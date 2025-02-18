@@ -1,10 +1,10 @@
-{{ define "persona-public-arbre.html" }}
+{{ define "espai-public-arbre.html" }}
 <!DOCTYPE html>
 <html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ t .Lang "tree.title" }} · {{ .Data.PersonaName }}</title>
+    <title>{{ t .Lang "space.privacy.public.title" }} · {{ .Data.TreeName }}</title>
     {{ template "styles-public" . }}
     <link rel="stylesheet" href="/static/css/taula.css">
     <link rel="stylesheet" href="/static/css/arbre.css">
@@ -14,9 +14,9 @@
     <main class="contingut-principal arbre-full">
         <section class="controls-arbre">
             <div class="view-switch" aria-label="{{ t .Lang "tree.controls.view_switch_aria" }}">
-                <a class="view-btn {{ if eq .Data.View "pedigree" }}is-active{{ end }}" href="/public/persones/{{ .Data.Persona.ID }}/arbre?view=pedigree&gens={{ .Data.Gens }}" title="{{ t .Lang "tree.view.pedigree" }}">{{ t .Lang "tree.view.pedigree" }}</a>
-                <a class="view-btn {{ if eq .Data.View "familiar" }}is-active{{ end }}" href="/public/persones/{{ .Data.Persona.ID }}/arbre?view=familiar&gens={{ .Data.Gens }}" title="{{ t .Lang "tree.view.familiar" }}">{{ t .Lang "tree.view.familiar" }}</a>
-                <a class="view-btn {{ if eq .Data.View "ventall" }}is-active{{ end }}" href="/public/persones/{{ .Data.Persona.ID }}/arbre?view=ventall&gens={{ .Data.Gens }}" title="{{ t .Lang "tree.view.ventall" }}">{{ t .Lang "tree.view.ventall" }}</a>
+                <a class="view-btn {{ if eq .Data.View "pedigree" }}is-active{{ end }}" href="/public/espai/arbres/{{ .Data.TreeID }}?view=pedigree&gens={{ .Data.Gens }}&persona_id={{ .Data.RootPersonId }}" title="{{ t .Lang "tree.view.pedigree" }}">{{ t .Lang "tree.view.pedigree" }}</a>
+                <a class="view-btn {{ if eq .Data.View "familiar" }}is-active{{ end }}" href="/public/espai/arbres/{{ .Data.TreeID }}?view=familiar&gens={{ .Data.Gens }}&persona_id={{ .Data.RootPersonId }}" title="{{ t .Lang "tree.view.familiar" }}">{{ t .Lang "tree.view.familiar" }}</a>
+                <a class="view-btn {{ if eq .Data.View "ventall" }}is-active{{ end }}" href="/public/espai/arbres/{{ .Data.TreeID }}?view=ventall&gens={{ .Data.Gens }}&persona_id={{ .Data.RootPersonId }}" title="{{ t .Lang "tree.view.ventall" }}">{{ t .Lang "tree.view.ventall" }}</a>
             </div>
 
             <label class="sr-only" for="generacionsSelect">{{ t .Lang "tree.controls.generations" }}</label>
@@ -37,10 +37,6 @@
                 <i class="fas fa-id-card"></i>
                 <span class="btn-text">{{ t .Lang "tree.controls.drawer" }}</span>
             </button>
-            <a id="viewPersonBtn" class="view-person-link" href="/public/persones/{{ .Data.Persona.ID }}" title="{{ t .Lang "tree.controls.view_person" }}">
-                <i class="fas fa-user"></i>
-                <span class="btn-text">{{ t .Lang "tree.controls.view_person" }}</span>
-            </a>
         </section>
 
         <section class="arbre-container" id="arbreContainer">
@@ -79,7 +75,8 @@
         window.familyLinks = {{ toJsonJS .Data.FamilyLinks }};
         window.rootPersonId = {{ .Data.RootPersonId }};
         window.__DATASET_STATS = {{ toJsonJS .Data.DatasetStats }};
-        window.treeProfileBase = "/public/persones";
+        window.treeProfileBase = "";
+        window.treeExpandDisabled = true;
     </script>
     <script src="/static/vendor/d3.v7.min.js"></script>
     {{ if eq .Data.View "ventall" }}

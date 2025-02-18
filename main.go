@@ -63,6 +63,7 @@ func main() {
 	if err := app.EnsureSystemImportTemplates(); err != nil {
 		log.Printf("[import-templates] error assegurant plantilles system: %v", err)
 	}
+	app.StartEspaiGrampsSyncWorker()
 	defer app.Close()
 
 	// Serveix recursos estàtics amb middleware de seguretat
@@ -155,6 +156,7 @@ func main() {
 
 	http.HandleFunc("/api/check-availability", applyMiddleware(app.CheckAvailability, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/public/metrics", applyMiddleware(app.PublicMetricsAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/public/espai/arbres/", applyMiddleware(app.EspaiPublicArbreAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/dashboard/widgets", applyMiddleware(app.RequireLogin(app.DashboardWidgetsAPI), core.BlockIPs, core.RateLimit))
 
 	http.HandleFunc("/regenerar-token", func(w http.ResponseWriter, r *http.Request) {
@@ -177,6 +179,37 @@ func main() {
 	http.HandleFunc("/perfil/credits/convert", applyMiddleware(app.RequireLogin(app.ConvertPointsToCredits), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/perfil/email-confirm", applyMiddleware(app.ConfirmarCanviEmail, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/perfil/email-revert", applyMiddleware(app.RevertirCanviEmail, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai", applyMiddleware(app.RequireLogin(app.EspaiPersonalOverview), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/persones/", applyMiddleware(app.RequireLogin(app.EspaiPersonaHandler), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/gedcom", applyMiddleware(app.RequireLogin(app.EspaiPersonalGedcom), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/gedcom/upload", applyMiddleware(app.RequireLogin(app.EspaiGedcomUpload), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/gedcom/reimport", applyMiddleware(app.RequireLogin(app.EspaiGedcomReimport), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/integracions", applyMiddleware(app.RequireLogin(app.EspaiPersonalIntegracions), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/integracions/gramps/connect", applyMiddleware(app.RequireLogin(app.EspaiGrampsConnect), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/integracions/gramps/sync", applyMiddleware(app.RequireLogin(app.EspaiGrampsSyncNow), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/notificacions/read", applyMiddleware(app.RequireLogin(app.EspaiNotificationsRead), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/notificacions/read-all", applyMiddleware(app.RequireLogin(app.EspaiNotificationsReadAll), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/notificacions/prefs", applyMiddleware(app.RequireLogin(app.EspaiNotificationsPrefs), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/privacitat/arbre", applyMiddleware(app.RequireLogin(app.EspaiPrivacyUpdateTree), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/privacitat/persona", applyMiddleware(app.RequireLogin(app.EspaiPrivacyUpdatePersona), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/coincidencies", applyMiddleware(app.RequireLogin(app.EspaiPersonalCoincidencies), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/coincidencies/decide", applyMiddleware(app.RequireLogin(app.EspaiCoincidenciesDecide), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/coincidencies/bulk", applyMiddleware(app.RequireLogin(app.EspaiCoincidenciesBulk), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/coincidencies/rebuild", applyMiddleware(app.RequireLogin(app.EspaiCoincidenciesRebuild), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/grups", applyMiddleware(app.RequireLogin(app.EspaiPersonalGrups), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/grups/create", applyMiddleware(app.RequireLogin(app.EspaiGrupsCreate), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/grups/invite", applyMiddleware(app.RequireLogin(app.EspaiGrupsInvite), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/grups/membre/accept", applyMiddleware(app.RequireLogin(app.EspaiGrupsAcceptInvite), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/grups/membre/decline", applyMiddleware(app.RequireLogin(app.EspaiGrupsDeclineInvite), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/grups/membre/update", applyMiddleware(app.RequireLogin(app.EspaiGrupsUpdateMember), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/grups/arbres/add", applyMiddleware(app.RequireLogin(app.EspaiGrupsAddTree), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/grups/arbres/remove", applyMiddleware(app.RequireLogin(app.EspaiGrupsRemoveTree), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/grups/conflictes/rebuild", applyMiddleware(app.RequireLogin(app.EspaiGrupsRebuildConflicts), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/grups/conflictes/resolve", applyMiddleware(app.RequireLogin(app.EspaiGrupsResolveConflict), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/espai/grups/arbre", applyMiddleware(app.RequireLogin(app.EspaiGrupsTreeView), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/espai/gedcom/imports", applyMiddleware(app.RequireLogin(app.EspaiGedcomImportsAPI), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/espai/gedcom/imports/", applyMiddleware(app.RequireLogin(app.EspaiGedcomImportDetailAPI), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/espai/coincidencies", applyMiddleware(app.RequireLogin(app.EspaiCoincidenciesAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/perfil/achievements", applyMiddleware(app.RequireLogin(app.PerfilAchievementsAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/perfil/achievements/", applyMiddleware(app.RequireLogin(app.PerfilAchievementsAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/ranking", applyMiddleware(app.Ranking, core.BlockIPs, core.RateLimit))
@@ -199,6 +232,7 @@ func main() {
 		}
 		http.NotFound(w, r)
 	})
+	http.HandleFunc("/public/espai/arbres/", applyMiddleware(app.EspaiPublicArbrePage, core.BlockIPs, core.RateLimit))
 
 	// Cognoms
 	http.HandleFunc("/cognoms", applyMiddleware(app.RequireLogin(app.CognomsList), core.BlockIPs, core.RateLimit))

@@ -20,7 +20,8 @@ A continuació es detallen totes les combinacions típiques.
 
 ```ini
 DB_ENGINE=sqlite        # sqlite | postgres | mysql
-RECREADB=true           # true = recrea l'esquema des del fitxer SQL
+RECREADB=true           # true = aplica l'esquema des del fitxer SQL (no esborra dades)
+RECREADB_RESET=false    # true = esborra i recrea la BD (nomes si RECREADB=true)
 REGISTERD=true          # comportament funcional (registre d’usuaris, etc.)
 
 # Per SQLite
@@ -43,7 +44,7 @@ LOG_LEVEL=debug         # silent/error | info | debug
 
 L’enviament de correus intenta primer el binari `sendmail` del sistema i, si no està disponible, prova via SMTP a `MAIL_SMTP_HOST:MAIL_SMTP_PORT` (per defecte `localhost:25`).
 
-> `RECREADB=true` fa que, a l’arrencada, es llegeixi el fitxer SQL corresponent al motor:
+> `RECREADB=true` fa que, a l’arrencada, s’apliqui el fitxer SQL corresponent al motor:
 > - `sqlite`  → `db/SQLite.sql`
 > - `postgres` → `db/PostgreSQL.sql`
 > - `mysql`  → `db/MySQL.sql`
@@ -60,6 +61,7 @@ Ideal per a desenvolupament local, quan no cal conservar dades.
 DB_ENGINE=sqlite
 DB_PATH=./database.db
 RECREADB=true
+RECREADB_RESET=true
 REGISTERD=true
 
 LOG_LEVEL=debug
@@ -124,6 +126,7 @@ Requereix tenir `db/PostgreSQL.sql` preparat amb l’esquema equivalent al de SQ
 ```ini
 DB_ENGINE=postgres
 RECREADB=true
+RECREADB_RESET=true
 REGISTERD=true
 
 DB_HOST=dev.marc.cat   # o localhost si l’app corre al mateix host
@@ -137,7 +140,8 @@ LOG_LEVEL=debug
 
 - A l’arrencada:
   - Es connecta a la BD `cerca_genealogica`.
-  - Executa el contingut de `db/PostgreSQL.sql` (drop/recreate d’esquema segons com tinguis l’SQL).
+  - Executa el contingut de `db/PostgreSQL.sql`.
+  - Amb `RECREADB_RESET=true`, es neteja l’esquema abans d’aplicar-lo.
 - Útil per tests d’integració que necessiten un entorn net.
 
 ### 3.2. Postgres sense recreació (entorn compartit / semi-prod)
@@ -199,6 +203,7 @@ Requereix `db/MySQL.sql` amb l’esquema adaptat (tipus, AUTO_INCREMENT, etc.).
 ```ini
 DB_ENGINE=mysql
 RECREADB=true
+RECREADB_RESET=true
 REGISTERD=true
 
 DB_HOST=dev.marc.cat
@@ -212,7 +217,8 @@ LOG_LEVEL=debug
 
 - A l’arrencada:
   - Es connecta a `cerca_genealogica`.
-  - Executa `db/MySQL.sql` per crear/actualitzar l’esquema (segons l’SQL).
+  - Executa `db/MySQL.sql` per crear/actualitzar l’esquema.
+  - Amb `RECREADB_RESET=true`, es neteja l’esquema abans d’aplicar-lo.
 
 ### 4.2. MySQL sense recreació
 
@@ -236,14 +242,14 @@ LOG_LEVEL=info
 
 ## 5. Taula resum de combinacions
 
-| Ús                                 | DB_ENGINE | RECREADB | Fitxer SQL necessari         | Exemple de destí              |
-|------------------------------------|-----------|----------|------------------------------|-------------------------------|
-| Dev local ràpid (fitxer únic)     | sqlite    | true     | `db/SQLite.sql`              | `./database.db`               |
-| SQLite amb dades persistents      | sqlite    | false    | (execució manual opcional)   | `./database.db`               |
-| Tests amb Postgres “net”          | postgres  | true     | `db/PostgreSQL.sql`          | `devstack.marc.cat:5432`      |
-| Postgres compartit / semi-prod    | postgres  | false    | (esquema creat abans)        | `devstack.marc.cat:5432`      |
-| Tests amb MySQL “net”             | mysql     | true     | `db/MySQL.sql`               | `devstack.marc.cat:3306`      |
-| MySQL compartit / semi-prod       | mysql     | false    | (esquema creat abans)        | `devstack.marc.cat:3306`      |
+| Ús                                 | DB_ENGINE | RECREADB | RECREADB_RESET | Fitxer SQL necessari         | Exemple de destí              |
+|------------------------------------|-----------|----------|----------------|------------------------------|-------------------------------|
+| Dev local ràpid (fitxer únic)     | sqlite    | true     | true           | `db/SQLite.sql`              | `./database.db`               |
+| SQLite amb dades persistents      | sqlite    | false    | false          | (execució manual opcional)   | `./database.db`               |
+| Tests amb Postgres “net”          | postgres  | true     | true           | `db/PostgreSQL.sql`          | `devstack.marc.cat:5432`      |
+| Postgres compartit / semi-prod    | postgres  | false    | false          | (esquema creat abans)        | `devstack.marc.cat:5432`      |
+| Tests amb MySQL “net”             | mysql     | true     | true           | `db/MySQL.sql`               | `devstack.marc.cat:3306`      |
+| MySQL compartit / semi-prod       | mysql     | false    | false          | (esquema creat abans)        | `devstack.marc.cat:3306`      |
 
 ---
 

@@ -37,6 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
         all: form.dataset.labelAll || "All",
         entityPersona: form.dataset.labelEntityPersona || "Persona",
         entityRegistre: form.dataset.labelEntityRegistre || "Registre",
+        entityEspai: form.dataset.labelEntityEspai || "Arbre",
         facetEntity: form.dataset.labelFacetEntity || "Entity",
         facetTipus: form.dataset.labelFacetTipus || "Tipus",
     };
@@ -317,6 +318,13 @@ document.addEventListener("DOMContentLoaded", () => {
             icon: "fa-book-open",
             onClick: () => applyEntityFilter("registre_raw"),
         });
+        entityItems.push({
+            label: labels.entityEspai,
+            count: entityCounts.espai_arbre || 0,
+            active: activeEntity === "espai_arbre",
+            icon: "fa-tree",
+            onClick: () => applyEntityFilter("espai_arbre"),
+        });
 
         const tipusItems = [];
         const tipusKeys = Object.keys(tipusCounts || {});
@@ -380,12 +388,15 @@ document.addEventListener("DOMContentLoaded", () => {
             const grouped = {
                 persona: [],
                 registre_raw: [],
+                espai_arbre: [],
             };
             items.forEach((item) => {
                 if (item.entity_type === "persona") {
                     grouped.persona.push(item);
                 } else if (item.entity_type === "registre_raw") {
                     grouped.registre_raw.push(item);
+                } else if (item.entity_type === "espai_arbre") {
+                    grouped.espai_arbre.push(item);
                 }
             });
             if (grouped.persona.length > 0) {
@@ -393,6 +404,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (grouped.registre_raw.length > 0) {
                 resultsEl.appendChild(renderSection(labels.entityRegistre, grouped.registre_raw));
+            }
+            if (grouped.espai_arbre.length > 0) {
+                resultsEl.appendChild(renderSection(labels.entityEspai, grouped.espai_arbre));
             }
         } else {
             resultsEl.appendChild(renderSection("", items));

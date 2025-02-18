@@ -927,6 +927,173 @@ func (d *PostgreSQL) DequeueWikiPending(changeID int) error {
 func (d *PostgreSQL) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 	return d.help.listWikiPending(limit)
 }
+// Espai personal
+func (d *PostgreSQL) CreateEspaiArbre(a *EspaiArbre) (int, error) { return d.help.createEspaiArbre(a) }
+func (d *PostgreSQL) UpdateEspaiArbre(a *EspaiArbre) error { return d.help.updateEspaiArbre(a) }
+func (d *PostgreSQL) GetEspaiArbre(id int) (*EspaiArbre, error) { return d.help.getEspaiArbre(id) }
+func (d *PostgreSQL) ListEspaiArbresByOwner(ownerID int) ([]EspaiArbre, error) {
+	return d.help.listEspaiArbresByOwner(ownerID)
+}
+func (d *PostgreSQL) ListEspaiArbresPublic() ([]EspaiArbre, error) {
+	return d.help.listEspaiArbresPublic()
+}
+func (d *PostgreSQL) CreateEspaiFontImportacio(f *EspaiFontImportacio) (int, error) {
+	return d.help.createEspaiFontImportacio(f)
+}
+func (d *PostgreSQL) GetEspaiFontImportacio(id int) (*EspaiFontImportacio, error) {
+	return d.help.getEspaiFontImportacio(id)
+}
+func (d *PostgreSQL) GetEspaiFontImportacioByChecksum(ownerID int, checksum string) (*EspaiFontImportacio, error) {
+	return d.help.getEspaiFontImportacioByChecksum(ownerID, checksum)
+}
+func (d *PostgreSQL) ListEspaiFontsImportacioByOwner(ownerID int) ([]EspaiFontImportacio, error) {
+	return d.help.listEspaiFontsImportacioByOwner(ownerID)
+}
+func (d *PostgreSQL) CreateEspaiImport(i *EspaiImport) (int, error) { return d.help.createEspaiImport(i) }
+func (d *PostgreSQL) UpdateEspaiImportStatus(id int, status string, errorText, summaryJSON string) error {
+	return d.help.updateEspaiImportStatus(id, status, errorText, summaryJSON)
+}
+func (d *PostgreSQL) UpdateEspaiImportProgress(id int, done, total int) error {
+	return d.help.updateEspaiImportProgress(id, done, total)
+}
+func (d *PostgreSQL) GetEspaiImport(id int) (*EspaiImport, error) { return d.help.getEspaiImport(id) }
+func (d *PostgreSQL) GetLatestEspaiImportByFont(ownerID, fontID int) (*EspaiImport, error) {
+	return d.help.getLatestEspaiImportByFont(ownerID, fontID)
+}
+func (d *PostgreSQL) ListEspaiImportsByOwner(ownerID int) ([]EspaiImport, error) {
+	return d.help.listEspaiImportsByOwner(ownerID)
+}
+func (d *PostgreSQL) ListEspaiImportsByArbre(arbreID int) ([]EspaiImport, error) {
+	return d.help.listEspaiImportsByArbre(arbreID)
+}
+func (d *PostgreSQL) CreateEspaiPersona(p *EspaiPersona) (int, error) { return d.help.createEspaiPersona(p) }
+func (d *PostgreSQL) UpdateEspaiPersonaVisibility(id int, visibility string) error {
+	return d.help.updateEspaiPersonaVisibility(id, visibility)
+}
+func (d *PostgreSQL) GetEspaiPersona(id int) (*EspaiPersona, error) { return d.help.getEspaiPersona(id) }
+func (d *PostgreSQL) ListEspaiPersonesByArbre(arbreID int) ([]EspaiPersona, error) {
+	return d.help.listEspaiPersonesByArbre(arbreID)
+}
+func (d *PostgreSQL) ListEspaiPersonesByArbreQuery(arbreID int, query string, limit, offset int) ([]EspaiPersona, error) {
+	return d.help.listEspaiPersonesByArbreQuery(arbreID, query, limit, offset)
+}
+func (d *PostgreSQL) CountEspaiPersonesByArbre(arbreID int) (int, int, error) {
+	return d.help.countEspaiPersonesByArbre(arbreID)
+}
+func (d *PostgreSQL) CountEspaiPersonesByArbreQuery(arbreID int, query string) (int, error) {
+	return d.help.countEspaiPersonesByArbreQuery(arbreID, query)
+}
+func (d *PostgreSQL) CreateEspaiRelacio(r *EspaiRelacio) (int, error) { return d.help.createEspaiRelacio(r) }
+func (d *PostgreSQL) ListEspaiRelacionsByArbre(arbreID int) ([]EspaiRelacio, error) {
+	return d.help.listEspaiRelacionsByArbre(arbreID)
+}
+func (d *PostgreSQL) CreateEspaiCoincidencia(c *EspaiCoincidencia) (int, error) {
+	return d.help.createEspaiCoincidencia(c)
+}
+func (d *PostgreSQL) UpdateEspaiCoincidenciaStatus(id int, status string) error {
+	return d.help.updateEspaiCoincidenciaStatus(id, status)
+}
+func (d *PostgreSQL) GetEspaiCoincidencia(id int) (*EspaiCoincidencia, error) {
+	return d.help.getEspaiCoincidencia(id)
+}
+func (d *PostgreSQL) GetEspaiCoincidenciaByTarget(ownerID, personaID int, targetType string, targetID int) (*EspaiCoincidencia, error) {
+	return d.help.getEspaiCoincidenciaByTarget(ownerID, personaID, targetType, targetID)
+}
+func (d *PostgreSQL) ListEspaiCoincidenciesByOwner(ownerID int) ([]EspaiCoincidencia, error) {
+	return d.help.listEspaiCoincidenciesByOwner(ownerID)
+}
+func (d *PostgreSQL) CreateEspaiCoincidenciaDecision(dec *EspaiCoincidenciaDecision) (int, error) {
+	return d.help.createEspaiCoincidenciaDecision(dec)
+}
+func (d *PostgreSQL) ListEspaiCoincidenciaDecisions(coincidenciaID int) ([]EspaiCoincidenciaDecision, error) {
+	return d.help.listEspaiCoincidenciaDecisions(coincidenciaID)
+}
+func (d *PostgreSQL) CreateEspaiIntegracioGramps(i *EspaiIntegracioGramps) (int, error) {
+	return d.help.createEspaiIntegracioGramps(i)
+}
+func (d *PostgreSQL) UpdateEspaiIntegracioGramps(i *EspaiIntegracioGramps) error {
+	return d.help.updateEspaiIntegracioGramps(i)
+}
+func (d *PostgreSQL) GetEspaiIntegracioGramps(id int) (*EspaiIntegracioGramps, error) {
+	return d.help.getEspaiIntegracioGramps(id)
+}
+func (d *PostgreSQL) ListEspaiIntegracionsGrampsByOwner(ownerID int) ([]EspaiIntegracioGramps, error) {
+	return d.help.listEspaiIntegracionsGrampsByOwner(ownerID)
+}
+func (d *PostgreSQL) ListEspaiIntegracionsGramps() ([]EspaiIntegracioGramps, error) {
+	return d.help.listEspaiIntegracionsGramps()
+}
+func (d *PostgreSQL) CreateEspaiIntegracioGrampsLog(l *EspaiIntegracioGrampsLog) (int, error) {
+	return d.help.createEspaiIntegracioGrampsLog(l)
+}
+func (d *PostgreSQL) ListEspaiIntegracioGrampsLogs(integracioID int, limit int) ([]EspaiIntegracioGrampsLog, error) {
+	return d.help.listEspaiIntegracioGrampsLogs(integracioID, limit)
+}
+func (d *PostgreSQL) CreateEspaiNotification(n *EspaiNotification) (int, error) {
+	return d.help.createEspaiNotification(n)
+}
+func (d *PostgreSQL) ListEspaiNotificationsByUser(userID int, status string, limit int) ([]EspaiNotification, error) {
+	return d.help.listEspaiNotificationsByUser(userID, status, limit)
+}
+func (d *PostgreSQL) MarkEspaiNotificationRead(id int, userID int) error {
+	return d.help.markEspaiNotificationRead(id, userID)
+}
+func (d *PostgreSQL) MarkEspaiNotificationsReadAll(userID int) error {
+	return d.help.markEspaiNotificationsReadAll(userID)
+}
+func (d *PostgreSQL) GetEspaiNotificationPref(userID int) (*EspaiNotificationPref, error) {
+	return d.help.getEspaiNotificationPref(userID)
+}
+func (d *PostgreSQL) UpsertEspaiNotificationPref(p *EspaiNotificationPref) error {
+	return d.help.upsertEspaiNotificationPref(p)
+}
+func (d *PostgreSQL) CreateEspaiPrivacyAudit(a *EspaiPrivacyAudit) (int, error) {
+	return d.help.createEspaiPrivacyAudit(a)
+}
+func (d *PostgreSQL) CreateEspaiGrup(g *EspaiGrup) (int, error) { return d.help.createEspaiGrup(g) }
+func (d *PostgreSQL) GetEspaiGrup(id int) (*EspaiGrup, error) { return d.help.getEspaiGrup(id) }
+func (d *PostgreSQL) ListEspaiGrupsByOwner(ownerID int) ([]EspaiGrup, error) {
+	return d.help.listEspaiGrupsByOwner(ownerID)
+}
+func (d *PostgreSQL) ListEspaiGrupsByUser(userID int) ([]EspaiGrup, error) {
+	return d.help.listEspaiGrupsByUser(userID)
+}
+func (d *PostgreSQL) AddEspaiGrupMembre(m *EspaiGrupMembre) (int, error) {
+	return d.help.addEspaiGrupMembre(m)
+}
+func (d *PostgreSQL) GetEspaiGrupMembre(grupID, userID int) (*EspaiGrupMembre, error) {
+	return d.help.getEspaiGrupMembre(grupID, userID)
+}
+func (d *PostgreSQL) UpdateEspaiGrupMembre(m *EspaiGrupMembre) error {
+	return d.help.updateEspaiGrupMembre(m)
+}
+func (d *PostgreSQL) ListEspaiGrupMembres(grupID int) ([]EspaiGrupMembre, error) {
+	return d.help.listEspaiGrupMembres(grupID)
+}
+func (d *PostgreSQL) AddEspaiGrupArbre(a *EspaiGrupArbre) (int, error) {
+	return d.help.addEspaiGrupArbre(a)
+}
+func (d *PostgreSQL) ListEspaiGrupArbres(grupID int) ([]EspaiGrupArbre, error) {
+	return d.help.listEspaiGrupArbres(grupID)
+}
+func (d *PostgreSQL) UpdateEspaiGrupArbreStatus(grupID, arbreID int, status string) error {
+	return d.help.updateEspaiGrupArbreStatus(grupID, arbreID, status)
+}
+func (d *PostgreSQL) CreateEspaiGrupConflicte(c *EspaiGrupConflicte) (int, error) {
+	return d.help.createEspaiGrupConflicte(c)
+}
+func (d *PostgreSQL) UpdateEspaiGrupConflicteStatus(id int, status string, resolvedBy *int) error {
+	return d.help.updateEspaiGrupConflicteStatus(id, status, resolvedBy)
+}
+func (d *PostgreSQL) ListEspaiGrupConflictes(grupID int) ([]EspaiGrupConflicte, error) {
+	return d.help.listEspaiGrupConflictes(grupID)
+}
+func (d *PostgreSQL) CreateEspaiGrupCanvi(c *EspaiGrupCanvi) (int, error) {
+	return d.help.createEspaiGrupCanvi(c)
+}
+func (d *PostgreSQL) ListEspaiGrupCanvis(grupID int, limit int) ([]EspaiGrupCanvi, error) {
+	return d.help.listEspaiGrupCanvis(grupID, limit)
+}
 func (d *PostgreSQL) CreateCSVImportTemplate(t *CSVImportTemplate) (int, error) {
 	return d.help.createCSVImportTemplate(t)
 }

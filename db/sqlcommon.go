@@ -9843,7 +9843,7 @@ func (h sqlHelper) searchDocs(f SearchQueryFilter) ([]SearchDocRow, int, SearchF
 		clauses = append(clauses, "s.published = 1")
 	}
 	entity := strings.TrimSpace(f.Entity)
-	if entity == "persona" || entity == "registre_raw" {
+	if entity == "persona" || entity == "registre_raw" || entity == "espai_arbre" {
 		clauses = append(clauses, "s.entity_type = ?")
 		args = append(args, entity)
 	}

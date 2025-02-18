@@ -1,0 +1,1171 @@
+{{ define "espai.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "space.title" }} - {{ t .Lang "app.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/espai-personal.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+
+    <main class="contingut-principal">
+        {{ $section := default (index .Data "SpaceSection") "overview" }}
+        {{ $state := default (index .Data "SpaceState") "empty" }}
+        {{ $sectionLabel := t .Lang (printf "space.nav.%s" $section) }}
+
+        <section class="espai-shell">
+            <aside class="espai-sidebar">
+                <div class="espai-sidebar__header">
+                    <div>
+                        <h2>{{ t .Lang "space.title" }}</h2>
+                        <p>{{ t .Lang "space.subtitle" }}</p>
+                    </div>
+                    <span class="espai-badge">{{ t .Lang "space.badge.private" }}</span>
+                </div>
+                <nav class="espai-nav" aria-label="{{ t .Lang "space.title" }}">
+                    <a href="/espai" class="espai-nav__link {{ if eq $section "overview" }}is-active{{ end }}">
+                        <i class="fas fa-compass"></i>
+                        <span>{{ t .Lang "space.nav.overview" }}</span>
+                    </a>
+                    <a href="/espai/gedcom" class="espai-nav__link {{ if eq $section "gedcom" }}is-active{{ end }}">
+                        <i class="fas fa-file-upload"></i>
+                        <span>{{ t .Lang "space.nav.gedcom" }}</span>
+                    </a>
+                    <a href="/espai/integracions" class="espai-nav__link {{ if eq $section "integracions" }}is-active{{ end }}">
+                        <i class="fas fa-plug"></i>
+                        <span>{{ t .Lang "space.nav.integracions" }}</span>
+                    </a>
+                    <a href="/espai/coincidencies" class="espai-nav__link {{ if eq $section "coincidencies" }}is-active{{ end }}">
+                        <i class="fas fa-link"></i>
+                        <span>{{ t .Lang "space.nav.coincidencies" }}</span>
+                    </a>
+                    <a href="/espai/grups" class="espai-nav__link {{ if eq $section "grups" }}is-active{{ end }}">
+                        <i class="fas fa-users"></i>
+                        <span>{{ t .Lang "space.nav.grups" }}</span>
+                    </a>
+                </nav>
+            </aside>
+
+            <div class="espai-content">
+                <div class="espai-breadcrumbs" aria-label="{{ t .Lang "space.breadcrumb" }}">
+                    <a href="/">{{ t .Lang "menu.section.home" }}</a>
+                    <span>/</span>
+                    <a href="/espai">{{ t .Lang "space.title" }}</a>
+                    {{ if ne $section "overview" }}
+                    <span>/</span>
+                    <span>{{ $sectionLabel }}</span>
+                    {{ end }}
+                </div>
+
+                <header class="espai-content__header">
+                    <div>
+                        <h1>{{ t .Lang (printf "space.section.%s.title" $section) }}</h1>
+                        <p>{{ t .Lang (printf "space.section.%s.desc" $section) }}</p>
+                    </div>
+                </header>
+
+                <div class="espai-state" data-state="{{ $state }}">
+                    <div class="espai-state__panel" data-for="empty">
+                        <div class="espai-state__icon">
+                            <i class="fas fa-inbox"></i>
+                        </div>
+                        <div class="espai-state__body">
+                            <h3>{{ t .Lang "space.state.empty.title" }}</h3>
+                            <p>{{ t .Lang "space.state.empty.desc" $sectionLabel }}</p>
+                            {{ if eq $section "overview" }}
+                            <div class="espai-state__actions">
+                                <a class="boto" href="/espai/gedcom"><i class="fas fa-file-upload"></i> {{ t .Lang "space.cta.gedcom" }}</a>
+                                <a class="boto-secundari" href="/espai/integracions"><i class="fas fa-plug"></i> {{ t .Lang "space.cta.integrations" }}</a>
+                            </div>
+                            {{ end }}
+                        </div>
+                    </div>
+
+                    <div class="espai-state__panel" data-for="loading">
+                        <div class="espai-state__icon">
+                            <i class="fas fa-circle-notch fa-spin"></i>
+                        </div>
+                        <div class="espai-state__body">
+                            <h3>{{ t .Lang "space.state.loading.title" }}</h3>
+                            <p>{{ t .Lang "space.state.loading.desc" $sectionLabel }}</p>
+                        </div>
+                    </div>
+
+                    <div class="espai-state__panel" data-for="error">
+                        <div class="espai-state__icon">
+                            <i class="fas fa-triangle-exclamation"></i>
+                        </div>
+                        <div class="espai-state__body">
+                            <h3>{{ t .Lang "space.state.error.title" }}</h3>
+                            <p>{{ t .Lang "space.state.error.desc" $sectionLabel }}</p>
+                            <div class="espai-state__actions">
+                                <a class="boto-secundari" href="/espai"><i class="fas fa-arrow-left"></i> {{ t .Lang "space.cta.back" }}</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{ if eq $section "gedcom" }}
+                <div class="espai-gedcom">
+                    {{ if .Data.UploadError }}
+                    <div class="espai-alert espai-alert--error"><i class="fas fa-triangle-exclamation"></i> {{ .Data.UploadError }}</div>
+                    {{ end }}
+                    {{ if .Data.UploadNotice }}
+                    <div class="espai-alert espai-alert--success"><i class="fas fa-circle-check"></i> {{ .Data.UploadNotice }}</div>
+                    {{ end }}
+
+                    <section class="espai-card">
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ t .Lang "space.gedcom.upload.title" }}</h2>
+                                <p>{{ t .Lang "space.gedcom.upload.desc" }}</p>
+                            </div>
+                        </div>
+                        <form class="espai-form" action="/espai/gedcom/upload" method="post" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                            <div class="espai-form__grid">
+                                <div class="espai-field espai-field--full">
+                                    <label for="gedcom-file">{{ t .Lang "space.gedcom.upload.file" }}</label>
+                                    <input id="gedcom-file" type="file" name="file" accept=".ged,.gedcom" required>
+                                    <span class="espai-help">{{ t .Lang "space.gedcom.upload.file_help" }}</span>
+                                </div>
+                                <div class="espai-field">
+                                    <label for="gedcom-tree">{{ t .Lang "space.gedcom.upload.tree" }}</label>
+                                    <select id="gedcom-tree" name="arbre_id">
+                                        <option value="0">{{ t .Lang "space.gedcom.upload.tree_new" }}</option>
+                                        {{ range .Data.GEDCOMTrees }}
+                                        <option value="{{ .ID }}">{{ .Nom }}</option>
+                                        {{ end }}
+                                    </select>
+                                </div>
+                                <div class="espai-field">
+                                    <label for="gedcom-tree-name">{{ t .Lang "space.gedcom.upload.tree_name" }}</label>
+                                    <input id="gedcom-tree-name" type="text" name="tree_name" placeholder="{{ t .Lang "space.gedcom.upload.tree_placeholder" }}">
+                                </div>
+                            </div>
+                            <div class="espai-form__actions">
+                                <button class="boto-primari" type="submit"><i class="fas fa-file-upload"></i> {{ t .Lang "space.gedcom.upload.action" }}</button>
+                                <span class="espai-help">{{ t .Lang "space.gedcom.upload.hint" (index .Data "GEDCOMMaxMB") }}</span>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="espai-card">
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ t .Lang "space.gedcom.history.title" }}</h2>
+                                <p>{{ t .Lang "space.gedcom.history.desc" }}</p>
+                            </div>
+                        </div>
+                        <div class="taula-wrapper">
+                            <table class="taula">
+                                <thead>
+                                    <tr>
+                                        <th>{{ t .Lang "space.gedcom.history.import" }}</th>
+                                        <th>{{ t .Lang "space.gedcom.history.tree" }}</th>
+                                        <th>{{ t .Lang "space.gedcom.history.file" }}</th>
+                                        <th>{{ t .Lang "space.gedcom.history.status" }}</th>
+                                        <th>{{ t .Lang "space.gedcom.history.date" }}</th>
+                                        <th>{{ t .Lang "space.gedcom.history.actions" }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {{ range .Data.GEDCOMImports }}
+                                    {{ $font := index $.Data.GEDCOMFontsByID .FontID.Int64 }}
+                                    {{ $tree := index $.Data.GEDCOMTreesByID .ArbreID }}
+                                    <tr>
+                                        <td>
+                                            <div class="espai-import-name">
+                                                <strong>#{{ .ID }}</strong>
+                                                <span class="muted">{{ .ImportType }}</span>
+                                            </div>
+                                        </td>
+                                        <td>{{ if $tree }}{{ $tree.Nom }}{{ else }}-{{ end }}</td>
+                                        <td>
+                                            {{ if and .FontID.Valid $font }}
+                                                {{ if $font.OriginalFilename.Valid }}{{ $font.OriginalFilename.String }}{{ else }}-{{ end }}
+                                            {{ else }}
+                                                -
+                                            {{ end }}
+                                        </td>
+                                        <td><span class="espai-status espai-status--{{ .Status }}">{{ t $.Lang (printf "space.gedcom.status.%s" .Status) }}</span></td>
+                                        <td>{{ if .CreatedAt.Valid }}{{ .CreatedAt.Time.Format "2006-01-02 15:04" }}{{ else }}-{{ end }}</td>
+                                        <td class="espai-actions">
+                                            <a class="boto-secundari btn-mini" href="/espai/gedcom?import_id={{ .ID }}">{{ t $.Lang "space.gedcom.action.view" }}</a>
+                                            <form class="espai-inline" action="/espai/gedcom/reimport" method="post">
+                                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                <input type="hidden" name="import_id" value="{{ .ID }}">
+                                                <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.gedcom.action.reimport" }}</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {{ else }}
+                                    <tr>
+                                        <td colspan="6" class="muted">{{ t .Lang "space.gedcom.history.empty" }}</td>
+                                    </tr>
+                                    {{ end }}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    {{ with .Data.SelectedImport }}
+                    {{ $font := index $.Data.GEDCOMFontsByID .FontID.Int64 }}
+                    {{ $tree := index $.Data.GEDCOMTreesByID .ArbreID }}
+                    <section class="espai-card">
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ t $.Lang "space.gedcom.detail.title" }}</h2>
+                                <p>{{ t $.Lang "space.gedcom.detail.desc" }}</p>
+                            </div>
+                            <span class="espai-status espai-status--{{ .Status }}">{{ t $.Lang (printf "space.gedcom.status.%s" .Status) }}</span>
+                        </div>
+                        <div class="espai-detail-grid">
+                            <div class="espai-detail">
+                                <span class="espai-detail__label">{{ t $.Lang "space.gedcom.detail.tree" }}</span>
+                                <strong>{{ if $tree }}{{ $tree.Nom }}{{ else }}-{{ end }}</strong>
+                            </div>
+                            <div class="espai-detail">
+                                <span class="espai-detail__label">{{ t $.Lang "space.gedcom.detail.file" }}</span>
+                                <strong>
+                                    {{ if and .FontID.Valid $font }}
+                                        {{ if $font.OriginalFilename.Valid }}{{ $font.OriginalFilename.String }}{{ else }}-{{ end }}
+                                    {{ else }}
+                                        -
+                                    {{ end }}
+                                </strong>
+                            </div>
+                            <div class="espai-detail">
+                                <span class="espai-detail__label">{{ t $.Lang "space.gedcom.detail.size" }}</span>
+                                <strong>
+                                    {{ if and .FontID.Valid $font }}
+                                        {{ if $font.SizeBytes.Valid }}{{ $font.SizeBytes.Int64 }} B{{ else }}-{{ end }}
+                                    {{ else }}
+                                        -
+                                    {{ end }}
+                                </strong>
+                            </div>
+                            <div class="espai-detail">
+                                <span class="espai-detail__label">{{ t $.Lang "space.gedcom.detail.progress" }}</span>
+                                <strong>{{ if gt .ProgressTotal 0 }}{{ .ProgressDone }}/{{ .ProgressTotal }}{{ else }}-{{ end }}</strong>
+                            </div>
+                        </div>
+
+                        {{ if .ErrorText.Valid }}
+                        <div class="espai-alert espai-alert--error"><i class="fas fa-triangle-exclamation"></i> {{ .ErrorText.String }}</div>
+                        {{ end }}
+
+                        {{ with $.Data.SelectedSummary }}
+                        <div class="espai-summary-grid">
+                            <div class="espai-summary-card">
+                                <span>{{ t $.Lang "space.gedcom.summary.persons" }}</span>
+                                <strong>{{ .Persons }}</strong>
+                            </div>
+                            <div class="espai-summary-card">
+                                <span>{{ t $.Lang "space.gedcom.summary.families" }}</span>
+                                <strong>{{ .Families }}</strong>
+                            </div>
+                            <div class="espai-summary-card">
+                                <span>{{ t $.Lang "space.gedcom.summary.relations" }}</span>
+                                <strong>{{ .Relations }}</strong>
+                            </div>
+                            <div class="espai-summary-card">
+                                <span>{{ t $.Lang "space.gedcom.summary.warnings" }}</span>
+                                <strong>{{ .WarningsTotal }}</strong>
+                            </div>
+                            <div class="espai-summary-card">
+                                <span>{{ t $.Lang "space.gedcom.summary.errors" }}</span>
+                                <strong>{{ .ErrorsTotal }}</strong>
+                            </div>
+                        </div>
+
+                        {{ if gt .WarningsTotal 0 }}
+                        <div class="espai-log">
+                            <h3>{{ t $.Lang "space.gedcom.detail.warnings" }}</h3>
+                            <ul>
+                                {{ range .Warnings }}
+                                <li>{{ . }}</li>
+                                {{ end }}
+                            </ul>
+                        </div>
+                        {{ end }}
+
+                        {{ if gt .ErrorsTotal 0 }}
+                        <div class="espai-log espai-log--error">
+                            <h3>{{ t $.Lang "space.gedcom.detail.errors" }}</h3>
+                            <ul>
+                                {{ range .Errors }}
+                                <li>{{ . }}</li>
+                                {{ end }}
+                            </ul>
+                        </div>
+                        {{ end }}
+                        {{ else }}
+                        <p class="muted">{{ t $.Lang "space.gedcom.detail.empty" }}</p>
+                        {{ end }}
+                    </section>
+                    {{ end }}
+                </div>
+                {{ end }}
+
+                {{ if eq $section "overview" }}
+                <div class="espai-overview">
+                    {{ if .Data.UploadError }}
+                    <div class="espai-alert espai-alert--error"><i class="fas fa-triangle-exclamation"></i> {{ .Data.UploadError }}</div>
+                    {{ end }}
+                    {{ if .Data.UploadNotice }}
+                    <div class="espai-alert espai-alert--success"><i class="fas fa-circle-check"></i> {{ .Data.UploadNotice }}</div>
+                    {{ end }}
+
+                    <section class="espai-card espai-card--overview">
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ t .Lang "space.overview.activity.title" }}</h2>
+                                <p>{{ t .Lang "space.overview.activity.desc" }}</p>
+                            </div>
+                        </div>
+
+                        <div class="espai-summary-grid">
+                            <div class="espai-summary-card">
+                                <span>{{ t .Lang "space.overview.activity.matches" }}</span>
+                                <strong>{{ .Data.EspaiOverviewCounts.PendingMatches }}</strong>
+                            </div>
+                            <div class="espai-summary-card">
+                                <span>{{ t .Lang "space.overview.activity.syncs" }}</span>
+                                <strong>{{ .Data.EspaiOverviewCounts.SyncFailures }}</strong>
+                            </div>
+                            <div class="espai-summary-card">
+                                <span>{{ t .Lang "space.overview.activity.conflicts" }}</span>
+                                <strong>{{ .Data.EspaiOverviewCounts.GroupConflicts }}</strong>
+                            </div>
+                            <div class="espai-summary-card">
+                                <span>{{ t .Lang "space.overview.activity.unread" }}</span>
+                                <strong>{{ .Data.EspaiOverviewCounts.UnreadAlerts }}</strong>
+                            </div>
+                        </div>
+
+                        <div class="espai-overview-panels">
+                            <div class="espai-panel">
+                                <div class="espai-panel__header">
+                                    <div>
+                                        <h3>{{ t .Lang "space.notifications.title" }}</h3>
+                                        <p>{{ t .Lang "space.notifications.desc" }}</p>
+                                    </div>
+                                    {{ if gt .Data.EspaiNotificationUnread 0 }}
+                                    <form class="espai-inline" method="post" action="/espai/notificacions/read-all">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <button class="boto-secundari btn-mini" type="submit">{{ t .Lang "space.notifications.read_all" }}</button>
+                                    </form>
+                                    {{ end }}
+                                </div>
+                                <div class="espai-notify-list">
+                                    {{ range .Data.EspaiNotifications }}
+                                    <article class="espai-notify-item {{ if eq .Status "unread" }}is-unread{{ end }}">
+                                        <div class="espai-notify-icon"><i class="fas {{ .Icon }}"></i></div>
+                                        <div class="espai-notify-body">
+                                            <div class="espai-notify-title">{{ .Title }}</div>
+                                            <div class="espai-notify-text">{{ .Body }}</div>
+                                            <div class="espai-notify-meta">
+                                                <span>{{ if .CreatedAt.Valid }}{{ .CreatedAt.Time.Format "2006-01-02 15:04" }}{{ else }}-{{ end }}</span>
+                                                {{ if .URL }}
+                                                <a class="link-muted" href="{{ .URL }}">{{ t $.Lang "space.notifications.open" }}</a>
+                                                {{ end }}
+                                            </div>
+                                        </div>
+                                        {{ if eq .Status "unread" }}
+                                        <form class="espai-inline" method="post" action="/espai/notificacions/read">
+                                            <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                            <input type="hidden" name="id" value="{{ .ID }}">
+                                            <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.notifications.read" }}</button>
+                                        </form>
+                                        {{ end }}
+                                    </article>
+                                    {{ else }}
+                                    <p class="muted">{{ t .Lang "space.notifications.empty" }}</p>
+                                    {{ end }}
+                                </div>
+                            </div>
+
+                            <div class="espai-panel">
+                                <div class="espai-panel__header">
+                                    <div>
+                                        <h3>{{ t .Lang "space.notifications.prefs.title" }}</h3>
+                                        <p>{{ t .Lang "space.notifications.prefs.desc" }}</p>
+                                    </div>
+                                </div>
+                                <form class="espai-form" method="post" action="/espai/notificacions/prefs">
+                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                    <div class="espai-field">
+                                        <label for="notif-freq">{{ t .Lang "space.notifications.prefs.freq" }}</label>
+                                        <select id="notif-freq" name="freq">
+                                            <option value="instant" {{ if eq .Data.EspaiNotificationPrefs.Freq "instant" }}selected{{ end }}>{{ t .Lang "space.notifications.freq.instant" }}</option>
+                                            <option value="daily" {{ if eq .Data.EspaiNotificationPrefs.Freq "daily" }}selected{{ end }}>{{ t .Lang "space.notifications.freq.daily" }}</option>
+                                            <option value="weekly" {{ if eq .Data.EspaiNotificationPrefs.Freq "weekly" }}selected{{ end }}>{{ t .Lang "space.notifications.freq.weekly" }}</option>
+                                            <option value="off" {{ if eq .Data.EspaiNotificationPrefs.Freq "off" }}selected{{ end }}>{{ t .Lang "space.notifications.freq.off" }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="espai-field">
+                                        <span class="espai-field__label">{{ t .Lang "space.notifications.prefs.types" }}</span>
+                                        <div class="espai-checkbox-list">
+                                            <label><input type="checkbox" name="types" value="matches" {{ if index .Data.EspaiNotificationPrefs.Types "matches" }}checked{{ end }}> {{ t .Lang "space.notifications.type.matches" }}</label>
+                                            <label><input type="checkbox" name="types" value="gramps" {{ if index .Data.EspaiNotificationPrefs.Types "gramps" }}checked{{ end }}> {{ t .Lang "space.notifications.type.gramps" }}</label>
+                                            <label><input type="checkbox" name="types" value="groups" {{ if index .Data.EspaiNotificationPrefs.Types "groups" }}checked{{ end }}> {{ t .Lang "space.notifications.type.groups" }}</label>
+                                        </div>
+                                    </div>
+                                    <div class="espai-form__actions">
+                                        <button class="boto-secundari btn-mini" type="submit">{{ t .Lang "space.notifications.prefs.save" }}</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="espai-card">
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ t .Lang "space.privacy.overview.title" }}</h2>
+                                <p>{{ t .Lang "space.privacy.overview.desc" }}</p>
+                            </div>
+                        </div>
+
+                        <div class="espai-tree-list">
+                            {{ range .Data.EspaiTrees }}
+                            {{ $stats := index $.Data.EspaiTreeStats .ID }}
+                            {{ $people := index $.Data.EspaiTreePersons .ID }}
+                            {{ $pager := index $.Data.EspaiTreePeoplePager .ID }}
+                            <article class="espai-tree-card">
+                                <div class="espai-tree-card__header">
+                                    <div>
+                                        <h3>{{ .Nom }}</h3>
+                                        {{ if .Descripcio.Valid }}
+                                        <p>{{ .Descripcio.String }}</p>
+                                        {{ end }}
+                                    </div>
+                                    <span class="espai-status espai-status--{{ .Visibility }}">{{ t $.Lang (printf "space.privacy.visibility.%s" .Visibility) }}</span>
+                                </div>
+
+                                <div class="espai-summary-grid">
+                                    <div class="espai-summary-card">
+                                        <span>{{ t $.Lang "space.privacy.stats.people" }}</span>
+                                        <strong>{{ $stats.Total }}</strong>
+                                    </div>
+                                    <div class="espai-summary-card">
+                                        <span>{{ t $.Lang "space.privacy.stats.hidden" }}</span>
+                                        <strong>{{ $stats.Hidden }}</strong>
+                                    </div>
+                                </div>
+
+                                <div class="espai-tree-actions">
+                                    <form class="espai-inline" action="/espai/privacitat/arbre" method="post">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <input type="hidden" name="tree_id" value="{{ .ID }}">
+                                        <label class="sr-only" for="tree-visibility-{{ .ID }}">{{ t $.Lang "space.privacy.tree.visibility" }}</label>
+                                        <select id="tree-visibility-{{ .ID }}" name="visibility">
+                                            <option value="private" {{ if eq .Visibility "private" }}selected{{ end }}>{{ t $.Lang "space.privacy.visibility.private" }}</option>
+                                            <option value="public" {{ if eq .Visibility "public" }}selected{{ end }}>{{ t $.Lang "space.privacy.visibility.public" }}</option>
+                                        </select>
+                                        <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.privacy.tree.save" }}</button>
+                                    </form>
+
+                                    {{ if eq .Visibility "public" }}
+                                    <a class="boto-secundari btn-mini" href="/public/espai/arbres/{{ .ID }}"><i class="fas fa-globe"></i> {{ t $.Lang "space.privacy.tree.preview" }}</a>
+                                    {{ else }}
+                                    <span class="espai-disabled-hint">{{ t $.Lang "space.privacy.tree.preview.disabled" }}</span>
+                                    {{ end }}
+
+                                    {{ if $people }}
+                                    {{ $root := index $people 0 }}
+                                    <a class="boto-secundari btn-mini" href="/espai/persones/{{ $root.ID }}/arbre?view=pedigree&gens=3"><i class="fas fa-tree"></i> {{ t $.Lang "tree.action.open" }}</a>
+                                    {{ end }}
+                                </div>
+
+                                <div class="espai-tree-persons">
+                                    <h4>{{ t $.Lang "space.privacy.persons.title" }}</h4>
+                                    <div class="espai-tree-controls">
+                                        <form class="espai-tree-search" method="get" action="/espai">
+                                            <input type="hidden" name="tree_id" value="{{ .ID }}">
+                                            <input type="hidden" name="page" value="1">
+                                            <label class="sr-only" for="tree-search-{{ .ID }}">{{ t $.Lang "space.privacy.persons.search.label" }}</label>
+                                            <input id="tree-search-{{ .ID }}" type="text" name="q" value="{{ $pager.Query }}" placeholder="{{ t $.Lang "space.privacy.persons.search.placeholder" }}">
+                                            <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.privacy.persons.search.submit" }}</button>
+                                        </form>
+                                        <div class="espai-tree-results">
+                                            {{ t $.Lang "space.privacy.persons.results" $pager.Total }}
+                                        </div>
+                                    </div>
+                                    {{ if $people }}
+                                    <div class="taula-wrapper">
+                                        <table class="taula">
+                                            <thead>
+                                                <tr>
+                                                    <th>{{ t $.Lang "space.privacy.persons.name" }}</th>
+                                                    <th>{{ t $.Lang "space.privacy.persons.visibility" }}</th>
+                                                    <th>{{ t $.Lang "space.privacy.persons.action" }}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {{ range $people }}
+                                                <tr>
+                                                    <td><a href="/espai/persones/{{ .ID }}">{{ .Name }}</a></td>
+                                                    <td><span class="espai-status espai-status--{{ .Visibility }}">{{ t $.Lang (printf "space.privacy.person_visibility.%s" .Visibility) }}</span></td>
+                                                    <td>
+                                                        <form class="espai-inline" action="/espai/privacitat/persona" method="post">
+                                                            <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                            <input type="hidden" name="persona_id" value="{{ .ID }}">
+                                                            <label class="sr-only" for="persona-visibility-{{ .ID }}">{{ t $.Lang "space.privacy.persons.visibility" }}</label>
+                                                            <select id="persona-visibility-{{ .ID }}" name="visibility">
+                                                                <option value="visible" {{ if eq .Visibility "visible" }}selected{{ end }}>{{ t $.Lang "space.privacy.person_visibility.visible" }}</option>
+                                                                <option value="hidden" {{ if eq .Visibility "hidden" }}selected{{ end }}>{{ t $.Lang "space.privacy.person_visibility.hidden" }}</option>
+                                                            </select>
+                                                            <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.privacy.persons.save" }}</button>
+                                                        </form>
+                                                    </td>
+                                                </tr>
+                                                {{ end }}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {{ if gt $pager.TotalPages 1 }}
+                                    <div class="espai-tree-pagination">
+                                        {{ if $pager.HasPrev }}
+                                        <a class="boto-secundari btn-mini" href="{{ $pager.PageBase }}&page={{ $pager.PrevPage }}">{{ t $.Lang "common.prev" }}</a>
+                                        {{ end }}
+                                        <span class="muted">{{ printf (t $.Lang "common.page_info") $pager.Page $pager.TotalPages }}</span>
+                                        {{ if $pager.HasNext }}
+                                        <a class="boto-secundari btn-mini" href="{{ $pager.PageBase }}&page={{ $pager.NextPage }}">{{ t $.Lang "common.next" }}</a>
+                                        {{ end }}
+                                    </div>
+                                    {{ end }}
+                                    {{ else }}
+                                    {{ if $pager.Query }}
+                                    <p class="muted">{{ t $.Lang "space.privacy.persons.search.empty" }}</p>
+                                    {{ else }}
+                                    <p class="muted">{{ t $.Lang "space.privacy.persons.empty" }}</p>
+                                    {{ end }}
+                                    {{ end }}
+                                </div>
+                            </article>
+                            {{ else }}
+                            <div class="muted">{{ t .Lang "space.privacy.trees.empty" }}</div>
+                            {{ end }}
+                        </div>
+                    </section>
+                </div>
+                {{ end }}
+
+                {{ if eq $section "integracions" }}
+                <div class="espai-integracions">
+                    {{ if .Data.UploadError }}
+                    <div class="espai-alert espai-alert--error"><i class="fas fa-triangle-exclamation"></i> {{ .Data.UploadError }}</div>
+                    {{ end }}
+                    {{ if .Data.UploadNotice }}
+                    <div class="espai-alert espai-alert--success"><i class="fas fa-circle-check"></i> {{ .Data.UploadNotice }}</div>
+                    {{ end }}
+
+                    <section class="espai-card">
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ t .Lang "space.gramps.form.title" }}</h2>
+                                <p>{{ t .Lang "space.gramps.form.desc" }}</p>
+                            </div>
+                        </div>
+                        <form class="espai-form" action="/espai/integracions/gramps/connect" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                            <div class="espai-form__grid">
+                                <div class="espai-field espai-field--full">
+                                    <label for="gramps-base-url">{{ t .Lang "space.gramps.form.base_url" }}</label>
+                                    <input id="gramps-base-url" type="url" name="base_url" placeholder="https://gramps.example" required>
+                                    <span class="espai-help">{{ t .Lang "space.gramps.form.base_url_help" }}</span>
+                                </div>
+                                <div class="espai-field">
+                                    <label for="gramps-username">{{ t .Lang "space.gramps.form.username" }}</label>
+                                    <input id="gramps-username" type="text" name="username" placeholder="{{ t .Lang "space.gramps.form.username_placeholder" }}">
+                                    <span class="espai-help">{{ t .Lang "space.gramps.form.username_help" }}</span>
+                                </div>
+                                <div class="espai-field">
+                                    <label for="gramps-tree">{{ t .Lang "space.gramps.form.tree" }}</label>
+                                    <select id="gramps-tree" name="arbre_id">
+                                        <option value="0">{{ t .Lang "space.gramps.form.tree_new" }}</option>
+                                        {{ range .Data.GrampsTrees }}
+                                        <option value="{{ .ID }}">{{ .Nom }}</option>
+                                        {{ end }}
+                                    </select>
+                                </div>
+                                <div class="espai-field espai-field--full">
+                                    <label for="gramps-token">{{ t .Lang "space.gramps.form.token" }}</label>
+                                    <input id="gramps-token" type="password" name="token" required>
+                                    <span class="espai-help">{{ t .Lang "space.gramps.form.token_help" }}</span>
+                                </div>
+                                <div class="espai-field espai-field--full">
+                                    <label for="gramps-tree-name">{{ t .Lang "space.gramps.form.tree_name" }}</label>
+                                    <input id="gramps-tree-name" type="text" name="tree_name" placeholder="{{ t .Lang "space.gramps.form.tree_placeholder" }}">
+                                </div>
+                            </div>
+                            <div class="espai-form__actions">
+                                <button class="boto-primari" type="submit"><i class="fas fa-plug"></i> {{ t .Lang "space.gramps.form.action" }}</button>
+                                <span class="espai-help">{{ t .Lang "space.gramps.form.hint" }}</span>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="espai-card">
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ t .Lang "space.gramps.list.title" }}</h2>
+                                <p>{{ t .Lang "space.gramps.list.desc" }}</p>
+                            </div>
+                        </div>
+
+                        <div class="espai-integracions__list">
+                            {{ range .Data.GrampsIntegrations }}
+                            {{ $tree := index $.Data.GrampsTreesByID .ArbreID }}
+                            <article class="espai-integration-card">
+                                <div class="espai-integration-card__header">
+                                    <div>
+                                        <h3>{{ if gt $tree.ID 0 }}{{ $tree.Nom }}{{ else }}{{ t $.Lang "space.gramps.list.tree_unknown" }}{{ end }}</h3>
+                                        <p>{{ .BaseURL }}</p>
+                                    </div>
+                                    <span class="espai-status espai-status--{{ .Status }}">{{ t $.Lang (printf "space.gramps.status.%s" .Status) }}</span>
+                                </div>
+
+                                <div class="espai-summary-grid">
+                                    <div class="espai-summary-card">
+                                        <span>{{ t $.Lang "space.gramps.list.tree" }}</span>
+                                        <strong>{{ if gt $tree.ID 0 }}{{ $tree.Nom }}{{ else }}-{{ end }}</strong>
+                                    </div>
+                                    <div class="espai-summary-card">
+                                        <span>{{ t $.Lang "space.gramps.list.user" }}</span>
+                                        <strong>{{ if .Username.Valid }}{{ .Username.String }}{{ else }}{{ t $.Lang "space.gramps.list.user_token" }}{{ end }}</strong>
+                                    </div>
+                                    <div class="espai-summary-card">
+                                        <span>{{ t $.Lang "space.gramps.list.last_sync" }}</span>
+                                        <strong>{{ if .LastSyncAt.Valid }}{{ .LastSyncAt.Time.Format "2006-01-02 15:04" }}{{ else }}-{{ end }}</strong>
+                                    </div>
+                                </div>
+
+                                {{ if .LastError.Valid }}
+                                <div class="espai-alert espai-alert--error"><i class="fas fa-triangle-exclamation"></i> {{ .LastError.String }}</div>
+                                {{ end }}
+
+                                <div class="espai-actions">
+                                    <form class="espai-inline" action="/espai/integracions/gramps/sync" method="post">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <input type="hidden" name="integration_id" value="{{ .ID }}">
+                                        <button class="boto-secundari btn-mini" type="submit"><i class="fas fa-rotate"></i> {{ t $.Lang "space.gramps.list.sync_now" }}</button>
+                                    </form>
+                                </div>
+
+                                <div class="espai-logs">
+                                    <h4>{{ t $.Lang "space.gramps.logs.title" }}</h4>
+                                    {{ $logs := index $.Data.GrampsLogsByID .ID }}
+                                    {{ if $logs }}
+                                    <div class="espai-log-list">
+                                        {{ range $logs }}
+                                        <div class="espai-log {{ if eq .Status "error" }}espai-log--error{{ end }}">
+                                            <div class="espai-log__header">
+                                                <span class="espai-status espai-status--{{ .Status }}">{{ t $.Lang (printf "space.gramps.log.%s" .Status) }}</span>
+                                                <span class="muted">{{ if .CreatedAt.Valid }}{{ .CreatedAt.Time.Format "2006-01-02 15:04" }}{{ else }}-{{ end }}</span>
+                                            </div>
+                                            {{ if .Message.Valid }}
+                                            <p>{{ .Message.String }}</p>
+                                            {{ else }}
+                                            <p class="muted">-</p>
+                                            {{ end }}
+                                        </div>
+                                        {{ end }}
+                                    </div>
+                                    {{ else }}
+                                    <p class="muted">{{ t $.Lang "space.gramps.logs.empty" }}</p>
+                                    {{ end }}
+                                </div>
+                            </article>
+                            {{ else }}
+                            <div class="muted">{{ t .Lang "space.gramps.list.empty" }}</div>
+                            {{ end }}
+                        </div>
+                    </section>
+                </div>
+                {{ end }}
+
+                {{ if eq $section "grups" }}
+                <div class="espai-groups">
+                    {{ if .Data.UploadError }}
+                    <div class="espai-alert espai-alert--error"><i class="fas fa-triangle-exclamation"></i> {{ .Data.UploadError }}</div>
+                    {{ end }}
+                    {{ if .Data.UploadNotice }}
+                    <div class="espai-alert espai-alert--success"><i class="fas fa-circle-check"></i> {{ .Data.UploadNotice }}</div>
+                    {{ end }}
+
+                    <section class="espai-card">
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ t .Lang "space.groups.create.title" }}</h2>
+                                <p>{{ t .Lang "space.groups.create.desc" }}</p>
+                            </div>
+                        </div>
+                        <form class="espai-form" action="/espai/grups/create" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                            <div class="espai-form__grid">
+                                <div class="espai-field">
+                                    <label for="group-name">{{ t .Lang "space.groups.create.name" }}</label>
+                                    <input id="group-name" type="text" name="name" required>
+                                </div>
+                                <div class="espai-field">
+                                    <label for="group-desc">{{ t .Lang "space.groups.create.desc_label" }}</label>
+                                    <input id="group-desc" type="text" name="description">
+                                </div>
+                            </div>
+                            <div class="espai-form__actions">
+                                <button class="boto-primari" type="submit"><i class="fas fa-users"></i> {{ t .Lang "space.groups.create.action" }}</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="espai-card">
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ t .Lang "space.groups.list.title" }}</h2>
+                                <p>{{ t .Lang "space.groups.list.desc" }}</p>
+                            </div>
+                        </div>
+                        <div class="espai-group-list">
+                            {{ range .Data.GroupList }}
+                            {{ $summary := index $.Data.GroupSummaries .ID }}
+                            <article class="espai-group-card {{ if and $.Data.SelectedGroup (eq $.Data.SelectedGroup.ID .ID) }}is-active{{ end }}">
+                                <div>
+                                    <h3>{{ .Nom }}</h3>
+                                    {{ if .Descripcio.Valid }}<p>{{ .Descripcio.String }}</p>{{ end }}
+                                </div>
+                                <div class="espai-group-card__stats">
+                                    <span><strong>{{ $summary.Members }}</strong> {{ t $.Lang "space.groups.list.members" }}</span>
+                                    <span><strong>{{ $summary.Trees }}</strong> {{ t $.Lang "space.groups.list.trees" }}</span>
+                                    <span><strong>{{ $summary.Conflicts }}</strong> {{ t $.Lang "space.groups.list.conflicts" }}</span>
+                                </div>
+                                <a class="boto-secundari btn-mini" href="/espai/grups?group_id={{ .ID }}">{{ t $.Lang "space.groups.list.open" }}</a>
+                            </article>
+                            {{ else }}
+                            <div class="muted">{{ t .Lang "space.groups.list.empty" }}</div>
+                            {{ end }}
+                        </div>
+                    </section>
+
+                    {{ if .Data.SelectedGroup }}
+                    {{ $current := .Data.User }}
+                    {{ $member := .Data.SelectedMember }}
+                    <section class="espai-card">
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ .Data.SelectedGroup.Nom }}</h2>
+                                <p>{{ t .Lang "space.groups.detail.desc" }}</p>
+                            </div>
+                            {{ if $member }}
+                            <span class="espai-status espai-status--{{ $member.Role }}">{{ t $.Lang (printf "space.groups.role.%s" $member.Role) }}</span>
+                            {{ end }}
+                        </div>
+
+                        <div class="espai-group-actions">
+                            <a class="boto-secundari btn-mini" href="/espai/grups/arbre?group_id={{ .Data.SelectedGroup.ID }}"><i class="fas fa-sitemap"></i> {{ t .Lang "space.groups.tree.view" }}</a>
+                        </div>
+
+                        <div class="espai-group-section">
+                            <h3>{{ t .Lang "space.groups.members.title" }}</h3>
+                            {{ if .Data.GroupMembers }}
+                            <div class="taula-wrapper">
+                                <table class="taula">
+                                    <thead>
+                                        <tr>
+                                            <th>{{ t .Lang "space.groups.members.user" }}</th>
+                                            <th>{{ t .Lang "space.groups.members.email" }}</th>
+                                            <th>{{ t .Lang "space.groups.members.role" }}</th>
+                                            <th>{{ t .Lang "space.groups.members.status" }}</th>
+                                            <th>{{ t .Lang "space.groups.members.actions" }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {{ range .Data.GroupMembers }}
+                                        <tr>
+                                            <td>{{ .Name }}</td>
+                                            <td>{{ if .Email }}{{ .Email }}{{ else }}-{{ end }}</td>
+                                            <td><span class="espai-status espai-status--{{ .Role }}">{{ t $.Lang (printf "space.groups.role.%s" .Role) }}</span></td>
+                                            <td><span class="espai-status espai-status--{{ .Status }}">{{ t $.Lang (printf "space.groups.status.%s" .Status) }}</span></td>
+                                            <td>
+                                                {{ if and $current (eq .UserID $current.ID) (eq .Status "invited") }}
+                                                <form class="espai-inline" action="/espai/grups/membre/accept" method="post">
+                                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                    <input type="hidden" name="group_id" value="{{ $.Data.SelectedGroup.ID }}">
+                                                    <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.groups.invite.accept" }}</button>
+                                                </form>
+                                                <form class="espai-inline" action="/espai/grups/membre/decline" method="post">
+                                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                    <input type="hidden" name="group_id" value="{{ $.Data.SelectedGroup.ID }}">
+                                                    <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.groups.invite.decline" }}</button>
+                                                </form>
+                                                {{ else if and $member (or (eq $member.Role "owner") (eq $member.Role "admin")) }}
+                                                {{ if ne .Role "owner" }}
+                                                <form class="espai-inline" action="/espai/grups/membre/update" method="post">
+                                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                    <input type="hidden" name="group_id" value="{{ $.Data.SelectedGroup.ID }}">
+                                                    <input type="hidden" name="user_id" value="{{ .UserID }}">
+                                                    <select name="role">
+                                                        <option value="viewer" {{ if eq .Role "viewer" }}selected{{ end }}>{{ t $.Lang "space.groups.role.viewer" }}</option>
+                                                        <option value="member" {{ if eq .Role "member" }}selected{{ end }}>{{ t $.Lang "space.groups.role.member" }}</option>
+                                                        <option value="admin" {{ if eq .Role "admin" }}selected{{ end }}>{{ t $.Lang "space.groups.role.admin" }}</option>
+                                                    </select>
+                                                    <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.groups.members.update" }}</button>
+                                                </form>
+                                                <form class="espai-inline" action="/espai/grups/membre/update" method="post">
+                                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                    <input type="hidden" name="group_id" value="{{ $.Data.SelectedGroup.ID }}">
+                                                    <input type="hidden" name="user_id" value="{{ .UserID }}">
+                                                    <input type="hidden" name="action" value="remove">
+                                                    <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.groups.members.remove" }}</button>
+                                                </form>
+                                                {{ end }}
+                                                {{ end }}
+                                            </td>
+                                        </tr>
+                                        {{ end }}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {{ else }}
+                            <p class="muted">{{ t .Lang "space.groups.members.empty" }}</p>
+                            {{ end }}
+                        </div>
+
+                        {{ if and $member (or (eq $member.Role "owner") (eq $member.Role "admin")) }}
+                        <div class="espai-group-section">
+                            <h3>{{ t .Lang "space.groups.invite.title" }}</h3>
+                            <form class="espai-form" action="/espai/grups/invite" method="post">
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="group_id" value="{{ $.Data.SelectedGroup.ID }}">
+                                <div class="espai-form__grid">
+                                    <div class="espai-field">
+                                        <label for="invite-email">{{ t .Lang "space.groups.invite.email" }}</label>
+                                        <input id="invite-email" type="email" name="email" required>
+                                    </div>
+                                    <div class="espai-field">
+                                        <label for="invite-role">{{ t .Lang "space.groups.invite.role" }}</label>
+                                        <select id="invite-role" name="role">
+                                            <option value="viewer">{{ t .Lang "space.groups.role.viewer" }}</option>
+                                            <option value="member" selected>{{ t .Lang "space.groups.role.member" }}</option>
+                                            <option value="admin">{{ t .Lang "space.groups.role.admin" }}</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="espai-form__actions">
+                                    <button class="boto-secundari btn-mini" type="submit"><i class="fas fa-paper-plane"></i> {{ t .Lang "space.groups.invite.action" }}</button>
+                                </div>
+                            </form>
+                        </div>
+                        {{ end }}
+
+                        <div class="espai-group-section">
+                            <h3>{{ t .Lang "space.groups.trees.title" }}</h3>
+                            {{ if and $member (or (eq $member.Role "owner") (eq $member.Role "admin") (eq $member.Role "member")) }}
+                            <form class="espai-form" action="/espai/grups/arbres/add" method="post">
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="group_id" value="{{ $.Data.SelectedGroup.ID }}">
+                                <div class="espai-form__grid">
+                                    <div class="espai-field">
+                                        <label for="tree-id">{{ t .Lang "space.groups.trees.add" }}</label>
+                                        <select id="tree-id" name="tree_id">
+                                            {{ range .Data.AvailableTrees }}
+                                            <option value="{{ .ID }}">{{ .Nom }}</option>
+                                            {{ end }}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="espai-form__actions">
+                                    <button class="boto-secundari btn-mini" type="submit">{{ t .Lang "space.groups.trees.add_action" }}</button>
+                                </div>
+                            </form>
+                            {{ end }}
+                            {{ if .Data.GroupTrees }}
+                            <div class="taula-wrapper">
+                                <table class="taula">
+                                    <thead>
+                                        <tr>
+                                            <th>{{ t .Lang "space.groups.trees.name" }}</th>
+                                            <th>{{ t .Lang "space.groups.trees.owner" }}</th>
+                                            <th>{{ t .Lang "space.groups.trees.actions" }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {{ range .Data.GroupTrees }}
+                                        <tr>
+                                            <td>{{ .Name }}</td>
+                                            <td>{{ .OwnerName }}</td>
+                                            <td>
+                                                {{ if or (and $member (or (eq $member.Role "owner") (eq $member.Role "admin"))) (eq .OwnerID $.Data.CurrentUserID) }}
+                                                <form class="espai-inline" action="/espai/grups/arbres/remove" method="post">
+                                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                    <input type="hidden" name="group_id" value="{{ $.Data.SelectedGroup.ID }}">
+                                                    <input type="hidden" name="tree_id" value="{{ .TreeID }}">
+                                                    <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.groups.trees.remove" }}</button>
+                                                </form>
+                                                {{ end }}
+                                            </td>
+                                        </tr>
+                                        {{ end }}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {{ else }}
+                            <p class="muted">{{ t .Lang "space.groups.trees.empty" }}</p>
+                            {{ end }}
+                        </div>
+
+                        <div class="espai-group-section">
+                            <h3>{{ t .Lang "space.groups.conflicts.title" }}</h3>
+                            {{ if and $member (or (eq $member.Role "owner") (eq $member.Role "admin")) }}
+                            <form class="espai-inline" action="/espai/grups/conflictes/rebuild" method="post">
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="group_id" value="{{ $.Data.SelectedGroup.ID }}">
+                                <button class="boto-secundari btn-mini" type="submit"><i class="fas fa-rotate"></i> {{ t .Lang "space.groups.conflicts.rebuild" }}</button>
+                            </form>
+                            {{ end }}
+                            <div class="espai-conflict-filters">
+                                <a class="espai-chip {{ if or (eq .Data.ConflictFilter "") (eq .Data.ConflictFilter "pending") }}is-active{{ end }}" href="/espai/grups?group_id={{ $.Data.SelectedGroup.ID }}&conflict_status=pending">{{ t .Lang "space.groups.conflicts.pending" }}</a>
+                                <a class="espai-chip {{ if eq .Data.ConflictFilter "resolved" }}is-active{{ end }}" href="/espai/grups?group_id={{ $.Data.SelectedGroup.ID }}&conflict_status=resolved">{{ t .Lang "space.groups.conflicts.resolved" }}</a>
+                            </div>
+                            {{ if .Data.GroupConflicts }}
+                            <div class="taula-wrapper">
+                                <table class="taula">
+                                    <thead>
+                                        <tr>
+                                            <th>{{ t .Lang "space.groups.conflicts.summary" }}</th>
+                                            <th>{{ t .Lang "space.groups.conflicts.status" }}</th>
+                                            <th>{{ t .Lang "space.groups.conflicts.actions" }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {{ range .Data.GroupConflicts }}
+                                        <tr>
+                                            <td>{{ if .Summary.Valid }}{{ .Summary.String }}{{ else }}-{{ end }}</td>
+                                            <td><span class="espai-status espai-status--{{ .Status }}">{{ t $.Lang (printf "space.groups.conflicts.%s" .Status) }}</span></td>
+                                            <td>
+                                                {{ if and $member (or (eq $member.Role "owner") (eq $member.Role "admin")) (eq .Status "pending") }}
+                                                <form class="espai-inline" action="/espai/grups/conflictes/resolve" method="post">
+                                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                    <input type="hidden" name="group_id" value="{{ $.Data.SelectedGroup.ID }}">
+                                                    <input type="hidden" name="conflict_id" value="{{ .ID }}">
+                                                    <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.groups.conflicts.resolve" }}</button>
+                                                </form>
+                                                {{ end }}
+                                            </td>
+                                        </tr>
+                                        {{ end }}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {{ else }}
+                            <p class="muted">{{ t .Lang "space.groups.conflicts.empty" }}</p>
+                            {{ end }}
+                        </div>
+
+                        <div class="espai-group-section">
+                            <h3>{{ t .Lang "space.groups.changes.title" }}</h3>
+                            <form class="espai-form" method="get" action="/espai/grups">
+                                <input type="hidden" name="group_id" value="{{ $.Data.SelectedGroup.ID }}">
+                                <div class="espai-form__grid">
+                                    <div class="espai-field">
+                                        <label for="filter-actor">{{ t .Lang "space.groups.changes.actor" }}</label>
+                                        <input id="filter-actor" type="number" name="actor_id" value="{{ $.Data.ChangeActor }}">
+                                    </div>
+                                    <div class="espai-field">
+                                        <label for="filter-action">{{ t .Lang "space.groups.changes.action" }}</label>
+                                        <input id="filter-action" type="text" name="action" value="{{ $.Data.ChangeAction }}">
+                                    </div>
+                                    <div class="espai-field">
+                                        <label for="filter-from">{{ t .Lang "space.groups.changes.from" }}</label>
+                                        <input id="filter-from" type="date" name="from" value="{{ $.Data.ChangeFrom }}">
+                                    </div>
+                                    <div class="espai-field">
+                                        <label for="filter-to">{{ t .Lang "space.groups.changes.to" }}</label>
+                                        <input id="filter-to" type="date" name="to" value="{{ $.Data.ChangeTo }}">
+                                    </div>
+                                </div>
+                                <div class="espai-form__actions">
+                                    <button class="boto-secundari btn-mini" type="submit">{{ t .Lang "space.groups.changes.filter" }}</button>
+                                </div>
+                            </form>
+                            {{ if .Data.GroupChanges }}
+                            <div class="taula-wrapper">
+                                <table class="taula">
+                                    <thead>
+                                        <tr>
+                                            <th>{{ t .Lang "space.groups.changes.when" }}</th>
+                                            <th>{{ t .Lang "space.groups.changes.actor" }}</th>
+                                            <th>{{ t .Lang "space.groups.changes.action" }}</th>
+                                            <th>{{ t .Lang "space.groups.changes.object" }}</th>
+                                            <th>{{ t .Lang "space.groups.changes.payload" }}</th>
+                                            <th>{{ t .Lang "space.groups.changes.details" }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {{ range .Data.GroupChanges }}
+                                        <tr>
+                                            <td>{{ if .CreatedAt.Valid }}{{ .CreatedAt.Time.Format "2006-01-02 15:04" }}{{ else }}-{{ end }}</td>
+                                            <td>{{ .ActorName }}</td>
+                                            <td>{{ .Action }}</td>
+                                            <td>{{ .Object }}</td>
+                                            <td>{{ if .Payload }}<code>{{ .Payload }}</code>{{ else }}-{{ end }}</td>
+                                            <td><a class="link-muted" href="/espai/grups?group_id={{ $.Data.SelectedGroup.ID }}&change_id={{ .ID }}">{{ t $.Lang "space.groups.changes.view" }}</a></td>
+                                        </tr>
+                                        {{ end }}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {{ if .Data.SelectedChange }}
+                            <div class="espai-change-detail">
+                                <h4>{{ t .Lang "space.groups.change.title" }}</h4>
+                                <div class="espai-change-meta">
+                                    <span><strong>{{ t .Lang "space.groups.changes.when" }}:</strong> {{ if .Data.SelectedChange.CreatedAt.Valid }}{{ .Data.SelectedChange.CreatedAt.Time.Format "2006-01-02 15:04" }}{{ else }}-{{ end }}</span>
+                                    <span><strong>{{ t .Lang "space.groups.changes.actor" }}:</strong> {{ .Data.SelectedChange.ActorName }}</span>
+                                    <span><strong>{{ t .Lang "space.groups.changes.action" }}:</strong> {{ .Data.SelectedChange.Action }}</span>
+                                    <span><strong>{{ t .Lang "space.groups.changes.object" }}:</strong> {{ .Data.SelectedChange.Object }}</span>
+                                </div>
+                                <div class="espai-change-payload">
+                                    <div class="muted">{{ t .Lang "space.groups.change.payload" }}</div>
+                                    <pre>{{ if .Data.SelectedChange.PayloadPretty }}{{ .Data.SelectedChange.PayloadPretty }}{{ else }}-{{ end }}</pre>
+                                </div>
+                            </div>
+                            {{ end }}
+                            {{ else }}
+                            <p class="muted">{{ t .Lang "space.groups.changes.empty" }}</p>
+                            {{ end }}
+                        </div>
+                    </section>
+                    {{ end }}
+                </div>
+                {{ end }}
+
+                {{ if eq $section "coincidencies" }}
+                <div class="espai-matches">
+                    {{ if .Data.UploadError }}
+                    <div class="espai-alert espai-alert--error"><i class="fas fa-triangle-exclamation"></i> {{ .Data.UploadError }}</div>
+                    {{ end }}
+                    {{ if .Data.UploadNotice }}
+                    <div class="espai-alert espai-alert--success"><i class="fas fa-circle-check"></i> {{ .Data.UploadNotice }}</div>
+                    {{ end }}
+
+                    <section class="espai-card">
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ t .Lang "space.matches.title" }}</h2>
+                                <p>{{ t .Lang "space.matches.desc" }}</p>
+                            </div>
+                            <form class="espai-inline" action="/espai/coincidencies/rebuild" method="post">
+                                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                                <select name="arbre_id">
+                                    <option value="0">{{ t .Lang "space.matches.rebuild.all" }}</option>
+                                    {{ range .Data.MatchTrees }}
+                                    <option value="{{ .ID }}">{{ .Nom }}</option>
+                                    {{ end }}
+                                </select>
+                                <button class="boto-secundari btn-mini" type="submit"><i class="fas fa-rotate"></i> {{ t .Lang "space.matches.rebuild.action" }}</button>
+                            </form>
+                        </div>
+
+                        {{ $counts := .Data.MatchCounts }}
+                        {{ $status := .Data.MatchStatus }}
+                        <div class="espai-match-filters">
+                            <a class="espai-chip {{ if eq $status "pending" }}is-active{{ end }}" href="/espai/coincidencies?status=pending">
+                                {{ t .Lang "space.matches.filter.pending" }} <span>{{ default 0 (index $counts "pending") }}</span>
+                            </a>
+                            <a class="espai-chip {{ if eq $status "accepted" }}is-active{{ end }}" href="/espai/coincidencies?status=accepted">
+                                {{ t .Lang "space.matches.filter.accepted" }} <span>{{ default 0 (index $counts "accepted") }}</span>
+                            </a>
+                            <a class="espai-chip {{ if eq $status "ignored" }}is-active{{ end }}" href="/espai/coincidencies?status=ignored">
+                                {{ t .Lang "space.matches.filter.ignored" }} <span>{{ default 0 (index $counts "ignored") }}</span>
+                            </a>
+                            <a class="espai-chip {{ if eq $status "rejected" }}is-active{{ end }}" href="/espai/coincidencies?status=rejected">
+                                {{ t .Lang "space.matches.filter.rejected" }} <span>{{ default 0 (index $counts "rejected") }}</span>
+                            </a>
+                            <a class="espai-chip {{ if eq $status "all" }}is-active{{ end }}" href="/espai/coincidencies?status=all">
+                                {{ t .Lang "space.matches.filter.all" }} <span>{{ add (add (add (default 0 (index $counts "pending")) (default 0 (index $counts "accepted"))) (default 0 (index $counts "ignored"))) (default 0 (index $counts "rejected")) }}</span>
+                            </a>
+                        </div>
+
+                        <form id="bulk-form" class="espai-bulk" action="/espai/coincidencies/bulk" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                            <label class="espai-bulk__label">{{ t .Lang "space.matches.bulk.label" }}</label>
+                            <select name="decision">
+                                <option value="accept">{{ t .Lang "space.matches.action.accept" }}</option>
+                                <option value="ignore">{{ t .Lang "space.matches.action.ignore" }}</option>
+                                <option value="reject">{{ t .Lang "space.matches.action.reject" }}</option>
+                            </select>
+                            <button class="boto-secundari btn-mini" type="submit">{{ t .Lang "space.matches.bulk.apply" }}</button>
+                        </form>
+
+                        <div class="taula-wrapper">
+                            <table class="taula">
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th>{{ t .Lang "space.matches.table.persona" }}</th>
+                                        <th>{{ t .Lang "space.matches.table.target" }}</th>
+                                        <th>{{ t .Lang "space.matches.table.score" }}</th>
+                                        <th>{{ t .Lang "space.matches.table.status" }}</th>
+                                        <th>{{ t .Lang "space.matches.table.updated" }}</th>
+                                        <th>{{ t .Lang "space.matches.table.actions" }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {{ range .Data.Matches }}
+                                    <tr>
+                                        <td><input type="checkbox" name="match_id" value="{{ .ID }}" form="bulk-form"></td>
+                                        <td>
+                                            <strong>{{ .PersonaName }}</strong>
+                                        </td>
+                                        <td>
+                                            {{ if .TargetURL }}<a href="{{ .TargetURL }}">{{ .TargetName }}</a>{{ else }}{{ .TargetName }}{{ end }}
+                                            {{ if .TargetMeta }}<div class="muted">{{ .TargetMeta }}</div>{{ end }}
+                                            {{ if .Reasons }}
+                                            <div class="espai-reasons">
+                                                {{ range .Reasons }}
+                                                <span class="espai-reason">{{ t $.Lang (printf "space.matches.reason.%s" .Key) }} {{ .Score }}%</span>
+                                                {{ end }}
+                                            </div>
+                                            {{ end }}
+                                        </td>
+                                        <td><span class="espai-score">{{ .Score }}%</span></td>
+                                        <td><span class="espai-status espai-status--{{ .Status }}">{{ t $.Lang (printf "space.matches.status.%s" .Status) }}</span></td>
+                                        <td>{{ if .UpdatedAtText }}{{ .UpdatedAtText }}{{ else }}-{{ end }}</td>
+                                        <td>
+                                            <form class="espai-inline" action="/espai/coincidencies/decide" method="post">
+                                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                <input type="hidden" name="match_id" value="{{ .ID }}">
+                                                {{ if eq .Status "pending" }}
+                                                <button class="boto-secundari btn-mini" type="submit" name="decision" value="accept">{{ t $.Lang "space.matches.action.accept" }}</button>
+                                                <button class="boto-secundari btn-mini" type="submit" name="decision" value="ignore">{{ t $.Lang "space.matches.action.ignore" }}</button>
+                                                <button class="boto-secundari btn-mini" type="submit" name="decision" value="reject">{{ t $.Lang "space.matches.action.reject" }}</button>
+                                                {{ else }}
+                                                <button class="boto-secundari btn-mini" type="submit" name="decision" value="undo">{{ t $.Lang "space.matches.action.undo" }}</button>
+                                                {{ end }}
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {{ else }}
+                                    <tr>
+                                        <td colspan="7" class="muted">{{ t .Lang "space.matches.empty" }}</td>
+                                    </tr>
+                                    {{ end }}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+                {{ end }}
+            </div>
+        </section>
+    </main>
+
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

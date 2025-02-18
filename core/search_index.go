@@ -2,6 +2,7 @@ package core
 
 import (
 	"database/sql"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -53,10 +54,17 @@ func (a *App) hasSearchableData() (bool, error) {
 		return true, nil
 	}
 	rows, err = a.DB.Query("SELECT 1 AS one FROM transcripcions_raw WHERE moderation_status = 'publicat' LIMIT 1")
+	if err == nil && len(rows) > 0 {
+		return true, nil
+	}
+	rows, err = a.DB.Query("SELECT 1 AS one FROM espai_arbres WHERE visibility = 'public' AND status = 'active' LIMIT 1")
+	if err == nil && len(rows) > 0 {
+		return true, nil
+	}
 	if err != nil {
 		return false, err
 	}
-	return len(rows) > 0, nil
+	return false, nil
 }
 
 func (a *App) RebuildSearchIndex(scope SearchIndexScope) error {
@@ -67,7 +75,10 @@ func (a *App) RebuildSearchIndex(scope SearchIndexScope) error {
 	if err := a.rebuildSearchIndexForAllRegistres(); err != nil {
 		return err
 	}
-	return a.rebuildSearchIndexForPersones()
+	if err := a.rebuildSearchIndexForPersones(); err != nil {
+		return err
+	}
+	return a.rebuildSearchIndexForEspaiArbres()
 }
 
 func (a *App) rebuildSearchIndexForPersones() error {
@@ -91,6 +102,19 @@ func (a *App) rebuildSearchIndexForAllRegistres() error {
 	for i := range registres {
 		if err := a.upsertSearchDocForRegistreID(registres[i].ID); err != nil {
 			Errorf("SearchIndex registre %d: %v", registres[i].ID, err)
+		}
+	}
+	return nil
+}
+
+func (a *App) rebuildSearchIndexForEspaiArbres() error {
+	arbres, err := a.DB.ListEspaiArbresPublic()
+	if err != nil {
+		return err
+	}
+	for i := range arbres {
+		if err := a.upsertSearchDocForEspaiArbreID(arbres[i].ID); err != nil {
+			Errorf("SearchIndex espai arbre %d: %v", arbres[i].ID, err)
 		}
 	}
 	return nil
@@ -134,6 +158,21 @@ func (a *App) upsertSearchDocForRegistreID(registreID int) error {
 	return a.DB.UpsertSearchDoc(doc)
 }
 
+func (a *App) upsertSearchDocForEspaiArbreID(arbreID int) error {
+	if arbreID <= 0 {
+		return nil
+	}
+	arbre, err := a.DB.GetEspaiArbre(arbreID)
+	if err != nil || arbre == nil {
+		return err
+	}
+	if strings.TrimSpace(arbre.Visibility) != "public" || strings.TrimSpace(arbre.Status) != "active" {
+		return a.DB.DeleteSearchDoc("espai_arbre", arbreID)
+	}
+	doc := a.buildSearchDocFromEspaiArbre(arbre)
+	return a.DB.UpsertSearchDoc(doc)
+}
+
 func (a *App) buildSearchDocFromPersona(p *db.Persona) *db.SearchDoc {
 	nom := strings.TrimSpace(p.Nom)
 	cognoms := compactStrings([]string{p.Cognom1, p.Cognom2})
@@ -154,6 +193,24 @@ func (a *App) buildSearchDocFromPersona(p *db.Persona) *db.SearchDoc {
 		PersonPhonetic:    strings.Join(phoneticTokens(personTokens), " "),
 		CognomsPhonetic:   strings.Join(phoneticTokens(cognomTokens), " "),
 		CognomsCanon:      strings.Join(a.canonicalizeCognoms(cognoms), " "),
+	}
+}
+
+func (a *App) buildSearchDocFromEspaiArbre(arbre *db.EspaiArbre) *db.SearchDoc {
+	name := strings.TrimSpace(arbre.Nom)
+	if name == "" {
+		name = "Arbre " + strconv.Itoa(arbre.ID)
+	}
+	nameNorm := normalizeSearchText(name)
+	tokens := normalizeTokens(name)
+	return &db.SearchDoc{
+		EntityType:       "espai_arbre",
+		EntityID:         arbre.ID,
+		Published:        true,
+		PersonNomNorm:    nameNorm,
+		PersonFullNorm:   nameNorm,
+		PersonTokensNorm: strings.Join(tokens, " "),
+		PersonPhonetic:   strings.Join(phoneticTokens(tokens), " "),
 	}
 }
 

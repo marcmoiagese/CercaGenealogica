@@ -1694,6 +1694,272 @@ CREATE INDEX IF NOT EXISTS idx_persona_ofici ON persona(ofici);
 CREATE INDEX IF NOT EXISTS idx_persona_field_links_persona ON persona_field_links(persona_id);
 CREATE INDEX IF NOT EXISTS idx_persona_field_links_registre ON persona_field_links(registre_id);
 
+-- Espai personal
+CREATE TABLE IF NOT EXISTS espai_arbres (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    nom TEXT NOT NULL,
+    descripcio TEXT,
+    visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','public','restricted')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_arbres_owner ON espai_arbres(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_espai_arbres_status ON espai_arbres(status);
+CREATE INDEX IF NOT EXISTS idx_espai_arbres_updated ON espai_arbres(updated_at);
+
+CREATE TABLE IF NOT EXISTS espai_fonts_importacio (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    source_type TEXT NOT NULL CHECK (source_type IN ('gedcom','gramps','manual')),
+    nom TEXT,
+    original_filename TEXT,
+    storage_path TEXT,
+    checksum_sha256 TEXT,
+    size_bytes INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_fonts_owner ON espai_fonts_importacio(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_espai_fonts_type ON espai_fonts_importacio(source_type);
+
+CREATE TABLE IF NOT EXISTS espai_imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    arbre_id INTEGER NOT NULL REFERENCES espai_arbres(id) ON DELETE CASCADE,
+    font_id INTEGER REFERENCES espai_fonts_importacio(id) ON DELETE SET NULL,
+    import_type TEXT NOT NULL CHECK (import_type IN ('gedcom','gramps')),
+    status TEXT NOT NULL CHECK (status IN ('queued','parsing','normalizing','persisted','done','error','cancelled')),
+    progress_total INTEGER NOT NULL DEFAULT 0,
+    progress_done INTEGER NOT NULL DEFAULT 0,
+    summary_json TEXT,
+    error_text TEXT,
+    started_at TIMESTAMP,
+    finished_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_imports_owner ON espai_imports(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_espai_imports_arbre ON espai_imports(arbre_id);
+CREATE INDEX IF NOT EXISTS idx_espai_imports_status ON espai_imports(status);
+CREATE INDEX IF NOT EXISTS idx_espai_imports_updated ON espai_imports(updated_at);
+CREATE INDEX IF NOT EXISTS idx_espai_imports_type ON espai_imports(import_type);
+
+CREATE TABLE IF NOT EXISTS espai_persones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    arbre_id INTEGER NOT NULL REFERENCES espai_arbres(id) ON DELETE CASCADE,
+    external_id TEXT,
+    nom TEXT,
+    cognom1 TEXT,
+    cognom2 TEXT,
+    nom_complet TEXT,
+    sexe TEXT CHECK (sexe IN ('male','female','unknown')),
+    data_naixement TEXT,
+    data_defuncio TEXT,
+    lloc_naixement TEXT,
+    lloc_defuncio TEXT,
+    notes TEXT,
+    visibility TEXT NOT NULL DEFAULT 'visible' CHECK (visibility IN ('visible','hidden')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_persones_owner ON espai_persones(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_espai_persones_arbre ON espai_persones(arbre_id);
+CREATE INDEX IF NOT EXISTS idx_espai_persones_visibility ON espai_persones(visibility);
+CREATE INDEX IF NOT EXISTS idx_espai_persones_status ON espai_persones(status);
+CREATE INDEX IF NOT EXISTS idx_espai_persones_updated ON espai_persones(updated_at);
+
+CREATE TABLE IF NOT EXISTS espai_relacions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    arbre_id INTEGER NOT NULL REFERENCES espai_arbres(id) ON DELETE CASCADE,
+    persona_id INTEGER NOT NULL REFERENCES espai_persones(id) ON DELETE CASCADE,
+    related_persona_id INTEGER NOT NULL REFERENCES espai_persones(id) ON DELETE CASCADE,
+    relation_type TEXT NOT NULL CHECK (relation_type IN ('parent','mother','father','spouse','child','sibling')),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_relacions_arbre ON espai_relacions(arbre_id);
+CREATE INDEX IF NOT EXISTS idx_espai_relacions_persona ON espai_relacions(persona_id);
+CREATE INDEX IF NOT EXISTS idx_espai_relacions_related ON espai_relacions(related_persona_id);
+
+CREATE TABLE IF NOT EXISTS espai_coincidencies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    arbre_id INTEGER NOT NULL REFERENCES espai_arbres(id) ON DELETE CASCADE,
+    persona_id INTEGER NOT NULL REFERENCES espai_persones(id) ON DELETE CASCADE,
+    target_type TEXT NOT NULL CHECK (target_type IN ('persona','registre_raw')),
+    target_id INTEGER NOT NULL,
+    score REAL,
+    reason_json TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','rejected','ignored')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_coincidencies_owner ON espai_coincidencies(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_espai_coincidencies_arbre ON espai_coincidencies(arbre_id);
+CREATE INDEX IF NOT EXISTS idx_espai_coincidencies_status ON espai_coincidencies(status);
+CREATE INDEX IF NOT EXISTS idx_espai_coincidencies_updated ON espai_coincidencies(updated_at);
+CREATE INDEX IF NOT EXISTS idx_espai_coincidencies_target ON espai_coincidencies(target_type, target_id);
+
+CREATE TABLE IF NOT EXISTS espai_decisions_coincidencia (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    coincidencia_id INTEGER NOT NULL REFERENCES espai_coincidencies(id) ON DELETE CASCADE,
+    decision TEXT NOT NULL CHECK (decision IN ('accept','reject','ignore','undo')),
+    decided_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_decisions_match ON espai_decisions_coincidencia(coincidencia_id);
+CREATE INDEX IF NOT EXISTS idx_espai_decisions_user ON espai_decisions_coincidencia(decided_by);
+
+CREATE TABLE IF NOT EXISTS espai_integracions_gramps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    arbre_id INTEGER NOT NULL REFERENCES espai_arbres(id) ON DELETE CASCADE,
+    base_url TEXT NOT NULL,
+    username TEXT,
+    token TEXT,
+    status TEXT NOT NULL DEFAULT 'connected' CHECK (status IN ('connected','error','disabled')),
+    last_sync_at TIMESTAMP,
+    last_error TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_integracions_owner ON espai_integracions_gramps(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_espai_integracions_arbre ON espai_integracions_gramps(arbre_id);
+CREATE INDEX IF NOT EXISTS idx_espai_integracions_status ON espai_integracions_gramps(status);
+
+CREATE TABLE IF NOT EXISTS espai_integracions_gramps_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    integracio_id INTEGER NOT NULL REFERENCES espai_integracions_gramps(id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK (status IN ('success','error')),
+    message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_gramps_logs_integracio ON espai_integracions_gramps_logs(integracio_id);
+CREATE INDEX IF NOT EXISTS idx_espai_gramps_logs_created ON espai_integracions_gramps_logs(created_at);
+
+CREATE TABLE IF NOT EXISTS espai_privacy_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    arbre_id INTEGER NOT NULL REFERENCES espai_arbres(id) ON DELETE CASCADE,
+    persona_id INTEGER REFERENCES espai_persones(id) ON DELETE SET NULL,
+    action TEXT NOT NULL CHECK (action IN ('tree_visibility','person_visibility')),
+    from_visibility TEXT,
+    to_visibility TEXT,
+    ip TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_privacy_owner ON espai_privacy_audit(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_espai_privacy_arbre ON espai_privacy_audit(arbre_id);
+CREATE INDEX IF NOT EXISTS idx_espai_privacy_persona ON espai_privacy_audit(persona_id);
+CREATE INDEX IF NOT EXISTS idx_espai_privacy_created ON espai_privacy_audit(created_at);
+
+CREATE TABLE IF NOT EXISTS espai_grups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    nom TEXT NOT NULL,
+    descripcio TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (owner_user_id, nom)
+);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_owner ON espai_grups(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_status ON espai_grups(status);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_updated ON espai_grups(updated_at);
+
+CREATE TABLE IF NOT EXISTS espai_grups_membres (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    grup_id INTEGER NOT NULL REFERENCES espai_grups(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('owner','admin','member','viewer')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','invited','removed')),
+    joined_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (grup_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_membres_grup ON espai_grups_membres(grup_id);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_membres_user ON espai_grups_membres(user_id);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_membres_status ON espai_grups_membres(status);
+
+CREATE TABLE IF NOT EXISTS espai_grups_arbres (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    grup_id INTEGER NOT NULL REFERENCES espai_grups(id) ON DELETE CASCADE,
+    arbre_id INTEGER NOT NULL REFERENCES espai_arbres(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','removed')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (grup_id, arbre_id)
+);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_arbres_grup ON espai_grups_arbres(grup_id);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_arbres_arbre ON espai_grups_arbres(arbre_id);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_arbres_status ON espai_grups_arbres(status);
+
+CREATE TABLE IF NOT EXISTS espai_grups_conflictes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    grup_id INTEGER NOT NULL REFERENCES espai_grups(id) ON DELETE CASCADE,
+    arbre_id INTEGER NOT NULL REFERENCES espai_arbres(id) ON DELETE CASCADE,
+    conflict_type TEXT NOT NULL CHECK (conflict_type IN ('persona','relacio','event','camp')),
+    object_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','resolved')),
+    summary TEXT,
+    details_json TEXT,
+    resolved_at TIMESTAMP,
+    resolved_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_conflictes_grup ON espai_grups_conflictes(grup_id);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_conflictes_status ON espai_grups_conflictes(status);
+
+CREATE TABLE IF NOT EXISTS espai_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    title TEXT,
+    body TEXT,
+    url TEXT,
+    status TEXT NOT NULL DEFAULT 'unread' CHECK (status IN ('unread','read','archived')),
+    object_type TEXT,
+    object_id INTEGER,
+    group_id INTEGER REFERENCES espai_grups(id) ON DELETE SET NULL,
+    tree_id INTEGER REFERENCES espai_arbres(id) ON DELETE SET NULL,
+    dedupe_key TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_espai_notifications_dedupe ON espai_notifications(user_id, dedupe_key);
+CREATE INDEX IF NOT EXISTS idx_espai_notifications_user ON espai_notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_espai_notifications_status ON espai_notifications(status);
+CREATE INDEX IF NOT EXISTS idx_espai_notifications_created ON espai_notifications(created_at);
+
+CREATE TABLE IF NOT EXISTS espai_notification_prefs (
+    user_id INTEGER PRIMARY KEY REFERENCES usuaris(id) ON DELETE CASCADE,
+    freq TEXT NOT NULL DEFAULT 'instant' CHECK (freq IN ('instant','daily','weekly','off')),
+    types_json TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_conflictes_updated ON espai_grups_conflictes(updated_at);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_conflictes_type ON espai_grups_conflictes(conflict_type);
+
+CREATE TABLE IF NOT EXISTS espai_grups_canvis (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    grup_id INTEGER NOT NULL REFERENCES espai_grups(id) ON DELETE CASCADE,
+    actor_id INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    object_type TEXT,
+    object_id INTEGER,
+    payload_json TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_canvis_grup ON espai_grups_canvis(grup_id);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_canvis_created ON espai_grups_canvis(created_at);
+CREATE INDEX IF NOT EXISTS idx_espai_grups_canvis_actor ON espai_grups_canvis(actor_id);
+
 CREATE INDEX IF NOT EXISTS idx_usuaris_correu ON usuaris(correu);
 CREATE INDEX IF NOT EXISTS idx_usuaris_data_creacio ON usuaris(data_creacio);
 CREATE INDEX IF NOT EXISTS idx_grups_nom ON grups(nom);

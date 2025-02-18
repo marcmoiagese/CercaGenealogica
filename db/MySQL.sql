@@ -1757,6 +1757,331 @@ CREATE TABLE IF NOT EXISTS user_blocks (
   FOREIGN KEY (blocked_id) REFERENCES usuaris(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Espai personal
+CREATE TABLE IF NOT EXISTS espai_arbres (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  owner_user_id INT UNSIGNED NOT NULL,
+  nom VARCHAR(255) NOT NULL,
+  descripcio TEXT,
+  visibility VARCHAR(20) NOT NULL DEFAULT 'private',
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_arbres_owner FOREIGN KEY (owner_user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  CONSTRAINT chk_espai_arbres_visibility CHECK (visibility IN ('private','public','restricted')),
+  CONSTRAINT chk_espai_arbres_status CHECK (status IN ('active','archived')),
+  UNIQUE KEY idx_espai_arbres_owner_name (owner_user_id, nom)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_arbres_owner ON espai_arbres(owner_user_id);
+CREATE INDEX idx_espai_arbres_status ON espai_arbres(status);
+CREATE INDEX idx_espai_arbres_updated ON espai_arbres(updated_at);
+
+CREATE TABLE IF NOT EXISTS espai_fonts_importacio (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  owner_user_id INT UNSIGNED NOT NULL,
+  source_type VARCHAR(20) NOT NULL,
+  nom VARCHAR(255),
+  original_filename VARCHAR(255),
+  storage_path TEXT,
+  checksum_sha256 VARCHAR(128),
+  size_bytes BIGINT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_fonts_owner FOREIGN KEY (owner_user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  CONSTRAINT chk_espai_fonts_type CHECK (source_type IN ('gedcom','gramps','manual'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_fonts_owner ON espai_fonts_importacio(owner_user_id);
+CREATE INDEX idx_espai_fonts_type ON espai_fonts_importacio(source_type);
+
+CREATE TABLE IF NOT EXISTS espai_imports (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  owner_user_id INT UNSIGNED NOT NULL,
+  arbre_id INT UNSIGNED NOT NULL,
+  font_id INT UNSIGNED NULL,
+  import_type VARCHAR(20) NOT NULL,
+  status VARCHAR(20) NOT NULL,
+  progress_total INT NOT NULL DEFAULT 0,
+  progress_done INT NOT NULL DEFAULT 0,
+  summary_json TEXT,
+  error_text TEXT,
+  started_at DATETIME NULL,
+  finished_at DATETIME NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_imports_owner FOREIGN KEY (owner_user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_imports_arbre FOREIGN KEY (arbre_id) REFERENCES espai_arbres(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_imports_font FOREIGN KEY (font_id) REFERENCES espai_fonts_importacio(id) ON DELETE SET NULL,
+  CONSTRAINT chk_espai_imports_type CHECK (import_type IN ('gedcom','gramps')),
+  CONSTRAINT chk_espai_imports_status CHECK (status IN ('queued','parsing','normalizing','persisted','done','error','cancelled'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_imports_owner ON espai_imports(owner_user_id);
+CREATE INDEX idx_espai_imports_arbre ON espai_imports(arbre_id);
+CREATE INDEX idx_espai_imports_status ON espai_imports(status);
+CREATE INDEX idx_espai_imports_updated ON espai_imports(updated_at);
+CREATE INDEX idx_espai_imports_type ON espai_imports(import_type);
+
+CREATE TABLE IF NOT EXISTS espai_persones (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  owner_user_id INT UNSIGNED NOT NULL,
+  arbre_id INT UNSIGNED NOT NULL,
+  external_id VARCHAR(255),
+  nom VARCHAR(255),
+  cognom1 VARCHAR(255),
+  cognom2 VARCHAR(255),
+  nom_complet TEXT,
+  sexe VARCHAR(20),
+  data_naixement VARCHAR(50),
+  data_defuncio VARCHAR(50),
+  lloc_naixement VARCHAR(255),
+  lloc_defuncio VARCHAR(255),
+  notes TEXT,
+  visibility VARCHAR(12) NOT NULL DEFAULT 'visible',
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_persones_owner FOREIGN KEY (owner_user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_persones_arbre FOREIGN KEY (arbre_id) REFERENCES espai_arbres(id) ON DELETE CASCADE,
+  CONSTRAINT chk_espai_persones_status CHECK (status IN ('active','archived')),
+  CONSTRAINT chk_espai_persones_sexe CHECK (sexe IN ('male','female','unknown')),
+  CONSTRAINT chk_espai_persones_visibility CHECK (visibility IN ('visible','hidden'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_persones_owner ON espai_persones(owner_user_id);
+CREATE INDEX idx_espai_persones_arbre ON espai_persones(arbre_id);
+CREATE INDEX idx_espai_persones_visibility ON espai_persones(visibility);
+CREATE INDEX idx_espai_persones_status ON espai_persones(status);
+CREATE INDEX idx_espai_persones_updated ON espai_persones(updated_at);
+
+CREATE TABLE IF NOT EXISTS espai_relacions (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  arbre_id INT UNSIGNED NOT NULL,
+  persona_id INT UNSIGNED NOT NULL,
+  related_persona_id INT UNSIGNED NOT NULL,
+  relation_type VARCHAR(20) NOT NULL,
+  notes TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_relacions_arbre FOREIGN KEY (arbre_id) REFERENCES espai_arbres(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_relacions_persona FOREIGN KEY (persona_id) REFERENCES espai_persones(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_relacions_related FOREIGN KEY (related_persona_id) REFERENCES espai_persones(id) ON DELETE CASCADE,
+  CONSTRAINT chk_espai_relacions_type CHECK (relation_type IN ('parent','mother','father','spouse','child','sibling'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_relacions_arbre ON espai_relacions(arbre_id);
+CREATE INDEX idx_espai_relacions_persona ON espai_relacions(persona_id);
+CREATE INDEX idx_espai_relacions_related ON espai_relacions(related_persona_id);
+
+CREATE TABLE IF NOT EXISTS espai_coincidencies (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  owner_user_id INT UNSIGNED NOT NULL,
+  arbre_id INT UNSIGNED NOT NULL,
+  persona_id INT UNSIGNED NOT NULL,
+  target_type VARCHAR(20) NOT NULL,
+  target_id INT UNSIGNED NOT NULL,
+  score DOUBLE,
+  reason_json TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_coincidencies_owner FOREIGN KEY (owner_user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_coincidencies_arbre FOREIGN KEY (arbre_id) REFERENCES espai_arbres(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_coincidencies_persona FOREIGN KEY (persona_id) REFERENCES espai_persones(id) ON DELETE CASCADE,
+  CONSTRAINT chk_espai_coincidencies_status CHECK (status IN ('pending','accepted','rejected','ignored')),
+  CONSTRAINT chk_espai_coincidencies_target CHECK (target_type IN ('persona','registre_raw'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_coincidencies_owner ON espai_coincidencies(owner_user_id);
+CREATE INDEX idx_espai_coincidencies_arbre ON espai_coincidencies(arbre_id);
+CREATE INDEX idx_espai_coincidencies_status ON espai_coincidencies(status);
+CREATE INDEX idx_espai_coincidencies_updated ON espai_coincidencies(updated_at);
+CREATE INDEX idx_espai_coincidencies_target ON espai_coincidencies(target_type, target_id);
+
+CREATE TABLE IF NOT EXISTS espai_decisions_coincidencia (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  coincidencia_id INT UNSIGNED NOT NULL,
+  decision VARCHAR(20) NOT NULL,
+  decided_by INT UNSIGNED NULL,
+  notes TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_decisions_coincidencia FOREIGN KEY (coincidencia_id) REFERENCES espai_coincidencies(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_decisions_user FOREIGN KEY (decided_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+  CONSTRAINT chk_espai_decisions_decision CHECK (decision IN ('accept','reject','ignore','undo'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_decisions_match ON espai_decisions_coincidencia(coincidencia_id);
+CREATE INDEX idx_espai_decisions_user ON espai_decisions_coincidencia(decided_by);
+
+CREATE TABLE IF NOT EXISTS espai_integracions_gramps (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  owner_user_id INT UNSIGNED NOT NULL,
+  arbre_id INT UNSIGNED NOT NULL,
+  base_url TEXT NOT NULL,
+  username VARCHAR(255) NULL,
+  token TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'connected',
+  last_sync_at DATETIME NULL,
+  last_error TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_integracions_owner FOREIGN KEY (owner_user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_integracions_arbre FOREIGN KEY (arbre_id) REFERENCES espai_arbres(id) ON DELETE CASCADE,
+  CONSTRAINT chk_espai_integracions_status CHECK (status IN ('connected','error','disabled'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_integracions_owner ON espai_integracions_gramps(owner_user_id);
+CREATE INDEX idx_espai_integracions_arbre ON espai_integracions_gramps(arbre_id);
+CREATE INDEX idx_espai_integracions_status ON espai_integracions_gramps(status);
+
+CREATE TABLE IF NOT EXISTS espai_integracions_gramps_logs (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  integracio_id INT UNSIGNED NOT NULL,
+  status VARCHAR(20) NOT NULL,
+  message TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_gramps_logs_integracio FOREIGN KEY (integracio_id) REFERENCES espai_integracions_gramps(id) ON DELETE CASCADE,
+  CONSTRAINT chk_espai_gramps_logs_status CHECK (status IN ('success','error'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_gramps_logs_integracio ON espai_integracions_gramps_logs(integracio_id);
+CREATE INDEX idx_espai_gramps_logs_created ON espai_integracions_gramps_logs(created_at);
+
+CREATE TABLE IF NOT EXISTS espai_privacy_audit (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  owner_user_id INT UNSIGNED NOT NULL,
+  arbre_id INT UNSIGNED NOT NULL,
+  persona_id INT UNSIGNED NULL,
+  action VARCHAR(32) NOT NULL,
+  from_visibility VARCHAR(12),
+  to_visibility VARCHAR(12),
+  ip VARCHAR(45),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_privacy_owner FOREIGN KEY (owner_user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_privacy_arbre FOREIGN KEY (arbre_id) REFERENCES espai_arbres(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_privacy_persona FOREIGN KEY (persona_id) REFERENCES espai_persones(id) ON DELETE SET NULL,
+  CONSTRAINT chk_espai_privacy_action CHECK (action IN ('tree_visibility','person_visibility'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_privacy_owner ON espai_privacy_audit(owner_user_id);
+CREATE INDEX idx_espai_privacy_arbre ON espai_privacy_audit(arbre_id);
+CREATE INDEX idx_espai_privacy_persona ON espai_privacy_audit(persona_id);
+CREATE INDEX idx_espai_privacy_created ON espai_privacy_audit(created_at);
+
+CREATE TABLE IF NOT EXISTS espai_grups (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  owner_user_id INT UNSIGNED NOT NULL,
+  nom VARCHAR(255) NOT NULL,
+  descripcio TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_grups_owner FOREIGN KEY (owner_user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  CONSTRAINT chk_espai_grups_status CHECK (status IN ('active','archived')),
+  UNIQUE KEY idx_espai_grups_owner_name (owner_user_id, nom)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_grups_owner ON espai_grups(owner_user_id);
+CREATE INDEX idx_espai_grups_status ON espai_grups(status);
+CREATE INDEX idx_espai_grups_updated ON espai_grups(updated_at);
+
+CREATE TABLE IF NOT EXISTS espai_grups_membres (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  grup_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
+  role VARCHAR(20) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  joined_at DATETIME NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_grups_membres_grup FOREIGN KEY (grup_id) REFERENCES espai_grups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_grups_membres_user FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  CONSTRAINT chk_espai_grups_membres_role CHECK (role IN ('owner','admin','member','viewer')),
+  CONSTRAINT chk_espai_grups_membres_status CHECK (status IN ('active','invited','removed')),
+  UNIQUE KEY idx_espai_grups_membres_unique (grup_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_grups_membres_grup ON espai_grups_membres(grup_id);
+CREATE INDEX idx_espai_grups_membres_user ON espai_grups_membres(user_id);
+CREATE INDEX idx_espai_grups_membres_status ON espai_grups_membres(status);
+
+CREATE TABLE IF NOT EXISTS espai_grups_arbres (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  grup_id INT UNSIGNED NOT NULL,
+  arbre_id INT UNSIGNED NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_grups_arbres_grup FOREIGN KEY (grup_id) REFERENCES espai_grups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_grups_arbres_arbre FOREIGN KEY (arbre_id) REFERENCES espai_arbres(id) ON DELETE CASCADE,
+  CONSTRAINT chk_espai_grups_arbres_status CHECK (status IN ('active','removed')),
+  UNIQUE KEY idx_espai_grups_arbres_unique (grup_id, arbre_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_grups_arbres_grup ON espai_grups_arbres(grup_id);
+CREATE INDEX idx_espai_grups_arbres_arbre ON espai_grups_arbres(arbre_id);
+CREATE INDEX idx_espai_grups_arbres_status ON espai_grups_arbres(status);
+
+CREATE TABLE IF NOT EXISTS espai_grups_conflictes (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  grup_id INT UNSIGNED NOT NULL,
+  arbre_id INT UNSIGNED NOT NULL,
+  conflict_type VARCHAR(20) NOT NULL,
+  object_id INT UNSIGNED NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  summary TEXT,
+  details_json TEXT,
+  resolved_at DATETIME NULL,
+  resolved_by INT UNSIGNED NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_grups_conflictes_grup FOREIGN KEY (grup_id) REFERENCES espai_grups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_grups_conflictes_arbre FOREIGN KEY (arbre_id) REFERENCES espai_arbres(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_grups_conflictes_resolved_by FOREIGN KEY (resolved_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+  CONSTRAINT chk_espai_grups_conflictes_status CHECK (status IN ('pending','resolved')),
+  CONSTRAINT chk_espai_grups_conflictes_type CHECK (conflict_type IN ('persona','relacio','event','camp'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_grups_conflictes_grup ON espai_grups_conflictes(grup_id);
+CREATE INDEX idx_espai_grups_conflictes_status ON espai_grups_conflictes(status);
+CREATE INDEX idx_espai_grups_conflictes_updated ON espai_grups_conflictes(updated_at);
+CREATE INDEX idx_espai_grups_conflictes_type ON espai_grups_conflictes(conflict_type);
+
+CREATE TABLE IF NOT EXISTS espai_notifications (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  kind VARCHAR(40) NOT NULL,
+  title TEXT,
+  body TEXT,
+  url TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'unread',
+  object_type VARCHAR(40),
+  object_id INT UNSIGNED NULL,
+  group_id INT UNSIGNED NULL,
+  tree_id INT UNSIGNED NULL,
+  dedupe_key VARCHAR(191),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  read_at DATETIME NULL,
+  CONSTRAINT fk_espai_notifications_user FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_notifications_group FOREIGN KEY (group_id) REFERENCES espai_grups(id) ON DELETE SET NULL,
+  CONSTRAINT fk_espai_notifications_tree FOREIGN KEY (tree_id) REFERENCES espai_arbres(id) ON DELETE SET NULL,
+  CONSTRAINT chk_espai_notifications_status CHECK (status IN ('unread','read','archived')),
+  UNIQUE KEY uniq_espai_notifications_dedupe (user_id, dedupe_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_notifications_user ON espai_notifications(user_id);
+CREATE INDEX idx_espai_notifications_status ON espai_notifications(status);
+CREATE INDEX idx_espai_notifications_created ON espai_notifications(created_at);
+
+CREATE TABLE IF NOT EXISTS espai_notification_prefs (
+  user_id INT UNSIGNED NOT NULL PRIMARY KEY,
+  freq VARCHAR(20) NOT NULL DEFAULT 'instant',
+  types_json TEXT,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_notification_prefs_user FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  CONSTRAINT chk_espai_notification_prefs_freq CHECK (freq IN ('instant','daily','weekly','off'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS espai_grups_canvis (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  grup_id INT UNSIGNED NOT NULL,
+  actor_id INT UNSIGNED NULL,
+  action VARCHAR(255) NOT NULL,
+  object_type VARCHAR(100),
+  object_id INT UNSIGNED NULL,
+  payload_json TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_grups_canvis_grup FOREIGN KEY (grup_id) REFERENCES espai_grups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_grups_canvis_actor FOREIGN KEY (actor_id) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_grups_canvis_grup ON espai_grups_canvis(grup_id);
+CREATE INDEX idx_espai_grups_canvis_created ON espai_grups_canvis(created_at);
+CREATE INDEX idx_espai_grups_canvis_actor ON espai_grups_canvis(actor_id);
+
 CREATE INDEX idx_transcripcions_raw_llibre_pagina
   ON transcripcions_raw(llibre_id, pagina_id, posicio_pagina);
 CREATE INDEX idx_transcripcions_raw_llibre_tipus_any

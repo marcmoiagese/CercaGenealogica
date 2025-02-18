@@ -430,6 +430,69 @@ type DB interface {
 	GetCSVImportTemplate(id int) (*CSVImportTemplate, error)
 	ListCSVImportTemplates(filter CSVImportTemplateFilter) ([]CSVImportTemplate, error)
 	DeleteCSVImportTemplate(id int) error
+	// Espai personal
+	CreateEspaiArbre(a *EspaiArbre) (int, error)
+	UpdateEspaiArbre(a *EspaiArbre) error
+	GetEspaiArbre(id int) (*EspaiArbre, error)
+	ListEspaiArbresByOwner(ownerID int) ([]EspaiArbre, error)
+	ListEspaiArbresPublic() ([]EspaiArbre, error)
+	CreateEspaiFontImportacio(f *EspaiFontImportacio) (int, error)
+	GetEspaiFontImportacio(id int) (*EspaiFontImportacio, error)
+	GetEspaiFontImportacioByChecksum(ownerID int, checksum string) (*EspaiFontImportacio, error)
+	ListEspaiFontsImportacioByOwner(ownerID int) ([]EspaiFontImportacio, error)
+	CreateEspaiImport(i *EspaiImport) (int, error)
+	UpdateEspaiImportStatus(id int, status string, errorText, summaryJSON string) error
+	UpdateEspaiImportProgress(id int, done, total int) error
+	GetEspaiImport(id int) (*EspaiImport, error)
+	GetLatestEspaiImportByFont(ownerID, fontID int) (*EspaiImport, error)
+	ListEspaiImportsByOwner(ownerID int) ([]EspaiImport, error)
+	ListEspaiImportsByArbre(arbreID int) ([]EspaiImport, error)
+	CreateEspaiPersona(p *EspaiPersona) (int, error)
+	UpdateEspaiPersonaVisibility(id int, visibility string) error
+	GetEspaiPersona(id int) (*EspaiPersona, error)
+	ListEspaiPersonesByArbre(arbreID int) ([]EspaiPersona, error)
+	ListEspaiPersonesByArbreQuery(arbreID int, query string, limit, offset int) ([]EspaiPersona, error)
+	CountEspaiPersonesByArbre(arbreID int) (int, int, error)
+	CountEspaiPersonesByArbreQuery(arbreID int, query string) (int, error)
+	CreateEspaiRelacio(r *EspaiRelacio) (int, error)
+	ListEspaiRelacionsByArbre(arbreID int) ([]EspaiRelacio, error)
+	CreateEspaiCoincidencia(c *EspaiCoincidencia) (int, error)
+	UpdateEspaiCoincidenciaStatus(id int, status string) error
+	GetEspaiCoincidencia(id int) (*EspaiCoincidencia, error)
+	GetEspaiCoincidenciaByTarget(ownerID, personaID int, targetType string, targetID int) (*EspaiCoincidencia, error)
+	ListEspaiCoincidenciesByOwner(ownerID int) ([]EspaiCoincidencia, error)
+	CreateEspaiCoincidenciaDecision(d *EspaiCoincidenciaDecision) (int, error)
+	ListEspaiCoincidenciaDecisions(coincidenciaID int) ([]EspaiCoincidenciaDecision, error)
+	CreateEspaiIntegracioGramps(i *EspaiIntegracioGramps) (int, error)
+	UpdateEspaiIntegracioGramps(i *EspaiIntegracioGramps) error
+	GetEspaiIntegracioGramps(id int) (*EspaiIntegracioGramps, error)
+	ListEspaiIntegracionsGrampsByOwner(ownerID int) ([]EspaiIntegracioGramps, error)
+	ListEspaiIntegracionsGramps() ([]EspaiIntegracioGramps, error)
+	CreateEspaiIntegracioGrampsLog(l *EspaiIntegracioGrampsLog) (int, error)
+	ListEspaiIntegracioGrampsLogs(integracioID int, limit int) ([]EspaiIntegracioGrampsLog, error)
+	CreateEspaiNotification(n *EspaiNotification) (int, error)
+	ListEspaiNotificationsByUser(userID int, status string, limit int) ([]EspaiNotification, error)
+	MarkEspaiNotificationRead(id int, userID int) error
+	MarkEspaiNotificationsReadAll(userID int) error
+	GetEspaiNotificationPref(userID int) (*EspaiNotificationPref, error)
+	UpsertEspaiNotificationPref(p *EspaiNotificationPref) error
+	CreateEspaiPrivacyAudit(a *EspaiPrivacyAudit) (int, error)
+	CreateEspaiGrup(g *EspaiGrup) (int, error)
+	GetEspaiGrup(id int) (*EspaiGrup, error)
+	ListEspaiGrupsByOwner(ownerID int) ([]EspaiGrup, error)
+	ListEspaiGrupsByUser(userID int) ([]EspaiGrup, error)
+	AddEspaiGrupMembre(m *EspaiGrupMembre) (int, error)
+	GetEspaiGrupMembre(grupID, userID int) (*EspaiGrupMembre, error)
+	UpdateEspaiGrupMembre(m *EspaiGrupMembre) error
+	ListEspaiGrupMembres(grupID int) ([]EspaiGrupMembre, error)
+	AddEspaiGrupArbre(a *EspaiGrupArbre) (int, error)
+	ListEspaiGrupArbres(grupID int) ([]EspaiGrupArbre, error)
+	UpdateEspaiGrupArbreStatus(grupID, arbreID int, status string) error
+	CreateEspaiGrupConflicte(c *EspaiGrupConflicte) (int, error)
+	UpdateEspaiGrupConflicteStatus(id int, status string, resolvedBy *int) error
+	ListEspaiGrupConflictes(grupID int) ([]EspaiGrupConflicte, error)
+	CreateEspaiGrupCanvi(c *EspaiGrupCanvi) (int, error)
+	ListEspaiGrupCanvis(grupID int, limit int) ([]EspaiGrupCanvi, error)
 	SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error)
 	ListRegistresByPersona(personaID int, tipus string) ([]PersonaRegistreRow, error)
 	GetPersonesByIDs(ids []int) (map[int]*Persona, error)
@@ -2194,7 +2257,7 @@ func NewDB(config map[string]string) (DB, error) {
 
 	switch engine {
 	case "sqlite":
-		if config["RECREADB"] == "true" {
+		if config["RECREADB"] == "true" && config["RECREADB_RESET"] == "true" {
 			path := strings.TrimSpace(config["DB_PATH"])
 			if path != "" {
 				if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
@@ -2231,8 +2294,14 @@ func NewDB(config map[string]string) (DB, error) {
 	// Si cal, recrearem la BD
 	if config["RECREADB"] == "true" {
 		sqlFile := getSQLFilePath(engine)
-		if err := CreateDatabaseFromSQL(sqlFile, engine, dbInstance); err != nil {
-			return nil, fmt.Errorf("error recreant BD amb %s: %v", engine, err)
+		if config["RECREADB_RESET"] == "true" {
+			if err := CreateDatabaseFromSQL(sqlFile, engine, dbInstance); err != nil {
+				return nil, fmt.Errorf("error recreant BD amb %s: %v", engine, err)
+			}
+		} else {
+			if err := ApplyDatabaseFromSQL(sqlFile, engine, dbInstance); err != nil {
+				return nil, fmt.Errorf("error aplicant esquema amb %s: %v", engine, err)
+			}
 		}
 	} else {
 		ready, err := baseSchemaReady(engine, dbInstance)
@@ -2267,13 +2336,27 @@ func getSQLFilePath(engine string) string {
 // Funció genèrica per executar totes les sentències SQL d'un fitxer
 // Funció genèrica per executar totes les sentències SQL d'un fitxer
 func CreateDatabaseFromSQL(sqlFile, engine string, db DB) error {
-	logInfof("Recreant BD des de: %s", sqlFile)
+	return applyDatabaseFromSQL(sqlFile, engine, db, true)
+}
+
+func ApplyDatabaseFromSQL(sqlFile, engine string, db DB) error {
+	return applyDatabaseFromSQL(sqlFile, engine, db, false)
+}
+
+func applyDatabaseFromSQL(sqlFile, engine string, db DB, reset bool) error {
+	if reset {
+		logInfof("Recreant BD des de: %s", sqlFile)
+	} else {
+		logInfof("Aplicant esquema BD des de: %s", sqlFile)
+	}
 	data, err := os.ReadFile(sqlFile)
 	if err != nil {
 		return fmt.Errorf("no s'ha pogut llegir el fitxer SQL: %w", err)
 	}
-	if err := resetDatabase(engine, db); err != nil {
-		return fmt.Errorf("error netejant BD (%s): %w", engine, err)
+	if reset {
+		if err := resetDatabase(engine, db); err != nil {
+			return fmt.Errorf("error netejant BD (%s): %w", engine, err)
+		}
 	}
 
 	raw := string(data)
@@ -2364,7 +2447,11 @@ func CreateDatabaseFromSQL(sqlFile, engine string, db DB) error {
 		return fmt.Errorf("error fent COMMIT: %w", err)
 	}
 
-	logInfof("BD recreada correctament")
+	if reset {
+		logInfof("BD recreada correctament")
+	} else {
+		logInfof("Esquema aplicat correctament")
+	}
 	return nil
 }
 

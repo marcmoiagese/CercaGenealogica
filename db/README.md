@@ -13,6 +13,7 @@ Els esquemes estan versionats per motor:
 - `MySQL.sql`
 
 Quan l’aplicació arrenca amb `RECREADB=true`, s’aplica l’esquema corresponent.
+Si vols netejar i recrear la BD, posa `RECREADB_RESET=true` o elimina la BD manualment (SQLite).
 
 ## Compatibilitat de placeholders
 

@@ -48,6 +48,13 @@
   const btnToggleDrawer = document.getElementById("toggleDrawer");
   const generationsSelect = document.getElementById("generacionsSelect");
   const viewPersonBtn = document.getElementById("viewPersonBtn");
+  const hasProfileBase = Object.prototype.hasOwnProperty.call(window, "treeProfileBase");
+  const profileBaseRaw =
+    hasProfileBase && typeof window.treeProfileBase === "string"
+      ? window.treeProfileBase.trim()
+      : "";
+  const profileBase = hasProfileBase ? profileBaseRaw : "/persones";
+  const canOpenProfile = profileBase !== "";
 
   const familyDataRef = Array.isArray(window.familyData) ? window.familyData : [];
   const familyLinksRef = Array.isArray(window.familyLinks) ? window.familyLinks : [];
@@ -233,17 +240,29 @@
     return id != null && /^\d+$/.test(String(id));
   }
 
+  function buildProfileURL(id) {
+    const base = profileBase.endsWith("/") ? profileBase.slice(0, -1) : profileBase;
+    return `${base}/${id}`;
+  }
+
   function setViewPersonTarget(personLike) {
     if (!viewPersonBtn) return;
+    if (!canOpenProfile) {
+      viewPersonBtn.removeAttribute("href");
+      viewPersonBtn.classList.add("is-disabled");
+      viewPersonBtn.setAttribute("aria-disabled", "true");
+      viewPersonBtn.style.display = "none";
+      return;
+    }
     const rootId = window.rootPersonId;
     if (personLike && isNumericId(personLike.id)) {
-      viewPersonBtn.href = `/persones/${personLike.id}`;
+      viewPersonBtn.href = buildProfileURL(personLike.id);
       viewPersonBtn.classList.remove("is-disabled");
       viewPersonBtn.setAttribute("aria-disabled", "false");
       return;
     }
     if (rootId && isNumericId(rootId)) {
-      viewPersonBtn.href = `/persones/${rootId}`;
+      viewPersonBtn.href = buildProfileURL(rootId);
       viewPersonBtn.classList.remove("is-disabled");
       viewPersonBtn.setAttribute("aria-disabled", "false");
       return;
@@ -280,8 +299,8 @@
       [t("tree.drawer.death_place"), p.death_place || ""],
     ].filter(([, v]) => (v || "").trim() !== "");
 
-    const actionLink = isNumericId(p.id)
-      ? `<div class="drawer-actions"><a class="drawer-link" href="/persones/${p.id}">${t("tree.drawer.open_profile")}</a></div>`
+    const actionLink = canOpenProfile && isNumericId(p.id)
+      ? `<div class="drawer-actions"><a class="drawer-link" href="${buildProfileURL(p.id)}">${t("tree.drawer.open_profile")}</a></div>`
       : "";
 
     if (rows.length === 0) {

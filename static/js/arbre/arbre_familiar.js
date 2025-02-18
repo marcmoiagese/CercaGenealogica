@@ -61,6 +61,14 @@
   const btnToggleDrawer = document.getElementById("toggleDrawer");
   const generationsSelect = document.getElementById("generacionsSelect");
   const viewPersonBtn = document.getElementById("viewPersonBtn");
+  const hasProfileBase = Object.prototype.hasOwnProperty.call(window, "treeProfileBase");
+  const profileBaseRaw =
+    hasProfileBase && typeof window.treeProfileBase === "string"
+      ? window.treeProfileBase.trim()
+      : "";
+  const profileBase = hasProfileBase ? profileBaseRaw : "/persones";
+  const canOpenProfile = profileBase !== "";
+  const expandDisabled = !!window.treeExpandDisabled;
 
   // Dades
   const familyDataRef = Array.isArray(window.familyData) ? window.familyData : [];
@@ -76,6 +84,13 @@
 
   function linkKey(child, fatherId, motherId) {
     return `${child || ""}:${fatherId || ""}:${motherId || ""}`;
+  }
+
+  function normalizeTreeId(val) {
+    if (val == null) return null;
+    const num = Number(val);
+    if (!Number.isFinite(num) || num === 0) return null;
+    return String(num);
   }
 
   function addPerson(person) {
@@ -113,10 +128,14 @@
 
   function addLinkRecord(record) {
     if (!record) return false;
-    const child = record.child ?? record.Child ?? record.id ?? null;
-    if (child == null) return false;
-    const fatherId = record.father != null ? String(record.father) : null;
-    const motherId = record.mother != null ? String(record.mother) : null;
+    const child = normalizeTreeId(record.child ?? record.Child ?? record.id ?? null);
+    if (!child) return false;
+    const fatherId = normalizeTreeId(record.father ?? record.Father ?? null);
+    const motherId = normalizeTreeId(record.mother ?? record.Mother ?? null);
+    if (!fatherId && !motherId) {
+      markNoParents(child);
+      return false;
+    }
     const key = linkKey(child, fatherId, motherId);
     if (linkKeySet.has(key)) {
       upsertParentMaps(child, fatherId, motherId);
@@ -184,17 +203,29 @@
     return id != null && /^\d+$/.test(String(id));
   }
 
+  function buildProfileURL(id) {
+    const base = profileBase.endsWith("/") ? profileBase.slice(0, -1) : profileBase;
+    return `${base}/${id}`;
+  }
+
   function setViewPersonTarget(personLike) {
     if (!viewPersonBtn) return;
-    const rootId = window.rootPersonId;
+    if (!canOpenProfile) {
+      viewPersonBtn.removeAttribute("href");
+      viewPersonBtn.classList.add("is-disabled");
+      viewPersonBtn.setAttribute("aria-disabled", "true");
+      viewPersonBtn.style.display = "none";
+      return;
+    }
+    const rootId = focusPersonId || window.rootPersonId;
     if (personLike && isNumericId(personLike.id)) {
-      viewPersonBtn.href = `/persones/${personLike.id}`;
+      viewPersonBtn.href = buildProfileURL(personLike.id);
       viewPersonBtn.classList.remove("is-disabled");
       viewPersonBtn.setAttribute("aria-disabled", "false");
       return;
     }
     if (rootId && isNumericId(rootId)) {
-      viewPersonBtn.href = `/persones/${rootId}`;
+      viewPersonBtn.href = buildProfileURL(rootId);
       viewPersonBtn.classList.remove("is-disabled");
       viewPersonBtn.setAttribute("aria-disabled", "false");
       return;
@@ -231,6 +262,7 @@
   }
 
   async function fetchAncestorsFor(personId, gens) {
+    if (expandDisabled) return false;
     const key = `${personId}:${gens}`;
     if (expandCache.has(key) || expandInFlight.has(key)) return false;
     expandInFlight.add(key);
@@ -313,8 +345,8 @@
       [t("tree.drawer.death_place"), p.death_place || ""],
     ].filter(([, v]) => (v || "").trim() !== "");
 
-    const actionLink = isNumericId(p.id)
-      ? `<div class="drawer-actions"><a class="drawer-link" href="/persones/${p.id}">${t("tree.drawer.open_profile")}</a></div>`
+    const actionLink = canOpenProfile && isNumericId(p.id)
+      ? `<div class="drawer-actions"><a class="drawer-link" href="${buildProfileURL(p.id)}">${t("tree.drawer.open_profile")}</a></div>`
       : "";
 
     if (rows.length === 0) {
@@ -367,6 +399,7 @@
   const expanded = new Set();
   let didAutoExpandParents = false;
   let currentSelectionId = null;
+  let focusPersonId = window.rootPersonId ? String(window.rootPersonId) : null;
 
   // Seleccio de llinatge (estil Geneanet):
   // per cada "fill" (node del tronc), triem si seguim la linia paterna o materna.
@@ -377,6 +410,36 @@
   // parentId -> { childId, side }
   let lastLineageSwitchMap = new Map();
   let lastTrunkSet = new Set();
+
+  function updateFocusUrl(id) {
+    if (!id || !window.history || !window.history.replaceState) return;
+    const url = new URL(window.location.href);
+    const path = url.pathname;
+    const match = path.match(/^(.*\/(?:espai\/persones|persones|public\/persones)\/)(\d+)(\/arbre.*)$/);
+    if (!match) return;
+    url.pathname = `${match[1]}${id}${match[3]}`;
+    window.history.replaceState({}, "", url.toString());
+  }
+
+  function resetFocusState() {
+    expanded.clear();
+    lineageChoice.clear();
+    lastLineageSwitchMap = new Map();
+    lastTrunkSet = new Set();
+    didAutoExpandParents = false;
+  }
+
+  function setFocusPerson(newId) {
+    if (!newId) return false;
+    const idStr = String(newId);
+    if (focusPersonId === idStr) return false;
+    focusPersonId = idStr;
+    window.rootPersonId = idStr;
+    currentSelectionId = idStr;
+    resetFocusState();
+    updateFocusUrl(idStr);
+    return true;
+  }
 
   function toggleExpanded(id) {
     const k = String(id);
@@ -629,6 +692,80 @@
     return gen;
   }
 
+  function computeSideMap(focusId, visible) {
+    const focus = String(focusId);
+    const sideMap = new Map();
+    const distMap = new Map();
+
+    sideMap.set(focus, "center");
+    distMap.set(focus, 0);
+
+    const queue = [];
+
+    function seed(idRaw, side) {
+      if (!idRaw) return;
+      const id = String(idRaw);
+      if (!visible.has(id)) return;
+      if (isHidden(id)) return;
+
+      const existingDist = distMap.get(id);
+      if (existingDist == null || existingDist > 1) {
+        distMap.set(id, 1);
+        sideMap.set(id, side);
+        queue.push(id);
+        return;
+      }
+      if (existingDist === 1) {
+        const existingSide = sideMap.get(id);
+        if (existingSide && existingSide !== side) {
+          sideMap.set(id, "center");
+        }
+      }
+    }
+
+    const { fatherId, motherId } = getParents(focus);
+    if (fatherId) seed(fatherId, "left");
+    if (motherId) seed(motherId, "right");
+
+    for (const kid of getChildren(focus)) {
+      seed(kid, "center");
+    }
+
+    while (queue.length) {
+      const id = queue.shift();
+      const curDist = distMap.get(id) ?? 0;
+      const curSide = sideMap.get(id) || "center";
+
+      const neighbors = [];
+      const { fatherId: f, motherId: m } = getParents(id);
+      if (f) neighbors.push(String(f));
+      if (m) neighbors.push(String(m));
+      for (const kid of getChildren(id)) neighbors.push(String(kid));
+
+      for (const nid of neighbors) {
+        if (nid === focus) continue;
+        if (!visible.has(nid)) continue;
+        if (isHidden(nid)) continue;
+
+        const nextDist = curDist + 1;
+        const existingDist = distMap.get(nid);
+        if (existingDist == null || nextDist < existingDist) {
+          distMap.set(nid, nextDist);
+          sideMap.set(nid, curSide);
+          queue.push(nid);
+        } else if (existingDist === nextDist) {
+          const existingSide = sideMap.get(nid);
+          if (existingSide && existingSide !== curSide && existingSide !== "center") {
+            sideMap.set(nid, "center");
+            queue.push(nid);
+          }
+        }
+      }
+    }
+
+    return { sideMap, distMap };
+  }
+
   function computeLayout(focusId, visible, genMap) {
     // Layout per "clusters" a cada generacio: persona + totes les seves parelles visibles al costat.
     // Aixo fa que, quan desplegues algu amb parella(es), la fila es reordeni i faci lloc (com Geneanet).
@@ -648,25 +785,110 @@
     }
 
     const pos = new Map();
+    const sideInfo = computeSideMap(focusId, visible);
+    const sideMap = sideInfo.sideMap;
+    const distMap = sideInfo.distMap;
+
+    function unionKey(a, b) {
+      if (!a || !b) return null;
+      return a < b ? `u:${a}:${b}` : `u:${b}:${a}`;
+    }
+
+    const unionChildrenMap = new Map();
+    for (const r of links) {
+      const child = String(r.child);
+      if (!visible.has(child)) continue;
+      if (isHidden(child)) continue;
+      const fatherId = r.father != null ? String(r.father) : null;
+      const motherId = r.mother != null ? String(r.mother) : null;
+      if (!fatherId || !motherId) continue;
+      if (!visible.has(fatherId) || !visible.has(motherId)) continue;
+      if (isHidden(fatherId) || isHidden(motherId)) continue;
+      const key = unionKey(fatherId, motherId);
+      if (!key) continue;
+      let set = unionChildrenMap.get(key);
+      if (!set) {
+        set = new Set();
+        unionChildrenMap.set(key, set);
+      }
+      set.add(child);
+    }
+
+    function getUnionChildren(a, b) {
+      const key = unionKey(a, b);
+      if (!key) return [];
+      const set = unionChildrenMap.get(key);
+      return set ? Array.from(set) : [];
+    }
+
+    const primarySpouseByPerson = new Map();
+
+    function visibleSpouses(pid, genValue) {
+      return getSpouses(pid)
+        .map(String)
+        .filter((s) => visible.has(s))
+        .filter((s) => (genMap.get(s) ?? 0) === genValue)
+        .filter((s) => !(getPerson(s)?.hidden));
+    }
+
+    function spouseScore(pid, spouseId) {
+      let score = Number.POSITIVE_INFINITY;
+      const spouseDist = distMap.get(spouseId);
+      if (spouseDist != null) score = Math.min(score, spouseDist);
+      const kids = getUnionChildren(pid, spouseId);
+      if (kids.length) {
+        let bestChild = Number.POSITIVE_INFINITY;
+        for (const kid of kids) {
+          const d = distMap.get(kid);
+          if (d != null && d < bestChild) bestChild = d;
+        }
+        if (bestChild < score) score = bestChild;
+      }
+      return score;
+    }
+
+    for (const pid of visible) {
+      const genValue = genMap.get(pid) ?? 0;
+      const spouses = visibleSpouses(pid, genValue);
+      if (!spouses.length) continue;
+      if (spouses.length === 1) {
+        primarySpouseByPerson.set(String(pid), spouses[0]);
+        continue;
+      }
+      let best = null;
+      let bestScore = Number.POSITIVE_INFINITY;
+      let bestKids = -1;
+      let bestName = "";
+      for (const spouseId of spouses) {
+        const score = spouseScore(pid, spouseId);
+        const kidsCount = getUnionChildren(pid, spouseId).length;
+        const name = String(getPerson(spouseId).name || "");
+        if (
+          score < bestScore ||
+          (score === bestScore && kidsCount > bestKids) ||
+          (score === bestScore && kidsCount === bestKids && name.localeCompare(bestName) < 0)
+        ) {
+          best = spouseId;
+          bestScore = score;
+          bestKids = kidsCount;
+          bestName = name;
+        }
+      }
+      if (best) primarySpouseByPerson.set(String(pid), best);
+    }
 
     function clusterWidth(members) {
       if (!members.length) return 0;
       return members.length * NODE_W + (members.length - 1) * SPOUSE_GAP;
     }
 
-    function sortedSpouses(pid, genValue) {
-      const spouses = getSpouses(pid)
-        .map(String)
-        .filter((s) => visible.has(s))
-        .filter((s) => (genMap.get(s) ?? 0) === genValue)
-        .filter((s) => !(getPerson(s)?.hidden));
-
-      spouses.sort((a, b) => {
-        const pa = getPerson(a);
-        const pb = getPerson(b);
-        return String(pa.name || "").localeCompare(String(pb.name || ""));
-      });
-      return spouses;
+    function primarySpouse(pid, genValue) {
+      const spouseId = primarySpouseByPerson.get(String(pid));
+      if (!spouseId) return null;
+      if (!visible.has(spouseId)) return null;
+      if ((genMap.get(spouseId) ?? 0) !== genValue) return null;
+      if (getPerson(spouseId)?.hidden) return null;
+      return spouseId;
     }
 
     function buildClustersForGen(ids, genValue, focus) {
@@ -681,8 +903,14 @@
         if (assigned.has(pid)) continue;
         if (!wantCluster(pid)) continue;
 
-        const spouses = sortedSpouses(pid, genValue).filter((s) => !assigned.has(s));
-        const members = [pid, ...spouses];
+        const members = [pid];
+        const spouseId = primarySpouse(pid, genValue);
+        if (spouseId && !assigned.has(spouseId)) {
+          const spousePrimary = primarySpouseByPerson.get(String(spouseId));
+          if (spousePrimary === pid) {
+            members.push(spouseId);
+          }
+        }
         for (const m of members) assigned.add(m);
         clusters.push({ root: pid, members });
       }
@@ -698,9 +926,92 @@
       return clusters;
     }
 
+    function clusterSide(cluster) {
+      let hasLeft = false;
+      let hasRight = false;
+      let hasCenter = false;
+
+      for (const id of cluster.members) {
+        const side = sideMap.get(String(id));
+        if (side === "left") hasLeft = true;
+        else if (side === "right") hasRight = true;
+        else hasCenter = true;
+      }
+
+      if (hasLeft && hasRight) return "center";
+      if (hasCenter) return "center";
+      if (hasLeft) return "left";
+      if (hasRight) return "right";
+      return "center";
+    }
+
+    function clusterDisplayName(cluster) {
+      const p = getPerson(cluster.root);
+      return String(p.name || "");
+    }
+
+    function clusterName(item) {
+      return clusterDisplayName(item.cluster);
+    }
+
+    function compareByTargetThenName(a, b) {
+      const aHas = typeof a.target === "number";
+      const bHas = typeof b.target === "number";
+      if (aHas && bHas && a.target !== b.target) return a.target - b.target;
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      return clusterName(a).localeCompare(clusterName(b));
+    }
+
+    function sideRank(side) {
+      if (side === "left") return -1;
+      if (side === "right") return 1;
+      return 0;
+    }
+
+    function clusterParentInfo(cluster, refGen) {
+      let best = null;
+      for (const id of cluster.members) {
+        const { fatherId, motherId } = getParents(id);
+        if (!fatherId || !motherId) continue;
+        const f = String(fatherId);
+        const m = String(motherId);
+        if (!visible.has(f) || !visible.has(m)) continue;
+        if ((genMap.get(f) ?? 0) !== refGen || (genMap.get(m) ?? 0) !== refGen) continue;
+        const fPos = pos.get(f);
+        const mPos = pos.get(m);
+        if (!fPos || !mPos) continue;
+        const key = unionKey(f, m);
+        if (!key) continue;
+        const center = (fPos.x + mPos.x) / 2;
+        const score = Math.min(
+          distMap.get(f) ?? Number.POSITIVE_INFINITY,
+          distMap.get(m) ?? Number.POSITIVE_INFINITY,
+          distMap.get(String(id)) ?? Number.POSITIVE_INFINITY
+        );
+        if (!best || score < best.score) {
+          best = { key, center, score };
+        }
+      }
+      return best;
+    }
+
     function clusterRefs(cluster, refGen, clusterGen) {
       // Referencia per ordenar el cluster segons els nodes ja collocats a la generacio adjacent.
       const refs = [];
+      if (refGen > clusterGen && cluster.members.length === 2) {
+        const a = String(cluster.members[0]);
+        const b = String(cluster.members[1]);
+        const kids = getUnionChildren(a, b)
+          .map(String)
+          .filter((k) => visible.has(k))
+          .filter((k) => !(getPerson(k)?.hidden))
+          .filter((k) => (genMap.get(k) ?? 0) === refGen);
+        if (kids.length) {
+          refs.push(...kids);
+          return refs;
+        }
+      }
+
       for (const id of cluster.members) {
         if (refGen > clusterGen) {
           // cap avall: mira fills
@@ -725,53 +1036,139 @@
 
     function orderClusters(clusters, clusterGen, refGen, focus) {
       // Si estem a gen 0, garantim que el cluster del focus queda al centre.
-      if (clusterGen === 0) {
-        const idx = clusters.findIndex((c) => c.members.includes(String(focus)));
-        const focusCluster = idx >= 0 ? clusters.splice(idx, 1)[0] : null;
-        clusters.sort((a, b) => {
-          const pa = getPerson(a.root);
-          const pb = getPerson(b.root);
-          return String(pa.name || "").localeCompare(String(pb.name || ""));
-        });
-        const left = [];
-        const right = [];
-        for (let i = 0; i < clusters.length; i++) {
-          if (i % 2 === 0) left.push(clusters[i]);
-          else right.push(clusters[i]);
+      const idx = clusters.findIndex((c) => c.members.includes(String(focus)));
+      const focusCluster = idx >= 0 ? clusters.splice(idx, 1)[0] : null;
+
+      const groupTargets = new Map();
+      if (refGen < clusterGen) {
+        const groups = new Map();
+        for (const c of clusters) {
+          const info = clusterParentInfo(c, refGen);
+          if (!info) continue;
+          let group = groups.get(info.key);
+          if (!group) {
+            group = { center: info.center, clusters: [] };
+            groups.set(info.key, group);
+          }
+          group.clusters.push(c);
         }
-        left.reverse();
-        return focusCluster ? [...left, focusCluster, ...right] : [...left, ...right];
+
+        for (const group of groups.values()) {
+          if (group.clusters.length < 2) continue;
+          const ordered = group.clusters
+            .slice()
+            .sort((a, b) => clusterDisplayName(a).localeCompare(clusterDisplayName(b)));
+          const widths = ordered.map((c) => clusterWidth(c.members));
+          const total = widths.reduce((a, b) => a + b, 0) + Math.max(0, ordered.length - 1) * GAP_X;
+          let cursor = group.center - total / 2;
+          for (let i = 0; i < ordered.length; i++) {
+            const w = widths[i];
+            const center = cursor + w / 2;
+            groupTargets.set(ordered[i], center);
+            cursor += w + GAP_X;
+          }
+        }
       }
 
       const scored = clusters.map((c) => {
         const refs = clusterRefs(c, refGen, clusterGen);
         const xs = refs.map((r) => pos.get(String(r))?.x).filter((v) => typeof v === "number");
-        const avg = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
-        return { c, avg };
+        const fallback = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+        const target = groupTargets.has(c) ? groupTargets.get(c) : fallback;
+        return { cluster: c, target, side: clusterSide(c) };
       });
-      scored.sort((a, b) => a.avg - b.avg);
-      return scored.map((s) => s.c);
+
+      if (clusterGen === 0) {
+        const left = [];
+        const right = [];
+        const center = [];
+
+        for (const item of scored) {
+          if (item.side === "left") left.push(item);
+          else if (item.side === "right") right.push(item);
+          else center.push(item);
+        }
+
+        left.sort(compareByTargetThenName);
+        right.sort(compareByTargetThenName);
+        center.sort(compareByTargetThenName);
+
+        const centerLeft = [];
+        const centerRight = [];
+        for (let i = 0; i < center.length; i++) {
+          if (i % 2 === 0) centerLeft.push(center[i]);
+          else centerRight.push(center[i]);
+        }
+        centerLeft.reverse();
+
+        const ordered = [...left, ...centerLeft];
+        if (focusCluster) {
+          ordered.push({ cluster: focusCluster, target: 0, side: "center" });
+        }
+        ordered.push(...centerRight, ...right);
+        return ordered;
+      }
+
+      scored.sort((a, b) => {
+        const ra = sideRank(a.side);
+        const rb = sideRank(b.side);
+        if (ra !== rb) return ra - rb;
+        return compareByTargetThenName(a, b);
+      });
+
+      return scored;
     }
 
     function packClusters(ordered, genValue) {
-      const widths = ordered.map((c) => clusterWidth(c.members));
-      const totalW = widths.reduce((a, b) => a + b, 0) + Math.max(0, ordered.length - 1) * GAP_X;
+      if (!ordered.length) return;
+      const items = ordered.map((item) =>
+        item && item.cluster ? item : { cluster: item, target: null, side: "center" }
+      );
+      const widths = items.map((item) => clusterWidth(item.cluster.members));
+      const totalW = widths.reduce((a, b) => a + b, 0) + Math.max(0, items.length - 1) * GAP_X;
       let cursor = -totalW / 2;
       const y = genValue * (NODE_H + GAP_Y);
+      const fallbackCenters = new Array(items.length);
 
-      for (let i = 0; i < ordered.length; i++) {
-        const c = ordered[i];
+      for (let i = 0; i < items.length; i++) {
         const w = widths[i];
+        fallbackCenters[i] = cursor + w / 2;
+        cursor += w + GAP_X;
+      }
 
-        // membres consecutius dins del cluster
+      const centers = fallbackCenters.slice();
+      const desired = items.map((item, i) =>
+        typeof item.target === "number" ? item.target : fallbackCenters[i]
+      );
+
+      for (let i = 0; i < items.length; i++) {
+        let c = desired[i];
+        if (i > 0) {
+          const minCenter = centers[i - 1] + widths[i - 1] / 2 + GAP_X + widths[i] / 2;
+          if (c < minCenter) c = minCenter;
+        }
+        centers[i] = c;
+      }
+
+      for (let i = items.length - 2; i >= 0; i--) {
+        const maxCenter = centers[i + 1] - widths[i + 1] / 2 - GAP_X - widths[i] / 2;
+        if (centers[i] > maxCenter) centers[i] = maxCenter;
+      }
+
+      for (let i = 1; i < items.length; i++) {
+        const minCenter = centers[i - 1] + widths[i - 1] / 2 + GAP_X + widths[i] / 2;
+        if (centers[i] < minCenter) centers[i] = minCenter;
+      }
+
+      for (let i = 0; i < items.length; i++) {
+        const c = items[i].cluster;
+        const w = widths[i];
+        const left = centers[i] - w / 2;
         for (let j = 0; j < c.members.length; j++) {
           const id = c.members[j];
-          const x = cursor + NODE_W / 2 + j * (NODE_W + SPOUSE_GAP);
+          const x = left + NODE_W / 2 + j * (NODE_W + SPOUSE_GAP);
           pos.set(String(id), { x, y });
         }
-
-        // avancem al seguent cluster
-        cursor += w + GAP_X;
       }
     }
 
@@ -854,7 +1251,7 @@
     if (p && p.hidden) return false;
     const kids = getChildren(id);
     if (kids.length > 0) return true;
-    if (!parentsByChild.has(String(id))) return true;
+    if (!parentsByChild.has(String(id))) return !expandDisabled;
     return false;
   }
 
@@ -866,7 +1263,7 @@
   }
 
   function render({ fit = false } = {}) {
-    const focusIdRaw = window.rootPersonId;
+    const focusIdRaw = focusPersonId;
     if (!focusIdRaw) {
       console.error(t("tree.error.root"));
       return;
@@ -894,8 +1291,27 @@
     }
     lastFitBounds = { minX, maxX, minY, maxY };
 
+    function unionKeyForParents(fatherId, motherId) {
+      if (fatherId && motherId) {
+        const a = fatherId < motherId ? fatherId : motherId;
+        const b = fatherId < motherId ? motherId : fatherId;
+        return `u:${a}:${b}`;
+      }
+      if (fatherId) return `u:${fatherId}:_`;
+      if (motherId) return `u:_:${motherId}`;
+      return null;
+    }
+
+    const trunkUnionKeys = new Set();
+    for (const cidRaw of lastTrunkSet) {
+      const cid = String(cidRaw);
+      const { fatherId, motherId } = getParents(cid);
+      const key = unionKeyForParents(fatherId ? String(fatherId) : null, motherId ? String(motherId) : null);
+      if (key) trunkUnionKeys.add(key);
+    }
+
     // Links estil Geneanet: ortogonals + segments compartits
-    const unions = new Map(); // key -> { key, fatherId, motherId, children:Set }
+    const unions = new Map(); // key -> { key, fatherId, motherId, fatherRawId, motherRawId, children:Set }
 
     for (const r of links) {
       const child = String(r.child);
@@ -909,19 +1325,18 @@
 
       if (!fatherId && !motherId) continue;
 
-      let key;
-      if (fatherId && motherId) {
-        const a = fatherId < motherId ? fatherId : motherId;
-        const b = fatherId < motherId ? motherId : fatherId;
-        key = `u:${a}:${b}`;
-      } else if (fatherId) {
-        key = `u:${fatherId}:_`;
-      } else {
-        key = `u:_:${motherId}`;
-      }
+      const key = unionKeyForParents(fatherId, motherId);
+      if (!key) continue;
 
       if (!unions.has(key)) {
-        unions.set(key, { key, fatherId, motherId, children: new Set() });
+        unions.set(key, {
+          key,
+          fatherId,
+          motherId,
+          fatherRawId: fatherIdRaw,
+          motherRawId: motherIdRaw,
+          children: new Set(),
+        });
       }
       unions.get(key).children.add(child);
     }
@@ -946,6 +1361,12 @@
       if (fA && mA) centerX = (fA.x + mA.x) / 2;
       else if (fA) centerX = fA.x;
       else if (mA) centerX = mA.x;
+
+      const fatherTrunk = u.fatherRawId && lastTrunkSet.has(String(u.fatherRawId));
+      const motherTrunk = u.motherRawId && lastTrunkSet.has(String(u.motherRawId));
+      const trunkSideCount = (fatherTrunk ? 1 : 0) + (motherTrunk ? 1 : 0);
+      const isPrimaryUnion = trunkUnionKeys.has(u.key);
+      const isSecondaryUnion = trunkSideCount === 1 && !isPrimaryUnion;
 
       // baixades dels progenitors fins a la linia de parella
       if (fA) pushPath(`${u.key}:pf`, `M ${fA.x},${fA.y} V ${marriageY}`);
@@ -975,13 +1396,15 @@
       const minTopY = Math.min(...children.map(childTop));
       const busY = minTopY - 14;
 
-      // Cas 1: un sol fill -> dogleg senzill
-      if (children.length === 1) {
-        const cid = children[0];
-        const cPos = pos.get(cid);
-        const topY = childTop(cid);
-        const elbowY = Math.min(busY, topY - 12);
-        pushPath(`${u.key}:to:${cid}`, `M ${centerX},${marriageY} V ${elbowY} H ${cPos.x} V ${topY}`);
+      const useSharedBus = children.length > 1 && !isSecondaryUnion;
+
+      if (!useSharedBus) {
+        for (const cid of children) {
+          const cPos = pos.get(cid);
+          const topY = childTop(cid);
+          const elbowY = Math.min(busY, topY - 12);
+          pushPath(`${u.key}:to:${cid}`, `M ${centerX},${marriageY} V ${elbowY} H ${cPos.x} V ${topY}`);
+        }
         continue;
       }
 
@@ -1049,6 +1472,11 @@
       lastSelectedPersonLike = d.person;
       if (drawerEnabled) openDrawer(d.person);
 
+      if (setFocusPerson(d.id)) {
+        render({ fit: false });
+        return;
+      }
+
       // Si cliques sobre un progenitor del tronc (pare/mare visible),
       // canviem la branca (paterna/materna) al nivell corresponent.
       const sw = lastLineageSwitchMap.get(String(d.id));
@@ -1058,7 +1486,7 @@
         didSwitchLineage = true;
       }
 
-      if (!parentsByChild.has(String(d.id))) {
+      if (!expandDisabled && !parentsByChild.has(String(d.id))) {
         fetchAncestorsFor(d.id, EXPAND_GENS).then((updated) => {
           if (updated) render({ fit: false });
         });
@@ -1147,7 +1575,7 @@
       currentSelectionId = null;
       closeDrawer();
       gNodes.selectAll("g.tree-node").classed("is-selected", false);
-      setViewPersonTarget({ id: window.rootPersonId });
+      setViewPersonTarget({ id: focusPersonId || window.rootPersonId });
     });
 
     if (fit) fitToView(lastFitBounds);
@@ -1195,6 +1623,6 @@
   setupSvgLayers();
   bindUi();
   setDrawerEnabled(true);
-  setViewPersonTarget({ id: window.rootPersonId });
+  setViewPersonTarget({ id: focusPersonId || window.rootPersonId });
   render({ fit: true });
 })();

@@ -225,6 +225,7 @@ func (a *App) SearchAPI(w http.ResponseWriter, r *http.Request) {
 	registreCache := map[int]*db.TranscripcioRaw{}
 	llibreCache := map[int]*db.Llibre{}
 	municipiCache := map[int]*db.Municipi{}
+	treeCache := map[int]*db.EspaiArbre{}
 
 	getPersona := func(id int) *db.Persona {
 		if v, ok := personaCache[id]; ok {
@@ -279,6 +280,21 @@ func (a *App) SearchAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		municipiCache[id] = mun
 		return mun
+	}
+	getTree := func(id int) *db.EspaiArbre {
+		if id <= 0 {
+			return nil
+		}
+		if v, ok := treeCache[id]; ok {
+			return v
+		}
+		tree, err := a.DB.GetEspaiArbre(id)
+		if err != nil || tree == nil {
+			treeCache[id] = nil
+			return nil
+		}
+		treeCache[id] = tree
+		return tree
 	}
 
 	items := make([]map[string]interface{}, 0, len(results))
@@ -366,6 +382,33 @@ func (a *App) SearchAPI(w http.ResponseWriter, r *http.Request) {
 				"tipus_acte":        registre.TipusActe,
 				"tipus_acte_label":  tipusLabel,
 				"match_info":        matchInfo,
+				"reasons":           reasons,
+				"score":             row.Score,
+			})
+		case "espai_arbre":
+			tree := getTree(row.EntityID)
+			if tree == nil || strings.TrimSpace(tree.Visibility) != "public" || strings.TrimSpace(tree.Status) != "active" {
+				continue
+			}
+			title := strings.TrimSpace(tree.Nom)
+			if title == "" {
+				title = "Arbre " + strconv.Itoa(tree.ID)
+			}
+			peopleCount := 0
+			if total, _, err := a.DB.CountEspaiPersonesByArbre(tree.ID); err == nil {
+				peopleCount = total
+			}
+			subtitle := ""
+			if peopleCount > 0 {
+				subtitle = fmt.Sprintf(T(lang, "search.espai.tree.people"), peopleCount)
+			}
+			items = append(items, map[string]interface{}{
+				"entity_type":       row.EntityType,
+				"entity_type_label": T(lang, "search.entity.espai_arbre"),
+				"entity_id":         row.EntityID,
+				"title":             title,
+				"subtitle":          subtitle,
+				"url":               "/public/espai/arbres/" + strconv.Itoa(row.EntityID),
 				"reasons":           reasons,
 				"score":             row.Score,
 			})

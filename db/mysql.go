@@ -926,6 +926,169 @@ func (d *MySQL) DequeueWikiPending(changeID int) error {
 func (d *MySQL) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 	return d.help.listWikiPending(limit)
 }
+// Espai personal
+func (d *MySQL) CreateEspaiArbre(a *EspaiArbre) (int, error) { return d.help.createEspaiArbre(a) }
+func (d *MySQL) UpdateEspaiArbre(a *EspaiArbre) error { return d.help.updateEspaiArbre(a) }
+func (d *MySQL) GetEspaiArbre(id int) (*EspaiArbre, error) { return d.help.getEspaiArbre(id) }
+func (d *MySQL) ListEspaiArbresByOwner(ownerID int) ([]EspaiArbre, error) {
+	return d.help.listEspaiArbresByOwner(ownerID)
+}
+func (d *MySQL) ListEspaiArbresPublic() ([]EspaiArbre, error) {
+	return d.help.listEspaiArbresPublic()
+}
+func (d *MySQL) CreateEspaiFontImportacio(f *EspaiFontImportacio) (int, error) {
+	return d.help.createEspaiFontImportacio(f)
+}
+func (d *MySQL) GetEspaiFontImportacio(id int) (*EspaiFontImportacio, error) {
+	return d.help.getEspaiFontImportacio(id)
+}
+func (d *MySQL) GetEspaiFontImportacioByChecksum(ownerID int, checksum string) (*EspaiFontImportacio, error) {
+	return d.help.getEspaiFontImportacioByChecksum(ownerID, checksum)
+}
+func (d *MySQL) ListEspaiFontsImportacioByOwner(ownerID int) ([]EspaiFontImportacio, error) {
+	return d.help.listEspaiFontsImportacioByOwner(ownerID)
+}
+func (d *MySQL) CreateEspaiImport(i *EspaiImport) (int, error) { return d.help.createEspaiImport(i) }
+func (d *MySQL) UpdateEspaiImportStatus(id int, status string, errorText, summaryJSON string) error {
+	return d.help.updateEspaiImportStatus(id, status, errorText, summaryJSON)
+}
+func (d *MySQL) UpdateEspaiImportProgress(id int, done, total int) error {
+	return d.help.updateEspaiImportProgress(id, done, total)
+}
+func (d *MySQL) GetEspaiImport(id int) (*EspaiImport, error) { return d.help.getEspaiImport(id) }
+func (d *MySQL) GetLatestEspaiImportByFont(ownerID, fontID int) (*EspaiImport, error) {
+	return d.help.getLatestEspaiImportByFont(ownerID, fontID)
+}
+func (d *MySQL) ListEspaiImportsByOwner(ownerID int) ([]EspaiImport, error) {
+	return d.help.listEspaiImportsByOwner(ownerID)
+}
+func (d *MySQL) ListEspaiImportsByArbre(arbreID int) ([]EspaiImport, error) {
+	return d.help.listEspaiImportsByArbre(arbreID)
+}
+func (d *MySQL) CreateEspaiPersona(p *EspaiPersona) (int, error) { return d.help.createEspaiPersona(p) }
+func (d *MySQL) UpdateEspaiPersonaVisibility(id int, visibility string) error {
+	return d.help.updateEspaiPersonaVisibility(id, visibility)
+}
+func (d *MySQL) GetEspaiPersona(id int) (*EspaiPersona, error) { return d.help.getEspaiPersona(id) }
+func (d *MySQL) ListEspaiPersonesByArbre(arbreID int) ([]EspaiPersona, error) {
+	return d.help.listEspaiPersonesByArbre(arbreID)
+}
+func (d *MySQL) ListEspaiPersonesByArbreQuery(arbreID int, query string, limit, offset int) ([]EspaiPersona, error) {
+	return d.help.listEspaiPersonesByArbreQuery(arbreID, query, limit, offset)
+}
+func (d *MySQL) CountEspaiPersonesByArbre(arbreID int) (int, int, error) {
+	return d.help.countEspaiPersonesByArbre(arbreID)
+}
+func (d *MySQL) CountEspaiPersonesByArbreQuery(arbreID int, query string) (int, error) {
+	return d.help.countEspaiPersonesByArbreQuery(arbreID, query)
+}
+func (d *MySQL) CreateEspaiRelacio(r *EspaiRelacio) (int, error) { return d.help.createEspaiRelacio(r) }
+func (d *MySQL) ListEspaiRelacionsByArbre(arbreID int) ([]EspaiRelacio, error) {
+	return d.help.listEspaiRelacionsByArbre(arbreID)
+}
+func (d *MySQL) CreateEspaiCoincidencia(c *EspaiCoincidencia) (int, error) {
+	return d.help.createEspaiCoincidencia(c)
+}
+func (d *MySQL) UpdateEspaiCoincidenciaStatus(id int, status string) error {
+	return d.help.updateEspaiCoincidenciaStatus(id, status)
+}
+func (d *MySQL) GetEspaiCoincidencia(id int) (*EspaiCoincidencia, error) {
+	return d.help.getEspaiCoincidencia(id)
+}
+func (d *MySQL) GetEspaiCoincidenciaByTarget(ownerID, personaID int, targetType string, targetID int) (*EspaiCoincidencia, error) {
+	return d.help.getEspaiCoincidenciaByTarget(ownerID, personaID, targetType, targetID)
+}
+func (d *MySQL) ListEspaiCoincidenciesByOwner(ownerID int) ([]EspaiCoincidencia, error) {
+	return d.help.listEspaiCoincidenciesByOwner(ownerID)
+}
+func (d *MySQL) CreateEspaiCoincidenciaDecision(dec *EspaiCoincidenciaDecision) (int, error) {
+	return d.help.createEspaiCoincidenciaDecision(dec)
+}
+func (d *MySQL) ListEspaiCoincidenciaDecisions(coincidenciaID int) ([]EspaiCoincidenciaDecision, error) {
+	return d.help.listEspaiCoincidenciaDecisions(coincidenciaID)
+}
+func (d *MySQL) CreateEspaiIntegracioGramps(i *EspaiIntegracioGramps) (int, error) {
+	return d.help.createEspaiIntegracioGramps(i)
+}
+func (d *MySQL) UpdateEspaiIntegracioGramps(i *EspaiIntegracioGramps) error {
+	return d.help.updateEspaiIntegracioGramps(i)
+}
+func (d *MySQL) GetEspaiIntegracioGramps(id int) (*EspaiIntegracioGramps, error) {
+	return d.help.getEspaiIntegracioGramps(id)
+}
+func (d *MySQL) ListEspaiIntegracionsGrampsByOwner(ownerID int) ([]EspaiIntegracioGramps, error) {
+	return d.help.listEspaiIntegracionsGrampsByOwner(ownerID)
+}
+func (d *MySQL) ListEspaiIntegracionsGramps() ([]EspaiIntegracioGramps, error) {
+	return d.help.listEspaiIntegracionsGramps()
+}
+func (d *MySQL) CreateEspaiIntegracioGrampsLog(l *EspaiIntegracioGrampsLog) (int, error) {
+	return d.help.createEspaiIntegracioGrampsLog(l)
+}
+func (d *MySQL) ListEspaiIntegracioGrampsLogs(integracioID int, limit int) ([]EspaiIntegracioGrampsLog, error) {
+	return d.help.listEspaiIntegracioGrampsLogs(integracioID, limit)
+}
+func (d *MySQL) CreateEspaiNotification(n *EspaiNotification) (int, error) {
+	return d.help.createEspaiNotification(n)
+}
+func (d *MySQL) ListEspaiNotificationsByUser(userID int, status string, limit int) ([]EspaiNotification, error) {
+	return d.help.listEspaiNotificationsByUser(userID, status, limit)
+}
+func (d *MySQL) MarkEspaiNotificationRead(id int, userID int) error {
+	return d.help.markEspaiNotificationRead(id, userID)
+}
+func (d *MySQL) MarkEspaiNotificationsReadAll(userID int) error {
+	return d.help.markEspaiNotificationsReadAll(userID)
+}
+func (d *MySQL) GetEspaiNotificationPref(userID int) (*EspaiNotificationPref, error) {
+	return d.help.getEspaiNotificationPref(userID)
+}
+func (d *MySQL) UpsertEspaiNotificationPref(p *EspaiNotificationPref) error {
+	return d.help.upsertEspaiNotificationPref(p)
+}
+func (d *MySQL) CreateEspaiPrivacyAudit(a *EspaiPrivacyAudit) (int, error) {
+	return d.help.createEspaiPrivacyAudit(a)
+}
+func (d *MySQL) CreateEspaiGrup(g *EspaiGrup) (int, error) { return d.help.createEspaiGrup(g) }
+func (d *MySQL) GetEspaiGrup(id int) (*EspaiGrup, error) { return d.help.getEspaiGrup(id) }
+func (d *MySQL) ListEspaiGrupsByOwner(ownerID int) ([]EspaiGrup, error) {
+	return d.help.listEspaiGrupsByOwner(ownerID)
+}
+func (d *MySQL) ListEspaiGrupsByUser(userID int) ([]EspaiGrup, error) {
+	return d.help.listEspaiGrupsByUser(userID)
+}
+func (d *MySQL) AddEspaiGrupMembre(m *EspaiGrupMembre) (int, error) { return d.help.addEspaiGrupMembre(m) }
+func (d *MySQL) GetEspaiGrupMembre(grupID, userID int) (*EspaiGrupMembre, error) {
+	return d.help.getEspaiGrupMembre(grupID, userID)
+}
+func (d *MySQL) UpdateEspaiGrupMembre(m *EspaiGrupMembre) error {
+	return d.help.updateEspaiGrupMembre(m)
+}
+func (d *MySQL) ListEspaiGrupMembres(grupID int) ([]EspaiGrupMembre, error) {
+	return d.help.listEspaiGrupMembres(grupID)
+}
+func (d *MySQL) AddEspaiGrupArbre(a *EspaiGrupArbre) (int, error) { return d.help.addEspaiGrupArbre(a) }
+func (d *MySQL) ListEspaiGrupArbres(grupID int) ([]EspaiGrupArbre, error) {
+	return d.help.listEspaiGrupArbres(grupID)
+}
+func (d *MySQL) UpdateEspaiGrupArbreStatus(grupID, arbreID int, status string) error {
+	return d.help.updateEspaiGrupArbreStatus(grupID, arbreID, status)
+}
+func (d *MySQL) CreateEspaiGrupConflicte(c *EspaiGrupConflicte) (int, error) {
+	return d.help.createEspaiGrupConflicte(c)
+}
+func (d *MySQL) UpdateEspaiGrupConflicteStatus(id int, status string, resolvedBy *int) error {
+	return d.help.updateEspaiGrupConflicteStatus(id, status, resolvedBy)
+}
+func (d *MySQL) ListEspaiGrupConflictes(grupID int) ([]EspaiGrupConflicte, error) {
+	return d.help.listEspaiGrupConflictes(grupID)
+}
+func (d *MySQL) CreateEspaiGrupCanvi(c *EspaiGrupCanvi) (int, error) {
+	return d.help.createEspaiGrupCanvi(c)
+}
+func (d *MySQL) ListEspaiGrupCanvis(grupID int, limit int) ([]EspaiGrupCanvi, error) {
+	return d.help.listEspaiGrupCanvis(grupID, limit)
+}
 func (d *MySQL) CreateCSVImportTemplate(t *CSVImportTemplate) (int, error) {
 	return d.help.createCSVImportTemplate(t)
 }

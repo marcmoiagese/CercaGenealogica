@@ -945,6 +945,169 @@ func (d *SQLite) DequeueWikiPending(changeID int) error {
 func (d *SQLite) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 	return d.help.listWikiPending(limit)
 }
+// Espai personal
+func (d *SQLite) CreateEspaiArbre(a *EspaiArbre) (int, error) { return d.help.createEspaiArbre(a) }
+func (d *SQLite) UpdateEspaiArbre(a *EspaiArbre) error { return d.help.updateEspaiArbre(a) }
+func (d *SQLite) GetEspaiArbre(id int) (*EspaiArbre, error) { return d.help.getEspaiArbre(id) }
+func (d *SQLite) ListEspaiArbresByOwner(ownerID int) ([]EspaiArbre, error) {
+	return d.help.listEspaiArbresByOwner(ownerID)
+}
+func (d *SQLite) ListEspaiArbresPublic() ([]EspaiArbre, error) {
+	return d.help.listEspaiArbresPublic()
+}
+func (d *SQLite) CreateEspaiFontImportacio(f *EspaiFontImportacio) (int, error) {
+	return d.help.createEspaiFontImportacio(f)
+}
+func (d *SQLite) GetEspaiFontImportacio(id int) (*EspaiFontImportacio, error) {
+	return d.help.getEspaiFontImportacio(id)
+}
+func (d *SQLite) GetEspaiFontImportacioByChecksum(ownerID int, checksum string) (*EspaiFontImportacio, error) {
+	return d.help.getEspaiFontImportacioByChecksum(ownerID, checksum)
+}
+func (d *SQLite) ListEspaiFontsImportacioByOwner(ownerID int) ([]EspaiFontImportacio, error) {
+	return d.help.listEspaiFontsImportacioByOwner(ownerID)
+}
+func (d *SQLite) CreateEspaiImport(i *EspaiImport) (int, error) { return d.help.createEspaiImport(i) }
+func (d *SQLite) UpdateEspaiImportStatus(id int, status string, errorText, summaryJSON string) error {
+	return d.help.updateEspaiImportStatus(id, status, errorText, summaryJSON)
+}
+func (d *SQLite) UpdateEspaiImportProgress(id int, done, total int) error {
+	return d.help.updateEspaiImportProgress(id, done, total)
+}
+func (d *SQLite) GetEspaiImport(id int) (*EspaiImport, error) { return d.help.getEspaiImport(id) }
+func (d *SQLite) GetLatestEspaiImportByFont(ownerID, fontID int) (*EspaiImport, error) {
+	return d.help.getLatestEspaiImportByFont(ownerID, fontID)
+}
+func (d *SQLite) ListEspaiImportsByOwner(ownerID int) ([]EspaiImport, error) {
+	return d.help.listEspaiImportsByOwner(ownerID)
+}
+func (d *SQLite) ListEspaiImportsByArbre(arbreID int) ([]EspaiImport, error) {
+	return d.help.listEspaiImportsByArbre(arbreID)
+}
+func (d *SQLite) CreateEspaiPersona(p *EspaiPersona) (int, error) { return d.help.createEspaiPersona(p) }
+func (d *SQLite) UpdateEspaiPersonaVisibility(id int, visibility string) error {
+	return d.help.updateEspaiPersonaVisibility(id, visibility)
+}
+func (d *SQLite) GetEspaiPersona(id int) (*EspaiPersona, error) { return d.help.getEspaiPersona(id) }
+func (d *SQLite) ListEspaiPersonesByArbre(arbreID int) ([]EspaiPersona, error) {
+	return d.help.listEspaiPersonesByArbre(arbreID)
+}
+func (d *SQLite) ListEspaiPersonesByArbreQuery(arbreID int, query string, limit, offset int) ([]EspaiPersona, error) {
+	return d.help.listEspaiPersonesByArbreQuery(arbreID, query, limit, offset)
+}
+func (d *SQLite) CountEspaiPersonesByArbre(arbreID int) (int, int, error) {
+	return d.help.countEspaiPersonesByArbre(arbreID)
+}
+func (d *SQLite) CountEspaiPersonesByArbreQuery(arbreID int, query string) (int, error) {
+	return d.help.countEspaiPersonesByArbreQuery(arbreID, query)
+}
+func (d *SQLite) CreateEspaiRelacio(r *EspaiRelacio) (int, error) { return d.help.createEspaiRelacio(r) }
+func (d *SQLite) ListEspaiRelacionsByArbre(arbreID int) ([]EspaiRelacio, error) {
+	return d.help.listEspaiRelacionsByArbre(arbreID)
+}
+func (d *SQLite) CreateEspaiCoincidencia(c *EspaiCoincidencia) (int, error) {
+	return d.help.createEspaiCoincidencia(c)
+}
+func (d *SQLite) UpdateEspaiCoincidenciaStatus(id int, status string) error {
+	return d.help.updateEspaiCoincidenciaStatus(id, status)
+}
+func (d *SQLite) GetEspaiCoincidencia(id int) (*EspaiCoincidencia, error) {
+	return d.help.getEspaiCoincidencia(id)
+}
+func (d *SQLite) GetEspaiCoincidenciaByTarget(ownerID, personaID int, targetType string, targetID int) (*EspaiCoincidencia, error) {
+	return d.help.getEspaiCoincidenciaByTarget(ownerID, personaID, targetType, targetID)
+}
+func (d *SQLite) ListEspaiCoincidenciesByOwner(ownerID int) ([]EspaiCoincidencia, error) {
+	return d.help.listEspaiCoincidenciesByOwner(ownerID)
+}
+func (d *SQLite) CreateEspaiCoincidenciaDecision(dec *EspaiCoincidenciaDecision) (int, error) {
+	return d.help.createEspaiCoincidenciaDecision(dec)
+}
+func (d *SQLite) ListEspaiCoincidenciaDecisions(coincidenciaID int) ([]EspaiCoincidenciaDecision, error) {
+	return d.help.listEspaiCoincidenciaDecisions(coincidenciaID)
+}
+func (d *SQLite) CreateEspaiIntegracioGramps(i *EspaiIntegracioGramps) (int, error) {
+	return d.help.createEspaiIntegracioGramps(i)
+}
+func (d *SQLite) UpdateEspaiIntegracioGramps(i *EspaiIntegracioGramps) error {
+	return d.help.updateEspaiIntegracioGramps(i)
+}
+func (d *SQLite) GetEspaiIntegracioGramps(id int) (*EspaiIntegracioGramps, error) {
+	return d.help.getEspaiIntegracioGramps(id)
+}
+func (d *SQLite) ListEspaiIntegracionsGrampsByOwner(ownerID int) ([]EspaiIntegracioGramps, error) {
+	return d.help.listEspaiIntegracionsGrampsByOwner(ownerID)
+}
+func (d *SQLite) ListEspaiIntegracionsGramps() ([]EspaiIntegracioGramps, error) {
+	return d.help.listEspaiIntegracionsGramps()
+}
+func (d *SQLite) CreateEspaiIntegracioGrampsLog(l *EspaiIntegracioGrampsLog) (int, error) {
+	return d.help.createEspaiIntegracioGrampsLog(l)
+}
+func (d *SQLite) ListEspaiIntegracioGrampsLogs(integracioID int, limit int) ([]EspaiIntegracioGrampsLog, error) {
+	return d.help.listEspaiIntegracioGrampsLogs(integracioID, limit)
+}
+func (d *SQLite) CreateEspaiNotification(n *EspaiNotification) (int, error) {
+	return d.help.createEspaiNotification(n)
+}
+func (d *SQLite) ListEspaiNotificationsByUser(userID int, status string, limit int) ([]EspaiNotification, error) {
+	return d.help.listEspaiNotificationsByUser(userID, status, limit)
+}
+func (d *SQLite) MarkEspaiNotificationRead(id int, userID int) error {
+	return d.help.markEspaiNotificationRead(id, userID)
+}
+func (d *SQLite) MarkEspaiNotificationsReadAll(userID int) error {
+	return d.help.markEspaiNotificationsReadAll(userID)
+}
+func (d *SQLite) GetEspaiNotificationPref(userID int) (*EspaiNotificationPref, error) {
+	return d.help.getEspaiNotificationPref(userID)
+}
+func (d *SQLite) UpsertEspaiNotificationPref(p *EspaiNotificationPref) error {
+	return d.help.upsertEspaiNotificationPref(p)
+}
+func (d *SQLite) CreateEspaiPrivacyAudit(a *EspaiPrivacyAudit) (int, error) {
+	return d.help.createEspaiPrivacyAudit(a)
+}
+func (d *SQLite) CreateEspaiGrup(g *EspaiGrup) (int, error) { return d.help.createEspaiGrup(g) }
+func (d *SQLite) GetEspaiGrup(id int) (*EspaiGrup, error) { return d.help.getEspaiGrup(id) }
+func (d *SQLite) ListEspaiGrupsByOwner(ownerID int) ([]EspaiGrup, error) {
+	return d.help.listEspaiGrupsByOwner(ownerID)
+}
+func (d *SQLite) ListEspaiGrupsByUser(userID int) ([]EspaiGrup, error) {
+	return d.help.listEspaiGrupsByUser(userID)
+}
+func (d *SQLite) AddEspaiGrupMembre(m *EspaiGrupMembre) (int, error) { return d.help.addEspaiGrupMembre(m) }
+func (d *SQLite) GetEspaiGrupMembre(grupID, userID int) (*EspaiGrupMembre, error) {
+	return d.help.getEspaiGrupMembre(grupID, userID)
+}
+func (d *SQLite) UpdateEspaiGrupMembre(m *EspaiGrupMembre) error {
+	return d.help.updateEspaiGrupMembre(m)
+}
+func (d *SQLite) ListEspaiGrupMembres(grupID int) ([]EspaiGrupMembre, error) {
+	return d.help.listEspaiGrupMembres(grupID)
+}
+func (d *SQLite) AddEspaiGrupArbre(a *EspaiGrupArbre) (int, error) { return d.help.addEspaiGrupArbre(a) }
+func (d *SQLite) ListEspaiGrupArbres(grupID int) ([]EspaiGrupArbre, error) {
+	return d.help.listEspaiGrupArbres(grupID)
+}
+func (d *SQLite) UpdateEspaiGrupArbreStatus(grupID, arbreID int, status string) error {
+	return d.help.updateEspaiGrupArbreStatus(grupID, arbreID, status)
+}
+func (d *SQLite) CreateEspaiGrupConflicte(c *EspaiGrupConflicte) (int, error) {
+	return d.help.createEspaiGrupConflicte(c)
+}
+func (d *SQLite) UpdateEspaiGrupConflicteStatus(id int, status string, resolvedBy *int) error {
+	return d.help.updateEspaiGrupConflicteStatus(id, status, resolvedBy)
+}
+func (d *SQLite) ListEspaiGrupConflictes(grupID int) ([]EspaiGrupConflicte, error) {
+	return d.help.listEspaiGrupConflictes(grupID)
+}
+func (d *SQLite) CreateEspaiGrupCanvi(c *EspaiGrupCanvi) (int, error) {
+	return d.help.createEspaiGrupCanvi(c)
+}
+func (d *SQLite) ListEspaiGrupCanvis(grupID int, limit int) ([]EspaiGrupCanvi, error) {
+	return d.help.listEspaiGrupCanvis(grupID, limit)
+}
 func (d *SQLite) CreateCSVImportTemplate(t *CSVImportTemplate) (int, error) {
 	return d.help.createCSVImportTemplate(t)
 }

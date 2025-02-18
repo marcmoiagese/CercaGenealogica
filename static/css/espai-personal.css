@@ -1,0 +1,1017 @@
+:root {
+    --space-surface: #ffffff;
+    --space-border: #e2e8f0;
+    --space-muted: #6b7280;
+    --space-accent: var(--accent-color);
+    --space-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+}
+
+.espai-shell {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+
+.espai-sidebar {
+    background: linear-gradient(180deg, #f9fbff 0%, #eef5fb 100%);
+    border: 1px solid var(--space-border);
+    border-radius: 18px;
+    padding: 20px;
+    box-shadow: var(--space-shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.espai-sidebar__header {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.espai-sidebar__header h2 {
+    font-size: 1.25rem;
+    margin-bottom: 4px;
+}
+
+.espai-sidebar__header p {
+    color: var(--space-muted);
+    font-size: 0.95rem;
+}
+
+.espai-badge {
+    align-self: flex-start;
+    background: rgba(22, 96, 136, 0.12);
+    color: #164a67;
+    padding: 0.2rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+}
+
+.espai-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.espai-nav__link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0.6rem 0.75rem;
+    border-radius: 12px;
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.espai-nav__link i {
+    color: var(--secondary-color);
+    width: 18px;
+    text-align: center;
+}
+
+.espai-nav__link:hover {
+    background: rgba(79, 195, 247, 0.15);
+}
+
+.espai-nav__link.is-active {
+    background: rgba(79, 195, 247, 0.25);
+    color: #0f3f56;
+    font-weight: 600;
+}
+
+.espai-content {
+    background: var(--space-surface);
+    border-radius: 18px;
+    border: 1px solid var(--space-border);
+    box-shadow: var(--space-shadow);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.espai-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--space-muted);
+    font-size: 0.9rem;
+}
+
+.espai-breadcrumbs a {
+    color: var(--space-muted);
+    text-decoration: none;
+}
+
+.espai-breadcrumbs a:hover {
+    color: var(--secondary-color);
+}
+
+.espai-content__header h1 {
+    margin: 0 0 6px;
+    font-size: 1.6rem;
+}
+
+.espai-content__header p {
+    margin: 0;
+    color: var(--space-muted);
+}
+
+.espai-state {
+    border: 1px dashed var(--space-border);
+    border-radius: 16px;
+    padding: 24px;
+    background: #f8fafc;
+}
+
+.espai-state__panel {
+    display: none;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.espai-state__icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: rgba(22, 96, 136, 0.12);
+    color: #164a67;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+}
+
+.espai-state__body h3 {
+    margin: 0 0 6px;
+    font-size: 1.1rem;
+}
+
+.espai-state__body p {
+    margin: 0 0 16px;
+    color: var(--space-muted);
+}
+
+.espai-state__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.espai-state[data-state="empty"] .espai-state__panel[data-for="empty"],
+.espai-state[data-state="loading"] .espai-state__panel[data-for="loading"],
+.espai-state[data-state="error"] .espai-state__panel[data-for="error"] {
+    display: grid;
+}
+
+.espai-state[data-state="ready"] {
+    display: none;
+}
+
+.espai-gedcom {
+    display: grid;
+    gap: 20px;
+}
+
+.espai-overview {
+    display: grid;
+    gap: 20px;
+}
+
+.espai-card--overview .espai-summary-grid {
+    margin-bottom: 16px;
+}
+
+.espai-overview-panels {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.espai-panel {
+    background: #fff;
+    border: 1px solid #e6edf3;
+    border-radius: 14px;
+    padding: 14px;
+    display: grid;
+    gap: 12px;
+}
+
+.espai-panel__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.espai-panel__header h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.espai-panel__header p {
+    margin: 4px 0 0;
+    color: var(--space-muted);
+}
+
+.espai-notify-list {
+    display: grid;
+    gap: 12px;
+}
+
+.espai-notify-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: flex-start;
+    border: 1px solid #e6edf3;
+    border-radius: 12px;
+    padding: 10px;
+    background: #fff;
+}
+
+.espai-notify-item.is-unread {
+    border-color: rgba(79, 195, 247, 0.45);
+    box-shadow: 0 0 0 1px rgba(79, 195, 247, 0.25);
+}
+
+.espai-notify-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #1f8bc7;
+    font-size: 0.95rem;
+}
+
+.espai-notify-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.espai-notify-text {
+    color: var(--space-muted);
+    font-size: 0.92rem;
+}
+
+.espai-notify-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: var(--space-muted);
+}
+
+.espai-field__label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.espai-checkbox-list {
+    display: grid;
+    gap: 6px;
+}
+
+.espai-tree-list {
+    display: grid;
+    gap: 16px;
+}
+
+.espai-tree-card {
+    background: #fff;
+    border: 1px solid #e6edf3;
+    border-radius: 14px;
+    padding: 16px;
+    display: grid;
+    gap: 14px;
+}
+
+.espai-tree-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.espai-tree-card__header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.espai-tree-card__header p {
+    margin: 4px 0 0;
+    color: var(--space-muted);
+}
+
+.espai-tree-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.espai-tree-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.espai-tree-search {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.espai-tree-search input {
+    min-width: 220px;
+    border: 1px solid #d7e0ea;
+    border-radius: 10px;
+    padding: 8px 12px;
+    background: #fff;
+}
+
+.espai-tree-search input:focus {
+    outline: none;
+    border-color: #6fb1ff;
+    box-shadow: 0 0 0 3px rgba(111, 177, 255, 0.2);
+}
+
+.espai-tree-results {
+    font-size: 0.85rem;
+    color: var(--space-muted);
+}
+
+.espai-tree-persons h4 {
+    margin: 0 0 10px;
+    font-size: 1rem;
+}
+
+.espai-tree-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.espai-disabled-hint {
+    font-size: 0.85rem;
+    color: var(--space-muted);
+}
+
+.espai-integracions {
+    display: grid;
+    gap: 20px;
+}
+
+.espai-groups {
+    display: grid;
+    gap: 20px;
+}
+
+.espai-group-list {
+    display: grid;
+    gap: 16px;
+}
+
+.espai-group-card {
+    background: #fff;
+    border: 1px solid #e6edf3;
+    border-radius: 14px;
+    padding: 16px;
+    display: grid;
+    gap: 12px;
+}
+
+.espai-group-card.is-active {
+    border-color: rgba(79, 195, 247, 0.45);
+    box-shadow: 0 0 0 1px rgba(79, 195, 247, 0.25);
+}
+
+.espai-group-card h3 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.espai-group-card p {
+    margin: 4px 0 0;
+    color: var(--space-muted);
+}
+
+.espai-group-card__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    color: var(--space-muted);
+    font-size: 0.9rem;
+}
+
+.espai-group-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.espai-group-section {
+    margin-top: 20px;
+    display: grid;
+    gap: 12px;
+}
+
+.espai-group-section h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.espai-change-detail {
+    background: #f7f9fb;
+    border: 1px solid #e6edf3;
+    border-radius: 12px;
+    padding: 14px;
+    display: grid;
+    gap: 10px;
+}
+
+.espai-change-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 0.9rem;
+    color: var(--space-muted);
+}
+
+.espai-change-payload pre {
+    margin: 6px 0 0;
+    background: #fff;
+    border: 1px dashed #dbe4ec;
+    border-radius: 10px;
+    padding: 12px;
+    white-space: pre-wrap;
+}
+
+.link-muted {
+    color: var(--space-muted);
+    text-decoration: none;
+}
+
+.link-muted:hover {
+    color: #1f8bc7;
+}
+
+.espai-conflict-filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.espai-integracions__list {
+    display: grid;
+    gap: 16px;
+}
+
+.espai-integration-card {
+    background: #fff;
+    border: 1px solid #e6edf3;
+    border-radius: 14px;
+    padding: 16px;
+    display: grid;
+    gap: 14px;
+}
+
+.espai-integration-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.espai-integration-card__header h3 {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.espai-integration-card__header p {
+    margin: 4px 0 0;
+    color: var(--space-muted);
+    font-size: 0.9rem;
+}
+
+.espai-card {
+    background: #f8fafc;
+    border: 1px solid var(--space-border);
+    border-radius: 16px;
+    padding: 20px;
+}
+
+.espai-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.espai-card__header h2 {
+    margin: 0 0 6px;
+    font-size: 1.2rem;
+}
+
+.espai-card__header p {
+    margin: 0;
+    color: var(--space-muted);
+}
+
+.espai-form {
+    display: grid;
+    gap: 16px;
+}
+
+.espai-form__grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.espai-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.espai-field--full {
+    grid-column: 1 / -1;
+}
+
+.espai-field label {
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.espai-field input,
+.espai-field select {
+    border: 1px solid #d5dde4;
+    border-radius: 10px;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.95rem;
+    background: #fff;
+}
+
+.espai-field input:focus,
+.espai-field select:focus {
+    outline: 2px solid rgba(79, 195, 247, 0.35);
+    border-color: #7cc0e6;
+}
+
+.espai-help {
+    font-size: 0.85rem;
+    color: var(--space-muted);
+}
+
+.espai-form__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.espai-alert {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.espai-alert--error {
+    background: #fff1f2;
+    color: #b42318;
+    border-color: #fecdd3;
+}
+
+.espai-alert--success {
+    background: #ecfdf3;
+    color: #027a48;
+    border-color: #abefc6;
+}
+
+.espai-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+    border: 1px solid transparent;
+}
+
+.espai-status--queued,
+.espai-status--parsing,
+.espai-status--normalizing,
+.espai-status--persisted {
+    background: #e0f2fe;
+    color: #0369a1;
+    border-color: #bae6fd;
+}
+
+.espai-status--pending {
+    background: #e0f2fe;
+    color: #0369a1;
+    border-color: #bae6fd;
+}
+
+.espai-status--accepted {
+    background: #ecfdf3;
+    color: #027a48;
+    border-color: #abefc6;
+}
+
+.espai-status--ignored,
+.espai-status--rejected {
+    background: #fff1f2;
+    color: #b42318;
+    border-color: #fecdd3;
+}
+
+.espai-status--done {
+    background: #ecfdf3;
+    color: #027a48;
+    border-color: #abefc6;
+}
+
+.espai-status--connected,
+.espai-status--success {
+    background: #ecfdf3;
+    color: #027a48;
+    border-color: #abefc6;
+}
+
+.espai-status--public {
+    background: #ecfdf3;
+    color: #027a48;
+    border-color: #abefc6;
+}
+
+.espai-status--visible {
+    background: #ecfdf3;
+    color: #027a48;
+    border-color: #abefc6;
+}
+
+.espai-status--private {
+    background: #f1f5f9;
+    color: #64748b;
+    border-color: #e2e8f0;
+}
+
+.espai-status--owner {
+    background: #dbeafe;
+    color: #1e3a8a;
+    border-color: #bfdbfe;
+}
+
+.espai-status--admin {
+    background: #e0f2fe;
+    color: #075985;
+    border-color: #bae6fd;
+}
+
+.espai-status--member,
+.espai-status--viewer {
+    background: #f1f5f9;
+    color: #64748b;
+    border-color: #e2e8f0;
+}
+
+.espai-status--active {
+    background: #ecfdf3;
+    color: #027a48;
+    border-color: #abefc6;
+}
+
+.espai-status--invited {
+    background: #fef9c3;
+    color: #92400e;
+    border-color: #fde68a;
+}
+
+.espai-status--removed {
+    background: #fff1f2;
+    color: #b42318;
+    border-color: #fecdd3;
+}
+
+.espai-status--restricted {
+    background: #fef9c3;
+    color: #92400e;
+    border-color: #fde68a;
+}
+
+.espai-status--hidden {
+    background: #fff1f2;
+    color: #b42318;
+    border-color: #fecdd3;
+}
+
+.espai-status--disabled {
+    background: #f1f5f9;
+    color: #64748b;
+    border-color: #e2e8f0;
+}
+
+.espai-status--error,
+.espai-status--cancelled {
+    background: #fff1f2;
+    color: #b42318;
+    border-color: #fecdd3;
+}
+
+.espai-import-name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.espai-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.espai-inline {
+    display: inline-flex;
+}
+
+.espai-inline select,
+.espai-bulk select {
+    border: 1px solid #d5dde4;
+    border-radius: 10px;
+    padding: 0.45rem 0.6rem;
+    background: #fff;
+    font-size: 0.9rem;
+}
+
+.espai-detail-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    margin-bottom: 16px;
+}
+
+.espai-detail {
+    background: #fff;
+    border: 1px solid #e6edf3;
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: grid;
+    gap: 6px;
+}
+
+.espai-detail__label {
+    font-size: 0.8rem;
+    color: var(--space-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+}
+
+.espai-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.espai-summary-card {
+    background: #fff;
+    border: 1px solid #e6edf3;
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: grid;
+    gap: 4px;
+}
+
+.espai-summary-card span {
+    font-size: 0.85rem;
+    color: var(--space-muted);
+}
+
+.espai-summary-card strong {
+    font-size: 1.1rem;
+}
+
+.espai-log {
+    background: #fff;
+    border: 1px solid #e6edf3;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+}
+
+.espai-log__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+
+.espai-log h3 {
+    margin: 0 0 8px;
+    font-size: 0.95rem;
+}
+
+.espai-log p {
+    margin: 0;
+    color: #475569;
+}
+
+.espai-log ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    color: #475569;
+}
+
+.espai-log--error {
+    border-color: #fecdd3;
+    background: #fff1f2;
+}
+
+.espai-logs h4 {
+    margin: 0 0 8px;
+    font-size: 0.95rem;
+}
+
+.espai-logs {
+    display: grid;
+    gap: 8px;
+}
+
+.espai-log-list {
+    display: grid;
+    gap: 10px;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+
+.espai-matches {
+    display: grid;
+    gap: 20px;
+}
+
+.espai-match-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.espai-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    background: #eef3f7;
+    border: 1px solid #d5dde4;
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.espai-chip span {
+    background: #fff;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: #475569;
+}
+
+.espai-chip.is-active {
+    background: rgba(79, 195, 247, 0.25);
+    border-color: rgba(79, 195, 247, 0.4);
+}
+
+.espai-bulk {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.espai-bulk__label {
+    font-weight: 600;
+    color: var(--space-muted);
+}
+
+.espai-reasons {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.espai-reason {
+    font-size: 0.75rem;
+    background: #f1f5f9;
+    color: #475569;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+}
+
+.espai-score {
+    font-weight: 700;
+    color: #0f3f56;
+}
+
+@media (max-width: 860px) {
+    .espai-bulk {
+        align-items: stretch;
+    }
+
+    .espai-chip {
+        flex: 1 1 auto;
+        justify-content: space-between;
+    }
+}
+
+@media (max-width: 860px) {
+    .espai-form__grid {
+        grid-template-columns: 1fr;
+    }
+
+    .espai-card__header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 980px) {
+    .espai-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .espai-sidebar {
+        position: static;
+    }
+
+    .espai-nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .espai-nav__link {
+        flex: 1 1 160px;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 640px) {
+    .espai-content {
+        padding: 20px;
+    }
+
+    .espai-state__panel {
+        grid-template-columns: 1fr;
+    }
+
+    .espai-state__icon {
+        width: 42px;
+        height: 42px;
+    }
+
+    .espai-nav__link {
+        flex: 1 1 100%;
+        justify-content: flex-start;
+    }
+}
