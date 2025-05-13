@@ -3,6 +3,8 @@ package db
 import (
 	"fmt"
 	"os"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Database interface defineix els mètodes comuns per a totes les bases de dades
