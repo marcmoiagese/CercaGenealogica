@@ -16,7 +16,7 @@ func main() {
 	}
 
 	// Inicialitzar base de dades
-	database, err := db.NewDatabase(config.Database)
+	database, err := db.NewDatabase(*config) // Nota el * per desreferenciar
 	if err != nil {
 		log.Fatalf("Error inicialitzant base de dades: %v", err)
 	}

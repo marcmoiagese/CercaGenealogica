@@ -1,12 +1,14 @@
 package cnf
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/marcmoiagese/CercaGenealogica/db"
 	"gopkg.in/yaml.v3"
 )
 
-type Config struct {
+type YamlConfig struct {
 	Database struct {
 		Type     string `yaml:"type"`
 		Postgres struct {
@@ -23,19 +25,34 @@ type Config struct {
 	} `yaml:"database"`
 }
 
-func LoadConfig() (*Config, error) {
-	config := &Config{}
+func LoadConfig() (*db.Config, error) {
+	config := &YamlConfig{}
 
 	file, err := os.Open("cnf/config.yaml")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error obrint fitxer de configuració: %v", err)
 	}
 	defer file.Close()
 
-	decoder := yaml.NewDecoder(file)
-	if err := decoder.Decode(config); err != nil {
-		return nil, err
+	if err := yaml.NewDecoder(file).Decode(config); err != nil {
+		return nil, fmt.Errorf("error decodificant YAML: %v", err)
 	}
 
-	return config, nil
+	// Converteix a l'estructura que espera el paquet db
+	dbConfig := db.Config{
+		Type: config.Database.Type,
+		Postgres: db.PostgreSQLConfig{
+			Host:     config.Database.Postgres.Host,
+			Port:     config.Database.Postgres.Port,
+			User:     config.Database.Postgres.User,
+			Password: config.Database.Postgres.Password,
+			DBName:   config.Database.Postgres.DBName,
+			SSLMode:  config.Database.Postgres.SSLMode,
+		},
+		SQLite: db.SQLiteConfig{
+			Path: config.Database.SQLite.Path,
+		},
+	}
+
+	return &dbConfig, nil
 }
