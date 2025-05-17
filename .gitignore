@@ -1,9 +1,0 @@
-# Binari
-/CercaGenealogica
-
-# Base de dades SQLite
-/db/*.db
-/db/*.db-journal
-
-# Entorns virtuals
-.env

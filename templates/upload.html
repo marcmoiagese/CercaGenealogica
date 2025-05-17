@@ -1,0 +1,31 @@
+<!-- templates/upload.html -->
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <title>Importa CSV</title>
+</head>
+<body>
+    <h1>Importa Fitxer CSV de Baptismes</h1>
+    
+    <form action="/import" method="post" enctype="multipart/form-data">
+        <label for="file">Fitxer CSV:</label>
+        <input type="file" name="csvFile" id="file" accept=".csv" required><br><br>
+
+        <label for="tipus">Tipus:</label>
+        <select name="tipus" id="tipus" disabled>
+            <option value="baptisme" selected>Baptisme</option>
+        </select><br><br>
+
+        <label for="municipi">Municipi:</label>
+        <input type="text" name="municipi" id="municipi" required><br><br>
+
+        <label for="arquevisbat">Arquebisbat:</label>
+        <input type="text" name="arquevisbat" id="arquevisbat" required><br><br>
+
+        <button type="submit">Enviar</button>
+    </form>
+
+    <p><a href="/">Torna a l'inici</a></p>
+</body>
+</html>
