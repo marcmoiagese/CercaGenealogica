@@ -1,0 +1,45 @@
+<!-- templates/revisio_duplicats.html -->
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <title>Revisió de Duplicats</title>
+    <style>
+        body { font-family: Arial; max-width: 800px; margin: auto; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+        input[type=checkbox] { transform: scale(1.2); }
+    </style>
+</head>
+<body>
+    <h1>Registres possiblement duplicats</h1>
+    <p>Es troben {{len .}} registres amb els mateixos cognoms en la mateixa pàgina, llibre i any.</p>
+
+    <form action="/import-seleccionats" method="POST">
+        <table>
+            <thead>
+                <tr>
+                    <th>Seleccionar</th>
+                    <th>Cognoms</th>
+                    <th>Pàgina</th>
+                    <th>Llibre</th>
+                    <th>Any</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $index, $item := .}}
+                <tr>
+                    <td><input type="checkbox" name="ids" value="{{$item.id}}"></td>
+                    <td>{{$item.cognom1}} {{$item.cognom2}}</td>
+                    <td>{{$item.pagina}}</td>
+                    <td>{{$item.llibre}}</td>
+                    <td>{{$item.any}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        <br>
+        <button type="submit">Inserir registres seleccionats</button>
+    </form>
+</body>
+</html>

@@ -10,7 +10,9 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -53,7 +55,7 @@ func initDB() *sql.DB {
 		}
 	}
 
-	// Crear nova taula temporal per a possibles duplicats
+	// Crear taula temporal per a possibles duplicats
 	_, err = db.Exec(`
         CREATE TABLE IF NOT EXISTS usuaris_possibles_duplicats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,31 +74,12 @@ func initDB() *sql.DB {
 		log.Fatal(err)
 	}
 
+	db.SetMaxOpenConns(1)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
 	return db
 }
 
-type Baptisme struct {
-	Cognoms         string `csv:"Cognoms"`
-	PaginaReal      string `csv:"Pagina real"`
-	PaginaLlibre    string `csv:"Pagina llibre"`
-	Llibre          string `csv:"Llibre"`
-	Any             string `csv:"Any"`
-	Pare            string `csv:"Pare"`
-	Mare            string `csv:"Mare"`
-	AvisPaterns     string `csv:"Avis Paterns"`
-	AvisMaterns     string `csv:"Avis Materns"`
-	Casat           string `csv:"Casat"`
-	Nascut          string `csv:"Nascut"`
-	PadriBateig     string `csv:"Padri de bateig"`
-	PadrinetaBateig string `csv:"Padrineta de bateig"`
-	Bateig          string `csv:"Bateig"`
-	Ofici           string `csv:"Ofici"`
-	Defuncio        string `csv:"Defunció"`
-	MatrimoniPares  string `csv:"Matrimoni Pares"`
-	Historia        string `csv:"Historia"`
-}
-
-// Funció auxiliar per veure si una paraula està en un slice
 func contains(slice []string, target string) bool {
 	for _, s := range slice {
 		if s == target {
@@ -106,11 +89,9 @@ func contains(slice []string, target string) bool {
 	return false
 }
 
-// Funció per processar cognoms
 func parseCognoms(cognomStr string) (string, string, string, string) {
 	cognomStr = strings.TrimSpace(cognomStr)
 
-	// Valors amb marques d’incomplet
 	if strings.ContainsAny(cognomStr, "¿?") || strings.HasPrefix(cognomStr, "??") || strings.HasSuffix(cognomStr, "??") {
 		return "", "", "", ""
 	}
@@ -147,7 +128,6 @@ func parseCognoms(cognomStr string) (string, string, string, string) {
 	return c1, c2, nom, cognomStr
 }
 
-// Funció per llegir totes les línies del CSV
 func readCSVFile(reader *csv.Reader) ([][]string, error) {
 	var records [][]string
 	for {
@@ -165,7 +145,7 @@ func readCSVFile(reader *csv.Reader) ([][]string, error) {
 
 func handleImport(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		r.ParseMultipartForm(10 << 20) // Limit 10MB
+		r.ParseMultipartForm(10 << 20) // Límit 10MB
 
 		file, handler, err := r.FormFile("csvFile")
 		if err != nil {
@@ -181,7 +161,7 @@ func handleImport(db *sql.DB) http.HandlerFunc {
 
 		reader := csv.NewReader(file)
 		reader.Comma = ';'
-		reader.FieldsPerRecord = -1 // Allow variable number of fields
+		reader.FieldsPerRecord = -1 // Permetre nombre variable de camps
 
 		records, err := readCSVFile(reader)
 		if err != nil {
@@ -194,22 +174,30 @@ func handleImport(db *sql.DB) http.HandlerFunc {
 		municipi := r.FormValue("municipi")
 		arquevisbat := r.FormValue("arquevisbat")
 
-		stmt, err := db.Prepare("INSERT INTO usuaris(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		stmtInsert, err := db.Prepare("INSERT INTO usuaris(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		defer stmt.Close()
+		defer stmtInsert.Close()
+
+		stmtDuplicats, err := db.Prepare("INSERT INTO usuaris_possibles_duplicats(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer stmtDuplicats.Close()
 
 		totalProcessed := 0
 		totalPossibleDuplicates := 0
 
 		for i, record := range records {
 			if i == 0 {
-				continue // Skip header
+				continue // Ometre capçalera
 			}
 
 			if len(record) < 17 {
+				log.Printf("Línia %d: Menys de 17 camps (%d). Saltada.", i, len(record))
 				continue
 			}
 
@@ -217,6 +205,7 @@ func handleImport(db *sql.DB) http.HandlerFunc {
 			nomCSV = strings.TrimSpace(nomCSV)
 
 			if nomCSV == "" {
+				log.Printf("Línia %d: Cognoms buits. Saltada.", i)
 				continue
 			}
 
@@ -228,33 +217,34 @@ func handleImport(db *sql.DB) http.HandlerFunc {
 
 			exists := 0
 
-			// Si tenim cognoms vàlids, comprovem duplicats
 			if cognom1 != "" || cognom2 != "" {
-				var err error
 				if nom != "" {
-					err = db.QueryRow(`
+					err := db.QueryRow(`
                         SELECT COUNT(*) FROM usuaris 
                         WHERE cognom1 = ? AND cognom2 = ? AND nom = ? AND pagina = ? AND llibre = ? AND any = ?
                     `, cognom1, cognom2, nom, pagina, llibre, any).Scan(&exists)
+
+					if err != nil {
+						log.Println("Error comprovant duplicat:", err)
+						continue
+					}
 				} else {
-					err = db.QueryRow(`
+					err := db.QueryRow(`
                         SELECT COUNT(*) FROM usuaris 
                         WHERE cognom1 = ? AND cognom2 = ? AND pagina = ? AND llibre = ? AND any = ?
                     `, cognom1, cognom2, pagina, llibre, any).Scan(&exists)
-				}
 
-				if err != nil {
-					log.Println("Error comprovant duplicat:", err)
-					continue
+					if err != nil {
+						log.Println("Error comprovant duplicat:", err)
+						continue
+					}
 				}
 
 				if exists > 0 {
-					// Afegir a la taula de possibles duplicats
-					_, err = db.Exec(`
-                        INSERT INTO usuaris_possibles_duplicats(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    `, nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any)
+					dup := fmt.Sprintf("%s %s | Pàgina: %s | Llibre: %s | Any: %s", cognom1, cognom2, pagina, llibre, any)
+					log.Printf("Línia %d: Duplicat trobat: %s", i, dup)
 
+					_, err = stmtDuplicats.Exec(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any)
 					if err != nil {
 						log.Printf("Error inserint a possibles duplicats: %v", err)
 					}
@@ -262,19 +252,20 @@ func handleImport(db *sql.DB) http.HandlerFunc {
 					totalPossibleDuplicates++
 					continue
 				}
+			} else {
+				log.Printf("Línia %d: Cognoms buits, evitem comprovació de duplicat", i)
 			}
 
-			// Inserim registre
-			_, err = stmt.Exec(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any)
+			_, err = stmtInsert.Exec(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any)
 			if err != nil {
-				log.Printf("Error inserint (%s %s): %v\n", cognom1, cognom2, err)
+				log.Printf("Error inserint línia %d: %v\n", i, err)
 				continue
 			}
 
 			totalProcessed++
 		}
 
-		// Mostrar resum final
+		// Mostrar missatge final amb llista de possibles duplicats
 		fmt.Fprintf(w, `
 <!DOCTYPE html>
 <html lang="ca">
@@ -282,25 +273,22 @@ func handleImport(db *sql.DB) http.HandlerFunc {
     <meta charset="UTF-8">
     <title>Resultat Importació</title>
     <style>
-        body { font-family: Arial; max-width: 600px; margin: auto; }
-        h1 { text-align: center; }
-        ul { list-style-type: none; padding: 0; }
-        li { padding: 5px 0; }
+        body { font-family: Arial; max-width: 600px; margin: auto }
+        h1 { text-align: center }
+        ul { list-style-type: none; padding: 0 }
+        li { padding: 5px 0 }
     </style>
 </head>
 <body>
     <h1>Importació completada</h1>
     <p><strong>Registres processats:</strong> %d</p>
     <p><strong>Possibles duplicats detectats:</strong> %d</p>
+
     <form action="/import-seleccionats" method="POST">
         <button type="submit">Inserir possibles duplicats seleccionats</button>
-    </form>
-    <br>
-    <h2>Possibles duplicats</h2>
-    <ul>
+        <ul>
 `, totalProcessed, totalPossibleDuplicates)
 
-		// Llegir possibles duplicats per mostrar-los
 		rows, err := db.Query("SELECT id, cognom1, cognom2, pagina, llibre, any FROM usuaris_possibles_duplicats")
 		if err != nil {
 			log.Println("Error llegint possibles duplicats:", err)
@@ -313,12 +301,14 @@ func handleImport(db *sql.DB) http.HandlerFunc {
 					log.Println("Error llegint registre:", err)
 					continue
 				}
+				defer rows.Close()
 				fmt.Fprintf(w, "<li><input type=\"checkbox\" name=\"ids\" value=\"%d\"> %s %s | Pàgina: %s | Llibre: %s | Any: %s</li>\n", id, c1, c2, pag, lb, y)
 			}
 		}
 
 		fmt.Fprintf(w, `
-    </ul>
+        </ul>
+    </form>
 </body>
 </html>
 `)
@@ -332,16 +322,23 @@ func handleSeleccionats(db *sql.DB) http.HandlerFunc {
 			selectedIDs := r.Form["ids"]
 
 			if len(selectedIDs) > 0 {
-				placeholders := strings.Join(strings.Repeat("?", len(selectedIDs)), ",")
-				query := fmt.Sprintf("SELECT nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any FROM usuaris_possibles_duplicats WHERE id IN (%s)", placeholders)
+				placeholders := make([]string, len(selectedIDs))
+				args := make([]interface{}, len(selectedIDs))
+				for i, v := range selectedIDs {
+					id, _ := strconv.Atoi(v)
+					placeholders[i] = "?"
+					args[i] = id
+				}
+				whereClause := strings.Join(placeholders, ",")
 
-				rows, err := db.Query(query, selectedIDs...)
+				// Obtenir registres seleccionats
+				rows, err := db.Query(fmt.Sprintf("SELECT nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any FROM usuaris_possibles_duplicats WHERE id IN (%s)", whereClause), args...)
 				if err != nil {
 					http.Error(w, "Error llegint registres seleccionats", http.StatusInternalServerError)
 					return
 				}
-				defer rows.Close()
 
+				// Inserció definitiva
 				stmt, _ := db.Prepare("INSERT INTO usuaris(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
 				defer stmt.Close()
 
@@ -360,8 +357,7 @@ func handleSeleccionats(db *sql.DB) http.HandlerFunc {
 				}
 
 				// Eliminar després d'inserir
-				idsStr := strings.Join(selectedIDs, ", ")
-				db.Exec("DELETE FROM usuaris_possibles_duplicats WHERE id IN (" + idsStr + ")")
+				db.Exec(fmt.Sprintf("DELETE FROM usuaris_possibles_duplicats WHERE id IN (%s)", whereClause), args...)
 			}
 		}
 
@@ -403,9 +399,7 @@ func main() {
 			params = append(params, "%"+word+"%", "%"+word+"%", "%"+word+"%")
 		}
 
-		whereClause := strings.Join(clauses, " AND ")
-		sqlQuery := fmt.Sprintf("SELECT nom, cognom1, cognom2 FROM usuaris WHERE %s LIMIT 10", whereClause)
-
+		sqlQuery := fmt.Sprintf("SELECT nom, cognom1, cognom2 FROM usuaris WHERE %s LIMIT 10", strings.Join(clauses, " AND "))
 		rows, err := db.Query(sqlQuery, params...)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -426,6 +420,42 @@ func main() {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resultats)
+	})
+
+	http.HandleFunc("/pendents", func(w http.ResponseWriter, r *http.Request) {
+		rows, err := db.Query("SELECT id, cognom1, cognom2, pagina, llibre, any FROM usuaris_possibles_duplicats")
+		if err != nil {
+			http.Error(w, "Error llegint possibles duplicats", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var pendentList []map[string]string
+		for rows.Next() {
+			var id int
+			var c1, c2, pag, lb, y string
+			err := rows.Scan(&id, &c1, &c2, &pag, &lb, &y)
+			if err != nil {
+				log.Println("Error llegint registre:", err)
+				continue
+			}
+
+			pendentList = append(pendentList, map[string]string{
+				"id":      strconv.Itoa(id),
+				"cognoms": c1 + " " + c2,
+				"pagina":  pag,
+				"llibre":  lb,
+				"any":     y,
+			})
+		}
+
+		tmpl, err := template.ParseFiles("templates/pendents.html")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		tmpl.Execute(w, pendentList)
 	})
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
