@@ -11,9 +11,14 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// SQLiteDB implementa DBManager per SQLite
+// SQLiteDB és la implementació per SQLite
 type SQLiteDB struct {
 	db *sql.DB
+}
+
+// DB retorna la connexió a la BD
+func (s *SQLiteDB) DB() *sql.DB {
+	return s.db
 }
 
 // Init inicialitza la connexió i crea les taules si no existeixen

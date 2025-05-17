@@ -2,16 +2,14 @@ package main
 
 import (
 	"fmt"
-	arquevisbats "go-fesme/modules/Importacio/Arquevisbats"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"text/template"
 
-	"github.com/julienschmidt/httprouter"
-
-	"./core/cerca"
-	"./db"
+	"github.com/marcmoiagese/CercaGenealogica/db"
+	"github.com/marcmoiagese/CercaGenealogica/web/handlers"
 )
 
 func loadConfig() (engine, path string) {
@@ -32,7 +30,7 @@ func loadConfig() (engine, path string) {
 }
 
 func main() {
-	engine, path := loadConfig()
+	engine, _ := loadConfig()
 	dbManager, err := db.GetDBManager(engine)
 	if err != nil {
 		log.Fatal(err)
@@ -43,23 +41,26 @@ func main() {
 	}
 	defer db.Close()
 
-	router := httprouter.New()
+	// Inicialitza connexió SQL per passar als handlers
+	sqlDB := dbManager.DB()
 
-	// Rutes web
-	router.GET("/", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		http.ServeFile(w, r, "web/templates/index.html")
-	})
-	router.POST("/import", arquevisbats.HandleImport(&dbManager))
-	router.GET("/cerca", cerca.CercaHandler(dbManager.db))
-	router.GET("/pendents", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		dups, _ := dbManager.GetPossibleDuplicates()
-		// TODO: render template amb dups
+	// Rutes
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		tmpl, err := template.ParseFiles("web/templates/index.html")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		tmpl.Execute(w, nil)
 	})
 
-	// Serve static
-	fs := http.FileServer(http.Dir("web/static"))
-	router.Handler("GET", "/static/*filepath", http.StripPrefix("/static/", fs))
+	http.HandleFunc("/cerca", handlers.CercaHandler(sqlDB))
+	http.HandleFunc("/upload", handlers.UploadPageHandler())
+	http.HandleFunc("/import", handlers.ImportHandler(sqlDB))
+
+	// Serve static files
+	http.Handle("/static/", handlers.StaticHandler())
 
 	fmt.Println("Servidor corrent a http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", router))
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
