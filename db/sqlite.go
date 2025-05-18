@@ -108,9 +108,20 @@ func (s *SQLiteDB) CheckDuplicate(c1, c2, nom, pag, lb, y string) (bool, error) 
 	return exists > 0, err
 }
 
+// Insertem els duplicats
+func (s *SQLiteDB) InsertUsuariAPossiblesDuplicats(nom, c1, c2, muni, arq, nc, pag, lb, y string) error {
+	stmt, err := s.db.Prepare("INSERT INTO usuaris_possibles_duplicats(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(nom, c1, c2, muni, arq, nc, pag, lb, y)
+	return err
+}
+
 // GetPossibleDuplicates retorna tots els possibles duplicats
 func (s *SQLiteDB) GetPossibleDuplicates() ([]map[string]string, error) {
-	rows, err := s.db.Query("SELECT id, cognom1, cognom2, pagina, llibre, any FROM usuaris_possibles_duplicats")
+	rows, err := s.db.Query("SELECT id, nom, cognom1, cognom2, pagina, llibre, any FROM usuaris_possibles_duplicats")
 	if err != nil {
 		return nil, err
 	}
@@ -119,15 +130,15 @@ func (s *SQLiteDB) GetPossibleDuplicates() ([]map[string]string, error) {
 	var pendentList []map[string]string
 	for rows.Next() {
 		var id int
-		var c1, c2, pag, lb, y string
-		err := rows.Scan(&id, &c1, &c2, &pag, &lb, &y)
+		var n1, c1, c2, pag, lb, y string
+		err := rows.Scan(&id, &n1, &c1, &c2, &pag, &lb, &y)
 		if err != nil {
 			log.Println("Error llegint registre:", err)
 			continue
 		}
 		pendentList = append(pendentList, map[string]string{
 			"id":      strconv.Itoa(id),
-			"cognoms": c1 + " " + c2,
+			"cognoms": n1 + " " + c1 + " " + c2,
 			"pagina":  pag,
 			"llibre":  lb,
 			"any":     y,
@@ -138,6 +149,10 @@ func (s *SQLiteDB) GetPossibleDuplicates() ([]map[string]string, error) {
 
 // DeleteDuplicates esborra els duplicats seleccionats
 func (s *SQLiteDB) DeleteDuplicates(ids []int) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
 	placeholders := make([]string, len(ids))
 	args := make([]interface{}, len(ids))
 	for i, v := range ids {
@@ -145,42 +160,111 @@ func (s *SQLiteDB) DeleteDuplicates(ids []int) error {
 		args[i] = v
 	}
 	whereClause := strings.Join(placeholders, ",")
-	_, err := s.db.Exec(fmt.Sprintf("DELETE FROM usuaris_possibles_duplicats WHERE id IN (%s)", whereClause), args...)
-	return err
+
+	log.Printf("🗑️ Eliminant duplicats amb IDs: %v", ids)
+
+	result, err := s.db.Exec(fmt.Sprintf("DELETE FROM usuaris_possibles_duplicats WHERE id IN (%s)", whereClause), args...)
+	if err != nil {
+		log.Printf("❌ Error al eliminar duplicats: %v", err)
+		return err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("✔️ Eliminats %d possibles duplicats", rowsAffected)
+
+	return nil
 }
 
 // ImportSelectedDuplicates mou els duplicats seleccionats a la taula principal
 func (s *SQLiteDB) ImportSelectedDuplicates(ids []int) error {
+	if len(ids) == 0 {
+		return fmt.Errorf("cap ID proporcionat")
+	}
+
+	log.Printf("🔄 Iniciant importació de duplicats seleccionats amb IDs: %v", ids)
+
 	placeholders := make([]string, len(ids))
 	args := make([]interface{}, len(ids))
 	for i, v := range ids {
 		placeholders[i] = "?"
 		args[i] = v
 	}
-	whereClause := strings.Join(placeholders, ",")
+	whereClause := strings.Join(placeholders, ", ")
 
-	// Obtenir registres seleccionats
 	rows, err := s.db.Query(fmt.Sprintf("SELECT nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any FROM usuaris_possibles_duplicats WHERE id IN (%s)", whereClause), args...)
 	if err != nil {
+		log.Printf("❌ Error llegint duplicats: %v", err)
 		return err
 	}
+
+	log.Printf("🔄 Control 1")
+
+	// Llegim TOTES les files primer i guardem en memòria
+	var duplicats []struct {
+		nom, c1, c2, muni, arq, nc, pag, lb, y string
+	}
+
 	defer rows.Close()
-
-	// Inserció definitiva
-	stmt, _ := s.db.Prepare("INSERT INTO usuaris(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-	defer stmt.Close()
-
 	for rows.Next() {
 		var nom, c1, c2, muni, arq, nc, pag, lb, y string
-		err := rows.Scan(&nom, &c1, &c2, &muni, &arq, &nc, &pag, &lb, &y)
-		if err != nil {
-			log.Println("Error llegint registre:", err)
+		if err := rows.Scan(&nom, &c1, &c2, &muni, &arq, &nc, &pag, &lb, &y); err != nil {
+			log.Printf("⚠️ Error llegint fila: %v", err)
 			continue
 		}
+		duplicats = append(duplicats, struct {
+			nom, c1, c2, muni, arq, nc, pag, lb, y string
+		}{nom, c1, c2, muni, arq, nc, pag, lb, y})
+	}
+
+	log.Printf("🔄 S'han trobat %d duplicats seleccionats", len(duplicats))
+
+	if len(duplicats) == 0 {
+		return fmt.Errorf("no s'han trobat registres amb aquests IDs")
+	}
+
+	log.Printf("🔄 Control 2")
+
+	stmt, err := s.db.Prepare("INSERT INTO usuaris(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		log.Printf("❌ Error preparant inserció: %v", err)
+		return err
+	}
+	defer stmt.Close()
+
+	log.Printf("🔄 Control 3")
+
+	insertedCount := 0
+	for rows.Next() {
+		log.Printf("🔄 estic al for")
+		var nom, c1, c2, muni, arq, nc, pag, lb, y string
+		if err := rows.Scan(&nom, &c1, &c2, &muni, &arq, &nc, &pag, &lb, &y); err != nil {
+			log.Println("Error llegint duplicat:", err)
+			continue
+		}
+
+		err := rows.Scan(&nom, &c1, &c2, &muni, &arq, &nc, &pag, &lb, &y)
+		if err != nil {
+			log.Printf("⚠️ Error llegint fila: %v", err)
+			continue
+		}
+
+		log.Printf("📥 Preparat per inserir: %s %s %s | Pàgina: %s | Llibre: %s | Any: %s", c1, c2, nom, pag, lb, y)
+
 		_, err = stmt.Exec(nom, c1, c2, muni, arq, nc, pag, lb, y)
 		if err != nil {
-			log.Println("Error inserint registre:", err)
+			log.Printf("🚫 Error al fer exec: %v", err)
+			continue
 		}
+
+		insertedCount++
+		log.Printf("✅ Registre inserit correctament: %s %s %s", c1, c2, nom)
 	}
+
+	if insertedCount == 0 {
+		log.Println("🟡 No s'ha pogut insertar cap registre")
+	} else {
+		log.Printf("✔️ S'han inserit %d registres seleccionats", insertedCount)
+	}
+
 	return nil
 }

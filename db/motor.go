@@ -10,8 +10,15 @@ type DBManager interface {
 	Init() error
 	Close()
 	DB() *sql.DB // Afegit!
+
+	// Insercions
 	InsertUsuari(nom, c1, c2, muni, arq, nc, pag, lb, y string) error
+	InsertUsuariAPossiblesDuplicats(nom, c1, c2, muni, arq, nc, pag, lb, y string) error
+
+	// Comprovacions
 	CheckDuplicate(c1, c2, nom, pag, lb, y string) (bool, error)
+
+	// Gestió de duplicats
 	GetPossibleDuplicates() ([]map[string]string, error)
 	DeleteDuplicates(ids []int) error
 	ImportSelectedDuplicates(ids []int) error

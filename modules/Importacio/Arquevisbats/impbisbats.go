@@ -14,6 +14,11 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
+// normalizeSpaces redueix múltiples espais a un sol espai
+func normalizeSpaces(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}
+
 // parseCognoms separa els cognoms i el nom
 func parseCognoms(cognomStr string) (string, string, string, string) {
 	cognomStr = strings.TrimSpace(cognomStr)
@@ -114,7 +119,8 @@ func HandleImport(dbManager db.DBManager) httprouter.Handle {
 			}
 
 			nomCSV := record[0]
-			nomCSV = strings.TrimSpace(nomCSV)
+			nomCSV = normalizeSpaces(strings.TrimSpace(nomCSV))
+			//nomCSV = strings.TrimSpace(nomCSV)
 			if nomCSV == "" {
 				log.Printf("Línia %d: Cognoms buits. Saltada.", i)
 				continue
@@ -154,6 +160,11 @@ func HandleImport(dbManager db.DBManager) httprouter.Handle {
 			if exists {
 				dup := fmt.Sprintf("%s %s (%s) - Pàgina: %s, Llibre: %s, Any: %s", nom, cognom1, cognom2, pagina, llibre, any)
 				duplicats = append(duplicats, dup)
+				err := dbManager.InsertUsuariAPossiblesDuplicats(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any)
+				if err != nil {
+					log.Printf("Error afegint a duplicats línia %d: %v\n", i, err)
+					continue
+				}
 				totalDuplicates++
 				log.Printf("Línia %d: Duplicat trobat: %s", i, dup)
 				continue

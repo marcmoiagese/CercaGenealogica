@@ -61,6 +61,8 @@ func main() {
 	http.HandleFunc("/upload", handlers.UploadPageHandler())
 	http.HandleFunc("/import", handlers.ImportHandler(dbManager))
 	http.Handle("/static/", handlers.StaticHandler())
+	http.HandleFunc("/pendents", handlers.PendentsHandler(dbManager))
+	http.HandleFunc("/import-seleccionats", handlers.ImportarDuplicatsSeleccionatsHandler(dbManager))
 
 	fmt.Println("Servidor corrent a http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
