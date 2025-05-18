@@ -234,31 +234,17 @@ func (s *SQLiteDB) ImportSelectedDuplicates(ids []int) error {
 	log.Printf("🔄 Control 3")
 
 	insertedCount := 0
-	for rows.Next() {
-		log.Printf("🔄 estic al for")
-		var nom, c1, c2, muni, arq, nc, pag, lb, y string
-		if err := rows.Scan(&nom, &c1, &c2, &muni, &arq, &nc, &pag, &lb, &y); err != nil {
-			log.Println("Error llegint duplicat:", err)
-			continue
-		}
-
-		err := rows.Scan(&nom, &c1, &c2, &muni, &arq, &nc, &pag, &lb, &y)
-		if err != nil {
-			log.Printf("⚠️ Error llegint fila: %v", err)
-			continue
-		}
-
-		log.Printf("📥 Preparat per inserir: %s %s %s | Pàgina: %s | Llibre: %s | Any: %s", c1, c2, nom, pag, lb, y)
-
-		_, err = stmt.Exec(nom, c1, c2, muni, arq, nc, pag, lb, y)
+	for _, d := range duplicats {
+		_, err := stmt.Exec(d.nom, d.c1, d.c2, d.muni, d.arq, d.nc, d.pag, d.lb, d.y)
 		if err != nil {
 			log.Printf("🚫 Error al fer exec: %v", err)
 			continue
 		}
-
 		insertedCount++
-		log.Printf("✅ Registre inserit correctament: %s %s %s", c1, c2, nom)
+		log.Printf("✅ Registre inserit: %s %s %s", d.c1, d.c2, d.nom)
 	}
+
+	log.Printf("✔️ S'han inserit %d registres seleccionats", insertedCount)
 
 	if insertedCount == 0 {
 		log.Println("🟡 No s'ha pogut insertar cap registre")

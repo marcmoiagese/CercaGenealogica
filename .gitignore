@@ -1,0 +1,11 @@
+# Exclou tots els fitxers .db
+/database.db
+
+# Exclou tots els fitxers Excel a la carpeta db
+/db/Index_llibres_Digitals.xlsx
+
+# Excloc el csv
+/db/Index_llibres_Digitals_arbeca.csv
+
+# O alternativament, exclou tots els fitxers Excel
+*.xlsx
