@@ -69,7 +69,7 @@ func readCSVFile(reader *csv.Reader) ([][]string, error) {
 }
 
 // HandleImport processa l'upload del CSV
-func HandleImport(dbManager *db.DBManager) httprouter.Handle {
+func HandleImport(dbManager db.DBManager) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		r.ParseMultipartForm(10 << 20)
 		file, handler, err := r.FormFile("csvFile")
@@ -94,12 +94,15 @@ func HandleImport(dbManager *db.DBManager) httprouter.Handle {
 		}
 
 		log.Printf("Nombre total de línies llegides: %d", len(records))
-
 		municipi := r.FormValue("municipi")
 		arquevisbat := r.FormValue("arquevisbat")
 
 		totalProcessed := 0
-		totalPossibleDuplicates := 0
+		totalDuplicates := 0
+		var duplicats []string // Per mostrar al final
+
+		log.Printf("Iniciant importació del CSV")
+		log.Printf("Nombre total de línies llegides: %d", len(records))
 
 		for i, record := range records {
 			if i == 0 {
@@ -122,27 +125,79 @@ func HandleImport(dbManager *db.DBManager) httprouter.Handle {
 			llibre := record[3]
 			any := record[4]
 
-			isDup, err := (*dbManager).CheckDuplicate(cognom1, cognom2, nom, pagina, llibre, any)
-			if err != nil {
-				log.Println("Error comprovant duplicat:", err)
+			log.Printf("Processant línia %d: %s %s | Pàgina: %s | Llibre: %s | Any: %s", i, cognom1, cognom2, pagina, llibre, any)
+
+			exists := false
+
+			// Només comprova duplicats si hi ha cognoms vàlids
+			if cognom1 != "" || cognom2 != "" {
+				var isDup bool
+				var err error
+
+				// Si tenim nom, fem servir també per comprovar duplicats
+				if nom != "" {
+					isDup, err = dbManager.CheckDuplicate(cognom1, cognom2, nom, pagina, llibre, any)
+				} else {
+					isDup, err = dbManager.CheckDuplicate(cognom1, cognom2, "", pagina, llibre, any)
+				}
+
+				if err != nil {
+					log.Println("Error comprovant duplicat:", err)
+					continue
+				}
+
+				exists = isDup
+			} else {
+				log.Printf("Línia %d: Cognoms buits, evitem comprovació de duplicat", i)
+			}
+
+			if exists {
+				dup := fmt.Sprintf("%s %s (%s) - Pàgina: %s, Llibre: %s, Any: %s", nom, cognom1, cognom2, pagina, llibre, any)
+				duplicats = append(duplicats, dup)
+				totalDuplicates++
+				log.Printf("Línia %d: Duplicat trobat: %s", i, dup)
 				continue
 			}
 
-			if isDup {
-				// TODO: Afegir a duplicats
-				totalPossibleDuplicates++
-			} else {
-				err = (*dbManager).InsertUsuari(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any)
-				if err != nil {
-					log.Printf("Error inserint línia %d: %v\n", i, err)
-				} else {
-					totalProcessed++
-				}
+			err = dbManager.InsertUsuari(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any)
+			if err != nil {
+				log.Printf("Error inserint línia %d: %v\n", i, err)
+				continue
 			}
+
+			totalProcessed++
 		}
 
-		fmt.Fprintf(w, "<h1>Importació completada</h1>")
-		fmt.Fprintf(w, "<p>Processats: %d</p>", totalProcessed)
-		fmt.Fprintf(w, "<p>Possibles duplicats: %d</p>", totalPossibleDuplicates)
+		// Missatge final amb tots els duplicats
+		missatgeDuplicats := "<strong>Llista de duplicats:</strong><ul>"
+		for _, dup := range duplicats {
+			missatgeDuplicats += "<li>" + dup + "</li>"
+		}
+		missatgeDuplicats += "</ul>"
+
+		log.Printf("Registres processats: %d | Duplicats: %d", totalProcessed, totalDuplicates)
+
+		fmt.Fprintf(w, `
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <title>Resultat Importació</title>
+    <style>
+        body { font-family: Arial; max-width: 600px; margin: auto }
+        h1 { text-align: center }
+        ul { list-style-type: none; padding: 0 }
+        li { padding: 5px 0 }
+    </style>
+</head>
+<body>
+    <h1>Importació completada</h1>
+    <p><strong>Registres processats:</strong> %d</p>
+    <p><strong>Duplicats trobats:</strong> %d</p>
+    %s
+    <p><a href="/upload">Tornar</a></p>
+</body>
+</html>
+`, totalProcessed, totalDuplicates, missatgeDuplicats)
 	}
 }

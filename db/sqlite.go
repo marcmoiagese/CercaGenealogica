@@ -11,14 +11,9 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// SQLiteDB és la implementació per SQLite
+// SQLiteDB implementa DBManager per SQLite
 type SQLiteDB struct {
 	db *sql.DB
-}
-
-// DB retorna la connexió a la BD
-func (s *SQLiteDB) DB() *sql.DB {
-	return s.db
 }
 
 // Init inicialitza la connexió i crea les taules si no existeixen
@@ -29,10 +24,7 @@ func (s *SQLiteDB) Init() error {
 	}
 	s.db = db
 
-	// Llegim SQL des del fitxer /db/SQLite.sql
-	// TODO: Implementar lectura i execució del fitxer SQL
-
-	// Per ara ho fem directament:
+	// Crear taula principal si no existeix
 	_, err = db.Exec(`
         CREATE TABLE IF NOT EXISTS usuaris (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,6 +43,7 @@ func (s *SQLiteDB) Init() error {
 		return err
 	}
 
+	// Crear taula duplicats si no existeix
 	_, err = db.Exec(`
         CREATE TABLE IF NOT EXISTS usuaris_possibles_duplicats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,11 +67,16 @@ func (s *SQLiteDB) Init() error {
 	return nil
 }
 
-// Close tanca la connexió a la BD
+// Close tanca la connexió activa
 func (s *SQLiteDB) Close() {
 	if s.db != nil {
 		s.db.Close()
 	}
+}
+
+// DB retorna la connexió SQL neta
+func (s *SQLiteDB) DB() *sql.DB {
+	return s.db
 }
 
 // InsertUsuari insereix un usuari a la taula principal

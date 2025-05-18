@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 )
 
@@ -8,6 +9,7 @@ import (
 type DBManager interface {
 	Init() error
 	Close()
+	DB() *sql.DB // Afegit!
 	InsertUsuari(nom, c1, c2, muni, arq, nc, pag, lb, y string) error
 	CheckDuplicate(c1, c2, nom, pag, lb, y string) (bool, error)
 	GetPossibleDuplicates() ([]map[string]string, error)

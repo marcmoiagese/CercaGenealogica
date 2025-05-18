@@ -19,11 +19,14 @@ func loadConfig() (engine, path string) {
 	}
 	lines := strings.Split(string(data), "\n")
 	for _, line := range lines {
-		if strings.Contains(line, "DB_ENGINE=") {
+		line = strings.TrimSpace(line) // Eliminem espais inicials i finals
+		if strings.HasPrefix(line, "DB_ENGINE=") {
 			engine = strings.TrimPrefix(line, "DB_ENGINE=")
+			engine = strings.TrimSpace(engine) // Netegem també el valor
 		}
-		if strings.Contains(line, "DB_PATH=") {
+		if strings.HasPrefix(line, "DB_PATH=") {
 			path = strings.TrimPrefix(line, "DB_PATH=")
+			path = strings.TrimSpace(path) // Netegem també el valor
 		}
 	}
 	return
@@ -41,7 +44,7 @@ func main() {
 	}
 	defer db.Close()
 
-	// Inicialitza connexió SQL per passar als handlers
+	// Obtenim connexió SQL neta
 	sqlDB := dbManager.DB()
 
 	// Rutes
@@ -56,9 +59,7 @@ func main() {
 
 	http.HandleFunc("/cerca", handlers.CercaHandler(sqlDB))
 	http.HandleFunc("/upload", handlers.UploadPageHandler())
-	http.HandleFunc("/import", handlers.ImportHandler(sqlDB))
-
-	// Serve static files
+	http.HandleFunc("/import", handlers.ImportHandler(dbManager))
 	http.Handle("/static/", handlers.StaticHandler())
 
 	fmt.Println("Servidor corrent a http://localhost:8080")
