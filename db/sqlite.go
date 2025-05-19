@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -24,46 +25,30 @@ func (s *SQLiteDB) Init() error {
 	}
 	s.db = db
 
-	// Crear taula principal si no existeix
-	_, err = db.Exec(`
-        CREATE TABLE IF NOT EXISTS usuaris (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nom TEXT NOT NULL,
-            cognom1 TEXT NOT NULL,
-            cognom2 TEXT NOT NULL,
-            municipi TEXT,
-            arquevisbat TEXT,
-            nom_complet TEXT,
-            pagina TEXT,
-            llibre TEXT,
-            any TEXT
-        );
-    `)
-	if err != nil {
-		return err
-	}
-
-	// Crear taula duplicats si no existeix
-	_, err = db.Exec(`
-        CREATE TABLE IF NOT EXISTS usuaris_possibles_duplicats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nom TEXT NOT NULL,
-            cognom1 TEXT NOT NULL,
-            cognom2 TEXT NOT NULL,
-            municipi TEXT,
-            arquevisbat TEXT,
-            nom_complet TEXT,
-            pagina TEXT,
-            llibre TEXT,
-            any TEXT
-        );
-    `)
+	// Carregar esquema des de SQLite.sql
+	err = createTablesFromSQLFile(s.db, "db/SQLite.sql")
 	if err != nil {
 		return err
 	}
 
 	db.SetMaxOpenConns(1)
 	db.SetConnMaxLifetime(5 * time.Minute)
+	return nil
+}
+
+// createTablesFromSQLFile llegeix i executa el fitxer SQL
+func createTablesFromSQLFile(db *sql.DB, sqlPath string) error {
+	content, err := os.ReadFile(sqlPath)
+	if err != nil {
+		return fmt.Errorf("no s'ha pogut llegir %s: %v", sqlPath, err)
+	}
+
+	_, err = db.Exec(string(content))
+	if err != nil {
+		return fmt.Errorf("error executant SQLite.sql: %v", err)
+	}
+
+	log.Println("✅ Taules carregades correctament des de SQLite.sql")
 	return nil
 }
 
