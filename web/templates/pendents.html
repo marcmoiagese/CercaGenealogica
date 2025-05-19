@@ -10,6 +10,14 @@
         th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
         input[type=checkbox] { transform: scale(1.2); }
     </style>
+    <style>
+        .duplicate-checkbox {
+            margin: 5px;
+        }
+        th input[type="checkbox"] {
+            transform: scale(1.2);
+        }
+    </style>
 </head>
 <body>
     <h1>Registres possiblement duplicats</h1>
@@ -18,7 +26,7 @@
         <table>
             <thead>
                 <tr>
-                    <th>Seleccionar</th>
+                    <th><input type="checkbox" id="selectAll"></th>
                     <th>Cognoms</th>
                     <th>Pàgina</th>
                     <th>Llibre</th>
@@ -28,7 +36,7 @@
             <tbody>
                 {{range $index, $item := .}}
                 <tr>
-                    <td><input type="checkbox" name="ids" value="{{$item.id}}"></td>
+                    <td><input type="checkbox" class="duplicate-checkbox" name="ids" value="{{.id}}"></td>
                     <td>{{$item.cognoms}}</td>
                     <td>{{$item.pagina}}</td>
                     <td>{{$item.llibre}}</td>
@@ -42,5 +50,6 @@
     </form>
 
     <p><a href="/upload">Torna a l'importació</a></p>
+    <script src="/static/duplicats.js"></script>
 </body>
 </html>

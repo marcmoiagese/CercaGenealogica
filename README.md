@@ -21,13 +21,23 @@ app/
 │       └── Importacio
 │           └── Arquevisbats
 │               └── impbisbats.go
-└── web/
-    ├── templates/
-    │   ├── index.html
-    │   ├── upload.html
-    │   └── revisio_duplicats.html
-    ├── css/
-    └── static
-        └── static/
-            └── futurs js mes generals
+├── web/
+│   ├── css/
+│   ├── handlers/
+│   │   ├── cerca.go
+│   │   ├── pendents.go
+│   │   ├── static.go
+│   │   └── upload.go
+│   ├── static/
+│   │   ├── duplicats.js
+│   │   └── cercador.js
+│   └── templates/
+│       ├── index.html
+│       ├── pendents.html
+│       ├── revisio_duplicats.html
+│       └── upload.html
+├── .gitignore
+├── go.mod
+├── go.sum
+└── main.go
 ```

@@ -1,4 +1,3 @@
-<!-- templates/revisio_duplicats.html -->
 <!DOCTYPE html>
 <html lang="ca">
 <head>
@@ -9,38 +8,55 @@
         table { width: 100%; border-collapse: collapse; }
         th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
         th { background-color: #f2f2f2; }
-        button { margin-top: 20px; }
+        button { margin-top: 10px; margin-right: 10px; }
+    </style>
+    <style>
+        .duplicate-checkbox {
+            margin: 5px;
+        }
+        th input[type="checkbox"] {
+            transform: scale(1.2);
+        }
     </style>
 </head>
 <body>
     <h2>Possibles Duplicats per revisar</h2>
 
-    <form action="/import-seleccionats" method="post">
+    <!-- Formulari amb accions múltiples -->
+    <form id="accioForm" method="post" action="">
+        <input type="hidden" name="ids" id="selectedIds" value="">
+
+        <button type="submit" formaction="/import-seleccionats">✅ Inserir els seleccionats</button>
+        <button type="submit" formaction="/eliminar-seleccionats">🗑️ Eliminar els seleccionats</button>
+
         <table>
             <thead>
                 <tr>
-                    <th>Seleccionar</th>
-                    <th>Cognoms</th>
+                    <th><input type="checkbox" id="selectAll"></th>
+                    <th>Nom complet</th>
                     <th>Pàgina</th>
                     <th>Llibre</th>
                     <th>Any</th>
                 </tr>
             </thead>
             <tbody>
-                {{range $index, $element := .}}
+                {{range .}}
                 <tr>
-                    <td><input type="checkbox" name="ids" value="{{$element.id}}"></td>
-                    <td>{{$element.cognoms}}</td>
-                    <td>{{$element.pagina}}</td>
-                    <td>{{$element.llibre}}</td>
-                    <td>{{$element.any}}</td>
+                    <td><input type="checkbox" class="duplicate-checkbox" name="ids" value="{{.id}}"></td>
+                    <!-- <td><input type="checkbox" class="duplicate-checkbox" data-id="{{.id}}"></td> -->
+                    <td>{{.cognoms}}</td>
+                    <td>{{.pagina}}</td>
+                    <td>{{.llibre}}</td>
+                    <td>{{.any}}</td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
-        <button type="submit">Inserir registres seleccionats</button>
     </form>
 
     <p><a href="/upload">Torna a l'importació</a></p>
+
+    <!-- Carrega només el JS necessari -->
+    <script src="/static/duplicats.js"></script>
 </body>
 </html>

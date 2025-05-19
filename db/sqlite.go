@@ -191,23 +191,27 @@ func (s *SQLiteDB) ImportSelectedDuplicates(ids []int) error {
 	}
 	whereClause := strings.Join(placeholders, ", ")
 
-	rows, err := s.db.Query(fmt.Sprintf("SELECT nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any FROM usuaris_possibles_duplicats WHERE id IN (%s)", whereClause), args...)
+	rows, err := s.db.Query(fmt.Sprintf(`
+        SELECT nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any 
+        FROM usuaris_possibles_duplicats 
+        WHERE id IN (%s)
+    `, whereClause), args...)
+
 	if err != nil {
 		log.Printf("❌ Error llegint duplicats: %v", err)
 		return err
 	}
 
-	log.Printf("🔄 Control 1")
+	defer rows.Close()
 
-	// Llegim TOTES les files primer i guardem en memòria
 	var duplicats []struct {
 		nom, c1, c2, muni, arq, nc, pag, lb, y string
 	}
 
-	defer rows.Close()
 	for rows.Next() {
 		var nom, c1, c2, muni, arq, nc, pag, lb, y string
-		if err := rows.Scan(&nom, &c1, &c2, &muni, &arq, &nc, &pag, &lb, &y); err != nil {
+		err := rows.Scan(&nom, &c1, &c2, &muni, &arq, &nc, &pag, &lb, &y)
+		if err != nil {
 			log.Printf("⚠️ Error llegint fila: %v", err)
 			continue
 		}
@@ -218,20 +222,12 @@ func (s *SQLiteDB) ImportSelectedDuplicates(ids []int) error {
 
 	log.Printf("🔄 S'han trobat %d duplicats seleccionats", len(duplicats))
 
-	if len(duplicats) == 0 {
-		return fmt.Errorf("no s'han trobat registres amb aquests IDs")
-	}
-
-	log.Printf("🔄 Control 2")
-
-	stmt, err := s.db.Prepare("INSERT INTO usuaris(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+	stmt, err := s.db.Prepare("INSERT INTO usuaris(nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, any) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		log.Printf("❌ Error preparant inserció: %v", err)
 		return err
 	}
 	defer stmt.Close()
-
-	log.Printf("🔄 Control 3")
 
 	insertedCount := 0
 	for _, d := range duplicats {
@@ -245,12 +241,6 @@ func (s *SQLiteDB) ImportSelectedDuplicates(ids []int) error {
 	}
 
 	log.Printf("✔️ S'han inserit %d registres seleccionats", insertedCount)
-
-	if insertedCount == 0 {
-		log.Println("🟡 No s'ha pogut insertar cap registre")
-	} else {
-		log.Printf("✔️ S'han inserit %d registres seleccionats", insertedCount)
-	}
 
 	return nil
 }

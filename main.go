@@ -63,6 +63,7 @@ func main() {
 	http.Handle("/static/", handlers.StaticHandler())
 	http.HandleFunc("/pendents", handlers.PendentsHandler(dbManager))
 	http.HandleFunc("/import-seleccionats", handlers.ImportarDuplicatsSeleccionatsHandler(dbManager))
+	http.HandleFunc("/eliminar-seleccionats", handlers.EliminarDuplicatsSeleccionatsHandler(dbManager))
 
 	fmt.Println("Servidor corrent a http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
