@@ -229,3 +229,26 @@ func (s *SQLiteDB) ImportSelectedDuplicates(ids []int) error {
 
 	return nil
 }
+
+func (s *SQLiteDB) InsertRelacio(
+	usuariID int,
+	tipus string,
+	nom, c1, c2, municipi, ofici, dataMatrimoni string,
+) error {
+	stmt, err := s.db.Prepare(`
+        INSERT INTO relacions (
+            usuari_id, tipus_relacio, nom, cognom1, cognom2, municipi, ofici, data_matrimoni
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+	if err != nil {
+		return fmt.Errorf("error preparant statement: %w", err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(usuariID, tipus, nom, c1, c2, municipi, ofici, dataMatrimoni)
+	if err != nil {
+		return fmt.Errorf("error executant InsertRelacio: %w", err)
+	}
+
+	return nil
+}

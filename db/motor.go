@@ -22,6 +22,13 @@ type DBManager interface {
 	GetPossibleDuplicates() ([]map[string]string, error)
 	DeleteDuplicates(ids []int) error
 	ImportSelectedDuplicates(ids []int) error
+
+	// Relacions
+	InsertRelacio(
+		usuariID int,
+		tipus string,
+		nom, c1, c2, municipi, ofici, dataMatrimoni string,
+	) error
 }
 
 var defaultManager DBManager

@@ -73,6 +73,137 @@ func readCSVFile(reader *csv.Reader) ([][]string, error) {
 	return records, nil
 }
 
+// parsePersona extreu nom, c1, c2 i municipi d'una cadena com "Nom Cognom1 Cognom2 (Municipi)"
+func parsePersona(input string) (string, string, string, string) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return "", "", "", ""
+	}
+
+	var nom, c1, c2, municipi string
+
+	// Municipi entre parèntesis
+	if strings.Contains(input, "(") && strings.Contains(input, ")") {
+		parts := strings.SplitN(input, "(", 2)
+		namePart := strings.TrimSpace(parts[0])
+		municipi = strings.TrimSuffix(strings.TrimSpace(parts[1]), ")")
+
+		// Separa nom i cognoms
+		names := strings.Fields(namePart)
+		if len(names) >= 1 {
+			nom = names[0]
+		}
+		if len(names) >= 2 {
+			c1 = names[1]
+		}
+		if len(names) >= 3 {
+			c2 = strings.Join(names[2:], " ")
+		}
+	} else {
+		// Sense municipi
+		names := strings.Fields(input)
+		if len(names) >= 1 {
+			nom = names[0]
+		}
+		if len(names) >= 2 {
+			c1 = names[1]
+		}
+		if len(names) >= 3 {
+			c2 = strings.Join(names[2:], " ")
+		}
+	}
+
+	return nom, c1, c2, municipi
+}
+
+// processRelacions processa avis paterns o materns
+func processRelacions(dbManager db.DBManager, usuariID int, relStr, tipus, municipiDefault string) {
+	if relStr == "" {
+		return
+	}
+	for _, part := range strings.Split(relStr, "i") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		nom, c1, c2, municipi := parsePersona(part)
+		if municipi == "" {
+			municipi = municipiDefault
+		}
+		dbManager.InsertRelacio(usuariID, tipus, nom, c1, c2, municipi, "", "")
+
+	}
+}
+
+// processCasats processa matrimonis
+func processCasats(dbManager db.DBManager, usuariID int, casatStr, municipiDefault string) {
+	if casatStr == "" {
+		return
+	}
+	matrimonis := strings.Split(casatStr, "-")
+	for _, m := range matrimonis {
+		m = strings.TrimSpace(m)
+		if m == "" {
+			continue
+		}
+		// Ex: "1er Nom cognom1 cognom2 dd/mm/yyyy"
+		parts := strings.Fields(m)
+		var data string
+		var lloc string
+
+		// Busca data i lloc
+		for i, p := range parts {
+			if len(p) == 10 && p[2] == '/' && p[5] == '/' {
+				data = p
+				if i+1 < len(parts) && !strings.Contains(parts[i+1], "/") {
+					lloc = parts[i+1]
+				}
+				break
+			}
+		}
+
+		// Nom del conjuge
+		nomConjuge := strings.TrimPrefix(strings.Split(m, data)[0], "1er ")
+		nomConjuge = strings.TrimPrefix(nomConjuge, "2on ")
+		nomConjuge = strings.TrimSpace(nomConjuge)
+
+		// Separa nom i cognoms
+		names := strings.Fields(nomConjuge)
+		var nom, c1, c2 string
+		if len(names) >= 1 {
+			nom = names[0]
+		}
+		if len(names) >= 2 {
+			c1 = names[1]
+		}
+		if len(names) >= 3 {
+			c2 = strings.Join(names[2:], " ")
+		}
+
+		dbManager.InsertRelacio(usuariID, "casat", nom, c1, c2, lloc, "", data)
+	}
+}
+
+// updateUsuari actualitza camps addicionals com naixement, bateig, defuncio, ofici
+func updateUsuari(dbManager db.DBManager, id int, dataNaixement, dataBateig, dataDefuncio, ofici, estatCivil string) error {
+	stmt, err := dbManager.DB().Prepare(`
+        UPDATE usuaris 
+        SET data_naixement = ?, 
+            data_bateig = ?, 
+            data_defuncio = ?, 
+            ofici = ?,
+			estat_civil = ? 
+        WHERE id = ?
+    `)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(dataNaixement, dataBateig, dataDefuncio, ofici, estatCivil, id)
+	return err
+}
+
 // HandleImport processa l'upload del CSV
 func HandleImport(dbManager db.DBManager) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -131,6 +262,20 @@ func HandleImport(dbManager db.DBManager) httprouter.Handle {
 			llibre := record[3]
 			any := record[4]
 
+			// Nous camps
+			pareStr := record[5]            // Pare
+			mareStr := record[6]            // Mare
+			avisPaternsStr := record[7]     // Avis Paterns
+			avisMaternsStr := record[8]     // Avis Materns
+			casatStr := record[9]           // Casat
+			dataNaixement := record[10]     // Nascut
+			padriStr := record[11]          // Padri de bateig
+			padrinaStr := record[12]        // Padrineta de bateig
+			dataBateig := record[13]        // Bateig
+			oficiPare := record[14]         // Ofici
+			dataDefuncio := record[15]      // Defunció
+			matrimoniParesStr := record[16] // Matrimoni Pares
+
 			log.Printf("Processant línia %d: %s %s | Pàgina: %s | Llibre: %s | Any: %s", i, cognom1, cognom2, pagina, llibre, any)
 
 			exists := false
@@ -176,6 +321,94 @@ func HandleImport(dbManager db.DBManager) httprouter.Handle {
 				continue
 			}
 
+			// Obtenir últim ID inserit
+			var lastID int64
+			err = dbManager.DB().QueryRow("SELECT last_insert_rowid()").Scan(&lastID)
+			if err != nil {
+				log.Printf("⚠️ Error obtenint lastID: %v", err)
+				continue
+			}
+
+			log.Printf("✅ Últim ID inserit: %d", lastID)
+
+			if lastID <= 0 {
+				log.Printf("⚠️ lastID invàlid: %d", lastID)
+				continue
+			}
+
+			if err != nil {
+				log.Printf("Error obtenint últim ID: %v", err)
+			} else {
+				// Validem si hem trovat algun matrimoni
+				estatCivil := getEstatCivil(casatStr)
+
+				// Actualitzar camps extra
+				err = updateUsuari(dbManager, int(lastID), dataNaixement, dataBateig, dataDefuncio, oficiPare, estatCivil)
+				if err != nil {
+					log.Printf("Error actualitzant camps addicionals: %v", err)
+				}
+			}
+
+			// Processa pare i mare
+			if pareStr != "" {
+				nomPare, c1Pare, c2Pare, municipiPare := parsePersona(pareStr)
+				if municipiPare == "" {
+					municipiPare = municipi
+				}
+				dbManager.InsertRelacio(int(lastID), "pare", nomPare, c1Pare, c2Pare, municipiPare, "", "")
+			}
+
+			if mareStr != "" {
+				nomMare, c1Mare, c2Mare, municipiMare := parsePersona(mareStr)
+				if municipiMare == "" {
+					municipiMare = municipi
+				}
+				dbManager.InsertRelacio(int(lastID), "mare", nomMare, c1Mare, c2Mare, municipiMare, "", "")
+			}
+
+			// Processa avis
+			processRelacions(dbManager, int(lastID), avisPaternsStr, "avi_patern", municipi)
+			processRelacions(dbManager, int(lastID), avisMaternsStr, "avi_matern", municipi)
+
+			// Processa padrins
+			if padriStr != "" {
+				nom, c1, c2, municipi := parsePersona(padriStr)
+				log.Printf("Padri: %s %s %s - Municipi: %s", nom, c1, c2, municipi)
+				dbManager.InsertRelacio(int(lastID), "padri", nom, c1, c2, municipi, "", "")
+			}
+			if padrinaStr != "" {
+				nom, c1, c2, municipi := parsePersona(padrinaStr)
+				log.Printf("Padrina: %s %s %s - Municipi: %s", nom, c1, c2, municipi)
+				err = dbManager.InsertRelacio(int(lastID), "padrina", nom, c1, c2, municipi, "", "")
+				if err != nil {
+					log.Printf("❌ Error inserint padrina: %v", err)
+				} else {
+					log.Printf("⚠️ Padrina no processada: %q", padrinaStr)
+				}
+			}
+
+			// Processa casat
+			processCasats(dbManager, int(lastID), casatStr, municipi)
+
+			// Processa matrimoni pares
+			if matrimoniParesStr != "" {
+				parts := strings.Fields(matrimoniParesStr)
+				var data string
+				var lloc string
+
+				for i, p := range parts {
+					if len(p) == 10 && p[2] == '/' && p[5] == '/' {
+						data = p
+						if i+1 < len(parts) && !strings.Contains(parts[i+1], "/") {
+							lloc = parts[i+1]
+						}
+						break
+					}
+				}
+
+				dbManager.InsertRelacio(int(lastID), "matrimoni_pare", "", "", "", lloc, "", data)
+			}
+
 			totalProcessed++
 		}
 
@@ -211,4 +444,15 @@ func HandleImport(dbManager db.DBManager) httprouter.Handle {
 </html>
 `, totalProcessed, totalDuplicates, missatgeDuplicats)
 	}
+}
+
+func getEstatCivil(casatStr string) string {
+	casatStr = strings.ToLower(casatStr)
+
+	if strings.Contains(casatStr, "1er") || strings.Contains(casatStr, "casat") ||
+		strings.Contains(casatStr, "matrimoni") || strings.Contains(casatStr, "/") {
+		return "Casat/a"
+	}
+
+	return "NoSe"
 }
