@@ -1,3 +1,6 @@
+-- Desactivo les claus foranes per pervindre errors durant la creació
+-- PRAGMA foreign_keys = OFF;
+
 -- SQLite.sql
 CREATE TABLE IF NOT EXISTS usuaris (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,7 +49,6 @@ CREATE TABLE IF NOT EXISTS usuaris_possibles_duplicats (
 -- TAULA PAISOS
 CREATE TABLE IF NOT EXISTS paisos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nom TEXT NOT NULL, -- Nom oficial del país ex: "Espanya", "França"
     codi_iso2 TEXT(2) UNIQUE, -- Codi ISO 3166-1 alpha-2 ex: ES, FR, US, CA...
     codi_iso3 TEXT(3) UNIQUE, -- Codi ISO 3166-1 alpha-3 ex: ESP, FRA, USA
     codi_pais_num TEXT, -- Codi numèric ISO 3166-1
@@ -62,7 +64,7 @@ CREATE TABLE IF NOT EXISTS nivells_administratius (
     nom_nivell TEXT,                          -- Ex: Catalunya, Lleida, Urgell, etc.
     tipus_nivell TEXT,                        -- Tipus específic: Regió, Província, Comarca, Municipi, Barri, etc.
     codi_oficial TEXT,                        -- Codi oficial local (ex: INE, NUTS, etc.)
-    altres TEXT, -- Informació addicional en format JSON (ex: {"codi_INE": "25098", "codi_NUTS": "ES511"}
+    altres TEXT,                              -- Informació addicional en format JSON (ex: {"codi_INE": "25098", "codi_NUTS": "ES511"}
     estat TEXT CHECK(estat IN ('actiu', 'inactiu', 'fusionat', 'abolit')) DEFAULT 'actiu',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Quan s'ha creat el nivell
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Última vegada que ha canviat
@@ -155,21 +157,12 @@ CREATE TABLE IF NOT EXISTS relacio_comarca_provincia (
 
 CREATE TABLE IF NOT EXISTS llibres (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    
-    -- Relació amb l'arquevisbat (mitjançant FK)
     arquevisbat_id INTEGER NOT NULL,
-    FOREIGN KEY(arquevisbat_id) REFERENCES arquebisbats(id) ON DELETE CASCADE,
-
-    -- Relació amb el municipi (si hi ha una taula 'municipis')
     municipi_id INTEGER NOT NULL,
-    FOREIGN KEY(municipi_id) REFERENCES municipis(id) ON DELETE RESTRICT,
-
     nom_esglesia TEXT,                     -- ex: "Sant Jaume Apòstol"
-    
     -- Codi identificador únic (de cada sistema)
     codi_digital TEXT,                    -- ex: "0000013893" (Tarragona)
     codi_fisic TEXT,                      -- ex: "UD: 05 / UI: 423" (Urgell)
-    
     -- Metadades del llibre
     titol TEXT,
     cronologia TEXT,                      -- ex: "21.10.1600 - 10.01.1663"
@@ -180,18 +173,15 @@ CREATE TABLE IF NOT EXISTS llibres (
     requeriments_tecnics TEXT,
     unitat_catalogacio TEXT,               -- ex: "P-ABR-123"
     unitat_instalacio TEXT,                -- ex: "CAIXA-45"
-    pagines INT, -- numero de pagines totals del llibre
-    
+    pagines INT,                           -- numero de pagines totals del llibre
     -- URL digital
     url_base TEXT,                         -- ex: "https://arxiuenlinia.ahat.cat/Document/ "
     url_imatge_prefix TEXT DEFAULT "#imatge-", -- prefix comú per afegir pàgina
-    url_digital TEXT AS (url_base || codi_digital || url_imatge_prefix || pagina) STORED, -- generat automàticament
-    
-    -- Pàgina específica (si es vol navegar directe a una pàgina concreta)
-    pagina TEXT                            -- ex: "7", "05-0023" (Urgell)
-
+    pagina TEXT,                            -- Pàgina específica (si es vol navegar directe a una pàgina concreta) ex: "7", "05-0023" (Urgell)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(arquevisbat_id) REFERENCES arquebisbats(id) ON DELETE CASCADE,
+    FOREIGN KEY(municipi_id) REFERENCES municipis(id) ON DELETE RESTRICT
 );
 
 -- Index per accelerar busquedes
@@ -203,68 +193,239 @@ CREATE INDEX IF NOT EXISTS idx_nom_municipi ON municipis(nom);
 -- Per buscar nivells pel seu tipus
 CREATE INDEX IF NOT EXISTS idx_tipus_nivell ON nivells_administratius(tipus_nivell);
 
-CREATE INDEX IF NOT EXISTS idx_llibres_arquevisbat ON llibres(arquevisbat_id);
-CREATE INDEX IF NOT EXISTS idx_llibres_municipi ON llibres(municipi_id);
+--CREATE INDEX IF NOT EXISTS idx_llibres_arquevisbat ON llibres(arquevisbat_id);
+--CREATE INDEX IF NOT EXISTS idx_llibres_municipi ON llibres(municipi_id);
 
 -- Índex compost per millorar la cerca de duplicats i cerques combinades
-CREATE INDEX idx_usuaris_cognoms_any_llibre_pagina ON usuaris(cognom1, cognom2, any, llibre, pagina);
+-- CREATE INDEX idx_usuaris_cognoms_any_llibre_pagina ON usuaris(cognom1, cognom2, any, llibre, pagina); -- error executant SQLite.sql: index idx_usuaris_cognoms_any_llibre_pagina already exists
 
 -- Cerca per cognoms i nom (per coincidències exactes)
-CREATE INDEX idx_usuaris_nom_complet ON usuaris(nom_complet);
+CREATE INDEX IF NOT EXISTS idx_usuaris_nom_complet ON usuaris(nom_complet);
 
 -- Útil per cerca de persones per municipi i any (ex: nascuts al mateix lloc i època)
-CREATE INDEX idx_usuaris_municipi_any ON usuaris(municipi, any);
+CREATE INDEX IF NOT EXISTS idx_usuaris_municipi_any ON usuaris(municipi, any);
 
 -- Cercar per ofici o estat civil
-CREATE INDEX idx_usuaris_ofici ON usuaris(ofici);
-CREATE INDEX idx_usuaris_estat_civil ON usuaris(estat_civil);
+CREATE INDEX IF NOT EXISTS idx_usuaris_ofici ON usuaris(ofici);
+CREATE INDEX IF NOT EXISTS idx_usuaris_estat_civil ON usuaris(estat_civil);
 
+-- Reactivo les claus foranes per pervindre errors durant la creació
+-- PRAGMA foreign_keys = ON;
 
 -- Dades preinsertades
 -- Inserció de països a la taula 'paisos'
-INSERT INTO paisos (nom, codi_iso2, codi_iso3, codi_pais_num, capital, poblacio) VALUES
-('Espanya', 'ES', 'ESP', '724', 'Madrid', 47500297),
-('França', 'FR', 'FRA', '250', 'París', 67405000),
-('Itàlia', 'IT', 'ITA', '380', 'Roma', 60244639),
-('Portugal', 'PT', 'PRT', '620', 'Lisboa', 10309538),
-('Alemanya', 'DE', 'DEU', '276', 'Berlín', 83122573),
-('Regne Unit', 'GB', 'GBR', '826', 'Londres', 67081234),
-('Suïssa', 'CH', 'CHE', '756', 'Berna', 8601566),
-('Andorra', 'AD', 'AND', '20', 'Andorra la Vella', 77265),
-('Belgica', 'BE', 'BEL', '56', 'Brussel·les', 11555995),
-('Països Baixos', 'NL', 'NLD', '528', 'Amsterdam', 17450028),
-('Luxemburg', 'LU', 'LUX', '442', 'Luxemburg', 6261000),
-('Polònia', 'PL', 'POL', '616', 'Warsaw', 37974903),
-('República Txeca', 'CZ', 'CZE', '203', 'Praga', 10708981),
-('Slovàquia', 'SK', 'SVK', '703', 'Bratislava', 5459642),
-('Hongria', 'HU', 'HUN', '348', 'Budapest', 9749790),
-('Àustria', 'AT', 'AUT', '40', 'Viena', 9043056),
-('Suècia', 'SE', 'SWE', '752', 'Estocolm', 10437732),
-('Noruega', 'NO', 'NOR', '578', 'Oslo', 5408443),
-('Dinamarca', 'DK', 'DNK', '208', 'Copenhaguen', 5818514),
-('Finlàndia', 'FI', 'FIN', '246', 'Hèlsinki', 5539413),
-('Grècia', 'GR', 'GRC', '300', 'Atenes', 10724599),
-('Irlanda', 'IE', 'IRL', '372', 'Dublín', 5105097),
-('Bulgària', 'BG', 'BGR', '100', 'Sofia', 6948445),
-('Romania', 'RO', 'ROU', '642', 'Bucarest', 19286805),
-('Croàcia', 'HR', 'HRV', '191', 'Zagreb', 4067340),
-('Eslovènia', 'SI', 'SVN', '705', 'Liubliana', 2103767),
-('Eslovàquia', 'SK', 'SVK', '703', 'Bratislava', 5459642),
-('Turquia', 'TR', 'TUR', '792', 'Ankara', 84680273),
-('Canadà', 'CA', 'CAN', '124', 'Ottawa', 38005238),
-('Estats Units', 'US', 'USA', '840', 'Washington DC', 331449237),
-('Mèxic', 'MX', 'MEX', '484', 'Ciutat de Mèxic', 128932753),
-('Brasil', 'BR', 'BRA', '76', 'Brasília', 212559417),
-('Argentina', 'AR', 'ARG', '32', 'Buenos Aires', 45195508),
-('Xile', 'CL', 'CHL', '152', 'Santiago', 19116209),
-('Perú', 'PE', 'PER', '604', 'Lima', 32971854),
-('Colòmbia', 'CO', 'COL', '170', 'Bogotà', 50882891),
-('Uruguai', 'UY', 'URY', '858', 'Montevideo', 3470472),
-('Paraguai', 'PY', 'PRY', '600', 'Asunción', 7132538),
-('Veneçuela', 'VE', 'VEN', '862', 'Caracas', 28515829),
-('Rússia', 'RU', 'RUS', '643', 'Moscou', 144103215),
-('Japó', 'JP', 'JPN', '392', 'Tòquio', 125847412),
-('Xina', 'CN', 'CHN', '156', 'Pequin', 1439323776),
-('Índia', 'IN', 'IND', '356', 'Nova Delhi', 1393409098),
-('Marroc', 'MA', 'MAR', '504', 'Rabat', 37800000),
-('França', 'FR', 'FRA', '250', 'París', 67405000);
+INSERT INTO paisos (codi_iso2, codi_iso3, codi_pais_num) VALUES
+('AF', 'AFG', '004'),
+('AL', 'ALB', '008'),
+('DE', 'DEU', '276'),
+('AD', 'AND', '020'),
+('AO', 'AGO', '024'),
+('AG', 'ATG', '028'),
+('SA', 'SAU', '682'),
+('AR', 'ARG', '032'),
+('AM', 'ARM', '051'),
+('AU', 'AUS', '036'),
+('AT', 'AUT', '040'),
+('AZ', 'AZE', '031'),
+('BS', 'BHS', '044'),
+('BH', 'BHR', '048'),
+('BD', 'BGD', '050'),
+('BB', 'BRB', '052'),
+('BE', 'BEL', '056'),
+('BZ', 'BLZ', '084'),
+('BJ', 'BEN', '204'),
+('BY', 'BLR', '112'),
+('MM', 'MMR', '104'),
+('BO', 'BOL', '068'),
+('BA', 'BIH', '070'),
+('BW', 'BWA', '072'),
+('BR', 'BRA', '076'),
+('BN', 'BRN', '096'),
+('BG', 'BGR', '100'),
+('BF', 'BFA', '854'),
+('BI', 'BDI', '108'),
+('BT', 'BTN', '064'),
+('CV', 'CPV', '132'),
+('KH', 'KHM', '116'),
+('CM', 'CMR', '120'),
+('CA', 'CAN', '124'),
+('QA', 'QAT', '634'),
+('TD', 'TCD', '148'),
+('CL', 'CHL', '152'),
+('CN', 'CHN', '156'),
+('CY', 'CYP', '196'),
+('CO', 'COL', '170'),
+('KM', 'COM', '174'),
+('CG', 'COG', '178'),
+('CD', 'COD', '180'),
+('KP', 'PRK', '408'),
+('KR', 'KOR', '410'),
+('CI', 'CIV', '384'),
+('CR', 'CRI', '188'),
+('HR', 'HRV', '191'),
+('CU', 'CUB', '192'),
+('DK', 'DNK', '208'),
+('DM', 'DMA', '212'),
+('DO', 'DOM', '214'),
+('EC', 'ECU', '218'),
+('EG', 'EGY', '818'),
+('SV', 'SLV', '222'),
+('ER', 'ERI', '232'),
+('SK', 'SVK', '703'),
+('SI', 'SVN', '705'),
+('ES', 'ESP', '724'),
+('US', 'USA', '840'),
+('EE', 'EST', '233'),
+('SZ', 'SWZ', '748'),
+('ET', 'ETH', '231'),
+('FJ', 'FJI', '242'),
+('PH', 'PHL', '608'),
+('FI', 'FIN', '246'),
+('FR', 'FRA', '250'),
+('GA', 'GAB', '266'),
+('GM', 'GMB', '270'),
+('GE', 'GEO', '268'),
+('GH', 'GHA', '288'),
+('GR', 'GRC', '300'),
+('GD', 'GRD', '308'),
+('GT', 'GTM', '320'),
+('GN', 'GIN', '324'),
+('GW', 'GNB', '624'),
+('GQ', 'GNQ', '226'),
+('GY', 'GUY', '328'),
+('HT', 'HTI', '332'),
+('HN', 'HND', '340'),
+('HU', 'HUN', '348'),
+('IN', 'IND', '356'),
+('ID', 'IDN', '360'),
+('IR', 'IRN', '364'),
+('IQ', 'IRQ', '368'),
+('IE', 'IRL', '372'),
+('IS', 'ISL', '352'),
+('IL', 'ISR', '376'),
+('IT', 'ITA', '380'),
+('JM', 'JAM', '388'),
+('JP', 'JPN', '392'),
+('JO', 'JOR', '400'),
+('KZ', 'KAZ', '398'),
+('KE', 'KEN', '404'),
+('KI', 'KIR', '296'),
+('KW', 'KWT', '414'),
+('KG', 'KGZ', '417'),
+('LA', 'LAO', '418'),
+('LS', 'LSO', '426'),
+('LV', 'LVA', '428'),
+('LB', 'LBN', '422'),
+('LR', 'LBR', '430'),
+('LY', 'LBY', '434'),
+('LI', 'LIE', '438'),
+('LT', 'LTU', '440'),
+('LU', 'LUX', '442'),
+('MK', 'MKD', '807'),
+('MG', 'MDG', '450'),
+('MW', 'MWI', '454'),
+('MY', 'MYS', '458'),
+('MV', 'MDV', '462'),
+('ML', 'MLI', '466'),
+('MT', 'MLT', '470'),
+('MH', 'MHL', '584'),
+('MR', 'MRT', '478'),
+('MU', 'MUS', '480'),
+('MX', 'MEX', '484'),
+('FM', 'FSM', '583'),
+('MD', 'MDA', '498'),
+('MC', 'MCO', '492'),
+('MN', 'MNG', '496'),
+('ME', 'MNE', '499'),
+('MZ', 'MOZ', '508'),
+('NA', 'NAM', '516'),
+('NR', 'NRU', '520'),
+('NP', 'NPL', '524'),
+('NL', 'NLD', '528'),
+('NZ', 'NZL', '554'),
+('NI', 'NIC', '558'),
+('NE', 'NER', '562'),
+('NG', 'NGA', '566'),
+('NO', 'NOR', '578'),
+('OM', 'OMN', '512'),
+('PK', 'PAK', '586'),
+('PW', 'PLW', '585'),
+('PA', 'PAN', '591'),
+('PG', 'PNG', '598'),
+('PY', 'PRY', '600'),
+('PE', 'PER', '604'),
+('PL', 'POL', '616'),
+('PT', 'PRT', '620'),
+('GB', 'GBR', '826'),
+('CF', 'CAF', '140'),
+('CZ', 'CZE', '203'),
+('RO', 'ROU', '642'),
+('RU', 'RUS', '643'),
+('RW', 'RWA', '646'),
+('KN', 'KNA', '659'),
+('LC', 'LCA', '662'),
+('VC', 'VCT', '670'),
+('WS', 'WSM', '882'),
+('SM', 'SMR', '674'),
+('ST', 'STP', '678'),
+('SN', 'SEN', '686'),
+('RS', 'SRB', '688'),
+('SC', 'SYC', '690'),
+('SL', 'SLE', '694'),
+('SG', 'SGP', '702'),
+('SY', 'SYR', '760'),
+('SO', 'SOM', '706'),
+('LK', 'LKA', '144'),
+('ZA', 'ZAF', '710'),
+('SD', 'SDN', '729'),
+('SS', 'SSD', '728'),
+('SE', 'SWE', '752'),
+('CH', 'CHE', '756'),
+('SR', 'SUR', '740'),
+('TH', 'THA', '764'),
+('TJ', 'TJK', '762'),
+('TL', 'TLS', '626'),
+('TG', 'TGO', '768'),
+('TO', 'TON', '776'),
+('TT', 'TTO', '780'),
+('TN', 'TUN', '788'),
+('TR', 'TUR', '792'),
+('TM', 'TKM', '795'),
+('TV', 'TUV', '798'),
+('UG', 'UGA', '800'),
+('UA', 'UKR', '804'),
+('AE', 'ARE', '784'),
+('UY', 'URY', '858'),
+('UZ', 'UZB', '860'),
+('VU', 'VUT', '548'),
+('VA', 'VAT', '336'),
+('VE', 'VEN', '862'),
+('VN', 'VNM', '704'),
+('YE', 'YEM', '887'),
+('ZM', 'ZMB', '894'),
+('ZW', 'ZWE', '716'),
+('TW', 'TWN', '158'),
+('MA', 'MAR', '504'),
+('PS', 'PSE', '275'),
+('EH', 'ESH', '732'),
+('KY', 'CYM', '136'),
+('FK', 'FLK', '238'),
+('GI', 'GIB', '292'),
+('GL', 'GRL', '304'),
+('GP', 'GLP', '312'),
+('GU', 'GUM', '316'),
+('HK', 'HKG', '344'),
+('MO', 'MAC', '446'),
+('MQ', 'MTQ', '474'),
+('NC', 'NCL', '540'),
+('PF', 'PYF', '258'),
+('PR', 'PRI', '630'),
+('RE', 'REU', '638'),
+('BL', 'BLM', '652'),
+('MF', 'MAF', '663'),
+('PM', 'SPM', '666'),
+('SX', 'SXM', '534'),
+('TC', 'TCA', '796'),
+('VG', 'VGB', '092'),
+('VI', 'VIR', '850'),
+('WF', 'WLF', '876');

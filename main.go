@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/julienschmidt/httprouter"
 	"github.com/marcmoiagese/CercaGenealogica/core/mon"
 	"github.com/marcmoiagese/CercaGenealogica/db"
 	"github.com/marcmoiagese/CercaGenealogica/web/handlers"
@@ -31,6 +32,13 @@ func loadConfig() (engine, path string) {
 		}
 	}
 	return
+}
+
+// Adaptador per convertir httprouter.Handle a http.HandlerFunc
+func adapt(fn httprouter.Handle) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fn(w, r, nil)
+	}
 }
 
 func main() {
@@ -57,12 +65,6 @@ func main() {
 		}
 		tmpl.Execute(w, nil)
 	})
-
-	func adapt(fn func(db.DBManager) httprouter.Handle) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			fn(dbManager)(w, r, nil)
-		}
-	}
 
 	http.HandleFunc("/cerca", handlers.CercaHandler(sqlDB))
 	http.HandleFunc("/upload", handlers.UploadPageHandler())

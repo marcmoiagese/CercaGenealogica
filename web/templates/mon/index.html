@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <title>Mon - {{.Pais}}</title>
+    <style>
+        body { font-family: Arial; max-width: 1000px; margin: auto; padding: 20px }
+        .form-group { display: flex; flex-direction: column; margin-bottom: 10px; }
+        input[type="text"] { width: 100%; padding: 5px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>Cercador de Registres - {{.Pais}}</h2>
+
+    <!-- Formulari -->
+    <form method="GET" action="/mon">
+        <input type="hidden" name="pais" value="{{.Pais}}">
+        {{range $index, $field := $.Headers}}
+            {{if ne $field "Any"}}
+                <div class="form-group">
+                    <label>{{$field}}</label>
+                    <input type="text" name="{{$field | lower}}" value="{{index $.Filters $field | default ""}}">
+                </div>
+            {{end}}
+        {{end}}
+        <button type="submit">Buscar</button>
+    </form>
+
+    <!-- Taula -->
+    <table>
+        <thead>
+            <tr>
+                <th>Municipi</th>
+                <th>Llibre</th>
+                <th>Any</th>
+                {{range $index, $field := .Headers}}
+                    {{if not (eq $field "Municipi")}}
+                        <th>{{$field}}</th>
+                    {{end}}
+                {{end}}
+                <th>Registres</th>
+                <th>Opcions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Results}}
+            <tr>
+                <td>{{.cognoms}}</td>
+                <td>{{.pagina}}</td>
+                <td>{{.llibre}}</td>
+                <td>{{.any}}</td>
+                <td>{{len $.Results}} coincidències</td>
+                <td><a href="/detall?id={{.id}}">Veure detall</a></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+
+    <!-- Paginació -->
+    <div style="margin-top: 20px;">
+        {{if gt $.Page 1}}
+            <a href="?pais={{$.Pais}}&page={{$.PrevPage}}">Anterior</a>
+        {{end}}
+        <a href="?pais={{$.Pais}}&page={{$.NextPage}}">Següent</a>
+    </div>
+
+    <p><a href="/upload">Tornar</a></p>
+</body>
+</html>

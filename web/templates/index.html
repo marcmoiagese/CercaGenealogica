@@ -2,57 +2,43 @@
 <html lang="ca">
 <head>
     <meta charset="UTF-8">
-    <title>Buscador {{ .Pais }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cerca en Temps Real</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #cerca {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+        }
+        #resultats {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .resultat-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        .resultat-item:last-child {
+            border-bottom: none;
+        }
+    </style>
 </head>
 <body>
-    <h1>{{ .Pais }}</h1>
-
-    <form method="GET" action="/mon">
-        <input type="hidden" name="pais" value="{{ .Pais }}">
-        {{ range $key, $value := $.Filters }}
-            <label for="{{ $key }}">{{ $key }}:</label>
-            <input type="text" id="{{ $key }}" name="{{ $key }}" value="{{ $value }}"><br><br>
-        {{ end }}
-        <button type="submit">Buscar</button>
-    </form>
-
-    <table border="1">
-        <thead>
-            <tr>
-                {{ range .Headers }}
-                    <th>
-                        <a href="?pais={{ $.Pais }}&{{ $.Filters | mergeAndReplace $key $value }}">{{ . }}</a>
-                    </th>
-                {{ end }}
-                <th>Registres</th>
-                <th>Opcions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{ range .Results }}
-                <tr>
-                    {{ range . }}
-                        <td>{{ . }}</td>
-                    {{ end }}
-                    <td>123</td>
-                    <td><a href="/detall?id=1">Veure</a></td>
-                </tr>
-            {{ end }}
-        </tbody>
-    </table>
-
-    <div>
-        {{ if gt .Page 1 }}
-            <a href="?pais={{ .Pais }}&page={{ .PrevPage }}">&laquo; Anterior</a>
-        {{ end }}
-        Pàgina {{ .Page }} de {{ div .Total .PageSize | addIfRemainder .Total .PageSize }}
-        <a href="?pais={{ .Pais }}&page={{ .NextPage }}">Següent &raquo;</a>
-
-        <select onchange="location.href='?pais={{ .Pais }}&pageSize='+this.value">
-            {{ range .PageSizes }}
-                <option value="{{ . }}" {{ if eq $.PageSize . }}selected{{ end }}>{{ . }}</option>
-            {{ end }}
-        </select>
-    </div>
+    <h1>Cerca Usuaris</h1>
+    
+    <input type="text" id="cerca" placeholder="Escriu un nom o cognom...">
+    
+    <div id="resultats"></div>
+    
+    <script src="/static/cercador.js"></script>
+    <p><a href="/upload">Importa CSV</a></p>
 </body>
 </html>
