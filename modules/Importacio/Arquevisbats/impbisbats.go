@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
@@ -28,6 +29,7 @@ func parseCognoms(cognomStr string) (string, string, string, string) {
 
 	var result []string
 	words := strings.Fields(cognomStr)
+
 	compostos := map[string]bool{
 		"de": true, "del": true, "dela": true, "dels": true, "la": true, "lo": true, "los": true, "las": true,
 		"san": true, "santa": true, "sant": true, "sa": true, "st": true, "ste": true,
@@ -36,7 +38,7 @@ func parseCognoms(cognomStr string) (string, string, string, string) {
 
 	for i := 0; i < len(words); i++ {
 		word := words[i]
-		if _, ok := compostos[strings.ToLower(word)]; ok && i+1 < len(words) {
+		if i+1 < len(words) && compostos[strings.ToLower(word)] {
 			result = append(result, word+" "+words[i+1])
 			i++
 		} else {
@@ -53,6 +55,8 @@ func parseCognoms(cognomStr string) (string, string, string, string) {
 	}
 	if len(result) > 2 {
 		nom = strings.Join(result[2:], " ")
+	} else {
+		nom = ""
 	}
 	return c1, c2, nom, cognomStr
 }
@@ -80,40 +84,68 @@ func parsePersona(input string) (string, string, string, string) {
 		return "", "", "", ""
 	}
 
-	var nom, c1, c2, municipi string
-
-	// Municipi entre parèntesis
+	// Extreu municipi entre parèntesis
+	var muni string
 	if strings.Contains(input, "(") && strings.Contains(input, ")") {
 		parts := strings.SplitN(input, "(", 2)
-		namePart := strings.TrimSpace(parts[0])
-		municipi = strings.TrimSuffix(strings.TrimSpace(parts[1]), ")")
+		muni = strings.TrimSuffix(strings.TrimSpace(parts[1]), ")")
+		input = strings.TrimSpace(parts[0])
+	}
 
-		// Separa nom i cognoms
-		names := strings.Fields(namePart)
-		if len(names) >= 1 {
-			nom = names[0]
-		}
-		if len(names) >= 2 {
-			c1 = names[1]
-		}
-		if len(names) >= 3 {
-			c2 = strings.Join(names[2:], " ")
-		}
-	} else {
-		// Sense municipi
-		names := strings.Fields(input)
-		if len(names) >= 1 {
-			nom = names[0]
-		}
-		if len(names) >= 2 {
-			c1 = names[1]
-		}
-		if len(names) >= 3 {
-			c2 = strings.Join(names[2:], " ")
+	// Si és una data, ignorar-la
+	if len(input) == 10 && input[2] == '/' && input[5] == '/' {
+		return "", "", "", ""
+	}
+
+	// Si té paraula clau com "Casat", "1er", etc., trunca
+	for _, prefix := range []string{"Casat", "1er", "2on"} {
+		if strings.HasPrefix(input, prefix) {
+			input = strings.TrimPrefix(input, prefix)
+			input = strings.TrimSpace(input)
+			break
 		}
 	}
 
-	return nom, c1, c2, municipi
+	// Dividim per espais, però evitem paraules com "i", "de", "la", etc.
+	words := strings.Fields(input)
+
+	var nameParts, surnameParts []string
+	compostos := map[string]bool{
+		"de": true, "del": true, "dela": true, "dels": true,
+		"la": true, "lo": true, "los": true, "las": true,
+		"san": true, "santa": true,
+		"sant": true, "sa": true, "st": true, "ste": true,
+		"stra": true, "stma": true, "i": true, "y": true,
+	}
+
+	for i := 0; i < len(words); i++ {
+		word := words[i]
+		if i+1 < len(words) && compostos[strings.ToLower(word)] {
+			surnameParts = append(surnameParts, word+" "+words[i+1])
+			i++
+		} else {
+			nameParts = append(nameParts, word)
+		}
+	}
+
+	var nom, c1, c2 string
+	if len(nameParts) > 0 {
+		nom = nameParts[0]
+	}
+	if len(nameParts) > 1 {
+		c1 = nameParts[1]
+	}
+	if len(nameParts) > 2 {
+		c2 = strings.Join(nameParts[2:], " ")
+	}
+	if c1 == "" && len(surnameParts) > 0 {
+		c1 = surnameParts[0]
+	}
+	if c2 == "" && len(surnameParts) > 1 {
+		c2 = strings.Join(surnameParts[1:], " ")
+	}
+
+	return nom, c1, c2, muni
 }
 
 // processRelacions processa avis paterns o materns
@@ -121,7 +153,13 @@ func processRelacions(dbManager db.DBManager, usuariID int, relStr, tipus, munic
 	if relStr == "" {
 		return
 	}
-	for _, part := range strings.Split(relStr, "i") {
+
+	// Dividim pel connector 'i' o 'I'
+	parts := strings.FieldsFunc(relStr, func(r rune) bool {
+		return r == 'i' || r == 'I'
+	})
+
+	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
@@ -131,7 +169,6 @@ func processRelacions(dbManager db.DBManager, usuariID int, relStr, tipus, munic
 			municipi = municipiDefault
 		}
 		dbManager.InsertRelacio(usuariID, tipus, nom, c1, c2, municipi, "", "")
-
 	}
 }
 
@@ -146,23 +183,36 @@ func processCasats(dbManager db.DBManager, usuariID int, casatStr, municipiDefau
 		if m == "" {
 			continue
 		}
-		// Ex: "1er Nom cognom1 cognom2 dd/mm/yyyy"
-		parts := strings.Fields(m)
-		var data string
-		var lloc string
 
-		// Busca data i lloc
+		parts := strings.Fields(m)
+		// Només processem si tenim mínim dos elements (data + nom cònjuge)
+		if len(parts) < 2 {
+			log.Printf("⚠️ No es poden extreure data i lloc de casat de: %q", casatStr)
+			continue
+		}
+
+		// Nom del conjuge
+		var data, lloc string
+
+		// Mínimament necessitem dues parts per buscar data i lloc
 		for i, p := range parts {
-			if len(p) == 10 && p[2] == '/' && p[5] == '/' {
+			if len(p) == 10 && p[2] == '/' && p[5] == '/' { // detectem data
 				data = p
-				if i+1 < len(parts) && !strings.Contains(parts[i+1], "/") {
+				// Verifiquem si hi ha pròxima paraula i no és una data
+				if i+1 < len(parts) && (!strings.Contains(parts[i+1], "/")) {
 					lloc = parts[i+1]
 				}
 				break
 			}
+			log.Printf("DEBUG: parts=%v", parts)
 		}
 
-		// Nom del conjuge
+		if data == "" {
+			log.Printf("⚠️ No s'ha trobat cap data vàlida a casat: %q", casatStr)
+			continue
+		}
+
+		// Eliminem "1er" o "2on" del nom del conjuge
 		nomConjuge := strings.TrimPrefix(strings.Split(m, data)[0], "1er ")
 		nomConjuge = strings.TrimPrefix(nomConjuge, "2on ")
 		nomConjuge = strings.TrimSpace(nomConjuge)
@@ -202,6 +252,91 @@ func updateUsuari(dbManager db.DBManager, id int, dataNaixement, dataBateig, dat
 
 	_, err = stmt.Exec(dataNaixement, dataBateig, dataDefuncio, ofici, estatCivil, id)
 	return err
+}
+
+// parsePersonaAmbLlocData extreu nom, cognoms, municipi i data d'una cadena com:
+func parsePersonaAmbLlocData(input string) (nom, c1, c2, lloc, data string) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return "", "", "", "", ""
+	}
+
+	// Buscar municipi entre parèntesis
+	if strings.Contains(input, "(") && strings.Contains(input, ")") {
+		parts := strings.SplitN(input, "(", 2)
+		namePart := strings.TrimSpace(parts[0])
+		rest := strings.TrimSpace(parts[1])
+		dataPattern := regexp.MustCompile(`\d{1,2}/\d{1,2}/\d{4}`)
+		locDate := strings.TrimSuffix(rest, ")")
+
+		// Busca si hi ha data dins del lloc+data que pot estar en aquest format
+		if match := dataPattern.FindString(locDate); match != "" {
+			data = match
+			lloc = strings.TrimSpace(strings.Replace(locDate, match, "", -1))
+		} else {
+			lloc = locDate
+			data = ""
+		}
+
+		input = namePart
+	}
+
+	// Buscar data directament al final del nom principal si encara no s’ha trobat
+	if data == "" {
+		dataPattern := regexp.MustCompile(`.*?(\d{1,2}/\d{1,2}/\d{4})$`)
+		if match := dataPattern.FindStringSubmatch(input); len(match) > 1 {
+			data = match[1]
+			input = strings.TrimSpace(strings.Replace(input, data, "", -1))
+		}
+	}
+
+	// Separa el nom i cognoms
+	names := strings.Fields(input)
+	if len(names) >= 1 {
+		nom = names[0]
+	}
+	if len(names) >= 2 {
+		c1 = names[1]
+	}
+	if len(names) >= 3 {
+		c2 = strings.Join(names[2:], " ")
+	}
+
+	return nom, c1, c2, lloc, data
+}
+
+// processAvis processa avis (paterns o materns) separant avi i avia
+func processAvis(dbManager db.DBManager, usuariID int, avisStr, tipusAvi, municipiDefault string) {
+	if avisStr == "" {
+		return
+	}
+
+	// Separar per "i" per obtenir avi i avia
+	avis := strings.Split(avisStr, " i ")
+	if len(avis) < 2 {
+		log.Printf("⚠️ Format d'avis incorrecte: %q", avisStr)
+		return
+	}
+
+	// Processa l'avi
+	avi := strings.TrimSpace(avis[0])
+	nomAvi, c1Avi, c2Avi, muniAvi, dataAvi := parsePersonaAmbLlocData(avi)
+	if nomAvi != "" || c1Avi != "" {
+		dbManager.InsertRelacio(usuariID, tipusAvi+"_avi", nomAvi, c1Avi, c2Avi, muniAvi, "", dataAvi)
+		log.Printf("✅ Avi %s processat: %s %s %s - Municipi: %s - Data: %s", tipusAvi, nomAvi, c1Avi, c2Avi, muniAvi, dataAvi)
+	} else {
+		log.Printf("❌ Error: Avi %s no processat: %q", tipusAvi, avi)
+	}
+
+	// Processa l'avía
+	avía := strings.TrimSpace(avis[1])
+	nomAvia, c1Avia, c2Avia, muniAvia, dataAvia := parsePersonaAmbLlocData(avía)
+	if nomAvia != "" || c1Avia != "" {
+		dbManager.InsertRelacio(usuariID, tipusAvi+"_avia", nomAvia, c1Avia, c2Avia, muniAvia, "", dataAvia)
+		log.Printf("✅ Avia %s processada: %s %s %s - Municipi: %s - Data: %s", tipusAvi, nomAvia, c1Avia, c2Avia, muniAvia, dataAvia)
+	} else {
+		log.Printf("❌ Error: Avia %s no processada: %q", tipusAvi, avía)
+	}
 }
 
 // HandleImport processa l'upload del CSV
@@ -366,24 +501,43 @@ func HandleImport(dbManager db.DBManager) httprouter.Handle {
 				dbManager.InsertRelacio(int(lastID), "mare", nomMare, c1Mare, c2Mare, municipiMare, "", "")
 			}
 
-			// Processa avis
-			processRelacions(dbManager, int(lastID), avisPaternsStr, "avi_patern", municipi)
-			processRelacions(dbManager, int(lastID), avisMaternsStr, "avi_matern", municipi)
+			// Processa avis paterns
+			if avisPaternsStr != "" {
+				processAvis(dbManager, int(lastID), avisPaternsStr, "avi_patern", municipi)
+			}
+
+			// Processa avis materns
+			if avisMaternsStr != "" {
+				processAvis(dbManager, int(lastID), avisMaternsStr, "avi_matern", municipi)
+			}
 
 			// Processa padrins
 			if padriStr != "" {
-				nom, c1, c2, municipi := parsePersona(padriStr)
-				log.Printf("Padri: %s %s %s - Municipi: %s", nom, c1, c2, municipi)
-				dbManager.InsertRelacio(int(lastID), "padri", nom, c1, c2, municipi, "", "")
+				nom, c1, c2, municipi, data := parsePersonaAmbLlocData(padriStr)
+				log.Printf("Padri: %s %s %s - Municipi: %s - Data: %s", nom, c1, c2, municipi, data)
+				if nom != "" || c1 != "" || c2 != "" {
+					err = dbManager.InsertRelacio(int(lastID), "padri", nom, c1, c2, municipi, "", data)
+					if err != nil {
+						log.Printf("❌ Error inserint padri: %v", err)
+					} else {
+						log.Printf("⚠️ Padri no processat: %q", padriStr)
+					}
+				} else {
+					log.Printf("❌ Padri no vàlid: %q", padriStr)
+				}
 			}
 			if padrinaStr != "" {
 				nom, c1, c2, municipi := parsePersona(padrinaStr)
 				log.Printf("Padrina: %s %s %s - Municipi: %s", nom, c1, c2, municipi)
-				err = dbManager.InsertRelacio(int(lastID), "padrina", nom, c1, c2, municipi, "", "")
-				if err != nil {
-					log.Printf("❌ Error inserint padrina: %v", err)
+				if nom != "" || c1 != "" || c2 != "" {
+					err = dbManager.InsertRelacio(int(lastID), "padrina", nom, c1, c2, municipi, "", "")
+					if err != nil {
+						log.Printf("❌ Error inserint padrina: %v", err)
+					} else {
+						log.Printf("⚠️ Padrina no processada: %q", padrinaStr)
+					}
 				} else {
-					log.Printf("⚠️ Padrina no processada: %q", padrinaStr)
+					log.Printf("❌ Padri no vàlid: %q", padriStr)
 				}
 			}
 
@@ -399,8 +553,15 @@ func HandleImport(dbManager db.DBManager) httprouter.Handle {
 				for i, p := range parts {
 					if len(p) == 10 && p[2] == '/' && p[5] == '/' {
 						data = p
-						if i+1 < len(parts) && !strings.Contains(parts[i+1], "/") {
-							lloc = parts[i+1]
+						if i+1 < len(parts) {
+							nextPart := parts[i+1]
+							if !strings.Contains(nextPart, "/") {
+								lloc = nextPart
+							} else {
+								lloc = ""
+							}
+						} else {
+							lloc = ""
 						}
 						break
 					}

@@ -4,8 +4,6 @@
 
 ```plaintext
 app/
-├── main.go
-├── go.mod
 ├── cnf/
 │   └── config.cfg
 ├── db/
@@ -13,10 +11,12 @@ app/
 │   ├── SQLite.sql
 │   └── motor.go
 ├── core/
-│   └── cerca/
-│       ├──cerca.go
-│       └── static/
-│           └── script.js
+│   ├── cerca/
+│   │   └──cerca.go
+│   └── mon/
+│       ├── handler.go 
+│       ├── model.go
+│       └── service.go
 ├── modules/
 │       └── Importacio
 │           └── Arquevisbats
@@ -25,6 +25,7 @@ app/
 │   ├── css/
 │   ├── handlers/
 │   │   ├── cerca.go
+│   │   ├── mon.go
 │   │   ├── pendents.go
 │   │   ├── static.go
 │   │   └── upload.go
@@ -33,6 +34,7 @@ app/
 │   │   └── cercador.js
 │   └── templates/
 │       ├── index.html
+│       ├── municipis.html
 │       ├── pendents.html
 │       ├── revisio_duplicats.html
 │       └── upload.html

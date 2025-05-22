@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/marcmoiagese/CercaGenealogica/core/mon"
 	"github.com/marcmoiagese/CercaGenealogica/db"
 	"github.com/marcmoiagese/CercaGenealogica/web/handlers"
 )
@@ -57,6 +58,12 @@ func main() {
 		tmpl.Execute(w, nil)
 	})
 
+	func adapt(fn func(db.DBManager) httprouter.Handle) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			fn(dbManager)(w, r, nil)
+		}
+	}
+
 	http.HandleFunc("/cerca", handlers.CercaHandler(sqlDB))
 	http.HandleFunc("/upload", handlers.UploadPageHandler())
 	http.HandleFunc("/import", handlers.ImportHandler(dbManager))
@@ -64,6 +71,7 @@ func main() {
 	http.HandleFunc("/pendents", handlers.PendentsHandler(dbManager))
 	http.HandleFunc("/import-seleccionats", handlers.ImportarDuplicatsSeleccionatsHandler(dbManager))
 	http.HandleFunc("/eliminar-seleccionats", handlers.EliminarDuplicatsSeleccionatsHandler(dbManager))
+	http.HandleFunc("/mon", adapt(mon.ServePaisPage(dbManager)))
 
 	fmt.Println("Servidor corrent a http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
