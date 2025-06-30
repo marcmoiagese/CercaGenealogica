@@ -1,8 +1,65 @@
 -- Desactivo les claus foranes per pervindre errors durant la creació
 -- PRAGMA foreign_keys = OFF;
 
+CREATE TABLE usuaris (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuari TEXT NOT NULL UNIQUE,
+    contrasenya TEXT NOT NULL,  -- Guardarà el hash de la contrasenya
+    correu TEXT NOT NULL UNIQUE,
+    data_naixement DATE,
+    pais TEXT,
+    estat TEXT,
+    provincia TEXT,
+    poblacio TEXT,
+    codi_postal TEXT,
+    data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    actiu BOOLEAN DEFAULT 1
+);
+
+CREATE TABLE grups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL UNIQUE,
+    descripcio TEXT,
+    data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE usuaris_grups (
+    usuari_id INTEGER NOT NULL,
+    grup_id INTEGER NOT NULL,
+    data_afegit TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (usuari_id, grup_id),
+    FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+    FOREIGN KEY (grup_id) REFERENCES grups(id) ON DELETE CASCADE
+);
+
+CREATE TABLE politiques (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL UNIQUE,
+    descripcio TEXT,
+    permisos TEXT NOT NULL,  -- JSON o text amb els permisos específics
+    data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE usuaris_politiques (
+    usuari_id INTEGER NOT NULL,
+    politica_id INTEGER NOT NULL,
+    data_assignacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (usuari_id, politica_id),
+    FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+    FOREIGN KEY (politica_id) REFERENCES politiques(id) ON DELETE CASCADE
+);
+
+CREATE TABLE grups_politiques (
+    grup_id INTEGER NOT NULL,
+    politica_id INTEGER NOT NULL,
+    data_assignacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (grup_id, politica_id),
+    FOREIGN KEY (grup_id) REFERENCES grups(id) ON DELETE CASCADE,
+    FOREIGN KEY (politica_id) REFERENCES politiques(id) ON DELETE CASCADE
+);
+
 -- SQLite.sql
-CREATE TABLE IF NOT EXISTS usuaris (
+CREATE TABLE IF NOT EXISTS persona (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL,
     cognom1 TEXT,
@@ -22,7 +79,7 @@ CREATE TABLE IF NOT EXISTS usuaris (
 
 CREATE TABLE IF NOT EXISTS relacions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    usuari_id INTEGER NOT NULL,
+    persona_id INTEGER NOT NULL,
     tipus_relacio TEXT NOT NULL, -- ex: "pare", "mare", "casat", etc.
     nom TEXT,
     cognom1 TEXT,
@@ -30,10 +87,10 @@ CREATE TABLE IF NOT EXISTS relacions (
     municipi TEXT,
     ofici TEXT,
     data_matrimoni TEXT,
-    FOREIGN KEY(usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
+    FOREIGN KEY(persona_id) REFERENCES persona(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS usuaris_possibles_duplicats (
+CREATE TABLE IF NOT EXISTS persona_possibles_duplicats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL,
     cognom1 TEXT NOT NULL,
@@ -197,235 +254,22 @@ CREATE INDEX IF NOT EXISTS idx_tipus_nivell ON nivells_administratius(tipus_nive
 --CREATE INDEX IF NOT EXISTS idx_llibres_municipi ON llibres(municipi_id);
 
 -- Índex compost per millorar la cerca de duplicats i cerques combinades
--- CREATE INDEX idx_usuaris_cognoms_any_llibre_pagina ON usuaris(cognom1, cognom2, any, llibre, pagina); -- error executant SQLite.sql: index idx_usuaris_cognoms_any_llibre_pagina already exists
+-- CREATE INDEX idx_persona_cognoms_any_llibre_pagina ON persona(cognom1, cognom2, any, llibre, pagina); -- error executant SQLite.sql: index idx_persona_cognoms_any_llibre_pagina already exists
 
 -- Cerca per cognoms i nom (per coincidències exactes)
-CREATE INDEX IF NOT EXISTS idx_usuaris_nom_complet ON usuaris(nom_complet);
+CREATE INDEX IF NOT EXISTS idx_persona_nom_complet ON persona(nom_complet);
 
 -- Útil per cerca de persones per municipi i any (ex: nascuts al mateix lloc i època)
-CREATE INDEX IF NOT EXISTS idx_usuaris_municipi_any ON usuaris(municipi, any);
+CREATE INDEX IF NOT EXISTS idx_persona_municipi_any ON persona(municipi, any);
 
 -- Cercar per ofici o estat civil
-CREATE INDEX IF NOT EXISTS idx_usuaris_ofici ON usuaris(ofici);
-CREATE INDEX IF NOT EXISTS idx_usuaris_estat_civil ON usuaris(estat_civil);
+CREATE INDEX IF NOT EXISTS idx_persona_ofici ON persona(ofici);
+CREATE INDEX IF NOT EXISTS idx_persona_estat_civil ON persona(estat_civil);
+
+CREATE INDEX idx_usuaris_correu ON usuaris(correu);
+CREATE INDEX idx_usuaris_data_creacio ON usuaris(data_creacio);
+CREATE INDEX idx_grups_nom ON grups(nom);
+CREATE INDEX idx_politiques_nom ON politiques(nom);
 
 -- Reactivo les claus foranes per pervindre errors durant la creació
 -- PRAGMA foreign_keys = ON;
-
--- Dades preinsertades
--- Inserció de països a la taula 'paisos'
-INSERT INTO paisos (codi_iso2, codi_iso3, codi_pais_num) VALUES
-('AF', 'AFG', '004'),
-('AL', 'ALB', '008'),
-('DE', 'DEU', '276'),
-('AD', 'AND', '020'),
-('AO', 'AGO', '024'),
-('AG', 'ATG', '028'),
-('SA', 'SAU', '682'),
-('AR', 'ARG', '032'),
-('AM', 'ARM', '051'),
-('AU', 'AUS', '036'),
-('AT', 'AUT', '040'),
-('AZ', 'AZE', '031'),
-('BS', 'BHS', '044'),
-('BH', 'BHR', '048'),
-('BD', 'BGD', '050'),
-('BB', 'BRB', '052'),
-('BE', 'BEL', '056'),
-('BZ', 'BLZ', '084'),
-('BJ', 'BEN', '204'),
-('BY', 'BLR', '112'),
-('MM', 'MMR', '104'),
-('BO', 'BOL', '068'),
-('BA', 'BIH', '070'),
-('BW', 'BWA', '072'),
-('BR', 'BRA', '076'),
-('BN', 'BRN', '096'),
-('BG', 'BGR', '100'),
-('BF', 'BFA', '854'),
-('BI', 'BDI', '108'),
-('BT', 'BTN', '064'),
-('CV', 'CPV', '132'),
-('KH', 'KHM', '116'),
-('CM', 'CMR', '120'),
-('CA', 'CAN', '124'),
-('QA', 'QAT', '634'),
-('TD', 'TCD', '148'),
-('CL', 'CHL', '152'),
-('CN', 'CHN', '156'),
-('CY', 'CYP', '196'),
-('CO', 'COL', '170'),
-('KM', 'COM', '174'),
-('CG', 'COG', '178'),
-('CD', 'COD', '180'),
-('KP', 'PRK', '408'),
-('KR', 'KOR', '410'),
-('CI', 'CIV', '384'),
-('CR', 'CRI', '188'),
-('HR', 'HRV', '191'),
-('CU', 'CUB', '192'),
-('DK', 'DNK', '208'),
-('DM', 'DMA', '212'),
-('DO', 'DOM', '214'),
-('EC', 'ECU', '218'),
-('EG', 'EGY', '818'),
-('SV', 'SLV', '222'),
-('ER', 'ERI', '232'),
-('SK', 'SVK', '703'),
-('SI', 'SVN', '705'),
-('ES', 'ESP', '724'),
-('US', 'USA', '840'),
-('EE', 'EST', '233'),
-('SZ', 'SWZ', '748'),
-('ET', 'ETH', '231'),
-('FJ', 'FJI', '242'),
-('PH', 'PHL', '608'),
-('FI', 'FIN', '246'),
-('FR', 'FRA', '250'),
-('GA', 'GAB', '266'),
-('GM', 'GMB', '270'),
-('GE', 'GEO', '268'),
-('GH', 'GHA', '288'),
-('GR', 'GRC', '300'),
-('GD', 'GRD', '308'),
-('GT', 'GTM', '320'),
-('GN', 'GIN', '324'),
-('GW', 'GNB', '624'),
-('GQ', 'GNQ', '226'),
-('GY', 'GUY', '328'),
-('HT', 'HTI', '332'),
-('HN', 'HND', '340'),
-('HU', 'HUN', '348'),
-('IN', 'IND', '356'),
-('ID', 'IDN', '360'),
-('IR', 'IRN', '364'),
-('IQ', 'IRQ', '368'),
-('IE', 'IRL', '372'),
-('IS', 'ISL', '352'),
-('IL', 'ISR', '376'),
-('IT', 'ITA', '380'),
-('JM', 'JAM', '388'),
-('JP', 'JPN', '392'),
-('JO', 'JOR', '400'),
-('KZ', 'KAZ', '398'),
-('KE', 'KEN', '404'),
-('KI', 'KIR', '296'),
-('KW', 'KWT', '414'),
-('KG', 'KGZ', '417'),
-('LA', 'LAO', '418'),
-('LS', 'LSO', '426'),
-('LV', 'LVA', '428'),
-('LB', 'LBN', '422'),
-('LR', 'LBR', '430'),
-('LY', 'LBY', '434'),
-('LI', 'LIE', '438'),
-('LT', 'LTU', '440'),
-('LU', 'LUX', '442'),
-('MK', 'MKD', '807'),
-('MG', 'MDG', '450'),
-('MW', 'MWI', '454'),
-('MY', 'MYS', '458'),
-('MV', 'MDV', '462'),
-('ML', 'MLI', '466'),
-('MT', 'MLT', '470'),
-('MH', 'MHL', '584'),
-('MR', 'MRT', '478'),
-('MU', 'MUS', '480'),
-('MX', 'MEX', '484'),
-('FM', 'FSM', '583'),
-('MD', 'MDA', '498'),
-('MC', 'MCO', '492'),
-('MN', 'MNG', '496'),
-('ME', 'MNE', '499'),
-('MZ', 'MOZ', '508'),
-('NA', 'NAM', '516'),
-('NR', 'NRU', '520'),
-('NP', 'NPL', '524'),
-('NL', 'NLD', '528'),
-('NZ', 'NZL', '554'),
-('NI', 'NIC', '558'),
-('NE', 'NER', '562'),
-('NG', 'NGA', '566'),
-('NO', 'NOR', '578'),
-('OM', 'OMN', '512'),
-('PK', 'PAK', '586'),
-('PW', 'PLW', '585'),
-('PA', 'PAN', '591'),
-('PG', 'PNG', '598'),
-('PY', 'PRY', '600'),
-('PE', 'PER', '604'),
-('PL', 'POL', '616'),
-('PT', 'PRT', '620'),
-('GB', 'GBR', '826'),
-('CF', 'CAF', '140'),
-('CZ', 'CZE', '203'),
-('RO', 'ROU', '642'),
-('RU', 'RUS', '643'),
-('RW', 'RWA', '646'),
-('KN', 'KNA', '659'),
-('LC', 'LCA', '662'),
-('VC', 'VCT', '670'),
-('WS', 'WSM', '882'),
-('SM', 'SMR', '674'),
-('ST', 'STP', '678'),
-('SN', 'SEN', '686'),
-('RS', 'SRB', '688'),
-('SC', 'SYC', '690'),
-('SL', 'SLE', '694'),
-('SG', 'SGP', '702'),
-('SY', 'SYR', '760'),
-('SO', 'SOM', '706'),
-('LK', 'LKA', '144'),
-('ZA', 'ZAF', '710'),
-('SD', 'SDN', '729'),
-('SS', 'SSD', '728'),
-('SE', 'SWE', '752'),
-('CH', 'CHE', '756'),
-('SR', 'SUR', '740'),
-('TH', 'THA', '764'),
-('TJ', 'TJK', '762'),
-('TL', 'TLS', '626'),
-('TG', 'TGO', '768'),
-('TO', 'TON', '776'),
-('TT', 'TTO', '780'),
-('TN', 'TUN', '788'),
-('TR', 'TUR', '792'),
-('TM', 'TKM', '795'),
-('TV', 'TUV', '798'),
-('UG', 'UGA', '800'),
-('UA', 'UKR', '804'),
-('AE', 'ARE', '784'),
-('UY', 'URY', '858'),
-('UZ', 'UZB', '860'),
-('VU', 'VUT', '548'),
-('VA', 'VAT', '336'),
-('VE', 'VEN', '862'),
-('VN', 'VNM', '704'),
-('YE', 'YEM', '887'),
-('ZM', 'ZMB', '894'),
-('ZW', 'ZWE', '716'),
-('TW', 'TWN', '158'),
-('MA', 'MAR', '504'),
-('PS', 'PSE', '275'),
-('EH', 'ESH', '732'),
-('KY', 'CYM', '136'),
-('FK', 'FLK', '238'),
-('GI', 'GIB', '292'),
-('GL', 'GRL', '304'),
-('GP', 'GLP', '312'),
-('GU', 'GUM', '316'),
-('HK', 'HKG', '344'),
-('MO', 'MAC', '446'),
-('MQ', 'MTQ', '474'),
-('NC', 'NCL', '540'),
-('PF', 'PYF', '258'),
-('PR', 'PRI', '630'),
-('RE', 'REU', '638'),
-('BL', 'BLM', '652'),
-('MF', 'MAF', '663'),
-('PM', 'SPM', '666'),
-('SX', 'SXM', '534'),
-('TC', 'TCA', '796'),
-('VG', 'VGB', '092'),
-('VI', 'VIR', '850'),
-('WF', 'WLF', '876');

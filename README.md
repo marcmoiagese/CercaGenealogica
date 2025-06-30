@@ -43,3 +43,9 @@ app/
 ├── go.sum
 └── main.go
 ```
+
+```bash
+go get github.com/mattn/go-sqlite3
+go get github.com/lib/pq         # Postgres
+go get github.com/go-sql-driver/mysql
+```

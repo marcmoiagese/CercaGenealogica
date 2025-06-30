@@ -2,33 +2,40 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/go-sql-driver/mysql"
 )
 
-type SQLite struct {
-	Path string
-	Conn *sql.DB
+type MySQL struct {
+	Host   string
+	Port   string
+	User   string
+	Pass   string
+	DBName string
+	Conn   *sql.DB
 }
 
-func (s *SQLite) Connect() error {
+func (m *MySQL) Connect() error {
 	var err error
-	s.Conn, err = sql.Open("sqlite3", s.Path)
+	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
+		m.User, m.Pass, m.Host, m.Port, m.DBName)
+
+	m.Conn, err = sql.Open("mysql", connStr)
 	if err != nil {
 		return err
 	}
 
-	return s.Conn.Ping()
+	return m.Conn.Ping()
 }
 
-func (s *SQLite) Query(query string, args ...interface{}) ([]map[string]interface{}, error) {
-	rows, err := s.Conn.Query(query, args...)
+func (m *MySQL) Query(query string, args ...interface{}) ([]map[string]interface{}, error) {
+	rows, err := m.Conn.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	// Processa resultats
 	columns, _ := rows.Columns()
 	results := []map[string]interface{}{}
 
@@ -53,14 +60,16 @@ func (s *SQLite) Query(query string, args ...interface{}) ([]map[string]interfac
 	return results, nil
 }
 
-func (s *SQLite) Exec(query string, args ...interface{}) (int64, error) {
-	res, err := s.Conn.Exec(query, args...)
+func (m *MySQL) Exec(query string, args ...interface{}) (int64, error) {
+	res, err := m.Conn.Exec(query, args...)
 	if err != nil {
 		return 0, err
 	}
 	return res.RowsAffected()
 }
 
-func (s *SQLite) Close() {
-	s.Conn.Close()
+func (m *MySQL) Close() {
+	if m.Conn != nil {
+		m.Conn.Close()
+	}
 }
