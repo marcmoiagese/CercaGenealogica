@@ -1,5 +1,19 @@
+<!-- templates/index.html -->
+{{ define "styles" }}
+    {{ template "styles-index" . }}
+{{ end }}
+
+
 {{ define "content" }}
 <h1>Benvingut a Genealogia.cat</h1>
 <p>Aquest és el portal genealògic públic.</p>
 <a href="/login">Iniciar sessió</a>
+{{ end }}
+
+{{ template "modal-index-inici" . }}
+{{ template "modal-index-registre" . }}
+{{ template "modal-index-recuperar-pass" . }}
+
+{{ define "scripts" }}
+    {{ template "scripts-index" . }}
 {{ end }}

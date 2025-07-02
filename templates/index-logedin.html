@@ -1,4 +1,13 @@
+<!-- templates/index-logedin.html -->
+{{ define "styles" }}
+    {{ template "styles-logedin" . }}
+{{ end }}
+
 {{ define "content" }}
 <h1>Hola Joan!</h1>
-<p>Benvingut al teu espai personal.</p>
+<p>Estàs identificat correctament.</p>
+{{ end }}
+
+{{ define "scripts" }}
+    {{ template "scripts-logedin" . }}
 {{ end }}

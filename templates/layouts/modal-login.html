@@ -1,0 +1,24 @@
+{{ define "modal-index-recuperar-pass" }}
+<div class="modal-login" id="modalRecuperar">
+    <div class="modal-contingut">
+        <span class="modal-tanca" id="tancaModalRecuperar">&times;</span>
+        <h2>Recuperar contrasenya</h2>
+        <form id="formRecuperar">
+            <div class="form-grup">
+                <label for="email">Correu electrònic</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            <div class="form-grup">
+                <label for="captcha">Quant és 5 + 3?</label>
+                <input type="text" id="captcha" name="captcha" placeholder="Resposta" required>
+            </div>
+            <button type="submit" class="boto-registre boto-login-modal">
+                <i class="fas fa-paper-plane"></i> Enviar instruccions
+            </button>
+        </form>
+        <p class="opcions-addicionals">
+            <a href="#" id="tornaLoginRecuperar">Tornar a iniciar sessió</a>
+        </p>
+    </div>
+</div>
+{{ end }}

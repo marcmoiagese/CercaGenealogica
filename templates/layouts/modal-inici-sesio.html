@@ -1,0 +1,27 @@
+{{ define "modal-index-inici" }}
+<div class="modal-login" id="modalLogin">
+    <div class="modal-contingut">
+        <span class="modal-tanca" id="tancaModal">&times;</span>
+        <h2>Iniciar sessió</h2>
+        <form id="formLogin">
+            <div class="form-grup">
+                <label for="usuari">Usuari o correu electrònic</label>
+                <input type="text" id="usuari" name="usuari" required>
+            </div>
+            <div class="form-grup">
+                <label for="contrassenya">Contrasenya</label>
+                <input type="password" id="contrassenya" name="contrassenya" required>
+            </div>
+            <div class="form-grup">
+                <label for="captcha">Quant és 5 + 3?</label>
+                <input type="text" id="captcha" name="captcha" placeholder="Resposta" required>
+            </div>
+            <button type="submit" class="boto boto-login-modal"><a href=index-logedin.html>Iniciar sessió</a></button>
+        </form>
+        <p class="opcions-addicionals">
+            <a href="#" id="mostrarRecuperar">Recuperar contrasenya</a> · 
+            <a href="#" id="mostrarRegistre">Crear usuari</a>
+        </p>
+    </div>
+</div>
+{{ end }}

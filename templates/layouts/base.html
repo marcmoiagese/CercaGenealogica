@@ -4,14 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <title>Genealogia.cat</title>
-    <link rel="stylesheet" href="/static/css/estils.css">
-    <link rel="stylesheet" href="/static/css/login-modal.css">
-    <link rel="stylesheet" href="/static/css/perfil-dropdown.css">
-    <script src="/static/js/login-modal.js"></script>
-    <script src="/static/js/perfil-dropdown.js"></script>
+    {{ template "styles" . }}
 </head>
 <body>
-    {{ if .UserLoggedIn }}
+    {{ if eq .UserLoggedIn true }}
         {{ template "header-private" . }}
         {{ template "menu" . }}
     {{ else }}
@@ -23,5 +19,15 @@
     </main>
 
     {{ template "footer" . }}
+
+    <!-- <div id="modals"> -->
+        {{ if not .UserLoggedIn }}
+            {{ template "modal-index-inici" . }}
+            {{ template "modal-index-registre" . }}
+            {{ template "modal-index-recuperar-pass" . }}
+        {{ end }}
+    <!-- </div> -->
+
+    {{ template "scripts" . }}
 </body>
 </html>

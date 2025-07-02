@@ -1,0 +1,42 @@
+{{ define "modal-index-registre" }}
+<div class="modal-login" id="modalRegistre">
+    <div class="modal-contingut">
+        <span class="modal-tanca" id="tancaModalRegistre">&times;</span>
+        <h2>Crear compte</h2>
+        <form id="formRegistre">
+            <div class="form-grup">
+                <label for="nom">Nom</label>
+                <input type="text" id="nom" name="nom" required>
+            </div>
+            <div class="form-grup">
+                <label for="cognoms">Cognoms</label>
+                <input type="text" id="cognoms" name="cognoms" required>
+            </div>
+            <div class="form-grup">
+                <label for="data_naixament">Data de naixament</label>
+                <input type="date" id="data_naixament" name="data_naixament" required>
+            </div>
+            <div class="form-grup">
+                <label for="email">Correu electrònic</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            <div class="form-grup">
+                <label for="contrassenya">Contrasenya</label>
+                <input type="password" id="contrassenya" name="contrassenya" required>
+            </div>
+            <div class="form-grup">
+                <label for="confirmar_contrasenya">Confirmar contrasenya</label>
+                <input type="password" id="confirmar_contrasenya" name="confirmar_contrasenya" required>
+            </div>
+            <div class="form-grup">
+                <label for="captcha">Quant és 5 + 3?</label>
+                <input type="text" id="captcha" name="captcha" placeholder="Resposta" required>
+            </div>
+            <button type="submit" class="boto boto-login-modal">Crear compte</button>
+        </form>
+        <p class="opcions-addicionals">
+            <a href="#" id="tornaLogin">Ja tens compte? Inicia sessió</a>
+        </p>
+    </div>
+</div>
+{{ end }}
