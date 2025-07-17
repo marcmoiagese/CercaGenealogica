@@ -3,6 +3,8 @@
 
 CREATE TABLE usuaris (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL,
+    cognoms TEXT NOT NULL,
     usuari TEXT NOT NULL UNIQUE,
     contrasenya TEXT NOT NULL,  -- Guardarà el hash de la contrasenya
     correu TEXT NOT NULL UNIQUE,
@@ -13,6 +15,8 @@ CREATE TABLE usuaris (
     poblacio TEXT,
     codi_postal TEXT,
     data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    token_activacio TEXT,
+    expira_token DATETIME,
     actiu BOOLEAN DEFAULT 1
 );
 
@@ -264,7 +268,7 @@ CREATE INDEX IF NOT EXISTS idx_persona_municipi_any ON persona(municipi, any);
 
 -- Cercar per ofici o estat civil
 CREATE INDEX IF NOT EXISTS idx_persona_ofici ON persona(ofici);
-CREATE INDEX IF NOT EXISTS idx_persona_estat_civil ON persona(estat_civil);
+-- CREATE INDEX IF NOT EXISTS idx_persona_estat_civil ON persona(estat_civil);
 
 CREATE INDEX idx_usuaris_correu ON usuaris(correu);
 CREATE INDEX idx_usuaris_data_creacio ON usuaris(data_creacio);

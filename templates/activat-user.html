@@ -1,0 +1,15 @@
+{{ define "activat-user" }}
+<div class="container">
+    <h2>Activació de compte</h2>
+    {{ if .Data.Activat }}
+        <div class="missatge-activacio success">
+            El teu compte ha estat activat correctament! Ja pots <a href="/">iniciar sessió</a>.
+        </div>
+    {{ else }}
+        <div class="missatge-activacio error">
+            Token invàlid o caducat.<br>
+            Si necessites un nou token, pots <a href="/regenerar-token">regenerar-lo aquí</a>.
+        </div>
+    {{ end }}
+</div>
+{{ end }} 

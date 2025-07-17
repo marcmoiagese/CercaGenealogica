@@ -3,7 +3,12 @@
     <div class="modal-contingut">
         <span class="modal-tanca" id="tancaModalRegistre">&times;</span>
         <h2>Crear compte</h2>
-        <form id="formRegistre">
+        <form id="formRegistre" method="POST" action="/registre">
+            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+            <div class="form-grup">
+                <label for="usuari">Usuari</label>
+                <input type="text" id="usuari" name="usuari" required>
+            </div>
             <div class="form-grup">
                 <label for="nom">Nom</label>
                 <input type="text" id="nom" name="nom" required>

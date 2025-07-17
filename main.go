@@ -9,10 +9,16 @@ import (
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
+func applyMiddleware(fn http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
+	for _, mw := range middlewares {
+		fn = mw(fn)
+	}
+	return fn
+}
+
 func main() {
 
-	// Carrega configuració, inicia connexió BD...
-	log.Println("Servidor iniciant-se...")
+	core.InitWebServer()
 
 	config := cnf.LoadConfig("cnf/config.cfg")
 
@@ -22,17 +28,32 @@ func main() {
 	}
 	defer dbInstance.Close()
 
-	// Aplica middleware a /static/
-	http.HandleFunc("/static/", core.SecureHeaders(core.ServeStatic))
+	// Serveix recursos estàtics amb middleware de seguretat
+	http.HandleFunc("/static/", applyMiddleware(core.ServeStatic, core.BlockIPs, core.RateLimit))
+	//http.HandleFunc("/static/", core.SecureHeaders(core.BlockIPs(core.RateLimit(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))))
 
-	// Rutes públiques
-	http.HandleFunc("/", core.SecureHeaders(func(w http.ResponseWriter, r *http.Request) {
-		core.RenderTemplate(w, "index", nil)
-	}))
+	// Rutes HTML
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		core.RenderTemplate(w, "index", map[string]interface{}{
+			"CSRFToken": "token-segon",
+		})
+	})
 
-	http.HandleFunc("/inici", core.SecureHeaders(func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/inici", func(w http.ResponseWriter, r *http.Request) {
 		core.RenderPrivateTemplate(w, "index-logedin", nil)
-	}))
+	})
+
+	http.HandleFunc("/registre", core.RegistrarUsuari)
+
+	http.HandleFunc("/regenerar-token", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			core.MostrarFormulariRegenerarToken(w, r)
+		} else if r.Method == "POST" {
+			core.ProcessarRegenerarToken(w, r)
+		}
+	})
+
+	http.HandleFunc("/activar", core.ActivarUsuariHTTP)
 
 	log.Println("Servidor iniciat a http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))

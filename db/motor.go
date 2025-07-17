@@ -2,15 +2,38 @@ package db
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 )
 
 type DB interface {
 	Connect() error
-	Query(query string, args ...interface{}) ([]map[string]interface{}, error)
-	Exec(query string, args ...interface{}) (int64, error)
 	Close()
+	Exec(query string, args ...interface{}) (int64, error)
+	Query(query string, args ...interface{}) ([]map[string]interface{}, error)
+	InsertUser(user *User) error
+	SaveActivationToken(email, token string) error
+	GetUserByEmail(email string) (*User, error)
+	ActivateUser(token string) error
+}
+
+// Tipus comú d'usuari al paquet `db`
+type User struct {
+	ID            int
+	Usuari        string
+	Name          string
+	Surname       string
+	Email         string
+	Password      []byte
+	DataNaixament string
+	Active        bool
+	CreatedAt     string
+	Pais          string
+	Estat         string
+	Provincia     string
+	Poblacio      string
+	CodiPostal    string
 }
 
 // Funció principal per obtenir una connexió i recrear BD si cal
@@ -41,12 +64,12 @@ func NewDB(config map[string]string) (DB, error) {
 		return nil, fmt.Errorf("motor de BD desconegut: %s", engine)
 	}
 
-	// Connectem
+	// Connectem primer
 	if err := dbInstance.Connect(); err != nil {
 		return nil, err
 	}
 
-	// Recrear BD si cal
+	// Si cal, recrearem la BD
 	if config["RECREADB"] == "true" {
 		sqlFile := getSQLFilePath(engine)
 		if err := CreateDatabaseFromSQL(sqlFile, dbInstance); err != nil {
@@ -73,23 +96,22 @@ func getSQLFilePath(engine string) string {
 
 // Funció genèrica per executar totes les sentències SQL d'un fitxer
 func CreateDatabaseFromSQL(sqlFile string, db DB) error {
+	log.Printf("Recreant BD des de: %s", sqlFile)
 	data, err := os.ReadFile(sqlFile)
 	if err != nil {
-		return fmt.Errorf("no s'ha pogut llegir el fitxer SQL: %v", err)
+		return fmt.Errorf("no s'ha pogut llegir el fitxer SQL: %w", err)
 	}
 
 	queries := strings.Split(string(data), ";")
-
 	for _, q := range queries {
-		trimmed := strings.TrimSpace(q)
-		if trimmed == "" {
+		q = strings.TrimSpace(q)
+		if q == "" || strings.HasPrefix(q, "--") {
 			continue
 		}
-
-		if _, err := db.Exec(trimmed); err != nil {
-			return fmt.Errorf("error executant '%s': %v", trimmed, err)
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("error executant '%s': %w", q[:50]+"...", err)
 		}
 	}
-
+	log.Println("BD recreada correctament")
 	return nil
 }
