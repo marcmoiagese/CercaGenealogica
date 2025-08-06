@@ -1,15 +1,37 @@
-{{ define "activat-user" }}
-<div class="container">
-    <h2>Activació de compte</h2>
-    {{ if .Data.Activat }}
-        <div class="missatge-activacio success">
-            El teu compte ha estat activat correctament! Ja pots <a href="/">iniciar sessió</a>.
+{{ define "activat-user.html" }}
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <title>Genealogia.cat</title>
+    {{ template "styles-public" . }}
+</head>
+<body>
+    {{ template "header-public" . }}
+
+    <main class="contingut-principal">
+        <div class="container">
+            <h2>Activació de compte</h2>
+            {{ if .Data.Activat }}
+                <div class="missatge-activacio success">
+                    El teu compte ha estat activat correctament! Ja pots <a href="/">iniciar sessió</a>.
+                </div>
+            {{ else }}
+                <div class="missatge-activacio error">
+                    Token invàlid o caducat.<br>
+                    Si necessites un nou token, pots <a href="/regenerar-token">regenerar-lo aquí</a>.
+                </div>
+            {{ end }}
         </div>
-    {{ else }}
-        <div class="missatge-activacio error">
-            Token invàlid o caducat.<br>
-            Si necessites un nou token, pots <a href="/regenerar-token">regenerar-lo aquí</a>.
-        </div>
-    {{ end }}
-</div>
-{{ end }} 
+    </main>
+
+    {{ template "footer" . }}
+
+    {{ template "modal-index-inici" . }}
+    {{ template "modal-index-registre" . }}
+    {{ template "modal-index-recuperar-pass" . }}
+
+    {{ template "scripts-public" . }}
+</body>
+</html>
+{{ end }}

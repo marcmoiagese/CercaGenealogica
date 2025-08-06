@@ -1,0 +1,58 @@
+{{ define "registre-correcte.html" }}
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <title>Registre Completat - Genealogia.cat</title>
+    {{ template "styles-public" . }}
+    <link rel="stylesheet" href="/static/css/registre.css">
+</head>
+<body>
+    {{ template "header-public" . }}
+
+    <main class="contingut-principal">
+        <div class="container">
+            <div class="missatge-registre success">
+                <h2><i class="fas fa-check-circle"></i> Registre Completat</h2>
+                <p>El teu compte s'ha creat correctament a Genealogia.cat.</p>
+                
+                <div class="info-activacio">
+                    <h3>Següent pas: Activar el teu compte</h3>
+                    <p>Per poder utilitzar el teu compte, necessites activar-lo primer:</p>
+                    
+                    <div class="passos-activacio">
+                        <div class="pas">
+                            <i class="fas fa-envelope"></i>
+                            <span>Revisa la teva bústia de correu electrònic</span>
+                        </div>
+                        <div class="pas">
+                            <i class="fas fa-link"></i>
+                            <span>Fes clic al link d'activació que hem enviat</span>
+                        </div>
+                        <div class="pas">
+                            <i class="fas fa-user-check"></i>
+                            <span>Ja podràs iniciar sessió amb el teu compte</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accions-adicionals">
+                    <p><strong>No has rebut el correu?</strong></p>
+                    <a href="/regenerar-token" class="boto boto-secundari">
+                        <i class="fas fa-paper-plane"></i> Sol·licitar nou correu d'activació
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    {{ template "footer" . }}
+
+    {{ template "modal-index-inici" . }}
+    {{ template "modal-index-registre" . }}
+    {{ template "modal-index-recuperar-pass" . }}
+
+    {{ template "scripts-public" . }}
+</body>
+</html>
+{{ end }} 

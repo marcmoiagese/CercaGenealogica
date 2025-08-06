@@ -1,13 +1,23 @@
-<!-- templates/index-logedin.html -->
-{{ define "styles" }}
-    {{ template "styles-logedin" . }}
-{{ end }}
+{{ define "index-logedin.html" }}
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <title>Genealogia.cat</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
 
-{{ define "content" }}
-<h1>Hola Joan!</h1>
-<p>Estàs identificat correctament.</p>
-{{ end }}
+    <main class="contingut-principal">
+        <h1>Hola Joan!</h1>
+        <p>Estàs identificat correctament.</p>
+    </main>
 
-{{ define "scripts" }}
-    {{ template "scripts-logedin" . }}
+    {{ template "footer" . }}
+
+    {{ template "scripts-private" . }}
+</body>
+</html>
 {{ end }}

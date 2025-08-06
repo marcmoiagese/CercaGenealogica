@@ -32,13 +32,13 @@ func init() {
 	}
 }
 
-func RenderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
-	err := Templates.ExecuteTemplate(w, "base.html", &DataContext{
+func RenderTemplate(w http.ResponseWriter, templateName string, data map[string]interface{}) {
+	err := Templates.ExecuteTemplate(w, templateName, &DataContext{
 		UserLoggedIn: false,
 		Data:         data,
 	})
 	if err != nil {
-		log.Printf("Error renderitzant plantilla %s: %v", tmpl, err)
+		log.Printf("Error renderitzant plantilla %s: %v", templateName, err)
 		http.Error(w, "Error intern del servidor", http.StatusInternalServerError)
 	}
 }

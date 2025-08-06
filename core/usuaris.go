@@ -100,12 +100,18 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	// Validacions bàsiques
 	if password != confirmPassword {
 		log.Println("Error: les contrasenyes no coincideixen")
-		http.Error(w, "Les contrasenyes no coincideixen", http.StatusBadRequest)
+		RenderTemplate(w, "registre-incorrecte.html", map[string]interface{}{
+			"Error":     "Les contrasenyes no coincideixen",
+			"CSRFToken": "token-segon",
+		})
 		return
 	}
 	if captcha != "8" {
 		log.Println("Error: CAPTCHA invàlid")
-		http.Error(w, "CAPTCHA invàlid", http.StatusBadRequest)
+		RenderTemplate(w, "registre-incorrecte.html", map[string]interface{}{
+			"Error":     "CAPTCHA invàlid",
+			"CSRFToken": "token-segon",
+		})
 		return
 	}
 
@@ -134,7 +140,10 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	err = dbInstance.InsertUser(dbUser)
 	if err != nil {
 		log.Printf("ERROR SQL: %v", err)
-		http.Error(w, "Error en crear l'usuari", http.StatusInternalServerError)
+		RenderTemplate(w, "registre-incorrecte.html", map[string]interface{}{
+			"Error":     "Error en crear l'usuari. Potser ja existeix un usuari amb aquest nom o correu electrònic.",
+			"CSRFToken": "token-segon",
+		})
 		return
 	}
 
@@ -161,8 +170,11 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	// Opcional: envia correu d'activació
 	sendActivationEmail(email, token)
 
-	// Redirigeix a pantalla de confirmació
-	http.Redirect(w, r, "/registre/confirmacio", http.StatusSeeOther)
+	// Renderitza la pantalla de confirmació
+	RenderTemplate(w, "registre-correcte.html", map[string]interface{}{
+		"Email":     email,
+		"CSRFToken": "token-segon",
+	})
 }
 
 func isValidCSRF(token string) bool {
@@ -237,7 +249,7 @@ func RegenerarTokenActivacio(w http.ResponseWriter, r *http.Request) {
 }
 
 func MostrarFormulariRegenerarToken(w http.ResponseWriter, r *http.Request) {
-	RenderTemplate(w, "regenerar-token", map[string]interface{}{
+	RenderTemplate(w, "regenerar-token.html", map[string]interface{}{
 		"CSRFToken": "token-segon",
 	})
 }
@@ -253,7 +265,7 @@ func ProcessarRegenerarToken(w http.ResponseWriter, r *http.Request) {
 func ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		RenderTemplate(w, "activat-user", map[string]interface{}{
+		RenderTemplate(w, "activat-user.html", map[string]interface{}{
 			"Activat":   false,
 			"CSRFToken": "token-segon",
 		})
@@ -263,7 +275,7 @@ func ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 	dbInstance, err := db.NewDB(config)
 	if err != nil {
 		log.Printf("Error inicialitzant la base de dades: %v", err)
-		RenderTemplate(w, "activat-user", map[string]interface{}{
+		RenderTemplate(w, "activat-user.html", map[string]interface{}{
 			"Activat":   false,
 			"CSRFToken": "token-segon",
 		})
@@ -275,14 +287,14 @@ func ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 	err = dbInstance.ActivateUser(token)
 	if err != nil {
 		log.Printf("Error activant usuari: %v", err)
-		RenderTemplate(w, "activat-user", map[string]interface{}{
+		RenderTemplate(w, "activat-user.html", map[string]interface{}{
 			"Activat":   false,
 			"CSRFToken": "token-segon",
 		})
 		return
 	}
 	log.Printf("Usuari activat correctament amb token: %s", token)
-	RenderTemplate(w, "activat-user", map[string]interface{}{
+	RenderTemplate(w, "activat-user.html", map[string]interface{}{
 		"Activat":   true,
 		"CSRFToken": "token-segon",
 	})

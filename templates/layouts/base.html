@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Genealogia.cat</title>
-    {{ template "styles" . }}
+    {{ block "page-styles" . }}{{ end }}
 </head>
 <body>
     {{ if eq .UserLoggedIn true }}
@@ -15,7 +15,7 @@
     {{ end }}
 
     <main class="contingut-principal">
-        {{ template "content" . }}
+        {{ block "page-content" . }}{{ end }}
     </main>
 
     {{ template "footer" . }}
@@ -28,6 +28,6 @@
         {{ end }}
     <!-- </div> -->
 
-    {{ template "scripts" . }}
+    {{ block "page-scripts" . }}{{ end }}
 </body>
 </html>

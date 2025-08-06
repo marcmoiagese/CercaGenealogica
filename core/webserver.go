@@ -22,6 +22,7 @@ var allowedFiles = map[string]bool{
 	"css/menu.css":            true,
 	"css/perfil-dropdown.css": true,
 	"css/login-modal.css":     true,
+	"css/registre.css":        true,
 	"js/login-modal.js":       true,
 	"js/perfil-dropdown.js":   true,
 	"js/idioma.js":            true,
@@ -61,7 +62,7 @@ func BlockIPs(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// rateLimit – Permet una petició cada 200ms (5 peticions/segon com a màxim)
+// rateLimit – Permet una petició cada 100ms (10 peticions/segon com a màxim)
 func RateLimit(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ipStr := getIP(r)
@@ -69,14 +70,12 @@ func RateLimit(next http.HandlerFunc) http.HandlerFunc {
 		rateLimiter.mu.Lock()
 		defer rateLimiter.mu.Unlock()
 		lastTime, exists := rateLimiter.m[ipStr]
-		if exists && time.Since(lastTime) < 200*time.Second {
-			//rateLimiter.mu.Unlock()
+		if exists && time.Since(lastTime) < 100*time.Millisecond {
 			log.Printf("Massa peticions des de l'IP: %s", ipStr)
 			http.Error(w, "Massa peticions", http.StatusTooManyRequests)
 			return
 		}
 		rateLimiter.m[ipStr] = time.Now()
-		//rateLimiter.mu.Unlock()
 
 		next(w, r)
 	}
@@ -124,19 +123,22 @@ func ServeStatic(w http.ResponseWriter, r *http.Request) {
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
 	case ".js":
-		w.Header().Set("Content-Type", "application/javascript")
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	case ".css":
-		w.Header().Set("Content-Type", "text/css")
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	case ".png":
 		w.Header().Set("Content-Type", "image/png")
 	case ".jpg", ".jpeg":
 		w.Header().Set("Content-Type", "image/jpeg")
 	case ".gif":
 		w.Header().Set("Content-Type", "image/gif")
+	case ".svg":
+		w.Header().Set("Content-Type", "image/svg+xml")
+	case ".ico":
+		w.Header().Set("Content-Type", "image/x-icon")
 	default:
-		// Deixa que Go dedueixi el Content-Type automàticament si no és JS/CSS/PNG...
-		// O bé bloqueja extensions desconegudes
-		if ext != ".html" && ext != ".ico" && ext != ".svg" {
+		// Deixa que Go dedueixi el Content-Type automàticament per altres tipus
+		if ext != ".html" {
 			log.Printf("Extensió no permesa: %s", ext)
 			http.Error(w, "Tipus de fitxer no suportat", http.StatusForbidden)
 			return
@@ -174,8 +176,10 @@ func SecureHeaders(next http.HandlerFunc) http.HandlerFunc {
 		// Protecció XSS
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 
-		// MIME Sniffing
-		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// MIME Sniffing - Només en producció per evitar problemes en desenvolupament
+		if os.Getenv("ENVIRONMENT") != "development" {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+		}
 
 		// Evita que la web s'incrusti en altres webs
 		w.Header().Set("X-Frame-Options", "DENY")

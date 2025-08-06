@@ -1,14 +1,36 @@
-{{ define "regenerar-token" }}
-<div class="container">
-    <h2>Regenerar token d'activació</h2>
-    <form method="POST" action="/regenerar-token">
-        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
-        <div class="form-grup">
-            <label for="email">Correu electrònic</label>
-            <input type="email" id="email" name="email" required>
+{{ define "regenerar-token.html" }}
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <title>Genealogia.cat</title>
+    {{ template "styles-public" . }}
+</head>
+<body>
+    {{ template "header-public" . }}
+
+    <main class="contingut-principal">
+        <div class="container">
+            <h2>Regenerar token d'activació</h2>
+            <form method="POST" action="/regenerar-token">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="form-grup">
+                    <label for="email">Correu electrònic</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                <button type="submit" class="boto">Regenerar token</button>
+            </form>
+            <p>Si el teu token d'activació ha caducat, pots sol·licitar-ne un de nou aquí.</p>
         </div>
-        <button type="submit" class="boto">Regenerar token</button>
-    </form>
-    <p>Si el teu token d'activació ha caducat, pots sol·licitar-ne un de nou aquí.</p>
-</div>
-{{ end }} 
+    </main>
+
+    {{ template "footer" . }}
+
+    {{ template "modal-index-inici" . }}
+    {{ template "modal-index-registre" . }}
+    {{ template "modal-index-recuperar-pass" . }}
+
+    {{ template "scripts-public" . }}
+</body>
+</html>
+{{ end }}

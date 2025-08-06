@@ -34,7 +34,7 @@ func main() {
 
 	// Rutes HTML
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		core.RenderTemplate(w, "index", map[string]interface{}{
+		core.RenderTemplate(w, "index.html", map[string]interface{}{
 			"CSRFToken": "token-segon",
 		})
 	})
