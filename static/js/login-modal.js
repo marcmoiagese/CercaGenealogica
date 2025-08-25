@@ -87,3 +87,72 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 });
+
+// Validació del formulari de registre
+document.addEventListener('DOMContentLoaded', function() {
+    const formRegistre = document.getElementById('formRegistre');
+    if (formRegistre) {
+        formRegistre.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Validar que s'acceptin les condicions
+            const acceptaCondicions = document.getElementById('accepta_condicions');
+            if (!acceptaCondicions.checked) {
+                // Mostrar error
+                const checkboxGrup = acceptaCondicions.closest('.checkbox-grup');
+                checkboxGrup.classList.add('error');
+                
+                // Crear missatge d'error si no existeix
+                let errorMsg = checkboxGrup.querySelector('.error-missatge');
+                if (!errorMsg) {
+                    errorMsg = document.createElement('div');
+                    errorMsg.className = 'error-missatge';
+                    errorMsg.style.color = '#e74c3c';
+                    errorMsg.style.fontSize = '0.8rem';
+                    errorMsg.style.marginTop = '0.5rem';
+                    errorMsg.textContent = 'Has d\'acceptar les condicions d\'ús per continuar';
+                    checkboxGrup.appendChild(errorMsg);
+                }
+                
+                // Scroll suau cap al checkbox
+                acceptaCondicions.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+            
+            // Eliminar error si existeix
+            const checkboxGrup = acceptaCondicions.closest('.checkbox-grup');
+            checkboxGrup.classList.remove('error');
+            const errorMsg = checkboxGrup.querySelector('.error-missatge');
+            if (errorMsg) {
+                errorMsg.remove();
+            }
+            
+            // Validar contrasenyes
+            const contrasenya = document.getElementById('contrassenya').value;
+            const confirmarContrasenya = document.getElementById('confirmar_contrasenya').value;
+            
+            if (contrasenya !== confirmarContrasenya) {
+                alert('Les contrasenyes no coincideixen');
+                return;
+            }
+            
+            // Si tot està bé, enviar el formulari
+            formRegistre.submit();
+        });
+        
+        // Eliminar error quan es marca el checkbox
+        const acceptaCondicions = document.getElementById('accepta_condicions');
+        if (acceptaCondicions) {
+            acceptaCondicions.addEventListener('change', function() {
+                const checkboxGrup = this.closest('.checkbox-grup');
+                if (this.checked) {
+                    checkboxGrup.classList.remove('error');
+                    const errorMsg = checkboxGrup.querySelector('.error-missatge');
+                    if (errorMsg) {
+                        errorMsg.remove();
+                    }
+                }
+            });
+        }
+    }
+});

@@ -73,6 +73,7 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	captcha := r.FormValue("captcha")
 	csrf := r.FormValue("csrf_token")
 	usuariForm := r.FormValue("usuari")
+	acceptaCondicions := r.FormValue("accepta_condicions")
 	log.Printf("Valor rebut per a usuari: %s", usuariForm)
 
 	log.Printf("Dades rebudes: nom=%s, cognoms=%s, email=%s", nom, cognoms, email)
@@ -94,6 +95,16 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	if csrf == "" || !isValidCSRF(csrf) {
 		log.Printf(" Token CSRF invàlid: %s", csrf)
 		http.Error(w, "Error: accés no autoritzat", http.StatusForbidden)
+		return
+	}
+
+	// Valida que s'acceptin les condicions d'ús
+	if acceptaCondicions != "on" {
+		log.Println("Error: no s'han acceptat les condicions d'ús")
+		RenderTemplate(w, "registre-incorrecte.html", map[string]interface{}{
+			"Error":     "Has d'acceptar les condicions d'ús per continuar",
+			"CSRFToken": "token-segon",
+		})
 		return
 	}
 

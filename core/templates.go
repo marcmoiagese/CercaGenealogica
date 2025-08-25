@@ -13,10 +13,24 @@ type DataContext struct {
 	Data         interface{}
 }
 
+// Funcions personalitzades per a les plantilles
+var templateFuncs = template.FuncMap{
+	"default": func(value interface{}, defaultValue interface{}) interface{} {
+		if value == nil || value == "" {
+			return defaultValue
+		}
+		return value
+	},
+}
+
 func init() {
 	var err error
 
-	Templates = template.Must(template.New("").ParseGlob("templates/*.html"))
+	// Crear template amb funcions personalitzades
+	Templates = template.New("").Funcs(templateFuncs)
+
+	// Carregar plantilles
+	Templates = template.Must(Templates.ParseGlob("templates/*.html"))
 	if err != nil {
 		log.Fatal("Error carregant plantilles:", err)
 	}

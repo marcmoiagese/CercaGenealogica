@@ -45,6 +45,12 @@ func main() {
 
 	http.HandleFunc("/registre", core.RegistrarUsuari)
 
+	http.HandleFunc("/condicions-us", func(w http.ResponseWriter, r *http.Request) {
+		core.RenderTemplate(w, "condicions-us.html", map[string]interface{}{
+			"DataActualitzacio": "Gener 2024",
+		})
+	})
+
 	http.HandleFunc("/regenerar-token", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			core.MostrarFormulariRegenerarToken(w, r)

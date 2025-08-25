@@ -23,6 +23,7 @@ var allowedFiles = map[string]bool{
 	"css/perfil-dropdown.css": true,
 	"css/login-modal.css":     true,
 	"css/registre.css":        true,
+	"css/regenerar-token.css": true,
 	"js/login-modal.js":       true,
 	"js/perfil-dropdown.js":   true,
 	"js/idioma.js":            true,
@@ -30,11 +31,92 @@ var allowedFiles = map[string]bool{
 }
 
 // rateLimiter – Usarem sync.Map per compartir entre goroutines
-var rateLimiter = struct {
-	m  map[string]time.Time
-	mu sync.Mutex
+// Implementació de Token Bucket per limitar per IP/ruta amb burst
+type tokenBucket struct {
+	mu         sync.Mutex
+	tokens     float64
+	capacity   float64
+	fillRate   float64 // tokens per segon
+	lastRefill time.Time
+}
+
+func newTokenBucket(rate, burst float64) *tokenBucket {
+	return &tokenBucket{
+		tokens:     burst,
+		capacity:   burst,
+		fillRate:   rate,
+		lastRefill: time.Now(),
+	}
+}
+
+func (tb *tokenBucket) allow(n float64) bool {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+
+	now := time.Now()
+	elapsed := now.Sub(tb.lastRefill).Seconds()
+	tb.tokens += elapsed * tb.fillRate
+	if tb.tokens > tb.capacity {
+		tb.tokens = tb.capacity
+	}
+	tb.lastRefill = now
+
+	if tb.tokens >= n {
+		tb.tokens -= n
+		return true
+	}
+	return false
+}
+
+// Gestor global de buckets per clau (ruta + IP o sessió)
+var bucketRegistry = struct {
+	mu      sync.Mutex
+	buckets map[string]*tokenBucket
 }{
-	m: make(map[string]time.Time),
+	buckets: make(map[string]*tokenBucket),
+}
+
+type routeLimitConfig struct {
+	rate  float64 // tokens/segon
+	burst float64 // capacitat
+}
+
+// Config per ruta (prefix). Default si no hi ha match.
+var routeLimits = map[string]routeLimitConfig{
+	"/static/":  {rate: 20, burst: 30}, // permet descarregar molts recursos en carregar pàgina
+	"/login":    {rate: 5, burst: 10},  // una mica més estricte
+	"/registre": {rate: 2, burst: 5},   // molt estricte per prevenir abús
+}
+
+var defaultRouteLimit = routeLimitConfig{rate: 10, burst: 20}
+
+func getRouteLimit(path string) routeLimitConfig {
+	for prefix, cfg := range routeLimits {
+		if strings.HasPrefix(path, prefix) {
+			return cfg
+		}
+	}
+	return defaultRouteLimit
+}
+
+// retorna una clau de limitació basada en ruta + sessió (si disponible) o IP
+func getRequesterKey(r *http.Request, route string) string {
+	if sid := getSessionID(r); sid != "" {
+		return route + "::SID::" + sid
+	}
+	return route + "::IP::" + getIP(r)
+}
+
+// intenta obtenir algun identificador de sessió/cookie existent
+func getSessionID(r *http.Request) string {
+	// Cerca cookies comunes; si el projecte defineix una altra, s'afegeix aquí
+	candidateNames := []string{"cg_session", "session_id", "sid", "SESSION"}
+	for _, name := range candidateNames {
+		if c, err := r.Cookie(name); err == nil && c != nil && c.Value != "" {
+			return c.Value
+		}
+	}
+	return ""
 }
 
 func applyMiddleware(fn http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
@@ -65,17 +147,24 @@ func BlockIPs(next http.HandlerFunc) http.HandlerFunc {
 // rateLimit – Permet una petició cada 100ms (10 peticions/segon com a màxim)
 func RateLimit(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ipStr := getIP(r)
+		path := r.URL.Path
+		cfg := getRouteLimit(path)
+		key := getRequesterKey(r, path)
 
-		rateLimiter.mu.Lock()
-		defer rateLimiter.mu.Unlock()
-		lastTime, exists := rateLimiter.m[ipStr]
-		if exists && time.Since(lastTime) < 100*time.Millisecond {
-			log.Printf("Massa peticions des de l'IP: %s", ipStr)
+		bucketRegistry.mu.Lock()
+		b, ok := bucketRegistry.buckets[key]
+		if !ok {
+			b = newTokenBucket(cfg.rate, cfg.burst)
+			bucketRegistry.buckets[key] = b
+		}
+		bucketRegistry.mu.Unlock()
+
+		if !b.allow(1) {
+			ipStr := getIP(r)
+			log.Printf("Massa peticions (path=%s, key=%s, ip=%s)", path, key, ipStr)
 			http.Error(w, "Massa peticions", http.StatusTooManyRequests)
 			return
 		}
-		rateLimiter.m[ipStr] = time.Now()
 
 		next(w, r)
 	}
@@ -243,15 +332,19 @@ func IsBlocked(ip string) bool {
 }
 
 func ApplyRateLimit(ip string) bool {
-	rateLimiter.mu.Lock()
-	defer rateLimiter.mu.Unlock()
+	// Útil per a punts sense *http.Request: aplicació d'un límit genèric per IP
+	cfg := defaultRouteLimit
+	key := "/generic" + "::IP::" + ip
 
-	lastTime, exists := rateLimiter.m[ip]
-	if exists && time.Since(lastTime) < 1*time.Second {
-		return false // Massa peticions
+	bucketRegistry.mu.Lock()
+	b, ok := bucketRegistry.buckets[key]
+	if !ok {
+		b = newTokenBucket(cfg.rate, cfg.burst)
+		bucketRegistry.buckets[key] = b
 	}
-	rateLimiter.m[ip] = time.Now()
-	return true // Es pot continuar
+	bucketRegistry.mu.Unlock()
+
+	return b.allow(1)
 }
 
 func getIP(r *http.Request) string {

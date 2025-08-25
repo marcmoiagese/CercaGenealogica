@@ -1,0 +1,166 @@
+{{ define "condicions-us.html" }}
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Condicions d'ús - CercaGenealògica</title>
+    <link rel="stylesheet" href="/static/css/estils.css">
+    <style>
+        .condicions-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            line-height: 1.6;
+        }
+        
+        .condicions-header {
+            text-align: center;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .condicions-header h1 {
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        
+        .condicions-header .data-actualitzacio {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+        
+        .seccio {
+            margin-bottom: 2rem;
+        }
+        
+        .seccio h2 {
+            color: #34495e;
+            border-left: 4px solid #3498db;
+            padding-left: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .seccio p {
+            margin-bottom: 1rem;
+            text-align: justify;
+        }
+        
+        .seccio ul {
+            margin-left: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        .seccio li {
+            margin-bottom: 0.5rem;
+        }
+        
+        .destacat {
+            background: #f8f9fa;
+            border-left: 4px solid #e74c3c;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .boto-tancar {
+            display: block;
+            width: 200px;
+            margin: 2rem auto 0;
+            padding: 0.75rem 1.5rem;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            text-align: center;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        
+        .boto-tancar:hover {
+            background: #2980b9;
+        }
+        
+        @media (max-width: 768px) {
+            .condicions-container {
+                margin: 1rem;
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="condicions-container">
+        <div class="condicions-header">
+            <h1>Condicions d'ús</h1>
+            <p class="data-actualitzacio">Última actualització: {{ default .Data.DataActualitzacio "Gener 2024" }}</p>
+        </div>
+        
+        <div class="seccio">
+            <h2>1. Acceptació de les condicions</h2>
+            <p>En accedir i utilitzar aquesta pàgina web, acceptes estar vinculat per aquestes condicions d'ús. Si no estàs d'acord amb alguna part d'aquestes condicions, no hauries d'utilitzar el nostre servei.</p>
+        </div>
+        
+        <div class="seccio">
+            <h2>2. Descripció del servei</h2>
+            <p>CercaGenealògica és una plataforma que permet als usuaris investigar i gestionar la seva història familiar, crear arbres genealògics i connectar amb altres investigadors.</p>
+        </div>
+        
+        <div class="seccio">
+            <h2>3. Registre d'usuari</h2>
+            <p>Per utilitzar els serveis de la pàgina, has de registrar-te proporcionant informació veritable i actualitzada. És responsabilitat teva mantenir la confidencialitat de la teva contrasenya.</p>
+            <ul>
+                <li>Has de ser major d'edat o tenir consentiment parental</li>
+                <li>La informació proporcionada ha de ser precisa i veritable</li>
+                <li>No pots compartir el teu compte amb altres persones</li>
+            </ul>
+        </div>
+        
+        <div class="seccio">
+            <h2>4. Ús acceptable</h2>
+            <p>Compromes a utilitzar la pàgina només per a propòsits legals i legítims. No pots:</p>
+            <ul>
+                <li>Utilitzar el servei per a activitats il·legals</li>
+                <li>Intentar accedir a comptes d'altres usuaris</li>
+                <li>Transmetre virus o codi maliciós</li>
+                <li>Interferir amb el funcionament del servei</li>
+            </ul>
+        </div>
+        
+        <div class="seccio">
+            <h2>5. Privadesa i protecció de dades</h2>
+            <p>La teva privadesa és important per a nosaltres. Les teves dades personals es tracten d'acord amb la nostra política de privadesa i la legislació aplicable.</p>
+        </div>
+        
+        <div class="seccio">
+            <h2>6. Propietat intel·lectual</h2>
+            <p>El contingut de la pàgina, incloent-hi textos, imatges, logotips i programari, està protegit per drets d'autor i altres lleis de propietat intel·lectual.</p>
+        </div>
+        
+        <div class="seccio">
+            <h2>7. Limitació de responsabilitat</h2>
+            <p>El servei es proporciona "tal com està" sense garanties. No ens fem responsables dels danys directes, indirectes, incidentals o conseqüents que puguin derivar de l'ús del servei.</p>
+        </div>
+        
+        <div class="seccio">
+            <h2>8. Modificacions</h2>
+            <p>Ens reservem el dret de modificar aquestes condicions en qualsevol moment. Les modificacions entraran en vigor immediatament després de la seva publicació a la pàgina.</p>
+        </div>
+        
+        <div class="seccio">
+            <h2>9. Contacte</h2>
+            <p>Si tens alguna pregunta sobre aquestes condicions, pots contactar-nos a través dels mitjans indicats a la pàgina.</p>
+        </div>
+        
+        <div class="destacat">
+            <p><strong>Important:</strong> En registrar-te, confirmes que has llegit, entès i acceptat aquestes condicions d'ús en la seva totalitat.</p>
+        </div>
+        
+        <a href="#" onclick="window.close()" class="boto-tancar">Tancar finestra</a>
+    </div>
+</body>
+</html>
+{{ end }}

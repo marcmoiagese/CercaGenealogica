@@ -212,3 +212,122 @@
         max-width: 300px;
     }
 } 
+
+/* Estils per al formulari de registre */
+.form-grup {
+    margin-bottom: 1rem;
+}
+
+.form-grup label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #333;
+}
+
+.form-grup input[type="text"],
+.form-grup input[type="email"],
+.form-grup input[type="password"],
+.form-grup input[type="date"] {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+    transition: border-color 0.3s;
+}
+
+.form-grup input:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+/* Estils específics per al checkbox de condicions */
+.checkbox-grup {
+    margin: 1.5rem 0;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: auto;
+    margin-right: 0.75rem;
+    margin-top: 0.2rem;
+    cursor: pointer;
+}
+
+.checkbox-label .checkmark {
+    display: none; /* Ocultem el checkmark personalitzat per ara */
+}
+
+.link-condicions {
+    color: #3498db;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s;
+}
+
+.link-condicions:hover {
+    color: #2980b9;
+    text-decoration: underline;
+}
+
+.link-condicions:focus {
+    outline: 2px solid #3498db;
+    outline-offset: 2px;
+}
+
+/* Estat d'error per al checkbox */
+.checkbox-grup.error .checkbox-label {
+    color: #e74c3c;
+}
+
+.checkbox-grup.error .link-condicions {
+    color: #c0392b;
+}
+
+/* Botó de submit */
+.boto-login-modal {
+    width: 100%;
+    padding: 0.75rem;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.boto-login-modal:hover {
+    background: #2980b9;
+}
+
+.boto-login-modal:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+}
+
+/* Opcions addicionals */
+.opcions-addicionals {
+    text-align: center;
+    margin-top: 1rem;
+}
+
+.opcions-addicionals a {
+    color: #3498db;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.opcions-addicionals a:hover {
+    text-decoration: underline;
+} 
