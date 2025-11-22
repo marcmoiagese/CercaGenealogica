@@ -9,3 +9,15 @@
 
 # O alternativament, exclou tots els fitxers Excel
 *.xlsx
+
+# Carpeta per treballar amb Codex / ChatGPT
+.codex/
+
+# Carpeta per treballar amb vs code des de wsl
+.vscode/
+
+# Excloc readme tests
+/tests/README.md
+
+# Excloc gitignore
+.gitignore

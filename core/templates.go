@@ -53,17 +53,21 @@ func RenderTemplate(w http.ResponseWriter, templateName string, data map[string]
 	})
 	if err != nil {
 		log.Printf("Error renderitzant plantilla %s: %v", templateName, err)
-		http.Error(w, "Error intern del servidor", http.StatusInternalServerError)
+		// No cridem http.Error() aquí per evitar "superfluous response.WriteHeader call"
+		// ja que ExecuteTemplate ja ha escrit al ResponseWriter
+		return
 	}
 }
 
 func RenderPrivateTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
-	err := Templates.ExecuteTemplate(w, "base.html", &DataContext{
+	err := Templates.ExecuteTemplate(w, tmpl, &DataContext{
 		UserLoggedIn: true,
 		Data:         data,
 	})
 	if err != nil {
 		log.Printf("Error renderitzant plantilla %s: %v", tmpl, err)
-		http.Error(w, "Error intern del servidor", http.StatusInternalServerError)
+		// No cridem http.Error() aquí per evitar "superfluous response.WriteHeader call"
+		// ja que ExecuteTemplate ja ha escrit al ResponseWriter
+		return
 	}
 }

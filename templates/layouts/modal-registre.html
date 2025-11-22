@@ -6,40 +6,40 @@
         <form id="formRegistre" method="POST" action="/registre">
             <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
             <div class="form-grup">
-                <label for="usuari">Usuari</label>
-                <input type="text" id="usuari" name="usuari" required>
+                <label for="registre_usuari">Usuari</label>
+                <input type="text" id="registre_usuari" name="usuari" required>
             </div>
             <div class="form-grup">
-                <label for="nom">Nom</label>
-                <input type="text" id="nom" name="nom" required>
+                <label for="registre_nom">Nom</label>
+                <input type="text" id="registre_nom" name="nom" required>
             </div>
             <div class="form-grup">
-                <label for="cognoms">Cognoms</label>
-                <input type="text" id="cognoms" name="cognoms" required>
+                <label for="registre_cognoms">Cognoms</label>
+                <input type="text" id="registre_cognoms" name="cognoms" required>
             </div>
             <div class="form-grup">
-                <label for="data_naixament">Data de naixament</label>
-                <input type="date" id="data_naixament" name="data_naixament" required>
+                <label for="registre_data_naixament">Data de naixament</label>
+                <input type="date" id="registre_data_naixament" name="data_naixament" required>
             </div>
             <div class="form-grup">
-                <label for="email">Correu electrònic</label>
-                <input type="email" id="email" name="email" required>
+                <label for="registre_email">Correu electrònic</label>
+                <input type="email" id="registre_email" name="email" required>
             </div>
             <div class="form-grup">
-                <label for="contrassenya">Contrasenya</label>
-                <input type="password" id="contrassenya" name="contrassenya" required>
+                <label for="registre_contrassenya">Contrasenya</label>
+                <input type="password" id="registre_contrassenya" name="contrassenya" required>
             </div>
             <div class="form-grup">
-                <label for="confirmar_contrasenya">Confirmar contrasenya</label>
-                <input type="password" id="confirmar_contrasenya" name="confirmar_contrasenya" required>
+                <label for="registre_confirmar_contrasenya">Confirmar contrasenya</label>
+                <input type="password" id="registre_confirmar_contrasenya" name="confirmar_contrasenya" required>
             </div>
             <div class="form-grup">
-                <label for="captcha">Quant és 5 + 3?</label>
-                <input type="text" id="captcha" name="captcha" placeholder="Resposta" required>
+                <label for="registre_captcha">Quant és 5 + 3?</label>
+                <input type="text" id="registre_captcha" name="captcha" placeholder="Resposta" required>
             </div>
             <div class="form-grup checkbox-grup">
                 <label class="checkbox-label">
-                    <input type="checkbox" id="accepta_condicions" name="accepta_condicions" required>
+                    <input type="checkbox" id="registre_accepta_condicions" name="accepta_condicions" required>
                     <span class="checkmark"></span>
                     Accepto les <a href="/condicions-us" target="_blank" class="link-condicions">condicions d'ús</a> de la pàgina
                 </label>

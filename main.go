@@ -40,10 +40,23 @@ func main() {
 	})
 
 	http.HandleFunc("/inici", func(w http.ResponseWriter, r *http.Request) {
-		core.RenderPrivateTemplate(w, "index-logedin", nil)
+		// Verificar si l'usuari té una sessió vàlida
+		user, authenticated := core.VerificarSessio(r)
+		if !authenticated {
+			// Redirigir a la pàgina principal si no té sessió
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+
+		// Renderitzar la pàgina privada amb les dades de l'usuari
+		core.RenderPrivateTemplate(w, "index-logedin.html", map[string]interface{}{
+			"User": user,
+		})
 	})
 
 	http.HandleFunc("/registre", core.RegistrarUsuari)
+
+	http.HandleFunc("/login", core.IniciarSessio)
 
 	http.HandleFunc("/condicions-us", func(w http.ResponseWriter, r *http.Request) {
 		core.RenderTemplate(w, "condicions-us.html", map[string]interface{}{

@@ -16,6 +16,10 @@ type DB interface {
 	SaveActivationToken(email, token string) error
 	GetUserByEmail(email string) (*User, error)
 	ActivateUser(token string) error
+	AuthenticateUser(usernameOrEmail, password string) (*User, error)
+	SaveSession(sessionID string, userID int, expiry string) error
+	GetSessionUser(sessionID string) (*User, error)
+	DeleteSession(sessionID string) error
 }
 
 // Tipus comú d'usuari al paquet `db`
@@ -102,16 +106,65 @@ func CreateDatabaseFromSQL(sqlFile string, db DB) error {
 		return fmt.Errorf("no s'ha pogut llegir el fitxer SQL: %w", err)
 	}
 
-	queries := strings.Split(string(data), ";")
-	for _, q := range queries {
-		q = strings.TrimSpace(q)
-		if q == "" || strings.HasPrefix(q, "--") {
+	raw := string(data)
+
+	// 1) Elimina línies de comentari i línies buides,
+	//    però conserva el SQL que vingui després en altres línies
+	var b strings.Builder
+	for _, line := range strings.Split(raw, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "--") || trimmed == "" {
 			continue
 		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	cleanSQL := b.String()
+
+	// 2) Separa per ';' i neteja espais. (Semicolons al final del statement)
+	parts := strings.Split(cleanSQL, ";")
+
+	// 3) Executa-ho dins d’una única transacció perquè ningú vegi mig esquema
+	if _, err := db.Exec("BEGIN IMMEDIATE"); err != nil {
+		return fmt.Errorf("no s’ha pogut començar transacció: %w", err)
+	}
+	defer func() {
+		// en cas d’error, el caller retornarà; aquí fem un ROLLBACK best-effort
+		_, _ = db.Exec("ROLLBACK")
+	}()
+
+	// 4) Activa FKs (per si el fitxer no ho fa)
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return fmt.Errorf("error activant foreign_keys: %w", err)
+	}
+
+	// 5) Executa cada statement
+	for _, stmt := range parts {
+		q := strings.TrimSpace(stmt)
+		if q == "" {
+			continue
+		}
+		// Evita BEGIN/COMMIT del fitxer, si n’hi hagués
+		low := strings.ToLower(q)
+		if low == "begin" || low == "commit" || strings.HasPrefix(low, "begin ") || strings.HasPrefix(low, "commit ") {
+			continue
+		}
+
 		if _, err := db.Exec(q); err != nil {
-			return fmt.Errorf("error executant '%s': %w", q[:50]+"...", err)
+			// Mostra un tros de l’SQL per facilitar el debug
+			snip := q
+			if len(snip) > 120 {
+				snip = snip[:120] + " ..."
+			}
+			return fmt.Errorf("error executant '%s': %w", snip, err)
 		}
 	}
+
+	// 6) Commit final
+	if _, err := db.Exec("COMMIT"); err != nil {
+		return fmt.Errorf("error fent COMMIT: %w", err)
+	}
+
 	log.Println("BD recreada correctament")
 	return nil
 }

@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
     //const mostrarFavoritsBtn = document.getElementById('mostrarFavorits');
     //const favoritsSeccio = document.getElementById('favoritsSeccio');
     //const tancaFavoritsBtn = document.getElementById('tancaFavorits');
-    const botoSelector = document.getElementById('botoSelectorIdioma');
+    //const botoSelector = document.getElementById('botoSelectorIdioma');
     const dropdown = document.getElementById('dropdownIdiomes');
 
     // Funció per alternar el menú
@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     // MENU IDIOMA
-    if (botoSelector && dropdown) {
+    /*if (botoSelector && dropdown) {
         // Obre/tanca el desplegable en fer clic al botó
         botoSelector.addEventListener('click', function (e) {
             e.preventDefault();
@@ -120,6 +120,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     } else {
         console.warn("No s'han trobat els elements del desplegable d'idioma.");
-    }
+    }*/
 
 });

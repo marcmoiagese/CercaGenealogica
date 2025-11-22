@@ -6,6 +6,7 @@ import (
 	"log"
 
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type PostgreSQL struct {
@@ -144,5 +145,86 @@ func (d *PostgreSQL) ActivateUser(token string) error {
 		return err
 	}
 	_, err := d.Conn.Exec("UPDATE usuaris SET actiu = true, token_activacio = NULL, expira_token = NULL WHERE correu = $1", email)
+	return err
+}
+
+func (d *PostgreSQL) AuthenticateUser(usernameOrEmail, password string) (*User, error) {
+	// Buscar usuari per nom d'usuari o correu electrònic
+	row := d.Conn.QueryRow(`
+        SELECT id, usuari, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, data_creacio, actiu 
+        FROM usuaris 
+        WHERE (usuari = $1 OR correu = $2) AND actiu = true`, usernameOrEmail, usernameOrEmail)
+
+	u := new(User)
+	err := row.Scan(
+		&u.ID,
+		&u.Usuari,
+		&u.Name,
+		&u.Surname,
+		&u.Email,
+		&u.Password,
+		&u.DataNaixament,
+		&u.Pais,
+		&u.Estat,
+		&u.Provincia,
+		&u.Poblacio,
+		&u.CodiPostal,
+		&u.CreatedAt,
+		&u.Active,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("usuari no trobat o no actiu")
+	}
+
+	// Verificar contrasenya (assumim que està hashejada amb bcrypt)
+	if err := bcrypt.CompareHashAndPassword(u.Password, []byte(password)); err != nil {
+		return nil, fmt.Errorf("contrasenya incorrecta")
+	}
+
+	return u, nil
+}
+
+// Gestió de sessions - adaptat a PostgreSQL
+func (d *PostgreSQL) SaveSession(sessionID string, userID int, expiry string) error {
+	stmt := `INSERT INTO sessions (usuari_id, token_hash, creat, revocat) VALUES ($1, $2, NOW(), 0) ON CONFLICT (token_hash) DO UPDATE SET revocat = 0, creat = NOW()`
+	_, err := d.Conn.Exec(stmt, userID, sessionID)
+	if err != nil {
+		log.Printf("[PostgreSQL] Error guardant sessió: %v", err)
+	}
+	return err
+}
+
+func (d *PostgreSQL) GetSessionUser(sessionID string) (*User, error) {
+	row := d.Conn.QueryRow(`
+        SELECT u.id, u.usuari, u.nom, u.cognoms, u.correu, u.contrasenya, u.data_naixement, u.pais, u.estat, u.provincia, u.poblacio, u.codi_postal, u.data_creacio, u.actiu
+        FROM usuaris u
+        INNER JOIN sessions s ON u.id = s.usuari_id
+        WHERE s.token_hash = $1 AND s.revocat = 0`, sessionID)
+
+	u := new(User)
+	err := row.Scan(
+		&u.ID,
+		&u.Usuari,
+		&u.Name,
+		&u.Surname,
+		&u.Email,
+		&u.Password,
+		&u.DataNaixament,
+		&u.Pais,
+		&u.Estat,
+		&u.Provincia,
+		&u.Poblacio,
+		&u.CodiPostal,
+		&u.CreatedAt,
+		&u.Active,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func (d *PostgreSQL) DeleteSession(sessionID string) error {
+	_, err := d.Conn.Exec("UPDATE sessions SET revocat = 1 WHERE token_hash = $1", sessionID)
 	return err
 }

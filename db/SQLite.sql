@@ -1,3 +1,5 @@
+BEGIN IMMEDIATE;
+PRAGMA foreign_keys = ON;
 -- Desactivo les claus foranes per pervindre errors durant la creació
 -- PRAGMA foreign_keys = OFF;
 
@@ -245,6 +247,25 @@ CREATE TABLE IF NOT EXISTS llibres (
     FOREIGN KEY(municipi_id) REFERENCES municipis(id) ON DELETE RESTRICT
 );
 
+-- Taula de sessions (mapa token_hash -> usuari)
+CREATE TABLE IF NOT EXISTS sessions (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  usuari_id    INTEGER NOT NULL,
+  token_hash   TEXT    NOT NULL UNIQUE, -- SHA-256 o HMAC-SHA-256 en hex/base64
+  creat        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  revocat      INTEGER NOT NULL DEFAULT 0 CHECK (revocat IN (0,1)),
+  FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
+);
+
+-- Registre d’accessos (IP + timestamp vinculats a la sessió)
+CREATE TABLE IF NOT EXISTS session_access_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id INTEGER  NOT NULL,
+  ts         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ip         TEXT     NOT NULL,     -- guarda IPv4/IPv6 en text
+  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+);
+
 -- Index per accelerar busquedes
 
 -- Per buscar ràpidament pel codi postal
@@ -275,5 +296,14 @@ CREATE INDEX idx_usuaris_data_creacio ON usuaris(data_creacio);
 CREATE INDEX idx_grups_nom ON grups(nom);
 CREATE INDEX idx_politiques_nom ON politiques(nom);
 
+-- Index taula sessions
+CREATE INDEX IF NOT EXISTS idx_sessions_user    ON sessions(usuari_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_revocat ON sessions(revocat);
+
+-- Index taula sessions_access_log
+CREATE INDEX IF NOT EXISTS idx_access_session_ts ON session_access_log(session_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_access_ip_ts      ON session_access_log(ip, ts DESC);
+
 -- Reactivo les claus foranes per pervindre errors durant la creació
 -- PRAGMA foreign_keys = ON;
+COMMIT;

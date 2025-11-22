@@ -3,20 +3,28 @@
     <div class="modal-contingut">
         <span class="modal-tanca" id="tancaModal">&times;</span>
         <h2>Iniciar sessió</h2>
-        <form id="formLogin">
+        <form id="formLogin" method="POST" action="/login" enctype="application/x-www-form-urlencoded">
+            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
             <div class="form-grup">
-                <label for="usuari">Usuari o correu electrònic</label>
-                <input type="text" id="usuari" name="usuari" required>
+                <label for="login_usuari">Usuari o correu electrònic</label>
+                <input type="text" id="login_usuari" name="usuari" required>
             </div>
             <div class="form-grup">
-                <label for="contrassenya">Contrasenya</label>
-                <input type="password" id="contrassenya" name="contrassenya" required>
+                <label for="login_contrassenya">Contrasenya</label>
+                <input type="password" id="login_contrassenya" name="contrassenya" required>
             </div>
             <div class="form-grup">
-                <label for="captcha">Quant és 5 + 3?</label>
-                <input type="text" id="captcha" name="captcha" placeholder="Resposta" required>
+                <label for="login_captcha">Quant és 5 + 3?</label>
+                <input type="text" id="login_captcha" name="captcha" placeholder="Resposta" required>
             </div>
-            <button type="submit" class="boto boto-login-modal"><a href=index-logedin.html>Iniciar sessió</a></button>
+            <div class="form-grup checkbox-grup">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="login_mantenir_sessio" name="mantenir_sessio">
+                    <span class="checkmark"></span>
+                    Mantenir la sessió oberta
+                </label>
+            </div>
+            <button type="submit" class="boto boto-login-modal">Iniciar sessió</button>
         </form>
         <p class="opcions-addicionals">
             <a href="#" id="mostrarRecuperar">Recuperar contrasenya</a> · 

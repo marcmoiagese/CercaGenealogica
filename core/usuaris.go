@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -74,6 +75,20 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	csrf := r.FormValue("csrf_token")
 	usuariForm := r.FormValue("usuari")
 	acceptaCondicions := r.FormValue("accepta_condicions")
+
+	// Logs per debugar
+	log.Printf("=== DEBUG REGISTRE ===")
+	log.Printf("Nom: '%s'", nom)
+	log.Printf("Cognoms: '%s'", cognoms)
+	log.Printf("Email: '%s'", email)
+	log.Printf("Contrasenya: '%s' (longitud: %d)", password, len(password))
+	log.Printf("Confirmar contrasenya: '%s' (longitud: %d)", confirmPassword, len(confirmPassword))
+	log.Printf("CAPTCHA: '%s'", captcha)
+	log.Printf("CSRF: '%s'", csrf)
+	log.Printf("Usuari: '%s'", usuariForm)
+	log.Printf("Accepta condicions: '%s'", acceptaCondicions)
+	log.Printf("======================")
+
 	log.Printf("Valor rebut per a usuari: %s", usuariForm)
 
 	log.Printf("Dades rebudes: nom=%s, cognoms=%s, email=%s", nom, cognoms, email)
@@ -309,4 +324,189 @@ func ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 		"Activat":   true,
 		"CSRFToken": "token-segon",
 	})
+}
+
+// IniciarSessio – Autentica un usuari i crea una sessió
+func IniciarSessio(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[DEBUG] IniciarSessio cridada - Mètode: %s", r.Method)
+
+	if r.Method != "POST" {
+		log.Printf("[DEBUG] Mètode no permès: %s", r.Method)
+		http.Error(w, "Mètode no permès", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ipStr := getIP(r)
+	log.Printf("Intent d'inici de sessió des de: %s", ipStr)
+
+	// Verificar si l'usuari ja està autenticat
+	if user, authenticated := VerificarSessio(r); authenticated {
+		log.Printf("Usuari %s ja està autenticat, redirigint a /inici", user.Usuari)
+		http.Redirect(w, r, "/inici", http.StatusSeeOther)
+		return
+	}
+
+	// Inicialitza la configuració i la base de dades
+	config := cnf.LoadConfig("cnf/config.cfg")
+	dbInstance, err := db.NewDB(config)
+	if err != nil {
+		log.Printf("Error inicialitzant la base de dades: %v", err)
+		http.Error(w, "Error intern del servidor", http.StatusInternalServerError)
+		return
+	}
+	defer dbInstance.Close()
+
+	// Captura els camps del formulari
+	log.Printf("[DEBUG] Parsejant formulari...")
+	log.Printf("[DEBUG] Content-Type: %s", r.Header.Get("Content-Type"))
+	log.Printf("[DEBUG] Content-Length: %s", r.Header.Get("Content-Length"))
+
+	// Parsejar el formulari primer
+	ct := r.Header.Get("Content-Type")
+	if strings.HasPrefix(ct, "multipart/form-data") {
+		if err := r.ParseMultipartForm(2 << 20); err != nil { // 2MB
+			log.Printf("[DEBUG] Error ParseMultipartForm: %v", err)
+		}
+	} else {
+		if err := r.ParseForm(); err != nil {
+			log.Printf("[DEBUG] Error ParseForm: %v", err)
+		}
+	}
+
+	// Debug: veure tots els valors del formulari
+	log.Printf("[DEBUG] Tots els valors del formulari:")
+	for key, values := range r.Form {
+		log.Printf("  %s: %v", key, values)
+	}
+
+	// Debug: veure també els valors de PostForm
+	log.Printf("[DEBUG] Tots els valors de PostForm:")
+	for key, values := range r.PostForm {
+		log.Printf("  %s: %v", key, values)
+	}
+
+	if r.MultipartForm != nil {
+		log.Printf("[DEBUG] Tots els valors de MultipartForm.Value:")
+		for key, values := range r.MultipartForm.Value {
+			log.Printf("  %s: %v", key, values)
+		}
+	}
+
+	usernameOrEmail := r.FormValue("usuari")
+	password := r.FormValue("contrassenya")
+	captcha := r.FormValue("captcha")
+	mantenirSessio := r.FormValue("mantenir_sessio")
+
+	log.Printf("[DEBUG] Dades del formulari - Usuari: %s, Contrasenya: [%d chars], CAPTCHA: %s",
+		usernameOrEmail, len(password), captcha)
+
+	// Validacions bàsiques
+	if usernameOrEmail == "" || password == "" {
+		log.Printf("[DEBUG] Validació fallida: usuari o contrasenya buits")
+		RenderTemplate(w, "index.html", map[string]interface{}{
+			"Error":     "Usuari i contrasenya són obligatoris",
+			"CSRFToken": "token-segon",
+		})
+		return
+	}
+
+	// Validar CAPTCHA
+	if captcha != "8" {
+		log.Printf("[DEBUG] CAPTCHA invàlid: %s (esperat: 8)", captcha)
+		RenderTemplate(w, "index.html", map[string]interface{}{
+			"Error":     "CAPTCHA incorrecte",
+			"CSRFToken": "token-segon",
+		})
+		return
+	}
+
+	log.Printf("[DEBUG] Validacions bàsiques passades, procedint a autenticar...")
+
+	// Autenticar usuari
+	user, err := dbInstance.AuthenticateUser(usernameOrEmail, password)
+	if err != nil {
+		log.Printf("[DEBUG] Error d'autenticació per a %s: %v", usernameOrEmail, err)
+		RenderTemplate(w, "index.html", map[string]interface{}{
+			"Error":     "Usuari o contrasenya incorrectes",
+			"CSRFToken": "token-segon",
+		})
+		return
+	}
+
+	log.Printf("[DEBUG] Autenticació exitosa per a usuari: %s (ID: %d)", user.Usuari, user.ID)
+
+	// Crear sessió
+	sessionID := generateToken(32)
+	sessionExpiry := time.Now().Add(24 * time.Hour) // 24 hores per defecte
+
+	if mantenirSessio == "on" {
+		sessionExpiry = time.Now().Add(7 * 24 * time.Hour) // 1 setmana si marca el checkbox
+	}
+
+	log.Printf("[DEBUG] Creant sessió amb ID: %s", sessionID)
+
+	// Guardar sessió a la base de dades
+	err = dbInstance.SaveSession(sessionID, user.ID, sessionExpiry.Format("2006-01-02 15:04:05"))
+	if err != nil {
+		log.Printf("[DEBUG] Error guardant sessió: %v", err)
+		http.Error(w, "Error intern del servidor", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[DEBUG] Sessió guardada a la base de dades")
+
+	// Crear cookie de sessió
+	secure := r.TLS != nil && strings.EqualFold(os.Getenv("ENVIRONMENT"), "production")
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "cg_session",
+		Value:    sessionID,
+		Expires:  sessionExpiry,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secure,               // només Secure si és prod i HTTPS
+		SameSite: http.SameSiteLaxMode, // Lax per no tallar el 303/SeeOther cap a /inici
+	})
+
+	log.Printf("[DEBUG] Cookie de sessió creada (Secure=%v, SameSite=Lax, Expires=%s)", secure, sessionExpiry.Format(time.RFC3339))
+
+	// Redirigir a la pàgina privada
+	log.Printf("[DEBUG] Redirigint a /inici")
+	http.Redirect(w, r, "/inici", http.StatusSeeOther)
+}
+
+// VerificarSessio – Comprova si un usuari té una sessió vàlida
+func VerificarSessio(r *http.Request) (*db.User, bool) {
+	cookie, err := r.Cookie("cg_session")
+	if err != nil {
+		log.Printf("[VerificarSessio] No s'ha trobat cookie de sessió: %v", err)
+		return nil, false
+	}
+
+	sessionID := cookie.Value
+	if sessionID == "" {
+		log.Printf("[VerificarSessio] Cookie de sessió buida")
+		return nil, false
+	}
+
+	log.Printf("[VerificarSessio] Verificant sessió: %s", sessionID)
+
+	// Inicialitza la configuració i la base de dades
+	config := cnf.LoadConfig("cnf/config.cfg")
+	dbInstance, err := db.NewDB(config)
+	if err != nil {
+		log.Printf("[VerificarSessio] Error inicialitzant la base de dades: %v", err)
+		return nil, false
+	}
+	defer dbInstance.Close()
+
+	// Buscar l'usuari associat a aquesta sessió
+	user, err := dbInstance.GetSessionUser(sessionID)
+	if err != nil {
+		log.Printf("[VerificarSessio] Sessió no vàlida o expirada: %v", err)
+		return nil, false
+	}
+
+	log.Printf("[VerificarSessio] Sessió vàlida per a usuari: %s (ID: %d)", user.Usuari, user.ID)
+	return user, true
 }

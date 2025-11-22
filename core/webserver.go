@@ -28,6 +28,7 @@ var allowedFiles = map[string]bool{
 	"js/perfil-dropdown.js":   true,
 	"js/idioma.js":            true,
 	"img/logo.png":            true,
+	"js/menu.js":              true,
 }
 
 // rateLimiter – Usarem sync.Map per compartir entre goroutines
@@ -238,7 +239,7 @@ func ServeStatic(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".css") {
 		referer := r.Header.Get("Referer")
 		if referer != "" {
-			if !strings.HasPrefix(referer, "http://localhost") && !strings.HasPrefix(referer, "https://genealogia.cat ") {
+			if !strings.HasPrefix(referer, "http://localhost") && !strings.HasPrefix(referer, "https://genealogia.cat") {
 				log.Printf("Accés amb referer invàlid: %s - IP: %s", referer, ipStr)
 				http.Error(w, "Accés denegat", http.StatusForbidden)
 				return
@@ -361,8 +362,23 @@ func getIP(r *http.Request) string {
 		log.Printf("[getIP] X-Real-IP: %v", realIP)
 		return realIP
 	}
+
+	// Manejar IPv6 correctament
 	ipPort := r.RemoteAddr
-	ip := strings.Split(ipPort, ":")[0]
+	var ip string
+	if strings.Contains(ipPort, "[") {
+		// IPv6 format: [::1]:port
+		start := strings.Index(ipPort, "[")
+		end := strings.Index(ipPort, "]")
+		if start != -1 && end != -1 {
+			ip = ipPort[start+1 : end]
+		} else {
+			ip = ipPort
+		}
+	} else {
+		// IPv4 format: 127.0.0.1:port
+		ip = strings.Split(ipPort, ":")[0]
+	}
 	log.Printf("[getIP] IP parsejada de RemoteAddr: %v", ip)
 	return ip
 }

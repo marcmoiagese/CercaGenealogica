@@ -93,11 +93,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const formRegistre = document.getElementById('formRegistre');
     if (formRegistre) {
         formRegistre.addEventListener('submit', function(e) {
-            e.preventDefault();
+            // No prevenir l'enviament per defecte, només validar
+            console.log('Validant formulari de registre...');
             
             // Validar que s'acceptin les condicions
-            const acceptaCondicions = document.getElementById('accepta_condicions');
+            const acceptaCondicions = document.getElementById('registre_accepta_condicions');
             if (!acceptaCondicions.checked) {
+                e.preventDefault();
+                console.log('Error: No s\'han acceptat les condicions');
+                
                 // Mostrar error
                 const checkboxGrup = acceptaCondicions.closest('.checkbox-grup');
                 checkboxGrup.classList.add('error');
@@ -128,20 +132,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Validar contrasenyes
-            const contrasenya = document.getElementById('contrassenya').value;
-            const confirmarContrasenya = document.getElementById('confirmar_contrasenya').value;
+            const contrasenya = document.getElementById('registre_contrassenya').value;
+            const confirmarContrasenya = document.getElementById('registre_confirmar_contrasenya').value;
+            
+            console.log('Contrasenya:', contrasenya);
+            console.log('Confirmar contrasenya:', confirmarContrasenya);
+            console.log('Coincideixen:', contrasenya === confirmarContrasenya);
             
             if (contrasenya !== confirmarContrasenya) {
+                e.preventDefault();
+                console.log('Error: Les contrasenyes no coincideixen');
                 alert('Les contrasenyes no coincideixen');
                 return;
             }
             
-            // Si tot està bé, enviar el formulari
-            formRegistre.submit();
+            console.log('Formulari vàlid, enviant...');
+            // El formulari s'enviarà automàticament
         });
         
         // Eliminar error quan es marca el checkbox
-        const acceptaCondicions = document.getElementById('accepta_condicions');
+        const acceptaCondicions = document.getElementById('registre_accepta_condicions');
         if (acceptaCondicions) {
             acceptaCondicions.addEventListener('change', function() {
                 const checkboxGrup = this.closest('.checkbox-grup');
@@ -154,5 +164,50 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
+    }
+});
+
+// Gestió del formulari d'inici de sessió
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('[DEBUG] DOM carregat, buscant formulari de login...');
+    
+    const formLogin = document.getElementById('formLogin');
+    if (formLogin) {
+        console.log('[DEBUG] Formulari de login trobat!');
+        console.log('[DEBUG] Action del formulari:', formLogin.action);
+        console.log('[DEBUG] Method del formulari:', formLogin.method);
+        
+        // TEMPORAL: Desactivem la validació per veure si el problema està aquí
+        /*
+        formLogin.addEventListener('submit', function(e) {
+            console.log('[DEBUG] Event submit disparat!');
+            
+            // Validar CAPTCHA
+            const captcha = document.getElementById('login_captcha');
+            const usuari = document.getElementById('login_usuari');
+            const contrasenya = document.getElementById('login_contrassenya');
+            
+            console.log('[DEBUG] Element captcha:', captcha);
+            console.log('[DEBUG] Element usuari:', usuari);
+            console.log('[DEBUG] Element contrasenya:', contrasenya);
+            
+            if (captcha && captcha.value !== '8') {
+                e.preventDefault();
+                alert('CAPTCHA incorrecte. La resposta és 8.');
+                return;
+            }
+            
+            console.log('[DEBUG] CAPTCHA correcte, enviant formulari...');
+            // No fem preventDefault() - deixem que el formulari s'enviï normalment
+        });
+        */
+        console.log('[DEBUG] JavaScript del formulari desactivat temporalment per debug');
+    } else {
+        console.log('[DEBUG] ERROR: No s\'ha trobat el formulari amb ID formLogin');
+        console.log('[DEBUG] Elements disponibles amb "form":');
+        const forms = document.querySelectorAll('form');
+        forms.forEach((form, index) => {
+            console.log(`  Form ${index}: id="${form.id}", action="${form.action}"`);
+        });
     }
 });
