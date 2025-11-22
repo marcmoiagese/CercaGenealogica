@@ -2,7 +2,8 @@ package integration
 
 import (
 	"testing"
-	. "tests/common"
+
+	. "github.com/marcmoiagese/CercaGenealogica/tests/common"
 )
 
 // Test d'integració del canvi de contrasenya (Fase 2.1).

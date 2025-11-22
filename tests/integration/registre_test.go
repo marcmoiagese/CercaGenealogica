@@ -2,6 +2,8 @@ package integration
 
 import (
 	"testing"
+
+	. "github.com/marcmoiagese/CercaGenealogica/tests/common"
 )
 
 // Test d'integració del flux de registre.
