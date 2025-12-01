@@ -389,7 +389,7 @@ func (a *App) IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	if usernameOrEmail == "" || password == "" {
 		Debugf("Validació fallida: usuari o contrasenya buits")
 		RenderTemplate(w, r, "index.html", map[string]interface{}{
-			"Error":     T(lang, "error.login.required"),
+			"Error": T(lang, "error.login.required"),
 		})
 		return
 	}
@@ -398,7 +398,7 @@ func (a *App) IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	if captcha != "8" {
 		Debugf("CAPTCHA invàlid: %s (esperat: 8)", captcha)
 		RenderTemplate(w, r, "index.html", map[string]interface{}{
-			"Error":     T(lang, "error.captcha.invalid"),
+			"Error": T(lang, "error.captcha.invalid"),
 		})
 		return
 	}
@@ -410,7 +410,7 @@ func (a *App) IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		Debugf("Error d'autenticació per a %s: %v", usernameOrEmail, err)
 		RenderTemplate(w, r, "index.html", map[string]interface{}{
-			"Error":     T(lang, "error.login.invalid"),
+			"Error": T(lang, "error.login.invalid"),
 		})
 		return
 	}
@@ -438,7 +438,13 @@ func (a *App) IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	Debugf("Sessió guardada a la base de dades")
 
 	// Crear cookie de sessió
-	secure := r.TLS != nil && strings.EqualFold(os.Getenv("ENVIRONMENT"), "production")
+	env := strings.ToLower(os.Getenv("ENVIRONMENT"))
+	secure := true
+	sameSite := http.SameSiteStrictMode
+	if env == "development" {
+		secure = r.TLS != nil
+		sameSite = http.SameSiteLaxMode
+	}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "cg_session",
@@ -446,8 +452,8 @@ func (a *App) IniciarSessio(w http.ResponseWriter, r *http.Request) {
 		Expires:  sessionExpiry,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   secure,               // només Secure si és prod i HTTPS
-		SameSite: http.SameSiteLaxMode, // Lax per no tallar el 303/SeeOther cap a /inici
+		Secure:   secure,   // Secure en entorns reals; en dev depèn de TLS
+		SameSite: sameSite, // Strict per reduir CSRF; Lax en dev per comoditat
 	})
 
 	Debugf("Cookie de sessió creada (Secure=%v, SameSite=Lax, Expires=%s)", secure, sessionExpiry.Format(time.RFC3339))
@@ -501,13 +507,21 @@ func (a *App) TancarSessio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Esborra la cookie
+	env := strings.ToLower(os.Getenv("ENVIRONMENT"))
+	secure := true
+	sameSite := http.SameSiteStrictMode
+	if env == "development" {
+		secure = r.TLS != nil
+		sameSite = http.SameSiteLaxMode
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "cg_session",
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: sameSite,
+		Secure:   secure,
 	})
 
 	// Missatge opcional via querystring o flash; per ara només redirigim
