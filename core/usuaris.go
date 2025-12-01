@@ -88,19 +88,6 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	Debugf("Valor rebut per a usuari: %s", usuariForm)
 	Debugf("Dades rebudes: nom=%s, cognoms=%s, email=%s", nom, cognoms, email)
 
-	// Comprova si ja està bloquejat per IP
-	ip := strings.Split(r.RemoteAddr, ":")[0]
-	if IsBlocked(ip) {
-		http.Error(w, "Accés denegat", http.StatusForbidden)
-		return
-	}
-
-	// Aplica límit d'intents
-	if !ApplyRateLimit(ip) {
-		http.Error(w, "Massa peticions. Intental-ho més tard.", http.StatusTooManyRequests)
-		return
-	}
-
 	// Valida el token CSRF
 	// (validat a l'inici amb validateCSRF)
 

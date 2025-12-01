@@ -74,10 +74,10 @@ func main() {
 		})
 	})
 
-	http.HandleFunc("/registre", app.RegistrarUsuari)
+	http.HandleFunc("/registre", applyMiddleware(app.RegistrarUsuari, core.BlockIPs, core.RateLimit))
 
-	http.HandleFunc("/login", app.IniciarSessio)
-	http.HandleFunc("/logout", app.TancarSessio)
+	http.HandleFunc("/login", applyMiddleware(app.IniciarSessio, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/logout", applyMiddleware(app.TancarSessio, core.BlockIPs))
 
 	http.HandleFunc("/condicions-us", func(w http.ResponseWriter, r *http.Request) {
 		core.RenderTemplate(w, r, "condicions-us.html", map[string]interface{}{
@@ -114,14 +114,17 @@ func main() {
 	http.HandleFunc("/oc/", handleLang("oc"))
 
 	http.HandleFunc("/regenerar-token", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			app.MostrarFormulariRegenerarToken(w, r)
-		} else if r.Method == "POST" {
-			app.ProcessarRegenerarToken(w, r)
+		handler := func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "GET" {
+				app.MostrarFormulariRegenerarToken(w, r)
+			} else if r.Method == "POST" {
+				app.ProcessarRegenerarToken(w, r)
+			}
 		}
+		applyMiddleware(handler, core.BlockIPs, core.RateLimit)(w, r)
 	})
 
-	http.HandleFunc("/activar", app.ActivarUsuariHTTP)
+	http.HandleFunc("/activar", applyMiddleware(app.ActivarUsuariHTTP, core.BlockIPs))
 
 	log.Println("Servidor iniciat a http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
