@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"net/mail"
 	"os"
 	"strings"
 	"time"
@@ -53,6 +54,7 @@ func (u *Usuari) ToDBUser(passwordHash []byte) *db.User {
 func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	ipStr := getIP(r)
 	log.Printf(" Iniciant registre d'usuari des de: %s", ipStr)
+	lang := ResolveLang(r)
 
 	// Inicialitza la configuració i la base de dades
 	config := cnf.LoadConfig("cnf/config.cfg")
@@ -116,8 +118,18 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	// Valida que s'acceptin les condicions d'ús
 	if acceptaCondicions != "on" {
 		log.Println("Error: no s'han acceptat les condicions d'ús")
-		RenderTemplate(w, "registre-incorrecte.html", map[string]interface{}{
-			"Error":     "Has d'acceptar les condicions d'ús per continuar",
+		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
+			"Error":     T(lang, "error.accept.terms"),
+			"CSRFToken": "token-segon",
+		})
+		return
+	}
+
+	// Valida format de correu electrònic
+	if _, err := mail.ParseAddress(email); err != nil {
+		log.Printf("Error: correu electrònic invàlid: %s", email)
+		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
+			"Error":     T(lang, "error.email.invalid"),
 			"CSRFToken": "token-segon",
 		})
 		return
@@ -126,16 +138,16 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	// Validacions bàsiques
 	if password != confirmPassword {
 		log.Println("Error: les contrasenyes no coincideixen")
-		RenderTemplate(w, "registre-incorrecte.html", map[string]interface{}{
-			"Error":     "Les contrasenyes no coincideixen",
+		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
+			"Error":     T(lang, "error.password.mismatch"),
 			"CSRFToken": "token-segon",
 		})
 		return
 	}
 	if captcha != "8" {
 		log.Println("Error: CAPTCHA invàlid")
-		RenderTemplate(w, "registre-incorrecte.html", map[string]interface{}{
-			"Error":     "CAPTCHA invàlid",
+		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
+			"Error":     T(lang, "error.captcha.invalid"),
 			"CSRFToken": "token-segon",
 		})
 		return
@@ -166,8 +178,8 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	err = dbInstance.InsertUser(dbUser)
 	if err != nil {
 		log.Printf("ERROR SQL: %v", err)
-		RenderTemplate(w, "registre-incorrecte.html", map[string]interface{}{
-			"Error":     "Error en crear l'usuari. Potser ja existeix un usuari amb aquest nom o correu electrònic.",
+		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
+			"Error":     T(lang, "error.user.create"),
 			"CSRFToken": "token-segon",
 		})
 		return
@@ -197,7 +209,7 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	sendActivationEmail(email, token)
 
 	// Renderitza la pantalla de confirmació
-	RenderTemplate(w, "registre-correcte.html", map[string]interface{}{
+	RenderTemplate(w, r, "registre-correcte.html", map[string]interface{}{
 		"Email":     email,
 		"CSRFToken": "token-segon",
 	})
@@ -275,7 +287,7 @@ func RegenerarTokenActivacio(w http.ResponseWriter, r *http.Request) {
 }
 
 func MostrarFormulariRegenerarToken(w http.ResponseWriter, r *http.Request) {
-	RenderTemplate(w, "regenerar-token.html", map[string]interface{}{
+	RenderTemplate(w, r, "regenerar-token.html", map[string]interface{}{
 		"CSRFToken": "token-segon",
 	})
 }
@@ -291,7 +303,7 @@ func ProcessarRegenerarToken(w http.ResponseWriter, r *http.Request) {
 func ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		RenderTemplate(w, "activat-user.html", map[string]interface{}{
+		RenderTemplate(w, r, "activat-user.html", map[string]interface{}{
 			"Activat":   false,
 			"CSRFToken": "token-segon",
 		})
@@ -301,7 +313,7 @@ func ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 	dbInstance, err := db.NewDB(config)
 	if err != nil {
 		log.Printf("Error inicialitzant la base de dades: %v", err)
-		RenderTemplate(w, "activat-user.html", map[string]interface{}{
+		RenderTemplate(w, r, "activat-user.html", map[string]interface{}{
 			"Activat":   false,
 			"CSRFToken": "token-segon",
 		})
@@ -313,14 +325,14 @@ func ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 	err = dbInstance.ActivateUser(token)
 	if err != nil {
 		log.Printf("Error activant usuari: %v", err)
-		RenderTemplate(w, "activat-user.html", map[string]interface{}{
+		RenderTemplate(w, r, "activat-user.html", map[string]interface{}{
 			"Activat":   false,
 			"CSRFToken": "token-segon",
 		})
 		return
 	}
 	log.Printf("Usuari activat correctament amb token: %s", token)
-	RenderTemplate(w, "activat-user.html", map[string]interface{}{
+	RenderTemplate(w, r, "activat-user.html", map[string]interface{}{
 		"Activat":   true,
 		"CSRFToken": "token-segon",
 	})
@@ -329,6 +341,7 @@ func ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 // IniciarSessio – Autentica un usuari i crea una sessió
 func IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[DEBUG] IniciarSessio cridada - Mètode: %s", r.Method)
+	lang := ResolveLang(r)
 
 	if r.Method != "POST" {
 		log.Printf("[DEBUG] Mètode no permès: %s", r.Method)
@@ -403,8 +416,8 @@ func IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	// Validacions bàsiques
 	if usernameOrEmail == "" || password == "" {
 		log.Printf("[DEBUG] Validació fallida: usuari o contrasenya buits")
-		RenderTemplate(w, "index.html", map[string]interface{}{
-			"Error":     "Usuari i contrasenya són obligatoris",
+		RenderTemplate(w, r, "index.html", map[string]interface{}{
+			"Error":     T(lang, "error.login.required"),
 			"CSRFToken": "token-segon",
 		})
 		return
@@ -413,8 +426,8 @@ func IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	// Validar CAPTCHA
 	if captcha != "8" {
 		log.Printf("[DEBUG] CAPTCHA invàlid: %s (esperat: 8)", captcha)
-		RenderTemplate(w, "index.html", map[string]interface{}{
-			"Error":     "CAPTCHA incorrecte",
+		RenderTemplate(w, r, "index.html", map[string]interface{}{
+			"Error":     T(lang, "error.captcha.invalid"),
 			"CSRFToken": "token-segon",
 		})
 		return
@@ -426,8 +439,8 @@ func IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	user, err := dbInstance.AuthenticateUser(usernameOrEmail, password)
 	if err != nil {
 		log.Printf("[DEBUG] Error d'autenticació per a %s: %v", usernameOrEmail, err)
-		RenderTemplate(w, "index.html", map[string]interface{}{
-			"Error":     "Usuari o contrasenya incorrectes",
+		RenderTemplate(w, r, "index.html", map[string]interface{}{
+			"Error":     T(lang, "error.login.invalid"),
 			"CSRFToken": "token-segon",
 		})
 		return
@@ -509,4 +522,44 @@ func VerificarSessio(r *http.Request) (*db.User, bool) {
 
 	log.Printf("[VerificarSessio] Sessió vàlida per a usuari: %s (ID: %d)", user.Usuari, user.ID)
 	return user, true
+}
+
+// TancarSessio – elimina la sessió actual (cookie + BD) i redirigeix a l'inici
+func TancarSessio(w http.ResponseWriter, r *http.Request) {
+	lang := ResolveLang(r)
+
+	cookie, err := r.Cookie("cg_session")
+	if err != nil || cookie.Value == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	sessionID := cookie.Value
+
+	config := cnf.LoadConfig("cnf/config.cfg")
+	dbInstance, err := db.NewDB(config)
+	if err == nil {
+		defer dbInstance.Close()
+		if err := dbInstance.DeleteSession(sessionID); err != nil {
+			log.Printf("[logout] error eliminant sessió %s: %v", sessionID, err)
+		}
+	} else {
+		log.Printf("[logout] no s'ha pogut inicialitzar la BD: %v", err)
+	}
+
+	// Esborra la cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "cg_session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	// Missatge opcional via querystring o flash; per ara només redirigim
+	redirectTarget := "/"
+	// Si vols redirigir a login amb idioma, podríem fer servir lang
+	log.Printf("[logout] sessió %s tancada, redirigint a %s (lang=%s)", sessionID, redirectTarget, lang)
+	http.Redirect(w, r, redirectTarget, http.StatusSeeOther)
 }

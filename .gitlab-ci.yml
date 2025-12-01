@@ -1,0 +1,86 @@
+# .gitlab-ci.yml - PIPELINE DE PROVA
+variables:
+  GITHUB_REPO: "git@github.com:marcmoiagese/CercaGenealogica.git"
+
+.setup_ssh: &setup_ssh |
+  echo "🔑 Configurant SSH..."
+  apt-get update -y && apt-get install -y openssh-client git
+  eval $(ssh-agent -s)
+  echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+  mkdir -p ~/.ssh
+  chmod 700 ~/.ssh
+  ssh-keyscan github.com >> ~/.ssh/known_hosts
+  chmod 644 ~/.ssh/known_hosts
+
+stages:
+  - test
+  - dry-run
+
+test_github_connection:
+  stage: test
+  script:
+    - *setup_ssh
+    - |
+      echo "🧪 PROVA 1: Test SSH Connection..."
+      ssh -T git@github.com
+      echo "✅ SSH Connection: OK"
+      
+      echo "🧪 PROVA 2: Test Clone from GitHub..."
+      git clone $GITHUB_REPO /tmp/test_clone_github
+      echo "✅ GitHub Clone: OK"
+      
+      echo "🧪 PROVA 3: Test Push (dry-run)..."
+      cd /tmp/test_clone_github
+      git config user.email "ci@gitlab.marc.cat"
+      git config user.name "GitLab CI Test"
+      # Provem un canvi mínim
+      echo "# Test $(date)" >> TEST_FILE.md
+      git add TEST_FILE.md
+      git commit -m "Test commit from GitLab CI" || echo "⚠️  No changes to commit"
+      # NO fem push real
+      echo "✅ GitHub Push (dry-run): OK - Ready for real push"
+      
+      echo "🎉 TOTES LES PROVES OK!"
+  only:
+    - gitlab-specific
+  when: manual  # ← L'executes manualment
+
+dry_run_deploy:
+  stage: dry-run
+  script:
+    - *setup_ssh
+    - |
+      echo "🔍 DRY RUN: Simulant deploy sense fer canvis reals..."
+      
+      # Clonem des de GitLab
+      git clone git@gitlab.marc.cat:applicacions/genealogia/cercagenealogica.git dry_run_repo
+      cd dry_run_repo
+      git checkout gitlab-specific
+      
+      echo "📋 Contingut actual:"
+      ls -la
+      
+      echo "🗑️  Simulant eliminació de carpetes..."
+      echo "   - .codex: $( [ -d ".codex" ] && echo "EXISTIRIA → ELIMINAT" || echo "No existeix" )"
+      echo "   - .vscode: $( [ -d ".vscode" ] && echo "EXISTIRIA → ELIMINAT" || echo "No existeix" )" 
+      echo "   - tests: $( [ -d "tests" ] && echo "EXISTIRIA → ELIMINAT" || echo "No existeix" )"
+      echo "   - tools: $( [ -d "tools" ] && echo "EXISTIRIA → ELIMINAT" || echo "No existeix" )"
+      
+      echo "📄 .gitignore actual:"
+      cat .gitignore || echo "No .gitignore"
+      
+      echo "📄 .gitignore nou que es crearia:"
+      cat << 'EOF'
+*.db
+*.csv
+*.xlsx
+EOF
+      
+      echo "🚀 Simulant push a GitHub..."
+      echo "   git push github gitlab-specific:master --force"
+      
+      echo "✅ DRY RUN COMPLETAT - Tot llest per al deploy real!"
+  only:
+    - gitlab-specific
+  when: manual
+  allow_failure: false

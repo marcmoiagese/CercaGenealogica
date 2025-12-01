@@ -95,6 +95,7 @@ document.addEventListener('DOMContentLoaded', function() {
         formRegistre.addEventListener('submit', function(e) {
             // No prevenir l'enviament per defecte, només validar
             console.log('Validant formulari de registre...');
+            const emailInput = document.getElementById('registre_email');
             
             // Validar que s'acceptin les condicions
             const acceptaCondicions = document.getElementById('registre_accepta_condicions');
@@ -129,6 +130,19 @@ document.addEventListener('DOMContentLoaded', function() {
             const errorMsg = checkboxGrup.querySelector('.error-missatge');
             if (errorMsg) {
                 errorMsg.remove();
+            }
+
+            // Validar format d'email senzill
+            if (emailInput) {
+                const emailVal = emailInput.value.trim();
+                const emailRegex = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+                if (!emailRegex.test(emailVal)) {
+                    e.preventDefault();
+                    console.log('Error: email invàlid');
+                    alert('Introdueix un correu electrònic vàlid');
+                    emailInput.focus();
+                    return;
+                }
             }
             
             // Validar contrasenyes

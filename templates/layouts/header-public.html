@@ -4,22 +4,22 @@
     <div class="container">
         <div class="logo-idiomes">
             <a href="/" class="logo">
-                <img src="/static/img/logo.png" alt="Genealogia.cat">
-                <span>Genealogia.cat</span>
+                <img src="/static/img/logo.png" alt="{{ t .Lang "app.brand" }}">
+                <span>{{ t .Lang "app.brand" }}</span>
             </a>
             <div class="controls-dreta">
                 <div class="selector-idioma-dropdown">
                     <button class="boto-selector-idioma" id="botoSelectorIdioma">
-                        CAT <i class="fas fa-chevron-down"></i>
+                        {{ if eq .Lang "en" }}{{ t .Lang "lang.code.en" }}{{ else if eq .Lang "oc" }}{{ t .Lang "lang.code.oc" }}{{ else }}{{ t .Lang "lang.code.cat" }}{{ end }} <i class="fas fa-chevron-down"></i>
                     </button>
                     <ul class="dropdown-idiomes" id="dropdownIdiomes">
-                        <li><a href="/cat/" class="active">Català</a></li>
-                        <li><a href="/en/">English</a></li>
-                        <li><a href="/oc/">Occitan</a></li>
+                        <li><a href="/cat/" data-lang="cat" class="{{ if eq .Lang "cat" }}active{{ end }}">{{ t .Lang "lang.name.cat" }}</a></li>
+                        <li><a href="/en/" data-lang="en" class="{{ if eq .Lang "en" }}active{{ end }}">{{ t .Lang "lang.name.en" }}</a></li>
+                        <li><a href="/oc/" data-lang="oc" class="{{ if eq .Lang "oc" }}active{{ end }}">{{ t .Lang "lang.name.oc" }}</a></li>
                     </ul>
                 </div>
-                <a href="/login" class="boto-login" id="botoLogin"><i class="fas fa-user"></i> Iniciar sessió</a>
-                <a href="#" class="boto-login boto-registre" id="botoRegistre"><i class="fas fa-user-plus"></i> Registra't</a>
+                <a href="/login" class="boto-login" id="botoLogin"><i class="fas fa-user"></i> {{ t .Lang "nav.login" }}</a>
+                <a href="#" class="boto-login boto-registre" id="botoRegistre"><i class="fas fa-user-plus"></i> {{ t .Lang "nav.register" }}</a>
             </div>
         </div>
     </div>

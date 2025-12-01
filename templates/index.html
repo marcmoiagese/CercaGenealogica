@@ -1,18 +1,18 @@
 {{ define "index.html" }}
 <!DOCTYPE html>
-<html lang="ca">
+<html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>Genealogia.cat</title>
+    <title>{{ t .Lang "app.title" }}</title>
     {{ template "styles-public" . }}
 </head>
 <body>
     {{ template "header-public" . }}
 
     <main class="contingut-principal">
-        <h1>Benvingut a Genealogia.cat</h1>
-        <p>Aquest és el portal genealògic públic.</p>
-        <a href="/login">Iniciar sessió</a>
+        <h1>{{ t .Lang "index.title" }}</h1>
+        <p>{{ t .Lang "index.subtitle" }}</p>
+        <a href="/login">{{ t .Lang "index.loginCta" }}</a>
     </main>
 
     {{ template "footer" . }}

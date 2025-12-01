@@ -1,9 +1,9 @@
 {{ define "regenerar-token.html" }}
 <!DOCTYPE html>
-<html lang="ca">
+<html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>Regenerar Token - Genealogia.cat</title>
+    <title>{{ t .Lang "regenerate.title" }} - {{ t .Lang "app.brand" }}</title>
     {{ template "styles-public" . }}
     <link rel="stylesheet" href="/static/css/regenerar-token.css">
 </head>
@@ -13,21 +13,20 @@
     <main class="contingut-principal">
         <div class="container">
             <div class="regenerar-token-container">
-                <h2><i class="fas fa-key"></i> Regenerar Token d'Activació</h2>
+                <h2><i class="fas fa-key"></i> {{ t .Lang "regenerate.title" }}</h2>
                 <form method="POST" action="/regenerar-token">
                     <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                     <div class="form-grup">
-                        <label for="email">Correu electrònic</label>
-                        <input type="email" id="email" name="email" placeholder="Introdueix el teu correu electrònic" required>
+                        <label for="email">{{ t .Lang "regenerate.label.email" }}</label>
+                        <input type="email" id="email" name="email" placeholder="{{ t .Lang "regenerate.placeholder.email" }}" required>
                     </div>
                     <button type="submit" class="boto-regenerar-token">
-                        <i class="fas fa-sync-alt"></i> Regenerar Token
+                        <i class="fas fa-sync-alt"></i> {{ t .Lang "regenerate.submit" }}
                     </button>
                 </form>
                 <p>
                     <i class="fas fa-info-circle"></i>
-                    Si el teu token d'activació ha caducat o no l'has rebut, pots sol·licitar-ne un de nou aquí. 
-                    Revisa la teva bústia de correu després d'enviar la sol·licitud.
+                    {{ t .Lang "regenerate.description" }}
                 </p>
             </div>
         </div>

@@ -1,9 +1,9 @@
 <!-- templates/layouts/base.html -->
 <!DOCTYPE html>
-<html lang="ca">
+<html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>Genealogia.cat</title>
+    <title>{{ t .Lang "app.title" }}</title>
     {{ block "page-styles" . }}{{ end }}
 </head>
 <body>

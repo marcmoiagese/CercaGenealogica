@@ -1,9 +1,9 @@
 {{ define "activat-user.html" }}
 <!DOCTYPE html>
-<html lang="ca">
+<html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>Genealogia.cat</title>
+    <title>{{ t .Lang "app.title" }}</title>
     {{ template "styles-public" . }}
 </head>
 <body>
@@ -11,15 +11,15 @@
 
     <main class="contingut-principal">
         <div class="container">
-            <h2>Activació de compte</h2>
+            <h2>{{ t .Lang "activation.title" }}</h2>
             {{ if .Data.Activat }}
                 <div class="missatge-activacio success">
-                    El teu compte ha estat activat correctament! Ja pots <a href="/">iniciar sessió</a>.
+                    {{ t .Lang "activation.success" }} <a href="/">{{ t .Lang "nav.login" }}</a>.
                 </div>
             {{ else }}
                 <div class="missatge-activacio error">
-                    Token invàlid o caducat.<br>
-                    Si necessites un nou token, pots <a href="/regenerar-token">regenerar-lo aquí</a>.
+                    {{ t .Lang "activation.error" }}<br>
+                    <a href="/regenerar-token">{{ t .Lang "regenerate.submit" }}</a>
                 </div>
             {{ end }}
         </div>

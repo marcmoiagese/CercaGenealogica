@@ -2,52 +2,52 @@
 <div class="modal-login" id="modalRegistre">
     <div class="modal-contingut">
         <span class="modal-tanca" id="tancaModalRegistre">&times;</span>
-        <h2>Crear compte</h2>
+        <h2>{{ t .Lang "register.title" }}</h2>
         <form id="formRegistre" method="POST" action="/registre">
             <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
             <div class="form-grup">
-                <label for="registre_usuari">Usuari</label>
+                <label for="registre_usuari">{{ t .Lang "register.label.username" }}</label>
                 <input type="text" id="registre_usuari" name="usuari" required>
             </div>
             <div class="form-grup">
-                <label for="registre_nom">Nom</label>
+                <label for="registre_nom">{{ t .Lang "register.label.name" }}</label>
                 <input type="text" id="registre_nom" name="nom" required>
             </div>
             <div class="form-grup">
-                <label for="registre_cognoms">Cognoms</label>
+                <label for="registre_cognoms">{{ t .Lang "register.label.surname" }}</label>
                 <input type="text" id="registre_cognoms" name="cognoms" required>
             </div>
             <div class="form-grup">
-                <label for="registre_data_naixament">Data de naixament</label>
+                <label for="registre_data_naixament">{{ t .Lang "register.label.birthdate" }}</label>
                 <input type="date" id="registre_data_naixament" name="data_naixament" required>
             </div>
             <div class="form-grup">
-                <label for="registre_email">Correu electrònic</label>
+                <label for="registre_email">{{ t .Lang "register.label.email" }}</label>
                 <input type="email" id="registre_email" name="email" required>
             </div>
             <div class="form-grup">
-                <label for="registre_contrassenya">Contrasenya</label>
+                <label for="registre_contrassenya">{{ t .Lang "register.label.password" }}</label>
                 <input type="password" id="registre_contrassenya" name="contrassenya" required>
             </div>
             <div class="form-grup">
-                <label for="registre_confirmar_contrasenya">Confirmar contrasenya</label>
+                <label for="registre_confirmar_contrasenya">{{ t .Lang "register.label.passwordConfirm" }}</label>
                 <input type="password" id="registre_confirmar_contrasenya" name="confirmar_contrasenya" required>
             </div>
             <div class="form-grup">
-                <label for="registre_captcha">Quant és 5 + 3?</label>
-                <input type="text" id="registre_captcha" name="captcha" placeholder="Resposta" required>
+                <label for="registre_captcha">{{ t .Lang "register.label.captcha" }}</label>
+                <input type="text" id="registre_captcha" name="captcha" placeholder="{{ t .Lang "register.captcha.placeholder" }}" required>
             </div>
             <div class="form-grup checkbox-grup">
                 <label class="checkbox-label">
                     <input type="checkbox" id="registre_accepta_condicions" name="accepta_condicions" required>
                     <span class="checkmark"></span>
-                    Accepto les <a href="/condicions-us" target="_blank" class="link-condicions">condicions d'ús</a> de la pàgina
+                    {{ t .Lang "register.accept" }} <a href="/condicions-us" target="_blank" class="link-condicions">{{ t .Lang "register.terms" }}</a> de la pàgina
                 </label>
             </div>
-            <button type="submit" class="boto boto-login-modal">Crear compte</button>
+            <button type="submit" class="boto boto-login-modal">{{ t .Lang "register.submit" }}</button>
         </form>
         <p class="opcions-addicionals">
-            <a href="#" id="tornaLogin">Ja tens compte? Inicia sessió</a>
+            <a href="#" id="tornaLogin">{{ t .Lang "register.link.login" }}</a>
         </p>
     </div>
 </div>

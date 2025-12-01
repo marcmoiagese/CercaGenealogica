@@ -7,28 +7,38 @@
     <div class="container">
         <div class="logo-idiomes">
             <a href="/" class="logo">
-                <img src="/static/img/logo.png" alt="Genealogia.cat">
-                <span>Genealogia.cat</span>
+                <img src="/static/img/logo.png" alt="{{ t .Lang "app.brand" }}">
+                <span>{{ t .Lang "app.brand" }}</span>
             </a>
             <div class="controls-dreta">
                 <div class="selector-idioma-dropdown">
                     <button class="boto-selector-idioma" id="botoSelectorIdioma">
-                        CAT <i class="fas fa-chevron-down"></i>
+                        {{ if eq .Lang "en" }}{{ t .Lang "lang.code.en" }}{{ else if eq .Lang "oc" }}{{ t .Lang "lang.code.oc" }}{{ else }}{{ t .Lang "lang.code.cat" }}{{ end }} <i class="fas fa-chevron-down"></i>
                     </button>
                     <ul class="dropdown-idiomes" id="dropdownIdiomes">
-                        <li><a href="/cat/" class="active">Català</a></li>
-                        <li><a href="/en/">English</a></li>
-                        <li><a href="/oc/">Occitan</a></li>
+                        <li><a href="/cat/" data-lang="cat" class="{{ if eq .Lang "cat" }}active{{ end }}">{{ t .Lang "lang.name.cat" }}</a></li>
+                        <li><a href="/en/" data-lang="en" class="{{ if eq .Lang "en" }}active{{ end }}">{{ t .Lang "lang.name.en" }}</a></li>
+                        <li><a href="/oc/" data-lang="oc" class="{{ if eq .Lang "oc" }}active{{ end }}">{{ t .Lang "lang.name.oc" }}</a></li>
                     </ul>
                 </div>
                 <div class="perfil-usuari">
                     <button class="boto-perfil-usuari" id="botoPerfil">
-                        <i class="fas fa-user-circle"></i> Joan Martí <i class="fas fa-chevron-down"></i>
+                        <i class="fas fa-user-circle"></i>
+                        {{ with .Data.User }}
+                            {{ if .Name }}
+                                {{ .Name }}{{ if .Surname }} {{ .Surname }}{{ end }}
+                            {{ else }}
+                                {{ .Usuari }}
+                            {{ end }}
+                        {{ else }}
+                            {{ t .Lang "nav.profile" }}
+                        {{ end }}
+                        <i class="fas fa-chevron-down"></i>
                     </button>
                     <ul class="dropdown-perfil" id="dropdownPerfil">
-                        <li><a href="#"><i class="fas fa-user-cog"></i> Dades personals</a></li>
-                        <li><a href="#"><i class="fas fa-folder-open"></i> Espai personal</a></li>
-                        <li><a href="#"><i class="fas fa-sign-out-alt"></i> Desconnectar</a></li>
+                        <li><a href="#"><i class="fas fa-user-cog"></i> {{ t .Lang "nav.profile" }}</a></li>
+                        <li><a href="#"><i class="fas fa-folder-open"></i> {{ t .Lang "nav.space" }}</a></li>
+                        <li><a href="/logout"><i class="fas fa-sign-out-alt"></i> {{ t .Lang "nav.logout" }}</a></li>
                     </ul>
                 </div>
             </div>

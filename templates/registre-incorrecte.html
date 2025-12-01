@@ -1,9 +1,9 @@
 {{ define "registre-incorrecte.html" }}
 <!DOCTYPE html>
-<html lang="ca">
+<html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>Error en el Registre - Genealogia.cat</title>
+    <title>{{ t .Lang "register.error.title" }} - {{ t .Lang "app.brand" }}</title>
     {{ template "styles-public" . }}
     <link rel="stylesheet" href="/static/css/registre.css">
 </head>
@@ -13,24 +13,24 @@
     <main class="contingut-principal">
         <div class="container">
             <div class="missatge-registre error">
-                <h2><i class="fas fa-exclamation-triangle"></i> Error en el Registre</h2>
-                <p>No s'ha pogut completar el registre del teu compte.</p>
+                <h2><i class="fas fa-exclamation-triangle"></i> {{ t .Lang "register.error.heading" }}</h2>
+                <p>{{ t .Lang "register.error.description" }}</p>
                 
                 <div class="info-error">
-                    <h3>Possibles causes:</h3>
+                    <h3>{{ t .Lang "register.error.possible" }}</h3>
                     <ul class="causes-error">
-                        <li><i class="fas fa-user-times"></i> El nom d'usuari ja existeix a la base de dades</li>
-                        <li><i class="fas fa-envelope"></i> L'adreça de correu electrònic ja està registrada</li>
-                        <li><i class="fas fa-calendar-alt"></i> La data de naixement no és vàlida</li>
-                        <li><i class="fas fa-shield-alt"></i> Les dades no compleixen els estàndards de seguretat</li>
-                        <li><i class="fas fa-robot"></i> El CAPTCHA no s'ha completat correctament</li>
+                        <li><i class="fas fa-user-times"></i> {{ t .Lang "register.error.reason.username" }}</li>
+                        <li><i class="fas fa-envelope"></i> {{ t .Lang "register.error.reason.email" }}</li>
+                        <li><i class="fas fa-calendar-alt"></i> {{ t .Lang "register.error.reason.birthdate" }}</li>
+                        <li><i class="fas fa-shield-alt"></i> {{ t .Lang "register.error.reason.security" }}</li>
+                        <li><i class="fas fa-robot"></i> {{ t .Lang "register.error.reason.captcha" }}</li>
                     </ul>
                 </div>
 
                 <div class="contacte-suport">
-                    <p>Si creus que és un error, contacta amb el suport tècnic:</p>
+                    <p>{{ t .Lang "register.error.support" }}</p>
                     <a href="mailto:support@genealogia.cat" class="boto boto-secundari">
-                        <i class="fas fa-envelope"></i> Contactar suport
+                        <i class="fas fa-envelope"></i> {{ t .Lang "register.error.contact" }}
                     </a>
                 </div>
             </div>

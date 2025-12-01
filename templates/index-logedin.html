@@ -1,9 +1,9 @@
 {{ define "index-logedin.html" }}
 <!DOCTYPE html>
-<html lang="ca">
+<html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>Genealogia.cat</title>
+    <title>{{ t .Lang "app.title" }}</title>
     {{ template "styles-private" . }}
 </head>
 <body>
@@ -11,8 +11,8 @@
     {{ template "menu" . }}
 
     <main class="contingut-principal">
-        <h1>Hola Joan!</h1>
-        <p>Estàs identificat correctament.</p>
+        <h1>{{ t .Lang "private.welcome" }}</h1>
+        <p>{{ t .Lang "private.loggedIn" }}</p>
     </main>
 
     {{ template "footer" . }}

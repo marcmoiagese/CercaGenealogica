@@ -2,33 +2,33 @@
 <div class="modal-login" id="modalLogin">
     <div class="modal-contingut">
         <span class="modal-tanca" id="tancaModal">&times;</span>
-        <h2>Iniciar sessió</h2>
+        <h2>{{ t .Lang "login.title" }}</h2>
         <form id="formLogin" method="POST" action="/login" enctype="application/x-www-form-urlencoded">
             <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
             <div class="form-grup">
-                <label for="login_usuari">Usuari o correu electrònic</label>
+                <label for="login_usuari">{{ t .Lang "login.label.user" }}</label>
                 <input type="text" id="login_usuari" name="usuari" required>
             </div>
             <div class="form-grup">
-                <label for="login_contrassenya">Contrasenya</label>
+                <label for="login_contrassenya">{{ t .Lang "login.label.password" }}</label>
                 <input type="password" id="login_contrassenya" name="contrassenya" required>
             </div>
             <div class="form-grup">
-                <label for="login_captcha">Quant és 5 + 3?</label>
-                <input type="text" id="login_captcha" name="captcha" placeholder="Resposta" required>
+                <label for="login_captcha">{{ t .Lang "login.label.captcha" }}</label>
+                <input type="text" id="login_captcha" name="captcha" placeholder="{{ t .Lang "login.captcha.placeholder" }}" required>
             </div>
             <div class="form-grup checkbox-grup">
                 <label class="checkbox-label">
                     <input type="checkbox" id="login_mantenir_sessio" name="mantenir_sessio">
                     <span class="checkmark"></span>
-                    Mantenir la sessió oberta
+                    {{ t .Lang "login.label.remember" }}
                 </label>
             </div>
-            <button type="submit" class="boto boto-login-modal">Iniciar sessió</button>
+            <button type="submit" class="boto boto-login-modal">{{ t .Lang "login.submit" }}</button>
         </form>
         <p class="opcions-addicionals">
-            <a href="#" id="mostrarRecuperar">Recuperar contrasenya</a> · 
-            <a href="#" id="mostrarRegistre">Crear usuari</a>
+            <a href="#" id="mostrarRecuperar">{{ t .Lang "login.link.recover" }}</a> · 
+            <a href="#" id="mostrarRegistre">{{ t .Lang "login.link.register" }}</a>
         </p>
     </div>
 </div>

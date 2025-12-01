@@ -10,6 +10,7 @@ var Templates *template.Template
 
 type DataContext struct {
 	UserLoggedIn bool
+	Lang         string
 	Data         interface{}
 }
 
@@ -20,6 +21,9 @@ var templateFuncs = template.FuncMap{
 			return defaultValue
 		}
 		return value
+	},
+	"t": func(lang, key string) string {
+		return T(lang, key)
 	},
 }
 
@@ -46,9 +50,11 @@ func init() {
 	}
 }
 
-func RenderTemplate(w http.ResponseWriter, templateName string, data map[string]interface{}) {
+func RenderTemplate(w http.ResponseWriter, r *http.Request, templateName string, data map[string]interface{}) {
+	lang := ResolveLang(r)
 	err := Templates.ExecuteTemplate(w, templateName, &DataContext{
 		UserLoggedIn: false,
+		Lang:         lang,
 		Data:         data,
 	})
 	if err != nil {
@@ -59,9 +65,11 @@ func RenderTemplate(w http.ResponseWriter, templateName string, data map[string]
 	}
 }
 
-func RenderPrivateTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
+func RenderPrivateTemplate(w http.ResponseWriter, r *http.Request, tmpl string, data interface{}) {
+	lang := ResolveLang(r)
 	err := Templates.ExecuteTemplate(w, tmpl, &DataContext{
 		UserLoggedIn: true,
+		Lang:         lang,
 		Data:         data,
 	})
 	if err != nil {

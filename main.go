@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/cnf"
 	"github.com/marcmoiagese/CercaGenealogica/core"
@@ -34,7 +35,12 @@ func main() {
 
 	// Rutes HTML
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		core.RenderTemplate(w, "index.html", map[string]interface{}{
+		if user, authenticated := core.VerificarSessio(r); authenticated {
+			log.Printf("[auth] usuari %s ja autenticat, redirigint / -> /inici", user.Usuari)
+			http.Redirect(w, r, "/inici", http.StatusSeeOther)
+			return
+		}
+		core.RenderTemplate(w, r, "index.html", map[string]interface{}{
 			"CSRFToken": "token-segon",
 		})
 	})
@@ -49,7 +55,7 @@ func main() {
 		}
 
 		// Renderitzar la pàgina privada amb les dades de l'usuari
-		core.RenderPrivateTemplate(w, "index-logedin.html", map[string]interface{}{
+		core.RenderPrivateTemplate(w, r, "index-logedin.html", map[string]interface{}{
 			"User": user,
 		})
 	})
@@ -57,12 +63,33 @@ func main() {
 	http.HandleFunc("/registre", core.RegistrarUsuari)
 
 	http.HandleFunc("/login", core.IniciarSessio)
+	http.HandleFunc("/logout", core.TancarSessio)
 
 	http.HandleFunc("/condicions-us", func(w http.ResponseWriter, r *http.Request) {
-		core.RenderTemplate(w, "condicions-us.html", map[string]interface{}{
+		core.RenderTemplate(w, r, "condicions-us.html", map[string]interface{}{
 			"DataActualitzacio": "Gener 2024",
 		})
 	})
+
+	// Canvi d'idioma via ruta /{lang}/ amb cookie + redirect
+	handleLang := func(lang string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			expiry := time.Now().Add(365 * 24 * time.Hour)
+			http.SetCookie(w, &http.Cookie{
+				Name:     "lang",
+				Value:    lang,
+				Expires:  expiry,
+				Path:     "/",
+				HttpOnly: false,
+				SameSite: http.SameSiteLaxMode,
+			})
+			log.Printf("[lang] canvi a %s des de %s", lang, r.RemoteAddr)
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+		}
+	}
+	http.HandleFunc("/cat/", handleLang("cat"))
+	http.HandleFunc("/en/", handleLang("en"))
+	http.HandleFunc("/oc/", handleLang("oc"))
 
 	http.HandleFunc("/regenerar-token", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
