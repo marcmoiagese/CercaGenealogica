@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"path/filepath"
 	"reflect"
 )
 
@@ -29,21 +30,25 @@ var templateFuncs = template.FuncMap{
 }
 
 func init() {
-	var err error
-
 	// Crear template amb funcions personalitzades
 	Templates = template.New("").Funcs(templateFuncs)
 
 	// Carregar plantilles
-	Templates = template.Must(Templates.ParseGlob("templates/*.html"))
-	if err != nil {
-		log.Fatal("Error carregant plantilles:", err)
+	parsePattern := func(pattern string) {
+		matches, gerr := filepath.Glob(pattern)
+		if gerr != nil {
+			log.Printf("Error buscant plantilles amb patró %s: %v", pattern, gerr)
+			return
+		}
+		if len(matches) == 0 {
+			Debugf("Cap plantilla trobada per al patró %s (omitint)", pattern)
+			return
+		}
+		Templates = template.Must(Templates.ParseFiles(matches...))
 	}
 
-	Templates = template.Must(Templates.ParseGlob("templates/layouts/*.html"))
-	if err != nil {
-		log.Fatal("Error afegint layouts:", err)
-	}
+	parsePattern("templates/*.html")
+	parsePattern("templates/layouts/*.html")
 
 	Infof("Plantilles carregades:")
 	for _, t := range Templates.Templates() {
