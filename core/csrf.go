@@ -24,7 +24,13 @@ func ensureCSRF(w http.ResponseWriter, r *http.Request) (string, error) {
 	}
 	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
 
-	secure := r.TLS != nil && strings.EqualFold(os.Getenv("ENVIRONMENT"), "production")
+	env := strings.ToLower(os.Getenv("ENVIRONMENT"))
+	secure := true
+	sameSite := http.SameSiteStrictMode
+	if env == "development" {
+		secure = r.TLS != nil
+		sameSite = http.SameSiteLaxMode
+	}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     csrfCookieName,
@@ -32,7 +38,7 @@ func ensureCSRF(w http.ResponseWriter, r *http.Request) (string, error) {
 		Path:     "/",
 		Expires:  time.Now().Add(24 * time.Hour),
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: sameSite,
 		Secure:   secure,
 	})
 

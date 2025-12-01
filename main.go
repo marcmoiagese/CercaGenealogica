@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/cnf"
@@ -87,13 +89,21 @@ func main() {
 	handleLang := func(lang string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			expiry := time.Now().Add(365 * 24 * time.Hour)
+			env := strings.ToLower(os.Getenv("ENVIRONMENT"))
+			secure := true
+			sameSite := http.SameSiteStrictMode
+			if env == "development" {
+				secure = r.TLS != nil
+				sameSite = http.SameSiteLaxMode
+			}
 			http.SetCookie(w, &http.Cookie{
 				Name:     "lang",
 				Value:    lang,
 				Expires:  expiry,
 				Path:     "/",
 				HttpOnly: false,
-				SameSite: http.SameSiteLaxMode,
+				SameSite: sameSite,
+				Secure:   secure,
 			})
 			log.Printf("[lang] canvi a %s des de %s", lang, r.RemoteAddr)
 			http.Redirect(w, r, "/", http.StatusSeeOther)

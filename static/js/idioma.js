@@ -30,7 +30,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 const expires = new Date(Date.now() + expiresDays * 24 * 60 * 60 * 1000).toUTCString();
 
                 // Desa cookie d'idioma per coherència immediata
-                document.cookie = `lang=${lang}; path=/; expires=${expires}`;
+                const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+                document.cookie = `lang=${lang}; path=/; expires=${expires}; SameSite=Strict${secure}`;
                 botoSelector.innerHTML = this.textContent + ' <i class="fas fa-chevron-down"></i>';
                 // Deixem que l'enllaç continuï amb la navegació (rutes /cat/, /en/, /oc/)
             });
