@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"log"
 
 	_ "github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
@@ -25,7 +24,7 @@ func (d *MySQL) Connect() error {
 		return fmt.Errorf("error connectant a MySQL: %w", err)
 	}
 	d.Conn = conn
-	log.Println("Conectat a MySQL")
+	logInfof("Conectat a MySQL")
 	return nil
 }
 
@@ -188,7 +187,7 @@ func (d *MySQL) SaveSession(sessionID string, userID int, expiry string) error {
 	stmt := `INSERT INTO sessions (usuari_id, token_hash, creat, revocat) VALUES (?, ?, NOW(), 0) ON DUPLICATE KEY UPDATE revocat = 0, creat = NOW()`
 	_, err := d.Conn.Exec(stmt, userID, sessionID)
 	if err != nil {
-		log.Printf("[MySQL] Error guardant sessió: %v", err)
+		logErrorf("[MySQL] Error guardant sessió: %v", err)
 	}
 	return err
 }

@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"log"
 
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -27,7 +26,7 @@ func (d *PostgreSQL) Connect() error {
 		return fmt.Errorf("error connectant a PostgreSQL: %w", err)
 	}
 	d.Conn = conn
-	log.Println("Conectat a PostgreSQL")
+	logInfof("Conectat a PostgreSQL")
 	return nil
 }
 
@@ -189,7 +188,7 @@ func (d *PostgreSQL) SaveSession(sessionID string, userID int, expiry string) er
 	stmt := `INSERT INTO sessions (usuari_id, token_hash, creat, revocat) VALUES ($1, $2, NOW(), 0) ON CONFLICT (token_hash) DO UPDATE SET revocat = 0, creat = NOW()`
 	_, err := d.Conn.Exec(stmt, userID, sessionID)
 	if err != nil {
-		log.Printf("[PostgreSQL] Error guardant sessió: %v", err)
+		logErrorf("[PostgreSQL] Error guardant sessió: %v", err)
 	}
 	return err
 }

@@ -2,7 +2,6 @@ package core
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -41,11 +40,11 @@ func loadTranslationsOnce() {
 		}
 
 		if loadErr != nil && len(translations) == 0 {
-			log.Printf("No s'han pogut carregar les traduccions: %v", loadErr)
+			Errorf("No s'han pogut carregar les traduccions: %v", loadErr)
 		}
 
 		if translations[defaultLang] == nil {
-			log.Printf("Atenció: no s'ha carregat cap traducció per a l'idioma per defecte (%s)", defaultLang)
+			Errorf("Atenció: no s'ha carregat cap traducció per a l'idioma per defecte (%s)", defaultLang)
 		}
 	})
 }
@@ -73,20 +72,20 @@ func loadTranslationsFromDir(dir string) error {
 		path := filepath.Join(dir, entry.Name())
 		file, err := os.Open(path)
 		if err != nil {
-			log.Printf("No s'ha pogut obrir el fitxer de traducció %s: %v", path, err)
+			Errorf("No s'ha pogut obrir el fitxer de traducció %s: %v", path, err)
 			continue
 		}
 
 		var data map[string]string
 		if err := json.NewDecoder(file).Decode(&data); err != nil {
-			log.Printf("No s'ha pogut parsejar %s: %v", path, err)
+			Errorf("No s'ha pogut parsejar %s: %v", path, err)
 			_ = file.Close()
 			continue
 		}
 		_ = file.Close()
 
 		translations[lang] = data
-		log.Printf("Traduccions carregades per a %s (%d claus)", lang, len(data))
+		Infof("Traduccions carregades per a %s (%d claus)", lang, len(data))
 	}
 
 	return nil

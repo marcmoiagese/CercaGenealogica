@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"log"
 
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
@@ -20,7 +19,7 @@ func (d *SQLite) Connect() error {
 		return fmt.Errorf("error connectant a SQLite: %w", err)
 	}
 	d.Conn = conn
-	log.Println("Conectat a SQLite")
+	logInfof("Conectat a SQLite")
 	return nil
 }
 
@@ -91,7 +90,7 @@ func (d *SQLite) InsertUser(user *User) error {
 		user.Active,
 	)
 	if err != nil {
-		log.Printf("[SQLite] Error a InsertUser: %v", err)
+		logErrorf("[SQLite] Error a InsertUser: %v", err)
 		return err
 	}
 
@@ -190,7 +189,7 @@ func (d *SQLite) SaveSession(sessionID string, userID int, expiry string) error 
 	stmt := `INSERT OR REPLACE INTO sessions (usuari_id, token_hash, creat, revocat) VALUES (?, ?, datetime('now'), 0)`
 	_, err := d.Conn.Exec(stmt, userID, sessionID)
 	if err != nil {
-		log.Printf("[SQLite] Error guardant sessió: %v", err)
+		logErrorf("[SQLite] Error guardant sessió: %v", err)
 	}
 	return err
 }

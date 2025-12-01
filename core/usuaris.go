@@ -3,7 +3,6 @@ package core
 import (
 	"crypto/rand"
 	"fmt"
-	"log"
 	"math/big"
 	"net/http"
 	"net/mail"
@@ -11,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/marcmoiagese/CercaGenealogica/cnf"
 	"github.com/marcmoiagese/CercaGenealogica/db"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -51,20 +49,17 @@ func (u *Usuari) ToDBUser(passwordHash []byte) *db.User {
 	}
 }
 
-func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
+func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	ipStr := getIP(r)
-	log.Printf(" Iniciant registre d'usuari des de: %s", ipStr)
+	Infof("Iniciant registre d'usuari des de: %s", ipStr)
 	lang := ResolveLang(r)
 
-	// Inicialitza la configuració i la base de dades
-	config := cnf.LoadConfig("cnf/config.cfg")
-	dbInstance, err := db.NewDB(config)
-	if err != nil {
-		log.Printf("Error inicialitzant la base de dades: %v", err)
-		http.Error(w, "Error intern del servidor", http.StatusInternalServerError)
+	// Validar CSRF
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		Errorf("Token CSRF invàlid o inexistent en registre")
+		http.Error(w, "Error: accés no autoritzat", http.StatusForbidden)
 		return
 	}
-	defer dbInstance.Close()
 
 	// Captura els camps del formulari
 	r.ParseForm()
@@ -79,21 +74,19 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	acceptaCondicions := r.FormValue("accepta_condicions")
 
 	// Logs per debugar
-	log.Printf("=== DEBUG REGISTRE ===")
-	log.Printf("Nom: '%s'", nom)
-	log.Printf("Cognoms: '%s'", cognoms)
-	log.Printf("Email: '%s'", email)
-	log.Printf("Contrasenya: '%s' (longitud: %d)", password, len(password))
-	log.Printf("Confirmar contrasenya: '%s' (longitud: %d)", confirmPassword, len(confirmPassword))
-	log.Printf("CAPTCHA: '%s'", captcha)
-	log.Printf("CSRF: '%s'", csrf)
-	log.Printf("Usuari: '%s'", usuariForm)
-	log.Printf("Accepta condicions: '%s'", acceptaCondicions)
-	log.Printf("======================")
-
-	log.Printf("Valor rebut per a usuari: %s", usuariForm)
-
-	log.Printf("Dades rebudes: nom=%s, cognoms=%s, email=%s", nom, cognoms, email)
+	Debugf("=== DEBUG REGISTRE ===")
+	Debugf("Nom: '%s'", nom)
+	Debugf("Cognoms: '%s'", cognoms)
+	Debugf("Email: '%s'", email)
+	Debugf("Contrasenya: '[oculta]' (longitud: %d)", len(password))
+	Debugf("Confirmar contrasenya: '[oculta]' (longitud: %d)", len(confirmPassword))
+	Debugf("CAPTCHA: '%s'", captcha)
+	Debugf("CSRF: '%s'", csrf)
+	Debugf("Usuari: '%s'", usuariForm)
+	Debugf("Accepta condicions: '%s'", acceptaCondicions)
+	Debugf("======================")
+	Debugf("Valor rebut per a usuari: %s", usuariForm)
+	Debugf("Dades rebudes: nom=%s, cognoms=%s, email=%s", nom, cognoms, email)
 
 	// Comprova si ja està bloquejat per IP
 	ip := strings.Split(r.RemoteAddr, ":")[0]
@@ -109,15 +102,11 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Valida el token CSRF
-	if csrf == "" || !isValidCSRF(csrf) {
-		log.Printf(" Token CSRF invàlid: %s", csrf)
-		http.Error(w, "Error: accés no autoritzat", http.StatusForbidden)
-		return
-	}
+	// (validat a l'inici amb validateCSRF)
 
 	// Valida que s'acceptin les condicions d'ús
 	if acceptaCondicions != "on" {
-		log.Println("Error: no s'han acceptat les condicions d'ús")
+		Errorf("Error: no s'han acceptat les condicions d'ús")
 		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
 			"Error":     T(lang, "error.accept.terms"),
 			"CSRFToken": "token-segon",
@@ -127,7 +116,7 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 
 	// Valida format de correu electrònic
 	if _, err := mail.ParseAddress(email); err != nil {
-		log.Printf("Error: correu electrònic invàlid: %s", email)
+		Errorf("Error: correu electrònic invàlid: %s", email)
 		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
 			"Error":     T(lang, "error.email.invalid"),
 			"CSRFToken": "token-segon",
@@ -137,7 +126,7 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 
 	// Validacions bàsiques
 	if password != confirmPassword {
-		log.Println("Error: les contrasenyes no coincideixen")
+		Errorf("Error: les contrasenyes no coincideixen")
 		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
 			"Error":     T(lang, "error.password.mismatch"),
 			"CSRFToken": "token-segon",
@@ -145,7 +134,7 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if captcha != "8" {
-		log.Println("Error: CAPTCHA invàlid")
+		Errorf("Error: CAPTCHA invàlid")
 		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
 			"Error":     T(lang, "error.captcha.invalid"),
 			"CSRFToken": "token-segon",
@@ -156,7 +145,7 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	// Genera hash de la contrasenya
 	hash, err := generateHash(password)
 	if err != nil {
-		log.Printf("Error generant hash: %v", err)
+		Errorf("Error generant hash: %v", err)
 		http.Error(w, "Error intern", http.StatusInternalServerError)
 		return
 	}
@@ -173,11 +162,11 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dbUser := user.ToDBUser(hash)
-	log.Printf("Convertint usuari: %+v", dbUser)
+	Debugf("Convertint usuari: %+v", dbUser)
 
-	err = dbInstance.InsertUser(dbUser)
+	err = a.DB.InsertUser(dbUser)
 	if err != nil {
-		log.Printf("ERROR SQL: %v", err)
+		Errorf("ERROR SQL: %v", err)
 		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
 			"Error":     T(lang, "error.user.create"),
 			"CSRFToken": "token-segon",
@@ -185,25 +174,25 @@ func RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf(" IP de la petició: %s", ipStr)
+	Debugf(" IP de la petició: %s", ipStr)
 
-	log.Printf(" Usuari creat correctament: %s", email)
+	Infof("Usuari creat correctament: %s", email)
 
 	// Envia token d'activació
 	token := generateToken(32)
-	log.Printf("Generat token d'activació: %s", token)
-	log.Printf("Intentant guardar token per a %s", email)
-	err = dbInstance.SaveActivationToken(email, token)
+	Debugf("Generat token d'activació: %s", token)
+	Debugf("Intentant guardar token per a %s", email)
+	err = a.DB.SaveActivationToken(email, token)
 	if err != nil {
-		log.Printf("Error guardant token: %v", err)
+		Errorf("Error guardant token: %v", err)
 		http.Error(w, "Error intern", http.StatusInternalServerError)
 		return
 	} else {
-		log.Printf("Token i expira_token guardats correctament per a %s", email)
+		Debugf("Token i expira_token guardats correctament per a %s", email)
 	}
 
-	log.Printf("Token d'activació per a %s: %s", email, token)
-	log.Printf("URL d'activació: http://localhost:8080/activar?token=%s", token)
+	Debugf("Token d'activació per a %s: %s", email, token)
+	Debugf("URL d'activació: http://localhost:8080/activar?token=%s", token)
 
 	// Opcional: envia correu d'activació
 	sendActivationEmail(email, token)
@@ -240,7 +229,7 @@ func hashPassword(p string) ([]byte, error) {
 
 func sendActivationEmail(email, token string) {
 	// Simula l'enviament d'un correu
-	log.Printf("Enviat token a %s: %s", email, token)
+	Debugf("Enviat token a %s: %s", email, token)
 	// Aquí podries cridar a SendGrid, SMTP, etc.
 }
 
@@ -252,21 +241,18 @@ func ParseDate(dateStr string) time.Time {
 	return t
 }
 
-func RegenerarTokenActivacio(w http.ResponseWriter, r *http.Request) {
+func (a *App) RegenerarTokenActivacio(w http.ResponseWriter, r *http.Request) {
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "Error: accés no autoritzat", http.StatusForbidden)
+		return
+	}
 	email := r.URL.Query().Get("email")
 	if email == "" {
 		http.Error(w, "Cal proporcionar el correu electrònic", http.StatusBadRequest)
 		return
 	}
-	config := cnf.LoadConfig("cnf/config.cfg")
-	dbInstance, err := db.NewDB(config)
-	if err != nil {
-		http.Error(w, "Error intern del servidor", http.StatusInternalServerError)
-		return
-	}
-	defer dbInstance.Close()
 
-	usuari, err := dbInstance.GetUserByEmail(email)
+	usuari, err := a.DB.GetUserByEmail(email)
 	if err != nil {
 		http.Error(w, "Usuari no trobat", http.StatusNotFound)
 		return
@@ -276,31 +262,32 @@ func RegenerarTokenActivacio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := generateToken(32)
-	err = dbInstance.SaveActivationToken(email, token)
+	err = a.DB.SaveActivationToken(email, token)
 	if err != nil {
 		http.Error(w, "No s'ha pogut regenerar el token", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("Token d'activació regenerat per a %s: %s", email, token)
-	log.Printf("URL d'activació: http://localhost:8080/activar?token=%s", token)
+	Infof("Token d'activació regenerat per a %s: %s", email, token)
+	Debugf("URL d'activació: http://localhost:8080/activar?token=%s", token)
 	fmt.Fprint(w, "S'ha regenerat el token d'activació. Revisa el teu correu o contacta amb l'administrador.")
 }
 
-func MostrarFormulariRegenerarToken(w http.ResponseWriter, r *http.Request) {
+func (a *App) MostrarFormulariRegenerarToken(w http.ResponseWriter, r *http.Request) {
 	RenderTemplate(w, r, "regenerar-token.html", map[string]interface{}{
 		"CSRFToken": "token-segon",
 	})
 }
 
-func ProcessarRegenerarToken(w http.ResponseWriter, r *http.Request) {
+func (a *App) ProcessarRegenerarToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
-		RegenerarTokenActivacio(w, r)
+		a.RegenerarTokenActivacio(w, r)
 	} else {
 		http.Redirect(w, r, "/regenerar-token", http.StatusSeeOther)
 	}
 }
 
-func ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
+func (a *App) ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
+	// No exigim CSRF aquí perquè és GET via enllaç de correu
 	token := r.URL.Query().Get("token")
 	if token == "" {
 		RenderTemplate(w, r, "activat-user.html", map[string]interface{}{
@@ -309,29 +296,18 @@ func ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	config := cnf.LoadConfig("cnf/config.cfg")
-	dbInstance, err := db.NewDB(config)
-	if err != nil {
-		log.Printf("Error inicialitzant la base de dades: %v", err)
-		RenderTemplate(w, r, "activat-user.html", map[string]interface{}{
-			"Activat":   false,
-			"CSRFToken": "token-segon",
-		})
-		return
-	}
-	defer dbInstance.Close()
 
-	log.Printf("Intentant activar usuari amb token: %s", token)
-	err = dbInstance.ActivateUser(token)
+	Infof("Intentant activar usuari amb token: %s", token)
+	err := a.DB.ActivateUser(token)
 	if err != nil {
-		log.Printf("Error activant usuari: %v", err)
+		Errorf("Error activant usuari: %v", err)
 		RenderTemplate(w, r, "activat-user.html", map[string]interface{}{
 			"Activat":   false,
 			"CSRFToken": "token-segon",
 		})
 		return
 	}
-	log.Printf("Usuari activat correctament amb token: %s", token)
+	Infof("Usuari activat correctament amb token: %s", token)
 	RenderTemplate(w, r, "activat-user.html", map[string]interface{}{
 		"Activat":   true,
 		"CSRFToken": "token-segon",
@@ -339,69 +315,65 @@ func ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // IniciarSessio – Autentica un usuari i crea una sessió
-func IniciarSessio(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[DEBUG] IniciarSessio cridada - Mètode: %s", r.Method)
+func (a *App) IniciarSessio(w http.ResponseWriter, r *http.Request) {
+	Debugf("IniciarSessio cridada - Mètode: %s", r.Method)
 	lang := ResolveLang(r)
 
 	if r.Method != "POST" {
-		log.Printf("[DEBUG] Mètode no permès: %s", r.Method)
+		Debugf("Mètode no permès: %s", r.Method)
 		http.Error(w, "Mètode no permès", http.StatusMethodNotAllowed)
 		return
 	}
 
+	// Validar CSRF
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "Error: accés no autoritzat", http.StatusForbidden)
+		return
+	}
+
 	ipStr := getIP(r)
-	log.Printf("Intent d'inici de sessió des de: %s", ipStr)
+	Infof("Intent d'inici de sessió des de: %s", ipStr)
 
 	// Verificar si l'usuari ja està autenticat
-	if user, authenticated := VerificarSessio(r); authenticated {
-		log.Printf("Usuari %s ja està autenticat, redirigint a /inici", user.Usuari)
+	if user, authenticated := a.VerificarSessio(r); authenticated {
+		Infof("Usuari %s ja està autenticat, redirigint a /inici", user.Usuari)
 		http.Redirect(w, r, "/inici", http.StatusSeeOther)
 		return
 	}
 
-	// Inicialitza la configuració i la base de dades
-	config := cnf.LoadConfig("cnf/config.cfg")
-	dbInstance, err := db.NewDB(config)
-	if err != nil {
-		log.Printf("Error inicialitzant la base de dades: %v", err)
-		http.Error(w, "Error intern del servidor", http.StatusInternalServerError)
-		return
-	}
-	defer dbInstance.Close()
-
 	// Captura els camps del formulari
-	log.Printf("[DEBUG] Parsejant formulari...")
-	log.Printf("[DEBUG] Content-Type: %s", r.Header.Get("Content-Type"))
-	log.Printf("[DEBUG] Content-Length: %s", r.Header.Get("Content-Length"))
+	Debugf("Parsejant formulari...")
+	Debugf("Content-Type: %s", r.Header.Get("Content-Type"))
+	Debugf("Content-Length: %s", r.Header.Get("Content-Length"))
 
 	// Parsejar el formulari primer
 	ct := r.Header.Get("Content-Type")
 	if strings.HasPrefix(ct, "multipart/form-data") {
 		if err := r.ParseMultipartForm(2 << 20); err != nil { // 2MB
-			log.Printf("[DEBUG] Error ParseMultipartForm: %v", err)
+			Debugf("Error ParseMultipartForm: %v", err)
 		}
 	} else {
 		if err := r.ParseForm(); err != nil {
-			log.Printf("[DEBUG] Error ParseForm: %v", err)
+			Debugf("Error ParseForm: %v", err)
 		}
 	}
 
 	// Debug: veure tots els valors del formulari
-	log.Printf("[DEBUG] Tots els valors del formulari:")
+	Debugf("Tots els valors del formulari:")
 	for key, values := range r.Form {
-		log.Printf("  %s: %v", key, values)
+		Debugf("  %s: %v", key, values)
 	}
 
 	// Debug: veure també els valors de PostForm
-	log.Printf("[DEBUG] Tots els valors de PostForm:")
+	Debugf("Tots els valors de PostForm:")
 	for key, values := range r.PostForm {
-		log.Printf("  %s: %v", key, values)
+		Debugf("  %s: %v", key, values)
 	}
 
 	if r.MultipartForm != nil {
-		log.Printf("[DEBUG] Tots els valors de MultipartForm.Value:")
+		Debugf("Tots els valors de MultipartForm.Value:")
 		for key, values := range r.MultipartForm.Value {
-			log.Printf("  %s: %v", key, values)
+			Debugf("  %s: %v", key, values)
 		}
 	}
 
@@ -410,43 +382,40 @@ func IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	captcha := r.FormValue("captcha")
 	mantenirSessio := r.FormValue("mantenir_sessio")
 
-	log.Printf("[DEBUG] Dades del formulari - Usuari: %s, Contrasenya: [%d chars], CAPTCHA: %s",
+	Debugf("Dades del formulari - Usuari: %s, Contrasenya: [%d chars], CAPTCHA: %s",
 		usernameOrEmail, len(password), captcha)
 
 	// Validacions bàsiques
 	if usernameOrEmail == "" || password == "" {
-		log.Printf("[DEBUG] Validació fallida: usuari o contrasenya buits")
+		Debugf("Validació fallida: usuari o contrasenya buits")
 		RenderTemplate(w, r, "index.html", map[string]interface{}{
 			"Error":     T(lang, "error.login.required"),
-			"CSRFToken": "token-segon",
 		})
 		return
 	}
 
 	// Validar CAPTCHA
 	if captcha != "8" {
-		log.Printf("[DEBUG] CAPTCHA invàlid: %s (esperat: 8)", captcha)
+		Debugf("CAPTCHA invàlid: %s (esperat: 8)", captcha)
 		RenderTemplate(w, r, "index.html", map[string]interface{}{
 			"Error":     T(lang, "error.captcha.invalid"),
-			"CSRFToken": "token-segon",
 		})
 		return
 	}
 
-	log.Printf("[DEBUG] Validacions bàsiques passades, procedint a autenticar...")
+	Debugf("Validacions bàsiques passades, procedint a autenticar...")
 
 	// Autenticar usuari
-	user, err := dbInstance.AuthenticateUser(usernameOrEmail, password)
+	user, err := a.DB.AuthenticateUser(usernameOrEmail, password)
 	if err != nil {
-		log.Printf("[DEBUG] Error d'autenticació per a %s: %v", usernameOrEmail, err)
+		Debugf("Error d'autenticació per a %s: %v", usernameOrEmail, err)
 		RenderTemplate(w, r, "index.html", map[string]interface{}{
 			"Error":     T(lang, "error.login.invalid"),
-			"CSRFToken": "token-segon",
 		})
 		return
 	}
 
-	log.Printf("[DEBUG] Autenticació exitosa per a usuari: %s (ID: %d)", user.Usuari, user.ID)
+	Infof("Autenticació exitosa per a usuari: %s (ID: %d)", user.Usuari, user.ID)
 
 	// Crear sessió
 	sessionID := generateToken(32)
@@ -456,17 +425,17 @@ func IniciarSessio(w http.ResponseWriter, r *http.Request) {
 		sessionExpiry = time.Now().Add(7 * 24 * time.Hour) // 1 setmana si marca el checkbox
 	}
 
-	log.Printf("[DEBUG] Creant sessió amb ID: %s", sessionID)
+	Debugf("Creant sessió amb ID: %s", sessionID)
 
 	// Guardar sessió a la base de dades
-	err = dbInstance.SaveSession(sessionID, user.ID, sessionExpiry.Format("2006-01-02 15:04:05"))
+	err = a.DB.SaveSession(sessionID, user.ID, sessionExpiry.Format("2006-01-02 15:04:05"))
 	if err != nil {
-		log.Printf("[DEBUG] Error guardant sessió: %v", err)
+		Errorf("Error guardant sessió: %v", err)
 		http.Error(w, "Error intern del servidor", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[DEBUG] Sessió guardada a la base de dades")
+	Debugf("Sessió guardada a la base de dades")
 
 	// Crear cookie de sessió
 	secure := r.TLS != nil && strings.EqualFold(os.Getenv("ENVIRONMENT"), "production")
@@ -481,51 +450,42 @@ func IniciarSessio(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode, // Lax per no tallar el 303/SeeOther cap a /inici
 	})
 
-	log.Printf("[DEBUG] Cookie de sessió creada (Secure=%v, SameSite=Lax, Expires=%s)", secure, sessionExpiry.Format(time.RFC3339))
+	Debugf("Cookie de sessió creada (Secure=%v, SameSite=Lax, Expires=%s)", secure, sessionExpiry.Format(time.RFC3339))
 
 	// Redirigir a la pàgina privada
-	log.Printf("[DEBUG] Redirigint a /inici")
+	Debugf("Redirigint a /inici")
 	http.Redirect(w, r, "/inici", http.StatusSeeOther)
 }
 
 // VerificarSessio – Comprova si un usuari té una sessió vàlida
-func VerificarSessio(r *http.Request) (*db.User, bool) {
+func (a *App) VerificarSessio(r *http.Request) (*db.User, bool) {
 	cookie, err := r.Cookie("cg_session")
 	if err != nil {
-		log.Printf("[VerificarSessio] No s'ha trobat cookie de sessió: %v", err)
+		Debugf("[VerificarSessio] No s'ha trobat cookie de sessió: %v", err)
 		return nil, false
 	}
 
 	sessionID := cookie.Value
 	if sessionID == "" {
-		log.Printf("[VerificarSessio] Cookie de sessió buida")
+		Debugf("[VerificarSessio] Cookie de sessió buida")
 		return nil, false
 	}
 
-	log.Printf("[VerificarSessio] Verificant sessió: %s", sessionID)
-
-	// Inicialitza la configuració i la base de dades
-	config := cnf.LoadConfig("cnf/config.cfg")
-	dbInstance, err := db.NewDB(config)
-	if err != nil {
-		log.Printf("[VerificarSessio] Error inicialitzant la base de dades: %v", err)
-		return nil, false
-	}
-	defer dbInstance.Close()
+	Debugf("[VerificarSessio] Verificant sessió: %s", sessionID)
 
 	// Buscar l'usuari associat a aquesta sessió
-	user, err := dbInstance.GetSessionUser(sessionID)
+	user, err := a.DB.GetSessionUser(sessionID)
 	if err != nil {
-		log.Printf("[VerificarSessio] Sessió no vàlida o expirada: %v", err)
+		Debugf("[VerificarSessio] Sessió no vàlida o expirada: %v", err)
 		return nil, false
 	}
 
-	log.Printf("[VerificarSessio] Sessió vàlida per a usuari: %s (ID: %d)", user.Usuari, user.ID)
+	Debugf("[VerificarSessio] Sessió vàlida per a usuari: %s (ID: %d)", user.Usuari, user.ID)
 	return user, true
 }
 
 // TancarSessio – elimina la sessió actual (cookie + BD) i redirigeix a l'inici
-func TancarSessio(w http.ResponseWriter, r *http.Request) {
+func (a *App) TancarSessio(w http.ResponseWriter, r *http.Request) {
 	lang := ResolveLang(r)
 
 	cookie, err := r.Cookie("cg_session")
@@ -536,15 +496,8 @@ func TancarSessio(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := cookie.Value
 
-	config := cnf.LoadConfig("cnf/config.cfg")
-	dbInstance, err := db.NewDB(config)
-	if err == nil {
-		defer dbInstance.Close()
-		if err := dbInstance.DeleteSession(sessionID); err != nil {
-			log.Printf("[logout] error eliminant sessió %s: %v", sessionID, err)
-		}
-	} else {
-		log.Printf("[logout] no s'ha pogut inicialitzar la BD: %v", err)
+	if err := a.DB.DeleteSession(sessionID); err != nil {
+		Errorf("[logout] error eliminant sessió %s: %v", sessionID, err)
 	}
 
 	// Esborra la cookie
@@ -560,6 +513,6 @@ func TancarSessio(w http.ResponseWriter, r *http.Request) {
 	// Missatge opcional via querystring o flash; per ara només redirigim
 	redirectTarget := "/"
 	// Si vols redirigir a login amb idioma, podríem fer servir lang
-	log.Printf("[logout] sessió %s tancada, redirigint a %s (lang=%s)", sessionID, redirectTarget, lang)
+	Infof("[logout] sessió %s tancada, redirigint a %s (lang=%s)", sessionID, redirectTarget, lang)
 	http.Redirect(w, r, redirectTarget, http.StatusSeeOther)
 }

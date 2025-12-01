@@ -2,7 +2,6 @@
 package core
 
 import (
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -135,7 +134,7 @@ func BlockIPs(next http.HandlerFunc) http.HandlerFunc {
 		blockedIps := strings.Split(cnf.Config["BLOCKED_IPS"], ",")
 		for _, b := range blockedIps {
 			if ipStr == b {
-				log.Printf("Accés denegat per IP bloquejada: %s", ipStr)
+				Errorf("Accés denegat per IP bloquejada: %s", ipStr)
 				http.Error(w, "Accés denegat", http.StatusForbidden)
 				return
 			}
@@ -162,7 +161,7 @@ func RateLimit(next http.HandlerFunc) http.HandlerFunc {
 
 		if !b.allow(1) {
 			ipStr := getIP(r)
-			log.Printf("Massa peticions (path=%s, key=%s, ip=%s)", path, key, ipStr)
+			Errorf("Massa peticions (path=%s, key=%s, ip=%s)", path, key, ipStr)
 			http.Error(w, "Massa peticions", http.StatusTooManyRequests)
 			return
 		}
@@ -178,7 +177,7 @@ func ServeStatic(w http.ResponseWriter, r *http.Request) {
 
 	// Bloqueja Path Traversal
 	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
-		log.Printf("Intent de path traversal: %s", realPath)
+		Errorf("Intent de path traversal: %s", realPath)
 		http.Error(w, "Accés denegat", http.StatusForbidden)
 		return
 	}
@@ -187,7 +186,7 @@ func ServeStatic(w http.ResponseWriter, r *http.Request) {
 	info, err := os.Stat(realPath)
 	if err == nil && info.IsDir() {
 		ipStr := strings.Split(r.RemoteAddr, ":")[0]
-		log.Printf("Intent de llistar carpeta: %s - IP: %s", realPath, ipStr)
+		Errorf("Intent de llistar carpeta: %s - IP: %s", realPath, ipStr)
 		http.Error(w, "Accés denegat", http.StatusForbidden)
 		return
 	}
@@ -201,7 +200,7 @@ func ServeStatic(w http.ResponseWriter, r *http.Request) {
 	// Verifica si el camí està autoritzat
 	if !allowedFiles[path] {
 		//ipStr := strings.Split(r.RemoteAddr, ":")[0]
-		log.Printf("Fitxer no autoritzat: %s", path)
+		Errorf("Fitxer no autoritzat: %s", path)
 		http.Error(w, "Aquest recurs no es pot servir", http.StatusForbidden)
 		return
 	}
@@ -229,7 +228,7 @@ func ServeStatic(w http.ResponseWriter, r *http.Request) {
 	default:
 		// Deixa que Go dedueixi el Content-Type automàticament per altres tipus
 		if ext != ".html" {
-			log.Printf("Extensió no permesa: %s", ext)
+			Errorf("Extensió no permesa: %s", ext)
 			http.Error(w, "Tipus de fitxer no suportat", http.StatusForbidden)
 			return
 		}
@@ -240,7 +239,7 @@ func ServeStatic(w http.ResponseWriter, r *http.Request) {
 		referer := r.Header.Get("Referer")
 		if referer != "" {
 			if !strings.HasPrefix(referer, "http://localhost") && !strings.HasPrefix(referer, "https://genealogia.cat") {
-				log.Printf("Accés amb referer invàlid: %s - IP: %s", referer, ipStr)
+				Errorf("Accés amb referer invàlid: %s - IP: %s", referer, ipStr)
 				http.Error(w, "Accés denegat", http.StatusForbidden)
 				return
 			}
@@ -291,7 +290,7 @@ func SecureHeaders(next http.HandlerFunc) http.HandlerFunc {
 		userAgent := r.UserAgent()
 		for _, agent := range blockedUserAgents {
 			if strings.Contains(userAgent, agent) {
-				log.Printf("Scraper bloquejat: %s - IP: %s", userAgent, ipStr)
+				Errorf("Scraper bloquejat: %s - IP: %s", userAgent, ipStr)
 				http.Error(w, "Accés denegat", http.StatusForbidden)
 				return
 			}
@@ -300,14 +299,14 @@ func SecureHeaders(next http.HandlerFunc) http.HandlerFunc {
 		// Referer check només per JS/CSS
 		referer := r.Header.Get("Referer")
 		if referer != "" && !strings.HasPrefix(referer, "http://localhost") && !strings.HasPrefix(referer, "https://genealogia.cat ") {
-			log.Printf("Accés amb referer invàlid: %s - IP: %s", referer, ipStr)
+			Errorf("Accés amb referer invàlid: %s - IP: %s", referer, ipStr)
 			http.Error(w, "Accés denegat", http.StatusForbidden)
 			return
 		}
 
 		// Força HTTPS en producció
 		if r.URL.Scheme != "https" && os.Getenv("ENVIRONMENT") != "development" {
-			log.Printf("Redirigint a HTTPS: %s", r.Host+r.URL.Path)
+			Infof("Redirigint a HTTPS: %s", r.Host+r.URL.Path)
 			http.Redirect(w, r, "https://"+r.Host+r.URL.Path, http.StatusMovedPermanently)
 			return
 		}
@@ -317,9 +316,11 @@ func SecureHeaders(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // InitWebServer – Carrega configuració de seguretat i inicia el servidor
-func InitWebServer() {
-	log.Println("Iniciant servidor amb mesures de seguretat...")
-	cnf.LoadConfig("cnf/config.cfg")
+func InitWebServer(cfg map[string]string) {
+	Infof("Iniciant servidor amb mesures de seguretat...")
+	if cfg != nil {
+		cnf.Config = cfg
+	}
 }
 
 func IsBlocked(ip string) bool {
@@ -349,17 +350,17 @@ func ApplyRateLimit(ip string) bool {
 }
 
 func getIP(r *http.Request) string {
-	log.Printf("[getIP] RemoteAddr rebut: %v", r.RemoteAddr)
+	Debugf("[getIP] RemoteAddr rebut: %v", r.RemoteAddr)
 	forwarded := r.Header.Get("X-Forwarded-For")
 	if forwarded != "" {
-		log.Printf("[getIP] X-Forwarded-For: %v", forwarded)
+		Debugf("[getIP] X-Forwarded-For: %v", forwarded)
 		ip := strings.Split(forwarded, ",")[0]
-		log.Printf("[getIP] IP parsejada de X-Forwarded-For: %v", ip)
+		Debugf("[getIP] IP parsejada de X-Forwarded-For: %v", ip)
 		return ip
 	}
 	realIP := r.Header.Get("X-Real-IP")
 	if realIP != "" {
-		log.Printf("[getIP] X-Real-IP: %v", realIP)
+		Debugf("[getIP] X-Real-IP: %v", realIP)
 		return realIP
 	}
 
@@ -379,6 +380,6 @@ func getIP(r *http.Request) string {
 		// IPv4 format: 127.0.0.1:port
 		ip = strings.Split(ipPort, ":")[0]
 	}
-	log.Printf("[getIP] IP parsejada de RemoteAddr: %v", ip)
+	Debugf("[getIP] IP parsejada de RemoteAddr: %v", ip)
 	return ip
 }

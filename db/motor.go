@@ -2,7 +2,6 @@ package db
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 )
@@ -100,7 +99,7 @@ func getSQLFilePath(engine string) string {
 
 // Funció genèrica per executar totes les sentències SQL d'un fitxer
 func CreateDatabaseFromSQL(sqlFile string, db DB) error {
-	log.Printf("Recreant BD des de: %s", sqlFile)
+	logInfof("Recreant BD des de: %s", sqlFile)
 	data, err := os.ReadFile(sqlFile)
 	if err != nil {
 		return fmt.Errorf("no s'ha pogut llegir el fitxer SQL: %w", err)
@@ -165,6 +164,6 @@ func CreateDatabaseFromSQL(sqlFile string, db DB) error {
 		return fmt.Errorf("error fent COMMIT: %w", err)
 	}
 
-	log.Println("BD recreada correctament")
+	logInfof("BD recreada correctament")
 	return nil
 }

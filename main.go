@@ -19,15 +19,27 @@ func applyMiddleware(fn http.HandlerFunc, middlewares ...func(http.HandlerFunc) 
 
 func main() {
 
-	core.InitWebServer()
+	configMap, err := cnf.LoadConfig("cnf/config.cfg")
+	if err != nil {
+		log.Fatalf("No s'ha pogut carregar config: %v", err)
+	}
 
-	config := cnf.LoadConfig("cnf/config.cfg")
+	appCfg, err := cnf.ParseConfig(configMap)
+	if err != nil {
+		log.Fatalf("Config invàlida: %v", err)
+	}
 
-	dbInstance, err := db.NewDB(config)
+	core.SetLogLevel(appCfg.LogLevel)
+	core.LogLoadedTemplates()
+
+	core.InitWebServer(configMap)
+
+	dbInstance, err := db.NewDB(configMap)
 	if err != nil {
 		log.Fatalf("Error inicialitzant BD: %v", err)
 	}
-	defer dbInstance.Close()
+	app := core.NewApp(configMap, dbInstance)
+	defer app.Close()
 
 	// Serveix recursos estàtics amb middleware de seguretat
 	http.HandleFunc("/static/", applyMiddleware(core.ServeStatic, core.BlockIPs, core.RateLimit))
@@ -35,7 +47,7 @@ func main() {
 
 	// Rutes HTML
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if user, authenticated := core.VerificarSessio(r); authenticated {
+		if user, authenticated := app.VerificarSessio(r); authenticated {
 			log.Printf("[auth] usuari %s ja autenticat, redirigint / -> /inici", user.Usuari)
 			http.Redirect(w, r, "/inici", http.StatusSeeOther)
 			return
@@ -47,7 +59,7 @@ func main() {
 
 	http.HandleFunc("/inici", func(w http.ResponseWriter, r *http.Request) {
 		// Verificar si l'usuari té una sessió vàlida
-		user, authenticated := core.VerificarSessio(r)
+		user, authenticated := app.VerificarSessio(r)
 		if !authenticated {
 			// Redirigir a la pàgina principal si no té sessió
 			http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -60,10 +72,10 @@ func main() {
 		})
 	})
 
-	http.HandleFunc("/registre", core.RegistrarUsuari)
+	http.HandleFunc("/registre", app.RegistrarUsuari)
 
-	http.HandleFunc("/login", core.IniciarSessio)
-	http.HandleFunc("/logout", core.TancarSessio)
+	http.HandleFunc("/login", app.IniciarSessio)
+	http.HandleFunc("/logout", app.TancarSessio)
 
 	http.HandleFunc("/condicions-us", func(w http.ResponseWriter, r *http.Request) {
 		core.RenderTemplate(w, r, "condicions-us.html", map[string]interface{}{
@@ -93,13 +105,13 @@ func main() {
 
 	http.HandleFunc("/regenerar-token", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
-			core.MostrarFormulariRegenerarToken(w, r)
+			app.MostrarFormulariRegenerarToken(w, r)
 		} else if r.Method == "POST" {
-			core.ProcessarRegenerarToken(w, r)
+			app.ProcessarRegenerarToken(w, r)
 		}
 	})
 
-	http.HandleFunc("/activar", core.ActivarUsuariHTTP)
+	http.HandleFunc("/activar", app.ActivarUsuariHTTP)
 
 	log.Println("Servidor iniciat a http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))

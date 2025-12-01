@@ -2,18 +2,35 @@ package cnf
 
 import (
 	"bufio"
-	"log"
+	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
 // Config – Variable pública amb les opcions de configuració
 var Config map[string]string
 
-func LoadConfig(path string) map[string]string {
+// AppConfig – Configuració tipada per facilitar l'ús
+type AppConfig struct {
+	DBEngine  string
+	DBPath    string
+	RecreaDB  bool
+	RegisterD bool
+	LogLevel  string
+	Env       string
+	DBHost    string
+	DBUser    string
+	DBPass    string
+	DBPort    string
+	DBName    string
+}
+
+// LoadConfig carrega el fitxer en format clau=valor, ignorant línies buides o comentaris.
+func LoadConfig(path string) (map[string]string, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		log.Fatalf("No s'ha pogut obrir el fitxer de configuració: %v", err)
+		return nil, fmt.Errorf("no s'ha pogut obrir el fitxer de configuració: %w", err)
 	}
 	defer file.Close()
 
@@ -21,7 +38,10 @@ func LoadConfig(path string) map[string]string {
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
-		line := scanner.Text()
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
 		if strings.Contains(line, "=") {
 			parts := strings.SplitN(line, "=", 2)
 			key := strings.TrimSpace(parts[0])
@@ -30,5 +50,50 @@ func LoadConfig(path string) map[string]string {
 		}
 	}
 
-	return config
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error llegint config: %w", err)
+	}
+
+	Config = config
+	return config, nil
+}
+
+// ParseConfig converteix map[string]string en AppConfig amb valors per defecte.
+func ParseConfig(cfg map[string]string) (AppConfig, error) {
+	ac := AppConfig{
+		DBEngine: strings.TrimSpace(cfg["DB_ENGINE"]),
+		DBPath:   cfg["DB_PATH"],
+		LogLevel: strings.TrimSpace(cfg["LOG_LEVEL"]),
+		Env:      strings.TrimSpace(cfg["ENVIRONMENT"]),
+		DBHost:   cfg["DB_HOST"],
+		DBUser:   cfg["DB_USR"],
+		DBPass:   cfg["DB_PASS"],
+		DBPort:   cfg["DB_PORT"],
+		DBName:   cfg["DB_NAME"],
+	}
+
+	if ac.DBEngine == "" {
+		ac.DBEngine = "sqlite"
+	}
+	if ac.DBPath == "" {
+		ac.DBPath = "./database.db"
+	}
+	if ac.LogLevel == "" {
+		ac.LogLevel = "info"
+	}
+	if ac.Env == "" {
+		ac.Env = os.Getenv("ENVIRONMENT")
+		if ac.Env == "" {
+			ac.Env = "development"
+		}
+	}
+
+	if v, ok := cfg["RECREADB"]; ok {
+		ac.RecreaDB, _ = strconv.ParseBool(strings.ToLower(strings.TrimSpace(v)))
+	}
+	if v, ok := cfg["REGISTERD"]; ok {
+		ac.RegisterD, _ = strconv.ParseBool(strings.ToLower(strings.TrimSpace(v)))
+	}
+
+	return ac, nil
 }

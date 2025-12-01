@@ -44,21 +44,37 @@ func init() {
 		log.Fatal("Error afegint layouts:", err)
 	}
 
-	log.Println("Plantilles carregades:")
+	Infof("Plantilles carregades:")
 	for _, t := range Templates.Templates() {
-		log.Printf(" - %q", t.Name())
+		Debugf(" - %q", t.Name())
+	}
+}
+
+// LogLoadedTemplates – permet registrar plantilles carregades quan es canvia el nivell de log
+func LogLoadedTemplates() {
+	if Templates == nil {
+		return
+	}
+	Infof("Plantilles carregades:")
+	for _, t := range Templates.Templates() {
+		Debugf(" - %q", t.Name())
 	}
 }
 
 func RenderTemplate(w http.ResponseWriter, r *http.Request, templateName string, data map[string]interface{}) {
 	lang := ResolveLang(r)
+	csrfToken, _ := ensureCSRF(w, r)
+	if data == nil {
+		data = make(map[string]interface{})
+	}
+	data["CSRFToken"] = csrfToken
 	err := Templates.ExecuteTemplate(w, templateName, &DataContext{
 		UserLoggedIn: false,
 		Lang:         lang,
 		Data:         data,
 	})
 	if err != nil {
-		log.Printf("Error renderitzant plantilla %s: %v", templateName, err)
+		Errorf("Error renderitzant plantilla %s: %v", templateName, err)
 		// No cridem http.Error() aquí per evitar "superfluous response.WriteHeader call"
 		// ja que ExecuteTemplate ja ha escrit al ResponseWriter
 		return
@@ -67,13 +83,17 @@ func RenderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 
 func RenderPrivateTemplate(w http.ResponseWriter, r *http.Request, tmpl string, data interface{}) {
 	lang := ResolveLang(r)
+	csrfToken, _ := ensureCSRF(w, r)
+	if m, ok := data.(map[string]interface{}); ok {
+		m["CSRFToken"] = csrfToken
+	}
 	err := Templates.ExecuteTemplate(w, tmpl, &DataContext{
 		UserLoggedIn: true,
 		Lang:         lang,
 		Data:         data,
 	})
 	if err != nil {
-		log.Printf("Error renderitzant plantilla %s: %v", tmpl, err)
+		Errorf("Error renderitzant plantilla %s: %v", tmpl, err)
 		// No cridem http.Error() aquí per evitar "superfluous response.WriteHeader call"
 		// ja que ExecuteTemplate ja ha escrit al ResponseWriter
 		return
