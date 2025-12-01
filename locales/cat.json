@@ -54,6 +54,8 @@
   "error.password.mismatch": "Les contrasenyes no coincideixen",
   "error.captcha.invalid": "CAPTCHA invàlid",
   "error.email.invalid": "Correu electrònic invàlid",
+  "error.user.exists": "Ja existeix un usuari amb aquest nom",
+  "error.email.exists": "Ja existeix un compte amb aquest correu electrònic",
   "error.user.create": "Error en crear l'usuari. Potser ja existeix un usuari amb aquest nom o correu electrònic.",
   "error.login.required": "Usuari i contrasenya són obligatoris",
   "error.login.invalid": "Usuari o contrasenya incorrectes",

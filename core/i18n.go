@@ -160,5 +160,21 @@ func ResolveLang(r *http.Request) string {
 		}
 	}
 
+	// Fallback: Accept-Language
+	if al := r.Header.Get("Accept-Language"); al != "" {
+		langs := strings.Split(al, ",")
+		for _, l := range langs {
+			parts := strings.SplitN(l, ";", 2)
+			code := strings.TrimSpace(parts[0])
+			if code == "" {
+				continue
+			}
+			norm := normalizeLang(code)
+			if isSupportedLang(norm) {
+				return norm
+			}
+		}
+	}
+
 	return defaultLang
 }

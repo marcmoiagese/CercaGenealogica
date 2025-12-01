@@ -3,7 +3,7 @@ PRAGMA foreign_keys = ON;
 -- Desactivo les claus foranes per pervindre errors durant la creació
 -- PRAGMA foreign_keys = OFF;
 
-CREATE TABLE usuaris (
+CREATE TABLE IF NOT EXISTS usuaris (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL,
     cognoms TEXT NOT NULL,
@@ -22,14 +22,14 @@ CREATE TABLE usuaris (
     actiu BOOLEAN DEFAULT 1
 );
 
-CREATE TABLE grups (
+CREATE TABLE IF NOT EXISTS grups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL UNIQUE,
     descripcio TEXT,
     data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE usuaris_grups (
+CREATE TABLE IF NOT EXISTS usuaris_grups (
     usuari_id INTEGER NOT NULL,
     grup_id INTEGER NOT NULL,
     data_afegit TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -38,7 +38,7 @@ CREATE TABLE usuaris_grups (
     FOREIGN KEY (grup_id) REFERENCES grups(id) ON DELETE CASCADE
 );
 
-CREATE TABLE politiques (
+CREATE TABLE IF NOT EXISTS politiques (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL UNIQUE,
     descripcio TEXT,
@@ -46,7 +46,7 @@ CREATE TABLE politiques (
     data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE usuaris_politiques (
+CREATE TABLE IF NOT EXISTS usuaris_politiques (
     usuari_id INTEGER NOT NULL,
     politica_id INTEGER NOT NULL,
     data_assignacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -55,7 +55,7 @@ CREATE TABLE usuaris_politiques (
     FOREIGN KEY (politica_id) REFERENCES politiques(id) ON DELETE CASCADE
 );
 
-CREATE TABLE grups_politiques (
+CREATE TABLE IF NOT EXISTS grups_politiques (
     grup_id INTEGER NOT NULL,
     politica_id INTEGER NOT NULL,
     data_assignacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -252,6 +252,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   usuari_id    INTEGER NOT NULL,
   token_hash   TEXT    NOT NULL UNIQUE, -- SHA-256 o HMAC-SHA-256 en hex/base64
+  expira       TIMESTAMP, -- data d'expiració (nullable per compatibilitat amb versions anteriors)
   creat        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   revocat      INTEGER NOT NULL DEFAULT 0 CHECK (revocat IN (0,1)),
   FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
@@ -291,10 +292,10 @@ CREATE INDEX IF NOT EXISTS idx_persona_municipi_any ON persona(municipi, any);
 CREATE INDEX IF NOT EXISTS idx_persona_ofici ON persona(ofici);
 -- CREATE INDEX IF NOT EXISTS idx_persona_estat_civil ON persona(estat_civil);
 
-CREATE INDEX idx_usuaris_correu ON usuaris(correu);
-CREATE INDEX idx_usuaris_data_creacio ON usuaris(data_creacio);
-CREATE INDEX idx_grups_nom ON grups(nom);
-CREATE INDEX idx_politiques_nom ON politiques(nom);
+CREATE INDEX IF NOT EXISTS idx_usuaris_correu ON usuaris(correu);
+CREATE INDEX IF NOT EXISTS idx_usuaris_data_creacio ON usuaris(data_creacio);
+CREATE INDEX IF NOT EXISTS idx_grups_nom ON grups(nom);
+CREATE INDEX IF NOT EXISTS idx_politiques_nom ON politiques(nom);
 
 -- Index taula sessions
 CREATE INDEX IF NOT EXISTS idx_sessions_user    ON sessions(usuari_id);

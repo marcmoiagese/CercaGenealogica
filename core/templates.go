@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"reflect"
 )
 
 var Templates *template.Template
@@ -61,13 +62,10 @@ func LogLoadedTemplates() {
 	}
 }
 
-func RenderTemplate(w http.ResponseWriter, r *http.Request, templateName string, data map[string]interface{}) {
+func RenderTemplate(w http.ResponseWriter, r *http.Request, templateName string, data interface{}) {
 	lang := ResolveLang(r)
 	csrfToken, _ := ensureCSRF(w, r)
-	if data == nil {
-		data = make(map[string]interface{})
-	}
-	data["CSRFToken"] = csrfToken
+	data = injectCSRFToken(data, csrfToken)
 	err := Templates.ExecuteTemplate(w, templateName, &DataContext{
 		UserLoggedIn: false,
 		Lang:         lang,
@@ -84,9 +82,7 @@ func RenderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 func RenderPrivateTemplate(w http.ResponseWriter, r *http.Request, tmpl string, data interface{}) {
 	lang := ResolveLang(r)
 	csrfToken, _ := ensureCSRF(w, r)
-	if m, ok := data.(map[string]interface{}); ok {
-		m["CSRFToken"] = csrfToken
-	}
+	data = injectCSRFToken(data, csrfToken)
 	err := Templates.ExecuteTemplate(w, tmpl, &DataContext{
 		UserLoggedIn: true,
 		Lang:         lang,
@@ -98,4 +94,45 @@ func RenderPrivateTemplate(w http.ResponseWriter, r *http.Request, tmpl string, 
 		// ja que ExecuteTemplate ja ha escrit al ResponseWriter
 		return
 	}
+}
+
+// injectCSRFToken insereix CSRFToken i retorna el data (map o struct) amb el token aplicat.
+func injectCSRFToken(data interface{}, token string) interface{} {
+	if data == nil {
+		return map[string]interface{}{"CSRFToken": token}
+	}
+	if m, ok := data.(map[string]interface{}); ok {
+		m["CSRFToken"] = token
+		return m
+	}
+
+	v := reflect.ValueOf(data)
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return map[string]interface{}{"CSRFToken": token}
+		}
+		elem := v.Elem()
+		if elem.Kind() == reflect.Struct {
+			field := elem.FieldByName("CSRFToken")
+			if field.IsValid() && field.CanSet() && field.Kind() == reflect.String {
+				field.SetString(token)
+				return data
+			}
+		}
+	}
+
+	if v.Kind() == reflect.Struct {
+		// crear còpia addressable
+		copyVal := reflect.New(v.Type()).Elem()
+		copyVal.Set(v)
+		field := copyVal.FieldByName("CSRFToken")
+		if field.IsValid() && field.CanSet() && field.Kind() == reflect.String {
+			field.SetString(token)
+			// retorna pointer a la còpia per mantenir addressable
+			ptr := copyVal.Addr().Interface()
+			return ptr
+		}
+	}
+
+	return data
 }

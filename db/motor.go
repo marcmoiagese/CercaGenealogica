@@ -14,6 +14,8 @@ type DB interface {
 	InsertUser(user *User) error
 	SaveActivationToken(email, token string) error
 	GetUserByEmail(email string) (*User, error)
+	ExistsUserByUsername(username string) (bool, error)
+	ExistsUserByEmail(email string) (bool, error)
 	ActivateUser(token string) error
 	AuthenticateUser(usernameOrEmail, password string) (*User, error)
 	SaveSession(sessionID string, userID int, expiry string) error

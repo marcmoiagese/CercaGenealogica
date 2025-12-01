@@ -11,6 +11,7 @@ import (
 type SQLite struct {
 	Path string
 	Conn *sql.DB
+	help sqlHelper
 }
 
 func (d *SQLite) Connect() error {
@@ -19,6 +20,7 @@ func (d *SQLite) Connect() error {
 		return fmt.Errorf("error connectant a SQLite: %w", err)
 	}
 	d.Conn = conn
+	d.help = newSQLHelper(conn, "sqlite", "datetime('now')")
 	logInfof("Conectat a SQLite")
 	return nil
 }
@@ -71,105 +73,35 @@ func (d *SQLite) Exec(query string, args ...interface{}) (int64, error) {
 }
 
 func (d *SQLite) InsertUser(user *User) error {
-	stmt := `INSERT INTO usuaris 
-    (usuari, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, data_creacio, actiu) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`
-
-	res, err := d.Conn.Exec(stmt,
-		user.Usuari,
-		user.Name,
-		user.Surname,
-		user.Email,
-		user.Password,
-		user.DataNaixament,
-		user.Pais,
-		user.Estat,
-		user.Provincia,
-		user.Poblacio,
-		user.CodiPostal,
-		user.Active,
-	)
-	if err != nil {
+	if err := d.help.insertUser(user); err != nil {
 		logErrorf("[SQLite] Error a InsertUser: %v", err)
 		return err
 	}
-
-	id, err := res.LastInsertId()
-	if err != nil {
-		return err
-	}
-	user.ID = int(id)
 	return nil
 }
 
 func (d *SQLite) GetUserByEmail(email string) (*User, error) {
-	row := d.Conn.QueryRow(`
-        SELECT id, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, data_creacio, actiu 
-        FROM usuaris 
-        WHERE correu = ?`, email)
+	return d.help.getUserByEmail(email)
+}
 
-	u := new(User)
-	err := row.Scan(
-		&u.ID,
-		&u.Name,
-		&u.Surname,
-		&u.Email,
-		&u.Password,
-		&u.DataNaixament,
-		&u.Pais,
-		&u.Estat,
-		&u.Provincia,
-		&u.Poblacio,
-		&u.CodiPostal,
-		&u.CreatedAt,
-		&u.Active,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return u, nil
+func (d *SQLite) ExistsUserByUsername(username string) (bool, error) {
+	return d.help.existsUserByUsername(username)
+}
+
+func (d *SQLite) ExistsUserByEmail(email string) (bool, error) {
+	return d.help.existsUserByEmail(email)
 }
 
 func (s *SQLite) SaveActivationToken(email, token string) error {
-	stmt := `UPDATE usuaris SET actiu = 0, token_activacio = ?, expira_token = datetime('now', '+48 hours') WHERE correu = ?`
-	_, err := s.Conn.Exec(stmt, token, email)
-	return err
+	return s.help.saveActivationToken(email, token)
 }
 
 func (d *SQLite) ActivateUser(token string) error {
-	row := d.Conn.QueryRow("SELECT correu FROM usuaris WHERE token_activacio = ? AND expira_token > datetime('now')", token)
-	var email string
-	if err := row.Scan(&email); err != nil {
-		return err
-	}
-	_, err := d.Conn.Exec("UPDATE usuaris SET actiu = 1, token_activacio = NULL, expira_token = NULL WHERE correu = ?", email)
-	return err
+	return d.help.activateUser(token)
 }
 
 func (d *SQLite) AuthenticateUser(usernameOrEmail, password string) (*User, error) {
-	// Buscar usuari per nom d'usuari o correu electrònic
-	row := d.Conn.QueryRow(`
-        SELECT id, usuari, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, data_creacio, actiu 
-        FROM usuaris 
-        WHERE (usuari = ? OR correu = ?) AND actiu = 1`, usernameOrEmail, usernameOrEmail)
-
-	u := new(User)
-	err := row.Scan(
-		&u.ID,
-		&u.Usuari,
-		&u.Name,
-		&u.Surname,
-		&u.Email,
-		&u.Password,
-		&u.DataNaixament,
-		&u.Pais,
-		&u.Estat,
-		&u.Provincia,
-		&u.Poblacio,
-		&u.CodiPostal,
-		&u.CreatedAt,
-		&u.Active,
-	)
+	u, err := d.help.authenticateUser(usernameOrEmail, password)
 	if err != nil {
 		return nil, fmt.Errorf("usuari no trobat o no actiu")
 	}
@@ -184,48 +116,17 @@ func (d *SQLite) AuthenticateUser(usernameOrEmail, password string) (*User, erro
 
 // Gestió de sessions - adaptat a l'estructura existent de la taula sessions
 func (d *SQLite) SaveSession(sessionID string, userID int, expiry string) error {
-	// Per ara, utilitzem la taula existent però sense gestionar l'expiry
-	// ja que l'estructura actual no té aquest camp
-	stmt := `INSERT OR REPLACE INTO sessions (usuari_id, token_hash, creat, revocat) VALUES (?, ?, datetime('now'), 0)`
-	_, err := d.Conn.Exec(stmt, userID, sessionID)
-	if err != nil {
+	if err := d.help.saveSession(sessionID, userID, expiry); err != nil {
 		logErrorf("[SQLite] Error guardant sessió: %v", err)
+		return err
 	}
-	return err
+	return nil
 }
 
 func (d *SQLite) GetSessionUser(sessionID string) (*User, error) {
-	row := d.Conn.QueryRow(`
-        SELECT u.id, u.usuari, u.nom, u.cognoms, u.correu, u.contrasenya, u.data_naixement, u.pais, u.estat, u.provincia, u.poblacio, u.codi_postal, u.data_creacio, u.actiu
-        FROM usuaris u
-        INNER JOIN sessions s ON u.id = s.usuari_id
-        WHERE s.token_hash = ? AND s.revocat = 0`, sessionID)
-
-	u := new(User)
-	err := row.Scan(
-		&u.ID,
-		&u.Usuari,
-		&u.Name,
-		&u.Surname,
-		&u.Email,
-		&u.Password,
-		&u.DataNaixament,
-		&u.Pais,
-		&u.Estat,
-		&u.Provincia,
-		&u.Poblacio,
-		&u.CodiPostal,
-		&u.CreatedAt,
-		&u.Active,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return u, nil
+	return d.help.getSessionUser(sessionID)
 }
 
 func (d *SQLite) DeleteSession(sessionID string) error {
-	// Marcar la sessió com revocada en lloc d'eliminar-la
-	_, err := d.Conn.Exec("UPDATE sessions SET revocat = 1 WHERE token_hash = ?", sessionID)
-	return err
+	return d.help.deleteSession(sessionID)
 }

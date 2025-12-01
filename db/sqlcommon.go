@@ -97,11 +97,12 @@ func (h sqlHelper) getUserByEmail(email string) (*User, error) {
 }
 
 func (h sqlHelper) saveActivationToken(email, token string) error {
-	stmt := formatPlaceholders(h.style, `UPDATE usuaris SET token_activacio = ?, expira_token = datetime('now', '+24 hours') WHERE correu = ?`)
+	// Manté una finestra de 48h com en la implementació original
+	stmt := formatPlaceholders(h.style, `UPDATE usuaris SET token_activacio = ?, expira_token = datetime('now', '+48 hours') WHERE correu = ?`)
 	if h.style == "mysql" || h.style == "postgres" {
-		stmt = formatPlaceholders(h.style, `UPDATE usuaris SET token_activacio = ?, expira_token = NOW() + INTERVAL '24 HOURS' WHERE correu = ?`)
+		stmt = formatPlaceholders(h.style, `UPDATE usuaris SET token_activacio = ?, expira_token = NOW() + INTERVAL '48 HOURS' WHERE correu = ?`)
 		if h.style == "mysql" {
-			stmt = formatPlaceholders(h.style, `UPDATE usuaris SET token_activacio = ?, expira_token = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE correu = ?`)
+			stmt = formatPlaceholders(h.style, `UPDATE usuaris SET token_activacio = ?, expira_token = DATE_ADD(NOW(), INTERVAL 48 HOUR) WHERE correu = ?`)
 		}
 	}
 	_, err := h.db.Exec(stmt, token, email)
@@ -121,8 +122,14 @@ func (h sqlHelper) activateUser(token string) error {
 		nowExpr = "NOW()"
 	}
 	stmt = fmt.Sprintf(stmt, nowExpr)
-	_, err := h.db.Exec(stmt, token)
-	return err
+	res, err := h.db.Exec(stmt, token)
+	if err != nil {
+		return err
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return fmt.Errorf("token invàlid o expirat")
+	}
+	return nil
 }
 
 func (h sqlHelper) authenticateUser(usernameOrEmail, password string) (*User, error) {
@@ -183,4 +190,32 @@ func (h sqlHelper) deleteSession(sessionID string) error {
 	stmt := formatPlaceholders(h.style, `UPDATE sessions SET revocat = 1 WHERE token_hash = ?`)
 	_, err := h.db.Exec(stmt, sessionID)
 	return err
+}
+
+func (h sqlHelper) existsUserByUsername(username string) (bool, error) {
+	query := formatPlaceholders(h.style, `SELECT 1 FROM usuaris WHERE usuari = ? LIMIT 1`)
+	row := h.db.QueryRow(query, username)
+	var tmp int
+	err := row.Scan(&tmp)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (h sqlHelper) existsUserByEmail(email string) (bool, error) {
+	query := formatPlaceholders(h.style, `SELECT 1 FROM usuaris WHERE correu = ? LIMIT 1`)
+	row := h.db.QueryRow(query, email)
+	var tmp int
+	err := row.Scan(&tmp)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }

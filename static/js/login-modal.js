@@ -91,10 +91,89 @@ document.addEventListener('DOMContentLoaded', function () {
 // Validació del formulari de registre
 document.addEventListener('DOMContentLoaded', function() {
     const formRegistre = document.getElementById('formRegistre');
+    const inputUsuari = document.getElementById('registre_usuari');
+    const inputEmail = document.getElementById('registre_email');
+    const statusUsuari = document.getElementById('statusUsuari');
+    const statusEmail = document.getElementById('statusEmail');
+    const errorUsuari = document.getElementById('errorUsuari');
+    const errorEmail = document.getElementById('errorEmail');
+    const csrfTokenInput = document.querySelector('input[name="csrf_token"]');
+
+    async function checkAvailability(field, value) {
+        if (!value) return null;
+        const form = new FormData();
+        form.append(field, value);
+        if (csrfTokenInput) {
+            form.append('csrf_token', csrfTokenInput.value);
+        }
+        try {
+            const resp = await fetch('/api/check-availability', {
+                method: 'POST',
+                body: form,
+                credentials: 'same-origin',
+                headers: {
+                    'X-CSRF-Token': csrfTokenInput ? csrfTokenInput.value : ''
+                }
+            });
+            if (!resp.ok) return null;
+            return await resp.json();
+        } catch (err) {
+            console.warn('No s\'ha pogut validar disponibilitat', err);
+            return null;
+        }
+    }
+
+    function setStatus(elStatus, elError, ok, msg) {
+        if (!elStatus || !elError) return;
+        elStatus.className = 'status-icon';
+        elError.textContent = '';
+        if (ok === true) {
+            elStatus.classList.add('ok');
+            elStatus.textContent = '✔';
+        } else if (ok === false) {
+            elStatus.classList.add('error');
+            elStatus.textContent = '✖';
+            elError.textContent = msg || '';
+        } else {
+            elStatus.textContent = '';
+        }
+    }
+
+    if (inputUsuari) {
+        inputUsuari.addEventListener('blur', async () => {
+            const val = inputUsuari.value.trim();
+            if (!val) {
+                setStatus(statusUsuari, errorUsuari, null);
+                return;
+            }
+            const data = await checkAvailability('username', val);
+            if (data && data.usernameTaken) {
+                setStatus(statusUsuari, errorUsuari, false, 'Usuari no disponible');
+            } else {
+                setStatus(statusUsuari, errorUsuari, true);
+            }
+        });
+    }
+
+    if (inputEmail) {
+        inputEmail.addEventListener('blur', async () => {
+            const val = inputEmail.value.trim();
+            if (!val) {
+                setStatus(statusEmail, errorEmail, null);
+                return;
+            }
+            const data = await checkAvailability('email', val);
+            if (data && data.emailTaken) {
+                setStatus(statusEmail, errorEmail, false, 'Email ja registrat');
+            } else {
+                setStatus(statusEmail, errorEmail, true);
+            }
+        });
+    }
+
     if (formRegistre) {
         formRegistre.addEventListener('submit', function(e) {
             // No prevenir l'enviament per defecte, només validar
-            console.log('Validant formulari de registre...');
             const emailInput = document.getElementById('registre_email');
             
             // Validar que s'acceptin les condicions
@@ -148,19 +227,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // Validar contrasenyes
             const contrasenya = document.getElementById('registre_contrassenya').value;
             const confirmarContrasenya = document.getElementById('registre_confirmar_contrasenya').value;
-            
-            console.log('Contrasenya:', contrasenya);
-            console.log('Confirmar contrasenya:', confirmarContrasenya);
-            console.log('Coincideixen:', contrasenya === confirmarContrasenya);
-            
+
             if (contrasenya !== confirmarContrasenya) {
                 e.preventDefault();
-                console.log('Error: Les contrasenyes no coincideixen');
                 alert('Les contrasenyes no coincideixen');
                 return;
             }
-            
-            console.log('Formulari vàlid, enviant...');
             // El formulari s'enviarà automàticament
         });
         

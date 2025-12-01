@@ -7,7 +7,11 @@
             <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
             <div class="form-grup">
                 <label for="registre_usuari">{{ t .Lang "register.label.username" }}</label>
-                <input type="text" id="registre_usuari" name="usuari" required>
+                <div class="input-with-status">
+                    <input type="text" id="registre_usuari" name="usuari" required>
+                    <span class="status-icon" id="statusUsuari"></span>
+                </div>
+                <div class="input-error" id="errorUsuari"></div>
             </div>
             <div class="form-grup">
                 <label for="registre_nom">{{ t .Lang "register.label.name" }}</label>
@@ -23,7 +27,11 @@
             </div>
             <div class="form-grup">
                 <label for="registre_email">{{ t .Lang "register.label.email" }}</label>
-                <input type="email" id="registre_email" name="email" required>
+                <div class="input-with-status">
+                    <input type="email" id="registre_email" name="email" required>
+                    <span class="status-icon" id="statusEmail"></span>
+                </div>
+                <div class="input-error" id="errorEmail"></div>
             </div>
             <div class="form-grup">
                 <label for="registre_contrassenya">{{ t .Lang "register.label.password" }}</label>

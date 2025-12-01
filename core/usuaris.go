@@ -2,7 +2,7 @@ package core
 
 import (
 	"crypto/rand"
-	"fmt"
+	"encoding/json"
 	"math/big"
 	"net/http"
 	"net/mail"
@@ -29,6 +29,31 @@ type Usuari struct {
 	CodiPostal    string
 	DataCreacio   time.Time
 	Actiu         bool
+}
+
+type IndexPageData struct {
+	CSRFToken string
+	Error     string
+}
+
+type RegistrePageData struct {
+	CSRFToken string
+	Error     string
+}
+
+type RegenerarTokenPageData struct {
+	CSRFToken string
+	Error     string
+}
+
+type ActivacioPageData struct {
+	CSRFToken string
+	Activat   bool
+}
+
+type AvailabilityResponse struct {
+	UsernameTaken bool `json:"usernameTaken"`
+	EmailTaken    bool `json:"emailTaken"`
 }
 
 // ToDBUser – Converteix core.Usuari en db.User
@@ -78,8 +103,8 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	Debugf("Nom: '%s'", nom)
 	Debugf("Cognoms: '%s'", cognoms)
 	Debugf("Email: '%s'", email)
-	Debugf("Contrasenya: '[oculta]' (longitud: %d)", len(password))
-	Debugf("Confirmar contrasenya: '[oculta]' (longitud: %d)", len(confirmPassword))
+	Debugf("Contrasenya: '[oculta]'")
+	Debugf("Confirmar contrasenya: '[oculta]'")
 	Debugf("CAPTCHA: '%s'", captcha)
 	Debugf("CSRF: '%s'", csrf)
 	Debugf("Usuari: '%s'", usuariForm)
@@ -94,9 +119,8 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	// Valida que s'acceptin les condicions d'ús
 	if acceptaCondicions != "on" {
 		Errorf("Error: no s'han acceptat les condicions d'ús")
-		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
-			"Error":     T(lang, "error.accept.terms"),
-			"CSRFToken": "token-segon",
+		RenderTemplate(w, r, "registre-incorrecte.html", RegistrePageData{
+			Error: T(lang, "error.accept.terms"),
 		})
 		return
 	}
@@ -104,9 +128,8 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	// Valida format de correu electrònic
 	if _, err := mail.ParseAddress(email); err != nil {
 		Errorf("Error: correu electrònic invàlid: %s", email)
-		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
-			"Error":     T(lang, "error.email.invalid"),
-			"CSRFToken": "token-segon",
+		RenderTemplate(w, r, "registre-incorrecte.html", RegistrePageData{
+			Error: T(lang, "error.email.invalid"),
 		})
 		return
 	}
@@ -114,17 +137,29 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	// Validacions bàsiques
 	if password != confirmPassword {
 		Errorf("Error: les contrasenyes no coincideixen")
-		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
-			"Error":     T(lang, "error.password.mismatch"),
-			"CSRFToken": "token-segon",
+		RenderTemplate(w, r, "registre-incorrecte.html", RegistrePageData{
+			Error: T(lang, "error.password.mismatch"),
 		})
 		return
 	}
 	if captcha != "8" {
 		Errorf("Error: CAPTCHA invàlid")
-		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
-			"Error":     T(lang, "error.captcha.invalid"),
-			"CSRFToken": "token-segon",
+		RenderTemplate(w, r, "registre-incorrecte.html", RegistrePageData{
+			Error: T(lang, "error.captcha.invalid"),
+		})
+		return
+	}
+
+	// Comprova duplicats
+	if exists, err := a.DB.ExistsUserByUsername(usuariForm); err == nil && exists {
+		RenderTemplate(w, r, "registre-incorrecte.html", RegistrePageData{
+			Error: T(lang, "error.user.exists"),
+		})
+		return
+	}
+	if exists, err := a.DB.ExistsUserByEmail(email); err == nil && exists {
+		RenderTemplate(w, r, "registre-incorrecte.html", RegistrePageData{
+			Error: T(lang, "error.email.exists"),
 		})
 		return
 	}
@@ -154,9 +189,8 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	err = a.DB.InsertUser(dbUser)
 	if err != nil {
 		Errorf("ERROR SQL: %v", err)
-		RenderTemplate(w, r, "registre-incorrecte.html", map[string]interface{}{
-			"Error":     T(lang, "error.user.create"),
-			"CSRFToken": "token-segon",
+		RenderTemplate(w, r, "registre-incorrecte.html", RegistrePageData{
+			Error: T(lang, "error.user.create"),
 		})
 		return
 	}
@@ -185,9 +219,9 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	sendActivationEmail(email, token)
 
 	// Renderitza la pantalla de confirmació
-	RenderTemplate(w, r, "registre-correcte.html", map[string]interface{}{
-		"Email":     email,
-		"CSRFToken": "token-segon",
+	RenderTemplate(w, r, "registre-correcte.html", RegistrePageData{
+		CSRFToken: "",
+		Error:     "",
 	})
 }
 
@@ -218,6 +252,38 @@ func sendActivationEmail(email, token string) {
 	// Simula l'enviament d'un correu
 	Debugf("Enviat token a %s: %s", email, token)
 	// Aquí podries cridar a SendGrid, SMTP, etc.
+}
+
+// redact oculta valors sensibles quan es logueja un formulari
+func redact(values []string, key string) []string {
+	sensitive := map[string]bool{
+		"contrassenya":          true,
+		"confirmar_contrasenya": true,
+		"password":              true,
+		"pwd":                   true,
+	}
+	if sensitive[strings.ToLower(key)] {
+		masked := make([]string, len(values))
+		for i, v := range values {
+			masked[i] = maskValue(v)
+		}
+		return masked
+	}
+	return values
+}
+
+func maskValue(v string) string {
+	if v == "" {
+		return ""
+	}
+	// Longitud aleatòria (6-12) independent de l'original
+	min, max := int64(6), int64(12)
+	nBig, err := rand.Int(rand.Reader, big.NewInt(max-min+1))
+	if err != nil {
+		return "******"
+	}
+	n := min + nBig.Int64()
+	return strings.Repeat("*", int(n))
 }
 
 func ParseDate(dateStr string) time.Time {
@@ -256,13 +322,13 @@ func (a *App) RegenerarTokenActivacio(w http.ResponseWriter, r *http.Request) {
 	}
 	Infof("Token d'activació regenerat per a %s: %s", email, token)
 	Debugf("URL d'activació: http://localhost:8080/activar?token=%s", token)
-	fmt.Fprint(w, "S'ha regenerat el token d'activació. Revisa el teu correu o contacta amb l'administrador.")
+	RenderTemplate(w, r, "regenerar-token.html", RegenerarTokenPageData{
+		Error: "",
+	})
 }
 
 func (a *App) MostrarFormulariRegenerarToken(w http.ResponseWriter, r *http.Request) {
-	RenderTemplate(w, r, "regenerar-token.html", map[string]interface{}{
-		"CSRFToken": "token-segon",
-	})
+	RenderTemplate(w, r, "regenerar-token.html", RegenerarTokenPageData{})
 }
 
 func (a *App) ProcessarRegenerarToken(w http.ResponseWriter, r *http.Request) {
@@ -277,9 +343,8 @@ func (a *App) ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 	// No exigim CSRF aquí perquè és GET via enllaç de correu
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		RenderTemplate(w, r, "activat-user.html", map[string]interface{}{
-			"Activat":   false,
-			"CSRFToken": "token-segon",
+		RenderTemplate(w, r, "activat-user.html", ActivacioPageData{
+			Activat: false,
 		})
 		return
 	}
@@ -288,16 +353,14 @@ func (a *App) ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 	err := a.DB.ActivateUser(token)
 	if err != nil {
 		Errorf("Error activant usuari: %v", err)
-		RenderTemplate(w, r, "activat-user.html", map[string]interface{}{
-			"Activat":   false,
-			"CSRFToken": "token-segon",
+		RenderTemplate(w, r, "activat-user.html", ActivacioPageData{
+			Activat: false,
 		})
 		return
 	}
 	Infof("Usuari activat correctament amb token: %s", token)
-	RenderTemplate(w, r, "activat-user.html", map[string]interface{}{
-		"Activat":   true,
-		"CSRFToken": "token-segon",
+	RenderTemplate(w, r, "activat-user.html", ActivacioPageData{
+		Activat: true,
 	})
 }
 
@@ -348,19 +411,19 @@ func (a *App) IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	// Debug: veure tots els valors del formulari
 	Debugf("Tots els valors del formulari:")
 	for key, values := range r.Form {
-		Debugf("  %s: %v", key, values)
+		Debugf("  %s: %v", key, redact(values, key))
 	}
 
 	// Debug: veure també els valors de PostForm
 	Debugf("Tots els valors de PostForm:")
 	for key, values := range r.PostForm {
-		Debugf("  %s: %v", key, values)
+		Debugf("  %s: %v", key, redact(values, key))
 	}
 
 	if r.MultipartForm != nil {
 		Debugf("Tots els valors de MultipartForm.Value:")
 		for key, values := range r.MultipartForm.Value {
-			Debugf("  %s: %v", key, values)
+			Debugf("  %s: %v", key, redact(values, key))
 		}
 	}
 
@@ -370,13 +433,13 @@ func (a *App) IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	mantenirSessio := r.FormValue("mantenir_sessio")
 
 	Debugf("Dades del formulari - Usuari: %s, Contrasenya: [%d chars], CAPTCHA: %s",
-		usernameOrEmail, len(password), captcha)
+		usernameOrEmail, 0, captcha)
 
 	// Validacions bàsiques
 	if usernameOrEmail == "" || password == "" {
 		Debugf("Validació fallida: usuari o contrasenya buits")
-		RenderTemplate(w, r, "index.html", map[string]interface{}{
-			"Error": T(lang, "error.login.required"),
+		RenderTemplate(w, r, "index.html", IndexPageData{
+			Error: T(lang, "error.login.required"),
 		})
 		return
 	}
@@ -384,8 +447,8 @@ func (a *App) IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	// Validar CAPTCHA
 	if captcha != "8" {
 		Debugf("CAPTCHA invàlid: %s (esperat: 8)", captcha)
-		RenderTemplate(w, r, "index.html", map[string]interface{}{
-			"Error": T(lang, "error.captcha.invalid"),
+		RenderTemplate(w, r, "index.html", IndexPageData{
+			Error: T(lang, "error.captcha.invalid"),
 		})
 		return
 	}
@@ -396,8 +459,8 @@ func (a *App) IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	user, err := a.DB.AuthenticateUser(usernameOrEmail, password)
 	if err != nil {
 		Debugf("Error d'autenticació per a %s: %v", usernameOrEmail, err)
-		RenderTemplate(w, r, "index.html", map[string]interface{}{
-			"Error": T(lang, "error.login.invalid"),
+		RenderTemplate(w, r, "index.html", IndexPageData{
+			Error: T(lang, "error.login.invalid"),
 		})
 		return
 	}
@@ -516,4 +579,35 @@ func (a *App) TancarSessio(w http.ResponseWriter, r *http.Request) {
 	// Si vols redirigir a login amb idioma, podríem fer servir lang
 	Infof("[logout] sessió %s tancada, redirigint a %s (lang=%s)", sessionID, redirectTarget, lang)
 	http.Redirect(w, r, redirectTarget, http.StatusSeeOther)
+}
+
+// CheckAvailability – endpoint AJAX per validar si usuari/correu existeixen.
+func (a *App) CheckAvailability(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Mètode no permès", http.StatusMethodNotAllowed)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) && !validateCSRF(r, r.Header.Get("X-CSRF-Token")) {
+		http.Error(w, "Error: accés no autoritzat", http.StatusForbidden)
+		return
+	}
+
+	username := r.FormValue("username")
+	email := r.FormValue("email")
+
+	resp := AvailabilityResponse{}
+
+	if username != "" {
+		if exists, err := a.DB.ExistsUserByUsername(username); err == nil {
+			resp.UsernameTaken = exists
+		}
+	}
+	if email != "" {
+		if exists, err := a.DB.ExistsUserByEmail(email); err == nil {
+			resp.EmailTaken = exists
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
 }

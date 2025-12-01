@@ -88,6 +88,14 @@ func (m *MySQL) SaveActivationToken(email, token string) error {
 	return m.help.saveActivationToken(email, token)
 }
 
+func (d *MySQL) ExistsUserByUsername(username string) (bool, error) {
+	return d.help.existsUserByUsername(username)
+}
+
+func (d *MySQL) ExistsUserByEmail(email string) (bool, error) {
+	return d.help.existsUserByEmail(email)
+}
+
 func (d *MySQL) ActivateUser(token string) error {
 	return d.help.activateUser(token)
 }

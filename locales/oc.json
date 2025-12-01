@@ -32,6 +32,8 @@
   "error.password.mismatch": "Los senhals correspondon pas",
   "error.captcha.invalid": "CAPTCHA invalid",
   "error.email.invalid": "Correu electronic invalid",
+  "error.user.exists": "Ja existís un utilizaire amb aqueste nom",
+  "error.email.exists": "Ja existís un compte amb aqueste corrièr electronic",
   "error.user.create": "Error al moment de crear l'utilizaire. Pòt ja existir un compte amb aqueste nom o email.",
   "error.login.required": "Nom d'utilizaire e senhal son obligatoris",
   "error.login.invalid": "Nom d'utilizaire o senhal incorrècte",

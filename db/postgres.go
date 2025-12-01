@@ -85,6 +85,14 @@ func (d *PostgreSQL) GetUserByEmail(email string) (*User, error) {
 	return d.help.getUserByEmail(email)
 }
 
+func (d *PostgreSQL) ExistsUserByUsername(username string) (bool, error) {
+	return d.help.existsUserByUsername(username)
+}
+
+func (d *PostgreSQL) ExistsUserByEmail(email string) (bool, error) {
+	return d.help.existsUserByEmail(email)
+}
+
 func (p *PostgreSQL) SaveActivationToken(email, token string) error {
 	return p.help.saveActivationToken(email, token)
 }

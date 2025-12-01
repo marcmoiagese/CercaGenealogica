@@ -32,6 +32,8 @@
   "error.password.mismatch": "Passwords do not match",
   "error.captcha.invalid": "Invalid CAPTCHA",
   "error.email.invalid": "Invalid email address",
+  "error.user.exists": "A user with this username already exists",
+  "error.email.exists": "An account with this email already exists",
   "error.user.create": "Error creating the user. There may already be an account with this username or email.",
   "error.login.required": "Username and password are required",
   "error.login.invalid": "Incorrect username or password",

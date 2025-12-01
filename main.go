@@ -113,6 +113,8 @@ func main() {
 	http.HandleFunc("/en/", handleLang("en"))
 	http.HandleFunc("/oc/", handleLang("oc"))
 
+	http.HandleFunc("/api/check-availability", applyMiddleware(app.CheckAvailability, core.BlockIPs, core.RateLimit))
+
 	http.HandleFunc("/regenerar-token", func(w http.ResponseWriter, r *http.Request) {
 		handler := func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == "GET" {
