@@ -6,27 +6,26 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/core"
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
-// TestActivacioUsuariFluxCorrecte comprova que un usuari amb token
-// d'activació vàlid passa de Active=false a Active=true.
-func TestActivacioUsuariFluxCorrecte(t *testing.T) {
-	// 1. Assegurem-nos que som a l'arrel del projecte
+// newTestAppForActivation crea una BD SQLite temporal, aplica l'esquema
+// (RECREADB=true) i construeix una *core.App perquè els handlers la facin servir.
+func newTestAppForActivation(t *testing.T, dbFileName string) (*core.App, db.DB) {
+	t.Helper()
+
 	projectRoot := findProjectRoot(t)
 	if err := os.Chdir(projectRoot); err != nil {
 		t.Fatalf("no puc fer chdir a l'arrel del projecte (%s): %v", projectRoot, err)
 	}
 
-	// 2. Carreguem plantilles (activat-user.html)
+	// Ens assegurem que les plantilles estan carregades
 	loadTemplatesForTests(t, projectRoot)
 
-	// 3. BD SQLite de test
 	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test_activacio_ok.sqlite3")
+	dbPath := filepath.Join(tmpDir, dbFileName)
 
 	cfg := map[string]string{
 		"DB_ENGINE": "sqlite",
@@ -39,42 +38,44 @@ func TestActivacioUsuariFluxCorrecte(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDB ha fallat: %v", err)
 	}
-	defer dbInstance.Close()
 
 	app := core.NewApp(cfg, dbInstance)
-	defer app.Close()
 
-	// 4. Creem un usuari inactiu directament a BD
+	// Tancarem la BD en acabar el test
+	t.Cleanup(func() {
+		app.Close()
+	})
+
+	return app, dbInstance
+}
+
+// TestActivacioCorrecta comprova que un usuari amb token vàlid
+// passa de Active=false a Active=true després de cridar /activar.
+func TestActivacioCorrecta(t *testing.T) {
+	app, dbInstance := newTestAppForActivation(t, "test_activacio_ok.sqlite3")
+
 	email := "activacio.correcte@example.com"
 	user := &db.User{
 		Usuari:        "activacio_ok",
 		Name:          "Test",
 		Surname:       "Activacio",
 		Email:         email,
-		Password:      []byte("dummy"), // no testegem login aquí
+		Password:      []byte("dummy"),
 		DataNaixament: "1990-01-01",
 		Active:        false,
-		CreatedAt:     time.Now().Format(time.RFC3339),
-		Pais:          "",
-		Estat:         "",
-		Provincia:     "",
-		Poblacio:      "",
-		CodiPostal:    "",
 	}
 
 	if err := dbInstance.InsertUser(user); err != nil {
 		t.Fatalf("InsertUser ha fallat: %v", err)
 	}
 
-	// 5. Assignem un token d'activació a aquest usuari
 	token := "TOKEN_ACTIVACIO_OK"
 	if err := dbInstance.SaveActivationToken(email, token); err != nil {
 		t.Fatalf("SaveActivationToken ha fallat: %v", err)
 	}
 
-	// 6. Fem una petició GET /activar?token=TOKEN_ACTIVACIO_OK
 	req := httptest.NewRequest(http.MethodGet, "/activar?token="+token, nil)
-	req.RemoteAddr = "127.0.0.1:40001"
+	req.RemoteAddr = "127.0.0.1:50001"
 
 	rr := httptest.NewRecorder()
 	app.ActivarUsuariHTTP(rr, req)
@@ -83,11 +84,10 @@ func TestActivacioUsuariFluxCorrecte(t *testing.T) {
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		t.Fatalf("esperava status 200 a l'activació correcta, però tinc %d. Cos:\n%s",
+		t.Fatalf("s'esperava status 200 en activació correcta, però tinc %d. Cos:\n%s",
 			res.StatusCode, rr.Body.String())
 	}
 
-	// 7. Verifiquem a BD que el camp Active ara és true
 	updated, err := dbInstance.GetUserByEmail(email)
 	if err != nil {
 		t.Fatalf("GetUserByEmail ha fallat després d'activació: %v", err)
@@ -100,38 +100,11 @@ func TestActivacioUsuariFluxCorrecte(t *testing.T) {
 	}
 }
 
-// TestActivacioUsuariTokenInvalid comprova que un token invàlid
-// NO activa l’usuari (Active continua sent false).
-func TestActivacioUsuariTokenInvalid(t *testing.T) {
-	// 1. Arrel del projecte i plantilles
-	projectRoot := findProjectRoot(t)
-	if err := os.Chdir(projectRoot); err != nil {
-		t.Fatalf("no puc fer chdir a l'arrel del projecte (%s): %v", projectRoot, err)
-	}
+// TestActivacioTokenInvalid comprova que un token que no existeix
+// NO activa l’usuari.
+func TestActivacioTokenInvalid(t *testing.T) {
+	app, dbInstance := newTestAppForActivation(t, "test_activacio_invalid.sqlite3")
 
-	loadTemplatesForTests(t, projectRoot)
-
-	// 2. BD de test
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test_activacio_invalid.sqlite3")
-
-	cfg := map[string]string{
-		"DB_ENGINE": "sqlite",
-		"DB_PATH":   dbPath,
-		"RECREADB":  "true",
-		"LOG_LEVEL": "silent",
-	}
-
-	dbInstance, err := db.NewDB(cfg)
-	if err != nil {
-		t.Fatalf("NewDB ha fallat: %v", err)
-	}
-	defer dbInstance.Close()
-
-	app := core.NewApp(cfg, dbInstance)
-	defer app.Close()
-
-	// 3. Usuari inactiu a BD
 	email := "activacio.invalid@example.com"
 	user := &db.User{
 		Usuari:        "activacio_invalid",
@@ -141,22 +114,21 @@ func TestActivacioUsuariTokenInvalid(t *testing.T) {
 		Password:      []byte("dummy"),
 		DataNaixament: "1990-01-01",
 		Active:        false,
-		CreatedAt:     time.Now().Format(time.RFC3339),
 	}
 
 	if err := dbInstance.InsertUser(user); err != nil {
 		t.Fatalf("InsertUser ha fallat: %v", err)
 	}
 
-	// 4. (Opcional) assignem un token real diferent
+	// Guardem un token "real" que NO farem servir al request
 	if err := dbInstance.SaveActivationToken(email, "TOKEN_REAL_PERO_NO_L_FAREM_SERVIR"); err != nil {
 		t.Fatalf("SaveActivationToken ha fallat: %v", err)
 	}
 
-	// 5. Cridem l'endpoint amb un token inventat que no existeix a BD
 	invalidToken := "TOKEN_QUE_NO_EXISTEIX"
+
 	req := httptest.NewRequest(http.MethodGet, "/activar?token="+invalidToken, nil)
-	req.RemoteAddr = "127.0.0.1:40002"
+	req.RemoteAddr = "127.0.0.1:50002"
 
 	rr := httptest.NewRecorder()
 	app.ActivarUsuariHTTP(rr, req)
@@ -165,19 +137,77 @@ func TestActivacioUsuariTokenInvalid(t *testing.T) {
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		t.Fatalf("esperava status 200 fins i tot amb token invàlid, però tinc %d. Cos:\n%s",
+		t.Fatalf("s'esperava status 200 fins i tot amb token invàlid, però tinc %d. Cos:\n%s",
 			res.StatusCode, rr.Body.String())
 	}
 
-	// 6. Comprovem que l'usuari CONTINUA inactiu
 	updated, err := dbInstance.GetUserByEmail(email)
 	if err != nil {
-		t.Fatalf("GetUserByEmail ha fallat després d'activació amb token invàlid: %v", err)
+		t.Fatalf("GetUserByEmail ha fallat després d'intent amb token invàlid: %v", err)
 	}
 	if updated == nil {
 		t.Fatalf("no s'ha trobat l'usuari %s després de cridar /activar amb token invàlid", email)
 	}
 	if updated.Active {
 		t.Fatalf("Active hauria de seguir sent false per token invàlid, però és true")
+	}
+}
+
+// TestActivacioTokenExpirat comprova el cas en què el token existeix
+// però expira_token és anterior a datetime('now').
+func TestActivacioTokenExpirat(t *testing.T) {
+	app, dbInstance := newTestAppForActivation(t, "test_activacio_expirat.sqlite3")
+
+	email := "activacio.expirat@example.com"
+	user := &db.User{
+		Usuari:        "activacio_expirat",
+		Name:          "Test",
+		Surname:       "Expirat",
+		Email:         email,
+		Password:      []byte("dummy"),
+		DataNaixament: "1990-01-01",
+		Active:        false,
+	}
+
+	if err := dbInstance.InsertUser(user); err != nil {
+		t.Fatalf("InsertUser ha fallat: %v", err)
+	}
+
+	token := "TOKEN_EXPIRAT"
+	if err := dbInstance.SaveActivationToken(email, token); err != nil {
+		t.Fatalf("SaveActivationToken ha fallat: %v", err)
+	}
+
+	// Forcem expira_token al passat (SQLite)
+	if _, err := dbInstance.Exec(
+		"UPDATE usuaris SET expira_token = datetime('now','-1 hour') WHERE correu = ?",
+		email,
+	); err != nil {
+		t.Fatalf("no puc forçar expira_token al passat: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/activar?token="+token, nil)
+	req.RemoteAddr = "127.0.0.1:50003"
+
+	rr := httptest.NewRecorder()
+	app.ActivarUsuariHTTP(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("s'esperava status 200 fins i tot amb token expirat, però tinc %d. Cos:\n%s",
+			res.StatusCode, rr.Body.String())
+	}
+
+	updated, err := dbInstance.GetUserByEmail(email)
+	if err != nil {
+		t.Fatalf("GetUserByEmail ha fallat després d'intent amb token expirat: %v", err)
+	}
+	if updated == nil {
+		t.Fatalf("no s'ha trobat l'usuari %s després de cridar /activar amb token expirat", email)
+	}
+	if updated.Active {
+		t.Fatalf("Active hauria de seguir sent false per token expirat, però és true")
 	}
 }
