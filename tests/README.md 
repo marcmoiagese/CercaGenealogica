@@ -31,3 +31,15 @@ go test ./... -cover -count=1
 - Si algun test falla:
   - No s'ha de considerar el canvi com a "bo".
   - Cal corregir codi o test fins que la suite torni a passar.
+
+
+## Generar fitxer de cobertura mes detallat
+
+```bash
+go test ./... -covermode=count -coverpkg=./... -coverprofile=coverage.out
+```
+
+## Examinar fitxer de cobertura
+```bash
+go tool cover -func=coverage.out | sort -nr -k3
+```
