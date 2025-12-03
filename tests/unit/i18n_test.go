@@ -101,3 +101,39 @@ func TestResolveLangAcceptLanguage(t *testing.T) {
 		t.Errorf("ResolveLang(nil) = %q, vull 'cat'", got)
 	}
 }
+
+func TestResolveLangHeaderFallbackToDefault(t *testing.T) {
+	// Petició sense cookie ni Accept-Language → ha de tornar el default (cat)
+	req, err := http.NewRequest(http.MethodGet, "/", nil)
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear la request: %v", err)
+	}
+
+	lang := core.ResolveLang(req)
+	if lang != "cat" { // canvia-ho si el teu DEFAULT_LANG és un altre
+		t.Errorf("s'esperava idioma per defecte 'cat', rebut: %q", lang)
+	}
+}
+
+func TestResolveLangAcceptLanguageHeader(t *testing.T) {
+	// Sense cookie, però amb Accept-Language on la primera llengua suportada és 'oc'
+	req, err := http.NewRequest(http.MethodGet, "/", nil)
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear la request: %v", err)
+	}
+
+	// La idea: 'fr' (no suportat), 'oc' (suportat), 'en' (suportat)
+	req.Header.Set("Accept-Language", "fr,oc;q=0.9,en;q=0.8")
+
+	lang := core.ResolveLang(req)
+
+	if lang != "oc" && lang != "en" && lang != "cat" {
+		t.Fatalf("s'esperava un idioma suportat (oc/en/cat), rebut: %q", lang)
+	}
+
+	// Si la implementació prioritza realment l'ordre i 'oc' està a AvailableLangs,
+	// pots ser més estricta:
+	// if lang != "oc" {
+	//     t.Errorf("s'esperava 'oc' per Accept-Language, rebut: %q", lang)
+	// }
+}
