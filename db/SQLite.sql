@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS persona (
     nom_complet TEXT,
     pagina TEXT,
     llibre TEXT,
-    any TEXT,
+    quinta TEXT,
     data_naixement DATE,
     data_bateig DATE,
     data_defuncio DATE,
@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS persona_possibles_duplicats (
     nom_complet TEXT,
     pagina TEXT,
     llibre TEXT,
-    any TEXT
+    quinta TEXT
 );
 
 -- TAULA PAISOS
@@ -280,13 +280,13 @@ CREATE INDEX IF NOT EXISTS idx_tipus_nivell ON nivells_administratius(tipus_nive
 --CREATE INDEX IF NOT EXISTS idx_llibres_municipi ON llibres(municipi_id);
 
 -- Índex compost per millorar la cerca de duplicats i cerques combinades
--- CREATE INDEX idx_persona_cognoms_any_llibre_pagina ON persona(cognom1, cognom2, any, llibre, pagina); -- error executant SQLite.sql: index idx_persona_cognoms_any_llibre_pagina already exists
+-- CREATE INDEX idx_persona_cognoms_any_llibre_pagina ON persona(cognom1, cognom2, quinta, llibre, pagina); -- error executant SQLite.sql: index idx_persona_cognoms_any_llibre_pagina already exists
 
 -- Cerca per cognoms i nom (per coincidències exactes)
 CREATE INDEX IF NOT EXISTS idx_persona_nom_complet ON persona(nom_complet);
 
 -- Útil per cerca de persones per municipi i any (ex: nascuts al mateix lloc i època)
-CREATE INDEX IF NOT EXISTS idx_persona_municipi_any ON persona(municipi, any);
+CREATE INDEX IF NOT EXISTS idx_persona_municipi_quinta ON persona(municipi, quinta);
 
 -- Cercar per ofici o estat civil
 CREATE INDEX IF NOT EXISTS idx_persona_ofici ON persona(ofici);

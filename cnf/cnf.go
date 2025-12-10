@@ -13,17 +13,21 @@ var Config map[string]string
 
 // AppConfig – Configuració tipada per facilitar l'ús
 type AppConfig struct {
-	DBEngine  string
-	DBPath    string
-	RecreaDB  bool
-	RegisterD bool
-	LogLevel  string
-	Env       string
-	DBHost    string
-	DBUser    string
-	DBPass    string
-	DBPort    string
-	DBName    string
+	DBEngine     string
+	DBPath       string
+	RecreaDB     bool
+	RegisterD    bool
+	LogLevel     string
+	Env          string
+	DBHost       string
+	DBUser       string
+	DBPass       string
+	DBPort       string
+	DBName       string
+	MailEnabled  bool
+	MailFrom     string
+	MailSMTPHost string
+	MailSMTPPort string
 }
 
 // LoadConfig carrega el fitxer en format clau=valor, ignorant línies buides o comentaris.
@@ -93,6 +97,24 @@ func ParseConfig(cfg map[string]string) (AppConfig, error) {
 	}
 	if v, ok := cfg["REGISTERD"]; ok {
 		ac.RegisterD, _ = strconv.ParseBool(strings.ToLower(strings.TrimSpace(v)))
+	}
+	if v, ok := cfg["MAIL_ENABLED"]; ok {
+		ac.MailEnabled, _ = strconv.ParseBool(strings.ToLower(strings.TrimSpace(v)))
+	}
+
+	ac.MailFrom = strings.TrimSpace(cfg["MAIL_FROM"])
+	if ac.MailFrom == "" {
+		ac.MailFrom = "no-reply@localhost"
+	}
+
+	ac.MailSMTPHost = strings.TrimSpace(cfg["MAIL_SMTP_HOST"])
+	if ac.MailSMTPHost == "" {
+		ac.MailSMTPHost = "localhost"
+	}
+
+	ac.MailSMTPPort = strings.TrimSpace(cfg["MAIL_SMTP_PORT"])
+	if ac.MailSMTPPort == "" {
+		ac.MailSMTPPort = "25"
 	}
 
 	return ac, nil

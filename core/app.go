@@ -8,12 +8,14 @@ import (
 type App struct {
 	Config map[string]string
 	DB     db.DB
+	Mail   MailConfig
 }
 
 func NewApp(cfg map[string]string, database db.DB) *App {
 	return &App{
 		Config: cfg,
 		DB:     database,
+		Mail:   NewMailConfig(cfg),
 	}
 }
 

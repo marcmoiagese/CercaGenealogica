@@ -119,12 +119,12 @@ func getSessionID(r *http.Request) string {
 	return ""
 }
 
-func applyMiddleware(fn http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
+/*func applyMiddleware(fn http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
 	for _, mw := range middlewares {
 		fn = mw(fn)
 	}
 	return fn
-}
+}*/
 
 // blockIPs – Bloqueja accés per IP o rang d'IPs
 func BlockIPs(next http.HandlerFunc) http.HandlerFunc {

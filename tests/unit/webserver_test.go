@@ -3,6 +3,7 @@ package unit
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -113,7 +114,20 @@ func TestServeStatic_PathTraversalForbidden(t *testing.T) {
 }
 
 func TestServeStatic_AllowedFileOK(t *testing.T) {
-	// Aquest fitxer existeix al repo: static/img/logo.png
+	// Ens assegurem que el fitxer existeix al cwd dels tests (tests/unit)
+	if err := os.MkdirAll("static/img", 0o755); err != nil {
+		t.Fatalf("no puc crear static/img: %v", err)
+	}
+
+	if _, err := os.Stat("static/img/logo.png"); os.IsNotExist(err) {
+		// Contingut dummy, ServeFile no comprova que sigui PNG real
+		if err := os.WriteFile("static/img/logo.png", []byte("fake-png"), 0o644); err != nil {
+			t.Fatalf("no puc crear static/img/logo.png: %v", err)
+		}
+	} else if err != nil {
+		t.Fatalf("error comprovant static/img/logo.png: %v", err)
+	}
+
 	req := httptest.NewRequest(http.MethodGet, "/static/img/logo.png", nil)
 	rr := httptest.NewRecorder()
 
@@ -127,5 +141,41 @@ func TestServeStatic_AllowedFileOK(t *testing.T) {
 	ct := resp.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "image/png") {
 		t.Errorf("esperava Content-Type image/png, tinc %q", ct)
+	}
+}
+
+func TestRateLimit_UsesIPWhenNoSession(t *testing.T) {
+	handler := core.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/alguna-ruta", nil)
+	// Sense cap cookie de sessió → ha d'acabar usant IP
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("esperava 200 amb RateLimit sense sessió, tinc %d", rr.Code)
+	}
+}
+
+func TestRateLimit_UsesSessionWhenAvailable(t *testing.T) {
+	handler := core.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/alguna-ruta", nil)
+	// Afegim cookie de sessió perquè getSessionID no torni buit
+	req.AddCookie(&http.Cookie{
+		Name:  "cg_session",
+		Value: "sessio-de-prova",
+	})
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("esperava 200 amb RateLimit i sessió, tinc %d", rr.Code)
 	}
 }

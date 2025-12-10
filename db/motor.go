@@ -77,7 +77,7 @@ func NewDB(config map[string]string) (DB, error) {
 	// Si cal, recrearem la BD
 	if config["RECREADB"] == "true" {
 		sqlFile := getSQLFilePath(engine)
-		if err := CreateDatabaseFromSQL(sqlFile, dbInstance); err != nil {
+		if err := CreateDatabaseFromSQL(sqlFile, engine, dbInstance); err != nil {
 			return nil, fmt.Errorf("error recreant BD amb %s: %v", engine, err)
 		}
 	}
@@ -100,7 +100,8 @@ func getSQLFilePath(engine string) string {
 }
 
 // Funció genèrica per executar totes les sentències SQL d'un fitxer
-func CreateDatabaseFromSQL(sqlFile string, db DB) error {
+// Funció genèrica per executar totes les sentències SQL d'un fitxer
+func CreateDatabaseFromSQL(sqlFile, engine string, db DB) error {
 	logInfof("Recreant BD des de: %s", sqlFile)
 	data, err := os.ReadFile(sqlFile)
 	if err != nil {
@@ -125,8 +126,18 @@ func CreateDatabaseFromSQL(sqlFile string, db DB) error {
 	// 2) Separa per ';' i neteja espais. (Semicolons al final del statement)
 	parts := strings.Split(cleanSQL, ";")
 
-	// 3) Executa-ho dins d’una única transacció perquè ningú vegi mig esquema
-	if _, err := db.Exec("BEGIN IMMEDIATE"); err != nil {
+	// 3) Escollir com començar la transacció segons el motor
+	beginStmt := "BEGIN"
+	switch engine {
+	case "sqlite":
+		beginStmt = "BEGIN IMMEDIATE"
+	case "postgres", "mysql":
+		beginStmt = "BEGIN"
+	default:
+		beginStmt = "BEGIN"
+	}
+
+	if _, err := db.Exec(beginStmt); err != nil {
 		return fmt.Errorf("no s’ha pogut començar transacció: %w", err)
 	}
 	defer func() {
@@ -134,9 +145,11 @@ func CreateDatabaseFromSQL(sqlFile string, db DB) error {
 		_, _ = db.Exec("ROLLBACK")
 	}()
 
-	// 4) Activa FKs (per si el fitxer no ho fa)
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		return fmt.Errorf("error activant foreign_keys: %w", err)
+	// 4) Activar FKs només per SQLite (PRAGMA és específic de SQLite)
+	if engine == "sqlite" {
+		if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+			return fmt.Errorf("error activant foreign_keys: %w", err)
+		}
 	}
 
 	// 5) Executa cada statement

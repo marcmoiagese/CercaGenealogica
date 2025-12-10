@@ -3,6 +3,7 @@ package core
 import (
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"net/http"
 	"net/mail"
@@ -216,7 +217,7 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	Debugf("URL d'activació: http://localhost:8080/activar?token=%s", token)
 
 	// Opcional: envia correu d'activació
-	sendActivationEmail(email, token)
+	a.sendActivationEmail(email, token)
 
 	// Renderitza la pantalla de confirmació
 	RenderTemplate(w, r, "registre-correcte.html", RegistrePageData{
@@ -225,10 +226,10 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func isValidCSRF(token string) bool {
-	// Aquí pots fer servir un sistema real de tokens temporals
-	return token == "token-segon"
-}
+//func isValidCSRF(token string) bool {
+// Aquí pots fer servir un sistema real de tokens temporals
+//return token == "token-segon"
+//}
 
 func generateHash(password string) ([]byte, error) {
 	return bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -244,14 +245,26 @@ func generateToken(length int) string {
 	return string(result)
 }
 
-func hashPassword(p string) ([]byte, error) {
+/*func hashPassword(p string) ([]byte, error) {
 	return bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
-}
+}*/
 
-func sendActivationEmail(email, token string) {
-	// Simula l'enviament d'un correu
-	Debugf("Enviat token a %s: %s", email, token)
-	// Aquí podries cridar a SendGrid, SMTP, etc.
+func (a *App) sendActivationEmail(email, token string) {
+	if !a.Mail.Enabled {
+		Infof("MAIL_ENABLED està desactivat; no s'enviarà correu d'activació a %s", email)
+		return
+	}
+
+	activationURL := fmt.Sprintf("http://localhost:8080/activar?token=%s", token)
+	subject := "Activa el teu compte"
+	body := fmt.Sprintf("Hola,\n\nPer activar el teu compte, fes clic a l'enllaç següent:\n%s\n\nSi no has sol·licitat el registre, pots ignorar aquest missatge.\n", activationURL)
+
+	if err := a.Mail.Send(email, subject, body); err != nil {
+		Errorf("No s'ha pogut enviar el correu d'activació a %s: %v", email, err)
+		return
+	}
+
+	Infof("Correu d'activació enviat a %s", email)
 }
 
 // redact oculta valors sensibles quan es logueja un formulari
