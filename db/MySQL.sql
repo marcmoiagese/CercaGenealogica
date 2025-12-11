@@ -298,6 +298,19 @@ CREATE TABLE IF NOT EXISTS session_access_log (
   INDEX idx_access_ip_ts (ip, ts DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS password_resets (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  usuari_id  INT UNSIGNED NOT NULL,
+  token      VARCHAR(128) NOT NULL UNIQUE,
+  expira     DATETIME NOT NULL,
+  lang       VARCHAR(10),
+  used       BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  INDEX idx_password_resets_token (token),
+  INDEX idx_password_resets_expira (expira)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Índexs de la taula 'persona' (Els índexs ja s'han definit dins del CREATE TABLE per claredat en MySQL)
 ------------------------------------------------------------------------------------------------------------------------
 

@@ -128,3 +128,19 @@ func (d *PostgreSQL) GetSessionUser(sessionID string) (*User, error) {
 func (d *PostgreSQL) DeleteSession(sessionID string) error {
 	return d.help.deleteSession(sessionID)
 }
+
+func (d *PostgreSQL) CreatePasswordReset(email, token, expiry, lang string) (bool, error) {
+	return d.help.createPasswordReset(email, token, expiry, lang)
+}
+
+func (d *PostgreSQL) GetPasswordReset(token string) (*PasswordReset, error) {
+	return d.help.getPasswordReset(token)
+}
+
+func (d *PostgreSQL) MarkPasswordResetUsed(id int) error {
+	return d.help.markPasswordResetUsed(id)
+}
+
+func (d *PostgreSQL) UpdateUserPassword(userID int, passwordHash []byte) error {
+	return d.help.updateUserPassword(userID, passwordHash)
+}

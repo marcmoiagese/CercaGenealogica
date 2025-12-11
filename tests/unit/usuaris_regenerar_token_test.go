@@ -246,6 +246,14 @@ func (f *fakeDB) GetSessionUser(sessionID string) (*db.User, error) {
 	return nil, fmt.Errorf("not found")
 }
 func (f *fakeDB) DeleteSession(sessionID string) error { return nil }
+func (f *fakeDB) CreatePasswordReset(email, token, expiry, lang string) (bool, error) {
+	return false, nil
+}
+func (f *fakeDB) GetPasswordReset(token string) (*db.PasswordReset, error) { return nil, fmt.Errorf("not implemented") }
+func (f *fakeDB) MarkPasswordResetUsed(id int) error                      { return nil }
+func (f *fakeDB) UpdateUserPassword(userID int, passwordHash []byte) error {
+	return nil
+}
 
 // Helper per crear una App amb fakeDB
 func newFakeAppWithUsers(users map[string]*db.User) *core.App {

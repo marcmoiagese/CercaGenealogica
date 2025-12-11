@@ -76,6 +76,53 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    // Solicitud de recuperació de contrasenya
+    const formRecuperar = document.getElementById('formRecuperar');
+    const recoverMessage = document.getElementById('recoverMessage');
+    if (formRecuperar) {
+        formRecuperar.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const csrfInput = formRecuperar.querySelector('input[name="csrf_token"]') || document.querySelector('input[name="csrf_token"]');
+            const formData = new FormData(formRecuperar);
+            if (csrfInput) {
+                formData.set('csrf_token', csrfInput.value);
+            }
+
+            const defaultSuccess = formRecuperar.dataset.success || '';
+            const defaultError = formRecuperar.dataset.error || defaultSuccess;
+
+            try {
+                const resp = await fetch(formRecuperar.action || '/recuperar', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: Object.assign(
+                        { 'Accept': 'application/json' },
+                        csrfInput ? { 'X-CSRF-Token': csrfInput.value } : {}
+                    )
+                });
+                let data = {};
+                try {
+                    data = await resp.json();
+                } catch (err) {
+                    data = {};
+                }
+                const msg = data.message || data.error || (resp.ok ? defaultSuccess : defaultError);
+                if (recoverMessage) {
+                    recoverMessage.textContent = msg || '';
+                    recoverMessage.className = resp.ok ? 'alert alert-success' : 'alert alert-error';
+                    recoverMessage.style.display = 'block';
+                }
+            } catch (err) {
+                if (recoverMessage) {
+                    recoverMessage.textContent = defaultError || 'Error';
+                    recoverMessage.className = 'alert alert-error';
+                    recoverMessage.style.display = 'block';
+                }
+            }
+        });
+    }
+
     // Tanca modals fent clic fora
     window.addEventListener('click', function (event) {
         if (event.target === modalLogin) {

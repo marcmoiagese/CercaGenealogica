@@ -267,6 +267,18 @@ CREATE TABLE IF NOT EXISTS session_access_log (
   FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
+-- Recuperació de contrasenya
+CREATE TABLE IF NOT EXISTS password_resets (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  usuari_id  INTEGER NOT NULL,
+  token      TEXT    NOT NULL UNIQUE,
+  expira     DATETIME NOT NULL,
+  lang       TEXT,
+  used       INTEGER NOT NULL DEFAULT 0 CHECK (used IN (0,1)),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
+);
+
 -- Index per accelerar busquedes
 
 -- Per buscar ràpidament pel codi postal
@@ -304,6 +316,10 @@ CREATE INDEX IF NOT EXISTS idx_sessions_revocat ON sessions(revocat);
 -- Index taula sessions_access_log
 CREATE INDEX IF NOT EXISTS idx_access_session_ts ON session_access_log(session_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_access_ip_ts      ON session_access_log(ip, ts DESC);
+
+-- Index taula password_resets
+CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token);
+CREATE INDEX IF NOT EXISTS idx_password_resets_expira ON password_resets(expira);
 
 -- Reactivo les claus foranes per pervindre errors durant la creació
 -- PRAGMA foreign_keys = ON;

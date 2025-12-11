@@ -125,36 +125,80 @@ func findProjectRoot(t *testing.T) string {
 	}
 }
 
-// readKeyValueFile llegeix un fitxer tipus KEY=VALUE línia a línia i
-// retorna un mapa amb totes les claus/valors. Les línies buides o que
-// comencen per # o ; s'ignoren.
+// readKeyValueFile llegeix un fitxer simple de K=V, però també
+// entén seccions [sqlite], [postgres], [mysql] i prefixa les claus
+// amb el nom de la secció en majúscules.
+//
+// Exemple:
+//
+//	[postgres]
+//	DB_HOST=devstack.marc.cat
+//	DB_PORT=5432
+//
+// es converteix en:
+//
+//	POSTGRES_DB_HOST -> "devstack.marc.cat"
+//	POSTGRES_DB_PORT -> "5432"
 func readKeyValueFile(t *testing.T, path string) map[string]string {
 	t.Helper()
 
 	f, err := os.Open(path)
 	if err != nil {
-		t.Fatalf("no s'ha pogut obrir fitxer de config %s: %v", path, err)
+		t.Fatalf("no puc obrir fitxer de config de tests %q: %v", path, err)
 	}
 	defer f.Close()
 
 	out := make(map[string]string)
+	scanner := bufio.NewScanner(f)
 
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
+	currentSection := "" // ex: "SQLITE", "POSTGRES", "MYSQL"
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
 			continue
 		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
+
+		// Detecta seccions tipus [sqlite], [postgres], [mysql]
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			sec := strings.TrimSpace(line[1 : len(line)-1])
+			currentSection = strings.ToUpper(sec)
 			continue
 		}
+
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			// línia escombraria o format inesperat
+			continue
+		}
+
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
-		out[key] = val
+
+		// Normalitzem la clau a MAJÚSCULES
+		keyUpper := strings.ToUpper(key)
+
+		// Si estem dins d'una secció, prefixem (si cal)
+		//
+		// Ex:
+		//   [postgres] + DB_HOST -> POSTGRES_DB_HOST
+		//   [sqlite]   + DB_PATH -> SQLITE_DB_PATH
+		//
+		// Però si algú ja posa POSTGRES_DB_HOST dins la secció,
+		// no volem POSTGRES_POSTGRES_DB_HOST, així que controlem
+		// el prefix.
+		if currentSection != "" {
+			prefix := currentSection + "_"
+			if !strings.HasPrefix(keyUpper, prefix) {
+				keyUpper = prefix + keyUpper
+			}
+		}
+
+		out[keyUpper] = val
 	}
-	if err := sc.Err(); err != nil {
-		t.Fatalf("error llegint fitxer de config %s: %v", path, err)
+
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("error llegint fitxer de config de tests %q: %v", path, err)
 	}
 
 	return out

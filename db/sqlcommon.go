@@ -192,6 +192,61 @@ func (h sqlHelper) deleteSession(sessionID string) error {
 	return err
 }
 
+func (h sqlHelper) createPasswordReset(email, token, expiry, lang string) (bool, error) {
+	// Comprova si l'usuari existeix
+	var userID int
+	q := formatPlaceholders(h.style, `SELECT id FROM usuaris WHERE correu = ?`)
+	err := h.db.QueryRow(q, email).Scan(&userID)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	stmt := formatPlaceholders(h.style, `
+        INSERT INTO password_resets (usuari_id, token, expira, lang, used)
+        VALUES (?, ?, ?, ?, 0)`)
+	_, err = h.db.Exec(stmt, userID, token, expiry, lang)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (h sqlHelper) getPasswordReset(token string) (*PasswordReset, error) {
+	nowExpr := "datetime('now')"
+	if h.style == "mysql" || h.style == "postgres" {
+		nowExpr = "NOW()"
+	}
+
+	stmt := formatPlaceholders(h.style, `
+        SELECT pr.id, pr.usuari_id, pr.lang, u.correu
+        FROM password_resets pr
+        INNER JOIN usuaris u ON u.id = pr.usuari_id
+        WHERE pr.token = ? AND pr.used = 0 AND pr.expira > `+nowExpr+``)
+
+	row := h.db.QueryRow(stmt, token)
+	var pr PasswordReset
+	err := row.Scan(&pr.ID, &pr.UserID, &pr.Lang, &pr.Email)
+	if err != nil {
+		return nil, err
+	}
+	return &pr, nil
+}
+
+func (h sqlHelper) markPasswordResetUsed(id int) error {
+	stmt := formatPlaceholders(h.style, `UPDATE password_resets SET used = 1 WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
+	return err
+}
+
+func (h sqlHelper) updateUserPassword(userID int, passwordHash []byte) error {
+	stmt := formatPlaceholders(h.style, `UPDATE usuaris SET contrasenya = ? WHERE id = ?`)
+	_, err := h.db.Exec(stmt, passwordHash, userID)
+	return err
+}
+
 func (h sqlHelper) existsUserByUsername(username string) (bool, error) {
 	query := formatPlaceholders(h.style, `SELECT 1 FROM usuaris WHERE usuari = ? LIMIT 1`)
 	row := h.db.QueryRow(query, username)

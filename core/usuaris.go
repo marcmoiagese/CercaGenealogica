@@ -45,6 +45,13 @@ type RegistrePageData struct {
 type RegenerarTokenPageData struct {
 	CSRFToken string
 	Error     string
+	Success   string
+}
+
+type RecuperarResultPageData struct {
+	CSRFToken string
+	Error     string
+	Success   string
 }
 
 type ActivacioPageData struct {
@@ -217,7 +224,7 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	Debugf("URL d'activació: http://localhost:8080/activar?token=%s", token)
 
 	// Opcional: envia correu d'activació
-	a.sendActivationEmail(email, token)
+	a.sendActivationEmail(email, token, lang, "email.activation")
 
 	// Renderitza la pantalla de confirmació
 	RenderTemplate(w, r, "registre-correcte.html", RegistrePageData{
@@ -249,15 +256,15 @@ func generateToken(length int) string {
 	return bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
 }*/
 
-func (a *App) sendActivationEmail(email, token string) {
+func (a *App) sendActivationEmail(email, token, lang, keyPrefix string) {
 	if !a.Mail.Enabled {
 		Infof("MAIL_ENABLED està desactivat; no s'enviarà correu d'activació a %s", email)
 		return
 	}
 
 	activationURL := fmt.Sprintf("http://localhost:8080/activar?token=%s", token)
-	subject := "Activa el teu compte"
-	body := fmt.Sprintf("Hola,\n\nPer activar el teu compte, fes clic a l'enllaç següent:\n%s\n\nSi no has sol·licitat el registre, pots ignorar aquest missatge.\n", activationURL)
+	subject := T(lang, keyPrefix+".subject")
+	body := fmt.Sprintf(T(lang, keyPrefix+".body"), activationURL)
 
 	if err := a.Mail.Send(email, subject, body); err != nil {
 		Errorf("No s'ha pogut enviar el correu d'activació a %s: %v", email, err)
@@ -265,6 +272,112 @@ func (a *App) sendActivationEmail(email, token string) {
 	}
 
 	Infof("Correu d'activació enviat a %s", email)
+}
+
+func (a *App) sendPasswordResetEmail(email, url, lang string) {
+	if !a.Mail.Enabled {
+		Infof("MAIL_ENABLED està desactivat; no s'enviarà correu de recuperació a %s", email)
+		return
+	}
+	subject := T(lang, "email.reset.subject")
+	body := fmt.Sprintf(T(lang, "email.reset.body"), url)
+	if err := a.Mail.Send(email, subject, body); err != nil {
+		Errorf("No s'ha pogut enviar el correu de recuperació a %s: %v", email, err)
+		return
+	}
+	Infof("Correu de recuperació enviat a %s", email)
+}
+
+func (a *App) sendPasswordResetCompletedEmail(email, password, lang string) {
+	if !a.Mail.Enabled {
+		Infof("MAIL_ENABLED està desactivat; no s'enviarà correu amb la nova contrasenya a %s", email)
+		return
+	}
+	subject := T(lang, "email.reset.complete.subject")
+	body := fmt.Sprintf(T(lang, "email.reset.complete.body"), password)
+	if err := a.Mail.Send(email, subject, body); err != nil {
+		Errorf("No s'ha pogut enviar el correu amb la nova contrasenya a %s: %v", email, err)
+		return
+	}
+	Infof("Correu amb nova contrasenya enviat a %s", email)
+}
+
+func generateSecurePassword(length int) string {
+	lower := "abcdefghijklmnopqrstuvwxyz"
+	upper := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	digits := "0123456789"
+	symbols := "!@#$%^&*()-_=+[]{}<>?"
+	all := lower + upper + digits + symbols
+
+	result := make([]byte, length)
+
+	// Garantir almenys un caràcter de cada grup principal
+	classes := []string{lower, upper, digits, symbols}
+	for i := 0; i < 4 && i < length; i++ {
+		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(classes[i]))))
+		result[i] = classes[i][num.Int64()]
+	}
+
+	for i := 4; i < length; i++ {
+		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(all))))
+		result[i] = all[num.Int64()]
+	}
+
+	// barreja aleatòriament
+	for i := len(result) - 1; i > 0; i-- {
+		jBig, _ := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		j := int(jBig.Int64())
+		result[i], result[j] = result[j], result[i]
+	}
+
+	return string(result)
+}
+
+func writeJSONMessage(w http.ResponseWriter, ok bool, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	resp := map[string]string{
+		"message": msg,
+	}
+	if !ok {
+		resp["error"] = msg
+	}
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func wantsJSON(r *http.Request) bool {
+	accept := r.Header.Get("Accept")
+	xrw := strings.ToLower(r.Header.Get("X-Requested-With"))
+	ct := r.Header.Get("Content-Type")
+	if strings.Contains(accept, "application/json") || strings.Contains(ct, "application/json") {
+		return true
+	}
+	if xrw == "xmlhttprequest" {
+		return true
+	}
+	return false
+}
+
+func writeRecoverResponse(w http.ResponseWriter, r *http.Request, lang string, status int, ok bool, msg string) {
+	if wantsJSON(r) {
+		w.WriteHeader(status)
+		writeJSONMessage(w, ok, msg)
+		return
+	}
+
+	if status >= 400 {
+		w.WriteHeader(status)
+	}
+	RenderTemplate(w, r, "recover-result.html", RecuperarResultPageData{
+		Error:   ifThen(!ok && status >= 400, msg, ""),
+		Success: ifThen(ok, msg, ""),
+	})
+}
+
+func ifThen(cond bool, a, b string) string {
+	if cond {
+		return a
+	}
+	return b
 }
 
 // redact oculta valors sensibles quan es logueja un formulari
@@ -309,34 +422,55 @@ func ParseDate(dateStr string) time.Time {
 
 func (a *App) RegenerarTokenActivacio(w http.ResponseWriter, r *http.Request) {
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Error(w, "Error: accés no autoritzat", http.StatusForbidden)
+		lang := ResolveLang(r)
+		w.WriteHeader(http.StatusForbidden)
+		RenderTemplate(w, r, "regenerar-token.html", RegenerarTokenPageData{
+			Error: T(lang, "error.csrf"),
+		})
 		return
 	}
-	email := r.URL.Query().Get("email")
+	lang := ResolveLang(r)
+	email := strings.TrimSpace(r.FormValue("email"))
 	if email == "" {
-		http.Error(w, "Cal proporcionar el correu electrònic", http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		RenderTemplate(w, r, "regenerar-token.html", RegenerarTokenPageData{
+			Error: T(lang, "regenerate.error.emailRequired"),
+		})
 		return
 	}
 
 	usuari, err := a.DB.GetUserByEmail(email)
 	if err != nil {
-		http.Error(w, "Usuari no trobat", http.StatusNotFound)
+		w.WriteHeader(http.StatusNotFound)
+		RenderTemplate(w, r, "regenerar-token.html", RegenerarTokenPageData{
+			Error: T(lang, "regenerate.error.notFound"),
+		})
 		return
 	}
 	if usuari.Active {
-		http.Error(w, "El compte ja està activat", http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		RenderTemplate(w, r, "regenerar-token.html", RegenerarTokenPageData{
+			Error: T(lang, "regenerate.error.alreadyActive"),
+		})
 		return
 	}
 	token := generateToken(32)
 	err = a.DB.SaveActivationToken(email, token)
 	if err != nil {
-		http.Error(w, "No s'ha pogut regenerar el token", http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		RenderTemplate(w, r, "regenerar-token.html", RegenerarTokenPageData{
+			Error: T(lang, "regenerate.error.save"),
+		})
 		return
 	}
 	Infof("Token d'activació regenerat per a %s: %s", email, token)
 	Debugf("URL d'activació: http://localhost:8080/activar?token=%s", token)
+
+	// Envia nou correu d'activació amb la mateixa lògica de localització
+	a.sendActivationEmail(email, token, lang, "email.activation.regen")
+
 	RenderTemplate(w, r, "regenerar-token.html", RegenerarTokenPageData{
-		Error: "",
+		Success: T(lang, "regenerate.success"),
 	})
 }
 
@@ -352,6 +486,127 @@ func (a *App) ProcessarRegenerarToken(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GestionarRecuperacio gestiona POST de sol·licitud i GET del token de recuperació
+func (a *App) GestionarRecuperacio(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		a.SolicitarRecuperarContrasenya(w, r)
+		return
+	}
+	if r.Method == "GET" && r.URL.Query().Get("token") != "" {
+		a.ValidarRecuperarContrasenya(w, r)
+		return
+	}
+	http.Error(w, "Mètode no permès", http.StatusMethodNotAllowed)
+}
+
+// SolicitarRecuperarContrasenya processa la petició de recuperació.
+func (a *App) SolicitarRecuperarContrasenya(w http.ResponseWriter, r *http.Request) {
+	lang := ResolveLang(r)
+
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		w.WriteHeader(http.StatusForbidden)
+		writeRecoverResponse(w, r, lang, http.StatusForbidden, false, T(lang, "error.csrf"))
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeRecoverResponse(w, r, lang, http.StatusBadRequest, false, T(lang, "recover.error.generic"))
+		return
+	}
+
+	email := strings.TrimSpace(r.FormValue("email"))
+	captcha := r.FormValue("captcha")
+
+	if email == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		writeRecoverResponse(w, r, lang, http.StatusBadRequest, false, T(lang, "regenerate.error.emailRequired"))
+		return
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeRecoverResponse(w, r, lang, http.StatusBadRequest, false, T(lang, "error.email.invalid"))
+		return
+	}
+	if captcha != "8" {
+		w.WriteHeader(http.StatusBadRequest)
+		writeRecoverResponse(w, r, lang, http.StatusBadRequest, false, T(lang, "error.captcha.invalid"))
+		return
+	}
+
+	token := generateToken(32)
+	expiry := time.Now().Add(24 * time.Hour).Format("2006-01-02 15:04:05")
+
+	created, err := a.DB.CreatePasswordReset(email, token, expiry, lang)
+	if err != nil {
+		Errorf("Error creant sol·licitud de recuperació per %s: %v", email, err)
+		// No revelem l'error, retornem missatge genèric
+		writeRecoverResponse(w, r, lang, http.StatusOK, true, T(lang, "recover.info.sent"))
+		return
+	}
+
+	if created {
+		resetURL := fmt.Sprintf("http://localhost:8080/recuperar?token=%s", token)
+		a.sendPasswordResetEmail(email, resetURL, lang)
+	}
+
+	writeRecoverResponse(w, r, lang, http.StatusOK, true, T(lang, "recover.info.sent"))
+}
+
+// ValidarRecuperarContrasenya valida el token i genera una nova contrasenya enviada per correu.
+func (a *App) ValidarRecuperarContrasenya(w http.ResponseWriter, r *http.Request) {
+	lang := ResolveLang(r)
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		RenderTemplate(w, r, "recover-result.html", RecuperarResultPageData{
+			Error: T(lang, "recover.result.invalid"),
+		})
+		return
+	}
+
+	req, err := a.DB.GetPasswordReset(token)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		RenderTemplate(w, r, "recover-result.html", RecuperarResultPageData{
+			Error: T(lang, "recover.result.invalid"),
+		})
+		return
+	}
+
+	newPass := generateSecurePassword(16)
+	hash, err := generateHash(newPass)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		RenderTemplate(w, r, "recover-result.html", RecuperarResultPageData{
+			Error: T(lang, "recover.result.error"),
+		})
+		return
+	}
+
+	if err := a.DB.UpdateUserPassword(req.UserID, hash); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		RenderTemplate(w, r, "recover-result.html", RecuperarResultPageData{
+			Error: T(lang, "recover.result.error"),
+		})
+		return
+	}
+
+	// Marquem la petició com usada (best-effort)
+	if err := a.DB.MarkPasswordResetUsed(req.ID); err != nil {
+		Errorf("No s'ha pogut marcar password_resets %d com usada: %v", req.ID, err)
+	}
+
+	resetLang := req.Lang
+	if resetLang == "" {
+		resetLang = lang
+	}
+	a.sendPasswordResetCompletedEmail(req.Email, newPass, resetLang)
+
+	RenderTemplate(w, r, "recover-result.html", RecuperarResultPageData{
+		Success: T(lang, "recover.result.sent"),
+	})
+}
 func (a *App) ActivarUsuariHTTP(w http.ResponseWriter, r *http.Request) {
 	// No exigim CSRF aquí perquè és GET via enllaç de correu
 	token := r.URL.Query().Get("token")

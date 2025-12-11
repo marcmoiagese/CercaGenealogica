@@ -49,6 +49,12 @@
   "recover.captcha.placeholder": "Resposta",
   "recover.submit": "Enviar instruccions",
   "recover.link.login": "Tornar a iniciar sessió",
+  "recover.info.sent": "Si el correu existeix, rebràs un missatge amb instruccions per recuperar l'accés.",
+  "recover.error.generic": "No s'ha pogut processar la sol·licitud. Torna-ho a intentar en uns minuts.",
+  "recover.result.invalid": "Enllaç de recuperació invàlid o caducat.",
+  "recover.result.error": "No s'ha pogut completar la recuperació. Torna-ho a intentar.",
+  "recover.result.sent": "Si el correu existeix, hem enviat una nova contrasenya temporal. Canvia-la un cop iniciïs sessió.",
+  "recover.result.hint": "Per seguretat, canvia la contrasenya després d'accedir al teu compte.",
 
   "error.accept.terms": "Has d'acceptar les condicions d'ús per continuar",
   "error.password.mismatch": "Les contrasenyes no coincideixen",
@@ -59,6 +65,7 @@
   "error.user.create": "Error en crear l'usuari. Potser ja existeix un usuari amb aquest nom o correu electrònic.",
   "error.login.required": "Usuari i contrasenya són obligatoris",
   "error.login.invalid": "Usuari o contrasenya incorrectes",
+  "error.csrf": "Sol·licitud no autoritzada.",
 
   "activation.title": "Activació de compte",
   "activation.success": "Compte activat correctament. Ja pots iniciar sessió.",
@@ -69,6 +76,11 @@
   "regenerate.label.email": "Correu electrònic",
   "regenerate.placeholder.email": "Introdueix el teu correu electrònic",
   "regenerate.submit": "Enviar nou token",
+  "regenerate.success": "Si el compte existeix i no està activat, t'hem enviat un nou enllaç d'activació.",
+  "regenerate.error.emailRequired": "Cal proporcionar el correu electrònic.",
+  "regenerate.error.notFound": "No s'ha trobat cap compte amb aquest correu electrònic.",
+  "regenerate.error.alreadyActive": "El compte ja està activat.",
+  "regenerate.error.save": "No s'ha pogut regenerar el token. Torna-ho a intentar més tard.",
 
   "register.success.title": "Registre completat",
   "register.success.heading": "Registre completat",
@@ -95,6 +107,15 @@
 
   "private.welcome": "Hola!",
   "private.loggedIn": "Estàs identificat correctament.",
+
+  "email.activation.subject": "Activa el teu compte",
+  "email.activation.body": "Hola,\n\nPer activar el teu compte, fes clic a l'enllaç següent:\n%s\n\nSi no has sol·licitat el registre, pots ignorar aquest missatge.\n",
+  "email.activation.regen.subject": "Nou enllaç per activar el teu compte",
+  "email.activation.regen.body": "Hola,\n\nT'hem generat un nou enllaç per activar el teu compte:\n%s\n\nSi no has sol·licitat aquest correu, pots ignorar-lo.\n",
+  "email.reset.subject": "Recupera la teva contrasenya",
+  "email.reset.body": "Hola,\n\nHem rebut una sol·licitud per recuperar el teu compte. Fes clic en aquest enllaç per confirmar-ho (caduca en 24 h):\n%s\n\nSi tu no ho has demanat, ignora aquest correu.\n",
+  "email.reset.complete.subject": "Nova contrasenya temporal",
+  "email.reset.complete.body": "Hola,\n\nHem restablert la teva contrasenya. La nova contrasenya temporal és:\n%s\n\nPer seguretat, canvia-la després d'iniciar sessió.\n",
 
   "footer.title": "Genealogia.cat",
   "footer.tagline": "La plataforma líder per a la recerca genealògica a Catalunya",

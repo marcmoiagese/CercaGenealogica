@@ -37,6 +37,7 @@
   "error.user.create": "Error al moment de crear l'utilizaire. Pòt ja existir un compte amb aqueste nom o email.",
   "error.login.required": "Nom d'utilizaire e senhal son obligatoris",
   "error.login.invalid": "Nom d'utilizaire o senhal incorrècte",
+  "error.csrf": "Demanda pas autorizada.",
 
   "register.title": "Crear compte",
   "register.label.username": "Utilizaire",
@@ -59,6 +60,12 @@
   "recover.captcha.placeholder": "Responsa",
   "recover.submit": "Enviar las instruccions",
   "recover.link.login": "Tornar a la connexion",
+  "recover.info.sent": "Se lo corrièr existís, recebretz d'indicacions per recuperar l'accès.",
+  "recover.error.generic": "Avèm pas pogut processar la demanda. Ensajatz tornarmai en qualques minutas.",
+  "recover.result.invalid": "Ligam de recuperacion invalid o expirat.",
+  "recover.result.error": "Avèm pas pogut completar la recuperacion. Tornatz ensajar.",
+  "recover.result.sent": "Se lo corrièr existís, avèm enviat un senhal temporari. Cambiatz-lo aprèp vos connectar.",
+  "recover.result.hint": "Per seguretat, cambiatz lo senhal un còp dins vòstre compte.",
 
   "activation.title": "Activacion de compte",
   "activation.success": "Compte activat corrèctament. Ja te pòs connectar.",
@@ -69,6 +76,11 @@
   "regenerate.label.email": "Correu electronic",
   "regenerate.placeholder.email": "Picatz vòstre email",
   "regenerate.submit": "Enviar un novèl token",
+  "regenerate.success": "Se lo compte existís e es pas activat, vos avèm enviat un novèl ligam d'activacion.",
+  "regenerate.error.emailRequired": "Cal indicar lo corrièr electronic.",
+  "regenerate.error.notFound": "Cap de compte trobat amb aqueste corrièr electronic.",
+  "regenerate.error.alreadyActive": "Lo compte ja es activat.",
+  "regenerate.error.save": "Avèm pas pogut regenerar lo token. Tornatz ensajar mai tard.",
 
   "register.success.title": "Registre completat",
   "register.success.heading": "Registre completat",
@@ -95,6 +107,15 @@
 
   "private.welcome": "Bonjorn!",
   "private.loggedIn": "Sètz connectat corrèctament.",
+
+  "email.activation.subject": "Activatz vòstre compte",
+  "email.activation.body": "Bonjorn,\n\nPer activar vòstre compte, clicatz sul ligam seguënt:\n%s\n\nSe avètz pas demandat aqueste registre, podètz ignorar aqueste messatge.\n",
+  "email.activation.regen.subject": "Novèl ligam per activar vòstre compte",
+  "email.activation.regen.body": "Bonjorn,\n\nVos provesissèm un novèl ligam per activar vòstre compte:\n%s\n\nSe avètz pas demandat aqueste corrièr, lo podètz ignorar.\n",
+  "email.reset.subject": "Restablissètz vòstre senhal",
+  "email.reset.body": "Bonjorn,\n\nAvèm recebut una demanda per recuperar vòstre compte. Clicatz sus aqueste ligam per confirmar (expira en 24 h):\n%s\n\nSe l'avètz pas demandat, podètz ignorar aqueste corrièr.\n",
+  "email.reset.complete.subject": "Senhal temporari",
+  "email.reset.complete.body": "Bonjorn,\n\nAvèm restablit vòstre senhal. Lo novèl senhal temporari es:\n%s\n\nPer seguretat, cambiatz-lo aprèp vos connectar.\n",
 
   "footer.title": "Genealogia.cat",
   "footer.tagline": "La plataforma capdavantera per a la recèrca genealogica en Catalonha",

@@ -73,6 +73,18 @@ func (f *fakeDBVerificar) GetSessionUser(sessionID string) (*db.User, error) {
 func (f *fakeDBVerificar) DeleteSession(sessionID string) error {
 	return errors.New("DeleteSession not implemented in fakeDBVerificar")
 }
+func (f *fakeDBVerificar) CreatePasswordReset(email, token, expiry, lang string) (bool, error) {
+	return false, errors.New("CreatePasswordReset not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) GetPasswordReset(token string) (*db.PasswordReset, error) {
+	return nil, errors.New("GetPasswordReset not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) MarkPasswordResetUsed(id int) error {
+	return errors.New("MarkPasswordResetUsed not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) UpdateUserPassword(userID int, passwordHash []byte) error {
+	return errors.New("UpdateUserPassword not implemented in fakeDBVerificar")
+}
 
 // Crea una App només amb la fake DB per testejar VerificarSessio.
 func newAppVerificar(dbFake db.DB) *core.App {

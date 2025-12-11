@@ -21,6 +21,10 @@ type DB interface {
 	SaveSession(sessionID string, userID int, expiry string) error
 	GetSessionUser(sessionID string) (*User, error)
 	DeleteSession(sessionID string) error
+	CreatePasswordReset(email, token, expiry, lang string) (bool, error)
+	GetPasswordReset(token string) (*PasswordReset, error)
+	MarkPasswordResetUsed(id int) error
+	UpdateUserPassword(userID int, passwordHash []byte) error
 }
 
 // Tipus comú d'usuari al paquet `db`
@@ -39,6 +43,13 @@ type User struct {
 	Provincia     string
 	Poblacio      string
 	CodiPostal    string
+}
+
+type PasswordReset struct {
+	ID     int
+	UserID int
+	Email  string
+	Lang   string
 }
 
 // Funció principal per obtenir una connexió i recrear BD si cal

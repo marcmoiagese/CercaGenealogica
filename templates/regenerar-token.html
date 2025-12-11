@@ -14,6 +14,12 @@
         <div class="container">
             <div class="regenerar-token-container">
                 <h2><i class="fas fa-key"></i> {{ t .Lang "regenerate.title" }}</h2>
+                {{ if .Data.Error }}
+                <div class="alert alert-error">{{ .Data.Error }}</div>
+                {{ end }}
+                {{ if .Data.Success }}
+                <div class="alert alert-success">{{ .Data.Success }}</div>
+                {{ end }}
                 <form method="POST" action="/regenerar-token">
                     <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                     <div class="form-grup">

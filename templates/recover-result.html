@@ -1,0 +1,36 @@
+{{ define "recover-result.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "recover.title" }} - {{ t .Lang "app.brand" }}</title>
+    {{ template "styles-public" . }}
+</head>
+<body>
+    {{ template "header-public" . }}
+
+    <main class="contingut-principal">
+        <div class="container">
+            <div class="regenerar-token-container">
+                <h2><i class="fas fa-unlock-alt"></i> {{ t .Lang "recover.title" }}</h2>
+                {{ if .Data.Error }}
+                <div class="alert alert-error">{{ .Data.Error }}</div>
+                {{ end }}
+                {{ if .Data.Success }}
+                <div class="alert alert-success">{{ .Data.Success }}</div>
+                {{ end }}
+                <p>{{ t .Lang "recover.result.hint" }}</p>
+            </div>
+        </div>
+    </main>
+
+    {{ template "footer" . }}
+
+    {{ template "modal-index-inici" . }}
+    {{ template "modal-index-registre" . }}
+    {{ template "modal-index-recuperar-pass" . }}
+
+    {{ template "scripts-public" . }}
+</body>
+</html>
+{{ end }}

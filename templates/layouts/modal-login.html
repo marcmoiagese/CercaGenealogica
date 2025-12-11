@@ -3,7 +3,9 @@
     <div class="modal-contingut">
         <span class="modal-tanca" id="tancaModalRecuperar">&times;</span>
         <h2>{{ t .Lang "recover.title" }}</h2>
-        <form id="formRecuperar">
+        <div id="recoverMessage" class="alert" style="display: none;"></div>
+        <form id="formRecuperar" action="/recuperar" method="POST" data-success="{{ t .Lang "recover.info.sent" }}" data-error="{{ t .Lang "recover.error.generic" }}">
+            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
             <div class="form-grup">
                 <label for="email">{{ t .Lang "recover.label.email" }}</label>
                 <input type="email" id="email" name="email" required>

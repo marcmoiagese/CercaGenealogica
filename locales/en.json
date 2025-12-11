@@ -37,6 +37,7 @@
   "error.user.create": "Error creating the user. There may already be an account with this username or email.",
   "error.login.required": "Username and password are required",
   "error.login.invalid": "Incorrect username or password",
+  "error.csrf": "Unauthorized request.",
 
   "register.title": "Create account",
   "register.label.username": "Username",
@@ -59,6 +60,12 @@
   "recover.captcha.placeholder": "Answer",
   "recover.submit": "Send instructions",
   "recover.link.login": "Back to login",
+  "recover.info.sent": "If the email exists, you will receive instructions to recover access.",
+  "recover.error.generic": "We couldn't process the request. Please try again in a few minutes.",
+  "recover.result.invalid": "Recovery link is invalid or expired.",
+  "recover.result.error": "Could not complete the recovery. Please try again.",
+  "recover.result.sent": "If the email exists, we have sent a temporary password. Change it after you log in.",
+  "recover.result.hint": "For security, change the password after you access your account.",
 
   "activation.title": "Account activation",
   "activation.success": "Account activated successfully. You can now log in.",
@@ -69,6 +76,11 @@
   "regenerate.label.email": "Email",
   "regenerate.placeholder.email": "Enter your email address",
   "regenerate.submit": "Send new token",
+  "regenerate.success": "If the account exists and is not activated, we have sent you a new activation link.",
+  "regenerate.error.emailRequired": "Email is required.",
+  "regenerate.error.notFound": "No account was found with this email.",
+  "regenerate.error.alreadyActive": "The account is already active.",
+  "regenerate.error.save": "Could not regenerate the token. Please try again later.",
 
   "register.success.title": "Registration completed",
   "register.success.heading": "Registration completed",
@@ -95,6 +107,15 @@
 
   "private.welcome": "Hello!",
   "private.loggedIn": "You are logged in successfully.",
+
+  "email.activation.subject": "Activate your account",
+  "email.activation.body": "Hello,\n\nTo activate your account, click the link below:\n%s\n\nIf you did not request this, you can ignore this message.\n",
+  "email.activation.regen.subject": "New link to activate your account",
+  "email.activation.regen.body": "Hello,\n\nHere is a new link to activate your account:\n%s\n\nIf you did not request this email, you can ignore it.\n",
+  "email.reset.subject": "Reset your password",
+  "email.reset.body": "Hello,\n\nWe received a request to recover your account. Click this link to confirm (it expires in 24h):\n%s\n\nIf you did not request this, you can ignore this email.\n",
+  "email.reset.complete.subject": "Your temporary password",
+  "email.reset.complete.body": "Hello,\n\nWe have reset your password. Your new temporary password is:\n%s\n\nFor security, change it after you log in.\n",
 
   "footer.title": "Genealogia.cat",
   "footer.tagline": "The leading platform for genealogical research in Catalonia",

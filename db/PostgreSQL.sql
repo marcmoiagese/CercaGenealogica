@@ -266,6 +266,16 @@ CREATE TABLE IF NOT EXISTS session_access_log (
   FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS password_resets (
+  id         SERIAL PRIMARY KEY,
+  usuari_id  INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  token      TEXT    NOT NULL UNIQUE,
+  expira     TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+  lang       TEXT,
+  used       BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Índexs
 ------------------------------------------------------------------------------------------------------------------------
 
@@ -300,5 +310,9 @@ CREATE INDEX IF NOT EXISTS idx_sessions_revocat ON sessions(revocat);
 -- Índexs de la taula 'session_access_log'
 CREATE INDEX IF NOT EXISTS idx_access_session_ts ON session_access_log(session_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_access_ip_ts      ON session_access_log(ip, ts DESC);
+
+-- Índexs de la taula 'password_resets'
+CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token);
+CREATE INDEX IF NOT EXISTS idx_password_resets_expira ON password_resets(expira);
 
 COMMIT;

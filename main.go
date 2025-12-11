@@ -127,6 +127,7 @@ func main() {
 	})
 
 	http.HandleFunc("/activar", applyMiddleware(app.ActivarUsuariHTTP, core.BlockIPs))
+	http.HandleFunc("/recuperar", applyMiddleware(app.GestionarRecuperacio, core.BlockIPs, core.RateLimit))
 
 	log.Println("Servidor iniciat a http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))

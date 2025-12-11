@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -193,13 +194,29 @@ func ServeStatic(w http.ResponseWriter, r *http.Request) {
 
 	// Si no existeix
 	if _, err := os.Stat(realPath); os.IsNotExist(err) {
-		http.Error(w, "Fitxer no trobat", http.StatusNotFound)
-		return
+		// Fallback: si l'executable s'executa fora de l'arrel, prova ruta relativa al fitxer actual
+		if _, file, _, ok := runtime.Caller(0); ok {
+			altBase := filepath.Join(filepath.Dir(file), "..")
+			altPath := filepath.Join(altBase, "static", path)
+			if _, err2 := os.Stat(altPath); err2 == nil {
+				realPath = altPath
+			} else {
+				http.Error(w, "Fitxer no trobat", http.StatusNotFound)
+				return
+			}
+		} else {
+			http.Error(w, "Fitxer no trobat", http.StatusNotFound)
+			return
+		}
 	}
 
 	// Verifica si el camí està autoritzat
-	if !allowedFiles[path] {
-		//ipStr := strings.Split(r.RemoteAddr, ":")[0]
+	allowed := allowedFiles[path] ||
+		strings.HasPrefix(path, "css/") ||
+		strings.HasPrefix(path, "js/") ||
+		strings.HasPrefix(path, "img/") ||
+		strings.HasPrefix(path, "fonts/")
+	if !allowed {
 		Errorf("Fitxer no autoritzat: %s", path)
 		http.Error(w, "Aquest recurs no es pot servir", http.StatusForbidden)
 		return
