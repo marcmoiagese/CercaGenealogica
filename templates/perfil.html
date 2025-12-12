@@ -1,0 +1,437 @@
+{{ define "perfil.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "nav.profile" }} - {{ t .Lang "app.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/perfil-ajustos.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+
+    <main class="contingut-principal">
+        <section class="perfil-ajustos">
+            <header class="perfil-ajustos-capcalera">
+                <h1>{{ t .Lang "profile.title" }}</h1>
+                <p>{{ t .Lang "profile.subtitle" }}</p>
+            </header>
+
+            {{ if .Data.Error }}
+            <div class="alert alert-error" role="alert">{{ .Data.Error }}</div>
+            {{ end }}
+            {{ if .Data.Success }}
+            <div class="alert alert-success" role="alert">{{ .Data.Success }}</div>
+            {{ end }}
+
+            {{ $tab := .Data.ActiveTab }}
+            <div class="perfil-ajustos-tabs">
+                <div class="tabs-botons" role="tablist" aria-label="{{ t .Lang "profile.title" }}">
+                    <button class="tab-boto {{ if eq $tab "generals" }}actiu{{ end }}" data-tab="generals" role="tab" aria-selected="{{ if eq $tab "generals" }}true{{ else }}false{{ end }}" aria-controls="tab-generals">
+                        <i class="fas fa-id-card"></i>
+                        <span>{{ t .Lang "profile.tab.general" }}</span>
+                    </button>
+                    <button class="tab-boto {{ if eq $tab "contrasenya" }}actiu{{ end }}" data-tab="contrasenya" role="tab" aria-selected="{{ if eq $tab "contrasenya" }}true{{ else }}false{{ end }}" aria-controls="tab-contrasenya">
+                        <i class="fas fa-lock"></i>
+                        <span>{{ t .Lang "profile.tab.password" }}</span>
+                    </button>
+                    <button class="tab-boto {{ if eq $tab "privacitat" }}actiu{{ end }}" data-tab="privacitat" role="tab" aria-selected="{{ if eq $tab "privacitat" }}true{{ else }}false{{ end }}" aria-controls="tab-privacitat">
+                        <i class="fas fa-user-shield"></i>
+                        <span>{{ t .Lang "profile.tab.privacy" }}</span>
+                    </button>
+                    <button class="tab-boto tab-danger {{ if eq $tab "eliminar" }}actiu{{ end }}" data-tab="eliminar" role="tab" aria-selected="{{ if eq $tab "eliminar" }}true{{ else }}false{{ end }}" aria-controls="tab-eliminar">
+                        <i class="fas fa-user-slash"></i>
+                        <span>{{ t .Lang "profile.tab.delete" }}</span>
+                    </button>
+                </div>
+
+                <div class="tabs-contingut">
+                    <!-- Pestanya: Dades generals -->
+                    <section id="tab-generals" class="tab-pane {{ if eq $tab "generals" }}actiu{{ end }}" role="tabpanel" aria-labelledby="tab-generals">
+                        <form id="form-dades-generals" class="form-dades" method="post" action="/perfil/dades">
+                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                            <div class="fila-camp">
+                                <div class="camp-label">
+                                    <label for="camp-nom">{{ t .Lang "profile.field.name" }}</label>
+                                    <p class="camp-helper">{{ t .Lang "profile.helper.name" }}</p>
+                                </div>
+                                    <div class="camp-input">
+                                        <input type="text" id="camp-nom" name="nom" value="{{ if .Data.User }}{{ .Data.User.Name }}{{ end }}" autocomplete="given-name">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="nom_visibility" value="public" {{ if eq .Data.Privacy.NomVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="nom_visibility" value="private" {{ if or (eq .Data.Privacy.NomVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-cognoms">{{ t .Lang "profile.field.surname" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        <input type="text" id="camp-cognoms" name="cognoms" value="{{ if .Data.User }}{{ .Data.User.Surname }}{{ end }}" autocomplete="family-name">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="cognoms_visibility" value="public" {{ if eq .Data.Privacy.CognomsVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="cognoms_visibility" value="private" {{ if or (eq .Data.Privacy.CognomsVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-usuari">{{ t .Lang "profile.field.username" }}</label>
+                                        <p class="camp-helper">{{ t .Lang "profile.helper.username" }}</p>
+                                    </div>
+                                    <div class="camp-input">
+                                        <input type="text" id="camp-usuari" name="usuari" value="{{ if .Data.User }}{{ .Data.User.Usuari }}{{ end }}" readonly>
+                                    </div>
+                                    <div class="camp-privacitat camp-privacitat-desactivada">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <span class="text-desactivat">{{ t .Lang "profile.helper.visibilityLocked" }}</span>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-correu">{{ t .Lang "profile.field.email" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        <input type="email" id="camp-correu" name="correu" value="{{ if .Data.User }}{{ .Data.User.Email }}{{ end }}" autocomplete="email">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="correu_visibility" value="public" {{ if eq .Data.Privacy.EmailVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="correu_visibility" value="private" {{ if or (eq .Data.Privacy.EmailVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-naixement">{{ t .Lang "profile.field.birthdate" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        <input type="date" id="camp-naixement" name="data_naixement" value="{{ .Data.BirthInputValue }}" autocomplete="bday">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="naixement_visibility" value="public" {{ if eq .Data.Privacy.BirthVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="naixement_visibility" value="private" {{ if or (eq .Data.Privacy.BirthVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-pais">{{ t .Lang "profile.field.country" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        <input type="text" id="camp-pais" name="pais" value="{{ if .Data.User }}{{ .Data.User.Pais }}{{ end }}" autocomplete="country-name">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="pais_visibility" value="public" {{ if or (eq .Data.Privacy.PaisVisibility "public") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="pais_visibility" value="private" {{ if eq .Data.Privacy.PaisVisibility "private" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-estat">{{ t .Lang "profile.field.state" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        <input type="text" id="camp-estat" name="estat" value="{{ if .Data.User }}{{ .Data.User.Estat }}{{ end }}" autocomplete="address-level1">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="estat_visibility" value="public" {{ if eq .Data.Privacy.EstatVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="estat_visibility" value="private" {{ if or (eq .Data.Privacy.EstatVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-provincia">{{ t .Lang "profile.field.province" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        <input type="text" id="camp-provincia" name="provincia" value="{{ if .Data.User }}{{ .Data.User.Provincia }}{{ end }}" autocomplete="address-level2">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="provincia_visibility" value="public" {{ if eq .Data.Privacy.ProvinciaVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="provincia_visibility" value="private" {{ if or (eq .Data.Privacy.ProvinciaVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-poblacio">{{ t .Lang "profile.field.city" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        <input type="text" id="camp-poblacio" name="poblacio" value="{{ if .Data.User }}{{ .Data.User.Poblacio }}{{ end }}" autocomplete="address-level2">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="poblacio_visibility" value="public" {{ if eq .Data.Privacy.PoblacioVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="poblacio_visibility" value="private" {{ if or (eq .Data.Privacy.PoblacioVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-codi-postal">{{ t .Lang "profile.field.postal" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        <input type="text" id="camp-codi-postal" name="codi_postal" value="{{ if .Data.User }}{{ .Data.User.CodiPostal }}{{ end }}" autocomplete="postal-code">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="codi_postal_visibility" value="public" {{ if eq .Data.Privacy.PostalVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="codi_postal_visibility" value="private" {{ if or (eq .Data.Privacy.PostalVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="form-accio">
+                                    <button type="submit" class="boto-primari">
+                                        <i class="fas fa-save"></i>
+                                        <span>{{ t .Lang "profile.action.save" }}</span>
+                                    </button>
+                                </div>
+
+                            <!-- Estadístiques d'activitat -->
+                            <section class="perfil-ajustos-estadistiques">
+                                <header class="estadistiques-capcalera">
+                                    <div>
+                                        <h2>{{ t .Lang "profile.stats.title" }}</h2>
+                                        <p class="camp-helper">{{ t .Lang "profile.stats.subtitle" }}</p>
+                                    </div>
+                                    <div class="estadistiques-metadades">
+                                        <p class="member-since">
+                                            {{ t .Lang "profile.stats.memberSince" }} <strong>{{ .Data.MemberSinceDisplay }}</strong>
+                                        </p>
+                                        <label class="toggle-inline">
+                                            <input type="checkbox" name="mostrar_estadistiques_public" {{ if or (not .Data.Privacy) .Data.Privacy.ShowActivity }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.stats.showPublic" }}</span>
+                                        </label>
+                                    </div>
+                                </header>
+
+                                <div class="heatmap-legenda">
+                                    <span>{{ t .Lang "profile.stats.less" }}</span>
+                                    <div class="heatmap-gradient">
+                                        <span class="heatmap-swatch nivell-0"></span>
+                                        <span class="heatmap-swatch nivell-1"></span>
+                                        <span class="heatmap-swatch nivell-2"></span>
+                                        <span class="heatmap-swatch nivell-3"></span>
+                                        <span class="heatmap-swatch nivell-4"></span>
+                                    </div>
+                                    <span>{{ t .Lang "profile.stats.more" }}</span>
+                                </div>
+
+                                <div class="heatmap-container">
+                                    <div class="heatmap-grid" aria-hidden="true">
+                                        <div class="heatmap-dia" data-level="0"></div>
+                                        <div class="heatmap-dia" data-level="1"></div>
+                                        <div class="heatmap-dia" data-level="2"></div>
+                                        <div class="heatmap-dia" data-level="3"></div>
+                                        <div class="heatmap-dia" data-level="4"></div>
+                                    </div>
+                                </div>
+
+                                <p class="estadistiques-resum">
+                                    <strong>{{ t .Lang "profile.stats.summary" }}</strong> 0 (exemple).
+                                </p>
+                            </section>
+                            </form>
+                        </section>
+
+                        <!-- Pestanya: Contrasenya -->
+                        <section id="tab-contrasenya" class="tab-pane {{ if eq $tab "contrasenya" }}actiu{{ end }}" role="tabpanel" aria-labelledby="tab-contrasenya">
+                            <form id="form-contrasenya" class="form-vertical" method="post" action="/perfil/contrasenya">
+                                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                                <div class="grup-camp">
+                                    <label for="contrasenya-actual">{{ t .Lang "profile.password.current" }}</label>
+                                    <div class="input-amb-icona">
+                                        <input type="password" id="contrasenya-actual" name="contrasenya_actual" autocomplete="off">
+                                        <button type="button" class="boto-icona input-icon" aria-label="Mostra/oculta contrasenya" data-toggle-password="contrasenya-actual">
+                                            <i class="far fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="grup-camp">
+                                    <label for="nova-contrasenya">{{ t .Lang "profile.password.new" }}</label>
+                                    <div class="input-amb-icona">
+                                        <input type="password" id="nova-contrasenya" name="nova_contrasenya" autocomplete="off">
+                                        <button type="button" class="boto-icona input-icon" aria-label="Mostra/oculta contrasenya" data-toggle-password="nova-contrasenya">
+                                            <i class="far fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="grup-camp">
+                                    <label for="confirmar-contrasenya">{{ t .Lang "profile.password.confirm" }}</label>
+                                    <div class="input-amb-icona">
+                                        <input type="password" id="confirmar-contrasenya" name="confirmar_contrasenya" autocomplete="off">
+                                        <button type="button" class="boto-icona input-icon" aria-label="Mostra/oculta contrasenya" data-toggle-password="confirmar-contrasenya">
+                                            <i class="far fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <p id="contrasenya-error" class="missatge-error" aria-live="polite"></p>
+
+                                <div class="form-accio">
+                                    <button type="submit" class="boto-primari">
+                                        <i class="fas fa-key"></i>
+                                        <span>Actualitzar contrasenya</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </section>
+
+                        <!-- Pestanya: Privacitat -->
+                        <section id="tab-privacitat" class="tab-pane {{ if eq $tab "privacitat" }}actiu{{ end }}" role="tabpanel" aria-labelledby="tab-privacitat">
+                            <form id="form-privacitat" class="form-vertical" method="post" action="/perfil/privacitat">
+                                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                                <div class="grup-camp">
+                                    <h3>{{ t .Lang "profile.privacy.title" }}</h3>
+                                    <p class="camp-helper">{{ t .Lang "profile.privacy.helper" }}</p>
+                                    <div class="opcions-radi">
+                                        <label class="radio-card">
+                                            <input type="radio" name="perfil_visibility" value="public" {{ if or (not .Data.Privacy) .Data.Privacy.ProfilePublic }}checked{{ end }}>
+                                            <div class="radio-card-contingut">
+                                                <h4><i class="fas fa-user"></i> {{ t .Lang "profile.privacy.public.title" }}</h4>
+                                                <p>{{ t .Lang "profile.privacy.public.desc" }}</p>
+                                            </div>
+                                        </label>
+                                        <label class="radio-card">
+                                            <input type="radio" name="perfil_visibility" value="private" {{ if eq .Data.Privacy.ProfilePublic false }}checked{{ end }}>
+                                            <div class="radio-card-contingut">
+                                                <h4><i class="fas fa-user-secret"></i> {{ t .Lang "profile.privacy.private.title" }}</h4>
+                                                <p>{{ t .Lang "profile.privacy.private.desc" }}</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="grup-camp">
+                                    <h3>{{ t .Lang "profile.privacy.comms.title" }}</h3>
+                                    <div class="llista-checks">
+                                        <label class="checkbox-linia">
+                                            <input type="checkbox" name="notificacions_correu" {{ if or (not .Data.Privacy) .Data.Privacy.NotifyEmail }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.privacy.comms.email" }}</span>
+                                        </label>
+                                        <label class="checkbox-linia">
+                                            <input type="checkbox" name="contacte_altres_usuaris" {{ if or (not .Data.Privacy) .Data.Privacy.AllowContact }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.privacy.comms.contact" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="form-accio">
+                                    <button type="submit" class="boto-primari">
+                                        <i class="fas fa-shield-alt"></i>
+                                        <span>{{ t .Lang "profile.privacy.save" }}</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </section>
+
+                        <!-- Pestanya: Eliminar compte -->
+                        <section id="tab-eliminar" class="tab-pane tab-pane-danger {{ if eq $tab "eliminar" }}actiu{{ end }}" role="tabpanel" aria-labelledby="tab-eliminar">
+                            <form id="form-eliminar-compte" class="form-vertical form-perill" method="post" action="/perfil/eliminar">
+                                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                                <h3 class="titol-perill"><i class="fas fa-exclamation-triangle"></i> {{ t .Lang "profile.delete.title" }}</h3>
+                                <p class="camp-helper">{{ t .Lang "profile.delete.warning" }}</p>
+
+                                <div class="grup-camp">
+                                    <label for="eliminar-contrasenya">{{ t .Lang "profile.password.current" }}</label>
+                                    <div class="input-amb-icona">
+                                        <input type="password" id="eliminar-contrasenya" name="contrasenya_actual" autocomplete="off">
+                                        <button type="button" class="boto-icona input-icon" aria-label="Mostra/oculta contrasenya" data-toggle-password="eliminar-contrasenya">
+                                            <i class="far fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <label class="checkbox-linia checkbox-perill">
+                                    <input type="checkbox" id="confirmar-eliminacio" name="confirmar_eliminacio">
+                                    <span>{{ t .Lang "profile.delete.confirm" }}</span>
+                                </label>
+
+                                <div class="form-accio">
+                                    <button type="submit" class="boto-perill" disabled>
+                                        <i class="fas fa-user-slash"></i>
+                                        <span>{{ t .Lang "profile.delete.action" }}</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+    {{ template "footer" . }}
+
+    {{ template "scripts-private" . }}
+    <script src="/static/js/perfil-ajustos.js"></script>
+</body>
+</html>
+{{ end }}

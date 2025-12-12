@@ -144,3 +144,43 @@ func (d *PostgreSQL) MarkPasswordResetUsed(id int) error {
 func (d *PostgreSQL) UpdateUserPassword(userID int, passwordHash []byte) error {
 	return d.help.updateUserPassword(userID, passwordHash)
 }
+
+func (d *PostgreSQL) CreatePrivacyDefaults(userID int) error {
+	return d.help.createPrivacyDefaults(userID)
+}
+
+func (d *PostgreSQL) GetPrivacySettings(userID int) (*PrivacySettings, error) {
+	return d.help.getPrivacySettings(userID)
+}
+
+func (d *PostgreSQL) SavePrivacySettings(userID int, p *PrivacySettings) error {
+	return d.help.savePrivacySettings(userID, p)
+}
+
+func (d *PostgreSQL) UpdateUserProfile(u *User) error {
+	return d.help.updateUserProfile(u)
+}
+
+func (d *PostgreSQL) UpdateUserEmail(userID int, newEmail string) error {
+	return d.help.updateUserEmail(userID, newEmail)
+}
+
+func (d *PostgreSQL) CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {
+	return d.help.createEmailChange(userID, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang)
+}
+
+func (d *PostgreSQL) ConfirmEmailChange(token string) (*EmailChange, error) {
+	return d.help.confirmEmailChange(token)
+}
+
+func (d *PostgreSQL) RevertEmailChange(token string) (*EmailChange, error) {
+	return d.help.revertEmailChange(token)
+}
+
+func (d *PostgreSQL) markEmailChangeConfirmed(id int) error {
+	return d.help.markEmailChangeConfirmed(id)
+}
+
+func (d *PostgreSQL) markEmailChangeReverted(id int) error {
+	return d.help.markEmailChangeReverted(id)
+}

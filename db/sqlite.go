@@ -146,3 +146,43 @@ func (d *SQLite) MarkPasswordResetUsed(id int) error {
 func (d *SQLite) UpdateUserPassword(userID int, passwordHash []byte) error {
 	return d.help.updateUserPassword(userID, passwordHash)
 }
+
+func (d *SQLite) CreatePrivacyDefaults(userID int) error {
+	return d.help.createPrivacyDefaults(userID)
+}
+
+func (d *SQLite) GetPrivacySettings(userID int) (*PrivacySettings, error) {
+	return d.help.getPrivacySettings(userID)
+}
+
+func (d *SQLite) SavePrivacySettings(userID int, p *PrivacySettings) error {
+	return d.help.savePrivacySettings(userID, p)
+}
+
+func (d *SQLite) UpdateUserProfile(u *User) error {
+	return d.help.updateUserProfile(u)
+}
+
+func (d *SQLite) UpdateUserEmail(userID int, newEmail string) error {
+	return d.help.updateUserEmail(userID, newEmail)
+}
+
+func (d *SQLite) CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {
+	return d.help.createEmailChange(userID, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang)
+}
+
+func (d *SQLite) ConfirmEmailChange(token string) (*EmailChange, error) {
+	return d.help.confirmEmailChange(token)
+}
+
+func (d *SQLite) RevertEmailChange(token string) (*EmailChange, error) {
+	return d.help.revertEmailChange(token)
+}
+
+func (d *SQLite) markEmailChangeConfirmed(id int) error {
+	return d.help.markEmailChangeConfirmed(id)
+}
+
+func (d *SQLite) markEmailChangeReverted(id int) error {
+	return d.help.markEmailChangeReverted(id)
+}

@@ -143,3 +143,43 @@ func (d *MySQL) MarkPasswordResetUsed(id int) error {
 func (d *MySQL) UpdateUserPassword(userID int, passwordHash []byte) error {
 	return d.help.updateUserPassword(userID, passwordHash)
 }
+
+func (d *MySQL) CreatePrivacyDefaults(userID int) error {
+	return d.help.createPrivacyDefaults(userID)
+}
+
+func (d *MySQL) GetPrivacySettings(userID int) (*PrivacySettings, error) {
+	return d.help.getPrivacySettings(userID)
+}
+
+func (d *MySQL) SavePrivacySettings(userID int, p *PrivacySettings) error {
+	return d.help.savePrivacySettings(userID, p)
+}
+
+func (d *MySQL) UpdateUserProfile(u *User) error {
+	return d.help.updateUserProfile(u)
+}
+
+func (d *MySQL) UpdateUserEmail(userID int, newEmail string) error {
+	return d.help.updateUserEmail(userID, newEmail)
+}
+
+func (d *MySQL) CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {
+	return d.help.createEmailChange(userID, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang)
+}
+
+func (d *MySQL) ConfirmEmailChange(token string) (*EmailChange, error) {
+	return d.help.confirmEmailChange(token)
+}
+
+func (d *MySQL) RevertEmailChange(token string) (*EmailChange, error) {
+	return d.help.revertEmailChange(token)
+}
+
+func (d *MySQL) markEmailChangeConfirmed(id int) error {
+	return d.help.markEmailChangeConfirmed(id)
+}
+
+func (d *MySQL) markEmailChangeReverted(id int) error {
+	return d.help.markEmailChangeReverted(id)
+}

@@ -254,6 +254,20 @@ func (f *fakeDB) MarkPasswordResetUsed(id int) error                      { retu
 func (f *fakeDB) UpdateUserPassword(userID int, passwordHash []byte) error {
 	return nil
 }
+func (f *fakeDB) CreatePrivacyDefaults(userID int) error { return nil }
+func (f *fakeDB) GetPrivacySettings(userID int) (*db.PrivacySettings, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (f *fakeDB) SavePrivacySettings(userID int, p *db.PrivacySettings) error { return nil }
+func (f *fakeDB) UpdateUserProfile(u *db.User) error                         { return nil }
+func (f *fakeDB) UpdateUserEmail(userID int, newEmail string) error          { return nil }
+func (f *fakeDB) CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {
+	return nil
+}
+func (f *fakeDB) ConfirmEmailChange(token string) (*db.EmailChange, error) { return nil, fmt.Errorf("not implemented") }
+func (f *fakeDB) RevertEmailChange(token string) (*db.EmailChange, error)  { return nil, fmt.Errorf("not implemented") }
+func (f *fakeDB) markEmailChangeConfirmed(id int) error                    { return nil }
+func (f *fakeDB) markEmailChangeReverted(id int) error                     { return nil }
 
 // Helper per crear una App amb fakeDB
 func newFakeAppWithUsers(users map[string]*db.User) *core.App {

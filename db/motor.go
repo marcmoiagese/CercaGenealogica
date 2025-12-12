@@ -25,6 +25,14 @@ type DB interface {
 	GetPasswordReset(token string) (*PasswordReset, error)
 	MarkPasswordResetUsed(id int) error
 	UpdateUserPassword(userID int, passwordHash []byte) error
+	CreatePrivacyDefaults(userID int) error
+	GetPrivacySettings(userID int) (*PrivacySettings, error)
+	SavePrivacySettings(userID int, p *PrivacySettings) error
+	UpdateUserProfile(u *User) error
+	UpdateUserEmail(userID int, newEmail string) error
+	CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error
+	ConfirmEmailChange(token string) (*EmailChange, error)
+	RevertEmailChange(token string) (*EmailChange, error)
 }
 
 // Tipus comú d'usuari al paquet `db`
@@ -50,6 +58,37 @@ type PasswordReset struct {
 	UserID int
 	Email  string
 	Lang   string
+}
+
+type PrivacySettings struct {
+	UserID             int
+	NomVisibility      string
+	CognomsVisibility  string
+	EmailVisibility    string
+	BirthVisibility    string
+	PaisVisibility     string
+	EstatVisibility    string
+	ProvinciaVisibility string
+	PoblacioVisibility string
+	PostalVisibility   string
+	ShowActivity       bool
+	ProfilePublic      bool
+	NotifyEmail        bool
+	AllowContact       bool
+}
+
+type EmailChange struct {
+	ID          int
+	UserID      int
+	OldEmail    string
+	NewEmail    string
+	TokenConfirm string
+	ExpConfirm  string
+	TokenRevert string
+	ExpRevert   string
+	Lang        string
+	Confirmed   bool
+	Reverted    bool
 }
 
 // Funció principal per obtenir una connexió i recrear BD si cal

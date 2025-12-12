@@ -247,6 +247,217 @@ func (h sqlHelper) updateUserPassword(userID int, passwordHash []byte) error {
 	return err
 }
 
+func (h sqlHelper) updateUserProfile(u *User) error {
+	stmt := formatPlaceholders(h.style, `
+        UPDATE usuaris
+        SET nom = ?, cognoms = ?, correu = ?, data_naixement = ?, pais = ?, estat = ?, provincia = ?, poblacio = ?, codi_postal = ?
+        WHERE id = ?`)
+	_, err := h.db.Exec(stmt,
+		u.Name,
+		u.Surname,
+		u.Email,
+		u.DataNaixament,
+		u.Pais,
+		u.Estat,
+		u.Provincia,
+		u.Poblacio,
+		u.CodiPostal,
+		u.ID,
+	)
+	return err
+}
+
+func (h sqlHelper) updateUserEmail(userID int, newEmail string) error {
+	stmt := formatPlaceholders(h.style, `UPDATE usuaris SET correu = ? WHERE id = ?`)
+	_, err := h.db.Exec(stmt, newEmail, userID)
+	return err
+}
+
+func (h sqlHelper) savePrivacySettings(userID int, p *PrivacySettings) error {
+	stmt := formatPlaceholders(h.style, `
+        INSERT INTO user_privacy (
+            usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
+            pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+            show_activity, profile_public, notify_email, allow_contact
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(usuari_id) DO UPDATE SET
+            nom_visibility=excluded.nom_visibility,
+            cognoms_visibility=excluded.cognoms_visibility,
+            email_visibility=excluded.email_visibility,
+            birth_visibility=excluded.birth_visibility,
+            pais_visibility=excluded.pais_visibility,
+            estat_visibility=excluded.estat_visibility,
+            provincia_visibility=excluded.provincia_visibility,
+            poblacio_visibility=excluded.poblacio_visibility,
+            postal_visibility=excluded.postal_visibility,
+            show_activity=excluded.show_activity,
+            profile_public=excluded.profile_public,
+            notify_email=excluded.notify_email,
+            allow_contact=excluded.allow_contact
+    `)
+	if h.style == "mysql" {
+		stmt = `
+        INSERT INTO user_privacy (
+            usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
+            pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+            show_activity, profile_public, notify_email, allow_contact
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            nom_visibility=VALUES(nom_visibility),
+            cognoms_visibility=VALUES(cognoms_visibility),
+            email_visibility=VALUES(email_visibility),
+            birth_visibility=VALUES(birth_visibility),
+            pais_visibility=VALUES(pais_visibility),
+            estat_visibility=VALUES(estat_visibility),
+            provincia_visibility=VALUES(provincia_visibility),
+            poblacio_visibility=VALUES(poblacio_visibility),
+            postal_visibility=VALUES(postal_visibility),
+            show_activity=VALUES(show_activity),
+            profile_public=VALUES(profile_public),
+            notify_email=VALUES(notify_email),
+            allow_contact=VALUES(allow_contact)
+        `
+	}
+	_, err := h.db.Exec(stmt,
+		userID,
+		p.NomVisibility,
+		p.CognomsVisibility,
+		p.EmailVisibility,
+		p.BirthVisibility,
+		p.PaisVisibility,
+		p.EstatVisibility,
+		p.ProvinciaVisibility,
+		p.PoblacioVisibility,
+		p.PostalVisibility,
+		p.ShowActivity,
+		p.ProfilePublic,
+		p.NotifyEmail,
+		p.AllowContact,
+	)
+	return err
+}
+
+func (h sqlHelper) createEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {
+	stmt := formatPlaceholders(h.style, `
+        INSERT INTO email_changes (
+            usuari_id, old_email, new_email, token_confirm, exp_confirm, token_revert, exp_revert, lang, confirmed, reverted
+        )
+        SELECT id, correu, ?, ?, ?, ?, ?, ?, 0, 0 FROM usuaris WHERE id = ?`)
+	_, err := h.db.Exec(stmt, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang, userID)
+	return err
+}
+
+func (h sqlHelper) confirmEmailChange(token string) (*EmailChange, error) {
+	nowExpr := "datetime('now')"
+	if h.style == "mysql" || h.style == "postgres" {
+		nowExpr = "NOW()"
+	}
+	stmt := formatPlaceholders(h.style, `
+        SELECT id, usuari_id, old_email, new_email, token_confirm, exp_confirm, token_revert, exp_revert, lang, confirmed, reverted
+        FROM email_changes
+        WHERE token_confirm = ? AND confirmed = 0 AND exp_confirm > `+nowExpr+``)
+	row := h.db.QueryRow(stmt, token)
+	var c EmailChange
+	if err := row.Scan(&c.ID, &c.UserID, &c.OldEmail, &c.NewEmail, &c.TokenConfirm, &c.ExpConfirm, &c.TokenRevert, &c.ExpRevert, &c.Lang, &c.Confirmed, &c.Reverted); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (h sqlHelper) revertEmailChange(token string) (*EmailChange, error) {
+	nowExpr := "datetime('now')"
+	if h.style == "mysql" || h.style == "postgres" {
+		nowExpr = "NOW()"
+	}
+	stmt := formatPlaceholders(h.style, `
+        SELECT id, usuari_id, old_email, new_email, token_confirm, exp_confirm, token_revert, exp_revert, lang, confirmed, reverted
+        FROM email_changes
+        WHERE token_revert = ? AND reverted = 0 AND exp_revert > `+nowExpr+``)
+	row := h.db.QueryRow(stmt, token)
+	var c EmailChange
+	if err := row.Scan(&c.ID, &c.UserID, &c.OldEmail, &c.NewEmail, &c.TokenConfirm, &c.ExpConfirm, &c.TokenRevert, &c.ExpRevert, &c.Lang, &c.Confirmed, &c.Reverted); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (h sqlHelper) markEmailChangeConfirmed(id int) error {
+	stmt := formatPlaceholders(h.style, `UPDATE email_changes SET confirmed = 1 WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
+	return err
+}
+
+func (h sqlHelper) markEmailChangeReverted(id int) error {
+	stmt := formatPlaceholders(h.style, `UPDATE email_changes SET reverted = 1 WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
+	return err
+}
+
+func (h sqlHelper) createPrivacyDefaults(userID int) error {
+	stmt := formatPlaceholders(h.style, `
+        INSERT INTO user_privacy (
+            usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
+            pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+            show_activity, profile_public, notify_email, allow_contact
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1)
+        ON CONFLICT (usuari_id) DO NOTHING
+    `)
+	if h.style == "mysql" {
+		stmt = `
+        INSERT IGNORE INTO user_privacy (
+            usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
+            pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+            show_activity, profile_public, notify_email, allow_contact
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1)
+        `
+	}
+	_, err := h.db.Exec(stmt,
+		userID,
+		"private", // nom
+		"private", // cognoms
+		"private", // email
+		"private", // birth
+		"public",  // país
+		"private", // estat
+		"private", // provincia
+		"private", // poblacio
+		"private", // postal
+	)
+	return err
+}
+
+func (h sqlHelper) getPrivacySettings(userID int) (*PrivacySettings, error) {
+	stmt := formatPlaceholders(h.style, `
+        SELECT usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
+               pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+               show_activity, profile_public, notify_email, allow_contact
+        FROM user_privacy
+        WHERE usuari_id = ?
+    `)
+	row := h.db.QueryRow(stmt, userID)
+	var p PrivacySettings
+	err := row.Scan(
+		&p.UserID,
+		&p.NomVisibility,
+		&p.CognomsVisibility,
+		&p.EmailVisibility,
+		&p.BirthVisibility,
+		&p.PaisVisibility,
+		&p.EstatVisibility,
+		&p.ProvinciaVisibility,
+		&p.PoblacioVisibility,
+		&p.PostalVisibility,
+		&p.ShowActivity,
+		&p.ProfilePublic,
+		&p.NotifyEmail,
+		&p.AllowContact,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
 func (h sqlHelper) existsUserByUsername(username string) (bool, error) {
 	query := formatPlaceholders(h.style, `SELECT 1 FROM usuaris WHERE usuari = ? LIMIT 1`)
 	row := h.db.QueryRow(query, username)

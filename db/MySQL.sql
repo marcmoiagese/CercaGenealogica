@@ -311,6 +311,40 @@ CREATE TABLE IF NOT EXISTS password_resets (
   INDEX idx_password_resets_expira (expira)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS user_privacy (
+  usuari_id INT UNSIGNED NOT NULL PRIMARY KEY,
+  nom_visibility VARCHAR(10) DEFAULT 'private',
+  cognoms_visibility VARCHAR(10) DEFAULT 'private',
+  email_visibility VARCHAR(10) DEFAULT 'private',
+  birth_visibility VARCHAR(10) DEFAULT 'private',
+  pais_visibility VARCHAR(10) DEFAULT 'public',
+  estat_visibility VARCHAR(10) DEFAULT 'private',
+  provincia_visibility VARCHAR(10) DEFAULT 'private',
+  poblacio_visibility VARCHAR(10) DEFAULT 'private',
+  postal_visibility VARCHAR(10) DEFAULT 'private',
+  show_activity BOOLEAN NOT NULL DEFAULT TRUE,
+  profile_public BOOLEAN NOT NULL DEFAULT TRUE,
+  notify_email BOOLEAN NOT NULL DEFAULT TRUE,
+  allow_contact BOOLEAN NOT NULL DEFAULT TRUE,
+  FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS email_changes (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  usuari_id INT UNSIGNED NOT NULL,
+  old_email VARCHAR(255) NOT NULL,
+  new_email VARCHAR(255) NOT NULL,
+  token_confirm VARCHAR(128) NOT NULL UNIQUE,
+  exp_confirm DATETIME NOT NULL,
+  token_revert VARCHAR(128) NOT NULL UNIQUE,
+  exp_revert DATETIME NOT NULL,
+  lang VARCHAR(10),
+  confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+  reverted BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Índexs de la taula 'persona' (Els índexs ja s'han definit dins del CREATE TABLE per claredat en MySQL)
 ------------------------------------------------------------------------------------------------------------------------
 

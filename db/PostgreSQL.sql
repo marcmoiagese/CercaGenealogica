@@ -276,6 +276,38 @@ CREATE TABLE IF NOT EXISTS password_resets (
   created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS user_privacy (
+  usuari_id INTEGER PRIMARY KEY REFERENCES usuaris(id) ON DELETE CASCADE,
+  nom_visibility TEXT DEFAULT 'private',
+  cognoms_visibility TEXT DEFAULT 'private',
+  email_visibility TEXT DEFAULT 'private',
+  birth_visibility TEXT DEFAULT 'private',
+  pais_visibility TEXT DEFAULT 'public',
+  estat_visibility TEXT DEFAULT 'private',
+  provincia_visibility TEXT DEFAULT 'private',
+  poblacio_visibility TEXT DEFAULT 'private',
+  postal_visibility TEXT DEFAULT 'private',
+  show_activity BOOLEAN NOT NULL DEFAULT TRUE,
+  profile_public BOOLEAN NOT NULL DEFAULT TRUE,
+  notify_email BOOLEAN NOT NULL DEFAULT TRUE,
+  allow_contact BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS email_changes (
+  id SERIAL PRIMARY KEY,
+  usuari_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  old_email TEXT NOT NULL,
+  new_email TEXT NOT NULL,
+  token_confirm TEXT NOT NULL UNIQUE,
+  exp_confirm TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+  token_revert TEXT NOT NULL UNIQUE,
+  exp_revert TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+  lang TEXT,
+  confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+  reverted BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Índexs
 ------------------------------------------------------------------------------------------------------------------------
 

@@ -279,6 +279,40 @@ CREATE TABLE IF NOT EXISTS password_resets (
   FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS user_privacy (
+  usuari_id INTEGER PRIMARY KEY,
+  nom_visibility TEXT DEFAULT 'private',
+  cognoms_visibility TEXT DEFAULT 'private',
+  email_visibility TEXT DEFAULT 'private',
+  birth_visibility TEXT DEFAULT 'private',
+  pais_visibility TEXT DEFAULT 'public',
+  estat_visibility TEXT DEFAULT 'private',
+  provincia_visibility TEXT DEFAULT 'private',
+  poblacio_visibility TEXT DEFAULT 'private',
+  postal_visibility TEXT DEFAULT 'private',
+  show_activity INTEGER NOT NULL DEFAULT 1 CHECK (show_activity IN (0,1)),
+  profile_public INTEGER NOT NULL DEFAULT 1 CHECK (profile_public IN (0,1)),
+  notify_email INTEGER NOT NULL DEFAULT 1 CHECK (notify_email IN (0,1)),
+  allow_contact INTEGER NOT NULL DEFAULT 1 CHECK (allow_contact IN (0,1)),
+  FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS email_changes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  usuari_id INTEGER NOT NULL,
+  old_email TEXT NOT NULL,
+  new_email TEXT NOT NULL,
+  token_confirm TEXT NOT NULL UNIQUE,
+  exp_confirm DATETIME NOT NULL,
+  token_revert TEXT NOT NULL UNIQUE,
+  exp_revert DATETIME NOT NULL,
+  lang TEXT,
+  confirmed INTEGER NOT NULL DEFAULT 0 CHECK (confirmed IN (0,1)),
+  reverted INTEGER NOT NULL DEFAULT 0 CHECK (reverted IN (0,1)),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
+);
+
 -- Index per accelerar busquedes
 
 -- Per buscar ràpidament pel codi postal

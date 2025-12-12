@@ -85,6 +85,36 @@ func (f *fakeDBVerificar) MarkPasswordResetUsed(id int) error {
 func (f *fakeDBVerificar) UpdateUserPassword(userID int, passwordHash []byte) error {
 	return errors.New("UpdateUserPassword not implemented in fakeDBVerificar")
 }
+func (f *fakeDBVerificar) CreatePrivacyDefaults(userID int) error {
+	return errors.New("CreatePrivacyDefaults not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) GetPrivacySettings(userID int) (*db.PrivacySettings, error) {
+	return nil, errors.New("GetPrivacySettings not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) SavePrivacySettings(userID int, p *db.PrivacySettings) error {
+	return errors.New("SavePrivacySettings not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) UpdateUserProfile(u *db.User) error {
+	return errors.New("UpdateUserProfile not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) UpdateUserEmail(userID int, newEmail string) error {
+	return errors.New("UpdateUserEmail not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {
+	return errors.New("CreateEmailChange not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ConfirmEmailChange(token string) (*db.EmailChange, error) {
+	return nil, errors.New("ConfirmEmailChange not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) RevertEmailChange(token string) (*db.EmailChange, error) {
+	return nil, errors.New("RevertEmailChange not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) markEmailChangeConfirmed(id int) error {
+	return errors.New("markEmailChangeConfirmed not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) markEmailChangeReverted(id int) error {
+	return errors.New("markEmailChangeReverted not implemented in fakeDBVerificar")
+}
 
 // Crea una App només amb la fake DB per testejar VerificarSessio.
 func newAppVerificar(dbFake db.DB) *core.App {

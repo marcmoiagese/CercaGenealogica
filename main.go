@@ -106,7 +106,11 @@ func main() {
 				Secure:   secure,
 			})
 			log.Printf("[lang] canvi a %s des de %s", lang, r.RemoteAddr)
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+			target := r.Header.Get("Referer")
+			if target == "" {
+				target = "/"
+			}
+			http.Redirect(w, r, target, http.StatusSeeOther)
 		}
 	}
 	http.HandleFunc("/cat/", handleLang("cat"))
@@ -128,6 +132,12 @@ func main() {
 
 	http.HandleFunc("/activar", applyMiddleware(app.ActivarUsuariHTTP, core.BlockIPs))
 	http.HandleFunc("/recuperar", applyMiddleware(app.GestionarRecuperacio, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil", applyMiddleware(app.Perfil, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil/dades", applyMiddleware(app.ActualitzarPerfilDades, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil/privacitat", applyMiddleware(app.ActualitzarPerfilPrivacitat, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil/contrasenya", applyMiddleware(app.ActualitzarPerfilContrasenya, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil/email-confirm", applyMiddleware(app.ConfirmarCanviEmail, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil/email-revert", applyMiddleware(app.RevertirCanviEmail, core.BlockIPs, core.RateLimit))
 
 	log.Println("Servidor iniciat a http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))

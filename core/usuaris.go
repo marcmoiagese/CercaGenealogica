@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -52,6 +53,11 @@ type RecuperarResultPageData struct {
 	CSRFToken string
 	Error     string
 	Success   string
+}
+
+type UpdateProfileResponse struct {
+	Success string
+	Error   string
 }
 
 type ActivacioPageData struct {
@@ -207,6 +213,13 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 
 	Infof("Usuari creat correctament: %s", email)
 
+	// Crea configuració de privacitat per defecte
+	if createdUser, err := a.DB.GetUserByEmail(email); err == nil && createdUser != nil {
+		if err := a.DB.CreatePrivacyDefaults(createdUser.ID); err != nil {
+			Errorf("No s'ha pogut crear privacitat per defecte per a %s: %v", email, err)
+		}
+	}
+
 	// Envia token d'activació
 	token := generateToken(32)
 	Debugf("Generat token d'activació: %s", token)
@@ -300,6 +313,41 @@ func (a *App) sendPasswordResetCompletedEmail(email, password, lang string) {
 		return
 	}
 	Infof("Correu amb nova contrasenya enviat a %s", email)
+}
+
+func (a *App) sendEmailChangeConfirm(email, token, lang string) {
+	if !a.Mail.Enabled {
+		return
+	}
+	url := fmt.Sprintf("http://localhost:8080/perfil/email-confirm?token=%s", token)
+	subject := T(lang, "email.change.confirm.subject")
+	body := fmt.Sprintf(T(lang, "email.change.confirm.body"), url)
+	if err := a.Mail.Send(email, subject, body); err != nil {
+		Errorf("No s'ha pogut enviar correu de confirmació de canvi d'email a %s: %v", email, err)
+	}
+}
+
+func (a *App) sendEmailChangeRevert(oldEmail, newEmail, token, lang string) {
+	if !a.Mail.Enabled {
+		return
+	}
+	url := fmt.Sprintf("http://localhost:8080/perfil/email-revert?token=%s", token)
+	subject := T(lang, "email.change.revert.subject")
+	body := fmt.Sprintf(T(lang, "email.change.revert.body"), newEmail, url)
+	if err := a.Mail.Send(oldEmail, subject, body); err != nil {
+		Errorf("No s'ha pogut enviar correu de revert de canvi d'email a %s: %v", oldEmail, err)
+	}
+}
+
+func (a *App) sendPasswordChangedEmail(email, lang string) {
+	if !a.Mail.Enabled {
+		return
+	}
+	subject := T(lang, "email.password.changed.subject")
+	body := T(lang, "email.password.changed.body")
+	if err := a.Mail.Send(email, subject, body); err != nil {
+		Errorf("No s'ha pogut enviar correu de canvi de contrasenya a %s: %v", email, err)
+	}
 }
 
 func generateSecurePassword(length int) string {
@@ -484,6 +532,320 @@ func (a *App) ProcessarRegenerarToken(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.Redirect(w, r, "/regenerar-token", http.StatusSeeOther)
 	}
+}
+
+// Perfil – mostra la pàgina d'ajustos de compte per a usuaris autenticats.
+func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	var privacy *db.PrivacySettings
+	if p, err := a.DB.GetPrivacySettings(user.ID); err == nil {
+		privacy = p
+	}
+	if privacy == nil {
+		privacy = defaultPrivacySettings()
+	}
+
+	memberSince := formatDateDisplay(user.CreatedAt)
+	birthInput := formatDateInput(user.DataNaixament)
+
+	activeTab := r.URL.Query().Get("tab")
+	switch activeTab {
+	case "generals", "contrasenya", "privacitat", "eliminar":
+	default:
+		activeTab = "generals"
+	}
+
+	RenderPrivateTemplate(w, r, "perfil.html", map[string]interface{}{
+		"User":               user,
+		"Privacy":            privacy,
+		"MemberSince":        memberSince,
+		"BirthInputValue":    birthInput,
+		"MemberSinceDisplay": memberSince,
+		"Success":            r.URL.Query().Get("success"),
+		"Error":              r.URL.Query().Get("error"),
+		"ActiveTab":          activeTab,
+	})
+}
+
+func formatDateInput(dateStr string) string {
+	if dateStr == "" {
+		return ""
+	}
+	layouts := []string{
+		time.RFC3339,
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, dateStr); err == nil {
+			return t.Format("2006-01-02")
+		}
+	}
+	return ""
+}
+
+func formatDateDisplay(dateStr string) string {
+	if dateStr == "" {
+		return ""
+	}
+	layouts := []string{
+		time.RFC3339,
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, dateStr); err == nil {
+			return t.Format("02/01/2006")
+		}
+	}
+	return dateStr
+}
+
+func defaultPrivacySettings() *db.PrivacySettings {
+	return &db.PrivacySettings{
+		NomVisibility:       "private",
+		CognomsVisibility:   "private",
+		EmailVisibility:     "private",
+		BirthVisibility:     "private",
+		PaisVisibility:      "public",
+		EstatVisibility:     "private",
+		ProvinciaVisibility: "private",
+		PoblacioVisibility:  "private",
+		PostalVisibility:    "private",
+		ShowActivity:        true,
+		ProfilePublic:       true,
+		NotifyEmail:         true,
+		AllowContact:        true,
+	}
+}
+
+// ActualitzarPerfilDades – Desa dades generals i privacitat; gestiona canvi de correu amb confirmació.
+func (a *App) ActualitzarPerfilDades(w http.ResponseWriter, r *http.Request) {
+	lang := ResolveLang(r)
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/perfil?tab=generals", http.StatusSeeOther)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Redirect(w, r, "/perfil?tab=generals&error="+url.QueryEscape(T(lang, "error.csrf")), http.StatusSeeOther)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/perfil?tab=generals&error="+url.QueryEscape(T(lang, "error.user.create")), http.StatusSeeOther)
+		return
+	}
+
+	originalEmail := user.Email
+	newEmail := strings.TrimSpace(r.FormValue("correu"))
+
+	user.Name = r.FormValue("nom")
+	user.Surname = r.FormValue("cognoms")
+	user.DataNaixament = r.FormValue("data_naixement")
+	user.Pais = r.FormValue("pais")
+	user.Estat = r.FormValue("estat")
+	user.Provincia = r.FormValue("provincia")
+	user.Poblacio = r.FormValue("poblacio")
+	user.CodiPostal = r.FormValue("codi_postal")
+
+	if err := a.DB.UpdateUserProfile(user); err != nil {
+		http.Redirect(w, r, "/perfil?tab=generals&error="+url.QueryEscape(T(lang, "error.user.create")), http.StatusSeeOther)
+		return
+	}
+
+	privacy := defaultPrivacySettings()
+	if current, err := a.DB.GetPrivacySettings(user.ID); err == nil && current != nil {
+		privacy = current
+	}
+	// Actualitza només els camps presents al formulari de dades generals
+	privacy.UserID = user.ID
+	privacy.NomVisibility = visibilityValue(r.FormValue("nom_visibility"))
+	privacy.CognomsVisibility = visibilityValue(r.FormValue("cognoms_visibility"))
+	privacy.EmailVisibility = visibilityValue(r.FormValue("correu_visibility"))
+	privacy.BirthVisibility = visibilityValue(r.FormValue("naixement_visibility"))
+	privacy.PaisVisibility = visibilityValue(r.FormValue("pais_visibility"))
+	privacy.EstatVisibility = visibilityValue(r.FormValue("estat_visibility"))
+	privacy.ProvinciaVisibility = visibilityValue(r.FormValue("provincia_visibility"))
+	privacy.PoblacioVisibility = visibilityValue(r.FormValue("poblacio_visibility"))
+	privacy.PostalVisibility = visibilityValue(r.FormValue("codi_postal_visibility"))
+	privacy.ShowActivity = r.FormValue("mostrar_estadistiques_public") == "on"
+	// ProfilePublic, NotifyEmail i AllowContact provenen del formulari de privacitat; els mantenim.
+
+	_ = a.DB.SavePrivacySettings(user.ID, privacy)
+
+	// Si l'email ha canviat, iniciar procés de confirmació
+	if newEmail != "" && newEmail != originalEmail {
+		if _, err := mail.ParseAddress(newEmail); err == nil {
+			confirmToken := generateToken(32)
+			revertToken := generateToken(32)
+			expConfirm := time.Now().Add(24 * time.Hour).Format("2006-01-02 15:04:05")
+			expRevert := time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02 15:04:05")
+			if err := a.DB.CreateEmailChange(user.ID, newEmail, confirmToken, expConfirm, revertToken, expRevert, lang); err == nil {
+				a.sendEmailChangeConfirm(newEmail, confirmToken, lang)
+				http.Redirect(w, r, "/perfil?tab=generals&success="+url.QueryEscape(T(lang, "profile.email.change.pending")), http.StatusSeeOther)
+				return
+			}
+		}
+		http.Redirect(w, r, "/perfil?tab=generals&error="+url.QueryEscape(T(lang, "profile.email.change.invalid")), http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/perfil?tab=generals&success="+url.QueryEscape(T(lang, "profile.save.success")), http.StatusSeeOther)
+}
+
+// ActualitzarPerfilPrivacitat – desa només preferències de privacitat/comunicacions.
+func (a *App) ActualitzarPerfilPrivacitat(w http.ResponseWriter, r *http.Request) {
+	lang := ResolveLang(r)
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/perfil?tab=privacitat", http.StatusSeeOther)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Redirect(w, r, "/perfil?tab=privacitat&error="+url.QueryEscape(T(lang, "error.csrf")), http.StatusSeeOther)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/perfil?tab=privacitat&error="+url.QueryEscape(T(lang, "error.user.create")), http.StatusSeeOther)
+		return
+	}
+
+	privacy, err := a.DB.GetPrivacySettings(user.ID)
+	if err != nil || privacy == nil {
+		privacy = defaultPrivacySettings()
+	}
+
+	privacy.ProfilePublic = r.FormValue("perfil_visibility") != "private"
+	privacy.NotifyEmail = r.FormValue("notificacions_correu") == "on"
+	privacy.AllowContact = r.FormValue("contacte_altres_usuaris") == "on"
+
+	if err := a.DB.SavePrivacySettings(user.ID, privacy); err != nil {
+		http.Redirect(w, r, "/perfil?tab=privacitat&error="+url.QueryEscape(T(lang, "profile.save.error")), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/perfil?tab=privacitat&success="+url.QueryEscape(T(lang, "profile.save.success")), http.StatusSeeOther)
+}
+
+// ActualitzarPerfilContrasenya – valida la contrasenya actual i actualitza a una de nova.
+func (a *App) ActualitzarPerfilContrasenya(w http.ResponseWriter, r *http.Request) {
+	lang := ResolveLang(r)
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/perfil?tab=contrasenya", http.StatusSeeOther)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Redirect(w, r, "/perfil?tab=contrasenya&error="+url.QueryEscape(T(lang, "error.csrf")), http.StatusSeeOther)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/perfil?tab=contrasenya&error="+url.QueryEscape(T(lang, "profile.password.error.generic")), http.StatusSeeOther)
+		return
+	}
+
+	current := r.FormValue("contrasenya_actual")
+	newPass := r.FormValue("nova_contrasenya")
+	confirm := r.FormValue("confirmar_contrasenya")
+
+	if current == "" || newPass == "" || confirm == "" {
+		http.Redirect(w, r, "/perfil?tab=contrasenya&error="+url.QueryEscape(T(lang, "profile.password.error.required")), http.StatusSeeOther)
+		return
+	}
+	if newPass != confirm {
+		http.Redirect(w, r, "/perfil?tab=contrasenya&error="+url.QueryEscape(T(lang, "profile.password.error.mismatch")), http.StatusSeeOther)
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword(user.Password, []byte(current)); err != nil {
+		http.Redirect(w, r, "/perfil?tab=contrasenya&error="+url.QueryEscape(T(lang, "profile.password.error.current")), http.StatusSeeOther)
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword(user.Password, []byte(newPass)); err == nil {
+		http.Redirect(w, r, "/perfil?tab=contrasenya&error="+url.QueryEscape(T(lang, "profile.password.error.same")), http.StatusSeeOther)
+		return
+	}
+
+	hash, err := generateHash(newPass)
+	if err != nil {
+		http.Redirect(w, r, "/perfil?tab=contrasenya&error="+url.QueryEscape(T(lang, "profile.password.error.generic")), http.StatusSeeOther)
+		return
+	}
+	if err := a.DB.UpdateUserPassword(user.ID, hash); err != nil {
+		http.Redirect(w, r, "/perfil?tab=contrasenya&error="+url.QueryEscape(T(lang, "profile.password.error.generic")), http.StatusSeeOther)
+		return
+	}
+
+	a.sendPasswordChangedEmail(user.Email, lang)
+	http.Redirect(w, r, "/perfil?tab=contrasenya&success="+url.QueryEscape(T(lang, "profile.password.success")), http.StatusSeeOther)
+}
+
+func visibilityValue(v string) string {
+	if strings.ToLower(v) == "public" {
+		return "public"
+	}
+	return "private"
+}
+
+func (a *App) ConfirmarCanviEmail(w http.ResponseWriter, r *http.Request) {
+	lang := ResolveLang(r)
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Redirect(w, r, "/perfil?error="+url.QueryEscape(T(lang, "profile.email.change.invalid")), http.StatusSeeOther)
+		return
+	}
+	change, err := a.DB.ConfirmEmailChange(token)
+	if err != nil {
+		http.Redirect(w, r, "/perfil?error="+url.QueryEscape(T(lang, "profile.email.change.invalid")), http.StatusSeeOther)
+		return
+	}
+	if err := a.DB.UpdateUserEmail(change.UserID, change.NewEmail); err != nil {
+		http.Redirect(w, r, "/perfil?error="+url.QueryEscape(T(lang, "profile.email.change.invalid")), http.StatusSeeOther)
+		return
+	}
+	if helper, ok := a.DB.(interface{ markEmailChangeConfirmed(id int) error }); ok {
+		_ = helper.markEmailChangeConfirmed(change.ID)
+	}
+	a.sendEmailChangeRevert(change.OldEmail, change.NewEmail, change.TokenRevert, change.Lang)
+	http.Redirect(w, r, "/perfil?success="+url.QueryEscape(T(change.Lang, "profile.email.change.confirmed")), http.StatusSeeOther)
+}
+
+func (a *App) RevertirCanviEmail(w http.ResponseWriter, r *http.Request) {
+	lang := ResolveLang(r)
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Redirect(w, r, "/perfil?error="+url.QueryEscape(T(lang, "profile.email.change.invalid")), http.StatusSeeOther)
+		return
+	}
+	change, err := a.DB.RevertEmailChange(token)
+	if err != nil {
+		http.Redirect(w, r, "/perfil?error="+url.QueryEscape(T(lang, "profile.email.change.invalid")), http.StatusSeeOther)
+		return
+	}
+	if err := a.DB.UpdateUserEmail(change.UserID, change.OldEmail); err != nil {
+		http.Redirect(w, r, "/perfil?error="+url.QueryEscape(T(lang, "profile.email.change.invalid")), http.StatusSeeOther)
+		return
+	}
+	if helper, ok := a.DB.(interface{ markEmailChangeReverted(id int) error }); ok {
+		_ = helper.markEmailChangeReverted(change.ID)
+	}
+	http.Redirect(w, r, "/perfil?success="+url.QueryEscape(T(change.Lang, "profile.email.change.reverted")), http.StatusSeeOther)
 }
 
 // GestionarRecuperacio gestiona POST de sol·licitud i GET del token de recuperació
