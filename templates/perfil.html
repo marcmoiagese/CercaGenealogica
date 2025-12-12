@@ -233,14 +233,154 @@
                                     <div class="camp-input">
                                         <input type="text" id="camp-codi-postal" name="codi_postal" value="{{ if .Data.User }}{{ .Data.User.CodiPostal }}{{ end }}" autocomplete="postal-code">
                                     </div>
-                                    <div class="camp-privacitat">
-                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
-                                        <label class="radio-pill">
-                                            <input type="radio" name="codi_postal_visibility" value="public" {{ if eq .Data.Privacy.PostalVisibility "public" }}checked{{ end }}>
-                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                <div class="camp-privacitat">
+                                    <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                    <label class="radio-pill">
+                                        <input type="radio" name="codi_postal_visibility" value="public" {{ if eq .Data.Privacy.PostalVisibility "public" }}checked{{ end }}>
+                                        <span>{{ t .Lang "profile.visibility.public" }}</span>
                                         </label>
                                         <label class="radio-pill">
                                             <input type="radio" name="codi_postal_visibility" value="private" {{ if or (eq .Data.Privacy.PostalVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-adreca">{{ t .Lang "profile.field.address" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        <input type="text" id="camp-adreca" name="adreca" value="{{ if .Data.User }}{{ .Data.User.Address }}{{ end }}" autocomplete="street-address">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="adreca_visibility" value="public" {{ if eq .Data.Privacy.AddressVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="adreca_visibility" value="private" {{ if or (eq .Data.Privacy.AddressVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-situacio">{{ t .Lang "profile.field.employment" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        {{ $emp := .Data.User.Employment }}
+                                        <select id="camp-situacio" name="situacio_laboral">
+                                            <option value="">{{ t .Lang "profile.option.none" }}</option>
+                                            <option value="actiu" {{ if eq $emp "actiu" }}selected{{ end }}>{{ t .Lang "profile.employment.active" }}</option>
+                                            <option value="parat" {{ if eq $emp "parat" }}selected{{ end }}>{{ t .Lang "profile.employment.unemployed" }}</option>
+                                            <option value="jubilat" {{ if eq $emp "jubilat" }}selected{{ end }}>{{ t .Lang "profile.employment.retired" }}</option>
+                                            <option value="estudiant" {{ if eq $emp "estudiant" }}selected{{ end }}>{{ t .Lang "profile.employment.student" }}</option>
+                                            <option value="altre" {{ if eq $emp "altre" }}selected{{ end }}>{{ t .Lang "profile.employment.other" }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="situacio_visibility" value="public" {{ if eq .Data.Privacy.EmploymentVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="situacio_visibility" value="private" {{ if or (eq .Data.Privacy.EmploymentVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-professio">{{ t .Lang "profile.field.profession" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        <input type="text" id="camp-professio" name="professio" value="{{ if .Data.User }}{{ .Data.User.Profession }}{{ end }}">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="professio_visibility" value="public" {{ if eq .Data.Privacy.ProfessionVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="professio_visibility" value="private" {{ if or (eq .Data.Privacy.ProfessionVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-telefon">{{ t .Lang "profile.field.phone" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        <input type="tel" id="camp-telefon" name="telefon" value="{{ if .Data.User }}{{ .Data.User.Phone }}{{ end }}" autocomplete="tel">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="telefon_visibility" value="public" {{ if eq .Data.Privacy.PhoneVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="telefon_visibility" value="private" {{ if or (eq .Data.Privacy.PhoneVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-idioma-preferit">{{ t .Lang "profile.field.preferredLang" }}</label>
+                                    </div>
+                                    <div class="camp-input">
+                                        {{ $pref := .Data.User.PreferredLang }}
+                                        <select id="camp-idioma-preferit" name="idioma_preferit">
+                                            <option value="">{{ t .Lang "profile.option.none" }}</option>
+                                            {{ range $opt := .Data.LangOptions }}
+                                            <option value="{{ $opt }}" {{ if eq $pref $opt }}selected{{ end }}>{{ t $.Lang (printf "lang.name.%s" $opt) }}</option>
+                                            {{ end }}
+                                        </select>
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="idioma_preferit_visibility" value="public" {{ if eq .Data.Privacy.PreferredLangVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="idioma_preferit_visibility" value="private" {{ if or (eq .Data.Privacy.PreferredLangVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.private" }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="fila-camp">
+                                    <div class="camp-label">
+                                        <label for="camp-idiomes-parla">{{ t .Lang "profile.field.languagesSpoken" }}</label>
+                                        <p class="camp-helper">{{ t .Lang "profile.field.languagesSpoken.helper" }}</p>
+                                    </div>
+                                    <div class="camp-input">
+                                        <div id="tags-idiomes" class="tags-input">
+                                            <ul class="tags-llista"></ul>
+                                            <input type="text" id="idiomes_parla_input" placeholder="{{ t .Lang "profile.field.languagesSpoken.placeholder" }}">
+                                            <ul class="tags-suggestions"></ul>
+                                        </div>
+                                        <input type="hidden" id="idiomes_parla_hidden" name="idiomes_parla" value="{{ if .Data.User }}{{ .Data.User.SpokenLangs }}{{ end }}">
+                                    </div>
+                                    <div class="camp-privacitat">
+                                        <span class="badge-privacitat">{{ t .Lang "profile.visibility" }}</span>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="idiomes_parla_visibility" value="public" {{ if eq .Data.Privacy.SpokenLangsVisibility "public" }}checked{{ end }}>
+                                            <span>{{ t .Lang "profile.visibility.public" }}</span>
+                                        </label>
+                                        <label class="radio-pill">
+                                            <input type="radio" name="idiomes_parla_visibility" value="private" {{ if or (eq .Data.Privacy.SpokenLangsVisibility "private") (not .Data.Privacy) }}checked{{ end }}>
                                             <span>{{ t .Lang "profile.visibility.private" }}</span>
                                         </label>
                                     </div>

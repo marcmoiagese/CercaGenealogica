@@ -101,6 +101,21 @@ func RenderPrivateTemplate(w http.ResponseWriter, r *http.Request, tmpl string, 
 	}
 }
 
+// RenderPrivateTemplateLang permet forçar l'idioma (p.ex. idioma preferit de l'usuari logat).
+func RenderPrivateTemplateLang(w http.ResponseWriter, r *http.Request, tmpl string, lang string, data interface{}) {
+	csrfToken, _ := ensureCSRF(w, r)
+	data = injectCSRFToken(data, csrfToken)
+	err := Templates.ExecuteTemplate(w, tmpl, &DataContext{
+		UserLoggedIn: true,
+		Lang:         lang,
+		Data:         data,
+	})
+	if err != nil {
+		Errorf("Error renderitzant plantilla %s: %v", tmpl, err)
+		return
+	}
+}
+
 // injectCSRFToken insereix CSRFToken i retorna el data (map o struct) amb el token aplicat.
 func injectCSRFToken(data interface{}, token string) interface{} {
 	if data == nil {

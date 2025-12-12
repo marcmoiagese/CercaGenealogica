@@ -114,4 +114,116 @@ document.addEventListener('DOMContentLoaded', function () {
         url.searchParams.delete('error');
         window.history.replaceState({}, '', url.toString());
     }
+
+    // Gestor de tags per a idiomes parlats
+    const tagsContainer = document.getElementById('tags-idiomes');
+    const tagsList = tagsContainer ? tagsContainer.querySelector('.tags-llista') : null;
+    const tagsInput = document.getElementById('idiomes_parla_input');
+    const hiddenInput = document.getElementById('idiomes_parla_hidden');
+    const suggestionsList = tagsContainer ? tagsContainer.querySelector('.tags-suggestions') : null;
+    // TODO: Omple aquesta llista amb tots els idiomes acceptats (codis o noms), un per string.
+    const LANGUAGE_OPTIONS = [
+        "Français",
+        "Occitan",
+        "Breton",
+        "Corse",
+        "Alsacien",
+        "Español",
+        "Català",
+        "Gallego",
+        "Euskara",
+        "Aranés",
+        "Italiano",
+        "Tedesco",
+        "Ladin",
+        "Slovenščina",
+        "Franco-provençal",
+        "Sardo",
+        "Deutsch",
+        "Dänisch",
+        "Friesisch",
+        "Sorbi",
+        "Nederlands",
+        "Fries",
+        "Português",
+        "Mirandês",
+        "English",
+        "Cymraeg",
+        "Gàidhlig",
+        "Scots",
+        "Gaelg",
+        "Kernewek",
+        "Irish",
+        "Ulster Scots"
+    ];
+    if (tagsContainer && tagsList && tagsInput && hiddenInput && suggestionsList) {
+        let tags = [];
+        let suggestions = [];
+        const renderTags = () => {
+            tagsList.innerHTML = '';
+            tags.forEach((tag, idx) => {
+                const li = document.createElement('li');
+                li.className = 'tag-item';
+                li.textContent = tag;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'tag-remove';
+                btn.innerHTML = '&times;';
+                btn.addEventListener('click', () => removeTag(idx));
+                li.appendChild(btn);
+                tagsList.appendChild(li);
+            });
+            hiddenInput.value = tags.join(',');
+        };
+        const addTag = (value) => {
+            const clean = value.trim();
+            if (!clean) return;
+            const exists = LANGUAGE_OPTIONS.some(opt => opt.toLowerCase() === clean.toLowerCase());
+            if (!exists) return;
+            // Normalitza al cas original de la llista
+            const canonical = LANGUAGE_OPTIONS.find(opt => opt.toLowerCase() === clean.toLowerCase()) || clean;
+            if (!tags.includes(canonical)) {
+                tags.push(canonical);
+                renderTags();
+            }
+            tagsInput.value = '';
+            renderSuggestions('');
+        };
+        const removeTag = (idx) => {
+            tags.splice(idx, 1);
+            renderTags();
+        };
+        const renderSuggestions = (term) => {
+            suggestionsList.innerHTML = '';
+            if (!term) return;
+            const lower = term.toLowerCase();
+            suggestions = LANGUAGE_OPTIONS
+                .filter(opt => opt.toLowerCase().includes(lower) && !tags.includes(opt))
+                .slice(0, 3);
+            suggestions.forEach(opt => {
+                const li = document.createElement('li');
+                li.textContent = opt;
+                li.addEventListener('click', () => addTag(opt));
+                suggestionsList.appendChild(li);
+            });
+        };
+        // Inicialitza des de hidden
+        if (hiddenInput.value) {
+            hiddenInput.value.split(',').forEach(v => addTag(v));
+        }
+        tagsInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                addTag(tagsInput.value);
+            } else if (e.key === 'Backspace' && tagsInput.value === '') {
+                tags.pop();
+                renderTags();
+            }
+        });
+        tagsInput.addEventListener('input', () => renderSuggestions(tagsInput.value));
+        tagsInput.addEventListener('blur', () => {
+            addTag(tagsInput.value);
+            setTimeout(() => suggestionsList.innerHTML = '', 200);
+        });
+    }
 });

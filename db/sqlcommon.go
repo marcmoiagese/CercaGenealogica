@@ -34,10 +34,161 @@ func newSQLHelper(db *sql.DB, style, nowFun string) sqlHelper {
 	return sqlHelper{db: db, style: strings.ToLower(style), nowFun: nowFun}
 }
 
+func (h sqlHelper) columnExists(table, column string) bool {
+	var query string
+	switch h.style {
+	case "mysql":
+		query = `SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`
+	case "postgres":
+		query = `SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = $2`
+	default: // sqlite
+		query = fmt.Sprintf(`SELECT 1 FROM pragma_table_info('%s') WHERE name = ?`, table)
+	}
+	row := h.db.QueryRow(query, table, column)
+	var tmp int
+	if err := row.Scan(&tmp); err != nil {
+		return false
+	}
+	return true
+}
+
+func (h sqlHelper) ensureUserExtraColumns() {
+	stmts := []string{}
+	switch h.style {
+	case "mysql":
+		if !h.columnExists("usuaris", "address") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN address TEXT")
+		}
+		if !h.columnExists("usuaris", "employment_status") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN employment_status VARCHAR(50)")
+		}
+		if !h.columnExists("usuaris", "profession") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN profession VARCHAR(255)")
+		}
+		if !h.columnExists("usuaris", "phone") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN phone VARCHAR(50)")
+		}
+		if !h.columnExists("usuaris", "preferred_lang") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN preferred_lang VARCHAR(10)")
+		}
+		if !h.columnExists("usuaris", "spoken_langs") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN spoken_langs TEXT")
+		}
+	case "postgres":
+		if !h.columnExists("usuaris", "address") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS address TEXT")
+		}
+		if !h.columnExists("usuaris", "employment_status") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS employment_status TEXT")
+		}
+		if !h.columnExists("usuaris", "profession") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS profession TEXT")
+		}
+		if !h.columnExists("usuaris", "phone") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS phone TEXT")
+		}
+		if !h.columnExists("usuaris", "preferred_lang") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS preferred_lang TEXT")
+		}
+		if !h.columnExists("usuaris", "spoken_langs") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS spoken_langs TEXT")
+		}
+	default: // sqlite
+		if !h.columnExists("usuaris", "address") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN address TEXT")
+		}
+		if !h.columnExists("usuaris", "employment_status") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN employment_status TEXT")
+		}
+		if !h.columnExists("usuaris", "profession") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN profession TEXT")
+		}
+		if !h.columnExists("usuaris", "phone") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN phone TEXT")
+		}
+		if !h.columnExists("usuaris", "preferred_lang") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN preferred_lang TEXT")
+		}
+		if !h.columnExists("usuaris", "spoken_langs") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN spoken_langs TEXT")
+		}
+	}
+	for _, stmt := range stmts {
+		_, _ = h.db.Exec(stmt)
+	}
+}
+
+func (h sqlHelper) ensurePrivacyExtraColumns() {
+	stmts := []string{}
+	switch h.style {
+	case "mysql":
+		if !h.columnExists("user_privacy", "address_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN address_visibility VARCHAR(10) DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "employment_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN employment_visibility VARCHAR(10) DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "profession_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN profession_visibility VARCHAR(10) DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "phone_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN phone_visibility VARCHAR(10) DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "preferred_lang_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN preferred_lang_visibility VARCHAR(10) DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "spoken_langs_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN spoken_langs_visibility VARCHAR(10) DEFAULT 'private'")
+		}
+	case "postgres":
+		if !h.columnExists("user_privacy", "address_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN IF NOT EXISTS address_visibility TEXT DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "employment_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN IF NOT EXISTS employment_visibility TEXT DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "profession_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN IF NOT EXISTS profession_visibility TEXT DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "phone_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN IF NOT EXISTS phone_visibility TEXT DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "preferred_lang_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN IF NOT EXISTS preferred_lang_visibility TEXT DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "spoken_langs_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN IF NOT EXISTS spoken_langs_visibility TEXT DEFAULT 'private'")
+		}
+	default: // sqlite
+		if !h.columnExists("user_privacy", "address_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN address_visibility TEXT DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "employment_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN employment_visibility TEXT DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "profession_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN profession_visibility TEXT DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "phone_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN phone_visibility TEXT DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "preferred_lang_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN preferred_lang_visibility TEXT DEFAULT 'private'")
+		}
+		if !h.columnExists("user_privacy", "spoken_langs_visibility") {
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN spoken_langs_visibility TEXT DEFAULT 'private'")
+		}
+	}
+	for _, stmt := range stmts {
+		_, _ = h.db.Exec(stmt)
+	}
+}
+
 func (h sqlHelper) insertUser(user *User) error {
+	h.ensureUserExtraColumns()
 	stmt := fmt.Sprintf(`INSERT INTO usuaris 
-    (usuari, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, data_creacio, actiu) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s, ?)`, h.nowFun)
+    (usuari, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, address, employment_status, profession, phone, preferred_lang, spoken_langs, data_creacio, actiu) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s, ?)`, h.nowFun)
 
 	stmt = formatPlaceholders(h.style, stmt)
 
@@ -53,6 +204,12 @@ func (h sqlHelper) insertUser(user *User) error {
 		user.Provincia,
 		user.Poblacio,
 		user.CodiPostal,
+		user.Address,
+		user.Employment,
+		user.Profession,
+		user.Phone,
+		user.PreferredLang,
+		user.SpokenLangs,
 		user.Active,
 	)
 	if err != nil {
@@ -67,8 +224,9 @@ func (h sqlHelper) insertUser(user *User) error {
 }
 
 func (h sqlHelper) getUserByEmail(email string) (*User, error) {
+	h.ensureUserExtraColumns()
 	query := formatPlaceholders(h.style, `
-        SELECT id, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, data_creacio, actiu 
+        SELECT id, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, address, employment_status, profession, phone, preferred_lang, spoken_langs, data_creacio, actiu 
         FROM usuaris 
         WHERE correu = ?`)
 
@@ -87,6 +245,12 @@ func (h sqlHelper) getUserByEmail(email string) (*User, error) {
 		&u.Provincia,
 		&u.Poblacio,
 		&u.CodiPostal,
+		&u.Address,
+		&u.Employment,
+		&u.Profession,
+		&u.Phone,
+		&u.PreferredLang,
+		&u.SpokenLangs,
 		&u.CreatedAt,
 		&u.Active,
 	)
@@ -133,15 +297,18 @@ func (h sqlHelper) activateUser(token string) error {
 }
 
 func (h sqlHelper) authenticateUser(usernameOrEmail, password string) (*User, error) {
+	h.ensureUserExtraColumns()
 	query := formatPlaceholders(h.style, `
-        SELECT id, usuari, nom, cognoms, correu, contrasenya, actiu 
+        SELECT id, usuari, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, address, employment_status, profession, phone, preferred_lang, spoken_langs, actiu 
         FROM usuaris 
         WHERE (usuari = ? OR correu = ?) AND actiu = 1`)
 
 	row := h.db.QueryRow(query, usernameOrEmail, usernameOrEmail)
 
 	u := new(User)
-	if err := row.Scan(&u.ID, &u.Usuari, &u.Name, &u.Surname, &u.Email, &u.Password, &u.Active); err != nil {
+	if err := row.Scan(&u.ID, &u.Usuari, &u.Name, &u.Surname, &u.Email, &u.Password,
+		&u.DataNaixament, &u.Pais, &u.Estat, &u.Provincia, &u.Poblacio, &u.CodiPostal,
+		&u.Address, &u.Employment, &u.Profession, &u.Phone, &u.PreferredLang, &u.SpokenLangs, &u.Active); err != nil {
 		return nil, err
 	}
 
@@ -155,8 +322,9 @@ func (h sqlHelper) saveSession(sessionID string, userID int, expiry string) erro
 }
 
 func (h sqlHelper) getSessionUser(sessionID string) (*User, error) {
+	h.ensureUserExtraColumns()
 	query := formatPlaceholders(h.style, `
-        SELECT u.id, u.usuari, u.nom, u.cognoms, u.correu, u.contrasenya, u.data_naixement, u.pais, u.estat, u.provincia, u.poblacio, u.codi_postal, u.data_creacio, u.actiu
+        SELECT u.id, u.usuari, u.nom, u.cognoms, u.correu, u.contrasenya, u.data_naixement, u.pais, u.estat, u.provincia, u.poblacio, u.codi_postal, u.address, u.employment_status, u.profession, u.phone, u.preferred_lang, u.spoken_langs, u.data_creacio, u.actiu
         FROM usuaris u
         INNER JOIN sessions s ON u.id = s.usuari_id
         WHERE s.token_hash = ? AND s.revocat = 0`)
@@ -177,6 +345,12 @@ func (h sqlHelper) getSessionUser(sessionID string) (*User, error) {
 		&u.Provincia,
 		&u.Poblacio,
 		&u.CodiPostal,
+		&u.Address,
+		&u.Employment,
+		&u.Profession,
+		&u.Phone,
+		&u.PreferredLang,
+		&u.SpokenLangs,
 		&u.CreatedAt,
 		&u.Active,
 	)
@@ -248,9 +422,10 @@ func (h sqlHelper) updateUserPassword(userID int, passwordHash []byte) error {
 }
 
 func (h sqlHelper) updateUserProfile(u *User) error {
+	h.ensureUserExtraColumns()
 	stmt := formatPlaceholders(h.style, `
         UPDATE usuaris
-        SET nom = ?, cognoms = ?, correu = ?, data_naixement = ?, pais = ?, estat = ?, provincia = ?, poblacio = ?, codi_postal = ?
+        SET nom = ?, cognoms = ?, correu = ?, data_naixement = ?, pais = ?, estat = ?, provincia = ?, poblacio = ?, codi_postal = ?, address = ?, employment_status = ?, profession = ?, phone = ?, preferred_lang = ?, spoken_langs = ?
         WHERE id = ?`)
 	_, err := h.db.Exec(stmt,
 		u.Name,
@@ -262,6 +437,12 @@ func (h sqlHelper) updateUserProfile(u *User) error {
 		u.Provincia,
 		u.Poblacio,
 		u.CodiPostal,
+		u.Address,
+		u.Employment,
+		u.Profession,
+		u.Phone,
+		u.PreferredLang,
+		u.SpokenLangs,
 		u.ID,
 	)
 	return err
@@ -274,12 +455,14 @@ func (h sqlHelper) updateUserEmail(userID int, newEmail string) error {
 }
 
 func (h sqlHelper) savePrivacySettings(userID int, p *PrivacySettings) error {
+	h.ensurePrivacyExtraColumns()
 	stmt := formatPlaceholders(h.style, `
         INSERT INTO user_privacy (
             usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
             pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+            address_visibility, employment_visibility, profession_visibility, phone_visibility, preferred_lang_visibility, spoken_langs_visibility,
             show_activity, profile_public, notify_email, allow_contact
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(usuari_id) DO UPDATE SET
             nom_visibility=excluded.nom_visibility,
             cognoms_visibility=excluded.cognoms_visibility,
@@ -290,6 +473,12 @@ func (h sqlHelper) savePrivacySettings(userID int, p *PrivacySettings) error {
             provincia_visibility=excluded.provincia_visibility,
             poblacio_visibility=excluded.poblacio_visibility,
             postal_visibility=excluded.postal_visibility,
+            address_visibility=excluded.address_visibility,
+            employment_visibility=excluded.employment_visibility,
+            profession_visibility=excluded.profession_visibility,
+            phone_visibility=excluded.phone_visibility,
+            preferred_lang_visibility=excluded.preferred_lang_visibility,
+            spoken_langs_visibility=excluded.spoken_langs_visibility,
             show_activity=excluded.show_activity,
             profile_public=excluded.profile_public,
             notify_email=excluded.notify_email,
@@ -300,8 +489,9 @@ func (h sqlHelper) savePrivacySettings(userID int, p *PrivacySettings) error {
         INSERT INTO user_privacy (
             usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
             pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+            address_visibility, employment_visibility, profession_visibility, phone_visibility, preferred_lang_visibility, spoken_langs_visibility,
             show_activity, profile_public, notify_email, allow_contact
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             nom_visibility=VALUES(nom_visibility),
             cognoms_visibility=VALUES(cognoms_visibility),
@@ -312,6 +502,12 @@ func (h sqlHelper) savePrivacySettings(userID int, p *PrivacySettings) error {
             provincia_visibility=VALUES(provincia_visibility),
             poblacio_visibility=VALUES(poblacio_visibility),
             postal_visibility=VALUES(postal_visibility),
+            address_visibility=VALUES(address_visibility),
+            employment_visibility=VALUES(employment_visibility),
+            profession_visibility=VALUES(profession_visibility),
+            phone_visibility=VALUES(phone_visibility),
+            preferred_lang_visibility=VALUES(preferred_lang_visibility),
+            spoken_langs_visibility=VALUES(spoken_langs_visibility),
             show_activity=VALUES(show_activity),
             profile_public=VALUES(profile_public),
             notify_email=VALUES(notify_email),
@@ -329,6 +525,12 @@ func (h sqlHelper) savePrivacySettings(userID int, p *PrivacySettings) error {
 		p.ProvinciaVisibility,
 		p.PoblacioVisibility,
 		p.PostalVisibility,
+		p.AddressVisibility,
+		p.EmploymentVisibility,
+		p.ProfessionVisibility,
+		p.PhoneVisibility,
+		p.PreferredLangVisibility,
+		p.SpokenLangsVisibility,
 		p.ShowActivity,
 		p.ProfilePublic,
 		p.NotifyEmail,
@@ -394,12 +596,14 @@ func (h sqlHelper) markEmailChangeReverted(id int) error {
 }
 
 func (h sqlHelper) createPrivacyDefaults(userID int) error {
+	h.ensurePrivacyExtraColumns()
 	stmt := formatPlaceholders(h.style, `
         INSERT INTO user_privacy (
             usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
             pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+            address_visibility, employment_visibility, profession_visibility, phone_visibility, preferred_lang_visibility, spoken_langs_visibility,
             show_activity, profile_public, notify_email, allow_contact
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1)
         ON CONFLICT (usuari_id) DO NOTHING
     `)
 	if h.style == "mysql" {
@@ -407,8 +611,9 @@ func (h sqlHelper) createPrivacyDefaults(userID int) error {
         INSERT IGNORE INTO user_privacy (
             usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
             pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+            address_visibility, employment_visibility, profession_visibility, phone_visibility, preferred_lang_visibility, spoken_langs_visibility,
             show_activity, profile_public, notify_email, allow_contact
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1)
         `
 	}
 	_, err := h.db.Exec(stmt,
@@ -422,14 +627,22 @@ func (h sqlHelper) createPrivacyDefaults(userID int) error {
 		"private", // provincia
 		"private", // poblacio
 		"private", // postal
+		"private", // address
+		"private", // employment
+		"private", // profession
+		"private", // phone
+		"private", // preferred lang
+		"private", // spoken langs
 	)
 	return err
 }
 
 func (h sqlHelper) getPrivacySettings(userID int) (*PrivacySettings, error) {
+	h.ensurePrivacyExtraColumns()
 	stmt := formatPlaceholders(h.style, `
         SELECT usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
                pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+               address_visibility, employment_visibility, profession_visibility, phone_visibility, preferred_lang_visibility, spoken_langs_visibility,
                show_activity, profile_public, notify_email, allow_contact
         FROM user_privacy
         WHERE usuari_id = ?
@@ -447,6 +660,12 @@ func (h sqlHelper) getPrivacySettings(userID int) (*PrivacySettings, error) {
 		&p.ProvinciaVisibility,
 		&p.PoblacioVisibility,
 		&p.PostalVisibility,
+		&p.AddressVisibility,
+		&p.EmploymentVisibility,
+		&p.ProfessionVisibility,
+		&p.PhoneVisibility,
+		&p.PreferredLangVisibility,
+		&p.SpokenLangsVisibility,
 		&p.ShowActivity,
 		&p.ProfilePublic,
 		&p.NotifyEmail,

@@ -69,7 +69,11 @@ func main() {
 		}
 
 		// Renderitzar la pàgina privada amb les dades de l'usuari
-		core.RenderPrivateTemplate(w, r, "index-logedin.html", map[string]interface{}{
+		lang := core.ResolveLang(r)
+		if pref := strings.TrimSpace(user.PreferredLang); pref != "" {
+			lang = pref
+		}
+		core.RenderPrivateTemplateLang(w, r, "index-logedin.html", lang, map[string]interface{}{
 			"User": user,
 		})
 	})
@@ -90,10 +94,9 @@ func main() {
 		return func(w http.ResponseWriter, r *http.Request) {
 			expiry := time.Now().Add(365 * 24 * time.Hour)
 			env := strings.ToLower(os.Getenv("ENVIRONMENT"))
-			secure := true
+			secure := r.TLS != nil
 			sameSite := http.SameSiteStrictMode
 			if env == "development" {
-				secure = r.TLS != nil
 				sameSite = http.SameSiteLaxMode
 			}
 			http.SetCookie(w, &http.Cookie{

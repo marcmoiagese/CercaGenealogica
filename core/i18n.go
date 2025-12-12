@@ -11,6 +11,7 @@ import (
 )
 
 const defaultLang = "cat"
+type langOverrideKey struct{}
 
 var (
 	translations   = make(map[string]map[string]string)
@@ -153,6 +154,13 @@ func ResolveLang(r *http.Request) string {
 		return defaultLang
 	}
 
+	// Permet passar un valor preestablert al context (p.ex. idioma preferit de l'usuari logat)
+	if v := r.Context().Value(langOverrideKey{}); v != nil {
+		if lang, ok := v.(string); ok && isSupportedLang(lang) {
+			return lang
+		}
+	}
+
 	if c, err := r.Cookie("lang"); err == nil && c != nil {
 		lang := normalizeLang(c.Value)
 		if isSupportedLang(lang) {
@@ -177,4 +185,12 @@ func ResolveLang(r *http.Request) string {
 	}
 
 	return defaultLang
+}
+
+// ResolveLangForUser retorna l'idioma de l'usuari si és vàlid, altrament fa servir ResolveLang.
+func ResolveLangForUser(r *http.Request, pref string) string {
+	if l := normalizeLang(strings.TrimSpace(pref)); l != "" && isSupportedLang(l) {
+		return l
+	}
+	return ResolveLang(r)
 }

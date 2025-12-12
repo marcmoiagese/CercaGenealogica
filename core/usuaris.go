@@ -84,6 +84,12 @@ func (u *Usuari) ToDBUser(passwordHash []byte) *db.User {
 		Provincia:     u.Provincia,
 		Poblacio:      u.Poblacio,
 		CodiPostal:    u.CodiPostal,
+		Address:       "",
+		Employment:    "",
+		Profession:    "",
+		Phone:         "",
+		PreferredLang: "",
+		SpokenLangs:   "",
 		Active:        u.Actiu,
 	}
 }
@@ -541,6 +547,11 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
+	lang := ResolveLang(r)
+	if pref := strings.TrimSpace(user.PreferredLang); pref != "" && isSupportedLang(pref) {
+		lang = pref
+		setLangCookie(w, r, lang)
+	}
 
 	var privacy *db.PrivacySettings
 	if p, err := a.DB.GetPrivacySettings(user.ID); err == nil {
@@ -553,6 +564,19 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 	memberSince := formatDateDisplay(user.CreatedAt)
 	birthInput := formatDateInput(user.DataNaixament)
 
+	spokenSlice := []string{}
+	if strings.TrimSpace(user.SpokenLangs) != "" {
+		for _, v := range strings.Split(user.SpokenLangs, ",") {
+			if t := strings.TrimSpace(v); t != "" {
+				spokenSlice = append(spokenSlice, t)
+			}
+		}
+	}
+	spokenSet := map[string]bool{}
+	for _, v := range spokenSlice {
+		spokenSet[v] = true
+	}
+
 	activeTab := r.URL.Query().Get("tab")
 	switch activeTab {
 	case "generals", "contrasenya", "privacitat", "eliminar":
@@ -560,7 +584,7 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 		activeTab = "generals"
 	}
 
-	RenderPrivateTemplate(w, r, "perfil.html", map[string]interface{}{
+	RenderPrivateTemplateLang(w, r, "perfil.html", lang, map[string]interface{}{
 		"User":               user,
 		"Privacy":            privacy,
 		"MemberSince":        memberSince,
@@ -569,6 +593,9 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 		"Success":            r.URL.Query().Get("success"),
 		"Error":              r.URL.Query().Get("error"),
 		"ActiveTab":          activeTab,
+		"LangOptions":        []string{"cat", "en", "oc"},
+		"SpokenSlice":        spokenSlice,
+		"SpokenSet":          spokenSet,
 	})
 }
 
@@ -617,6 +644,12 @@ func defaultPrivacySettings() *db.PrivacySettings {
 		ProvinciaVisibility: "private",
 		PoblacioVisibility:  "private",
 		PostalVisibility:    "private",
+		AddressVisibility:   "private",
+		EmploymentVisibility: "private",
+		ProfessionVisibility: "private",
+		PhoneVisibility:     "private",
+		PreferredLangVisibility: "private",
+		SpokenLangsVisibility: "private",
 		ShowActivity:        true,
 		ProfilePublic:       true,
 		NotifyEmail:         true,
@@ -624,13 +657,48 @@ func defaultPrivacySettings() *db.PrivacySettings {
 	}
 }
 
+func resolveUserLang(r *http.Request, user *db.User) string {
+	lang := ResolveLang(r)
+	if user != nil {
+		if l := normalizeLang(strings.TrimSpace(user.PreferredLang)); l != "" && isSupportedLang(l) {
+			return l
+		}
+	}
+	return lang
+}
+
+func setLangCookie(w http.ResponseWriter, r *http.Request, lang string) {
+	if lang == "" {
+		return
+	}
+	env := strings.ToLower(os.Getenv("ENVIRONMENT"))
+	secure := true
+	sameSite := http.SameSiteStrictMode
+	if env == "development" {
+		secure = r.TLS != nil
+		sameSite = http.SameSiteLaxMode
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "lang",
+		Value:    lang,
+		Path:     "/",
+		HttpOnly: false,
+		SameSite: sameSite,
+		Secure:   secure,
+	})
+}
+
 // ActualitzarPerfilDades – Desa dades generals i privacitat; gestiona canvi de correu amb confirmació.
 func (a *App) ActualitzarPerfilDades(w http.ResponseWriter, r *http.Request) {
-	lang := ResolveLang(r)
 	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
+	}
+	lang := ResolveLang(r)
+	if pref := strings.TrimSpace(user.PreferredLang); pref != "" && isSupportedLang(pref) {
+		lang = pref
+		setLangCookie(w, r, lang)
 	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/perfil?tab=generals", http.StatusSeeOther)
@@ -657,6 +725,12 @@ func (a *App) ActualitzarPerfilDades(w http.ResponseWriter, r *http.Request) {
 	user.Provincia = r.FormValue("provincia")
 	user.Poblacio = r.FormValue("poblacio")
 	user.CodiPostal = r.FormValue("codi_postal")
+	user.Address = r.FormValue("adreca")
+	user.Employment = r.FormValue("situacio_laboral")
+	user.Profession = r.FormValue("professio")
+	user.Phone = r.FormValue("telefon")
+	user.PreferredLang = r.FormValue("idioma_preferit")
+	user.SpokenLangs = strings.TrimSpace(r.FormValue("idiomes_parla"))
 
 	if err := a.DB.UpdateUserProfile(user); err != nil {
 		http.Redirect(w, r, "/perfil?tab=generals&error="+url.QueryEscape(T(lang, "error.user.create")), http.StatusSeeOther)
@@ -678,6 +752,12 @@ func (a *App) ActualitzarPerfilDades(w http.ResponseWriter, r *http.Request) {
 	privacy.ProvinciaVisibility = visibilityValue(r.FormValue("provincia_visibility"))
 	privacy.PoblacioVisibility = visibilityValue(r.FormValue("poblacio_visibility"))
 	privacy.PostalVisibility = visibilityValue(r.FormValue("codi_postal_visibility"))
+	privacy.AddressVisibility = visibilityValue(r.FormValue("adreca_visibility"))
+	privacy.EmploymentVisibility = visibilityValue(r.FormValue("situacio_visibility"))
+	privacy.ProfessionVisibility = visibilityValue(r.FormValue("professio_visibility"))
+	privacy.PhoneVisibility = visibilityValue(r.FormValue("telefon_visibility"))
+	privacy.PreferredLangVisibility = visibilityValue(r.FormValue("idioma_preferit_visibility"))
+	privacy.SpokenLangsVisibility = visibilityValue(r.FormValue("idiomes_parla_visibility"))
 	privacy.ShowActivity = r.FormValue("mostrar_estadistiques_public") == "on"
 	// ProfilePublic, NotifyEmail i AllowContact provenen del formulari de privacitat; els mantenim.
 
@@ -705,11 +785,15 @@ func (a *App) ActualitzarPerfilDades(w http.ResponseWriter, r *http.Request) {
 
 // ActualitzarPerfilPrivacitat – desa només preferències de privacitat/comunicacions.
 func (a *App) ActualitzarPerfilPrivacitat(w http.ResponseWriter, r *http.Request) {
-	lang := ResolveLang(r)
 	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
+	}
+	lang := ResolveLang(r)
+	if pref := strings.TrimSpace(user.PreferredLang); pref != "" && isSupportedLang(pref) {
+		lang = pref
+		setLangCookie(w, r, lang)
 	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/perfil?tab=privacitat", http.StatusSeeOther)
@@ -742,11 +826,15 @@ func (a *App) ActualitzarPerfilPrivacitat(w http.ResponseWriter, r *http.Request
 
 // ActualitzarPerfilContrasenya – valida la contrasenya actual i actualitza a una de nova.
 func (a *App) ActualitzarPerfilContrasenya(w http.ResponseWriter, r *http.Request) {
-	lang := ResolveLang(r)
 	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
+	}
+	lang := ResolveLang(r)
+	if pref := strings.TrimSpace(user.PreferredLang); pref != "" && isSupportedLang(pref) {
+		lang = pref
+		setLangCookie(w, r, lang)
 	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/perfil?tab=contrasenya", http.StatusSeeOther)

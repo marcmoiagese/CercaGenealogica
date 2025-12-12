@@ -51,6 +51,12 @@ type User struct {
 	Provincia     string
 	Poblacio      string
 	CodiPostal    string
+	Address       string
+	Employment    string
+	Profession    string
+	Phone         string
+	PreferredLang string
+	SpokenLangs   string
 }
 
 type PasswordReset struct {
@@ -71,6 +77,12 @@ type PrivacySettings struct {
 	ProvinciaVisibility string
 	PoblacioVisibility string
 	PostalVisibility   string
+	AddressVisibility  string
+	EmploymentVisibility string
+	ProfessionVisibility string
+	PhoneVisibility    string
+	PreferredLangVisibility string
+	SpokenLangsVisibility string
 	ShowActivity       bool
 	ProfilePublic      bool
 	NotifyEmail        bool
