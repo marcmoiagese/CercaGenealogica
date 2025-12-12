@@ -362,6 +362,57 @@ CREATE TABLE IF NOT EXISTS email_changes (
 
 -- Índex compost per millorar la cerca de duplicats i cerques combinades
 -- CREATE INDEX idx_persona_cognoms_any_llibre_pagina ON persona(cognom1, cognom2, quinta, llibre, pagina);
+
+
+
+-- =====================================================================
+-- Arxius / Custòdia (físic o digital) + Estat d'indexació per pàgina
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS arxius (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  nom VARCHAR(255) NOT NULL UNIQUE,
+  tipus VARCHAR(50),                 -- parroquia, arxiu_diocesa, portal_digital, etc.
+  municipi_id INT UNSIGNED NULL,
+  adreca TEXT,
+  ubicacio TEXT,                      -- (legacy) municipi/adreça en text lliure
+  web VARCHAR(255),
+  acces VARCHAR(20),                  -- online, presencial, mixt
+  notes TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS arxius_llibres (
+  arxiu_id INT UNSIGNED NOT NULL,
+  llibre_id INT UNSIGNED NOT NULL,
+  signatura VARCHAR(255),          -- signatura específica a aquell arxiu
+  url_override TEXT,               -- si l’URL depèn de l’arxiu/portal
+  PRIMARY KEY (arxiu_id, llibre_id),
+  FOREIGN KEY (arxiu_id) REFERENCES arxius(id) ON DELETE CASCADE,
+  FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS llibre_pagines (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  llibre_id INT UNSIGNED NOT NULL,
+  num_pagina INT NOT NULL,
+  estat VARCHAR(10) NOT NULL DEFAULT 'pendent',
+  indexed_at DATETIME,
+  indexed_by INT UNSIGNED NULL,
+  notes TEXT,
+  UNIQUE KEY uq_llibre_pagines (llibre_id, num_pagina),
+  CONSTRAINT chk_llibre_pagines_estat CHECK (estat IN ('pendent','indexant','indexada','revisio','error')),
+  FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE CASCADE,
+  FOREIGN KEY (indexed_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Índexs per accelerar consultes habituals
+CREATE INDEX idx_arxius_llibres_arxiu  ON arxius_llibres(arxiu_id);
+CREATE INDEX idx_arxius_llibres_llibre ON arxius_llibres(llibre_id);
+CREATE INDEX idx_llibre_pagines_estat  ON llibre_pagines(llibre_id, estat);
+
 -- Cerca per cognoms i nom (per coincidències exactes)
 -- CREATE INDEX idx_persona_nom_complet ON persona(nom_complet);
 -- Útil per cerca de persones per municipi i quinta (ex: nascuts al mateix lloc i època)

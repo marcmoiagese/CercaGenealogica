@@ -251,6 +251,51 @@ CREATE TABLE IF NOT EXISTS llibres (
     FOREIGN KEY(municipi_id) REFERENCES municipis(id) ON DELETE RESTRICT
 );
 
+
+
+
+-- =====================================================================
+-- Arxius / Custòdia (físic o digital) + Estat d'indexació per pàgina
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS arxius (
+  id SERIAL PRIMARY KEY,
+  nom TEXT NOT NULL UNIQUE,
+  tipus TEXT,                 -- parroquia, arxiu_diocesa, portal_digital, etc.
+  municipi_id INTEGER REFERENCES municipis(id) ON DELETE SET NULL,
+  adreca TEXT,
+  ubicacio TEXT,              -- (legacy) municipi/adreça en text lliure
+  web TEXT,
+  acces TEXT,                 -- online, presencial, mixt
+  notes TEXT,
+  created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS arxius_llibres (
+  arxiu_id INTEGER NOT NULL REFERENCES arxius(id) ON DELETE CASCADE,
+  llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,
+  signatura TEXT,          -- signatura específica a aquell arxiu
+  url_override TEXT,       -- si l’URL depèn de l’arxiu/portal
+  PRIMARY KEY (arxiu_id, llibre_id)
+);
+
+CREATE TABLE IF NOT EXISTS llibre_pagines (
+  id SERIAL PRIMARY KEY,
+  llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,
+  num_pagina INTEGER NOT NULL,
+  estat TEXT NOT NULL CHECK (estat IN ('pendent','indexant','indexada','revisio','error')) DEFAULT 'pendent',
+  indexed_at TIMESTAMP WITHOUT TIME ZONE,
+  indexed_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  notes TEXT,
+  UNIQUE (llibre_id, num_pagina)
+);
+
+-- Índexs per accelerar consultes habituals
+CREATE INDEX IF NOT EXISTS idx_arxius_llibres_arxiu  ON arxius_llibres(arxiu_id);
+CREATE INDEX IF NOT EXISTS idx_arxius_llibres_llibre ON arxius_llibres(llibre_id);
+CREATE INDEX IF NOT EXISTS idx_llibre_pagines_estat  ON llibre_pagines(llibre_id, estat);
+
 -- Taules de GESTIÓ DE SESSIONS
 ------------------------------------------------------------------------------------------------------------------------
 
