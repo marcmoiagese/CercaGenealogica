@@ -1,0 +1,318 @@
+//line /home/marc/codi/CercaGenealogica3/db/sqlite.go:1:1
+package db
+
+import (
+	"database/sql"
+	"fmt"
+
+	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/bcrypt"
+)
+
+type SQLite struct {
+	Path string
+	Conn *sql.DB
+	help sqlHelper
+}
+
+func (d *SQLite) Connect() error {goCover_4bc4be4c3247__209[0] = 3 ; goCover_4bc4be4c3247__209[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__209[2] = 209 ; goCover_4bc4be4c3247__209[3]++;
+	conn, err := sql.Open("sqlite3", d.Path)
+	if err != nil {goCover_4bc4be4c3247__209[5]++;
+		return fmt.Errorf("error connectant a SQLite: %w", err)
+	}
+	goCover_4bc4be4c3247__209[4]++;d.Conn = conn
+	d.help = newSQLHelper(conn, "sqlite", "datetime('now')")
+	logInfof("Conectat a SQLite")
+	return nil
+}
+
+func (d *SQLite) Close() {goCover_4bc4be4c3247__210[0] = 2 ; goCover_4bc4be4c3247__210[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__210[2] = 210 ; goCover_4bc4be4c3247__210[3]++;
+	if d.Conn != nil {goCover_4bc4be4c3247__210[4]++;
+		d.Conn.Close()
+	}
+}
+
+func (d *SQLite) Query(query string, args ...interface{}) ([]map[string]interface{}, error) {goCover_4bc4be4c3247__211[0] = 9 ; goCover_4bc4be4c3247__211[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__211[2] = 211 ; goCover_4bc4be4c3247__211[3]++;
+	rows, err := d.Conn.Query(query, args...)
+	if err != nil {goCover_4bc4be4c3247__211[6]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__211[4]++;defer rows.Close()
+
+	// Processa resultats
+	columns, _ := rows.Columns()
+	results := []map[string]interface{}{}
+
+	for rows.Next() {goCover_4bc4be4c3247__211[7]++;
+		scanArgs := make([]interface{}, len(columns))
+		values := make([]interface{}, len(columns))
+
+		for i := range values {goCover_4bc4be4c3247__211[10]++;
+			scanArgs[i] = &values[i]
+		}
+
+		goCover_4bc4be4c3247__211[8]++;rows.Scan(scanArgs...)
+
+		row := make(map[string]interface{})
+		for i, col := range columns {goCover_4bc4be4c3247__211[11]++;
+			row[col] = values[i]
+		}
+
+		goCover_4bc4be4c3247__211[9]++;results = append(results, row)
+	}
+
+	goCover_4bc4be4c3247__211[5]++;return results, nil
+}
+
+func (d *SQLite) Exec(query string, args ...interface{}) (int64, error) {goCover_4bc4be4c3247__212[0] = 3 ; goCover_4bc4be4c3247__212[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__212[2] = 212 ; goCover_4bc4be4c3247__212[3]++;
+	res, err := d.Conn.Exec(query, args...)
+	if err != nil {goCover_4bc4be4c3247__212[5]++;
+		return 0, err
+	}
+	goCover_4bc4be4c3247__212[4]++;id, _ := res.LastInsertId()
+	return id, nil
+}
+
+func (d *SQLite) InsertUser(user *User) error {goCover_4bc4be4c3247__213[0] = 3 ; goCover_4bc4be4c3247__213[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__213[2] = 213 ; goCover_4bc4be4c3247__213[3]++;
+	if err := d.help.insertUser(user); err != nil {goCover_4bc4be4c3247__213[5]++;
+		logErrorf("[SQLite] Error a InsertUser: %v", err)
+		return err
+	}
+	goCover_4bc4be4c3247__213[4]++;return nil
+}
+
+func (d *SQLite) GetUserByEmail(email string) (*User, error) {goCover_4bc4be4c3247__214[0] = 1 ; goCover_4bc4be4c3247__214[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__214[2] = 214 ; goCover_4bc4be4c3247__214[3]++;
+	return d.help.getUserByEmail(email)
+}
+
+func (d *SQLite) ExistsUserByUsername(username string) (bool, error) {goCover_4bc4be4c3247__215[0] = 1 ; goCover_4bc4be4c3247__215[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__215[2] = 215 ; goCover_4bc4be4c3247__215[3]++;
+	return d.help.existsUserByUsername(username)
+}
+
+func (d *SQLite) ExistsUserByEmail(email string) (bool, error) {goCover_4bc4be4c3247__216[0] = 1 ; goCover_4bc4be4c3247__216[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__216[2] = 216 ; goCover_4bc4be4c3247__216[3]++;
+	return d.help.existsUserByEmail(email)
+}
+
+func (s *SQLite) SaveActivationToken(email, token string) error {goCover_4bc4be4c3247__217[0] = 1 ; goCover_4bc4be4c3247__217[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__217[2] = 217 ; goCover_4bc4be4c3247__217[3]++;
+	return s.help.saveActivationToken(email, token)
+}
+
+func (d *SQLite) ActivateUser(token string) error {goCover_4bc4be4c3247__218[0] = 1 ; goCover_4bc4be4c3247__218[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__218[2] = 218 ; goCover_4bc4be4c3247__218[3]++;
+	return d.help.activateUser(token)
+}
+
+func (d *SQLite) AuthenticateUser(usernameOrEmail, password string) (*User, error) {goCover_4bc4be4c3247__219[0] = 5 ; goCover_4bc4be4c3247__219[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__219[2] = 219 ; goCover_4bc4be4c3247__219[3]++;
+	u, err := d.help.authenticateUser(usernameOrEmail, password)
+	if err != nil {goCover_4bc4be4c3247__219[6]++;
+		return nil, fmt.Errorf("usuari no trobat o no actiu")
+	}
+
+	// Verificar contrasenya (assumim que està hashejada amb bcrypt)
+	goCover_4bc4be4c3247__219[4]++;if err := bcrypt.CompareHashAndPassword(u.Password, []byte(password)); err != nil {goCover_4bc4be4c3247__219[7]++;
+		return nil, fmt.Errorf("contrasenya incorrecta")
+	}
+
+	goCover_4bc4be4c3247__219[5]++;return u, nil
+}
+
+// Gestió de sessions - adaptat a l'estructura existent de la taula sessions
+func (d *SQLite) SaveSession(sessionID string, userID int, expiry string) error {goCover_4bc4be4c3247__220[0] = 3 ; goCover_4bc4be4c3247__220[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__220[2] = 220 ; goCover_4bc4be4c3247__220[3]++;
+	if err := d.help.saveSession(sessionID, userID, expiry); err != nil {goCover_4bc4be4c3247__220[5]++;
+		logErrorf("[SQLite] Error guardant sessió: %v", err)
+		return err
+	}
+	goCover_4bc4be4c3247__220[4]++;return nil
+}
+
+func (d *SQLite) GetSessionUser(sessionID string) (*User, error) {goCover_4bc4be4c3247__221[0] = 1 ; goCover_4bc4be4c3247__221[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__221[2] = 221 ; goCover_4bc4be4c3247__221[3]++;
+	return d.help.getSessionUser(sessionID)
+}
+
+func (d *SQLite) DeleteSession(sessionID string) error {goCover_4bc4be4c3247__222[0] = 1 ; goCover_4bc4be4c3247__222[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__222[2] = 222 ; goCover_4bc4be4c3247__222[3]++;
+	return d.help.deleteSession(sessionID)
+}
+
+func (d *SQLite) CreatePasswordReset(email, token, expiry, lang string) (bool, error) {goCover_4bc4be4c3247__223[0] = 1 ; goCover_4bc4be4c3247__223[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__223[2] = 223 ; goCover_4bc4be4c3247__223[3]++;
+	return d.help.createPasswordReset(email, token, expiry, lang)
+}
+
+func (d *SQLite) GetPasswordReset(token string) (*PasswordReset, error) {goCover_4bc4be4c3247__224[0] = 1 ; goCover_4bc4be4c3247__224[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__224[2] = 224 ; goCover_4bc4be4c3247__224[3]++;
+	return d.help.getPasswordReset(token)
+}
+
+func (d *SQLite) MarkPasswordResetUsed(id int) error {goCover_4bc4be4c3247__225[0] = 1 ; goCover_4bc4be4c3247__225[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__225[2] = 225 ; goCover_4bc4be4c3247__225[3]++;
+	return d.help.markPasswordResetUsed(id)
+}
+
+func (d *SQLite) UpdateUserPassword(userID int, passwordHash []byte) error {goCover_4bc4be4c3247__226[0] = 1 ; goCover_4bc4be4c3247__226[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__226[2] = 226 ; goCover_4bc4be4c3247__226[3]++;
+	return d.help.updateUserPassword(userID, passwordHash)
+}
+
+func (d *SQLite) CreatePrivacyDefaults(userID int) error {goCover_4bc4be4c3247__227[0] = 1 ; goCover_4bc4be4c3247__227[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__227[2] = 227 ; goCover_4bc4be4c3247__227[3]++;
+	return d.help.createPrivacyDefaults(userID)
+}
+
+func (d *SQLite) GetPrivacySettings(userID int) (*PrivacySettings, error) {goCover_4bc4be4c3247__228[0] = 1 ; goCover_4bc4be4c3247__228[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__228[2] = 228 ; goCover_4bc4be4c3247__228[3]++;
+	return d.help.getPrivacySettings(userID)
+}
+
+func (d *SQLite) SavePrivacySettings(userID int, p *PrivacySettings) error {goCover_4bc4be4c3247__229[0] = 1 ; goCover_4bc4be4c3247__229[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__229[2] = 229 ; goCover_4bc4be4c3247__229[3]++;
+	return d.help.savePrivacySettings(userID, p)
+}
+
+func (d *SQLite) UpdateUserProfile(u *User) error {goCover_4bc4be4c3247__230[0] = 1 ; goCover_4bc4be4c3247__230[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__230[2] = 230 ; goCover_4bc4be4c3247__230[3]++;
+	return d.help.updateUserProfile(u)
+}
+
+func (d *SQLite) UpdateUserEmail(userID int, newEmail string) error {goCover_4bc4be4c3247__231[0] = 1 ; goCover_4bc4be4c3247__231[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__231[2] = 231 ; goCover_4bc4be4c3247__231[3]++;
+	return d.help.updateUserEmail(userID, newEmail)
+}
+
+func (d *SQLite) CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {goCover_4bc4be4c3247__232[0] = 1 ; goCover_4bc4be4c3247__232[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__232[2] = 232 ; goCover_4bc4be4c3247__232[3]++;
+	return d.help.createEmailChange(userID, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang)
+}
+
+func (d *SQLite) ConfirmEmailChange(token string) (*EmailChange, error) {goCover_4bc4be4c3247__233[0] = 1 ; goCover_4bc4be4c3247__233[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__233[2] = 233 ; goCover_4bc4be4c3247__233[3]++;
+	return d.help.confirmEmailChange(token)
+}
+
+func (d *SQLite) RevertEmailChange(token string) (*EmailChange, error) {goCover_4bc4be4c3247__234[0] = 1 ; goCover_4bc4be4c3247__234[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__234[2] = 234 ; goCover_4bc4be4c3247__234[3]++;
+	return d.help.revertEmailChange(token)
+}
+
+func (d *SQLite) markEmailChangeConfirmed(id int) error {goCover_4bc4be4c3247__235[0] = 1 ; goCover_4bc4be4c3247__235[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__235[2] = 235 ; goCover_4bc4be4c3247__235[3]++;
+	return d.help.markEmailChangeConfirmed(id)
+}
+
+func (d *SQLite) markEmailChangeReverted(id int) error {goCover_4bc4be4c3247__236[0] = 1 ; goCover_4bc4be4c3247__236[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__236[2] = 236 ; goCover_4bc4be4c3247__236[3]++;
+	return d.help.markEmailChangeReverted(id)
+}
+
+// Policies
+func (d *SQLite) UserHasAnyPolicy(userID int, policies []string) (bool, error) {goCover_4bc4be4c3247__237[0] = 1 ; goCover_4bc4be4c3247__237[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__237[2] = 237 ; goCover_4bc4be4c3247__237[3]++;
+	return d.help.userHasAnyPolicy(userID, policies)
+}
+func (d *SQLite) EnsureDefaultPolicies() error {goCover_4bc4be4c3247__238[0] = 1 ; goCover_4bc4be4c3247__238[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__238[2] = 238 ; goCover_4bc4be4c3247__238[3]++;
+	return d.help.ensureDefaultPolicies()
+}
+
+// Paisos
+func (d *SQLite) ListPaisos() ([]Pais, error) {goCover_4bc4be4c3247__239[0] = 1 ; goCover_4bc4be4c3247__239[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__239[2] = 239 ; goCover_4bc4be4c3247__239[3]++;
+	return d.help.listPaisos()
+}
+func (d *SQLite) GetPais(id int) (*Pais, error) {goCover_4bc4be4c3247__240[0] = 1 ; goCover_4bc4be4c3247__240[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__240[2] = 240 ; goCover_4bc4be4c3247__240[3]++;
+	return d.help.getPais(id)
+}
+func (d *SQLite) CreatePais(p *Pais) (int, error) {goCover_4bc4be4c3247__241[0] = 1 ; goCover_4bc4be4c3247__241[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__241[2] = 241 ; goCover_4bc4be4c3247__241[3]++;
+	return d.help.createPais(p)
+}
+func (d *SQLite) UpdatePais(p *Pais) error {goCover_4bc4be4c3247__242[0] = 1 ; goCover_4bc4be4c3247__242[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__242[2] = 242 ; goCover_4bc4be4c3247__242[3]++;
+	return d.help.updatePais(p)
+}
+
+// Nivells administratius
+func (d *SQLite) ListNivells(f NivellAdminFilter) ([]NivellAdministratiu, error) {goCover_4bc4be4c3247__243[0] = 1 ; goCover_4bc4be4c3247__243[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__243[2] = 243 ; goCover_4bc4be4c3247__243[3]++;
+	return d.help.listNivells(f)
+}
+func (d *SQLite) GetNivell(id int) (*NivellAdministratiu, error) {goCover_4bc4be4c3247__244[0] = 1 ; goCover_4bc4be4c3247__244[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__244[2] = 244 ; goCover_4bc4be4c3247__244[3]++;
+	return d.help.getNivell(id)
+}
+func (d *SQLite) CreateNivell(n *NivellAdministratiu) (int, error) {goCover_4bc4be4c3247__245[0] = 1 ; goCover_4bc4be4c3247__245[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__245[2] = 245 ; goCover_4bc4be4c3247__245[3]++;
+	return d.help.createNivell(n)
+}
+func (d *SQLite) UpdateNivell(n *NivellAdministratiu) error {goCover_4bc4be4c3247__246[0] = 1 ; goCover_4bc4be4c3247__246[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__246[2] = 246 ; goCover_4bc4be4c3247__246[3]++;
+	return d.help.updateNivell(n)
+}
+
+// Municipis
+func (d *SQLite) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {goCover_4bc4be4c3247__247[0] = 1 ; goCover_4bc4be4c3247__247[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__247[2] = 247 ; goCover_4bc4be4c3247__247[3]++;
+	return d.help.listMunicipis(f)
+}
+func (d *SQLite) GetMunicipi(id int) (*Municipi, error) {goCover_4bc4be4c3247__248[0] = 1 ; goCover_4bc4be4c3247__248[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__248[2] = 248 ; goCover_4bc4be4c3247__248[3]++;
+	return d.help.getMunicipi(id)
+}
+func (d *SQLite) CreateMunicipi(m *Municipi) (int, error) {goCover_4bc4be4c3247__249[0] = 1 ; goCover_4bc4be4c3247__249[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__249[2] = 249 ; goCover_4bc4be4c3247__249[3]++;
+	return d.help.createMunicipi(m)
+}
+func (d *SQLite) UpdateMunicipi(m *Municipi) error {goCover_4bc4be4c3247__250[0] = 1 ; goCover_4bc4be4c3247__250[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__250[2] = 250 ; goCover_4bc4be4c3247__250[3]++;
+	return d.help.updateMunicipi(m)
+}
+func (d *SQLite) ListCodisPostals(municipiID int) ([]CodiPostal, error) {goCover_4bc4be4c3247__251[0] = 1 ; goCover_4bc4be4c3247__251[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__251[2] = 251 ; goCover_4bc4be4c3247__251[3]++;
+	return d.help.listCodisPostals(municipiID)
+}
+func (d *SQLite) SaveCodiPostal(cp *CodiPostal) (int, error) {goCover_4bc4be4c3247__252[0] = 1 ; goCover_4bc4be4c3247__252[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__252[2] = 252 ; goCover_4bc4be4c3247__252[3]++;
+	return d.help.saveCodiPostal(cp)
+}
+
+// Entitats eclesiàstiques
+func (d *SQLite) ListArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error) {goCover_4bc4be4c3247__253[0] = 1 ; goCover_4bc4be4c3247__253[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__253[2] = 253 ; goCover_4bc4be4c3247__253[3]++;
+	return d.help.listArquebisbats(f)
+}
+func (d *SQLite) GetArquebisbat(id int) (*Arquebisbat, error) {goCover_4bc4be4c3247__254[0] = 1 ; goCover_4bc4be4c3247__254[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__254[2] = 254 ; goCover_4bc4be4c3247__254[3]++;
+	return d.help.getArquebisbat(id)
+}
+func (d *SQLite) CreateArquebisbat(ae *Arquebisbat) (int, error) {goCover_4bc4be4c3247__255[0] = 1 ; goCover_4bc4be4c3247__255[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__255[2] = 255 ; goCover_4bc4be4c3247__255[3]++;
+	return d.help.createArquebisbat(ae)
+}
+func (d *SQLite) UpdateArquebisbat(ae *Arquebisbat) error {goCover_4bc4be4c3247__256[0] = 1 ; goCover_4bc4be4c3247__256[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__256[2] = 256 ; goCover_4bc4be4c3247__256[3]++;
+	return d.help.updateArquebisbat(ae)
+}
+func (d *SQLite) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {goCover_4bc4be4c3247__257[0] = 1 ; goCover_4bc4be4c3247__257[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__257[2] = 257 ; goCover_4bc4be4c3247__257[3]++;
+	return d.help.listArquebisbatMunicipis(munID)
+}
+func (d *SQLite) SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {goCover_4bc4be4c3247__258[0] = 1 ; goCover_4bc4be4c3247__258[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__258[2] = 258 ; goCover_4bc4be4c3247__258[3]++;
+	return d.help.saveArquebisbatMunicipi(am)
+}
+
+// Arxius
+func (d *SQLite) ListArxius(f ArxiuFilter) ([]ArxiuWithCount, error) {goCover_4bc4be4c3247__259[0] = 1 ; goCover_4bc4be4c3247__259[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__259[2] = 259 ; goCover_4bc4be4c3247__259[3]++;
+	return d.help.listArxius(f)
+}
+func (d *SQLite) GetArxiu(id int) (*Arxiu, error) {goCover_4bc4be4c3247__260[0] = 1 ; goCover_4bc4be4c3247__260[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__260[2] = 260 ; goCover_4bc4be4c3247__260[3]++;
+	return d.help.getArxiu(id)
+}
+func (d *SQLite) CreateArxiu(a *Arxiu) (int, error) {goCover_4bc4be4c3247__261[0] = 1 ; goCover_4bc4be4c3247__261[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__261[2] = 261 ; goCover_4bc4be4c3247__261[3]++;
+	return d.help.createArxiu(a)
+}
+func (d *SQLite) UpdateArxiu(a *Arxiu) error {goCover_4bc4be4c3247__262[0] = 1 ; goCover_4bc4be4c3247__262[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__262[2] = 262 ; goCover_4bc4be4c3247__262[3]++;
+	return d.help.updateArxiu(a)
+}
+func (d *SQLite) DeleteArxiu(id int) error {goCover_4bc4be4c3247__263[0] = 1 ; goCover_4bc4be4c3247__263[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__263[2] = 263 ; goCover_4bc4be4c3247__263[3]++;
+	return d.help.deleteArxiu(id)
+}
+func (d *SQLite) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {goCover_4bc4be4c3247__264[0] = 1 ; goCover_4bc4be4c3247__264[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__264[2] = 264 ; goCover_4bc4be4c3247__264[3]++;
+	return d.help.listArxiuLlibres(arxiuID)
+}
+func (d *SQLite) AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {goCover_4bc4be4c3247__265[0] = 1 ; goCover_4bc4be4c3247__265[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__265[2] = 265 ; goCover_4bc4be4c3247__265[3]++;
+	return d.help.addArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+}
+func (d *SQLite) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {goCover_4bc4be4c3247__266[0] = 1 ; goCover_4bc4be4c3247__266[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__266[2] = 266 ; goCover_4bc4be4c3247__266[3]++;
+	return d.help.updateArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+}
+func (d *SQLite) DeleteArxiuLlibre(arxiuID, llibreID int) error {goCover_4bc4be4c3247__267[0] = 1 ; goCover_4bc4be4c3247__267[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__267[2] = 267 ; goCover_4bc4be4c3247__267[3]++;
+	return d.help.deleteArxiuLlibre(arxiuID, llibreID)
+}
+func (d *SQLite) SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error) {goCover_4bc4be4c3247__268[0] = 1 ; goCover_4bc4be4c3247__268[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__268[2] = 268 ; goCover_4bc4be4c3247__268[3]++;
+	return d.help.searchLlibresSimple(q, limit)
+}
+func (d *SQLite) ListLlibres(f LlibreFilter) ([]LlibreRow, error) {goCover_4bc4be4c3247__269[0] = 1 ; goCover_4bc4be4c3247__269[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__269[2] = 269 ; goCover_4bc4be4c3247__269[3]++;
+	return d.help.listLlibres(f)
+}
+func (d *SQLite) GetLlibre(id int) (*Llibre, error) {goCover_4bc4be4c3247__270[0] = 1 ; goCover_4bc4be4c3247__270[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__270[2] = 270 ; goCover_4bc4be4c3247__270[3]++;
+	return d.help.getLlibre(id)
+}
+func (d *SQLite) CreateLlibre(l *Llibre) (int, error) {goCover_4bc4be4c3247__271[0] = 1 ; goCover_4bc4be4c3247__271[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__271[2] = 271 ; goCover_4bc4be4c3247__271[3]++;
+	return d.help.createLlibre(l)
+}
+func (d *SQLite) UpdateLlibre(l *Llibre) error {goCover_4bc4be4c3247__272[0] = 1 ; goCover_4bc4be4c3247__272[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__272[2] = 272 ; goCover_4bc4be4c3247__272[3]++;
+	return d.help.updateLlibre(l)
+}
+func (d *SQLite) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {goCover_4bc4be4c3247__273[0] = 1 ; goCover_4bc4be4c3247__273[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__273[2] = 273 ; goCover_4bc4be4c3247__273[3]++;
+	return d.help.listLlibrePagines(llibreID)
+}
+func (d *SQLite) SaveLlibrePagina(p *LlibrePagina) (int, error) {goCover_4bc4be4c3247__274[0] = 1 ; goCover_4bc4be4c3247__274[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__274[2] = 274 ; goCover_4bc4be4c3247__274[3]++;
+	return d.help.saveLlibrePagina(p)
+}
+func (d *SQLite) RecalcLlibrePagines(llibreID, total int) error {goCover_4bc4be4c3247__275[0] = 1 ; goCover_4bc4be4c3247__275[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__275[2] = 275 ; goCover_4bc4be4c3247__275[3]++;
+	return d.help.recalcLlibrePagines(llibreID, total)
+}

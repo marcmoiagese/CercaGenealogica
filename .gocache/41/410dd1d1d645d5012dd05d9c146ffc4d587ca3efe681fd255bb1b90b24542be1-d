@@ -1,0 +1,161 @@
+//line /home/marc/codi/CercaGenealogica3/tests/common/db_test_helpers.go:1:1
+package common
+
+import (
+	"bufio"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/marcmoiagese/CercaGenealogica/db"
+)
+
+type Engine string
+
+const (
+	EngineSQLite   Engine = "sqlite"
+	EnginePostgres Engine = "postgres"
+	EngineMySQL    Engine = "mysql"
+)
+
+type DBTestConfig struct {
+	Engine Engine
+
+	// Per SQLite
+	Path string
+
+	// Per Postgres/MySQL
+	Host string
+	Port string
+	User string
+	Pass string
+	Name string
+}
+
+// retorna tots els motors que cal provar (sempre sqlite + els definits a cnf.cfg)
+func LoadDBTestConfigs(t *testing.T) []DBTestConfig {goCover_823c98ce6a81__0[0] = 19 ; goCover_823c98ce6a81__0[1] = goCover_823c98ce6a81_P ; goCover_823c98ce6a81__0[2] = 0 ; goCover_823c98ce6a81__0[3]++;
+	t.Helper()
+
+	// 1) SQLite sempre
+	cfgs := []DBTestConfig{
+		{
+			Engine: EngineSQLite,
+			Path:   "./database.test.db", // o el que vulguis; la BD es recrea igualment
+		},
+	}
+
+	// 2) Intentem llegir tests/cnf/cnf.cfg
+	cfgPath := filepath.Join("tests", "cnf", "cnf.cfg")
+	f, err := os.Open(cfgPath)
+	if err != nil {goCover_823c98ce6a81__0[8]++;
+		// Si no existeix, només fem SQLite
+		return cfgs
+	}
+	goCover_823c98ce6a81__0[4]++;defer f.Close()
+
+	// Parser INI molt simple
+	type kv = map[string]string
+	sections := map[string]kv{}
+	var current string
+
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {goCover_823c98ce6a81__0[9]++;
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {goCover_823c98ce6a81__0[14]++;
+			continue
+		}
+		goCover_823c98ce6a81__0[10]++;if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {goCover_823c98ce6a81__0[15]++;
+			current = strings.ToLower(strings.TrimSpace(line[1 : len(line)-1]))
+			if _, ok := sections[current]; !ok {goCover_823c98ce6a81__0[17]++;
+				sections[current] = kv{}
+			}
+			goCover_823c98ce6a81__0[16]++;continue
+		}
+		goCover_823c98ce6a81__0[11]++;if current == "" {goCover_823c98ce6a81__0[18]++;
+			continue
+		}
+		goCover_823c98ce6a81__0[12]++;parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {goCover_823c98ce6a81__0[19]++;
+			continue
+		}
+		goCover_823c98ce6a81__0[13]++;k := strings.TrimSpace(parts[0])
+		v := strings.TrimSpace(parts[1])
+		sections[current][k] = v
+	}
+
+	// 3) Afegim Postgres si hi és
+	goCover_823c98ce6a81__0[5]++;if sec, ok := sections["postgres"]; ok {goCover_823c98ce6a81__0[20]++;
+		cfgs = append(cfgs, DBTestConfig{
+			Engine: EnginePostgres,
+			Host:   sec["DB_HOST"],
+			Port:   sec["DB_PORT"],
+			User:   sec["DB_USR"],
+			Pass:   sec["DB_PASS"],
+			Name:   sec["DB_NAME"],
+		})
+	}
+
+	// 4) Afegim MySQL si hi és
+	goCover_823c98ce6a81__0[6]++;if sec, ok := sections["mysql"]; ok {goCover_823c98ce6a81__0[21]++;
+		cfgs = append(cfgs, DBTestConfig{
+			Engine: EngineMySQL,
+			Host:   sec["DB_HOST"],
+			Port:   sec["DB_PORT"],
+			User:   sec["DB_USR"],
+			Pass:   sec["DB_PASS"],
+			Name:   sec["DB_NAME"],
+		})
+	}
+
+	goCover_823c98ce6a81__0[7]++;return cfgs
+}
+
+// Crea un db.DB real per a un motor concret, amb RECREADB=true
+func NewDBForTest(t *testing.T, c DBTestConfig) (db.DB, func()) {goCover_823c98ce6a81__1[0] = 8 ; goCover_823c98ce6a81__1[1] = goCover_823c98ce6a81_P ; goCover_823c98ce6a81__1[2] = 1 ; goCover_823c98ce6a81__1[3]++;
+	t.Helper()
+
+	config := map[string]string{
+		"DB_ENGINE": string(c.Engine),
+		"RECREADB":  "true",
+	}
+
+	if c.Engine == EngineSQLite {goCover_823c98ce6a81__1[7]++;
+		config["DB_PATH"] = c.Path
+	} else{ goCover_823c98ce6a81__1[8]++;{
+		config["DB_HOST"] = c.Host
+		config["DB_PORT"] = c.Port
+		config["DB_USR"] = c.User
+		config["DB_PASS"] = c.Pass
+		config["DB_NAME"] = c.Name
+	}}
+
+	goCover_823c98ce6a81__1[4]++;dbInstance, err := db.NewDB(config)
+	if err != nil {goCover_823c98ce6a81__1[9]++;
+		t.Fatalf("no s'ha pogut inicialitzar DB %s de prova: %v", c.Engine, err)
+	}
+
+	goCover_823c98ce6a81__1[5]++;cleanup := func() {goCover_823c98ce6a81__1[10]++;
+		dbInstance.Close()
+	}
+
+	goCover_823c98ce6a81__1[6]++;return dbInstance, cleanup
+}
+
+// Helper per iterar sobre tots els motors
+func ForEachTestDB(t *testing.T, fn func(t *testing.T, cfg DBTestConfig, d db.DB)) {goCover_823c98ce6a81__2[0] = 3 ; goCover_823c98ce6a81__2[1] = goCover_823c98ce6a81_P ; goCover_823c98ce6a81__2[2] = 2 ; goCover_823c98ce6a81__2[3]++;
+	t.Helper()
+
+	cfgs := LoadDBTestConfigs(t)
+	for _, c := range cfgs {goCover_823c98ce6a81__2[4]++;
+		c := c
+		t.Run(string(c.Engine), func(t *testing.T) {goCover_823c98ce6a81__2[5]++;
+			t.Parallel()
+
+			d, cleanup := NewDBForTest(t, c)
+			defer cleanup()
+
+			fn(t, c, d)
+		})
+	}
+}

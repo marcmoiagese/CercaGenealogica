@@ -1,0 +1,119 @@
+{{ define "admin-llibres-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "books.form.new" }}{{ else }}{{ t .Lang "books.form.edit" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ if .Data.IsNew }}{{ t .Lang "books.form.new" }}{{ else }}{{ t .Lang "books.form.edit" }}{{ end }}</h1>
+            </header>
+            {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
+            <form method="post" action="/admin/llibres/save">
+                <input type="hidden" name="id" value="{{ .Data.Llibre.ID }}">
+                <div class="grup-camp">
+                    <label for="arquevisbat_id">{{ t .Lang "books.form.entity" }}</label>
+                    <select id="arquevisbat_id" name="arquevisbat_id" required>
+                        <option value="">{{ t .Lang "books.form.entity.none" }}</option>
+                        {{ range .Data.Arquebisbats }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Llibre.ArquebisbatID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="municipi_id">{{ t .Lang "books.form.municipi" }}</label>
+                    <select id="municipi_id" name="municipi_id" required>
+                        <option value="">{{ t .Lang "books.form.municipi.none" }}</option>
+                        {{ range .Data.Municipis }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Llibre.MunicipiID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="titol">{{ t .Lang "books.form.title" }}</label>
+                    <input id="titol" name="titol" type="text" value="{{ .Data.Llibre.Titol }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="nom_esglesia">{{ t .Lang "books.form.church" }}</label>
+                    <input id="nom_esglesia" name="nom_esglesia" type="text" value="{{ .Data.Llibre.NomEsglesia }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="codi_digital">{{ t .Lang "books.form.code.digital" }}</label>
+                    <input id="codi_digital" name="codi_digital" type="text" value="{{ .Data.Llibre.CodiDigital }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="codi_fisic">{{ t .Lang "books.form.code.physical" }}</label>
+                    <input id="codi_fisic" name="codi_fisic" type="text" value="{{ .Data.Llibre.CodiFisic }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="cronologia">{{ t .Lang "books.form.chrono" }}</label>
+                    <input id="cronologia" name="cronologia" type="text" value="{{ .Data.Llibre.Cronologia }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="volum">{{ t .Lang "books.form.volume" }}</label>
+                    <input id="volum" name="volum" type="text" value="{{ .Data.Llibre.Volum }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="abat">{{ t .Lang "books.form.abat" }}</label>
+                    <input id="abat" name="abat" type="text" value="{{ .Data.Llibre.Abat }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="contingut">{{ t .Lang "books.form.content" }}</label>
+                    <textarea id="contingut" name="contingut">{{ .Data.Llibre.Contingut }}</textarea>
+                </div>
+                <div class="grup-camp">
+                    <label for="llengua">{{ t .Lang "books.form.lang" }}</label>
+                    <input id="llengua" name="llengua" type="text" value="{{ .Data.Llibre.Llengua }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="requeriments_tecnics">{{ t .Lang "books.form.req" }}</label>
+                    <input id="requeriments_tecnics" name="requeriments_tecnics" type="text" value="{{ .Data.Llibre.Requeriments }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="unitat_catalogacio">{{ t .Lang "books.form.catalogacio" }}</label>
+                    <input id="unitat_catalogacio" name="unitat_catalogacio" type="text" value="{{ .Data.Llibre.UnitatCatalogacio }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="unitat_instalacio">{{ t .Lang "books.form.instalacio" }}</label>
+                    <input id="unitat_instalacio" name="unitat_instalacio" type="text" value="{{ .Data.Llibre.UnitatInstalacio }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="pagines">{{ t .Lang "books.form.pages" }}</label>
+                    <input id="pagines" name="pagines" type="number" min="0" value="{{ if .Data.Llibre.Pagines.Valid }}{{ .Data.Llibre.Pagines.Int64 }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="url_base">{{ t .Lang "books.form.url_base" }}</label>
+                    <input id="url_base" name="url_base" type="text" value="{{ .Data.Llibre.URLBase }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="url_imatge_prefix">{{ t .Lang "books.form.url_prefix" }}</label>
+                    <input id="url_imatge_prefix" name="url_imatge_prefix" type="text" value="{{ .Data.Llibre.URLImatgePrefix }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="pagina">{{ t .Lang "books.form.page_default" }}</label>
+                    <input id="pagina" name="pagina" type="text" value="{{ .Data.Llibre.Pagina }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="recalc_pagines">
+                        <input type="checkbox" id="recalc_pagines" name="recalc_pagines" value="1">
+                        {{ t .Lang "books.form.recalc" }}
+                    </label>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "books.form.save" }}</button>
+                    <a class="boto-secundari" href="/admin/llibres">{{ t .Lang "books.form.cancel" }}</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

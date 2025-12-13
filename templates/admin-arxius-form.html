@@ -1,0 +1,84 @@
+{{ define "admin-arxius-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "archives.form.new" }}{{ else }}{{ t .Lang "archives.form.edit" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ if .Data.IsNew }}{{ t .Lang "archives.form.new" }}{{ else }}{{ t .Lang "archives.form.edit" }}{{ end }}</h1>
+            </header>
+            {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
+            <form method="post" action="{{ if .Data.IsNew }}/admin/arxius{{ else }}/admin/arxius/{{ .Data.Arxiu.ID }}{{ end }}">
+                <div class="grup-camp">
+                    <label for="nom">{{ t .Lang "archives.form.name" }}</label>
+                    <input type="text" id="nom" name="nom" value="{{ .Data.Arxiu.Nom }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="tipus">{{ t .Lang "archives.form.type" }}</label>
+                    <select id="tipus" name="tipus">
+                        {{ range $opt := (list "parroquia" "arxiu_diocesa" "arxiu_capitular" "arxiu_comarcal" "portal_digital" "altre") }}
+                        <option value="{{ $opt }}" {{ if eq $.Data.Arxiu.Tipus $opt }}selected{{ end }}>{{ t $.Lang (printf "archives.type.%s" $opt) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="acces">{{ t .Lang "archives.form.access" }}</label>
+                    <select id="acces" name="acces">
+                        {{ range $opt := (list "online" "presencial" "mixt") }}
+                        <option value="{{ $opt }}" {{ if eq $.Data.Arxiu.Acces $opt }}selected{{ end }}>{{ t $.Lang (printf "archives.access.%s" $opt) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="municipi_id">{{ t .Lang "archives.form.municipi" }}</label>
+                    <select id="municipi_id" name="municipi_id">
+                        <option value="">{{ t .Lang "archives.form.municipi.none" }}</option>
+                        {{ range .Data.Municipis }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Arxiu.MunicipiID.Valid (eq .ID (int $.Data.Arxiu.MunicipiID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="entitat_eclesiastica_id">{{ t .Lang "archives.form.entity" }}</label>
+                    <select id="entitat_eclesiastica_id" name="entitat_eclesiastica_id">
+                        <option value="">{{ t .Lang "archives.form.entity.none" }}</option>
+                        {{ range .Data.Arquebisbats }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Arxiu.EntitatEclesiasticaID.Valid (eq .ID (int $.Data.Arxiu.EntitatEclesiasticaID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="adreca">{{ t .Lang "archives.form.address" }}</label>
+                    <textarea id="adreca" name="adreca">{{ .Data.Arxiu.Adreca }}</textarea>
+                </div>
+                <div class="grup-camp">
+                    <label for="ubicacio">{{ t .Lang "archives.form.location" }}</label>
+                    <input type="text" id="ubicacio" name="ubicacio" value="{{ .Data.Arxiu.Ubicacio }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="web">{{ t .Lang "archives.form.web" }}</label>
+                    <input type="url" id="web" name="web" value="{{ .Data.Arxiu.Web }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="notes">{{ t .Lang "archives.form.notes" }}</label>
+                    <textarea id="notes" name="notes">{{ .Data.Arxiu.Notes }}</textarea>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "archives.form.save" }}</button>
+                    <a class="boto-secundari" href="{{ if .Data.IsNew }}/admin/arxius{{ else }}/admin/arxius/{{ .Data.Arxiu.ID }}{{ end }}">{{ t .Lang "archives.form.cancel" }}</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

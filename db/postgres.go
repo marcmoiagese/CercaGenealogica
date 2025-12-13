@@ -128,6 +128,9 @@ func (d *PostgreSQL) GetSessionUser(sessionID string) (*User, error) {
 func (d *PostgreSQL) DeleteSession(sessionID string) error {
 	return d.help.deleteSession(sessionID)
 }
+func (d *PostgreSQL) ListUserGroups(userID int) ([]Group, error) {
+	return d.help.listUserGroups(userID)
+}
 
 func (d *PostgreSQL) CreatePasswordReset(email, token, expiry, lang string) (bool, error) {
 	return d.help.createPasswordReset(email, token, expiry, lang)
@@ -183,4 +186,175 @@ func (d *PostgreSQL) markEmailChangeConfirmed(id int) error {
 
 func (d *PostgreSQL) markEmailChangeReverted(id int) error {
 	return d.help.markEmailChangeReverted(id)
+}
+
+// Policies
+func (d *PostgreSQL) UserHasAnyPolicy(userID int, policies []string) (bool, error) {
+	return d.help.userHasAnyPolicy(userID, policies)
+}
+func (d *PostgreSQL) EnsureDefaultPolicies() error {
+	return d.help.ensureDefaultPolicies()
+}
+func (d *PostgreSQL) ListGroups() ([]Group, error) {
+	return d.help.listGroups()
+}
+func (d *PostgreSQL) ListPolitiques() ([]Politica, error) {
+	return d.help.listPolitiques()
+}
+func (d *PostgreSQL) GetPolitica(id int) (*Politica, error) {
+	return d.help.getPolitica(id)
+}
+func (d *PostgreSQL) SavePolitica(p *Politica) (int, error) {
+	return d.help.savePolitica(p)
+}
+func (d *PostgreSQL) ListUserPolitiques(userID int) ([]Politica, error) {
+	return d.help.listUserPolitiques(userID)
+}
+func (d *PostgreSQL) AddUserPolitica(userID, politicaID int) error {
+	return d.help.addUserPolitica(userID, politicaID)
+}
+func (d *PostgreSQL) RemoveUserPolitica(userID, politicaID int) error {
+	return d.help.removeUserPolitica(userID, politicaID)
+}
+func (d *PostgreSQL) ListGroupPolitiques(groupID int) ([]Politica, error) {
+	return d.help.listGroupPolitiques(groupID)
+}
+func (d *PostgreSQL) AddGroupPolitica(groupID, politicaID int) error {
+	return d.help.addGroupPolitica(groupID, politicaID)
+}
+func (d *PostgreSQL) RemoveGroupPolitica(groupID, politicaID int) error {
+	return d.help.removeGroupPolitica(groupID, politicaID)
+}
+func (d *PostgreSQL) GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error) {
+	return d.help.getEffectivePoliticaPerms(userID)
+}
+
+// Paisos
+func (d *PostgreSQL) ListPaisos() ([]Pais, error) {
+	return d.help.listPaisos()
+}
+func (d *PostgreSQL) GetPais(id int) (*Pais, error) {
+	return d.help.getPais(id)
+}
+func (d *PostgreSQL) CreatePais(p *Pais) (int, error) {
+	return d.help.createPais(p)
+}
+func (d *PostgreSQL) UpdatePais(p *Pais) error {
+	return d.help.updatePais(p)
+}
+
+// Nivells administratius
+func (d *PostgreSQL) ListNivells(f NivellAdminFilter) ([]NivellAdministratiu, error) {
+	return d.help.listNivells(f)
+}
+func (d *PostgreSQL) GetNivell(id int) (*NivellAdministratiu, error) {
+	return d.help.getNivell(id)
+}
+func (d *PostgreSQL) CreateNivell(n *NivellAdministratiu) (int, error) {
+	return d.help.createNivell(n)
+}
+func (d *PostgreSQL) UpdateNivell(n *NivellAdministratiu) error {
+	return d.help.updateNivell(n)
+}
+
+// Municipis
+func (d *PostgreSQL) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
+	return d.help.listMunicipis(f)
+}
+func (d *PostgreSQL) GetMunicipi(id int) (*Municipi, error) {
+	return d.help.getMunicipi(id)
+}
+func (d *PostgreSQL) CreateMunicipi(m *Municipi) (int, error) {
+	return d.help.createMunicipi(m)
+}
+func (d *PostgreSQL) UpdateMunicipi(m *Municipi) error {
+	return d.help.updateMunicipi(m)
+}
+func (d *PostgreSQL) ListCodisPostals(municipiID int) ([]CodiPostal, error) {
+	return d.help.listCodisPostals(municipiID)
+}
+func (d *PostgreSQL) SaveCodiPostal(cp *CodiPostal) (int, error) {
+	return d.help.saveCodiPostal(cp)
+}
+func (d *PostgreSQL) ListNomsHistorics(entitatTipus string, entitatID int) ([]NomHistoric, error) {
+	return d.help.listNomsHistorics(entitatTipus, entitatID)
+}
+func (d *PostgreSQL) SaveNomHistoric(nh *NomHistoric) (int, error) {
+	return d.help.saveNomHistoric(nh)
+}
+
+// Entitats eclesiàstiques
+func (d *PostgreSQL) ListArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error) {
+	return d.help.listArquebisbats(f)
+}
+func (d *PostgreSQL) GetArquebisbat(id int) (*Arquebisbat, error) {
+	return d.help.getArquebisbat(id)
+}
+func (d *PostgreSQL) CreateArquebisbat(ae *Arquebisbat) (int, error) {
+	return d.help.createArquebisbat(ae)
+}
+func (d *PostgreSQL) UpdateArquebisbat(ae *Arquebisbat) error {
+	return d.help.updateArquebisbat(ae)
+}
+func (d *PostgreSQL) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {
+	return d.help.listArquebisbatMunicipis(munID)
+}
+func (d *PostgreSQL) SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {
+	return d.help.saveArquebisbatMunicipi(am)
+}
+
+// Arxius
+func (d *PostgreSQL) ListArxius(f ArxiuFilter) ([]ArxiuWithCount, error) {
+	return d.help.listArxius(f)
+}
+func (d *PostgreSQL) GetArxiu(id int) (*Arxiu, error) {
+	return d.help.getArxiu(id)
+}
+func (d *PostgreSQL) CreateArxiu(a *Arxiu) (int, error) {
+	return d.help.createArxiu(a)
+}
+func (d *PostgreSQL) UpdateArxiu(a *Arxiu) error {
+	return d.help.updateArxiu(a)
+}
+func (d *PostgreSQL) DeleteArxiu(id int) error {
+	return d.help.deleteArxiu(id)
+}
+func (d *PostgreSQL) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
+	return d.help.listArxiuLlibres(arxiuID)
+}
+func (d *PostgreSQL) ListLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
+	return d.help.listLlibreArxius(llibreID)
+}
+func (d *PostgreSQL) AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	return d.help.addArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+}
+func (d *PostgreSQL) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	return d.help.updateArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+}
+func (d *PostgreSQL) DeleteArxiuLlibre(arxiuID, llibreID int) error {
+	return d.help.deleteArxiuLlibre(arxiuID, llibreID)
+}
+func (d *PostgreSQL) SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error) {
+	return d.help.searchLlibresSimple(q, limit)
+}
+func (d *PostgreSQL) ListLlibres(f LlibreFilter) ([]LlibreRow, error) {
+	return d.help.listLlibres(f)
+}
+func (d *PostgreSQL) GetLlibre(id int) (*Llibre, error) {
+	return d.help.getLlibre(id)
+}
+func (d *PostgreSQL) CreateLlibre(l *Llibre) (int, error) {
+	return d.help.createLlibre(l)
+}
+func (d *PostgreSQL) UpdateLlibre(l *Llibre) error {
+	return d.help.updateLlibre(l)
+}
+func (d *PostgreSQL) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {
+	return d.help.listLlibrePagines(llibreID)
+}
+func (d *PostgreSQL) SaveLlibrePagina(p *LlibrePagina) (int, error) {
+	return d.help.saveLlibrePagina(p)
+}
+func (d *PostgreSQL) RecalcLlibrePagines(llibreID, total int) error {
+	return d.help.recalcLlibrePagines(llibreID, total)
 }

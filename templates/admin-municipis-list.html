@@ -1,0 +1,88 @@
+{{ define "admin-municipis-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "municipis.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "municipis.title" }}</h1>
+                <a class="boto-primari" href="/admin/municipis/new">{{ t .Lang "municipis.button.new" }}</a>
+            </header>
+            <form class="filtres-arxius" method="get">
+                <div class="grup-camp">
+                    <label for="f-q">{{ t .Lang "municipis.filter.search" }}</label>
+                    <input id="f-q" type="text" name="q" value="{{ .Data.Filter.Text }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="f-estat">{{ t .Lang "municipis.filter.state" }}</label>
+                    <select id="f-estat" name="estat">
+                        <option value="">{{ t .Lang "municipis.filter.state.any" }}</option>
+                        {{ range $opt := (list "actiu" "inactiu" "abandonat") }}
+                        <option value="{{ $opt }}" {{ if eq $.Data.Filter.Estat $opt }}selected{{ end }}>{{ $opt }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="f-pais">{{ t .Lang "municipis.filter.country" }}</label>
+                    <select id="f-pais" name="pais_id">
+                        <option value="">{{ t .Lang "municipis.filter.country.any" }}</option>
+                        {{ range .Data.Paisos }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaisID .ID }}selected{{ end }}>{{ .CodiISO3 }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="f-nivell">{{ t .Lang "municipis.filter.level" }}</label>
+                    <select id="f-nivell" name="nivell_id">
+                        <option value="">{{ t .Lang "municipis.filter.level.any" }}</option>
+                        {{ range .Data.Nivells }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.NivellID .ID }}selected{{ end }}>{{ .NomNivell }} ({{ .Nivel }})</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <button class="boto-secundari" type="submit">{{ t .Lang "municipis.filter.submit" }}</button>
+            </form>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "municipis.col.name" }}</th>
+                            <th>{{ t .Lang "municipis.col.type" }}</th>
+                            <th>{{ t .Lang "municipis.col.state" }}</th>
+                            <th>{{ t .Lang "municipis.col.postal" }}</th>
+                            <th>{{ t .Lang "municipis.col.country" }}</th>
+                            <th>{{ t .Lang "municipis.col.province" }}</th>
+                            <th>{{ t .Lang "municipis.col.comarca" }}</th>
+                            <th>{{ t .Lang "municipis.col.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Municipis }}
+                        <tr>
+                            <td>{{ .Nom }}</td>
+                            <td>{{ .Tipus }}</td>
+                            <td>{{ .Estat }}</td>
+                            <td>{{ .CodiPostal }}</td>
+                            <td>{{ .PaisNom.String }}</td>
+                            <td>{{ .ProvNom.String }}</td>
+                            <td>{{ .Comarca.String }}</td>
+                            <td><a href="/admin/municipis/{{ .ID }}/edit">{{ t $.Lang "municipis.action.edit" }}</a></td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

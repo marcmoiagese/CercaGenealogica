@@ -1,0 +1,278 @@
+{{ define "admin-municipis-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "municipis.form.title.new" }}{{ else }}{{ t .Lang "municipis.form.title.edit" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ if .Data.IsNew }}{{ t .Lang "municipis.form.title.new" }}{{ else }}{{ t .Lang "municipis.form.title.edit" }}{{ end }}</h1>
+            </header>
+            {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
+            <form method="post" action="/admin/municipis/save">
+                <input type="hidden" name="id" value="{{ .Data.Municipi.ID }}">
+                <div class="grup-camp">
+                    <label for="nom">{{ t .Lang "municipis.form.name" }}</label>
+                    <input id="nom" name="nom" type="text" value="{{ .Data.Municipi.Nom }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="tipus">{{ t .Lang "municipis.form.type" }}</label>
+                    <input id="tipus" name="tipus" type="text" value="{{ .Data.Municipi.Tipus }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="municipi_id">{{ t .Lang "municipis.form.parent" }}</label>
+                    <input id="municipi_id" name="municipi_id" type="number" value="{{ if .Data.Municipi.MunicipiID.Valid }}{{ .Data.Municipi.MunicipiID.Int64 }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="pais_id">{{ t .Lang "municipis.form.country" }}</label>
+                    <select id="pais_id" name="nivell_administratiu_id_1">
+                        <option value="">{{ t .Lang "municipis.form.country.none" }}</option>
+                        {{ range .Data.Paisos }}
+                        <option value="{{ .ID }}" {{ if and (index $.Data.Municipi.NivellAdministratiuID 0).Valid (eq .ID (int (index $.Data.Municipi.NivellAdministratiuID 0).Int64)) }}selected{{ end }}>{{ .CodiISO3 }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label>{{ t .Lang "municipis.form.levels" }}</label>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.5rem;">
+                        {{ range $i, $val := .Data.Municipi.NivellAdministratiuID }}
+                        <div>
+                            <label for="nivell_administratiu_id_{{ add $i 1 }}">{{ t $.Lang "municipis.form.level" }} {{ add $i 1 }}</label>
+                            <select id="nivell_administratiu_id_{{ add $i 1 }}" name="nivell_administratiu_id_{{ add $i 1 }}">
+                                <option value="">{{ t $.Lang "municipis.form.level.none" }}</option>
+                                {{ range $lvl := $.Data.Levels }}
+                                    {{ if eq $lvl.Nivel (add $i 1) }}
+                                    <option value="{{ $lvl.ID }}" {{ if and $val.Valid (eq $lvl.ID (int $val.Int64)) }}selected{{ end }}>{{ $lvl.NomNivell }} ({{ $lvl.TipusNivell }})</option>
+                                    {{ end }}
+                                {{ end }}
+                                {{ if not $val.Valid }}
+                                {{ else }}
+                                    <option value="{{ $val.Int64 }}" selected>{{ $val.Int64 }}</option>
+                                {{ end }}
+                            </select>
+                        </div>
+                        {{ end }}
+                    </div>
+                    <p class="muted">{{ t .Lang "municipis.form.levels.hint" }}</p>
+                </div>
+                <div class="grup-camp">
+                    <label for="codi_postal">{{ t .Lang "municipis.form.postal" }}</label>
+                    <input id="codi_postal" name="codi_postal" type="text" value="{{ .Data.Municipi.CodiPostal }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="latitud">{{ t .Lang "municipis.form.lat" }}</label>
+                    <input id="latitud" name="latitud" type="text" value="{{ if .Data.Municipi.Latitud.Valid }}{{ .Data.Municipi.Latitud.Float64 }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="longitud">{{ t .Lang "municipis.form.lon" }}</label>
+                    <input id="longitud" name="longitud" type="text" value="{{ if .Data.Municipi.Longitud.Valid }}{{ .Data.Municipi.Longitud.Float64 }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="what3words">{{ t .Lang "municipis.form.w3w" }}</label>
+                    <input id="what3words" name="what3words" type="text" value="{{ .Data.Municipi.What3Words }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="web">{{ t .Lang "municipis.form.web" }}</label>
+                    <input id="web" name="web" type="text" value="{{ .Data.Municipi.Web }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="wikipedia">{{ t .Lang "municipis.form.wikipedia" }}</label>
+                    <input id="wikipedia" name="wikipedia" type="text" value="{{ .Data.Municipi.Wikipedia }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="altres">{{ t .Lang "municipis.form.altres" }}</label>
+                    <textarea id="altres" name="altres">{{ .Data.Municipi.Altres }}</textarea>
+                </div>
+                <div class="grup-camp">
+                    <label for="estat">{{ t .Lang "municipis.form.state" }}</label>
+                    <select id="estat" name="estat">
+                        {{ range $opt := (list "actiu" "inactiu" "abandonat") }}
+                        <option value="{{ $opt }}" {{ if eq $.Data.Municipi.Estat $opt }}selected{{ end }}>{{ $opt }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "municipis.form.save" }}</button>
+                    <a class="boto-secundari" href="/admin/municipis">{{ t .Lang "municipis.form.cancel" }}</a>
+                </div>
+            </form>
+
+            {{ if not .Data.IsNew }}
+            <hr>
+            <h2>{{ t .Lang "municipis.form.cp.title" }}</h2>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "municipis.form.cp.code" }}</th>
+                            <th>{{ t .Lang "municipis.form.cp.zone" }}</th>
+                            <th>{{ t .Lang "municipis.form.cp.from" }}</th>
+                            <th>{{ t .Lang "municipis.form.cp.to" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.CodisPostals }}
+                        <tr>
+                            <td>{{ .CodiPostal }}</td>
+                            <td>{{ .Zona }}</td>
+                            <td>{{ .Desde.String }}</td>
+                            <td>{{ .Fins.String }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+            <form method="post" action="/admin/municipis/{{ .Data.Municipi.ID }}/codis/save" style="margin-top:1rem;">
+                <input type="hidden" name="cp_id" value="">
+                <div class="grup-camp">
+                    <label for="cp_codi">{{ t .Lang "municipis.form.cp.code" }}</label>
+                    <input id="cp_codi" name="codi_postal" type="text" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="cp_zona">{{ t .Lang "municipis.form.cp.zone" }}</label>
+                    <input id="cp_zona" name="zona" type="text">
+                </div>
+                <div class="grup-camp">
+                    <label for="cp_desde">{{ t .Lang "municipis.form.cp.from" }}</label>
+                    <input id="cp_desde" name="desde" type="text" placeholder="YYYY-MM-DD">
+                </div>
+                <div class="grup-camp">
+                    <label for="cp_fins">{{ t .Lang "municipis.form.cp.to" }}</label>
+                    <input id="cp_fins" name="fins" type="text" placeholder="YYYY-MM-DD">
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-secundari">{{ t .Lang "municipis.form.cp.save" }}</button>
+                </div>
+            </form>
+
+            <hr>
+            <h2>{{ t .Lang "municipis.form.ecles.title" }}</h2>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "municipis.form.ecles.entity" }}</th>
+                            <th>{{ t .Lang "municipis.form.ecles.from" }}</th>
+                            <th>{{ t .Lang "municipis.form.ecles.to" }}</th>
+                            <th>{{ t .Lang "municipis.form.ecles.reason" }}</th>
+                            <th>{{ t .Lang "municipis.form.ecles.source" }}</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Ecles }}
+                        <tr>
+                            <td>{{ .NomEntitat }}</td>
+                            <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}</td>
+                            <td>{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
+                            <td>{{ .Motiu }}</td>
+                            <td>{{ .Font }}</td>
+                            <td><a href="/admin/municipis/{{ $.Data.Municipi.ID }}/edit?edit_am={{ .ID }}">{{ t $.Lang "municipis.form.ecles.edit" }}</a></td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+            {{ $edit := .Data.EditEcles }}
+            <form method="post" action="/admin/municipis/{{ .Data.Municipi.ID }}/ecles/save" style="margin-top:1rem;">
+                <input type="hidden" name="am_id" value="{{ if $edit }}{{ $edit.ID }}{{ end }}">
+                <div class="grup-camp">
+                    <label for="arquebisbat_id">{{ t .Lang "municipis.form.ecles.entity" }}</label>
+                    <select id="arquebisbat_id" name="arquebisbat_id" required>
+                        <option value="">{{ t .Lang "municipis.form.ecles.entity.none" }}</option>
+                        {{ range .Data.Arquebisbats }}
+                        <option value="{{ .ID }}" {{ if and $edit (eq .ID $edit.ArquebisbatID) }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="any_inici">{{ t .Lang "municipis.form.ecles.from" }}</label>
+                    <input id="any_inici" name="any_inici" type="number" placeholder="YYYY" value="{{ if and $edit $edit.AnyInici.Valid }}{{ $edit.AnyInici.Int64 }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="any_fi">{{ t .Lang "municipis.form.ecles.to" }}</label>
+                    <input id="any_fi" name="any_fi" type="number" placeholder="YYYY" value="{{ if and $edit $edit.AnyFi.Valid }}{{ $edit.AnyFi.Int64 }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="motiu">{{ t .Lang "municipis.form.ecles.reason" }}</label>
+                    <input id="motiu" name="motiu" type="text" value="{{ if $edit }}{{ $edit.Motiu }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="font">{{ t .Lang "municipis.form.ecles.source" }}</label>
+                    <input id="font" name="font" type="text" value="{{ if $edit }}{{ $edit.Font }}{{ end }}">
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-secundari">{{ if $edit }}{{ t .Lang "municipis.form.ecles.update" }}{{ else }}{{ t .Lang "municipis.form.ecles.save" }}{{ end }}</button>
+                </div>
+            </form>
+
+            <hr>
+            <h2>{{ t .Lang "municipis.form.hist.title" }}</h2>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "municipis.form.hist.name" }}</th>
+                            <th>{{ t .Lang "municipis.form.hist.from" }}</th>
+                            <th>{{ t .Lang "municipis.form.hist.to" }}</th>
+                            <th>{{ t .Lang "municipis.form.hist.state" }}</th>
+                            <th>{{ t .Lang "municipis.form.hist.source" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.NomsHistorics }}
+                        <tr>
+                            <td>{{ .Nom }}</td>
+                            <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}</td>
+                            <td>{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
+                            <td>{{ .PaisRegne }} / {{ .DistribucioGeografica }}</td>
+                            <td>{{ .Font }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+            <form method="post" action="/admin/municipis/{{ .Data.Municipi.ID }}/noms/save" style="margin-top:1rem;">
+                <input type="hidden" name="nh_id" value="">
+                <div class="grup-camp">
+                    <label for="nh_nom">{{ t .Lang "municipis.form.hist.name" }}</label>
+                    <input id="nh_nom" name="nom" type="text" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="nh_any_inici">{{ t .Lang "municipis.form.hist.from" }}</label>
+                    <input id="nh_any_inici" name="any_inici" type="number" placeholder="YYYY">
+                </div>
+                <div class="grup-camp">
+                    <label for="nh_any_fi">{{ t .Lang "municipis.form.hist.to" }}</label>
+                    <input id="nh_any_fi" name="any_fi" type="number" placeholder="YYYY">
+                </div>
+                <div class="grup-camp">
+                    <label for="nh_pais_regne">{{ t .Lang "municipis.form.hist.state" }}</label>
+                    <input id="nh_pais_regne" name="pais_regne" type="text">
+                </div>
+                <div class="grup-camp">
+                    <label for="nh_distribucio">{{ t .Lang "municipis.form.hist.distrib" }}</label>
+                    <input id="nh_distribucio" name="distribucio_geografica" type="text">
+                </div>
+                <div class="grup-camp">
+                    <label for="nh_font">{{ t .Lang "municipis.form.hist.source" }}</label>
+                    <input id="nh_font" name="font" type="text">
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-secundari">{{ t .Lang "municipis.form.hist.save" }}</button>
+                </div>
+            </form>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

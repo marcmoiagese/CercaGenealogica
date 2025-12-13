@@ -15,8 +15,25 @@
             </div>
             <ul>
                 <li class="menu-opcio"><a href="/inici">{{ t .Lang "menu.item.home" }}</a></li>
+                <li class="menu-opcio"><a href="/arxius"><i class="fas fa-archive"></i> {{ t .Lang "archives.title" }}</a></li>
             </ul>
         </div>
+        {{ if and .Data (index .Data "CanManageArxius") }}
+        <div class="menu-seccio">
+            <div class="menu-titol">
+                <i class="fas fa-tools"></i>
+                <h3>{{ t .Lang "menu.section.admin" }}</h3>
+            </div>
+            <ul>
+                <li class="menu-opcio"><a href="/admin/paisos"><i class="fas fa-globe"></i> {{ t .Lang "admin.menu.countries" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/nivells"><i class="fas fa-sitemap"></i> {{ t .Lang "admin.menu.levels" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/municipis"><i class="fas fa-map-marker-alt"></i> {{ t .Lang "municipis.title" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/eclesiastic"><i class="fas fa-church"></i> {{ t .Lang "admin.menu.ecles" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/arxius"><i class="fas fa-archive"></i> {{ t .Lang "admin.menu.archives" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/llibres"><i class="fas fa-book"></i> {{ t .Lang "admin.menu.books" }}</a></li>
+            </ul>
+        </div>
+        {{ end }}
     </div>
 </aside>
 <div class="overlay-menu" id="overlayMenu"></div>

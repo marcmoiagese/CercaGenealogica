@@ -1,0 +1,27 @@
+//line /home/marc/codi/CercaGenealogica3/core/app.go:1:1
+package core
+
+import (
+	"github.com/marcmoiagese/CercaGenealogica/db"
+)
+
+// App encapsula dependències compartides per evitar reobrir recursos per petició.
+type App struct {
+	Config map[string]string
+	DB     db.DB
+	Mail   MailConfig
+}
+
+func NewApp(cfg map[string]string, database db.DB) *App {goCover_33ba7a78e32c__61[0] = 1 ; goCover_33ba7a78e32c__61[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__61[2] = 61 ; goCover_33ba7a78e32c__61[3]++;
+	return &App{
+		Config: cfg,
+		DB:     database,
+		Mail:   NewMailConfig(cfg),
+	}
+}
+
+func (a *App) Close() {goCover_33ba7a78e32c__62[0] = 2 ; goCover_33ba7a78e32c__62[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__62[2] = 62 ; goCover_33ba7a78e32c__62[3]++;
+	if a.DB != nil {goCover_33ba7a78e32c__62[4]++;
+		a.DB.Close()
+	}
+}

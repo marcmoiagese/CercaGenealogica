@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS usuaris_grups (
 
 CREATE TABLE IF NOT EXISTS politiques (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nom TEXT NOT NULL UNIQUE,
+    nom TEXT NOT NULL UNIQUE, -- admin, moderador, confiança, usuari
     descripcio TEXT,
     permisos TEXT NOT NULL,  -- JSON o text amb els permisos específics
     data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -134,12 +134,16 @@ CREATE TABLE IF NOT EXISTS nivells_administratius (
     tipus_nivell TEXT,                        -- Tipus específic: Regió, Província, Comarca, Municipi, Barri, etc.
     codi_oficial TEXT,                        -- Codi oficial local (ex: INE, NUTS, etc.)
     altres TEXT,                              -- Informació addicional en format JSON (ex: {"codi_INE": "25098", "codi_NUTS": "ES511"}
+    parent_id INTEGER REFERENCES nivells_administratius(id), -- Referència al nivell superior (null si és el nivell més alt)
+    any_inici INTEGER,  -- quan apareix aquest nivell (si es coneix)
+    any_fi    INTEGER,   -- quan deixa d’existir / canvia (null = vigent)
     estat TEXT CHECK(estat IN ('actiu', 'inactiu', 'fusionat', 'abolit')) DEFAULT 'actiu',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Quan s'ha creat el nivell
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Última vegada que ha canviat
 );
 
 -- TAULA MUNICIPIS
+-- Aquesta taula conté qualsevol nucli de població (ciutat, poble, barri, llogaret, etc.)
 CREATE TABLE IF NOT EXISTS municipis (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL, -- Nom oficial actual del municipi
@@ -165,27 +169,45 @@ CREATE TABLE IF NOT EXISTS municipis (
     ultima_modificacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
+-- Recorda: aquí no podem posar FKs condicionals segons entitat_tipus en SQLite,
+-- la coherència l’asseguraràs des del codi Go (validant abans de fer INSERT/UPDATE).
 CREATE TABLE IF NOT EXISTS noms_historics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_municipi INTEGER NOT NULL REFERENCES municipis(id),
-    nom TEXT NOT NULL, -- Nom antic o anterior
-    any_inici INTEGER, -- Any d'inici del nom (opcional)
-    any_fi INTEGER, -- Any final del nom (null = encara vigent)
-    pais_regne TEXT, -- Regne o estat al moment del nom ex: "Regne d'Aragó", "Imperi Romà"
-    distribucio_geografica TEXT, -- Sistema administratiu anterior: vegueria, diòcesi, baronia, etc.
-    font TEXT, -- Font o documentació on s'ha trobat aquest nom
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Moment de gravació d'aquest registre
+
+    -- Tipus d'entitat a la qual fa referència aquest nom històric:
+    --   municipi       -> entitat_id apunta a municipis.id
+    --   nivell_admin   -> entitat_id apunta a nivells_administratius.id
+    --   eclesiastic    -> entitat_id apunta a arquebisbats.id
+    entitat_tipus TEXT NOT NULL CHECK(entitat_tipus IN ('municipi', 'nivell_admin', 'eclesiastic')),
+    entitat_id INTEGER NOT NULL,
+
+    nom TEXT NOT NULL,          -- Nom antic o anterior
+    any_inici INTEGER,          -- Any d'inici del nom (opcional)
+    any_fi INTEGER,             -- Any final del nom (NULL = encara vigent)
+
+    pais_regne TEXT,            -- Regne o estat al moment del nom ("Regne d'Aragó", "Imperi Romà"...)
+    distribucio_geografica TEXT,-- Sistema administratiu anterior: vegueria, diòcesi, baronia, etc.
+    font TEXT,                  -- Font o documentació on s'ha trobat aquest nom
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Moment de gravació del registre
 );
 
 CREATE TABLE IF NOT EXISTS arquebisbats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nom TEXT NOT NULL UNIQUE,
+    nom TEXT NOT NULL UNIQUE,   -- Nom oficial actual de l'entitat eclesiàstica
     tipus_entitat TEXT CHECK(tipus_entitat IN ('arquebisbat', 'bisbat', 'diocesi', 'viscomtat', 'vegueria', 'altres')), -- Tipus d'entitat eclesiàstica
+    pais_id INTEGER REFERENCES paisos(id),  -- Enllaç opcional amb un país (si aplica)
+    -- Jerarquia interna eclesiàstica
+    nivell INTEGER,             -- 1=arquebisbat, 2=bisbat, 3=arxiprestat, 4=parròquia, etc.
+    parent_id INTEGER REFERENCES arquebisbats(id), -- Entitat eclesiàstica superior
+    -- Vigència històrica (opcional)
+    any_inici INTEGER,          -- Any en què comença a existir aquesta entitat
+    any_fi INTEGER,             -- Any en què deixa d'existir / canvia (NULL = encara vigent)
     web TEXT,
     web_arxiu TEXT,
     web_wikipedia TEXT,
     territori TEXT, -- Ex: Àmbit geogràfic (ex: Catalunya Nord, Catalunya del Sud)
-    autoritat_superior TEXT, -- Bisbat superior o arquebisbat pare
     observacions TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -211,17 +233,6 @@ CREATE TABLE IF NOT EXISTS codis_postals (
     fins DATE,
     font TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS relacio_comarca_provincia (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_municipi INTEGER NOT NULL REFERENCES municipis(id),
-    comarca TEXT,
-    provincia TEXT,
-    any_inici INTEGER,
-    any_fi INTEGER,
-    font TEXT,
-    observacions TEXT
 );
 
 CREATE TABLE IF NOT EXISTS llibres (
@@ -260,17 +271,23 @@ CREATE TABLE IF NOT EXISTS llibres (
 -- =====================================================================
 
 CREATE TABLE IF NOT EXISTS arxius (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  nom TEXT NOT NULL UNIQUE,
-  tipus TEXT,                 -- parroquia, arxiu_diocesa, portal_digital, etc.
-  municipi_id INTEGER REFERENCES municipis(id) ON DELETE SET NULL,
-  adreca TEXT,
-  ubicacio TEXT,              -- (legacy) municipi/adreça en text lliure
-  web TEXT,
-  acces TEXT,                 -- online, presencial, mixt
-  notes TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL UNIQUE,
+    tipus TEXT,                 -- parroquia, arxiu_diocesa, portal_digital, etc.
+
+    municipi_id INTEGER REFERENCES municipis(id) ON DELETE SET NULL,
+
+    -- Nova FK opcional: a quina entitat eclesiàstica està vinculat l'arxiu
+    entitat_eclesiastica_id INTEGER REFERENCES arquebisbats(id) ON DELETE SET NULL,
+
+    adreca TEXT,
+    ubicacio TEXT,              -- (legacy) municipi/adreça en text lliure
+    web TEXT,
+    acces TEXT,                 -- online, presencial, mixt
+    notes TEXT,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS arxius_llibres (
@@ -369,6 +386,66 @@ CREATE TABLE IF NOT EXISTS email_changes (
   FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
 );
 
+-- =====================================================================
+-- Sistema de punts per activitats dels usuaris
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS punts_regles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codi TEXT NOT NULL UNIQUE,   -- Clau interna: 'persona_create', 'pagina_indexada', 'moderacio_aprovada', etc.
+    nom TEXT NOT NULL,           -- Nom humà: "Crear registre de persona", "Indexar pàgina", etc.
+    descripcio TEXT,             -- Explicació més llarga de la regla
+
+    punts INTEGER NOT NULL,      -- Punts que atorga aquesta acció (pot ser negatiu, si vols penalitzacions)
+    actiu INTEGER NOT NULL DEFAULT 1 CHECK (actiu IN (0,1)),
+
+    data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE IF NOT EXISTS usuaris_activitat (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    usuari_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+
+    -- Regla aplicada (opcional, però molt útil per saber d'on surten els punts)
+    regla_id INTEGER REFERENCES punts_regles(id),
+
+    -- Tipus d'acció genèric: 'crear', 'editar', 'moderar_aprovar', 'moderar_rebutjar', 'corregir', etc.
+    accio TEXT NOT NULL,
+
+    -- Sobre QUIN objecte s'ha fet l'acció
+    objecte_tipus TEXT NOT NULL,   -- 'persona', 'relacio', 'llibre_pagines', 'arxiu', 'comentari', etc.
+    objecte_id INTEGER,            -- ID dins de la taula corresponent (no podem posar FK forta perquè apunta a moltes taules diferents)
+
+    -- Punts aplicats en el moment de l’acció (pot ser 0, positiu o negatiu)
+    punts INTEGER NOT NULL DEFAULT 0,
+
+    -- Estat de l'activitat, pensant en moderació:
+    --   pendent   = a l'espera de revisió (el contingut existeix però no és "validat")
+    --   validat   = acceptat per algú amb permís
+    --   anulat    = acció revertida / punts retirats
+    estat TEXT NOT NULL DEFAULT 'validat'
+        CHECK (estat IN ('pendent','validat','anulat')),
+
+    -- Si hi ha moderació, qui la valida/rebutja
+    moderat_per INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+
+    -- JSON o text amb detalls extra (IP, resum dels canvis, etc.)
+    detalls TEXT,
+
+    data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS usuaris_punts (
+    usuari_id INTEGER PRIMARY KEY
+        REFERENCES usuaris(id) ON DELETE CASCADE,
+
+    punts_total INTEGER NOT NULL DEFAULT 0,
+
+    ultima_actualitzacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Index per accelerar busquedes
 
 -- Per buscar ràpidament pel codi postal
@@ -411,6 +488,20 @@ CREATE INDEX IF NOT EXISTS idx_access_ip_ts      ON session_access_log(ip, ts DE
 CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token);
 CREATE INDEX IF NOT EXISTS idx_password_resets_expira ON password_resets(expira);
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nivell_pais_nom
+ON nivells_administratius(pais_id, nivel, nom_nivell);
+
+
+-- Índexs útils per consultes habituals
+CREATE INDEX IF NOT EXISTS idx_usuaris_activitat_usuari_data
+    ON usuaris_activitat(usuari_id, data_creacio DESC);
+
+CREATE INDEX IF NOT EXISTS idx_usuaris_activitat_objecte
+    ON usuaris_activitat(objecte_tipus, objecte_id);
+
+CREATE INDEX IF NOT EXISTS idx_persona_cognoms_quinta_llibre_pagina
+  ON persona(cognom1, cognom2, quinta, llibre, pagina);
+  
 -- Reactivo les claus foranes per pervindre errors durant la creació
 -- PRAGMA foreign_keys = ON;
 COMMIT;

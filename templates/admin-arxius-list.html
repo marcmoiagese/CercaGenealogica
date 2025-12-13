@@ -1,0 +1,99 @@
+{{ define "admin-arxius-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "archives.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal arxius-layout">
+        {{ $viewBase := default $.Data.ArxiusBasePath "/admin/arxius" }}
+        {{ $manageBase := "/admin/arxius" }}
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "archives.title" }}</h1>
+                {{ if $.Data.CanManageArxius }}
+                <a class="boto-primari" href="{{ $manageBase }}/new">{{ t .Lang "archives.button.new" }}</a>
+                {{ end }}
+            </header>
+            <form class="filtres-arxius" method="get" action="{{ $viewBase }}">
+                <div class="grup-camp">
+                    <label for="filtre-q">{{ t .Lang "archives.filter.search" }}</label>
+                    <input id="filtre-q" type="text" name="q" placeholder="Ex: Arxiu Capitular" value="{{ .Data.Filter.Text }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="filtre-tipus">{{ t .Lang "archives.filter.type" }}</label>
+                    <select id="filtre-tipus" name="tipus">
+                        <option value="">{{ t .Lang "archives.filter.type.any" }}</option>
+                        {{ range $opt := (list "parroquia" "arxiu_diocesa" "arxiu_capitular" "arxiu_comarcal" "portal_digital" "altre") }}
+                        <option value="{{ $opt }}" {{ if eq $.Data.Filter.Tipus $opt }}selected{{ end }}>{{ t $.Lang (printf "archives.type.%s" $opt) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="filtre-acces">{{ t .Lang "archives.filter.access" }}</label>
+                    <select id="filtre-acces" name="acces">
+                        <option value="">{{ t .Lang "archives.filter.access.any" }}</option>
+                        {{ range $opt := (list "online" "presencial" "mixt") }}
+                        <option value="{{ $opt }}" {{ if eq $.Data.Filter.Acces $opt }}selected{{ end }}>{{ t $.Lang (printf "archives.access.%s" $opt) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="filtre-entitat">{{ t .Lang "archives.filter.entity" }}</label>
+                    <select id="filtre-entitat" name="entitat_id">
+                        <option value="">{{ t .Lang "archives.filter.entity.any" }}</option>
+                        {{ range .Data.Arquebisbats }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.EntitatID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <button type="submit" class="boto-secundari">{{ t .Lang "archives.filter.submit" }}</button>
+            </form>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "archives.col.name" }}</th>
+                            <th>{{ t .Lang "archives.col.type" }}</th>
+                            <th>{{ t .Lang "archives.col.access" }}</th>
+                            <th>{{ t .Lang "archives.col.entity" }}</th>
+                            <th>{{ t .Lang "archives.col.municipi" }}</th>
+                            <th>{{ t .Lang "archives.col.web" }}</th>
+                            <th>{{ t .Lang "archives.col.books" }}</th>
+                            {{ if $.Data.CanManageArxius }}<th>{{ t .Lang "archives.col.actions" }}</th>{{ end }}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Arxius }}
+                        <tr>
+                            <td><a href="{{ $viewBase }}/{{ .ID }}">{{ .Nom }}</a></td>
+                            <td>{{ t $.Lang (printf "archives.type.%s" .Tipus) }}</td>
+                            <td>{{ t $.Lang (printf "archives.access.%s" .Acces) }}</td>
+                            <td>{{ .EntitatNom.String }}</td>
+                            <td>{{ .MunicipiNom.String }}</td>
+                            <td>{{ if .Web }}<a href="{{ .Web }}" target="_blank">{{ t $.Lang "archives.link" }}</a>{{ end }}</td>
+                            <td>{{ .Llibres }}</td>
+                            {{ if $.Data.CanManageArxius }}
+                            <td class="accions">
+                                <a href="{{ $manageBase }}/{{ .ID }}/edit">{{ t $.Lang "archives.action.edit" }}</a> |
+                                <form method="post" action="{{ $manageBase }}/{{ .ID }}/delete" style="display:inline;" onsubmit="return confirm('{{ t $.Lang "archives.confirm.delete" }}');">
+                                    <button type="submit" class="enllaç">{{ t $.Lang "archives.action.delete" }}</button>
+                                </form>
+                            </td>
+                            {{ end }}
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

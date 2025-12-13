@@ -1,0 +1,96 @@
+{{ define "admin-llibres-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "books.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "books.title" }}</h1>
+                <a class="boto-primari" href="/admin/llibres/new">{{ t .Lang "books.new" }}</a>
+            </header>
+            <form class="filtres-arxius" method="get" action="/admin/llibres">
+                <div class="grup-camp">
+                    <label for="filtre-q">{{ t .Lang "books.filter.search" }}</label>
+                    <input id="filtre-q" type="text" name="q" value="{{ .Data.Filter.Text }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="filtre-arq">{{ t .Lang "books.filter.entity" }}</label>
+                    <select id="filtre-arq" name="arquevisbat_id">
+                        <option value="">{{ t .Lang "books.filter.entity.any" }}</option>
+                        {{ range .Data.Arquebisbats }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.ArquebisbatID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="filtre-mun">{{ t .Lang "books.filter.municipi" }}</label>
+                    <select id="filtre-mun" name="municipi_id">
+                        <option value="">{{ t .Lang "books.filter.municipi.any" }}</option>
+                        {{ range .Data.Municipis }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.MunicipiID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="filtre-arxiu">{{ t .Lang "books.filter.arxiu" }}</label>
+                    <select id="filtre-arxiu" name="arxiu_id">
+                        <option value="">{{ t .Lang "books.filter.arxiu.any" }}</option>
+                        {{ range .Data.Arxius }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.ArxiuID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="filtre-arxiu-tipus">{{ t .Lang "books.filter.arxiu_type" }}</label>
+                    <select id="filtre-arxiu-tipus" name="arxiu_tipus">
+                        <option value="">{{ t .Lang "books.filter.arxiu_type.any" }}</option>
+                        {{ range $opt := (list "parroquia" "arxiu_diocesa" "arxiu_capitular" "arxiu_comarcal" "portal_digital" "altre") }}
+                        <option value="{{ $opt }}" {{ if eq $.Data.Filter.ArxiuTipus $opt }}selected{{ end }}>{{ t $.Lang (printf "archives.type.%s" $opt) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <button type="submit" class="boto-secundari">{{ t .Lang "books.filter.submit" }}</button>
+            </form>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "books.col.title" }}</th>
+                            <th>{{ t .Lang "books.col.entity" }}</th>
+                            <th>{{ t .Lang "books.col.municipi" }}</th>
+                            <th>{{ t .Lang "books.col.chrono" }}</th>
+                            <th>{{ t .Lang "books.col.pages" }}</th>
+                            <th>{{ t .Lang "books.col.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Llibres }}
+                        <tr>
+                            <td><a href="/admin/llibres/{{ .ID }}">{{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}</a></td>
+                            <td>{{ .ArquebisbatNom.String }}</td>
+                            <td>{{ .MunicipiNom.String }}</td>
+                            <td>{{ .Cronologia }}</td>
+                            <td>{{ if .Pagines.Valid }}{{ .Pagines.Int64 }}{{ end }}</td>
+                            <td>
+                                <a href="/admin/llibres/{{ .ID }}/edit">{{ t $.Lang "books.action.edit" }}</a> |
+                                <a href="/admin/llibres/{{ .ID }}/pagines">{{ t $.Lang "books.action.pages" }}</a>
+                            </td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

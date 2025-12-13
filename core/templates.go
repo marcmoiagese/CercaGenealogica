@@ -1,6 +1,7 @@
 package core
 
 import (
+	"database/sql"
 	"html/template"
 	"log"
 	"net/http"
@@ -27,6 +28,49 @@ var templateFuncs = template.FuncMap{
 	"t": func(lang, key string) string {
 		return T(lang, key)
 	},
+	"index": func(m map[string]interface{}, k string) interface{} {
+		if m == nil {
+			return nil
+		}
+		return m[k]
+	},
+	"list": func(values ...string) []string {
+		return values
+	},
+	"add": func(a, b int) int {
+		return a + b
+	},
+	"int": func(v interface{}) int {
+		switch t := v.(type) {
+		case int:
+			return t
+		case int8:
+			return int(t)
+		case int16:
+			return int(t)
+		case int32:
+			return int(t)
+		case int64:
+			return int(t)
+		case uint:
+			return int(t)
+		case uint8:
+			return int(t)
+		case uint16:
+			return int(t)
+		case uint32:
+			return int(t)
+		case uint64:
+			return int(t)
+		case sql.NullInt64:
+			if t.Valid {
+				return int(t.Int64)
+			}
+			return 0
+		default:
+			return 0
+		}
+	},
 }
 
 func init() {
@@ -49,6 +93,7 @@ func init() {
 
 	parsePattern("templates/*.html")
 	parsePattern("templates/layouts/*.html")
+	parsePattern("templates/admin/*.html")
 
 	Infof("Plantilles carregades:")
 	for _, t := range Templates.Templates() {

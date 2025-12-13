@@ -584,6 +584,8 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 		activeTab = "generals"
 	}
 
+	canManageArxius := a.CanManageArxius(user)
+
 	RenderPrivateTemplateLang(w, r, "perfil.html", lang, map[string]interface{}{
 		"User":               user,
 		"Privacy":            privacy,
@@ -596,6 +598,7 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 		"LangOptions":        []string{"cat", "en", "oc"},
 		"SpokenSlice":        spokenSlice,
 		"SpokenSet":          spokenSet,
+		"CanManageArxius":    canManageArxius,
 	})
 }
 

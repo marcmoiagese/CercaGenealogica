@@ -1,0 +1,203 @@
+//line /home/marc/codi/CercaGenealogica3/core/admin_nivells.go:1:1
+package core
+
+import (
+	"database/sql"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/marcmoiagese/CercaGenealogica/db"
+)
+
+var nivellEstats = map[string]bool{
+	"actiu":    true,
+	"inactiu":  true,
+	"fusionat": true,
+	"abolit":   true,
+}
+
+func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {goCover_33ba7a78e32c__46[0] = 9 ; goCover_33ba7a78e32c__46[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__46[2] = 46 ; goCover_33ba7a78e32c__46[3]++;
+	if _, ok := a.requirePolicies(w, r, adminPolicies); !ok {goCover_33ba7a78e32c__46[7]++;
+		return
+	}
+	goCover_33ba7a78e32c__46[4]++;paisID := extractID(r.URL.Path)
+	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {goCover_33ba7a78e32c__46[8]++;
+		if v, err := strconv.Atoi(pid); err == nil {goCover_33ba7a78e32c__46[9]++;
+			paisID = v
+		}
+	}
+	goCover_33ba7a78e32c__46[5]++;niv, _ := strconv.Atoi(r.URL.Query().Get("nivel"))
+	estat := strings.TrimSpace(r.URL.Query().Get("estat"))
+	filter := db.NivellAdminFilter{
+		PaisID: paisID,
+		Nivel:  niv,
+		Estat:  estat,
+	}
+	nivells, _ := a.DB.ListNivells(filter)
+	var pais *db.Pais
+	if paisID > 0 {goCover_33ba7a78e32c__46[10]++;
+		pais, _ = a.DB.GetPais(paisID)
+		if pais == nil {goCover_33ba7a78e32c__46[11]++;
+			pais = &db.Pais{ID: paisID}
+		}
+	}
+	goCover_33ba7a78e32c__46[6]++;RenderPrivateTemplate(w, r, "admin-nivells-list.html", map[string]interface{}{
+		"Nivells":         nivells,
+		"Pais":            pais,
+		"Filter":          filter,
+		"CanManageArxius": true,
+	})
+}
+
+func (a *App) AdminNewNivell(w http.ResponseWriter, r *http.Request) {goCover_33ba7a78e32c__47[0] = 3 ; goCover_33ba7a78e32c__47[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__47[2] = 47 ; goCover_33ba7a78e32c__47[3]++;
+	if _, ok := a.requirePolicies(w, r, adminPolicies); !ok {goCover_33ba7a78e32c__47[5]++;
+		return
+	}
+	goCover_33ba7a78e32c__47[4]++;paisID := extractID(r.URL.Path)
+	pais, _ := a.DB.GetPais(paisID)
+	parents, _ := a.DB.ListNivells(db.NivellAdminFilter{PaisID: paisID})
+	RenderPrivateTemplate(w, r, "admin-nivells-form.html", map[string]interface{}{
+		"Nivell":          &db.NivellAdministratiu{PaisID: paisID, Estat: "actiu"},
+		"Pais":            pais,
+		"Parents":         parents,
+		"IsNew":           true,
+		"CanManageArxius": true,
+	})
+}
+
+func (a *App) AdminEditNivell(w http.ResponseWriter, r *http.Request) {goCover_33ba7a78e32c__48[0] = 5 ; goCover_33ba7a78e32c__48[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__48[2] = 48 ; goCover_33ba7a78e32c__48[3]++;
+	if _, ok := a.requirePolicies(w, r, adminPolicies); !ok {goCover_33ba7a78e32c__48[6]++;
+		return
+	}
+	goCover_33ba7a78e32c__48[4]++;id := extractID(r.URL.Path)
+	nivell, err := a.DB.GetNivell(id)
+	if err != nil || nivell == nil {goCover_33ba7a78e32c__48[7]++;
+		http.NotFound(w, r)
+		return
+	}
+	goCover_33ba7a78e32c__48[5]++;parents, _ := a.DB.ListNivells(db.NivellAdminFilter{PaisID: nivell.PaisID})
+	RenderPrivateTemplate(w, r, "admin-nivells-form.html", map[string]interface{}{
+		"Nivell":          nivell,
+		"Pais":            nil,
+		"Parents":         parents,
+		"IsNew":           false,
+		"CanManageArxius": true,
+	})
+}
+
+func parseNullInt(val string) sql.NullInt64 {goCover_33ba7a78e32c__49[0] = 5 ; goCover_33ba7a78e32c__49[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__49[2] = 49 ; goCover_33ba7a78e32c__49[3]++;
+	var n sql.NullInt64
+	if strings.TrimSpace(val) == "" {goCover_33ba7a78e32c__49[6]++;
+		return n
+	}
+	goCover_33ba7a78e32c__49[4]++;if i, err := strconv.Atoi(val); err == nil {goCover_33ba7a78e32c__49[7]++;
+		n.Int64 = int64(i)
+		n.Valid = true
+	}
+	goCover_33ba7a78e32c__49[5]++;return n
+}
+
+func (a *App) AdminSaveNivell(w http.ResponseWriter, r *http.Request) {goCover_33ba7a78e32c__50[0] = 14 ; goCover_33ba7a78e32c__50[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__50[2] = 50 ; goCover_33ba7a78e32c__50[3]++;
+	if _, ok := a.requirePolicies(w, r, adminPolicies); !ok {goCover_33ba7a78e32c__50[10]++;
+		return
+	}
+	goCover_33ba7a78e32c__50[4]++;if r.Method != http.MethodPost {goCover_33ba7a78e32c__50[11]++;
+		http.Redirect(w, r, "/admin/paisos", http.StatusSeeOther)
+		return
+	}
+	goCover_33ba7a78e32c__50[5]++;id, _ := strconv.Atoi(r.FormValue("id"))
+	paisID, _ := strconv.Atoi(r.FormValue("pais_id"))
+	nivel, _ := strconv.Atoi(r.FormValue("nivel"))
+	parentID := parseNullInt(r.FormValue("parent_id"))
+	anyInici := parseNullInt(r.FormValue("any_inici"))
+	anyFi := parseNullInt(r.FormValue("any_fi"))
+	estat := strings.TrimSpace(r.FormValue("estat"))
+	nivell := &db.NivellAdministratiu{
+		ID:          id,
+		PaisID:      paisID,
+		Nivel:       nivel,
+		NomNivell:   strings.TrimSpace(r.FormValue("nom_nivell")),
+		TipusNivell: strings.TrimSpace(r.FormValue("tipus_nivell")),
+		CodiOficial: strings.TrimSpace(r.FormValue("codi_oficial")),
+		Altres:      strings.TrimSpace(r.FormValue("altres")),
+		ParentID:    parentID,
+		AnyInici:    anyInici,
+		AnyFi:       anyFi,
+		Estat:       estat,
+	}
+	if errMsg := a.validateNivell(nivell); errMsg != "" {goCover_33ba7a78e32c__50[12]++;
+		a.renderNivellFormError(w, r, nivell, errMsg, id == 0)
+		return
+	}
+	goCover_33ba7a78e32c__50[6]++;if err := a.ensureNivellUnique(nivell); err != "" {goCover_33ba7a78e32c__50[13]++;
+		a.renderNivellFormError(w, r, nivell, err, id == 0)
+		return
+	}
+	goCover_33ba7a78e32c__50[7]++;var saveErr error
+	if nivell.ID == 0 {goCover_33ba7a78e32c__50[14]++;
+		_, saveErr = a.DB.CreateNivell(nivell)
+	} else{ goCover_33ba7a78e32c__50[15]++;{
+		saveErr = a.DB.UpdateNivell(nivell)
+	}}
+	goCover_33ba7a78e32c__50[8]++;if saveErr != nil {goCover_33ba7a78e32c__50[16]++;
+		a.renderNivellFormError(w, r, nivell, "No s'ha pogut desar el nivell administratiu.", id == 0)
+		return
+	}
+	goCover_33ba7a78e32c__50[9]++;http.Redirect(w, r, "/admin/paisos/"+strconv.Itoa(nivell.PaisID)+"/nivells", http.StatusSeeOther)
+}
+
+func (a *App) validateNivell(n *db.NivellAdministratiu) string {goCover_33ba7a78e32c__51[0] = 16 ; goCover_33ba7a78e32c__51[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__51[2] = 51 ; goCover_33ba7a78e32c__51[3]++;
+	if n.PaisID == 0 {goCover_33ba7a78e32c__51[10]++;
+		return "Cal indicar el país."
+	}
+	goCover_33ba7a78e32c__51[4]++;if n.Nivel < 1 || n.Nivel > 7 {goCover_33ba7a78e32c__51[11]++;
+		return "El nivell ha d'estar entre 1 i 7."
+	}
+	goCover_33ba7a78e32c__51[5]++;if strings.TrimSpace(n.NomNivell) == "" {goCover_33ba7a78e32c__51[12]++;
+		return "El nom del nivell és obligatori."
+	}
+	goCover_33ba7a78e32c__51[6]++;if n.ParentID.Valid {goCover_33ba7a78e32c__51[13]++;
+		parent, err := a.DB.GetNivell(int(n.ParentID.Int64))
+		if err != nil || parent == nil || parent.PaisID != n.PaisID {goCover_33ba7a78e32c__51[15]++;
+			return "El nivell pare ha de pertànyer al mateix país."
+		}
+		goCover_33ba7a78e32c__51[14]++;if parent.ID == n.ID {goCover_33ba7a78e32c__51[16]++;
+			return "Un nivell no pot ser el seu propi pare."
+		}
+	}
+	goCover_33ba7a78e32c__51[7]++;if n.Estat == "" {goCover_33ba7a78e32c__51[17]++;
+		n.Estat = "actiu"
+	}
+	goCover_33ba7a78e32c__51[8]++;if !nivellEstats[n.Estat] {goCover_33ba7a78e32c__51[18]++;
+		return "Estat no vàlid."
+	}
+	goCover_33ba7a78e32c__51[9]++;return ""
+}
+
+func (a *App) ensureNivellUnique(n *db.NivellAdministratiu) string {goCover_33ba7a78e32c__52[0] = 8 ; goCover_33ba7a78e32c__52[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__52[2] = 52 ; goCover_33ba7a78e32c__52[3]++;
+	existents, err := a.DB.ListNivells(db.NivellAdminFilter{PaisID: n.PaisID, Nivel: n.Nivel})
+	if err != nil {goCover_33ba7a78e32c__52[6]++;
+		return ""
+	}
+	goCover_33ba7a78e32c__52[4]++;for _, e := range existents {goCover_33ba7a78e32c__52[7]++;
+		if n.ID != 0 && e.ID == n.ID {goCover_33ba7a78e32c__52[9]++;
+			continue
+		}
+		goCover_33ba7a78e32c__52[8]++;if strings.EqualFold(e.NomNivell, n.NomNivell) {goCover_33ba7a78e32c__52[10]++;
+			return "Ja existeix un nivell amb aquest nom i nivell per al país."
+		}
+	}
+	goCover_33ba7a78e32c__52[5]++;return ""
+}
+
+func (a *App) renderNivellFormError(w http.ResponseWriter, r *http.Request, n *db.NivellAdministratiu, msg string, isNew bool) {goCover_33ba7a78e32c__53[0] = 1 ; goCover_33ba7a78e32c__53[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__53[2] = 53 ; goCover_33ba7a78e32c__53[3]++;
+	parents, _ := a.DB.ListNivells(db.NivellAdminFilter{PaisID: n.PaisID})
+	RenderPrivateTemplate(w, r, "admin-nivells-form.html", map[string]interface{}{
+		"Nivell":          n,
+		"Parents":         parents,
+		"IsNew":           isNew,
+		"Error":           msg,
+		"CanManageArxius": true,
+	})
+}

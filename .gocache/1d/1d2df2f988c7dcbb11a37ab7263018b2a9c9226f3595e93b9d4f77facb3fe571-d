@@ -1,0 +1,259 @@
+//line /home/marc/codi/CercaGenealogica3/core/admin_municipis.go:1:1
+package core
+
+import (
+	"database/sql"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/marcmoiagese/CercaGenealogica/db"
+)
+
+func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {goCover_33ba7a78e32c__37[0] = 6 ; goCover_33ba7a78e32c__37[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__37[2] = 37 ; goCover_33ba7a78e32c__37[3]++;
+	if _, ok := a.requirePolicies(w, r, adminPolicies); !ok {goCover_33ba7a78e32c__37[6]++;
+		return
+	}
+	goCover_33ba7a78e32c__37[4]++;filter := db.MunicipiFilter{
+		Text:  strings.TrimSpace(r.URL.Query().Get("q")),
+		Estat: strings.TrimSpace(r.URL.Query().Get("estat")),
+	}
+	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {goCover_33ba7a78e32c__37[7]++;
+		if v, err := strconv.Atoi(pid); err == nil {goCover_33ba7a78e32c__37[8]++;
+			filter.PaisID = v
+		}
+	}
+	goCover_33ba7a78e32c__37[5]++;muns, _ := a.DB.ListMunicipis(filter)
+	paisos, _ := a.DB.ListPaisos()
+	RenderPrivateTemplate(w, r, "admin-municipis-list.html", map[string]interface{}{
+		"Municipis":       muns,
+		"Filter":          filter,
+		"Paisos":          paisos,
+		"CanManageArxius": true,
+	})
+}
+
+func (a *App) AdminNewMunicipi(w http.ResponseWriter, r *http.Request) {goCover_33ba7a78e32c__38[0] = 6 ; goCover_33ba7a78e32c__38[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__38[2] = 38 ; goCover_33ba7a78e32c__38[3]++;
+	if _, ok := a.requirePolicies(w, r, adminPolicies); !ok {goCover_33ba7a78e32c__38[6]++;
+		return
+	}
+	goCover_33ba7a78e32c__38[4]++;paisos, _ := a.DB.ListPaisos()
+	var levels []db.NivellAdministratiu
+	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {goCover_33ba7a78e32c__38[7]++;
+		if v, err := strconv.Atoi(pid); err == nil {goCover_33ba7a78e32c__38[8]++;
+			levels, _ = a.DB.ListNivells(db.NivellAdminFilter{PaisID: v})
+		}
+	}
+	goCover_33ba7a78e32c__38[5]++;arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
+	RenderPrivateTemplate(w, r, "admin-municipis-form.html", map[string]interface{}{
+		"Municipi":        &db.Municipi{Estat: "actiu"},
+		"Paisos":          paisos,
+		"Levels":          levels,
+		"Arquebisbats":    arquebisbats,
+		"CodisPostals":    nil,
+		"IsNew":           true,
+		"CanManageArxius": true,
+	})
+}
+
+func (a *App) AdminEditMunicipi(w http.ResponseWriter, r *http.Request) {goCover_33ba7a78e32c__39[0] = 7 ; goCover_33ba7a78e32c__39[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__39[2] = 39 ; goCover_33ba7a78e32c__39[3]++;
+	if _, ok := a.requirePolicies(w, r, adminPolicies); !ok {goCover_33ba7a78e32c__39[7]++;
+		return
+	}
+	goCover_33ba7a78e32c__39[4]++;id := extractID(r.URL.Path)
+	mun, err := a.DB.GetMunicipi(id)
+	if err != nil || mun == nil {goCover_33ba7a78e32c__39[8]++;
+		http.NotFound(w, r)
+		return
+	}
+	goCover_33ba7a78e32c__39[5]++;paisos, _ := a.DB.ListPaisos()
+	var levels []db.NivellAdministratiu
+	if mun.NivellAdministratiuID[0].Valid {goCover_33ba7a78e32c__39[9]++;
+		levels, _ = a.DB.ListNivells(db.NivellAdminFilter{PaisID: int(mun.NivellAdministratiuID[0].Int64)})
+	}
+	goCover_33ba7a78e32c__39[6]++;codis, _ := a.DB.ListCodisPostals(mun.ID)
+	ecles, _ := a.DB.ListArquebisbatMunicipis(mun.ID)
+	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
+	RenderPrivateTemplate(w, r, "admin-municipis-form.html", map[string]interface{}{
+		"Municipi":        mun,
+		"Paisos":          paisos,
+		"Levels":          levels,
+		"CodisPostals":    codis,
+		"Ecles":           ecles,
+		"Arquebisbats":    arquebisbats,
+		"IsNew":           false,
+		"CanManageArxius": true,
+	})
+}
+
+func parseNullFloat(val string) sql.NullFloat64 {goCover_33ba7a78e32c__40[0] = 5 ; goCover_33ba7a78e32c__40[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__40[2] = 40 ; goCover_33ba7a78e32c__40[3]++;
+	var n sql.NullFloat64
+	if strings.TrimSpace(val) == "" {goCover_33ba7a78e32c__40[6]++;
+		return n
+	}
+	goCover_33ba7a78e32c__40[4]++;if f, err := strconv.ParseFloat(val, 64); err == nil {goCover_33ba7a78e32c__40[7]++;
+		n.Valid = true
+		n.Float64 = f
+	}
+	goCover_33ba7a78e32c__40[5]++;return n
+}
+
+func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {goCover_33ba7a78e32c__41[0] = 17 ; goCover_33ba7a78e32c__41[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__41[2] = 41 ; goCover_33ba7a78e32c__41[3]++;
+	if _, ok := a.requirePolicies(w, r, adminPolicies); !ok {goCover_33ba7a78e32c__41[10]++;
+		return
+	}
+	goCover_33ba7a78e32c__41[4]++;if r.Method != http.MethodPost {goCover_33ba7a78e32c__41[11]++;
+		http.Redirect(w, r, "/admin/municipis", http.StatusSeeOther)
+		return
+	}
+	goCover_33ba7a78e32c__41[5]++;id, _ := strconv.Atoi(r.FormValue("id"))
+	parent := parseNullInt(r.FormValue("municipi_id"))
+	m := &db.Municipi{
+		ID:         id,
+		Nom:        strings.TrimSpace(r.FormValue("nom")),
+		MunicipiID: parent,
+		Tipus:      strings.TrimSpace(r.FormValue("tipus")),
+		CodiPostal: strings.TrimSpace(r.FormValue("codi_postal")),
+		Latitud:    parseNullFloat(r.FormValue("latitud")),
+		Longitud:   parseNullFloat(r.FormValue("longitud")),
+		What3Words: strings.TrimSpace(r.FormValue("what3words")),
+		Web:        strings.TrimSpace(r.FormValue("web")),
+		Wikipedia:  strings.TrimSpace(r.FormValue("wikipedia")),
+		Altres:     strings.TrimSpace(r.FormValue("altres")),
+		Estat:      strings.TrimSpace(r.FormValue("estat")),
+	}
+	for i := 0; i < 7; i++ {goCover_33ba7a78e32c__41[12]++;
+		field := strings.TrimSpace(r.FormValue("nivell_administratiu_id_" + strconv.Itoa(i+1)))
+		if field != "" {goCover_33ba7a78e32c__41[13]++;
+			m.NivellAdministratiuID[i] = parseNullInt(field)
+		}
+	}
+	goCover_33ba7a78e32c__41[6]++;if m.Estat == "" {goCover_33ba7a78e32c__41[14]++;
+		m.Estat = "actiu"
+	}
+	goCover_33ba7a78e32c__41[7]++;if errMsg := a.validateMunicipi(m); errMsg != "" {goCover_33ba7a78e32c__41[15]++;
+		a.renderMunicipiFormError(w, r, m, errMsg, id == 0)
+		return
+	}
+	goCover_33ba7a78e32c__41[8]++;if m.ID == 0 {goCover_33ba7a78e32c__41[16]++;
+		if _, err := a.DB.CreateMunicipi(m); err != nil {goCover_33ba7a78e32c__41[17]++;
+			a.renderMunicipiFormError(w, r, m, "No s'ha pogut crear el municipi.", true)
+			return
+		}
+	} else{ goCover_33ba7a78e32c__41[18]++;{
+		if err := a.DB.UpdateMunicipi(m); err != nil {goCover_33ba7a78e32c__41[19]++;
+			a.renderMunicipiFormError(w, r, m, "No s'ha pogut actualitzar el municipi.", false)
+			return
+		}
+	}}
+	goCover_33ba7a78e32c__41[9]++;http.Redirect(w, r, "/admin/municipis", http.StatusSeeOther)
+}
+
+func (a *App) validateMunicipi(m *db.Municipi) string {goCover_33ba7a78e32c__42[0] = 7 ; goCover_33ba7a78e32c__42[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__42[2] = 42 ; goCover_33ba7a78e32c__42[3]++;
+	if strings.TrimSpace(m.Nom) == "" {goCover_33ba7a78e32c__42[7]++;
+		return "El nom és obligatori."
+	}
+	goCover_33ba7a78e32c__42[4]++;if m.Tipus == "" {goCover_33ba7a78e32c__42[8]++;
+		return "El tipus és obligatori."
+	}
+	goCover_33ba7a78e32c__42[5]++;if m.MunicipiID.Valid && m.ID != 0 && m.MunicipiID.Int64 == int64(m.ID) {goCover_33ba7a78e32c__42[9]++;
+		return "Un municipi no pot ser pare de si mateix."
+	}
+	goCover_33ba7a78e32c__42[6]++;return ""
+}
+
+func (a *App) renderMunicipiFormError(w http.ResponseWriter, r *http.Request, m *db.Municipi, msg string, isNew bool) {goCover_33ba7a78e32c__43[0] = 5 ; goCover_33ba7a78e32c__43[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__43[2] = 43 ; goCover_33ba7a78e32c__43[3]++;
+	paisos, _ := a.DB.ListPaisos()
+	var levels []db.NivellAdministratiu
+	if m.NivellAdministratiuID[0].Valid {goCover_33ba7a78e32c__43[6]++;
+		levels, _ = a.DB.ListNivells(db.NivellAdminFilter{PaisID: int(m.NivellAdministratiuID[0].Int64)})
+	}
+	goCover_33ba7a78e32c__43[4]++;var ecles []db.ArquebisbatMunicipi
+	if !isNew && m.ID != 0 {goCover_33ba7a78e32c__43[7]++;
+		ecles, _ = a.DB.ListArquebisbatMunicipis(m.ID)
+	}
+	goCover_33ba7a78e32c__43[5]++;arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
+	RenderPrivateTemplate(w, r, "admin-municipis-form.html", map[string]interface{}{
+		"Municipi":        m,
+		"Paisos":          paisos,
+		"Levels":          levels,
+		"CodisPostals":    nil,
+		"Ecles":           ecles,
+		"Arquebisbats":    arquebisbats,
+		"Error":           msg,
+		"IsNew":           isNew,
+		"CanManageArxius": true,
+	})
+}
+
+func (a *App) AdminSaveCodiPostal(w http.ResponseWriter, r *http.Request) {goCover_33ba7a78e32c__44[0] = 11 ; goCover_33ba7a78e32c__44[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__44[2] = 44 ; goCover_33ba7a78e32c__44[3]++;
+	if _, ok := a.requirePolicies(w, r, adminPolicies); !ok {goCover_33ba7a78e32c__44[9]++;
+		return
+	}
+	goCover_33ba7a78e32c__44[4]++;if r.Method != http.MethodPost {goCover_33ba7a78e32c__44[10]++;
+		http.Redirect(w, r, "/admin/municipis", http.StatusSeeOther)
+		return
+	}
+	goCover_33ba7a78e32c__44[5]++;munID := extractID(r.URL.Path)
+	if munID == 0 {goCover_33ba7a78e32c__44[11]++;
+		http.NotFound(w, r)
+		return
+	}
+	goCover_33ba7a78e32c__44[6]++;_, err := a.DB.GetMunicipi(munID)
+	if err != nil {goCover_33ba7a78e32c__44[12]++;
+		http.NotFound(w, r)
+		return
+	}
+	goCover_33ba7a78e32c__44[7]++;cpID, _ := strconv.Atoi(r.FormValue("cp_id"))
+	cp := &db.CodiPostal{
+		ID:         cpID,
+		MunicipiID: munID,
+		CodiPostal: strings.TrimSpace(r.FormValue("codi_postal")),
+		Zona:       strings.TrimSpace(r.FormValue("zona")),
+		Desde:      sql.NullString{String: strings.TrimSpace(r.FormValue("desde")), Valid: strings.TrimSpace(r.FormValue("desde")) != ""},
+		Fins:       sql.NullString{String: strings.TrimSpace(r.FormValue("fins")), Valid: strings.TrimSpace(r.FormValue("fins")) != ""},
+	}
+	if cp.CodiPostal == "" {goCover_33ba7a78e32c__44[13]++;
+		http.Redirect(w, r, "/admin/municipis/"+strconv.Itoa(munID)+"/edit?error=cp", http.StatusSeeOther)
+		return
+	}
+	goCover_33ba7a78e32c__44[8]++;_, _ = a.DB.SaveCodiPostal(cp)
+	http.Redirect(w, r, "/admin/municipis/"+strconv.Itoa(munID)+"/edit", http.StatusSeeOther)
+}
+
+func (a *App) AdminSaveMunicipiEcles(w http.ResponseWriter, r *http.Request) {goCover_33ba7a78e32c__45[0] = 11 ; goCover_33ba7a78e32c__45[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__45[2] = 45 ; goCover_33ba7a78e32c__45[3]++;
+	if _, ok := a.requirePolicies(w, r, adminPolicies); !ok {goCover_33ba7a78e32c__45[9]++;
+		return
+	}
+	goCover_33ba7a78e32c__45[4]++;if r.Method != http.MethodPost {goCover_33ba7a78e32c__45[10]++;
+		http.Redirect(w, r, "/admin/municipis", http.StatusSeeOther)
+		return
+	}
+	goCover_33ba7a78e32c__45[5]++;munID := extractID(r.URL.Path)
+	if munID == 0 {goCover_33ba7a78e32c__45[11]++;
+		http.NotFound(w, r)
+		return
+	}
+	goCover_33ba7a78e32c__45[6]++;_, err := a.DB.GetMunicipi(munID)
+	if err != nil {goCover_33ba7a78e32c__45[12]++;
+		http.NotFound(w, r)
+		return
+	}
+	goCover_33ba7a78e32c__45[7]++;amID, _ := strconv.Atoi(r.FormValue("am_id"))
+	arqID, _ := strconv.Atoi(r.FormValue("arquebisbat_id"))
+	am := &db.ArquebisbatMunicipi{
+		ID:            amID,
+		MunicipiID:    munID,
+		ArquebisbatID: arqID,
+		AnyInici:      parseNullInt(r.FormValue("any_inici")),
+		AnyFi:         parseNullInt(r.FormValue("any_fi")),
+		Motiu:         strings.TrimSpace(r.FormValue("motiu")),
+		Font:          strings.TrimSpace(r.FormValue("font")),
+	}
+	if am.ArquebisbatID == 0 {goCover_33ba7a78e32c__45[13]++;
+		http.Redirect(w, r, "/admin/municipis/"+strconv.Itoa(munID)+"/edit?error=ecles", http.StatusSeeOther)
+		return
+	}
+	goCover_33ba7a78e32c__45[8]++;_, _ = a.DB.SaveArquebisbatMunicipi(am)
+	http.Redirect(w, r, "/admin/municipis/"+strconv.Itoa(munID)+"/edit", http.StatusSeeOther)
+}

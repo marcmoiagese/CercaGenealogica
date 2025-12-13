@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"strings"
@@ -21,6 +22,7 @@ type DB interface {
 	SaveSession(sessionID string, userID int, expiry string) error
 	GetSessionUser(sessionID string) (*User, error)
 	DeleteSession(sessionID string) error
+	ListUserGroups(userID int) ([]Group, error)
 	CreatePasswordReset(email, token, expiry, lang string) (bool, error)
 	GetPasswordReset(token string) (*PasswordReset, error)
 	MarkPasswordResetUsed(id int) error
@@ -33,6 +35,76 @@ type DB interface {
 	CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error
 	ConfirmEmailChange(token string) (*EmailChange, error)
 	RevertEmailChange(token string) (*EmailChange, error)
+	// Policies
+	UserHasAnyPolicy(userID int, policies []string) (bool, error)
+	EnsureDefaultPolicies() error
+	ListGroups() ([]Group, error)
+	ListPolitiques() ([]Politica, error)
+	GetPolitica(id int) (*Politica, error)
+	SavePolitica(p *Politica) (int, error)
+	ListUserPolitiques(userID int) ([]Politica, error)
+	AddUserPolitica(userID, politicaID int) error
+	RemoveUserPolitica(userID, politicaID int) error
+	ListGroupPolitiques(groupID int) ([]Politica, error)
+	AddGroupPolitica(groupID, politicaID int) error
+	RemoveGroupPolitica(groupID, politicaID int) error
+	GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error)
+
+	// Persones (moderació)
+	ListPersones(filter PersonaFilter) ([]Persona, error)
+	GetPersona(id int) (*Persona, error)
+	CreatePersona(p *Persona) (int, error)
+	UpdatePersona(p *Persona) error
+	UpdatePersonaModeracio(id int, estat, motiu string) error
+	// Arxius CRUD
+	ListArxius(filter ArxiuFilter) ([]ArxiuWithCount, error)
+	GetArxiu(id int) (*Arxiu, error)
+	CreateArxiu(a *Arxiu) (int, error)
+	UpdateArxiu(a *Arxiu) error
+	DeleteArxiu(id int) error
+	ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error)
+	ListLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error)
+	AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error
+	UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error
+	DeleteArxiuLlibre(arxiuID, llibreID int) error
+	SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error)
+	ListLlibres(filter LlibreFilter) ([]LlibreRow, error)
+	GetLlibre(id int) (*Llibre, error)
+	CreateLlibre(l *Llibre) (int, error)
+	UpdateLlibre(l *Llibre) error
+	ListLlibrePagines(llibreID int) ([]LlibrePagina, error)
+	SaveLlibrePagina(p *LlibrePagina) (int, error)
+	RecalcLlibrePagines(llibreID, total int) error
+
+	// Paisos
+	ListPaisos() ([]Pais, error)
+	GetPais(id int) (*Pais, error)
+	CreatePais(p *Pais) (int, error)
+	UpdatePais(p *Pais) error
+
+	// Nivells administratius
+	ListNivells(f NivellAdminFilter) ([]NivellAdministratiu, error)
+	GetNivell(id int) (*NivellAdministratiu, error)
+	CreateNivell(n *NivellAdministratiu) (int, error)
+	UpdateNivell(n *NivellAdministratiu) error
+
+	// Municipis
+	ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error)
+	GetMunicipi(id int) (*Municipi, error)
+	CreateMunicipi(m *Municipi) (int, error)
+	UpdateMunicipi(m *Municipi) error
+	ListCodisPostals(municipiID int) ([]CodiPostal, error)
+	SaveCodiPostal(cp *CodiPostal) (int, error)
+	ListNomsHistorics(entitatTipus string, entitatID int) ([]NomHistoric, error)
+	SaveNomHistoric(nh *NomHistoric) (int, error)
+
+	// Entitats eclesiàstiques
+	ListArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error)
+	GetArquebisbat(id int) (*Arquebisbat, error)
+	CreateArquebisbat(ae *Arquebisbat) (int, error)
+	UpdateArquebisbat(ae *Arquebisbat) error
+	ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error)
+	SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error)
 }
 
 // Tipus comú d'usuari al paquet `db`
@@ -67,40 +139,315 @@ type PasswordReset struct {
 }
 
 type PrivacySettings struct {
-	UserID             int
-	NomVisibility      string
-	CognomsVisibility  string
-	EmailVisibility    string
-	BirthVisibility    string
-	PaisVisibility     string
-	EstatVisibility    string
-	ProvinciaVisibility string
-	PoblacioVisibility string
-	PostalVisibility   string
-	AddressVisibility  string
-	EmploymentVisibility string
-	ProfessionVisibility string
-	PhoneVisibility    string
+	UserID                  int
+	NomVisibility           string
+	CognomsVisibility       string
+	EmailVisibility         string
+	BirthVisibility         string
+	PaisVisibility          string
+	EstatVisibility         string
+	ProvinciaVisibility     string
+	PoblacioVisibility      string
+	PostalVisibility        string
+	AddressVisibility       string
+	EmploymentVisibility    string
+	ProfessionVisibility    string
+	PhoneVisibility         string
 	PreferredLangVisibility string
-	SpokenLangsVisibility string
-	ShowActivity       bool
-	ProfilePublic      bool
-	NotifyEmail        bool
-	AllowContact       bool
+	SpokenLangsVisibility   string
+	ShowActivity            bool
+	ProfilePublic           bool
+	NotifyEmail             bool
+	AllowContact            bool
+}
+
+type Pais struct {
+	ID          int
+	CodiISO2    string
+	CodiISO3    string
+	CodiPaisNum string
+}
+
+type Politica struct {
+	ID         int
+	Nom        string
+	Descripcio string
+	Permisos   string
+}
+
+type PolicyPermissions struct {
+	Admin               bool `json:"admin"`
+	CanManageUsers      bool `json:"can_manage_users"`
+	CanManageTerritory  bool `json:"can_manage_territory"`
+	CanManageEclesia    bool `json:"can_manage_eclesiastic"`
+	CanManageArchives   bool `json:"can_manage_archives"`
+	CanCreatePerson     bool `json:"can_create_person"`
+	CanEditAnyPerson    bool `json:"can_edit_any_person"`
+	CanModerate         bool `json:"can_moderate"`
+	CanManagePolicies   bool `json:"can_manage_policies"`
+}
+
+type Group struct {
+	ID   int
+	Nom  string
+	Descripcio string
+}
+
+type Persona struct {
+	ID             int
+	Nom            string
+	Cognom1        string
+	Cognom2        string
+	Municipi       string
+	Arquebisbat    string
+	NomComplet     string
+	Pagina         string
+	Llibre         string
+	Quinta         string
+	DataNaixement  sql.NullString
+	DataBateig     sql.NullString
+	DataDefuncio   sql.NullString
+	Ofici          string
+	EstatCivil     string
+	ModeracioEstat string
+	ModeracioMotiu string
+	CreadaPer      sql.NullInt64
+	ActualitzadaAt sql.NullString
+}
+
+type PersonaFilter struct {
+	Estat string
+	Limit int
+}
+
+type NivellAdministratiu struct {
+	ID          int
+	PaisID      int
+	Nivel       int
+	NomNivell   string
+	TipusNivell string
+	CodiOficial string
+	Altres      string
+	ParentID    sql.NullInt64
+	ParentNom   sql.NullString
+	AnyInici    sql.NullInt64
+	AnyFi       sql.NullInt64
+	Estat       string
+}
+
+type NivellAdminFilter struct {
+	PaisID int
+	Nivel  int
+	Estat  string
+}
+
+type Municipi struct {
+	ID                    int
+	Nom                   string
+	MunicipiID            sql.NullInt64
+	Tipus                 string
+	NivellAdministratiuID [7]sql.NullInt64
+	CodiPostal            string
+	Latitud               sql.NullFloat64
+	Longitud              sql.NullFloat64
+	What3Words            string
+	Web                   string
+	Wikipedia             string
+	Altres                string
+	Estat                 string
+}
+
+type MunicipiRow struct {
+	ID         int
+	Nom        string
+	Tipus      string
+	Estat      string
+	CodiPostal string
+	PaisNom    sql.NullString
+	ProvNom    sql.NullString
+	Comarca    sql.NullString
+}
+
+type MunicipiFilter struct {
+	Text     string
+	Estat    string
+	PaisID   int
+	NivellID int
+}
+
+type CodiPostal struct {
+	ID         int
+	MunicipiID int
+	CodiPostal string
+	Zona       string
+	Desde      sql.NullString
+	Fins       sql.NullString
+}
+
+type Arquebisbat struct {
+	ID           int
+	Nom          string
+	TipusEntitat string
+	PaisID       sql.NullInt64
+	Nivell       sql.NullInt64
+	ParentID     sql.NullInt64
+	AnyInici     sql.NullInt64
+	AnyFi        sql.NullInt64
+	Web          string
+	WebArxiu     string
+	WebWikipedia string
+	Territori    string
+	Observacions string
+}
+
+type ArquebisbatRow struct {
+	ID           int
+	Nom          string
+	TipusEntitat string
+	PaisNom      sql.NullString
+	Nivell       sql.NullInt64
+	ParentNom    sql.NullString
+	AnyInici     sql.NullInt64
+	AnyFi        sql.NullInt64
+}
+
+type ArquebisbatFilter struct {
+	Text   string
+	PaisID int
+}
+
+type ArquebisbatMunicipi struct {
+	ID            int
+	MunicipiID    int
+	ArquebisbatID int
+	AnyInici      sql.NullInt64
+	AnyFi         sql.NullInt64
+	Motiu         string
+	Font          string
+	NomEntitat    string
 }
 
 type EmailChange struct {
-	ID          int
-	UserID      int
-	OldEmail    string
-	NewEmail    string
+	ID           int
+	UserID       int
+	OldEmail     string
+	NewEmail     string
 	TokenConfirm string
-	ExpConfirm  string
-	TokenRevert string
-	ExpRevert   string
-	Lang        string
-	Confirmed   bool
-	Reverted    bool
+	ExpConfirm   string
+	TokenRevert  string
+	ExpRevert    string
+	Lang         string
+	Confirmed    bool
+	Reverted     bool
+}
+
+// Arxius
+type Arxiu struct {
+	ID                    int
+	Nom                   string
+	Tipus                 string
+	MunicipiID            sql.NullInt64
+	EntitatEclesiasticaID sql.NullInt64
+	Adreca                string
+	Ubicacio              string
+	Web                   string
+	Acces                 string
+	Notes                 string
+}
+
+type ArxiuFilter struct {
+	Text      string
+	Tipus     string
+	Acces     string
+	EntitatID int
+	PaisID    int
+	Limit     int
+	Offset    int
+}
+
+type ArxiuWithCount struct {
+	Arxiu
+	MunicipiNom sql.NullString
+	EntitatNom  sql.NullString
+	Llibres     int
+}
+
+type ArxiuLlibreDetail struct {
+	ArxiuID     int
+	LlibreID    int
+	Titol       string
+	NomEsglesia string
+	Cronologia  string
+	Municipi    sql.NullString
+	ArxiuNom    sql.NullString
+	Signatura   sql.NullString
+	URLOverride sql.NullString
+}
+
+type LlibreSimple struct {
+	ID          int
+	Titol       string
+	NomEsglesia string
+	Cronologia  string
+	Municipi    sql.NullString
+}
+
+type Llibre struct {
+	ID                int
+	ArquebisbatID     int
+	MunicipiID        int
+	NomEsglesia       string
+	CodiDigital       string
+	CodiFisic         string
+	Titol             string
+	Cronologia        string
+	Volum             string
+	Abat              string
+	Contingut         string
+	Llengua           string
+	Requeriments      string
+	UnitatCatalogacio string
+	UnitatInstalacio  string
+	Pagines           sql.NullInt64
+	URLBase           string
+	URLImatgePrefix   string
+	Pagina            string
+}
+
+type LlibreRow struct {
+	Llibre
+	ArquebisbatNom sql.NullString
+	MunicipiNom    sql.NullString
+}
+
+type LlibreFilter struct {
+	Text          string
+	ArquebisbatID int
+	MunicipiID    int
+	ArxiuID       int
+	ArxiuTipus    string
+}
+
+type LlibrePagina struct {
+	ID        int
+	LlibreID  int
+	NumPagina int
+	Estat     string
+	IndexedAt sql.NullString
+	IndexedBy sql.NullInt64
+	Notes     string
+}
+
+type NomHistoric struct {
+	ID                    int
+	EntitatTipus          string
+	EntitatID             int
+	Nom                   string
+	AnyInici              sql.NullInt64
+	AnyFi                 sql.NullInt64
+	PaisRegne             string
+	DistribucioGeografica string
+	Font                  string
 }
 
 // Funció principal per obtenir una connexió i recrear BD si cal

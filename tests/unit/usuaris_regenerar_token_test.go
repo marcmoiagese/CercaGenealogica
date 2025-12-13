@@ -249,8 +249,10 @@ func (f *fakeDB) DeleteSession(sessionID string) error { return nil }
 func (f *fakeDB) CreatePasswordReset(email, token, expiry, lang string) (bool, error) {
 	return false, nil
 }
-func (f *fakeDB) GetPasswordReset(token string) (*db.PasswordReset, error) { return nil, fmt.Errorf("not implemented") }
-func (f *fakeDB) MarkPasswordResetUsed(id int) error                      { return nil }
+func (f *fakeDB) GetPasswordReset(token string) (*db.PasswordReset, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (f *fakeDB) MarkPasswordResetUsed(id int) error { return nil }
 func (f *fakeDB) UpdateUserPassword(userID int, passwordHash []byte) error {
 	return nil
 }
@@ -259,15 +261,107 @@ func (f *fakeDB) GetPrivacySettings(userID int) (*db.PrivacySettings, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 func (f *fakeDB) SavePrivacySettings(userID int, p *db.PrivacySettings) error { return nil }
-func (f *fakeDB) UpdateUserProfile(u *db.User) error                         { return nil }
-func (f *fakeDB) UpdateUserEmail(userID int, newEmail string) error          { return nil }
+func (f *fakeDB) UpdateUserProfile(u *db.User) error                          { return nil }
+func (f *fakeDB) UpdateUserEmail(userID int, newEmail string) error           { return nil }
 func (f *fakeDB) CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {
 	return nil
 }
-func (f *fakeDB) ConfirmEmailChange(token string) (*db.EmailChange, error) { return nil, fmt.Errorf("not implemented") }
-func (f *fakeDB) RevertEmailChange(token string) (*db.EmailChange, error)  { return nil, fmt.Errorf("not implemented") }
-func (f *fakeDB) markEmailChangeConfirmed(id int) error                    { return nil }
-func (f *fakeDB) markEmailChangeReverted(id int) error                     { return nil }
+func (f *fakeDB) ConfirmEmailChange(token string) (*db.EmailChange, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (f *fakeDB) RevertEmailChange(token string) (*db.EmailChange, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (f *fakeDB) markEmailChangeConfirmed(id int) error { return nil }
+func (f *fakeDB) markEmailChangeReverted(id int) error  { return nil }
+func (f *fakeDB) UserHasAnyPolicy(userID int, policies []string) (bool, error) {
+	return false, nil
+}
+func (f *fakeDB) EnsureDefaultPolicies() error { return nil }
+func (f *fakeDB) ListArxius(filter db.ArxiuFilter) ([]db.ArxiuWithCount, error) {
+	return nil, nil
+}
+func (f *fakeDB) GetArxiu(id int) (*db.Arxiu, error)   { return nil, nil }
+func (f *fakeDB) CreateArxiu(a *db.Arxiu) (int, error) { return 0, nil }
+func (f *fakeDB) UpdateArxiu(a *db.Arxiu) error        { return nil }
+func (f *fakeDB) DeleteArxiu(id int) error             { return nil }
+func (f *fakeDB) ListArxiuLlibres(arxiuID int) ([]db.ArxiuLlibreDetail, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListLlibreArxius(llibreID int) ([]db.ArxiuLlibreDetail, error) { return nil, nil }
+func (f *fakeDB) AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	return nil
+}
+func (f *fakeDB) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	return nil
+}
+func (f *fakeDB) DeleteArxiuLlibre(arxiuID, llibreID int) error { return nil }
+func (f *fakeDB) SearchLlibresSimple(q string, limit int) ([]db.LlibreSimple, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListLlibres(filter db.LlibreFilter) ([]db.LlibreRow, error) { return nil, nil }
+func (f *fakeDB) GetLlibre(id int) (*db.Llibre, error)                       { return nil, nil }
+func (f *fakeDB) CreateLlibre(l *db.Llibre) (int, error)                     { return 0, nil }
+func (f *fakeDB) UpdateLlibre(l *db.Llibre) error                            { return nil }
+func (f *fakeDB) ListLlibrePagines(llibreID int) ([]db.LlibrePagina, error)  { return nil, nil }
+func (f *fakeDB) SaveLlibrePagina(p *db.LlibrePagina) (int, error)           { return 0, nil }
+func (f *fakeDB) RecalcLlibrePagines(llibreID, total int) error              { return nil }
+func (f *fakeDB) ListPaisos() ([]db.Pais, error)                             { return nil, nil }
+func (f *fakeDB) GetPais(id int) (*db.Pais, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (f *fakeDB) CreatePais(p *db.Pais) (int, error) { return 0, nil }
+func (f *fakeDB) UpdatePais(p *db.Pais) error        { return nil }
+func (f *fakeDB) ListNivells(filt db.NivellAdminFilter) ([]db.NivellAdministratiu, error) {
+	return nil, nil
+}
+func (f *fakeDB) GetNivell(id int) (*db.NivellAdministratiu, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (f *fakeDB) CreateNivell(n *db.NivellAdministratiu) (int, error) { return 0, nil }
+func (f *fakeDB) UpdateNivell(n *db.NivellAdministratiu) error        { return nil }
+func (f *fakeDB) ListMunicipis(filter db.MunicipiFilter) ([]db.MunicipiRow, error) {
+	return nil, nil
+}
+func (f *fakeDB) GetMunicipi(id int) (*db.Municipi, error) { return nil, nil }
+func (f *fakeDB) CreateMunicipi(m *db.Municipi) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) UpdateMunicipi(m *db.Municipi) error { return nil }
+func (f *fakeDB) ListCodisPostals(municipiID int) ([]db.CodiPostal, error) {
+	return nil, nil
+}
+func (f *fakeDB) SaveCodiPostal(cp *db.CodiPostal) (int, error) { return 0, nil }
+func (f *fakeDB) ListNomsHistorics(entitatTipus string, entitatID int) ([]db.NomHistoric, error) {
+	return nil, nil
+}
+func (f *fakeDB) SaveNomHistoric(nh *db.NomHistoric) (int, error) { return 0, nil }
+func (f *fakeDB) ListGroups() ([]db.Group, error)                 { return nil, nil }
+func (f *fakeDB) ListArquebisbats(filt db.ArquebisbatFilter) ([]db.ArquebisbatRow, error) {
+	return nil, nil
+}
+func (f *fakeDB) GetArquebisbat(id int) (*db.Arquebisbat, error)    { return nil, nil }
+func (f *fakeDB) CreateArquebisbat(ae *db.Arquebisbat) (int, error) { return 0, nil }
+func (f *fakeDB) UpdateArquebisbat(ae *db.Arquebisbat) error        { return nil }
+func (f *fakeDB) ListArquebisbatMunicipis(munID int) ([]db.ArquebisbatMunicipi, error) {
+	return nil, nil
+}
+func (f *fakeDB) SaveArquebisbatMunicipi(am *db.ArquebisbatMunicipi) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) ListPolitiques() ([]db.Politica, error)                 { return nil, nil }
+func (f *fakeDB) GetPolitica(id int) (*db.Politica, error)               { return nil, nil }
+func (f *fakeDB) SavePolitica(p *db.Politica) (int, error)               { return 0, nil }
+func (f *fakeDB) ListUserPolitiques(userID int) ([]db.Politica, error)   { return nil, nil }
+func (f *fakeDB) AddUserPolitica(userID, politicaID int) error           { return nil }
+func (f *fakeDB) RemoveUserPolitica(userID, politicaID int) error        { return nil }
+func (f *fakeDB) ListGroupPolitiques(groupID int) ([]db.Politica, error) { return nil, nil }
+func (f *fakeDB) AddGroupPolitica(groupID, politicaID int) error         { return nil }
+func (f *fakeDB) RemoveGroupPolitica(groupID, politicaID int) error      { return nil }
+func (f *fakeDB) GetEffectivePoliticaPerms(userID int) (db.PolicyPermissions, error) {
+	return db.PolicyPermissions{}, nil
+}
+func (f *fakeDB) ListUserGroups(userID int) ([]db.Group, error) { return nil, nil }
 
 // Helper per crear una App amb fakeDB
 func newFakeAppWithUsers(users map[string]*db.User) *core.App {

@@ -1,0 +1,91 @@
+{{ define "admin-llibres-pagines.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "books.pages.title" }} - {{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "books.pages.title" }}</h1>
+                <a class="boto-secundari" href="/admin/llibres/{{ .Data.Llibre.ID }}/edit">{{ t .Lang "books.action.back" }}</a>
+            </header>
+            <p class="muted">{{ t .Lang "books.pages.subtitle" }}</p>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "books.pages.col.num" }}</th>
+                            <th>{{ t .Lang "books.pages.col.state" }}</th>
+                            <th>{{ t .Lang "books.pages.col.indexed_at" }}</th>
+                            <th>{{ t .Lang "books.pages.col.indexed_by" }}</th>
+                            <th>{{ t .Lang "books.pages.col.notes" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Pagines }}
+                        <tr>
+                            <td>{{ .NumPagina }}</td>
+                            <td>{{ .Estat }}</td>
+                            <td>{{ .IndexedAt.String }}</td>
+                            <td>{{ if .IndexedBy.Valid }}{{ .IndexedBy.Int64 }}{{ end }}</td>
+                            <td>{{ .Notes }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+
+            <form method="post" action="/admin/llibres/{{ .Data.Llibre.ID }}/pagines/save" style="margin-top:1rem;">
+                <input type="hidden" name="page_id" value="">
+                <div class="grup-camp">
+                    <label for="num_pagina">{{ t .Lang "books.pages.form.num" }}</label>
+                    <input id="num_pagina" name="num_pagina" type="number" min="1" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="estat">{{ t .Lang "books.pages.form.state" }}</label>
+                    <select id="estat" name="estat">
+                        {{ range $opt := (list "pendent" "indexant" "indexada" "revisio" "error") }}
+                        <option value="{{ $opt }}">{{ $opt }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="indexed_at">{{ t .Lang "books.pages.form.indexed_at" }}</label>
+                    <input id="indexed_at" name="indexed_at" type="text" placeholder="YYYY-MM-DD">
+                </div>
+                <div class="grup-camp">
+                    <label for="indexed_by">{{ t .Lang "books.pages.form.indexed_by" }}</label>
+                    <input id="indexed_by" name="indexed_by" type="number">
+                </div>
+                <div class="grup-camp">
+                    <label for="notes">{{ t .Lang "books.pages.form.notes" }}</label>
+                    <textarea id="notes" name="notes"></textarea>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "books.pages.form.save" }}</button>
+                </div>
+            </form>
+
+            <form method="post" action="/admin/llibres/{{ .Data.Llibre.ID }}/pagines/save" style="margin-top:1rem;display:flex;gap:0.5rem;align-items:flex-end;">
+                <input type="hidden" name="recalc" value="1">
+                <div class="grup-camp">
+                    <label for="total_pagines">{{ t .Lang "books.pages.recalc.total" }}</label>
+                    <input id="total_pagines" name="total_pagines" type="number" min="1" value="{{ if .Data.Llibre.Pagines.Valid }}{{ .Data.Llibre.Pagines.Int64 }}{{ end }}">
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-secundari">{{ t .Lang "books.pages.recalc.submit" }}</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

@@ -1,0 +1,140 @@
+{{ define "admin-nivells-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "levels.form.title.new" }}{{ else }}{{ t .Lang "levels.form.title.edit" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ if .Data.IsNew }}{{ t .Lang "levels.form.title.new" }}{{ else }}{{ t .Lang "levels.form.title.edit" }}{{ end }}</h1>
+            </header>
+            {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
+            <form method="post" action="/admin/nivells/save">
+                <input type="hidden" name="id" value="{{ .Data.Nivell.ID }}">
+                <input type="hidden" name="pais_id" value="{{ .Data.Nivell.PaisID }}">
+                <div class="grup-camp">
+                    <label for="pais_id_display">{{ t .Lang "levels.form.country" }}</label>
+                    <input type="text" id="pais_id_display" value="{{ .Data.Nivell.PaisID }}" disabled>
+                </div>
+                <div class="grup-camp">
+                    <label for="nivel">{{ t .Lang "levels.form.level" }}</label>
+                    <input type="number" id="nivel" name="nivel" min="1" max="7" value="{{ .Data.Nivell.Nivel }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="nom_nivell">{{ t .Lang "levels.form.name" }}</label>
+                    <input type="text" id="nom_nivell" name="nom_nivell" value="{{ .Data.Nivell.NomNivell }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="tipus_nivell">{{ t .Lang "levels.form.type" }}</label>
+                    <input type="text" id="tipus_nivell" name="tipus_nivell" value="{{ .Data.Nivell.TipusNivell }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="codi_oficial">{{ t .Lang "levels.form.code" }}</label>
+                    <input type="text" id="codi_oficial" name="codi_oficial" value="{{ .Data.Nivell.CodiOficial }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="parent_id">{{ t .Lang "levels.form.parent" }}</label>
+                    <select id="parent_id" name="parent_id">
+                        <option value="">{{ t .Lang "levels.form.parent.none" }}</option>
+                        {{ range .Data.Parents }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Nivell.ParentID.Valid (eq .ID (int $.Data.Nivell.ParentID.Int64)) }}selected{{ end }}>{{ .NomNivell }} ({{ .Nivel }})</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="any_inici">{{ t .Lang "levels.form.year_start" }}</label>
+                    <input type="number" id="any_inici" name="any_inici" value="{{ if .Data.Nivell.AnyInici.Valid }}{{ .Data.Nivell.AnyInici.Int64 }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="any_fi">{{ t .Lang "levels.form.year_end" }}</label>
+                    <input type="number" id="any_fi" name="any_fi" value="{{ if .Data.Nivell.AnyFi.Valid }}{{ .Data.Nivell.AnyFi.Int64 }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="estat">{{ t .Lang "levels.form.state" }}</label>
+                    <select id="estat" name="estat">
+                        {{ range $opt := (list "actiu" "inactiu" "fusionat" "abolit") }}
+                        <option value="{{ $opt }}" {{ if eq $.Data.Nivell.Estat $opt }}selected{{ end }}>{{ $opt }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="altres">{{ t .Lang "levels.form.altres" }}</label>
+                    <textarea id="altres" name="altres">{{ .Data.Nivell.Altres }}</textarea>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "levels.form.save" }}</button>
+                    <a class="boto-secundari" href="/admin/paisos/{{ .Data.Nivell.PaisID }}/nivells">{{ t .Lang "levels.form.cancel" }}</a>
+                </div>
+            </form>
+
+            {{ if not .Data.IsNew }}
+            <hr>
+            <h2>{{ t .Lang "levels.hist.title" }}</h2>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "levels.hist.name" }}</th>
+                            <th>{{ t .Lang "levels.hist.from" }}</th>
+                            <th>{{ t .Lang "levels.hist.to" }}</th>
+                            <th>{{ t .Lang "levels.hist.state" }}</th>
+                            <th>{{ t .Lang "levels.hist.source" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.NomsHistorics }}
+                        <tr>
+                            <td>{{ .Nom }}</td>
+                            <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}</td>
+                            <td>{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
+                            <td>{{ .PaisRegne }} / {{ .DistribucioGeografica }}</td>
+                            <td>{{ .Font }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+            <form method="post" action="/admin/nivells/{{ .Data.Nivell.ID }}/noms/save" style="margin-top:1rem;">
+                <input type="hidden" name="nh_id" value="">
+                <div class="grup-camp">
+                    <label for="nh_nom">{{ t .Lang "levels.hist.name" }}</label>
+                    <input id="nh_nom" name="nom" type="text" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="nh_any_inici">{{ t .Lang "levels.hist.from" }}</label>
+                    <input id="nh_any_inici" name="any_inici" type="number" placeholder="YYYY">
+                </div>
+                <div class="grup-camp">
+                    <label for="nh_any_fi">{{ t .Lang "levels.hist.to" }}</label>
+                    <input id="nh_any_fi" name="any_fi" type="number" placeholder="YYYY">
+                </div>
+                <div class="grup-camp">
+                    <label for="nh_pais_regne">{{ t .Lang "levels.hist.state" }}</label>
+                    <input id="nh_pais_regne" name="pais_regne" type="text">
+                </div>
+                <div class="grup-camp">
+                    <label for="nh_distribucio">{{ t .Lang "levels.hist.distrib" }}</label>
+                    <input id="nh_distribucio" name="distribucio_geografica" type="text">
+                </div>
+                <div class="grup-camp">
+                    <label for="nh_font">{{ t .Lang "levels.hist.source" }}</label>
+                    <input id="nh_font" name="font" type="text">
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-secundari">{{ t .Lang "levels.hist.save" }}</button>
+                </div>
+            </form>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

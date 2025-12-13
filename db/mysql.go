@@ -127,6 +127,9 @@ func (d *MySQL) GetSessionUser(sessionID string) (*User, error) {
 func (d *MySQL) DeleteSession(sessionID string) error {
 	return d.help.deleteSession(sessionID)
 }
+func (d *MySQL) ListUserGroups(userID int) ([]Group, error) {
+	return d.help.listUserGroups(userID)
+}
 
 func (d *MySQL) CreatePasswordReset(email, token, expiry, lang string) (bool, error) {
 	return d.help.createPasswordReset(email, token, expiry, lang)
@@ -182,4 +185,175 @@ func (d *MySQL) markEmailChangeConfirmed(id int) error {
 
 func (d *MySQL) markEmailChangeReverted(id int) error {
 	return d.help.markEmailChangeReverted(id)
+}
+
+// Policies
+func (d *MySQL) UserHasAnyPolicy(userID int, policies []string) (bool, error) {
+	return d.help.userHasAnyPolicy(userID, policies)
+}
+func (d *MySQL) EnsureDefaultPolicies() error {
+	return d.help.ensureDefaultPolicies()
+}
+func (d *MySQL) ListGroups() ([]Group, error) {
+	return d.help.listGroups()
+}
+func (d *MySQL) ListPolitiques() ([]Politica, error) {
+	return d.help.listPolitiques()
+}
+func (d *MySQL) GetPolitica(id int) (*Politica, error) {
+	return d.help.getPolitica(id)
+}
+func (d *MySQL) SavePolitica(p *Politica) (int, error) {
+	return d.help.savePolitica(p)
+}
+func (d *MySQL) ListUserPolitiques(userID int) ([]Politica, error) {
+	return d.help.listUserPolitiques(userID)
+}
+func (d *MySQL) AddUserPolitica(userID, politicaID int) error {
+	return d.help.addUserPolitica(userID, politicaID)
+}
+func (d *MySQL) RemoveUserPolitica(userID, politicaID int) error {
+	return d.help.removeUserPolitica(userID, politicaID)
+}
+func (d *MySQL) ListGroupPolitiques(groupID int) ([]Politica, error) {
+	return d.help.listGroupPolitiques(groupID)
+}
+func (d *MySQL) AddGroupPolitica(groupID, politicaID int) error {
+	return d.help.addGroupPolitica(groupID, politicaID)
+}
+func (d *MySQL) RemoveGroupPolitica(groupID, politicaID int) error {
+	return d.help.removeGroupPolitica(groupID, politicaID)
+}
+func (d *MySQL) GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error) {
+	return d.help.getEffectivePoliticaPerms(userID)
+}
+
+// Paisos
+func (d *MySQL) ListPaisos() ([]Pais, error) {
+	return d.help.listPaisos()
+}
+func (d *MySQL) GetPais(id int) (*Pais, error) {
+	return d.help.getPais(id)
+}
+func (d *MySQL) CreatePais(p *Pais) (int, error) {
+	return d.help.createPais(p)
+}
+func (d *MySQL) UpdatePais(p *Pais) error {
+	return d.help.updatePais(p)
+}
+
+// Nivells administratius
+func (d *MySQL) ListNivells(f NivellAdminFilter) ([]NivellAdministratiu, error) {
+	return d.help.listNivells(f)
+}
+func (d *MySQL) GetNivell(id int) (*NivellAdministratiu, error) {
+	return d.help.getNivell(id)
+}
+func (d *MySQL) CreateNivell(n *NivellAdministratiu) (int, error) {
+	return d.help.createNivell(n)
+}
+func (d *MySQL) UpdateNivell(n *NivellAdministratiu) error {
+	return d.help.updateNivell(n)
+}
+
+// Municipis
+func (d *MySQL) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
+	return d.help.listMunicipis(f)
+}
+func (d *MySQL) GetMunicipi(id int) (*Municipi, error) {
+	return d.help.getMunicipi(id)
+}
+func (d *MySQL) CreateMunicipi(m *Municipi) (int, error) {
+	return d.help.createMunicipi(m)
+}
+func (d *MySQL) UpdateMunicipi(m *Municipi) error {
+	return d.help.updateMunicipi(m)
+}
+func (d *MySQL) ListCodisPostals(municipiID int) ([]CodiPostal, error) {
+	return d.help.listCodisPostals(municipiID)
+}
+func (d *MySQL) SaveCodiPostal(cp *CodiPostal) (int, error) {
+	return d.help.saveCodiPostal(cp)
+}
+func (d *MySQL) ListNomsHistorics(entitatTipus string, entitatID int) ([]NomHistoric, error) {
+	return d.help.listNomsHistorics(entitatTipus, entitatID)
+}
+func (d *MySQL) SaveNomHistoric(nh *NomHistoric) (int, error) {
+	return d.help.saveNomHistoric(nh)
+}
+
+// Entitats eclesiàstiques
+func (d *MySQL) ListArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error) {
+	return d.help.listArquebisbats(f)
+}
+func (d *MySQL) GetArquebisbat(id int) (*Arquebisbat, error) {
+	return d.help.getArquebisbat(id)
+}
+func (d *MySQL) CreateArquebisbat(ae *Arquebisbat) (int, error) {
+	return d.help.createArquebisbat(ae)
+}
+func (d *MySQL) UpdateArquebisbat(ae *Arquebisbat) error {
+	return d.help.updateArquebisbat(ae)
+}
+func (d *MySQL) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {
+	return d.help.listArquebisbatMunicipis(munID)
+}
+func (d *MySQL) SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {
+	return d.help.saveArquebisbatMunicipi(am)
+}
+
+// Arxius
+func (d *MySQL) ListArxius(f ArxiuFilter) ([]ArxiuWithCount, error) {
+	return d.help.listArxius(f)
+}
+func (d *MySQL) GetArxiu(id int) (*Arxiu, error) {
+	return d.help.getArxiu(id)
+}
+func (d *MySQL) CreateArxiu(a *Arxiu) (int, error) {
+	return d.help.createArxiu(a)
+}
+func (d *MySQL) UpdateArxiu(a *Arxiu) error {
+	return d.help.updateArxiu(a)
+}
+func (d *MySQL) DeleteArxiu(id int) error {
+	return d.help.deleteArxiu(id)
+}
+func (d *MySQL) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
+	return d.help.listArxiuLlibres(arxiuID)
+}
+func (d *MySQL) ListLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
+	return d.help.listLlibreArxius(llibreID)
+}
+func (d *MySQL) AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	return d.help.addArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+}
+func (d *MySQL) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	return d.help.updateArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+}
+func (d *MySQL) DeleteArxiuLlibre(arxiuID, llibreID int) error {
+	return d.help.deleteArxiuLlibre(arxiuID, llibreID)
+}
+func (d *MySQL) SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error) {
+	return d.help.searchLlibresSimple(q, limit)
+}
+func (d *MySQL) ListLlibres(f LlibreFilter) ([]LlibreRow, error) {
+	return d.help.listLlibres(f)
+}
+func (d *MySQL) GetLlibre(id int) (*Llibre, error) {
+	return d.help.getLlibre(id)
+}
+func (d *MySQL) CreateLlibre(l *Llibre) (int, error) {
+	return d.help.createLlibre(l)
+}
+func (d *MySQL) UpdateLlibre(l *Llibre) error {
+	return d.help.updateLlibre(l)
+}
+func (d *MySQL) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {
+	return d.help.listLlibrePagines(llibreID)
+}
+func (d *MySQL) SaveLlibrePagina(p *LlibrePagina) (int, error) {
+	return d.help.saveLlibrePagina(p)
+}
+func (d *MySQL) RecalcLlibrePagines(llibreID, total int) error {
+	return d.help.recalcLlibrePagines(llibreID, total)
 }

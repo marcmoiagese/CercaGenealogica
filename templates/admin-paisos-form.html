@@ -1,0 +1,43 @@
+{{ define "admin-paisos-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "countries.form.title.new" }}{{ else }}{{ t .Lang "countries.form.title.edit" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ if .Data.IsNew }}{{ t .Lang "countries.form.title.new" }}{{ else }}{{ t .Lang "countries.form.title.edit" }}{{ end }}</h1>
+            </header>
+            {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
+            <form method="post" action="/admin/paisos/save">
+                <input type="hidden" name="id" value="{{ .Data.Pais.ID }}">
+                <div class="grup-camp">
+                    <label for="codi_iso2">{{ t .Lang "countries.form.iso2" }}</label>
+                    <input type="text" id="codi_iso2" name="codi_iso2" value="{{ .Data.Pais.CodiISO2 }}" maxlength="2" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="codi_iso3">{{ t .Lang "countries.form.iso3" }}</label>
+                    <input type="text" id="codi_iso3" name="codi_iso3" value="{{ .Data.Pais.CodiISO3 }}" maxlength="3" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="codi_pais_num">{{ t .Lang "countries.form.num" }}</label>
+                    <input type="text" id="codi_pais_num" name="codi_pais_num" value="{{ .Data.Pais.CodiPaisNum }}">
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "countries.form.save" }}</button>
+                    <a class="boto-secundari" href="/admin/paisos">{{ t .Lang "countries.form.cancel" }}</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

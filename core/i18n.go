@@ -194,3 +194,8 @@ func ResolveLangForUser(r *http.Request, pref string) string {
 	}
 	return ResolveLang(r)
 }
+
+// IsSupportedLang exposa la comprovació de llengua suportada.
+func IsSupportedLang(lang string) bool {
+	return isSupportedLang(lang)
+}

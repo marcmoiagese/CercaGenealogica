@@ -1,0 +1,95 @@
+{{ define "admin-llibres-show.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "books.title" }} - {{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</h1>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="/admin/llibres/{{ .Data.Llibre.ID }}/edit">{{ t .Lang "books.action.edit" }}</a>
+                    <a class="boto-secundari" href="/admin/llibres/{{ .Data.Llibre.ID }}/pagines">{{ t .Lang "books.action.pages" }}</a>
+                </div>
+            </header>
+            <ul class="dades-grid">
+                <li><strong>{{ t .Lang "books.form.entity" }}:</strong> {{ .Data.Llibre.ArquebisbatID }}</li>
+                <li><strong>{{ t .Lang "books.form.municipi" }}:</strong> {{ .Data.Llibre.MunicipiID }}</li>
+                <li><strong>{{ t .Lang "books.form.chrono" }}:</strong> {{ .Data.Llibre.Cronologia }}</li>
+                <li><strong>{{ t .Lang "books.form.code.digital" }}:</strong> {{ .Data.Llibre.CodiDigital }}</li>
+                <li><strong>{{ t .Lang "books.form.code.physical" }}:</strong> {{ .Data.Llibre.CodiFisic }}</li>
+                <li style="grid-column: 1 / -1;"><strong>{{ t .Lang "books.form.content" }}:</strong><br>{{ .Data.Llibre.Contingut }}</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <header class="card-header">
+                <h2>{{ t .Lang "archives.title" }}</h2>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "admin.menu.archives" }}</th>
+                            <th>{{ t .Lang "archives.books.col.signatura" }}</th>
+                            <th>{{ t .Lang "archives.books.col.url" }}</th>
+                            <th>{{ t .Lang "archives.books.col.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Arxius }}
+                        <tr>
+                            <td>{{ .ArxiuNom.String }}</td>
+                            <td>
+                                <form method="post" action="/admin/llibres/{{ .LlibreID }}/arxius/{{ .ArxiuID }}/update">
+                                    <input type="text" name="signatura" value="{{ .Signatura.String }}">
+                                    <input type="text" name="url_override" value="{{ .URLOverride.String }}" placeholder="URL">
+                                    <button type="submit" class="boto-secundari">{{ t $.Lang "archives.books.update" }}</button>
+                                </form>
+                            </td>
+                            <td>{{ if .URLOverride.Valid }}<a href="{{ .URLOverride.String }}" target="_blank">{{ .URLOverride.String }}</a>{{ end }}</td>
+                            <td>
+                                <form method="post" action="/admin/llibres/{{ .LlibreID }}/arxius/{{ .ArxiuID }}/delete" onsubmit="return confirm('{{ t $.Lang "archives.books.remove.confirm" }}');">
+                                    <button type="submit" class="boto-perill">{{ t $.Lang "archives.action.delete" }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>{{ t .Lang "archives.books.add" }}</h3>
+            <form method="post" action="/admin/llibres/{{ .Data.Llibre.ID }}/arxius/add">
+                <div class="grup-camp">
+                    <label for="arxiu_id">{{ t .Lang "admin.menu.archives" }}</label>
+                    <select id="arxiu_id" name="arxiu_id" required>
+                        <option value="">{{ t .Lang "archives.form.municipi.none" }}</option>
+                        {{ range .Data.ArxiusOptions }}
+                        <option value="{{ .ID }}">{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="signatura">{{ t .Lang "archives.books.add.signatura" }}</label>
+                    <input type="text" id="signatura" name="signatura">
+                </div>
+                <div class="grup-camp">
+                    <label for="url_override">{{ t .Lang "archives.books.add.url_override" }}</label>
+                    <input type="text" id="url_override" name="url_override">
+                </div>
+                <button type="submit" class="boto-primari">{{ t .Lang "archives.books.add.submit" }}</button>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

@@ -1,0 +1,5 @@
+covervars.go
+db_test_helpers.cover.go
+pending.cover.go
+sqlhelpers.cover.go
+testdb.cover.go

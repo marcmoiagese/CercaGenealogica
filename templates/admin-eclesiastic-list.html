@@ -1,0 +1,68 @@
+{{ define "admin-eclesiastic-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "ecles.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "ecles.title" }}</h1>
+                <a class="boto-primari" href="/admin/eclesiastic/new">{{ t .Lang "ecles.button.new" }}</a>
+            </header>
+            <form class="filtres-arxius" method="get">
+                <div class="grup-camp">
+                    <label for="f-q">{{ t .Lang "ecles.filter.search" }}</label>
+                    <input id="f-q" type="text" name="q" value="{{ .Data.Filter.Text }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="f-pais">{{ t .Lang "ecles.filter.country" }}</label>
+                    <select id="f-pais" name="pais_id">
+                        <option value="">{{ t .Lang "ecles.filter.country.any" }}</option>
+                        {{ range .Data.Paisos }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaisID .ID }}selected{{ end }}>{{ .CodiISO3 }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <button class="boto-secundari" type="submit">{{ t .Lang "ecles.filter.submit" }}</button>
+            </form>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "ecles.col.name" }}</th>
+                            <th>{{ t .Lang "ecles.col.type" }}</th>
+                            <th>{{ t .Lang "ecles.col.country" }}</th>
+                            <th>{{ t .Lang "ecles.col.level" }}</th>
+                            <th>{{ t .Lang "ecles.col.parent" }}</th>
+                            <th>{{ t .Lang "ecles.col.years" }}</th>
+                            <th>{{ t .Lang "ecles.col.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Entitats }}
+                        <tr>
+                            <td>{{ .Nom }}</td>
+                            <td>{{ .TipusEntitat }}</td>
+                            <td>{{ .PaisNom.String }}</td>
+                            <td>{{ if .Nivell.Valid }}{{ .Nivell.Int64 }}{{ end }}</td>
+                            <td>{{ .ParentNom.String }}</td>
+                            <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
+                            <td><a href="/admin/eclesiastic/{{ .ID }}/edit">{{ t $.Lang "ecles.action.edit" }}</a></td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

@@ -1,0 +1,1631 @@
+//line /home/marc/codi/CercaGenealogica3/db/sqlcommon.go:1:1
+package db
+
+import (
+	"database/sql"
+	"fmt"
+	"strings"
+)
+
+// formatPlaceholders converteix '?' a placeholders de l'estil PostgreSQL ($1, $2...) si cal.
+func formatPlaceholders(style, query string) string {goCover_4bc4be4c3247__140[0] = 7 ; goCover_4bc4be4c3247__140[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__140[2] = 140 ; goCover_4bc4be4c3247__140[3]++;
+	if strings.ToLower(style) != "postgres" {goCover_4bc4be4c3247__140[6]++;
+		return query
+	}
+	goCover_4bc4be4c3247__140[4]++;var b strings.Builder
+	idx := 1
+	for i := 0; i < len(query); i++ {goCover_4bc4be4c3247__140[7]++;
+		if query[i] == '?' {goCover_4bc4be4c3247__140[8]++;
+			b.WriteString(fmt.Sprintf("$%d", idx))
+			idx++
+		} else{ goCover_4bc4be4c3247__140[9]++;{
+			b.WriteByte(query[i])
+		}}
+	}
+	goCover_4bc4be4c3247__140[5]++;return b.String()
+}
+
+func buildInPlaceholders(style string, count int) string {goCover_4bc4be4c3247__141[0] = 7 ; goCover_4bc4be4c3247__141[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__141[2] = 141 ; goCover_4bc4be4c3247__141[3]++;
+	if count <= 0 {goCover_4bc4be4c3247__141[5]++;
+		return ""
+	}
+	goCover_4bc4be4c3247__141[4]++;switch strings.ToLower(style) {
+	case "postgres":goCover_4bc4be4c3247__141[6]++;
+		parts := make([]string, count)
+		for i := 0; i < count; i++ {goCover_4bc4be4c3247__141[9]++;
+			parts[i] = fmt.Sprintf("$%d", i+1)
+		}
+		goCover_4bc4be4c3247__141[7]++;return strings.Join(parts, ",")
+	default:goCover_4bc4be4c3247__141[8]++;
+		return strings.TrimRight(strings.Repeat("?,", count), ",")
+	}
+}
+
+type sqlHelper struct {
+	db     *sql.DB
+	style  string
+	nowFun string
+}
+
+func newSQLHelper(db *sql.DB, style, nowFun string) sqlHelper {goCover_4bc4be4c3247__142[0] = 1 ; goCover_4bc4be4c3247__142[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__142[2] = 142 ; goCover_4bc4be4c3247__142[3]++;
+	return sqlHelper{db: db, style: strings.ToLower(style), nowFun: nowFun}
+}
+
+func (h sqlHelper) columnExists(table, column string) bool {goCover_4bc4be4c3247__143[0] = 7 ; goCover_4bc4be4c3247__143[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__143[2] = 143 ; goCover_4bc4be4c3247__143[3]++;
+	var query string
+	var args []interface{}
+	switch h.style {
+	case "mysql":goCover_4bc4be4c3247__143[6]++;
+		query = `SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`
+		args = []interface{}{table, column}
+	case "postgres":goCover_4bc4be4c3247__143[7]++;
+		query = `SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = $2`
+		args = []interface{}{table, column}
+	default:goCover_4bc4be4c3247__143[8]++; // sqlite
+		query = fmt.Sprintf(`SELECT 1 FROM pragma_table_info('%s') WHERE name = ?`, table)
+		args = []interface{}{column}
+	}
+	goCover_4bc4be4c3247__143[4]++;row := h.db.QueryRow(query, args...)
+	var tmp int
+	if err := row.Scan(&tmp); err != nil {goCover_4bc4be4c3247__143[9]++;
+		return false
+	}
+	goCover_4bc4be4c3247__143[5]++;return true
+}
+
+// Policies
+func (h sqlHelper) ensureDefaultPolicies() error {goCover_4bc4be4c3247__144[0] = 10 ; goCover_4bc4be4c3247__144[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__144[2] = 144 ; goCover_4bc4be4c3247__144[3]++;
+	policies := []string{"admin", "moderador", "confiança", "usuari"}
+	for _, p := range policies {goCover_4bc4be4c3247__144[5]++;
+		stmt := `INSERT INTO politiques (nom, descripcio, permisos, data_creacio) VALUES (?, ?, ?, ` + h.nowFun + `)`
+		if h.style == "postgres" {goCover_4bc4be4c3247__144[8]++;
+			stmt = formatPlaceholders(h.style, `INSERT INTO politiques (nom, descripcio, permisos, data_creacio) VALUES (?, ?, ?, `+h.nowFun+`) ON CONFLICT (nom) DO NOTHING`)
+		} else{ goCover_4bc4be4c3247__144[9]++;if h.style == "mysql" {goCover_4bc4be4c3247__144[10]++;
+			stmt += " ON DUPLICATE KEY UPDATE nom=nom"
+		} else{ goCover_4bc4be4c3247__144[11]++;{ // sqlite
+			stmt += " ON CONFLICT(nom) DO NOTHING"
+		}}}
+		goCover_4bc4be4c3247__144[6]++;if h.style != "postgres" {goCover_4bc4be4c3247__144[12]++;
+			stmt = formatPlaceholders(h.style, stmt)
+		}
+		goCover_4bc4be4c3247__144[7]++;_, _ = h.db.Exec(stmt, p, "", "{}")
+	}
+	goCover_4bc4be4c3247__144[4]++;return nil
+}
+
+func (h sqlHelper) userHasAnyPolicy(userID int, policies []string) (bool, error) {goCover_4bc4be4c3247__145[0] = 9 ; goCover_4bc4be4c3247__145[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__145[2] = 145 ; goCover_4bc4be4c3247__145[3]++;
+	if len(policies) == 0 {goCover_4bc4be4c3247__145[7]++;
+		return false, nil
+	}
+	goCover_4bc4be4c3247__145[4]++;inPlaceholders := strings.TrimRight(strings.Repeat("?,", len(policies)), ",")
+	query := `
+        SELECT 1
+        FROM usuaris_politiques up
+        INNER JOIN politiques p ON p.id = up.politica_id
+        WHERE up.usuari_id = ? AND p.nom IN (` + inPlaceholders + `)
+        LIMIT 1`
+	query = formatPlaceholders(h.style, query)
+	args := make([]interface{}, 0, len(policies)+1)
+	args = append(args, userID)
+	for _, p := range policies {goCover_4bc4be4c3247__145[8]++;
+		args = append(args, p)
+	}
+	goCover_4bc4be4c3247__145[5]++;row := h.db.QueryRow(query, args...)
+	var tmp int
+	if err := row.Scan(&tmp); err != nil {goCover_4bc4be4c3247__145[9]++;
+		if err == sql.ErrNoRows {goCover_4bc4be4c3247__145[11]++;
+			return false, nil
+		}
+		goCover_4bc4be4c3247__145[10]++;return false, err
+	}
+	goCover_4bc4be4c3247__145[6]++;return true, nil
+}
+
+// Paisos
+func (h sqlHelper) listPaisos() ([]Pais, error) {goCover_4bc4be4c3247__146[0] = 7 ; goCover_4bc4be4c3247__146[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__146[2] = 146 ; goCover_4bc4be4c3247__146[3]++;
+	query := `SELECT id, codi_iso2, codi_iso3, codi_pais_num FROM paisos ORDER BY codi_iso2`
+	rows, err := h.db.Query(query)
+	if err != nil {goCover_4bc4be4c3247__146[6]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__146[4]++;defer rows.Close()
+	var res []Pais
+	for rows.Next() {goCover_4bc4be4c3247__146[7]++;
+		var p Pais
+		if err := rows.Scan(&p.ID, &p.CodiISO2, &p.CodiISO3, &p.CodiPaisNum); err != nil {goCover_4bc4be4c3247__146[9]++;
+			return nil, err
+		}
+		goCover_4bc4be4c3247__146[8]++;res = append(res, p)
+	}
+	goCover_4bc4be4c3247__146[5]++;return res, nil
+}
+
+func (h sqlHelper) getPais(id int) (*Pais, error) {goCover_4bc4be4c3247__147[0] = 3 ; goCover_4bc4be4c3247__147[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__147[2] = 147 ; goCover_4bc4be4c3247__147[3]++;
+	query := formatPlaceholders(h.style, `SELECT id, codi_iso2, codi_iso3, codi_pais_num FROM paisos WHERE id = ?`)
+	row := h.db.QueryRow(query, id)
+	var p Pais
+	if err := row.Scan(&p.ID, &p.CodiISO2, &p.CodiISO3, &p.CodiPaisNum); err != nil {goCover_4bc4be4c3247__147[5]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__147[4]++;return &p, nil
+}
+
+func (h sqlHelper) createPais(p *Pais) (int, error) {goCover_4bc4be4c3247__148[0] = 11 ; goCover_4bc4be4c3247__148[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__148[2] = 148 ; goCover_4bc4be4c3247__148[3]++;
+	query := `
+        INSERT INTO paisos (codi_iso2, codi_iso3, codi_pais_num, created_at, updated_at)
+        VALUES (?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {goCover_4bc4be4c3247__148[8]++;
+		query += ` RETURNING id`
+	}
+	goCover_4bc4be4c3247__148[4]++;query = formatPlaceholders(h.style, query)
+
+	if h.style == "postgres" {goCover_4bc4be4c3247__148[9]++;
+		if err := h.db.QueryRow(query, p.CodiISO2, p.CodiISO3, p.CodiPaisNum).Scan(&p.ID); err != nil {goCover_4bc4be4c3247__148[11]++;
+			return 0, err
+		}
+		goCover_4bc4be4c3247__148[10]++;return p.ID, nil
+	}
+	goCover_4bc4be4c3247__148[5]++;res, err := h.db.Exec(query, p.CodiISO2, p.CodiISO3, p.CodiPaisNum)
+	if err != nil {goCover_4bc4be4c3247__148[12]++;
+		return 0, err
+	}
+	goCover_4bc4be4c3247__148[6]++;if id, err := res.LastInsertId(); err == nil {goCover_4bc4be4c3247__148[13]++;
+		p.ID = int(id)
+	}
+	goCover_4bc4be4c3247__148[7]++;return p.ID, nil
+}
+
+func (h sqlHelper) updatePais(p *Pais) error {goCover_4bc4be4c3247__149[0] = 1 ; goCover_4bc4be4c3247__149[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__149[2] = 149 ; goCover_4bc4be4c3247__149[3]++;
+	query := `
+        UPDATE paisos
+        SET codi_iso2 = ?, codi_iso3 = ?, codi_pais_num = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, p.CodiISO2, p.CodiISO3, p.CodiPaisNum, p.ID)
+	return err
+}
+
+// Nivells administratius
+func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, error) {goCover_4bc4be4c3247__150[0] = 13 ; goCover_4bc4be4c3247__150[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__150[2] = 150 ; goCover_4bc4be4c3247__150[3]++;
+	where := "1=1"
+	args := []interface{}{}
+	if f.PaisID > 0 {goCover_4bc4be4c3247__150[9]++;
+		where += " AND n.pais_id = ?"
+		args = append(args, f.PaisID)
+	}
+	goCover_4bc4be4c3247__150[4]++;if f.Nivel > 0 {goCover_4bc4be4c3247__150[10]++;
+		where += " AND n.nivel = ?"
+		args = append(args, f.Nivel)
+	}
+	goCover_4bc4be4c3247__150[5]++;if strings.TrimSpace(f.Estat) != "" {goCover_4bc4be4c3247__150[11]++;
+		where += " AND n.estat = ?"
+		args = append(args, strings.TrimSpace(f.Estat))
+	}
+	goCover_4bc4be4c3247__150[6]++;query := `
+        SELECT n.id, n.pais_id, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
+               n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat
+        FROM nivells_administratius n
+        LEFT JOIN nivells_administratius p ON p.id = n.parent_id
+        WHERE ` + where + `
+        ORDER BY n.nivel, n.nom_nivell`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {goCover_4bc4be4c3247__150[12]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__150[7]++;defer rows.Close()
+	var res []NivellAdministratiu
+	for rows.Next() {goCover_4bc4be4c3247__150[13]++;
+		var n NivellAdministratiu
+		if err := rows.Scan(&n.ID, &n.PaisID, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat); err != nil {goCover_4bc4be4c3247__150[15]++;
+			return nil, err
+		}
+		goCover_4bc4be4c3247__150[14]++;res = append(res, n)
+	}
+	goCover_4bc4be4c3247__150[8]++;return res, nil
+}
+
+func (h sqlHelper) getNivell(id int) (*NivellAdministratiu, error) {goCover_4bc4be4c3247__151[0] = 3 ; goCover_4bc4be4c3247__151[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__151[2] = 151 ; goCover_4bc4be4c3247__151[3]++;
+	query := `
+        SELECT n.id, n.pais_id, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
+               n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat
+        FROM nivells_administratius n
+        LEFT JOIN nivells_administratius p ON p.id = n.parent_id
+        WHERE n.id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var n NivellAdministratiu
+	if err := row.Scan(&n.ID, &n.PaisID, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat); err != nil {goCover_4bc4be4c3247__151[5]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__151[4]++;return &n, nil
+}
+
+func (h sqlHelper) createNivell(n *NivellAdministratiu) (int, error) {goCover_4bc4be4c3247__152[0] = 11 ; goCover_4bc4be4c3247__152[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__152[2] = 152 ; goCover_4bc4be4c3247__152[3]++;
+	query := `
+        INSERT INTO nivells_administratius
+            (pais_id, nivel, nom_nivell, tipus_nivell, codi_oficial, altres, parent_id, any_inici, any_fi, estat, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {goCover_4bc4be4c3247__152[8]++;
+		query += ` RETURNING id`
+	}
+	goCover_4bc4be4c3247__152[4]++;query = formatPlaceholders(h.style, query)
+	args := []interface{}{n.PaisID, n.Nivel, n.NomNivell, n.TipusNivell, n.CodiOficial, n.Altres, n.ParentID, n.AnyInici, n.AnyFi, n.Estat}
+	if h.style == "postgres" {goCover_4bc4be4c3247__152[9]++;
+		if err := h.db.QueryRow(query, args...).Scan(&n.ID); err != nil {goCover_4bc4be4c3247__152[11]++;
+			return 0, err
+		}
+		goCover_4bc4be4c3247__152[10]++;return n.ID, nil
+	}
+	goCover_4bc4be4c3247__152[5]++;res, err := h.db.Exec(query, args...)
+	if err != nil {goCover_4bc4be4c3247__152[12]++;
+		return 0, err
+	}
+	goCover_4bc4be4c3247__152[6]++;if id, err := res.LastInsertId(); err == nil {goCover_4bc4be4c3247__152[13]++;
+		n.ID = int(id)
+	}
+	goCover_4bc4be4c3247__152[7]++;return n.ID, nil
+}
+
+func (h sqlHelper) updateNivell(n *NivellAdministratiu) error {goCover_4bc4be4c3247__153[0] = 1 ; goCover_4bc4be4c3247__153[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__153[2] = 153 ; goCover_4bc4be4c3247__153[3]++;
+	query := `
+        UPDATE nivells_administratius
+        SET pais_id = ?, nivel = ?, nom_nivell = ?, tipus_nivell = ?, codi_oficial = ?, altres = ?, parent_id = ?, any_inici = ?, any_fi = ?, estat = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, n.PaisID, n.Nivel, n.NomNivell, n.TipusNivell, n.CodiOficial, n.Altres, n.ParentID, n.AnyInici, n.AnyFi, n.Estat, n.ID)
+	return err
+}
+
+// Municipis
+func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {goCover_4bc4be4c3247__154[0] = 13 ; goCover_4bc4be4c3247__154[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__154[2] = 154 ; goCover_4bc4be4c3247__154[3]++;
+	where := "1=1"
+	args := []interface{}{}
+	if strings.TrimSpace(f.Text) != "" {goCover_4bc4be4c3247__154[9]++;
+		where += " AND lower(m.nom) LIKE ?"
+		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
+	}
+	goCover_4bc4be4c3247__154[4]++;if strings.TrimSpace(f.Estat) != "" {goCover_4bc4be4c3247__154[10]++;
+		where += " AND m.estat = ?"
+		args = append(args, strings.TrimSpace(f.Estat))
+	}
+	goCover_4bc4be4c3247__154[5]++;if f.PaisID > 0 {goCover_4bc4be4c3247__154[11]++;
+		where += " AND na1.id = ?"
+		args = append(args, f.PaisID)
+	}
+	goCover_4bc4be4c3247__154[6]++;query := `
+        SELECT m.id, m.nom, m.tipus, m.estat, m.codi_postal,
+               na1.nom_nivell AS pais_nom,
+               na3.nom_nivell AS provincia_nom,
+               na4.nom_nivell AS comarca_nom
+        FROM municipis m
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+        LEFT JOIN nivells_administratius na3 ON na3.id = m.nivell_administratiu_id_3
+        LEFT JOIN nivells_administratius na4 ON na4.id = m.nivell_administratiu_id_4
+        WHERE ` + where + `
+        ORDER BY m.nom`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {goCover_4bc4be4c3247__154[12]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__154[7]++;defer rows.Close()
+	var res []MunicipiRow
+	for rows.Next() {goCover_4bc4be4c3247__154[13]++;
+		var r MunicipiRow
+		if err := rows.Scan(&r.ID, &r.Nom, &r.Tipus, &r.Estat, &r.CodiPostal, &r.PaisNom, &r.ProvNom, &r.Comarca); err != nil {goCover_4bc4be4c3247__154[15]++;
+			return nil, err
+		}
+		goCover_4bc4be4c3247__154[14]++;res = append(res, r)
+	}
+	goCover_4bc4be4c3247__154[8]++;return res, nil
+}
+
+func (h sqlHelper) getMunicipi(id int) (*Municipi, error) {goCover_4bc4be4c3247__155[0] = 3 ; goCover_4bc4be4c3247__155[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__155[2] = 155 ; goCover_4bc4be4c3247__155[3]++;
+	query := `
+        SELECT id, nom, municipi_id, tipus,
+               nivell_administratiu_id_1, nivell_administratiu_id_2, nivell_administratiu_id_3,
+               nivell_administratiu_id_4, nivell_administratiu_id_5, nivell_administratiu_id_6, nivell_administratiu_id_7,
+               codi_postal, latitud, longitud, what3words, web, wikipedia, altres, estat
+        FROM municipis WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var m Municipi
+	if err := row.Scan(
+		&m.ID, &m.Nom, &m.MunicipiID, &m.Tipus,
+		&m.NivellAdministratiuID[0], &m.NivellAdministratiuID[1], &m.NivellAdministratiuID[2],
+		&m.NivellAdministratiuID[3], &m.NivellAdministratiuID[4], &m.NivellAdministratiuID[5], &m.NivellAdministratiuID[6],
+		&m.CodiPostal, &m.Latitud, &m.Longitud, &m.What3Words, &m.Web, &m.Wikipedia, &m.Altres, &m.Estat,
+	); err != nil {goCover_4bc4be4c3247__155[5]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__155[4]++;return &m, nil
+}
+
+func (h sqlHelper) createMunicipi(m *Municipi) (int, error) {goCover_4bc4be4c3247__156[0] = 11 ; goCover_4bc4be4c3247__156[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__156[2] = 156 ; goCover_4bc4be4c3247__156[3]++;
+	query := `
+        INSERT INTO municipis
+            (nom, municipi_id, tipus, nivell_administratiu_id_1, nivell_administratiu_id_2, nivell_administratiu_id_3,
+             nivell_administratiu_id_4, nivell_administratiu_id_5, nivell_administratiu_id_6, nivell_administratiu_id_7,
+             codi_postal, latitud, longitud, what3words, web, wikipedia, altres, estat, data_creacio, ultima_modificacio)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {goCover_4bc4be4c3247__156[8]++;
+		query += ` RETURNING id`
+	}
+	goCover_4bc4be4c3247__156[4]++;query = formatPlaceholders(h.style, query)
+	args := []interface{}{
+		m.Nom, m.MunicipiID, m.Tipus,
+		m.NivellAdministratiuID[0], m.NivellAdministratiuID[1], m.NivellAdministratiuID[2],
+		m.NivellAdministratiuID[3], m.NivellAdministratiuID[4], m.NivellAdministratiuID[5], m.NivellAdministratiuID[6],
+		m.CodiPostal, m.Latitud, m.Longitud, m.What3Words, m.Web, m.Wikipedia, m.Altres, m.Estat,
+	}
+	if h.style == "postgres" {goCover_4bc4be4c3247__156[9]++;
+		if err := h.db.QueryRow(query, args...).Scan(&m.ID); err != nil {goCover_4bc4be4c3247__156[11]++;
+			return 0, err
+		}
+		goCover_4bc4be4c3247__156[10]++;return m.ID, nil
+	}
+	goCover_4bc4be4c3247__156[5]++;res, err := h.db.Exec(query, args...)
+	if err != nil {goCover_4bc4be4c3247__156[12]++;
+		return 0, err
+	}
+	goCover_4bc4be4c3247__156[6]++;if id, err := res.LastInsertId(); err == nil {goCover_4bc4be4c3247__156[13]++;
+		m.ID = int(id)
+	}
+	goCover_4bc4be4c3247__156[7]++;return m.ID, nil
+}
+
+func (h sqlHelper) updateMunicipi(m *Municipi) error {goCover_4bc4be4c3247__157[0] = 1 ; goCover_4bc4be4c3247__157[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__157[2] = 157 ; goCover_4bc4be4c3247__157[3]++;
+	query := `
+        UPDATE municipis SET
+            nom=?, municipi_id=?, tipus=?,
+            nivell_administratiu_id_1=?, nivell_administratiu_id_2=?, nivell_administratiu_id_3=?,
+            nivell_administratiu_id_4=?, nivell_administratiu_id_5=?, nivell_administratiu_id_6=?, nivell_administratiu_id_7=?,
+            codi_postal=?, latitud=?, longitud=?, what3words=?, web=?, wikipedia=?, altres=?, estat=?, ultima_modificacio=` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query,
+		m.Nom, m.MunicipiID, m.Tipus,
+		m.NivellAdministratiuID[0], m.NivellAdministratiuID[1], m.NivellAdministratiuID[2],
+		m.NivellAdministratiuID[3], m.NivellAdministratiuID[4], m.NivellAdministratiuID[5], m.NivellAdministratiuID[6],
+		m.CodiPostal, m.Latitud, m.Longitud, m.What3Words, m.Web, m.Wikipedia, m.Altres, m.Estat,
+		m.ID)
+	return err
+}
+
+func (h sqlHelper) listCodisPostals(municipiID int) ([]CodiPostal, error) {goCover_4bc4be4c3247__158[0] = 7 ; goCover_4bc4be4c3247__158[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__158[2] = 158 ; goCover_4bc4be4c3247__158[3]++;
+	query := formatPlaceholders(h.style, `
+        SELECT id, municipi_id, codi_postal, zona, desde, fins
+        FROM codis_postals
+        WHERE municipi_id = ? ORDER BY codi_postal`)
+	rows, err := h.db.Query(query, municipiID)
+	if err != nil {goCover_4bc4be4c3247__158[6]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__158[4]++;defer rows.Close()
+	var res []CodiPostal
+	for rows.Next() {goCover_4bc4be4c3247__158[7]++;
+		var cp CodiPostal
+		if err := rows.Scan(&cp.ID, &cp.MunicipiID, &cp.CodiPostal, &cp.Zona, &cp.Desde, &cp.Fins); err != nil {goCover_4bc4be4c3247__158[9]++;
+			return nil, err
+		}
+		goCover_4bc4be4c3247__158[8]++;res = append(res, cp)
+	}
+	goCover_4bc4be4c3247__158[5]++;return res, nil
+}
+
+func (h sqlHelper) saveCodiPostal(cp *CodiPostal) (int, error) {goCover_4bc4be4c3247__159[0] = 11 ; goCover_4bc4be4c3247__159[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__159[2] = 159 ; goCover_4bc4be4c3247__159[3]++;
+	if cp.ID == 0 {goCover_4bc4be4c3247__159[5]++;
+		query := `
+            INSERT INTO codis_postals (municipi_id, codi_postal, zona, desde, fins)
+            VALUES (?, ?, ?, ?, ?)`
+		query = formatPlaceholders(h.style, query)
+		if h.style == "postgres" {goCover_4bc4be4c3247__159[9]++;
+			query += ` RETURNING id`
+			if err := h.db.QueryRow(query, cp.MunicipiID, cp.CodiPostal, cp.Zona, cp.Desde, cp.Fins).Scan(&cp.ID); err != nil {goCover_4bc4be4c3247__159[11]++;
+				return 0, err
+			}
+			goCover_4bc4be4c3247__159[10]++;return cp.ID, nil
+		}
+		goCover_4bc4be4c3247__159[6]++;res, err := h.db.Exec(query, cp.MunicipiID, cp.CodiPostal, cp.Zona, cp.Desde, cp.Fins)
+		if err != nil {goCover_4bc4be4c3247__159[12]++;
+			return 0, err
+		}
+		goCover_4bc4be4c3247__159[7]++;if id, err := res.LastInsertId(); err == nil {goCover_4bc4be4c3247__159[13]++;
+			cp.ID = int(id)
+		}
+		goCover_4bc4be4c3247__159[8]++;return cp.ID, nil
+	}
+	goCover_4bc4be4c3247__159[4]++;query := `
+        UPDATE codis_postals
+        SET codi_postal=?, zona=?, desde=?, fins=?
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, cp.CodiPostal, cp.Zona, cp.Desde, cp.Fins, cp.ID)
+	return cp.ID, err
+}
+
+// Entitats eclesiàstiques
+func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error) {goCover_4bc4be4c3247__160[0] = 11 ; goCover_4bc4be4c3247__160[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__160[2] = 160 ; goCover_4bc4be4c3247__160[3]++;
+	where := "1=1"
+	args := []interface{}{}
+	if strings.TrimSpace(f.Text) != "" {goCover_4bc4be4c3247__160[8]++;
+		where += " AND lower(a.nom) LIKE ?"
+		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
+	}
+	goCover_4bc4be4c3247__160[4]++;if f.PaisID > 0 {goCover_4bc4be4c3247__160[9]++;
+		where += " AND a.pais_id = ?"
+		args = append(args, f.PaisID)
+	}
+	goCover_4bc4be4c3247__160[5]++;query := `
+        SELECT a.id, a.nom, a.tipus_entitat, p.codi_iso3, a.nivell, parent.nom as parent_nom, a.any_inici, a.any_fi
+        FROM arquebisbats a
+        LEFT JOIN paisos p ON p.id = a.pais_id
+        LEFT JOIN arquebisbats parent ON parent.id = a.parent_id
+        WHERE ` + where + `
+        ORDER BY a.nom`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {goCover_4bc4be4c3247__160[10]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__160[6]++;defer rows.Close()
+	var res []ArquebisbatRow
+	for rows.Next() {goCover_4bc4be4c3247__160[11]++;
+		var r ArquebisbatRow
+		if err := rows.Scan(&r.ID, &r.Nom, &r.TipusEntitat, &r.PaisNom, &r.Nivell, &r.ParentNom, &r.AnyInici, &r.AnyFi); err != nil {goCover_4bc4be4c3247__160[13]++;
+			return nil, err
+		}
+		goCover_4bc4be4c3247__160[12]++;res = append(res, r)
+	}
+	goCover_4bc4be4c3247__160[7]++;return res, nil
+}
+
+func (h sqlHelper) getArquebisbat(id int) (*Arquebisbat, error) {goCover_4bc4be4c3247__161[0] = 3 ; goCover_4bc4be4c3247__161[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__161[2] = 161 ; goCover_4bc4be4c3247__161[3]++;
+	query := `
+        SELECT id, nom, tipus_entitat, pais_id, nivell, parent_id, any_inici, any_fi,
+               web, web_arxiu, web_wikipedia, territori, observacions
+        FROM arquebisbats WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var a Arquebisbat
+	if err := row.Scan(&a.ID, &a.Nom, &a.TipusEntitat, &a.PaisID, &a.Nivell, &a.ParentID, &a.AnyInici, &a.AnyFi, &a.Web, &a.WebArxiu, &a.WebWikipedia, &a.Territori, &a.Observacions); err != nil {goCover_4bc4be4c3247__161[5]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__161[4]++;return &a, nil
+}
+
+func (h sqlHelper) createArquebisbat(ae *Arquebisbat) (int, error) {goCover_4bc4be4c3247__162[0] = 11 ; goCover_4bc4be4c3247__162[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__162[2] = 162 ; goCover_4bc4be4c3247__162[3]++;
+	query := `
+        INSERT INTO arquebisbats
+            (nom, tipus_entitat, pais_id, nivell, parent_id, any_inici, any_fi, web, web_arxiu, web_wikipedia, territori, observacions, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {goCover_4bc4be4c3247__162[8]++;
+		query += ` RETURNING id`
+	}
+	goCover_4bc4be4c3247__162[4]++;query = formatPlaceholders(h.style, query)
+	args := []interface{}{ae.Nom, ae.TipusEntitat, ae.PaisID, ae.Nivell, ae.ParentID, ae.AnyInici, ae.AnyFi, ae.Web, ae.WebArxiu, ae.WebWikipedia, ae.Territori, ae.Observacions}
+	if h.style == "postgres" {goCover_4bc4be4c3247__162[9]++;
+		if err := h.db.QueryRow(query, args...).Scan(&ae.ID); err != nil {goCover_4bc4be4c3247__162[11]++;
+			return 0, err
+		}
+		goCover_4bc4be4c3247__162[10]++;return ae.ID, nil
+	}
+	goCover_4bc4be4c3247__162[5]++;res, err := h.db.Exec(query, args...)
+	if err != nil {goCover_4bc4be4c3247__162[12]++;
+		return 0, err
+	}
+	goCover_4bc4be4c3247__162[6]++;if id, err := res.LastInsertId(); err == nil {goCover_4bc4be4c3247__162[13]++;
+		ae.ID = int(id)
+	}
+	goCover_4bc4be4c3247__162[7]++;return ae.ID, nil
+}
+
+func (h sqlHelper) updateArquebisbat(ae *Arquebisbat) error {goCover_4bc4be4c3247__163[0] = 1 ; goCover_4bc4be4c3247__163[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__163[2] = 163 ; goCover_4bc4be4c3247__163[3]++;
+	query := `
+        UPDATE arquebisbats
+        SET nom=?, tipus_entitat=?, pais_id=?, nivell=?, parent_id=?, any_inici=?, any_fi=?, web=?, web_arxiu=?, web_wikipedia=?, territori=?, observacions=?, updated_at=` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, ae.Nom, ae.TipusEntitat, ae.PaisID, ae.Nivell, ae.ParentID, ae.AnyInici, ae.AnyFi, ae.Web, ae.WebArxiu, ae.WebWikipedia, ae.Territori, ae.Observacions, ae.ID)
+	return err
+}
+
+func (h sqlHelper) listArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {goCover_4bc4be4c3247__164[0] = 7 ; goCover_4bc4be4c3247__164[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__164[2] = 164 ; goCover_4bc4be4c3247__164[3]++;
+	query := `
+        SELECT am.id, am.id_municipi, am.id_arquevisbat, am.any_inici, am.any_fi, am.motiu, am.font, a.nom
+        FROM arquebisbats_municipi am
+        INNER JOIN arquebisbats a ON a.id = am.id_arquevisbat
+        WHERE am.id_municipi = ? ORDER BY am.any_inici`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, munID)
+	if err != nil {goCover_4bc4be4c3247__164[6]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__164[4]++;defer rows.Close()
+	var res []ArquebisbatMunicipi
+	for rows.Next() {goCover_4bc4be4c3247__164[7]++;
+		var am ArquebisbatMunicipi
+		if err := rows.Scan(&am.ID, &am.MunicipiID, &am.ArquebisbatID, &am.AnyInici, &am.AnyFi, &am.Motiu, &am.Font, &am.NomEntitat); err != nil {goCover_4bc4be4c3247__164[9]++;
+			return nil, err
+		}
+		goCover_4bc4be4c3247__164[8]++;res = append(res, am)
+	}
+	goCover_4bc4be4c3247__164[5]++;return res, nil
+}
+
+func (h sqlHelper) saveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {goCover_4bc4be4c3247__165[0] = 11 ; goCover_4bc4be4c3247__165[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__165[2] = 165 ; goCover_4bc4be4c3247__165[3]++;
+	if am.ID == 0 {goCover_4bc4be4c3247__165[5]++;
+		query := `
+            INSERT INTO arquebisbats_municipi (id_municipi, id_arquevisbat, any_inici, any_fi, motiu, font)
+            VALUES (?, ?, ?, ?, ?, ?)`
+		query = formatPlaceholders(h.style, query)
+		if h.style == "postgres" {goCover_4bc4be4c3247__165[9]++;
+			query += ` RETURNING id`
+			if err := h.db.QueryRow(query, am.MunicipiID, am.ArquebisbatID, am.AnyInici, am.AnyFi, am.Motiu, am.Font).Scan(&am.ID); err != nil {goCover_4bc4be4c3247__165[11]++;
+				return 0, err
+			}
+			goCover_4bc4be4c3247__165[10]++;return am.ID, nil
+		}
+		goCover_4bc4be4c3247__165[6]++;res, err := h.db.Exec(query, am.MunicipiID, am.ArquebisbatID, am.AnyInici, am.AnyFi, am.Motiu, am.Font)
+		if err != nil {goCover_4bc4be4c3247__165[12]++;
+			return 0, err
+		}
+		goCover_4bc4be4c3247__165[7]++;if id, err := res.LastInsertId(); err == nil {goCover_4bc4be4c3247__165[13]++;
+			am.ID = int(id)
+		}
+		goCover_4bc4be4c3247__165[8]++;return am.ID, nil
+	}
+	goCover_4bc4be4c3247__165[4]++;query := `
+        UPDATE arquebisbats_municipi
+        SET id_arquevisbat=?, any_inici=?, any_fi=?, motiu=?, font=?
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, am.ArquebisbatID, am.AnyInici, am.AnyFi, am.Motiu, am.Font, am.ID)
+	return am.ID, err
+}
+func (h sqlHelper) ensureUserExtraColumns() {goCover_4bc4be4c3247__166[0] = 39 ; goCover_4bc4be4c3247__166[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__166[2] = 166 ; goCover_4bc4be4c3247__166[3]++;
+	stmts := []string{}
+	switch h.style {
+	case "mysql":goCover_4bc4be4c3247__166[5]++;
+		if !h.columnExists("usuaris", "address") {goCover_4bc4be4c3247__166[23]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN address TEXT")
+		}
+		goCover_4bc4be4c3247__166[6]++;if !h.columnExists("usuaris", "employment_status") {goCover_4bc4be4c3247__166[24]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN employment_status VARCHAR(50)")
+		}
+		goCover_4bc4be4c3247__166[7]++;if !h.columnExists("usuaris", "profession") {goCover_4bc4be4c3247__166[25]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN profession VARCHAR(255)")
+		}
+		goCover_4bc4be4c3247__166[8]++;if !h.columnExists("usuaris", "phone") {goCover_4bc4be4c3247__166[26]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN phone VARCHAR(50)")
+		}
+		goCover_4bc4be4c3247__166[9]++;if !h.columnExists("usuaris", "preferred_lang") {goCover_4bc4be4c3247__166[27]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN preferred_lang VARCHAR(10)")
+		}
+		goCover_4bc4be4c3247__166[10]++;if !h.columnExists("usuaris", "spoken_langs") {goCover_4bc4be4c3247__166[28]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN spoken_langs TEXT")
+		}
+	case "postgres":goCover_4bc4be4c3247__166[11]++;
+		if !h.columnExists("usuaris", "address") {goCover_4bc4be4c3247__166[29]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS address TEXT")
+		}
+		goCover_4bc4be4c3247__166[12]++;if !h.columnExists("usuaris", "employment_status") {goCover_4bc4be4c3247__166[30]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS employment_status TEXT")
+		}
+		goCover_4bc4be4c3247__166[13]++;if !h.columnExists("usuaris", "profession") {goCover_4bc4be4c3247__166[31]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS profession TEXT")
+		}
+		goCover_4bc4be4c3247__166[14]++;if !h.columnExists("usuaris", "phone") {goCover_4bc4be4c3247__166[32]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS phone TEXT")
+		}
+		goCover_4bc4be4c3247__166[15]++;if !h.columnExists("usuaris", "preferred_lang") {goCover_4bc4be4c3247__166[33]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS preferred_lang TEXT")
+		}
+		goCover_4bc4be4c3247__166[16]++;if !h.columnExists("usuaris", "spoken_langs") {goCover_4bc4be4c3247__166[34]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS spoken_langs TEXT")
+		}
+	default:goCover_4bc4be4c3247__166[17]++; // sqlite
+		if !h.columnExists("usuaris", "address") {goCover_4bc4be4c3247__166[35]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN address TEXT")
+		}
+		goCover_4bc4be4c3247__166[18]++;if !h.columnExists("usuaris", "employment_status") {goCover_4bc4be4c3247__166[36]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN employment_status TEXT")
+		}
+		goCover_4bc4be4c3247__166[19]++;if !h.columnExists("usuaris", "profession") {goCover_4bc4be4c3247__166[37]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN profession TEXT")
+		}
+		goCover_4bc4be4c3247__166[20]++;if !h.columnExists("usuaris", "phone") {goCover_4bc4be4c3247__166[38]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN phone TEXT")
+		}
+		goCover_4bc4be4c3247__166[21]++;if !h.columnExists("usuaris", "preferred_lang") {goCover_4bc4be4c3247__166[39]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN preferred_lang TEXT")
+		}
+		goCover_4bc4be4c3247__166[22]++;if !h.columnExists("usuaris", "spoken_langs") {goCover_4bc4be4c3247__166[40]++;
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN spoken_langs TEXT")
+		}
+	}
+	goCover_4bc4be4c3247__166[4]++;for _, stmt := range stmts {goCover_4bc4be4c3247__166[41]++;
+		_, _ = h.db.Exec(stmt)
+	}
+}
+
+func (h sqlHelper) ensurePrivacyExtraColumns() {goCover_4bc4be4c3247__167[0] = 39 ; goCover_4bc4be4c3247__167[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__167[2] = 167 ; goCover_4bc4be4c3247__167[3]++;
+	stmts := []string{}
+	switch h.style {
+	case "mysql":goCover_4bc4be4c3247__167[5]++;
+		if !h.columnExists("user_privacy", "address_visibility") {goCover_4bc4be4c3247__167[23]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN address_visibility VARCHAR(10) DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[6]++;if !h.columnExists("user_privacy", "employment_visibility") {goCover_4bc4be4c3247__167[24]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN employment_visibility VARCHAR(10) DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[7]++;if !h.columnExists("user_privacy", "profession_visibility") {goCover_4bc4be4c3247__167[25]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN profession_visibility VARCHAR(10) DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[8]++;if !h.columnExists("user_privacy", "phone_visibility") {goCover_4bc4be4c3247__167[26]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN phone_visibility VARCHAR(10) DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[9]++;if !h.columnExists("user_privacy", "preferred_lang_visibility") {goCover_4bc4be4c3247__167[27]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN preferred_lang_visibility VARCHAR(10) DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[10]++;if !h.columnExists("user_privacy", "spoken_langs_visibility") {goCover_4bc4be4c3247__167[28]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN spoken_langs_visibility VARCHAR(10) DEFAULT 'private'")
+		}
+	case "postgres":goCover_4bc4be4c3247__167[11]++;
+		if !h.columnExists("user_privacy", "address_visibility") {goCover_4bc4be4c3247__167[29]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN IF NOT EXISTS address_visibility TEXT DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[12]++;if !h.columnExists("user_privacy", "employment_visibility") {goCover_4bc4be4c3247__167[30]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN IF NOT EXISTS employment_visibility TEXT DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[13]++;if !h.columnExists("user_privacy", "profession_visibility") {goCover_4bc4be4c3247__167[31]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN IF NOT EXISTS profession_visibility TEXT DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[14]++;if !h.columnExists("user_privacy", "phone_visibility") {goCover_4bc4be4c3247__167[32]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN IF NOT EXISTS phone_visibility TEXT DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[15]++;if !h.columnExists("user_privacy", "preferred_lang_visibility") {goCover_4bc4be4c3247__167[33]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN IF NOT EXISTS preferred_lang_visibility TEXT DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[16]++;if !h.columnExists("user_privacy", "spoken_langs_visibility") {goCover_4bc4be4c3247__167[34]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN IF NOT EXISTS spoken_langs_visibility TEXT DEFAULT 'private'")
+		}
+	default:goCover_4bc4be4c3247__167[17]++; // sqlite
+		if !h.columnExists("user_privacy", "address_visibility") {goCover_4bc4be4c3247__167[35]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN address_visibility TEXT DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[18]++;if !h.columnExists("user_privacy", "employment_visibility") {goCover_4bc4be4c3247__167[36]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN employment_visibility TEXT DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[19]++;if !h.columnExists("user_privacy", "profession_visibility") {goCover_4bc4be4c3247__167[37]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN profession_visibility TEXT DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[20]++;if !h.columnExists("user_privacy", "phone_visibility") {goCover_4bc4be4c3247__167[38]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN phone_visibility TEXT DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[21]++;if !h.columnExists("user_privacy", "preferred_lang_visibility") {goCover_4bc4be4c3247__167[39]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN preferred_lang_visibility TEXT DEFAULT 'private'")
+		}
+		goCover_4bc4be4c3247__167[22]++;if !h.columnExists("user_privacy", "spoken_langs_visibility") {goCover_4bc4be4c3247__167[40]++;
+			stmts = append(stmts, "ALTER TABLE user_privacy ADD COLUMN spoken_langs_visibility TEXT DEFAULT 'private'")
+		}
+	}
+	goCover_4bc4be4c3247__167[4]++;for _, stmt := range stmts {goCover_4bc4be4c3247__167[41]++;
+		_, _ = h.db.Exec(stmt)
+	}
+}
+
+func (h sqlHelper) insertUser(user *User) error {goCover_4bc4be4c3247__168[0] = 5 ; goCover_4bc4be4c3247__168[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__168[2] = 168 ; goCover_4bc4be4c3247__168[3]++;
+	h.ensureUserExtraColumns()
+	stmt := fmt.Sprintf(`INSERT INTO usuaris 
+    (usuari, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, address, employment_status, profession, phone, preferred_lang, spoken_langs, data_creacio, actiu) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s, ?)`, h.nowFun)
+
+	stmt = formatPlaceholders(h.style, stmt)
+
+	res, err := h.db.Exec(stmt,
+		user.Usuari,
+		user.Name,
+		user.Surname,
+		user.Email,
+		user.Password,
+		user.DataNaixament,
+		user.Pais,
+		user.Estat,
+		user.Provincia,
+		user.Poblacio,
+		user.CodiPostal,
+		user.Address,
+		user.Employment,
+		user.Profession,
+		user.Phone,
+		user.PreferredLang,
+		user.SpokenLangs,
+		user.Active,
+	)
+	if err != nil {goCover_4bc4be4c3247__168[6]++;
+		return err
+	}
+
+	goCover_4bc4be4c3247__168[4]++;id, err := res.LastInsertId()
+	if err == nil {goCover_4bc4be4c3247__168[7]++;
+		user.ID = int(id)
+	}
+	goCover_4bc4be4c3247__168[5]++;return nil
+}
+
+func (h sqlHelper) getUserByEmail(email string) (*User, error) {goCover_4bc4be4c3247__169[0] = 3 ; goCover_4bc4be4c3247__169[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__169[2] = 169 ; goCover_4bc4be4c3247__169[3]++;
+	h.ensureUserExtraColumns()
+	query := formatPlaceholders(h.style, `
+        SELECT id, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, address, employment_status, profession, phone, preferred_lang, spoken_langs, data_creacio, actiu 
+        FROM usuaris 
+        WHERE correu = ?`)
+
+	row := h.db.QueryRow(query, email)
+
+	u := new(User)
+	err := row.Scan(
+		&u.ID,
+		&u.Name,
+		&u.Surname,
+		&u.Email,
+		&u.Password,
+		&u.DataNaixament,
+		&u.Pais,
+		&u.Estat,
+		&u.Provincia,
+		&u.Poblacio,
+		&u.CodiPostal,
+		&u.Address,
+		&u.Employment,
+		&u.Profession,
+		&u.Phone,
+		&u.PreferredLang,
+		&u.SpokenLangs,
+		&u.CreatedAt,
+		&u.Active,
+	)
+	if err != nil {goCover_4bc4be4c3247__169[5]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__169[4]++;return u, nil
+}
+
+func (h sqlHelper) saveActivationToken(email, token string) error {goCover_4bc4be4c3247__170[0] = 4 ; goCover_4bc4be4c3247__170[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__170[2] = 170 ; goCover_4bc4be4c3247__170[3]++;
+	// Manté una finestra de 48h com en la implementació original
+	stmt := formatPlaceholders(h.style, `UPDATE usuaris SET token_activacio = ?, expira_token = datetime('now', '+48 hours') WHERE correu = ?`)
+	if h.style == "mysql" || h.style == "postgres" {goCover_4bc4be4c3247__170[5]++;
+		stmt = formatPlaceholders(h.style, `UPDATE usuaris SET token_activacio = ?, expira_token = NOW() + INTERVAL '48 HOURS' WHERE correu = ?`)
+		if h.style == "mysql" {goCover_4bc4be4c3247__170[6]++;
+			stmt = formatPlaceholders(h.style, `UPDATE usuaris SET token_activacio = ?, expira_token = DATE_ADD(NOW(), INTERVAL 48 HOUR) WHERE correu = ?`)
+		}
+	}
+	goCover_4bc4be4c3247__170[4]++;_, err := h.db.Exec(stmt, token, email)
+	return err
+}
+
+func (h sqlHelper) activateUser(token string) error {goCover_4bc4be4c3247__171[0] = 9 ; goCover_4bc4be4c3247__171[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__171[2] = 171 ; goCover_4bc4be4c3247__171[3]++;
+	stmt := formatPlaceholders(h.style, `
+        UPDATE usuaris 
+        SET actiu = %s, token_activacio = NULL, expira_token = NULL 
+        WHERE token_activacio = ? AND (expira_token IS NULL OR expira_token > %s)
+    `)
+	nowExpr := "datetime('now')"
+	actiuExpr := "1"
+	if h.style == "mysql" {goCover_4bc4be4c3247__171[7]++;
+		nowExpr = "NOW()"
+	} else{ goCover_4bc4be4c3247__171[8]++;if h.style == "postgres" {goCover_4bc4be4c3247__171[9]++;
+		nowExpr = "NOW()"
+		actiuExpr = "TRUE"
+	}}
+	goCover_4bc4be4c3247__171[4]++;stmt = fmt.Sprintf(stmt, actiuExpr, nowExpr)
+	res, err := h.db.Exec(stmt, token)
+	if err != nil {goCover_4bc4be4c3247__171[10]++;
+		return err
+	}
+	goCover_4bc4be4c3247__171[5]++;if rows, _ := res.RowsAffected(); rows == 0 {goCover_4bc4be4c3247__171[11]++;
+		return fmt.Errorf("token invàlid o expirat")
+	}
+	goCover_4bc4be4c3247__171[6]++;return nil
+}
+
+func (h sqlHelper) authenticateUser(usernameOrEmail, password string) (*User, error) {goCover_4bc4be4c3247__172[0] = 3 ; goCover_4bc4be4c3247__172[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__172[2] = 172 ; goCover_4bc4be4c3247__172[3]++;
+	h.ensureUserExtraColumns()
+	query := formatPlaceholders(h.style, `
+        SELECT id, usuari, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, address, employment_status, profession, phone, preferred_lang, spoken_langs, actiu 
+        FROM usuaris 
+        WHERE (usuari = ? OR correu = ?) AND actiu = 1`)
+
+	row := h.db.QueryRow(query, usernameOrEmail, usernameOrEmail)
+
+	u := new(User)
+	if err := row.Scan(&u.ID, &u.Usuari, &u.Name, &u.Surname, &u.Email, &u.Password,
+		&u.DataNaixament, &u.Pais, &u.Estat, &u.Provincia, &u.Poblacio, &u.CodiPostal,
+		&u.Address, &u.Employment, &u.Profession, &u.Phone, &u.PreferredLang, &u.SpokenLangs, &u.Active); err != nil {goCover_4bc4be4c3247__172[5]++;
+		return nil, err
+	}
+
+	goCover_4bc4be4c3247__172[4]++;return u, nil
+}
+
+func (h sqlHelper) saveSession(sessionID string, userID int, expiry string) error {goCover_4bc4be4c3247__173[0] = 1 ; goCover_4bc4be4c3247__173[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__173[2] = 173 ; goCover_4bc4be4c3247__173[3]++;
+	stmt := formatPlaceholders(h.style, `INSERT INTO sessions (token_hash, usuari_id, expira, revocat) VALUES (?, ?, ?, 0)`)
+	_, err := h.db.Exec(stmt, sessionID, userID, expiry)
+	return err
+}
+
+func (h sqlHelper) getSessionUser(sessionID string) (*User, error) {goCover_4bc4be4c3247__174[0] = 3 ; goCover_4bc4be4c3247__174[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__174[2] = 174 ; goCover_4bc4be4c3247__174[3]++;
+	h.ensureUserExtraColumns()
+	query := formatPlaceholders(h.style, `
+        SELECT u.id, u.usuari, u.nom, u.cognoms, u.correu, u.contrasenya, u.data_naixement, u.pais, u.estat, u.provincia, u.poblacio, u.codi_postal, u.address, u.employment_status, u.profession, u.phone, u.preferred_lang, u.spoken_langs, u.data_creacio, u.actiu
+        FROM usuaris u
+        INNER JOIN sessions s ON u.id = s.usuari_id
+        WHERE s.token_hash = ? AND s.revocat = 0`)
+
+	row := h.db.QueryRow(query, sessionID)
+
+	u := new(User)
+	err := row.Scan(
+		&u.ID,
+		&u.Usuari,
+		&u.Name,
+		&u.Surname,
+		&u.Email,
+		&u.Password,
+		&u.DataNaixament,
+		&u.Pais,
+		&u.Estat,
+		&u.Provincia,
+		&u.Poblacio,
+		&u.CodiPostal,
+		&u.Address,
+		&u.Employment,
+		&u.Profession,
+		&u.Phone,
+		&u.PreferredLang,
+		&u.SpokenLangs,
+		&u.CreatedAt,
+		&u.Active,
+	)
+	if err != nil {goCover_4bc4be4c3247__174[5]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__174[4]++;return u, nil
+}
+
+func (h sqlHelper) deleteSession(sessionID string) error {goCover_4bc4be4c3247__175[0] = 1 ; goCover_4bc4be4c3247__175[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__175[2] = 175 ; goCover_4bc4be4c3247__175[3]++;
+	stmt := formatPlaceholders(h.style, `UPDATE sessions SET revocat = 1 WHERE token_hash = ?`)
+	_, err := h.db.Exec(stmt, sessionID)
+	return err
+}
+
+func (h sqlHelper) createPasswordReset(email, token, expiry, lang string) (bool, error) {goCover_4bc4be4c3247__176[0] = 7 ; goCover_4bc4be4c3247__176[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__176[2] = 176 ; goCover_4bc4be4c3247__176[3]++;
+	// Comprova si l'usuari existeix
+	var userID int
+	q := formatPlaceholders(h.style, `SELECT id FROM usuaris WHERE correu = ?`)
+	err := h.db.QueryRow(q, email).Scan(&userID)
+	if err == sql.ErrNoRows {goCover_4bc4be4c3247__176[7]++;
+		return false, nil
+	}
+	goCover_4bc4be4c3247__176[4]++;if err != nil {goCover_4bc4be4c3247__176[8]++;
+		return false, err
+	}
+
+	goCover_4bc4be4c3247__176[5]++;stmt := formatPlaceholders(h.style, `
+        INSERT INTO password_resets (usuari_id, token, expira, lang, used)
+        VALUES (?, ?, ?, ?, 0)`)
+	_, err = h.db.Exec(stmt, userID, token, expiry, lang)
+	if err != nil {goCover_4bc4be4c3247__176[9]++;
+		return false, err
+	}
+	goCover_4bc4be4c3247__176[6]++;return true, nil
+}
+
+func (h sqlHelper) getPasswordReset(token string) (*PasswordReset, error) {goCover_4bc4be4c3247__177[0] = 5 ; goCover_4bc4be4c3247__177[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__177[2] = 177 ; goCover_4bc4be4c3247__177[3]++;
+	nowExpr := "datetime('now')"
+	if h.style == "mysql" || h.style == "postgres" {goCover_4bc4be4c3247__177[6]++;
+		nowExpr = "NOW()"
+	}
+
+	goCover_4bc4be4c3247__177[4]++;stmt := formatPlaceholders(h.style, `
+        SELECT pr.id, pr.usuari_id, pr.lang, u.correu
+        FROM password_resets pr
+        INNER JOIN usuaris u ON u.id = pr.usuari_id
+        WHERE pr.token = ? AND pr.used = 0 AND pr.expira > `+nowExpr+``)
+
+	row := h.db.QueryRow(stmt, token)
+	var pr PasswordReset
+	err := row.Scan(&pr.ID, &pr.UserID, &pr.Lang, &pr.Email)
+	if err != nil {goCover_4bc4be4c3247__177[7]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__177[5]++;return &pr, nil
+}
+
+func (h sqlHelper) markPasswordResetUsed(id int) error {goCover_4bc4be4c3247__178[0] = 1 ; goCover_4bc4be4c3247__178[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__178[2] = 178 ; goCover_4bc4be4c3247__178[3]++;
+	stmt := formatPlaceholders(h.style, `UPDATE password_resets SET used = 1 WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
+	return err
+}
+
+func (h sqlHelper) updateUserPassword(userID int, passwordHash []byte) error {goCover_4bc4be4c3247__179[0] = 1 ; goCover_4bc4be4c3247__179[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__179[2] = 179 ; goCover_4bc4be4c3247__179[3]++;
+	stmt := formatPlaceholders(h.style, `UPDATE usuaris SET contrasenya = ? WHERE id = ?`)
+	_, err := h.db.Exec(stmt, passwordHash, userID)
+	return err
+}
+
+func (h sqlHelper) updateUserProfile(u *User) error {goCover_4bc4be4c3247__180[0] = 1 ; goCover_4bc4be4c3247__180[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__180[2] = 180 ; goCover_4bc4be4c3247__180[3]++;
+	h.ensureUserExtraColumns()
+	stmt := formatPlaceholders(h.style, `
+        UPDATE usuaris
+        SET nom = ?, cognoms = ?, correu = ?, data_naixement = ?, pais = ?, estat = ?, provincia = ?, poblacio = ?, codi_postal = ?, address = ?, employment_status = ?, profession = ?, phone = ?, preferred_lang = ?, spoken_langs = ?
+        WHERE id = ?`)
+	_, err := h.db.Exec(stmt,
+		u.Name,
+		u.Surname,
+		u.Email,
+		u.DataNaixament,
+		u.Pais,
+		u.Estat,
+		u.Provincia,
+		u.Poblacio,
+		u.CodiPostal,
+		u.Address,
+		u.Employment,
+		u.Profession,
+		u.Phone,
+		u.PreferredLang,
+		u.SpokenLangs,
+		u.ID,
+	)
+	return err
+}
+
+func (h sqlHelper) updateUserEmail(userID int, newEmail string) error {goCover_4bc4be4c3247__181[0] = 1 ; goCover_4bc4be4c3247__181[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__181[2] = 181 ; goCover_4bc4be4c3247__181[3]++;
+	stmt := formatPlaceholders(h.style, `UPDATE usuaris SET correu = ? WHERE id = ?`)
+	_, err := h.db.Exec(stmt, newEmail, userID)
+	return err
+}
+
+func (h sqlHelper) savePrivacySettings(userID int, p *PrivacySettings) error {goCover_4bc4be4c3247__182[0] = 3 ; goCover_4bc4be4c3247__182[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__182[2] = 182 ; goCover_4bc4be4c3247__182[3]++;
+	h.ensurePrivacyExtraColumns()
+	stmt := formatPlaceholders(h.style, `
+        INSERT INTO user_privacy (
+            usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
+            pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+            address_visibility, employment_visibility, profession_visibility, phone_visibility, preferred_lang_visibility, spoken_langs_visibility,
+            show_activity, profile_public, notify_email, allow_contact
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(usuari_id) DO UPDATE SET
+            nom_visibility=excluded.nom_visibility,
+            cognoms_visibility=excluded.cognoms_visibility,
+            email_visibility=excluded.email_visibility,
+            birth_visibility=excluded.birth_visibility,
+            pais_visibility=excluded.pais_visibility,
+            estat_visibility=excluded.estat_visibility,
+            provincia_visibility=excluded.provincia_visibility,
+            poblacio_visibility=excluded.poblacio_visibility,
+            postal_visibility=excluded.postal_visibility,
+            address_visibility=excluded.address_visibility,
+            employment_visibility=excluded.employment_visibility,
+            profession_visibility=excluded.profession_visibility,
+            phone_visibility=excluded.phone_visibility,
+            preferred_lang_visibility=excluded.preferred_lang_visibility,
+            spoken_langs_visibility=excluded.spoken_langs_visibility,
+            show_activity=excluded.show_activity,
+            profile_public=excluded.profile_public,
+            notify_email=excluded.notify_email,
+            allow_contact=excluded.allow_contact
+    `)
+	if h.style == "mysql" {goCover_4bc4be4c3247__182[5]++;
+		stmt = `
+        INSERT INTO user_privacy (
+            usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
+            pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+            address_visibility, employment_visibility, profession_visibility, phone_visibility, preferred_lang_visibility, spoken_langs_visibility,
+            show_activity, profile_public, notify_email, allow_contact
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            nom_visibility=VALUES(nom_visibility),
+            cognoms_visibility=VALUES(cognoms_visibility),
+            email_visibility=VALUES(email_visibility),
+            birth_visibility=VALUES(birth_visibility),
+            pais_visibility=VALUES(pais_visibility),
+            estat_visibility=VALUES(estat_visibility),
+            provincia_visibility=VALUES(provincia_visibility),
+            poblacio_visibility=VALUES(poblacio_visibility),
+            postal_visibility=VALUES(postal_visibility),
+            address_visibility=VALUES(address_visibility),
+            employment_visibility=VALUES(employment_visibility),
+            profession_visibility=VALUES(profession_visibility),
+            phone_visibility=VALUES(phone_visibility),
+            preferred_lang_visibility=VALUES(preferred_lang_visibility),
+            spoken_langs_visibility=VALUES(spoken_langs_visibility),
+            show_activity=VALUES(show_activity),
+            profile_public=VALUES(profile_public),
+            notify_email=VALUES(notify_email),
+            allow_contact=VALUES(allow_contact)
+        `
+	}
+	goCover_4bc4be4c3247__182[4]++;_, err := h.db.Exec(stmt,
+		userID,
+		p.NomVisibility,
+		p.CognomsVisibility,
+		p.EmailVisibility,
+		p.BirthVisibility,
+		p.PaisVisibility,
+		p.EstatVisibility,
+		p.ProvinciaVisibility,
+		p.PoblacioVisibility,
+		p.PostalVisibility,
+		p.AddressVisibility,
+		p.EmploymentVisibility,
+		p.ProfessionVisibility,
+		p.PhoneVisibility,
+		p.PreferredLangVisibility,
+		p.SpokenLangsVisibility,
+		p.ShowActivity,
+		p.ProfilePublic,
+		p.NotifyEmail,
+		p.AllowContact,
+	)
+	return err
+}
+
+func (h sqlHelper) createEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {goCover_4bc4be4c3247__183[0] = 1 ; goCover_4bc4be4c3247__183[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__183[2] = 183 ; goCover_4bc4be4c3247__183[3]++;
+	stmt := formatPlaceholders(h.style, `
+        INSERT INTO email_changes (
+            usuari_id, old_email, new_email, token_confirm, exp_confirm, token_revert, exp_revert, lang, confirmed, reverted
+        )
+        SELECT id, correu, ?, ?, ?, ?, ?, ?, 0, 0 FROM usuaris WHERE id = ?`)
+	_, err := h.db.Exec(stmt, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang, userID)
+	return err
+}
+
+func (h sqlHelper) confirmEmailChange(token string) (*EmailChange, error) {goCover_4bc4be4c3247__184[0] = 5 ; goCover_4bc4be4c3247__184[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__184[2] = 184 ; goCover_4bc4be4c3247__184[3]++;
+	nowExpr := "datetime('now')"
+	if h.style == "mysql" || h.style == "postgres" {goCover_4bc4be4c3247__184[6]++;
+		nowExpr = "NOW()"
+	}
+	goCover_4bc4be4c3247__184[4]++;stmt := formatPlaceholders(h.style, `
+        SELECT id, usuari_id, old_email, new_email, token_confirm, exp_confirm, token_revert, exp_revert, lang, confirmed, reverted
+        FROM email_changes
+        WHERE token_confirm = ? AND confirmed = 0 AND exp_confirm > `+nowExpr+``)
+	row := h.db.QueryRow(stmt, token)
+	var c EmailChange
+	if err := row.Scan(&c.ID, &c.UserID, &c.OldEmail, &c.NewEmail, &c.TokenConfirm, &c.ExpConfirm, &c.TokenRevert, &c.ExpRevert, &c.Lang, &c.Confirmed, &c.Reverted); err != nil {goCover_4bc4be4c3247__184[7]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__184[5]++;return &c, nil
+}
+
+func (h sqlHelper) revertEmailChange(token string) (*EmailChange, error) {goCover_4bc4be4c3247__185[0] = 5 ; goCover_4bc4be4c3247__185[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__185[2] = 185 ; goCover_4bc4be4c3247__185[3]++;
+	nowExpr := "datetime('now')"
+	if h.style == "mysql" || h.style == "postgres" {goCover_4bc4be4c3247__185[6]++;
+		nowExpr = "NOW()"
+	}
+	goCover_4bc4be4c3247__185[4]++;stmt := formatPlaceholders(h.style, `
+        SELECT id, usuari_id, old_email, new_email, token_confirm, exp_confirm, token_revert, exp_revert, lang, confirmed, reverted
+        FROM email_changes
+        WHERE token_revert = ? AND reverted = 0 AND exp_revert > `+nowExpr+``)
+	row := h.db.QueryRow(stmt, token)
+	var c EmailChange
+	if err := row.Scan(&c.ID, &c.UserID, &c.OldEmail, &c.NewEmail, &c.TokenConfirm, &c.ExpConfirm, &c.TokenRevert, &c.ExpRevert, &c.Lang, &c.Confirmed, &c.Reverted); err != nil {goCover_4bc4be4c3247__185[7]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__185[5]++;return &c, nil
+}
+
+func (h sqlHelper) markEmailChangeConfirmed(id int) error {goCover_4bc4be4c3247__186[0] = 1 ; goCover_4bc4be4c3247__186[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__186[2] = 186 ; goCover_4bc4be4c3247__186[3]++;
+	stmt := formatPlaceholders(h.style, `UPDATE email_changes SET confirmed = 1 WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
+	return err
+}
+
+func (h sqlHelper) markEmailChangeReverted(id int) error {goCover_4bc4be4c3247__187[0] = 1 ; goCover_4bc4be4c3247__187[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__187[2] = 187 ; goCover_4bc4be4c3247__187[3]++;
+	stmt := formatPlaceholders(h.style, `UPDATE email_changes SET reverted = 1 WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
+	return err
+}
+
+func (h sqlHelper) createPrivacyDefaults(userID int) error {goCover_4bc4be4c3247__188[0] = 3 ; goCover_4bc4be4c3247__188[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__188[2] = 188 ; goCover_4bc4be4c3247__188[3]++;
+	h.ensurePrivacyExtraColumns()
+	stmt := formatPlaceholders(h.style, `
+        INSERT INTO user_privacy (
+            usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
+            pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+            address_visibility, employment_visibility, profession_visibility, phone_visibility, preferred_lang_visibility, spoken_langs_visibility,
+            show_activity, profile_public, notify_email, allow_contact
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1)
+        ON CONFLICT (usuari_id) DO NOTHING
+    `)
+	if h.style == "mysql" {goCover_4bc4be4c3247__188[5]++;
+		stmt = `
+        INSERT IGNORE INTO user_privacy (
+            usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
+            pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+            address_visibility, employment_visibility, profession_visibility, phone_visibility, preferred_lang_visibility, spoken_langs_visibility,
+            show_activity, profile_public, notify_email, allow_contact
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1)
+        `
+	}
+	goCover_4bc4be4c3247__188[4]++;_, err := h.db.Exec(stmt,
+		userID,
+		"private", // nom
+		"private", // cognoms
+		"private", // email
+		"private", // birth
+		"public",  // país
+		"private", // estat
+		"private", // provincia
+		"private", // poblacio
+		"private", // postal
+		"private", // address
+		"private", // employment
+		"private", // profession
+		"private", // phone
+		"private", // preferred lang
+		"private", // spoken langs
+	)
+	return err
+}
+
+func (h sqlHelper) getPrivacySettings(userID int) (*PrivacySettings, error) {goCover_4bc4be4c3247__189[0] = 3 ; goCover_4bc4be4c3247__189[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__189[2] = 189 ; goCover_4bc4be4c3247__189[3]++;
+	h.ensurePrivacyExtraColumns()
+	stmt := formatPlaceholders(h.style, `
+        SELECT usuari_id, nom_visibility, cognoms_visibility, email_visibility, birth_visibility,
+               pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
+               address_visibility, employment_visibility, profession_visibility, phone_visibility, preferred_lang_visibility, spoken_langs_visibility,
+               show_activity, profile_public, notify_email, allow_contact
+        FROM user_privacy
+        WHERE usuari_id = ?
+    `)
+	row := h.db.QueryRow(stmt, userID)
+	var p PrivacySettings
+	err := row.Scan(
+		&p.UserID,
+		&p.NomVisibility,
+		&p.CognomsVisibility,
+		&p.EmailVisibility,
+		&p.BirthVisibility,
+		&p.PaisVisibility,
+		&p.EstatVisibility,
+		&p.ProvinciaVisibility,
+		&p.PoblacioVisibility,
+		&p.PostalVisibility,
+		&p.AddressVisibility,
+		&p.EmploymentVisibility,
+		&p.ProfessionVisibility,
+		&p.PhoneVisibility,
+		&p.PreferredLangVisibility,
+		&p.SpokenLangsVisibility,
+		&p.ShowActivity,
+		&p.ProfilePublic,
+		&p.NotifyEmail,
+		&p.AllowContact,
+	)
+	if err != nil {goCover_4bc4be4c3247__189[5]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__189[4]++;return &p, nil
+}
+
+func (h sqlHelper) existsUserByUsername(username string) (bool, error) {goCover_4bc4be4c3247__190[0] = 5 ; goCover_4bc4be4c3247__190[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__190[2] = 190 ; goCover_4bc4be4c3247__190[3]++;
+	query := formatPlaceholders(h.style, `SELECT 1 FROM usuaris WHERE usuari = ? LIMIT 1`)
+	row := h.db.QueryRow(query, username)
+	var tmp int
+	err := row.Scan(&tmp)
+	if err == sql.ErrNoRows {goCover_4bc4be4c3247__190[6]++;
+		return false, nil
+	}
+	goCover_4bc4be4c3247__190[4]++;if err != nil {goCover_4bc4be4c3247__190[7]++;
+		return false, err
+	}
+	goCover_4bc4be4c3247__190[5]++;return true, nil
+}
+
+func (h sqlHelper) existsUserByEmail(email string) (bool, error) {goCover_4bc4be4c3247__191[0] = 5 ; goCover_4bc4be4c3247__191[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__191[2] = 191 ; goCover_4bc4be4c3247__191[3]++;
+	query := formatPlaceholders(h.style, `SELECT 1 FROM usuaris WHERE correu = ? LIMIT 1`)
+	row := h.db.QueryRow(query, email)
+	var tmp int
+	err := row.Scan(&tmp)
+	if err == sql.ErrNoRows {goCover_4bc4be4c3247__191[6]++;
+		return false, nil
+	}
+	goCover_4bc4be4c3247__191[4]++;if err != nil {goCover_4bc4be4c3247__191[7]++;
+		return false, err
+	}
+	goCover_4bc4be4c3247__191[5]++;return true, nil
+}
+
+// Arxius
+func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {goCover_4bc4be4c3247__192[0] = 19 ; goCover_4bc4be4c3247__192[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__192[2] = 192 ; goCover_4bc4be4c3247__192[3]++;
+	h.ensureUserExtraColumns() // no-op but keeps migrations consistent
+	args := []interface{}{}
+	clauses := []string{"1=1"}
+	if filter.Text != "" {goCover_4bc4be4c3247__192[12]++;
+		clauses = append(clauses, "a.nom LIKE ?")
+		args = append(args, "%"+filter.Text+"%")
+	}
+	goCover_4bc4be4c3247__192[4]++;if filter.Tipus != "" {goCover_4bc4be4c3247__192[13]++;
+		clauses = append(clauses, "a.tipus = ?")
+		args = append(args, filter.Tipus)
+	}
+	goCover_4bc4be4c3247__192[5]++;if filter.Acces != "" {goCover_4bc4be4c3247__192[14]++;
+		clauses = append(clauses, "a.acces = ?")
+		args = append(args, filter.Acces)
+	}
+	goCover_4bc4be4c3247__192[6]++;if filter.EntitatID > 0 {goCover_4bc4be4c3247__192[15]++;
+		clauses = append(clauses, "a.entitat_eclesiastica_id = ?")
+		args = append(args, filter.EntitatID)
+	}
+	goCover_4bc4be4c3247__192[7]++;limit := 50
+	offset := 0
+	if filter.Limit > 0 {goCover_4bc4be4c3247__192[16]++;
+		limit = filter.Limit
+	}
+	goCover_4bc4be4c3247__192[8]++;if filter.Offset > 0 {goCover_4bc4be4c3247__192[17]++;
+		offset = filter.Offset
+	}
+	goCover_4bc4be4c3247__192[9]++;args = append(args, limit, offset)
+	query := `
+        SELECT a.id, a.nom, a.tipus, a.municipi_id, a.entitat_eclesiastica_id, a.adreca, a.ubicacio, a.web, a.acces, a.notes,
+               m.nom as municipi_nom, ae.nom as entitat_nom,
+               COALESCE(cnt.total, 0) AS llibres
+        FROM arxius a
+        LEFT JOIN municipis m ON m.id = a.municipi_id
+        LEFT JOIN arquebisbats ae ON ae.id = a.entitat_eclesiastica_id
+        LEFT JOIN (
+            SELECT arxiu_id, COUNT(*) as total FROM arxius_llibres GROUP BY arxiu_id
+        ) cnt ON cnt.arxiu_id = a.id
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        ORDER BY a.nom ASC
+        LIMIT ? OFFSET ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {goCover_4bc4be4c3247__192[18]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__192[10]++;defer rows.Close()
+	var res []ArxiuWithCount
+	for rows.Next() {goCover_4bc4be4c3247__192[19]++;
+		var a ArxiuWithCount
+		if err := rows.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.Web, &a.Acces, &a.Notes, &a.MunicipiNom, &a.EntitatNom, &a.Llibres); err != nil {goCover_4bc4be4c3247__192[21]++;
+			return nil, err
+		}
+		goCover_4bc4be4c3247__192[20]++;res = append(res, a)
+	}
+	goCover_4bc4be4c3247__192[11]++;return res, nil
+}
+
+func (h sqlHelper) getArxiu(id int) (*Arxiu, error) {goCover_4bc4be4c3247__193[0] = 3 ; goCover_4bc4be4c3247__193[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__193[2] = 193 ; goCover_4bc4be4c3247__193[3]++;
+	query := formatPlaceholders(h.style, `
+        SELECT id, nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes
+        FROM arxius WHERE id = ?`)
+	row := h.db.QueryRow(query, id)
+	var a Arxiu
+	if err := row.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.Web, &a.Acces, &a.Notes); err != nil {goCover_4bc4be4c3247__193[5]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__193[4]++;return &a, nil
+}
+
+func (h sqlHelper) createArxiu(a *Arxiu) (int, error) {goCover_4bc4be4c3247__194[0] = 9 ; goCover_4bc4be4c3247__194[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__194[2] = 194 ; goCover_4bc4be4c3247__194[3]++;
+	args := []interface{}{a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.Web, a.Acces, a.Notes}
+	if h.style == "postgres" {goCover_4bc4be4c3247__194[7]++;
+		query := `
+            INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)
+            RETURNING id`
+		query = formatPlaceholders(h.style, query)
+		if err := h.db.QueryRow(query, args...).Scan(&a.ID); err != nil {goCover_4bc4be4c3247__194[9]++;
+			return 0, err
+		}
+		goCover_4bc4be4c3247__194[8]++;return a.ID, nil
+	}
+
+	goCover_4bc4be4c3247__194[4]++;query := `
+        INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	query = formatPlaceholders(h.style, query)
+	res, err := h.db.Exec(query, args...)
+	if err != nil {goCover_4bc4be4c3247__194[10]++;
+		return 0, err
+	}
+	goCover_4bc4be4c3247__194[5]++;if id, err := res.LastInsertId(); err == nil {goCover_4bc4be4c3247__194[11]++;
+		a.ID = int(id)
+	}
+	goCover_4bc4be4c3247__194[6]++;return a.ID, nil
+}
+
+func (h sqlHelper) updateArxiu(a *Arxiu) error {goCover_4bc4be4c3247__195[0] = 1 ; goCover_4bc4be4c3247__195[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__195[2] = 195 ; goCover_4bc4be4c3247__195[3]++;
+	query := `
+        UPDATE arxius
+        SET nom = ?, tipus = ?, municipi_id = ?, entitat_eclesiastica_id = ?, adreca = ?, ubicacio = ?, web = ?, acces = ?, notes = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.Web, a.Acces, a.Notes, a.ID)
+	return err
+}
+
+func (h sqlHelper) deleteArxiu(id int) error {goCover_4bc4be4c3247__196[0] = 1 ; goCover_4bc4be4c3247__196[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__196[2] = 196 ; goCover_4bc4be4c3247__196[3]++;
+	stmt := formatPlaceholders(h.style, `DELETE FROM arxius WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
+	return err
+}
+
+func (h sqlHelper) listArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {goCover_4bc4be4c3247__197[0] = 7 ; goCover_4bc4be4c3247__197[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__197[2] = 197 ; goCover_4bc4be4c3247__197[3]++;
+	query := `
+        SELECT al.arxiu_id, al.llibre_id, al.signatura, al.url_override,
+               l.titol, l.nom_esglesia, l.cronologia, m.nom as municipi
+        FROM arxius_llibres al
+        INNER JOIN llibres l ON l.id = al.llibre_id
+        LEFT JOIN municipis m ON m.id = l.municipi_id
+        WHERE al.arxiu_id = ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, arxiuID)
+	if err != nil {goCover_4bc4be4c3247__197[6]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__197[4]++;defer rows.Close()
+	var res []ArxiuLlibreDetail
+	for rows.Next() {goCover_4bc4be4c3247__197[7]++;
+		var d ArxiuLlibreDetail
+		if err := rows.Scan(&d.ArxiuID, &d.LlibreID, &d.Signatura, &d.URLOverride, &d.Titol, &d.NomEsglesia, &d.Cronologia, &d.Municipi); err != nil {goCover_4bc4be4c3247__197[9]++;
+			return nil, err
+		}
+		goCover_4bc4be4c3247__197[8]++;res = append(res, d)
+	}
+	goCover_4bc4be4c3247__197[5]++;return res, nil
+}
+
+func (h sqlHelper) addArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {goCover_4bc4be4c3247__198[0] = 1 ; goCover_4bc4be4c3247__198[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__198[2] = 198 ; goCover_4bc4be4c3247__198[3]++;
+	stmt := formatPlaceholders(h.style, `
+        INSERT INTO arxius_llibres (arxiu_id, llibre_id, signatura, url_override)
+        VALUES (?, ?, ?, ?)`)
+	_, err := h.db.Exec(stmt, arxiuID, llibreID, signatura, urlOverride)
+	return err
+}
+
+func (h sqlHelper) updateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {goCover_4bc4be4c3247__199[0] = 1 ; goCover_4bc4be4c3247__199[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__199[2] = 199 ; goCover_4bc4be4c3247__199[3]++;
+	stmt := formatPlaceholders(h.style, `
+        UPDATE arxius_llibres SET signatura = ?, url_override = ?
+        WHERE arxiu_id = ? AND llibre_id = ?`)
+	_, err := h.db.Exec(stmt, signatura, urlOverride, arxiuID, llibreID)
+	return err
+}
+
+func (h sqlHelper) deleteArxiuLlibre(arxiuID, llibreID int) error {goCover_4bc4be4c3247__200[0] = 1 ; goCover_4bc4be4c3247__200[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__200[2] = 200 ; goCover_4bc4be4c3247__200[3]++;
+	stmt := formatPlaceholders(h.style, `DELETE FROM arxius_llibres WHERE arxiu_id = ? AND llibre_id = ?`)
+	_, err := h.db.Exec(stmt, arxiuID, llibreID)
+	return err
+}
+
+func (h sqlHelper) searchLlibresSimple(q string, limit int) ([]LlibreSimple, error) {goCover_4bc4be4c3247__201[0] = 11 ; goCover_4bc4be4c3247__201[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__201[2] = 201 ; goCover_4bc4be4c3247__201[3]++;
+	if limit <= 0 {goCover_4bc4be4c3247__201[8]++;
+		limit = 20
+	}
+	goCover_4bc4be4c3247__201[4]++;args := []interface{}{}
+	where := "1=1"
+	if strings.TrimSpace(q) != "" {goCover_4bc4be4c3247__201[9]++;
+		where = "(l.titol LIKE ? OR l.nom_esglesia LIKE ? OR l.cronologia LIKE ?)"
+		like := "%" + q + "%"
+		args = append(args, like, like, like)
+	}
+	goCover_4bc4be4c3247__201[5]++;args = append(args, limit)
+	query := `
+        SELECT l.id, l.titol, l.nom_esglesia, l.cronologia, m.nom as municipi
+        FROM llibres l
+        LEFT JOIN municipis m ON m.id = l.municipi_id
+        WHERE ` + where + `
+        ORDER BY l.titol ASC
+        LIMIT ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {goCover_4bc4be4c3247__201[10]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__201[6]++;defer rows.Close()
+	var res []LlibreSimple
+	for rows.Next() {goCover_4bc4be4c3247__201[11]++;
+		var l LlibreSimple
+		if err := rows.Scan(&l.ID, &l.Titol, &l.NomEsglesia, &l.Cronologia, &l.Municipi); err != nil {goCover_4bc4be4c3247__201[13]++;
+			return nil, err
+		}
+		goCover_4bc4be4c3247__201[12]++;res = append(res, l)
+	}
+	goCover_4bc4be4c3247__201[7]++;return res, nil
+}
+
+func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {goCover_4bc4be4c3247__202[0] = 13 ; goCover_4bc4be4c3247__202[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__202[2] = 202 ; goCover_4bc4be4c3247__202[3]++;
+	args := []interface{}{}
+	clauses := []string{"1=1"}
+	if strings.TrimSpace(filter.Text) != "" {goCover_4bc4be4c3247__202[9]++;
+		like := "%" + strings.TrimSpace(filter.Text) + "%"
+		clauses = append(clauses, "(l.titol LIKE ? OR l.nom_esglesia LIKE ?)")
+		args = append(args, like, like)
+	}
+	goCover_4bc4be4c3247__202[4]++;if filter.ArquebisbatID > 0 {goCover_4bc4be4c3247__202[10]++;
+		clauses = append(clauses, "l.arquevisbat_id = ?")
+		args = append(args, filter.ArquebisbatID)
+	}
+	goCover_4bc4be4c3247__202[5]++;if filter.MunicipiID > 0 {goCover_4bc4be4c3247__202[11]++;
+		clauses = append(clauses, "l.municipi_id = ?")
+		args = append(args, filter.MunicipiID)
+	}
+	goCover_4bc4be4c3247__202[6]++;query := `
+        SELECT l.id, l.arquevisbat_id, l.municipi_id, l.nom_esglesia, l.codi_digital, l.codi_fisic,
+               l.titol, l.cronologia, l.volum, l.abat, l.contingut, l.llengua,
+               l.requeriments_tecnics, l.unitat_catalogacio, l.unitat_instalacio, l.pagines,
+               l.url_base, l.url_imatge_prefix, l.pagina,
+               ae.nom as arquebisbat_nom, m.nom as municipi_nom
+        FROM llibres l
+        LEFT JOIN arquebisbats ae ON ae.id = l.arquevisbat_id
+        LEFT JOIN municipis m ON m.id = l.municipi_id
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        ORDER BY l.titol`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {goCover_4bc4be4c3247__202[12]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__202[7]++;defer rows.Close()
+	var res []LlibreRow
+	for rows.Next() {goCover_4bc4be4c3247__202[13]++;
+		var lr LlibreRow
+		if err := rows.Scan(
+			&lr.ID, &lr.ArquebisbatID, &lr.MunicipiID, &lr.NomEsglesia, &lr.CodiDigital, &lr.CodiFisic,
+			&lr.Titol, &lr.Cronologia, &lr.Volum, &lr.Abat, &lr.Contingut, &lr.Llengua,
+			&lr.Requeriments, &lr.UnitatCatalogacio, &lr.UnitatInstalacio, &lr.Pagines,
+			&lr.URLBase, &lr.URLImatgePrefix, &lr.Pagina,
+			&lr.ArquebisbatNom, &lr.MunicipiNom,
+		); err != nil {goCover_4bc4be4c3247__202[15]++;
+			return nil, err
+		}
+		goCover_4bc4be4c3247__202[14]++;res = append(res, lr)
+	}
+	goCover_4bc4be4c3247__202[8]++;return res, nil
+}
+
+func (h sqlHelper) getLlibre(id int) (*Llibre, error) {goCover_4bc4be4c3247__203[0] = 3 ; goCover_4bc4be4c3247__203[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__203[2] = 203 ; goCover_4bc4be4c3247__203[3]++;
+	query := `
+        SELECT id, arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic,
+               titol, cronologia, volum, abat, contingut, llengua,
+               requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines,
+               url_base, url_imatge_prefix, pagina
+        FROM llibres WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var l Llibre
+	if err := row.Scan(
+		&l.ID, &l.ArquebisbatID, &l.MunicipiID, &l.NomEsglesia, &l.CodiDigital, &l.CodiFisic,
+		&l.Titol, &l.Cronologia, &l.Volum, &l.Abat, &l.Contingut, &l.Llengua,
+		&l.Requeriments, &l.UnitatCatalogacio, &l.UnitatInstalacio, &l.Pagines,
+		&l.URLBase, &l.URLImatgePrefix, &l.Pagina,
+	); err != nil {goCover_4bc4be4c3247__203[5]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__203[4]++;return &l, nil
+}
+
+func (h sqlHelper) createLlibre(l *Llibre) (int, error) {goCover_4bc4be4c3247__204[0] = 11 ; goCover_4bc4be4c3247__204[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__204[2] = 204 ; goCover_4bc4be4c3247__204[3]++;
+	query := `
+        INSERT INTO llibres
+            (arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic, titol, cronologia, volum, abat, contingut, llengua,
+             requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines, url_base, url_imatge_prefix, pagina, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {goCover_4bc4be4c3247__204[8]++;
+		query += ` RETURNING id`
+	}
+	goCover_4bc4be4c3247__204[4]++;query = formatPlaceholders(h.style, query)
+	args := []interface{}{
+		l.ArquebisbatID, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
+		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina,
+	}
+	if h.style == "postgres" {goCover_4bc4be4c3247__204[9]++;
+		if err := h.db.QueryRow(query, args...).Scan(&l.ID); err != nil {goCover_4bc4be4c3247__204[11]++;
+			return 0, err
+		}
+		goCover_4bc4be4c3247__204[10]++;return l.ID, nil
+	}
+	goCover_4bc4be4c3247__204[5]++;res, err := h.db.Exec(query, args...)
+	if err != nil {goCover_4bc4be4c3247__204[12]++;
+		return 0, err
+	}
+	goCover_4bc4be4c3247__204[6]++;if id, err := res.LastInsertId(); err == nil {goCover_4bc4be4c3247__204[13]++;
+		l.ID = int(id)
+	}
+	goCover_4bc4be4c3247__204[7]++;return l.ID, nil
+}
+
+func (h sqlHelper) updateLlibre(l *Llibre) error {goCover_4bc4be4c3247__205[0] = 1 ; goCover_4bc4be4c3247__205[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__205[2] = 205 ; goCover_4bc4be4c3247__205[3]++;
+	query := `
+        UPDATE llibres
+        SET arquevisbat_id=?, municipi_id=?, nom_esglesia=?, codi_digital=?, codi_fisic=?, titol=?, cronologia=?, volum=?, abat=?, contingut=?, llengua=?,
+            requeriments_tecnics=?, unitat_catalogacio=?, unitat_instalacio=?, pagines=?, url_base=?, url_imatge_prefix=?, pagina=?, updated_at=` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query,
+		l.ArquebisbatID, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
+		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina, l.ID)
+	return err
+}
+
+func (h sqlHelper) listLlibrePagines(llibreID int) ([]LlibrePagina, error) {goCover_4bc4be4c3247__206[0] = 7 ; goCover_4bc4be4c3247__206[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__206[2] = 206 ; goCover_4bc4be4c3247__206[3]++;
+	query := `
+        SELECT id, llibre_id, num_pagina, estat, indexed_at, indexed_by, notes
+        FROM llibre_pagines
+        WHERE llibre_id = ?
+        ORDER BY num_pagina`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, llibreID)
+	if err != nil {goCover_4bc4be4c3247__206[6]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__206[4]++;defer rows.Close()
+	var res []LlibrePagina
+	for rows.Next() {goCover_4bc4be4c3247__206[7]++;
+		var p LlibrePagina
+		if err := rows.Scan(&p.ID, &p.LlibreID, &p.NumPagina, &p.Estat, &p.IndexedAt, &p.IndexedBy, &p.Notes); err != nil {goCover_4bc4be4c3247__206[9]++;
+			return nil, err
+		}
+		goCover_4bc4be4c3247__206[8]++;res = append(res, p)
+	}
+	goCover_4bc4be4c3247__206[5]++;return res, nil
+}
+
+func (h sqlHelper) saveLlibrePagina(p *LlibrePagina) (int, error) {goCover_4bc4be4c3247__207[0] = 11 ; goCover_4bc4be4c3247__207[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__207[2] = 207 ; goCover_4bc4be4c3247__207[3]++;
+	if p.ID == 0 {goCover_4bc4be4c3247__207[5]++;
+		query := `
+            INSERT INTO llibre_pagines (llibre_id, num_pagina, estat, indexed_at, indexed_by, notes)
+            VALUES (?, ?, ?, ?, ?, ?)`
+		query = formatPlaceholders(h.style, query)
+		if h.style == "postgres" {goCover_4bc4be4c3247__207[9]++;
+			query += ` RETURNING id`
+			if err := h.db.QueryRow(query, p.LlibreID, p.NumPagina, p.Estat, p.IndexedAt, p.IndexedBy, p.Notes).Scan(&p.ID); err != nil {goCover_4bc4be4c3247__207[11]++;
+				return 0, err
+			}
+			goCover_4bc4be4c3247__207[10]++;return p.ID, nil
+		}
+		goCover_4bc4be4c3247__207[6]++;res, err := h.db.Exec(query, p.LlibreID, p.NumPagina, p.Estat, p.IndexedAt, p.IndexedBy, p.Notes)
+		if err != nil {goCover_4bc4be4c3247__207[12]++;
+			return 0, err
+		}
+		goCover_4bc4be4c3247__207[7]++;if id, err := res.LastInsertId(); err == nil {goCover_4bc4be4c3247__207[13]++;
+			p.ID = int(id)
+		}
+		goCover_4bc4be4c3247__207[8]++;return p.ID, nil
+	}
+	goCover_4bc4be4c3247__207[4]++;query := `
+        UPDATE llibre_pagines
+        SET num_pagina=?, estat=?, indexed_at=?, indexed_by=?, notes=?
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, p.NumPagina, p.Estat, p.IndexedAt, p.IndexedBy, p.Notes, p.ID)
+	return p.ID, err
+}
+
+func (h sqlHelper) recalcLlibrePagines(llibreID, total int) error {goCover_4bc4be4c3247__208[0] = 10 ; goCover_4bc4be4c3247__208[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__208[2] = 208 ; goCover_4bc4be4c3247__208[3]++;
+	if total <= 0 {goCover_4bc4be4c3247__208[8]++;
+		return nil
+	}
+	goCover_4bc4be4c3247__208[4]++;tx, err := h.db.Begin()
+	if err != nil {goCover_4bc4be4c3247__208[9]++;
+		return err
+	}
+	goCover_4bc4be4c3247__208[5]++;defer tx.Rollback()
+	delStmt := formatPlaceholders(h.style, `DELETE FROM llibre_pagines WHERE llibre_id = ?`)
+	if _, err := tx.Exec(delStmt, llibreID); err != nil {goCover_4bc4be4c3247__208[10]++;
+		return err
+	}
+	goCover_4bc4be4c3247__208[6]++;insertStmt := formatPlaceholders(h.style, `
+        INSERT INTO llibre_pagines (llibre_id, num_pagina, estat)
+        VALUES (?, ?, 'pendent')`)
+	for i := 1; i <= total; i++ {goCover_4bc4be4c3247__208[11]++;
+		if _, err := tx.Exec(insertStmt, llibreID, i); err != nil {goCover_4bc4be4c3247__208[12]++;
+			return err
+		}
+	}
+	goCover_4bc4be4c3247__208[7]++;return tx.Commit()
+}

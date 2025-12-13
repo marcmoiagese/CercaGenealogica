@@ -1,0 +1,267 @@
+//line /home/marc/codi/CercaGenealogica3/main.go:1:1
+package main; import _ "runtime/coverage"
+
+import (
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/marcmoiagese/CercaGenealogica/cnf"
+	"github.com/marcmoiagese/CercaGenealogica/core"
+	"github.com/marcmoiagese/CercaGenealogica/db"
+)
+
+func applyMiddleware(fn http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {goCover_5e9b0bb19471__0[0] = 3 ; goCover_5e9b0bb19471__0[1] = goCover_5e9b0bb19471_P ; goCover_5e9b0bb19471__0[2] = 0 ; goCover_5e9b0bb19471__0[3]++;
+	for _, mw := range middlewares {goCover_5e9b0bb19471__0[5]++;
+		fn = mw(fn)
+	}
+	goCover_5e9b0bb19471__0[4]++;return fn
+}
+
+func main() {goCover_5e9b0bb19471__1[0] = 82 ; goCover_5e9b0bb19471__1[1] = goCover_5e9b0bb19471_P ; goCover_5e9b0bb19471__1[2] = 1 ; goCover_5e9b0bb19471__1[3]++;
+
+	configMap, err := cnf.LoadConfig("cnf/config.cfg")
+	if err != nil {goCover_5e9b0bb19471__1[19]++;
+		log.Fatalf("No s'ha pogut carregar config: %v", err)
+	}
+
+	goCover_5e9b0bb19471__1[4]++;appCfg, err := cnf.ParseConfig(configMap)
+	if err != nil {goCover_5e9b0bb19471__1[20]++;
+		log.Fatalf("Config invàlida: %v", err)
+	}
+
+	goCover_5e9b0bb19471__1[5]++;core.SetLogLevel(appCfg.LogLevel)
+	core.LogLoadedTemplates()
+
+	core.InitWebServer(configMap)
+
+	dbInstance, err := db.NewDB(configMap)
+	if err != nil {goCover_5e9b0bb19471__1[21]++;
+		log.Fatalf("Error inicialitzant BD: %v", err)
+	}
+	goCover_5e9b0bb19471__1[6]++;_ = dbInstance.EnsureDefaultPolicies()
+	app := core.NewApp(configMap, dbInstance)
+	defer app.Close()
+
+	// Serveix recursos estàtics amb middleware de seguretat
+	http.HandleFunc("/static/", applyMiddleware(core.ServeStatic, core.BlockIPs, core.RateLimit))
+	//http.HandleFunc("/static/", core.SecureHeaders(core.BlockIPs(core.RateLimit(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))))
+
+	// Rutes HTML
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[22]++;
+		if user, authenticated := app.VerificarSessio(r); authenticated {goCover_5e9b0bb19471__1[24]++;
+			log.Printf("[auth] usuari %s ja autenticat, redirigint / -> /inici", user.Usuari)
+			http.Redirect(w, r, "/inici", http.StatusSeeOther)
+			return
+		}
+		goCover_5e9b0bb19471__1[23]++;core.RenderTemplate(w, r, "index.html", map[string]interface{}{
+			"CSRFToken": "token-segon",
+		})
+	})
+
+	goCover_5e9b0bb19471__1[7]++;http.HandleFunc("/inici", func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[25]++;
+		// Verificar si l'usuari té una sessió vàlida
+		user, authenticated := app.VerificarSessio(r)
+		if !authenticated {goCover_5e9b0bb19471__1[28]++;
+			// Redirigir a la pàgina principal si no té sessió
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+
+		// Renderitzar la pàgina privada amb les dades de l'usuari
+		goCover_5e9b0bb19471__1[26]++;lang := core.ResolveLang(r)
+		if pref := strings.TrimSpace(user.PreferredLang); pref != "" {goCover_5e9b0bb19471__1[29]++;
+			lang = pref
+		}
+		goCover_5e9b0bb19471__1[27]++;canManageArxius := app.CanManageArxius(user)
+		core.RenderPrivateTemplateLang(w, r, "index-logedin.html", lang, map[string]interface{}{
+			"User":            user,
+			"CanManageArxius": canManageArxius,
+		})
+	})
+
+	goCover_5e9b0bb19471__1[8]++;http.HandleFunc("/registre", applyMiddleware(app.RegistrarUsuari, core.BlockIPs, core.RateLimit))
+
+	http.HandleFunc("/login", applyMiddleware(app.IniciarSessio, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/logout", applyMiddleware(app.TancarSessio, core.BlockIPs))
+
+	http.HandleFunc("/condicions-us", func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[30]++;
+		core.RenderTemplate(w, r, "condicions-us.html", map[string]interface{}{
+			"DataActualitzacio": "Gener 2024",
+		})
+	})
+
+	// Canvi d'idioma via ruta /{lang}/ amb cookie + redirect
+	goCover_5e9b0bb19471__1[9]++;handleLang := func(lang string) http.HandlerFunc {goCover_5e9b0bb19471__1[31]++;
+		return func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[32]++;
+			expiry := time.Now().Add(365 * 24 * time.Hour)
+			env := strings.ToLower(os.Getenv("ENVIRONMENT"))
+			secure := r.TLS != nil
+			sameSite := http.SameSiteStrictMode
+			if env == "development" {goCover_5e9b0bb19471__1[35]++;
+				sameSite = http.SameSiteLaxMode
+			}
+			goCover_5e9b0bb19471__1[33]++;http.SetCookie(w, &http.Cookie{
+				Name:     "lang",
+				Value:    lang,
+				Expires:  expiry,
+				Path:     "/",
+				HttpOnly: false,
+				SameSite: sameSite,
+				Secure:   secure,
+			})
+			log.Printf("[lang] canvi a %s des de %s", lang, r.RemoteAddr)
+			target := r.Header.Get("Referer")
+			if target == "" {goCover_5e9b0bb19471__1[36]++;
+				target = "/"
+			}
+			goCover_5e9b0bb19471__1[34]++;http.Redirect(w, r, target, http.StatusSeeOther)
+		}
+	}
+	goCover_5e9b0bb19471__1[10]++;http.HandleFunc("/cat/", handleLang("cat"))
+	http.HandleFunc("/en/", handleLang("en"))
+	http.HandleFunc("/oc/", handleLang("oc"))
+
+	http.HandleFunc("/api/check-availability", applyMiddleware(app.CheckAvailability, core.BlockIPs, core.RateLimit))
+
+	http.HandleFunc("/regenerar-token", func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[37]++;
+		handler := func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[39]++;
+			if r.Method == "GET" {goCover_5e9b0bb19471__1[40]++;
+				app.MostrarFormulariRegenerarToken(w, r)
+			} else{ goCover_5e9b0bb19471__1[41]++;if r.Method == "POST" {goCover_5e9b0bb19471__1[42]++;
+				app.ProcessarRegenerarToken(w, r)
+			}}
+		}
+		goCover_5e9b0bb19471__1[38]++;applyMiddleware(handler, core.BlockIPs, core.RateLimit)(w, r)
+	})
+
+	goCover_5e9b0bb19471__1[11]++;http.HandleFunc("/activar", applyMiddleware(app.ActivarUsuariHTTP, core.BlockIPs))
+	http.HandleFunc("/recuperar", applyMiddleware(app.GestionarRecuperacio, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil", applyMiddleware(app.Perfil, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil/dades", applyMiddleware(app.ActualitzarPerfilDades, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil/privacitat", applyMiddleware(app.ActualitzarPerfilPrivacitat, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil/contrasenya", applyMiddleware(app.ActualitzarPerfilContrasenya, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil/email-confirm", applyMiddleware(app.ConfirmarCanviEmail, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil/email-revert", applyMiddleware(app.RevertirCanviEmail, core.BlockIPs, core.RateLimit))
+
+	// Arxius (lectura per a tots els usuaris autenticats)
+	http.HandleFunc("/arxius", applyMiddleware(app.ListArxius, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/arxius/", applyMiddleware(app.ShowArxiu, core.BlockIPs, core.RateLimit))
+
+	// Admin països
+	http.HandleFunc("/admin/paisos", applyMiddleware(app.AdminListPaisos, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/paisos/new", applyMiddleware(app.AdminNewPais, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/paisos/save", applyMiddleware(app.AdminSavePais, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/paisos/", func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[43]++;
+		if strings.Contains(r.URL.Path, "/nivells") {goCover_5e9b0bb19471__1[46]++;
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/nivells"):goCover_5e9b0bb19471__1[48]++;
+				applyMiddleware(app.AdminListNivells, core.BlockIPs, core.RateLimit)(w, r)
+			case strings.HasSuffix(r.URL.Path, "/nivells/new"):goCover_5e9b0bb19471__1[49]++;
+				applyMiddleware(app.AdminNewNivell, core.BlockIPs, core.RateLimit)(w, r)
+			default:goCover_5e9b0bb19471__1[50]++;
+				http.NotFound(w, r)
+			}
+			goCover_5e9b0bb19471__1[47]++;return
+		}
+		goCover_5e9b0bb19471__1[44]++;if strings.HasSuffix(r.URL.Path, "/edit") {goCover_5e9b0bb19471__1[51]++;
+			applyMiddleware(app.AdminEditPais, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		goCover_5e9b0bb19471__1[45]++;http.NotFound(w, r)
+	})
+	goCover_5e9b0bb19471__1[12]++;http.HandleFunc("/admin/nivells", applyMiddleware(app.AdminListNivells, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/nivells/save", applyMiddleware(app.AdminSaveNivell, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/nivells/", func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[52]++;
+		if strings.HasSuffix(r.URL.Path, "/edit") {goCover_5e9b0bb19471__1[54]++;
+			applyMiddleware(app.AdminEditNivell, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		goCover_5e9b0bb19471__1[53]++;http.NotFound(w, r)
+	})
+
+	// Admin municipis
+	goCover_5e9b0bb19471__1[13]++;http.HandleFunc("/admin/municipis", func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[55]++;
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):goCover_5e9b0bb19471__1[56]++;
+			applyMiddleware(app.AdminNewMunicipi, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/edit"):goCover_5e9b0bb19471__1[57]++;
+			applyMiddleware(app.AdminEditMunicipi, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/codis/") && strings.HasSuffix(r.URL.Path, "/save"):goCover_5e9b0bb19471__1[58]++;
+			applyMiddleware(app.AdminSaveCodiPostal, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/ecles/") && strings.HasSuffix(r.URL.Path, "/save"):goCover_5e9b0bb19471__1[59]++;
+			applyMiddleware(app.AdminSaveMunicipiEcles, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/save"):goCover_5e9b0bb19471__1[60]++;
+			applyMiddleware(app.AdminSaveMunicipi, core.BlockIPs, core.RateLimit)(w, r)
+		default:goCover_5e9b0bb19471__1[61]++;
+			applyMiddleware(app.AdminListMunicipis, core.BlockIPs, core.RateLimit)(w, r)
+		}
+	})
+
+	// Entitats eclesiàstiques
+	goCover_5e9b0bb19471__1[14]++;http.HandleFunc("/admin/eclesiastic", func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[62]++;
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):goCover_5e9b0bb19471__1[63]++;
+			applyMiddleware(app.AdminNewEclesiastic, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/edit"):goCover_5e9b0bb19471__1[64]++;
+			applyMiddleware(app.AdminEditEclesiastic, core.BlockIPs, core.RateLimit)(w, r)
+		default:goCover_5e9b0bb19471__1[65]++;
+			applyMiddleware(app.AdminListEclesiastic, core.BlockIPs, core.RateLimit)(w, r)
+		}
+	})
+	goCover_5e9b0bb19471__1[15]++;http.HandleFunc("/admin/eclesiastic/save", applyMiddleware(app.AdminSaveEclesiastic, core.BlockIPs, core.RateLimit))
+
+	// Admin arxius
+	http.HandleFunc("/admin/arxius", func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[66]++;
+		if r.Method == http.MethodPost {goCover_5e9b0bb19471__1[68]++;
+			applyMiddleware(app.AdminCreateArxiu, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		goCover_5e9b0bb19471__1[67]++;applyMiddleware(app.AdminListArxius, core.BlockIPs, core.RateLimit)(w, r)
+	})
+	goCover_5e9b0bb19471__1[16]++;http.HandleFunc("/admin/arxius/new", applyMiddleware(app.AdminNewArxiu, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/arxius/", func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[69]++;
+		path := r.URL.Path
+		switch {
+		case strings.HasSuffix(path, "/edit"):goCover_5e9b0bb19471__1[70]++;
+			applyMiddleware(app.AdminEditArxiu, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(path, "/delete"):goCover_5e9b0bb19471__1[71]++;
+			applyMiddleware(app.AdminDeleteArxiu, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(path, "/llibres/") && strings.HasSuffix(path, "/update"):goCover_5e9b0bb19471__1[72]++;
+			applyMiddleware(app.AdminUpdateArxiuLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(path, "/llibres/") && strings.HasSuffix(path, "/delete"):goCover_5e9b0bb19471__1[73]++;
+			applyMiddleware(app.AdminDeleteArxiuLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(path, "/llibres/add"):goCover_5e9b0bb19471__1[74]++;
+			applyMiddleware(app.AdminAddArxiuLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		default:goCover_5e9b0bb19471__1[75]++;
+			if r.Method == http.MethodPost {goCover_5e9b0bb19471__1[76]++;
+				applyMiddleware(app.AdminUpdateArxiu, core.BlockIPs, core.RateLimit)(w, r)
+			} else{ goCover_5e9b0bb19471__1[77]++;{
+				applyMiddleware(app.AdminShowArxiu, core.BlockIPs, core.RateLimit)(w, r)
+			}}
+		}
+	})
+	// Admin llibres
+	goCover_5e9b0bb19471__1[17]++;http.HandleFunc("/admin/llibres", func(w http.ResponseWriter, r *http.Request) {goCover_5e9b0bb19471__1[78]++;
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):goCover_5e9b0bb19471__1[79]++;
+			applyMiddleware(app.AdminNewLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/edit"):goCover_5e9b0bb19471__1[80]++;
+			applyMiddleware(app.AdminEditLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/pagines/save"):goCover_5e9b0bb19471__1[81]++;
+			applyMiddleware(app.AdminSaveLlibrePagina, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/pagines"):goCover_5e9b0bb19471__1[82]++;
+			applyMiddleware(app.AdminLlibrePagines, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/save"):goCover_5e9b0bb19471__1[83]++;
+			applyMiddleware(app.AdminSaveLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		default:goCover_5e9b0bb19471__1[84]++;
+			applyMiddleware(app.AdminListLlibres, core.BlockIPs, core.RateLimit)(w, r)
+		}
+	})
+	goCover_5e9b0bb19471__1[18]++;http.HandleFunc("/admin/llibres/save", applyMiddleware(app.AdminSaveLlibre, core.BlockIPs, core.RateLimit))
+
+	log.Println("Servidor iniciat a http://localhost:8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}

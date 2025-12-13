@@ -186,3 +186,177 @@ func (d *SQLite) markEmailChangeConfirmed(id int) error {
 func (d *SQLite) markEmailChangeReverted(id int) error {
 	return d.help.markEmailChangeReverted(id)
 }
+
+// Policies
+func (d *SQLite) UserHasAnyPolicy(userID int, policies []string) (bool, error) {
+	return d.help.userHasAnyPolicy(userID, policies)
+}
+func (d *SQLite) EnsureDefaultPolicies() error {
+	return d.help.ensureDefaultPolicies()
+}
+func (d *SQLite) ListGroups() ([]Group, error) {
+	return d.help.listGroups()
+}
+func (d *SQLite) ListPolitiques() ([]Politica, error) {
+	return d.help.listPolitiques()
+}
+func (d *SQLite) GetPolitica(id int) (*Politica, error) {
+	return d.help.getPolitica(id)
+}
+func (d *SQLite) SavePolitica(p *Politica) (int, error) {
+	return d.help.savePolitica(p)
+}
+func (d *SQLite) ListUserPolitiques(userID int) ([]Politica, error) {
+	return d.help.listUserPolitiques(userID)
+}
+func (d *SQLite) AddUserPolitica(userID, politicaID int) error {
+	return d.help.addUserPolitica(userID, politicaID)
+}
+func (d *SQLite) RemoveUserPolitica(userID, politicaID int) error {
+	return d.help.removeUserPolitica(userID, politicaID)
+}
+func (d *SQLite) ListGroupPolitiques(groupID int) ([]Politica, error) {
+	return d.help.listGroupPolitiques(groupID)
+}
+func (d *SQLite) AddGroupPolitica(groupID, politicaID int) error {
+	return d.help.addGroupPolitica(groupID, politicaID)
+}
+func (d *SQLite) RemoveGroupPolitica(groupID, politicaID int) error {
+	return d.help.removeGroupPolitica(groupID, politicaID)
+}
+func (d *SQLite) ListUserGroups(userID int) ([]Group, error) {
+	return d.help.listUserGroups(userID)
+}
+func (d *SQLite) GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error) {
+	return d.help.getEffectivePoliticaPerms(userID)
+}
+
+// Paisos
+func (d *SQLite) ListPaisos() ([]Pais, error) {
+	return d.help.listPaisos()
+}
+func (d *SQLite) GetPais(id int) (*Pais, error) {
+	return d.help.getPais(id)
+}
+func (d *SQLite) CreatePais(p *Pais) (int, error) {
+	return d.help.createPais(p)
+}
+func (d *SQLite) UpdatePais(p *Pais) error {
+	return d.help.updatePais(p)
+}
+
+// Nivells administratius
+func (d *SQLite) ListNivells(f NivellAdminFilter) ([]NivellAdministratiu, error) {
+	return d.help.listNivells(f)
+}
+func (d *SQLite) GetNivell(id int) (*NivellAdministratiu, error) {
+	return d.help.getNivell(id)
+}
+func (d *SQLite) CreateNivell(n *NivellAdministratiu) (int, error) {
+	return d.help.createNivell(n)
+}
+func (d *SQLite) UpdateNivell(n *NivellAdministratiu) error {
+	return d.help.updateNivell(n)
+}
+
+// Municipis
+func (d *SQLite) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
+	return d.help.listMunicipis(f)
+}
+func (d *SQLite) GetMunicipi(id int) (*Municipi, error) {
+	return d.help.getMunicipi(id)
+}
+func (d *SQLite) CreateMunicipi(m *Municipi) (int, error) {
+	return d.help.createMunicipi(m)
+}
+func (d *SQLite) UpdateMunicipi(m *Municipi) error {
+	return d.help.updateMunicipi(m)
+}
+func (d *SQLite) ListCodisPostals(municipiID int) ([]CodiPostal, error) {
+	return d.help.listCodisPostals(municipiID)
+}
+func (d *SQLite) SaveCodiPostal(cp *CodiPostal) (int, error) {
+	return d.help.saveCodiPostal(cp)
+}
+func (d *SQLite) ListNomsHistorics(entitatTipus string, entitatID int) ([]NomHistoric, error) {
+	return d.help.listNomsHistorics(entitatTipus, entitatID)
+}
+func (d *SQLite) SaveNomHistoric(nh *NomHistoric) (int, error) {
+	return d.help.saveNomHistoric(nh)
+}
+
+// Entitats eclesiàstiques
+func (d *SQLite) ListArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error) {
+	return d.help.listArquebisbats(f)
+}
+func (d *SQLite) GetArquebisbat(id int) (*Arquebisbat, error) {
+	return d.help.getArquebisbat(id)
+}
+func (d *SQLite) CreateArquebisbat(ae *Arquebisbat) (int, error) {
+	return d.help.createArquebisbat(ae)
+}
+func (d *SQLite) UpdateArquebisbat(ae *Arquebisbat) error {
+	return d.help.updateArquebisbat(ae)
+}
+func (d *SQLite) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {
+	return d.help.listArquebisbatMunicipis(munID)
+}
+func (d *SQLite) SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {
+	return d.help.saveArquebisbatMunicipi(am)
+}
+
+// Arxius
+func (d *SQLite) ListArxius(f ArxiuFilter) ([]ArxiuWithCount, error) {
+	return d.help.listArxius(f)
+}
+func (d *SQLite) GetArxiu(id int) (*Arxiu, error) {
+	return d.help.getArxiu(id)
+}
+func (d *SQLite) CreateArxiu(a *Arxiu) (int, error) {
+	return d.help.createArxiu(a)
+}
+func (d *SQLite) UpdateArxiu(a *Arxiu) error {
+	return d.help.updateArxiu(a)
+}
+func (d *SQLite) DeleteArxiu(id int) error {
+	return d.help.deleteArxiu(id)
+}
+func (d *SQLite) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
+	return d.help.listArxiuLlibres(arxiuID)
+}
+func (d *SQLite) ListLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
+	return d.help.listLlibreArxius(llibreID)
+}
+func (d *SQLite) AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	return d.help.addArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+}
+func (d *SQLite) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	return d.help.updateArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+}
+func (d *SQLite) DeleteArxiuLlibre(arxiuID, llibreID int) error {
+	return d.help.deleteArxiuLlibre(arxiuID, llibreID)
+}
+func (d *SQLite) SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error) {
+	return d.help.searchLlibresSimple(q, limit)
+}
+func (d *SQLite) ListLlibres(f LlibreFilter) ([]LlibreRow, error) {
+	return d.help.listLlibres(f)
+}
+func (d *SQLite) GetLlibre(id int) (*Llibre, error) {
+	return d.help.getLlibre(id)
+}
+func (d *SQLite) CreateLlibre(l *Llibre) (int, error) {
+	return d.help.createLlibre(l)
+}
+func (d *SQLite) UpdateLlibre(l *Llibre) error {
+	return d.help.updateLlibre(l)
+}
+func (d *SQLite) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {
+	return d.help.listLlibrePagines(llibreID)
+}
+func (d *SQLite) SaveLlibrePagina(p *LlibrePagina) (int, error) {
+	return d.help.saveLlibrePagina(p)
+}
+func (d *SQLite) RecalcLlibrePagines(llibreID, total int) error {
+	return d.help.recalcLlibrePagines(llibreID, total)
+}

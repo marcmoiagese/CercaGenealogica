@@ -1,0 +1,93 @@
+{{ define "admin-eclesiastic-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "ecles.form.title.new" }}{{ else }}{{ t .Lang "ecles.form.title.edit" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ if .Data.IsNew }}{{ t .Lang "ecles.form.title.new" }}{{ else }}{{ t .Lang "ecles.form.title.edit" }}{{ end }}</h1>
+            </header>
+            {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
+            <form method="post" action="/admin/eclesiastic/save">
+                <input type="hidden" name="id" value="{{ .Data.Entitat.ID }}">
+                <div class="grup-camp">
+                    <label for="nom">{{ t .Lang "ecles.form.name" }}</label>
+                    <input id="nom" name="nom" type="text" value="{{ .Data.Entitat.Nom }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="tipus_entitat">{{ t .Lang "ecles.form.type" }}</label>
+                    <select id="tipus_entitat" name="tipus_entitat">
+                        {{ range $opt := (list "arquebisbat" "bisbat" "diocesi" "vegueria" "altres") }}
+                        <option value="{{ $opt }}" {{ if eq $.Data.Entitat.TipusEntitat $opt }}selected{{ end }}>{{ $opt }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="pais_id">{{ t .Lang "ecles.form.country" }}</label>
+                    <select id="pais_id" name="pais_id">
+                        <option value="">{{ t .Lang "ecles.form.country.none" }}</option>
+                        {{ range .Data.Paisos }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Entitat.PaisID.Valid (eq .ID (int $.Data.Entitat.PaisID.Int64)) }}selected{{ end }}>{{ .CodiISO3 }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="nivell">{{ t .Lang "ecles.form.level" }}</label>
+                    <input id="nivell" name="nivell" type="number" min="1" max="10" value="{{ if .Data.Entitat.Nivell.Valid }}{{ .Data.Entitat.Nivell.Int64 }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="parent_id">{{ t .Lang "ecles.form.parent" }}</label>
+                    <select id="parent_id" name="parent_id">
+                        <option value="">{{ t .Lang "ecles.form.parent.none" }}</option>
+                        {{ range .Data.Parents }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Entitat.ParentID.Valid (eq .ID (int $.Data.Entitat.ParentID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="any_inici">{{ t .Lang "ecles.form.year_start" }}</label>
+                    <input id="any_inici" name="any_inici" type="number" value="{{ if .Data.Entitat.AnyInici.Valid }}{{ .Data.Entitat.AnyInici.Int64 }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="any_fi">{{ t .Lang "ecles.form.year_end" }}</label>
+                    <input id="any_fi" name="any_fi" type="number" value="{{ if .Data.Entitat.AnyFi.Valid }}{{ .Data.Entitat.AnyFi.Int64 }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="web">{{ t .Lang "ecles.form.web" }}</label>
+                    <input id="web" name="web" type="text" value="{{ .Data.Entitat.Web }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="web_arxiu">{{ t .Lang "ecles.form.web_arxiu" }}</label>
+                    <input id="web_arxiu" name="web_arxiu" type="text" value="{{ .Data.Entitat.WebArxiu }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="web_wikipedia">{{ t .Lang "ecles.form.web_wikipedia" }}</label>
+                    <input id="web_wikipedia" name="web_wikipedia" type="text" value="{{ .Data.Entitat.WebWikipedia }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="territori">{{ t .Lang "ecles.form.territori" }}</label>
+                    <textarea id="territori" name="territori">{{ .Data.Entitat.Territori }}</textarea>
+                </div>
+                <div class="grup-camp">
+                    <label for="observacions">{{ t .Lang "ecles.form.obs" }}</label>
+                    <textarea id="observacions" name="observacions">{{ .Data.Entitat.Observacions }}</textarea>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "ecles.form.save" }}</button>
+                    <a class="boto-secundari" href="/admin/eclesiastic">{{ t .Lang "ecles.form.cancel" }}</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

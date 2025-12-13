@@ -115,6 +115,100 @@ func (f *fakeDBVerificar) markEmailChangeConfirmed(id int) error {
 func (f *fakeDBVerificar) markEmailChangeReverted(id int) error {
 	return errors.New("markEmailChangeReverted not implemented in fakeDBVerificar")
 }
+func (f *fakeDBVerificar) UserHasAnyPolicy(userID int, policies []string) (bool, error) {
+	return false, nil
+}
+func (f *fakeDBVerificar) EnsureDefaultPolicies() error { return nil }
+func (f *fakeDBVerificar) ListArxius(filter db.ArxiuFilter) ([]db.ArxiuWithCount, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetArxiu(id int) (*db.Arxiu, error)   { return nil, nil }
+func (f *fakeDBVerificar) CreateArxiu(a *db.Arxiu) (int, error) { return 0, nil }
+func (f *fakeDBVerificar) UpdateArxiu(a *db.Arxiu) error        { return nil }
+func (f *fakeDBVerificar) DeleteArxiu(id int) error             { return nil }
+func (f *fakeDBVerificar) ListArxiuLlibres(arxiuID int) ([]db.ArxiuLlibreDetail, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) ListLlibreArxius(llibreID int) ([]db.ArxiuLlibreDetail, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	return nil
+}
+func (f *fakeDBVerificar) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	return nil
+}
+func (f *fakeDBVerificar) DeleteArxiuLlibre(arxiuID, llibreID int) error { return nil }
+func (f *fakeDBVerificar) SearchLlibresSimple(q string, limit int) ([]db.LlibreSimple, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) ListLlibres(filter db.LlibreFilter) ([]db.LlibreRow, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetLlibre(id int) (*db.Llibre, error)                      { return nil, nil }
+func (f *fakeDBVerificar) CreateLlibre(l *db.Llibre) (int, error)                    { return 0, nil }
+func (f *fakeDBVerificar) UpdateLlibre(l *db.Llibre) error                           { return nil }
+func (f *fakeDBVerificar) ListLlibrePagines(llibreID int) ([]db.LlibrePagina, error) { return nil, nil }
+func (f *fakeDBVerificar) SaveLlibrePagina(p *db.LlibrePagina) (int, error)          { return 0, nil }
+func (f *fakeDBVerificar) RecalcLlibrePagines(llibreID, total int) error             { return nil }
+func (f *fakeDBVerificar) ListPaisos() ([]db.Pais, error)                            { return nil, nil }
+func (f *fakeDBVerificar) GetPais(id int) (*db.Pais, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeDBVerificar) CreatePais(p *db.Pais) (int, error) { return 0, nil }
+func (f *fakeDBVerificar) UpdatePais(p *db.Pais) error        { return nil }
+func (f *fakeDBVerificar) ListNivells(filt db.NivellAdminFilter) ([]db.NivellAdministratiu, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetNivell(id int) (*db.NivellAdministratiu, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeDBVerificar) CreateNivell(n *db.NivellAdministratiu) (int, error) { return 0, nil }
+func (f *fakeDBVerificar) UpdateNivell(n *db.NivellAdministratiu) error        { return nil }
+func (f *fakeDBVerificar) ListMunicipis(filter db.MunicipiFilter) ([]db.MunicipiRow, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetMunicipi(id int) (*db.Municipi, error) { return nil, nil }
+func (f *fakeDBVerificar) CreateMunicipi(m *db.Municipi) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) UpdateMunicipi(m *db.Municipi) error { return nil }
+func (f *fakeDBVerificar) ListCodisPostals(municipiID int) ([]db.CodiPostal, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) SaveCodiPostal(cp *db.CodiPostal) (int, error) { return 0, nil }
+func (f *fakeDBVerificar) ListNomsHistorics(entitatTipus string, entitatID int) ([]db.NomHistoric, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) SaveNomHistoric(nh *db.NomHistoric) (int, error) { return 0, nil }
+func (f *fakeDBVerificar) ListGroups() ([]db.Group, error)                 { return nil, nil }
+func (f *fakeDBVerificar) ListArquebisbats(filt db.ArquebisbatFilter) ([]db.ArquebisbatRow, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetArquebisbat(id int) (*db.Arquebisbat, error) { return nil, nil }
+func (f *fakeDBVerificar) CreateArquebisbat(ae *db.Arquebisbat) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) UpdateArquebisbat(ae *db.Arquebisbat) error { return nil }
+func (f *fakeDBVerificar) ListArquebisbatMunicipis(munID int) ([]db.ArquebisbatMunicipi, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) SaveArquebisbatMunicipi(am *db.ArquebisbatMunicipi) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) ListPolitiques() ([]db.Politica, error)                 { return nil, nil }
+func (f *fakeDBVerificar) GetPolitica(id int) (*db.Politica, error)               { return nil, nil }
+func (f *fakeDBVerificar) SavePolitica(p *db.Politica) (int, error)               { return 0, nil }
+func (f *fakeDBVerificar) ListUserPolitiques(userID int) ([]db.Politica, error)   { return nil, nil }
+func (f *fakeDBVerificar) AddUserPolitica(userID, politicaID int) error           { return nil }
+func (f *fakeDBVerificar) RemoveUserPolitica(userID, politicaID int) error        { return nil }
+func (f *fakeDBVerificar) ListGroupPolitiques(groupID int) ([]db.Politica, error) { return nil, nil }
+func (f *fakeDBVerificar) AddGroupPolitica(groupID, politicaID int) error         { return nil }
+func (f *fakeDBVerificar) RemoveGroupPolitica(groupID, politicaID int) error      { return nil }
+func (f *fakeDBVerificar) GetEffectivePoliticaPerms(userID int) (db.PolicyPermissions, error) {
+	return db.PolicyPermissions{}, nil
+}
+func (f *fakeDBVerificar) ListUserGroups(userID int) ([]db.Group, error) { return nil, nil }
 
 // Crea una App només amb la fake DB per testejar VerificarSessio.
 func newAppVerificar(dbFake db.DB) *core.App {

@@ -1,0 +1,77 @@
+{{ define "admin-nivells-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "levels.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <div>
+                    <p class="muted">{{ if .Data.Pais }}{{ t .Lang "levels.country" }}: {{ .Data.Pais.CodiISO3 }}{{ end }}</p>
+                    <h1>{{ t .Lang "levels.title" }}</h1>
+                </div>
+                {{ if .Data.Pais }}
+                <a class="boto-primari" href="/admin/paisos/{{ .Data.Pais.ID }}/nivells/new">{{ t .Lang "levels.button.new" }}</a>
+                {{ else }}
+                <span class="muted">{{ t .Lang "levels.select.country" }}</span>
+                {{ end }}
+            </header>
+            <form class="filtres-arxius" method="get">
+                <div class="grup-camp">
+                    <label for="f-nivel">{{ t .Lang "levels.filter.level" }}</label>
+                    <input type="number" id="f-nivel" name="nivel" min="1" max="7" value="{{ if .Data.Filter.Nivel }}{{ .Data.Filter.Nivel }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="f-estat">{{ t .Lang "levels.filter.state" }}</label>
+                    <select id="f-estat" name="estat">
+                        <option value="">{{ t .Lang "levels.filter.state.any" }}</option>
+                        {{ range $opt := (list "actiu" "inactiu" "fusionat" "abolit") }}
+                        <option value="{{ $opt }}" {{ if eq $.Data.Filter.Estat $opt }}selected{{ end }}>{{ $opt }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <button class="boto-secundari" type="submit">{{ t .Lang "levels.filter.submit" }}</button>
+            </form>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "levels.col.level" }}</th>
+                            <th>{{ t .Lang "levels.col.name" }}</th>
+                            <th>{{ t .Lang "levels.col.type" }}</th>
+                            <th>{{ t .Lang "levels.col.code" }}</th>
+                            <th>{{ t .Lang "levels.col.parent" }}</th>
+                            <th>{{ t .Lang "levels.col.years" }}</th>
+                            <th>{{ t .Lang "levels.col.state" }}</th>
+                            <th>{{ t .Lang "levels.col.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Nivells }}
+                        <tr>
+                            <td>{{ .Nivel }}</td>
+                            <td>{{ .NomNivell }}</td>
+                            <td>{{ .TipusNivell }}</td>
+                            <td>{{ .CodiOficial }}</td>
+                            <td>{{ if .ParentNom.Valid }}{{ .ParentNom.String }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
+                            <td>{{ .Estat }}</td>
+                            <td><a href="/admin/nivells/{{ .ID }}/edit">{{ t $.Lang "levels.action.edit" }}</a></td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

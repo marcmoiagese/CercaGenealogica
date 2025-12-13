@@ -1,0 +1,316 @@
+//line /home/marc/codi/CercaGenealogica3/db/postgres.go:1:1
+package db
+
+import (
+	"database/sql"
+	"fmt"
+
+	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
+)
+
+type PostgreSQL struct {
+	Host   string
+	Port   string
+	User   string
+	Pass   string
+	DBName string
+	Conn   *sql.DB
+	help   sqlHelper
+}
+
+func (d *PostgreSQL) Connect() error {goCover_4bc4be4c3247__73[0] = 3 ; goCover_4bc4be4c3247__73[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__73[2] = 73 ; goCover_4bc4be4c3247__73[3]++;
+	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		d.Host, d.Port, d.User, d.Pass, d.DBName)
+
+	conn, err := sql.Open("postgres", psqlInfo)
+	if err != nil {goCover_4bc4be4c3247__73[5]++;
+		return fmt.Errorf("error connectant a PostgreSQL: %w", err)
+	}
+	goCover_4bc4be4c3247__73[4]++;d.Conn = conn
+	d.help = newSQLHelper(conn, "postgres", "NOW()")
+	logInfof("Conectat a PostgreSQL")
+	return nil
+}
+
+func (d *PostgreSQL) Close() {goCover_4bc4be4c3247__74[0] = 2 ; goCover_4bc4be4c3247__74[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__74[2] = 74 ; goCover_4bc4be4c3247__74[3]++;
+	if d.Conn != nil {goCover_4bc4be4c3247__74[4]++;
+		d.Conn.Close()
+	}
+}
+
+func (d *PostgreSQL) Exec(query string, args ...interface{}) (int64, error) {goCover_4bc4be4c3247__75[0] = 3 ; goCover_4bc4be4c3247__75[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__75[2] = 75 ; goCover_4bc4be4c3247__75[3]++;
+	res, err := d.Conn.Exec(query, args...)
+	if err != nil {goCover_4bc4be4c3247__75[5]++;
+		return 0, err
+	}
+	goCover_4bc4be4c3247__75[4]++;id, _ := res.LastInsertId()
+	return id, nil
+}
+
+func (d *PostgreSQL) Query(query string, args ...interface{}) ([]map[string]interface{}, error) {goCover_4bc4be4c3247__76[0] = 11 ; goCover_4bc4be4c3247__76[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__76[2] = 76 ; goCover_4bc4be4c3247__76[3]++;
+	rows, err := d.Conn.Query(query, args...)
+	if err != nil {goCover_4bc4be4c3247__76[6]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__76[4]++;defer rows.Close()
+
+	var results []map[string]interface{}
+	for rows.Next() {goCover_4bc4be4c3247__76[7]++;
+		columns, _ := rows.Columns()
+		scanArgs := make([]interface{}, len(columns))
+		values := make([]interface{}, len(columns))
+
+		for i := range values {goCover_4bc4be4c3247__76[11]++;
+			scanArgs[i] = &values[i]
+		}
+
+		goCover_4bc4be4c3247__76[8]++;if err := rows.Scan(scanArgs...); err != nil {goCover_4bc4be4c3247__76[12]++;
+			return nil, err
+		}
+
+		goCover_4bc4be4c3247__76[9]++;row := make(map[string]interface{})
+		for i, col := range columns {goCover_4bc4be4c3247__76[13]++;
+			row[col] = values[i]
+		}
+		goCover_4bc4be4c3247__76[10]++;results = append(results, row)
+	}
+	goCover_4bc4be4c3247__76[5]++;return results, nil
+}
+
+func (d *PostgreSQL) InsertUser(user *User) error {goCover_4bc4be4c3247__77[0] = 1 ; goCover_4bc4be4c3247__77[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__77[2] = 77 ; goCover_4bc4be4c3247__77[3]++;
+	return d.help.insertUser(user)
+}
+
+func (d *PostgreSQL) GetUserByEmail(email string) (*User, error) {goCover_4bc4be4c3247__78[0] = 1 ; goCover_4bc4be4c3247__78[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__78[2] = 78 ; goCover_4bc4be4c3247__78[3]++;
+	return d.help.getUserByEmail(email)
+}
+
+func (d *PostgreSQL) ExistsUserByUsername(username string) (bool, error) {goCover_4bc4be4c3247__79[0] = 1 ; goCover_4bc4be4c3247__79[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__79[2] = 79 ; goCover_4bc4be4c3247__79[3]++;
+	return d.help.existsUserByUsername(username)
+}
+
+func (d *PostgreSQL) ExistsUserByEmail(email string) (bool, error) {goCover_4bc4be4c3247__80[0] = 1 ; goCover_4bc4be4c3247__80[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__80[2] = 80 ; goCover_4bc4be4c3247__80[3]++;
+	return d.help.existsUserByEmail(email)
+}
+
+func (p *PostgreSQL) SaveActivationToken(email, token string) error {goCover_4bc4be4c3247__81[0] = 1 ; goCover_4bc4be4c3247__81[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__81[2] = 81 ; goCover_4bc4be4c3247__81[3]++;
+	return p.help.saveActivationToken(email, token)
+}
+
+func (d *PostgreSQL) ActivateUser(token string) error {goCover_4bc4be4c3247__82[0] = 1 ; goCover_4bc4be4c3247__82[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__82[2] = 82 ; goCover_4bc4be4c3247__82[3]++;
+	return d.help.activateUser(token)
+}
+
+func (d *PostgreSQL) AuthenticateUser(usernameOrEmail, password string) (*User, error) {goCover_4bc4be4c3247__83[0] = 5 ; goCover_4bc4be4c3247__83[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__83[2] = 83 ; goCover_4bc4be4c3247__83[3]++;
+	u, err := d.help.authenticateUser(usernameOrEmail, password)
+	if err != nil {goCover_4bc4be4c3247__83[6]++;
+		return nil, fmt.Errorf("usuari no trobat o no actiu")
+	}
+	goCover_4bc4be4c3247__83[4]++;if err := bcrypt.CompareHashAndPassword(u.Password, []byte(password)); err != nil {goCover_4bc4be4c3247__83[7]++;
+		return nil, fmt.Errorf("contrasenya incorrecta")
+	}
+	goCover_4bc4be4c3247__83[5]++;return u, nil
+}
+
+// Gestió de sessions - adaptat a PostgreSQL
+func (d *PostgreSQL) SaveSession(sessionID string, userID int, expiry string) error {goCover_4bc4be4c3247__84[0] = 3 ; goCover_4bc4be4c3247__84[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__84[2] = 84 ; goCover_4bc4be4c3247__84[3]++;
+	if err := d.help.saveSession(sessionID, userID, expiry); err != nil {goCover_4bc4be4c3247__84[5]++;
+		logErrorf("[PostgreSQL] Error guardant sessió: %v", err)
+		return err
+	}
+	goCover_4bc4be4c3247__84[4]++;return nil
+}
+
+func (d *PostgreSQL) GetSessionUser(sessionID string) (*User, error) {goCover_4bc4be4c3247__85[0] = 1 ; goCover_4bc4be4c3247__85[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__85[2] = 85 ; goCover_4bc4be4c3247__85[3]++;
+	return d.help.getSessionUser(sessionID)
+}
+
+func (d *PostgreSQL) DeleteSession(sessionID string) error {goCover_4bc4be4c3247__86[0] = 1 ; goCover_4bc4be4c3247__86[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__86[2] = 86 ; goCover_4bc4be4c3247__86[3]++;
+	return d.help.deleteSession(sessionID)
+}
+
+func (d *PostgreSQL) CreatePasswordReset(email, token, expiry, lang string) (bool, error) {goCover_4bc4be4c3247__87[0] = 1 ; goCover_4bc4be4c3247__87[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__87[2] = 87 ; goCover_4bc4be4c3247__87[3]++;
+	return d.help.createPasswordReset(email, token, expiry, lang)
+}
+
+func (d *PostgreSQL) GetPasswordReset(token string) (*PasswordReset, error) {goCover_4bc4be4c3247__88[0] = 1 ; goCover_4bc4be4c3247__88[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__88[2] = 88 ; goCover_4bc4be4c3247__88[3]++;
+	return d.help.getPasswordReset(token)
+}
+
+func (d *PostgreSQL) MarkPasswordResetUsed(id int) error {goCover_4bc4be4c3247__89[0] = 1 ; goCover_4bc4be4c3247__89[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__89[2] = 89 ; goCover_4bc4be4c3247__89[3]++;
+	return d.help.markPasswordResetUsed(id)
+}
+
+func (d *PostgreSQL) UpdateUserPassword(userID int, passwordHash []byte) error {goCover_4bc4be4c3247__90[0] = 1 ; goCover_4bc4be4c3247__90[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__90[2] = 90 ; goCover_4bc4be4c3247__90[3]++;
+	return d.help.updateUserPassword(userID, passwordHash)
+}
+
+func (d *PostgreSQL) CreatePrivacyDefaults(userID int) error {goCover_4bc4be4c3247__91[0] = 1 ; goCover_4bc4be4c3247__91[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__91[2] = 91 ; goCover_4bc4be4c3247__91[3]++;
+	return d.help.createPrivacyDefaults(userID)
+}
+
+func (d *PostgreSQL) GetPrivacySettings(userID int) (*PrivacySettings, error) {goCover_4bc4be4c3247__92[0] = 1 ; goCover_4bc4be4c3247__92[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__92[2] = 92 ; goCover_4bc4be4c3247__92[3]++;
+	return d.help.getPrivacySettings(userID)
+}
+
+func (d *PostgreSQL) SavePrivacySettings(userID int, p *PrivacySettings) error {goCover_4bc4be4c3247__93[0] = 1 ; goCover_4bc4be4c3247__93[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__93[2] = 93 ; goCover_4bc4be4c3247__93[3]++;
+	return d.help.savePrivacySettings(userID, p)
+}
+
+func (d *PostgreSQL) UpdateUserProfile(u *User) error {goCover_4bc4be4c3247__94[0] = 1 ; goCover_4bc4be4c3247__94[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__94[2] = 94 ; goCover_4bc4be4c3247__94[3]++;
+	return d.help.updateUserProfile(u)
+}
+
+func (d *PostgreSQL) UpdateUserEmail(userID int, newEmail string) error {goCover_4bc4be4c3247__95[0] = 1 ; goCover_4bc4be4c3247__95[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__95[2] = 95 ; goCover_4bc4be4c3247__95[3]++;
+	return d.help.updateUserEmail(userID, newEmail)
+}
+
+func (d *PostgreSQL) CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {goCover_4bc4be4c3247__96[0] = 1 ; goCover_4bc4be4c3247__96[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__96[2] = 96 ; goCover_4bc4be4c3247__96[3]++;
+	return d.help.createEmailChange(userID, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang)
+}
+
+func (d *PostgreSQL) ConfirmEmailChange(token string) (*EmailChange, error) {goCover_4bc4be4c3247__97[0] = 1 ; goCover_4bc4be4c3247__97[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__97[2] = 97 ; goCover_4bc4be4c3247__97[3]++;
+	return d.help.confirmEmailChange(token)
+}
+
+func (d *PostgreSQL) RevertEmailChange(token string) (*EmailChange, error) {goCover_4bc4be4c3247__98[0] = 1 ; goCover_4bc4be4c3247__98[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__98[2] = 98 ; goCover_4bc4be4c3247__98[3]++;
+	return d.help.revertEmailChange(token)
+}
+
+func (d *PostgreSQL) markEmailChangeConfirmed(id int) error {goCover_4bc4be4c3247__99[0] = 1 ; goCover_4bc4be4c3247__99[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__99[2] = 99 ; goCover_4bc4be4c3247__99[3]++;
+	return d.help.markEmailChangeConfirmed(id)
+}
+
+func (d *PostgreSQL) markEmailChangeReverted(id int) error {goCover_4bc4be4c3247__100[0] = 1 ; goCover_4bc4be4c3247__100[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__100[2] = 100 ; goCover_4bc4be4c3247__100[3]++;
+	return d.help.markEmailChangeReverted(id)
+}
+
+// Policies
+func (d *PostgreSQL) UserHasAnyPolicy(userID int, policies []string) (bool, error) {goCover_4bc4be4c3247__101[0] = 1 ; goCover_4bc4be4c3247__101[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__101[2] = 101 ; goCover_4bc4be4c3247__101[3]++;
+	return d.help.userHasAnyPolicy(userID, policies)
+}
+func (d *PostgreSQL) EnsureDefaultPolicies() error {goCover_4bc4be4c3247__102[0] = 1 ; goCover_4bc4be4c3247__102[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__102[2] = 102 ; goCover_4bc4be4c3247__102[3]++;
+	return d.help.ensureDefaultPolicies()
+}
+
+// Paisos
+func (d *PostgreSQL) ListPaisos() ([]Pais, error) {goCover_4bc4be4c3247__103[0] = 1 ; goCover_4bc4be4c3247__103[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__103[2] = 103 ; goCover_4bc4be4c3247__103[3]++;
+	return d.help.listPaisos()
+}
+func (d *PostgreSQL) GetPais(id int) (*Pais, error) {goCover_4bc4be4c3247__104[0] = 1 ; goCover_4bc4be4c3247__104[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__104[2] = 104 ; goCover_4bc4be4c3247__104[3]++;
+	return d.help.getPais(id)
+}
+func (d *PostgreSQL) CreatePais(p *Pais) (int, error) {goCover_4bc4be4c3247__105[0] = 1 ; goCover_4bc4be4c3247__105[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__105[2] = 105 ; goCover_4bc4be4c3247__105[3]++;
+	return d.help.createPais(p)
+}
+func (d *PostgreSQL) UpdatePais(p *Pais) error {goCover_4bc4be4c3247__106[0] = 1 ; goCover_4bc4be4c3247__106[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__106[2] = 106 ; goCover_4bc4be4c3247__106[3]++;
+	return d.help.updatePais(p)
+}
+
+// Nivells administratius
+func (d *PostgreSQL) ListNivells(f NivellAdminFilter) ([]NivellAdministratiu, error) {goCover_4bc4be4c3247__107[0] = 1 ; goCover_4bc4be4c3247__107[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__107[2] = 107 ; goCover_4bc4be4c3247__107[3]++;
+	return d.help.listNivells(f)
+}
+func (d *PostgreSQL) GetNivell(id int) (*NivellAdministratiu, error) {goCover_4bc4be4c3247__108[0] = 1 ; goCover_4bc4be4c3247__108[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__108[2] = 108 ; goCover_4bc4be4c3247__108[3]++;
+	return d.help.getNivell(id)
+}
+func (d *PostgreSQL) CreateNivell(n *NivellAdministratiu) (int, error) {goCover_4bc4be4c3247__109[0] = 1 ; goCover_4bc4be4c3247__109[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__109[2] = 109 ; goCover_4bc4be4c3247__109[3]++;
+	return d.help.createNivell(n)
+}
+func (d *PostgreSQL) UpdateNivell(n *NivellAdministratiu) error {goCover_4bc4be4c3247__110[0] = 1 ; goCover_4bc4be4c3247__110[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__110[2] = 110 ; goCover_4bc4be4c3247__110[3]++;
+	return d.help.updateNivell(n)
+}
+
+// Municipis
+func (d *PostgreSQL) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {goCover_4bc4be4c3247__111[0] = 1 ; goCover_4bc4be4c3247__111[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__111[2] = 111 ; goCover_4bc4be4c3247__111[3]++;
+	return d.help.listMunicipis(f)
+}
+func (d *PostgreSQL) GetMunicipi(id int) (*Municipi, error) {goCover_4bc4be4c3247__112[0] = 1 ; goCover_4bc4be4c3247__112[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__112[2] = 112 ; goCover_4bc4be4c3247__112[3]++;
+	return d.help.getMunicipi(id)
+}
+func (d *PostgreSQL) CreateMunicipi(m *Municipi) (int, error) {goCover_4bc4be4c3247__113[0] = 1 ; goCover_4bc4be4c3247__113[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__113[2] = 113 ; goCover_4bc4be4c3247__113[3]++;
+	return d.help.createMunicipi(m)
+}
+func (d *PostgreSQL) UpdateMunicipi(m *Municipi) error {goCover_4bc4be4c3247__114[0] = 1 ; goCover_4bc4be4c3247__114[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__114[2] = 114 ; goCover_4bc4be4c3247__114[3]++;
+	return d.help.updateMunicipi(m)
+}
+func (d *PostgreSQL) ListCodisPostals(municipiID int) ([]CodiPostal, error) {goCover_4bc4be4c3247__115[0] = 1 ; goCover_4bc4be4c3247__115[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__115[2] = 115 ; goCover_4bc4be4c3247__115[3]++;
+	return d.help.listCodisPostals(municipiID)
+}
+func (d *PostgreSQL) SaveCodiPostal(cp *CodiPostal) (int, error) {goCover_4bc4be4c3247__116[0] = 1 ; goCover_4bc4be4c3247__116[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__116[2] = 116 ; goCover_4bc4be4c3247__116[3]++;
+	return d.help.saveCodiPostal(cp)
+}
+
+// Entitats eclesiàstiques
+func (d *PostgreSQL) ListArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error) {goCover_4bc4be4c3247__117[0] = 1 ; goCover_4bc4be4c3247__117[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__117[2] = 117 ; goCover_4bc4be4c3247__117[3]++;
+	return d.help.listArquebisbats(f)
+}
+func (d *PostgreSQL) GetArquebisbat(id int) (*Arquebisbat, error) {goCover_4bc4be4c3247__118[0] = 1 ; goCover_4bc4be4c3247__118[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__118[2] = 118 ; goCover_4bc4be4c3247__118[3]++;
+	return d.help.getArquebisbat(id)
+}
+func (d *PostgreSQL) CreateArquebisbat(ae *Arquebisbat) (int, error) {goCover_4bc4be4c3247__119[0] = 1 ; goCover_4bc4be4c3247__119[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__119[2] = 119 ; goCover_4bc4be4c3247__119[3]++;
+	return d.help.createArquebisbat(ae)
+}
+func (d *PostgreSQL) UpdateArquebisbat(ae *Arquebisbat) error {goCover_4bc4be4c3247__120[0] = 1 ; goCover_4bc4be4c3247__120[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__120[2] = 120 ; goCover_4bc4be4c3247__120[3]++;
+	return d.help.updateArquebisbat(ae)
+}
+func (d *PostgreSQL) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {goCover_4bc4be4c3247__121[0] = 1 ; goCover_4bc4be4c3247__121[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__121[2] = 121 ; goCover_4bc4be4c3247__121[3]++;
+	return d.help.listArquebisbatMunicipis(munID)
+}
+func (d *PostgreSQL) SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {goCover_4bc4be4c3247__122[0] = 1 ; goCover_4bc4be4c3247__122[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__122[2] = 122 ; goCover_4bc4be4c3247__122[3]++;
+	return d.help.saveArquebisbatMunicipi(am)
+}
+
+// Arxius
+func (d *PostgreSQL) ListArxius(f ArxiuFilter) ([]ArxiuWithCount, error) {goCover_4bc4be4c3247__123[0] = 1 ; goCover_4bc4be4c3247__123[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__123[2] = 123 ; goCover_4bc4be4c3247__123[3]++;
+	return d.help.listArxius(f)
+}
+func (d *PostgreSQL) GetArxiu(id int) (*Arxiu, error) {goCover_4bc4be4c3247__124[0] = 1 ; goCover_4bc4be4c3247__124[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__124[2] = 124 ; goCover_4bc4be4c3247__124[3]++;
+	return d.help.getArxiu(id)
+}
+func (d *PostgreSQL) CreateArxiu(a *Arxiu) (int, error) {goCover_4bc4be4c3247__125[0] = 1 ; goCover_4bc4be4c3247__125[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__125[2] = 125 ; goCover_4bc4be4c3247__125[3]++;
+	return d.help.createArxiu(a)
+}
+func (d *PostgreSQL) UpdateArxiu(a *Arxiu) error {goCover_4bc4be4c3247__126[0] = 1 ; goCover_4bc4be4c3247__126[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__126[2] = 126 ; goCover_4bc4be4c3247__126[3]++;
+	return d.help.updateArxiu(a)
+}
+func (d *PostgreSQL) DeleteArxiu(id int) error {goCover_4bc4be4c3247__127[0] = 1 ; goCover_4bc4be4c3247__127[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__127[2] = 127 ; goCover_4bc4be4c3247__127[3]++;
+	return d.help.deleteArxiu(id)
+}
+func (d *PostgreSQL) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {goCover_4bc4be4c3247__128[0] = 1 ; goCover_4bc4be4c3247__128[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__128[2] = 128 ; goCover_4bc4be4c3247__128[3]++;
+	return d.help.listArxiuLlibres(arxiuID)
+}
+func (d *PostgreSQL) AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {goCover_4bc4be4c3247__129[0] = 1 ; goCover_4bc4be4c3247__129[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__129[2] = 129 ; goCover_4bc4be4c3247__129[3]++;
+	return d.help.addArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+}
+func (d *PostgreSQL) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {goCover_4bc4be4c3247__130[0] = 1 ; goCover_4bc4be4c3247__130[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__130[2] = 130 ; goCover_4bc4be4c3247__130[3]++;
+	return d.help.updateArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+}
+func (d *PostgreSQL) DeleteArxiuLlibre(arxiuID, llibreID int) error {goCover_4bc4be4c3247__131[0] = 1 ; goCover_4bc4be4c3247__131[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__131[2] = 131 ; goCover_4bc4be4c3247__131[3]++;
+	return d.help.deleteArxiuLlibre(arxiuID, llibreID)
+}
+func (d *PostgreSQL) SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error) {goCover_4bc4be4c3247__132[0] = 1 ; goCover_4bc4be4c3247__132[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__132[2] = 132 ; goCover_4bc4be4c3247__132[3]++;
+	return d.help.searchLlibresSimple(q, limit)
+}
+func (d *PostgreSQL) ListLlibres(f LlibreFilter) ([]LlibreRow, error) {goCover_4bc4be4c3247__133[0] = 1 ; goCover_4bc4be4c3247__133[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__133[2] = 133 ; goCover_4bc4be4c3247__133[3]++;
+	return d.help.listLlibres(f)
+}
+func (d *PostgreSQL) GetLlibre(id int) (*Llibre, error) {goCover_4bc4be4c3247__134[0] = 1 ; goCover_4bc4be4c3247__134[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__134[2] = 134 ; goCover_4bc4be4c3247__134[3]++;
+	return d.help.getLlibre(id)
+}
+func (d *PostgreSQL) CreateLlibre(l *Llibre) (int, error) {goCover_4bc4be4c3247__135[0] = 1 ; goCover_4bc4be4c3247__135[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__135[2] = 135 ; goCover_4bc4be4c3247__135[3]++;
+	return d.help.createLlibre(l)
+}
+func (d *PostgreSQL) UpdateLlibre(l *Llibre) error {goCover_4bc4be4c3247__136[0] = 1 ; goCover_4bc4be4c3247__136[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__136[2] = 136 ; goCover_4bc4be4c3247__136[3]++;
+	return d.help.updateLlibre(l)
+}
+func (d *PostgreSQL) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {goCover_4bc4be4c3247__137[0] = 1 ; goCover_4bc4be4c3247__137[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__137[2] = 137 ; goCover_4bc4be4c3247__137[3]++;
+	return d.help.listLlibrePagines(llibreID)
+}
+func (d *PostgreSQL) SaveLlibrePagina(p *LlibrePagina) (int, error) {goCover_4bc4be4c3247__138[0] = 1 ; goCover_4bc4be4c3247__138[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__138[2] = 138 ; goCover_4bc4be4c3247__138[3]++;
+	return d.help.saveLlibrePagina(p)
+}
+func (d *PostgreSQL) RecalcLlibrePagines(llibreID, total int) error {goCover_4bc4be4c3247__139[0] = 1 ; goCover_4bc4be4c3247__139[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__139[2] = 139 ; goCover_4bc4be4c3247__139[3]++;
+	return d.help.recalcLlibrePagines(llibreID, total)
+}

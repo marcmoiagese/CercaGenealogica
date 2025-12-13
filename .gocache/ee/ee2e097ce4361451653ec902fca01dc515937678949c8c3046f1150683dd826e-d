@@ -1,0 +1,206 @@
+//line /home/marc/codi/CercaGenealogica3/tests/common/testdb.go:1:1
+package common
+
+import (
+	"bufio"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// TestDBConfig descriu una configuració de base de dades per a tests.
+// Engine: "sqlite", "postgres" o "mysql".
+// Config: mapa de claus/valors que passen directament a db.NewDB(...).
+// Label: nom curt per fer servir a t.Run (normalment igual que Engine).
+type TestDBConfig struct {
+	Engine string
+	Config map[string]string
+	Label  string
+}
+
+// LoadTestDBConfigs llegeix tests/cnf/cnf.cfg des de l'arrel del projecte
+// i construeix una llista de TestDBConfig. Sempre retorna com a mínim
+// una entrada per SQLite. PostgreSQL i MySQL només s'afegeixen si al fitxer
+// hi ha definides POSTGRES_DB_HOST / MYSQL_DB_HOST respectivament.
+func LoadTestDBConfigs(t *testing.T) []TestDBConfig {goCover_823c98ce6a81__8[0] = 9 ; goCover_823c98ce6a81__8[1] = goCover_823c98ce6a81_P ; goCover_823c98ce6a81__8[2] = 8 ; goCover_823c98ce6a81__8[3]++;
+	t.Helper()
+
+	projectRoot := findProjectRoot(t)
+	cfgPath := filepath.Join(projectRoot, "tests", "cnf", "cnf.cfg")
+
+	raw := readKeyValueFile(t, cfgPath)
+
+	var result []TestDBConfig
+
+	// --- SQLite (sempre present) ---
+	sqlitePath := raw["SQLITE_DB_PATH"]
+	if sqlitePath == "" {goCover_823c98ce6a81__8[7]++;
+		// Per defecte, fem servir un fitxer a tests/tmp/test.db
+		sqlitePath = filepath.Join(projectRoot, "tests", "tmp", "test.db")
+	} else{ goCover_823c98ce6a81__8[8]++;if !filepath.IsAbs(sqlitePath) {goCover_823c98ce6a81__8[9]++;
+		// Convertim a ruta absoluta relativa a l'arrel del projecte
+		sqlitePath = filepath.Join(projectRoot, sqlitePath)
+	}}
+
+	goCover_823c98ce6a81__8[4]++;sqliteCfg := map[string]string{
+		"DB_ENGINE": "sqlite",
+		"DB_PATH":   sqlitePath,
+		"RECREADB":  firstNonEmpty(raw["SQLITE_RECREADB"], "true"),
+	}
+	result = append(result, TestDBConfig{
+		Engine: "sqlite",
+		Label:  "sqlite",
+		Config: sqliteCfg,
+	})
+
+	// --- PostgreSQL (opcional) ---
+	if host := strings.TrimSpace(raw["POSTGRES_DB_HOST"]); host != "" {goCover_823c98ce6a81__8[10]++;
+		pgCfg := map[string]string{
+			"DB_ENGINE": "postgres",
+			"DB_HOST":   host,
+			"DB_PORT":   firstNonEmpty(raw["POSTGRES_DB_PORT"], "5432"),
+			"DB_USR":    firstNonEmpty(raw["POSTGRES_DB_USER"], "postgres"),
+			"DB_PASS":   raw["POSTGRES_DB_PASS"],
+			"DB_NAME":   firstNonEmpty(raw["POSTGRES_DB_NAME"], "postgres"),
+			"RECREADB":  firstNonEmpty(raw["POSTGRES_RECREADB"], "true"),
+		}
+		result = append(result, TestDBConfig{
+			Engine: "postgres",
+			Label:  "postgres",
+			Config: pgCfg, // <- aquí estava el typo (_Config)
+		})
+	}
+
+	// --- MySQL (opcional) ---
+	goCover_823c98ce6a81__8[5]++;if host := strings.TrimSpace(raw["MYSQL_DB_HOST"]); host != "" {goCover_823c98ce6a81__8[11]++;
+		myCfg := map[string]string{
+			"DB_ENGINE": "mysql",
+			"DB_HOST":   host,
+			"DB_PORT":   firstNonEmpty(raw["MYSQL_DB_PORT"], "3306"),
+			"DB_USR":    firstNonEmpty(raw["MYSQL_DB_USER"], "root"),
+			"DB_PASS":   raw["MYSQL_DB_PASS"],
+			"DB_NAME":   firstNonEmpty(raw["MYSQL_DB_NAME"], "mysql"),
+			"RECREADB":  firstNonEmpty(raw["MYSQL_RECREADB"], "true"),
+		}
+		result = append(result, TestDBConfig{
+			Engine: "mysql",
+			Label:  "mysql",
+			Config: myCfg,
+		})
+	}
+
+	goCover_823c98ce6a81__8[6]++;return result
+}
+
+// firstNonEmpty retorna el primer valor no buit d'una llista de cadenes.
+// Si tots són buits, retorna "".
+func firstNonEmpty(values ...string) string {goCover_823c98ce6a81__9[0] = 4 ; goCover_823c98ce6a81__9[1] = goCover_823c98ce6a81_P ; goCover_823c98ce6a81__9[2] = 9 ; goCover_823c98ce6a81__9[3]++;
+	for _, v := range values {goCover_823c98ce6a81__9[5]++;
+		if strings.TrimSpace(v) != "" {goCover_823c98ce6a81__9[6]++;
+			return v
+		}
+	}
+	goCover_823c98ce6a81__9[4]++;return ""
+}
+
+// findProjectRoot cerca l'arrel del projecte (directori que conté go.mod)
+// pujant des del directori actual. Si no la troba, el test falla.
+func findProjectRoot(t *testing.T) string {goCover_823c98ce6a81__10[0] = 8 ; goCover_823c98ce6a81__10[1] = goCover_823c98ce6a81_P ; goCover_823c98ce6a81__10[2] = 10 ; goCover_823c98ce6a81__10[3]++;
+	t.Helper()
+
+	dir, err := os.Getwd()
+	if err != nil {goCover_823c98ce6a81__10[5]++;
+		t.Fatalf("no puc obtenir directori actual: %v", err)
+	}
+
+	goCover_823c98ce6a81__10[4]++;for {goCover_823c98ce6a81__10[6]++;
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {goCover_823c98ce6a81__10[9]++;
+			return dir
+		}
+		goCover_823c98ce6a81__10[7]++;parent := filepath.Dir(dir)
+		if parent == dir {goCover_823c98ce6a81__10[10]++;
+			t.Fatalf("no s'ha trobat go.mod a cap directori pare de %s", dir)
+		}
+		goCover_823c98ce6a81__10[8]++;dir = parent
+	}
+}
+
+// readKeyValueFile llegeix un fitxer simple de K=V, però també
+// entén seccions [sqlite], [postgres], [mysql] i prefixa les claus
+// amb el nom de la secció en majúscules.
+//
+// Exemple:
+//
+//	[postgres]
+//	DB_HOST=devstack.marc.cat
+//	DB_PORT=5432
+//
+// es converteix en:
+//
+//	POSTGRES_DB_HOST -> "devstack.marc.cat"
+//	POSTGRES_DB_PORT -> "5432"
+func readKeyValueFile(t *testing.T, path string) map[string]string {goCover_823c98ce6a81__11[0] = 16 ; goCover_823c98ce6a81__11[1] = goCover_823c98ce6a81_P ; goCover_823c98ce6a81__11[2] = 11 ; goCover_823c98ce6a81__11[3]++;
+	t.Helper()
+
+	f, err := os.Open(path)
+	if err != nil {goCover_823c98ce6a81__11[7]++;
+		t.Fatalf("no puc obrir fitxer de config de tests %q: %v", path, err)
+	}
+	goCover_823c98ce6a81__11[4]++;defer f.Close()
+
+	out := make(map[string]string)
+	scanner := bufio.NewScanner(f)
+
+	currentSection := "" // ex: "SQLITE", "POSTGRES", "MYSQL"
+
+	for scanner.Scan() {goCover_823c98ce6a81__11[8]++;
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {goCover_823c98ce6a81__11[13]++;
+			continue
+		}
+
+		// Detecta seccions tipus [sqlite], [postgres], [mysql]
+		goCover_823c98ce6a81__11[9]++;if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {goCover_823c98ce6a81__11[14]++;
+			sec := strings.TrimSpace(line[1 : len(line)-1])
+			currentSection = strings.ToUpper(sec)
+			continue
+		}
+
+		goCover_823c98ce6a81__11[10]++;parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {goCover_823c98ce6a81__11[15]++;
+			// línia escombraria o format inesperat
+			continue
+		}
+
+		goCover_823c98ce6a81__11[11]++;key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+
+		// Normalitzem la clau a MAJÚSCULES
+		keyUpper := strings.ToUpper(key)
+
+		// Si estem dins d'una secció, prefixem (si cal)
+		//
+		// Ex:
+		//   [postgres] + DB_HOST -> POSTGRES_DB_HOST
+		//   [sqlite]   + DB_PATH -> SQLITE_DB_PATH
+		//
+		// Però si algú ja posa POSTGRES_DB_HOST dins la secció,
+		// no volem POSTGRES_POSTGRES_DB_HOST, així que controlem
+		// el prefix.
+		if currentSection != "" {goCover_823c98ce6a81__11[16]++;
+			prefix := currentSection + "_"
+			if !strings.HasPrefix(keyUpper, prefix) {goCover_823c98ce6a81__11[17]++;
+				keyUpper = prefix + keyUpper
+			}
+		}
+
+		goCover_823c98ce6a81__11[12]++;out[keyUpper] = val
+	}
+
+	goCover_823c98ce6a81__11[5]++;if err := scanner.Err(); err != nil {goCover_823c98ce6a81__11[18]++;
+		t.Fatalf("error llegint fitxer de config de tests %q: %v", path, err)
+	}
+
+	goCover_823c98ce6a81__11[6]++;return out
+}

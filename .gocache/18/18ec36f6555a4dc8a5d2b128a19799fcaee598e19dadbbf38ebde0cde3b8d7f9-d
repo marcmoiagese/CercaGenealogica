@@ -1,0 +1,32 @@
+//line /home/marc/codi/CercaGenealogica3/db/logger.go:1:1
+package db
+
+import (
+	"log"
+	"strings"
+
+	"github.com/marcmoiagese/CercaGenealogica/cnf"
+)
+
+func logLevel() string {goCover_4bc4be4c3247__0[0] = 5 ; goCover_4bc4be4c3247__0[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__0[2] = 0 ; goCover_4bc4be4c3247__0[3]++;
+	if cnf.Config == nil {goCover_4bc4be4c3247__0[6]++;
+		return "info"
+	}
+	goCover_4bc4be4c3247__0[4]++;l := strings.ToLower(strings.TrimSpace(cnf.Config["LOG_LEVEL"]))
+	if l == "" {goCover_4bc4be4c3247__0[7]++;
+		return "info"
+	}
+	goCover_4bc4be4c3247__0[5]++;return l
+}
+
+func logInfof(format string, v ...interface{}) {goCover_4bc4be4c3247__1[0] = 3 ; goCover_4bc4be4c3247__1[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__1[2] = 1 ; goCover_4bc4be4c3247__1[3]++;
+	l := logLevel()
+	if l == "silent" || l == "error" {goCover_4bc4be4c3247__1[5]++;
+		return
+	}
+	goCover_4bc4be4c3247__1[4]++;log.Printf("[DB] "+format, v...)
+}
+
+func logErrorf(format string, v ...interface{}) {goCover_4bc4be4c3247__2[0] = 1 ; goCover_4bc4be4c3247__2[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__2[2] = 2 ; goCover_4bc4be4c3247__2[3]++;
+	log.Printf("[DB][ERROR] "+format, v...)
+}

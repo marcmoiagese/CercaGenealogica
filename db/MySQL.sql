@@ -134,9 +134,9 @@ CREATE TABLE IF NOT EXISTS persona_possibles_duplicats (
 
 CREATE TABLE IF NOT EXISTS paisos (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    codi_iso2 VARCHAR(2) UNIQUE, -- Codi ISO 3166-1 alpha-2 ex: ES, FR, US, CA... (VARCHAR en lloc de TEXT(2))
-    codi_iso3 VARCHAR(3) UNIQUE, -- Codi ISO 3166-1 alpha-3 ex: ESP, FRA, USA (VARCHAR en lloc de TEXT(3))
-    codi_pais_num VARCHAR(10), -- Codi numèric ISO 3166-1
+    codi_iso2 VARCHAR(2) UNIQUE,
+    codi_iso3 VARCHAR(3) UNIQUE,
+    codi_pais_num VARCHAR(10),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -149,28 +149,33 @@ CREATE TABLE IF NOT EXISTS nivells_administratius (
     tipus_nivell VARCHAR(50),
     codi_oficial VARCHAR(50),
     altres TEXT,
-    estat ENUM('actiu', 'inactiu', 'fusionat', 'abolit') DEFAULT 'actiu', -- ENUM per als CHECKS
+    parent_id INT UNSIGNED,
+    any_inici SMALLINT,
+    any_fi SMALLINT,
+    estat ENUM('actiu', 'inactiu', 'fusionat', 'abolit') DEFAULT 'actiu',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (pais_id) REFERENCES paisos(id),
-    INDEX idx_tipus_nivell (tipus_nivell)
+    FOREIGN KEY (parent_id) REFERENCES nivells_administratius(id),
+    INDEX idx_tipus_nivell (tipus_nivell),
+    UNIQUE KEY idx_nivell_pais_nom (pais_id, nivel, nom_nivell)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS municipis (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nom VARCHAR(255) NOT NULL,
-    municipi_id INT UNSIGNED REFERENCES municipis(id), -- Opcional: si el poble pertany a un altre municipi
+    municipi_id INT UNSIGNED REFERENCES municipis(id),
     tipus VARCHAR(50) NOT NULL,
-    nivell_administratiu_id_1 INT UNSIGNED REFERENCES nivells_administratius(id), -- País
-    nivell_administratiu_id_2 INT UNSIGNED REFERENCES nivells_administratius(id), -- Regió / Comunitat Autònoma
-    nivell_administratiu_id_3 INT UNSIGNED REFERENCES nivells_administratius(id), -- Província
-    nivell_administratiu_id_4 INT UNSIGNED REFERENCES nivells_administratius(id), -- Comarca / àrea local
-    nivell_administratiu_id_5 INT UNSIGNED REFERENCES nivells_administratius(id), -- Àrea local
-    nivell_administratiu_id_6 INT UNSIGNED REFERENCES nivells_administratius(id), -- Municipi
-    nivell_administratiu_id_7 INT UNSIGNED REFERENCES nivells_administratius(id), -- Barri
+    nivell_administratiu_id_1 INT UNSIGNED REFERENCES nivells_administratius(id),
+    nivell_administratiu_id_2 INT UNSIGNED REFERENCES nivells_administratius(id),
+    nivell_administratiu_id_3 INT UNSIGNED REFERENCES nivells_administratius(id),
+    nivell_administratiu_id_4 INT UNSIGNED REFERENCES nivells_administratius(id),
+    nivell_administratiu_id_5 INT UNSIGNED REFERENCES nivells_administratius(id),
+    nivell_administratiu_id_6 INT UNSIGNED REFERENCES nivells_administratius(id),
+    nivell_administratiu_id_7 INT UNSIGNED REFERENCES nivells_administratius(id),
     codi_postal VARCHAR(10),
-    latitud DECIMAL(10, 6), -- REAL canviat a DECIMAL per precisió
-    longitud DECIMAL(10, 6), -- REAL canviat a DECIMAL per precisió
+    latitud DECIMAL(10, 6),
+    longitud DECIMAL(10, 6),
     what3words VARCHAR(255),
     web VARCHAR(255),
     wikipedia VARCHAR(255),
@@ -186,42 +191,57 @@ CREATE TABLE IF NOT EXISTS municipis (
     FOREIGN KEY (nivell_administratiu_id_4) REFERENCES nivells_administratius(id),
     FOREIGN KEY (nivell_administratiu_id_5) REFERENCES nivells_administratius(id),
     FOREIGN KEY (nivell_administratiu_id_6) REFERENCES nivells_administratius(id),
-    FOREIGN KEY (nivell_administratiu_id_7) REFERENCES nivells_administratius(id)
+    FOREIGN KEY (nivell_administratiu_id_7) REFERENCES nivells_administratius(id),
+    FOREIGN KEY (municipi_id) REFERENCES municipis(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS noms_historics (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    id_municipi INT UNSIGNED NOT NULL,
-    nom VARCHAR(255) NOT NULL, -- Nom antic o anterior
-    any_inici YEAR, -- INTEGER canviat a YEAR per a anys
-    any_fi YEAR, -- INTEGER canviat a YEAR per a anys
+
+    -- Tipus d'entitat a la qual fa referència aquest nom històric:
+    --   municipi       -> entitat_id apunta a municipis.id
+    --   nivell_admin   -> entitat_id apunta a nivells_administratius.id
+    --   eclesiastic    -> entitat_id apunta a arquebisbats.id
+    entitat_tipus ENUM('municipi', 'nivell_admin', 'eclesiastic') NOT NULL,
+    entitat_id INT UNSIGNED NOT NULL,
+
+    nom VARCHAR(255) NOT NULL,
+    any_inici SMALLINT,
+    any_fi SMALLINT,
+
     pais_regne VARCHAR(255),
     distribucio_geografica VARCHAR(255),
     font TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (id_municipi) REFERENCES municipis(id) ON DELETE CASCADE
+
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS arquebisbats (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nom VARCHAR(255) NOT NULL UNIQUE,
     tipus_entitat ENUM('arquebisbat', 'bisbat', 'diocesi', 'viscomtat', 'vegueria', 'altres'),
+    pais_id INT UNSIGNED,
+    nivell TINYINT,
+    parent_id INT UNSIGNED,
+    any_inici SMALLINT,
+    any_fi SMALLINT,
     web VARCHAR(255),
     web_arxiu VARCHAR(255),
     web_wikipedia VARCHAR(255),
     territori TEXT,
-    autoritat_superior VARCHAR(255),
     observacions TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (pais_id) REFERENCES paisos(id),
+    FOREIGN KEY (parent_id) REFERENCES arquebisbats(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS arquebisbats_municipi (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     id_municipi INT UNSIGNED NOT NULL,
     id_arquevisbat INT UNSIGNED NOT NULL,
-    any_inici YEAR,
-    any_fi YEAR,
+    any_inici SMALLINT,
+    any_fi SMALLINT,
     motiu TEXT,
     font TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -238,18 +258,6 @@ CREATE TABLE IF NOT EXISTS codis_postals (
     fins DATE,
     font TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (id_municipi) REFERENCES municipis(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS relacio_comarca_provincia (
-    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    id_municipi INT UNSIGNED NOT NULL,
-    comarca VARCHAR(255),
-    provincia VARCHAR(255),
-    any_inici YEAR,
-    any_fi YEAR,
-    font TEXT,
-    observacions TEXT,
     FOREIGN KEY (id_municipi) REFERENCES municipis(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -285,7 +293,7 @@ CREATE TABLE IF NOT EXISTS llibres (
 CREATE TABLE IF NOT EXISTS sessions (
   id           INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   usuari_id    INT UNSIGNED NOT NULL,
-  token_hash   VARCHAR(64) NOT NULL UNIQUE, -- S'assumeix un hash de longitud fixa
+  token_hash   VARCHAR(64) NOT NULL UNIQUE,
   expira       DATETIME,
   creat        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   revocat      BOOLEAN NOT NULL DEFAULT FALSE,
@@ -298,7 +306,7 @@ CREATE TABLE IF NOT EXISTS session_access_log (
   id         INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   session_id INT UNSIGNED NOT NULL,
   ts         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  ip         VARCHAR(45) NOT NULL,     -- Admet IPv6
+  ip         VARCHAR(45) NOT NULL,
   FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
   INDEX idx_access_session_ts (session_id, ts DESC),
   INDEX idx_access_ip_ts (ip, ts DESC)
@@ -357,13 +365,56 @@ CREATE TABLE IF NOT EXISTS email_changes (
   FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Índexs de la taula 'persona' (Els índexs ja s'han definit dins del CREATE TABLE per claredat en MySQL)
-------------------------------------------------------------------------------------------------------------------------
+-- =====================================================================
+-- Sistema de punts per activitats dels usuaris
+-- =====================================================================
 
--- Índex compost per millorar la cerca de duplicats i cerques combinades
--- CREATE INDEX idx_persona_cognoms_any_llibre_pagina ON persona(cognom1, cognom2, quinta, llibre, pagina);
+CREATE TABLE IF NOT EXISTS punts_regles (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    codi VARCHAR(100) NOT NULL UNIQUE,
+    nom VARCHAR(255) NOT NULL,
+    descripcio TEXT,
 
+    punts INT NOT NULL,
+    actiu BOOLEAN NOT NULL DEFAULT TRUE,
 
+    data_creacio DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS usuaris_activitat (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+
+    usuari_id INT UNSIGNED NOT NULL,
+    regla_id INT UNSIGNED NULL,
+
+    accio VARCHAR(50) NOT NULL,
+
+    objecte_tipus VARCHAR(50) NOT NULL,
+    objecte_id INT UNSIGNED NULL,
+
+    punts INT NOT NULL DEFAULT 0,
+
+    estat ENUM('pendent','validat','anulat') NOT NULL DEFAULT 'validat',
+
+    moderat_per INT UNSIGNED NULL,
+
+    detalls TEXT,
+
+    data_creacio DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+    FOREIGN KEY (regla_id) REFERENCES punts_regles(id),
+    FOREIGN KEY (moderat_per) REFERENCES usuaris(id) ON DELETE SET NULL,
+    INDEX idx_usuaris_activitat_usuari_data (usuari_id, data_creacio DESC),
+    INDEX idx_usuaris_activitat_objecte (objecte_tipus, objecte_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS usuaris_punts (
+    usuari_id INT UNSIGNED NOT NULL PRIMARY KEY,
+    punts_total INT NOT NULL DEFAULT 0,
+    ultima_actualitzacio DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =====================================================================
 -- Arxius / Custòdia (físic o digital) + Estat d'indexació per pàgina
@@ -372,28 +423,32 @@ CREATE TABLE IF NOT EXISTS email_changes (
 CREATE TABLE IF NOT EXISTS arxius (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   nom VARCHAR(255) NOT NULL UNIQUE,
-  tipus VARCHAR(50),                 -- parroquia, arxiu_diocesa, portal_digital, etc.
+  tipus VARCHAR(50),
   municipi_id INT UNSIGNED NULL,
+  entitat_eclesiastica_id INT UNSIGNED NULL,
   adreca TEXT,
-  ubicacio TEXT,                      -- (legacy) municipi/adreça en text lliure
+  ubicacio TEXT,
   web VARCHAR(255),
-  acces VARCHAR(20),                  -- online, presencial, mixt
+  acces VARCHAR(20),
   notes TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE SET NULL
+  FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE SET NULL,
+  FOREIGN KEY (entitat_eclesiastica_id) REFERENCES arquebisbats(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+DROP TABLE IF EXISTS arxius_llibres;
 CREATE TABLE IF NOT EXISTS arxius_llibres (
   arxiu_id INT UNSIGNED NOT NULL,
   llibre_id INT UNSIGNED NOT NULL,
-  signatura VARCHAR(255),          -- signatura específica a aquell arxiu
-  url_override TEXT,               -- si l’URL depèn de l’arxiu/portal
+  signatura VARCHAR(255),
+  url_override TEXT,
   PRIMARY KEY (arxiu_id, llibre_id),
   FOREIGN KEY (arxiu_id) REFERENCES arxius(id) ON DELETE CASCADE,
   FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+DROP TABLE IF EXISTS llibre_pagines;
 CREATE TABLE IF NOT EXISTS llibre_pagines (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   llibre_id INT UNSIGNED NOT NULL,

@@ -1,0 +1,9 @@
+//line /home/marc/codi/CercaGenealogica3/tests/common/pending.go:1:1
+package common
+
+import "testing"
+
+func Pending(t *testing.T, msg string) {goCover_823c98ce6a81__3[0] = 1 ; goCover_823c98ce6a81__3[1] = goCover_823c98ce6a81_P ; goCover_823c98ce6a81__3[2] = 3 ; goCover_823c98ce6a81__3[3]++;
+	t.Helper()
+	t.Skipf("PENDENT: %s", msg)
+}

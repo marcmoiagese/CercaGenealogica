@@ -92,7 +92,203 @@ body {
 /* Contingut principal */
 .contingut-principal {
     flex: 1;
-    padding: 20px 0;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px 20px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+/* Targetes bàsiques */
+.card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+    padding: 1.25rem;
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.card-header h1,
+.card-header h2 {
+    margin: 0;
+}
+
+/* Taules */
+.taula {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.taula th,
+.taula td {
+    padding: 0.75rem 0.6rem;
+    border-bottom: 1px solid #e6e6e6;
+    text-align: left;
+}
+
+.taula thead th {
+    background: #f3f5f7;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.taula tbody tr:nth-child(odd) {
+    background: #fafbfc;
+}
+
+.taula a {
+    color: var(--secondary-color);
+    text-decoration: none;
+}
+
+.form-accio {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}
+
+.grup-camp {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 0.85rem;
+}
+
+.grup-camp label {
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.grup-camp input,
+.grup-camp select,
+.grup-camp textarea {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: #fff;
+    width: 100%;
+}
+
+.boto-primari,
+.boto-secundari,
+.boto-perill,
+.enllaç {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 1.1rem;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+    text-decoration: none;
+}
+
+.boto-primari {
+    background-color: var(--secondary-color);
+    color: #fff;
+}
+
+.boto-primari:hover {
+    background-color: #0d4b6e;
+    box-shadow: 0 2px 8px rgba(13, 75, 110, 0.3);
+}
+
+.boto-secundari {
+    background: #eef3f7;
+    color: var(--primary-color);
+    border: 1px solid #d5dde4;
+}
+
+.boto-secundari:hover {
+    background: #e3ebf2;
+}
+
+.boto-perill {
+    background-color: #e74c3c;
+    color: #fff;
+}
+
+.boto-perill:hover:not(:disabled) {
+    background-color: #c0392b;
+    box-shadow: 0 2px 8px rgba(192, 57, 43, 0.35);
+}
+
+.enllaç {
+    background: none;
+    color: var(--secondary-color);
+    padding: 0;
+}
+
+.taula-wrapper {
+    width: 100%;
+    overflow: auto;
+}
+
+.arxius-layout {
+    gap: 1.25rem;
+}
+
+.filtres-arxius {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: flex-end;
+    margin-bottom: 0.75rem;
+}
+
+.filtres-arxius .grup-camp {
+    margin: 0;
+}
+
+.filtres-arxius label {
+    font-size: 0.9rem;
+    color: var(--color-text);
+}
+
+.filtres-arxius input,
+.filtres-arxius select {
+    min-width: 200px;
+}
+
+.arxiu-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.dades-grid {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem 1rem;
+}
+
+.dades-grid li {
+    background: #f7f7f9;
+    border-radius: 8px;
+    padding: 0.75rem 0.9rem;
+}
+
+/* Utilitats */
+.muted {
+    color: var(--color-text-clar);
+    font-size: 0.95rem;
 }
 
 /* Hero section */

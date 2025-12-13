@@ -1,0 +1,102 @@
+//line /home/marc/codi/CercaGenealogica3/core/mail.go:1:1
+package core
+
+import (
+	"bytes"
+	"fmt"
+	"net/smtp"
+	"os/exec"
+	"strings"
+)
+
+// MailConfig encapsula la configuració d'enviament de correu.
+type MailConfig struct {
+	Enabled  bool
+	From     string
+	SMTPHost string
+	SMTPPort string
+}
+
+// NewMailConfig construeix una MailConfig a partir del map de configuració.
+func NewMailConfig(cfg map[string]string) MailConfig {goCover_33ba7a78e32c__80[0] = 7 ; goCover_33ba7a78e32c__80[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__80[2] = 80 ; goCover_33ba7a78e32c__80[3]++;
+	enabled := strings.ToLower(strings.TrimSpace(cfg["MAIL_ENABLED"])) == "true"
+
+	from := strings.TrimSpace(cfg["MAIL_FROM"])
+	if from == "" {goCover_33ba7a78e32c__80[7]++;
+		from = "no-reply@localhost"
+	}
+
+	goCover_33ba7a78e32c__80[4]++;host := strings.TrimSpace(cfg["MAIL_SMTP_HOST"])
+	if host == "" {goCover_33ba7a78e32c__80[8]++;
+		host = "localhost"
+	}
+
+	goCover_33ba7a78e32c__80[5]++;port := strings.TrimSpace(cfg["MAIL_SMTP_PORT"])
+	if port == "" {goCover_33ba7a78e32c__80[9]++;
+		port = "25"
+	}
+
+	goCover_33ba7a78e32c__80[6]++;return MailConfig{
+		Enabled:  enabled,
+		From:     from,
+		SMTPHost: host,
+		SMTPPort: port,
+	}
+}
+
+// Send envia un correu utilitzant primer el binari local sendmail i, si no està disponible, fa servir SMTP.
+func (mc MailConfig) Send(to, subject, body string) error {goCover_33ba7a78e32c__81[0] = 6 ; goCover_33ba7a78e32c__81[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__81[2] = 81 ; goCover_33ba7a78e32c__81[3]++;
+	if !mc.Enabled {goCover_33ba7a78e32c__81[6]++;
+		return nil
+	}
+
+	goCover_33ba7a78e32c__81[4]++;msg := buildRFC822(mc.From, to, subject, body)
+
+	if err := mc.sendViaSendmail(msg); err == nil {goCover_33ba7a78e32c__81[7]++;
+		return nil
+	} else{ goCover_33ba7a78e32c__81[8]++;{
+		Debugf("sendmail no disponible, provant SMTP: %v", err)
+	}}
+
+	goCover_33ba7a78e32c__81[5]++;return mc.sendViaSMTP(msg, to)
+}
+
+func (mc MailConfig) sendViaSendmail(msg []byte) error {goCover_33ba7a78e32c__82[0] = 7 ; goCover_33ba7a78e32c__82[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__82[2] = 82 ; goCover_33ba7a78e32c__82[3]++;
+	path, err := exec.LookPath("sendmail")
+	if err != nil {goCover_33ba7a78e32c__82[6]++;
+		return err
+	}
+
+	goCover_33ba7a78e32c__82[4]++;cmd := exec.Command(path, "-t", "-oi")
+	cmd.Stdin = bytes.NewReader(msg)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {goCover_33ba7a78e32c__82[7]++;
+		if stderr.Len() > 0 {goCover_33ba7a78e32c__82[9]++;
+			return fmt.Errorf("sendmail: %w: %s", err, strings.TrimSpace(stderr.String()))
+		}
+		goCover_33ba7a78e32c__82[8]++;return fmt.Errorf("sendmail: %w", err)
+	}
+
+	goCover_33ba7a78e32c__82[5]++;return nil
+}
+
+func (mc MailConfig) sendViaSMTP(msg []byte, to string) error {goCover_33ba7a78e32c__83[0] = 1 ; goCover_33ba7a78e32c__83[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__83[2] = 83 ; goCover_33ba7a78e32c__83[3]++;
+	addr := fmt.Sprintf("%s:%s", mc.SMTPHost, mc.SMTPPort)
+	return smtp.SendMail(addr, nil, mc.From, []string{to}, msg)
+}
+
+func buildRFC822(from, to, subject, body string) []byte {goCover_33ba7a78e32c__84[0] = 1 ; goCover_33ba7a78e32c__84[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__84[2] = 84 ; goCover_33ba7a78e32c__84[3]++;
+	headers := []string{
+		fmt.Sprintf("From: %s", from),
+		fmt.Sprintf("To: %s", to),
+		fmt.Sprintf("Subject: %s", subject),
+		"MIME-Version: 1.0",
+		"Content-Type: text/plain; charset=UTF-8",
+		"",
+		body,
+	}
+	return []byte(strings.Join(headers, "\r\n"))
+}

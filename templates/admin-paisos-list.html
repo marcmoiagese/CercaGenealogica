@@ -1,0 +1,48 @@
+{{ define "admin-paisos-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "countries.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "countries.title" }}</h1>
+                <a class="boto-primari" href="/admin/paisos/new">{{ t .Lang "countries.button.new" }}</a>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>{{ t .Lang "countries.col.iso2" }}</th>
+                            <th>{{ t .Lang "countries.col.iso3" }}</th>
+                            <th>{{ t .Lang "countries.col.num" }}</th>
+                            <th>{{ t .Lang "countries.col.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Paisos }}
+                        <tr>
+                            <td>{{ .ID }}</td>
+                            <td>{{ .CodiISO2 }}</td>
+                            <td>{{ .CodiISO3 }}</td>
+                            <td>{{ .CodiPaisNum }}</td>
+                            <td><a href="/admin/paisos/{{ .ID }}/edit">{{ t $.Lang "countries.action.edit" }}</a></td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

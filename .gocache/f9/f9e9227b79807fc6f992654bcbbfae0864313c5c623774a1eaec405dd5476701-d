@@ -1,0 +1,15 @@
+./admin_arxius.go
+./admin_eclesiastic.go
+./admin_llibres.go
+./admin_municipis.go
+./admin_nivells.go
+./admin_paisos.go
+./app.go
+./csrf.go
+./i18n.go
+./logger.go
+./mail.go
+./permissions.go
+./templates.go
+./usuaris.go
+./webserver.go

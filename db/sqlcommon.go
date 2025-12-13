@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -24,6 +25,22 @@ func formatPlaceholders(style, query string) string {
 	return b.String()
 }
 
+func buildInPlaceholders(style string, count int) string {
+	if count <= 0 {
+		return ""
+	}
+	switch strings.ToLower(style) {
+	case "postgres":
+		parts := make([]string, count)
+		for i := 0; i < count; i++ {
+			parts[i] = fmt.Sprintf("$%d", i+1)
+		}
+		return strings.Join(parts, ",")
+	default:
+		return strings.TrimRight(strings.Repeat("?,", count), ",")
+	}
+}
+
 type sqlHelper struct {
 	db     *sql.DB
 	style  string
@@ -36,15 +53,19 @@ func newSQLHelper(db *sql.DB, style, nowFun string) sqlHelper {
 
 func (h sqlHelper) columnExists(table, column string) bool {
 	var query string
+	var args []interface{}
 	switch h.style {
 	case "mysql":
 		query = `SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`
+		args = []interface{}{table, column}
 	case "postgres":
 		query = `SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = $2`
+		args = []interface{}{table, column}
 	default: // sqlite
 		query = fmt.Sprintf(`SELECT 1 FROM pragma_table_info('%s') WHERE name = ?`, table)
+		args = []interface{}{column}
 	}
-	row := h.db.QueryRow(query, table, column)
+	row := h.db.QueryRow(query, args...)
 	var tmp int
 	if err := row.Scan(&tmp); err != nil {
 		return false
@@ -52,6 +73,816 @@ func (h sqlHelper) columnExists(table, column string) bool {
 	return true
 }
 
+// Policies
+func (h sqlHelper) ensureDefaultPolicies() error {
+	defaultPerms := map[string]PolicyPermissions{
+		"admin": {
+			Admin:              true,
+			CanManageUsers:     true,
+			CanManageTerritory: true,
+			CanManageEclesia:   true,
+			CanManageArchives:  true,
+			CanCreatePerson:    true,
+			CanEditAnyPerson:   true,
+			CanModerate:        true,
+			CanManagePolicies:  true,
+		},
+		"moderador": {
+			CanModerate: true,
+		},
+		"confiança": {
+			CanCreatePerson: true,
+		},
+		"usuari": {},
+	}
+	for name, perms := range defaultPerms {
+		permsJSON, _ := json.Marshal(perms)
+		stmt := `INSERT INTO politiques (nom, descripcio, permisos, data_creacio) VALUES (?, ?, ?, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			stmt = formatPlaceholders(h.style, `INSERT INTO politiques (nom, descripcio, permisos, data_creacio) VALUES (?, ?, ?, `+h.nowFun+`) ON CONFLICT (nom) DO NOTHING`)
+		} else if h.style == "mysql" {
+			stmt += " ON DUPLICATE KEY UPDATE permisos=VALUES(permisos), descripcio=VALUES(descripcio)"
+		} else { // sqlite
+			stmt += " ON CONFLICT(nom) DO NOTHING"
+		}
+		if h.style != "postgres" {
+			stmt = formatPlaceholders(h.style, stmt)
+		}
+		_, _ = h.db.Exec(stmt, name, "", string(permsJSON))
+		// Update perms if entry already exists but empty
+		upd := formatPlaceholders(h.style, `UPDATE politiques SET permisos = ? WHERE nom = ? AND (permisos IS NULL OR permisos = '' OR permisos = '{}' )`)
+		_, _ = h.db.Exec(upd, string(permsJSON), name)
+	}
+	return nil
+}
+
+func (h sqlHelper) userHasAnyPolicy(userID int, policies []string) (bool, error) {
+	if len(policies) == 0 {
+		return false, nil
+	}
+	inPlaceholders := strings.TrimRight(strings.Repeat("?,", len(policies)), ",")
+	query := `
+        SELECT 1
+        FROM usuaris_politiques up
+        INNER JOIN politiques p ON p.id = up.politica_id
+        WHERE up.usuari_id = ? AND p.nom IN (` + inPlaceholders + `)
+        LIMIT 1`
+	query = formatPlaceholders(h.style, query)
+	args := make([]interface{}, 0, len(policies)+1)
+	args = append(args, userID)
+	for _, p := range policies {
+		args = append(args, p)
+	}
+	row := h.db.QueryRow(query, args...)
+	var tmp int
+	if err := row.Scan(&tmp); err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (h sqlHelper) listPolitiques() ([]Politica, error) {
+	rows, err := h.db.Query(`SELECT id, nom, descripcio, permisos FROM politiques ORDER BY nom`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []Politica
+	for rows.Next() {
+		var p Politica
+		if err := rows.Scan(&p.ID, &p.Nom, &p.Descripcio, &p.Permisos); err != nil {
+			return nil, err
+		}
+		res = append(res, p)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getPolitica(id int) (*Politica, error) {
+	row := h.db.QueryRow(`SELECT id, nom, descripcio, permisos FROM politiques WHERE id = ?`, id)
+	p := &Politica{}
+	if err := row.Scan(&p.ID, &p.Nom, &p.Descripcio, &p.Permisos); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (h sqlHelper) savePolitica(p *Politica) (int, error) {
+	if p.ID == 0 {
+		stmt := `INSERT INTO politiques (nom, descripcio, permisos, data_creacio) VALUES (?, ?, ?, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			stmt += " RETURNING id"
+		}
+		stmt = formatPlaceholders(h.style, stmt)
+		if h.style == "postgres" {
+			if err := h.db.QueryRow(stmt, p.Nom, p.Descripcio, p.Permisos).Scan(&p.ID); err != nil {
+				return 0, err
+			}
+			return p.ID, nil
+		}
+		res, err := h.db.Exec(stmt, p.Nom, p.Descripcio, p.Permisos)
+		if err != nil {
+			return 0, err
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			p.ID = int(id)
+		}
+		return p.ID, nil
+	}
+	stmt := `UPDATE politiques SET nom=?, descripcio=?, permisos=? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, p.Nom, p.Descripcio, p.Permisos, p.ID)
+	return p.ID, err
+}
+
+func (h sqlHelper) listUserPolitiques(userID int) ([]Politica, error) {
+	query := `
+        SELECT p.id, p.nom, p.descripcio, p.permisos
+        FROM usuaris_politiques up
+        INNER JOIN politiques p ON p.id = up.politica_id
+        WHERE up.usuari_id = ?
+        ORDER BY p.nom`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []Politica
+	for rows.Next() {
+		var p Politica
+		if err := rows.Scan(&p.ID, &p.Nom, &p.Descripcio, &p.Permisos); err != nil {
+			return nil, err
+		}
+		res = append(res, p)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) addUserPolitica(userID, politicaID int) error {
+	stmt := formatPlaceholders(h.style, `INSERT INTO usuaris_politiques (usuari_id, politica_id, data_assignacio) VALUES (?, ?, `+h.nowFun+`) ON CONFLICT DO NOTHING`)
+	if h.style == "mysql" {
+		stmt = formatPlaceholders(h.style, `INSERT INTO usuaris_politiques (usuari_id, politica_id, data_assignacio) VALUES (?, ?, `+h.nowFun+`) ON DUPLICATE KEY UPDATE usuari_id=VALUES(usuari_id)`)
+	}
+	_, err := h.db.Exec(stmt, userID, politicaID)
+	return err
+}
+
+func (h sqlHelper) removeUserPolitica(userID, politicaID int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM usuaris_politiques WHERE usuari_id = ? AND politica_id = ?`)
+	_, err := h.db.Exec(stmt, userID, politicaID)
+	return err
+}
+
+func (h sqlHelper) listGroupPolitiques(groupID int) ([]Politica, error) {
+	query := `
+        SELECT p.id, p.nom, p.descripcio, p.permisos
+        FROM grups_politiques gp
+        INNER JOIN politiques p ON p.id = gp.politica_id
+        WHERE gp.grup_id = ?
+        ORDER BY p.nom`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []Politica
+	for rows.Next() {
+		var p Politica
+		if err := rows.Scan(&p.ID, &p.Nom, &p.Descripcio, &p.Permisos); err != nil {
+			return nil, err
+		}
+		res = append(res, p)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) addGroupPolitica(groupID, politicaID int) error {
+	stmt := formatPlaceholders(h.style, `INSERT INTO grups_politiques (grup_id, politica_id, data_assignacio) VALUES (?, ?, `+h.nowFun+`) ON CONFLICT DO NOTHING`)
+	if h.style == "mysql" {
+		stmt = formatPlaceholders(h.style, `INSERT INTO grups_politiques (grup_id, politica_id, data_assignacio) VALUES (?, ?, `+h.nowFun+`) ON DUPLICATE KEY UPDATE grup_id=VALUES(grup_id)`)
+	}
+	_, err := h.db.Exec(stmt, groupID, politicaID)
+	return err
+}
+
+func (h sqlHelper) removeGroupPolitica(groupID, politicaID int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM grups_politiques WHERE grup_id = ? AND politica_id = ?`)
+	_, err := h.db.Exec(stmt, groupID, politicaID)
+	return err
+}
+
+func (h sqlHelper) listGroups() ([]Group, error) {
+	rows, err := h.db.Query(`SELECT id, nom, descripcio FROM grups ORDER BY nom`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []Group
+	for rows.Next() {
+		var g Group
+		if err := rows.Scan(&g.ID, &g.Nom, &g.Descripcio); err != nil {
+			return nil, err
+		}
+		res = append(res, g)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listUserGroups(userID int) ([]Group, error) {
+	query := `
+        SELECT g.id, g.nom, g.descripcio
+        FROM usuaris_grups ug
+        INNER JOIN grups g ON g.id = ug.grup_id
+        WHERE ug.usuari_id = ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []Group
+	for rows.Next() {
+		var g Group
+		if err := rows.Scan(&g.ID, &g.Nom, &g.Descripcio); err != nil {
+			return nil, err
+		}
+		res = append(res, g)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getEffectivePoliticaPerms(userID int) (PolicyPermissions, error) {
+	combined := PolicyPermissions{}
+	// Direct policies
+	userPolicies, err := h.listUserPolitiques(userID)
+	if err != nil {
+		return combined, err
+	}
+	// Group policies
+	groupRows, err := h.listUserGroups(userID)
+	if err != nil {
+		return combined, err
+	}
+	groupPolicies := []Politica{}
+	for _, g := range groupRows {
+		ps, err := h.listGroupPolitiques(g.ID)
+		if err == nil {
+			groupPolicies = append(groupPolicies, ps...)
+		}
+	}
+	all := append(userPolicies, groupPolicies...)
+	for _, p := range all {
+		var perms PolicyPermissions
+		if err := json.Unmarshal([]byte(p.Permisos), &perms); err != nil {
+			continue
+		}
+		combined = combinePermissions(combined, perms)
+	}
+	return combined, nil
+}
+
+func combinePermissions(base, add PolicyPermissions) PolicyPermissions {
+	base.Admin = base.Admin || add.Admin
+	base.CanManageUsers = base.CanManageUsers || add.CanManageUsers
+	base.CanManageTerritory = base.CanManageTerritory || add.CanManageTerritory
+	base.CanManageEclesia = base.CanManageEclesia || add.CanManageEclesia
+	base.CanManageArchives = base.CanManageArchives || add.CanManageArchives
+	base.CanCreatePerson = base.CanCreatePerson || add.CanCreatePerson
+	base.CanEditAnyPerson = base.CanEditAnyPerson || add.CanEditAnyPerson
+	base.CanModerate = base.CanModerate || add.CanModerate
+	base.CanManagePolicies = base.CanManagePolicies || add.CanManagePolicies
+	return base
+}
+
+// Paisos
+func (h sqlHelper) listPaisos() ([]Pais, error) {
+	query := `SELECT id, codi_iso2, codi_iso3, codi_pais_num FROM paisos ORDER BY codi_iso2`
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []Pais
+	for rows.Next() {
+		var p Pais
+		if err := rows.Scan(&p.ID, &p.CodiISO2, &p.CodiISO3, &p.CodiPaisNum); err != nil {
+			return nil, err
+		}
+		res = append(res, p)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getPais(id int) (*Pais, error) {
+	query := formatPlaceholders(h.style, `SELECT id, codi_iso2, codi_iso3, codi_pais_num FROM paisos WHERE id = ?`)
+	row := h.db.QueryRow(query, id)
+	var p Pais
+	if err := row.Scan(&p.ID, &p.CodiISO2, &p.CodiISO3, &p.CodiPaisNum); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (h sqlHelper) createPais(p *Pais) (int, error) {
+	query := `
+        INSERT INTO paisos (codi_iso2, codi_iso3, codi_pais_num, created_at, updated_at)
+        VALUES (?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += ` RETURNING id`
+	}
+	query = formatPlaceholders(h.style, query)
+
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(query, p.CodiISO2, p.CodiISO3, p.CodiPaisNum).Scan(&p.ID); err != nil {
+			return 0, err
+		}
+		return p.ID, nil
+	}
+	res, err := h.db.Exec(query, p.CodiISO2, p.CodiISO3, p.CodiPaisNum)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		p.ID = int(id)
+	}
+	return p.ID, nil
+}
+
+func (h sqlHelper) updatePais(p *Pais) error {
+	query := `
+        UPDATE paisos
+        SET codi_iso2 = ?, codi_iso3 = ?, codi_pais_num = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, p.CodiISO2, p.CodiISO3, p.CodiPaisNum, p.ID)
+	return err
+}
+
+// Nivells administratius
+func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, error) {
+	where := "1=1"
+	args := []interface{}{}
+	if f.PaisID > 0 {
+		where += " AND n.pais_id = ?"
+		args = append(args, f.PaisID)
+	}
+	if f.Nivel > 0 {
+		where += " AND n.nivel = ?"
+		args = append(args, f.Nivel)
+	}
+	if strings.TrimSpace(f.Estat) != "" {
+		where += " AND n.estat = ?"
+		args = append(args, strings.TrimSpace(f.Estat))
+	}
+	query := `
+        SELECT n.id, n.pais_id, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
+               n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat
+        FROM nivells_administratius n
+        LEFT JOIN nivells_administratius p ON p.id = n.parent_id
+        WHERE ` + where + `
+        ORDER BY n.nivel, n.nom_nivell`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []NivellAdministratiu
+	for rows.Next() {
+		var n NivellAdministratiu
+		if err := rows.Scan(&n.ID, &n.PaisID, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat); err != nil {
+			return nil, err
+		}
+		res = append(res, n)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getNivell(id int) (*NivellAdministratiu, error) {
+	query := `
+        SELECT n.id, n.pais_id, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
+               n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat
+        FROM nivells_administratius n
+        LEFT JOIN nivells_administratius p ON p.id = n.parent_id
+        WHERE n.id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var n NivellAdministratiu
+	if err := row.Scan(&n.ID, &n.PaisID, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat); err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
+func (h sqlHelper) createNivell(n *NivellAdministratiu) (int, error) {
+	query := `
+        INSERT INTO nivells_administratius
+            (pais_id, nivel, nom_nivell, tipus_nivell, codi_oficial, altres, parent_id, any_inici, any_fi, estat, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += ` RETURNING id`
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{n.PaisID, n.Nivel, n.NomNivell, n.TipusNivell, n.CodiOficial, n.Altres, n.ParentID, n.AnyInici, n.AnyFi, n.Estat}
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(query, args...).Scan(&n.ID); err != nil {
+			return 0, err
+		}
+		return n.ID, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		n.ID = int(id)
+	}
+	return n.ID, nil
+}
+
+func (h sqlHelper) updateNivell(n *NivellAdministratiu) error {
+	query := `
+        UPDATE nivells_administratius
+        SET pais_id = ?, nivel = ?, nom_nivell = ?, tipus_nivell = ?, codi_oficial = ?, altres = ?, parent_id = ?, any_inici = ?, any_fi = ?, estat = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, n.PaisID, n.Nivel, n.NomNivell, n.TipusNivell, n.CodiOficial, n.Altres, n.ParentID, n.AnyInici, n.AnyFi, n.Estat, n.ID)
+	return err
+}
+
+// Municipis
+func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
+	where := "1=1"
+	args := []interface{}{}
+	if strings.TrimSpace(f.Text) != "" {
+		where += " AND lower(m.nom) LIKE ?"
+		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
+	}
+	if strings.TrimSpace(f.Estat) != "" {
+		where += " AND m.estat = ?"
+		args = append(args, strings.TrimSpace(f.Estat))
+	}
+	if f.PaisID > 0 {
+		where += " AND na1.id = ?"
+		args = append(args, f.PaisID)
+	}
+	if f.NivellID > 0 {
+		where += " AND (m.nivell_administratiu_id_1 = ? OR m.nivell_administratiu_id_2 = ? OR m.nivell_administratiu_id_3 = ? OR m.nivell_administratiu_id_4 = ? OR m.nivell_administratiu_id_5 = ? OR m.nivell_administratiu_id_6 = ? OR m.nivell_administratiu_id_7 = ?)"
+		for i := 0; i < 7; i++ {
+			args = append(args, f.NivellID)
+		}
+	}
+	query := `
+        SELECT m.id, m.nom, m.tipus, m.estat, m.codi_postal,
+               na1.nom_nivell AS pais_nom,
+               na3.nom_nivell AS provincia_nom,
+               na4.nom_nivell AS comarca_nom
+        FROM municipis m
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+        LEFT JOIN nivells_administratius na3 ON na3.id = m.nivell_administratiu_id_3
+        LEFT JOIN nivells_administratius na4 ON na4.id = m.nivell_administratiu_id_4
+        WHERE ` + where + `
+        ORDER BY m.nom`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MunicipiRow
+	for rows.Next() {
+		var r MunicipiRow
+		if err := rows.Scan(&r.ID, &r.Nom, &r.Tipus, &r.Estat, &r.CodiPostal, &r.PaisNom, &r.ProvNom, &r.Comarca); err != nil {
+			return nil, err
+		}
+		res = append(res, r)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getMunicipi(id int) (*Municipi, error) {
+	query := `
+        SELECT id, nom, municipi_id, tipus,
+               nivell_administratiu_id_1, nivell_administratiu_id_2, nivell_administratiu_id_3,
+               nivell_administratiu_id_4, nivell_administratiu_id_5, nivell_administratiu_id_6, nivell_administratiu_id_7,
+               codi_postal, latitud, longitud, what3words, web, wikipedia, altres, estat
+        FROM municipis WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var m Municipi
+	if err := row.Scan(
+		&m.ID, &m.Nom, &m.MunicipiID, &m.Tipus,
+		&m.NivellAdministratiuID[0], &m.NivellAdministratiuID[1], &m.NivellAdministratiuID[2],
+		&m.NivellAdministratiuID[3], &m.NivellAdministratiuID[4], &m.NivellAdministratiuID[5], &m.NivellAdministratiuID[6],
+		&m.CodiPostal, &m.Latitud, &m.Longitud, &m.What3Words, &m.Web, &m.Wikipedia, &m.Altres, &m.Estat,
+	); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+func (h sqlHelper) createMunicipi(m *Municipi) (int, error) {
+	query := `
+        INSERT INTO municipis
+            (nom, municipi_id, tipus, nivell_administratiu_id_1, nivell_administratiu_id_2, nivell_administratiu_id_3,
+             nivell_administratiu_id_4, nivell_administratiu_id_5, nivell_administratiu_id_6, nivell_administratiu_id_7,
+             codi_postal, latitud, longitud, what3words, web, wikipedia, altres, estat, data_creacio, ultima_modificacio)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += ` RETURNING id`
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{
+		m.Nom, m.MunicipiID, m.Tipus,
+		m.NivellAdministratiuID[0], m.NivellAdministratiuID[1], m.NivellAdministratiuID[2],
+		m.NivellAdministratiuID[3], m.NivellAdministratiuID[4], m.NivellAdministratiuID[5], m.NivellAdministratiuID[6],
+		m.CodiPostal, m.Latitud, m.Longitud, m.What3Words, m.Web, m.Wikipedia, m.Altres, m.Estat,
+	}
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(query, args...).Scan(&m.ID); err != nil {
+			return 0, err
+		}
+		return m.ID, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		m.ID = int(id)
+	}
+	return m.ID, nil
+}
+
+func (h sqlHelper) updateMunicipi(m *Municipi) error {
+	query := `
+        UPDATE municipis SET
+            nom=?, municipi_id=?, tipus=?,
+            nivell_administratiu_id_1=?, nivell_administratiu_id_2=?, nivell_administratiu_id_3=?,
+            nivell_administratiu_id_4=?, nivell_administratiu_id_5=?, nivell_administratiu_id_6=?, nivell_administratiu_id_7=?,
+            codi_postal=?, latitud=?, longitud=?, what3words=?, web=?, wikipedia=?, altres=?, estat=?, ultima_modificacio=` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query,
+		m.Nom, m.MunicipiID, m.Tipus,
+		m.NivellAdministratiuID[0], m.NivellAdministratiuID[1], m.NivellAdministratiuID[2],
+		m.NivellAdministratiuID[3], m.NivellAdministratiuID[4], m.NivellAdministratiuID[5], m.NivellAdministratiuID[6],
+		m.CodiPostal, m.Latitud, m.Longitud, m.What3Words, m.Web, m.Wikipedia, m.Altres, m.Estat,
+		m.ID)
+	return err
+}
+
+func (h sqlHelper) listCodisPostals(municipiID int) ([]CodiPostal, error) {
+	query := formatPlaceholders(h.style, `
+        SELECT id, municipi_id, codi_postal, zona, desde, fins
+        FROM codis_postals
+        WHERE municipi_id = ? ORDER BY codi_postal`)
+	rows, err := h.db.Query(query, municipiID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CodiPostal
+	for rows.Next() {
+		var cp CodiPostal
+		if err := rows.Scan(&cp.ID, &cp.MunicipiID, &cp.CodiPostal, &cp.Zona, &cp.Desde, &cp.Fins); err != nil {
+			return nil, err
+		}
+		res = append(res, cp)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) saveCodiPostal(cp *CodiPostal) (int, error) {
+	if cp.ID == 0 {
+		query := `
+            INSERT INTO codis_postals (municipi_id, codi_postal, zona, desde, fins)
+            VALUES (?, ?, ?, ?, ?)`
+		query = formatPlaceholders(h.style, query)
+		if h.style == "postgres" {
+			query += ` RETURNING id`
+			if err := h.db.QueryRow(query, cp.MunicipiID, cp.CodiPostal, cp.Zona, cp.Desde, cp.Fins).Scan(&cp.ID); err != nil {
+				return 0, err
+			}
+			return cp.ID, nil
+		}
+		res, err := h.db.Exec(query, cp.MunicipiID, cp.CodiPostal, cp.Zona, cp.Desde, cp.Fins)
+		if err != nil {
+			return 0, err
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			cp.ID = int(id)
+		}
+		return cp.ID, nil
+	}
+	query := `
+        UPDATE codis_postals
+        SET codi_postal=?, zona=?, desde=?, fins=?
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, cp.CodiPostal, cp.Zona, cp.Desde, cp.Fins, cp.ID)
+	return cp.ID, err
+}
+
+// Noms històrics
+func (h sqlHelper) listNomsHistorics(entitatTipus string, entitatID int) ([]NomHistoric, error) {
+	query := `
+        SELECT id, entitat_tipus, entitat_id, nom, any_inici, any_fi, pais_regne, distribucio_geografica, font
+        FROM noms_historics
+        WHERE entitat_tipus = ? AND entitat_id = ?
+        ORDER BY any_inici`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, entitatTipus, entitatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []NomHistoric
+	for rows.Next() {
+		var nh NomHistoric
+		if err := rows.Scan(&nh.ID, &nh.EntitatTipus, &nh.EntitatID, &nh.Nom, &nh.AnyInici, &nh.AnyFi, &nh.PaisRegne, &nh.DistribucioGeografica, &nh.Font); err != nil {
+			return nil, err
+		}
+		res = append(res, nh)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) saveNomHistoric(nh *NomHistoric) (int, error) {
+	if nh.ID == 0 {
+		query := `
+            INSERT INTO noms_historics (entitat_tipus, entitat_id, nom, any_inici, any_fi, pais_regne, distribucio_geografica, font)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+		query = formatPlaceholders(h.style, query)
+		if h.style == "postgres" {
+			query += " RETURNING id"
+			if err := h.db.QueryRow(query, nh.EntitatTipus, nh.EntitatID, nh.Nom, nh.AnyInici, nh.AnyFi, nh.PaisRegne, nh.DistribucioGeografica, nh.Font).Scan(&nh.ID); err != nil {
+				return 0, err
+			}
+			return nh.ID, nil
+		}
+		res, err := h.db.Exec(query, nh.EntitatTipus, nh.EntitatID, nh.Nom, nh.AnyInici, nh.AnyFi, nh.PaisRegne, nh.DistribucioGeografica, nh.Font)
+		if err != nil {
+			return 0, err
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			nh.ID = int(id)
+		}
+		return nh.ID, nil
+	}
+	query := `
+        UPDATE noms_historics
+        SET nom=?, any_inici=?, any_fi=?, pais_regne=?, distribucio_geografica=?, font=?
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, nh.Nom, nh.AnyInici, nh.AnyFi, nh.PaisRegne, nh.DistribucioGeografica, nh.Font, nh.ID)
+	return nh.ID, err
+}
+
+// Entitats eclesiàstiques
+func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error) {
+	where := "1=1"
+	args := []interface{}{}
+	if strings.TrimSpace(f.Text) != "" {
+		where += " AND lower(a.nom) LIKE ?"
+		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
+	}
+	if f.PaisID > 0 {
+		where += " AND a.pais_id = ?"
+		args = append(args, f.PaisID)
+	}
+	query := `
+        SELECT a.id, a.nom, a.tipus_entitat, p.codi_iso3, a.nivell, parent.nom as parent_nom, a.any_inici, a.any_fi
+        FROM arquebisbats a
+        LEFT JOIN paisos p ON p.id = a.pais_id
+        LEFT JOIN arquebisbats parent ON parent.id = a.parent_id
+        WHERE ` + where + `
+        ORDER BY a.nom`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []ArquebisbatRow
+	for rows.Next() {
+		var r ArquebisbatRow
+		if err := rows.Scan(&r.ID, &r.Nom, &r.TipusEntitat, &r.PaisNom, &r.Nivell, &r.ParentNom, &r.AnyInici, &r.AnyFi); err != nil {
+			return nil, err
+		}
+		res = append(res, r)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getArquebisbat(id int) (*Arquebisbat, error) {
+	query := `
+        SELECT id, nom, tipus_entitat, pais_id, nivell, parent_id, any_inici, any_fi,
+               web, web_arxiu, web_wikipedia, territori, observacions
+        FROM arquebisbats WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var a Arquebisbat
+	if err := row.Scan(&a.ID, &a.Nom, &a.TipusEntitat, &a.PaisID, &a.Nivell, &a.ParentID, &a.AnyInici, &a.AnyFi, &a.Web, &a.WebArxiu, &a.WebWikipedia, &a.Territori, &a.Observacions); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (h sqlHelper) createArquebisbat(ae *Arquebisbat) (int, error) {
+	query := `
+        INSERT INTO arquebisbats
+            (nom, tipus_entitat, pais_id, nivell, parent_id, any_inici, any_fi, web, web_arxiu, web_wikipedia, territori, observacions, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += ` RETURNING id`
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{ae.Nom, ae.TipusEntitat, ae.PaisID, ae.Nivell, ae.ParentID, ae.AnyInici, ae.AnyFi, ae.Web, ae.WebArxiu, ae.WebWikipedia, ae.Territori, ae.Observacions}
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(query, args...).Scan(&ae.ID); err != nil {
+			return 0, err
+		}
+		return ae.ID, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		ae.ID = int(id)
+	}
+	return ae.ID, nil
+}
+
+func (h sqlHelper) updateArquebisbat(ae *Arquebisbat) error {
+	query := `
+        UPDATE arquebisbats
+        SET nom=?, tipus_entitat=?, pais_id=?, nivell=?, parent_id=?, any_inici=?, any_fi=?, web=?, web_arxiu=?, web_wikipedia=?, territori=?, observacions=?, updated_at=` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, ae.Nom, ae.TipusEntitat, ae.PaisID, ae.Nivell, ae.ParentID, ae.AnyInici, ae.AnyFi, ae.Web, ae.WebArxiu, ae.WebWikipedia, ae.Territori, ae.Observacions, ae.ID)
+	return err
+}
+
+func (h sqlHelper) listArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {
+	query := `
+        SELECT am.id, am.id_municipi, am.id_arquevisbat, am.any_inici, am.any_fi, am.motiu, am.font, a.nom
+        FROM arquebisbats_municipi am
+        INNER JOIN arquebisbats a ON a.id = am.id_arquevisbat
+        WHERE am.id_municipi = ? ORDER BY am.any_inici`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, munID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []ArquebisbatMunicipi
+	for rows.Next() {
+		var am ArquebisbatMunicipi
+		if err := rows.Scan(&am.ID, &am.MunicipiID, &am.ArquebisbatID, &am.AnyInici, &am.AnyFi, &am.Motiu, &am.Font, &am.NomEntitat); err != nil {
+			return nil, err
+		}
+		res = append(res, am)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) saveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {
+	if am.ID == 0 {
+		query := `
+            INSERT INTO arquebisbats_municipi (id_municipi, id_arquevisbat, any_inici, any_fi, motiu, font)
+            VALUES (?, ?, ?, ?, ?, ?)`
+		query = formatPlaceholders(h.style, query)
+		if h.style == "postgres" {
+			query += ` RETURNING id`
+			if err := h.db.QueryRow(query, am.MunicipiID, am.ArquebisbatID, am.AnyInici, am.AnyFi, am.Motiu, am.Font).Scan(&am.ID); err != nil {
+				return 0, err
+			}
+			return am.ID, nil
+		}
+		res, err := h.db.Exec(query, am.MunicipiID, am.ArquebisbatID, am.AnyInici, am.AnyFi, am.Motiu, am.Font)
+		if err != nil {
+			return 0, err
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			am.ID = int(id)
+		}
+		return am.ID, nil
+	}
+	query := `
+        UPDATE arquebisbats_municipi
+        SET id_arquevisbat=?, any_inici=?, any_fi=?, motiu=?, font=?
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, am.ArquebisbatID, am.AnyInici, am.AnyFi, am.Motiu, am.Font, am.ID)
+	return am.ID, err
+}
 func (h sqlHelper) ensureUserExtraColumns() {
 	stmts := []string{}
 	switch h.style {
@@ -276,16 +1107,18 @@ func (h sqlHelper) saveActivationToken(email, token string) error {
 func (h sqlHelper) activateUser(token string) error {
 	stmt := formatPlaceholders(h.style, `
         UPDATE usuaris 
-        SET actiu = 1, token_activacio = NULL, expira_token = NULL 
+        SET actiu = %s, token_activacio = NULL, expira_token = NULL 
         WHERE token_activacio = ? AND (expira_token IS NULL OR expira_token > %s)
     `)
 	nowExpr := "datetime('now')"
+	actiuExpr := "1"
 	if h.style == "mysql" {
 		nowExpr = "NOW()"
 	} else if h.style == "postgres" {
 		nowExpr = "NOW()"
+		actiuExpr = "TRUE"
 	}
-	stmt = fmt.Sprintf(stmt, nowExpr)
+	stmt = fmt.Sprintf(stmt, actiuExpr, nowExpr)
 	res, err := h.db.Exec(stmt, token)
 	if err != nil {
 		return err
@@ -703,4 +1536,430 @@ func (h sqlHelper) existsUserByEmail(email string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// Arxius
+func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
+	h.ensureUserExtraColumns() // no-op but keeps migrations consistent
+	args := []interface{}{}
+	clauses := []string{"1=1"}
+	if filter.Text != "" {
+		clauses = append(clauses, "a.nom LIKE ?")
+		args = append(args, "%"+filter.Text+"%")
+	}
+	if filter.Tipus != "" {
+		clauses = append(clauses, "a.tipus = ?")
+		args = append(args, filter.Tipus)
+	}
+	if filter.Acces != "" {
+		clauses = append(clauses, "a.acces = ?")
+		args = append(args, filter.Acces)
+	}
+	if filter.EntitatID > 0 {
+		clauses = append(clauses, "a.entitat_eclesiastica_id = ?")
+		args = append(args, filter.EntitatID)
+	}
+	limit := 50
+	offset := 0
+	if filter.Limit > 0 {
+		limit = filter.Limit
+	}
+	if filter.Offset > 0 {
+		offset = filter.Offset
+	}
+	args = append(args, limit, offset)
+	query := `
+        SELECT a.id, a.nom, a.tipus, a.municipi_id, a.entitat_eclesiastica_id, a.adreca, a.ubicacio, a.web, a.acces, a.notes,
+               m.nom as municipi_nom, ae.nom as entitat_nom,
+               COALESCE(cnt.total, 0) AS llibres
+        FROM arxius a
+        LEFT JOIN municipis m ON m.id = a.municipi_id
+        LEFT JOIN arquebisbats ae ON ae.id = a.entitat_eclesiastica_id
+        LEFT JOIN (
+            SELECT arxiu_id, COUNT(*) as total FROM arxius_llibres GROUP BY arxiu_id
+        ) cnt ON cnt.arxiu_id = a.id
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        ORDER BY a.nom ASC
+        LIMIT ? OFFSET ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []ArxiuWithCount
+	for rows.Next() {
+		var a ArxiuWithCount
+		if err := rows.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.Web, &a.Acces, &a.Notes, &a.MunicipiNom, &a.EntitatNom, &a.Llibres); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getArxiu(id int) (*Arxiu, error) {
+	query := formatPlaceholders(h.style, `
+        SELECT id, nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes
+        FROM arxius WHERE id = ?`)
+	row := h.db.QueryRow(query, id)
+	var a Arxiu
+	if err := row.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.Web, &a.Acces, &a.Notes); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (h sqlHelper) createArxiu(a *Arxiu) (int, error) {
+	args := []interface{}{a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.Web, a.Acces, a.Notes}
+	if h.style == "postgres" {
+		query := `
+            INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)
+            RETURNING id`
+		query = formatPlaceholders(h.style, query)
+		if err := h.db.QueryRow(query, args...).Scan(&a.ID); err != nil {
+			return 0, err
+		}
+		return a.ID, nil
+	}
+
+	query := `
+        INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	query = formatPlaceholders(h.style, query)
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		a.ID = int(id)
+	}
+	return a.ID, nil
+}
+
+func (h sqlHelper) updateArxiu(a *Arxiu) error {
+	query := `
+        UPDATE arxius
+        SET nom = ?, tipus = ?, municipi_id = ?, entitat_eclesiastica_id = ?, adreca = ?, ubicacio = ?, web = ?, acces = ?, notes = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.Web, a.Acces, a.Notes, a.ID)
+	return err
+}
+
+func (h sqlHelper) deleteArxiu(id int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM arxius WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
+	return err
+}
+
+func (h sqlHelper) listArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
+	query := `
+        SELECT al.arxiu_id, al.llibre_id, al.signatura, al.url_override,
+               l.titol, l.nom_esglesia, l.cronologia, m.nom as municipi, a.nom as arxiu_nom
+        FROM arxius_llibres al
+        INNER JOIN llibres l ON l.id = al.llibre_id
+        LEFT JOIN municipis m ON m.id = l.municipi_id
+        LEFT JOIN arxius a ON a.id = al.arxiu_id
+        WHERE al.arxiu_id = ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, arxiuID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []ArxiuLlibreDetail
+	for rows.Next() {
+		var d ArxiuLlibreDetail
+		if err := rows.Scan(&d.ArxiuID, &d.LlibreID, &d.Signatura, &d.URLOverride, &d.Titol, &d.NomEsglesia, &d.Cronologia, &d.Municipi, &d.ArxiuNom); err != nil {
+			return nil, err
+		}
+		res = append(res, d)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
+	query := `
+        SELECT al.arxiu_id, al.llibre_id, al.signatura, al.url_override,
+               a.nom as arxiu_nom, m.nom as municipi
+        FROM arxius_llibres al
+        INNER JOIN arxius a ON a.id = al.arxiu_id
+        LEFT JOIN municipis m ON m.id = a.municipi_id
+        WHERE al.llibre_id = ?
+        ORDER BY a.nom`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, llibreID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []ArxiuLlibreDetail
+	for rows.Next() {
+		var d ArxiuLlibreDetail
+		if err := rows.Scan(&d.ArxiuID, &d.LlibreID, &d.Signatura, &d.URLOverride, &d.ArxiuNom, &d.Municipi); err != nil {
+			return nil, err
+		}
+		res = append(res, d)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) addArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	stmt := formatPlaceholders(h.style, `
+        INSERT INTO arxius_llibres (arxiu_id, llibre_id, signatura, url_override)
+        VALUES (?, ?, ?, ?)`)
+	_, err := h.db.Exec(stmt, arxiuID, llibreID, signatura, urlOverride)
+	return err
+}
+
+func (h sqlHelper) updateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	stmt := formatPlaceholders(h.style, `
+        UPDATE arxius_llibres SET signatura = ?, url_override = ?
+        WHERE arxiu_id = ? AND llibre_id = ?`)
+	_, err := h.db.Exec(stmt, signatura, urlOverride, arxiuID, llibreID)
+	return err
+}
+
+func (h sqlHelper) deleteArxiuLlibre(arxiuID, llibreID int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM arxius_llibres WHERE arxiu_id = ? AND llibre_id = ?`)
+	_, err := h.db.Exec(stmt, arxiuID, llibreID)
+	return err
+}
+
+func (h sqlHelper) searchLlibresSimple(q string, limit int) ([]LlibreSimple, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	args := []interface{}{}
+	where := "1=1"
+	if strings.TrimSpace(q) != "" {
+		where = "(l.titol LIKE ? OR l.nom_esglesia LIKE ? OR l.cronologia LIKE ?)"
+		like := "%" + q + "%"
+		args = append(args, like, like, like)
+	}
+	args = append(args, limit)
+	query := `
+        SELECT l.id, l.titol, l.nom_esglesia, l.cronologia, m.nom as municipi
+        FROM llibres l
+        LEFT JOIN municipis m ON m.id = l.municipi_id
+        WHERE ` + where + `
+        ORDER BY l.titol ASC
+        LIMIT ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []LlibreSimple
+	for rows.Next() {
+		var l LlibreSimple
+		if err := rows.Scan(&l.ID, &l.Titol, &l.NomEsglesia, &l.Cronologia, &l.Municipi); err != nil {
+			return nil, err
+		}
+		res = append(res, l)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
+	args := []interface{}{}
+	clauses := []string{"1=1"}
+	if strings.TrimSpace(filter.Text) != "" {
+		like := "%" + strings.TrimSpace(filter.Text) + "%"
+		clauses = append(clauses, "(l.titol LIKE ? OR l.nom_esglesia LIKE ?)")
+		args = append(args, like, like)
+	}
+	if filter.ArquebisbatID > 0 {
+		clauses = append(clauses, "l.arquevisbat_id = ?")
+		args = append(args, filter.ArquebisbatID)
+	}
+	if filter.MunicipiID > 0 {
+		clauses = append(clauses, "l.municipi_id = ?")
+		args = append(args, filter.MunicipiID)
+	}
+	if filter.ArxiuID > 0 {
+		clauses = append(clauses, "EXISTS (SELECT 1 FROM arxius_llibres al WHERE al.llibre_id = l.id AND al.arxiu_id = ?)")
+		args = append(args, filter.ArxiuID)
+	}
+	if strings.TrimSpace(filter.ArxiuTipus) != "" {
+		clauses = append(clauses, "EXISTS (SELECT 1 FROM arxius_llibres al INNER JOIN arxius ax ON ax.id = al.arxiu_id WHERE al.llibre_id = l.id AND ax.tipus = ?)")
+		args = append(args, strings.TrimSpace(filter.ArxiuTipus))
+	}
+	query := `
+        SELECT l.id, l.arquevisbat_id, l.municipi_id, l.nom_esglesia, l.codi_digital, l.codi_fisic,
+               l.titol, l.cronologia, l.volum, l.abat, l.contingut, l.llengua,
+               l.requeriments_tecnics, l.unitat_catalogacio, l.unitat_instalacio, l.pagines,
+               l.url_base, l.url_imatge_prefix, l.pagina,
+               ae.nom as arquebisbat_nom, m.nom as municipi_nom
+        FROM llibres l
+        LEFT JOIN arquebisbats ae ON ae.id = l.arquevisbat_id
+        LEFT JOIN municipis m ON m.id = l.municipi_id
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        ORDER BY l.titol`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []LlibreRow
+	for rows.Next() {
+		var lr LlibreRow
+		if err := rows.Scan(
+			&lr.ID, &lr.ArquebisbatID, &lr.MunicipiID, &lr.NomEsglesia, &lr.CodiDigital, &lr.CodiFisic,
+			&lr.Titol, &lr.Cronologia, &lr.Volum, &lr.Abat, &lr.Contingut, &lr.Llengua,
+			&lr.Requeriments, &lr.UnitatCatalogacio, &lr.UnitatInstalacio, &lr.Pagines,
+			&lr.URLBase, &lr.URLImatgePrefix, &lr.Pagina,
+			&lr.ArquebisbatNom, &lr.MunicipiNom,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, lr)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getLlibre(id int) (*Llibre, error) {
+	query := `
+        SELECT id, arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic,
+               titol, cronologia, volum, abat, contingut, llengua,
+               requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines,
+               url_base, url_imatge_prefix, pagina
+        FROM llibres WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var l Llibre
+	if err := row.Scan(
+		&l.ID, &l.ArquebisbatID, &l.MunicipiID, &l.NomEsglesia, &l.CodiDigital, &l.CodiFisic,
+		&l.Titol, &l.Cronologia, &l.Volum, &l.Abat, &l.Contingut, &l.Llengua,
+		&l.Requeriments, &l.UnitatCatalogacio, &l.UnitatInstalacio, &l.Pagines,
+		&l.URLBase, &l.URLImatgePrefix, &l.Pagina,
+	); err != nil {
+		return nil, err
+	}
+	return &l, nil
+}
+
+func (h sqlHelper) createLlibre(l *Llibre) (int, error) {
+	query := `
+        INSERT INTO llibres
+            (arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic, titol, cronologia, volum, abat, contingut, llengua,
+             requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines, url_base, url_imatge_prefix, pagina, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += ` RETURNING id`
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{
+		l.ArquebisbatID, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
+		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina,
+	}
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(query, args...).Scan(&l.ID); err != nil {
+			return 0, err
+		}
+		return l.ID, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		l.ID = int(id)
+	}
+	return l.ID, nil
+}
+
+func (h sqlHelper) updateLlibre(l *Llibre) error {
+	query := `
+        UPDATE llibres
+        SET arquevisbat_id=?, municipi_id=?, nom_esglesia=?, codi_digital=?, codi_fisic=?, titol=?, cronologia=?, volum=?, abat=?, contingut=?, llengua=?,
+            requeriments_tecnics=?, unitat_catalogacio=?, unitat_instalacio=?, pagines=?, url_base=?, url_imatge_prefix=?, pagina=?, updated_at=` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query,
+		l.ArquebisbatID, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
+		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina, l.ID)
+	return err
+}
+
+func (h sqlHelper) listLlibrePagines(llibreID int) ([]LlibrePagina, error) {
+	query := `
+        SELECT id, llibre_id, num_pagina, estat, indexed_at, indexed_by, notes
+        FROM llibre_pagines
+        WHERE llibre_id = ?
+        ORDER BY num_pagina`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, llibreID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []LlibrePagina
+	for rows.Next() {
+		var p LlibrePagina
+		if err := rows.Scan(&p.ID, &p.LlibreID, &p.NumPagina, &p.Estat, &p.IndexedAt, &p.IndexedBy, &p.Notes); err != nil {
+			return nil, err
+		}
+		res = append(res, p)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) saveLlibrePagina(p *LlibrePagina) (int, error) {
+	if p.ID == 0 {
+		query := `
+            INSERT INTO llibre_pagines (llibre_id, num_pagina, estat, indexed_at, indexed_by, notes)
+            VALUES (?, ?, ?, ?, ?, ?)`
+		query = formatPlaceholders(h.style, query)
+		if h.style == "postgres" {
+			query += ` RETURNING id`
+			if err := h.db.QueryRow(query, p.LlibreID, p.NumPagina, p.Estat, p.IndexedAt, p.IndexedBy, p.Notes).Scan(&p.ID); err != nil {
+				return 0, err
+			}
+			return p.ID, nil
+		}
+		res, err := h.db.Exec(query, p.LlibreID, p.NumPagina, p.Estat, p.IndexedAt, p.IndexedBy, p.Notes)
+		if err != nil {
+			return 0, err
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			p.ID = int(id)
+		}
+		return p.ID, nil
+	}
+	query := `
+        UPDATE llibre_pagines
+        SET num_pagina=?, estat=?, indexed_at=?, indexed_by=?, notes=?
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, p.NumPagina, p.Estat, p.IndexedAt, p.IndexedBy, p.Notes, p.ID)
+	return p.ID, err
+}
+
+func (h sqlHelper) recalcLlibrePagines(llibreID, total int) error {
+	if total <= 0 {
+		return nil
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	delStmt := formatPlaceholders(h.style, `DELETE FROM llibre_pagines WHERE llibre_id = ?`)
+	if _, err := tx.Exec(delStmt, llibreID); err != nil {
+		return err
+	}
+	insertStmt := formatPlaceholders(h.style, `
+        INSERT INTO llibre_pagines (llibre_id, num_pagina, estat)
+        VALUES (?, ?, 'pendent')`)
+	for i := 1; i <= total; i++ {
+		if _, err := tx.Exec(insertStmt, llibreID, i); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }

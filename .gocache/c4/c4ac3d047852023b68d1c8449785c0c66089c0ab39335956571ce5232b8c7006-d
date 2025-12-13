@@ -1,0 +1,202 @@
+//line /home/marc/codi/CercaGenealogica3/core/i18n.go:1:1
+package core
+
+import (
+	"encoding/json"
+	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+)
+
+const defaultLang = "cat"
+type langOverrideKey struct{}
+
+var (
+	translations   = make(map[string]map[string]string)
+	supportedLangs = map[string]struct{}{
+		"cat": {},
+		"en":  {},
+		"oc":  {},
+	}
+	loadOnce sync.Once
+	loadErr  error
+)
+
+func loadTranslationsOnce() {goCover_33ba7a78e32c__66[0] = 9 ; goCover_33ba7a78e32c__66[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__66[2] = 66 ; goCover_33ba7a78e32c__66[3]++;
+	loadOnce.Do(func() {goCover_33ba7a78e32c__66[4]++;
+		// Primer intent: directori de treball actual
+		loadErr = loadTranslationsFromDir("locales")
+
+		// Segon intent: ruta relativa al fitxer actual (per quan l'exe s'executa des d'un tmp)
+		if translations[defaultLang] == nil {goCover_33ba7a78e32c__66[7]++;
+			if _, file, _, ok := runtime.Caller(0); ok {goCover_33ba7a78e32c__66[8]++;
+				baseDir := filepath.Dir(file)
+				altLocales := filepath.Join(baseDir, "..", "locales")
+				if err := loadTranslationsFromDir(altLocales); err != nil && loadErr == nil {goCover_33ba7a78e32c__66[9]++;
+					loadErr = err
+				}
+			}
+		}
+
+		goCover_33ba7a78e32c__66[5]++;if loadErr != nil && len(translations) == 0 {goCover_33ba7a78e32c__66[10]++;
+			Errorf("No s'han pogut carregar les traduccions: %v", loadErr)
+		}
+
+		goCover_33ba7a78e32c__66[6]++;if translations[defaultLang] == nil {goCover_33ba7a78e32c__66[11]++;
+			Errorf("Atenció: no s'ha carregat cap traducció per a l'idioma per defecte (%s)", defaultLang)
+		}
+	})
+}
+
+func loadTranslationsFromDir(dir string) error {goCover_33ba7a78e32c__67[0] = 15 ; goCover_33ba7a78e32c__67[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__67[2] = 67 ; goCover_33ba7a78e32c__67[3]++;
+	entries, err := os.ReadDir(dir)
+	if err != nil {goCover_33ba7a78e32c__67[6]++;
+		return err
+	}
+
+	goCover_33ba7a78e32c__67[4]++;for _, entry := range entries {goCover_33ba7a78e32c__67[7]++;
+		if entry.IsDir() {goCover_33ba7a78e32c__67[13]++;
+			continue
+		}
+		goCover_33ba7a78e32c__67[8]++;if filepath.Ext(entry.Name()) != ".json" {goCover_33ba7a78e32c__67[14]++;
+			continue
+		}
+
+		goCover_33ba7a78e32c__67[9]++;lang := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+		lang = strings.ToLower(lang)
+		if !isSupportedLang(lang) {goCover_33ba7a78e32c__67[15]++;
+			continue
+		}
+
+		goCover_33ba7a78e32c__67[10]++;path := filepath.Join(dir, entry.Name())
+		file, err := os.Open(path)
+		if err != nil {goCover_33ba7a78e32c__67[16]++;
+			Errorf("No s'ha pogut obrir el fitxer de traducció %s: %v", path, err)
+			continue
+		}
+
+		goCover_33ba7a78e32c__67[11]++;var data map[string]string
+		if err := json.NewDecoder(file).Decode(&data); err != nil {goCover_33ba7a78e32c__67[17]++;
+			Errorf("No s'ha pogut parsejar %s: %v", path, err)
+			_ = file.Close()
+			continue
+		}
+		goCover_33ba7a78e32c__67[12]++;_ = file.Close()
+
+		translations[lang] = data
+		Infof("Traduccions carregades per a %s (%d claus)", lang, len(data))
+	}
+
+	goCover_33ba7a78e32c__67[5]++;return nil
+}
+
+func isSupportedLang(lang string) bool {goCover_33ba7a78e32c__68[0] = 1 ; goCover_33ba7a78e32c__68[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__68[2] = 68 ; goCover_33ba7a78e32c__68[3]++;
+	_, ok := supportedLangs[lang]
+	return ok
+}
+
+// normalizeLang retorna un codi d'idioma suportat, o el per defecte si no coincideix.
+func normalizeLang(lang string) string {goCover_33ba7a78e32c__69[0] = 7 ; goCover_33ba7a78e32c__69[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__69[2] = 69 ; goCover_33ba7a78e32c__69[3]++;
+	lang = strings.ToLower(strings.TrimSpace(lang))
+
+	// Normalitza codis comuns o variants
+	switch lang {
+	case "ca":goCover_33ba7a78e32c__69[6]++;
+		lang = "cat"
+	case "en-us", "en-gb", "en-uk", "en-ca":goCover_33ba7a78e32c__69[7]++;
+		lang = "en"
+	case "oc", "oci", "oc-fr":goCover_33ba7a78e32c__69[8]++;
+		lang = "oc"
+	}
+
+	goCover_33ba7a78e32c__69[4]++;if isSupportedLang(lang) {goCover_33ba7a78e32c__69[9]++;
+		return lang
+	}
+	goCover_33ba7a78e32c__69[5]++;return defaultLang
+}
+
+// T retorna la traducció per a una clau. Si no es troba, retorna la clau literal.
+func T(lang, key string) string {goCover_33ba7a78e32c__70[0] = 8 ; goCover_33ba7a78e32c__70[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__70[2] = 70 ; goCover_33ba7a78e32c__70[3]++;
+	loadTranslationsOnce()
+
+	lang = normalizeLang(lang)
+	if m, ok := translations[lang]; ok {goCover_33ba7a78e32c__70[6]++;
+		if val, ok := m[key]; ok && val != "" {goCover_33ba7a78e32c__70[7]++;
+			return val
+		}
+	}
+
+	goCover_33ba7a78e32c__70[4]++;if lang != defaultLang {goCover_33ba7a78e32c__70[8]++;
+		if m, ok := translations[defaultLang]; ok {goCover_33ba7a78e32c__70[9]++;
+			if val, ok := m[key]; ok && val != "" {goCover_33ba7a78e32c__70[10]++;
+				return val
+			}
+		}
+	}
+
+	goCover_33ba7a78e32c__70[5]++;return key
+}
+
+// AvailableLangs retorna la llista d'idiomes suportats.
+func AvailableLangs() []string {goCover_33ba7a78e32c__71[0] = 3 ; goCover_33ba7a78e32c__71[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__71[2] = 71 ; goCover_33ba7a78e32c__71[3]++;
+	result := make([]string, 0, len(supportedLangs))
+	for lang := range supportedLangs {goCover_33ba7a78e32c__71[5]++;
+		result = append(result, lang)
+	}
+	goCover_33ba7a78e32c__71[4]++;return result
+}
+
+// ResolveLang determina l'idioma preferit a partir de la cookie o retorna el per defecte.
+func ResolveLang(r *http.Request) string {goCover_33ba7a78e32c__72[0] = 15 ; goCover_33ba7a78e32c__72[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__72[2] = 72 ; goCover_33ba7a78e32c__72[3]++;
+	if r == nil {goCover_33ba7a78e32c__72[8]++;
+		return defaultLang
+	}
+
+	// Permet passar un valor preestablert al context (p.ex. idioma preferit de l'usuari logat)
+	goCover_33ba7a78e32c__72[4]++;if v := r.Context().Value(langOverrideKey{}); v != nil {goCover_33ba7a78e32c__72[9]++;
+		if lang, ok := v.(string); ok && isSupportedLang(lang) {goCover_33ba7a78e32c__72[10]++;
+			return lang
+		}
+	}
+
+	goCover_33ba7a78e32c__72[5]++;if c, err := r.Cookie("lang"); err == nil && c != nil {goCover_33ba7a78e32c__72[11]++;
+		lang := normalizeLang(c.Value)
+		if isSupportedLang(lang) {goCover_33ba7a78e32c__72[12]++;
+			return lang
+		}
+	}
+
+	// Fallback: Accept-Language
+	goCover_33ba7a78e32c__72[6]++;if al := r.Header.Get("Accept-Language"); al != "" {goCover_33ba7a78e32c__72[13]++;
+		langs := strings.Split(al, ",")
+		for _, l := range langs {goCover_33ba7a78e32c__72[14]++;
+			parts := strings.SplitN(l, ";", 2)
+			code := strings.TrimSpace(parts[0])
+			if code == "" {goCover_33ba7a78e32c__72[16]++;
+				continue
+			}
+			goCover_33ba7a78e32c__72[15]++;norm := normalizeLang(code)
+			if isSupportedLang(norm) {goCover_33ba7a78e32c__72[17]++;
+				return norm
+			}
+		}
+	}
+
+	goCover_33ba7a78e32c__72[7]++;return defaultLang
+}
+
+// ResolveLangForUser retorna l'idioma de l'usuari si és vàlid, altrament fa servir ResolveLang.
+func ResolveLangForUser(r *http.Request, pref string) string {goCover_33ba7a78e32c__73[0] = 3 ; goCover_33ba7a78e32c__73[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__73[2] = 73 ; goCover_33ba7a78e32c__73[3]++;
+	if l := normalizeLang(strings.TrimSpace(pref)); l != "" && isSupportedLang(l) {goCover_33ba7a78e32c__73[5]++;
+		return l
+	}
+	goCover_33ba7a78e32c__73[4]++;return ResolveLang(r)
+}
+
+// IsSupportedLang exposa la comprovació de llengua suportada.
+func IsSupportedLang(lang string) bool {goCover_33ba7a78e32c__74[0] = 1 ; goCover_33ba7a78e32c__74[1] = goCover_33ba7a78e32c_P ; goCover_33ba7a78e32c__74[2] = 74 ; goCover_33ba7a78e32c__74[3]++;
+	return isSupportedLang(lang)
+}

@@ -1,0 +1,315 @@
+//line /home/marc/codi/CercaGenealogica3/db/mysql.go:1:1
+package db
+
+import (
+	"database/sql"
+	"fmt"
+
+	_ "github.com/go-sql-driver/mysql"
+	"golang.org/x/crypto/bcrypt"
+)
+
+type MySQL struct {
+	Host   string
+	Port   string
+	User   string
+	Pass   string
+	DBName string
+	Conn   *sql.DB
+	help   sqlHelper
+}
+
+func (d *MySQL) Connect() error {goCover_4bc4be4c3247__6[0] = 3 ; goCover_4bc4be4c3247__6[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__6[2] = 6 ; goCover_4bc4be4c3247__6[3]++;
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", d.User, d.Pass, d.Host, d.Port, d.DBName)
+	conn, err := sql.Open("mysql", dsn)
+	if err != nil {goCover_4bc4be4c3247__6[5]++;
+		return fmt.Errorf("error connectant a MySQL: %w", err)
+	}
+	goCover_4bc4be4c3247__6[4]++;d.Conn = conn
+	d.help = newSQLHelper(conn, "mysql", "NOW()")
+	logInfof("Conectat a MySQL")
+	return nil
+}
+
+func (d *MySQL) Close() {goCover_4bc4be4c3247__7[0] = 2 ; goCover_4bc4be4c3247__7[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__7[2] = 7 ; goCover_4bc4be4c3247__7[3]++;
+	if d.Conn != nil {goCover_4bc4be4c3247__7[4]++;
+		d.Conn.Close()
+	}
+}
+
+func (d *MySQL) Exec(query string, args ...interface{}) (int64, error) {goCover_4bc4be4c3247__8[0] = 3 ; goCover_4bc4be4c3247__8[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__8[2] = 8 ; goCover_4bc4be4c3247__8[3]++;
+	res, err := d.Conn.Exec(query, args...)
+	if err != nil {goCover_4bc4be4c3247__8[5]++;
+		return 0, err
+	}
+	goCover_4bc4be4c3247__8[4]++;id, _ := res.LastInsertId()
+	return id, nil
+}
+
+func (d *MySQL) Query(query string, args ...interface{}) ([]map[string]interface{}, error) {goCover_4bc4be4c3247__9[0] = 11 ; goCover_4bc4be4c3247__9[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__9[2] = 9 ; goCover_4bc4be4c3247__9[3]++;
+	rows, err := d.Conn.Query(query, args...)
+	if err != nil {goCover_4bc4be4c3247__9[6]++;
+		return nil, err
+	}
+	goCover_4bc4be4c3247__9[4]++;defer rows.Close()
+
+	var results []map[string]interface{}
+	for rows.Next() {goCover_4bc4be4c3247__9[7]++;
+		columns, _ := rows.Columns()
+		scanArgs := make([]interface{}, len(columns))
+		values := make([]interface{}, len(columns))
+
+		for i := range values {goCover_4bc4be4c3247__9[11]++;
+			scanArgs[i] = &values[i]
+		}
+
+		goCover_4bc4be4c3247__9[8]++;err := rows.Scan(scanArgs...)
+		if err != nil {goCover_4bc4be4c3247__9[12]++;
+			return nil, err
+		}
+
+		goCover_4bc4be4c3247__9[9]++;row := make(map[string]interface{})
+		for i, col := range columns {goCover_4bc4be4c3247__9[13]++;
+			row[col] = values[i]
+		}
+		goCover_4bc4be4c3247__9[10]++;results = append(results, row)
+	}
+	goCover_4bc4be4c3247__9[5]++;return results, nil
+}
+
+func (d *MySQL) InsertUser(user *User) error {goCover_4bc4be4c3247__10[0] = 1 ; goCover_4bc4be4c3247__10[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__10[2] = 10 ; goCover_4bc4be4c3247__10[3]++;
+	return d.help.insertUser(user)
+}
+
+func (d *MySQL) GetUserByEmail(email string) (*User, error) {goCover_4bc4be4c3247__11[0] = 1 ; goCover_4bc4be4c3247__11[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__11[2] = 11 ; goCover_4bc4be4c3247__11[3]++;
+	return d.help.getUserByEmail(email)
+}
+
+func (m *MySQL) SaveActivationToken(email, token string) error {goCover_4bc4be4c3247__12[0] = 1 ; goCover_4bc4be4c3247__12[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__12[2] = 12 ; goCover_4bc4be4c3247__12[3]++;
+	return m.help.saveActivationToken(email, token)
+}
+
+func (d *MySQL) ExistsUserByUsername(username string) (bool, error) {goCover_4bc4be4c3247__13[0] = 1 ; goCover_4bc4be4c3247__13[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__13[2] = 13 ; goCover_4bc4be4c3247__13[3]++;
+	return d.help.existsUserByUsername(username)
+}
+
+func (d *MySQL) ExistsUserByEmail(email string) (bool, error) {goCover_4bc4be4c3247__14[0] = 1 ; goCover_4bc4be4c3247__14[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__14[2] = 14 ; goCover_4bc4be4c3247__14[3]++;
+	return d.help.existsUserByEmail(email)
+}
+
+func (d *MySQL) ActivateUser(token string) error {goCover_4bc4be4c3247__15[0] = 1 ; goCover_4bc4be4c3247__15[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__15[2] = 15 ; goCover_4bc4be4c3247__15[3]++;
+	return d.help.activateUser(token)
+}
+
+func (d *MySQL) AuthenticateUser(usernameOrEmail, password string) (*User, error) {goCover_4bc4be4c3247__16[0] = 5 ; goCover_4bc4be4c3247__16[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__16[2] = 16 ; goCover_4bc4be4c3247__16[3]++;
+	u, err := d.help.authenticateUser(usernameOrEmail, password)
+	if err != nil {goCover_4bc4be4c3247__16[6]++;
+		return nil, fmt.Errorf("usuari no trobat o no actiu")
+	}
+	goCover_4bc4be4c3247__16[4]++;if err := bcrypt.CompareHashAndPassword(u.Password, []byte(password)); err != nil {goCover_4bc4be4c3247__16[7]++;
+		return nil, fmt.Errorf("contrasenya incorrecta")
+	}
+	goCover_4bc4be4c3247__16[5]++;return u, nil
+}
+
+// Gestió de sessions - adaptat a MySQL
+func (d *MySQL) SaveSession(sessionID string, userID int, expiry string) error {goCover_4bc4be4c3247__17[0] = 3 ; goCover_4bc4be4c3247__17[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__17[2] = 17 ; goCover_4bc4be4c3247__17[3]++;
+	if err := d.help.saveSession(sessionID, userID, expiry); err != nil {goCover_4bc4be4c3247__17[5]++;
+		logErrorf("[MySQL] Error guardant sessió: %v", err)
+		return err
+	}
+	goCover_4bc4be4c3247__17[4]++;return nil
+}
+
+func (d *MySQL) GetSessionUser(sessionID string) (*User, error) {goCover_4bc4be4c3247__18[0] = 1 ; goCover_4bc4be4c3247__18[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__18[2] = 18 ; goCover_4bc4be4c3247__18[3]++;
+	return d.help.getSessionUser(sessionID)
+}
+
+func (d *MySQL) DeleteSession(sessionID string) error {goCover_4bc4be4c3247__19[0] = 1 ; goCover_4bc4be4c3247__19[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__19[2] = 19 ; goCover_4bc4be4c3247__19[3]++;
+	return d.help.deleteSession(sessionID)
+}
+
+func (d *MySQL) CreatePasswordReset(email, token, expiry, lang string) (bool, error) {goCover_4bc4be4c3247__20[0] = 1 ; goCover_4bc4be4c3247__20[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__20[2] = 20 ; goCover_4bc4be4c3247__20[3]++;
+	return d.help.createPasswordReset(email, token, expiry, lang)
+}
+
+func (d *MySQL) GetPasswordReset(token string) (*PasswordReset, error) {goCover_4bc4be4c3247__21[0] = 1 ; goCover_4bc4be4c3247__21[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__21[2] = 21 ; goCover_4bc4be4c3247__21[3]++;
+	return d.help.getPasswordReset(token)
+}
+
+func (d *MySQL) MarkPasswordResetUsed(id int) error {goCover_4bc4be4c3247__22[0] = 1 ; goCover_4bc4be4c3247__22[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__22[2] = 22 ; goCover_4bc4be4c3247__22[3]++;
+	return d.help.markPasswordResetUsed(id)
+}
+
+func (d *MySQL) UpdateUserPassword(userID int, passwordHash []byte) error {goCover_4bc4be4c3247__23[0] = 1 ; goCover_4bc4be4c3247__23[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__23[2] = 23 ; goCover_4bc4be4c3247__23[3]++;
+	return d.help.updateUserPassword(userID, passwordHash)
+}
+
+func (d *MySQL) CreatePrivacyDefaults(userID int) error {goCover_4bc4be4c3247__24[0] = 1 ; goCover_4bc4be4c3247__24[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__24[2] = 24 ; goCover_4bc4be4c3247__24[3]++;
+	return d.help.createPrivacyDefaults(userID)
+}
+
+func (d *MySQL) GetPrivacySettings(userID int) (*PrivacySettings, error) {goCover_4bc4be4c3247__25[0] = 1 ; goCover_4bc4be4c3247__25[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__25[2] = 25 ; goCover_4bc4be4c3247__25[3]++;
+	return d.help.getPrivacySettings(userID)
+}
+
+func (d *MySQL) SavePrivacySettings(userID int, p *PrivacySettings) error {goCover_4bc4be4c3247__26[0] = 1 ; goCover_4bc4be4c3247__26[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__26[2] = 26 ; goCover_4bc4be4c3247__26[3]++;
+	return d.help.savePrivacySettings(userID, p)
+}
+
+func (d *MySQL) UpdateUserProfile(u *User) error {goCover_4bc4be4c3247__27[0] = 1 ; goCover_4bc4be4c3247__27[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__27[2] = 27 ; goCover_4bc4be4c3247__27[3]++;
+	return d.help.updateUserProfile(u)
+}
+
+func (d *MySQL) UpdateUserEmail(userID int, newEmail string) error {goCover_4bc4be4c3247__28[0] = 1 ; goCover_4bc4be4c3247__28[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__28[2] = 28 ; goCover_4bc4be4c3247__28[3]++;
+	return d.help.updateUserEmail(userID, newEmail)
+}
+
+func (d *MySQL) CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {goCover_4bc4be4c3247__29[0] = 1 ; goCover_4bc4be4c3247__29[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__29[2] = 29 ; goCover_4bc4be4c3247__29[3]++;
+	return d.help.createEmailChange(userID, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang)
+}
+
+func (d *MySQL) ConfirmEmailChange(token string) (*EmailChange, error) {goCover_4bc4be4c3247__30[0] = 1 ; goCover_4bc4be4c3247__30[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__30[2] = 30 ; goCover_4bc4be4c3247__30[3]++;
+	return d.help.confirmEmailChange(token)
+}
+
+func (d *MySQL) RevertEmailChange(token string) (*EmailChange, error) {goCover_4bc4be4c3247__31[0] = 1 ; goCover_4bc4be4c3247__31[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__31[2] = 31 ; goCover_4bc4be4c3247__31[3]++;
+	return d.help.revertEmailChange(token)
+}
+
+func (d *MySQL) markEmailChangeConfirmed(id int) error {goCover_4bc4be4c3247__32[0] = 1 ; goCover_4bc4be4c3247__32[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__32[2] = 32 ; goCover_4bc4be4c3247__32[3]++;
+	return d.help.markEmailChangeConfirmed(id)
+}
+
+func (d *MySQL) markEmailChangeReverted(id int) error {goCover_4bc4be4c3247__33[0] = 1 ; goCover_4bc4be4c3247__33[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__33[2] = 33 ; goCover_4bc4be4c3247__33[3]++;
+	return d.help.markEmailChangeReverted(id)
+}
+
+// Policies
+func (d *MySQL) UserHasAnyPolicy(userID int, policies []string) (bool, error) {goCover_4bc4be4c3247__34[0] = 1 ; goCover_4bc4be4c3247__34[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__34[2] = 34 ; goCover_4bc4be4c3247__34[3]++;
+	return d.help.userHasAnyPolicy(userID, policies)
+}
+func (d *MySQL) EnsureDefaultPolicies() error {goCover_4bc4be4c3247__35[0] = 1 ; goCover_4bc4be4c3247__35[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__35[2] = 35 ; goCover_4bc4be4c3247__35[3]++;
+	return d.help.ensureDefaultPolicies()
+}
+
+// Paisos
+func (d *MySQL) ListPaisos() ([]Pais, error) {goCover_4bc4be4c3247__36[0] = 1 ; goCover_4bc4be4c3247__36[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__36[2] = 36 ; goCover_4bc4be4c3247__36[3]++;
+	return d.help.listPaisos()
+}
+func (d *MySQL) GetPais(id int) (*Pais, error) {goCover_4bc4be4c3247__37[0] = 1 ; goCover_4bc4be4c3247__37[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__37[2] = 37 ; goCover_4bc4be4c3247__37[3]++;
+	return d.help.getPais(id)
+}
+func (d *MySQL) CreatePais(p *Pais) (int, error) {goCover_4bc4be4c3247__38[0] = 1 ; goCover_4bc4be4c3247__38[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__38[2] = 38 ; goCover_4bc4be4c3247__38[3]++;
+	return d.help.createPais(p)
+}
+func (d *MySQL) UpdatePais(p *Pais) error {goCover_4bc4be4c3247__39[0] = 1 ; goCover_4bc4be4c3247__39[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__39[2] = 39 ; goCover_4bc4be4c3247__39[3]++;
+	return d.help.updatePais(p)
+}
+
+// Nivells administratius
+func (d *MySQL) ListNivells(f NivellAdminFilter) ([]NivellAdministratiu, error) {goCover_4bc4be4c3247__40[0] = 1 ; goCover_4bc4be4c3247__40[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__40[2] = 40 ; goCover_4bc4be4c3247__40[3]++;
+	return d.help.listNivells(f)
+}
+func (d *MySQL) GetNivell(id int) (*NivellAdministratiu, error) {goCover_4bc4be4c3247__41[0] = 1 ; goCover_4bc4be4c3247__41[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__41[2] = 41 ; goCover_4bc4be4c3247__41[3]++;
+	return d.help.getNivell(id)
+}
+func (d *MySQL) CreateNivell(n *NivellAdministratiu) (int, error) {goCover_4bc4be4c3247__42[0] = 1 ; goCover_4bc4be4c3247__42[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__42[2] = 42 ; goCover_4bc4be4c3247__42[3]++;
+	return d.help.createNivell(n)
+}
+func (d *MySQL) UpdateNivell(n *NivellAdministratiu) error {goCover_4bc4be4c3247__43[0] = 1 ; goCover_4bc4be4c3247__43[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__43[2] = 43 ; goCover_4bc4be4c3247__43[3]++;
+	return d.help.updateNivell(n)
+}
+
+// Municipis
+func (d *MySQL) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {goCover_4bc4be4c3247__44[0] = 1 ; goCover_4bc4be4c3247__44[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__44[2] = 44 ; goCover_4bc4be4c3247__44[3]++;
+	return d.help.listMunicipis(f)
+}
+func (d *MySQL) GetMunicipi(id int) (*Municipi, error) {goCover_4bc4be4c3247__45[0] = 1 ; goCover_4bc4be4c3247__45[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__45[2] = 45 ; goCover_4bc4be4c3247__45[3]++;
+	return d.help.getMunicipi(id)
+}
+func (d *MySQL) CreateMunicipi(m *Municipi) (int, error) {goCover_4bc4be4c3247__46[0] = 1 ; goCover_4bc4be4c3247__46[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__46[2] = 46 ; goCover_4bc4be4c3247__46[3]++;
+	return d.help.createMunicipi(m)
+}
+func (d *MySQL) UpdateMunicipi(m *Municipi) error {goCover_4bc4be4c3247__47[0] = 1 ; goCover_4bc4be4c3247__47[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__47[2] = 47 ; goCover_4bc4be4c3247__47[3]++;
+	return d.help.updateMunicipi(m)
+}
+func (d *MySQL) ListCodisPostals(municipiID int) ([]CodiPostal, error) {goCover_4bc4be4c3247__48[0] = 1 ; goCover_4bc4be4c3247__48[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__48[2] = 48 ; goCover_4bc4be4c3247__48[3]++;
+	return d.help.listCodisPostals(municipiID)
+}
+func (d *MySQL) SaveCodiPostal(cp *CodiPostal) (int, error) {goCover_4bc4be4c3247__49[0] = 1 ; goCover_4bc4be4c3247__49[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__49[2] = 49 ; goCover_4bc4be4c3247__49[3]++;
+	return d.help.saveCodiPostal(cp)
+}
+
+// Entitats eclesiàstiques
+func (d *MySQL) ListArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error) {goCover_4bc4be4c3247__50[0] = 1 ; goCover_4bc4be4c3247__50[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__50[2] = 50 ; goCover_4bc4be4c3247__50[3]++;
+	return d.help.listArquebisbats(f)
+}
+func (d *MySQL) GetArquebisbat(id int) (*Arquebisbat, error) {goCover_4bc4be4c3247__51[0] = 1 ; goCover_4bc4be4c3247__51[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__51[2] = 51 ; goCover_4bc4be4c3247__51[3]++;
+	return d.help.getArquebisbat(id)
+}
+func (d *MySQL) CreateArquebisbat(ae *Arquebisbat) (int, error) {goCover_4bc4be4c3247__52[0] = 1 ; goCover_4bc4be4c3247__52[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__52[2] = 52 ; goCover_4bc4be4c3247__52[3]++;
+	return d.help.createArquebisbat(ae)
+}
+func (d *MySQL) UpdateArquebisbat(ae *Arquebisbat) error {goCover_4bc4be4c3247__53[0] = 1 ; goCover_4bc4be4c3247__53[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__53[2] = 53 ; goCover_4bc4be4c3247__53[3]++;
+	return d.help.updateArquebisbat(ae)
+}
+func (d *MySQL) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {goCover_4bc4be4c3247__54[0] = 1 ; goCover_4bc4be4c3247__54[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__54[2] = 54 ; goCover_4bc4be4c3247__54[3]++;
+	return d.help.listArquebisbatMunicipis(munID)
+}
+func (d *MySQL) SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {goCover_4bc4be4c3247__55[0] = 1 ; goCover_4bc4be4c3247__55[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__55[2] = 55 ; goCover_4bc4be4c3247__55[3]++;
+	return d.help.saveArquebisbatMunicipi(am)
+}
+
+// Arxius
+func (d *MySQL) ListArxius(f ArxiuFilter) ([]ArxiuWithCount, error) {goCover_4bc4be4c3247__56[0] = 1 ; goCover_4bc4be4c3247__56[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__56[2] = 56 ; goCover_4bc4be4c3247__56[3]++;
+	return d.help.listArxius(f)
+}
+func (d *MySQL) GetArxiu(id int) (*Arxiu, error) {goCover_4bc4be4c3247__57[0] = 1 ; goCover_4bc4be4c3247__57[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__57[2] = 57 ; goCover_4bc4be4c3247__57[3]++;
+	return d.help.getArxiu(id)
+}
+func (d *MySQL) CreateArxiu(a *Arxiu) (int, error) {goCover_4bc4be4c3247__58[0] = 1 ; goCover_4bc4be4c3247__58[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__58[2] = 58 ; goCover_4bc4be4c3247__58[3]++;
+	return d.help.createArxiu(a)
+}
+func (d *MySQL) UpdateArxiu(a *Arxiu) error {goCover_4bc4be4c3247__59[0] = 1 ; goCover_4bc4be4c3247__59[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__59[2] = 59 ; goCover_4bc4be4c3247__59[3]++;
+	return d.help.updateArxiu(a)
+}
+func (d *MySQL) DeleteArxiu(id int) error {goCover_4bc4be4c3247__60[0] = 1 ; goCover_4bc4be4c3247__60[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__60[2] = 60 ; goCover_4bc4be4c3247__60[3]++;
+	return d.help.deleteArxiu(id)
+}
+func (d *MySQL) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {goCover_4bc4be4c3247__61[0] = 1 ; goCover_4bc4be4c3247__61[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__61[2] = 61 ; goCover_4bc4be4c3247__61[3]++;
+	return d.help.listArxiuLlibres(arxiuID)
+}
+func (d *MySQL) AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {goCover_4bc4be4c3247__62[0] = 1 ; goCover_4bc4be4c3247__62[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__62[2] = 62 ; goCover_4bc4be4c3247__62[3]++;
+	return d.help.addArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+}
+func (d *MySQL) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {goCover_4bc4be4c3247__63[0] = 1 ; goCover_4bc4be4c3247__63[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__63[2] = 63 ; goCover_4bc4be4c3247__63[3]++;
+	return d.help.updateArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+}
+func (d *MySQL) DeleteArxiuLlibre(arxiuID, llibreID int) error {goCover_4bc4be4c3247__64[0] = 1 ; goCover_4bc4be4c3247__64[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__64[2] = 64 ; goCover_4bc4be4c3247__64[3]++;
+	return d.help.deleteArxiuLlibre(arxiuID, llibreID)
+}
+func (d *MySQL) SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error) {goCover_4bc4be4c3247__65[0] = 1 ; goCover_4bc4be4c3247__65[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__65[2] = 65 ; goCover_4bc4be4c3247__65[3]++;
+	return d.help.searchLlibresSimple(q, limit)
+}
+func (d *MySQL) ListLlibres(f LlibreFilter) ([]LlibreRow, error) {goCover_4bc4be4c3247__66[0] = 1 ; goCover_4bc4be4c3247__66[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__66[2] = 66 ; goCover_4bc4be4c3247__66[3]++;
+	return d.help.listLlibres(f)
+}
+func (d *MySQL) GetLlibre(id int) (*Llibre, error) {goCover_4bc4be4c3247__67[0] = 1 ; goCover_4bc4be4c3247__67[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__67[2] = 67 ; goCover_4bc4be4c3247__67[3]++;
+	return d.help.getLlibre(id)
+}
+func (d *MySQL) CreateLlibre(l *Llibre) (int, error) {goCover_4bc4be4c3247__68[0] = 1 ; goCover_4bc4be4c3247__68[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__68[2] = 68 ; goCover_4bc4be4c3247__68[3]++;
+	return d.help.createLlibre(l)
+}
+func (d *MySQL) UpdateLlibre(l *Llibre) error {goCover_4bc4be4c3247__69[0] = 1 ; goCover_4bc4be4c3247__69[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__69[2] = 69 ; goCover_4bc4be4c3247__69[3]++;
+	return d.help.updateLlibre(l)
+}
+func (d *MySQL) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {goCover_4bc4be4c3247__70[0] = 1 ; goCover_4bc4be4c3247__70[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__70[2] = 70 ; goCover_4bc4be4c3247__70[3]++;
+	return d.help.listLlibrePagines(llibreID)
+}
+func (d *MySQL) SaveLlibrePagina(p *LlibrePagina) (int, error) {goCover_4bc4be4c3247__71[0] = 1 ; goCover_4bc4be4c3247__71[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__71[2] = 71 ; goCover_4bc4be4c3247__71[3]++;
+	return d.help.saveLlibrePagina(p)
+}
+func (d *MySQL) RecalcLlibrePagines(llibreID, total int) error {goCover_4bc4be4c3247__72[0] = 1 ; goCover_4bc4be4c3247__72[1] = goCover_4bc4be4c3247_P ; goCover_4bc4be4c3247__72[2] = 72 ; goCover_4bc4be4c3247__72[3]++;
+	return d.help.recalcLlibrePagines(llibreID, total)
+}
