@@ -1,6 +1,7 @@
 package core
 
 import (
+	"database/sql"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,6 +17,11 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 	filter := db.ArquebisbatFilter{
 		Text: strings.TrimSpace(r.URL.Query().Get("q")),
 	}
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	if status == "" {
+		status = "publicat"
+	}
+	filter.Status = status
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {
 			filter.PaisID = v
@@ -39,7 +45,7 @@ func (a *App) AdminNewEclesiastic(w http.ResponseWriter, r *http.Request) {
 	user, _ := a.VerificarSessio(r)
 	paisos, _ := a.DB.ListPaisos()
 	RenderPrivateTemplate(w, r, "admin-eclesiastic-form.html", map[string]interface{}{
-		"Entitat":         &db.Arquebisbat{TipusEntitat: "bisbat"},
+		"Entitat":         &db.Arquebisbat{TipusEntitat: "bisbat", ModeracioEstat: "pendent"},
 		"Paisos":          paisos,
 		"Parents":         nil,
 		"IsNew":           true,
@@ -75,6 +81,7 @@ func (a *App) AdminSaveEclesiastic(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permEclesia); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/admin/eclesiastic", http.StatusSeeOther)
 		return
@@ -86,34 +93,54 @@ func (a *App) AdminSaveEclesiastic(w http.ResponseWriter, r *http.Request) {
 	anyInici := sqlNullInt(r.FormValue("any_inici"))
 	anyFi := sqlNullInt(r.FormValue("any_fi"))
 	ent := &db.Arquebisbat{
-		ID:           id,
-		Nom:          strings.TrimSpace(r.FormValue("nom")),
-		TipusEntitat: strings.TrimSpace(r.FormValue("tipus_entitat")),
-		PaisID:       paisID,
-		Nivell:       nivell,
-		ParentID:     parentID,
-		AnyInici:     anyInici,
-		AnyFi:        anyFi,
-		Web:          strings.TrimSpace(r.FormValue("web")),
-		WebArxiu:     strings.TrimSpace(r.FormValue("web_arxiu")),
-		WebWikipedia: strings.TrimSpace(r.FormValue("web_wikipedia")),
-		Territori:    strings.TrimSpace(r.FormValue("territori")),
-		Observacions: strings.TrimSpace(r.FormValue("observacions")),
+		ID:             id,
+		Nom:            strings.TrimSpace(r.FormValue("nom")),
+		TipusEntitat:   strings.TrimSpace(r.FormValue("tipus_entitat")),
+		PaisID:         paisID,
+		Nivell:         nivell,
+		ParentID:       parentID,
+		AnyInici:       anyInici,
+		AnyFi:          anyFi,
+		Web:            strings.TrimSpace(r.FormValue("web")),
+		WebArxiu:       strings.TrimSpace(r.FormValue("web_arxiu")),
+		WebWikipedia:   strings.TrimSpace(r.FormValue("web_wikipedia")),
+		Territori:      strings.TrimSpace(r.FormValue("territori")),
+		Observacions:   strings.TrimSpace(r.FormValue("observacions")),
+		ModeracioEstat: "pendent",
 	}
 	if errMsg := validateEclesiastic(ent); errMsg != "" {
 		a.renderEclesiasticError(w, r, ent, errMsg, id == 0)
 		return
 	}
 	var saveErr error
-	if ent.ID == 0 {
-		_, saveErr = a.DB.CreateArquebisbat(ent)
+	isNew := ent.ID == 0
+	if isNew {
+		ent.CreatedBy = sqlNullIntFromInt(user.ID)
+		ent.ModeratedBy = sql.NullInt64{}
+		ent.ModeratedAt = sql.NullTime{}
+		ent.ModeracioMotiu = ""
+		if newID, err := a.DB.CreateArquebisbat(ent); err == nil {
+			ent.ID = newID
+		} else {
+			saveErr = err
+		}
 	} else {
+		ent.ModeratedBy = sql.NullInt64{}
+		ent.ModeratedAt = sql.NullTime{}
+		ent.ModeracioMotiu = ""
 		saveErr = a.DB.UpdateArquebisbat(ent)
 	}
 	if saveErr != nil {
 		a.renderEclesiasticError(w, r, ent, "No s'ha pogut desar l'entitat.", id == 0)
 		return
 	}
+	rule := ruleEclesiasticCreate
+	action := "crear"
+	if !isNew {
+		rule = ruleEclesiasticUpdate
+		action = "editar"
+	}
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, rule, action, "eclesiastic", &ent.ID, "pendent", nil, "")
 	http.Redirect(w, r, "/admin/eclesiastic", http.StatusSeeOther)
 }
 

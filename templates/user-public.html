@@ -1,0 +1,155 @@
+{{ define "user-public.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ .Data.Name }} · {{ t .Lang "points.ranking.user" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/perfil-ajustos.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card perfil-public">
+            <header class="card-header">
+                <div>
+                    <h1>@{{ .Data.Username }}</h1>
+                    {{ if .Data.ShowRealName }}<p class="subinfo">{{ .Data.RealName }}</p>{{ end }}
+                    {{ if .Data.PreferredCode }}<p class="subinfo badge-lang">{{ .Data.PreferredCode }}</p>{{ end }}
+                </div>
+            </header>
+            <div class="card-body">
+                <div class="perfil-public-dades">
+                    <h2>{{ t .Lang "profile.title" }}</h2>
+                    <dl class="dades-usuari">
+                        <div>
+                            <dt>{{ t .Lang "profile.field.username" }}</dt>
+                            <dd>{{ if .Data.Username }}@{{ .Data.Username }}{{ else }}-{{ end }}</dd>
+                        </div>
+                        {{ if .Data.ShowRealName }}
+                        <div>
+                            <dt>{{ t .Lang "profile.field.name" }}</dt>
+                            <dd>{{ .Data.RealName }}</dd>
+                        </div>
+                        {{ end }}
+                        {{ if .Data.ShowEmail }}
+                        <div>
+                            <dt>{{ t .Lang "profile.field.email" }}</dt>
+                            <dd>{{ .Data.ProfileUser.Email }}</dd>
+                        </div>
+                        {{ end }}
+                        {{ if .Data.ShowPais }}
+                        <div>
+                            <dt>{{ t .Lang "profile.field.country" }}</dt>
+                            <dd>{{ .Data.ProfileUser.Pais }}</dd>
+                        </div>
+                        {{ end }}
+                        {{ if .Data.ShowPoblacio }}
+                        <div>
+                            <dt>{{ t .Lang "profile.field.city" }}</dt>
+                            <dd>{{ .Data.ProfileUser.Poblacio }}</dd>
+                        </div>
+                        {{ end }}
+                        {{ if .Data.ShowLanguages }}
+                        <div>
+                            <dt>{{ t .Lang "profile.field.preferredLang" }}</dt>
+                            <dd>{{ upper .Data.ProfileUser.PreferredLang }}</dd>
+                        </div>
+                        {{ end }}
+                        {{ if .Data.ShowSpoken }}
+                        <div>
+                            <dt>{{ t .Lang "profile.field.languagesSpoken" }}</dt>
+                            <dd>
+                                {{ if .Data.SpokenLangs }}
+                                    {{ range .Data.SpokenLangs }}<span class="badge-lang petit">{{ . }}</span> {{ end }}
+                                {{ else }}-{{ end }}
+                            </dd>
+                        </div>
+                        {{ end }}
+                        {{ if .Data.ShowPhone }}
+                        <div>
+                            <dt>{{ t .Lang "profile.field.phone" }}</dt>
+                            <dd>{{ .Data.ProfileUser.Phone }}</dd>
+                        </div>
+                        {{ end }}
+                    </dl>
+                </div>
+                {{ if .Data.ShowActivity }}
+                <div class="taula-wrapper">
+                    <div class="perfil-ajustos-estadistiques">
+                        <header class="estadistiques-capcalera">
+                            <div>
+                                <h2>{{ t .Lang "activity.title" }}</h2>
+                            </div>
+                            <div class="estadistiques-metadades">
+                                <p class="member-since">
+                                    {{ t .Lang "points.profile.total" }}: <strong>{{ .Data.Points }}</strong>
+                                </p>
+                            </div>
+                        </header>
+                        <div class="heatmap-legenda">
+                            <span>{{ t .Lang "activity.heatmap.less" }}</span>
+                            <div class="heatmap-gradient">
+                                <span class="heatmap-swatch nivell-0"></span>
+                                <span class="heatmap-swatch nivell-1"></span>
+                                <span class="heatmap-swatch nivell-2"></span>
+                                <span class="heatmap-swatch nivell-3"></span>
+                                <span class="heatmap-swatch nivell-4"></span>
+                            </div>
+                            <span>{{ t .Lang "activity.heatmap.more" }}</span>
+                        </div>
+                        <div class="heatmap-container">
+                            <div class="heatmap-grid" aria-hidden="true">
+                                {{ range .Data.Heatmap }}
+                                <div class="heatmap-dia" data-level="{{ .Level }}" title="{{ .Label }}"></div>
+                                {{ end }}
+                            </div>
+                        </div>
+                    </div>
+                    <h2>{{ t .Lang "activity.title" }}</h2>
+                    <table class="taula">
+                        <thead>
+                            <tr>
+                                <th>{{ t .Lang "activity.col.date" }}</th>
+                                <th>{{ t .Lang "activity.col.action" }}</th>
+                                <th>{{ t .Lang "activity.col.object" }}</th>
+                                <th>{{ t .Lang "activity.col.status" }}</th>
+                                <th>{{ t .Lang "activity.col.points" }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ range .Data.Activities }}
+                            <tr>
+                                <td>{{ .CreatedAt.Format "2006-01-02" }}</td>
+                                <td>{{ t $.Lang (printf "activity.action.%s" .Action) }}</td>
+                                <td>
+                                    {{ $label := t $.Lang (printf "activity.object.%s" .ObjectType) }}
+                                    {{ if and (or (eq .ObjectType "persona") (eq .ObjectType "llibre") (eq .ObjectType "arxiu") (eq .ObjectType "municipi") (eq .ObjectType "nivell") (eq .ObjectType "eclesiastic")) (.ObjectID.Valid) }}
+                                        <a href="/{{ .ObjectType }}/{{ .ObjectID.Int64 }}">{{ $label }}</a>
+                                    {{ else if and (eq .ObjectType "llibre_pagina") (.ObjectID.Valid) }}
+                                        <a href="/admin/llibres/{{ .ObjectID.Int64 }}/pagines">{{ $label }}</a>
+                                    {{ else }}
+                                        {{ $label }}
+                                    {{ end }}
+                                </td>
+                                <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .Status) }}</span></td>
+                                <td>{{ .Points }}</td>
+                            </tr>
+                            {{ else }}
+                            <tr><td colspan="5">{{ t .Lang "common.empty" }}</td></tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
+                {{ else }}
+                <p class="muted">{{ t .Lang "activity.hidden" }}</p>
+                {{ end }}
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

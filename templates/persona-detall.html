@@ -20,7 +20,12 @@
                 <div><strong>{{ t .Lang "persons.col.llibre" }}:</strong> {{ .Data.Persona.Llibre }}</div>
                 <div><strong>{{ t .Lang "persons.col.pagina" }}:</strong> {{ .Data.Persona.Pagina }}</div>
                 <div><strong>{{ t .Lang "persons.col.ofici" }}:</strong> {{ .Data.Persona.Ofici }}</div>
-                <div><strong>{{ t .Lang "persons.col.status" }}:</strong> {{ .Data.Persona.ModeracioEstat }}</div>
+                <div>
+                    <strong>{{ t .Lang "persons.col.status" }}:</strong>
+                    <span class="badge {{ if eq .Data.Persona.ModeracioEstat "publicat" }}verd{{ else if eq .Data.Persona.ModeracioEstat "pendent" }}taronja{{ else }}vermell{{ end }}">
+                        {{ t .Lang (printf "activity.status.%s" .Data.Persona.ModeracioEstat) }}
+                    </span>
+                </div>
                 {{ if .Data.Persona.ModeracioMotiu }}
                 <div><strong>{{ t .Lang "moderation.reason" }}:</strong> {{ .Data.Persona.ModeracioMotiu }}</div>
                 {{ end }}

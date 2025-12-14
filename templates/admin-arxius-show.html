@@ -22,6 +22,11 @@
                     </form>
                 </div>
                 {{ end }}
+                {{ if .Data.Arxiu.ModeracioEstat }}
+                <span class="badge {{ if eq .Data.Arxiu.ModeracioEstat "publicat" }}verd{{ else if eq .Data.Arxiu.ModeracioEstat "pendent" }}taronja{{ else }}vermell{{ end }}">
+                    {{ t .Lang (printf "activity.status.%s" .Data.Arxiu.ModeracioEstat) }}
+                </span>
+                {{ end }}
             </header>
             <ul class="dades-grid">
                 <li><strong>{{ t .Lang "archives.details.type" }}:</strong> {{ t .Lang (printf "archives.type.%s" .Data.Arxiu.Tipus) }}</li>

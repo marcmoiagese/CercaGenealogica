@@ -31,6 +31,11 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 		Tipus: strings.TrimSpace(r.URL.Query().Get("tipus")),
 		Acces: strings.TrimSpace(r.URL.Query().Get("acces")),
 	}
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	if status == "" {
+		status = "publicat"
+	}
+	filter.Status = status
 	if v := strings.TrimSpace(r.URL.Query().Get("entitat_id")); v != "" {
 		if id, err := strconv.Atoi(v); err == nil {
 			filter.EntitatID = id
@@ -89,6 +94,11 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		Tipus: strings.TrimSpace(r.URL.Query().Get("tipus")),
 		Acces: strings.TrimSpace(r.URL.Query().Get("acces")),
 	}
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	if status == "" {
+		status = "publicat"
+	}
+	filter.Status = status
 	if v := strings.TrimSpace(r.URL.Query().Get("entitat_id")); v != "" {
 		if id, err := strconv.Atoi(v); err == nil {
 			filter.EntitatID = id
@@ -160,11 +170,16 @@ func (a *App) AdminCreateArxiu(w http.ResponseWriter, r *http.Request) {
 		a.renderArxiuForm(w, r, arxiu, true, "El nom és obligatori (mínim 3 caràcters).", user)
 		return
 	}
+	arxiu.CreatedBy = sqlNullIntFromInt(user.ID)
+	arxiu.ModeracioEstat = "pendent"
+	arxiu.ModeratedBy = sql.NullInt64{}
+	arxiu.ModeratedAt = sql.NullTime{}
 	id, err := a.DB.CreateArxiu(arxiu)
 	if err != nil {
 		a.renderArxiuForm(w, r, arxiu, true, "No s'ha pogut crear l'arxiu.", user)
 		return
 	}
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuCreate, "crear", "arxiu", &id, "pendent", nil, "")
 	http.Redirect(w, r, "/admin/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
 }
 
@@ -195,10 +210,14 @@ func (a *App) AdminUpdateArxiu(w http.ResponseWriter, r *http.Request) {
 	}
 	arxiu := parseArxiuForm(r)
 	arxiu.ID = id
+	arxiu.ModeracioEstat = "pendent"
+	arxiu.ModeratedBy = sql.NullInt64{}
+	arxiu.ModeratedAt = sql.NullTime{}
 	if err := a.DB.UpdateArxiu(arxiu); err != nil {
 		a.renderArxiuForm(w, r, arxiu, false, "No s'ha pogut actualitzar.", user)
 		return
 	}
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuUpdate, "editar", "arxiu", &id, "pendent", nil, "")
 	http.Redirect(w, r, "/admin/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
 }
 
@@ -309,6 +328,10 @@ func sqlNullInt(val string) (n sql.NullInt64) {
 		n.Valid = true
 	}
 	return
+}
+
+func sqlNullIntFromInt(v int) sql.NullInt64 {
+	return sql.NullInt64{Int64: int64(v), Valid: true}
 }
 
 func (a *App) loadEntitatNom(arxiu *db.Arxiu) string {

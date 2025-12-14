@@ -162,10 +162,17 @@ CREATE TABLE IF NOT EXISTS nivells_administratius (
     any_inici SMALLINT,
     any_fi SMALLINT,
     estat ENUM('actiu', 'inactiu', 'fusionat', 'abolit') DEFAULT 'actiu',
+    created_by INT UNSIGNED NULL,
+    moderation_status ENUM('pendent','publicat','rebutjat') DEFAULT 'pendent',
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
+    moderation_notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (pais_id) REFERENCES paisos(id),
     FOREIGN KEY (parent_id) REFERENCES nivells_administratius(id),
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     INDEX idx_tipus_nivell (tipus_nivell),
     UNIQUE KEY idx_nivell_pais_nom (pais_id, nivel, nom_nivell)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -190,6 +197,11 @@ CREATE TABLE IF NOT EXISTS municipis (
     wikipedia VARCHAR(255),
     altres TEXT,
     estat ENUM('actiu', 'inactiu', 'abandonat') DEFAULT 'actiu',
+    created_by INT UNSIGNED NULL,
+    moderation_status ENUM('pendent','publicat','rebutjat') DEFAULT 'pendent',
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
+    moderation_notes TEXT,
     data_creacio DATETIME DEFAULT CURRENT_TIMESTAMP,
     ultima_modificacio DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_codi_postal (codi_postal),
@@ -201,7 +213,9 @@ CREATE TABLE IF NOT EXISTS municipis (
     FOREIGN KEY (nivell_administratiu_id_5) REFERENCES nivells_administratius(id),
     FOREIGN KEY (nivell_administratiu_id_6) REFERENCES nivells_administratius(id),
     FOREIGN KEY (nivell_administratiu_id_7) REFERENCES nivells_administratius(id),
-    FOREIGN KEY (municipi_id) REFERENCES municipis(id)
+    FOREIGN KEY (municipi_id) REFERENCES municipis(id),
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS noms_historics (
@@ -239,10 +253,17 @@ CREATE TABLE IF NOT EXISTS arquebisbats (
     web_wikipedia VARCHAR(255),
     territori TEXT,
     observacions TEXT,
+    created_by INT UNSIGNED NULL,
+    moderation_status ENUM('pendent','publicat','rebutjat') DEFAULT 'pendent',
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
+    moderation_notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (pais_id) REFERENCES paisos(id),
-    FOREIGN KEY (parent_id) REFERENCES arquebisbats(id)
+    FOREIGN KEY (parent_id) REFERENCES arquebisbats(id),
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS arquebisbats_municipi (
@@ -290,10 +311,17 @@ CREATE TABLE IF NOT EXISTS llibres (
     url_base VARCHAR(255),
     url_imatge_prefix VARCHAR(50) DEFAULT '#imatge-',
     pagina VARCHAR(50),
+    created_by INT UNSIGNED NULL,
+    moderation_status ENUM('pendent','publicat','rebutjat') DEFAULT 'pendent',
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
+    moderation_notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(arquevisbat_id) REFERENCES arquebisbats(id) ON DELETE CASCADE,
-    FOREIGN KEY(municipi_id) REFERENCES municipis(id) ON DELETE RESTRICT
+    FOREIGN KEY(municipi_id) REFERENCES municipis(id) ON DELETE RESTRICT,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Taules de GESTIÓ DE SESSIONS
@@ -440,10 +468,17 @@ CREATE TABLE IF NOT EXISTS arxius (
   web VARCHAR(255),
   acces VARCHAR(20),
   notes TEXT,
+  created_by INT UNSIGNED NULL,
+  moderation_status ENUM('pendent','publicat','rebutjat') DEFAULT 'pendent',
+  moderated_by INT UNSIGNED NULL,
+  moderated_at DATETIME,
+  moderation_notes TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE SET NULL,
-  FOREIGN KEY (entitat_eclesiastica_id) REFERENCES arquebisbats(id) ON DELETE SET NULL
+  FOREIGN KEY (entitat_eclesiastica_id) REFERENCES arquebisbats(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+  FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 DROP TABLE IF EXISTS arxius_llibres;

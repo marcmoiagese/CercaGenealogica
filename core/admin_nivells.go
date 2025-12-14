@@ -34,6 +34,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		PaisID: paisID,
 		Nivel:  niv,
 		Estat:  estat,
+		Status: "publicat",
 	}
 	nivells, _ := a.DB.ListNivells(filter)
 	var pais *db.Pais
@@ -62,7 +63,7 @@ func (a *App) AdminNewNivell(w http.ResponseWriter, r *http.Request) {
 	pais, _ := a.DB.GetPais(paisID)
 	parents, _ := a.DB.ListNivells(db.NivellAdminFilter{PaisID: paisID})
 	RenderPrivateTemplate(w, r, "admin-nivells-form.html", map[string]interface{}{
-		"Nivell":          &db.NivellAdministratiu{PaisID: paisID, Estat: "actiu"},
+		"Nivell":          &db.NivellAdministratiu{PaisID: paisID, Estat: "actiu", ModeracioEstat: "pendent"},
 		"Pais":            pais,
 		"Parents":         parents,
 		"IsNew":           true,
@@ -115,6 +116,7 @@ func (a *App) AdminSaveNivell(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/paisos", http.StatusSeeOther)
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	id, _ := strconv.Atoi(r.FormValue("id"))
 	paisID, _ := strconv.Atoi(r.FormValue("pais_id"))
 	nivel, _ := strconv.Atoi(r.FormValue("nivel"))
@@ -134,6 +136,10 @@ func (a *App) AdminSaveNivell(w http.ResponseWriter, r *http.Request) {
 		AnyInici:    anyInici,
 		AnyFi:       anyFi,
 		Estat:       estat,
+		CreatedBy:   sqlNullIntFromInt(user.ID),
+		ModeracioEstat: "pendent",
+		ModeratedBy: sql.NullInt64{},
+		ModeratedAt: sql.NullTime{},
 	}
 	if errMsg := a.validateNivell(nivell); errMsg != "" {
 		a.renderNivellFormError(w, r, nivell, errMsg, id == 0)
@@ -145,9 +151,15 @@ func (a *App) AdminSaveNivell(w http.ResponseWriter, r *http.Request) {
 	}
 	var saveErr error
 	if nivell.ID == 0 {
-		_, saveErr = a.DB.CreateNivell(nivell)
+		var createdID int
+		createdID, saveErr = a.DB.CreateNivell(nivell)
+		if saveErr == nil {
+			nivell.ID = createdID
+			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleNivellCreate, "crear", "nivell", &createdID, "pendent", nil, "")
+		}
 	} else {
 		saveErr = a.DB.UpdateNivell(nivell)
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleNivellUpdate, "editar", "nivell", &id, "pendent", nil, "")
 	}
 	if saveErr != nil {
 		a.renderNivellFormError(w, r, nivell, "No s'ha pogut desar el nivell administratiu.", id == 0)

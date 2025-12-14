@@ -19,6 +19,7 @@ func (a *App) AdminListPuntsRegles(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error llistant regles", http.StatusInternalServerError)
 		return
 	}
+	token, _ := ensureCSRF(w, r)
 	msg := ""
 	if r.URL.Query().Get("ok") != "" {
 		msg = T(ResolveLang(r), "common.saved")
@@ -27,12 +28,13 @@ func (a *App) AdminListPuntsRegles(w http.ResponseWriter, r *http.Request) {
 	} else if r.URL.Query().Get("err") != "" {
 		msg = T(ResolveLang(r), "common.error")
 	}
-	RenderPrivateTemplate(w, r, "admin-punts-regles-list.html", map[string]interface{}{
+	RenderPrivateTemplate(w, r, "admin-punts-list.html", map[string]interface{}{
 		"Regles":            regles,
 		"User":              user,
 		"CanManageArxius":   true,
 		"CanManagePolicies": true,
 		"Msg":               msg,
+		"CSRFToken":         token,
 	})
 }
 
@@ -43,7 +45,7 @@ func (a *App) AdminNewPuntsRegla(w http.ResponseWriter, r *http.Request) {
 	}
 	user, _ := a.VerificarSessio(r)
 	token, _ := ensureCSRF(w, r)
-	RenderPrivateTemplate(w, r, "admin-punts-regles-form.html", map[string]interface{}{
+	RenderPrivateTemplate(w, r, "admin-punts-form.html", map[string]interface{}{
 		"Regla":             &db.PointsRule{},
 		"IsNew":             true,
 		"CSRFToken":         token,
@@ -66,7 +68,7 @@ func (a *App) AdminEditPuntsRegla(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token, _ := ensureCSRF(w, r)
-	RenderPrivateTemplate(w, r, "admin-punts-regles-form.html", map[string]interface{}{
+	RenderPrivateTemplate(w, r, "admin-punts-form.html", map[string]interface{}{
 		"Regla":             regla,
 		"IsNew":             false,
 		"CSRFToken":         token,
@@ -81,6 +83,7 @@ func (a *App) AdminSavePuntsRegla(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -94,22 +97,25 @@ func (a *App) AdminSavePuntsRegla(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := strconv.Atoi(r.FormValue("id"))
-	code := strings.TrimSpace(r.FormValue("codi"))
+	code := strings.TrimSpace(r.FormValue("code"))
 	if id > 0 {
 		// No permetre canviar el codi via form (immutable)
 		if existing, err := a.DB.GetPointsRule(id); err == nil && existing != nil {
 			code = existing.Code
 		}
 	}
-	name := strings.TrimSpace(r.FormValue("nom"))
-	desc := strings.TrimSpace(r.FormValue("descripcio"))
-	points, _ := strconv.Atoi(r.FormValue("punts"))
-	active := r.FormValue("actiu") == "1"
+	name := strings.TrimSpace(r.FormValue("name"))
+	desc := strings.TrimSpace(r.FormValue("description"))
+	points, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("points")))
+	active := r.FormValue("active") == "1"
 	if code == "" || name == "" {
-		RenderPrivateTemplate(w, r, "admin-punts-regles-form.html", map[string]interface{}{
-			"Regla": &db.PointsRule{ID: id, Code: code, Name: name, Description: desc, Points: points, Active: active},
-			"IsNew": id == 0,
-			"Error": "Codi i nom són obligatoris",
+		token, _ := ensureCSRF(w, r)
+		RenderPrivateTemplate(w, r, "admin-punts-form.html", map[string]interface{}{
+			"Regla":     &db.PointsRule{ID: id, Code: code, Name: name, Description: desc, Points: points, Active: active},
+			"IsNew":     id == 0,
+			"Error":     "Codi i nom són obligatoris",
+			"CSRFToken": token,
+			"User":      user,
 		})
 		return
 	}
@@ -122,10 +128,13 @@ func (a *App) AdminSavePuntsRegla(w http.ResponseWriter, r *http.Request) {
 		Active:      active,
 	}
 	if _, err := a.DB.SavePointsRule(regla); err != nil {
-		RenderPrivateTemplate(w, r, "admin-punts-regles-form.html", map[string]interface{}{
-			"Regla": regla,
-			"IsNew": id == 0,
-			"Error": "No s'ha pogut desar la regla",
+		token, _ := ensureCSRF(w, r)
+		RenderPrivateTemplate(w, r, "admin-punts-form.html", map[string]interface{}{
+			"Regla":     regla,
+			"IsNew":     id == 0,
+			"Error":     "No s'ha pogut desar la regla",
+			"CSRFToken": token,
+			"User":      user,
 		})
 		return
 	}

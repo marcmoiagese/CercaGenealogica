@@ -136,6 +136,16 @@ func (h sqlHelper) ensureDefaultPointsRules() error {
 		{Code: "llibre_pagina_index", Name: "Indexar pàgina", Description: "Indexar pàgina de llibre", Points: 3, Active: true},
 		{Code: "moderacio_approve", Name: "Aprovar com a moderador", Description: "Aprovar contingut pendent", Points: 1, Active: true},
 		{Code: "moderacio_reject", Name: "Rebutjar com a moderador", Description: "Rebutjar contingut pendent", Points: 0, Active: true},
+		{Code: "arxiu_create", Name: "Crear arxiu", Description: "Alta d'arxiu", Points: 2, Active: true},
+		{Code: "arxiu_update", Name: "Editar arxiu", Description: "Edició d'arxiu", Points: 1, Active: true},
+		{Code: "llibre_create", Name: "Crear llibre", Description: "Alta de llibre", Points: 3, Active: true},
+		{Code: "llibre_update", Name: "Editar llibre", Description: "Edició de llibre", Points: 1, Active: true},
+		{Code: "nivell_create", Name: "Crear nivell administratiu", Description: "Alta de nivell administratiu", Points: 2, Active: true},
+		{Code: "nivell_update", Name: "Editar nivell administratiu", Description: "Edició de nivell administratiu", Points: 1, Active: true},
+		{Code: "municipi_create", Name: "Crear municipi", Description: "Alta de municipi/localitat", Points: 3, Active: true},
+		{Code: "municipi_update", Name: "Editar municipi", Description: "Edició de municipi/localitat", Points: 1, Active: true},
+		{Code: "eclesiastic_create", Name: "Crear entitat eclesiàstica", Description: "Alta d'entitat eclesiàstica", Points: 2, Active: true},
+		{Code: "eclesiastic_update", Name: "Editar entitat eclesiàstica", Description: "Edició d'entitat eclesiàstica", Points: 1, Active: true},
 	}
 	for _, r := range defaults {
 		stmt := `INSERT INTO punts_regles (codi, nom, descripcio, punts, actiu, data_creacio) VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)`
@@ -714,12 +724,42 @@ func (h sqlHelper) recalcUserPoints() error {
 	return err
 }
 
-func (h sqlHelper) getRanking(limit int) ([]UserPoints, error) {
-	query := `SELECT usuari_id, punts_total, ultima_actualitzacio FROM usuaris_punts ORDER BY punts_total DESC`
-	if limit > 0 {
-		query += fmt.Sprintf(" LIMIT %d", limit)
+func (h sqlHelper) getRanking(f RankingFilter) ([]UserPoints, error) {
+	query := `SELECT u.id, COALESCE(up.punts_total, 0) AS total, COALESCE(up.ultima_actualitzacio, u.data_creacio) AS ultima
+			  FROM usuaris u
+			  LEFT JOIN usuaris_punts up ON u.id = up.usuari_id
+			  LEFT JOIN user_privacy pr ON pr.usuari_id = u.id`
+	args := []interface{}{}
+	clauses := []string{}
+	if f.PublicOnly {
+		publicCond := "(pr.profile_public IS NULL OR pr.profile_public = 1)"
+		if h.style == "postgres" {
+			publicCond = "(pr.profile_public IS NULL OR pr.profile_public = TRUE)"
+		}
+		clauses = append(clauses, publicCond)
 	}
-	rows, err := h.db.Query(query)
+	if strings.TrimSpace(f.PreferredLang) != "" {
+		clauses = append(clauses, "u.preferred_lang = ?")
+		args = append(args, f.PreferredLang)
+	}
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query += " ORDER BY total DESC, u.id ASC"
+	if f.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, f.Limit)
+		if f.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, f.Offset)
+		}
+	} else if f.Offset > 0 {
+		// offset without limit can be problematic; set a large limit to allow offset usage
+		query += " LIMIT -1 OFFSET ?"
+		args = append(args, f.Offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -727,12 +767,49 @@ func (h sqlHelper) getRanking(limit int) ([]UserPoints, error) {
 	var res []UserPoints
 	for rows.Next() {
 		var up UserPoints
-		if err := rows.Scan(&up.UserID, &up.Total, &up.UltimaActualitzacio); err != nil {
+		var ts sql.NullString
+		if err := rows.Scan(&up.UserID, &up.Total, &ts); err != nil {
 			return nil, err
+		}
+		if ts.Valid {
+			if parsed, perr := time.Parse(time.RFC3339, ts.String); perr == nil {
+				up.UltimaActualitzacio = parsed
+			} else if parsed, perr2 := time.Parse("2006-01-02 15:04:05", ts.String); perr2 == nil {
+				up.UltimaActualitzacio = parsed
+			}
 		}
 		res = append(res, up)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) countRanking(f RankingFilter) (int, error) {
+	query := `SELECT COUNT(1)
+			  FROM usuaris u
+			  LEFT JOIN user_privacy pr ON pr.usuari_id = u.id`
+	args := []interface{}{}
+	clauses := []string{}
+	if f.PublicOnly {
+		publicCond := "(pr.profile_public IS NULL OR pr.profile_public = 1)"
+		if h.style == "postgres" {
+			publicCond = "(pr.profile_public IS NULL OR pr.profile_public = TRUE)"
+		}
+		clauses = append(clauses, publicCond)
+	}
+	if strings.TrimSpace(f.PreferredLang) != "" {
+		clauses = append(clauses, "u.preferred_lang = ?")
+		args = append(args, f.PreferredLang)
+	}
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, args...)
+	var total int
+	if err := row.Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (h sqlHelper) updatePersona(p *Persona) error {
@@ -754,6 +831,46 @@ func (h sqlHelper) updatePersonaModeracio(id int, estat, motiu string, moderator
 	stmt = formatPlaceholders(h.style, stmt)
 	now := time.Now()
 	_, err := h.db.Exec(stmt, estat, motiu, now, moderatorID, now, id)
+	return err
+}
+
+func (h sqlHelper) updateArxiuModeracio(id int, estat, motiu string, moderatorID int) error {
+	stmt := `UPDATE arxius SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	now := time.Now()
+	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, now, now, id)
+	return err
+}
+
+func (h sqlHelper) updateLlibreModeracio(id int, estat, motiu string, moderatorID int) error {
+	stmt := `UPDATE llibres SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	now := time.Now()
+	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, now, now, id)
+	return err
+}
+
+func (h sqlHelper) updateNivellModeracio(id int, estat, motiu string, moderatorID int) error {
+	stmt := `UPDATE nivells_administratius SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	now := time.Now()
+	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, now, now, id)
+	return err
+}
+
+func (h sqlHelper) updateMunicipiModeracio(id int, estat, motiu string, moderatorID int) error {
+	stmt := `UPDATE municipis SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	now := time.Now()
+	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, now, now, id)
+	return err
+}
+
+func (h sqlHelper) updateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error {
+	stmt := `UPDATE arquebisbats SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	now := time.Now()
+	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, now, now, id)
 	return err
 }
 
@@ -837,9 +954,14 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 		where += " AND n.estat = ?"
 		args = append(args, strings.TrimSpace(f.Estat))
 	}
+	if strings.TrimSpace(f.Status) != "" {
+		where += " AND n.moderation_status = ?"
+		args = append(args, strings.TrimSpace(f.Status))
+	}
 	query := `
         SELECT n.id, n.pais_id, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
-               n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat
+               n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat,
+               n.created_by, n.moderation_status, n.moderated_by, n.moderated_at, n.moderation_notes
         FROM nivells_administratius n
         LEFT JOIN nivells_administratius p ON p.id = n.parent_id
         WHERE ` + where + `
@@ -853,7 +975,8 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 	var res []NivellAdministratiu
 	for rows.Next() {
 		var n NivellAdministratiu
-		if err := rows.Scan(&n.ID, &n.PaisID, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat); err != nil {
+		if err := rows.Scan(&n.ID, &n.PaisID, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat,
+			&n.CreatedBy, &n.ModeracioEstat, &n.ModeratedBy, &n.ModeratedAt, &n.ModeracioMotiu); err != nil {
 			return nil, err
 		}
 		res = append(res, n)
@@ -864,14 +987,16 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 func (h sqlHelper) getNivell(id int) (*NivellAdministratiu, error) {
 	query := `
         SELECT n.id, n.pais_id, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
-               n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat
+               n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat,
+               n.created_by, n.moderation_status, n.moderated_by, n.moderated_at, n.moderation_notes
         FROM nivells_administratius n
         LEFT JOIN nivells_administratius p ON p.id = n.parent_id
         WHERE n.id = ?`
 	query = formatPlaceholders(h.style, query)
 	row := h.db.QueryRow(query, id)
 	var n NivellAdministratiu
-	if err := row.Scan(&n.ID, &n.PaisID, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat); err != nil {
+	if err := row.Scan(&n.ID, &n.PaisID, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat,
+		&n.CreatedBy, &n.ModeracioEstat, &n.ModeratedBy, &n.ModeratedAt, &n.ModeracioMotiu); err != nil {
 		return nil, err
 	}
 	return &n, nil
@@ -880,13 +1005,15 @@ func (h sqlHelper) getNivell(id int) (*NivellAdministratiu, error) {
 func (h sqlHelper) createNivell(n *NivellAdministratiu) (int, error) {
 	query := `
         INSERT INTO nivells_administratius
-            (pais_id, nivel, nom_nivell, tipus_nivell, codi_oficial, altres, parent_id, any_inici, any_fi, estat, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+            (pais_id, nivel, nom_nivell, tipus_nivell, codi_oficial, altres, parent_id, any_inici, any_fi, estat,
+             created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	if h.style == "postgres" {
 		query += ` RETURNING id`
 	}
 	query = formatPlaceholders(h.style, query)
-	args := []interface{}{n.PaisID, n.Nivel, n.NomNivell, n.TipusNivell, n.CodiOficial, n.Altres, n.ParentID, n.AnyInici, n.AnyFi, n.Estat}
+	args := []interface{}{n.PaisID, n.Nivel, n.NomNivell, n.TipusNivell, n.CodiOficial, n.Altres, n.ParentID, n.AnyInici, n.AnyFi, n.Estat,
+		n.CreatedBy, n.ModeracioEstat, n.ModeratedBy, n.ModeratedAt, n.ModeracioMotiu}
 	if h.style == "postgres" {
 		if err := h.db.QueryRow(query, args...).Scan(&n.ID); err != nil {
 			return 0, err
@@ -906,10 +1033,12 @@ func (h sqlHelper) createNivell(n *NivellAdministratiu) (int, error) {
 func (h sqlHelper) updateNivell(n *NivellAdministratiu) error {
 	query := `
         UPDATE nivells_administratius
-        SET pais_id = ?, nivel = ?, nom_nivell = ?, tipus_nivell = ?, codi_oficial = ?, altres = ?, parent_id = ?, any_inici = ?, any_fi = ?, estat = ?, updated_at = ` + h.nowFun + `
+        SET pais_id = ?, nivel = ?, nom_nivell = ?, tipus_nivell = ?, codi_oficial = ?, altres = ?, parent_id = ?, any_inici = ?, any_fi = ?, estat = ?,
+            moderation_status = ?, moderated_by = ?, moderated_at = ?, moderation_notes = ?, updated_at = ` + h.nowFun + `
         WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
-	_, err := h.db.Exec(query, n.PaisID, n.Nivel, n.NomNivell, n.TipusNivell, n.CodiOficial, n.Altres, n.ParentID, n.AnyInici, n.AnyFi, n.Estat, n.ID)
+	_, err := h.db.Exec(query, n.PaisID, n.Nivel, n.NomNivell, n.TipusNivell, n.CodiOficial, n.Altres, n.ParentID, n.AnyInici, n.AnyFi, n.Estat,
+		n.ModeracioEstat, n.ModeratedBy, n.ModeratedAt, n.ModeracioMotiu, n.ID)
 	return err
 }
 
@@ -924,6 +1053,10 @@ func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 	if strings.TrimSpace(f.Estat) != "" {
 		where += " AND m.estat = ?"
 		args = append(args, strings.TrimSpace(f.Estat))
+	}
+	if strings.TrimSpace(f.Status) != "" {
+		where += " AND m.moderation_status = ?"
+		args = append(args, strings.TrimSpace(f.Status))
 	}
 	if f.PaisID > 0 {
 		where += " AND na1.id = ?"
@@ -968,7 +1101,8 @@ func (h sqlHelper) getMunicipi(id int) (*Municipi, error) {
         SELECT id, nom, municipi_id, tipus,
                nivell_administratiu_id_1, nivell_administratiu_id_2, nivell_administratiu_id_3,
                nivell_administratiu_id_4, nivell_administratiu_id_5, nivell_administratiu_id_6, nivell_administratiu_id_7,
-               codi_postal, latitud, longitud, what3words, web, wikipedia, altres, estat
+               codi_postal, latitud, longitud, what3words, web, wikipedia, altres, estat,
+               created_by, moderation_status, moderated_by, moderated_at, moderation_notes
         FROM municipis WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
 	row := h.db.QueryRow(query, id)
@@ -978,6 +1112,7 @@ func (h sqlHelper) getMunicipi(id int) (*Municipi, error) {
 		&m.NivellAdministratiuID[0], &m.NivellAdministratiuID[1], &m.NivellAdministratiuID[2],
 		&m.NivellAdministratiuID[3], &m.NivellAdministratiuID[4], &m.NivellAdministratiuID[5], &m.NivellAdministratiuID[6],
 		&m.CodiPostal, &m.Latitud, &m.Longitud, &m.What3Words, &m.Web, &m.Wikipedia, &m.Altres, &m.Estat,
+		&m.CreatedBy, &m.ModeracioEstat, &m.ModeratedBy, &m.ModeratedAt, &m.ModeracioMotiu,
 	); err != nil {
 		return nil, err
 	}
@@ -989,8 +1124,8 @@ func (h sqlHelper) createMunicipi(m *Municipi) (int, error) {
         INSERT INTO municipis
             (nom, municipi_id, tipus, nivell_administratiu_id_1, nivell_administratiu_id_2, nivell_administratiu_id_3,
              nivell_administratiu_id_4, nivell_administratiu_id_5, nivell_administratiu_id_6, nivell_administratiu_id_7,
-             codi_postal, latitud, longitud, what3words, web, wikipedia, altres, estat, data_creacio, ultima_modificacio)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+            codi_postal, latitud, longitud, what3words, web, wikipedia, altres, estat, created_by, moderation_status, moderation_notes, data_creacio, ultima_modificacio)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	if h.style == "postgres" {
 		query += ` RETURNING id`
 	}
@@ -999,7 +1134,7 @@ func (h sqlHelper) createMunicipi(m *Municipi) (int, error) {
 		m.Nom, m.MunicipiID, m.Tipus,
 		m.NivellAdministratiuID[0], m.NivellAdministratiuID[1], m.NivellAdministratiuID[2],
 		m.NivellAdministratiuID[3], m.NivellAdministratiuID[4], m.NivellAdministratiuID[5], m.NivellAdministratiuID[6],
-		m.CodiPostal, m.Latitud, m.Longitud, m.What3Words, m.Web, m.Wikipedia, m.Altres, m.Estat,
+		m.CodiPostal, m.Latitud, m.Longitud, m.What3Words, m.Web, m.Wikipedia, m.Altres, m.Estat, m.CreatedBy, m.ModeracioEstat, m.ModeracioMotiu,
 	}
 	if h.style == "postgres" {
 		if err := h.db.QueryRow(query, args...).Scan(&m.ID); err != nil {
@@ -1023,7 +1158,9 @@ func (h sqlHelper) updateMunicipi(m *Municipi) error {
             nom=?, municipi_id=?, tipus=?,
             nivell_administratiu_id_1=?, nivell_administratiu_id_2=?, nivell_administratiu_id_3=?,
             nivell_administratiu_id_4=?, nivell_administratiu_id_5=?, nivell_administratiu_id_6=?, nivell_administratiu_id_7=?,
-            codi_postal=?, latitud=?, longitud=?, what3words=?, web=?, wikipedia=?, altres=?, estat=?, ultima_modificacio=` + h.nowFun + `
+            codi_postal=?, latitud=?, longitud=?, what3words=?, web=?, wikipedia=?, altres=?, estat=?,
+            moderation_status=?, moderated_by=?, moderated_at=?, moderation_notes=?,
+            ultima_modificacio=` + h.nowFun + `
         WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
 	_, err := h.db.Exec(query,
@@ -1031,6 +1168,7 @@ func (h sqlHelper) updateMunicipi(m *Municipi) error {
 		m.NivellAdministratiuID[0], m.NivellAdministratiuID[1], m.NivellAdministratiuID[2],
 		m.NivellAdministratiuID[3], m.NivellAdministratiuID[4], m.NivellAdministratiuID[5], m.NivellAdministratiuID[6],
 		m.CodiPostal, m.Latitud, m.Longitud, m.What3Words, m.Web, m.Wikipedia, m.Altres, m.Estat,
+		m.ModeracioEstat, m.ModeratedBy, m.ModeratedAt, m.ModeracioMotiu,
 		m.ID)
 	return err
 }
@@ -1154,6 +1292,10 @@ func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, erro
 		where += " AND a.pais_id = ?"
 		args = append(args, f.PaisID)
 	}
+	if strings.TrimSpace(f.Status) != "" {
+		where += " AND a.moderation_status = ?"
+		args = append(args, strings.TrimSpace(f.Status))
+	}
 	query := `
         SELECT a.id, a.nom, a.tipus_entitat, p.codi_iso3, a.nivell, parent.nom as parent_nom, a.any_inici, a.any_fi
         FROM arquebisbats a
@@ -1181,12 +1323,14 @@ func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, erro
 func (h sqlHelper) getArquebisbat(id int) (*Arquebisbat, error) {
 	query := `
         SELECT id, nom, tipus_entitat, pais_id, nivell, parent_id, any_inici, any_fi,
-               web, web_arxiu, web_wikipedia, territori, observacions
+               web, web_arxiu, web_wikipedia, territori, observacions,
+               created_by, moderation_status, moderated_by, moderated_at, moderation_notes
         FROM arquebisbats WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
 	row := h.db.QueryRow(query, id)
 	var a Arquebisbat
-	if err := row.Scan(&a.ID, &a.Nom, &a.TipusEntitat, &a.PaisID, &a.Nivell, &a.ParentID, &a.AnyInici, &a.AnyFi, &a.Web, &a.WebArxiu, &a.WebWikipedia, &a.Territori, &a.Observacions); err != nil {
+	if err := row.Scan(&a.ID, &a.Nom, &a.TipusEntitat, &a.PaisID, &a.Nivell, &a.ParentID, &a.AnyInici, &a.AnyFi, &a.Web, &a.WebArxiu, &a.WebWikipedia, &a.Territori, &a.Observacions,
+		&a.CreatedBy, &a.ModeracioEstat, &a.ModeratedBy, &a.ModeratedAt, &a.ModeracioMotiu); err != nil {
 		return nil, err
 	}
 	return &a, nil
@@ -1195,13 +1339,15 @@ func (h sqlHelper) getArquebisbat(id int) (*Arquebisbat, error) {
 func (h sqlHelper) createArquebisbat(ae *Arquebisbat) (int, error) {
 	query := `
         INSERT INTO arquebisbats
-            (nom, tipus_entitat, pais_id, nivell, parent_id, any_inici, any_fi, web, web_arxiu, web_wikipedia, territori, observacions, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+            (nom, tipus_entitat, pais_id, nivell, parent_id, any_inici, any_fi, web, web_arxiu, web_wikipedia, territori, observacions,
+             created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	if h.style == "postgres" {
 		query += ` RETURNING id`
 	}
 	query = formatPlaceholders(h.style, query)
-	args := []interface{}{ae.Nom, ae.TipusEntitat, ae.PaisID, ae.Nivell, ae.ParentID, ae.AnyInici, ae.AnyFi, ae.Web, ae.WebArxiu, ae.WebWikipedia, ae.Territori, ae.Observacions}
+	args := []interface{}{ae.Nom, ae.TipusEntitat, ae.PaisID, ae.Nivell, ae.ParentID, ae.AnyInici, ae.AnyFi, ae.Web, ae.WebArxiu, ae.WebWikipedia, ae.Territori, ae.Observacions,
+		ae.CreatedBy, ae.ModeracioEstat, ae.ModeratedBy, ae.ModeratedAt, ae.ModeracioMotiu}
 	if h.style == "postgres" {
 		if err := h.db.QueryRow(query, args...).Scan(&ae.ID); err != nil {
 			return 0, err
@@ -1221,10 +1367,12 @@ func (h sqlHelper) createArquebisbat(ae *Arquebisbat) (int, error) {
 func (h sqlHelper) updateArquebisbat(ae *Arquebisbat) error {
 	query := `
         UPDATE arquebisbats
-        SET nom=?, tipus_entitat=?, pais_id=?, nivell=?, parent_id=?, any_inici=?, any_fi=?, web=?, web_arxiu=?, web_wikipedia=?, territori=?, observacions=?, updated_at=` + h.nowFun + `
+        SET nom=?, tipus_entitat=?, pais_id=?, nivell=?, parent_id=?, any_inici=?, any_fi=?, web=?, web_arxiu=?, web_wikipedia=?, territori=?, observacions=?,
+            moderation_status=?, moderated_by=?, moderated_at=?, moderation_notes=?, updated_at=` + h.nowFun + `
         WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
-	_, err := h.db.Exec(query, ae.Nom, ae.TipusEntitat, ae.PaisID, ae.Nivell, ae.ParentID, ae.AnyInici, ae.AnyFi, ae.Web, ae.WebArxiu, ae.WebWikipedia, ae.Territori, ae.Observacions, ae.ID)
+	_, err := h.db.Exec(query, ae.Nom, ae.TipusEntitat, ae.PaisID, ae.Nivell, ae.ParentID, ae.AnyInici, ae.AnyFi, ae.Web, ae.WebArxiu, ae.WebWikipedia, ae.Territori, ae.Observacions,
+		ae.ModeracioEstat, ae.ModeratedBy, ae.ModeratedAt, ae.ModeracioMotiu, ae.ID)
 	return err
 }
 
@@ -1492,13 +1640,14 @@ func (h sqlHelper) getUserByEmail(email string) (*User, error) {
 func (h sqlHelper) getUserByID(id int) (*User, error) {
 	h.ensureUserExtraColumns()
 	query := formatPlaceholders(h.style, `
-        SELECT id, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, address, employment_status, profession, phone, preferred_lang, spoken_langs, data_creacio, actiu 
+        SELECT id, usuari, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, address, employment_status, profession, phone, preferred_lang, spoken_langs, data_creacio, actiu 
         FROM usuaris 
         WHERE id = ?`)
 	row := h.db.QueryRow(query, id)
 	u := new(User)
 	err := row.Scan(
 		&u.ID,
+		&u.Usuari,
 		&u.Name,
 		&u.Surname,
 		&u.Email,
@@ -1992,6 +2141,10 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 		clauses = append(clauses, "a.entitat_eclesiastica_id = ?")
 		args = append(args, filter.EntitatID)
 	}
+	if strings.TrimSpace(filter.Status) != "" {
+		clauses = append(clauses, "a.moderation_status = ?")
+		args = append(args, strings.TrimSpace(filter.Status))
+	}
 	limit := 50
 	offset := 0
 	if filter.Limit > 0 {
@@ -2003,6 +2156,7 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 	args = append(args, limit, offset)
 	query := `
         SELECT a.id, a.nom, a.tipus, a.municipi_id, a.entitat_eclesiastica_id, a.adreca, a.ubicacio, a.web, a.acces, a.notes,
+               a.created_by, a.moderation_status, a.moderated_by, a.moderated_at, a.moderation_notes,
                m.nom as municipi_nom, ae.nom as entitat_nom,
                COALESCE(cnt.total, 0) AS llibres
         FROM arxius a
@@ -2023,7 +2177,9 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 	var res []ArxiuWithCount
 	for rows.Next() {
 		var a ArxiuWithCount
-		if err := rows.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.Web, &a.Acces, &a.Notes, &a.MunicipiNom, &a.EntitatNom, &a.Llibres); err != nil {
+		if err := rows.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.Web, &a.Acces, &a.Notes,
+			&a.CreatedBy, &a.ModeracioEstat, &a.ModeratedBy, &a.ModeratedAt, &a.ModeracioMotiu,
+			&a.MunicipiNom, &a.EntitatNom, &a.Llibres); err != nil {
 			return nil, err
 		}
 		res = append(res, a)
@@ -2033,22 +2189,24 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 
 func (h sqlHelper) getArxiu(id int) (*Arxiu, error) {
 	query := formatPlaceholders(h.style, `
-        SELECT id, nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes
+        SELECT id, nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes,
+               created_by, moderation_status, moderated_by, moderated_at, moderation_notes
         FROM arxius WHERE id = ?`)
 	row := h.db.QueryRow(query, id)
 	var a Arxiu
-	if err := row.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.Web, &a.Acces, &a.Notes); err != nil {
+	if err := row.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.Web, &a.Acces, &a.Notes,
+		&a.CreatedBy, &a.ModeracioEstat, &a.ModeratedBy, &a.ModeratedAt, &a.ModeracioMotiu); err != nil {
 		return nil, err
 	}
 	return &a, nil
 }
 
 func (h sqlHelper) createArxiu(a *Arxiu) (int, error) {
-	args := []interface{}{a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.Web, a.Acces, a.Notes}
+	args := []interface{}{a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.Web, a.Acces, a.Notes, a.CreatedBy, a.ModeracioEstat, a.ModeratedBy, a.ModeratedAt, a.ModeracioMotiu}
 	if h.style == "postgres" {
 		query := `
-            INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)
+            INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes, created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)
             RETURNING id`
 		query = formatPlaceholders(h.style, query)
 		if err := h.db.QueryRow(query, args...).Scan(&a.ID); err != nil {
@@ -2058,8 +2216,8 @@ func (h sqlHelper) createArxiu(a *Arxiu) (int, error) {
 	}
 
 	query := `
-        INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+        INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes, created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	query = formatPlaceholders(h.style, query)
 	res, err := h.db.Exec(query, args...)
 	if err != nil {
@@ -2074,10 +2232,11 @@ func (h sqlHelper) createArxiu(a *Arxiu) (int, error) {
 func (h sqlHelper) updateArxiu(a *Arxiu) error {
 	query := `
         UPDATE arxius
-        SET nom = ?, tipus = ?, municipi_id = ?, entitat_eclesiastica_id = ?, adreca = ?, ubicacio = ?, web = ?, acces = ?, notes = ?, updated_at = ` + h.nowFun + `
+        SET nom = ?, tipus = ?, municipi_id = ?, entitat_eclesiastica_id = ?, adreca = ?, ubicacio = ?, web = ?, acces = ?, notes = ?,
+            moderation_status = ?, moderated_by = ?, moderated_at = ?, moderation_notes = ?, updated_at = ` + h.nowFun + `
         WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
-	_, err := h.db.Exec(query, a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.Web, a.Acces, a.Notes, a.ID)
+	_, err := h.db.Exec(query, a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.Web, a.Acces, a.Notes, a.ModeracioEstat, a.ModeratedBy, a.ModeratedAt, a.ModeracioMotiu, a.ID)
 	return err
 }
 
@@ -2221,11 +2380,16 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 		clauses = append(clauses, "EXISTS (SELECT 1 FROM arxius_llibres al INNER JOIN arxius ax ON ax.id = al.arxiu_id WHERE al.llibre_id = l.id AND ax.tipus = ?)")
 		args = append(args, strings.TrimSpace(filter.ArxiuTipus))
 	}
+	if strings.TrimSpace(filter.Status) != "" {
+		clauses = append(clauses, "l.moderation_status = ?")
+		args = append(args, strings.TrimSpace(filter.Status))
+	}
 	query := `
         SELECT l.id, l.arquevisbat_id, l.municipi_id, l.nom_esglesia, l.codi_digital, l.codi_fisic,
                l.titol, l.cronologia, l.volum, l.abat, l.contingut, l.llengua,
                l.requeriments_tecnics, l.unitat_catalogacio, l.unitat_instalacio, l.pagines,
                l.url_base, l.url_imatge_prefix, l.pagina,
+               l.created_by, l.moderation_status, l.moderated_by, l.moderated_at, l.moderation_notes,
                ae.nom as arquebisbat_nom, m.nom as municipi_nom
         FROM llibres l
         LEFT JOIN arquebisbats ae ON ae.id = l.arquevisbat_id
@@ -2246,6 +2410,7 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 			&lr.Titol, &lr.Cronologia, &lr.Volum, &lr.Abat, &lr.Contingut, &lr.Llengua,
 			&lr.Requeriments, &lr.UnitatCatalogacio, &lr.UnitatInstalacio, &lr.Pagines,
 			&lr.URLBase, &lr.URLImatgePrefix, &lr.Pagina,
+			&lr.CreatedBy, &lr.ModeracioEstat, &lr.ModeratedBy, &lr.ModeratedAt, &lr.ModeracioMotiu,
 			&lr.ArquebisbatNom, &lr.MunicipiNom,
 		); err != nil {
 			return nil, err
@@ -2260,7 +2425,8 @@ func (h sqlHelper) getLlibre(id int) (*Llibre, error) {
         SELECT id, arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic,
                titol, cronologia, volum, abat, contingut, llengua,
                requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines,
-               url_base, url_imatge_prefix, pagina
+               url_base, url_imatge_prefix, pagina,
+               created_by, moderation_status, moderated_by, moderated_at, moderation_notes
         FROM llibres WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
 	row := h.db.QueryRow(query, id)
@@ -2270,6 +2436,7 @@ func (h sqlHelper) getLlibre(id int) (*Llibre, error) {
 		&l.Titol, &l.Cronologia, &l.Volum, &l.Abat, &l.Contingut, &l.Llengua,
 		&l.Requeriments, &l.UnitatCatalogacio, &l.UnitatInstalacio, &l.Pagines,
 		&l.URLBase, &l.URLImatgePrefix, &l.Pagina,
+		&l.CreatedBy, &l.ModeracioEstat, &l.ModeratedBy, &l.ModeratedAt, &l.ModeracioMotiu,
 	); err != nil {
 		return nil, err
 	}
@@ -2280,8 +2447,9 @@ func (h sqlHelper) createLlibre(l *Llibre) (int, error) {
 	query := `
         INSERT INTO llibres
             (arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic, titol, cronologia, volum, abat, contingut, llengua,
-             requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines, url_base, url_imatge_prefix, pagina, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+             requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines, url_base, url_imatge_prefix, pagina,
+             created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	if h.style == "postgres" {
 		query += ` RETURNING id`
 	}
@@ -2289,6 +2457,7 @@ func (h sqlHelper) createLlibre(l *Llibre) (int, error) {
 	args := []interface{}{
 		l.ArquebisbatID, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
 		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina,
+		l.CreatedBy, l.ModeracioEstat, l.ModeratedBy, l.ModeratedAt, l.ModeracioMotiu,
 	}
 	if h.style == "postgres" {
 		if err := h.db.QueryRow(query, args...).Scan(&l.ID); err != nil {
@@ -2310,12 +2479,14 @@ func (h sqlHelper) updateLlibre(l *Llibre) error {
 	query := `
         UPDATE llibres
         SET arquevisbat_id=?, municipi_id=?, nom_esglesia=?, codi_digital=?, codi_fisic=?, titol=?, cronologia=?, volum=?, abat=?, contingut=?, llengua=?,
-            requeriments_tecnics=?, unitat_catalogacio=?, unitat_instalacio=?, pagines=?, url_base=?, url_imatge_prefix=?, pagina=?, updated_at=` + h.nowFun + `
+            requeriments_tecnics=?, unitat_catalogacio=?, unitat_instalacio=?, pagines=?, url_base=?, url_imatge_prefix=?, pagina=?,
+            moderation_status=?, moderated_by=?, moderated_at=?, moderation_notes=?, updated_at=` + h.nowFun + `
         WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
 	_, err := h.db.Exec(query,
 		l.ArquebisbatID, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
-		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina, l.ID)
+		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina,
+		l.ModeracioEstat, l.ModeratedBy, l.ModeratedAt, l.ModeracioMotiu, l.ID)
 	return err
 }
 

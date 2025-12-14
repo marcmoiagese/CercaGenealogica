@@ -17,6 +17,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 	filter := db.MunicipiFilter{
 		Text:  strings.TrimSpace(r.URL.Query().Get("q")),
 		Estat: strings.TrimSpace(r.URL.Query().Get("estat")),
+		Status: "publicat",
 	}
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {
@@ -150,6 +151,7 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/municipis", http.StatusSeeOther)
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	id, _ := strconv.Atoi(r.FormValue("id"))
 	parent := parseNullInt(r.FormValue("municipi_id"))
 	m := &db.Municipi{
@@ -165,6 +167,10 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 		Wikipedia:  strings.TrimSpace(r.FormValue("wikipedia")),
 		Altres:     strings.TrimSpace(r.FormValue("altres")),
 		Estat:      strings.TrimSpace(r.FormValue("estat")),
+		CreatedBy:  sqlNullIntFromInt(user.ID),
+		ModeracioEstat: "pendent",
+		ModeratedBy: sql.NullInt64{},
+		ModeratedAt: sql.NullTime{},
 	}
 	for i := 0; i < 7; i++ {
 		field := strings.TrimSpace(r.FormValue("nivell_administratiu_id_" + strconv.Itoa(i+1)))
@@ -180,15 +186,19 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if m.ID == 0 {
-		if _, err := a.DB.CreateMunicipi(m); err != nil {
+		createdID, err := a.DB.CreateMunicipi(m)
+		if err != nil {
 			a.renderMunicipiFormError(w, r, m, "No s'ha pogut crear el municipi.", true)
 			return
 		}
+		m.ID = createdID
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleMunicipiCreate, "crear", "municipi", &createdID, "pendent", nil, "")
 	} else {
 		if err := a.DB.UpdateMunicipi(m); err != nil {
 			a.renderMunicipiFormError(w, r, m, "No s'ha pogut actualitzar el municipi.", false)
 			return
 		}
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleMunicipiUpdate, "editar", "municipi", &id, "pendent", nil, "")
 	}
 	http.Redirect(w, r, "/admin/municipis", http.StatusSeeOther)
 }

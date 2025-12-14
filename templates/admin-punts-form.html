@@ -1,0 +1,60 @@
+{{ define "admin-punts-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "points.rules.new" }}{{ else }}{{ t .Lang "points.rules.edit" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <form class="card formulari" method="post" action="/admin/punts/regles/save">
+            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+            <input type="hidden" name="id" value="{{ .Data.Regla.ID }}">
+            <header class="card-header">
+                <h1>{{ if .Data.IsNew }}{{ t .Lang "points.rules.new" }}{{ else }}{{ t .Lang "points.rules.edit" }}{{ end }}</h1>
+                <p class="card-kicker">{{ t .Lang "points.rules.kicker" }}</p>
+            </header>
+            {{ if .Data.Error }}
+            <div class="alerta alerta-error">{{ .Data.Error }}</div>
+            {{ end }}
+            <div class="form-grid">
+                <div class="form-control">
+                    <label for="code">{{ t .Lang "points.rules.code" }}</label>
+                    <input id="code" name="code" type="text" value="{{ .Data.Regla.Code }}" {{ if not .Data.IsNew }}readonly{{ end }} required>
+                    {{ if not .Data.IsNew }}<p class="camp-helper">{{ t .Lang "points.rules.code.help" }}</p>{{ end }}
+                </div>
+                <div class="form-control">
+                    <label for="name">{{ t .Lang "points.rules.name" }}</label>
+                    <input id="name" name="name" type="text" value="{{ .Data.Regla.Name }}" required>
+                </div>
+                <div class="form-control">
+                    <label for="description">{{ t .Lang "points.rules.description" }}</label>
+                    <textarea id="description" name="description" rows="3">{{ .Data.Regla.Description }}</textarea>
+                </div>
+                <div class="form-control">
+                    <label for="points">{{ t .Lang "points.rules.points" }}</label>
+                    <input id="points" name="points" type="number" value="{{ .Data.Regla.Points }}" required>
+                </div>
+                <div class="form-control check-inline">
+                    <label class="checkbox-linia">
+                        <input type="checkbox" name="active" value="1" {{ if .Data.Regla.Active }}checked{{ end }}>
+                        <span>{{ t .Lang "points.rules.active" }}</span>
+                    </label>
+                </div>
+            </div>
+            <div class="form-accio">
+                <a class="boto-secundari" href="/admin/punts/regles">{{ t .Lang "common.cancel" }}</a>
+                <button type="submit" class="boto-primari">
+                    <i class="fas fa-save"></i> <span>{{ t .Lang "common.save" }}</span>
+                </button>
+            </div>
+        </form>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

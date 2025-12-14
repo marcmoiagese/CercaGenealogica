@@ -402,7 +402,8 @@ func (f *fakeDB) GetUserPoints(userID int) (*db.UserPoints, error) {
 	return &db.UserPoints{UserID: userID}, nil
 }
 func (f *fakeDB) RecalcUserPoints() error                       { return nil }
-func (f *fakeDB) GetRanking(limit int) ([]db.UserPoints, error) { return nil, nil }
+func (f *fakeDB) GetRanking(db.RankingFilter) ([]db.UserPoints, error) { return nil, nil }
+func (f *fakeDB) CountRanking(db.RankingFilter) (int, error)           { return 0, nil }
 func (f *fakeDB) ListUserGroups(userID int) ([]db.Group, error) { return nil, nil }
 func (f *fakeDB) ListPersones(filter db.PersonaFilter) ([]db.Persona, error) {
 	return nil, nil
@@ -413,6 +414,19 @@ func (f *fakeDB) CreatePersona(p *db.Persona) (int, error) {
 }
 func (f *fakeDB) UpdatePersona(p *db.Persona) error { return nil }
 func (f *fakeDB) UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDB) UpdateArxiuModeracio(id int, estat, motiu string, moderatorID int) error { return nil }
+func (f *fakeDB) UpdateLlibreModeracio(id int, estat, motiu string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDB) UpdateNivellModeracio(id int, estat, motiu string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDB) UpdateMunicipiModeracio(id int, estat, motiu string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDB) UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error {
 	return nil
 }
 

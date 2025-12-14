@@ -279,6 +279,9 @@ func (d *MySQL) CreateNivell(n *NivellAdministratiu) (int, error) {
 func (d *MySQL) UpdateNivell(n *NivellAdministratiu) error {
 	return d.help.updateNivell(n)
 }
+func (d *MySQL) UpdateNivellModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateNivellModeracio(id, estat, motiu, moderatorID)
+}
 
 // Municipis
 func (d *MySQL) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
@@ -292,6 +295,9 @@ func (d *MySQL) CreateMunicipi(m *Municipi) (int, error) {
 }
 func (d *MySQL) UpdateMunicipi(m *Municipi) error {
 	return d.help.updateMunicipi(m)
+}
+func (d *MySQL) UpdateMunicipiModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateMunicipiModeracio(id, estat, motiu, moderatorID)
 }
 func (d *MySQL) ListCodisPostals(municipiID int) ([]CodiPostal, error) {
 	return d.help.listCodisPostals(municipiID)
@@ -319,6 +325,9 @@ func (d *MySQL) CreateArquebisbat(ae *Arquebisbat) (int, error) {
 func (d *MySQL) UpdateArquebisbat(ae *Arquebisbat) error {
 	return d.help.updateArquebisbat(ae)
 }
+func (d *MySQL) UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateArquebisbatModeracio(id, estat, motiu, moderatorID)
+}
 func (d *MySQL) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {
 	return d.help.listArquebisbatMunicipis(munID)
 }
@@ -338,6 +347,9 @@ func (d *MySQL) CreateArxiu(a *Arxiu) (int, error) {
 }
 func (d *MySQL) UpdateArxiu(a *Arxiu) error {
 	return d.help.updateArxiu(a)
+}
+func (d *MySQL) UpdateArxiuModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateArxiuModeracio(id, estat, motiu, moderatorID)
 }
 func (d *MySQL) DeleteArxiu(id int) error {
 	return d.help.deleteArxiu(id)
@@ -371,6 +383,9 @@ func (d *MySQL) CreateLlibre(l *Llibre) (int, error) {
 }
 func (d *MySQL) UpdateLlibre(l *Llibre) error {
 	return d.help.updateLlibre(l)
+}
+func (d *MySQL) UpdateLlibreModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateLlibreModeracio(id, estat, motiu, moderatorID)
 }
 func (d *MySQL) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {
 	return d.help.listLlibrePagines(llibreID)
@@ -407,4 +422,5 @@ func (d *MySQL) AddPointsToUser(userID int, delta int) error {
 }
 func (d *MySQL) GetUserPoints(userID int) (*UserPoints, error) { return d.help.getUserPoints(userID) }
 func (d *MySQL) RecalcUserPoints() error                       { return d.help.recalcUserPoints() }
-func (d *MySQL) GetRanking(limit int) ([]UserPoints, error)    { return d.help.getRanking(limit) }
+func (d *MySQL) GetRanking(f RankingFilter) ([]UserPoints, error) { return d.help.getRanking(f) }
+func (d *MySQL) CountRanking(f RankingFilter) (int, error)        { return d.help.countRanking(f) }

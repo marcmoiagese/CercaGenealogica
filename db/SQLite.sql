@@ -147,6 +147,11 @@ CREATE TABLE IF NOT EXISTS nivells_administratius (
     any_inici INTEGER,  -- quan apareix aquest nivell (si es coneix)
     any_fi    INTEGER,   -- quan deixa d’existir / canvia (null = vigent)
     estat TEXT CHECK(estat IN ('actiu', 'inactiu', 'fusionat', 'abolit')) DEFAULT 'actiu',
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
+    moderation_notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Quan s'ha creat el nivell
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Última vegada que ha canviat
 );
@@ -174,6 +179,11 @@ CREATE TABLE IF NOT EXISTS municipis (
     wikipedia TEXT, -- URL o títol de pàgina Wikipedia
     altres TEXT,                               -- JSON amb informació adicional
     estat TEXT CHECK(estat IN ('actiu', 'inactiu', 'abandonat')) DEFAULT 'actiu',
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
+    moderation_notes TEXT,
     data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     ultima_modificacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -218,6 +228,11 @@ CREATE TABLE IF NOT EXISTS arquebisbats (
     web_wikipedia TEXT,
     territori TEXT, -- Ex: Àmbit geogràfic (ex: Catalunya Nord, Catalunya del Sud)
     observacions TEXT,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
+    moderation_notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -267,6 +282,11 @@ CREATE TABLE IF NOT EXISTS llibres (
     url_base TEXT,                         -- ex: "https://arxiuenlinia.ahat.cat/Document/ "
     url_imatge_prefix TEXT DEFAULT "#imatge-", -- prefix comú per afegir pàgina
     pagina TEXT,                            -- Pàgina específica (si es vol navegar directe a una pàgina concreta) ex: "7", "05-0023" (Urgell)
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
+    moderation_notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(arquevisbat_id) REFERENCES arquebisbats(id) ON DELETE CASCADE,
@@ -294,6 +314,11 @@ CREATE TABLE IF NOT EXISTS arxius (
     web TEXT,
     acces TEXT,                 -- online, presencial, mixt
     notes TEXT,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
+    moderation_notes TEXT,
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

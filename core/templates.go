@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"reflect"
+	"strings"
 )
 
 var Templates *template.Template
@@ -39,6 +40,9 @@ var templateFuncs = template.FuncMap{
 	},
 	"add": func(a, b int) int {
 		return a + b
+	},
+	"upper": func(s string) string {
+		return strings.ToUpper(s)
 	},
 	// idx: accés segur a slices/arrays/mapes via reflect
 	"idx": func(collection interface{}, index int) interface{} {

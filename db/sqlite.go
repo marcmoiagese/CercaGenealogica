@@ -282,6 +282,9 @@ func (d *SQLite) CreateNivell(n *NivellAdministratiu) (int, error) {
 func (d *SQLite) UpdateNivell(n *NivellAdministratiu) error {
 	return d.help.updateNivell(n)
 }
+func (d *SQLite) UpdateNivellModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateNivellModeracio(id, estat, motiu, moderatorID)
+}
 
 // Municipis
 func (d *SQLite) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
@@ -295,6 +298,9 @@ func (d *SQLite) CreateMunicipi(m *Municipi) (int, error) {
 }
 func (d *SQLite) UpdateMunicipi(m *Municipi) error {
 	return d.help.updateMunicipi(m)
+}
+func (d *SQLite) UpdateMunicipiModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateMunicipiModeracio(id, estat, motiu, moderatorID)
 }
 func (d *SQLite) ListCodisPostals(municipiID int) ([]CodiPostal, error) {
 	return d.help.listCodisPostals(municipiID)
@@ -322,6 +328,9 @@ func (d *SQLite) CreateArquebisbat(ae *Arquebisbat) (int, error) {
 func (d *SQLite) UpdateArquebisbat(ae *Arquebisbat) error {
 	return d.help.updateArquebisbat(ae)
 }
+func (d *SQLite) UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateArquebisbatModeracio(id, estat, motiu, moderatorID)
+}
 func (d *SQLite) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {
 	return d.help.listArquebisbatMunicipis(munID)
 }
@@ -341,6 +350,9 @@ func (d *SQLite) CreateArxiu(a *Arxiu) (int, error) {
 }
 func (d *SQLite) UpdateArxiu(a *Arxiu) error {
 	return d.help.updateArxiu(a)
+}
+func (d *SQLite) UpdateArxiuModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateArxiuModeracio(id, estat, motiu, moderatorID)
 }
 func (d *SQLite) DeleteArxiu(id int) error {
 	return d.help.deleteArxiu(id)
@@ -374,6 +386,9 @@ func (d *SQLite) CreateLlibre(l *Llibre) (int, error) {
 }
 func (d *SQLite) UpdateLlibre(l *Llibre) error {
 	return d.help.updateLlibre(l)
+}
+func (d *SQLite) UpdateLlibreModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateLlibreModeracio(id, estat, motiu, moderatorID)
 }
 func (d *SQLite) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {
 	return d.help.listLlibrePagines(llibreID)
@@ -412,4 +427,7 @@ func (d *SQLite) AddPointsToUser(userID int, delta int) error {
 }
 func (d *SQLite) GetUserPoints(userID int) (*UserPoints, error) { return d.help.getUserPoints(userID) }
 func (d *SQLite) RecalcUserPoints() error                       { return d.help.recalcUserPoints() }
-func (d *SQLite) GetRanking(limit int) ([]UserPoints, error)    { return d.help.getRanking(limit) }
+func (d *SQLite) GetRanking(f RankingFilter) ([]UserPoints, error) {
+	return d.help.getRanking(f)
+}
+func (d *SQLite) CountRanking(f RankingFilter) (int, error) { return d.help.countRanking(f) }

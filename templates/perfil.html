@@ -471,6 +471,11 @@
                                             <option value="" {{ if eq $f.type "" }}selected{{ end }}>{{ t .Lang "common.all" }}</option>
                                             <option value="persona" {{ if eq $f.type "persona" }}selected{{ end }}>{{ t .Lang "activity.object.persona" }}</option>
                                             <option value="llibre_pagina" {{ if eq $f.type "llibre_pagina" }}selected{{ end }}>{{ t .Lang "activity.object.llibre_pagina" }}</option>
+                                            <option value="arxiu" {{ if eq $f.type "arxiu" }}selected{{ end }}>{{ t .Lang "activity.object.arxiu" }}</option>
+                                            <option value="llibre" {{ if eq $f.type "llibre" }}selected{{ end }}>{{ t .Lang "activity.object.llibre" }}</option>
+                                            <option value="municipi" {{ if eq $f.type "municipi" }}selected{{ end }}>{{ t .Lang "activity.object.municipi" }}</option>
+                                            <option value="nivell" {{ if eq $f.type "nivell" }}selected{{ end }}>{{ t .Lang "activity.object.nivell" }}</option>
+                                            <option value="eclesiastic" {{ if eq $f.type "eclesiastic" }}selected{{ end }}>{{ t .Lang "activity.object.eclesiastic" }}</option>
                                         </select>
                                     </div>
                                     <div class="grup-camp">
@@ -502,7 +507,25 @@
                                         <tr>
                                             <td>{{ .CreatedAt.Format "2006-01-02 15:04" }}</td>
                                             <td>{{ t $.Lang (printf "activity.action.%s" .Action) }}</td>
-                                            <td>{{ t $.Lang (printf "activity.object.%s" .ObjectType) }} {{ if .ObjectID.Valid }}#{{ .ObjectID.Int64 }}{{ end }}</td>
+                                            <td>
+                                                {{ $label := t $.Lang (printf "activity.object.%s" .ObjectType) }}
+                                                {{ if and .ObjectID.Valid (ne .ObjectType "") }}
+                                                    {{ $url := "" }}
+                                                    {{ if eq .ObjectType "persona" }}{{ $url = (printf "/persones/%d" .ObjectID.Int64) }}{{ end }}
+                                                    {{ if eq .ObjectType "arxiu" }}{{ $url = (printf "/arxius/%d" .ObjectID.Int64) }}{{ end }}
+                                                    {{ if eq .ObjectType "llibre" }}{{ $url = (printf "/admin/llibres/%d" .ObjectID.Int64) }}{{ end }}
+                                                    {{ if eq .ObjectType "municipi" }}{{ $url = (printf "/admin/municipis/%d/edit" .ObjectID.Int64) }}{{ end }}
+                                                    {{ if eq .ObjectType "nivell" }}{{ $url = (printf "/admin/nivells/%d/edit" .ObjectID.Int64) }}{{ end }}
+                                                    {{ if eq .ObjectType "eclesiastic" }}{{ $url = (printf "/admin/eclesiastic/%d/edit" .ObjectID.Int64) }}{{ end }}
+                                                    {{ if $url }}
+                                                        <a href="{{ $url }}">{{ $label }} #{{ .ObjectID.Int64 }}</a>
+                                                    {{ else }}
+                                                        {{ $label }} #{{ .ObjectID.Int64 }}
+                                                    {{ end }}
+                                                {{ else }}
+                                                    {{ $label }}
+                                                {{ end }}
+                                            </td>
                                             <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .Status) }}</span></td>
                                             <td>{{ .Points }}</td>
                                         </tr>

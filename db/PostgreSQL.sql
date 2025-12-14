@@ -147,6 +147,11 @@ CREATE TABLE IF NOT EXISTS nivells_administratius (
     any_inici INTEGER,
     any_fi INTEGER,
     estat TEXT CHECK(estat IN ('actiu', 'inactiu', 'fusionat', 'abolit')) DEFAULT 'actiu',
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP WITHOUT TIME ZONE,
+    moderation_notes TEXT,
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -171,6 +176,11 @@ CREATE TABLE IF NOT EXISTS municipis (
     wikipedia TEXT,
     altres TEXT,
     estat TEXT CHECK(estat IN ('actiu', 'inactiu', 'abandonat')) DEFAULT 'actiu',
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP WITHOUT TIME ZONE,
+    moderation_notes TEXT,
     data_creacio TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     ultima_modificacio TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -208,6 +218,11 @@ CREATE TABLE IF NOT EXISTS arquebisbats (
     web_wikipedia TEXT,
     territori TEXT,
     observacions TEXT,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP WITHOUT TIME ZONE,
+    moderation_notes TEXT,
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -254,6 +269,11 @@ CREATE TABLE IF NOT EXISTS llibres (
     url_base TEXT,
     url_imatge_prefix TEXT DEFAULT '#imatge-',
     pagina TEXT,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP WITHOUT TIME ZONE,
+    moderation_notes TEXT,
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -273,6 +293,11 @@ CREATE TABLE IF NOT EXISTS arxius (
   web TEXT,
   acces TEXT,
   notes TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP WITHOUT TIME ZONE,
+  moderation_notes TEXT,
   created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

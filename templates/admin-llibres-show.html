@@ -17,6 +17,11 @@
                     <a class="boto-secundari" href="/admin/llibres/{{ .Data.Llibre.ID }}/edit">{{ t .Lang "books.action.edit" }}</a>
                     <a class="boto-secundari" href="/admin/llibres/{{ .Data.Llibre.ID }}/pagines">{{ t .Lang "books.action.pages" }}</a>
                 </div>
+                {{ if .Data.Llibre.ModeracioEstat }}
+                <span class="badge {{ if eq .Data.Llibre.ModeracioEstat "publicat" }}verd{{ else if eq .Data.Llibre.ModeracioEstat "pendent" }}taronja{{ else }}vermell{{ end }}">
+                    {{ t .Lang (printf "activity.status.%s" .Data.Llibre.ModeracioEstat) }}
+                </span>
+                {{ end }}
             </header>
             <ul class="dades-grid">
                 <li><strong>{{ t .Lang "books.form.entity" }}:</strong> {{ .Data.Llibre.ArquebisbatID }}</li>

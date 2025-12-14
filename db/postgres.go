@@ -280,6 +280,9 @@ func (d *PostgreSQL) CreateNivell(n *NivellAdministratiu) (int, error) {
 func (d *PostgreSQL) UpdateNivell(n *NivellAdministratiu) error {
 	return d.help.updateNivell(n)
 }
+func (d *PostgreSQL) UpdateNivellModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateNivellModeracio(id, estat, motiu, moderatorID)
+}
 
 // Municipis
 func (d *PostgreSQL) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
@@ -293,6 +296,9 @@ func (d *PostgreSQL) CreateMunicipi(m *Municipi) (int, error) {
 }
 func (d *PostgreSQL) UpdateMunicipi(m *Municipi) error {
 	return d.help.updateMunicipi(m)
+}
+func (d *PostgreSQL) UpdateMunicipiModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateMunicipiModeracio(id, estat, motiu, moderatorID)
 }
 func (d *PostgreSQL) ListCodisPostals(municipiID int) ([]CodiPostal, error) {
 	return d.help.listCodisPostals(municipiID)
@@ -320,6 +326,9 @@ func (d *PostgreSQL) CreateArquebisbat(ae *Arquebisbat) (int, error) {
 func (d *PostgreSQL) UpdateArquebisbat(ae *Arquebisbat) error {
 	return d.help.updateArquebisbat(ae)
 }
+func (d *PostgreSQL) UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateArquebisbatModeracio(id, estat, motiu, moderatorID)
+}
 func (d *PostgreSQL) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {
 	return d.help.listArquebisbatMunicipis(munID)
 }
@@ -339,6 +348,9 @@ func (d *PostgreSQL) CreateArxiu(a *Arxiu) (int, error) {
 }
 func (d *PostgreSQL) UpdateArxiu(a *Arxiu) error {
 	return d.help.updateArxiu(a)
+}
+func (d *PostgreSQL) UpdateArxiuModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateArxiuModeracio(id, estat, motiu, moderatorID)
 }
 func (d *PostgreSQL) DeleteArxiu(id int) error {
 	return d.help.deleteArxiu(id)
@@ -372,6 +384,9 @@ func (d *PostgreSQL) CreateLlibre(l *Llibre) (int, error) {
 }
 func (d *PostgreSQL) UpdateLlibre(l *Llibre) error {
 	return d.help.updateLlibre(l)
+}
+func (d *PostgreSQL) UpdateLlibreModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateLlibreModeracio(id, estat, motiu, moderatorID)
 }
 func (d *PostgreSQL) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {
 	return d.help.listLlibrePagines(llibreID)
@@ -414,4 +429,9 @@ func (d *PostgreSQL) GetUserPoints(userID int) (*UserPoints, error) {
 	return d.help.getUserPoints(userID)
 }
 func (d *PostgreSQL) RecalcUserPoints() error                    { return d.help.recalcUserPoints() }
-func (d *PostgreSQL) GetRanking(limit int) ([]UserPoints, error) { return d.help.getRanking(limit) }
+func (d *PostgreSQL) GetRanking(f RankingFilter) ([]UserPoints, error) {
+	return d.help.getRanking(f)
+}
+func (d *PostgreSQL) CountRanking(f RankingFilter) (int, error) {
+	return d.help.countRanking(f)
+}

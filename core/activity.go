@@ -14,6 +14,16 @@ const (
 	rulePaginaIndex     = "llibre_pagina_index"
 	ruleModeracioApprove = "moderacio_approve"
 	ruleModeracioReject  = "moderacio_reject"
+	ruleArxiuCreate      = "arxiu_create"
+	ruleArxiuUpdate      = "arxiu_update"
+	ruleLlibreCreate     = "llibre_create"
+	ruleLlibreUpdate     = "llibre_update"
+	ruleNivellCreate     = "nivell_create"
+	ruleNivellUpdate     = "nivell_update"
+	ruleMunicipiCreate   = "municipi_create"
+	ruleMunicipiUpdate   = "municipi_update"
+	ruleEclesiasticCreate = "eclesiastic_create"
+	ruleEclesiasticUpdate = "eclesiastic_update"
 )
 
 // RegisterUserActivity crea una entrada d'activitat i, si està validada, suma punts.

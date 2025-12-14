@@ -33,6 +33,11 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	filter.ArxiuTipus = strings.TrimSpace(r.URL.Query().Get("arxiu_tipus"))
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	if status == "" {
+		status = "publicat"
+	}
+	filter.Status = status
 	llibres, _ := a.DB.ListLlibres(filter)
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
@@ -53,7 +58,7 @@ func (a *App) AdminNewLlibre(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a.renderLlibreForm(w, r, &db.Llibre{}, true, "")
+	a.renderLlibreForm(w, r, &db.Llibre{ModeracioEstat: "pendent"}, true, "")
 }
 
 func (a *App) AdminEditLlibre(w http.ResponseWriter, r *http.Request) {
@@ -156,22 +161,30 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/llibres", http.StatusSeeOther)
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	llibre := parseLlibreForm(r)
 	isNew := llibre.ID == 0
 	if msg := a.validateLlibre(llibre); msg != "" {
 		a.renderLlibreForm(w, r, llibre, isNew, msg)
 		return
 	}
+	llibre.CreatedBy = sqlNullIntFromInt(user.ID)
+	llibre.ModeracioEstat = "pendent"
+	llibre.ModeratedBy = sql.NullInt64{}
+	llibre.ModeratedAt = sql.NullTime{}
 	if isNew {
-		if _, err := a.DB.CreateLlibre(llibre); err != nil {
+		id, err := a.DB.CreateLlibre(llibre)
+		if err != nil {
 			a.renderLlibreForm(w, r, llibre, isNew, "No s'ha pogut crear el llibre.")
 			return
 		}
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleLlibreCreate, "crear", "llibre", &id, "pendent", nil, "")
 	} else {
 		if err := a.DB.UpdateLlibre(llibre); err != nil {
 			a.renderLlibreForm(w, r, llibre, isNew, "No s'ha pogut actualitzar el llibre.")
 			return
 		}
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleLlibreUpdate, "editar", "llibre", &llibre.ID, "pendent", nil, "")
 	}
 	if strings.TrimSpace(r.FormValue("recalc_pagines")) != "" && llibre.Pagines.Valid {
 		_ = a.DB.RecalcLlibrePagines(llibre.ID, int(llibre.Pagines.Int64))

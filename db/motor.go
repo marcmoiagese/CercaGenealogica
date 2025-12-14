@@ -65,7 +65,8 @@ type DB interface {
 	AddPointsToUser(userID int, delta int) error
 	GetUserPoints(userID int) (*UserPoints, error)
 	RecalcUserPoints() error
-	GetRanking(limit int) ([]UserPoints, error)
+	GetRanking(f RankingFilter) ([]UserPoints, error)
+	CountRanking(f RankingFilter) (int, error)
 
 	// Persones (moderació)
 	ListPersones(filter PersonaFilter) ([]Persona, error)
@@ -73,6 +74,11 @@ type DB interface {
 	CreatePersona(p *Persona) (int, error)
 	UpdatePersona(p *Persona) error
 	UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error
+	UpdateArxiuModeracio(id int, estat, motiu string, moderatorID int) error
+	UpdateLlibreModeracio(id int, estat, motiu string, moderatorID int) error
+	UpdateNivellModeracio(id int, estat, motiu string, moderatorID int) error
+	UpdateMunicipiModeracio(id int, estat, motiu string, moderatorID int) error
+	UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error
 	// Arxius CRUD
 	ListArxius(filter ArxiuFilter) ([]ArxiuWithCount, error)
 	GetArxiu(id int) (*Arxiu, error)
@@ -218,6 +224,13 @@ type ActivityFilter struct {
 	To         time.Time
 }
 
+type RankingFilter struct {
+	PreferredLang string
+	Limit         int
+	Offset        int
+	PublicOnly    bool
+}
+
 type Pais struct {
 	ID          int
 	CodiISO2    string
@@ -282,24 +295,30 @@ type PersonaFilter struct {
 }
 
 type NivellAdministratiu struct {
-	ID          int
-	PaisID      int
-	Nivel       int
-	NomNivell   string
-	TipusNivell string
-	CodiOficial string
-	Altres      string
-	ParentID    sql.NullInt64
-	ParentNom   sql.NullString
-	AnyInici    sql.NullInt64
-	AnyFi       sql.NullInt64
-	Estat       string
+	ID             int
+	PaisID         int
+	Nivel          int
+	NomNivell      string
+	TipusNivell    string
+	CodiOficial    string
+	Altres         string
+	ParentID       sql.NullInt64
+	ParentNom      sql.NullString
+	AnyInici       sql.NullInt64
+	AnyFi          sql.NullInt64
+	Estat          string
+	CreatedBy      sql.NullInt64
+	ModeracioEstat string
+	ModeracioMotiu string
+	ModeratedBy    sql.NullInt64
+	ModeratedAt    sql.NullTime
 }
 
 type NivellAdminFilter struct {
 	PaisID int
 	Nivel  int
 	Estat  string
+	Status string
 }
 
 type Municipi struct {
@@ -316,6 +335,11 @@ type Municipi struct {
 	Wikipedia             string
 	Altres                string
 	Estat                 string
+	CreatedBy             sql.NullInt64
+	ModeracioEstat        string
+	ModeracioMotiu        string
+	ModeratedBy           sql.NullInt64
+	ModeratedAt           sql.NullTime
 }
 
 type MunicipiRow struct {
@@ -334,6 +358,7 @@ type MunicipiFilter struct {
 	Estat    string
 	PaisID   int
 	NivellID int
+	Status   string
 }
 
 type CodiPostal struct {
@@ -346,19 +371,24 @@ type CodiPostal struct {
 }
 
 type Arquebisbat struct {
-	ID           int
-	Nom          string
-	TipusEntitat string
-	PaisID       sql.NullInt64
-	Nivell       sql.NullInt64
-	ParentID     sql.NullInt64
-	AnyInici     sql.NullInt64
-	AnyFi        sql.NullInt64
-	Web          string
-	WebArxiu     string
-	WebWikipedia string
-	Territori    string
-	Observacions string
+	ID             int
+	Nom            string
+	TipusEntitat   string
+	PaisID         sql.NullInt64
+	Nivell         sql.NullInt64
+	ParentID       sql.NullInt64
+	AnyInici       sql.NullInt64
+	AnyFi          sql.NullInt64
+	Web            string
+	WebArxiu       string
+	WebWikipedia   string
+	Territori      string
+	Observacions   string
+	CreatedBy      sql.NullInt64
+	ModeracioEstat string
+	ModeracioMotiu string
+	ModeratedBy    sql.NullInt64
+	ModeratedAt    sql.NullTime
 }
 
 type ArquebisbatRow struct {
@@ -375,6 +405,7 @@ type ArquebisbatRow struct {
 type ArquebisbatFilter struct {
 	Text   string
 	PaisID int
+	Status string
 }
 
 type ArquebisbatMunicipi struct {
@@ -414,6 +445,11 @@ type Arxiu struct {
 	Web                   string
 	Acces                 string
 	Notes                 string
+	CreatedBy             sql.NullInt64
+	ModeracioEstat        string
+	ModeracioMotiu        string
+	ModeratedBy           sql.NullInt64
+	ModeratedAt           sql.NullTime
 }
 
 type ArxiuFilter struct {
@@ -424,6 +460,7 @@ type ArxiuFilter struct {
 	PaisID    int
 	Limit     int
 	Offset    int
+	Status    string
 }
 
 type ArxiuWithCount struct {
@@ -473,6 +510,11 @@ type Llibre struct {
 	URLBase           string
 	URLImatgePrefix   string
 	Pagina            string
+	CreatedBy         sql.NullInt64
+	ModeracioEstat    string
+	ModeracioMotiu    string
+	ModeratedBy       sql.NullInt64
+	ModeratedAt       sql.NullTime
 }
 
 type LlibreRow struct {
@@ -487,6 +529,7 @@ type LlibreFilter struct {
 	MunicipiID    int
 	ArxiuID       int
 	ArxiuTipus    string
+	Status        string
 }
 
 type LlibrePagina struct {

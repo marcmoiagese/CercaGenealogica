@@ -13,6 +13,34 @@
         <section class="card">
             <header class="card-header">
                 <h1>{{ t .Lang "points.ranking.title" }}</h1>
+                <form class="form-filtres" method="get" action="/ranking">
+                    <div class="fila-camp">
+                        <label for="filter-lang">{{ t .Lang "points.ranking.filterLanguage" }}</label>
+                        <select id="filter-lang" name="lang">
+                            <option value="" {{ if eq .Data.LangFilter "" }}selected{{ end }}>{{ t .Lang "points.ranking.allLanguages" }}</option>
+                            <option value="cat" {{ if eq .Data.LangFilter "cat" }}selected{{ end }}>{{ t .Lang "lang.name.cat" }}</option>
+                            <option value="en" {{ if eq .Data.LangFilter "en" }}selected{{ end }}>{{ t .Lang "lang.name.en" }}</option>
+                            <option value="oc" {{ if eq .Data.LangFilter "oc" }}selected{{ end }}>{{ t .Lang "lang.name.oc" }}</option>
+                        </select>
+                    </div>
+                    <div class="fila-camp">
+                        <label for="page-size">{{ t .Lang "points.ranking.pageSize" }}</label>
+                        <select id="page-size" name="page_size">
+                            {{ $ps := .Data.PageSize }}
+                            <option value="5" {{ if eq $ps 5 }}selected{{ end }}>5</option>
+                            <option value="10" {{ if eq $ps 10 }}selected{{ end }}>10</option>
+                            <option value="15" {{ if eq $ps 15 }}selected{{ end }}>15</option>
+                            <option value="20" {{ if eq $ps 20 }}selected{{ end }}>20</option>
+                            <option value="50" {{ if eq $ps 50 }}selected{{ end }}>50</option>
+                            <option value="100" {{ if eq $ps 100 }}selected{{ end }}>100</option>
+                        </select>
+                    </div>
+                    <div class="fila-camp">
+                        <label>&nbsp;</label>
+                        <button type="submit" class="boto-primari pequeno"><i class="fas fa-filter"></i> <span>{{ t .Lang "common.apply" }}</span></button>
+                    </div>
+                    <input type="hidden" name="page" value="1">
+                </form>
             </header>
             <div class="taula-wrapper">
                 <table class="taula">
@@ -26,8 +54,13 @@
                     <tbody>
                         {{ range $i, $row := .Data.Ranking }}
                         <tr>
-                            <td>{{ add $i 1 }}</td>
-                            <td>{{ $row.Name }}</td>
+                            <td>{{ $row.Position }}</td>
+                            <td>
+                                <a class="ranking-user" href="/u/{{ $row.UserID }}">
+                                    <span class="nom">@{{ $row.Name }}</span>
+                                    {{ if $row.PreferredCode }}<span class="badge-lang">{{ $row.PreferredCode }}</span>{{ end }}
+                                </a>
+                            </td>
                             <td>{{ $row.Points }}</td>
                         </tr>
                         {{ else }}
@@ -36,6 +69,19 @@
                     </tbody>
                 </table>
             </div>
+            {{ if gt .Data.Total .Data.PageSize }}
+            <div class="paginacio">
+                <div class="paginacio-cont">
+                    {{ if .Data.HasPrev }}
+                    <a class="boto-secundari" href="/ranking?page={{ .Data.PrevPage }}&page_size={{ .Data.PageSize }}{{ if .Data.LangFilter }}&lang={{ .Data.LangFilter }}{{ end }}">{{ t .Lang "common.prev" }}</a>
+                    {{ end }}
+                    <span class="paginacio-info">{{ t .Lang "points.ranking.pageInfo" (printf "%d" .Data.Page) (printf "%d" .Data.TotalPages) }}</span>
+                    {{ if .Data.HasNext }}
+                    <a class="boto-secundari" href="/ranking?page={{ .Data.NextPage }}&page_size={{ .Data.PageSize }}{{ if .Data.LangFilter }}&lang={{ .Data.LangFilter }}{{ end }}">{{ t .Lang "common.next" }}</a>
+                    {{ end }}
+                </div>
+            </div>
+            {{ end }}
         </section>
     </main>
     {{ template "footer" . }}
