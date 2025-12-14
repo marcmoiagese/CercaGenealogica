@@ -22,7 +22,7 @@
             <form class="filtres-arxius" method="get" action="{{ $viewBase }}">
                 <div class="grup-camp">
                     <label for="filtre-q">{{ t .Lang "archives.filter.search" }}</label>
-                    <input id="filtre-q" type="text" name="q" placeholder="Ex: Arxiu Capitular" value="{{ .Data.Filter.Text }}">
+                    <input id="filtre-q" type="text" name="q" placeholder="{{ t .Lang "archives.filter.search.placeholder" }}" value="{{ .Data.Filter.Text }}">
                 </div>
                 <div class="grup-camp">
                     <label for="filtre-tipus">{{ t .Lang "archives.filter.type" }}</label>

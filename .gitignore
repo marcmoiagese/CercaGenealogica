@@ -21,6 +21,7 @@
 
 #excloc cache de go
 .gocache/
+coverage.out
 
 # Excloc gitignore
 .gitignore

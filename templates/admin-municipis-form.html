@@ -34,7 +34,8 @@
                     <select id="pais_id" name="nivell_administratiu_id_1">
                         <option value="">{{ t .Lang "municipis.form.country.none" }}</option>
                         {{ range .Data.Paisos }}
-                        <option value="{{ .ID }}" {{ if and (index $.Data.Municipi.NivellAdministratiuID 0).Valid (eq .ID (int (index $.Data.Municipi.NivellAdministratiuID 0).Int64)) }}selected{{ end }}>{{ .CodiISO3 }}</option>
+                        {{ $lvl1 := idx $.Data.Municipi.NivellAdministratiuID 0 }}
+                        <option value="{{ .ID }}" {{ if and $lvl1.Valid (eq .ID (int $lvl1.Int64)) }}selected{{ end }}>{{ .CodiISO3 }}</option>
                         {{ end }}
                     </select>
                 </div>
@@ -93,7 +94,7 @@
                     <label for="estat">{{ t .Lang "municipis.form.state" }}</label>
                     <select id="estat" name="estat">
                         {{ range $opt := (list "actiu" "inactiu" "abandonat") }}
-                        <option value="{{ $opt }}" {{ if eq $.Data.Municipi.Estat $opt }}selected{{ end }}>{{ $opt }}</option>
+                        <option value="{{ $opt }}" {{ if eq $.Data.Municipi.Estat $opt }}selected{{ end }}>{{ t $.Lang (printf "municipis.state.%s" $opt) }}</option>
                         {{ end }}
                     </select>
                 </div>

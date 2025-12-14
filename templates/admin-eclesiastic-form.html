@@ -25,7 +25,7 @@
                     <label for="tipus_entitat">{{ t .Lang "ecles.form.type" }}</label>
                     <select id="tipus_entitat" name="tipus_entitat">
                         {{ range $opt := (list "arquebisbat" "bisbat" "diocesi" "vegueria" "altres") }}
-                        <option value="{{ $opt }}" {{ if eq $.Data.Entitat.TipusEntitat $opt }}selected{{ end }}>{{ $opt }}</option>
+                        <option value="{{ $opt }}" {{ if eq $.Data.Entitat.TipusEntitat $opt }}selected{{ end }}>{{ t $.Lang (printf "ecles.types.%s" $opt) }}</option>
                         {{ end }}
                     </select>
                 </div>

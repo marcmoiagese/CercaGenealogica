@@ -10,6 +10,7 @@ import (
 type permContextKey string
 
 const permissionsKey permContextKey = "permissions"
+
 type userContextKey string
 
 const userKey userContextKey = "user"
@@ -27,6 +28,18 @@ func (a *App) getPermissionsForUser(userID int) db.PolicyPermissions {
 	if err != nil {
 		Errorf("error carregant permisos per usuari %d: %v", userID, err)
 		return db.PolicyPermissions{}
+	}
+	// Si no hi ha cap permís assignat (BD buida o sense polítiques), donem admin per defecte per evitar bloquejos.
+	if perms == (db.PolicyPermissions{}) {
+		perms.Admin = true
+		perms.CanManageUsers = true
+		perms.CanManageTerritory = true
+		perms.CanManageEclesia = true
+		perms.CanManageArchives = true
+		perms.CanCreatePerson = true
+		perms.CanEditAnyPerson = true
+		perms.CanModerate = true
+		perms.CanManagePolicies = true
 	}
 	return perms
 }

@@ -27,6 +27,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 			paisID = v
 		}
 	}
+	paisos, _ := a.DB.ListPaisos()
 	niv, _ := strconv.Atoi(r.URL.Query().Get("nivel"))
 	estat := strings.TrimSpace(r.URL.Query().Get("estat"))
 	filter := db.NivellAdminFilter{
@@ -45,6 +46,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 	RenderPrivateTemplate(w, r, "admin-nivells-list.html", map[string]interface{}{
 		"Nivells":         nivells,
 		"Pais":            pais,
+		"Paisos":          paisos,
 		"Filter":          filter,
 		"CanManageArxius": true,
 		"User":            user,

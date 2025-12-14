@@ -114,6 +114,18 @@ func (h sqlHelper) ensureDefaultPolicies() error {
 		upd := formatPlaceholders(h.style, `UPDATE politiques SET permisos = ? WHERE nom = ? AND (permisos IS NULL OR permisos = '' OR permisos = '{}' )`)
 		_, _ = h.db.Exec(upd, string(permsJSON), name)
 	}
+	// Bootstrap: assigna admin al primer usuari si no hi ha cap assignació
+	var assignCount int
+	if err := h.db.QueryRow("SELECT COUNT(*) FROM usuaris_politiques").Scan(&assignCount); err == nil && assignCount == 0 {
+		var userID int
+		if err := h.db.QueryRow("SELECT id FROM usuaris ORDER BY id ASC LIMIT 1").Scan(&userID); err == nil {
+			var policyID int
+			if err := h.db.QueryRow(formatPlaceholders(h.style, "SELECT id FROM politiques WHERE nom = ?"), "admin").Scan(&policyID); err == nil {
+				stmt := formatPlaceholders(h.style, "INSERT INTO usuaris_politiques (usuari_id, politica_id) VALUES (?, ?)")
+				_, _ = h.db.Exec(stmt, userID, policyID)
+			}
+		}
+	}
 	return nil
 }
 

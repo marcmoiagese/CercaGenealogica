@@ -1,7 +1,0 @@
-covervars.go
-logger.cover.go
-motor.cover.go
-mysql.cover.go
-postgres.cover.go
-sqlcommon.cover.go
-sqlite.cover.go

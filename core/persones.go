@@ -119,6 +119,8 @@ func (a *App) PersonaSave(w http.ResponseWriter, r *http.Request) {
 		ModeracioMotiu: r.FormValue("motiu"),
 		CreatedBy:      createdBy,
 		UpdatedBy:      updatedBy,
+		DataNaixement:  sql.NullString{String: strings.TrimSpace(r.FormValue("data_naixement")), Valid: strings.TrimSpace(r.FormValue("data_naixement")) != ""},
+		DataDefuncio:   sql.NullString{String: strings.TrimSpace(r.FormValue("data_defuncio")), Valid: strings.TrimSpace(r.FormValue("data_defuncio")) != ""},
 	}
 	if id == 0 {
 		if _, err := a.DB.CreatePersona(p); err != nil {
@@ -281,6 +283,8 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 	existent.ModeracioMotiu = req.ModeracioMotiu
 	existent.Quinta = req.ModeracioMotiu
 	existent.UpdatedBy = sql.NullInt64{Int64: int64(user.ID), Valid: true}
+	existent.DataNaixement = sql.NullString{String: strings.TrimSpace(existent.DataNaixement.String), Valid: existent.DataNaixement.String != ""}
+	existent.DataDefuncio = sql.NullString{String: strings.TrimSpace(existent.DataDefuncio.String), Valid: existent.DataDefuncio.String != ""}
 	if err := a.DB.UpdatePersona(existent); err != nil {
 		http.Error(w, "No s'ha pogut actualitzar", http.StatusInternalServerError)
 		return

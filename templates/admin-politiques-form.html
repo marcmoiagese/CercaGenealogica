@@ -5,6 +5,22 @@
     <meta charset="UTF-8">
     <title>{{ if .Data.IsNew }}{{ t .Lang "policies.new" }}{{ else }}{{ t .Lang "policies.edit" }}{{ end }}</title>
     {{ template "styles-private" . }}
+    <style>
+        .policy-tabs{display:flex;gap:10px;margin:0 0 8px 0;align-items:center}
+        .policy-tabs .tab-boto{background:#f6f8fb;border:1px solid #dfe3ec;color:#1f2c4d;padding:8px 14px;border-radius:10px;transition:all .15s ease}
+        .policy-tabs .tab-boto.actiu{background:#e9edfb;border-color:#bcc8f4;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6),0 2px 6px rgba(0,0,0,0.05);color:#1f2c4d}
+        .policy-tab{display:none}
+        .policy-tab.actiu{display:block}
+        .llista-permisos{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+        .llista-permisos .checkbox-linia{position:relative;align-items:flex-start;padding:12px;border:1px solid #e2e6ef;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.04);transition:all .15s ease;overflow:hidden;cursor:pointer}
+        .llista-permisos .checkbox-linia.actiu{border-color:#b9c7f3;box-shadow:0 4px 12px rgba(71,102,190,0.15);background:#f1f4ff}
+        .llista-permisos .checkbox-linia input{position:absolute;opacity:0;pointer-events:none}
+        .llista-permisos .checkbox-linia span{font-weight:600;color:#1f2c4d}
+        .permis-hint{margin-top:4px;font-size:12px;color:#6b7285;display:block}
+        .perm-indicator{position:absolute;right:12px;top:14px;width:18px;height:18px;border-radius:999px;border:2px solid #cdd4e0;box-shadow:inset 0 1px 2px rgba(0,0,0,0.05);background:#f8fafc;transition:all .15s ease}
+        .llista-permisos .checkbox-linia.actiu .perm-indicator{background:#6f86f6;border-color:#6f86f6;box-shadow:0 0 0 4px rgba(111,134,246,0.18) inset}
+        .grup-camp input,.grup-camp textarea{width:100%}
+    </style>
 </head>
 <body>
     {{ template "header-private" . }}
@@ -17,31 +33,109 @@
             {{ if .Data.Error }}
             <div class="alert alert-error">{{ .Data.Error }}</div>
             {{ end }}
-            <form method="POST" action="/admin/politiques/save" class="formulari-admin">
+            <form method="POST" action="/admin/politiques/save" class="formulari-admin" id="policy-form">
                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                 <input type="hidden" name="id" value="{{ .Data.Politica.ID }}">
-                <div class="camp-form">
+                <div class="grup-camp">
                     <label for="nom">{{ t .Lang "policies.name" }}</label>
                     <input type="text" id="nom" name="nom" value="{{ .Data.Politica.Nom }}" required>
                 </div>
-                <div class="camp-form">
+                <div class="grup-camp">
                     <label for="descripcio">{{ t .Lang "policies.desc" }}</label>
                     <input type="text" id="descripcio" name="descripcio" value="{{ .Data.Politica.Descripcio }}">
                 </div>
-                <div class="camp-form">
-                    <label for="permisos">{{ t .Lang "policies.permissions" }}</label>
-                    <textarea id="permisos" name="permisos" rows="8" placeholder='{"admin":true,...}'>{{ .Data.Politica.Permisos }}</textarea>
-                    <small>{{ t .Lang "policies.permissions.help" }}</small>
+                <div class="grup-camp">
+                    <label>{{ t .Lang "policies.permissions" }}</label>
+                    <div class="policy-tabs">
+                        <div class="tabs-botons" role="tablist">
+                            <button type="button" class="tab-boto actiu" data-target="tab-gui">{{ t .Lang "policies.tab.gui" }}</button>
+                            <button type="button" class="tab-boto" data-target="tab-json">{{ t .Lang "policies.tab.json" }}</button>
+                        </div>
+                    </div>
+                    <p class="camp-helper">{{ t .Lang "policies.gui.helper" }}</p>
+                    <div class="tabs-contingut">
+                        <section class="policy-tab tab-pane actiu" id="tab-gui">
+                            <div class="llista-permisos">
+                                {{ $perms := list "admin" "can_manage_users" "can_manage_territory" "can_manage_eclesiastic" "can_manage_archives" "can_create_person" "can_edit_any_person" "can_moderate" "can_manage_policies" }}
+                                {{ range $perms }}
+                                <label class="checkbox-linia perm-card" data-perm="{{ . }}">
+                                    <input type="checkbox" id="perm-{{ . }}" data-perm="{{ . }}">
+                                    <span>
+                                        {{ t $.Lang (printf "policies.perm.%s" .) }}
+                                        <small class="permis-hint">{{ t $.Lang (printf "policies.perm.desc.%s" .) }}</small>
+                                    </span>
+                                    <span class="perm-indicator" aria-hidden="true"></span>
+                                </label>
+                                {{ end }}
+                            </div>
+                        </section>
+                        <section class="policy-tab tab-pane" id="tab-json">
+                            <textarea id="permisos" name="permisos" rows="10" placeholder='{"admin":true,...}'>{{ .Data.Politica.Permisos }}</textarea>
+                            <small>{{ t .Lang "policies.permissions.help" }}</small>
+                        </section>
+                    </div>
                 </div>
                 <div class="accions-formulari">
-                    <button type="submit" class="boto boto-principal">Desar</button>
-                    <a href="/admin/politiques" class="boto boto-secundari">Cancel·lar</a>
+                    <button type="submit" class="boto-primari">{{ t .Lang "policies.form.save" }}</button>
+                    <a href="/admin/politiques" class="boto-secundari">{{ t .Lang "policies.form.cancel" }}</a>
                 </div>
             </form>
         </section>
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script>
+    (() => {
+        const permKeys = ["admin","can_manage_users","can_manage_territory","can_manage_eclesiastic","can_manage_archives","can_create_person","can_edit_any_person","can_moderate","can_manage_policies"];
+        const textarea = document.getElementById('permisos');
+        const parsePerms = () => {
+            try {
+                const parsed = JSON.parse(textarea.value || '{}');
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch (e) { return {}; }
+        };
+        const syncChecks = (perms) => {
+            permKeys.forEach(k => {
+                const cb = document.getElementById(`perm-${k}`);
+                const card = document.querySelector(`.perm-card[data-perm="${k}"]`);
+                if(cb){
+                    const val = !!perms[k];
+                    cb.checked = val;
+                    if(card){ card.classList.toggle('actiu', val); }
+                }
+            });
+        };
+        const syncJSON = () => {
+            const obj = {};
+            permKeys.forEach(k => {
+                const cb = document.getElementById(`perm-${k}`);
+                const card = document.querySelector(`.perm-card[data-perm="${k}"]`);
+                if(cb && cb.checked) obj[k] = true;
+                if(card) card.classList.toggle('actiu', cb && cb.checked);
+            });
+            textarea.value = JSON.stringify(obj, null, 2);
+        };
+        // init
+        syncChecks(parsePerms());
+        permKeys.forEach(k => {
+            const cb = document.getElementById(`perm-${k}`);
+            if(cb) cb.addEventListener('change', syncJSON);
+        });
+        // tabs
+        document.querySelectorAll('.policy-tabs .tab-boto').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.policy-tabs .tab-boto').forEach(b=>b.classList.remove('actiu'));
+                document.querySelectorAll('.policy-tab').forEach(t=>t.classList.remove('actiu'));
+                btn.classList.add('actiu');
+                const target = document.getElementById(btn.dataset.target);
+                if(target) target.classList.add('actiu');
+                if(btn.dataset.target === 'tab-json') syncJSON();
+                else syncChecks(parsePerms());
+            });
+        });
+        document.getElementById('policy-form').addEventListener('submit', syncJSON);
+    })();
+    </script>
 </body>
 </html>
 {{ end }}

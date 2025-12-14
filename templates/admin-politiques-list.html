@@ -5,6 +5,11 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "policies.title" }}</title>
     {{ template "styles-private" . }}
+    <style>
+        .perms-badges{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+        .perms-pill{background:#eef2ff;border:1px solid #d8ddf0;padding:4px 8px;border-radius:8px;font-size:12px;color:#27304a}
+        .code-fallback{font-size:12px;color:#666}
+    </style>
 </head>
 <body>
     {{ template "header-private" . }}
@@ -13,7 +18,7 @@
         <section class="card">
             <header class="card-header">
                 <h1>{{ t .Lang "policies.title" }}</h1>
-                <a class="boto-primari" href="/admin/politiques/new">Afegir</a>
+                <a class="boto-primari" href="/admin/politiques/new">{{ t .Lang "policies.button.new" }}</a>
             </header>
             <div class="taula-wrapper">
                 <table class="taula">
@@ -32,11 +37,15 @@
                             <td>{{ .ID }}</td>
                             <td>{{ .Nom }}</td>
                             <td>{{ .Descripcio }}</td>
-                            <td><code>{{ .Permisos }}</code></td>
-                            <td><a class="boto-secundari" href="/admin/politiques/{{ .ID }}/edit">Editar</a></td>
+                            <td>
+                                <div class="perms-badges" data-perms='{{ js .Permisos }}'>
+                                    <span class="code-fallback"><code>{{ .Permisos }}</code></span>
+                                </div>
+                            </td>
+                            <td><a class="boto-secundari" href="/admin/politiques/{{ .ID }}/edit">{{ t $.Lang "policies.action.edit" }}</a></td>
                         </tr>
                         {{ else }}
-                        <tr><td colspan="5">Cap resultat</td></tr>
+                        <tr><td colspan="5">{{ t .Lang "common.empty" }}</td></tr>
                         {{ end }}
                     </tbody>
                 </table>
@@ -45,6 +54,40 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script>
+    (() => {
+        const permLabels = {
+            "admin": "{{ t .Lang "policies.perm.admin" }}",
+            "can_manage_users": "{{ t .Lang "policies.perm.can_manage_users" }}",
+            "can_manage_territory": "{{ t .Lang "policies.perm.can_manage_territory" }}",
+            "can_manage_eclesiastic": "{{ t .Lang "policies.perm.can_manage_eclesiastic" }}",
+            "can_manage_archives": "{{ t .Lang "policies.perm.can_manage_archives" }}",
+            "can_create_person": "{{ t .Lang "policies.perm.can_create_person" }}",
+            "can_edit_any_person": "{{ t .Lang "policies.perm.can_edit_any_person" }}",
+            "can_moderate": "{{ t .Lang "policies.perm.can_moderate" }}",
+            "can_manage_policies": "{{ t .Lang "policies.perm.can_manage_policies" }}"
+        };
+        document.querySelectorAll('.perms-badges').forEach(el => {
+            const raw = el.getAttribute('data-perms') || '{}';
+            let data = {};
+            try { data = JSON.parse(raw); } catch (_) { return; }
+            el.innerHTML = '';
+            Object.entries(data).forEach(([k,v]) => {
+                if(!v) return;
+                const span = document.createElement('span');
+                span.className = 'perms-pill';
+                span.textContent = permLabels[k] || k;
+                el.appendChild(span);
+            });
+            if(!el.childElementCount){
+                const span=document.createElement('span');
+                span.className='code-fallback';
+                span.textContent='—';
+                el.appendChild(span);
+            }
+        });
+    })();
+    </script>
 </body>
 </html>
 {{ end }}

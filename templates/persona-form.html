@@ -12,7 +12,10 @@
     <main class="contingut-principal">
         <section class="card">
             <header class="card-header">
-                <h1>{{ if .Data.IsNew }}Nova persona{{ else }}Editar persona{{ end }}</h1>
+                <div>
+                    <p class="muted">{{ t .Lang "persons.detail.published" }}</p>
+                    <h1>{{ if .Data.IsNew }}{{ t .Lang "persons.form.title.new" }}{{ else }}{{ t .Lang "persons.form.title.edit" }}{{ end }}</h1>
+                </div>
             </header>
             {{ if .Data.Error }}
             <div class="alerta alerta-error">{{ .Data.Error }}</div>
@@ -20,48 +23,64 @@
             <form class="formulari-admin" method="post" action="/persones/save">
                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                 <input type="hidden" name="id" value="{{ .Data.Persona.ID }}">
+
+                <h3>{{ t .Lang "persons.form.section.basic" }}</h3>
                 <div class="grid-2col">
-                    <div class="camp-form">
-                        <label for="nom">Nom</label>
+                    <div class="grup-camp">
+                        <label for="nom">{{ t .Lang "persons.form.name" }}</label>
                         <input type="text" id="nom" name="nom" value="{{ .Data.Persona.Nom }}" required>
                     </div>
-                    <div class="camp-form">
-                        <label for="cognom1">Primer cognom</label>
+                    <div class="grup-camp">
+                        <label for="cognom1">{{ t .Lang "persons.form.surname1" }}</label>
                         <input type="text" id="cognom1" name="cognom1" value="{{ .Data.Persona.Cognom1 }}">
                     </div>
-                    <div class="camp-form">
-                        <label for="cognom2">Segon cognom</label>
+                    <div class="grup-camp">
+                        <label for="cognom2">{{ t .Lang "persons.form.surname2" }}</label>
                         <input type="text" id="cognom2" name="cognom2" value="{{ .Data.Persona.Cognom2 }}">
                     </div>
-                    <div class="camp-form">
-                        <label for="municipi">Municipi</label>
-                        <input type="text" id="municipi" name="municipi" value="{{ .Data.Persona.Municipi }}">
+                    <div class="grup-camp">
+                        <label for="data_naixement">{{ t .Lang "persons.form.birth" }}</label>
+                        <input type="date" id="data_naixement" name="data_naixement" value="{{ if .Data.Persona.DataNaixement.Valid }}{{ .Data.Persona.DataNaixement.String }}{{ end }}">
                     </div>
-                    <div class="camp-form">
-                        <label for="arquevisbat">Arquebisbat / entitat</label>
-                        <input type="text" id="arquevisbat" name="arquevisbat" value="{{ .Data.Persona.Arquebisbat }}">
+                    <div class="grup-camp">
+                        <label for="data_defuncio">{{ t .Lang "persons.form.death" }}</label>
+                        <input type="date" id="data_defuncio" name="data_defuncio" value="{{ if .Data.Persona.DataDefuncio.Valid }}{{ .Data.Persona.DataDefuncio.String }}{{ end }}">
                     </div>
-                    <div class="camp-form">
-                        <label for="llibre">Llibre</label>
-                        <input type="text" id="llibre" name="llibre" value="{{ .Data.Persona.Llibre }}">
+                    <div class="grup-camp">
+                        <label for="municipi">{{ t .Lang "persons.form.municipi" }}</label>
+                        <input type="text" id="municipi" name="municipi" value="{{ .Data.Persona.Municipi }}" placeholder="{{ t .Lang "persons.form.optional" }}">
                     </div>
-                    <div class="camp-form">
-                        <label for="pagina">Pàgina</label>
-                        <input type="text" id="pagina" name="pagina" value="{{ .Data.Persona.Pagina }}">
-                    </div>
-                    <div class="camp-form">
-                        <label for="ofici">Ofici</label>
-                        <input type="text" id="ofici" name="ofici" value="{{ .Data.Persona.Ofici }}">
-                    </div>
-                    <div class="camp-form">
-                        <label for="motiu">Notes / motiu</label>
-                        <textarea id="motiu" name="motiu" rows="3">{{ .Data.Persona.ModeracioMotiu }}</textarea>
+                    <div class="grup-camp">
+                        <label for="ofici">{{ t .Lang "persons.form.job" }}</label>
+                        <input type="text" id="ofici" name="ofici" value="{{ .Data.Persona.Ofici }}" placeholder="{{ t .Lang "persons.form.optional" }}">
                     </div>
                 </div>
-                <p class="camp-helper">En desar, la fitxa quedarà en estat pendent fins que un moderador l’aprovi.</p>
+
+                <h3>{{ t .Lang "persons.form.section.refs" }}</h3>
+                <p class="camp-helper">{{ t .Lang "persons.form.section.refs.helper" }}</p>
+                <div class="grid-2col">
+                    <div class="grup-camp">
+                        <label for="llibre">{{ t .Lang "persons.form.book" }}</label>
+                        <input type="text" id="llibre" name="llibre" value="{{ .Data.Persona.Llibre }}" placeholder="{{ t .Lang "persons.form.book.placeholder" }}">
+                    </div>
+                    <div class="grup-camp">
+                        <label for="pagina">{{ t .Lang "persons.form.page" }}</label>
+                        <input type="text" id="pagina" name="pagina" value="{{ .Data.Persona.Pagina }}">
+                    </div>
+                    <div class="grup-camp">
+                        <label for="arquevisbat">{{ t .Lang "persons.form.entity" }}</label>
+                        <input type="text" id="arquevisbat" name="arquevisbat" value="{{ .Data.Persona.Arquebisbat }}">
+                    </div>
+                    <div class="grup-camp">
+                        <label for="motiu">{{ t .Lang "persons.form.notes" }}</label>
+                        <textarea id="motiu" name="motiu" rows="3" placeholder="{{ t .Lang "persons.form.notes.placeholder" }}">{{ .Data.Persona.ModeracioMotiu }}</textarea>
+                    </div>
+                </div>
+
+                <p class="camp-helper">{{ t .Lang "persons.form.pending" }}</p>
                 <div class="accions-formulari">
-                    <button type="submit" class="boto-primari">Desar</button>
-                    <a href="/persones" class="boto-secundari">Cancel·lar</a>
+                    <button type="submit" class="boto-primari">{{ t .Lang "persons.form.save" }}</button>
+                    <a href="/persones" class="boto-secundari">{{ t .Lang "persons.form.cancel" }}</a>
                 </div>
             </form>
         </section>

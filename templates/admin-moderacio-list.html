@@ -21,14 +21,14 @@
                 <table class="taula">
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>Nom</th>
-                            <th>Municipi</th>
-                            <th>Llibre/Pàgina</th>
-                            <th>Autor</th>
-                            <th>Creada</th>
-                            <th>Motiu</th>
-                            <th>Accions</th>
+                            <th>{{ t .Lang "moderation.table.id" }}</th>
+                            <th>{{ t .Lang "moderation.table.name" }}</th>
+                            <th>{{ t .Lang "moderation.table.municipi" }}</th>
+                            <th>{{ t .Lang "moderation.table.book" }}</th>
+                            <th>{{ t .Lang "moderation.table.author" }}</th>
+                            <th>{{ t .Lang "moderation.table.created" }}</th>
+                            <th>{{ t .Lang "moderation.table.reason" }}</th>
+                            <th>{{ t .Lang "moderation.table.actions" }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -44,17 +44,17 @@
                             <td>
                                 <form style="display:inline" method="post" action="/admin/moderacio/{{ .Persona.ID }}/aprovar">
                                     <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
-                                    <button type="submit" class="boto-primari">Aprovar</button>
+                                    <button type="submit" class="boto-primari">{{ t $.Lang "moderation.table.approve" }}</button>
                                 </form>
                                 <form style="display:inline" method="post" action="/admin/moderacio/{{ .Persona.ID }}/rebutjar">
                                     <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
-                                    <input type="text" name="motiu" placeholder="Motiu" style="max-width:150px">
-                                    <button type="submit" class="boto-secundari">Rebutjar</button>
+                                    <input type="text" name="motiu" placeholder="{{ t $.Lang "moderation.table.reason.placeholder" }}" style="max-width:150px">
+                                    <button type="submit" class="boto-secundari">{{ t $.Lang "moderation.table.reject" }}</button>
                                 </form>
                             </td>
                         </tr>
                         {{ else }}
-                        <tr><td colspan="6">Cap pendent de moderació</td></tr>
+                        <tr><td colspan="8">{{ t $.Lang "moderation.table.empty" }}</td></tr>
                         {{ end }}
                     </tbody>
                 </table>

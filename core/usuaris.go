@@ -214,6 +214,8 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	// Intenta bootstrap de polítiques (p.ex. assignar admin al primer usuari si no hi ha assignacions)
+	_ = a.DB.EnsureDefaultPolicies()
 
 	Debugf(" IP de la petició: %s", ipStr)
 
@@ -638,25 +640,25 @@ func formatDateDisplay(dateStr string) string {
 
 func defaultPrivacySettings() *db.PrivacySettings {
 	return &db.PrivacySettings{
-		NomVisibility:       "private",
-		CognomsVisibility:   "private",
-		EmailVisibility:     "private",
-		BirthVisibility:     "private",
-		PaisVisibility:      "public",
-		EstatVisibility:     "private",
-		ProvinciaVisibility: "private",
-		PoblacioVisibility:  "private",
-		PostalVisibility:    "private",
-		AddressVisibility:   "private",
-		EmploymentVisibility: "private",
-		ProfessionVisibility: "private",
-		PhoneVisibility:     "private",
+		NomVisibility:           "private",
+		CognomsVisibility:       "private",
+		EmailVisibility:         "private",
+		BirthVisibility:         "private",
+		PaisVisibility:          "public",
+		EstatVisibility:         "private",
+		ProvinciaVisibility:     "private",
+		PoblacioVisibility:      "private",
+		PostalVisibility:        "private",
+		AddressVisibility:       "private",
+		EmploymentVisibility:    "private",
+		ProfessionVisibility:    "private",
+		PhoneVisibility:         "private",
 		PreferredLangVisibility: "private",
-		SpokenLangsVisibility: "private",
-		ShowActivity:        true,
-		ProfilePublic:       true,
-		NotifyEmail:         true,
-		AllowContact:        true,
+		SpokenLangsVisibility:   "private",
+		ShowActivity:            true,
+		ProfilePublic:           true,
+		NotifyEmail:             true,
+		AllowContact:            true,
 	}
 }
 

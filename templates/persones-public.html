@@ -30,10 +30,10 @@
                             <td>{{ .Nom }} {{ .Cognom1 }} {{ .Cognom2 }}</td>
                             <td>{{ .Municipi }}</td>
                             <td>{{ .Llibre }}</td>
-                            <td><a class="boto-secundari" href="/persones/{{ .ID }}">{{ t .Lang "common.view" }}</a></td>
+                            <td><a class="boto-secundari" href="/persones/{{ .ID }}">{{ t $.Lang "common.view" }}</a></td>
                         </tr>
                         {{ else }}
-                        <tr><td colspan="4">{{ t .Lang "common.empty" }}</td></tr>
+                        <tr><td colspan="4">{{ t $.Lang "common.empty" }}</td></tr>
                         {{ end }}
                     </tbody>
                 </table>

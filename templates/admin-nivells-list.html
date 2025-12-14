@@ -24,6 +24,15 @@
             </header>
             <form class="filtres-arxius" method="get">
                 <div class="grup-camp">
+                    <label for="f-pais">{{ t .Lang "levels.country" }}</label>
+                    <select id="f-pais" name="pais_id">
+                        <option value="0">{{ t .Lang "levels.select.country" }}</option>
+                        {{ range .Data.Paisos }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaisID .ID }}selected{{ end }}>{{ .CodiISO3 }} - {{ .CodiISO2 }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
                     <label for="f-nivel">{{ t .Lang "levels.filter.level" }}</label>
                     <input type="number" id="f-nivel" name="nivel" min="1" max="7" value="{{ if .Data.Filter.Nivel }}{{ .Data.Filter.Nivel }}{{ end }}">
                 </div>
@@ -32,7 +41,7 @@
                     <select id="f-estat" name="estat">
                         <option value="">{{ t .Lang "levels.filter.state.any" }}</option>
                         {{ range $opt := (list "actiu" "inactiu" "fusionat" "abolit") }}
-                        <option value="{{ $opt }}" {{ if eq $.Data.Filter.Estat $opt }}selected{{ end }}>{{ $opt }}</option>
+                        <option value="{{ $opt }}" {{ if eq $.Data.Filter.Estat $opt }}selected{{ end }}>{{ t $.Lang (printf "levels.state.%s" $opt) }}</option>
                         {{ end }}
                     </select>
                 </div>
@@ -61,9 +70,11 @@
                             <td>{{ .CodiOficial }}</td>
                             <td>{{ if .ParentNom.Valid }}{{ .ParentNom.String }}{{ else }}-{{ end }}</td>
                             <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
-                            <td>{{ .Estat }}</td>
+                            <td>{{ t $.Lang (printf "levels.state.%s" .Estat) }}</td>
                             <td><a href="/admin/nivells/{{ .ID }}/edit">{{ t $.Lang "levels.action.edit" }}</a></td>
                         </tr>
+                        {{ else }}
+                        <tr><td colspan="8">{{ t .Lang "common.empty" }}</td></tr>
                         {{ end }}
                     </tbody>
                 </table>

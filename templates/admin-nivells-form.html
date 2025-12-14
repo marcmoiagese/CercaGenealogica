@@ -59,7 +59,7 @@
                     <label for="estat">{{ t .Lang "levels.form.state" }}</label>
                     <select id="estat" name="estat">
                         {{ range $opt := (list "actiu" "inactiu" "fusionat" "abolit") }}
-                        <option value="{{ $opt }}" {{ if eq $.Data.Nivell.Estat $opt }}selected{{ end }}>{{ $opt }}</option>
+                        <option value="{{ $opt }}" {{ if eq $.Data.Nivell.Estat $opt }}selected{{ end }}>{{ t $.Lang (printf "levels.state.%s" $opt) }}</option>
                         {{ end }}
                     </select>
                 </div>

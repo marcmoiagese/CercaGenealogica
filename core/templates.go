@@ -5,8 +5,8 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"reflect"
 	"path/filepath"
+	"reflect"
 )
 
 var Templates *template.Template
@@ -39,6 +39,25 @@ var templateFuncs = template.FuncMap{
 	},
 	"add": func(a, b int) int {
 		return a + b
+	},
+	// idx: accés segur a slices/arrays/mapes via reflect
+	"idx": func(collection interface{}, index int) interface{} {
+		v := reflect.ValueOf(collection)
+		if !v.IsValid() {
+			return nil
+		}
+		switch v.Kind() {
+		case reflect.Slice, reflect.Array:
+			if index >= 0 && index < v.Len() {
+				return v.Index(index).Interface()
+			}
+		case reflect.Map:
+			key := reflect.ValueOf(index)
+			if v.MapIndex(key).IsValid() {
+				return v.MapIndex(key).Interface()
+			}
+		}
+		return nil
 	},
 	"int": func(v interface{}) int {
 		switch t := v.(type) {
