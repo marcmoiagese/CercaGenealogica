@@ -591,10 +591,14 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 		userPoints *db.UserPoints
 		activities []db.UserActivity
 		actFilter  = map[string]string{}
+		heatmap    []map[string]interface{}
+		heatTotal  int
 	)
 	if up, err := a.DB.GetUserPoints(user.ID); err == nil {
 		userPoints = up
 	}
+	// Heatmap d'últims 12 mesos
+	heatmap, heatTotal = buildHeatmap(a.DB, user.ID, lang)
 	if activeTab == "activitat" {
 		status := strings.TrimSpace(r.URL.Query().Get("status"))
 		objType := strings.TrimSpace(r.URL.Query().Get("type"))
@@ -633,7 +637,81 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 		"UserPoints":         userPoints,
 		"Activities":         activities,
 		"ActFilter":          actFilter,
+		"Heatmap":            heatmap,
+		"HeatmapTotal":       heatTotal,
 	})
+}
+
+// buildHeatmap prepara la distribució d'activitat dels darrers 365 dies, tipus GitHub.
+func buildHeatmap(store db.DB, userID int, lang string) ([]map[string]interface{}, int) {
+	from := time.Now().AddDate(-1, 0, 0)
+	acts, err := store.ListUserActivityByUser(userID, db.ActivityFilter{
+		Status: "validat",
+		From:   from,
+	})
+	if err != nil {
+		return nil, 0
+	}
+	counts := map[string]int{}
+	total := 0
+	for _, a := range acts {
+		day := a.CreatedAt.Format("2006-01-02")
+		counts[day]++
+		total++
+	}
+	// calcula màxim per escalar
+	max := 0
+	for _, c := range counts {
+		if c > max {
+			max = c
+		}
+	}
+	// Comença el dilluns anterior per alinear files (diumenge=0)
+	end := time.Now()
+	start := end.AddDate(0, 0, -364)
+	for start.Weekday() != time.Sunday {
+		start = start.AddDate(0, 0, -1)
+	}
+	var cells []map[string]interface{}
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		key := d.Format("2006-01-02")
+		c := counts[key]
+		level := heatLevel(c, max)
+		label := fmt.Sprintf(T(lang, "activity.heatmap.none"), key)
+		if c > 0 {
+			label = fmt.Sprintf(T(lang, "activity.heatmap.some"), c, key)
+		}
+		cells = append(cells, map[string]interface{}{
+			"Date":  key,
+			"Count": c,
+			"Level": level,
+			"Label": label,
+		})
+	}
+	return cells, total
+}
+
+func heatLevel(count, max int) int {
+	if count <= 0 {
+		return 0
+	}
+	if max <= 1 {
+		return 1
+	}
+	step := max / 4
+	if step < 1 {
+		step = 1
+	}
+	switch {
+	case count >= step*4:
+		return 4
+	case count >= step*3:
+		return 3
+	case count >= step*2:
+		return 2
+	default:
+		return 1
+	}
 }
 
 func formatDateInput(dateStr string) string {

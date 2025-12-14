@@ -429,16 +429,14 @@
 
                                 <div class="heatmap-container">
                                     <div class="heatmap-grid" aria-hidden="true">
-                                        <div class="heatmap-dia" data-level="0"></div>
-                                        <div class="heatmap-dia" data-level="1"></div>
-                                        <div class="heatmap-dia" data-level="2"></div>
-                                        <div class="heatmap-dia" data-level="3"></div>
-                                        <div class="heatmap-dia" data-level="4"></div>
+                                        {{ range .Data.Heatmap }}
+                                        <div class="heatmap-dia" data-level="{{ .Level }}" title="{{ .Label }}"></div>
+                                        {{ end }}
                                     </div>
                                 </div>
 
                                 <p class="estadistiques-resum">
-                                    <strong>{{ t .Lang "profile.stats.summary" }}</strong> 0 (exemple).
+                                    <strong>{{ t .Lang "profile.stats.summary" }}</strong> {{ .Data.HeatmapTotal }}
                                 </p>
                             </section>
                             </form>

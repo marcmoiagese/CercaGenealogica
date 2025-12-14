@@ -52,15 +52,23 @@ func (a *App) AdminNewMunicipi(w http.ResponseWriter, r *http.Request) {
 	}
 	user, _ := a.VerificarSessio(r)
 	paisos, _ := a.DB.ListPaisos()
-	var levels []db.NivellAdministratiu
+	var (
+		levels []db.NivellAdministratiu
+		mun    = &db.Municipi{Estat: "actiu"}
+	)
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {
 			levels, _ = a.DB.ListNivells(db.NivellAdminFilter{PaisID: v})
+			mun.NivellAdministratiuID[0] = sql.NullInt64{Int64: int64(v), Valid: true}
 		}
+	}
+	// Si no hi ha filtre, carrega nivells del primer país per donar referència visual
+	if len(levels) == 0 && len(paisos) > 0 {
+		levels, _ = a.DB.ListNivells(db.NivellAdminFilter{PaisID: paisos[0].ID})
 	}
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	RenderPrivateTemplate(w, r, "admin-municipis-form.html", map[string]interface{}{
-		"Municipi":        &db.Municipi{Estat: "actiu"},
+		"Municipi":        mun,
 		"Paisos":          paisos,
 		"Levels":          levels,
 		"Arquebisbats":    arquebisbats,
@@ -84,6 +92,11 @@ func (a *App) AdminEditMunicipi(w http.ResponseWriter, r *http.Request) {
 	}
 	paisos, _ := a.DB.ListPaisos()
 	var levels []db.NivellAdministratiu
+	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
+		if v, err := strconv.Atoi(pid); err == nil {
+			mun.NivellAdministratiuID[0] = sql.NullInt64{Int64: int64(v), Valid: true}
+		}
+	}
 	if mun.NivellAdministratiuID[0].Valid {
 		levels, _ = a.DB.ListNivells(db.NivellAdminFilter{PaisID: int(mun.NivellAdministratiuID[0].Int64)})
 	}

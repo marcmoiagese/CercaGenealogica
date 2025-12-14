@@ -274,6 +274,19 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script>
+    (function() {
+        const sel = document.getElementById('pais_id');
+        if (sel) {
+            sel.addEventListener('change', function () {
+                const val = this.value;
+                if (!val) return;
+                const base = {{ if .Data.IsNew }}"/admin/municipis/new"{{ else }}"/admin/municipis/{{ .Data.Municipi.ID }}/edit"{{ end }};
+                window.location.href = base + "?pais_id=" + encodeURIComponent(val);
+            });
+        }
+    })();
+    </script>
 </body>
 </html>
 {{ end }}

@@ -324,6 +324,8 @@
   "activity.filter.apply": "Aplicar los filtres",
   "activity.period.week": "Darrièra setmana",
   "activity.period.month": "Darrièr mes",
+  "activity.heatmap.none": "Cap de contribucion lo %s",
+  "activity.heatmap.some": "%d contribucions lo %s",
   "activity.action.crear": "Crear",
   "activity.action.editar": "Modificar",
   "activity.action.indexar": "Indexar pagina",

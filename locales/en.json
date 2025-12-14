@@ -324,6 +324,8 @@
   "activity.filter.apply": "Apply filters",
   "activity.period.week": "Last week",
   "activity.period.month": "Last month",
+  "activity.heatmap.none": "No contributions on %s",
+  "activity.heatmap.some": "%d contributions on %s",
   "activity.action.crear": "Create",
   "activity.action.editar": "Edit",
   "activity.action.indexar": "Index page",
