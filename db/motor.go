@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 type DB interface {
@@ -50,6 +51,21 @@ type DB interface {
 	AddGroupPolitica(groupID, politicaID int) error
 	RemoveGroupPolitica(groupID, politicaID int) error
 	GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error)
+	EnsureDefaultPointsRules() error
+	// Punts i activitat
+	ListPointsRules() ([]PointsRule, error)
+	GetPointsRule(id int) (*PointsRule, error)
+	GetPointsRuleByCode(code string) (*PointsRule, error)
+	SavePointsRule(r *PointsRule) (int, error)
+	GetUserActivity(id int) (*UserActivity, error)
+	InsertUserActivity(a *UserActivity) (int, error)
+	UpdateUserActivityStatus(id int, status string, moderatedBy *int) error
+	ListUserActivityByUser(userID int, f ActivityFilter) ([]UserActivity, error)
+	ListActivityByObject(objectType string, objectID int, status string) ([]UserActivity, error)
+	AddPointsToUser(userID int, delta int) error
+	GetUserPoints(userID int) (*UserPoints, error)
+	RecalcUserPoints() error
+	GetRanking(limit int) ([]UserPoints, error)
 
 	// Persones (moderació)
 	ListPersones(filter PersonaFilter) ([]Persona, error)
@@ -160,6 +176,46 @@ type PrivacySettings struct {
 	ProfilePublic           bool
 	NotifyEmail             bool
 	AllowContact            bool
+}
+
+// Regles de punts / activitat
+type PointsRule struct {
+	ID          int
+	Code        string
+	Name        string
+	Description string
+	Points      int
+	Active      bool
+	CreatedAt   time.Time
+}
+
+type UserActivity struct {
+	ID          int
+	UserID      int
+	RuleID      sql.NullInt64
+	Action      string
+	ObjectType  string
+	ObjectID    sql.NullInt64
+	Points      int
+	Status      string
+	ModeratedBy sql.NullInt64
+	Details     string
+	CreatedAt   time.Time
+}
+
+type UserPoints struct {
+	UserID              int
+	Total               int
+	UltimaActualitzacio time.Time
+}
+
+type ActivityFilter struct {
+	Status     string
+	ObjectType string
+	Limit      int
+	Offset     int
+	From       time.Time
+	To         time.Time
 }
 
 type Pais struct {

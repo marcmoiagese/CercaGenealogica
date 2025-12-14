@@ -2,6 +2,7 @@ package unit
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -127,7 +128,8 @@ func (f *fakeDBVerificar) markEmailChangeReverted(id int) error {
 func (f *fakeDBVerificar) UserHasAnyPolicy(userID int, policies []string) (bool, error) {
 	return false, nil
 }
-func (f *fakeDBVerificar) EnsureDefaultPolicies() error { return nil }
+func (f *fakeDBVerificar) EnsureDefaultPolicies() error    { return nil }
+func (f *fakeDBVerificar) EnsureDefaultPointsRules() error { return nil }
 func (f *fakeDBVerificar) ListArxius(filter db.ArxiuFilter) ([]db.ArxiuWithCount, error) {
 	return nil, nil
 }
@@ -217,6 +219,35 @@ func (f *fakeDBVerificar) RemoveGroupPolitica(groupID, politicaID int) error    
 func (f *fakeDBVerificar) GetEffectivePoliticaPerms(userID int) (db.PolicyPermissions, error) {
 	return db.PolicyPermissions{}, nil
 }
+
+// Punts i activitat (no-op)
+func (f *fakeDBVerificar) ListPointsRules() ([]db.PointsRule, error) { return nil, nil }
+func (f *fakeDBVerificar) GetPointsRule(id int) (*db.PointsRule, error) {
+	return nil, fmt.Errorf("not found")
+}
+func (f *fakeDBVerificar) GetPointsRuleByCode(code string) (*db.PointsRule, error) {
+	return nil, fmt.Errorf("not found")
+}
+func (f *fakeDBVerificar) SavePointsRule(r *db.PointsRule) (int, error)       { return 0, nil }
+func (f *fakeDBVerificar) InsertUserActivity(a *db.UserActivity) (int, error) { return 0, nil }
+func (f *fakeDBVerificar) GetUserActivity(id int) (*db.UserActivity, error) {
+	return nil, fmt.Errorf("not found")
+}
+func (f *fakeDBVerificar) UpdateUserActivityStatus(id int, status string, moderatedBy *int) error {
+	return nil
+}
+func (f *fakeDBVerificar) ListUserActivityByUser(userID int, af db.ActivityFilter) ([]db.UserActivity, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) ListActivityByObject(objectType string, objectID int, status string) ([]db.UserActivity, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) AddPointsToUser(userID int, delta int) error { return nil }
+func (f *fakeDBVerificar) GetUserPoints(userID int) (*db.UserPoints, error) {
+	return &db.UserPoints{UserID: userID}, nil
+}
+func (f *fakeDBVerificar) RecalcUserPoints() error                       { return nil }
+func (f *fakeDBVerificar) GetRanking(limit int) ([]db.UserPoints, error) { return nil, nil }
 func (f *fakeDBVerificar) ListUserGroups(userID int) ([]db.Group, error) { return nil, nil }
 func (f *fakeDBVerificar) ListPersones(filter db.PersonaFilter) ([]db.Persona, error) {
 	return nil, nil

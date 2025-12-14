@@ -123,15 +123,18 @@ func (a *App) PersonaSave(w http.ResponseWriter, r *http.Request) {
 		DataDefuncio:   sql.NullString{String: strings.TrimSpace(r.FormValue("data_defuncio")), Valid: strings.TrimSpace(r.FormValue("data_defuncio")) != ""},
 	}
 	if id == 0 {
-		if _, err := a.DB.CreatePersona(p); err != nil {
+		newID, err := a.DB.CreatePersona(p)
+		if err != nil {
 			a.renderPersonaFormError(w, r, id, "No s'ha pogut crear la persona.")
 			return
 		}
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, rulePersonaCreate, "crear", "persona", &newID, "pendent", nil, "")
 	} else {
 		if err := a.DB.UpdatePersona(p); err != nil {
 			a.renderPersonaFormError(w, r, id, "No s'ha pogut actualitzar la persona.")
 			return
 		}
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, rulePersonaUpdate, "editar", "persona", &id, "pendent", nil, "")
 	}
 	http.Redirect(w, r, "/persones", http.StatusSeeOther)
 }
@@ -242,6 +245,7 @@ func (a *App) CreatePersona(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No s'ha pogut crear", http.StatusInternalServerError)
 		return
 	}
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, rulePersonaCreate, "crear", "persona", &id, "pendent", nil, "")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": id, "estat": p.ModeracioEstat})
@@ -289,6 +293,7 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No s'ha pogut actualitzar", http.StatusInternalServerError)
 		return
 	}
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, rulePersonaUpdate, "editar", "persona", &id, "pendent", nil, "")
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": id, "estat": existent.ModeracioEstat})
 }

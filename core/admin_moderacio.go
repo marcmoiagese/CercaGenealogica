@@ -79,6 +79,12 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 	id := extractID(r.URL.Path)
 	_ = r.ParseForm()
 	_ = a.DB.UpdatePersonaModeracio(id, "publicat", "", user.ID)
+	if acts, err := a.DB.ListActivityByObject("persona", id, "pendent"); err == nil {
+		for _, act := range acts {
+			_ = a.ValidateActivity(act.ID, user.ID)
+		}
+	}
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleModeracioApprove, "moderar_aprovar", "persona", &id, "validat", nil, "")
 	http.Redirect(w, r, "/admin/moderacio?ok=1", http.StatusSeeOther)
 }
 
@@ -103,5 +109,11 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 	}
 	motiu := r.FormValue("motiu")
 	_ = a.DB.UpdatePersonaModeracio(id, "rebutjat", motiu, user.ID)
+	if acts, err := a.DB.ListActivityByObject("persona", id, "pendent"); err == nil {
+		for _, act := range acts {
+			_ = a.DB.UpdateUserActivityStatus(act.ID, "anulat", &user.ID)
+		}
+	}
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleModeracioReject, "moderar_rebutjar", "persona", &id, "validat", nil, motiu)
 	http.Redirect(w, r, "/admin/moderacio?ok=1", http.StatusSeeOther)
 }

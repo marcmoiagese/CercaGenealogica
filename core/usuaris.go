@@ -216,6 +216,7 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	}
 	// Intenta bootstrap de polítiques (p.ex. assignar admin al primer usuari si no hi ha assignacions)
 	_ = a.DB.EnsureDefaultPolicies()
+	_ = a.DB.EnsureDefaultPointsRules()
 
 	Debugf(" IP de la petició: %s", ipStr)
 
@@ -581,9 +582,37 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 
 	activeTab := r.URL.Query().Get("tab")
 	switch activeTab {
-	case "generals", "contrasenya", "privacitat", "eliminar":
+	case "generals", "contrasenya", "privacitat", "eliminar", "activitat":
 	default:
 		activeTab = "generals"
+	}
+
+	var (
+		userPoints *db.UserPoints
+		activities []db.UserActivity
+		actFilter  = map[string]string{}
+	)
+	if up, err := a.DB.GetUserPoints(user.ID); err == nil {
+		userPoints = up
+	}
+	if activeTab == "activitat" {
+		status := strings.TrimSpace(r.URL.Query().Get("status"))
+		objType := strings.TrimSpace(r.URL.Query().Get("type"))
+		period := strings.TrimSpace(r.URL.Query().Get("period"))
+		f := db.ActivityFilter{Limit: 50, Status: status, ObjectType: objType}
+		now := time.Now()
+		switch period {
+		case "week":
+			f.From = now.AddDate(0, 0, -7)
+		case "month":
+			f.From = now.AddDate(0, -1, 0)
+		}
+		if acts, err := a.DB.ListUserActivityByUser(user.ID, f); err == nil {
+			activities = acts
+		}
+		actFilter["status"] = status
+		actFilter["type"] = objType
+		actFilter["period"] = period
 	}
 
 	canManageArxius := a.CanManageArxius(user)
@@ -601,6 +630,9 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 		"SpokenSlice":        spokenSlice,
 		"SpokenSet":          spokenSet,
 		"CanManageArxius":    canManageArxius,
+		"UserPoints":         userPoints,
+		"Activities":         activities,
+		"ActFilter":          actFilter,
 	})
 }
 

@@ -289,7 +289,8 @@ func (f *fakeDB) markEmailChangeReverted(id int) error  { return nil }
 func (f *fakeDB) UserHasAnyPolicy(userID int, policies []string) (bool, error) {
 	return false, nil
 }
-func (f *fakeDB) EnsureDefaultPolicies() error { return nil }
+func (f *fakeDB) EnsureDefaultPolicies() error    { return nil }
+func (f *fakeDB) EnsureDefaultPointsRules() error { return nil }
 func (f *fakeDB) ListArxius(filter db.ArxiuFilter) ([]db.ArxiuWithCount, error) {
 	return nil, nil
 }
@@ -373,6 +374,35 @@ func (f *fakeDB) RemoveGroupPolitica(groupID, politicaID int) error      { retur
 func (f *fakeDB) GetEffectivePoliticaPerms(userID int) (db.PolicyPermissions, error) {
 	return db.PolicyPermissions{}, nil
 }
+
+// Punts i activitat (no-op)
+func (f *fakeDB) ListPointsRules() ([]db.PointsRule, error) { return nil, nil }
+func (f *fakeDB) GetPointsRule(id int) (*db.PointsRule, error) {
+	return nil, fmt.Errorf("not found")
+}
+func (f *fakeDB) GetPointsRuleByCode(code string) (*db.PointsRule, error) {
+	return nil, fmt.Errorf("not found")
+}
+func (f *fakeDB) SavePointsRule(r *db.PointsRule) (int, error)       { return 0, nil }
+func (f *fakeDB) InsertUserActivity(a *db.UserActivity) (int, error) { return 0, nil }
+func (f *fakeDB) GetUserActivity(id int) (*db.UserActivity, error) {
+	return nil, fmt.Errorf("not found")
+}
+func (f *fakeDB) UpdateUserActivityStatus(id int, status string, moderatedBy *int) error {
+	return nil
+}
+func (f *fakeDB) ListUserActivityByUser(userID int, af db.ActivityFilter) ([]db.UserActivity, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListActivityByObject(objectType string, objectID int, status string) ([]db.UserActivity, error) {
+	return nil, nil
+}
+func (f *fakeDB) AddPointsToUser(userID int, delta int) error { return nil }
+func (f *fakeDB) GetUserPoints(userID int) (*db.UserPoints, error) {
+	return &db.UserPoints{UserID: userID}, nil
+}
+func (f *fakeDB) RecalcUserPoints() error                       { return nil }
+func (f *fakeDB) GetRanking(limit int) ([]db.UserPoints, error) { return nil, nil }
 func (f *fakeDB) ListUserGroups(userID int) ([]db.Group, error) { return nil, nil }
 func (f *fakeDB) ListPersones(filter db.PersonaFilter) ([]db.Persona, error) {
 	return nil, nil

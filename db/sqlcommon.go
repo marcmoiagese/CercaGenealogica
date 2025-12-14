@@ -129,6 +129,29 @@ func (h sqlHelper) ensureDefaultPolicies() error {
 	return nil
 }
 
+func (h sqlHelper) ensureDefaultPointsRules() error {
+	defaults := []PointsRule{
+		{Code: "persona_create", Name: "Crear persona", Description: "Alta de fitxa de persona", Points: 5, Active: true},
+		{Code: "persona_update", Name: "Editar persona", Description: "Edició/correcció de persona", Points: 2, Active: true},
+		{Code: "llibre_pagina_index", Name: "Indexar pàgina", Description: "Indexar pàgina de llibre", Points: 3, Active: true},
+		{Code: "moderacio_approve", Name: "Aprovar com a moderador", Description: "Aprovar contingut pendent", Points: 1, Active: true},
+		{Code: "moderacio_reject", Name: "Rebutjar com a moderador", Description: "Rebutjar contingut pendent", Points: 0, Active: true},
+	}
+	for _, r := range defaults {
+		stmt := `INSERT INTO punts_regles (codi, nom, descripcio, punts, actiu, data_creacio) VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			stmt += " ON CONFLICT (codi) DO NOTHING"
+		} else if h.style == "mysql" {
+			stmt += " ON DUPLICATE KEY UPDATE nom=VALUES(nom), descripcio=VALUES(descripcio), punts=VALUES(punts), actiu=VALUES(actiu)"
+		} else { // sqlite
+			stmt += " ON CONFLICT(codi) DO NOTHING"
+		}
+		stmt = formatPlaceholders(h.style, stmt)
+		h.db.Exec(stmt, r.Code, r.Name, r.Description, r.Points, r.Active)
+	}
+	return nil
+}
+
 func (h sqlHelper) userHasAnyPolicy(userID int, policies []string) (bool, error) {
 	if len(policies) == 0 {
 		return false, nil
@@ -452,6 +475,264 @@ func (h sqlHelper) createPersona(p *Persona) (int, error) {
 		p.ID = int(id)
 	}
 	return p.ID, nil
+}
+
+// Punts i activitat
+func (h sqlHelper) listPointsRules() ([]PointsRule, error) {
+	rows, err := h.db.Query(`SELECT id, codi, nom, descripcio, punts, actiu, data_creacio FROM punts_regles ORDER BY codi`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []PointsRule
+	for rows.Next() {
+		var r PointsRule
+		if err := rows.Scan(&r.ID, &r.Code, &r.Name, &r.Description, &r.Points, &r.Active, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, r)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getPointsRuleByCode(code string) (*PointsRule, error) {
+	row := h.db.QueryRow(`SELECT id, codi, nom, descripcio, punts, actiu, data_creacio FROM punts_regles WHERE codi = ?`, code)
+	var r PointsRule
+	if err := row.Scan(&r.ID, &r.Code, &r.Name, &r.Description, &r.Points, &r.Active, &r.CreatedAt); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (h sqlHelper) getPointsRule(id int) (*PointsRule, error) {
+	row := h.db.QueryRow(`SELECT id, codi, nom, descripcio, punts, actiu, data_creacio FROM punts_regles WHERE id = ?`, id)
+	var r PointsRule
+	if err := row.Scan(&r.ID, &r.Code, &r.Name, &r.Description, &r.Points, &r.Active, &r.CreatedAt); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (h sqlHelper) savePointsRule(r *PointsRule) (int, error) {
+	if r.ID == 0 {
+		stmt := `INSERT INTO punts_regles (codi, nom, descripcio, punts, actiu, data_creacio) VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			stmt += " RETURNING id"
+		}
+		stmt = formatPlaceholders(h.style, stmt)
+		if h.style == "postgres" {
+			if err := h.db.QueryRow(stmt, r.Code, r.Name, r.Description, r.Points, r.Active).Scan(&r.ID); err != nil {
+				return 0, err
+			}
+			return r.ID, nil
+		}
+		res, err := h.db.Exec(stmt, r.Code, r.Name, r.Description, r.Points, r.Active)
+		if err != nil {
+			return 0, err
+		}
+		id, _ := res.LastInsertId()
+		r.ID = int(id)
+		return r.ID, nil
+	}
+	stmt := formatPlaceholders(h.style, `UPDATE punts_regles SET codi = ?, nom = ?, descripcio = ?, punts = ?, actiu = ? WHERE id = ?`)
+	if _, err := h.db.Exec(stmt, r.Code, r.Name, r.Description, r.Points, r.Active, r.ID); err != nil {
+		return 0, err
+	}
+	return r.ID, nil
+}
+
+func (h sqlHelper) getUserActivity(id int) (*UserActivity, error) {
+	row := h.db.QueryRow(`SELECT id, usuari_id, regla_id, accio, objecte_tipus, objecte_id, punts, estat, moderat_per, detalls, data_creacio FROM usuaris_activitat WHERE id = ?`, id)
+	var a UserActivity
+	if err := row.Scan(&a.ID, &a.UserID, &a.RuleID, &a.Action, &a.ObjectType, &a.ObjectID, &a.Points, &a.Status, &a.ModeratedBy, &a.Details, &a.CreatedAt); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (h sqlHelper) insertUserActivity(a *UserActivity) (int, error) {
+	stmt := `INSERT INTO usuaris_activitat (usuari_id, regla_id, accio, objecte_tipus, objecte_id, punts, estat, moderat_per, detalls, data_creacio)
+	         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	var ruleID interface{}
+	if a.RuleID.Valid {
+		ruleID = a.RuleID.Int64
+	}
+	var objID interface{}
+	if a.ObjectID.Valid {
+		objID = a.ObjectID.Int64
+	}
+	var mod interface{}
+	if a.ModeratedBy.Valid {
+		mod = a.ModeratedBy.Int64
+	}
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(stmt, a.UserID, ruleID, a.Action, a.ObjectType, objID, a.Points, a.Status, mod, a.Details).Scan(&a.ID); err != nil {
+			return 0, err
+		}
+		return a.ID, nil
+	}
+	res, err := h.db.Exec(stmt, a.UserID, ruleID, a.Action, a.ObjectType, objID, a.Points, a.Status, mod, a.Details)
+	if err != nil {
+		return 0, err
+	}
+	id, _ := res.LastInsertId()
+	a.ID = int(id)
+	return a.ID, nil
+}
+
+func (h sqlHelper) updateUserActivityStatus(id int, status string, moderatedBy *int) error {
+	stmt := formatPlaceholders(h.style, `UPDATE usuaris_activitat SET estat = ?, moderat_per = ? WHERE id = ?`)
+	var mod interface{}
+	if moderatedBy != nil {
+		mod = *moderatedBy
+	}
+	_, err := h.db.Exec(stmt, status, mod, id)
+	return err
+}
+
+func (h sqlHelper) listUserActivityByUser(userID int, f ActivityFilter) ([]UserActivity, error) {
+	where := []string{"usuari_id = ?"}
+	args := []interface{}{userID}
+	if f.Status != "" {
+		where = append(where, "estat = ?")
+		args = append(args, f.Status)
+	}
+	if f.ObjectType != "" {
+		where = append(where, "objecte_tipus = ?")
+		args = append(args, f.ObjectType)
+	}
+	if !f.From.IsZero() {
+		where = append(where, "data_creacio >= ?")
+		args = append(args, f.From)
+	}
+	if !f.To.IsZero() {
+		where = append(where, "data_creacio <= ?")
+		args = append(args, f.To)
+	}
+	query := `SELECT id, usuari_id, regla_id, accio, objecte_tipus, objecte_id, punts, estat, moderat_per, detalls, data_creacio
+	          FROM usuaris_activitat`
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += " ORDER BY data_creacio DESC"
+	if f.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", f.Limit)
+	}
+	if f.Offset > 0 {
+		query += fmt.Sprintf(" OFFSET %d", f.Offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []UserActivity
+	for rows.Next() {
+		var a UserActivity
+		if err := rows.Scan(&a.ID, &a.UserID, &a.RuleID, &a.Action, &a.ObjectType, &a.ObjectID, &a.Points, &a.Status, &a.ModeratedBy, &a.Details, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listActivityByObject(objectType string, objectID int, status string) ([]UserActivity, error) {
+	where := []string{"objecte_tipus = ?", "objecte_id = ?"}
+	args := []interface{}{objectType, objectID}
+	if status != "" {
+		where = append(where, "estat = ?")
+		args = append(args, status)
+	}
+	query := `SELECT id, usuari_id, regla_id, accio, objecte_tipus, objecte_id, punts, estat, moderat_per, detalls, data_creacio
+	          FROM usuaris_activitat WHERE ` + strings.Join(where, " AND ") + ` ORDER BY data_creacio DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []UserActivity
+	for rows.Next() {
+		var a UserActivity
+		if err := rows.Scan(&a.ID, &a.UserID, &a.RuleID, &a.Action, &a.ObjectType, &a.ObjectID, &a.Points, &a.Status, &a.ModeratedBy, &a.Details, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) addPointsToUser(userID int, delta int) error {
+	switch h.style {
+	case "mysql":
+		stmt := `INSERT INTO usuaris_punts (usuari_id, punts_total, ultima_actualitzacio)
+		         VALUES (?, ?, ` + h.nowFun + `)
+		         ON DUPLICATE KEY UPDATE punts_total = punts_total + VALUES(punts_total), ultima_actualitzacio = ` + h.nowFun
+		_, err := h.db.Exec(formatPlaceholders(h.style, stmt), userID, delta)
+		return err
+	case "postgres":
+		stmt := `INSERT INTO usuaris_punts (usuari_id, punts_total, ultima_actualitzacio)
+		         VALUES ($1, $2, ` + h.nowFun + `)
+		         ON CONFLICT (usuari_id) DO UPDATE SET punts_total = usuaris_punts.punts_total + EXCLUDED.punts_total, ultima_actualitzacio = ` + h.nowFun
+		_, err := h.db.Exec(stmt, userID, delta)
+		return err
+	default: // sqlite
+		stmt := `INSERT INTO usuaris_punts (usuari_id, punts_total, ultima_actualitzacio)
+		         VALUES (?, ?, ` + h.nowFun + `)
+		         ON CONFLICT(usuari_id) DO UPDATE SET punts_total = punts_total + excluded.punts_total, ultima_actualitzacio = ` + h.nowFun
+		_, err := h.db.Exec(formatPlaceholders(h.style, stmt), userID, delta)
+		return err
+	}
+}
+
+func (h sqlHelper) getUserPoints(userID int) (*UserPoints, error) {
+	row := h.db.QueryRow(`SELECT usuari_id, punts_total, ultima_actualitzacio FROM usuaris_punts WHERE usuari_id = ?`, userID)
+	var up UserPoints
+	if err := row.Scan(&up.UserID, &up.Total, &up.UltimaActualitzacio); err != nil {
+		return nil, err
+	}
+	return &up, nil
+}
+
+func (h sqlHelper) recalcUserPoints() error {
+	if _, err := h.db.Exec(`DELETE FROM usuaris_punts`); err != nil {
+		return err
+	}
+	stmt := `
+	    INSERT INTO usuaris_punts (usuari_id, punts_total, ultima_actualitzacio)
+	    SELECT usuari_id, COALESCE(SUM(punts),0) AS total, ` + h.nowFun + `
+	    FROM usuaris_activitat
+	    WHERE estat = 'validat'
+	    GROUP BY usuari_id`
+	_, err := h.db.Exec(stmt)
+	return err
+}
+
+func (h sqlHelper) getRanking(limit int) ([]UserPoints, error) {
+	query := `SELECT usuari_id, punts_total, ultima_actualitzacio FROM usuaris_punts ORDER BY punts_total DESC`
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", limit)
+	}
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []UserPoints
+	for rows.Next() {
+		var up UserPoints
+		if err := rows.Scan(&up.UserID, &up.Total, &up.UltimaActualitzacio); err != nil {
+			return nil, err
+		}
+		res = append(res, up)
+	}
+	return res, nil
 }
 
 func (h sqlHelper) updatePersona(p *Persona) error {

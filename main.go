@@ -41,6 +41,7 @@ func main() {
 		log.Fatalf("Error inicialitzant BD: %v", err)
 	}
 	_ = dbInstance.EnsureDefaultPolicies()
+	_ = dbInstance.EnsureDefaultPointsRules()
 	app := core.NewApp(configMap, dbInstance)
 	defer app.Close()
 
@@ -144,6 +145,7 @@ func main() {
 	http.HandleFunc("/perfil/contrasenya", applyMiddleware(app.ActualitzarPerfilContrasenya, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/perfil/email-confirm", applyMiddleware(app.ConfirmarCanviEmail, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/perfil/email-revert", applyMiddleware(app.RevertirCanviEmail, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/ranking", applyMiddleware(app.Ranking, core.BlockIPs, core.RateLimit))
 
 	// Arxius (lectura per a tots els usuaris autenticats)
 	http.HandleFunc("/arxius", applyMiddleware(app.ListArxius, core.BlockIPs, core.RateLimit))
@@ -303,6 +305,19 @@ func main() {
 	http.HandleFunc("/admin/politiques/treure-usuari", applyMiddleware(app.AdminTreurePoliticaUsuari, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/politiques/assignar-grup", applyMiddleware(app.AdminAssignarPoliticaGrup, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/politiques/treure-grup", applyMiddleware(app.AdminTreurePoliticaGrup, core.BlockIPs, core.RateLimit))
+
+	// Regles de punts
+	http.HandleFunc("/admin/punts/regles", applyMiddleware(app.AdminListPuntsRegles, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/punts/regles/new", applyMiddleware(app.AdminNewPuntsRegla, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/punts/regles/save", applyMiddleware(app.AdminSavePuntsRegla, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/punts/regles/recalc", applyMiddleware(app.AdminRecalcPunts, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/punts/regles/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/edit") {
+			applyMiddleware(app.AdminEditPuntsRegla, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
 
 	// Moderació
 	http.HandleFunc("/admin/moderacio", applyMiddleware(app.AdminModeracioList, core.BlockIPs, core.RateLimit))

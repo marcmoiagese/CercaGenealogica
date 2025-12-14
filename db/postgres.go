@@ -199,6 +199,9 @@ func (d *PostgreSQL) UserHasAnyPolicy(userID int, policies []string) (bool, erro
 func (d *PostgreSQL) EnsureDefaultPolicies() error {
 	return d.help.ensureDefaultPolicies()
 }
+func (d *PostgreSQL) EnsureDefaultPointsRules() error {
+	return d.help.ensureDefaultPointsRules()
+}
 func (d *PostgreSQL) ListGroups() ([]Group, error) {
 	return d.help.listGroups()
 }
@@ -379,3 +382,36 @@ func (d *PostgreSQL) SaveLlibrePagina(p *LlibrePagina) (int, error) {
 func (d *PostgreSQL) RecalcLlibrePagines(llibreID, total int) error {
 	return d.help.recalcLlibrePagines(llibreID, total)
 }
+
+// Punts i activitat
+func (d *PostgreSQL) ListPointsRules() ([]PointsRule, error) { return d.help.listPointsRules() }
+func (d *PostgreSQL) GetPointsRule(id int) (*PointsRule, error) {
+	return d.help.getPointsRule(id)
+}
+func (d *PostgreSQL) GetPointsRuleByCode(code string) (*PointsRule, error) {
+	return d.help.getPointsRuleByCode(code)
+}
+func (d *PostgreSQL) SavePointsRule(r *PointsRule) (int, error) { return d.help.savePointsRule(r) }
+func (d *PostgreSQL) GetUserActivity(id int) (*UserActivity, error) {
+	return d.help.getUserActivity(id)
+}
+func (d *PostgreSQL) InsertUserActivity(a *UserActivity) (int, error) {
+	return d.help.insertUserActivity(a)
+}
+func (d *PostgreSQL) UpdateUserActivityStatus(id int, status string, moderatedBy *int) error {
+	return d.help.updateUserActivityStatus(id, status, moderatedBy)
+}
+func (d *PostgreSQL) ListUserActivityByUser(userID int, f ActivityFilter) ([]UserActivity, error) {
+	return d.help.listUserActivityByUser(userID, f)
+}
+func (d *PostgreSQL) ListActivityByObject(objectType string, objectID int, status string) ([]UserActivity, error) {
+	return d.help.listActivityByObject(objectType, objectID, status)
+}
+func (d *PostgreSQL) AddPointsToUser(userID int, delta int) error {
+	return d.help.addPointsToUser(userID, delta)
+}
+func (d *PostgreSQL) GetUserPoints(userID int) (*UserPoints, error) {
+	return d.help.getUserPoints(userID)
+}
+func (d *PostgreSQL) RecalcUserPoints() error                    { return d.help.recalcUserPoints() }
+func (d *PostgreSQL) GetRanking(limit int) ([]UserPoints, error) { return d.help.getRanking(limit) }

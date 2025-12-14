@@ -32,6 +32,10 @@
                         <i class="fas fa-id-card"></i>
                         <span>{{ t .Lang "profile.tab.general" }}</span>
                     </button>
+                    <button class="tab-boto {{ if eq $tab "activitat" }}actiu{{ end }}" data-tab="activitat" role="tab" aria-selected="{{ if eq $tab "activitat" }}true{{ else }}false{{ end }}" aria-controls="tab-activitat">
+                        <i class="fas fa-trophy"></i>
+                        <span>{{ t .Lang "points.menu" }}</span>
+                    </button>
                     <button class="tab-boto {{ if eq $tab "contrasenya" }}actiu{{ end }}" data-tab="contrasenya" role="tab" aria-selected="{{ if eq $tab "contrasenya" }}true{{ else }}false{{ end }}" aria-controls="tab-contrasenya">
                         <i class="fas fa-lock"></i>
                         <span>{{ t .Lang "profile.tab.password" }}</span>
@@ -441,6 +445,77 @@
                         </section>
 
                         <!-- Pestanya: Contrasenya -->
+                        <section id="tab-activitat" class="tab-pane {{ if eq $tab "activitat" }}actiu{{ end }}" role="tabpanel" aria-labelledby="tab-activitat">
+                            <div class="stats-grid">
+                                <div class="card">
+                                    <h3>{{ t .Lang "points.profile.total" }}</h3>
+                                    <p class="kpi">{{ if .Data.UserPoints }}{{ .Data.UserPoints.Total }}{{ else }}0{{ end }}</p>
+                                    <p class="muted">{{ t .Lang "points.profile.updated" }}: {{ if and .Data.UserPoints .Data.UserPoints.UltimaActualitzacio }}{{ .Data.UserPoints.UltimaActualitzacio.Format "2006-01-02" }}{{ else }}—{{ end }}</p>
+                                </div>
+                            </div>
+                            <h3>{{ t .Lang "activity.title" }}</h3>
+                            {{ $f := .Data.ActFilter }}
+                            <form class="form-filtres" method="get" action="/perfil">
+                                <input type="hidden" name="tab" value="activitat">
+                                <div class="filtres-grid">
+                                    <div class="grup-camp">
+                                        <label for="filtre-status">{{ t .Lang "activity.filter.status" }}</label>
+                                        <select id="filtre-status" name="status">
+                                            <option value="" {{ if eq $f.status "" }}selected{{ end }}>{{ t .Lang "common.all" }}</option>
+                                            <option value="pendent" {{ if eq $f.status "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
+                                            <option value="validat" {{ if eq $f.status "validat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
+                                            <option value="anulat" {{ if eq $f.status "anulat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="grup-camp">
+                                        <label for="filtre-tipus">{{ t .Lang "activity.filter.type" }}</label>
+                                        <select id="filtre-tipus" name="type">
+                                            <option value="" {{ if eq $f.type "" }}selected{{ end }}>{{ t .Lang "common.all" }}</option>
+                                            <option value="persona" {{ if eq $f.type "persona" }}selected{{ end }}>{{ t .Lang "activity.object.persona" }}</option>
+                                            <option value="llibre_pagina" {{ if eq $f.type "llibre_pagina" }}selected{{ end }}>{{ t .Lang "activity.object.llibre_pagina" }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="grup-camp">
+                                        <label for="filtre-periode">{{ t .Lang "activity.filter.period" }}</label>
+                                        <select id="filtre-periode" name="period">
+                                            <option value="" {{ if eq $f.period "" }}selected{{ end }}>{{ t .Lang "common.all" }}</option>
+                                            <option value="week" {{ if eq $f.period "week" }}selected{{ end }}>{{ t .Lang "activity.period.week" }}</option>
+                                            <option value="month" {{ if eq $f.period "month" }}selected{{ end }}>{{ t .Lang "activity.period.month" }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="grup-camp align-end">
+                                        <button type="submit" class="boto-primari">{{ t .Lang "activity.filter.apply" }}</button>
+                                    </div>
+                                </div>
+                            </form>
+                            <div class="taula-wrapper">
+                                <table class="taula">
+                                    <thead>
+                                        <tr>
+                                            <th>{{ t .Lang "activity.col.date" }}</th>
+                                            <th>{{ t .Lang "activity.col.action" }}</th>
+                                            <th>{{ t .Lang "activity.col.object" }}</th>
+                                            <th>{{ t .Lang "activity.col.status" }}</th>
+                                            <th>{{ t .Lang "activity.col.points" }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {{ range .Data.Activities }}
+                                        <tr>
+                                            <td>{{ .CreatedAt.Format "2006-01-02 15:04" }}</td>
+                                            <td>{{ t $.Lang (printf "activity.action.%s" .Action) }}</td>
+                                            <td>{{ t $.Lang (printf "activity.object.%s" .ObjectType) }} {{ if .ObjectID.Valid }}#{{ .ObjectID.Int64 }}{{ end }}</td>
+                                            <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .Status) }}</span></td>
+                                            <td>{{ .Points }}</td>
+                                        </tr>
+                                        {{ else }}
+                                        <tr><td colspan="5">{{ t .Lang "common.empty" }}</td></tr>
+                                        {{ end }}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+
                         <section id="tab-contrasenya" class="tab-pane {{ if eq $tab "contrasenya" }}actiu{{ end }}" role="tabpanel" aria-labelledby="tab-contrasenya">
                             <form id="form-contrasenya" class="form-vertical" method="post" action="/perfil/contrasenya">
                                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">

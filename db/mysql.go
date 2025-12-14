@@ -198,6 +198,9 @@ func (d *MySQL) UserHasAnyPolicy(userID int, policies []string) (bool, error) {
 func (d *MySQL) EnsureDefaultPolicies() error {
 	return d.help.ensureDefaultPolicies()
 }
+func (d *MySQL) EnsureDefaultPointsRules() error {
+	return d.help.ensureDefaultPointsRules()
+}
 func (d *MySQL) ListGroups() ([]Group, error) {
 	return d.help.listGroups()
 }
@@ -378,3 +381,30 @@ func (d *MySQL) SaveLlibrePagina(p *LlibrePagina) (int, error) {
 func (d *MySQL) RecalcLlibrePagines(llibreID, total int) error {
 	return d.help.recalcLlibrePagines(llibreID, total)
 }
+
+// Punts i activitat
+func (d *MySQL) ListPointsRules() ([]PointsRule, error) { return d.help.listPointsRules() }
+func (d *MySQL) GetPointsRule(id int) (*PointsRule, error) {
+	return d.help.getPointsRule(id)
+}
+func (d *MySQL) GetPointsRuleByCode(code string) (*PointsRule, error) {
+	return d.help.getPointsRuleByCode(code)
+}
+func (d *MySQL) SavePointsRule(r *PointsRule) (int, error)       { return d.help.savePointsRule(r) }
+func (d *MySQL) GetUserActivity(id int) (*UserActivity, error)   { return d.help.getUserActivity(id) }
+func (d *MySQL) InsertUserActivity(a *UserActivity) (int, error) { return d.help.insertUserActivity(a) }
+func (d *MySQL) UpdateUserActivityStatus(id int, status string, moderatedBy *int) error {
+	return d.help.updateUserActivityStatus(id, status, moderatedBy)
+}
+func (d *MySQL) ListUserActivityByUser(userID int, f ActivityFilter) ([]UserActivity, error) {
+	return d.help.listUserActivityByUser(userID, f)
+}
+func (d *MySQL) ListActivityByObject(objectType string, objectID int, status string) ([]UserActivity, error) {
+	return d.help.listActivityByObject(objectType, objectID, status)
+}
+func (d *MySQL) AddPointsToUser(userID int, delta int) error {
+	return d.help.addPointsToUser(userID, delta)
+}
+func (d *MySQL) GetUserPoints(userID int) (*UserPoints, error) { return d.help.getUserPoints(userID) }
+func (d *MySQL) RecalcUserPoints() error                       { return d.help.recalcUserPoints() }
+func (d *MySQL) GetRanking(limit int) ([]UserPoints, error)    { return d.help.getRanking(limit) }

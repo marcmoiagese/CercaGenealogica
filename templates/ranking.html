@@ -1,0 +1,45 @@
+{{ define "ranking.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "points.ranking.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "points.ranking.title" }}</h1>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "points.ranking.position" }}</th>
+                            <th>{{ t .Lang "points.ranking.user" }}</th>
+                            <th>{{ t .Lang "points.ranking.points" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range $i, $row := .Data.Ranking }}
+                        <tr>
+                            <td>{{ add $i 1 }}</td>
+                            <td>{{ $row.Name }}</td>
+                            <td>{{ $row.Points }}</td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="3">{{ t .Lang "common.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

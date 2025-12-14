@@ -1,0 +1,54 @@
+{{ define "admin-punts-regles-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "points.rules.new" }}{{ else }}{{ t .Lang "points.rules.edit.title" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ if .Data.IsNew }}{{ t .Lang "points.rules.new" }}{{ else }}{{ t .Lang "points.rules.edit.title" }}{{ end }}</h1>
+            </header>
+            {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
+            <form method="post" action="/admin/punts/regles/save" class="formulari-admin">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="id" value="{{ .Data.Regla.ID }}">
+                <div class="grup-camp">
+                    <label for="codi">{{ t .Lang "points.rules.code" }}</label>
+                    <input id="codi" name="codi" type="text" value="{{ .Data.Regla.Code }}" {{ if not .Data.IsNew }}readonly{{ end }} required>
+                </div>
+                <div class="grup-camp">
+                    <label for="nom">{{ t .Lang "points.rules.name" }}</label>
+                    <input id="nom" name="nom" type="text" value="{{ .Data.Regla.Name }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="descripcio">{{ t .Lang "points.rules.desc" }}</label>
+                    <textarea id="descripcio" name="descripcio" rows="3">{{ .Data.Regla.Description }}</textarea>
+                </div>
+                <div class="grup-camp">
+                    <label for="punts">{{ t .Lang "points.rules.points" }}</label>
+                    <input id="punts" name="punts" type="number" value="{{ .Data.Regla.Points }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label class="checkbox-linia">
+                        <input type="checkbox" name="actiu" value="1" {{ if .Data.Regla.Active }}checked{{ end }}>
+                        <span>{{ t .Lang "points.rules.active" }}</span>
+                    </label>
+                </div>
+                <div class="accions-formulari">
+                    <button type="submit" class="boto-primari">{{ t .Lang "points.rules.save" }}</button>
+                    <a class="boto-secundari" href="/admin/punts/regles">{{ t .Lang "points.rules.cancel" }}</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

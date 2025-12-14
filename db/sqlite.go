@@ -198,6 +198,9 @@ func (d *SQLite) UserHasAnyPolicy(userID int, policies []string) (bool, error) {
 func (d *SQLite) EnsureDefaultPolicies() error {
 	return d.help.ensureDefaultPolicies()
 }
+func (d *SQLite) EnsureDefaultPointsRules() error {
+	return d.help.ensureDefaultPointsRules()
+}
 func (d *SQLite) ListGroups() ([]Group, error) {
 	return d.help.listGroups()
 }
@@ -381,3 +384,32 @@ func (d *SQLite) SaveLlibrePagina(p *LlibrePagina) (int, error) {
 func (d *SQLite) RecalcLlibrePagines(llibreID, total int) error {
 	return d.help.recalcLlibrePagines(llibreID, total)
 }
+
+// Punts i activitat
+func (d *SQLite) ListPointsRules() ([]PointsRule, error) { return d.help.listPointsRules() }
+func (d *SQLite) GetPointsRule(id int) (*PointsRule, error) {
+	return d.help.getPointsRule(id)
+}
+func (d *SQLite) GetPointsRuleByCode(code string) (*PointsRule, error) {
+	return d.help.getPointsRuleByCode(code)
+}
+func (d *SQLite) SavePointsRule(r *PointsRule) (int, error)     { return d.help.savePointsRule(r) }
+func (d *SQLite) GetUserActivity(id int) (*UserActivity, error) { return d.help.getUserActivity(id) }
+func (d *SQLite) InsertUserActivity(a *UserActivity) (int, error) {
+	return d.help.insertUserActivity(a)
+}
+func (d *SQLite) UpdateUserActivityStatus(id int, status string, moderatedBy *int) error {
+	return d.help.updateUserActivityStatus(id, status, moderatedBy)
+}
+func (d *SQLite) ListUserActivityByUser(userID int, f ActivityFilter) ([]UserActivity, error) {
+	return d.help.listUserActivityByUser(userID, f)
+}
+func (d *SQLite) ListActivityByObject(objectType string, objectID int, status string) ([]UserActivity, error) {
+	return d.help.listActivityByObject(objectType, objectID, status)
+}
+func (d *SQLite) AddPointsToUser(userID int, delta int) error {
+	return d.help.addPointsToUser(userID, delta)
+}
+func (d *SQLite) GetUserPoints(userID int) (*UserPoints, error) { return d.help.getUserPoints(userID) }
+func (d *SQLite) RecalcUserPoints() error                       { return d.help.recalcUserPoints() }
+func (d *SQLite) GetRanking(limit int) ([]UserPoints, error)    { return d.help.getRanking(limit) }

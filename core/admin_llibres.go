@@ -200,7 +200,8 @@ func (a *App) AdminLlibrePagines(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminSaveLlibrePagina(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
+	user, _, ok := a.requirePermission(w, r, permArxius)
+	if !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -242,7 +243,13 @@ func (a *App) AdminSaveLlibrePagina(w http.ResponseWriter, r *http.Request) {
 	if p.Estat == "" {
 		p.Estat = "pendent"
 	}
-	_, _ = a.DB.SaveLlibrePagina(p)
+	pageID, _ := a.DB.SaveLlibrePagina(p)
+	if pageID == 0 {
+		pageID = p.ID
+	}
+	if strings.ToLower(p.Estat) == "indexada" {
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, rulePaginaIndex, "indexar", "llibre_pagina", &pageID, "validat", nil, "")
+	}
 	http.Redirect(w, r, "/admin/llibres/"+strconv.Itoa(llibreID)+"/pagines", http.StatusSeeOther)
 }
 

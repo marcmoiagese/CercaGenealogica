@@ -108,6 +108,7 @@ func permEclesia(p db.PolicyPermissions) bool   { return p.CanManageEclesia }
 func permArxius(p db.PolicyPermissions) bool    { return p.CanManageArchives }
 func permModerate(p db.PolicyPermissions) bool  { return p.CanModerate }
 func permPolicies(p db.PolicyPermissions) bool  { return p.CanManagePolicies }
+func permAdmin(p db.PolicyPermissions) bool     { return p.Admin }
 func permUsers(p db.PolicyPermissions) bool     { return p.CanManageUsers }
 func permCreatePerson(p db.PolicyPermissions) bool {
 	return p.CanCreatePerson || p.Admin

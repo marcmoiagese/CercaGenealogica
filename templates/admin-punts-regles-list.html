@@ -1,0 +1,59 @@
+{{ define "admin-punts-regles-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "points.rules.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "points.rules.title" }}</h1>
+                <a class="boto-primari" href="/admin/punts/regles/new">{{ t .Lang "points.rules.new" }}</a>
+            </header>
+            {{ if .Data.Msg }}<div class="alert alerta-exit">{{ .Data.Msg }}</div>{{ end }}
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>{{ t .Lang "points.rules.code" }}</th>
+                            <th>{{ t .Lang "points.rules.name" }}</th>
+                            <th>{{ t .Lang "points.rules.desc" }}</th>
+                            <th>{{ t .Lang "points.rules.points" }}</th>
+                            <th>{{ t .Lang "points.rules.active" }}</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Regles }}
+                        <tr>
+                            <td>{{ .ID }}</td>
+                            <td><code>{{ .Code }}</code></td>
+                            <td>{{ .Name }}</td>
+                            <td>{{ .Description }}</td>
+                            <td>{{ .Points }}</td>
+                            <td>{{ if .Active }}{{ t $.Lang "common.yes" }}{{ else }}{{ t $.Lang "common.no" }}{{ end }}</td>
+                            <td><a class="boto-secundari" href="/admin/punts/regles/{{ .ID }}/edit">{{ t $.Lang "points.rules.edit" }}</a></td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="7">{{ t .Lang "common.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+            <form method="post" action="/admin/punts/regles/recalc" style="margin-top:1rem;">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <button type="submit" class="boto-secundari">{{ t .Lang "points.rules.recalc" }}</button>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}
