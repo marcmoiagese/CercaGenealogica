@@ -1,0 +1,61 @@
+{{ define "admin-moderacio-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.menu.moderation" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "admin.menu.moderation" }}</h1>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nom</th>
+                            <th>Municipi</th>
+                            <th>Llibre/Pàgina</th>
+                            <th>Motiu</th>
+                            <th>Accions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Persones }}
+                        <tr>
+                            <td>{{ .ID }}</td>
+                            <td>{{ .Nom }} {{ .Cognom1 }} {{ .Cognom2 }}</td>
+                            <td>{{ .Municipi }}</td>
+                            <td>{{ .Llibre }} {{ if .Pagina }}(p. {{ .Pagina }}){{ end }}</td>
+                            <td>{{ .ModeracioMotiu }}</td>
+                            <td>
+                                <form style="display:inline" method="post" action="/admin/moderacio/{{ .ID }}/aprovar">
+                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                    <button type="submit" class="boto-primari">Aprovar</button>
+                                </form>
+                                <form style="display:inline" method="post" action="/admin/moderacio/{{ .ID }}/rebutjar">
+                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                    <input type="text" name="motiu" placeholder="Motiu" style="max-width:150px">
+                                    <button type="submit" class="boto-secundari">Rebutjar</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="6">Cap pendent de moderació</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

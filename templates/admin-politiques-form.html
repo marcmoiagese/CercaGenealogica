@@ -1,0 +1,47 @@
+{{ define "admin-politiques-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "policies.new" }}{{ else }}{{ t .Lang "policies.edit" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ if .Data.IsNew }}{{ t .Lang "policies.new" }}{{ else }}{{ t .Lang "policies.edit" }}{{ end }}</h1>
+            </header>
+            {{ if .Data.Error }}
+            <div class="alert alert-error">{{ .Data.Error }}</div>
+            {{ end }}
+            <form method="POST" action="/admin/politiques/save" class="formulari-admin">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="id" value="{{ .Data.Politica.ID }}">
+                <div class="camp-form">
+                    <label for="nom">{{ t .Lang "policies.name" }}</label>
+                    <input type="text" id="nom" name="nom" value="{{ .Data.Politica.Nom }}" required>
+                </div>
+                <div class="camp-form">
+                    <label for="descripcio">{{ t .Lang "policies.desc" }}</label>
+                    <input type="text" id="descripcio" name="descripcio" value="{{ .Data.Politica.Descripcio }}">
+                </div>
+                <div class="camp-form">
+                    <label for="permisos">{{ t .Lang "policies.permissions" }}</label>
+                    <textarea id="permisos" name="permisos" rows="8" placeholder='{"admin":true,...}'>{{ .Data.Politica.Permisos }}</textarea>
+                    <small>{{ t .Lang "policies.permissions.help" }}</small>
+                </div>
+                <div class="accions-formulari">
+                    <button type="submit" class="boto boto-principal">Desar</button>
+                    <a href="/admin/politiques" class="boto boto-secundari">Cancel·lar</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

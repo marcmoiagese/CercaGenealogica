@@ -218,6 +218,37 @@ func main() {
 	})
 	http.HandleFunc("/admin/eclesiastic/save", applyMiddleware(app.AdminSaveEclesiastic, core.BlockIPs, core.RateLimit))
 
+	// Polítiques / permisos
+	http.HandleFunc("/admin/politiques", func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):
+			applyMiddleware(app.AdminNewPolitica, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/edit"):
+			applyMiddleware(app.AdminEditPolitica, core.BlockIPs, core.RateLimit)(w, r)
+		default:
+			applyMiddleware(app.AdminListPolitiques, core.BlockIPs, core.RateLimit)(w, r)
+		}
+	})
+	http.HandleFunc("/admin/politiques/save", applyMiddleware(app.AdminSavePolitica, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/politiques/assignacions", applyMiddleware(app.AdminAssignacionsPolitiques, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/politiques/assignar-usuari", applyMiddleware(app.AdminAssignarPoliticaUsuari, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/politiques/treure-usuari", applyMiddleware(app.AdminTreurePoliticaUsuari, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/politiques/assignar-grup", applyMiddleware(app.AdminAssignarPoliticaGrup, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/politiques/treure-grup", applyMiddleware(app.AdminTreurePoliticaGrup, core.BlockIPs, core.RateLimit))
+
+	// Moderació
+	http.HandleFunc("/admin/moderacio", applyMiddleware(app.AdminModeracioList, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/moderacio/", func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/aprovar"):
+			applyMiddleware(app.AdminModeracioAprovar, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/rebutjar"):
+			applyMiddleware(app.AdminModeracioRebutjar, core.BlockIPs, core.RateLimit)(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
 	// Admin arxius
 	http.HandleFunc("/admin/arxius", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {

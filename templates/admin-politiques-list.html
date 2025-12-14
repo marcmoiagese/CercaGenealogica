@@ -1,0 +1,50 @@
+{{ define "admin-politiques-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "policies.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "policies.title" }}</h1>
+                <a class="boto-primari" href="/admin/politiques/new">Afegir</a>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>{{ t .Lang "policies.name" }}</th>
+                            <th>{{ t .Lang "policies.desc" }}</th>
+                            <th>{{ t .Lang "policies.permissions" }}</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Politiques }}
+                        <tr>
+                            <td>{{ .ID }}</td>
+                            <td>{{ .Nom }}</td>
+                            <td>{{ .Descripcio }}</td>
+                            <td><code>{{ .Permisos }}</code></td>
+                            <td><a class="boto-secundari" href="/admin/politiques/{{ .ID }}/edit">Editar</a></td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="5">Cap resultat</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

@@ -18,7 +18,7 @@
                 <li class="menu-opcio"><a href="/arxius"><i class="fas fa-archive"></i> {{ t .Lang "archives.title" }}</a></li>
             </ul>
         </div>
-        {{ if and .Data (index .Data "CanManageArxius") }}
+        {{ if and .Data (or (index .Data "CanManageArxius") (index .Data "CanManagePolicies") (index .Data "CanModerate")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-tools"></i>
@@ -31,6 +31,8 @@
                 <li class="menu-opcio"><a href="/admin/eclesiastic"><i class="fas fa-church"></i> {{ t .Lang "admin.menu.ecles" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/arxius"><i class="fas fa-archive"></i> {{ t .Lang "admin.menu.archives" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/llibres"><i class="fas fa-book"></i> {{ t .Lang "admin.menu.books" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/politiques"><i class="fas fa-shield-alt"></i> {{ t .Lang "admin.menu.policies" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/moderacio"><i class="fas fa-clipboard-check"></i> {{ t .Lang "admin.menu.moderation" }}</a></li>
             </ul>
         </div>
         {{ end }}

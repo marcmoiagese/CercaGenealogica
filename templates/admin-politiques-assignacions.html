@@ -1,0 +1,111 @@
+{{ define "admin-politiques-assignacions.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>Assignació de polítiques</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>Assignació de polítiques</h1>
+            </header>
+            <div class="grid-2col">
+                <div>
+                    <h2>Usuaris</h2>
+                    <form class="formulari-admin" method="get" action="/admin/politiques/assignacions">
+                        <label for="user_id">Selecciona usuari</label>
+                        <select id="user_id" name="user_id">
+                            <option value="">--</option>
+                            {{ range .Data.Users }}
+                            <option value="{{ .ID }}" {{ if eq $.Data.UserID .ID }}selected{{ end }}>{{ .ID }} - {{ .Usuari }} ({{ .Email }})</option>
+                            {{ end }}
+                        </select>
+                        <button type="submit" class="boto-primari">Veure</button>
+                    </form>
+
+                    {{ if .Data.UserID }}
+                    <form class="formulari-admin" method="post" action="/admin/politiques/assignar-usuari">
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                        <input type="hidden" name="user_id" value="{{ .Data.UserID }}">
+                        <label for="pol-usuari">Afegir política</label>
+                        <select id="pol-usuari" name="politica_id">
+                            {{ range .Data.Politiques }}
+                            <option value="{{ .ID }}">{{ .Nom }}</option>
+                            {{ end }}
+                        </select>
+                        <button type="submit" class="boto-primari">Afegir</button>
+                    </form>
+                    <h3>Polítiques actuals</h3>
+                    <ul class="llista-simple">
+                        {{ range .Data.UserPols }}
+                        <li>
+                            {{ .Nom }}
+                            <form style="display:inline" method="post" action="/admin/politiques/treure-usuari">
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="user_id" value="{{ $.Data.UserID }}">
+                                <input type="hidden" name="politica_id" value="{{ .ID }}">
+                                <button type="submit" class="boto-secundari">Treure</button>
+                            </form>
+                        </li>
+                        {{ else }}
+                        <li>Sense polítiques assignades</li>
+                        {{ end }}
+                    </ul>
+                    {{ end }}
+                </div>
+                <div>
+                    <h2>Grups</h2>
+                    <form class="formulari-admin" method="get" action="/admin/politiques/assignacions">
+                        <label for="group_id">Selecciona grup</label>
+                        <select id="group_id" name="group_id">
+                            <option value="">--</option>
+                            {{ range .Data.Groups }}
+                            <option value="{{ .ID }}" {{ if eq $.Data.GroupID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                            {{ end }}
+                        </select>
+                        <button type="submit" class="boto-primari">Veure</button>
+                    </form>
+
+                    {{ if .Data.GroupID }}
+                    <form class="formulari-admin" method="post" action="/admin/politiques/assignar-grup">
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                        <input type="hidden" name="group_id" value="{{ .Data.GroupID }}">
+                        <label for="pol-grup">Afegir política</label>
+                        <select id="pol-grup" name="politica_id">
+                            {{ range .Data.Politiques }}
+                            <option value="{{ .ID }}">{{ .Nom }}</option>
+                            {{ end }}
+                        </select>
+                        <button type="submit" class="boto-primari">Afegir</button>
+                    </form>
+                    <h3>Polítiques del grup</h3>
+                    <ul class="llista-simple">
+                        {{ range .Data.GroupPols }}
+                        <li>
+                            {{ .Nom }}
+                            <form style="display:inline" method="post" action="/admin/politiques/treure-grup">
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="group_id" value="{{ $.Data.GroupID }}">
+                                <input type="hidden" name="politica_id" value="{{ .ID }}">
+                                <button type="submit" class="boto-secundari">Treure</button>
+                            </form>
+                        </li>
+                        {{ else }}
+                        <li>Sense polítiques assignades</li>
+                        {{ end }}
+                    </ul>
+                    {{ end }}
+                </div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}
