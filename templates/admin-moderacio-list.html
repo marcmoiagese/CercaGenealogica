@@ -14,6 +14,9 @@
             <header class="card-header">
                 <h1>{{ t .Lang "admin.menu.moderation" }}</h1>
             </header>
+            {{ if .Data.Msg }}
+            <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
+            {{ end }}
             <div class="taula-wrapper">
                 <table class="taula">
                     <thead>
@@ -22,6 +25,8 @@
                             <th>Nom</th>
                             <th>Municipi</th>
                             <th>Llibre/Pàgina</th>
+                            <th>Autor</th>
+                            <th>Creada</th>
                             <th>Motiu</th>
                             <th>Accions</th>
                         </tr>
@@ -29,17 +34,19 @@
                     <tbody>
                         {{ range .Data.Persones }}
                         <tr>
-                            <td>{{ .ID }}</td>
-                            <td>{{ .Nom }} {{ .Cognom1 }} {{ .Cognom2 }}</td>
-                            <td>{{ .Municipi }}</td>
-                            <td>{{ .Llibre }} {{ if .Pagina }}(p. {{ .Pagina }}){{ end }}</td>
-                            <td>{{ .ModeracioMotiu }}</td>
+                            <td>{{ .Persona.ID }}</td>
+                            <td><a href="/persones/{{ .Persona.ID }}">{{ .Persona.Nom }} {{ .Persona.Cognom1 }} {{ .Persona.Cognom2 }}</a></td>
+                            <td>{{ .Persona.Municipi }}</td>
+                            <td>{{ .Persona.Llibre }} {{ if .Persona.Pagina }}(p. {{ .Persona.Pagina }}){{ end }}</td>
+                            <td>{{ .Autor }}</td>
+                            <td>{{ .Created }}</td>
+                            <td>{{ .Persona.ModeracioMotiu }}</td>
                             <td>
-                                <form style="display:inline" method="post" action="/admin/moderacio/{{ .ID }}/aprovar">
+                                <form style="display:inline" method="post" action="/admin/moderacio/{{ .Persona.ID }}/aprovar">
                                     <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                     <button type="submit" class="boto-primari">Aprovar</button>
                                 </form>
-                                <form style="display:inline" method="post" action="/admin/moderacio/{{ .ID }}/rebutjar">
+                                <form style="display:inline" method="post" action="/admin/moderacio/{{ .Persona.ID }}/rebutjar">
                                     <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                     <input type="text" name="motiu" placeholder="Motiu" style="max-width:150px">
                                     <button type="submit" class="boto-secundari">Rebutjar</button>

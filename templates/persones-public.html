@@ -1,0 +1,47 @@
+{{ define "persones-public.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "persons.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "persons.title" }}</h1>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "persons.col.name" }}</th>
+                            <th>{{ t .Lang "persons.col.municipi" }}</th>
+                            <th>{{ t .Lang "persons.col.llibre" }}</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Persones }}
+                        <tr>
+                            <td>{{ .Nom }} {{ .Cognom1 }} {{ .Cognom2 }}</td>
+                            <td>{{ .Municipi }}</td>
+                            <td>{{ .Llibre }}</td>
+                            <td><a class="boto-secundari" href="/persones/{{ .ID }}">{{ t .Lang "common.view" }}</a></td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="4">{{ t .Lang "common.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

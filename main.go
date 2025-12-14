@@ -149,6 +149,36 @@ func main() {
 	http.HandleFunc("/arxius", applyMiddleware(app.ListArxius, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/arxius/", applyMiddleware(app.ShowArxiu, core.BlockIPs, core.RateLimit))
 
+	// Persones (bàsic: llista pública i creació/edició amb moderació)
+	http.HandleFunc("/persones", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			applyMiddleware(app.RequireLogin(app.ListPersonesPublic), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if r.Method == http.MethodPost {
+			applyMiddleware(app.CreatePersona, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	http.HandleFunc("/persones/new", applyMiddleware(app.PersonaForm, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/persones/save", applyMiddleware(app.PersonaSave, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/persones/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/edit") && r.Method == http.MethodGet {
+			applyMiddleware(app.PersonaForm, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if r.Method == http.MethodGet {
+			applyMiddleware(app.RequireLogin(app.PersonaDetall), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if r.Method == http.MethodPut || r.Method == http.MethodPost {
+			applyMiddleware(app.UpdatePersona, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
 	// Admin països
 	http.HandleFunc("/admin/paisos", applyMiddleware(app.AdminListPaisos, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/paisos/new", applyMiddleware(app.AdminNewPais, core.BlockIPs, core.RateLimit))

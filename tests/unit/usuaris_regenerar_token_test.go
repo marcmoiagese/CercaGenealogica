@@ -215,6 +215,18 @@ func (f *fakeDB) GetUserByEmail(email string) (*db.User, error) {
 	return u, nil
 }
 
+func (f *fakeDB) GetUserByID(id int) (*db.User, error) {
+	if f.users == nil {
+		return nil, fmt.Errorf("not found")
+	}
+	for _, u := range f.users {
+		if u.ID == id {
+			return u, nil
+		}
+	}
+	return nil, fmt.Errorf("not found")
+}
+
 func (f *fakeDB) ExistsUserByUsername(username string) (bool, error) {
 	if f.users == nil {
 		return false, nil
@@ -370,7 +382,7 @@ func (f *fakeDB) CreatePersona(p *db.Persona) (int, error) {
 	return 0, nil
 }
 func (f *fakeDB) UpdatePersona(p *db.Persona) error { return nil }
-func (f *fakeDB) UpdatePersonaModeracio(id int, estat, motiu string) error {
+func (f *fakeDB) UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return nil
 }
 

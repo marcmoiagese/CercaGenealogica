@@ -292,6 +292,13 @@
   "policies.permissions.help": "Paste a JSON structure with permission flags",
   "policies.new": "New policy",
   "policies.edit": "Edit policy",
+  "persons.title": "Persons",
+  "persons.col.name": "Name",
+  "persons.col.municipi": "Municipality",
+  "persons.col.llibre": "Book",
+  "persons.new": "New person",
+  "moderation.success": "Action completed successfully",
+  "moderation.error": "Could not complete the action",
 
   "books.title": "Books",
   "books.new": "New book",
@@ -514,5 +521,15 @@
   "ecles.form.territori": "Territory",
   "ecles.form.obs": "Notes",
   "ecles.form.save": "Save",
-  "ecles.form.cancel": "Cancel"
+  "ecles.form.cancel": "Cancel",
+
+  "moderation.reason": "Reason",
+  "admin.moderation.msg.approved": "Record approved successfully",
+  "admin.moderation.msg.rejected": "Record rejected successfully",
+
+  "persons.detail.published": "Published record",
+  "persons.col.pagina": "Page",
+  "persons.col.ofici": "Occupation",
+  "persons.col.status": "Status",
+  "common.view": "View"
 }

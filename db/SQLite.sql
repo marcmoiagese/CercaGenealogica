@@ -86,7 +86,16 @@ CREATE TABLE IF NOT EXISTS persona (
     data_bateig DATE,
     data_defuncio DATE,
     ofici TEXT,
-    estat_civil TEXT
+    estat_civil TEXT,
+    created_by INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by INTEGER,
+    moderated_by INTEGER,
+    moderated_at TIMESTAMP,
+    FOREIGN KEY(created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY(updated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY(moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS relacions (

@@ -34,6 +34,7 @@ func (a *App) AdminListPaisos(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	paisos, err := a.DB.ListPaisos()
 	if err != nil {
 		http.Error(w, "Error obtenint països", http.StatusInternalServerError)
@@ -42,6 +43,7 @@ func (a *App) AdminListPaisos(w http.ResponseWriter, r *http.Request) {
 	RenderPrivateTemplate(w, r, "admin-paisos-list.html", map[string]interface{}{
 		"Paisos":          paisos,
 		"CanManageArxius": true,
+		"User":            user,
 	})
 }
 
@@ -49,10 +51,12 @@ func (a *App) AdminNewPais(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	RenderPrivateTemplate(w, r, "admin-paisos-form.html", map[string]interface{}{
 		"Pais":            &db.Pais{},
 		"IsNew":           true,
 		"CanManageArxius": true,
+		"User":            user,
 	})
 }
 
@@ -60,6 +64,7 @@ func (a *App) AdminEditPais(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	id := extractID(r.URL.Path)
 	pais, err := a.DB.GetPais(id)
 	if err != nil || pais == nil {
@@ -70,6 +75,7 @@ func (a *App) AdminEditPais(w http.ResponseWriter, r *http.Request) {
 		"Pais":            pais,
 		"IsNew":           false,
 		"CanManageArxius": true,
+		"User":            user,
 	})
 }
 

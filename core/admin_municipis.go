@@ -13,6 +13,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	filter := db.MunicipiFilter{
 		Text:  strings.TrimSpace(r.URL.Query().Get("q")),
 		Estat: strings.TrimSpace(r.URL.Query().Get("estat")),
@@ -41,6 +42,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		"Paisos":          paisos,
 		"Nivells":         nivells,
 		"CanManageArxius": true,
+		"User":            user,
 	})
 }
 
@@ -48,6 +50,7 @@ func (a *App) AdminNewMunicipi(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	paisos, _ := a.DB.ListPaisos()
 	var levels []db.NivellAdministratiu
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
@@ -64,6 +67,7 @@ func (a *App) AdminNewMunicipi(w http.ResponseWriter, r *http.Request) {
 		"CodisPostals":    nil,
 		"IsNew":           true,
 		"CanManageArxius": true,
+		"User":            user,
 	})
 }
 
@@ -71,6 +75,7 @@ func (a *App) AdminEditMunicipi(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	id := extractID(r.URL.Path)
 	mun, err := a.DB.GetMunicipi(id)
 	if err != nil || mun == nil {
@@ -108,6 +113,7 @@ func (a *App) AdminEditMunicipi(w http.ResponseWriter, r *http.Request) {
 		"EditEcles":       editEcles,
 		"IsNew":           false,
 		"CanManageArxius": true,
+		"User":            user,
 	})
 }
 

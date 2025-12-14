@@ -84,6 +84,10 @@ func (d *SQLite) GetUserByEmail(email string) (*User, error) {
 	return d.help.getUserByEmail(email)
 }
 
+func (d *SQLite) GetUserByID(id int) (*User, error) {
+	return d.help.getUserByID(id)
+}
+
 func (d *SQLite) ExistsUserByUsername(username string) (bool, error) {
 	return d.help.existsUserByUsername(username)
 }
@@ -244,8 +248,8 @@ func (d *SQLite) CreatePersona(p *Persona) (int, error) {
 func (d *SQLite) UpdatePersona(p *Persona) error {
 	return d.help.updatePersona(p)
 }
-func (d *SQLite) UpdatePersonaModeracio(id int, estat, motiu string) error {
-	return d.help.updatePersonaModeracio(id, estat, motiu)
+func (d *SQLite) UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updatePersonaModeracio(id, estat, motiu, moderatorID)
 }
 
 // Paisos

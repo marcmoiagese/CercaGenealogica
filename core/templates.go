@@ -5,8 +5,8 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"path/filepath"
 	"reflect"
+	"path/filepath"
 )
 
 var Templates *template.Template
@@ -132,7 +132,7 @@ func RenderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 func RenderPrivateTemplate(w http.ResponseWriter, r *http.Request, tmpl string, data interface{}) {
 	lang := ResolveLang(r)
 	csrfToken, _ := ensureCSRF(w, r)
-	data = injectCSRFToken(data, csrfToken)
+	data = injectUserIfMissing(r, injectCSRFToken(data, csrfToken))
 	err := Templates.ExecuteTemplate(w, tmpl, &DataContext{
 		UserLoggedIn: true,
 		Lang:         lang,
@@ -149,7 +149,7 @@ func RenderPrivateTemplate(w http.ResponseWriter, r *http.Request, tmpl string, 
 // RenderPrivateTemplateLang permet forçar l'idioma (p.ex. idioma preferit de l'usuari logat).
 func RenderPrivateTemplateLang(w http.ResponseWriter, r *http.Request, tmpl string, lang string, data interface{}) {
 	csrfToken, _ := ensureCSRF(w, r)
-	data = injectCSRFToken(data, csrfToken)
+	data = injectUserIfMissing(r, injectCSRFToken(data, csrfToken))
 	err := Templates.ExecuteTemplate(w, tmpl, &DataContext{
 		UserLoggedIn: true,
 		Lang:         lang,
@@ -200,4 +200,20 @@ func injectCSRFToken(data interface{}, token string) interface{} {
 	}
 
 	return data
+}
+
+// injectUserIfMissing intenta inserir l'usuari obtingut del context (RequireLogin/requirePermission)
+// quan el handler no l'ha passat explícitament al mapa de dades. Només actua sobre map[string]interface{}.
+func injectUserIfMissing(r *http.Request, data interface{}) interface{} {
+	m, ok := data.(map[string]interface{})
+	if !ok {
+		return data
+	}
+	if _, found := m["User"]; found {
+		return data
+	}
+	if u := userFromContext(r); u != nil {
+		m["User"] = u
+	}
+	return m
 }

@@ -12,6 +12,7 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permEclesia); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	filter := db.ArquebisbatFilter{
 		Text: strings.TrimSpace(r.URL.Query().Get("q")),
 	}
@@ -27,6 +28,7 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 		"Filter":          filter,
 		"Paisos":          paisos,
 		"CanManageArxius": true,
+		"User":            user,
 	})
 }
 
@@ -34,6 +36,7 @@ func (a *App) AdminNewEclesiastic(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permEclesia); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	paisos, _ := a.DB.ListPaisos()
 	RenderPrivateTemplate(w, r, "admin-eclesiastic-form.html", map[string]interface{}{
 		"Entitat":         &db.Arquebisbat{TipusEntitat: "bisbat"},
@@ -41,6 +44,7 @@ func (a *App) AdminNewEclesiastic(w http.ResponseWriter, r *http.Request) {
 		"Parents":         nil,
 		"IsNew":           true,
 		"CanManageArxius": true,
+		"User":            user,
 	})
 }
 
@@ -48,6 +52,7 @@ func (a *App) AdminEditEclesiastic(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permEclesia); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	id := extractID(r.URL.Path)
 	ent, err := a.DB.GetArquebisbat(id)
 	if err != nil || ent == nil {
@@ -62,6 +67,7 @@ func (a *App) AdminEditEclesiastic(w http.ResponseWriter, r *http.Request) {
 		"Parents":         parents,
 		"IsNew":           false,
 		"CanManageArxius": true,
+		"User":            user,
 	})
 }
 

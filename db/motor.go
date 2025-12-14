@@ -15,6 +15,7 @@ type DB interface {
 	InsertUser(user *User) error
 	SaveActivationToken(email, token string) error
 	GetUserByEmail(email string) (*User, error)
+	GetUserByID(id int) (*User, error)
 	ExistsUserByUsername(username string) (bool, error)
 	ExistsUserByEmail(email string) (bool, error)
 	ActivateUser(token string) error
@@ -55,7 +56,7 @@ type DB interface {
 	GetPersona(id int) (*Persona, error)
 	CreatePersona(p *Persona) (int, error)
 	UpdatePersona(p *Persona) error
-	UpdatePersonaModeracio(id int, estat, motiu string) error
+	UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error
 	// Arxius CRUD
 	ListArxius(filter ArxiuFilter) ([]ArxiuWithCount, error)
 	GetArxiu(id int) (*Arxiu, error)
@@ -176,20 +177,20 @@ type Politica struct {
 }
 
 type PolicyPermissions struct {
-	Admin               bool `json:"admin"`
-	CanManageUsers      bool `json:"can_manage_users"`
-	CanManageTerritory  bool `json:"can_manage_territory"`
-	CanManageEclesia    bool `json:"can_manage_eclesiastic"`
-	CanManageArchives   bool `json:"can_manage_archives"`
-	CanCreatePerson     bool `json:"can_create_person"`
-	CanEditAnyPerson    bool `json:"can_edit_any_person"`
-	CanModerate         bool `json:"can_moderate"`
-	CanManagePolicies   bool `json:"can_manage_policies"`
+	Admin              bool `json:"admin"`
+	CanManageUsers     bool `json:"can_manage_users"`
+	CanManageTerritory bool `json:"can_manage_territory"`
+	CanManageEclesia   bool `json:"can_manage_eclesiastic"`
+	CanManageArchives  bool `json:"can_manage_archives"`
+	CanCreatePerson    bool `json:"can_create_person"`
+	CanEditAnyPerson   bool `json:"can_edit_any_person"`
+	CanModerate        bool `json:"can_moderate"`
+	CanManagePolicies  bool `json:"can_manage_policies"`
 }
 
 type Group struct {
-	ID   int
-	Nom  string
+	ID         int
+	Nom        string
 	Descripcio string
 }
 
@@ -211,8 +212,12 @@ type Persona struct {
 	EstatCivil     string
 	ModeracioEstat string
 	ModeracioMotiu string
-	CreadaPer      sql.NullInt64
-	ActualitzadaAt sql.NullString
+	CreatedBy      sql.NullInt64
+	CreatedAt      sql.NullTime
+	UpdatedAt      sql.NullTime
+	UpdatedBy      sql.NullInt64
+	ModeratedBy    sql.NullInt64
+	ModeratedAt    sql.NullTime
 }
 
 type PersonaFilter struct {

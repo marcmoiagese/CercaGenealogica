@@ -10,6 +10,9 @@ import (
 type permContextKey string
 
 const permissionsKey permContextKey = "permissions"
+type userContextKey string
+
+const userKey userContextKey = "user"
 
 // PolicyPermissions is re-exported for convenience
 type PolicyPermissions = db.PolicyPermissions
@@ -41,6 +44,25 @@ func (a *App) withPermissions(r *http.Request, perms db.PolicyPermissions) *http
 	return r.WithContext(context.WithValue(r.Context(), permissionsKey, perms))
 }
 
+func (a *App) withUser(r *http.Request, u *db.User) *http.Request {
+	if u == nil {
+		return r
+	}
+	return r.WithContext(context.WithValue(r.Context(), userKey, u))
+}
+
+func userFromContext(r *http.Request) *db.User {
+	if r == nil {
+		return nil
+	}
+	if val := r.Context().Value(userKey); val != nil {
+		if u, ok := val.(*db.User); ok {
+			return u
+		}
+	}
+	return nil
+}
+
 func (a *App) hasPerm(perms db.PolicyPermissions, check func(db.PolicyPermissions) bool) bool {
 	if perms.Admin {
 		return true
@@ -54,6 +76,7 @@ func (a *App) requirePermission(w http.ResponseWriter, r *http.Request, check fu
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return nil, db.PolicyPermissions{}, false
 	}
+	r = a.withUser(r, user)
 	perms, found := a.permissionsFromContext(r)
 	if !found {
 		perms = a.getPermissionsForUser(user.ID)
@@ -73,12 +96,15 @@ func permArxius(p db.PolicyPermissions) bool    { return p.CanManageArchives }
 func permModerate(p db.PolicyPermissions) bool  { return p.CanModerate }
 func permPolicies(p db.PolicyPermissions) bool  { return p.CanManagePolicies }
 func permUsers(p db.PolicyPermissions) bool     { return p.CanManageUsers }
+func permCreatePerson(p db.PolicyPermissions) bool {
+	return p.CanCreatePerson || p.Admin
+}
 
 // RequireLogin is a minimal guard without any specific permission.
 func (a *App) RequireLogin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if user, ok := a.VerificarSessio(r); ok && user != nil {
-			next(w, r)
+			next(w, a.withUser(r, user))
 			return
 		}
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -92,6 +118,7 @@ func (a *App) requirePolicies(w http.ResponseWriter, r *http.Request, policies [
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return nil, false
 	}
+	r = a.withUser(r, user)
 	if len(policies) == 0 {
 		return user, true
 	}

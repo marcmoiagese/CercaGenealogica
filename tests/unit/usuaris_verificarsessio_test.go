@@ -41,6 +41,15 @@ func (f *fakeDBVerificar) GetUserByEmail(email string) (*db.User, error) {
 	return nil, errors.New("GetUserByEmail not implemented in fakeDBVerificar")
 }
 
+func (f *fakeDBVerificar) GetUserByID(id int) (*db.User, error) {
+	for _, u := range f.sessions {
+		if u.ID == id {
+			return u, nil
+		}
+	}
+	return nil, errors.New("not found")
+}
+
 func (f *fakeDBVerificar) ExistsUserByUsername(username string) (bool, error) {
 	return false, errors.New("ExistsUserByUsername not implemented in fakeDBVerificar")
 }
@@ -217,7 +226,7 @@ func (f *fakeDBVerificar) CreatePersona(p *db.Persona) (int, error) {
 	return 0, nil
 }
 func (f *fakeDBVerificar) UpdatePersona(p *db.Persona) error { return nil }
-func (f *fakeDBVerificar) UpdatePersonaModeracio(id int, estat, motiu string) error {
+func (f *fakeDBVerificar) UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return nil
 }
 

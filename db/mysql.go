@@ -84,6 +84,10 @@ func (d *MySQL) GetUserByEmail(email string) (*User, error) {
 	return d.help.getUserByEmail(email)
 }
 
+func (d *MySQL) GetUserByID(id int) (*User, error) {
+	return d.help.getUserByID(id)
+}
+
 func (m *MySQL) SaveActivationToken(email, token string) error {
 	return m.help.saveActivationToken(email, token)
 }
@@ -241,8 +245,8 @@ func (d *MySQL) CreatePersona(p *Persona) (int, error) {
 func (d *MySQL) UpdatePersona(p *Persona) error {
 	return d.help.updatePersona(p)
 }
-func (d *MySQL) UpdatePersonaModeracio(id int, estat, motiu string) error {
-	return d.help.updatePersonaModeracio(id, estat, motiu)
+func (d *MySQL) UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updatePersonaModeracio(id, estat, motiu, moderatorID)
 }
 
 // Paisos

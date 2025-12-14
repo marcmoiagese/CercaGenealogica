@@ -13,6 +13,7 @@ func (a *App) AdminListPolitiques(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	pols, err := a.DB.ListPolitiques()
 	if err != nil {
 		http.Error(w, "Error obtenint polítiques", http.StatusInternalServerError)
@@ -22,6 +23,7 @@ func (a *App) AdminListPolitiques(w http.ResponseWriter, r *http.Request) {
 		"Politiques":        pols,
 		"CanManageArxius":   true,
 		"CanManagePolicies": true,
+		"User":              user,
 	})
 }
 
@@ -29,11 +31,13 @@ func (a *App) AdminNewPolitica(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	RenderPrivateTemplate(w, r, "admin-politiques-form.html", map[string]interface{}{
 		"Politica":          &db.Politica{},
 		"IsNew":             true,
 		"CanManageArxius":   true,
 		"CanManagePolicies": true,
+		"User":              user,
 	})
 }
 
@@ -41,6 +45,7 @@ func (a *App) AdminEditPolitica(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	id := extractID(r.URL.Path)
 	pol, err := a.DB.GetPolitica(id)
 	if err != nil || pol == nil {
@@ -52,6 +57,7 @@ func (a *App) AdminEditPolitica(w http.ResponseWriter, r *http.Request) {
 		"IsNew":             false,
 		"CanManageArxius":   true,
 		"CanManagePolicies": true,
+		"User":              user,
 	})
 }
 

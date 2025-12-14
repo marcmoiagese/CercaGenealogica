@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // formatPlaceholders converteix '?' a placeholders de l'estil PostgreSQL ($1, $2...) si cal.
@@ -363,7 +364,8 @@ func combinePermissions(base, add PolicyPermissions) PolicyPermissions {
 func (h sqlHelper) listPersones(f PersonaFilter) ([]Persona, error) {
 	query := `
         SELECT id, nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, quinta,
-               data_naixement, data_bateig, data_defuncio, ofici, estat_civil
+               data_naixement, data_bateig, data_defuncio, ofici, estat_civil,
+               created_by, created_at, updated_at, updated_by, moderated_by, moderated_at
         FROM persona`
 	var args []interface{}
 	where := []string{}
@@ -388,7 +390,7 @@ func (h sqlHelper) listPersones(f PersonaFilter) ([]Persona, error) {
 	var res []Persona
 	for rows.Next() {
 		var p Persona
-		if err := rows.Scan(&p.ID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.Municipi, &p.Arquebisbat, &p.NomComplet, &p.Pagina, &p.Llibre, &p.Quinta, &p.DataNaixement, &p.DataBateig, &p.DataDefuncio, &p.Ofici, &p.ModeracioEstat); err != nil {
+		if err := rows.Scan(&p.ID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.Municipi, &p.Arquebisbat, &p.NomComplet, &p.Pagina, &p.Llibre, &p.Quinta, &p.DataNaixement, &p.DataBateig, &p.DataDefuncio, &p.Ofici, &p.ModeracioEstat, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt, &p.UpdatedBy, &p.ModeratedBy, &p.ModeratedAt); err != nil {
 			return nil, err
 		}
 		// Guardem el motiu de moderació (si s'ha usat) dins de quinta per no ampliar esquema
@@ -400,9 +402,9 @@ func (h sqlHelper) listPersones(f PersonaFilter) ([]Persona, error) {
 
 func (h sqlHelper) getPersona(id int) (*Persona, error) {
 	row := h.db.QueryRow(`SELECT id, nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, quinta,
-        data_naixement, data_bateig, data_defuncio, ofici, estat_civil FROM persona WHERE id = ?`, id)
+        data_naixement, data_bateig, data_defuncio, ofici, estat_civil, created_by, created_at, updated_at, updated_by, moderated_by, moderated_at FROM persona WHERE id = ?`, id)
 	var p Persona
-	if err := row.Scan(&p.ID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.Municipi, &p.Arquebisbat, &p.NomComplet, &p.Pagina, &p.Llibre, &p.Quinta, &p.DataNaixement, &p.DataBateig, &p.DataDefuncio, &p.Ofici, &p.ModeracioEstat); err != nil {
+	if err := row.Scan(&p.ID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.Municipi, &p.Arquebisbat, &p.NomComplet, &p.Pagina, &p.Llibre, &p.Quinta, &p.DataNaixement, &p.DataBateig, &p.DataDefuncio, &p.Ofici, &p.ModeracioEstat, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt, &p.UpdatedBy, &p.ModeratedBy, &p.ModeratedAt); err != nil {
 		return nil, err
 	}
 	p.ModeracioMotiu = p.Quinta
@@ -418,19 +420,19 @@ func (h sqlHelper) createPersona(p *Persona) (int, error) {
 	if strings.TrimSpace(nomComplet) == "" {
 		nomComplet = strings.TrimSpace(strings.Join([]string{p.Nom, p.Cognom1, p.Cognom2}, " "))
 	}
-	stmt := `INSERT INTO persona (nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, quinta, data_naixement, data_bateig, data_defuncio, ofici, estat_civil)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	stmt := `INSERT INTO persona (nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, quinta, data_naixement, data_bateig, data_defuncio, ofici, estat_civil, created_by, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	if h.style == "postgres" {
 		stmt += " RETURNING id"
 	}
 	stmt = formatPlaceholders(h.style, stmt)
 	if h.style == "postgres" {
-		if err := h.db.QueryRow(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, status).Scan(&p.ID); err != nil {
+		if err := h.db.QueryRow(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, status, p.CreatedBy, p.UpdatedBy).Scan(&p.ID); err != nil {
 			return 0, err
 		}
 		return p.ID, nil
 	}
-	res, err := h.db.Exec(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, status)
+	res, err := h.db.Exec(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, status, p.CreatedBy, p.UpdatedBy)
 	if err != nil {
 		return 0, err
 	}
@@ -447,17 +449,18 @@ func (h sqlHelper) updatePersona(p *Persona) error {
 	}
 	stmt := `
         UPDATE persona
-        SET nom=?, cognom1=?, cognom2=?, municipi=?, arquevisbat=?, nom_complet=?, pagina=?, llibre=?, quinta=?, data_naixement=?, data_bateig=?, data_defuncio=?, ofici=?, estat_civil=?
+        SET nom=?, cognom1=?, cognom2=?, municipi=?, arquevisbat=?, nom_complet=?, pagina=?, llibre=?, quinta=?, data_naixement=?, data_bateig=?, data_defuncio=?, ofici=?, estat_civil=?, updated_at=?, updated_by=?
         WHERE id = ?`
 	stmt = formatPlaceholders(h.style, stmt)
-	_, err := h.db.Exec(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, p.ModeracioEstat, p.ID)
+	_, err := h.db.Exec(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, p.ModeracioEstat, time.Now(), p.UpdatedBy, p.ID)
 	return err
 }
 
-func (h sqlHelper) updatePersonaModeracio(id int, estat, motiu string) error {
-	stmt := `UPDATE persona SET estat_civil = ?, quinta = ? WHERE id = ?`
+func (h sqlHelper) updatePersonaModeracio(id int, estat, motiu string, moderatorID int) error {
+	stmt := `UPDATE persona SET estat_civil = ?, quinta = ?, updated_at = ?, moderated_by = ?, moderated_at = ? WHERE id = ?`
 	stmt = formatPlaceholders(h.style, stmt)
-	_, err := h.db.Exec(stmt, estat, motiu, id)
+	now := time.Now()
+	_, err := h.db.Exec(stmt, estat, motiu, now, moderatorID, now, id)
 	return err
 }
 
@@ -1165,6 +1168,41 @@ func (h sqlHelper) getUserByEmail(email string) (*User, error) {
 
 	row := h.db.QueryRow(query, email)
 
+	u := new(User)
+	err := row.Scan(
+		&u.ID,
+		&u.Name,
+		&u.Surname,
+		&u.Email,
+		&u.Password,
+		&u.DataNaixament,
+		&u.Pais,
+		&u.Estat,
+		&u.Provincia,
+		&u.Poblacio,
+		&u.CodiPostal,
+		&u.Address,
+		&u.Employment,
+		&u.Profession,
+		&u.Phone,
+		&u.PreferredLang,
+		&u.SpokenLangs,
+		&u.CreatedAt,
+		&u.Active,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func (h sqlHelper) getUserByID(id int) (*User, error) {
+	h.ensureUserExtraColumns()
+	query := formatPlaceholders(h.style, `
+        SELECT id, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, address, employment_status, profession, phone, preferred_lang, spoken_langs, data_creacio, actiu 
+        FROM usuaris 
+        WHERE id = ?`)
+	row := h.db.QueryRow(query, id)
 	u := new(User)
 	err := row.Scan(
 		&u.ID,

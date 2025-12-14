@@ -292,6 +292,13 @@
   "policies.permissions.help": "Engancha un JSON amb los camps de permisses",
   "policies.new": "Nòva politica",
   "policies.edit": "Editar politica",
+  "persons.title": "Personas",
+  "persons.col.name": "Nom",
+  "persons.col.municipi": "Municipi",
+  "persons.col.llibre": "Libre",
+  "persons.new": "Nòva persona",
+  "moderation.success": "Accion completada corrèctament",
+  "moderation.error": "No s'es pogut completar l'accion",
 
   "books.title": "Libres",
   "books.new": "Libre novèl",
@@ -514,5 +521,15 @@
   "ecles.form.territori": "Territòri",
   "ecles.form.obs": "Nòtas",
   "ecles.form.save": "Enregistrar",
-  "ecles.form.cancel": "Anullar"
+  "ecles.form.cancel": "Anullar",
+
+  "moderation.reason": "Motiu",
+  "admin.moderation.msg.approved": "Registre aprovat",
+  "admin.moderation.msg.rejected": "Registre refusat",
+
+  "persons.detail.published": "Registre publicat",
+  "persons.col.pagina": "Pagina",
+  "persons.col.ofici": "Ofici",
+  "persons.col.status": "Estat",
+  "common.view": "Veire"
 }

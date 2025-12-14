@@ -18,6 +18,7 @@ func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request
 	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	_ = r.ParseForm()
 	userID, _ := strconv.Atoi(r.FormValue("user_id"))
 	groupID, _ := strconv.Atoi(r.FormValue("group_id"))
@@ -45,6 +46,7 @@ func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request
 		"GroupPols":         groupPols,
 		"CanManageArxius":   true,
 		"CanManagePolicies": true,
+		"User":              user,
 	})
 }
 
@@ -54,6 +56,10 @@ func (a *App) AdminAssignarPoliticaUsuari(w http.ResponseWriter, r *http.Request
 	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
 	}
 	_ = r.ParseForm()
@@ -71,6 +77,10 @@ func (a *App) AdminTreurePoliticaUsuari(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
 	_ = r.ParseForm()
 	userID, _ := strconv.Atoi(r.FormValue("user_id"))
 	polID, _ := strconv.Atoi(r.FormValue("politica_id"))
@@ -86,6 +96,10 @@ func (a *App) AdminAssignarPoliticaGrup(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
 	_ = r.ParseForm()
 	groupID, _ := strconv.Atoi(r.FormValue("group_id"))
 	polID, _ := strconv.Atoi(r.FormValue("politica_id"))
@@ -99,6 +113,10 @@ func (a *App) AdminTreurePoliticaGrup(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
 	}
 	_ = r.ParseForm()

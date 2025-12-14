@@ -97,10 +97,19 @@ CREATE TABLE IF NOT EXISTS persona (
     data_defuncio DATE,
     ofici VARCHAR(255),
     estat_civil VARCHAR(50),
+    created_by INT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by INT,
+    moderated_by INT,
+    moderated_at DATETIME NULL,
     INDEX idx_persona_cognoms_quinta_llibre_pagina (cognom1, cognom2, quinta, llibre, pagina),
     FULLTEXT INDEX idx_persona_nom_complet (nom_complet),
     INDEX idx_persona_municipi_quinta (municipi, quinta),
-    INDEX idx_persona_ofici (ofici)
+    INDEX idx_persona_ofici (ofici),
+    CONSTRAINT fk_persona_created_by FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    CONSTRAINT fk_persona_updated_by FOREIGN KEY (updated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    CONSTRAINT fk_persona_moderated_by FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS relacions (

@@ -20,6 +20,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	paisID := extractID(r.URL.Path)
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {
@@ -46,6 +47,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		"Pais":            pais,
 		"Filter":          filter,
 		"CanManageArxius": true,
+		"User":            user,
 	})
 }
 
@@ -53,6 +55,7 @@ func (a *App) AdminNewNivell(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	paisID := extractID(r.URL.Path)
 	pais, _ := a.DB.GetPais(paisID)
 	parents, _ := a.DB.ListNivells(db.NivellAdminFilter{PaisID: paisID})
@@ -62,6 +65,7 @@ func (a *App) AdminNewNivell(w http.ResponseWriter, r *http.Request) {
 		"Parents":         parents,
 		"IsNew":           true,
 		"CanManageArxius": true,
+		"User":            user,
 	})
 }
 
@@ -69,6 +73,7 @@ func (a *App) AdminEditNivell(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
 		return
 	}
+	user, _ := a.VerificarSessio(r)
 	id := extractID(r.URL.Path)
 	nivell, err := a.DB.GetNivell(id)
 	if err != nil || nivell == nil {
@@ -84,6 +89,7 @@ func (a *App) AdminEditNivell(w http.ResponseWriter, r *http.Request) {
 		"NomsHistorics":   nomsH,
 		"IsNew":           false,
 		"CanManageArxius": true,
+		"User":            user,
 	})
 }
 
