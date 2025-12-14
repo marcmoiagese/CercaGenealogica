@@ -362,6 +362,17 @@ func (f *fakeDB) GetEffectivePoliticaPerms(userID int) (db.PolicyPermissions, er
 	return db.PolicyPermissions{}, nil
 }
 func (f *fakeDB) ListUserGroups(userID int) ([]db.Group, error) { return nil, nil }
+func (f *fakeDB) ListPersones(filter db.PersonaFilter) ([]db.Persona, error) {
+	return nil, nil
+}
+func (f *fakeDB) GetPersona(id int) (*db.Persona, error) { return nil, nil }
+func (f *fakeDB) CreatePersona(p *db.Persona) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) UpdatePersona(p *db.Persona) error { return nil }
+func (f *fakeDB) UpdatePersonaModeracio(id int, estat, motiu string) error {
+	return nil
+}
 
 // Helper per crear una App amb fakeDB
 func newFakeAppWithUsers(users map[string]*db.User) *core.App {

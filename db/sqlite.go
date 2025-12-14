@@ -231,6 +231,23 @@ func (d *SQLite) GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error
 	return d.help.getEffectivePoliticaPerms(userID)
 }
 
+// Persones (moderació)
+func (d *SQLite) ListPersones(f PersonaFilter) ([]Persona, error) {
+	return d.help.listPersones(f)
+}
+func (d *SQLite) GetPersona(id int) (*Persona, error) {
+	return d.help.getPersona(id)
+}
+func (d *SQLite) CreatePersona(p *Persona) (int, error) {
+	return d.help.createPersona(p)
+}
+func (d *SQLite) UpdatePersona(p *Persona) error {
+	return d.help.updatePersona(p)
+}
+func (d *SQLite) UpdatePersonaModeracio(id int, estat, motiu string) error {
+	return d.help.updatePersonaModeracio(id, estat, motiu)
+}
+
 // Paisos
 func (d *SQLite) ListPaisos() ([]Pais, error) {
 	return d.help.listPaisos()

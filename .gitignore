@@ -19,5 +19,8 @@
 # Excloc readme tests
 /tests/README.md
 
+#excloc cache de go
+.gocache/
+
 # Excloc gitignore
 .gitignore

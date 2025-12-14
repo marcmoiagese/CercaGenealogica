@@ -228,6 +228,23 @@ func (d *MySQL) GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error)
 	return d.help.getEffectivePoliticaPerms(userID)
 }
 
+// Persones (moderació)
+func (d *MySQL) ListPersones(f PersonaFilter) ([]Persona, error) {
+	return d.help.listPersones(f)
+}
+func (d *MySQL) GetPersona(id int) (*Persona, error) {
+	return d.help.getPersona(id)
+}
+func (d *MySQL) CreatePersona(p *Persona) (int, error) {
+	return d.help.createPersona(p)
+}
+func (d *MySQL) UpdatePersona(p *Persona) error {
+	return d.help.updatePersona(p)
+}
+func (d *MySQL) UpdatePersonaModeracio(id int, estat, motiu string) error {
+	return d.help.updatePersonaModeracio(id, estat, motiu)
+}
+
 // Paisos
 func (d *MySQL) ListPaisos() ([]Pais, error) {
 	return d.help.listPaisos()

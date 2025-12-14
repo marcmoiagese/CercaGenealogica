@@ -229,6 +229,23 @@ func (d *PostgreSQL) GetEffectivePoliticaPerms(userID int) (PolicyPermissions, e
 	return d.help.getEffectivePoliticaPerms(userID)
 }
 
+// Persones (moderació)
+func (d *PostgreSQL) ListPersones(f PersonaFilter) ([]Persona, error) {
+	return d.help.listPersones(f)
+}
+func (d *PostgreSQL) GetPersona(id int) (*Persona, error) {
+	return d.help.getPersona(id)
+}
+func (d *PostgreSQL) CreatePersona(p *Persona) (int, error) {
+	return d.help.createPersona(p)
+}
+func (d *PostgreSQL) UpdatePersona(p *Persona) error {
+	return d.help.updatePersona(p)
+}
+func (d *PostgreSQL) UpdatePersonaModeracio(id int, estat, motiu string) error {
+	return d.help.updatePersonaModeracio(id, estat, motiu)
+}
+
 // Paisos
 func (d *PostgreSQL) ListPaisos() ([]Pais, error) {
 	return d.help.listPaisos()

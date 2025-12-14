@@ -209,6 +209,17 @@ func (f *fakeDBVerificar) GetEffectivePoliticaPerms(userID int) (db.PolicyPermis
 	return db.PolicyPermissions{}, nil
 }
 func (f *fakeDBVerificar) ListUserGroups(userID int) ([]db.Group, error) { return nil, nil }
+func (f *fakeDBVerificar) ListPersones(filter db.PersonaFilter) ([]db.Persona, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetPersona(id int) (*db.Persona, error) { return nil, nil }
+func (f *fakeDBVerificar) CreatePersona(p *db.Persona) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) UpdatePersona(p *db.Persona) error { return nil }
+func (f *fakeDBVerificar) UpdatePersonaModeracio(id int, estat, motiu string) error {
+	return nil
+}
 
 // Crea una App només amb la fake DB per testejar VerificarSessio.
 func newAppVerificar(dbFake db.DB) *core.App {

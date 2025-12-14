@@ -359,6 +359,108 @@ func combinePermissions(base, add PolicyPermissions) PolicyPermissions {
 	return base
 }
 
+// Persones (moderació bàsica)
+func (h sqlHelper) listPersones(f PersonaFilter) ([]Persona, error) {
+	query := `
+        SELECT id, nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, quinta,
+               data_naixement, data_bateig, data_defuncio, ofici, estat_civil
+        FROM persona`
+	var args []interface{}
+	where := []string{}
+	if f.Estat != "" {
+		where = append(where, "estat_civil = ?")
+		args = append(args, f.Estat)
+	}
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += " ORDER BY id DESC"
+	if f.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, f.Limit)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []Persona
+	for rows.Next() {
+		var p Persona
+		if err := rows.Scan(&p.ID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.Municipi, &p.Arquebisbat, &p.NomComplet, &p.Pagina, &p.Llibre, &p.Quinta, &p.DataNaixement, &p.DataBateig, &p.DataDefuncio, &p.Ofici, &p.ModeracioEstat); err != nil {
+			return nil, err
+		}
+		// Guardem el motiu de moderació (si s'ha usat) dins de quinta per no ampliar esquema
+		p.ModeracioMotiu = p.Quinta
+		res = append(res, p)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getPersona(id int) (*Persona, error) {
+	row := h.db.QueryRow(`SELECT id, nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, quinta,
+        data_naixement, data_bateig, data_defuncio, ofici, estat_civil FROM persona WHERE id = ?`, id)
+	var p Persona
+	if err := row.Scan(&p.ID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.Municipi, &p.Arquebisbat, &p.NomComplet, &p.Pagina, &p.Llibre, &p.Quinta, &p.DataNaixement, &p.DataBateig, &p.DataDefuncio, &p.Ofici, &p.ModeracioEstat); err != nil {
+		return nil, err
+	}
+	p.ModeracioMotiu = p.Quinta
+	return &p, nil
+}
+
+func (h sqlHelper) createPersona(p *Persona) (int, error) {
+	status := p.ModeracioEstat
+	if status == "" {
+		status = "pendent"
+	}
+	nomComplet := p.NomComplet
+	if strings.TrimSpace(nomComplet) == "" {
+		nomComplet = strings.TrimSpace(strings.Join([]string{p.Nom, p.Cognom1, p.Cognom2}, " "))
+	}
+	stmt := `INSERT INTO persona (nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, quinta, data_naixement, data_bateig, data_defuncio, ofici, estat_civil)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, status).Scan(&p.ID); err != nil {
+			return 0, err
+		}
+		return p.ID, nil
+	}
+	res, err := h.db.Exec(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, status)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		p.ID = int(id)
+	}
+	return p.ID, nil
+}
+
+func (h sqlHelper) updatePersona(p *Persona) error {
+	nomComplet := p.NomComplet
+	if strings.TrimSpace(nomComplet) == "" {
+		nomComplet = strings.TrimSpace(strings.Join([]string{p.Nom, p.Cognom1, p.Cognom2}, " "))
+	}
+	stmt := `
+        UPDATE persona
+        SET nom=?, cognom1=?, cognom2=?, municipi=?, arquevisbat=?, nom_complet=?, pagina=?, llibre=?, quinta=?, data_naixement=?, data_bateig=?, data_defuncio=?, ofici=?, estat_civil=?
+        WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, p.ModeracioEstat, p.ID)
+	return err
+}
+
+func (h sqlHelper) updatePersonaModeracio(id int, estat, motiu string) error {
+	stmt := `UPDATE persona SET estat_civil = ?, quinta = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, estat, motiu, id)
+	return err
+}
+
 // Paisos
 func (h sqlHelper) listPaisos() ([]Pais, error) {
 	query := `SELECT id, codi_iso2, codi_iso3, codi_pais_num FROM paisos ORDER BY codi_iso2`
