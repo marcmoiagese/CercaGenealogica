@@ -959,11 +959,12 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 		args = append(args, strings.TrimSpace(f.Status))
 	}
 	query := `
-        SELECT n.id, n.pais_id, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
+        SELECT n.id, n.pais_id, pi.codi_iso2, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
                n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat,
                n.created_by, n.moderation_status, n.moderated_by, n.moderated_at, n.moderation_notes
         FROM nivells_administratius n
         LEFT JOIN nivells_administratius p ON p.id = n.parent_id
+        LEFT JOIN paisos pi ON pi.id = n.pais_id
         WHERE ` + where + `
         ORDER BY n.nivel, n.nom_nivell`
 	query = formatPlaceholders(h.style, query)
@@ -975,7 +976,7 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 	var res []NivellAdministratiu
 	for rows.Next() {
 		var n NivellAdministratiu
-		if err := rows.Scan(&n.ID, &n.PaisID, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat,
+		if err := rows.Scan(&n.ID, &n.PaisID, &n.PaisISO2, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat,
 			&n.CreatedBy, &n.ModeracioEstat, &n.ModeratedBy, &n.ModeratedAt, &n.ModeracioMotiu); err != nil {
 			return nil, err
 		}
@@ -986,16 +987,17 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 
 func (h sqlHelper) getNivell(id int) (*NivellAdministratiu, error) {
 	query := `
-        SELECT n.id, n.pais_id, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
+        SELECT n.id, n.pais_id, pi.codi_iso2, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
                n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat,
                n.created_by, n.moderation_status, n.moderated_by, n.moderated_at, n.moderation_notes
         FROM nivells_administratius n
         LEFT JOIN nivells_administratius p ON p.id = n.parent_id
+        LEFT JOIN paisos pi ON pi.id = n.pais_id
         WHERE n.id = ?`
 	query = formatPlaceholders(h.style, query)
 	row := h.db.QueryRow(query, id)
 	var n NivellAdministratiu
-	if err := row.Scan(&n.ID, &n.PaisID, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat,
+	if err := row.Scan(&n.ID, &n.PaisID, &n.PaisISO2, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat,
 		&n.CreatedBy, &n.ModeracioEstat, &n.ModeratedBy, &n.ModeratedAt, &n.ModeracioMotiu); err != nil {
 		return nil, err
 	}
@@ -1121,11 +1123,37 @@ func (h sqlHelper) getMunicipi(id int) (*Municipi, error) {
 
 func (h sqlHelper) createMunicipi(m *Municipi) (int, error) {
 	query := `
-        INSERT INTO municipis
-            (nom, municipi_id, tipus, nivell_administratiu_id_1, nivell_administratiu_id_2, nivell_administratiu_id_3,
-             nivell_administratiu_id_4, nivell_administratiu_id_5, nivell_administratiu_id_6, nivell_administratiu_id_7,
-            codi_postal, latitud, longitud, what3words, web, wikipedia, altres, estat, created_by, moderation_status, moderation_notes, data_creacio, ultima_modificacio)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+        INSERT INTO municipis (
+            nom,
+            municipi_id,
+            tipus,
+            nivell_administratiu_id_1,
+            nivell_administratiu_id_2,
+            nivell_administratiu_id_3,
+            nivell_administratiu_id_4,
+            nivell_administratiu_id_5,
+            nivell_administratiu_id_6,
+            nivell_administratiu_id_7,
+            codi_postal,
+            latitud,
+            longitud,
+            what3words,
+            web,
+            wikipedia,
+            altres,
+            estat,
+            created_by,
+            moderation_status,
+            moderated_by,
+            moderated_at,
+            moderation_notes,
+            data_creacio,
+            ultima_modificacio
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `
+        )`
 	if h.style == "postgres" {
 		query += ` RETURNING id`
 	}
@@ -1134,16 +1162,18 @@ func (h sqlHelper) createMunicipi(m *Municipi) (int, error) {
 		m.Nom, m.MunicipiID, m.Tipus,
 		m.NivellAdministratiuID[0], m.NivellAdministratiuID[1], m.NivellAdministratiuID[2],
 		m.NivellAdministratiuID[3], m.NivellAdministratiuID[4], m.NivellAdministratiuID[5], m.NivellAdministratiuID[6],
-		m.CodiPostal, m.Latitud, m.Longitud, m.What3Words, m.Web, m.Wikipedia, m.Altres, m.Estat, m.CreatedBy, m.ModeracioEstat, m.ModeracioMotiu,
+		m.CodiPostal, m.Latitud, m.Longitud, m.What3Words, m.Web, m.Wikipedia, m.Altres, m.Estat, m.CreatedBy, m.ModeracioEstat, m.ModeratedBy, m.ModeratedAt, m.ModeracioMotiu,
 	}
 	if h.style == "postgres" {
 		if err := h.db.QueryRow(query, args...).Scan(&m.ID); err != nil {
+			fmt.Printf("[DB][createMunicipi][%s] err=%v cols=25 args=%d query=%s\n", h.style, err, len(args), query)
 			return 0, err
 		}
 		return m.ID, nil
 	}
 	res, err := h.db.Exec(query, args...)
 	if err != nil {
+		fmt.Printf("[DB][createMunicipi][%s] err=%v cols=25 args=%d query=%s\n", h.style, err, len(args), query)
 		return 0, err
 	}
 	if id, err := res.LastInsertId(); err == nil {

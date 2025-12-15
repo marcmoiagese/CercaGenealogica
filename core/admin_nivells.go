@@ -31,8 +31,11 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 	paisos, _ := a.DB.ListPaisos()
 	niv, _ := strconv.Atoi(r.URL.Query().Get("nivel"))
 	estat := strings.TrimSpace(r.URL.Query().Get("estat"))
-	status := strings.TrimSpace(r.URL.Query().Get("status"))
-	if status == "" {
+	statusVals, statusExists := r.URL.Query()["status"]
+	status := ""
+	if statusExists {
+		status = strings.TrimSpace(statusVals[0])
+	} else {
 		status = "publicat"
 	}
 	filter := db.NivellAdminFilter{
@@ -42,6 +45,11 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		Status: status,
 	}
 	nivells, _ := a.DB.ListNivells(filter)
+	for i := range nivells {
+		if nivells[i].PaisISO2.Valid {
+			nivells[i].PaisLabel = a.countryLabelFromISO(nivells[i].PaisISO2.String, ResolveLang(r))
+		}
+	}
 	var pais *db.Pais
 	if paisID > 0 {
 		pais, _ = a.DB.GetPais(paisID)
@@ -64,14 +72,22 @@ func (a *App) AdminNewNivell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
+	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	paisID := extractID(r.URL.Path)
 	pais, _ := a.DB.GetPais(paisID)
 	parents, _ := a.DB.ListNivells(db.NivellAdminFilter{PaisID: paisID})
+	paisLabel := ""
+	if pais != nil {
+		paisLabel = a.countryLabelFromISO(pais.CodiISO2, ResolveLang(r))
+	}
 	RenderPrivateTemplate(w, r, "admin-nivells-form.html", map[string]interface{}{
 		"Nivell":          &db.NivellAdministratiu{PaisID: paisID, Estat: "actiu", ModeracioEstat: "pendent"},
 		"Pais":            pais,
+		"PaisLabel":       paisLabel,
 		"Parents":         parents,
+		"LevelTypes":      levelTypes(),
 		"IsNew":           true,
+		"ReturnURL":       returnURL,
 		"CanManageArxius": true,
 		"User":            user,
 	})
@@ -82,23 +98,118 @@ func (a *App) AdminEditNivell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
+	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	id := extractID(r.URL.Path)
 	nivell, err := a.DB.GetNivell(id)
 	if err != nil || nivell == nil {
 		http.NotFound(w, r)
 		return
 	}
+	pais, _ := a.DB.GetPais(nivell.PaisID)
 	parents, _ := a.DB.ListNivells(db.NivellAdminFilter{PaisID: nivell.PaisID})
 	nomsH, _ := a.DB.ListNomsHistorics("nivell_admin", nivell.ID)
+	paisLabel := ""
+	if pais != nil {
+		paisLabel = a.countryLabelFromISO(pais.CodiISO2, ResolveLang(r))
+	}
 	RenderPrivateTemplate(w, r, "admin-nivells-form.html", map[string]interface{}{
 		"Nivell":          nivell,
-		"Pais":            nil,
+		"Pais":            pais,
+		"PaisLabel":       paisLabel,
 		"Parents":         parents,
 		"NomsHistorics":   nomsH,
+		"LevelTypes":      levelTypes(),
 		"IsNew":           false,
+		"ReturnURL":       returnURL,
 		"CanManageArxius": true,
 		"User":            user,
 	})
+}
+
+func levelTypes() []string {
+	return []string{
+		"provincia",
+		"districte",
+		"subdistricte",
+		"comtat",
+		"municipi",
+		"govern_local",
+		"poble",
+		"parroquia",
+		"dependencia",
+		"comunitat",
+		"comunitat_autonoma",
+		"vegueria",
+		"localitat",
+		"comuna",
+		"barri",
+		"regio",
+		"estat",
+		"ciutat_estatutaria",
+		"ciutat",
+		"ciutat_mercat",
+		"raion",
+		"republica_autonoma",
+		"assentament",
+		"governacio",
+		"divisio",
+		"subregio",
+		"consell_unitari",
+		"corporacio_municipal",
+		"regio_autonoma",
+		"districte_rural",
+		"districte_urba",
+		"subprefectura",
+		"departament",
+		"canto",
+		"unitat_veinal",
+		"prefectura",
+		"prefectura_autonoma",
+		"area_no_incorporada",
+		"districte_electoral",
+		"area_urbana",
+		"area_rural",
+		"corregiment",
+		"vereda",
+		"territori",
+		"jefatura",
+		"sector",
+		"grupacio",
+		"colina",
+		"cantons",
+		"comunitat_local",
+		"districte_especial",
+		"territori_no_organitzat",
+		"regio_administrativa",
+		"circumscripcio",
+		"entitat_federal",
+		"condomi",
+		"ciutat_independent",
+		"mancomunitat_serveis",
+		"territori_equivalent",
+		"concell",
+		"post_administratiu",
+		"area_censal",
+		"reserva_indigena",
+		"territori_organitzat_no_incorporat",
+		"comarca",
+		"ciutat_autonoma",
+		"illa_autonoma",
+		"aglomeracio_urbana",
+		"area_especial",
+		"collectivitat_ultramar",
+		"regio_administrativa_especial",
+		"mancomunitat",
+		"poble_etnic_reserva",
+		"districte_forestal",
+		"burg",
+		"vila_australia",
+		"metropoli",
+		"area_metropolitana",
+		"area_govern_local",
+		"comissio_serveis",
+		"districte_millora",
+	}
 }
 
 func parseNullInt(val string) sql.NullInt64 {
@@ -124,27 +235,28 @@ func (a *App) AdminSaveNivell(w http.ResponseWriter, r *http.Request) {
 	user, _ := a.VerificarSessio(r)
 	id, _ := strconv.Atoi(r.FormValue("id"))
 	paisID, _ := strconv.Atoi(r.FormValue("pais_id"))
+	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	nivel, _ := strconv.Atoi(r.FormValue("nivel"))
 	parentID := parseNullInt(r.FormValue("parent_id"))
 	anyInici := parseNullInt(r.FormValue("any_inici"))
 	anyFi := parseNullInt(r.FormValue("any_fi"))
 	estat := strings.TrimSpace(r.FormValue("estat"))
 	nivell := &db.NivellAdministratiu{
-		ID:          id,
-		PaisID:      paisID,
-		Nivel:       nivel,
-		NomNivell:   strings.TrimSpace(r.FormValue("nom_nivell")),
-		TipusNivell: strings.TrimSpace(r.FormValue("tipus_nivell")),
-		CodiOficial: strings.TrimSpace(r.FormValue("codi_oficial")),
-		Altres:      strings.TrimSpace(r.FormValue("altres")),
-		ParentID:    parentID,
-		AnyInici:    anyInici,
-		AnyFi:       anyFi,
-		Estat:       estat,
-		CreatedBy:   sqlNullIntFromInt(user.ID),
+		ID:             id,
+		PaisID:         paisID,
+		Nivel:          nivel,
+		NomNivell:      strings.TrimSpace(r.FormValue("nom_nivell")),
+		TipusNivell:    strings.TrimSpace(r.FormValue("tipus_nivell")),
+		CodiOficial:    strings.TrimSpace(r.FormValue("codi_oficial")),
+		Altres:         strings.TrimSpace(r.FormValue("altres")),
+		ParentID:       parentID,
+		AnyInici:       anyInici,
+		AnyFi:          anyFi,
+		Estat:          estat,
+		CreatedBy:      sqlNullIntFromInt(user.ID),
 		ModeracioEstat: "pendent",
-		ModeratedBy: sql.NullInt64{},
-		ModeratedAt: sql.NullTime{},
+		ModeratedBy:    sql.NullInt64{},
+		ModeratedAt:    sql.NullTime{},
 	}
 	if errMsg := a.validateNivell(nivell); errMsg != "" {
 		a.renderNivellFormError(w, r, nivell, errMsg, id == 0)
@@ -170,7 +282,11 @@ func (a *App) AdminSaveNivell(w http.ResponseWriter, r *http.Request) {
 		a.renderNivellFormError(w, r, nivell, "No s'ha pogut desar el nivell administratiu.", id == 0)
 		return
 	}
-	http.Redirect(w, r, "/territori/paisos/"+strconv.Itoa(nivell.PaisID)+"/nivells", http.StatusSeeOther)
+	if returnURL != "" {
+		http.Redirect(w, r, returnURL, http.StatusSeeOther)
+	} else {
+		http.Redirect(w, r, "/territori/paisos/"+strconv.Itoa(nivell.PaisID)+"/nivells", http.StatusSeeOther)
+	}
 }
 
 func (a *App) validateNivell(n *db.NivellAdministratiu) string {
@@ -226,6 +342,7 @@ func (a *App) renderNivellFormError(w http.ResponseWriter, r *http.Request, n *d
 		"IsNew":           isNew,
 		"Error":           msg,
 		"NomsHistorics":   nomsH,
+		"ReturnURL":       strings.TrimSpace(r.FormValue("return_to")),
 		"CanManageArxius": true,
 	})
 }

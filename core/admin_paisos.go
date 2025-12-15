@@ -1,7 +1,11 @@
 package core
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -52,9 +56,11 @@ func (a *App) AdminNewPais(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
+	countries := loadCountriesOptions(r)
 	RenderPrivateTemplate(w, r, "admin-paisos-form.html", map[string]interface{}{
 		"Pais":            &db.Pais{},
 		"IsNew":           true,
+		"Countries":       countries,
 		"CanManageArxius": true,
 		"User":            user,
 	})
@@ -71,9 +77,11 @@ func (a *App) AdminEditPais(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	countries := loadCountriesOptions(r)
 	RenderPrivateTemplate(w, r, "admin-paisos-form.html", map[string]interface{}{
 		"Pais":            pais,
 		"IsNew":           false,
+		"Countries":       countries,
 		"CanManageArxius": true,
 		"User":            user,
 	})
@@ -99,6 +107,7 @@ func (a *App) AdminSavePais(w http.ResponseWriter, r *http.Request) {
 			"Pais":            pais,
 			"IsNew":           id == 0,
 			"Error":           errMsg,
+			"Countries":       loadCountriesOptions(r),
 			"CanManageArxius": true,
 		})
 		return
@@ -108,6 +117,7 @@ func (a *App) AdminSavePais(w http.ResponseWriter, r *http.Request) {
 			"Pais":            pais,
 			"IsNew":           id == 0,
 			"Error":           errMsg,
+			"Countries":       loadCountriesOptions(r),
 			"CanManageArxius": true,
 		})
 		return
@@ -123,6 +133,7 @@ func (a *App) AdminSavePais(w http.ResponseWriter, r *http.Request) {
 			"Pais":            pais,
 			"IsNew":           id == 0,
 			"Error":           "No s'ha pogut desar el país.",
+			"Countries":       loadCountriesOptions(r),
 			"CanManageArxius": true,
 		})
 		return
@@ -142,6 +153,55 @@ func (a *App) ensurePaisUnique(p *db.Pais) string {
 		if e.CodiISO2 == p.CodiISO2 || e.CodiISO3 == p.CodiISO3 || (p.CodiPaisNum != "" && e.CodiPaisNum == p.CodiPaisNum) {
 			return "Ja existeix un país amb aquest codi."
 		}
+	}
+	return ""
+}
+
+type countryOption struct {
+	ISO2  string
+	ISO3  string
+	Num   int
+	Label string
+}
+
+func loadCountriesOptions(r *http.Request) []countryOption {
+	lang := ResolveLang(r)
+	content, err := os.ReadFile("static/json/countries.json")
+	if err != nil {
+		return nil
+	}
+	var raw []map[string]interface{}
+	if err := json.Unmarshal(content, &raw); err != nil {
+		return nil
+	}
+	opts := make([]countryOption, 0, len(raw))
+	for _, c := range raw {
+		iso2, _ := c["alpha2"].(string)
+		iso3, _ := c["alpha3"].(string)
+		var num int
+		switch v := c["id"].(type) {
+		case float64:
+			num = int(v)
+		case int:
+			num = v
+		}
+		label := pickCountryLabel(c, lang)
+		opts = append(opts, countryOption{ISO2: strings.ToUpper(iso2), ISO3: strings.ToUpper(iso3), Num: num, Label: label})
+	}
+	sort.Slice(opts, func(i, j int) bool { return opts[i].Label < opts[j].Label })
+	return opts
+}
+
+func pickCountryLabel(m map[string]interface{}, lang string) string {
+	l := strings.ToLower(strings.TrimSpace(lang))
+	preferred := []string{l, "cat", "ca", "oc", "eu", "en", "es", "fr"}
+	for _, k := range preferred {
+		if v, ok := m[k]; ok {
+			return fmt.Sprint(v)
+		}
+	}
+	if v, ok := m["alpha3"]; ok {
+		return fmt.Sprint(v)
 	}
 	return ""
 }

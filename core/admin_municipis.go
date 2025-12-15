@@ -17,8 +17,8 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	filter := db.MunicipiFilter{
-		Text:  strings.TrimSpace(r.URL.Query().Get("q")),
-		Estat: strings.TrimSpace(r.URL.Query().Get("estat")),
+		Text:   strings.TrimSpace(r.URL.Query().Get("q")),
+		Estat:  strings.TrimSpace(r.URL.Query().Get("estat")),
 		Status: strings.TrimSpace(r.URL.Query().Get("status")),
 	}
 	if filter.Status == "" {
@@ -57,11 +57,24 @@ func (a *App) AdminNewMunicipi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
+	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	paisos, _ := a.DB.ListPaisos()
 	var (
-		levels []db.NivellAdministratiu
-		mun    = &db.Municipi{Estat: "actiu"}
+		levels        []db.NivellAdministratiu
+		allLevels     []db.NivellAdministratiu
+		allLevelsJSON []map[string]interface{}
+		mun           = &db.Municipi{Estat: "actiu"}
 	)
+	allLevels, _ = a.DB.ListNivells(db.NivellAdminFilter{})
+	for _, l := range allLevels {
+		entry := map[string]interface{}{
+			"ID": l.ID, "PaisID": l.PaisID, "Nivel": l.Nivel, "NomNivell": l.NomNivell, "TipusNivell": l.TipusNivell,
+		}
+		if l.ParentID.Valid {
+			entry["ParentID"] = int(l.ParentID.Int64)
+		}
+		allLevelsJSON = append(allLevelsJSON, entry)
+	}
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {
 			levels, _ = a.DB.ListNivells(db.NivellAdminFilter{PaisID: v})
@@ -77,6 +90,8 @@ func (a *App) AdminNewMunicipi(w http.ResponseWriter, r *http.Request) {
 		"Municipi":        mun,
 		"Paisos":          paisos,
 		"Levels":          levels,
+		"AllLevels":       allLevelsJSON,
+		"ReturnURL":       returnURL,
 		"Arquebisbats":    arquebisbats,
 		"CodisPostals":    nil,
 		"IsNew":           true,
@@ -90,6 +105,7 @@ func (a *App) AdminEditMunicipi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
+	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	id := extractID(r.URL.Path)
 	mun, err := a.DB.GetMunicipi(id)
 	if err != nil || mun == nil {
@@ -98,6 +114,17 @@ func (a *App) AdminEditMunicipi(w http.ResponseWriter, r *http.Request) {
 	}
 	paisos, _ := a.DB.ListPaisos()
 	var levels []db.NivellAdministratiu
+	allLevels, _ := a.DB.ListNivells(db.NivellAdminFilter{})
+	var allLevelsJSON []map[string]interface{}
+	for _, l := range allLevels {
+		entry := map[string]interface{}{
+			"ID": l.ID, "PaisID": l.PaisID, "Nivel": l.Nivel, "NomNivell": l.NomNivell, "TipusNivell": l.TipusNivell,
+		}
+		if l.ParentID.Valid {
+			entry["ParentID"] = int(l.ParentID.Int64)
+		}
+		allLevelsJSON = append(allLevelsJSON, entry)
+	}
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {
 			mun.NivellAdministratiuID[0] = sql.NullInt64{Int64: int64(v), Valid: true}
@@ -125,11 +152,13 @@ func (a *App) AdminEditMunicipi(w http.ResponseWriter, r *http.Request) {
 		"Municipi":        mun,
 		"Paisos":          paisos,
 		"Levels":          levels,
+		"AllLevels":       allLevelsJSON,
 		"CodisPostals":    codis,
 		"Ecles":           ecles,
 		"Arquebisbats":    arquebisbats,
 		"NomsHistorics":   nomsH,
 		"EditEcles":       editEcles,
+		"ReturnURL":       returnURL,
 		"IsNew":           false,
 		"CanManageArxius": true,
 		"User":            user,
@@ -158,30 +187,35 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 	}
 	user, _ := a.VerificarSessio(r)
 	id, _ := strconv.Atoi(r.FormValue("id"))
+	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	parent := parseNullInt(r.FormValue("municipi_id"))
 	m := &db.Municipi{
-		ID:         id,
-		Nom:        strings.TrimSpace(r.FormValue("nom")),
-		MunicipiID: parent,
-		Tipus:      strings.TrimSpace(r.FormValue("tipus")),
-		CodiPostal: strings.TrimSpace(r.FormValue("codi_postal")),
-		Latitud:    parseNullFloat(r.FormValue("latitud")),
-		Longitud:   parseNullFloat(r.FormValue("longitud")),
-		What3Words: strings.TrimSpace(r.FormValue("what3words")),
-		Web:        strings.TrimSpace(r.FormValue("web")),
-		Wikipedia:  strings.TrimSpace(r.FormValue("wikipedia")),
-		Altres:     strings.TrimSpace(r.FormValue("altres")),
-		Estat:      strings.TrimSpace(r.FormValue("estat")),
-		CreatedBy:  sqlNullIntFromInt(user.ID),
+		ID:             id,
+		Nom:            strings.TrimSpace(r.FormValue("nom")),
+		MunicipiID:     parent,
+		Tipus:          strings.TrimSpace(r.FormValue("tipus")),
+		CodiPostal:     strings.TrimSpace(r.FormValue("codi_postal")),
+		Latitud:        parseNullFloat(r.FormValue("latitud")),
+		Longitud:       parseNullFloat(r.FormValue("longitud")),
+		What3Words:     strings.TrimSpace(r.FormValue("what3words")),
+		Web:            strings.TrimSpace(r.FormValue("web")),
+		Wikipedia:      strings.TrimSpace(r.FormValue("wikipedia")),
+		Altres:         strings.TrimSpace(r.FormValue("altres")),
+		Estat:          strings.TrimSpace(r.FormValue("estat")),
+		CreatedBy:      sqlNullIntFromInt(user.ID),
 		ModeracioEstat: "pendent",
-		ModeratedBy: sql.NullInt64{},
-		ModeratedAt: sql.NullTime{},
+		ModeratedBy:    sql.NullInt64{},
+		ModeratedAt:    sql.NullTime{},
 	}
 	for i := 0; i < 7; i++ {
 		field := strings.TrimSpace(r.FormValue("nivell_administratiu_id_" + strconv.Itoa(i+1)))
 		if field != "" {
 			m.NivellAdministratiuID[i] = parseNullInt(field)
 		}
+	}
+	if !m.NivellAdministratiuID[0].Valid {
+		a.renderMunicipiFormError(w, r, m, "Cal seleccionar un país i el primer nivell administratiu.", id == 0)
+		return
 	}
 	if m.Estat == "" {
 		m.Estat = "actiu"
@@ -193,19 +227,23 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 	if m.ID == 0 {
 		createdID, err := a.DB.CreateMunicipi(m)
 		if err != nil {
-			a.renderMunicipiFormError(w, r, m, "No s'ha pogut crear el municipi.", true)
+			a.renderMunicipiFormError(w, r, m, "No s'ha pogut crear el municipi: "+err.Error(), true)
 			return
 		}
 		m.ID = createdID
 		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleMunicipiCreate, "crear", "municipi", &createdID, "pendent", nil, "")
 	} else {
 		if err := a.DB.UpdateMunicipi(m); err != nil {
-			a.renderMunicipiFormError(w, r, m, "No s'ha pogut actualitzar el municipi.", false)
+			a.renderMunicipiFormError(w, r, m, "No s'ha pogut actualitzar el municipi: "+err.Error(), false)
 			return
 		}
 		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleMunicipiUpdate, "editar", "municipi", &id, "pendent", nil, "")
 	}
-	http.Redirect(w, r, "/territori/municipis", http.StatusSeeOther)
+	if returnURL != "" {
+		http.Redirect(w, r, returnURL, http.StatusSeeOther)
+	} else {
+		http.Redirect(w, r, "/territori/municipis", http.StatusSeeOther)
+	}
 }
 
 func (a *App) validateMunicipi(m *db.Municipi) string {
@@ -227,6 +265,17 @@ func (a *App) renderMunicipiFormError(w http.ResponseWriter, r *http.Request, m 
 	if m.NivellAdministratiuID[0].Valid {
 		levels, _ = a.DB.ListNivells(db.NivellAdminFilter{PaisID: int(m.NivellAdministratiuID[0].Int64)})
 	}
+	allLevels, _ := a.DB.ListNivells(db.NivellAdminFilter{})
+	var allLevelsJSON []map[string]interface{}
+	for _, l := range allLevels {
+		entry := map[string]interface{}{
+			"ID": l.ID, "PaisID": l.PaisID, "Nivel": l.Nivel, "NomNivell": l.NomNivell, "TipusNivell": l.TipusNivell,
+		}
+		if l.ParentID.Valid {
+			entry["ParentID"] = int(l.ParentID.Int64)
+		}
+		allLevelsJSON = append(allLevelsJSON, entry)
+	}
 	var ecles []db.ArquebisbatMunicipi
 	if !isNew && m.ID != 0 {
 		ecles, _ = a.DB.ListArquebisbatMunicipis(m.ID)
@@ -237,12 +286,14 @@ func (a *App) renderMunicipiFormError(w http.ResponseWriter, r *http.Request, m 
 		"Municipi":        m,
 		"Paisos":          paisos,
 		"Levels":          levels,
+		"AllLevels":       allLevelsJSON,
 		"CodisPostals":    nil,
 		"Ecles":           ecles,
 		"Arquebisbats":    arquebisbats,
 		"NomsHistorics":   nomsH,
 		"Error":           msg,
 		"IsNew":           isNew,
+		"ReturnURL":       strings.TrimSpace(r.FormValue("return_to")),
 		"CanManageArxius": true,
 	})
 }

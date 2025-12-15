@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS nivells_administratius (
 CREATE TABLE IF NOT EXISTS municipis (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL, -- Nom oficial actual del municipi
-    municipi_id INTEGER REFERENCES municipis(id), -- Opcional: si el poble pertany a un altre municipi (ex: barri d'un municipi gran)
+    municipi_id INTEGER REFERENCES municipis(id) ON DELETE SET NULL, -- Opcional: si el poble pertany a un altre municipi (ex: barri d'un municipi gran)
     tipus TEXT NOT NULL,                        -- Tipus de territori: poblatge, ciutat, barri, nucli, etc.
     -- Relacions jeràrquiques amb nivells administratius (de 1 a 7)
     nivell_administratiu_id_1 INTEGER REFERENCES nivells_administratius(id), -- País

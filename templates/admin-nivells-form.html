@@ -18,28 +18,56 @@
             <form method="post" action="/territori/nivells/save">
                 <input type="hidden" name="id" value="{{ .Data.Nivell.ID }}">
                 <input type="hidden" name="pais_id" value="{{ .Data.Nivell.PaisID }}">
+                <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
                 <div class="grup-camp">
                     <label for="pais_id_display">{{ t .Lang "levels.form.country" }}</label>
-                    <input type="text" id="pais_id_display" value="{{ .Data.Nivell.PaisID }}" disabled>
+                    <input type="text" id="pais_id_display" value="{{ .Data.PaisLabel }}" disabled>
                 </div>
                 <div class="grup-camp">
-                    <label for="nivel">{{ t .Lang "levels.form.level" }}</label>
+                    <label for="nivel">
+                        {{ t .Lang "levels.form.level" }}
+                        <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-nivell" aria-label="{{ t .Lang "levels.help.level.button" }}">?</button>
+                    </label>
                     <input type="number" id="nivel" name="nivel" min="1" max="7" value="{{ .Data.Nivell.Nivel }}" required>
                 </div>
                 <div class="grup-camp">
-                    <label for="nom_nivell">{{ t .Lang "levels.form.name" }}</label>
+                    <label for="nom_nivell">
+                        {{ t .Lang "levels.form.name" }}
+                        <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-nom" aria-label="{{ t .Lang "levels.help.name.button" }}">?</button>
+                    </label>
                     <input type="text" id="nom_nivell" name="nom_nivell" value="{{ .Data.Nivell.NomNivell }}" required>
                 </div>
                 <div class="grup-camp">
-                    <label for="tipus_nivell">{{ t .Lang "levels.form.type" }}</label>
-                    <input type="text" id="tipus_nivell" name="tipus_nivell" value="{{ .Data.Nivell.TipusNivell }}">
+                    <label for="tipus_nivell">
+                        {{ t .Lang "levels.form.type" }}
+                        <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-tipus" aria-label="{{ t .Lang "levels.help.type.button" }}">?</button>
+                    </label>
+                    <input type="text" id="tipus_search" class="input-text" placeholder="{{ t .Lang "levels.form.type.search" }}" autocomplete="off">
+                    <select id="tipus_nivell" name="tipus_nivell" size="8" style="margin-top:0.5rem;">
+                        <option value="">{{ t .Lang "common.select" }}</option>
+                        {{ $current := .Data.Nivell.TipusNivell }}
+                        {{ $found := false }}
+                        {{ range .Data.LevelTypes }}
+                            {{ if eq $current . }}{{ $found = true }}{{ end }}
+                            <option value="{{ . }}" {{ if eq $current . }}selected{{ end }}>{{ t $.Lang (printf "levels.types.%s" .) }}</option>
+                        {{ end }}
+                        {{ if and $current (not $found) }}
+                            <option value="{{ $current }}" selected>{{ $current }}</option>
+                        {{ end }}
+                    </select>
                 </div>
                 <div class="grup-camp">
-                    <label for="codi_oficial">{{ t .Lang "levels.form.code" }}</label>
+                    <label for="codi_oficial">
+                        {{ t .Lang "levels.form.code" }}
+                        <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-codi" aria-label="{{ t .Lang "levels.help.code.button" }}">?</button>
+                    </label>
                     <input type="text" id="codi_oficial" name="codi_oficial" value="{{ .Data.Nivell.CodiOficial }}">
                 </div>
                 <div class="grup-camp">
-                    <label for="parent_id">{{ t .Lang "levels.form.parent" }}</label>
+                    <label for="parent_id">
+                        {{ t .Lang "levels.form.parent" }}
+                        <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-parent" aria-label="{{ t .Lang "levels.help.parent.button" }}">?</button>
+                    </label>
                     <select id="parent_id" name="parent_id">
                         <option value="">{{ t .Lang "levels.form.parent.none" }}</option>
                         {{ range .Data.Parents }}
@@ -48,15 +76,24 @@
                     </select>
                 </div>
                 <div class="grup-camp">
-                    <label for="any_inici">{{ t .Lang "levels.form.year_start" }}</label>
+                    <label for="any_inici">
+                        {{ t .Lang "levels.form.year_start" }}
+                        <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-any-inici" aria-label="{{ t .Lang "levels.help.year_start.button" }}">?</button>
+                    </label>
                     <input type="number" id="any_inici" name="any_inici" value="{{ if .Data.Nivell.AnyInici.Valid }}{{ .Data.Nivell.AnyInici.Int64 }}{{ end }}">
                 </div>
                 <div class="grup-camp">
-                    <label for="any_fi">{{ t .Lang "levels.form.year_end" }}</label>
+                    <label for="any_fi">
+                        {{ t .Lang "levels.form.year_end" }}
+                        <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-any-fi" aria-label="{{ t .Lang "levels.help.year_end.button" }}">?</button>
+                    </label>
                     <input type="number" id="any_fi" name="any_fi" value="{{ if .Data.Nivell.AnyFi.Valid }}{{ .Data.Nivell.AnyFi.Int64 }}{{ end }}">
                 </div>
                 <div class="grup-camp">
-                    <label for="estat">{{ t .Lang "levels.form.state" }}</label>
+                    <label for="estat">
+                        {{ t .Lang "levels.form.state" }}
+                        <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-estat" aria-label="{{ t .Lang "levels.help.state.button" }}">?</button>
+                    </label>
                     <select id="estat" name="estat">
                         {{ range $opt := (list "actiu" "inactiu" "fusionat" "abolit") }}
                         <option value="{{ $opt }}" {{ if eq $.Data.Nivell.Estat $opt }}selected{{ end }}>{{ t $.Lang (printf "levels.state.%s" $opt) }}</option>
@@ -69,12 +106,12 @@
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">{{ t .Lang "levels.form.save" }}</button>
-                    <a class="boto-secundari" href="/territori/paisos/{{ .Data.Nivell.PaisID }}/nivells">{{ t .Lang "levels.form.cancel" }}</a>
+                    <a class="boto-secundari" href="{{ if .Data.ReturnURL }}{{ .Data.ReturnURL }}{{ else }}/territori/paisos/{{ .Data.Nivell.PaisID }}/nivells{{ end }}">{{ t .Lang "levels.form.cancel" }}</a>
                 </div>
             </form>
 
             {{ if not .Data.IsNew }}
-            <hr>
+            <hr style="margin:1.5rem 0;">
             <h2>{{ t .Lang "levels.hist.title" }}</h2>
             <div class="taula-wrapper">
                 <table class="taula">
@@ -135,6 +172,101 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <div class="modal-ajuda" id="ajuda-nivell" role="dialog" aria-modal="true" aria-labelledby="ajuda-nivell-titol" hidden>
+        <div class="modal-ajuda__contingut">
+            <h2 id="ajuda-nivell-titol">{{ t .Lang "levels.help.level.title" }}</h2>
+            <p>{{ t .Lang "levels.help.level.body" }}</p>
+            <button type="button" class="boto-primari tancar-ajuda">{{ t .Lang "levels.help.level.close" }}</button>
+        </div>
+    </div>
+    <div class="modal-ajuda" id="ajuda-nom" role="dialog" aria-modal="true" aria-labelledby="ajuda-nom-titol" hidden>
+        <div class="modal-ajuda__contingut">
+            <h2 id="ajuda-nom-titol">{{ t .Lang "levels.help.name.title" }}</h2>
+            <p>{{ t .Lang "levels.help.name.body" }}</p>
+            <button type="button" class="boto-primari tancar-ajuda" data-target="ajuda-nom">{{ t .Lang "levels.help.name.close" }}</button>
+        </div>
+    </div>
+    <div class="modal-ajuda" id="ajuda-tipus" role="dialog" aria-modal="true" aria-labelledby="ajuda-tipus-titol" hidden>
+        <div class="modal-ajuda__contingut">
+            <h2 id="ajuda-tipus-titol">{{ t .Lang "levels.help.type.title" }}</h2>
+            <p>{{ t .Lang "levels.help.type.body" }}</p>
+            <button type="button" class="boto-primari tancar-ajuda" data-target="ajuda-tipus">{{ t .Lang "levels.help.type.close" }}</button>
+        </div>
+    </div>
+    <div class="modal-ajuda" id="ajuda-codi" role="dialog" aria-modal="true" aria-labelledby="ajuda-codi-titol" hidden>
+        <div class="modal-ajuda__contingut">
+            <h2 id="ajuda-codi-titol">{{ t .Lang "levels.help.code.title" }}</h2>
+            <p>{{ t .Lang "levels.help.code.body" }}</p>
+            <button type="button" class="boto-primari tancar-ajuda" data-target="ajuda-codi">{{ t .Lang "levels.help.code.close" }}</button>
+        </div>
+    </div>
+    <div class="modal-ajuda" id="ajuda-parent" role="dialog" aria-modal="true" aria-labelledby="ajuda-parent-titol" hidden>
+        <div class="modal-ajuda__contingut">
+            <h2 id="ajuda-parent-titol">{{ t .Lang "levels.help.parent.title" }}</h2>
+            <p>{{ t .Lang "levels.help.parent.body" }}</p>
+            <button type="button" class="boto-primari tancar-ajuda" data-target="ajuda-parent">{{ t .Lang "levels.help.parent.close" }}</button>
+        </div>
+    </div>
+    <div class="modal-ajuda" id="ajuda-any-inici" role="dialog" aria-modal="true" aria-labelledby="ajuda-any-inici-titol" hidden>
+        <div class="modal-ajuda__contingut">
+            <h2 id="ajuda-any-inici-titol">{{ t .Lang "levels.help.year_start.title" }}</h2>
+            <p>{{ t .Lang "levels.help.year_start.body" }}</p>
+            <button type="button" class="boto-primari tancar-ajuda" data-target="ajuda-any-inici">{{ t .Lang "levels.help.year_start.close" }}</button>
+        </div>
+    </div>
+    <div class="modal-ajuda" id="ajuda-any-fi" role="dialog" aria-modal="true" aria-labelledby="ajuda-any-fi-titol" hidden>
+        <div class="modal-ajuda__contingut">
+            <h2 id="ajuda-any-fi-titol">{{ t .Lang "levels.help.year_end.title" }}</h2>
+            <p>{{ t .Lang "levels.help.year_end.body" }}</p>
+            <button type="button" class="boto-primari tancar-ajuda" data-target="ajuda-any-fi">{{ t .Lang "levels.help.year_end.close" }}</button>
+        </div>
+    </div>
+    <div class="modal-ajuda" id="ajuda-estat" role="dialog" aria-modal="true" aria-labelledby="ajuda-estat-titol" hidden>
+        <div class="modal-ajuda__contingut">
+            <h2 id="ajuda-estat-titol">{{ t .Lang "levels.help.state.title" }}</h2>
+            <p>{{ t .Lang "levels.help.state.body" }}</p>
+            <button type="button" class="boto-primari tancar-ajuda" data-target="ajuda-estat">{{ t .Lang "levels.help.state.close" }}</button>
+        </div>
+    </div>
+    <style>
+        .modal-ajuda {position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);z-index:2000;}
+        .modal-ajuda[hidden]{display:none;}
+        .modal-ajuda__contingut{background:#fff;padding:1.75rem 1.75rem 1.25rem;border-radius:10px;max-width:520px;width:90%;box-shadow:0 10px 28px rgba(0,0,0,0.18);}
+        .modal-ajuda__contingut h2{margin-top:0;margin-bottom:0.65rem;}
+        .modal-ajuda__contingut p{margin:0 0 1.25rem 0;line-height:1.6;}
+        .ajuda-boto{margin-left:0.35rem;font-size:0.8rem;line-height:1;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;border:1px solid #166088;background:#166088;color:#fff;cursor:pointer;}
+        .ajuda-boto:hover{background:#114b6e;border-color:#114b6e;}
+    </style>
+    <script>
+    (function(){
+        const ajudaButtons = document.querySelectorAll('.ajuda-boto');
+        const modals = document.querySelectorAll('.modal-ajuda');
+        const tipusSearch = document.getElementById('tipus_search');
+        const tipusSelect = document.getElementById('tipus_nivell');
+        ajudaButtons.forEach(btn => {
+            btn.addEventListener('click', ()=>{
+                const target = btn.getAttribute('aria-controls');
+                const modal = document.getElementById(target);
+                if(modal){ modal.hidden=false; modal.focus(); }
+            });
+        });
+        modals.forEach(modal => {
+            modal.addEventListener('click',(e)=>{ if(e.target===modal) modal.hidden=true; });
+            const close = modal.querySelector('.tancar-ajuda');
+            if (close) close.addEventListener('click', ()=> modal.hidden=true);
+        });
+        if (tipusSearch && tipusSelect) {
+            tipusSearch.addEventListener('input', ()=>{
+                const q = tipusSearch.value.toLowerCase();
+                for(let i=0;i<tipusSelect.options.length;i++){
+                    const opt = tipusSelect.options[i];
+                    if (!opt.value) { opt.style.display=''; continue; }
+                    opt.style.display = opt.textContent.toLowerCase().includes(q) ? '' : 'none';
+                }
+            });
+        }
+    })();
+    </script>
 </body>
 </html>
 {{ end }}

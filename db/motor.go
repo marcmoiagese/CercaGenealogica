@@ -297,6 +297,8 @@ type PersonaFilter struct {
 type NivellAdministratiu struct {
 	ID             int
 	PaisID         int
+	PaisISO2       sql.NullString
+	PaisLabel      string
 	Nivel          int
 	NomNivell      string
 	TipusNivell    string

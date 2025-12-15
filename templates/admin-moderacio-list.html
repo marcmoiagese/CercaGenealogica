@@ -5,6 +5,43 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "admin.menu.moderation" }}</title>
     {{ template "styles-private" . }}
+    <style>
+        .moderacio-accions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .moderacio-accions-top {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .moderacio-accions-top .boto-primari,
+        .moderacio-accions-top .boto-secundari {
+            width: auto;
+            min-width: 0;
+            align-self: flex-start;
+        }
+        .moderacio-motiu {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        .moderacio-motiu label {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .moderacio-motiu .input-text {
+            min-width: 240px;
+            padding: 0.65rem 0.75rem;
+            border-radius: 8px;
+            border: 1px solid var(--color-gris-suau, #d5d5d5);
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            resize: vertical;
+        }
+    </style>
 </head>
 <body>
     {{ template "header-private" . }}
@@ -35,24 +72,32 @@
                         {{ range .Data.Persones }}
                         <tr>
                             <td>{{ .ID }}</td>
-                            <td>{{ .Type }}</td>
+                            <td>{{ t $.Lang (printf "moderation.type.%s" .Type) }}</td>
                             <td>{{ .Nom }}</td>
                             <td>{{ .Context }}</td>
-                            <td>{{ .Autor }}</td>
-                            <td>{{ .Created }}</td>
-                            <td>{{ .Motiu }}</td>
                             <td>
-                                <form style="display:inline" method="post" action="/moderacio/{{ .ID }}/aprovar">
-                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
-                                    <input type="hidden" name="object_type" value="{{ .Type }}">
-                                    <button type="submit" class="boto-primari">{{ t $.Lang "moderation.table.approve" }}</button>
-                                </form>
-                                <form style="display:inline" method="post" action="/moderacio/{{ .ID }}/rebutjar">
-                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
-                                    <input type="hidden" name="object_type" value="{{ .Type }}">
-                                    <input type="text" name="motiu" placeholder="{{ t $.Lang "moderation.table.reason.placeholder" }}" style="max-width:150px">
-                                    <button type="submit" class="boto-secundari">{{ t $.Lang "moderation.table.reject" }}</button>
-                                </form>
+                                {{ if .AutorURL }}<a href="{{ .AutorURL }}">@{{ .Autor }}</a>{{ else }}@{{ .Autor }}{{ end }}
+                            </td>
+                            <td>{{ if .Created }}{{ .Created }}{{ else }}—{{ end }}</td>
+                            <td>{{ if .Motiu }}{{ .Motiu }}{{ else }}—{{ end }}</td>
+                            <td class="moderacio-accions">
+                                <div class="moderacio-accions-top">
+                                    {{ if .EditURL }}<a class="boto-secundari" href="{{ .EditURL }}">{{ t $.Lang "moderation.table.viewedit" }}</a>{{ end }}
+                                    <form style="display:inline" method="post" action="/moderacio/{{ .ID }}/aprovar">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <input type="hidden" name="object_type" value="{{ .Type }}">
+                                        <button type="submit" class="boto-primari">{{ t $.Lang "moderation.table.approve" }}</button>
+                                    </form>
+                                    <form style="display:inline" id="rej-{{ .ID }}" method="post" action="/moderacio/{{ .ID }}/rebutjar">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <input type="hidden" name="object_type" value="{{ .Type }}">
+                                        <button type="submit" class="boto-secundari">{{ t $.Lang "moderation.table.reject" }}</button>
+                                    </form>
+                                </div>
+                                <div class="moderacio-motiu">
+                                    <label for="motiu-{{ .ID }}">{{ t $.Lang "moderation.table.reason" }}</label>
+                                    <textarea id="motiu-{{ .ID }}" name="motiu" form="rej-{{ .ID }}" class="input-text" placeholder="{{ t $.Lang "moderation.table.reason.placeholder" }}" rows="2"></textarea>
+                                </div>
                             </td>
                         </tr>
                         {{ else }}

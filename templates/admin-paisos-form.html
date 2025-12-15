@@ -18,16 +18,27 @@
             <form method="post" action="/admin/paisos/save">
                 <input type="hidden" name="id" value="{{ .Data.Pais.ID }}">
                 <div class="grup-camp">
+                    <label for="pais_selector">{{ t .Lang "countries.form.selector" }}</label>
+                    <input type="text" id="pais_search" class="input-text" placeholder="{{ t .Lang "countries.form.search.placeholder" }}">
+                    <select id="pais_selector" class="select-llarg" size="8">
+                        <option value="">{{ t .Lang "countries.form.selector.placeholder" }}</option>
+                        {{ range .Data.Countries }}
+                        <option value="{{ .ISO2 }}" data-iso2="{{ .ISO2 }}" data-iso3="{{ .ISO3 }}" data-num="{{ .Num }}" {{ if eq $.Data.Pais.CodiISO2 .ISO2 }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                    <p class="camp-helper">{{ t .Lang "countries.form.selector.helper" }}</p>
+                </div>
+                <div class="grup-camp">
                     <label for="codi_iso2">{{ t .Lang "countries.form.iso2" }}</label>
-                    <input type="text" id="codi_iso2" name="codi_iso2" value="{{ .Data.Pais.CodiISO2 }}" maxlength="2" required>
+                    <input type="text" id="codi_iso2" name="codi_iso2" value="{{ .Data.Pais.CodiISO2 }}" maxlength="2" required readonly>
                 </div>
                 <div class="grup-camp">
                     <label for="codi_iso3">{{ t .Lang "countries.form.iso3" }}</label>
-                    <input type="text" id="codi_iso3" name="codi_iso3" value="{{ .Data.Pais.CodiISO3 }}" maxlength="3" required>
+                    <input type="text" id="codi_iso3" name="codi_iso3" value="{{ .Data.Pais.CodiISO3 }}" maxlength="3" required readonly>
                 </div>
                 <div class="grup-camp">
                     <label for="codi_pais_num">{{ t .Lang "countries.form.num" }}</label>
-                    <input type="text" id="codi_pais_num" name="codi_pais_num" value="{{ .Data.Pais.CodiPaisNum }}">
+                    <input type="text" id="codi_pais_num" name="codi_pais_num" value="{{ .Data.Pais.CodiPaisNum }}" readonly>
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">{{ t .Lang "countries.form.save" }}</button>
@@ -38,6 +49,38 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script>
+    (function(){
+        const select = document.getElementById('pais_selector');
+        const search = document.getElementById('pais_search');
+        const iso2 = document.getElementById('codi_iso2');
+        const iso3 = document.getElementById('codi_iso3');
+        const num = document.getElementById('codi_pais_num');
+        function setCodes(option){
+            if(!option) return;
+            iso2.value = (option.getAttribute('data-iso2') || '').toUpperCase();
+            iso3.value = (option.getAttribute('data-iso3') || '').toUpperCase();
+            num.value = option.getAttribute('data-num') || '';
+        }
+        if (select && select.selectedIndex > 0) {
+            setCodes(select.options[select.selectedIndex]);
+        }
+        select.addEventListener('change', () => {
+            setCodes(select.options[select.selectedIndex]);
+        });
+        if (search) {
+            search.addEventListener('input', () => {
+                const q = search.value.toLowerCase();
+                for (let i = 0; i < select.options.length; i++) {
+                    const opt = select.options[i];
+                    if (i === 0 && !opt.value) { opt.style.display = ''; continue; }
+                    const label = opt.textContent.toLowerCase();
+                    opt.style.display = label.includes(q) ? '' : 'none';
+                }
+            });
+        }
+    })();
+    </script>
 </body>
 </html>
 {{ end }}

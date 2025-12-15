@@ -2,6 +2,7 @@ package core
 
 import (
 	"database/sql"
+	"encoding/json"
 	"html/template"
 	"log"
 	"net/http"
@@ -93,6 +94,13 @@ var templateFuncs = template.FuncMap{
 		default:
 			return 0
 		}
+	},
+	"toJson": func(v interface{}) string {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return "[]"
+		}
+		return string(b)
 	},
 }
 
