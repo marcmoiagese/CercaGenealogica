@@ -15,7 +15,7 @@
                 <h1>{{ if .Data.IsNew }}{{ t .Lang "books.form.new" }}{{ else }}{{ t .Lang "books.form.edit" }}{{ end }}</h1>
             </header>
             {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
-            <form method="post" action="/admin/llibres/save">
+            <form method="post" action="/documentals/llibres/save">
                 <input type="hidden" name="id" value="{{ .Data.Llibre.ID }}">
                 <div class="grup-camp">
                     <label for="arquevisbat_id">{{ t .Lang "books.form.entity" }}</label>
@@ -107,7 +107,7 @@
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">{{ t .Lang "books.form.save" }}</button>
-                    <a class="boto-secundari" href="/admin/llibres">{{ t .Lang "books.form.cancel" }}</a>
+                    <a class="boto-secundari" href="/documentals/llibres">{{ t .Lang "books.form.cancel" }}</a>
                 </div>
             </form>
         </section>

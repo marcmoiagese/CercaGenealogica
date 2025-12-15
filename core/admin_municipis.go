@@ -10,14 +10,19 @@ import (
 )
 
 func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	user, _ := a.VerificarSessio(r)
+	perms := a.getPermissionsForUser(user.ID)
 	filter := db.MunicipiFilter{
 		Text:  strings.TrimSpace(r.URL.Query().Get("q")),
 		Estat: strings.TrimSpace(r.URL.Query().Get("estat")),
-		Status: "publicat",
+		Status: strings.TrimSpace(r.URL.Query().Get("status")),
+	}
+	if filter.Status == "" {
+		filter.Status = "publicat"
 	}
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {
@@ -42,7 +47,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		"Filter":          filter,
 		"Paisos":          paisos,
 		"Nivells":         nivells,
-		"CanManageArxius": true,
+		"CanManageArxius": a.hasPerm(perms, permArxius),
 		"User":            user,
 	})
 }
@@ -148,7 +153,7 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/admin/municipis", http.StatusSeeOther)
+		http.Redirect(w, r, "/territori/municipis", http.StatusSeeOther)
 		return
 	}
 	user, _ := a.VerificarSessio(r)
@@ -200,7 +205,7 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleMunicipiUpdate, "editar", "municipi", &id, "pendent", nil, "")
 	}
-	http.Redirect(w, r, "/admin/municipis", http.StatusSeeOther)
+	http.Redirect(w, r, "/territori/municipis", http.StatusSeeOther)
 }
 
 func (a *App) validateMunicipi(m *db.Municipi) string {
@@ -247,7 +252,7 @@ func (a *App) AdminSaveCodiPostal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/admin/municipis", http.StatusSeeOther)
+		http.Redirect(w, r, "/territori/municipis", http.StatusSeeOther)
 		return
 	}
 	munID := extractID(r.URL.Path)
@@ -270,11 +275,11 @@ func (a *App) AdminSaveCodiPostal(w http.ResponseWriter, r *http.Request) {
 		Fins:       sql.NullString{String: strings.TrimSpace(r.FormValue("fins")), Valid: strings.TrimSpace(r.FormValue("fins")) != ""},
 	}
 	if cp.CodiPostal == "" {
-		http.Redirect(w, r, "/admin/municipis/"+strconv.Itoa(munID)+"/edit?error=cp", http.StatusSeeOther)
+		http.Redirect(w, r, "/territori/municipis/"+strconv.Itoa(munID)+"/edit?error=cp", http.StatusSeeOther)
 		return
 	}
 	_, _ = a.DB.SaveCodiPostal(cp)
-	http.Redirect(w, r, "/admin/municipis/"+strconv.Itoa(munID)+"/edit", http.StatusSeeOther)
+	http.Redirect(w, r, "/territori/municipis/"+strconv.Itoa(munID)+"/edit", http.StatusSeeOther)
 }
 
 func (a *App) AdminSaveMunicipiEcles(w http.ResponseWriter, r *http.Request) {
@@ -282,7 +287,7 @@ func (a *App) AdminSaveMunicipiEcles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/admin/municipis", http.StatusSeeOther)
+		http.Redirect(w, r, "/territori/municipis", http.StatusSeeOther)
 		return
 	}
 	munID := extractID(r.URL.Path)
@@ -307,11 +312,11 @@ func (a *App) AdminSaveMunicipiEcles(w http.ResponseWriter, r *http.Request) {
 		Font:          strings.TrimSpace(r.FormValue("font")),
 	}
 	if am.ArquebisbatID == 0 {
-		http.Redirect(w, r, "/admin/municipis/"+strconv.Itoa(munID)+"/edit?error=ecles", http.StatusSeeOther)
+		http.Redirect(w, r, "/territori/municipis/"+strconv.Itoa(munID)+"/edit?error=ecles", http.StatusSeeOther)
 		return
 	}
 	_, _ = a.DB.SaveArquebisbatMunicipi(am)
-	http.Redirect(w, r, "/admin/municipis/"+strconv.Itoa(munID)+"/edit", http.StatusSeeOther)
+	http.Redirect(w, r, "/territori/municipis/"+strconv.Itoa(munID)+"/edit", http.StatusSeeOther)
 }
 
 func (a *App) AdminSaveMunicipiNomHistoric(w http.ResponseWriter, r *http.Request) {
@@ -319,7 +324,7 @@ func (a *App) AdminSaveMunicipiNomHistoric(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/admin/municipis", http.StatusSeeOther)
+		http.Redirect(w, r, "/territori/municipis", http.StatusSeeOther)
 		return
 	}
 	munID := extractID(r.URL.Path)
@@ -345,9 +350,9 @@ func (a *App) AdminSaveMunicipiNomHistoric(w http.ResponseWriter, r *http.Reques
 		Font:                  strings.TrimSpace(r.FormValue("font")),
 	}
 	if nh.Nom == "" {
-		http.Redirect(w, r, "/admin/municipis/"+strconv.Itoa(munID)+"/edit?error=nomh", http.StatusSeeOther)
+		http.Redirect(w, r, "/territori/municipis/"+strconv.Itoa(munID)+"/edit?error=nomh", http.StatusSeeOther)
 		return
 	}
 	_, _ = a.DB.SaveNomHistoric(nh)
-	http.Redirect(w, r, "/admin/municipis/"+strconv.Itoa(munID)+"/edit", http.StatusSeeOther)
+	http.Redirect(w, r, "/territori/municipis/"+strconv.Itoa(munID)+"/edit", http.StatusSeeOther)
 }

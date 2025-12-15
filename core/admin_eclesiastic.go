@@ -10,10 +10,12 @@ import (
 )
 
 func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permEclesia); !ok {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	user, _ := a.VerificarSessio(r)
+	perms := a.getPermissionsForUser(user.ID)
 	filter := db.ArquebisbatFilter{
 		Text: strings.TrimSpace(r.URL.Query().Get("q")),
 	}
@@ -33,7 +35,7 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 		"Entitats":        entitats,
 		"Filter":          filter,
 		"Paisos":          paisos,
-		"CanManageArxius": true,
+		"CanManageArxius": a.hasPerm(perms, permArxius),
 		"User":            user,
 	})
 }
@@ -83,7 +85,7 @@ func (a *App) AdminSaveEclesiastic(w http.ResponseWriter, r *http.Request) {
 	}
 	user, _ := a.VerificarSessio(r)
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/admin/eclesiastic", http.StatusSeeOther)
+		http.Redirect(w, r, "/territori/eclesiastic", http.StatusSeeOther)
 		return
 	}
 	id, _ := strconv.Atoi(r.FormValue("id"))
@@ -141,7 +143,7 @@ func (a *App) AdminSaveEclesiastic(w http.ResponseWriter, r *http.Request) {
 		action = "editar"
 	}
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, rule, action, "eclesiastic", &ent.ID, "pendent", nil, "")
-	http.Redirect(w, r, "/admin/eclesiastic", http.StatusSeeOther)
+	http.Redirect(w, r, "/territori/eclesiastic", http.StatusSeeOther)
 }
 
 func validateEclesiastic(e *db.Arquebisbat) string {

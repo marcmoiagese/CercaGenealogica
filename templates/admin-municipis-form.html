@@ -15,7 +15,7 @@
                 <h1>{{ if .Data.IsNew }}{{ t .Lang "municipis.form.title.new" }}{{ else }}{{ t .Lang "municipis.form.title.edit" }}{{ end }}</h1>
             </header>
             {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
-            <form method="post" action="/admin/municipis/save">
+            <form method="post" action="/territori/municipis/save">
                 <input type="hidden" name="id" value="{{ .Data.Municipi.ID }}">
                 <div class="grup-camp">
                     <label for="nom">{{ t .Lang "municipis.form.name" }}</label>
@@ -100,7 +100,7 @@
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">{{ t .Lang "municipis.form.save" }}</button>
-                    <a class="boto-secundari" href="/admin/municipis">{{ t .Lang "municipis.form.cancel" }}</a>
+                    <a class="boto-secundari" href="/territori/municipis">{{ t .Lang "municipis.form.cancel" }}</a>
                 </div>
             </form>
 
@@ -129,7 +129,7 @@
                     </tbody>
                 </table>
             </div>
-            <form method="post" action="/admin/municipis/{{ .Data.Municipi.ID }}/codis/save" style="margin-top:1rem;">
+            <form method="post" action="/territori/municipis/{{ .Data.Municipi.ID }}/codis/save" style="margin-top:1rem;">
                 <input type="hidden" name="cp_id" value="">
                 <div class="grup-camp">
                     <label for="cp_codi">{{ t .Lang "municipis.form.cp.code" }}</label>
@@ -174,14 +174,14 @@
                             <td>{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
                             <td>{{ .Motiu }}</td>
                             <td>{{ .Font }}</td>
-                            <td><a href="/admin/municipis/{{ $.Data.Municipi.ID }}/edit?edit_am={{ .ID }}">{{ t $.Lang "municipis.form.ecles.edit" }}</a></td>
+                            <td><a href="/territori/municipis/{{ $.Data.Municipi.ID }}/edit?edit_am={{ .ID }}">{{ t $.Lang "municipis.form.ecles.edit" }}</a></td>
                         </tr>
                         {{ end }}
                     </tbody>
                 </table>
             </div>
             {{ $edit := .Data.EditEcles }}
-            <form method="post" action="/admin/municipis/{{ .Data.Municipi.ID }}/ecles/save" style="margin-top:1rem;">
+            <form method="post" action="/territori/municipis/{{ .Data.Municipi.ID }}/ecles/save" style="margin-top:1rem;">
                 <input type="hidden" name="am_id" value="{{ if $edit }}{{ $edit.ID }}{{ end }}">
                 <div class="grup-camp">
                     <label for="arquebisbat_id">{{ t .Lang "municipis.form.ecles.entity" }}</label>
@@ -239,7 +239,7 @@
                     </tbody>
                 </table>
             </div>
-            <form method="post" action="/admin/municipis/{{ .Data.Municipi.ID }}/noms/save" style="margin-top:1rem;">
+            <form method="post" action="/territori/municipis/{{ .Data.Municipi.ID }}/noms/save" style="margin-top:1rem;">
                 <input type="hidden" name="nh_id" value="">
                 <div class="grup-camp">
                     <label for="nh_nom">{{ t .Lang "municipis.form.hist.name" }}</label>
@@ -281,7 +281,7 @@
             sel.addEventListener('change', function () {
                 const val = this.value;
                 if (!val) return;
-                const base = {{ if .Data.IsNew }}"/admin/municipis/new"{{ else }}"/admin/municipis/{{ .Data.Municipi.ID }}/edit"{{ end }};
+                const base = {{ if .Data.IsNew }}"/territori/municipis/new"{{ else }}"/territori/municipis/{{ .Data.Municipi.ID }}/edit"{{ end }};
                 window.location.href = base + "?pais_id=" + encodeURIComponent(val);
             });
         }

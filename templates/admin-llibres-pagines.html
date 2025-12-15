@@ -13,7 +13,7 @@
         <section class="card">
             <header class="card-header">
                 <h1>{{ t .Lang "books.pages.title" }}</h1>
-                <a class="boto-secundari" href="/admin/llibres/{{ .Data.Llibre.ID }}/edit">{{ t .Lang "books.action.back" }}</a>
+                <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/edit">{{ t .Lang "books.action.back" }}</a>
             </header>
             <p class="muted">{{ t .Lang "books.pages.subtitle" }}</p>
             <div class="taula-wrapper">
@@ -41,7 +41,7 @@
                 </table>
             </div>
 
-            <form method="post" action="/admin/llibres/{{ .Data.Llibre.ID }}/pagines/save" style="margin-top:1rem;">
+            <form method="post" action="/documentals/llibres/{{ .Data.Llibre.ID }}/pagines/save" style="margin-top:1rem;">
                 <input type="hidden" name="page_id" value="">
                 <div class="grup-camp">
                     <label for="num_pagina">{{ t .Lang "books.pages.form.num" }}</label>
@@ -72,7 +72,7 @@
                 </div>
             </form>
 
-            <form method="post" action="/admin/llibres/{{ .Data.Llibre.ID }}/pagines/save" style="margin-top:1rem;display:flex;gap:0.5rem;align-items:flex-end;">
+            <form method="post" action="/documentals/llibres/{{ .Data.Llibre.ID }}/pagines/save" style="margin-top:1rem;display:flex;gap:0.5rem;align-items:flex-end;">
                 <input type="hidden" name="recalc" value="1">
                 <div class="grup-camp">
                     <label for="total_pagines">{{ t .Lang "books.pages.recalc.total" }}</label>

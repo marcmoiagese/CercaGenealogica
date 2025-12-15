@@ -10,10 +10,13 @@ import (
 )
 
 func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+	perms := a.getPermissionsForUser(user.ID)
+	canManage := a.hasPerm(perms, permArxius)
 	filter := db.LlibreFilter{
 		Text: strings.TrimSpace(r.URL.Query().Get("q")),
 	}
@@ -48,7 +51,7 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		"Arquebisbats":    arquebisbats,
 		"Municipis":       municipis,
 		"Arxius":          arxius,
-		"CanManageArxius": true,
+		"CanManageArxius": canManage,
 		"User":            user,
 	})
 }
@@ -158,7 +161,7 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/admin/llibres", http.StatusSeeOther)
+		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
 		return
 	}
 	user, _ := a.VerificarSessio(r)
@@ -189,7 +192,7 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(r.FormValue("recalc_pagines")) != "" && llibre.Pagines.Valid {
 		_ = a.DB.RecalcLlibrePagines(llibre.ID, int(llibre.Pagines.Int64))
 	}
-	http.Redirect(w, r, "/admin/llibres", http.StatusSeeOther)
+	http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
 }
 
 func (a *App) AdminLlibrePagines(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +221,7 @@ func (a *App) AdminSaveLlibrePagina(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/admin/llibres", http.StatusSeeOther)
+		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
 		return
 	}
 	llibreID := extractID(r.URL.Path)
@@ -236,12 +239,12 @@ func (a *App) AdminSaveLlibrePagina(w http.ResponseWriter, r *http.Request) {
 		if total > 0 {
 			_ = a.DB.RecalcLlibrePagines(llibreID, total)
 		}
-		http.Redirect(w, r, "/admin/llibres/"+strconv.Itoa(llibreID)+"/pagines", http.StatusSeeOther)
+		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/pagines", http.StatusSeeOther)
 		return
 	}
 	numPagina, _ := strconv.Atoi(r.FormValue("num_pagina"))
 	if numPagina == 0 {
-		http.Redirect(w, r, "/admin/llibres/"+strconv.Itoa(llibreID)+"/pagines?error=page", http.StatusSeeOther)
+		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/pagines?error=page", http.StatusSeeOther)
 		return
 	}
 	p := &db.LlibrePagina{
@@ -263,17 +266,21 @@ func (a *App) AdminSaveLlibrePagina(w http.ResponseWriter, r *http.Request) {
 	if strings.ToLower(p.Estat) == "indexada" {
 		_, _ = a.RegisterUserActivity(r.Context(), user.ID, rulePaginaIndex, "indexar", "llibre_pagina", &pageID, "validat", nil, "")
 	}
-	http.Redirect(w, r, "/admin/llibres/"+strconv.Itoa(llibreID)+"/pagines", http.StatusSeeOther)
+	http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/pagines", http.StatusSeeOther)
 }
 
 func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
+	user, _, _ := a.requirePermission(w, r, permArxius)
 	id := extractID(r.URL.Path)
 	llibre, err := a.DB.GetLlibre(id)
 	if err != nil || llibre == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if user == nil {
+		user, _ = a.VerificarSessio(r)
+	}
+	if (user == nil || !a.CanManageArxius(user)) && llibre.ModeracioEstat != "publicat" {
 		http.NotFound(w, r)
 		return
 	}
@@ -297,11 +304,11 @@ func (a *App) AdminAddLlibreArxiu(w http.ResponseWriter, r *http.Request) {
 	signatura := strings.TrimSpace(r.FormValue("signatura"))
 	urlOverride := strings.TrimSpace(r.FormValue("url_override"))
 	if llibreID == 0 || arxiuID == 0 {
-		http.Redirect(w, r, "/admin/llibres", http.StatusSeeOther)
+		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
 		return
 	}
 	_ = a.DB.AddArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
-	http.Redirect(w, r, "/admin/llibres/"+strconv.Itoa(llibreID), http.StatusSeeOther)
+	http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID), http.StatusSeeOther)
 }
 
 func (a *App) AdminUpdateLlibreArxiu(w http.ResponseWriter, r *http.Request) {
@@ -318,7 +325,7 @@ func (a *App) AdminUpdateLlibreArxiu(w http.ResponseWriter, r *http.Request) {
 	signatura := strings.TrimSpace(r.FormValue("signatura"))
 	urlOverride := strings.TrimSpace(r.FormValue("url_override"))
 	_ = a.DB.UpdateArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
-	http.Redirect(w, r, "/admin/llibres/"+strconv.Itoa(llibreID), http.StatusSeeOther)
+	http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID), http.StatusSeeOther)
 }
 
 func (a *App) AdminDeleteLlibreArxiu(w http.ResponseWriter, r *http.Request) {
@@ -333,5 +340,5 @@ func (a *App) AdminDeleteLlibreArxiu(w http.ResponseWriter, r *http.Request) {
 	llibreID, _ := strconv.Atoi(parts[2])
 	arxiuID, _ := strconv.Atoi(parts[4])
 	_ = a.DB.DeleteArxiuLlibre(arxiuID, llibreID)
-	http.Redirect(w, r, "/admin/llibres/"+strconv.Itoa(llibreID), http.StatusSeeOther)
+	http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID), http.StatusSeeOther)
 }

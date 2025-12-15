@@ -128,7 +128,7 @@
                                     {{ if and (or (eq .ObjectType "persona") (eq .ObjectType "llibre") (eq .ObjectType "arxiu") (eq .ObjectType "municipi") (eq .ObjectType "nivell") (eq .ObjectType "eclesiastic")) (.ObjectID.Valid) }}
                                         <a href="/{{ .ObjectType }}/{{ .ObjectID.Int64 }}">{{ $label }}</a>
                                     {{ else if and (eq .ObjectType "llibre_pagina") (.ObjectID.Valid) }}
-                                        <a href="/admin/llibres/{{ .ObjectID.Int64 }}/pagines">{{ $label }}</a>
+                                        <a href="/documentals/llibres/{{ .ObjectID.Int64 }}/pagines">{{ $label }}</a>
                                     {{ else }}
                                         {{ $label }}
                                     {{ end }}

@@ -513,10 +513,10 @@
                                                     {{ $url := "" }}
                                                     {{ if eq .ObjectType "persona" }}{{ $url = (printf "/persones/%d" .ObjectID.Int64) }}{{ end }}
                                                     {{ if eq .ObjectType "arxiu" }}{{ $url = (printf "/arxius/%d" .ObjectID.Int64) }}{{ end }}
-                                                    {{ if eq .ObjectType "llibre" }}{{ $url = (printf "/admin/llibres/%d" .ObjectID.Int64) }}{{ end }}
-                                                    {{ if eq .ObjectType "municipi" }}{{ $url = (printf "/admin/municipis/%d/edit" .ObjectID.Int64) }}{{ end }}
-                                                    {{ if eq .ObjectType "nivell" }}{{ $url = (printf "/admin/nivells/%d/edit" .ObjectID.Int64) }}{{ end }}
-                                                    {{ if eq .ObjectType "eclesiastic" }}{{ $url = (printf "/admin/eclesiastic/%d/edit" .ObjectID.Int64) }}{{ end }}
+                                                    {{ if eq .ObjectType "llibre" }}{{ $url = (printf "/documentals/llibres/%d" .ObjectID.Int64) }}{{ end }}
+                                                    {{ if eq .ObjectType "municipi" }}{{ $url = (printf "/territori/municipis/%d/edit" .ObjectID.Int64) }}{{ end }}
+                                                    {{ if eq .ObjectType "nivell" }}{{ $url = (printf "/territori/nivells/%d/edit" .ObjectID.Int64) }}{{ end }}
+                                                    {{ if eq .ObjectType "eclesiastic" }}{{ $url = (printf "/territori/eclesiastic/%d/edit" .ObjectID.Int64) }}{{ end }}
                                                     {{ if $url }}
                                                         <a href="{{ $url }}">{{ $label }} #{{ .ObjectID.Int64 }}</a>
                                                     {{ else }}

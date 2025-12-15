@@ -225,6 +225,12 @@
 
   "menu.search.placeholder": "Cerca en el menú...",
   "menu.section.home": "Inici",
+  "menu.section.admin": "Administració",
+  "menu.section.territory": "Territori",
+  "menu.section.funds": "Fons documentals",
+  "menu.section.moderation": "Moderació",
+  "menu.section.ranking": "Rànquing de contribuïdors",
+  "menu.section.persons": "Persones",
   "menu.item.home": "Pàgina principal",
 
   "archives.title": "Arxius",

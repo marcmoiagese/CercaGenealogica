@@ -225,6 +225,12 @@
 
   "menu.search.placeholder": "Recercar dins lo menú...",
   "menu.section.home": "Començament",
+  "menu.section.admin": "Administracion",
+  "menu.section.territory": "Territòri",
+  "menu.section.funds": "Fons documentals",
+  "menu.section.moderation": "Moderacion",
+  "menu.section.ranking": "Classament de contribuidors",
+  "menu.section.persons": "Personas",
   "menu.item.home": "Pagina principala",
 
   "archives.title": "Archius",

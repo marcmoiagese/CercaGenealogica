@@ -225,6 +225,12 @@
 
   "menu.search.placeholder": "Search the menu...",
   "menu.section.home": "Home",
+  "menu.section.admin": "Administration",
+  "menu.section.territory": "Territory",
+  "menu.section.funds": "Document funds",
+  "menu.section.moderation": "Moderation",
+  "menu.section.ranking": "Contributors ranking",
+  "menu.section.persons": "People",
   "menu.item.home": "Main page",
 
   "archives.title": "Archives",

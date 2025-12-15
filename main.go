@@ -187,26 +187,29 @@ func main() {
 	http.HandleFunc("/admin/paisos/new", applyMiddleware(app.AdminNewPais, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/paisos/save", applyMiddleware(app.AdminSavePais, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/paisos/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "/nivells") {
-			switch {
-			case strings.HasSuffix(r.URL.Path, "/nivells"):
-				applyMiddleware(app.AdminListNivells, core.BlockIPs, core.RateLimit)(w, r)
-			case strings.HasSuffix(r.URL.Path, "/nivells/new"):
-				applyMiddleware(app.AdminNewNivell, core.BlockIPs, core.RateLimit)(w, r)
-			default:
-				http.NotFound(w, r)
-			}
-			return
-		}
 		if strings.HasSuffix(r.URL.Path, "/edit") {
 			applyMiddleware(app.AdminEditPais, core.BlockIPs, core.RateLimit)(w, r)
 			return
 		}
 		http.NotFound(w, r)
 	})
-	http.HandleFunc("/admin/nivells", applyMiddleware(app.AdminListNivells, core.BlockIPs, core.RateLimit))
-	http.HandleFunc("/admin/nivells/save", applyMiddleware(app.AdminSaveNivell, core.BlockIPs, core.RateLimit))
-	http.HandleFunc("/admin/nivells/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/territori/paisos/", func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/nivells") {
+			http.NotFound(w, r)
+			return
+		}
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/nivells"):
+			applyMiddleware(app.AdminListNivells, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/nivells/new"):
+			applyMiddleware(app.AdminNewNivell, core.BlockIPs, core.RateLimit)(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	http.HandleFunc("/territori/nivells", applyMiddleware(app.AdminListNivells, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/territori/nivells/save", applyMiddleware(app.AdminSaveNivell, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/territori/nivells/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/edit") {
 			applyMiddleware(app.AdminEditNivell, core.BlockIPs, core.RateLimit)(w, r)
 			return
@@ -219,7 +222,7 @@ func main() {
 	})
 
 	// Admin municipis
-	http.HandleFunc("/admin/municipis", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/territori/municipis", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):
 			applyMiddleware(app.AdminNewMunicipi, core.BlockIPs, core.RateLimit)(w, r)
@@ -237,7 +240,7 @@ func main() {
 			applyMiddleware(app.AdminListMunicipis, core.BlockIPs, core.RateLimit)(w, r)
 		}
 	})
-	http.HandleFunc("/admin/municipis/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/territori/municipis/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):
 			applyMiddleware(app.AdminNewMunicipi, core.BlockIPs, core.RateLimit)(w, r)
@@ -257,7 +260,7 @@ func main() {
 	})
 
 	// Entitats eclesiàstiques
-	http.HandleFunc("/admin/eclesiastic", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/territori/eclesiastic", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):
 			applyMiddleware(app.AdminNewEclesiastic, core.BlockIPs, core.RateLimit)(w, r)
@@ -267,7 +270,7 @@ func main() {
 			applyMiddleware(app.AdminListEclesiastic, core.BlockIPs, core.RateLimit)(w, r)
 		}
 	})
-	http.HandleFunc("/admin/eclesiastic/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/territori/eclesiastic/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):
 			applyMiddleware(app.AdminNewEclesiastic, core.BlockIPs, core.RateLimit)(w, r)
@@ -277,7 +280,7 @@ func main() {
 			applyMiddleware(app.AdminListEclesiastic, core.BlockIPs, core.RateLimit)(w, r)
 		}
 	})
-	http.HandleFunc("/admin/eclesiastic/save", applyMiddleware(app.AdminSaveEclesiastic, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/territori/eclesiastic/save", applyMiddleware(app.AdminSaveEclesiastic, core.BlockIPs, core.RateLimit))
 
 	// Polítiques / permisos
 	http.HandleFunc("/admin/politiques", func(w http.ResponseWriter, r *http.Request) {
@@ -321,8 +324,8 @@ func main() {
 	})
 
 	// Moderació
-	http.HandleFunc("/admin/moderacio", applyMiddleware(app.AdminModeracioList, core.BlockIPs, core.RateLimit))
-	http.HandleFunc("/admin/moderacio/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/moderacio", applyMiddleware(app.AdminModeracioList, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/moderacio/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/aprovar"):
 			applyMiddleware(app.AdminModeracioAprovar, core.BlockIPs, core.RateLimit)(w, r)
@@ -334,15 +337,15 @@ func main() {
 	})
 
 	// Admin arxius
-	http.HandleFunc("/admin/arxius", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/documentals/arxius", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			applyMiddleware(app.AdminCreateArxiu, core.BlockIPs, core.RateLimit)(w, r)
 			return
 		}
 		applyMiddleware(app.AdminListArxius, core.BlockIPs, core.RateLimit)(w, r)
 	})
-	http.HandleFunc("/admin/arxius/new", applyMiddleware(app.AdminNewArxiu, core.BlockIPs, core.RateLimit))
-	http.HandleFunc("/admin/arxius/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/documentals/arxius/new", applyMiddleware(app.AdminNewArxiu, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/documentals/arxius/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
 		case strings.HasSuffix(path, "/edit"):
@@ -364,7 +367,7 @@ func main() {
 		}
 	})
 	// Admin llibres
-	http.HandleFunc("/admin/llibres", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/documentals/llibres", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):
 			applyMiddleware(app.AdminNewLlibre, core.BlockIPs, core.RateLimit)(w, r)
@@ -382,13 +385,13 @@ func main() {
 			applyMiddleware(app.AdminAddLlibreArxiu, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/save"):
 			applyMiddleware(app.AdminSaveLlibre, core.BlockIPs, core.RateLimit)(w, r)
-		case r.URL.Path != "/admin/llibres":
+		case r.URL.Path != "/documentals/llibres":
 			applyMiddleware(app.AdminShowLlibre, core.BlockIPs, core.RateLimit)(w, r)
 		default:
 			applyMiddleware(app.AdminListLlibres, core.BlockIPs, core.RateLimit)(w, r)
 		}
 	})
-	http.HandleFunc("/admin/llibres/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/documentals/llibres/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):
 			applyMiddleware(app.AdminNewLlibre, core.BlockIPs, core.RateLimit)(w, r)
@@ -406,13 +409,13 @@ func main() {
 			applyMiddleware(app.AdminAddLlibreArxiu, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/save"):
 			applyMiddleware(app.AdminSaveLlibre, core.BlockIPs, core.RateLimit)(w, r)
-		case r.URL.Path != "/admin/llibres":
+		case r.URL.Path != "/documentals/llibres":
 			applyMiddleware(app.AdminShowLlibre, core.BlockIPs, core.RateLimit)(w, r)
 		default:
 			applyMiddleware(app.AdminListLlibres, core.BlockIPs, core.RateLimit)(w, r)
 		}
 	})
-	http.HandleFunc("/admin/llibres/save", applyMiddleware(app.AdminSaveLlibre, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/documentals/llibres/save", applyMiddleware(app.AdminSaveLlibre, core.BlockIPs, core.RateLimit))
 
 	log.Println("Servidor iniciat a http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))

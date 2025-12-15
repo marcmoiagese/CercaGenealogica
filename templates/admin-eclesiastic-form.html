@@ -15,7 +15,7 @@
                 <h1>{{ if .Data.IsNew }}{{ t .Lang "ecles.form.title.new" }}{{ else }}{{ t .Lang "ecles.form.title.edit" }}{{ end }}</h1>
             </header>
             {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
-            <form method="post" action="/admin/eclesiastic/save">
+            <form method="post" action="/territori/eclesiastic/save">
                 <input type="hidden" name="id" value="{{ .Data.Entitat.ID }}">
                 <div class="grup-camp">
                     <label for="nom">{{ t .Lang "ecles.form.name" }}</label>
@@ -81,7 +81,7 @@
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">{{ t .Lang "ecles.form.save" }}</button>
-                    <a class="boto-secundari" href="/admin/eclesiastic">{{ t .Lang "ecles.form.cancel" }}</a>
+                    <a class="boto-secundari" href="/territori/eclesiastic">{{ t .Lang "ecles.form.cancel" }}</a>
                 </div>
             </form>
         </section>

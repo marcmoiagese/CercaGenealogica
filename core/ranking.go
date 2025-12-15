@@ -67,8 +67,8 @@ func (a *App) Ranking(w http.ResponseWriter, r *http.Request) {
 		if privacy != nil && !privacy.ProfilePublic {
 			continue
 		}
-		name := u.Usuari
-		initial := u.Usuari
+		name := strings.TrimSpace(u.Usuari)
+		initial := name
 		if strings.TrimSpace(initial) != "" {
 			runes := []rune(strings.TrimSpace(initial))
 			if len(runes) > 0 {

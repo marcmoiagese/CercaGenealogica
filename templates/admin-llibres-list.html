@@ -13,9 +13,9 @@
         <section class="card">
             <header class="card-header">
                 <h1>{{ t .Lang "books.title" }}</h1>
-                <a class="boto-primari" href="/admin/llibres/new">{{ t .Lang "books.new" }}</a>
+                <a class="boto-primari" href="/documentals/llibres/new">{{ t .Lang "books.new" }}</a>
             </header>
-            <form class="filtres-arxius" method="get" action="/admin/llibres">
+            <form class="filtres-arxius" method="get" action="/documentals/llibres">
                 <div class="grup-camp">
                     <label for="filtre-q">{{ t .Lang "books.filter.search" }}</label>
                     <input id="filtre-q" type="text" name="q" value="{{ .Data.Filter.Text }}">
@@ -56,6 +56,16 @@
                         {{ end }}
                     </select>
                 </div>
+                <div class="grup-camp">
+                    <label for="filtre-status">{{ t .Lang "moderation.status" }}</label>
+                    {{ $st := .Data.Filter.Status }}
+                    <select id="filtre-status" name="status">
+                        <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
+                        <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
+                        <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                    </select>
+                </div>
                 <button type="submit" class="boto-secundari">{{ t .Lang "books.filter.submit" }}</button>
             </form>
             <div class="taula-wrapper">
@@ -67,20 +77,22 @@
                             <th>{{ t .Lang "books.col.municipi" }}</th>
                             <th>{{ t .Lang "books.col.chrono" }}</th>
                             <th>{{ t .Lang "books.col.pages" }}</th>
+                            <th>{{ t .Lang "moderation.status" }}</th>
                             <th>{{ t .Lang "books.col.actions" }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         {{ range .Data.Llibres }}
                         <tr>
-                            <td><a href="/admin/llibres/{{ .ID }}">{{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}</a></td>
+                            <td><a href="/documentals/llibres/{{ .ID }}">{{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}</a></td>
                             <td>{{ .ArquebisbatNom.String }}</td>
                             <td>{{ .MunicipiNom.String }}</td>
                             <td>{{ .Cronologia }}</td>
                             <td>{{ if .Pagines.Valid }}{{ .Pagines.Int64 }}{{ end }}</td>
+                            <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
                             <td>
-                                <a href="/admin/llibres/{{ .ID }}/edit">{{ t $.Lang "books.action.edit" }}</a> |
-                                <a href="/admin/llibres/{{ .ID }}/pagines">{{ t $.Lang "books.action.pages" }}</a>
+                                <a href="/documentals/llibres/{{ .ID }}/edit">{{ t $.Lang "books.action.edit" }}</a> |
+                                <a href="/documentals/llibres/{{ .ID }}/pagines">{{ t $.Lang "books.action.pages" }}</a>
                             </td>
                         </tr>
                         {{ end }}

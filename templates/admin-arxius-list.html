@@ -10,8 +10,8 @@
     {{ template "header-private" . }}
     {{ template "menu" . }}
     <main class="contingut-principal arxius-layout">
-        {{ $viewBase := default $.Data.ArxiusBasePath "/admin/arxius" }}
-        {{ $manageBase := "/admin/arxius" }}
+        {{ $viewBase := default $.Data.ArxiusBasePath "/documentals/arxius" }}
+        {{ $manageBase := "/documentals/arxius" }}
         <section class="card">
             <header class="card-header">
                 <h1>{{ t .Lang "archives.title" }}</h1>
@@ -51,6 +51,16 @@
                         {{ end }}
                     </select>
                 </div>
+                <div class="grup-camp">
+                    <label for="filtre-status">{{ t .Lang "moderation.status" }}</label>
+                    <select id="filtre-status" name="status">
+                        {{ $st := .Data.Filter.Status }}
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                        <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
+                        <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
+                        <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                    </select>
+                </div>
                 <button type="submit" class="boto-secundari">{{ t .Lang "archives.filter.submit" }}</button>
             </form>
             <div class="taula-wrapper">
@@ -64,6 +74,7 @@
                             <th>{{ t .Lang "archives.col.municipi" }}</th>
                             <th>{{ t .Lang "archives.col.web" }}</th>
                             <th>{{ t .Lang "archives.col.books" }}</th>
+                            <th>{{ t .Lang "moderation.status" }}</th>
                             {{ if $.Data.CanManageArxius }}<th>{{ t .Lang "archives.col.actions" }}</th>{{ end }}
                         </tr>
                     </thead>
@@ -77,6 +88,7 @@
                             <td>{{ .MunicipiNom.String }}</td>
                             <td>{{ if .Web }}<a href="{{ .Web }}" target="_blank">{{ t $.Lang "archives.link" }}</a>{{ end }}</td>
                             <td>{{ .Llibres }}</td>
+                            <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
                             {{ if $.Data.CanManageArxius }}
                             <td class="accions">
                                 <a href="{{ $manageBase }}/{{ .ID }}/edit">{{ t $.Lang "archives.action.edit" }}</a> |

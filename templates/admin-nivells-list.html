@@ -17,7 +17,7 @@
                     <h1>{{ t .Lang "levels.title" }}</h1>
                 </div>
                 {{ if .Data.Pais }}
-                <a class="boto-primari" href="/admin/paisos/{{ .Data.Pais.ID }}/nivells/new">{{ t .Lang "levels.button.new" }}</a>
+                <a class="boto-primari" href="/territori/paisos/{{ .Data.Pais.ID }}/nivells/new">{{ t .Lang "levels.button.new" }}</a>
                 {{ else }}
                 <span class="muted">{{ t .Lang "levels.select.country" }}</span>
                 {{ end }}
@@ -45,6 +45,16 @@
                         {{ end }}
                     </select>
                 </div>
+                <div class="grup-camp">
+                    <label for="f-status">{{ t .Lang "moderation.status" }}</label>
+                    {{ $st := .Data.Filter.Status }}
+                    <select id="f-status" name="status">
+                        <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
+                        <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
+                        <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                    </select>
+                </div>
                 <button class="boto-secundari" type="submit">{{ t .Lang "levels.filter.submit" }}</button>
             </form>
             <div class="taula-wrapper">
@@ -58,6 +68,7 @@
                             <th>{{ t .Lang "levels.col.parent" }}</th>
                             <th>{{ t .Lang "levels.col.years" }}</th>
                             <th>{{ t .Lang "levels.col.state" }}</th>
+                            <th>{{ t .Lang "moderation.status" }}</th>
                             <th>{{ t .Lang "levels.col.actions" }}</th>
                         </tr>
                     </thead>
@@ -71,7 +82,8 @@
                             <td>{{ if .ParentNom.Valid }}{{ .ParentNom.String }}{{ else }}-{{ end }}</td>
                             <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
                             <td>{{ t $.Lang (printf "levels.state.%s" .Estat) }}</td>
-                            <td><a href="/admin/nivells/{{ .ID }}/edit">{{ t $.Lang "levels.action.edit" }}</a></td>
+                            <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                            <td><a href="/territori/nivells/{{ .ID }}/edit">{{ t $.Lang "levels.action.edit" }}</a></td>
                         </tr>
                         {{ else }}
                         <tr><td colspan="8">{{ t .Lang "common.empty" }}</td></tr>

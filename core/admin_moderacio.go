@@ -189,7 +189,7 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = r.ParseForm()
 	if err := a.updateModeracioObject(objType, id, "publicat", "", user.ID); err != nil {
-		http.Redirect(w, r, "/admin/moderacio?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
 		return
 	}
 	if acts, err := a.DB.ListActivityByObject(objType, id, "pendent"); err == nil {
@@ -198,7 +198,7 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleModeracioApprove, "moderar_aprovar", objType, &id, "validat", nil, "")
-	http.Redirect(w, r, "/admin/moderacio?ok=1", http.StatusSeeOther)
+	http.Redirect(w, r, "/moderacio?ok=1", http.StatusSeeOther)
 }
 
 // Rebutjar persona amb motiu
@@ -221,12 +221,12 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 		objType = "persona"
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, "/admin/moderacio?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
 		return
 	}
 	motiu := r.FormValue("motiu")
 	if err := a.updateModeracioObject(objType, id, "rebutjat", motiu, user.ID); err != nil {
-		http.Redirect(w, r, "/admin/moderacio?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
 		return
 	}
 	if acts, err := a.DB.ListActivityByObject(objType, id, "pendent"); err == nil {
@@ -235,7 +235,7 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleModeracioReject, "moderar_rebutjar", objType, &id, "validat", nil, motiu)
-	http.Redirect(w, r, "/admin/moderacio?ok=1", http.StatusSeeOther)
+	http.Redirect(w, r, "/moderacio?ok=1", http.StatusSeeOther)
 }
 
 func (a *App) updateModeracioObject(objectType string, id int, estat, motiu string, moderatorID int) error {

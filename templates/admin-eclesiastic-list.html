@@ -13,7 +13,7 @@
         <section class="card">
             <header class="card-header">
                 <h1>{{ t .Lang "ecles.title" }}</h1>
-                <a class="boto-primari" href="/admin/eclesiastic/new">{{ t .Lang "ecles.button.new" }}</a>
+                <a class="boto-primari" href="/territori/eclesiastic/new">{{ t .Lang "ecles.button.new" }}</a>
             </header>
             <form class="filtres-arxius" method="get">
                 <div class="grup-camp">
@@ -29,6 +29,16 @@
                         {{ end }}
                     </select>
                 </div>
+                <div class="grup-camp">
+                    <label for="f-status">{{ t .Lang "moderation.status" }}</label>
+                    {{ $st := .Data.Filter.Status }}
+                    <select id="f-status" name="status">
+                        <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
+                        <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
+                        <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                    </select>
+                </div>
                 <button class="boto-secundari" type="submit">{{ t .Lang "ecles.filter.submit" }}</button>
             </form>
             <div class="taula-wrapper">
@@ -41,6 +51,7 @@
                             <th>{{ t .Lang "ecles.col.level" }}</th>
                             <th>{{ t .Lang "ecles.col.parent" }}</th>
                             <th>{{ t .Lang "ecles.col.years" }}</th>
+                            <th>{{ t .Lang "moderation.status" }}</th>
                             <th>{{ t .Lang "ecles.col.actions" }}</th>
                         </tr>
                     </thead>
@@ -53,7 +64,8 @@
                             <td>{{ if .Nivell.Valid }}{{ .Nivell.Int64 }}{{ end }}</td>
                             <td>{{ .ParentNom.String }}</td>
                             <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
-                            <td><a href="/admin/eclesiastic/{{ .ID }}/edit">{{ t $.Lang "ecles.action.edit" }}</a></td>
+                            <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                            <td><a href="/territori/eclesiastic/{{ .ID }}/edit">{{ t $.Lang "ecles.action.edit" }}</a></td>
                         </tr>
                         {{ end }}
                     </tbody>

@@ -15,7 +15,7 @@
                 <h1>{{ if .Data.IsNew }}{{ t .Lang "archives.form.new" }}{{ else }}{{ t .Lang "archives.form.edit" }}{{ end }}</h1>
             </header>
             {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
-            <form method="post" action="{{ if .Data.IsNew }}/admin/arxius{{ else }}/admin/arxius/{{ .Data.Arxiu.ID }}{{ end }}">
+            <form method="post" action="{{ if .Data.IsNew }}/documentals/arxius{{ else }}/documentals/arxius/{{ .Data.Arxiu.ID }}{{ end }}">
                 <div class="grup-camp">
                     <label for="nom">{{ t .Lang "archives.form.name" }}</label>
                     <input type="text" id="nom" name="nom" value="{{ .Data.Arxiu.Nom }}" required>
@@ -72,7 +72,7 @@
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">{{ t .Lang "archives.form.save" }}</button>
-                    <a class="boto-secundari" href="{{ if .Data.IsNew }}/admin/arxius{{ else }}/admin/arxius/{{ .Data.Arxiu.ID }}{{ end }}">{{ t .Lang "archives.form.cancel" }}</a>
+                    <a class="boto-secundari" href="{{ if .Data.IsNew }}/documentals/arxius{{ else }}/documentals/arxius/{{ .Data.Arxiu.ID }}{{ end }}">{{ t .Lang "archives.form.cancel" }}</a>
                 </div>
             </form>
         </section>

@@ -14,8 +14,8 @@
             <header class="card-header">
                 <h1>{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</h1>
                 <div class="arxiu-header-actions">
-                    <a class="boto-secundari" href="/admin/llibres/{{ .Data.Llibre.ID }}/edit">{{ t .Lang "books.action.edit" }}</a>
-                    <a class="boto-secundari" href="/admin/llibres/{{ .Data.Llibre.ID }}/pagines">{{ t .Lang "books.action.pages" }}</a>
+                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/edit">{{ t .Lang "books.action.edit" }}</a>
+                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/pagines">{{ t .Lang "books.action.pages" }}</a>
                 </div>
                 {{ if .Data.Llibre.ModeracioEstat }}
                 <span class="badge {{ if eq .Data.Llibre.ModeracioEstat "publicat" }}verd{{ else if eq .Data.Llibre.ModeracioEstat "pendent" }}taronja{{ else }}vermell{{ end }}">
@@ -52,7 +52,7 @@
                         <tr>
                             <td>{{ .ArxiuNom.String }}</td>
                             <td>
-                                <form method="post" action="/admin/llibres/{{ .LlibreID }}/arxius/{{ .ArxiuID }}/update">
+                                <form method="post" action="/documentals/llibres/{{ .LlibreID }}/arxius/{{ .ArxiuID }}/update">
                                     <input type="text" name="signatura" value="{{ .Signatura.String }}">
                                     <input type="text" name="url_override" value="{{ .URLOverride.String }}" placeholder="URL">
                                     <button type="submit" class="boto-secundari">{{ t $.Lang "archives.books.update" }}</button>
@@ -60,7 +60,7 @@
                             </td>
                             <td>{{ if .URLOverride.Valid }}<a href="{{ .URLOverride.String }}" target="_blank">{{ .URLOverride.String }}</a>{{ end }}</td>
                             <td>
-                                <form method="post" action="/admin/llibres/{{ .LlibreID }}/arxius/{{ .ArxiuID }}/delete" onsubmit="return confirm('{{ t $.Lang "archives.books.remove.confirm" }}');">
+                                <form method="post" action="/documentals/llibres/{{ .LlibreID }}/arxius/{{ .ArxiuID }}/delete" onsubmit="return confirm('{{ t $.Lang "archives.books.remove.confirm" }}');">
                                     <button type="submit" class="boto-perill">{{ t $.Lang "archives.action.delete" }}</button>
                                 </form>
                             </td>
@@ -71,7 +71,7 @@
             </div>
 
             <h3>{{ t .Lang "archives.books.add" }}</h3>
-            <form method="post" action="/admin/llibres/{{ .Data.Llibre.ID }}/arxius/add">
+            <form method="post" action="/documentals/llibres/{{ .Data.Llibre.ID }}/arxius/add">
                 <div class="grup-camp">
                     <label for="arxiu_id">{{ t .Lang "admin.menu.archives" }}</label>
                     <select id="arxiu_id" name="arxiu_id" required>

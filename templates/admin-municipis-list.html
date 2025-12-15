@@ -13,7 +13,7 @@
         <section class="card">
             <header class="card-header">
                 <h1>{{ t .Lang "municipis.title" }}</h1>
-                <a class="boto-primari" href="/admin/municipis/new">{{ t .Lang "municipis.button.new" }}</a>
+                <a class="boto-primari" href="/territori/municipis/new">{{ t .Lang "municipis.button.new" }}</a>
             </header>
             <form class="filtres-arxius" method="get">
                 <div class="grup-camp">
@@ -47,6 +47,16 @@
                         {{ end }}
                     </select>
                 </div>
+                <div class="grup-camp">
+                    <label for="f-status">{{ t .Lang "moderation.status" }}</label>
+                    {{ $st := .Data.Filter.Status }}
+                    <select id="f-status" name="status">
+                        <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
+                        <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
+                        <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                    </select>
+                </div>
                 <button class="boto-secundari" type="submit">{{ t .Lang "municipis.filter.submit" }}</button>
             </form>
             <div class="taula-wrapper">
@@ -60,6 +70,7 @@
                             <th>{{ t .Lang "municipis.col.country" }}</th>
                             <th>{{ t .Lang "municipis.col.province" }}</th>
                             <th>{{ t .Lang "municipis.col.comarca" }}</th>
+                            <th>{{ t .Lang "moderation.status" }}</th>
                             <th>{{ t .Lang "municipis.col.actions" }}</th>
                         </tr>
                     </thead>
@@ -73,7 +84,8 @@
                             <td>{{ .PaisNom.String }}</td>
                             <td>{{ .ProvNom.String }}</td>
                             <td>{{ .Comarca.String }}</td>
-                            <td><a href="/admin/municipis/{{ .ID }}/edit">{{ t $.Lang "municipis.action.edit" }}</a></td>
+                            <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                            <td><a href="/territori/municipis/{{ .ID }}/edit">{{ t $.Lang "municipis.action.edit" }}</a></td>
                         </tr>
                         {{ end }}
                     </tbody>

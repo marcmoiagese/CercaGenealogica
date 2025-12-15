@@ -42,12 +42,12 @@
                             <td>{{ .Created }}</td>
                             <td>{{ .Motiu }}</td>
                             <td>
-                                <form style="display:inline" method="post" action="/admin/moderacio/{{ .ID }}/aprovar">
+                                <form style="display:inline" method="post" action="/moderacio/{{ .ID }}/aprovar">
                                     <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                     <input type="hidden" name="object_type" value="{{ .Type }}">
                                     <button type="submit" class="boto-primari">{{ t $.Lang "moderation.table.approve" }}</button>
                                 </form>
-                                <form style="display:inline" method="post" action="/admin/moderacio/{{ .ID }}/rebutjar">
+                                <form style="display:inline" method="post" action="/moderacio/{{ .ID }}/rebutjar">
                                     <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                     <input type="hidden" name="object_type" value="{{ .Type }}">
                                     <input type="text" name="motiu" placeholder="{{ t $.Lang "moderation.table.reason.placeholder" }}" style="max-width:150px">

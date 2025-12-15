@@ -71,6 +71,10 @@ func (a *App) ShowArxiu(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if !canManage && arxiu.ModeracioEstat != "publicat" {
+		http.NotFound(w, r)
+		return
+	}
 	llibres, _ := a.DB.ListArxiuLlibres(id)
 	entNom := a.loadEntitatNom(arxiu)
 	RenderPrivateTemplate(w, r, "admin-arxius-show.html", map[string]interface{}{
@@ -85,20 +89,23 @@ func (a *App) ShowArxiu(w http.ResponseWriter, r *http.Request) {
 
 // Admin: llistat d'arxius
 func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
+	user, authenticated := a.VerificarSessio(r)
+	if !authenticated || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	filter := db.ArxiuFilter{
-		Text:  strings.TrimSpace(r.URL.Query().Get("q")),
-		Tipus: strings.TrimSpace(r.URL.Query().Get("tipus")),
-		Acces: strings.TrimSpace(r.URL.Query().Get("acces")),
-	}
+	perms := a.getPermissionsForUser(user.ID)
+	canManage := a.hasPerm(perms, permArxius)
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
 	if status == "" {
 		status = "publicat"
 	}
-	filter.Status = status
+	filter := db.ArxiuFilter{
+		Text:   strings.TrimSpace(r.URL.Query().Get("q")),
+		Tipus:  strings.TrimSpace(r.URL.Query().Get("tipus")),
+		Acces:  strings.TrimSpace(r.URL.Query().Get("acces")),
+		Status: status,
+	}
 	if v := strings.TrimSpace(r.URL.Query().Get("entitat_id")); v != "" {
 		if id, err := strconv.Atoi(v); err == nil {
 			filter.EntitatID = id
@@ -109,8 +116,8 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
 		"Arxius":          arxius,
 		"Filter":          filter,
-		"CanManageArxius": true,
-		"ArxiusBasePath":  "/admin/arxius",
+		"CanManageArxius": canManage,
+		"ArxiusBasePath":  "/documentals/arxius",
 		"Arquebisbats":    arquebisbats,
 		"User":            user,
 	})
@@ -162,7 +169,7 @@ func (a *App) AdminCreateArxiu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/admin/arxius", http.StatusSeeOther)
+		http.Redirect(w, r, "/documentals/arxius", http.StatusSeeOther)
 		return
 	}
 	arxiu := parseArxiuForm(r)
@@ -180,7 +187,7 @@ func (a *App) AdminCreateArxiu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuCreate, "crear", "arxiu", &id, "pendent", nil, "")
-	http.Redirect(w, r, "/admin/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
+	http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
 }
 
 // Edició
@@ -205,7 +212,7 @@ func (a *App) AdminUpdateArxiu(w http.ResponseWriter, r *http.Request) {
 	}
 	id := extractID(r.URL.Path)
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/admin/arxius/"+strconv.Itoa(id)+"/edit", http.StatusSeeOther)
+		http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id)+"/edit", http.StatusSeeOther)
 		return
 	}
 	arxiu := parseArxiuForm(r)
@@ -218,7 +225,7 @@ func (a *App) AdminUpdateArxiu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuUpdate, "editar", "arxiu", &id, "pendent", nil, "")
-	http.Redirect(w, r, "/admin/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
+	http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
 }
 
 func (a *App) AdminDeleteArxiu(w http.ResponseWriter, r *http.Request) {
@@ -227,7 +234,7 @@ func (a *App) AdminDeleteArxiu(w http.ResponseWriter, r *http.Request) {
 	}
 	id := extractID(r.URL.Path)
 	_ = a.DB.DeleteArxiu(id)
-	http.Redirect(w, r, "/admin/arxius", http.StatusSeeOther)
+	http.Redirect(w, r, "/documentals/arxius", http.StatusSeeOther)
 }
 
 func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
@@ -248,7 +255,7 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 		"Llibres":         llibres,
 		"EntitatNom":      entNom,
 		"CanManageArxius": true,
-		"ArxiusBasePath":  "/admin/arxius",
+		"ArxiusBasePath":  "/documentals/arxius",
 		"User":            user,
 	})
 }
@@ -259,21 +266,21 @@ func (a *App) AdminAddArxiuLlibre(w http.ResponseWriter, r *http.Request) {
 	}
 	id := extractID(r.URL.Path)
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/admin/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
+		http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
 		return
 	}
 	llibreID, _ := strconv.Atoi(r.FormValue("llibre_id"))
 	signatura := strings.TrimSpace(r.FormValue("signatura"))
 	urlOverride := strings.TrimSpace(r.FormValue("url_override"))
 	if llibreID == 0 {
-		http.Redirect(w, r, "/admin/arxius/"+strconv.Itoa(id)+"?error=llibre", http.StatusSeeOther)
+		http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id)+"?error=llibre", http.StatusSeeOther)
 		return
 	}
 	if err := a.DB.AddArxiuLlibre(id, llibreID, signatura, urlOverride); err != nil {
-		http.Redirect(w, r, "/admin/arxius/"+strconv.Itoa(id)+"?error=dup", http.StatusSeeOther)
+		http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id)+"?error=dup", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/admin/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
+	http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
 }
 
 func (a *App) AdminUpdateArxiuLlibre(w http.ResponseWriter, r *http.Request) {
@@ -290,7 +297,7 @@ func (a *App) AdminUpdateArxiuLlibre(w http.ResponseWriter, r *http.Request) {
 	signatura := strings.TrimSpace(r.FormValue("signatura"))
 	urlOverride := strings.TrimSpace(r.FormValue("url_override"))
 	_ = a.DB.UpdateArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
-	http.Redirect(w, r, "/admin/arxius/"+strconv.Itoa(arxiuID), http.StatusSeeOther)
+	http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(arxiuID), http.StatusSeeOther)
 }
 
 func (a *App) AdminDeleteArxiuLlibre(w http.ResponseWriter, r *http.Request) {
@@ -305,7 +312,7 @@ func (a *App) AdminDeleteArxiuLlibre(w http.ResponseWriter, r *http.Request) {
 	arxiuID, _ := strconv.Atoi(parts[2])
 	llibreID, _ := strconv.Atoi(parts[4])
 	_ = a.DB.DeleteArxiuLlibre(arxiuID, llibreID)
-	http.Redirect(w, r, "/admin/arxius/"+strconv.Itoa(arxiuID), http.StatusSeeOther)
+	http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(arxiuID), http.StatusSeeOther)
 }
 
 // util

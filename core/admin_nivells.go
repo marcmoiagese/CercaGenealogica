@@ -17,10 +17,11 @@ var nivellEstats = map[string]bool{
 }
 
 func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	paisID := extractID(r.URL.Path)
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {
@@ -30,11 +31,15 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 	paisos, _ := a.DB.ListPaisos()
 	niv, _ := strconv.Atoi(r.URL.Query().Get("nivel"))
 	estat := strings.TrimSpace(r.URL.Query().Get("estat"))
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	if status == "" {
+		status = "publicat"
+	}
 	filter := db.NivellAdminFilter{
 		PaisID: paisID,
 		Nivel:  niv,
 		Estat:  estat,
-		Status: "publicat",
+		Status: status,
 	}
 	nivells, _ := a.DB.ListNivells(filter)
 	var pais *db.Pais
@@ -49,7 +54,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		"Pais":            pais,
 		"Paisos":          paisos,
 		"Filter":          filter,
-		"CanManageArxius": true,
+		"CanManageArxius": a.hasPerm(a.getPermissionsForUser(user.ID), permArxius),
 		"User":            user,
 	})
 }
@@ -165,7 +170,7 @@ func (a *App) AdminSaveNivell(w http.ResponseWriter, r *http.Request) {
 		a.renderNivellFormError(w, r, nivell, "No s'ha pogut desar el nivell administratiu.", id == 0)
 		return
 	}
-	http.Redirect(w, r, "/admin/paisos/"+strconv.Itoa(nivell.PaisID)+"/nivells", http.StatusSeeOther)
+	http.Redirect(w, r, "/territori/paisos/"+strconv.Itoa(nivell.PaisID)+"/nivells", http.StatusSeeOther)
 }
 
 func (a *App) validateNivell(n *db.NivellAdministratiu) string {
@@ -230,7 +235,7 @@ func (a *App) AdminSaveNivellNomHistoric(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/admin/nivells", http.StatusSeeOther)
+		http.Redirect(w, r, "/territori/nivells", http.StatusSeeOther)
 		return
 	}
 	nivID := extractID(r.URL.Path)
@@ -256,9 +261,9 @@ func (a *App) AdminSaveNivellNomHistoric(w http.ResponseWriter, r *http.Request)
 		Font:                  strings.TrimSpace(r.FormValue("font")),
 	}
 	if nh.Nom == "" {
-		http.Redirect(w, r, "/admin/nivells/"+strconv.Itoa(nivID)+"/edit?error=nomh", http.StatusSeeOther)
+		http.Redirect(w, r, "/territori/nivells/"+strconv.Itoa(nivID)+"/edit?error=nomh", http.StatusSeeOther)
 		return
 	}
 	_, _ = a.DB.SaveNomHistoric(nh)
-	http.Redirect(w, r, "/admin/nivells/"+strconv.Itoa(nivID)+"/edit", http.StatusSeeOther)
+	http.Redirect(w, r, "/territori/nivells/"+strconv.Itoa(nivID)+"/edit", http.StatusSeeOther)
 }
