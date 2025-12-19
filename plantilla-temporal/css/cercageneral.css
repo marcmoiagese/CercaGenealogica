@@ -1,0 +1,213 @@
+/* --- SOBREESCRITURA PER EVITAR QUE INPUTS AFECTIN CHECKBOXOS --- */
+
+.columna-esquerra .filtre-grup input[type="text"],
+.columna-esquerra .filtre-grup input[type="search"],
+.columna-esquerra .filtre-grup input[type="number"],
+.columna-esquerra .filtre-grup input[type="date"] {
+    width: 100%;
+    padding: 10px 15px;
+    border: 1px solid var(--color-borda);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+/* --- ESTIL EXPLICÍTIC PER A CHECKBOXOS --- */
+
+.columna-esquerra .filtre-grup input[type="checkbox"] {
+    width: auto !important;
+    padding: 0 !important;
+    border: none !important;
+    margin-right: 6px !important;
+    vertical-align: middle !important;
+}
+
+
+/* --- CONTENIDOR GENERAL I LAYOUT --- */
+
+.buscador-container {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+}
+
+.columna-dreta {
+    flex: 1;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    padding: 20px;
+}
+
+/* --- INPUT DE CERCA --- */
+.cerca-input {
+    width: 100%;
+    padding: 10px 15px;
+    border: 1px solid var(--color-borda);
+    border-radius: 4px;
+    font-size: 14px;
+    margin-bottom: 15px;
+}
+
+/* --- COLUMNA ESQUERRA (FILTRES) --- */
+.columna-esquerra {
+    width: 300px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    padding: 20px;
+}
+
+.columna-esquerra .filtre-grup label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.columna-esquerra .filtre-checklist {
+    padding-left: 0;
+    list-style: none;
+}
+
+.columna-esquerra .filtro-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 24px;
+}
+
+.columna-esquerra .filtro-etiqueta {
+    display: flex;
+    align-items: center; /* Alinea verticalment */
+    gap: 6px; /* Espai entre checkbox i text */
+    min-width: 0;
+}
+
+.columna-esquerra .filtro-etiqueta input[type="checkbox"] {
+    margin: 0;
+    padding: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--color-borda);
+    background-color: #fff;
+    border-radius: 3px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transform: translateY(-4px);
+}
+
+/* Marca ✔ quan està seleccionat */
+.columna-esquerra .filtro-etiqueta input[type="checkbox"]:checked::after {
+    content: "✔";
+    position: absolute;
+    top: 1px;
+    left: 2px;
+    font-size: 15px;
+    color: var(--secondary-color);
+}
+
+.columna-esquerra .filtro-etiqueta {
+    line-height: 1.4;
+}
+
+.columna-esquerra .filtro-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+
+.columna-esquerra .comptador {
+    color: var(--color-text-clar);
+    font-size: 0.9em;
+    white-space: nowrap;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+/* --- BOTÓ DE CERCA --- */
+
+.boto-cerca {
+    width: 100%;
+    padding: 10px;
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.boto-cerca:hover {
+    background-color: #0d4b6e;
+}
+
+/* --- RESULTATS PAGINATS --- */
+
+.resultats-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--color-borda);
+}
+
+.resultats-total {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.resultat-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--color-borda);
+}
+
+.resultat-nom {
+    font-weight: bold;
+}
+
+.resultat-ann {
+    text-align: center;
+}
+
+.resultat-municipi {
+    text-align: right;
+    color: var(--color-text-clar);
+}
+
+.paginacio {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 20px;
+}
+
+.boto-pagina {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--color-borda);
+    background-color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.boto-pagina:hover {
+    background-color: #f1f1f1;
+}
+
+.boto-pagina.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}

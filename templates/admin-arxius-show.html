@@ -41,8 +41,11 @@
         </section>
 
         <section class="card">
-            <header class="card-header">
+            <header class="card-header card-header-flex">
                 <h2>{{ t .Lang "archives.books.linked" }}</h2>
+                {{ if $.Data.CanManageArxius }}
+                <a class="boto-primari" href="/documentals/llibres/new?arxiu_id={{ .Data.Arxiu.ID }}&return_to=/documentals/arxius/{{ .Data.Arxiu.ID }}">{{ t .Lang "archives.books.add.submit" }}</a>
+                {{ end }}
             </header>
             <div class="taula-wrapper">
                 <table class="taula">
@@ -51,6 +54,7 @@
                             <th>{{ t .Lang "archives.books.col.title" }}</th>
                             <th>{{ t .Lang "archives.books.col.chrono" }}</th>
                             <th>{{ t .Lang "archives.books.col.municipi" }}</th>
+                            <th>{{ t .Lang "books.col.pages" }}</th>
                             <th>{{ t .Lang "archives.books.col.signatura" }}</th>
                             <th>{{ t .Lang "archives.books.col.url" }}</th>
                             {{ if $.Data.CanManageArxius }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
@@ -59,28 +63,16 @@
                     <tbody>
                         {{ range .Data.Llibres }}
                         <tr>
-                            <td>{{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}</td>
+                            <td><a href="/documentals/llibres/{{ .LlibreID }}">{{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}</a></td>
                             <td>{{ .Cronologia }}</td>
                             <td>{{ .Municipi.String }}</td>
-                            <td>
-                                {{ if $.Data.CanManageArxius }}
-                                <form method="post" action="{{ $manageBase }}/{{ .ArxiuID }}/llibres/{{ .LlibreID }}/update">
-                                    <input type="text" name="signatura" value="{{ .Signatura.String }}">
-                                    <input type="text" name="url_override" value="{{ .URLOverride.String }}" placeholder="URL">
-                                    <button type="submit" class="boto-secundari">{{ t $.Lang "archives.books.update" }}</button>
-                                </form>
-                                {{ else }}
-                                {{ if .Signatura.Valid }}{{ .Signatura.String }}{{ end }}
-                                {{ end }}
-                            </td>
-                            <td>
-                                {{ if .URLOverride.Valid }}<a href="{{ .URLOverride.String }}" target="_blank">{{ .URLOverride.String }}</a>{{ end }}
-                            </td>
+                            <td>{{ if .Pagines.Valid }}{{ .Pagines.Int64 }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .Signatura.Valid }}{{ .Signatura.String }}{{ end }}</td>
+                            <td>{{ if .URLOverride.Valid }}<a href="{{ .URLOverride.String }}" target="_blank">{{ t $.Lang "archives.link" }}</a>{{ end }}</td>
                             {{ if $.Data.CanManageArxius }}
-                            <td>
-                                <form method="post" action="{{ $manageBase }}/{{ .ArxiuID }}/llibres/{{ .LlibreID }}/delete" onsubmit="return confirm('{{ t $.Lang "archives.books.remove.confirm" }}');">
-                                    <button type="submit" class="boto-perill">{{ t $.Lang "archives.action.delete" }}</button>
-                                </form>
+                            <td class="accions">
+                                <a href="/documentals/llibres/{{ .LlibreID }}/edit">{{ t $.Lang "archives.action.edit" }}</a> |
+                                <a href="/documentals/llibres/{{ .LlibreID }}/pagines">{{ t $.Lang "books.col.pages" }}</a>
                             </td>
                             {{ end }}
                         </tr>
@@ -88,25 +80,6 @@
                     </tbody>
                 </table>
             </div>
-
-            {{ if $.Data.CanManageArxius }}
-            <h3>{{ t .Lang "archives.books.add" }}</h3>
-            <form method="post" action="{{ $manageBase }}/{{ .Data.Arxiu.ID }}/llibres/add">
-                <div class="grup-camp">
-                    <label for="llibre_id">{{ t .Lang "archives.books.add.llibre_id" }}</label>
-                    <input type="number" id="llibre_id" name="llibre_id" required>
-                </div>
-                <div class="grup-camp">
-                    <label for="signatura">{{ t .Lang "archives.books.add.signatura" }}</label>
-                    <input type="text" id="signatura" name="signatura">
-                </div>
-                <div class="grup-camp">
-                    <label for="url_override">{{ t .Lang "archives.books.add.url_override" }}</label>
-                    <input type="text" id="url_override" name="url_override">
-                </div>
-                <button type="submit" class="boto-primari">{{ t .Lang "archives.books.add.submit" }}</button>
-            </form>
-            {{ end }}
         </section>
     </main>
     {{ template "footer" . }}

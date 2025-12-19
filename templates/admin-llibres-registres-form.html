@@ -1,0 +1,406 @@
+{{ define "admin-llibres-registres-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "records.form.new" }}{{ else }}{{ t .Lang "records.form.edit" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/indexer.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ if .Data.IsNew }}{{ t .Lang "records.form.new" }}{{ else }}{{ t .Lang "records.form.edit" }}{{ end }}</h1>
+                <p class="muted">{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</p>
+            </header>
+            {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
+            <form method="post" action="{{ if .Data.IsNew }}/documentals/llibres/{{ .Data.Llibre.ID }}/registres{{ else }}/documentals/registres/{{ .Data.Registre.ID }}/editar{{ end }}">
+                <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
+
+                <div class="grup-camp">
+                    <label for="tipus_acte">{{ t .Lang "records.form.type" }}</label>
+                    <select id="tipus_acte" name="tipus_acte">
+                        {{ range .Data.TipusActeOptions }}
+                        <option value="{{ . }}" {{ if eq $.Data.Registre.TipusActe . }}selected{{ end }}>{{ t $.Lang (printf "records.type.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+
+                <div class="grup-camp">
+                    <label for="any_doc">{{ t .Lang "records.form.year" }}</label>
+                    <input id="any_doc" name="any_doc" type="number" value="{{ if .Data.Registre.AnyDoc.Valid }}{{ .Data.Registre.AnyDoc.Int64 }}{{ end }}">
+                </div>
+
+                <div class="grup-camp">
+                    <label for="pagina_id">{{ t .Lang "records.form.page" }}</label>
+                    <select id="pagina_id" name="pagina_id">
+                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
+                        {{ range .Data.Pagines }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Registre.PaginaID.Valid (eq (int $.Data.Registre.PaginaID.Int64) .ID) }}selected{{ end }}>{{ .NumPagina }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+
+                <div class="grup-camp">
+                    <label for="num_pagina_text">{{ t .Lang "records.form.page.text" }}</label>
+                    <input id="num_pagina_text" name="num_pagina_text" type="text" value="{{ .Data.Registre.NumPaginaText }}">
+                </div>
+
+                <div class="grup-camp">
+                    <label for="posicio_pagina">{{ t .Lang "records.form.page.position" }}</label>
+                    <input id="posicio_pagina" name="posicio_pagina" type="number" value="{{ if .Data.Registre.PosicioPagina.Valid }}{{ .Data.Registre.PosicioPagina.Int64 }}{{ end }}">
+                </div>
+
+                <div class="grup-camp">
+                    <label for="data_acte_text">{{ t .Lang "records.form.date.text" }}</label>
+                    <input id="data_acte_text" name="data_acte_text" type="text" value="{{ .Data.Registre.DataActeText }}">
+                </div>
+
+                <div class="grup-camp">
+                    <label for="data_acte_iso">{{ t .Lang "records.form.date.iso" }}</label>
+                    <input id="data_acte_iso" name="data_acte_iso" type="date" value="{{ .Data.Registre.DataActeISO.String }}">
+                </div>
+
+                <div class="grup-camp">
+                    <label for="data_acte_estat">{{ t .Lang "records.form.date.state" }}</label>
+                    <select id="data_acte_estat" name="data_acte_estat">
+                        {{ range .Data.QualitatOptions }}
+                        <option value="{{ . }}" {{ if eq $.Data.Registre.DataActeEstat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+
+                <div class="grup-camp">
+                    <label for="transcripcio_literal">{{ t .Lang "records.form.transcription" }}</label>
+                    <textarea id="transcripcio_literal" name="transcripcio_literal" rows="6">{{ .Data.Registre.TranscripcioLiteral }}</textarea>
+                </div>
+
+                <div class="grup-camp">
+                    <label for="notes_marginals">{{ t .Lang "records.form.notes.marginal" }}</label>
+                    <textarea id="notes_marginals" name="notes_marginals" rows="3">{{ .Data.Registre.NotesMarginals }}</textarea>
+                </div>
+
+                <div class="grup-camp">
+                    <label for="observacions_paleografiques">{{ t .Lang "records.form.notes.paleo" }}</label>
+                    <textarea id="observacions_paleografiques" name="observacions_paleografiques" rows="3">{{ .Data.Registre.ObservacionsPaleografiques }}</textarea>
+                </div>
+
+                <h2>{{ t .Lang "records.form.people" }}</h2>
+                <div class="taula-wrapper indexer-table">
+                    <table class="taula">
+                        <thead>
+                            <tr>
+                                <th>{{ t .Lang "records.form.people.role" }}</th>
+                                <th>{{ t .Lang "records.form.people.name" }}</th>
+                                <th>{{ t .Lang "records.field.qualitat" }} {{ t .Lang "records.form.people.name" }}</th>
+                                <th>{{ t .Lang "records.form.people.surname1" }}</th>
+                                <th>{{ t .Lang "records.field.qualitat" }} {{ t .Lang "records.form.people.surname1" }}</th>
+                                <th>{{ t .Lang "records.form.people.surname2" }}</th>
+                                <th>{{ t .Lang "records.field.qualitat" }} {{ t .Lang "records.form.people.surname2" }}</th>
+                                <th>{{ t .Lang "records.form.people.sex" }}</th>
+                                <th>{{ t .Lang "records.field.qualitat" }} {{ t .Lang "records.form.people.sex" }}</th>
+                                <th>{{ t .Lang "records.form.people.age" }}</th>
+                                <th>{{ t .Lang "records.field.qualitat" }} {{ t .Lang "records.form.people.age" }}</th>
+                                <th>{{ t .Lang "records.form.people.civil" }}</th>
+                                <th>{{ t .Lang "records.field.qualitat" }} {{ t .Lang "records.form.people.civil" }}</th>
+                                <th>{{ t .Lang "records.form.people.place" }}</th>
+                                <th>{{ t .Lang "records.field.qualitat" }} {{ t .Lang "records.form.people.place" }}</th>
+                                <th>{{ t .Lang "records.form.people.job" }}</th>
+                                <th>{{ t .Lang "records.field.qualitat" }} {{ t .Lang "records.form.people.job" }}</th>
+                                <th>{{ t .Lang "records.form.people.house" }}</th>
+                                <th>{{ t .Lang "records.field.qualitat" }} {{ t .Lang "records.form.people.house" }}</th>
+                                <th>{{ t .Lang "records.form.notes" }}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="persones-container">
+                            {{ range .Data.Persones }}
+                            {{ $p := . }}
+                            <tr>
+                                <td>
+                                    <select name="person_rol">
+                                        <option value="">{{ t $.Lang "common.select" }}</option>
+                                        {{ range $.Data.RoleOptions }}
+                                        <option value="{{ .Value }}" {{ if eq $p.Rol .Value }}selected{{ end }}>{{ .Label }}</option>
+                                        {{ end }}
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" name="person_nom" value="{{ $p.Nom }}">
+                                </td>
+                                <td>
+                                    <select name="person_nom_estat">
+                                        {{ range $.Data.QualitatOptions }}
+                                        <option value="{{ . }}" {{ if eq $p.NomEstat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                                        {{ end }}
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" name="person_cognom1" value="{{ $p.Cognom1 }}">
+                                </td>
+                                <td>
+                                    <select name="person_cognom1_estat">
+                                        {{ range $.Data.QualitatOptions }}
+                                        <option value="{{ . }}" {{ if eq $p.Cognom1Estat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                                        {{ end }}
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" name="person_cognom2" value="{{ $p.Cognom2 }}">
+                                </td>
+                                <td>
+                                    <select name="person_cognom2_estat">
+                                        {{ range $.Data.QualitatOptions }}
+                                        <option value="{{ . }}" {{ if eq $p.Cognom2Estat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                                        {{ end }}
+                                    </select>
+                                </td>
+                                <td>
+                                    <select name="person_sexe">
+                                        <option value="">{{ t $.Lang "common.select" }}</option>
+                                        <option value="masculi" {{ if eq $p.Sexe "masculi" }}selected{{ end }}>{{ t $.Lang "records.value.sex.masculi" }}</option>
+                                        <option value="femeni" {{ if eq $p.Sexe "femeni" }}selected{{ end }}>{{ t $.Lang "records.value.sex.femeni" }}</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select name="person_sexe_estat">
+                                        {{ range $.Data.QualitatOptions }}
+                                        <option value="{{ . }}" {{ if eq $p.SexeEstat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                                        {{ end }}
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" name="person_edat" value="{{ $p.EdatText }}">
+                                </td>
+                                <td>
+                                    <select name="person_edat_estat">
+                                        {{ range $.Data.QualitatOptions }}
+                                        <option value="{{ . }}" {{ if eq $p.EdatEstat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                                        {{ end }}
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" name="person_estat_civil" value="{{ $p.EstatCivilText }}">
+                                </td>
+                                <td>
+                                    <select name="person_estat_civil_estat">
+                                        {{ range $.Data.QualitatOptions }}
+                                        <option value="{{ . }}" {{ if eq $p.EstatCivilEstat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                                        {{ end }}
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" name="person_municipi" value="{{ $p.MunicipiText }}">
+                                </td>
+                                <td>
+                                    <select name="person_municipi_estat">
+                                        {{ range $.Data.QualitatOptions }}
+                                        <option value="{{ . }}" {{ if eq $p.MunicipiEstat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                                        {{ end }}
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" name="person_ofici" value="{{ $p.OficiText }}">
+                                </td>
+                                <td>
+                                    <select name="person_ofici_estat">
+                                        {{ range $.Data.QualitatOptions }}
+                                        <option value="{{ . }}" {{ if eq $p.OficiEstat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                                        {{ end }}
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" name="person_casa" value="{{ $p.CasaNom }}">
+                                </td>
+                                <td>
+                                    <select name="person_casa_estat">
+                                        {{ range $.Data.QualitatOptions }}
+                                        <option value="{{ . }}" {{ if eq $p.CasaEstat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                                        {{ end }}
+                                    </select>
+                                </td>
+                                <td><input type="text" name="person_notes" value="{{ $p.Notes }}"></td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-actions">
+                    <button type="button" class="boto-secundari" id="add-person">{{ t .Lang "records.form.people.add" }}</button>
+                </div>
+
+                <h2>{{ t .Lang "records.form.attributes" }}</h2>
+                <div class="taula-wrapper indexer-table">
+                    <table class="taula">
+                        <thead>
+                            <tr>
+                                <th>{{ t .Lang "records.form.attributes.key" }}</th>
+                                <th>{{ t .Lang "records.form.attributes.type" }}</th>
+                                <th>{{ t .Lang "records.form.attributes.value" }}</th>
+                                <th>{{ t .Lang "records.form.attributes.state" }}</th>
+                                <th>{{ t .Lang "records.form.notes" }}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="atributs-container">
+                            {{ range .Data.Atributs }}
+                            {{ $a := . }}
+                            <tr>
+                                <td><input type="text" name="attr_key" value="{{ $a.Clau }}"></td>
+                                <td>
+                                    <select name="attr_type">
+                                        {{ range $.Data.ValorTipus }}
+                                        <option value="{{ . }}" {{ if eq $a.TipusValor . }}selected{{ end }}>{{ . }}</option>
+                                        {{ end }}
+                                    </select>
+                                </td>
+                                <td><input type="text" name="attr_value" value="{{ if $a.ValorText }}{{ $a.ValorText }}{{ else if $a.ValorInt.Valid }}{{ $a.ValorInt.Int64 }}{{ else if $a.ValorDate.Valid }}{{ $a.ValorDate.String }}{{ else if $a.ValorBool.Valid }}{{ if $a.ValorBool.Bool }}1{{ else }}0{{ end }}{{ end }}"></td>
+                                <td>
+                                    <select name="attr_state">
+                                        {{ range $.Data.QualitatOptions }}
+                                        <option value="{{ . }}" {{ if eq $a.Estat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                                        {{ end }}
+                                    </select>
+                                </td>
+                                <td><input type="text" name="attr_notes" value="{{ $a.Notes }}"></td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-actions">
+                    <button type="button" class="boto-secundari" id="add-attr">{{ t .Lang "records.form.attributes.add" }}</button>
+                </div>
+
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "records.form.save" }}</button>
+                    <a class="boto-secundari" href="{{ .Data.ReturnURL }}">{{ t .Lang "records.form.cancel" }}</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script>
+        (function() {
+            const personContainer = document.getElementById('persones-container');
+            const attrContainer = document.getElementById('atributs-container');
+            const addPerson = document.getElementById('add-person');
+            const addAttr = document.getElementById('add-attr');
+
+            const qualityOptions = {{ toJsonJS .Data.QualitatOptions }};
+            const qualityLabels = {{ toJsonJS .Data.QualitatLabels }};
+            const typeOptions = {{ toJsonJS .Data.ValorTipus }};
+            const roleOptions = {{ toJsonJS .Data.RoleOptions }};
+
+            function qualitySelect(name) {
+                const select = document.createElement('select');
+                select.name = name;
+                qualityOptions.forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt;
+                    o.textContent = qualityLabels[opt] || opt;
+                    select.appendChild(o);
+                });
+                return select;
+            }
+
+            function roleSelect(name) {
+                const select = document.createElement('select');
+                select.name = name;
+                const emptyOpt = document.createElement('option');
+                emptyOpt.value = '';
+                emptyOpt.textContent = '{{ t .Lang "common.select" }}';
+                select.appendChild(emptyOpt);
+                roleOptions.forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt.Value;
+                    o.textContent = opt.Label || opt.Value;
+                    select.appendChild(o);
+                });
+                return select;
+            }
+
+            function sexSelect(name) {
+                const select = document.createElement('select');
+                select.name = name;
+                const emptyOpt = document.createElement('option');
+                emptyOpt.value = '';
+                emptyOpt.textContent = '{{ t .Lang "common.select" }}';
+                select.appendChild(emptyOpt);
+                const optM = document.createElement('option');
+                optM.value = 'masculi';
+                optM.textContent = '{{ t .Lang "records.value.sex.masculi" }}';
+                select.appendChild(optM);
+                const optF = document.createElement('option');
+                optF.value = 'femeni';
+                optF.textContent = '{{ t .Lang "records.value.sex.femeni" }}';
+                select.appendChild(optF);
+                return select;
+            }
+
+            addPerson.addEventListener('click', () => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td></td>
+                    <td><input type="text" name="person_nom"></td>
+                    <td></td>
+                    <td><input type="text" name="person_cognom1"></td>
+                    <td></td>
+                    <td><input type="text" name="person_cognom2"></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td><input type="text" name="person_edat"></td>
+                    <td></td>
+                    <td><input type="text" name="person_estat_civil"></td>
+                    <td></td>
+                    <td><input type="text" name="person_municipi"></td>
+                    <td></td>
+                    <td><input type="text" name="person_ofici"></td>
+                    <td></td>
+                    <td><input type="text" name="person_casa"></td>
+                    <td></td>
+                    <td><input type="text" name="person_notes"></td>
+                `;
+                row.children[0].appendChild(roleSelect('person_rol'));
+                row.children[2].appendChild(qualitySelect('person_nom_estat'));
+                row.children[4].appendChild(qualitySelect('person_cognom1_estat'));
+                row.children[6].appendChild(qualitySelect('person_cognom2_estat'));
+                row.children[7].appendChild(sexSelect('person_sexe'));
+                row.children[8].appendChild(qualitySelect('person_sexe_estat'));
+                row.children[10].appendChild(qualitySelect('person_edat_estat'));
+                row.children[12].appendChild(qualitySelect('person_estat_civil_estat'));
+                row.children[14].appendChild(qualitySelect('person_municipi_estat'));
+                row.children[16].appendChild(qualitySelect('person_ofici_estat'));
+                row.children[18].appendChild(qualitySelect('person_casa_estat'));
+                personContainer.appendChild(row);
+            });
+
+            addAttr.addEventListener('click', () => {
+                const row = document.createElement('tr');
+                const typeSelect = document.createElement('select');
+                typeSelect.name = 'attr_type';
+                typeOptions.forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt;
+                    o.textContent = opt;
+                    typeSelect.appendChild(o);
+                });
+                row.innerHTML = `
+                    <td><input type="text" name="attr_key"></td>
+                    <td></td>
+                    <td><input type="text" name="attr_value"></td>
+                    <td></td>
+                    <td><input type="text" name="attr_notes"></td>
+                `;
+                row.children[1].appendChild(typeSelect);
+                row.children[3].appendChild(qualitySelect('attr_state'));
+                attrContainer.appendChild(row);
+            });
+        })();
+    </script>
+</body>
+</html>
+{{ end }}

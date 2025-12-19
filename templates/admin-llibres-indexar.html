@@ -1,0 +1,109 @@
+{{ define "admin-llibres-indexar.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "records.index.title" }}</title>
+    <meta name="csrf-token" content="{{ .Data.CSRFToken }}">
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/taula.css">
+    <link rel="stylesheet" href="/static/css/indexer.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal indexer-wide">
+        <section class="hero">
+            <h1>{{ t .Lang "records.index.title" }}</h1>
+            <p>{{ t .Lang "records.index.subtitle" }}</p>
+        </section>
+
+        <section class="card indexer-card">
+            <header class="card-header card-header-flex">
+                <div class="indexer-header-title">
+                    <h2>
+                        <i class="fas fa-book-open"></i>
+                        {{ if .Data.MunicipiNom }}{{ .Data.MunicipiNom }} - {{ end }}{{ t .Lang "records.index.book_label" }} {{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}
+                    </h2>
+                    <p class="muted">{{ t .Lang (printf "books.type.%s" .Data.TipusActe) }}</p>
+                </div>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="{{ .Data.ReturnTo }}">{{ t .Lang "books.action.back" }}</a>
+                </div>
+            </header>
+
+            <form id="indexer-form" method="post" action="/documentals/llibres/{{ .Data.Llibre.ID }}/indexar/commit">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="payload" id="indexer-payload">
+
+                <div id="indexer-root"
+                     class="indexer-toolbar"
+                     data-action-label="{{ t .Lang "records.index.action" }}"
+                     data-remove-label="{{ t .Lang "records.index.remove_row" }}"
+                     data-draft-saved="{{ t .Lang "records.index.draft_saved" }}"
+                     data-draft-failed="{{ t .Lang "records.index.draft_failed" }}"
+                     data-submit-failed="{{ t .Lang "records.index.submit_failed" }}"
+                     data-empty="{{ t .Lang "records.index.empty" }}">
+                    <div class="indexer-controls">
+                        <button type="button" class="boto-primari indexer-btn indexer-add-row" id="indexer-add-row">
+                            <i class="fas fa-plus"></i>
+                            <span>{{ t .Lang "records.index.add_row" }}</span>
+                        </button>
+                        <button type="button" class="boto-secundari indexer-btn indexer-save-draft" id="indexer-save-draft">
+                            <i class="fas fa-save"></i>
+                            <span>{{ t .Lang "records.index.save_draft" }}</span>
+                        </button>
+                        <button type="button" class="boto-secundari indexer-btn indexer-clear-draft" id="indexer-clear-draft">
+                            <i class="fas fa-eraser"></i>
+                            <span>{{ t .Lang "records.index.clear_draft" }}</span>
+                        </button>
+                    </div>
+                    <div class="indexer-status" id="indexer-status"></div>
+                    <div>
+                        <button type="submit" class="boto-primari indexer-btn indexer-submit">
+                            <i class="fas fa-check"></i>
+                            <span>{{ t .Lang "records.index.submit" }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="taula-wrapper indexer-table">
+                    <table class="taula" id="indexer-table">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <div class="indexer-toolbar indexer-toolbar-bottom">
+                    <div class="indexer-controls">
+                        <button type="button" class="boto-primari indexer-btn indexer-add-row">
+                            <i class="fas fa-plus"></i>
+                            <span>{{ t .Lang "records.index.add_row" }}</span>
+                        </button>
+                        <button type="button" class="boto-secundari indexer-btn indexer-save-draft">
+                            <i class="fas fa-save"></i>
+                            <span>{{ t .Lang "records.index.save_draft" }}</span>
+                        </button>
+                        <button type="button" class="boto-secundari indexer-btn indexer-clear-draft">
+                            <i class="fas fa-eraser"></i>
+                            <span>{{ t .Lang "records.index.clear_draft" }}</span>
+                        </button>
+                    </div>
+                    <div>
+                        <button type="submit" class="boto-primari indexer-btn indexer-submit">
+                            <i class="fas fa-check"></i>
+                            <span>{{ t .Lang "records.index.submit" }}</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script type="application/json" id="indexer-config">{{ toJsonJS .Data.Indexer }}</script>
+    <script type="application/json" id="indexer-draft">{{ toJsonJS .Data.DraftRows }}</script>
+    <script src="/static/js/indexer.js"></script>
+</body>
+</html>
+{{ end }}

@@ -10,6 +10,16 @@
     {{ template "header-private" . }}
     {{ template "menu" . }}
     <main class="contingut-principal">
+        <div class="persona-tabs">
+            <div class="tabs-botons" role="tablist" aria-label="{{ t .Lang "persons.tabs.label" }}">
+                <a class="tab-boto {{ if eq .Data.Tab "detall" }}actiu{{ end }}" href="/persones/{{ .Data.Persona.ID }}">
+                    {{ t .Lang "persons.tabs.detail" }}
+                </a>
+                <a class="tab-boto {{ if eq .Data.Tab "registres" }}actiu{{ end }}" href="/persones/{{ .Data.Persona.ID }}/registres">
+                    {{ t .Lang "persons.tabs.records" }}
+                </a>
+            </div>
+        </div>
         <section class="card">
             <header class="card-header">
                 <h1>{{ .Data.Persona.Nom }} {{ .Data.Persona.Cognom1 }} {{ .Data.Persona.Cognom2 }}</h1>

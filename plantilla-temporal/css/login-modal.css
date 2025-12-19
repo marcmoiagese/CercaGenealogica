@@ -1,0 +1,91 @@
+/* MODAL INICI DE SESSIÓ */
+.modal-login {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: none; /* Ocult per defecte */
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-contingut {
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 400px;
+    position: relative;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.modal-tanca {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    color: #666;
+    cursor: pointer;
+}
+
+.modal-tanca:hover {
+    color: var(--primary-color);
+}
+
+.modal-contingut h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    text-align: center;
+    color: var(--primary-color);
+}
+
+.form-grup {
+    margin-bottom: 15px;
+}
+
+.form-grup label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.form-grup input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--color-borda);
+    border-radius: 4px;
+}
+
+.boto-login-modal {
+    width: 100%;
+    padding: 10px;
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.boto-login-modal:hover {
+    background-color: #0d4b6e;
+}
+
+.opcions-addicionals {
+    margin-top: 15px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.opcions-addicionals a {
+    color: var(--primary-color);
+    text-decoration: none;
+    margin: 0 5px;
+}
+
+.opcions-addicionals a:hover {
+    text-decoration: underline;
+}

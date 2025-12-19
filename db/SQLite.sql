@@ -269,6 +269,7 @@ CREATE TABLE IF NOT EXISTS llibres (
     codi_fisic TEXT,                      -- ex: "UD: 05 / UI: 423" (Urgell)
     -- Metadades del llibre
     titol TEXT,
+    tipus_llibre TEXT,
     cronologia TEXT,                      -- ex: "21.10.1600 - 10.01.1663"
     volum TEXT,                           -- ex: "Foli partit de gran tamany"
     abat TEXT,
@@ -347,6 +348,98 @@ CREATE TABLE IF NOT EXISTS llibre_pagines (
 CREATE INDEX IF NOT EXISTS idx_arxius_llibres_arxiu  ON arxius_llibres(arxiu_id);
 CREATE INDEX IF NOT EXISTS idx_arxius_llibres_llibre ON arxius_llibres(llibre_id);
 CREATE INDEX IF NOT EXISTS idx_llibre_pagines_estat  ON llibre_pagines(llibre_id, estat);
+
+-- Transcripcions RAW de registres
+CREATE TABLE IF NOT EXISTS transcripcions_raw (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,
+  pagina_id INTEGER REFERENCES llibre_pagines(id) ON DELETE SET NULL,
+  num_pagina_text TEXT,
+  posicio_pagina INTEGER,
+  tipus_acte TEXT,
+  any_doc INTEGER,
+  data_acte_text TEXT,
+  data_acte_iso DATE,
+  data_acte_estat TEXT CHECK(data_acte_estat IN ('clar','dubtos','incomplet','illegible','no_consta')) DEFAULT 'clar',
+  transcripcio_literal TEXT,
+  notes_marginals TEXT,
+  observacions_paleografiques TEXT,
+  moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP,
+  moderation_notes TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS transcripcions_persones_raw (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transcripcio_id INTEGER NOT NULL REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+  rol TEXT,
+  nom TEXT,
+  nom_estat TEXT,
+  cognom1 TEXT,
+  cognom1_estat TEXT,
+  cognom2 TEXT,
+  cognom2_estat TEXT,
+  sexe TEXT,
+  sexe_estat TEXT,
+  edat_text TEXT,
+  edat_estat TEXT,
+  estat_civil_text TEXT,
+  estat_civil_estat TEXT,
+  municipi_text TEXT,
+  municipi_estat TEXT,
+  ofici_text TEXT,
+  ofici_estat TEXT,
+  casa_nom TEXT,
+  casa_estat TEXT,
+  persona_id INTEGER REFERENCES persona(id) ON DELETE SET NULL,
+  linked_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  linked_at TIMESTAMP,
+  notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS transcripcions_atributs_raw (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transcripcio_id INTEGER NOT NULL REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+  clau TEXT,
+  tipus_valor TEXT,
+  valor_text TEXT,
+  valor_int INTEGER,
+  valor_date DATE,
+  valor_bool INTEGER,
+  estat TEXT,
+  notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS transcripcions_raw_drafts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  payload TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (llibre_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_llibre_pagina
+  ON transcripcions_raw(llibre_id, pagina_id, posicio_pagina);
+CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_llibre_tipus_any
+  ON transcripcions_raw(llibre_id, tipus_acte, any_doc);
+CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_status
+  ON transcripcions_raw(moderation_status);
+
+CREATE INDEX IF NOT EXISTS idx_transcripcions_persones_raw_rol
+  ON transcripcions_persones_raw(transcripcio_id, rol);
+CREATE INDEX IF NOT EXISTS idx_transcripcions_persones_raw_nom
+  ON transcripcions_persones_raw(cognom1, cognom2, nom);
+
+CREATE INDEX IF NOT EXISTS idx_transcripcions_atributs_raw_clau
+  ON transcripcions_atributs_raw(clau);
+CREATE INDEX IF NOT EXISTS idx_transcripcions_atributs_raw_transcripcio
+  ON transcripcions_atributs_raw(transcripcio_id, clau);
 
 -- Taula de sessions (mapa token_hash -> usuari)
 CREATE TABLE IF NOT EXISTS sessions (

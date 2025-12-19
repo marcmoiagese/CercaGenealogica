@@ -1,0 +1,368 @@
+.buscador-dinamic {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    padding: 30px;
+    margin-bottom: 40px;
+}
+
+.buscador-dinamic h2 {
+    color: var(--primary-color);
+    margin-bottom: 25px;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+}
+
+.buscador-dinamic h2 i {
+    margin-right: 10px;
+    color: var(--secondary-color);
+}
+
+.filtres-localitzacio {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 10px; /* Separa dels marges */
+    margin-bottom: 20px; /* Opcional: espai cap per sota */
+}
+
+.filtre-grup {
+    flex: 1 1 200px;
+    min-width: 200px;
+}
+
+.filtre-grup label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: var(--color-text-clar);
+}
+
+.boto-cerca {
+    margin-top: 30px;
+}
+
+.filtre-grup select {
+    width: 100%;
+    padding: 10px 15px;
+    font-size: 14px;
+    border-radius: 4px;
+    border: 1px solid var(--color-borda);
+}
+
+.filtre-grup#municipiGrup {
+    flex: 1 1 200px;
+}
+
+
+/* Taula */
+.taula-resultats {
+    margin-top: 40px;
+}
+
+.taula-wrapper {
+    overflow-x: auto;
+}
+
+#taulaBuscadorMunicipis {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#taulaBuscadorMunicipis th,
+#taulaBuscadorMunicipis td {
+    padding: 12px 8px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+    white-space: nowrap;
+}
+
+#taulaBuscadorMunicipis th {
+    background-color: var(--primary-color);
+    color: white;
+    cursor: pointer;
+}
+
+#taulaBuscadorMunicipis th i {
+    margin-left: 5px;
+}
+
+.controls-paginacio {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 15px;
+}
+
+.controls-paginacio button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.controls-paginacio button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.percentatge-indexat {
+    font-size: 12px;
+    color: #777;
+    margin-left: 5px;
+}
+
+/* Estil per a les icones dins de la taula */
+#taulaBuscadorMunicipis td a i {
+    color: var(--primary-color); /* #2c3e50 */
+    margin-right: 10px;
+    transition: color 0.3s ease;
+}
+
+/* Efecte hover */
+#taulaBuscadorMunicipis td a:hover i {
+    color: var(--accent-color); /* #4fc3f7 */
+}
+
+.taula-paginacio {
+    margin-bottom: 15px;
+}
+
+.paginacio-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    min-height: 36px;
+}
+
+.pagina-info {
+    font-size: 14px;
+    color: #333;
+    white-space: nowrap;
+    margin-right: auto;
+}
+
+.registres-per-pagina {
+    padding: 5px 8px;
+    border: 1px solid var(--color-borda);
+    border-radius: 4px;
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+    background-color: white;
+    margin-left: auto; /* Empura a la dreta */
+    min-width: 120px;
+}
+
+.paginacio-controls button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s ease;
+}
+
+.paginacio-controls button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+/* Paginacio taula inferior */
+.paginacio-centrada {
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+.grup-botons-pagina button.boto-pagina {
+    margin: 0 5px;
+    padding: 5px 10px;
+    border: none;
+    background-color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.grup-botons-pagina button.boto-pagina.active {
+    background-color: #2c3e50;
+    color: white;
+}
+
+.grup-botons-pagina {
+    display: flex;
+    gap: 5px;
+}
+
+.boto-pagina {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--color-borda);
+    background-color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    color: #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.boto-pagina:hover {
+    background-color: #f1f1f1;
+}
+
+.boto-pagina.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.boto-pagina.disabled,
+.boto-pagina.disabled i {
+    color: #aaa;
+    background-color: #eee;
+    cursor: not-allowed;
+}
+
+
+.custom-select {
+    position: relative;
+    display: inline-block;
+    width: 140px;
+}
+
+.custom-select select {
+    width: 100%;
+    padding: 8px 10px 8px 10px;
+    border: 1px solid var(--color-borda);
+    border-radius: 4px;
+    background: white;
+    font-size: 14px;
+    color: #333;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+}
+
+
+.custom-select i {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: var(--color-text-clar);
+    font-size: 12px;
+}
+
+/* Buscador dinamic */
+.cerca-avançada {
+    position: relative;
+}
+
+.cerca-avançada label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+#campCercaAvançada {
+    width: 100%;
+    padding: 10px 15px;
+    border: 1px solid var(--color-borda);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.resultats-cerca {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: white;
+    border: 1px solid var(--color-borda);
+    border-top: none;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    display: none;
+}
+
+.resultats-cerca li {
+    padding: 10px 15px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+}
+
+.resultats-cerca li:last-child {
+    border-bottom: none;
+}
+
+.resultats-cerca li:hover {
+    background-color: #f1f1f1;
+}
+
+/* Registres barra de indexacio */
+
+.barra-progres {
+    display: inline-block;
+    width: 100px;
+    height: 10px;
+    background-color: #eee;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+.barra-progres .progres {
+    height: 100%;
+    width: 0%;
+    background-color: #4caf50; /* Verd */
+    transition: width 0.3s ease;
+}
+
+/* Colors dinàmics segons valor */
+.barra-progres .progres.verd { background-color: #4caf50; }
+.barra-progres .progres.groc { background-color: #ffeb3b; }
+.barra-progres .progres.taronja { background-color: #ff9800; }
+.barra-progres .progres.rosa { background-color: #f44336; }
+
+.percentatge-text {
+    font-size: 12px;
+    color: #666;
+    margin-left: 5px;
+    white-space: nowrap;
+}
+
+.barra-progres {
+    display: inline-block;
+    width: 80px;
+    height: 10px;
+    background-color: #e0e0e0;
+    border-radius: 5px;
+    overflow: hidden;
+    vertical-align: middle;
+}
+
+.progres {
+    height: 100%;
+    width: 0%;
+    transition: width 0.3s ease;
+}

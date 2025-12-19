@@ -92,6 +92,8 @@
                             <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
                             <td>
                                 <a href="/documentals/llibres/{{ .ID }}/edit">{{ t $.Lang "books.action.edit" }}</a> |
+                                <a href="/documentals/llibres/{{ .ID }}/indexar">{{ t $.Lang "books.action.index" }}</a> |
+                                <a href="/documentals/llibres/{{ .ID }}/registres">{{ t $.Lang "books.action.records" }}</a> |
                                 <a href="/documentals/llibres/{{ .ID }}/pagines">{{ t $.Lang "books.action.pages" }}</a>
                             </td>
                         </tr>

@@ -397,6 +397,70 @@ func (d *MySQL) RecalcLlibrePagines(llibreID, total int) error {
 	return d.help.recalcLlibrePagines(llibreID, total)
 }
 
+func (d *MySQL) ListTranscripcionsRaw(llibreID int, f TranscripcioFilter) ([]TranscripcioRaw, error) {
+	return d.help.listTranscripcionsRaw(llibreID, f)
+}
+func (d *MySQL) ListTranscripcionsRawGlobal(f TranscripcioFilter) ([]TranscripcioRaw, error) {
+	return d.help.listTranscripcionsRawGlobal(f)
+}
+func (d *MySQL) CountTranscripcionsRaw(llibreID int, f TranscripcioFilter) (int, error) {
+	return d.help.countTranscripcionsRaw(llibreID, f)
+}
+func (d *MySQL) CountTranscripcionsRawGlobal(f TranscripcioFilter) (int, error) {
+	return d.help.countTranscripcionsRawGlobal(f)
+}
+func (d *MySQL) GetTranscripcioRaw(id int) (*TranscripcioRaw, error) {
+	return d.help.getTranscripcioRaw(id)
+}
+func (d *MySQL) CreateTranscripcioRaw(t *TranscripcioRaw) (int, error) {
+	return d.help.createTranscripcioRaw(t)
+}
+func (d *MySQL) UpdateTranscripcioRaw(t *TranscripcioRaw) error {
+	return d.help.updateTranscripcioRaw(t)
+}
+func (d *MySQL) DeleteTranscripcioRaw(id int) error {
+	return d.help.deleteTranscripcioRaw(id)
+}
+func (d *MySQL) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
+	return d.help.listTranscripcioPersones(transcripcioID)
+}
+func (d *MySQL) CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error) {
+	return d.help.createTranscripcioPersona(p)
+}
+func (d *MySQL) DeleteTranscripcioPersones(transcripcioID int) error {
+	return d.help.deleteTranscripcioPersones(transcripcioID)
+}
+func (d *MySQL) LinkTranscripcioPersona(personaRawID int, personaID int, linkedBy int) error {
+	return d.help.linkTranscripcioPersona(personaRawID, personaID, linkedBy)
+}
+func (d *MySQL) UnlinkTranscripcioPersona(personaRawID int, linkedBy int) error {
+	return d.help.unlinkTranscripcioPersona(personaRawID, linkedBy)
+}
+func (d *MySQL) ListTranscripcioAtributs(transcripcioID int) ([]TranscripcioAtributRaw, error) {
+	return d.help.listTranscripcioAtributs(transcripcioID)
+}
+func (d *MySQL) CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error) {
+	return d.help.createTranscripcioAtribut(a)
+}
+func (d *MySQL) DeleteTranscripcioAtributs(transcripcioID int) error {
+	return d.help.deleteTranscripcioAtributs(transcripcioID)
+}
+func (d *MySQL) GetTranscripcioDraft(userID, llibreID int) (*TranscripcioDraft, error) {
+	return d.help.getTranscripcioDraft(userID, llibreID)
+}
+func (d *MySQL) SaveTranscripcioDraft(userID, llibreID int, payload string) error {
+	return d.help.saveTranscripcioDraft(userID, llibreID, payload)
+}
+func (d *MySQL) DeleteTranscripcioDraft(userID, llibreID int) error {
+	return d.help.deleteTranscripcioDraft(userID, llibreID)
+}
+func (d *MySQL) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
+	return d.help.searchPersones(f)
+}
+func (d *MySQL) ListRegistresByPersona(personaID int, tipus string) ([]PersonaRegistreRow, error) {
+	return d.help.listRegistresByPersona(personaID, tipus)
+}
+
 // Punts i activitat
 func (d *MySQL) ListPointsRules() ([]PointsRule, error) { return d.help.listPointsRules() }
 func (d *MySQL) GetPointsRule(id int) (*PointsRule, error) {
@@ -420,7 +484,7 @@ func (d *MySQL) ListActivityByObject(objectType string, objectID int, status str
 func (d *MySQL) AddPointsToUser(userID int, delta int) error {
 	return d.help.addPointsToUser(userID, delta)
 }
-func (d *MySQL) GetUserPoints(userID int) (*UserPoints, error) { return d.help.getUserPoints(userID) }
-func (d *MySQL) RecalcUserPoints() error                       { return d.help.recalcUserPoints() }
+func (d *MySQL) GetUserPoints(userID int) (*UserPoints, error)    { return d.help.getUserPoints(userID) }
+func (d *MySQL) RecalcUserPoints() error                          { return d.help.recalcUserPoints() }
 func (d *MySQL) GetRanking(f RankingFilter) ([]UserPoints, error) { return d.help.getRanking(f) }
 func (d *MySQL) CountRanking(f RankingFilter) (int, error)        { return d.help.countRanking(f) }

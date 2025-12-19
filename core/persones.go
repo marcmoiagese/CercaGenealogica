@@ -209,6 +209,71 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"CanManageArxius":   a.hasPerm(perms, permArxius),
 		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
 		"CanModerate":       perms.CanModerate || perms.Admin,
+		"Tab":               "detall",
+	})
+}
+
+func (a *App) PersonaRegistres(w http.ResponseWriter, r *http.Request) {
+	id := extractID(r.URL.Path)
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	user := userFromContext(r)
+	perms := db.PolicyPermissions{}
+	if user != nil {
+		perms = a.getPermissionsForUser(user.ID)
+	}
+	p, err := a.DB.GetPersona(id)
+	if err != nil || p == nil || p.ModeracioEstat != "publicat" {
+		http.NotFound(w, r)
+		return
+	}
+	tipus := strings.TrimSpace(r.URL.Query().Get("tipus"))
+	rows, _ := a.DB.ListRegistresByPersona(id, tipus)
+	type registreView struct {
+		ID     int
+		Tipus  string
+		Rol    string
+		Any    string
+		Llibre string
+		Pagina string
+		Estat  string
+	}
+	var views []registreView
+	for _, row := range rows {
+		title := row.LlibreTitol.String
+		if title == "" {
+			title = row.LlibreNom.String
+		}
+		pagina := row.NumPaginaText
+		if row.PaginaID.Valid {
+			pagina = strconv.FormatInt(row.PaginaID.Int64, 10)
+		}
+		anyVal := ""
+		if row.AnyDoc.Valid {
+			anyVal = strconv.FormatInt(row.AnyDoc.Int64, 10)
+		}
+		views = append(views, registreView{
+			ID:     row.RegistreID,
+			Tipus:  row.TipusActe,
+			Rol:    row.Rol,
+			Any:    anyVal,
+			Llibre: title,
+			Pagina: pagina,
+			Estat:  row.ModeracioEstat,
+		})
+	}
+	RenderPrivateTemplate(w, r, "persona-registres.html", map[string]interface{}{
+		"Persona":           p,
+		"User":              user,
+		"Registres":         views,
+		"TipusOptions":      transcripcioTipusActe,
+		"TipusSelected":     tipus,
+		"CanManageArxius":   a.hasPerm(perms, permArxius),
+		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
+		"CanModerate":       perms.CanModerate || perms.Admin,
+		"Tab":               "registres",
 	})
 }
 

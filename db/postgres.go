@@ -398,6 +398,70 @@ func (d *PostgreSQL) RecalcLlibrePagines(llibreID, total int) error {
 	return d.help.recalcLlibrePagines(llibreID, total)
 }
 
+func (d *PostgreSQL) ListTranscripcionsRaw(llibreID int, f TranscripcioFilter) ([]TranscripcioRaw, error) {
+	return d.help.listTranscripcionsRaw(llibreID, f)
+}
+func (d *PostgreSQL) ListTranscripcionsRawGlobal(f TranscripcioFilter) ([]TranscripcioRaw, error) {
+	return d.help.listTranscripcionsRawGlobal(f)
+}
+func (d *PostgreSQL) CountTranscripcionsRaw(llibreID int, f TranscripcioFilter) (int, error) {
+	return d.help.countTranscripcionsRaw(llibreID, f)
+}
+func (d *PostgreSQL) CountTranscripcionsRawGlobal(f TranscripcioFilter) (int, error) {
+	return d.help.countTranscripcionsRawGlobal(f)
+}
+func (d *PostgreSQL) GetTranscripcioRaw(id int) (*TranscripcioRaw, error) {
+	return d.help.getTranscripcioRaw(id)
+}
+func (d *PostgreSQL) CreateTranscripcioRaw(t *TranscripcioRaw) (int, error) {
+	return d.help.createTranscripcioRaw(t)
+}
+func (d *PostgreSQL) UpdateTranscripcioRaw(t *TranscripcioRaw) error {
+	return d.help.updateTranscripcioRaw(t)
+}
+func (d *PostgreSQL) DeleteTranscripcioRaw(id int) error {
+	return d.help.deleteTranscripcioRaw(id)
+}
+func (d *PostgreSQL) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
+	return d.help.listTranscripcioPersones(transcripcioID)
+}
+func (d *PostgreSQL) CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error) {
+	return d.help.createTranscripcioPersona(p)
+}
+func (d *PostgreSQL) DeleteTranscripcioPersones(transcripcioID int) error {
+	return d.help.deleteTranscripcioPersones(transcripcioID)
+}
+func (d *PostgreSQL) LinkTranscripcioPersona(personaRawID int, personaID int, linkedBy int) error {
+	return d.help.linkTranscripcioPersona(personaRawID, personaID, linkedBy)
+}
+func (d *PostgreSQL) UnlinkTranscripcioPersona(personaRawID int, linkedBy int) error {
+	return d.help.unlinkTranscripcioPersona(personaRawID, linkedBy)
+}
+func (d *PostgreSQL) ListTranscripcioAtributs(transcripcioID int) ([]TranscripcioAtributRaw, error) {
+	return d.help.listTranscripcioAtributs(transcripcioID)
+}
+func (d *PostgreSQL) CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error) {
+	return d.help.createTranscripcioAtribut(a)
+}
+func (d *PostgreSQL) DeleteTranscripcioAtributs(transcripcioID int) error {
+	return d.help.deleteTranscripcioAtributs(transcripcioID)
+}
+func (d *PostgreSQL) GetTranscripcioDraft(userID, llibreID int) (*TranscripcioDraft, error) {
+	return d.help.getTranscripcioDraft(userID, llibreID)
+}
+func (d *PostgreSQL) SaveTranscripcioDraft(userID, llibreID int, payload string) error {
+	return d.help.saveTranscripcioDraft(userID, llibreID, payload)
+}
+func (d *PostgreSQL) DeleteTranscripcioDraft(userID, llibreID int) error {
+	return d.help.deleteTranscripcioDraft(userID, llibreID)
+}
+func (d *PostgreSQL) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
+	return d.help.searchPersones(f)
+}
+func (d *PostgreSQL) ListRegistresByPersona(personaID int, tipus string) ([]PersonaRegistreRow, error) {
+	return d.help.listRegistresByPersona(personaID, tipus)
+}
+
 // Punts i activitat
 func (d *PostgreSQL) ListPointsRules() ([]PointsRule, error) { return d.help.listPointsRules() }
 func (d *PostgreSQL) GetPointsRule(id int) (*PointsRule, error) {
@@ -428,7 +492,7 @@ func (d *PostgreSQL) AddPointsToUser(userID int, delta int) error {
 func (d *PostgreSQL) GetUserPoints(userID int) (*UserPoints, error) {
 	return d.help.getUserPoints(userID)
 }
-func (d *PostgreSQL) RecalcUserPoints() error                    { return d.help.recalcUserPoints() }
+func (d *PostgreSQL) RecalcUserPoints() error { return d.help.recalcUserPoints() }
 func (d *PostgreSQL) GetRanking(f RankingFilter) ([]UserPoints, error) {
 	return d.help.getRanking(f)
 }

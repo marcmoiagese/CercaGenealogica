@@ -16,6 +16,7 @@
             </header>
             {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
             <form method="post" action="{{ if .Data.IsNew }}/documentals/arxius{{ else }}/documentals/arxius/{{ .Data.Arxiu.ID }}{{ end }}">
+                <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
                 <div class="grup-camp">
                     <label for="nom">{{ t .Lang "archives.form.name" }}</label>
                     <input type="text" id="nom" name="nom" value="{{ .Data.Arxiu.Nom }}" required>
@@ -72,7 +73,7 @@
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">{{ t .Lang "archives.form.save" }}</button>
-                    <a class="boto-secundari" href="{{ if .Data.IsNew }}/documentals/arxius{{ else }}/documentals/arxius/{{ .Data.Arxiu.ID }}{{ end }}">{{ t .Lang "archives.form.cancel" }}</a>
+                    <a class="boto-secundari" href="{{ if .Data.ReturnURL }}{{ .Data.ReturnURL }}{{ else }}{{ if .Data.IsNew }}/documentals/arxius{{ else }}/documentals/arxius/{{ .Data.Arxiu.ID }}{{ end }}{{ end }}">{{ t .Lang "archives.form.cancel" }}</a>
                 </div>
             </form>
         </section>

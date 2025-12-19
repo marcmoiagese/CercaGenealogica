@@ -1,0 +1,497 @@
+.perfil-ajustos {
+    max-width: 1100px;
+    margin: 2rem auto 3rem;
+}
+
+.perfil-ajustos-capcalera h1 {
+    font-size: 1.7rem;
+    color: var(--primary-color);
+    margin-bottom: 0.25rem;
+}
+
+.perfil-ajustos-capcalera p {
+    color: var(--color-text-clar);
+}
+
+/* Card de tabs */
+
+.perfil-ajustos-tabs {
+    margin-top: 1.5rem;
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 14px rgba(0,0,0,0.06);
+    overflow: hidden;
+}
+
+.tabs-botons {
+    display: flex;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--color-borda);
+    background: linear-gradient(135deg, #f8fbff, #eef4f8);
+}
+
+.tab-boto {
+    flex: 1 1 0;
+    padding: 0.75rem 1rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.95rem;
+    color: var(--color-text-clar);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tab-boto i {
+    font-size: 0.9rem;
+}
+
+.tab-boto:hover {
+    background-color: rgba(255,255,255,0.8);
+    color: var(--primary-color);
+}
+
+.tab-boto.actiu {
+    color: var(--primary-color);
+    background-color: #fff;
+    box-shadow: inset 0 -3px 0 var(--secondary-color);
+}
+
+.tab-boto.tab-danger {
+    color: #e74c3c;
+}
+
+.tab-boto.tab-danger.actiu {
+    box-shadow: inset 0 -3px 0 #e74c3c;
+}
+
+.tabs-contingut {
+    padding: 1.8rem 2rem 2rem;
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.actiu {
+    display: block;
+}
+
+/* Taula de dades generals */
+
+.form-dades {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.fila-camp {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.6fr) minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: center;
+    padding: 0.8rem 0;
+    border-bottom: 1px solid #f4f4f4;
+}
+
+.fila-camp:last-of-type {
+    border-bottom: none;
+}
+
+.camp-label label {
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.camp-helper {
+    font-size: 0.8rem;
+    color: var(--color-text-clar);
+    margin-top: 0.25rem;
+}
+
+.camp-input input,
+.camp-input select {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border-radius: 4px;
+    border: 1px solid var(--color-borda);
+    font-size: 0.95rem;
+}
+
+.camp-input input:focus,
+.camp-input select:focus {
+    outline: none;
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 2px rgba(22,96,136,0.15);
+}
+
+.camp-input input[readonly] {
+    background-color: #f5f5f5;
+    cursor: not-allowed;
+    color: var(--color-text-clar);
+}
+
+/* Privacitat per camp */
+
+.camp-privacitat {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.badge-privacitat {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-clar);
+}
+
+.radio-pill {
+    position: relative;
+}
+
+.radio-pill input {
+    position: absolute;
+    opacity: 0;
+}
+
+.radio-pill span {
+    display: inline-block;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-borda);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    white-space: nowrap;
+}
+
+.radio-pill input:checked + span {
+    border-color: var(--secondary-color);
+    background-color: rgba(22,96,136,0.08);
+    color: var(--secondary-color);
+}
+
+.camp-privacitat-desactivada {
+    justify-content: flex-start;
+}
+
+.text-desactivat {
+    font-size: 0.8rem;
+    color: var(--color-text-clar);
+}
+
+/* Botons */
+
+.form-accio {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1.25rem;
+}
+
+.boto-primari,
+.boto-perill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 1.1rem;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.95rem;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+}
+
+.boto-primari {
+    background-color: var(--secondary-color);
+    color: #fff;
+}
+
+.boto-primari:hover {
+    background-color: #0d4b6e;
+    box-shadow: 0 2px 8px rgba(13,75,110,0.3);
+}
+
+.boto-perill {
+    background-color: #e74c3c;
+    color: #fff;
+}
+
+.boto-perill:hover:not(:disabled) {
+    background-color: #c0392b;
+    box-shadow: 0 2px 8px rgba(192,57,43,0.35);
+}
+
+.boto-perill:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Formularis verticals (contrasenya, privacitat, eliminar) */
+
+.form-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+}
+
+.grup-camp label,
+.grup-camp h3 {
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 0.25rem;
+}
+
+.grup-camp h3 {
+    margin-bottom: 0.1rem;
+}
+
+.input-amb-icona {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-amb-icona input {
+    width: 100%;
+    padding-right: 2.4rem;
+}
+
+.boto-icona {
+    position: absolute;
+    right: 0.35rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-clar);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+}
+
+.boto-icona:hover {
+    color: var(--secondary-color);
+}
+
+/* Missatges d'error */
+
+.missatge-error {
+    font-size: 0.85rem;
+    color: #e74c3c;
+    min-height: 1.1rem;
+}
+
+/* Privacitat */
+
+.opcions-radi {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.radio-card {
+    position: relative;
+    display: block;
+}
+
+.radio-card input {
+    position: absolute;
+    opacity: 0;
+}
+
+.radio-card-contingut {
+    border-radius: 8px;
+    border: 1px solid var(--color-borda);
+    padding: 0.75rem 0.9rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.radio-card-contingut h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.35rem;
+    font-size: 0.96rem;
+}
+
+.radio-card-contingut p {
+    font-size: 0.85rem;
+    color: var(--color-text-clar);
+}
+
+.radio-card input:checked + .radio-card-contingut {
+    border-color: var(--secondary-color);
+    background-color: rgba(22,96,136,0.03);
+    box-shadow: 0 0 0 2px rgba(22,96,136,0.2);
+}
+
+.llista-checks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-top: 0.4rem;
+}
+
+.checkbox-linia {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--color-text);
+}
+
+.checkbox-linia input {
+    margin-top: 0.15rem;
+}
+
+/* Eliminar compte */
+
+.form-perill {
+    border-radius: 8px;
+    border: 1px solid #fde2df;
+    background-color: #fff8f7;
+    padding: 1.25rem 1.5rem;
+}
+
+.titol-perill {
+    color: #c0392b;
+    margin-bottom: 0.5rem;
+}
+
+.checkbox-perill span {
+    color: #c0392b;
+}
+
+/* Estadístiques i heatmap */
+
+.perfil-ajustos-estadistiques {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #f1f1f1;
+}
+
+.estadistiques-capcalera {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.estadistiques-metadades {
+    text-align: right;
+}
+
+.member-since {
+    font-size: 0.9rem;
+    color: var(--color-text);
+    margin-bottom: 0.35rem;
+}
+
+.toggle-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--color-text-clar);
+}
+
+.heatmap-legenda {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--color-text-clar);
+}
+
+.heatmap-gradient {
+    display: inline-flex;
+    gap: 0.2rem;
+}
+
+.heatmap-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.nivell-0 { background-color: #eef2f7; }
+.nivell-1 { background-color: #d6e9f9; }
+.nivell-2 { background-color: #a9d4f5; }
+.nivell-3 { background-color: #4fc3f7; }
+.nivell-4 { background-color: #166088; }
+
+.heatmap-container {
+    margin-top: 0.6rem;
+    overflow-x: auto;
+}
+
+.heatmap-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 12px;
+    grid-template-rows: repeat(7, 12px);
+    gap: 3px;
+    padding: 0.4rem 0;
+}
+
+.heatmap-dia {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    background-color: #eef2f7;
+}
+
+.heatmap-dia[data-level="1"] { background-color: #d6e9f9; }
+.heatmap-dia[data-level="2"] { background-color: #a9d4f5; }
+.heatmap-dia[data-level="3"] { background-color: #4fc3f7; }
+.heatmap-dia[data-level="4"] { background-color: #166088; }
+
+.estadistiques-resum {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--color-text-clar);
+}
+
+/* Responsivitat */
+
+@media (max-width: 900px) {
+    .fila-camp {
+        grid-template-columns: 1fr;
+        align-items: flex-start;
+    }
+
+    .camp-privacitat {
+        justify-content: flex-start;
+    }
+
+    .estadistiques-capcalera {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .estadistiques-metadades {
+        text-align: left;
+    }
+}
+
+@media (max-width: 600px) {
+    .tabs-contingut {
+        padding: 1.2rem 1.2rem 1.5rem;
+    }
+
+    .tab-boto {
+        flex: 1 1 50%;
+    }
+}

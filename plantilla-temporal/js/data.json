@@ -1,0 +1,35 @@
+{
+  "root": {
+    "id": "p1",
+    "nom": "Joan Moya",
+    "sexe": "home",
+    "naixement": "1985",
+    "defuncio": "",
+    "fills": [
+      {
+        "id": "p2",
+        "nom": "Maria Riera",
+        "sexe": "dona",
+        "naixement": "1960",
+        "defuncio": "2020",
+        "fills": []
+      },
+      {
+        "id": "p3",
+        "nom": "Pere Moya",
+        "sexe": "home",
+        "naixement": "1958",
+        "defuncio": "",
+        "fills": [
+          {
+            "id": "p4",
+            "nom": "Teresa Solà",
+            "sexe": "dona",
+            "naixement": "1930",
+            "defuncio": "2000"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -11,9 +11,15 @@
     {{ template "menu" . }}
     <main class="contingut-principal">
         <section class="card">
-            <header class="card-header">
-                <h1>{{ t .Lang "books.pages.title" }}</h1>
-                <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/edit">{{ t .Lang "books.action.back" }}</a>
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "books.pages.title" }}</h1>
+                    <p class="muted">{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</p>
+                </div>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}">{{ t .Lang "books.action.back" }}</a>
+                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/registres">{{ t .Lang "books.action.records" }}</a>
+                </div>
             </header>
             <p class="muted">{{ t .Lang "books.pages.subtitle" }}</p>
             <div class="taula-wrapper">

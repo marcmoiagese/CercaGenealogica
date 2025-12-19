@@ -1,0 +1,171 @@
+/* Botó del menú */
+.boto-menu {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    z-index: 101;
+    position: relative;
+    margin-right: 10px;
+}
+
+/* Menú lateral */
+.menu-lateral {
+    position: fixed;
+    top: 0;
+    left: -300px;
+    width: 300px;
+    height: 100vh;
+    background-color: var(--primary-color);
+    color: white;
+    transition: left 0.3s ease;
+    z-index: 100;
+    overflow-y: auto;
+}
+
+.menu-lateral.obert {
+    left: 0;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+}
+
+/* Overlay */
+.overlay-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 99;
+    display: none;
+}
+
+.menu-lateral.obert ~ .overlay-menu {
+    display: block;
+}
+
+/* Contingut del menú */
+.menu-capçalera {
+    padding: 15px;
+    background-color: var(--secondary-color);
+    position: sticky;
+    top: 0;
+}
+
+.cerca-menu {
+    display: flex;
+}
+
+.cerca-menu input {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 4px 0 0 4px;
+}
+
+.cerca-menu button {
+    padding: 0 15px;
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+}
+
+.menu-contingut {
+    padding: 15px 0;
+}
+
+.menu-seccio {
+    margin-bottom: 10px;
+}
+
+.menu-titol {
+    padding: 12px 15px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    background-color: var(--secondary-color);
+}
+
+.menu-titol h3 {
+    margin: 0;
+    font-size: 16px;
+    flex: 1;
+}
+
+.menu-titol i {
+    margin-right: 10px;
+}
+
+.menu-opcio {
+    display: block;
+    padding: 10px 15px 10px 45px;
+    color: white;
+    text-decoration: none;
+}
+
+.menu-opcio:hover {
+    background-color: rgba(255,255,255,0.1);
+}
+
+/* Estils per als favorits */
+.boto-favorits {
+    width: 100%;
+    padding: 10px;
+    background-color: #e67e22;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    margin-top: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.boto-favorits i {
+    margin-right: 8px;
+}
+
+.menu-boto-tanca {
+    cursor: pointer;
+    padding: 0 5px;
+}
+
+.llista-favorits {
+    padding: 0;
+    list-style: none;
+}
+
+.llista-favorits li {
+    padding: 10px 15px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.placeholder-favorit {
+    color: #bdc3c7;
+    font-style: italic;
+    text-align: center;
+    padding: 15px;
+}
+
+/* Botons per afegir a favorits */
+.boto-afegir-favorit {
+    background: none;
+    border: none;
+    color: #e67e22;
+    cursor: pointer;
+    margin-left: auto;
+    padding: 0 5px;
+}
+
+.boto-afegir-favorit.favorit i {
+    color: #f1c40f !important;
+}
+
+.boto-afegir-favorit i {
+    transition: color 0.2s ease;
+}

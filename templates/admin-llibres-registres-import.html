@@ -1,0 +1,45 @@
+{{ define "admin-llibres-registres-import.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "records.import.file" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/taula.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "records.import.file" }}</h1>
+                    <p class="muted">{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</p>
+                </div>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/registres">{{ t .Lang "records.show.back" }}</a>
+                </div>
+            </header>
+
+            <form class="filtres" method="post" action="/documentals/llibres/{{ .Data.Llibre.ID }}/registres/import" enctype="multipart/form-data">
+                <div class="grup-camp">
+                    <label for="import-file">{{ t .Lang "records.import.file" }}</label>
+                    <input id="import-file" type="file" name="csv_file" accept=".csv" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="import-sep">{{ t .Lang "records.import.separator" }}</label>
+                    <select id="import-sep" name="separator">
+                        <option value=",">,</option>
+                        <option value=";">;</option>
+                    </select>
+                </div>
+                <button type="submit" class="boto-primari">{{ t .Lang "records.import.submit" }}</button>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

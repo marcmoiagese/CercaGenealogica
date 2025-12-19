@@ -1,0 +1,178 @@
+.indexer-card {
+    overflow: hidden;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    padding: 30px;
+    margin-bottom: 40px;
+}
+
+.contingut-principal.indexer-wide {
+    max-width: none;
+}
+
+.indexer-card .card-header {
+    margin-bottom: 25px;
+}
+
+.indexer-header-title h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    color: var(--primary-color);
+    font-size: 1.5rem;
+}
+
+.indexer-header-title i {
+    color: #166088;
+}
+
+.indexer-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: space-between;
+    align-items: center;
+    margin: 1rem 0;
+}
+
+.indexer-toolbar-bottom {
+    margin-top: 1.5rem;
+}
+
+.indexer-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.indexer-btn {
+    border-radius: 6px;
+    padding: 0.55rem 0.95rem;
+    font-size: 0.88rem;
+}
+
+.indexer-status {
+    font-size: 0.9rem;
+    color: #166088;
+    min-height: 1.2rem;
+}
+
+.indexer-status.error {
+    color: #a94442;
+}
+
+.indexer-table {
+    overflow-x: auto;
+}
+
+.indexer-table .taula {
+    table-layout: auto;
+}
+
+.indexer-table .taula thead {
+    display: table-header-group;
+}
+
+.indexer-table .taula thead th {
+    background: var(--primary-color);
+    color: #fff;
+    font-weight: 500;
+}
+
+.indexer-table .taula thead th:hover {
+    background: var(--secondary-color);
+}
+
+.indexer-table .taula tbody {
+    display: table-row-group;
+}
+
+.indexer-table .taula tr {
+    display: table-row;
+}
+
+.indexer-table .taula th,
+.indexer-table .taula td {
+    display: table-cell;
+}
+
+.indexer-table .taula th,
+.indexer-table .taula td {
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+.indexer-table .taula tbody tr:hover {
+    background: #f5f5f5;
+}
+
+.indexer-table .th-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.indexer-table .th-stack .muted {
+    font-size: 0.75rem;
+    color: #6b7280;
+    font-weight: 400;
+}
+
+.indexer-table .cell-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.indexer-table input,
+.indexer-table select,
+.indexer-table textarea {
+    width: 100%;
+    min-width: 120px;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #d0d7de;
+    background: #fff;
+    font-size: 0.9rem;
+}
+
+.indexer-table textarea {
+    min-height: 44px;
+    resize: vertical;
+}
+
+.indexer-row-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.indexer-row-actions .indexer-remove {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    border-radius: 4px;
+    background: none;
+    color: #d14343;
+    border: none;
+    box-shadow: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.indexer-row-actions .indexer-remove:hover {
+    background: rgba(209, 67, 67, 0.08);
+}
+
+.boto-eliminar-fila i {
+    font-size: 0.95rem;
+}
+
+.table-actions {
+    margin-top: 0.75rem;
+    display: flex;
+    gap: 0.5rem;
+}

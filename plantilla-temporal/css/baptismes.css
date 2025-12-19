@@ -1,0 +1,107 @@
+.input-nom {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid var(--color-borda);
+    border-radius: 4px;
+}
+.boto-eliminar-fila {
+    background: none;
+    border: none;
+    color: red;
+    cursor: pointer;
+}
+.taula-container table {
+    font-size: 13px;
+}
+
+.input-nom,
+input[type="date"],
+input[type="number"],
+textarea {
+    width: 100%;
+    min-width: 150px;
+    max-width: 300px;
+    padding: 6px 10px;
+    font-size: 14px;
+}
+textarea {
+    resize: vertical;
+    height: 30px;
+    overflow: hidden;
+}
+
+
+.taula-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 20px;
+}
+td, th {
+    white-space: nowrap;
+}
+
+/* Botons personalitzats */
+/* Estil per als botons dins de la pàgina de bateigs */
+.boto-registre {
+    background-color: var(--secondary-color);
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.3s ease;
+}
+
+.boto-registre:hover {
+    background-color: #0d4b6e;
+}
+
+.boto-registre i {
+    font-size: 16px;
+}
+
+/* Marca visual */
+/* Marca visual per persones seleccionades */
+.relatioant,
+.relatioant input,
+.relatioant textarea {
+    border-color: var(--secondary-color);
+    background-color: #f0f8ff;
+}
+
+/* Estil per Bootstrap-like */
+.is-valid {
+    border-color: #28a745 !important;
+    box-shadow: 0 0 0 0.25rem rgba(40, 167, 69, 0.25);
+}
+
+/* Icona de verificació */
+.is-valid::after {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    content: "✓";
+    color: #28a745;
+    font-size: 16px;
+}
+
+/* select */
+#div-suggeriments {
+    font-family: sans-serif;
+    font-size: 14px;
+}
+
+#div-suggeriments strong {
+    color: #333;
+}
+
+#div-suggeriments small {
+    color: #666;
+    display: block;
+}

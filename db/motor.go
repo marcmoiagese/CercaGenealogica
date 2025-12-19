@@ -98,6 +98,28 @@ type DB interface {
 	ListLlibrePagines(llibreID int) ([]LlibrePagina, error)
 	SaveLlibrePagina(p *LlibrePagina) (int, error)
 	RecalcLlibrePagines(llibreID, total int) error
+	// Transcripcions RAW
+	ListTranscripcionsRaw(llibreID int, f TranscripcioFilter) ([]TranscripcioRaw, error)
+	ListTranscripcionsRawGlobal(f TranscripcioFilter) ([]TranscripcioRaw, error)
+	CountTranscripcionsRaw(llibreID int, f TranscripcioFilter) (int, error)
+	CountTranscripcionsRawGlobal(f TranscripcioFilter) (int, error)
+	GetTranscripcioRaw(id int) (*TranscripcioRaw, error)
+	CreateTranscripcioRaw(t *TranscripcioRaw) (int, error)
+	UpdateTranscripcioRaw(t *TranscripcioRaw) error
+	DeleteTranscripcioRaw(id int) error
+	ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error)
+	CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error)
+	DeleteTranscripcioPersones(transcripcioID int) error
+	LinkTranscripcioPersona(personaRawID int, personaID int, linkedBy int) error
+	UnlinkTranscripcioPersona(personaRawID int, linkedBy int) error
+	ListTranscripcioAtributs(transcripcioID int) ([]TranscripcioAtributRaw, error)
+	CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error)
+	DeleteTranscripcioAtributs(transcripcioID int) error
+	GetTranscripcioDraft(userID, llibreID int) (*TranscripcioDraft, error)
+	SaveTranscripcioDraft(userID, llibreID int, payload string) error
+	DeleteTranscripcioDraft(userID, llibreID int) error
+	SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error)
+	ListRegistresByPersona(personaID int, tipus string) ([]PersonaRegistreRow, error)
 
 	// Paisos
 	ListPaisos() ([]Pais, error)
@@ -345,14 +367,15 @@ type Municipi struct {
 }
 
 type MunicipiRow struct {
-	ID         int
-	Nom        string
-	Tipus      string
-	Estat      string
-	CodiPostal string
-	PaisNom    sql.NullString
-	ProvNom    sql.NullString
-	Comarca    sql.NullString
+	ID             int
+	Nom            string
+	Tipus          string
+	Estat          string
+	CodiPostal     string
+	PaisNom        sql.NullString
+	ProvNom        sql.NullString
+	Comarca        sql.NullString
+	ModeracioEstat string
 }
 
 type MunicipiFilter struct {
@@ -394,14 +417,15 @@ type Arquebisbat struct {
 }
 
 type ArquebisbatRow struct {
-	ID           int
-	Nom          string
-	TipusEntitat string
-	PaisNom      sql.NullString
-	Nivell       sql.NullInt64
-	ParentNom    sql.NullString
-	AnyInici     sql.NullInt64
-	AnyFi        sql.NullInt64
+	ID             int
+	Nom            string
+	TipusEntitat   string
+	PaisNom        sql.NullString
+	Nivell         sql.NullInt64
+	ParentNom      sql.NullString
+	AnyInici       sql.NullInt64
+	AnyFi          sql.NullInt64
+	ModeracioEstat string
 }
 
 type ArquebisbatFilter struct {
@@ -482,6 +506,7 @@ type ArxiuLlibreDetail struct {
 	ArxiuNom    sql.NullString
 	Signatura   sql.NullString
 	URLOverride sql.NullString
+	Pagines     sql.NullInt64
 }
 
 type LlibreSimple struct {
@@ -500,6 +525,7 @@ type Llibre struct {
 	CodiDigital       string
 	CodiFisic         string
 	Titol             string
+	TipusLlibre       string
 	Cronologia        string
 	Volum             string
 	Abat              string
@@ -542,6 +568,131 @@ type LlibrePagina struct {
 	IndexedAt sql.NullString
 	IndexedBy sql.NullInt64
 	Notes     string
+}
+
+type TranscripcioRaw struct {
+	ID                         int
+	LlibreID                   int
+	PaginaID                   sql.NullInt64
+	NumPaginaText              string
+	PosicioPagina              sql.NullInt64
+	TipusActe                  string
+	AnyDoc                     sql.NullInt64
+	DataActeText               string
+	DataActeISO                sql.NullString
+	DataActeEstat              string
+	TranscripcioLiteral        string
+	NotesMarginals             string
+	ObservacionsPaleografiques string
+	ModeracioEstat             string
+	ModeratedBy                sql.NullInt64
+	ModeratedAt                sql.NullTime
+	ModeracioMotiu             string
+	CreatedBy                  sql.NullInt64
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
+}
+
+type TranscripcioPersonaRaw struct {
+	ID              int
+	TranscripcioID  int
+	Rol             string
+	Nom             string
+	NomEstat        string
+	Cognom1         string
+	Cognom1Estat    string
+	Cognom2         string
+	Cognom2Estat    string
+	Sexe            string
+	SexeEstat       string
+	EdatText        string
+	EdatEstat       string
+	EstatCivilText  string
+	EstatCivilEstat string
+	MunicipiText    string
+	MunicipiEstat   string
+	OficiText       string
+	OficiEstat      string
+	CasaNom         string
+	CasaEstat       string
+	PersonaID       sql.NullInt64
+	LinkedBy        sql.NullInt64
+	LinkedAt        sql.NullTime
+	Notes           string
+}
+
+type TranscripcioAtributRaw struct {
+	ID             int
+	TranscripcioID int
+	Clau           string
+	TipusValor     string
+	ValorText      string
+	ValorInt       sql.NullInt64
+	ValorDate      sql.NullString
+	ValorBool      sql.NullBool
+	Estat          string
+	Notes          string
+}
+
+type TranscripcioDraft struct {
+	ID        int
+	LlibreID  int
+	UserID    int
+	Payload   string
+	UpdatedAt time.Time
+}
+
+type PersonaSearchFilter struct {
+	Query    string
+	Nom      string
+	Cognom1  string
+	Cognom2  string
+	Municipi string
+	AnyMin   int
+	AnyMax   int
+	Limit    int
+}
+
+type PersonaSearchResult struct {
+	ID            int
+	Nom           string
+	Cognom1       string
+	Cognom2       string
+	Municipi      string
+	DataNaixement sql.NullString
+	DataBateig    sql.NullString
+	DataDefuncio  sql.NullString
+	Ofici         string
+	EstatCivil    string
+}
+
+type PersonaRegistreRow struct {
+	RegistreID     int
+	PersonaRawID   int
+	LlibreID       int
+	LlibreTitol    sql.NullString
+	LlibreNom      sql.NullString
+	TipusActe      string
+	AnyDoc         sql.NullInt64
+	DataActeText   string
+	PaginaID       sql.NullInt64
+	NumPaginaText  string
+	PosicioPagina  sql.NullInt64
+	Rol            string
+	ModeracioEstat string
+}
+
+type TranscripcioFilter struct {
+	LlibreID    int
+	TipusActe   string
+	AnyDoc      int
+	PaginaID    int
+	Status      string
+	Qualitat    string
+	Search      string
+	UseFullText bool
+	Limit       int
+	Offset      int
 }
 
 type NomHistoric struct {

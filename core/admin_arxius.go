@@ -42,6 +42,11 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	arxius, _ := a.DB.ListArxius(filter)
+	for i := range arxius {
+		if rels, err := a.DB.ListArxiuLlibres(arxius[i].ID); err == nil {
+			arxius[i].Llibres = len(rels)
+		}
+	}
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
 		"Arxius":          arxius,
@@ -112,6 +117,11 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	arxius, _ := a.DB.ListArxius(filter)
+	for i := range arxius {
+		if rels, err := a.DB.ListArxiuLlibres(arxius[i].ID); err == nil {
+			arxius[i].Llibres = len(rels)
+		}
+	}
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
 		"Arxius":          arxius,
@@ -140,13 +150,14 @@ func parseArxiuForm(r *http.Request) *db.Arxiu {
 	}
 }
 
-func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.Arxiu, isNew bool, errMsg string, user *db.User) {
+func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.Arxiu, isNew bool, errMsg string, user *db.User, returnURL string) {
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	RenderPrivateTemplate(w, r, "admin-arxius-form.html", map[string]interface{}{
 		"Arxiu":           arxiu,
 		"IsNew":           isNew,
 		"Error":           errMsg,
+		"ReturnURL":       returnURL,
 		"CanManageArxius": true,
 		"Municipis":       municipis,
 		"Arquebisbats":    arquebisbats,
@@ -160,7 +171,8 @@ func (a *App) AdminNewArxiu(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a.renderArxiuForm(w, r, &db.Arxiu{}, true, "", user)
+	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
+	a.renderArxiuForm(w, r, &db.Arxiu{}, true, "", user, returnURL)
 }
 
 func (a *App) AdminCreateArxiu(w http.ResponseWriter, r *http.Request) {
@@ -172,9 +184,10 @@ func (a *App) AdminCreateArxiu(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/documentals/arxius", http.StatusSeeOther)
 		return
 	}
+	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	arxiu := parseArxiuForm(r)
 	if arxiu.Nom == "" || len(arxiu.Nom) < 3 {
-		a.renderArxiuForm(w, r, arxiu, true, "El nom és obligatori (mínim 3 caràcters).", user)
+		a.renderArxiuForm(w, r, arxiu, true, "El nom és obligatori (mínim 3 caràcters).", user, returnURL)
 		return
 	}
 	arxiu.CreatedBy = sqlNullIntFromInt(user.ID)
@@ -183,10 +196,14 @@ func (a *App) AdminCreateArxiu(w http.ResponseWriter, r *http.Request) {
 	arxiu.ModeratedAt = sql.NullTime{}
 	id, err := a.DB.CreateArxiu(arxiu)
 	if err != nil {
-		a.renderArxiuForm(w, r, arxiu, true, "No s'ha pogut crear l'arxiu.", user)
+		a.renderArxiuForm(w, r, arxiu, true, "No s'ha pogut crear l'arxiu.", user, returnURL)
 		return
 	}
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuCreate, "crear", "arxiu", &id, "pendent", nil, "")
+	if returnURL != "" {
+		http.Redirect(w, r, returnURL, http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
 }
 
@@ -202,7 +219,8 @@ func (a *App) AdminEditArxiu(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	a.renderArxiuForm(w, r, arxiu, false, "", user)
+	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
+	a.renderArxiuForm(w, r, arxiu, false, "", user, returnURL)
 }
 
 func (a *App) AdminUpdateArxiu(w http.ResponseWriter, r *http.Request) {
@@ -215,16 +233,21 @@ func (a *App) AdminUpdateArxiu(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id)+"/edit", http.StatusSeeOther)
 		return
 	}
+	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	arxiu := parseArxiuForm(r)
 	arxiu.ID = id
 	arxiu.ModeracioEstat = "pendent"
 	arxiu.ModeratedBy = sql.NullInt64{}
 	arxiu.ModeratedAt = sql.NullTime{}
 	if err := a.DB.UpdateArxiu(arxiu); err != nil {
-		a.renderArxiuForm(w, r, arxiu, false, "No s'ha pogut actualitzar.", user)
+		a.renderArxiuForm(w, r, arxiu, false, "No s'ha pogut actualitzar.", user, returnURL)
 		return
 	}
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuUpdate, "editar", "arxiu", &id, "pendent", nil, "")
+	if returnURL != "" {
+		http.Redirect(w, r, returnURL, http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
 }
 

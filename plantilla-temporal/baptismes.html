@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <title>Municipi</title>
+    <link rel="stylesheet" href="css/estils.css">
+    <link rel="stylesheet" href="css/menu.css">
+    <link rel="stylesheet" href="css/taula.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/baptismes.css">
+    <link rel="stylesheet" href="css/perfil-dropdown.css">
+    
+</head>
+<body>
+
+<!-- Capçalera -->
+<header class="header-genealogic">
+    <button class="boto-menu" id="botoMenu">
+        <i class="fas fa-bars"></i>
+    </button>
+    <div class="container">
+        <div class="logo-idiomes">
+            <a href="/" class="logo">
+                <img src="img/logo.png" alt="Genealogia.cat">
+                <span>Genealogia.cat</span>
+            </a>
+
+            <!-- Grup drets: idioma + perfil usuari -->
+            <div class="controls-dreta">
+                <div class="selector-idioma-dropdown">
+                    <button class="boto-selector-idioma" id="botoSelectorIdioma">
+                        CAT <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <ul class="dropdown-idiomes" id="dropdownIdiomes">
+                        <li><a href="/cat/" class="active">Català</a></li>
+                        <li><a href="/en/">English</a></li>
+                        <li><a href="/oc/">Occitan</a></li>
+                    </ul>
+                </div>
+
+                <!-- Menú perfil usuari -->
+                <div class="perfil-usuari">
+                    <button class="boto-perfil-usuari" id="botoPerfil">
+                        <i class="fas fa-user-circle"></i> Joan Martí <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <ul class="dropdown-perfil" id="dropdownPerfil">
+                        <li><a href="#"><i class="fas fa-user-cog"></i> Dades personals</a></li>
+                        <li><a href="#"><i class="fas fa-folder-open"></i> Espai personal</a></li>
+                        <li><a href="#"><i class="fas fa-sign-out-alt"></i> Desconnectar</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- Menú lateral -->
+<aside class="menu-lateral" id="menuLateral">
+    <div class="menu-capçalera">
+        <div class="cerca-menu">
+            <input type="text" id="cercaMenuInput" placeholder="Cerca en el menú...">
+            <button id="cercaMenuBoto"><i class="fas fa-search"></i></button>
+        </div>
+        
+    </div>
+
+    <!-- Secció de Favorits -->
+    <div class="menu-seccio" id="favoritsSeccio" style="display:none;">
+        <div class="menu-titol">
+            <i class="fas fa-star"></i>
+            <h3>Els meus favorits</h3>
+            <span class="menu-boto-tanca" id="tancaFavorits"><i class="fas fa-times"></i></span>
+        </div>
+        <ul class="llista-favorits" id="llistaFavorits">
+            <li class="placeholder-favorit">No tens cap favorit encara</li>
+        </ul>
+    </div>
+    
+    
+    <div class="menu-contingut">
+        <div class="menu-seccio">
+            <div class="menu-titol">
+                <i class="fas fa-home"></i>
+                <h3>Inici</h3>
+            </div>
+            <ul>
+                <li class="menu-opcio">
+                    Pàgina principal
+                    <button class="boto-afegir-favorit" data-nom="Pàgina principal"><i class="far fa-star"></i></button>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="menu-seccio">
+            <div class="menu-titol">
+                <i class="fas fa-search"></i>
+                <h3>Cerca</h3>
+            </div>
+            <ul>
+                <li class="menu-opcio">
+                    Cerca persones
+                    <button class="boto-afegir-favorit" data-nom="Cerca persones"><i class="far fa-star"></i></button>
+                </li>
+                <li class="menu-opcio">
+                    Cerca famílies
+                    <button class="boto-afegir-favorit" data-nom="Cerca famílies"><i class="far fa-star"></i></button>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="menu-seccio">
+            <div class="menu-titol">
+                <i class="fas fa-tree"></i>
+                <h3>Arbre Genealògic</h3>
+            </div>
+            <ul>
+                <li class="menu-opcio">
+                    El meu arbre
+                    <button class="boto-afegir-favorit" data-nom="El meu arbre"><i class="far fa-star"></i></button>
+                </li>
+                <li class="menu-opcio">
+                    Afegir persona
+                    <button class="boto-afegir-favorit" data-nom="Afegir persona"><i class="far fa-star"></i></button>
+                </li>
+            </ul>
+        </div>
+    </div>
+</aside>
+
+<!-- Overlay del menú -->
+<div class="overlay-menu" id="overlayMenu"></div>
+
+<!-- Contingut principal -->
+<main class="contingut-principal">
+    <section class="hero">
+        <h1>Registrar Bateigs</h1>
+        <p>Afegeix registres de bateig per a documentar arxius parroquials o municipals.</p>
+    </section>
+
+    <section class="taula-resultats">
+        <h2><i class="fas fa-book-open"></i> Dades del Llibre de Bateig</h2>
+        <form id="formBateig">
+            <div class="filtre-grup">
+                <label for="llibre">Selecciona el llibre:</label>
+                <select name="llibre" id="llibre" required>
+                    <option value="">-- Selecciona --</option>
+                    <option value="1900A">1900A - Vic</option>
+                    <option value="1915B">1915B - Manresa</option>
+                </select>
+            </div>
+
+            <div class="taula-container">
+                <table id="taula-bateigs">
+                    <thead>
+                        <tr>
+                            <th>Cognom 1</th>
+                            <th>Cognom 2</th>
+                            <th>Nom</th>
+                            <th>Data Naixement</th>
+                            <th>Data Bateig</th>
+                            <th>Pàgina Llibre</th>
+                            <th>Pàgina Digital</th>
+                            <th>Any</th>
+                            <th>Cognom Pare 1</th>
+                            <th>Cognom Pare 2</th>
+                            <th>Nom Pare</th>
+                            <th>Cognom Mare 1</th>
+                            <th>Cognom Mare 2</th>
+                            <th>Nom Mare 2</th>
+                            <th>Cognom Avi Patern 1</th>
+                            <th>Cognom Avi Patern 2</th>
+                            <th>Nom Avi Patern</th>
+                            <th>Cognom Avia Paterna 1</th>
+                            <th>Cognom Avia Paterna 2</th>
+                            <th>Nom Avia Paterna</th>
+                            <th>Cognom Avi Matern 1</th>
+                            <th>Cognom Avi Matern 2</th>
+                            <th>Nom Avi Matern</th>
+                            <th>Cognom Avia Materna 1</th>
+                            <th>Cognom Avia Materna 2</th>
+                            <th>Nom Avia Materna</th>
+                            <th>Cognom Padri 1</th>
+                            <th>Cognom Padri 2</th>
+                            <th>Nom Padri</th>
+                            <th>Notes Padri</th>
+                            <th>Cognom Padrina 1</th>
+                            <th>Cognom Padrina 2</th>
+                            <th>Nom Padrina</th>
+                            <th>Notes Padrina</th>
+                            <th>Data Defunció</th>
+                            <th>Acció</th>
+                        </tr>
+                    </thead>
+                    <tbody id="registres-taula">
+                        <!-- Aquí es generaran les files dinàmicament -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="filtre-grup">
+                <button type="button" id="afegirFila" class="boto-registre">
+                    <i class="fas fa-plus"></i> Afegir fila
+                </button>
+                <button type="submit" class="boto-registre">
+                    <i class="fas fa-paper-plane"></i> Enviar tots els registres
+                </button>
+            </div>
+        </form>
+    </section>
+</main>
+
+<!-- Footer -->
+<footer class="footer-genealogic">
+    <div class="footer-contenidor">
+        <div class="footer-seccio">
+            <h3>Genealogia.cat</h3>
+            <p>La plataforma líder per a la recerca genealògica a Catalunya</p>
+            <div class="xarxes-socials">
+                <a href="#"><i class="fab fa-facebook-f"></i></a>
+                <a href="#"><i class="fab fa-twitter"></i></a>
+                <a href="#"><i class="fab fa-instagram"></i></a>
+            </div>
+        </div>
+        
+        <div class="footer-seccio">
+            <h3>Enllaços</h3>
+            <a href="#">Arxius històrics</a>
+            <a href="#">Cementiris</a>
+            <a href="#">Arxius parroquials</a>
+        </div>
+        
+        <div class="footer-seccio">
+            <h3>Contacte</h3>
+            <p><i class="fas fa-envelope"></i> info@genealogia.cat</p>
+            <p><i class="fas fa-map-marker-alt"></i> Barcelona, Catalunya</p>
+        </div>
+        
+        <div class="copyright">
+            <p>© 2023 Genealogia.cat - Tots els drets reservats</p>
+        </div>
+    </div>
+</footer>
+
+<script src="js/menu.js"></script>
+<script src="js/perfil-dropdown.js"></script>
+<script src="js/baptismes.js"></script>
+</body>
+</html>

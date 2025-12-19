@@ -1,0 +1,239 @@
+{{ define "admin-llibres-registres-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "records.list.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "records.list.title" }}</h1>
+                    <p class="muted">{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</p>
+                </div>
+                <div class="arxiu-header-actions">
+                    <a class="boto-primari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/registres/nou">{{ t .Lang "records.list.new" }}</a>
+                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/registres/import">{{ t .Lang "records.import.file" }}</a>
+                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/registres/export?{{ .Data.FilterQuery }}">{{ t .Lang "records.list.export" }}</a>
+                </div>
+            </header>
+            {{ if .Data.ImportSummary }}
+            <div class="alert {{ if gt .Data.ImportSummary.Failed 0 }}alert-error{{ else }}alert-success{{ end }}">
+                {{ t .Lang "records.import.summary" }}: {{ .Data.ImportSummary.Created }} / {{ .Data.ImportSummary.Failed }}
+            </div>
+            {{ end }}
+            {{ if .Data.ImportErrorToken }}
+            <div class="alert alert-warning">
+                <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/registres/import/errors?token={{ .Data.ImportErrorToken }}">{{ t .Lang "records.import.errors" }}</a>
+            </div>
+            {{ end }}
+
+            <form method="get" class="filtres registres-filtres">
+                <div class="grup-camp">
+                    <label for="f-tipus">{{ t .Lang "records.list.filter.type" }}</label>
+                    <select id="f-tipus" name="tipus_acte">
+                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
+                        {{ range .Data.TipusActeOptions }}
+                        <option value="{{ . }}" {{ if eq $.Data.Filter.TipusActe . }}selected{{ end }}>{{ t $.Lang (printf "records.type.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="f-any">{{ t .Lang "records.list.filter.year" }}</label>
+                    <input id="f-any" type="number" name="any_doc" value="{{ if gt .Data.Filter.AnyDoc 0 }}{{ .Data.Filter.AnyDoc }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="f-pagina">{{ t .Lang "records.list.filter.page" }}</label>
+                    <select id="f-pagina" name="pagina_id">
+                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
+                        {{ range .Data.Pagines }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaginaID .ID }}selected{{ end }}>{{ .NumPagina }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="f-status">{{ t .Lang "records.list.filter.status" }}</label>
+                    <select id="f-status" name="status">
+                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
+                        <option value="publicat" {{ if eq $.Data.Filter.Status "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
+                        <option value="pendent" {{ if eq $.Data.Filter.Status "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
+                        <option value="rebutjat" {{ if eq $.Data.Filter.Status "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="f-qualitat">{{ t .Lang "records.list.filter.quality" }}</label>
+                    <select id="f-qualitat" name="qualitat">
+                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
+                        {{ range .Data.QualitatOptions }}
+                        <option value="{{ . }}" {{ if eq $.Data.Filter.Qualitat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="f-q">{{ t .Lang "records.list.filter.search" }}</label>
+                    <input id="f-q" type="text" name="q" value="{{ .Data.Filter.Search }}">
+                </div>
+                <div class="grup-camp grup-camp-inline">
+                    <label class="checkbox-linia">
+                        <input type="checkbox" name="fts" value="1" {{ if .Data.Filter.UseFullText }}checked{{ end }}>
+                        <span>{{ t .Lang "records.list.filter.fts" }}</span>
+                    </label>
+                </div>
+                <div class="grup-camp">
+                    <label for="f-limit">{{ t .Lang "records.list.filter.limit" }}</label>
+                    <select id="f-limit" name="limit">
+                        {{ range $opt := (list "10" "25" "50" "100") }}
+                        <option value="{{ $opt }}" {{ if eq (printf "%d" $.Data.Limit) $opt }}selected{{ end }}>{{ $opt }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <button type="submit" class="boto-secundari">{{ t .Lang "records.list.filter.submit" }}</button>
+            </form>
+
+            <div class="columnes-toggle">
+                <span class="muted">{{ t .Lang "records.columns.title" }}</span>
+                <label><input type="checkbox" data-column-toggle value="page" checked> {{ t .Lang "records.table.page" }}</label>
+                <label><input type="checkbox" data-column-toggle value="position" checked> {{ t .Lang "records.table.position" }}</label>
+                <label><input type="checkbox" data-column-toggle value="type" checked> {{ t .Lang "records.table.type" }}</label>
+                <label><input type="checkbox" data-column-toggle value="year" checked> {{ t .Lang "records.table.year" }}</label>
+                <label><input type="checkbox" data-column-toggle value="subject" checked> {{ t .Lang "records.table.subject" }}</label>
+                <label><input type="checkbox" data-column-toggle value="detail" checked> {{ t .Lang "records.table.detail" }}</label>
+                <label><input type="checkbox" data-column-toggle value="status" checked> {{ t .Lang "records.table.status" }}</label>
+                <label><input type="checkbox" data-column-toggle value="actions" checked> {{ t .Lang "records.table.actions" }}</label>
+            </div>
+
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th data-column="page">{{ t .Lang "records.table.page" }}</th>
+                            <th data-column="position">{{ t .Lang "records.table.position" }}</th>
+                            <th data-column="type">{{ t .Lang "records.table.type" }}</th>
+                            <th data-column="year">{{ t .Lang "records.table.year" }}</th>
+                            <th data-column="subject">{{ t .Lang "records.table.subject" }}</th>
+                            <th data-column="detail">{{ t .Lang "records.table.detail" }}</th>
+                            <th data-column="status">{{ t .Lang "records.table.status" }}</th>
+                            <th data-column="actions">{{ t .Lang "records.table.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Registres }}
+                        <tr>
+                            <td data-column="page">{{ if .PaginaID.Valid }}{{ .PaginaID.Int64 }}{{ else }}{{ if .NumPaginaText }}{{ .NumPaginaText }}{{ else }}-{{ end }}{{ end }}</td>
+                            <td data-column="position">{{ if .PosicioPagina.Valid }}{{ .PosicioPagina.Int64 }}{{ end }}</td>
+                            <td data-column="type">{{ t $.Lang (printf "records.type.%s" .TipusActe) }}</td>
+                            <td data-column="year">{{ if .AnyDoc.Valid }}{{ .AnyDoc.Int64 }}{{ end }}</td>
+                            <td data-column="subject">{{ .Subjecte }}</td>
+                            <td data-column="detail">
+                                {{ if .Detall }}
+                                <div class="registre-detall-resum">{{ .Detall }}</div>
+                                {{ end }}
+                                {{ if or (gt (len .Persones) 0) (gt (len .Atributs) 0) }}
+                                <details class="registre-detall">
+                                    <summary>{{ t $.Lang "records.detail.more" }}</summary>
+                                    <div class="registre-detall-body">
+                                        <div>
+                                            <h4>{{ t $.Lang "records.detail.persons" }}</h4>
+                                            <ul class="registre-detall-list">
+                                                {{ range .Persones }}
+                                                <li><strong>{{ .Rol }}</strong>: {{ .Nom }}</li>
+                                                {{ end }}
+                                                {{ if eq (len .Persones) 0 }}
+                                                <li class="muted">{{ t $.Lang "records.detail.none" }}</li>
+                                                {{ end }}
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <h4>{{ t $.Lang "records.detail.attributes" }}</h4>
+                                            <ul class="registre-detall-list">
+                                                {{ range .Atributs }}
+                                                <li><strong>{{ .Key }}</strong>: {{ .Value }}</li>
+                                                {{ end }}
+                                                {{ if eq (len .Atributs) 0 }}
+                                                <li class="muted">{{ t $.Lang "records.detail.none" }}</li>
+                                                {{ end }}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </details>
+                                {{ else }}
+                                <span class="muted">-</span>
+                                {{ end }}
+                            </td>
+                            <td data-column="status"><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                            <td data-column="actions" class="accions">
+                                <a href="/documentals/registres/{{ .ID }}">{{ t $.Lang "records.action.view" }}</a> |
+                                <a href="/documentals/registres/{{ .ID }}/editar">{{ t $.Lang "records.action.edit" }}</a>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr>
+                            <td colspan="8">{{ t .Lang "common.empty" }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+
+            {{ if gt .Data.Total 0 }}
+            <div class="paginacio">
+                {{ range .Data.Pages }}
+                <a class="boto-secundari {{ if eq $.Data.Page . }}actiu{{ end }}" href="?{{ $.Data.FilterQuery }}&page={{ . }}&limit={{ $.Data.Limit }}">{{ . }}</a>
+                {{ end }}
+            </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script>
+        (function () {
+            const form = document.querySelector(".registres-filtres");
+            if (form) {
+                const search = form.querySelector("input[name='q']");
+                if (search) {
+                    let timer;
+                    search.addEventListener("input", function () {
+                        clearTimeout(timer);
+                        timer = setTimeout(() => form.submit(), 450);
+                    });
+                }
+                form.querySelectorAll("select").forEach((sel) => {
+                    sel.addEventListener("change", () => form.submit());
+                });
+            }
+            const table = document.querySelector(".taula");
+            const toggles = document.querySelectorAll("[data-column-toggle]");
+            if (!table || toggles.length === 0) {
+                return;
+            }
+            const storageKey = "records.columns";
+            const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
+            toggles.forEach((toggle) => {
+                const col = toggle.value;
+                if (stored[col] === false) {
+                    toggle.checked = false;
+                }
+            });
+            const apply = () => {
+                toggles.forEach((toggle) => {
+                    const col = toggle.value;
+                    table.querySelectorAll(`[data-column='${col}']`).forEach((cell) => {
+                        cell.style.display = toggle.checked ? "" : "none";
+                    });
+                    stored[col] = toggle.checked;
+                });
+                localStorage.setItem(storageKey, JSON.stringify(stored));
+            };
+            toggles.forEach((toggle) => toggle.addEventListener("change", apply));
+            apply();
+        })();
+    </script>
+</body>
+</html>
+{{ end }}

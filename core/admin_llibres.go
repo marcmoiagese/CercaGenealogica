@@ -56,12 +56,32 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+var llibreTipusOptions = []string{
+	"baptismes",
+	"matrimonis",
+	"obits",
+	"confirmacions",
+	"padrons",
+	"reclutaments",
+	"altres",
+}
+
 func (a *App) AdminNewLlibre(w http.ResponseWriter, r *http.Request) {
 	_, _, ok := a.requirePermission(w, r, permArxius)
 	if !ok {
 		return
 	}
-	a.renderLlibreForm(w, r, &db.Llibre{ModeracioEstat: "pendent"}, true, "")
+	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
+	selectedArxiu := intFromForm(r.URL.Query().Get("arxiu_id"))
+	newLlibre := &db.Llibre{ModeracioEstat: "pendent"}
+	if selectedArxiu > 0 {
+		if arxiu, err := a.DB.GetArxiu(selectedArxiu); err == nil && arxiu != nil {
+			if arxiu.EntitatEclesiasticaID.Valid {
+				newLlibre.ArquebisbatID = int(arxiu.EntitatEclesiasticaID.Int64)
+			}
+		}
+	}
+	a.renderLlibreForm(w, r, newLlibre, true, "", returnURL, selectedArxiu)
 }
 
 func (a *App) AdminEditLlibre(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +95,12 @@ func (a *App) AdminEditLlibre(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	a.renderLlibreForm(w, r, llibre, false, "")
+	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
+	selectedArxiu := 0
+	if rels, err := a.DB.ListLlibreArxius(id); err == nil && len(rels) > 0 {
+		selectedArxiu = rels[0].ArxiuID
+	}
+	a.renderLlibreForm(w, r, llibre, false, "", returnURL, selectedArxiu)
 }
 
 func parseNullInt64(val string) sql.NullInt64 {
@@ -108,6 +133,7 @@ func parseLlibreForm(r *http.Request) *db.Llibre {
 		CodiDigital:       strings.TrimSpace(r.FormValue("codi_digital")),
 		CodiFisic:         strings.TrimSpace(r.FormValue("codi_fisic")),
 		Titol:             strings.TrimSpace(r.FormValue("titol")),
+		TipusLlibre:       strings.TrimSpace(r.FormValue("tipus_llibre")),
 		Cronologia:        strings.TrimSpace(r.FormValue("cronologia")),
 		Volum:             strings.TrimSpace(r.FormValue("volum")),
 		Abat:              strings.TrimSpace(r.FormValue("abat")),
@@ -123,28 +149,33 @@ func parseLlibreForm(r *http.Request) *db.Llibre {
 	}
 }
 
-func (a *App) validateLlibre(l *db.Llibre) string {
-	if l.ArquebisbatID == 0 {
-		return "Cal indicar l'entitat eclesiàstica."
-	}
+func (a *App) validateLlibre(l *db.Llibre, arxiuID int) string {
 	if l.MunicipiID == 0 {
 		return "Cal indicar el municipi."
 	}
 	if strings.TrimSpace(l.Titol) == "" && strings.TrimSpace(l.NomEsglesia) == "" {
 		return "Cal un títol o nom d'església."
 	}
+	if arxiuID == 0 {
+		return "Cal indicar l'arxiu."
+	}
 	return ""
 }
 
-func (a *App) renderLlibreForm(w http.ResponseWriter, r *http.Request, l *db.Llibre, isNew bool, errMsg string) {
+func (a *App) renderLlibreForm(w http.ResponseWriter, r *http.Request, l *db.Llibre, isNew bool, errMsg string, returnURL string, selectedArxiu int) {
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
+	arxius, _ := a.DB.ListArxius(db.ArxiuFilter{Status: "publicat", Limit: 500})
 	RenderPrivateTemplate(w, r, "admin-llibres-form.html", map[string]interface{}{
 		"Llibre":          l,
+		"TipusOptions":    llibreTipusOptions,
 		"Arquebisbats":    arquebisbats,
 		"Municipis":       municipis,
+		"Arxius":          arxius,
+		"SelectedArxiuID": selectedArxiu,
 		"IsNew":           isNew,
 		"Error":           errMsg,
+		"ReturnURL":       returnURL,
 		"CanManageArxius": true,
 	})
 }
@@ -166,9 +197,11 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 	}
 	user, _ := a.VerificarSessio(r)
 	llibre := parseLlibreForm(r)
+	returnURL := strings.TrimSpace(r.FormValue("return_to"))
+	arxiuID := intFromForm(r.FormValue("arxiu_id"))
 	isNew := llibre.ID == 0
-	if msg := a.validateLlibre(llibre); msg != "" {
-		a.renderLlibreForm(w, r, llibre, isNew, msg)
+	if msg := a.validateLlibre(llibre, arxiuID); msg != "" {
+		a.renderLlibreForm(w, r, llibre, isNew, msg, returnURL, arxiuID)
 		return
 	}
 	llibre.CreatedBy = sqlNullIntFromInt(user.ID)
@@ -178,19 +211,31 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 	if isNew {
 		id, err := a.DB.CreateLlibre(llibre)
 		if err != nil {
-			a.renderLlibreForm(w, r, llibre, isNew, "No s'ha pogut crear el llibre.")
+			Errorf("Error creant llibre: %v", err)
+			a.renderLlibreForm(w, r, llibre, isNew, "No s'ha pogut crear el llibre.", returnURL, arxiuID)
 			return
+		}
+		if arxiuID > 0 {
+			_ = a.DB.AddArxiuLlibre(arxiuID, id, "", "")
 		}
 		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleLlibreCreate, "crear", "llibre", &id, "pendent", nil, "")
 	} else {
 		if err := a.DB.UpdateLlibre(llibre); err != nil {
-			a.renderLlibreForm(w, r, llibre, isNew, "No s'ha pogut actualitzar el llibre.")
+			Errorf("Error actualitzant llibre: %v", err)
+			a.renderLlibreForm(w, r, llibre, isNew, "No s'ha pogut actualitzar el llibre.", returnURL, arxiuID)
 			return
+		}
+		if arxiuID > 0 {
+			_ = a.DB.AddArxiuLlibre(arxiuID, llibre.ID, "", "")
 		}
 		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleLlibreUpdate, "editar", "llibre", &llibre.ID, "pendent", nil, "")
 	}
 	if strings.TrimSpace(r.FormValue("recalc_pagines")) != "" && llibre.Pagines.Valid {
 		_ = a.DB.RecalcLlibrePagines(llibre.ID, int(llibre.Pagines.Int64))
+	}
+	if returnURL != "" {
+		http.Redirect(w, r, returnURL, http.StatusSeeOther)
+		return
 	}
 	http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
 }
@@ -284,12 +329,34 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	statusFilter := ""
+	if user == nil || !a.CanManageArxius(user) {
+		statusFilter = "publicat"
+	}
+	registres, _ := a.DB.ListTranscripcionsRaw(id, db.TranscripcioFilter{
+		Status: statusFilter,
+		Limit:  10000,
+	})
+	type registreStat struct {
+		Tipus string
+		Count int
+	}
+	counts := make(map[string]int)
+	for _, r := range registres {
+		counts[r.TipusActe]++
+	}
+	stats := make([]registreStat, 0, len(transcripcioTipusActe))
+	for _, tipus := range transcripcioTipusActe {
+		stats = append(stats, registreStat{Tipus: tipus, Count: counts[tipus]})
+	}
 	arxius, _ := a.DB.ListLlibreArxius(id)
 	arxiusOpts, _ := a.DB.ListArxius(db.ArxiuFilter{Limit: 200})
 	RenderPrivateTemplate(w, r, "admin-llibres-show.html", map[string]interface{}{
 		"Llibre":          llibre,
 		"Arxius":          arxius,
 		"ArxiusOptions":   arxiusOpts,
+		"RegistresStats":  stats,
+		"RegistresTotal":  len(registres),
 		"User":            user,
 		"CanManageArxius": true,
 	})

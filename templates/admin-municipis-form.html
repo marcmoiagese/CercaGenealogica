@@ -17,6 +17,7 @@
             {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
             <form method="post" action="/territori/municipis/save">
                 <input type="hidden" name="id" value="{{ .Data.Municipi.ID }}">
+                <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
                 {{ $prefill := .Data.Municipi.NivellAdministratiuID }}
                 <input type="hidden" id="prefill-levels" value='{{ toJson $prefill }}'>
                 <input type="hidden" id="all-levels" value='{{ toJson .Data.AllLevels }}'>
@@ -102,7 +103,7 @@
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">{{ t .Lang "municipis.form.save" }}</button>
-                    <a class="boto-secundari" href="/territori/municipis">{{ t .Lang "municipis.form.cancel" }}</a>
+                    <a class="boto-secundari" href="{{ if .Data.ReturnURL }}{{ .Data.ReturnURL }}{{ else }}/territori/municipis{{ end }}">{{ t .Lang "municipis.form.cancel" }}</a>
                 </div>
             </form>
 

@@ -1,0 +1,177 @@
+{{ define "admin-llibres-registres-search.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "records.search.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "records.search.title" }}</h1>
+                    <p class="muted">{{ t .Lang "records.list.filter.search" }}</p>
+                </div>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="/documentals/llibres">{{ t .Lang "records.list.filter.all" }}</a>
+                    <a class="boto-primari" href="/documentals/registres/cercar/export?{{ .Data.FilterQuery }}">{{ t .Lang "records.list.export" }}</a>
+                </div>
+            </header>
+
+            <form method="get" class="filtres">
+                <div class="grup-camp">
+                    <label for="f-llibre">{{ t .Lang "records.search.filter.book" }}</label>
+                    <select id="f-llibre" name="llibre_id">
+                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
+                        {{ range .Data.Llibres }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.LlibreID .ID }}selected{{ end }}>
+                            {{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}
+                        </option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="f-tipus">{{ t .Lang "records.list.filter.type" }}</label>
+                    <select id="f-tipus" name="tipus_acte">
+                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
+                        {{ range .Data.TipusActeOptions }}
+                        <option value="{{ . }}" {{ if eq $.Data.Filter.TipusActe . }}selected{{ end }}>{{ t $.Lang (printf "records.type.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="f-any">{{ t .Lang "records.list.filter.year" }}</label>
+                    <input id="f-any" type="number" name="any_doc" value="{{ if gt .Data.Filter.AnyDoc 0 }}{{ .Data.Filter.AnyDoc }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="f-status">{{ t .Lang "records.list.filter.status" }}</label>
+                    <select id="f-status" name="status">
+                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
+                        <option value="publicat" {{ if eq $.Data.Filter.Status "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
+                        <option value="pendent" {{ if eq $.Data.Filter.Status "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
+                        <option value="rebutjat" {{ if eq $.Data.Filter.Status "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="f-qualitat">{{ t .Lang "records.list.filter.quality" }}</label>
+                    <select id="f-qualitat" name="qualitat">
+                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
+                        {{ range .Data.QualitatOptions }}
+                        <option value="{{ . }}" {{ if eq $.Data.Filter.Qualitat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="f-q">{{ t .Lang "records.list.filter.search" }}</label>
+                    <input id="f-q" type="text" name="q" value="{{ .Data.Filter.Search }}">
+                </div>
+                <div class="grup-camp grup-camp-inline">
+                    <label class="checkbox-linia">
+                        <input type="checkbox" name="fts" value="1" {{ if .Data.Filter.UseFullText }}checked{{ end }}>
+                        <span>{{ t .Lang "records.list.filter.fts" }}</span>
+                    </label>
+                </div>
+                <div class="grup-camp">
+                    <label for="f-limit">{{ t .Lang "records.list.filter.limit" }}</label>
+                    <select id="f-limit" name="limit">
+                        {{ range $opt := (list "10" "25" "50" "100") }}
+                        <option value="{{ $opt }}" {{ if eq (printf "%d" $.Data.Limit) $opt }}selected{{ end }}>{{ $opt }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <button type="submit" class="boto-secundari">{{ t .Lang "records.list.filter.submit" }}</button>
+            </form>
+
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "records.search.table.book" }}</th>
+                            <th>{{ t .Lang "records.table.page" }}</th>
+                            <th>{{ t .Lang "records.table.position" }}</th>
+                            <th>{{ t .Lang "records.table.type" }}</th>
+                            <th>{{ t .Lang "records.table.year" }}</th>
+                            <th>{{ t .Lang "records.table.subject" }}</th>
+                            <th>{{ t .Lang "records.table.detail" }}</th>
+                            <th>{{ t .Lang "records.table.status" }}</th>
+                            <th>{{ t .Lang "records.table.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Registres }}
+                        <tr>
+                            <td>{{ .LlibreTitol }}</td>
+                            <td>{{ if .PaginaID.Valid }}{{ .PaginaID.Int64 }}{{ else }}{{ if .NumPaginaText }}{{ .NumPaginaText }}{{ else }}-{{ end }}{{ end }}</td>
+                            <td>{{ if .PosicioPagina.Valid }}{{ .PosicioPagina.Int64 }}{{ end }}</td>
+                            <td>{{ t $.Lang (printf "records.type.%s" .TipusActe) }}</td>
+                            <td>{{ if .AnyDoc.Valid }}{{ .AnyDoc.Int64 }}{{ end }}</td>
+                            <td>{{ .Subjecte }}</td>
+                            <td>
+                                {{ if .Detall }}
+                                <div class="registre-detall-resum">{{ .Detall }}</div>
+                                {{ end }}
+                                {{ if or (gt (len .Persones) 0) (gt (len .Atributs) 0) }}
+                                <details class="registre-detall">
+                                    <summary>{{ t $.Lang "records.detail.more" }}</summary>
+                                    <div class="registre-detall-body">
+                                        <div>
+                                            <h4>{{ t $.Lang "records.detail.persons" }}</h4>
+                                            <ul class="registre-detall-list">
+                                                {{ range .Persones }}
+                                                <li><strong>{{ .Rol }}</strong>: {{ .Nom }}</li>
+                                                {{ end }}
+                                                {{ if eq (len .Persones) 0 }}
+                                                <li class="muted">{{ t $.Lang "records.detail.none" }}</li>
+                                                {{ end }}
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <h4>{{ t $.Lang "records.detail.attributes" }}</h4>
+                                            <ul class="registre-detall-list">
+                                                {{ range .Atributs }}
+                                                <li><strong>{{ .Key }}</strong>: {{ .Value }}</li>
+                                                {{ end }}
+                                                {{ if eq (len .Atributs) 0 }}
+                                                <li class="muted">{{ t $.Lang "records.detail.none" }}</li>
+                                                {{ end }}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </details>
+                                {{ else }}
+                                <span class="muted">-</span>
+                                {{ end }}
+                            </td>
+                            <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                            <td class="accions">
+                                <a href="/documentals/registres/{{ .ID }}">{{ t $.Lang "records.action.view" }}</a> |
+                                <a href="/documentals/registres/{{ .ID }}/editar">{{ t $.Lang "records.action.edit" }}</a>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr>
+                            <td colspan="9">{{ t .Lang "common.empty" }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+
+            {{ if gt .Data.Total 0 }}
+            <div class="paginacio">
+                {{ range .Data.Pages }}
+                <a class="boto-secundari {{ if eq $.Data.Page . }}actiu{{ end }}" href="?{{ $.Data.FilterQuery }}&page={{ . }}&limit={{ $.Data.Limit }}">{{ . }}</a>
+                {{ end }}
+            </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

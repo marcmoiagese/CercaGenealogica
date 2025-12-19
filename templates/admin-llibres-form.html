@@ -17,9 +17,20 @@
             {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
             <form method="post" action="/documentals/llibres/save">
                 <input type="hidden" name="id" value="{{ .Data.Llibre.ID }}">
+                <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
+                <div class="grup-camp">
+                    <label for="arxiu_id">{{ t .Lang "books.form.archive" }}</label>
+                    <select id="arxiu_id" name="arxiu_id" required>
+                        <option value="">{{ t .Lang "books.form.archive.none" }}</option>
+                        {{ range .Data.Arxius }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.SelectedArxiuID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                    <p class="camp-helper">{{ t .Lang "books.form.archive.helper" }}</p>
+                </div>
                 <div class="grup-camp">
                     <label for="arquevisbat_id">{{ t .Lang "books.form.entity" }}</label>
-                    <select id="arquevisbat_id" name="arquevisbat_id" required>
+                    <select id="arquevisbat_id" name="arquevisbat_id">
                         <option value="">{{ t .Lang "books.form.entity.none" }}</option>
                         {{ range .Data.Arquebisbats }}
                         <option value="{{ .ID }}" {{ if eq $.Data.Llibre.ArquebisbatID .ID }}selected{{ end }}>{{ .Nom }}</option>
@@ -38,6 +49,15 @@
                 <div class="grup-camp">
                     <label for="titol">{{ t .Lang "books.form.title" }}</label>
                     <input id="titol" name="titol" type="text" value="{{ .Data.Llibre.Titol }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="tipus_llibre">{{ t .Lang "books.form.type" }}</label>
+                    <select id="tipus_llibre" name="tipus_llibre">
+                        <option value="">{{ t .Lang "common.select" }}</option>
+                        {{ range .Data.TipusOptions }}
+                        <option value="{{ . }}" {{ if eq $.Data.Llibre.TipusLlibre . }}selected{{ end }}>{{ t $.Lang (printf "books.type.%s" .) }}</option>
+                        {{ end }}
+                    </select>
                 </div>
                 <div class="grup-camp">
                     <label for="nom_esglesia">{{ t .Lang "books.form.church" }}</label>
@@ -107,7 +127,7 @@
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">{{ t .Lang "books.form.save" }}</button>
-                    <a class="boto-secundari" href="/documentals/llibres">{{ t .Lang "books.form.cancel" }}</a>
+                    <a class="boto-secundari" href="{{ if .Data.ReturnURL }}{{ .Data.ReturnURL }}{{ else }}/documentals/llibres{{ end }}">{{ t .Lang "books.form.cancel" }}</a>
                 </div>
             </form>
         </section>

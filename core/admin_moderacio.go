@@ -232,6 +232,7 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = r.ParseForm()
 	if err := a.updateModeracioObject(objType, id, "publicat", "", user.ID); err != nil {
+		Errorf("Moderacio aprovar %s:%d ha fallat: %v", objType, id, err)
 		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
 		return
 	}
@@ -269,6 +270,7 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 	}
 	motiu := r.FormValue("motiu")
 	if err := a.updateModeracioObject(objType, id, "rebutjat", motiu, user.ID); err != nil {
+		Errorf("Moderacio rebutjar %s:%d ha fallat: %v", objType, id, err)
 		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
 		return
 	}

@@ -97,11 +97,11 @@ CREATE TABLE IF NOT EXISTS persona (
     data_defuncio DATE,
     ofici VARCHAR(255),
     estat_civil VARCHAR(50),
-    created_by INT,
+    created_by INT UNSIGNED NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    updated_by INT,
-    moderated_by INT,
+    updated_by INT UNSIGNED NULL,
+    moderated_by INT UNSIGNED NULL,
     moderated_at DATETIME NULL,
     INDEX idx_persona_cognoms_quinta_llibre_pagina (cognom1, cognom2, quinta, llibre, pagina),
     FULLTEXT INDEX idx_persona_nom_complet (nom_complet),
@@ -299,6 +299,7 @@ CREATE TABLE IF NOT EXISTS llibres (
     codi_digital VARCHAR(50),
     codi_fisic VARCHAR(50),
     titol VARCHAR(255),
+    tipus_llibre VARCHAR(50),
     cronologia VARCHAR(255),
     volum VARCHAR(255),
     abat VARCHAR(255),
@@ -511,6 +512,112 @@ CREATE TABLE IF NOT EXISTS llibre_pagines (
 CREATE INDEX idx_arxius_llibres_arxiu  ON arxius_llibres(arxiu_id);
 CREATE INDEX idx_arxius_llibres_llibre ON arxius_llibres(llibre_id);
 CREATE INDEX idx_llibre_pagines_estat  ON llibre_pagines(llibre_id, estat);
+
+-- Transcripcions RAW de registres
+DROP TABLE IF EXISTS transcripcions_atributs_raw;
+DROP TABLE IF EXISTS transcripcions_persones_raw;
+DROP TABLE IF EXISTS transcripcions_raw;
+CREATE TABLE IF NOT EXISTS transcripcions_raw (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  llibre_id INT UNSIGNED NOT NULL,
+  pagina_id INT UNSIGNED NULL,
+  num_pagina_text VARCHAR(50),
+  posicio_pagina INT,
+  tipus_acte VARCHAR(50),
+  any_doc INT,
+  data_acte_text TEXT,
+  data_acte_iso DATE,
+  data_acte_estat VARCHAR(20),
+  transcripcio_literal TEXT,
+  notes_marginals TEXT,
+  observacions_paleografiques TEXT,
+  moderation_status ENUM('pendent','publicat','rebutjat') DEFAULT 'pendent',
+  moderated_by INT UNSIGNED NULL,
+  moderated_at DATETIME,
+  moderation_notes TEXT,
+  created_by INT UNSIGNED NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT chk_transcripcions_raw_estat CHECK (data_acte_estat IN ('clar','dubtos','incomplet','illegible','no_consta')),
+  FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE CASCADE,
+  FOREIGN KEY (pagina_id) REFERENCES llibre_pagines(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+  FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS transcripcions_persones_raw (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  transcripcio_id INT UNSIGNED NOT NULL,
+  rol VARCHAR(50),
+  nom VARCHAR(255),
+  nom_estat VARCHAR(20),
+  cognom1 VARCHAR(255),
+  cognom1_estat VARCHAR(20),
+  cognom2 VARCHAR(255),
+  cognom2_estat VARCHAR(20),
+  sexe VARCHAR(10),
+  sexe_estat VARCHAR(20),
+  edat_text VARCHAR(100),
+  edat_estat VARCHAR(20),
+  estat_civil_text VARCHAR(100),
+  estat_civil_estat VARCHAR(20),
+  municipi_text VARCHAR(255),
+  municipi_estat VARCHAR(20),
+  ofici_text VARCHAR(255),
+  ofici_estat VARCHAR(20),
+  casa_nom VARCHAR(255),
+  casa_estat VARCHAR(20),
+  persona_id INT UNSIGNED NULL,
+  linked_by INT UNSIGNED NULL,
+  linked_at TIMESTAMP NULL,
+  notes TEXT,
+  FOREIGN KEY (transcripcio_id) REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+  FOREIGN KEY (persona_id) REFERENCES persona(id) ON DELETE SET NULL,
+  FOREIGN KEY (linked_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS transcripcions_atributs_raw (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  transcripcio_id INT UNSIGNED NOT NULL,
+  clau VARCHAR(100),
+  tipus_valor VARCHAR(20),
+  valor_text TEXT,
+  valor_int INT,
+  valor_date DATE,
+  valor_bool TINYINT(1),
+  estat VARCHAR(20),
+  notes TEXT,
+  FOREIGN KEY (transcripcio_id) REFERENCES transcripcions_raw(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS transcripcions_raw_drafts (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  llibre_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
+  payload MEDIUMTEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_transcripcions_raw_drafts (llibre_id, user_id),
+  FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_transcripcions_raw_llibre_pagina
+  ON transcripcions_raw(llibre_id, pagina_id, posicio_pagina);
+CREATE INDEX idx_transcripcions_raw_llibre_tipus_any
+  ON transcripcions_raw(llibre_id, tipus_acte, any_doc);
+CREATE INDEX idx_transcripcions_raw_status
+  ON transcripcions_raw(moderation_status);
+
+CREATE INDEX idx_transcripcions_persones_raw_rol
+  ON transcripcions_persones_raw(transcripcio_id, rol);
+CREATE INDEX idx_transcripcions_persones_raw_nom
+  ON transcripcions_persones_raw(cognom1, cognom2, nom);
+
+CREATE INDEX idx_transcripcions_atributs_raw_clau
+  ON transcripcions_atributs_raw(clau);
+CREATE INDEX idx_transcripcions_atributs_raw_transcripcio
+  ON transcripcions_atributs_raw(transcripcio_id, clau);
 
 -- Cerca per cognoms i nom (per coincidències exactes)
 -- CREATE INDEX idx_persona_nom_complet ON persona(nom_complet);

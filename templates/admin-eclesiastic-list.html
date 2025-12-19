@@ -67,6 +67,10 @@
                             <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
                             <td><a href="/territori/eclesiastic/{{ .ID }}/edit">{{ t $.Lang "ecles.action.edit" }}</a></td>
                         </tr>
+                        {{ else }}
+                        <tr>
+                            <td colspan="8">{{ t .Lang "common.empty" }}</td>
+                        </tr>
                         {{ end }}
                     </tbody>
                 </table>

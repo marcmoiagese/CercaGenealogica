@@ -1,0 +1,263 @@
+{{ define "admin-llibres-registres-show.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "records.show.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "records.show.title" }}</h1>
+                    {{ if .Data.Llibre }}
+                    <p class="muted">{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</p>
+                    {{ end }}
+                </div>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="/documentals/registres/{{ .Data.Registre.ID }}/editar">{{ t .Lang "records.action.edit" }}</a>
+                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Registre.LlibreID }}/registres">{{ t .Lang "records.show.back" }}</a>
+                </div>
+                {{ if .Data.Registre.ModeracioEstat }}
+                <span class="badge {{ if eq .Data.Registre.ModeracioEstat "publicat" }}verd{{ else if eq .Data.Registre.ModeracioEstat "pendent" }}taronja{{ else }}vermell{{ end }}">
+                    {{ t .Lang (printf "activity.status.%s" .Data.Registre.ModeracioEstat) }}
+                </span>
+                {{ end }}
+            </header>
+
+            <ul class="dades-grid">
+                <li><strong>{{ t .Lang "records.form.type" }}:</strong> {{ t .Lang (printf "records.type.%s" .Data.Registre.TipusActe) }}</li>
+                <li><strong>{{ t .Lang "records.form.year" }}:</strong> {{ if .Data.Registre.AnyDoc.Valid }}{{ .Data.Registre.AnyDoc.Int64 }}{{ end }}</li>
+                <li><strong>{{ t .Lang "records.form.page" }}:</strong> {{ if .Data.Registre.PaginaID.Valid }}{{ .Data.Registre.PaginaID.Int64 }}{{ else }}{{ if .Data.Registre.NumPaginaText }}{{ .Data.Registre.NumPaginaText }}{{ else }}-{{ end }}{{ end }}</li>
+                <li><strong>{{ t .Lang "records.form.page.position" }}:</strong> {{ if .Data.Registre.PosicioPagina.Valid }}{{ .Data.Registre.PosicioPagina.Int64 }}{{ end }}</li>
+                <li><strong>{{ t .Lang "records.form.date.text" }}:</strong> {{ .Data.Registre.DataActeText }}</li>
+                <li><strong>{{ t .Lang "records.form.date.iso" }}:</strong> {{ if .Data.Registre.DataActeISO.Valid }}{{ .Data.Registre.DataActeISO.String }}{{ end }}</li>
+                <li><strong>{{ t .Lang "records.form.date.state" }}:</strong> {{ if .Data.Registre.DataActeEstat }}{{ t .Lang (printf "records.quality.%s" .Data.Registre.DataActeEstat) }}{{ end }}</li>
+                <li style="grid-column: 1 / -1;"><strong>{{ t .Lang "records.form.transcription" }}:</strong><br>{{ .Data.Registre.TranscripcioLiteral }}</li>
+                {{ if .Data.Registre.NotesMarginals }}
+                <li style="grid-column: 1 / -1;"><strong>{{ t .Lang "records.form.notes.marginal" }}:</strong><br>{{ .Data.Registre.NotesMarginals }}</li>
+                {{ end }}
+                {{ if .Data.Registre.ObservacionsPaleografiques }}
+                <li style="grid-column: 1 / -1;"><strong>{{ t .Lang "records.form.notes.paleo" }}:</strong><br>{{ .Data.Registre.ObservacionsPaleografiques }}</li>
+                {{ end }}
+            </ul>
+        </section>
+
+        <section class="card">
+            <header class="card-header">
+                <h2>{{ t .Lang "records.form.people" }}</h2>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "records.form.people.role" }}</th>
+                            <th>{{ t .Lang "records.form.people.name" }}</th>
+                            <th>{{ t .Lang "records.form.people.surname1" }}</th>
+                            <th>{{ t .Lang "records.form.people.surname2" }}</th>
+                            <th>{{ t .Lang "records.form.people.sex" }}</th>
+                            <th>{{ t .Lang "records.form.people.age" }}</th>
+                            <th>{{ t .Lang "records.form.people.civil" }}</th>
+                            <th>{{ t .Lang "records.form.people.place" }}</th>
+                            <th>{{ t .Lang "records.form.people.job" }}</th>
+                            <th>{{ t .Lang "records.form.people.house" }}</th>
+                            <th>{{ t .Lang "records.form.notes" }}</th>
+                            <th>{{ t .Lang "records.link.title" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Persones }}
+                        {{ $p := . }}
+                        <tr>
+                            <td>{{ $p.Rol }}</td>
+                            <td>{{ $p.Nom }}{{ if $p.NomEstat }} <span class="muted">({{ t $.Lang (printf "records.quality.%s" $p.NomEstat) }})</span>{{ end }}</td>
+                            <td>{{ $p.Cognom1 }}{{ if $p.Cognom1Estat }} <span class="muted">({{ t $.Lang (printf "records.quality.%s" $p.Cognom1Estat) }})</span>{{ end }}</td>
+                            <td>{{ $p.Cognom2 }}{{ if $p.Cognom2Estat }} <span class="muted">({{ t $.Lang (printf "records.quality.%s" $p.Cognom2Estat) }})</span>{{ end }}</td>
+                            <td>{{ $p.Sexe }}{{ if $p.SexeEstat }} <span class="muted">({{ t $.Lang (printf "records.quality.%s" $p.SexeEstat) }})</span>{{ end }}</td>
+                            <td>{{ $p.EdatText }}{{ if $p.EdatEstat }} <span class="muted">({{ t $.Lang (printf "records.quality.%s" $p.EdatEstat) }})</span>{{ end }}</td>
+                            <td>{{ $p.EstatCivilText }}{{ if $p.EstatCivilEstat }} <span class="muted">({{ t $.Lang (printf "records.quality.%s" $p.EstatCivilEstat) }})</span>{{ end }}</td>
+                            <td>{{ $p.MunicipiText }}{{ if $p.MunicipiEstat }} <span class="muted">({{ t $.Lang (printf "records.quality.%s" $p.MunicipiEstat) }})</span>{{ end }}</td>
+                            <td>{{ $p.OficiText }}{{ if $p.OficiEstat }} <span class="muted">({{ t $.Lang (printf "records.quality.%s" $p.OficiEstat) }})</span>{{ end }}</td>
+                            <td>{{ $p.CasaNom }}{{ if $p.CasaEstat }} <span class="muted">({{ t $.Lang (printf "records.quality.%s" $p.CasaEstat) }})</span>{{ end }}</td>
+                            <td>{{ $p.Notes }}</td>
+                            <td>
+                                {{ if $p.PersonaID.Valid }}
+                                    {{ $pid := printf "%d" $p.PersonaID.Int64 }}
+                                    {{ $persona := index $.Data.LinkedPersones $pid }}
+                                    {{ if $persona }}
+                                        <a class="link-persona" href="/persones/{{ $persona.ID }}">
+                                            {{ $persona.Nom }} {{ $persona.Cognom1 }} {{ $persona.Cognom2 }}
+                                        </a>
+                                    {{ else }}
+                                        <span class="muted">#{{ $p.PersonaID.Int64 }}</span>
+                                    {{ end }}
+                                    <form class="inline-form" method="post" action="/documentals/registres/{{ $.Data.Registre.ID }}/persones/{{ $p.ID }}/desenllacar">
+                                        <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                                        <input type="hidden" name="return_to" value="/documentals/registres/{{ $.Data.Registre.ID }}">
+                                        <button type="submit" class="boto-secundari btn-mini">{{ t $.Lang "records.link.unlink" }}</button>
+                                    </form>
+                                {{ else }}
+                                    {{ if $.Data.CanLink }}
+                                        <button type="button" class="boto-secundari btn-mini" data-modal-open="link-modal-{{ $p.ID }}">{{ t $.Lang "records.link.button" }}</button>
+                                    {{ else }}
+                                        <span class="muted">{{ t $.Lang "records.link.disabled" }}</span>
+                                    {{ end }}
+                                {{ end }}
+                            </td>
+                        </tr>
+                        {{ if and (not $p.PersonaID.Valid) $.Data.CanLink }}
+                        <tr class="link-modal-row">
+                            <td colspan="12">
+                                <div class="modal-overlay {{ if eq $.Data.LinkSearchTarget $p.ID }}is-open{{ end }}" id="link-modal-{{ $p.ID }}">
+                                    <div class="modal-box">
+                                        <header class="modal-header">
+                                            <div>
+                                                <h3>{{ t $.Lang "records.link.title" }}</h3>
+                                                <p class="muted">{{ $p.Nom }} {{ $p.Cognom1 }} {{ $p.Cognom2 }}</p>
+                                            </div>
+                                            <button type="button" class="modal-close" data-modal-close="link-modal-{{ $p.ID }}">×</button>
+                                        </header>
+                                        <form method="get" class="link-search">
+                                            <input type="hidden" name="link_raw_id" value="{{ $p.ID }}">
+                                            <div class="grup-camp">
+                                                <label for="q-{{ $p.ID }}">{{ t $.Lang "records.link.search" }}</label>
+                                                <input id="q-{{ $p.ID }}" name="q" type="text" value="{{ $.Data.LinkSearchQuery }}" placeholder="{{ t $.Lang "records.link.search.placeholder" }}">
+                                            </div>
+                                            <div class="grup-camp">
+                                                <label for="municipi-{{ $p.ID }}">{{ t $.Lang "records.link.search.municipi" }}</label>
+                                                <input id="municipi-{{ $p.ID }}" name="municipi" type="text" value="{{ $.Data.LinkSearchMunicipi }}">
+                                            </div>
+                                            <div class="grup-camp inline-fields">
+                                                <div>
+                                                    <label for="any-min-{{ $p.ID }}">{{ t $.Lang "records.link.search.year_min" }}</label>
+                                                    <input id="any-min-{{ $p.ID }}" name="any_min" type="number" value="{{ $.Data.LinkSearchAnyMin }}">
+                                                </div>
+                                                <div>
+                                                    <label for="any-max-{{ $p.ID }}">{{ t $.Lang "records.link.search.year_max" }}</label>
+                                                    <input id="any-max-{{ $p.ID }}" name="any_max" type="number" value="{{ $.Data.LinkSearchAnyMax }}">
+                                                </div>
+                                            </div>
+                                            <div class="form-accio">
+                                                <button type="submit" class="boto-secundari">{{ t $.Lang "common.search" }}</button>
+                                            </div>
+                                        </form>
+
+                                        {{ $sugs := index $.Data.LinkSuggestions (printf "%d" $p.ID) }}
+                                        {{ if $sugs }}
+                                        <div class="link-suggestions">
+                                            <h4>{{ t $.Lang "records.link.suggestions" }}</h4>
+                                            {{ range $sugs }}
+                                            <div class="link-suggestion">
+                                                <div>
+                                                    <strong>{{ .Nom }}</strong>
+                                                    {{ if .Municipi }}<span class="muted"> · {{ .Municipi }}</span>{{ end }}
+                                                    {{ if .Any }}<span class="muted"> · {{ .Any }}</span>{{ end }}
+                                                </div>
+                                                <form method="post" action="/documentals/registres/{{ $.Data.Registre.ID }}/persones/{{ $p.ID }}/enllacar">
+                                                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                                                    <input type="hidden" name="persona_id" value="{{ .ID }}">
+                                                    <input type="hidden" name="return_to" value="/documentals/registres/{{ $.Data.Registre.ID }}">
+                                                    <button type="submit" class="boto-primari btn-mini">{{ t $.Lang "records.link.confirm" }}</button>
+                                                </form>
+                                            </div>
+                                            {{ end }}
+                                        </div>
+                                        {{ end }}
+
+                                        {{ if and (eq $.Data.LinkSearchTarget $p.ID) (gt (len $.Data.LinkSearchResults) 0) }}
+                                        <div class="link-suggestions">
+                                            <h4>{{ t $.Lang "records.link.results" }}</h4>
+                                            {{ range $.Data.LinkSearchResults }}
+                                            <div class="link-suggestion">
+                                                <div>
+                                                    <strong>{{ .Nom }}</strong>
+                                                    {{ if .Municipi }}<span class="muted"> · {{ .Municipi }}</span>{{ end }}
+                                                    {{ if .Any }}<span class="muted"> · {{ .Any }}</span>{{ end }}
+                                                </div>
+                                                <form method="post" action="/documentals/registres/{{ $.Data.Registre.ID }}/persones/{{ $p.ID }}/enllacar">
+                                                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                                                    <input type="hidden" name="persona_id" value="{{ .ID }}">
+                                                    <input type="hidden" name="return_to" value="/documentals/registres/{{ $.Data.Registre.ID }}">
+                                                    <button type="submit" class="boto-primari btn-mini">{{ t $.Lang "records.link.confirm" }}</button>
+                                                </form>
+                                            </div>
+                                            {{ end }}
+                                        </div>
+                                        {{ end }}
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {{ end }}
+                        {{ else }}
+                        <tr>
+                            <td colspan="12">{{ t .Lang "common.empty" }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card">
+            <header class="card-header">
+                <h2>{{ t .Lang "records.form.attributes" }}</h2>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "records.form.attributes.key" }}</th>
+                            <th>{{ t .Lang "records.form.attributes.type" }}</th>
+                            <th>{{ t .Lang "records.form.attributes.value" }}</th>
+                            <th>{{ t .Lang "records.form.attributes.state" }}</th>
+                            <th>{{ t .Lang "records.form.notes" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Atributs }}
+                        {{ $a := . }}
+                        <tr>
+                            <td>{{ $a.Clau }}</td>
+                            <td>{{ $a.TipusValor }}</td>
+                            <td>{{ if $a.ValorText }}{{ $a.ValorText }}{{ else if $a.ValorInt.Valid }}{{ $a.ValorInt.Int64 }}{{ else if $a.ValorDate.Valid }}{{ $a.ValorDate.String }}{{ else if $a.ValorBool.Valid }}{{ if $a.ValorBool.Bool }}1{{ else }}0{{ end }}{{ end }}</td>
+                            <td>{{ if $a.Estat }}{{ t $.Lang (printf "records.quality.%s" $a.Estat) }}{{ end }}</td>
+                            <td>{{ $a.Notes }}</td>
+                        </tr>
+                        {{ else }}
+                        <tr>
+                            <td colspan="5">{{ t .Lang "common.empty" }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script>
+        document.querySelectorAll('[data-modal-open]').forEach(function(button) {
+            button.addEventListener('click', function() {
+                var target = document.getElementById(button.getAttribute('data-modal-open'));
+                if (target) {
+                    target.classList.add('is-open');
+                }
+            });
+        });
+        document.querySelectorAll('[data-modal-close]').forEach(function(button) {
+            button.addEventListener('click', function() {
+                var target = document.getElementById(button.getAttribute('data-modal-close'));
+                if (target) {
+                    target.classList.remove('is-open');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+{{ end }}

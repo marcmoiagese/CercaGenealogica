@@ -246,10 +246,10 @@ func (f *fakeDBVerificar) AddPointsToUser(userID int, delta int) error { return 
 func (f *fakeDBVerificar) GetUserPoints(userID int) (*db.UserPoints, error) {
 	return &db.UserPoints{UserID: userID}, nil
 }
-func (f *fakeDBVerificar) RecalcUserPoints() error                       { return nil }
+func (f *fakeDBVerificar) RecalcUserPoints() error                              { return nil }
 func (f *fakeDBVerificar) GetRanking(db.RankingFilter) ([]db.UserPoints, error) { return nil, nil }
 func (f *fakeDBVerificar) CountRanking(db.RankingFilter) (int, error)           { return 0, nil }
-func (f *fakeDBVerificar) ListUserGroups(userID int) ([]db.Group, error) { return nil, nil }
+func (f *fakeDBVerificar) ListUserGroups(userID int) ([]db.Group, error)        { return nil, nil }
 func (f *fakeDBVerificar) ListPersones(filter db.PersonaFilter) ([]db.Persona, error) {
 	return nil, nil
 }
@@ -275,6 +275,69 @@ func (f *fakeDBVerificar) UpdateMunicipiModeracio(id int, estat, motiu string, m
 }
 func (f *fakeDBVerificar) UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error {
 	return nil
+}
+func (f *fakeDBVerificar) ListTranscripcionsRaw(llibreID int, ftr db.TranscripcioFilter) ([]db.TranscripcioRaw, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) ListTranscripcionsRawGlobal(ftr db.TranscripcioFilter) ([]db.TranscripcioRaw, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) CountTranscripcionsRaw(llibreID int, ftr db.TranscripcioFilter) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) CountTranscripcionsRawGlobal(ftr db.TranscripcioFilter) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) GetTranscripcioRaw(id int) (*db.TranscripcioRaw, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) CreateTranscripcioRaw(t *db.TranscripcioRaw) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) UpdateTranscripcioRaw(t *db.TranscripcioRaw) error {
+	return nil
+}
+func (f *fakeDBVerificar) DeleteTranscripcioRaw(id int) error {
+	return nil
+}
+func (f *fakeDBVerificar) ListTranscripcioPersones(transcripcioID int) ([]db.TranscripcioPersonaRaw, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) CreateTranscripcioPersona(p *db.TranscripcioPersonaRaw) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) LinkTranscripcioPersona(personaRawID int, personaID int, linkedBy int) error {
+	return nil
+}
+func (f *fakeDBVerificar) UnlinkTranscripcioPersona(personaRawID int, linkedBy int) error {
+	return nil
+}
+func (f *fakeDBVerificar) DeleteTranscripcioPersones(transcripcioID int) error {
+	return nil
+}
+func (f *fakeDBVerificar) ListTranscripcioAtributs(transcripcioID int) ([]db.TranscripcioAtributRaw, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) CreateTranscripcioAtribut(a *db.TranscripcioAtributRaw) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) DeleteTranscripcioAtributs(transcripcioID int) error {
+	return nil
+}
+func (f *fakeDBVerificar) GetTranscripcioDraft(userID, llibreID int) (*db.TranscripcioDraft, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) SaveTranscripcioDraft(userID, llibreID int, payload string) error {
+	return nil
+}
+func (f *fakeDBVerificar) DeleteTranscripcioDraft(userID, llibreID int) error {
+	return nil
+}
+func (f *fakeDBVerificar) SearchPersones(filt db.PersonaSearchFilter) ([]db.PersonaSearchResult, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) ListRegistresByPersona(personaID int, tipus string) ([]db.PersonaRegistreRow, error) {
+	return nil, nil
 }
 
 // Crea una App només amb la fake DB per testejar VerificarSessio.

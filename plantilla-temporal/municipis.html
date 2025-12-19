@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genealogia.cat - Inici</title>
+
+    <link rel="stylesheet" href="css/estils.css">
+    <link rel="stylesheet" href="css/menu.css">
+    <link rel="stylesheet" href="css/taula.css">
+    <link rel="stylesheet" href="css/perfil-dropdown.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="stylesheet" href="css/busqueda-municipis.css">
+    
+</head>
+<body>
+
+    <!-- Capçalera -->
+    <header class="header-genealogic">
+        <button class="boto-menu" id="botoMenu">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div class="container">
+            <div class="logo-idiomes">
+                <a href="/" class="logo">
+                    <img src="img/logo.png" alt="Genealogia.cat">
+                    <span>Genealogia.cat</span>
+                </a>
+
+                <!-- Grup drets: idioma + perfil usuari -->
+                <div class="controls-dreta">
+                    <div class="selector-idioma-dropdown">
+                        <button class="boto-selector-idioma" id="botoSelectorIdioma">
+                            CAT <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <ul class="dropdown-idiomes" id="dropdownIdiomes">
+                            <li><a href="/cat/" class="active">Català</a></li>
+                            <li><a href="/en/">English</a></li>
+                            <li><a href="/oc/">Occitan</a></li>
+                        </ul>
+                    </div>
+
+                    <!-- Menú perfil usuari -->
+                    <div class="perfil-usuari">
+                        <button class="boto-perfil-usuari" id="botoPerfil">
+                            <i class="fas fa-user-circle"></i> Joan Martí <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <ul class="dropdown-perfil" id="dropdownPerfil">
+                            <li><a href="#"><i class="fas fa-user-cog"></i> Dades personals</a></li>
+                            <li><a href="#"><i class="fas fa-folder-open"></i> Espai personal</a></li>
+                            <li><a href="#"><i class="fas fa-sign-out-alt"></i> Desconnectar</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Menú Lateral -->
+    <aside class="menu-lateral" id="menuLateral">
+        <div class="menu-capçalera">
+            <div class="cerca-menu">
+                <input type="text" id="cercaMenuInput" placeholder="Cerca en el menú...">
+                <button id="cercaMenuBoto"><i class="fas fa-search"></i></button>
+            </div>
+            
+        </div>
+
+        <!-- Secció de Favorits -->
+        <div class="menu-seccio" id="favoritsSeccio" style="display:none;">
+            <div class="menu-titol">
+                <i class="fas fa-star"></i>
+                <h3>Els meus favorits</h3>
+                <span class="menu-boto-tanca" id="tancaFavorits"><i class="fas fa-times"></i></span>
+            </div>
+            <ul class="llista-favorits" id="llistaFavorits">
+                <li class="placeholder-favorit">No tens cap favorit encara</li>
+            </ul>
+        </div>
+        
+        
+        <div class="menu-contingut">
+            <div class="menu-seccio">
+                <div class="menu-titol">
+                    <i class="fas fa-home"></i>
+                    <h3>Inici</h3>
+                </div>
+                <ul>
+                    <li class="menu-opcio">
+                        Pàgina principal
+                        <button class="boto-afegir-favorit" data-nom="Pàgina principal"><i class="far fa-star"></i></button>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="menu-seccio">
+                <div class="menu-titol">
+                    <i class="fas fa-search"></i>
+                    <h3>Cerca</h3>
+                </div>
+                <ul>
+                    <li class="menu-opcio">
+                        Cerca persones
+                        <button class="boto-afegir-favorit" data-nom="Cerca persones"><i class="far fa-star"></i></button>
+                    </li>
+                    <li class="menu-opcio">
+                        Cerca famílies
+                        <button class="boto-afegir-favorit" data-nom="Cerca famílies"><i class="far fa-star"></i></button>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="menu-seccio">
+                <div class="menu-titol">
+                    <i class="fas fa-tree"></i>
+                    <h3>Arbre Genealògic</h3>
+                </div>
+                <ul>
+                    <li class="menu-opcio">
+                        El meu arbre
+                        <button class="boto-afegir-favorit" data-nom="El meu arbre"><i class="far fa-star"></i></button>
+                    </li>
+                    <li class="menu-opcio">
+                        Afegir persona
+                        <button class="boto-afegir-favorit" data-nom="Afegir persona"><i class="far fa-star"></i></button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Overlay del menú -->
+    <div class="overlay-menu" id="overlayMenu"></div>
+
+    <!-- Contingut Principal -->
+    <main class="contingut-principal">
+        <section class="taula-resultats">
+            <!-- Cerca avançada -->
+            <div class="cerca-avançada" style="position: relative;">
+                <label for="campCercaAvançada">Cerca lliure:</label>
+                <input type="text" id="campCercaAvançada" placeholder="Escriu una comunitat, provincia, comarca o municipi..." autocomplete="off">
+                <ul id="resultatsCercaAvançada" class="resultats-cerca"></ul>
+            </div>
+            <!-- Buscador Dinàmic -->
+            <div class="filtres-localitzacio">
+                <!-- País -->
+                <div class="filtre-grup">
+                    <label for="paisSelect">País:</label>
+                    <select id="paisSelect" name="pais">
+                        <option value="" selected>-- Selecciona país --</option>
+                        <option value="espanya">Espanya</option>
+                    </select>
+                </div>
+
+                <!-- Comunitat -->
+                <div class="filtre-grup" id="comunitatGrup" style="display:none;">
+                    <label for="comunitatSelect">Comunitat Autònoma:</label>
+                    <select id="comunitatSelect" name="comunitat">
+                        <option value="">-- Selecciona comunitat --</option>
+                    </select>
+                </div>
+
+                <!-- Provincia -->
+                <div class="filtre-grup" id="provinciaGrup" style="display:none;">
+                    <label for="provinciaSelect">Provincia:</label>
+                    <select id="provinciaSelect" name="provincia">
+                        <option value="">-- Selecciona provincia --</option>
+                    </select>
+                </div>
+
+                <!-- Municipi -->
+                <div class="filtre-grup" id="municipiGrup" style="display:none;">
+                    <label for="municipiSelect">Municipi:</label>
+                    <select id="municipiSelect" name="municipi">
+                        <option value="">-- Selecciona municipi --</option>
+                    </select>
+                </div>
+
+                <!-- Botó Cerca -->
+                <!-- <button class="boto-login-modal boto-cerca"><i class="fas fa-search"></i> Cerca</button> -->
+            </div>
+        </section>
+
+        <!-- Taula de resultats -->
+        <section class="taula-resultats">
+            <div class="taula-wrapper">
+                <!-- Controles de paginació Superior -->
+                <div class="taula-paginacio">
+                    <div class="paginacio-controls">
+                        <span id="infoPagina" class="pagina-info">1/1</span>
+                        <span class="custom-select">
+                            <select id="registresPerPaginaSelect" class="registres-per-pagina">
+                                <option value="5">5 registres</option>
+                                <option value="10" selected>10 registres</option>
+                                <option value="20">20 registres</option>
+                                <option value="50">50 registres</option>
+                            </select>
+                            <i class="fas fa-chevron-down"></i>
+                        </span>
+                    </div>
+                </div>
+                <!-- Taula -->
+                <table id="taulaBuscadorMunicipis">
+                    <thead>
+                        <tr>
+                            <th data-column="pais">País <i class="fas fa-sort"></i></th>
+                            <th data-column="comunitat">Comunitat <i class="fas fa-sort"></i></th>
+                            <th data-column="provincia">Provincia <i class="fas fa-sort"></i></th>
+                            <th data-column="poble">Poble <i class="fas fa-sort"></i></th>
+                            <th data-column="registres">Registres <i class="fas fa-sort"></i></th>
+                            <th>Opcions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="taulaBuscadorMunicipisBody">
+                        <!-- El contingut es generarà dinàmicament -->
+                    </tbody>
+                </table>
+
+                <!-- Controls paginacio inferior -->
+                <div class="paginacio-centrada" id="botoPaginacioContainer">
+                    <!-- <button class="boto-pagina boto-anterior"><i class="fas fa-chevron-left"></i></button> -->
+                    <div id="grupBotonsPagina" class="grup-botons-pagina"></div>
+                    <!-- <button class="boto-pagina boto-seguent"><i class="fas fa-chevron-right"></i></button> -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer-genealogic">
+        <div class="footer-contenidor">
+            <div class="footer-seccio">
+                <h3>Genealogia.cat</h3>
+                <p>La plataforma líder per a la recerca genealògica a Catalunya</p>
+                <div class="xarxes-socials">
+                    <a href="#"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#"><i class="fab fa-twitter"></i></a>
+                    <a href="#"><i class="fab fa-instagram"></i></a>
+                </div>
+            </div>
+            
+            <div class="footer-seccio">
+                <h3>Enllaços</h3>
+                <a href="#">Arxius històrics</a>
+                <a href="#">Cementiris</a>
+                <a href="#">Arxius parroquials</a>
+            </div>
+            
+            <div class="footer-seccio">
+                <h3>Contacte</h3>
+                <p><i class="fas fa-envelope"></i> info@genealogia.cat</p>
+                <p><i class="fas fa-map-marker-alt"></i> Barcelona, Catalunya</p>
+            </div>
+            
+            <div class="copyright">
+                <p>© 2023 Genealogia.cat - Tots els drets reservats</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="js/menu.js"></script>
+    <script src="js/perfil-dropdown.js"></script>
+    <script src="js/buscador-municipis.js"></script>
+</body>
+</html>

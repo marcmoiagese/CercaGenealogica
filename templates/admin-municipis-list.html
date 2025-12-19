@@ -78,7 +78,7 @@
                         {{ range .Data.Municipis }}
                         <tr>
                             <td>{{ .Nom }}</td>
-                            <td>{{ .Tipus }}</td>
+                            <td>{{ if .Tipus }}{{ t $.Lang (printf "municipis.type.%s" .Tipus) }}{{ else }}-{{ end }}</td>
                             <td>{{ t $.Lang (printf "municipis.state.%s" .Estat) }}</td>
                             <td>{{ .CodiPostal }}</td>
                             <td>{{ .PaisNom.String }}</td>
@@ -86,6 +86,10 @@
                             <td>{{ .Comarca.String }}</td>
                             <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
                             <td><a href="/territori/municipis/{{ .ID }}/edit">{{ t $.Lang "municipis.action.edit" }}</a></td>
+                        </tr>
+                        {{ else }}
+                        <tr>
+                            <td colspan="9">{{ t .Lang "common.empty" }}</td>
                         </tr>
                         {{ end }}
                     </tbody>

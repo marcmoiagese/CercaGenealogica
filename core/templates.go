@@ -102,6 +102,13 @@ var templateFuncs = template.FuncMap{
 		}
 		return string(b)
 	},
+	"toJsonJS": func(v interface{}) template.JS {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return template.JS("null")
+		}
+		return template.JS(b)
+	},
 }
 
 func init() {

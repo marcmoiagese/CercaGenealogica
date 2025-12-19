@@ -45,11 +45,13 @@ func (a *App) AdminNewEclesiastic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
+	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	paisos, _ := a.DB.ListPaisos()
 	RenderPrivateTemplate(w, r, "admin-eclesiastic-form.html", map[string]interface{}{
 		"Entitat":         &db.Arquebisbat{TipusEntitat: "bisbat", ModeracioEstat: "pendent"},
 		"Paisos":          paisos,
 		"Parents":         nil,
+		"ReturnURL":       returnURL,
 		"IsNew":           true,
 		"CanManageArxius": true,
 		"User":            user,
@@ -61,6 +63,7 @@ func (a *App) AdminEditEclesiastic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
+	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	id := extractID(r.URL.Path)
 	ent, err := a.DB.GetArquebisbat(id)
 	if err != nil || ent == nil {
@@ -73,6 +76,7 @@ func (a *App) AdminEditEclesiastic(w http.ResponseWriter, r *http.Request) {
 		"Entitat":         ent,
 		"Paisos":          paisos,
 		"Parents":         parents,
+		"ReturnURL":       returnURL,
 		"IsNew":           false,
 		"CanManageArxius": true,
 		"User":            user,
@@ -89,6 +93,7 @@ func (a *App) AdminSaveEclesiastic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := strconv.Atoi(r.FormValue("id"))
+	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	paisID := sqlNullInt(r.FormValue("pais_id"))
 	parentID := sqlNullInt(r.FormValue("parent_id"))
 	nivell := sqlNullInt(r.FormValue("nivell"))
@@ -143,7 +148,11 @@ func (a *App) AdminSaveEclesiastic(w http.ResponseWriter, r *http.Request) {
 		action = "editar"
 	}
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, rule, action, "eclesiastic", &ent.ID, "pendent", nil, "")
-	http.Redirect(w, r, "/territori/eclesiastic", http.StatusSeeOther)
+	if returnURL != "" {
+		http.Redirect(w, r, returnURL, http.StatusSeeOther)
+	} else {
+		http.Redirect(w, r, "/territori/eclesiastic", http.StatusSeeOther)
+	}
 }
 
 func validateEclesiastic(e *db.Arquebisbat) string {
@@ -168,6 +177,7 @@ func (a *App) renderEclesiasticError(w http.ResponseWriter, r *http.Request, e *
 		"Parents":         parents,
 		"Error":           msg,
 		"IsNew":           isNew,
+		"ReturnURL":       strings.TrimSpace(r.FormValue("return_to")),
 		"CanManageArxius": true,
 	})
 }

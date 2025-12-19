@@ -17,6 +17,7 @@
             {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
             <form method="post" action="/territori/eclesiastic/save">
                 <input type="hidden" name="id" value="{{ .Data.Entitat.ID }}">
+                <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
                 <div class="grup-camp">
                     <label for="nom">{{ t .Lang "ecles.form.name" }}</label>
                     <input id="nom" name="nom" type="text" value="{{ .Data.Entitat.Nom }}" required>
@@ -81,7 +82,7 @@
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">{{ t .Lang "ecles.form.save" }}</button>
-                    <a class="boto-secundari" href="/territori/eclesiastic">{{ t .Lang "ecles.form.cancel" }}</a>
+                    <a class="boto-secundari" href="{{ if .Data.ReturnURL }}{{ .Data.ReturnURL }}{{ else }}/territori/eclesiastic{{ end }}">{{ t .Lang "ecles.form.cancel" }}</a>
                 </div>
             </form>
         </section>

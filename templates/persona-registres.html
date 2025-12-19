@@ -1,0 +1,93 @@
+{{ define "persona-registres.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "persons.records.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <div class="persona-tabs">
+            <div class="tabs-botons" role="tablist" aria-label="{{ t .Lang "persons.tabs.label" }}">
+                <a class="tab-boto {{ if eq .Data.Tab "detall" }}actiu{{ end }}" href="/persones/{{ .Data.Persona.ID }}">
+                    {{ t .Lang "persons.tabs.detail" }}
+                </a>
+                <a class="tab-boto {{ if eq .Data.Tab "registres" }}actiu{{ end }}" href="/persones/{{ .Data.Persona.ID }}/registres">
+                    {{ t .Lang "persons.tabs.records" }}
+                </a>
+            </div>
+        </div>
+
+        <section class="card">
+            <header class="card-header">
+                <div>
+                    <h1>{{ t .Lang "persons.records.title" }}</h1>
+                    <p class="muted">{{ .Data.Persona.Nom }} {{ .Data.Persona.Cognom1 }} {{ .Data.Persona.Cognom2 }}</p>
+                </div>
+            </header>
+
+            <form method="get" class="filtres">
+                <div class="grup-camp">
+                    <label for="tipus">{{ t .Lang "records.form.type" }}</label>
+                    <select id="tipus" name="tipus">
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                        {{ range .Data.TipusOptions }}
+                        <option value="{{ . }}" {{ if eq $.Data.TipusSelected . }}selected{{ end }}>
+                            {{ t $.Lang (printf "records.type.%s" .) }}
+                        </option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="form-accio">
+                    <button class="boto-secundari" type="submit">{{ t .Lang "common.filter" }}</button>
+                </div>
+            </form>
+
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "records.form.year" }}</th>
+                            <th>{{ t .Lang "records.form.type" }}</th>
+                            <th>{{ t .Lang "records.form.people.role" }}</th>
+                            <th>{{ t .Lang "records.form.page" }}</th>
+                            <th>{{ t .Lang "records.form.book" }}</th>
+                            <th>{{ t .Lang "moderation.status" }}</th>
+                            <th>{{ t .Lang "common.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Registres }}
+                        <tr>
+                            <td>{{ .Any }}</td>
+                            <td>{{ t $.Lang (printf "records.type.%s" .Tipus) }}</td>
+                            <td>{{ .Rol }}</td>
+                            <td>{{ .Pagina }}</td>
+                            <td>{{ .Llibre }}</td>
+                            <td>
+                                <span class="badge {{ if eq .Estat "publicat" }}verd{{ else if eq .Estat "pendent" }}taronja{{ else }}vermell{{ end }}">
+                                    {{ t $.Lang (printf "activity.status.%s" .Estat) }}
+                                </span>
+                            </td>
+                            <td>
+                                <a class="boto-secundari" href="/documentals/registres/{{ .ID }}">{{ t $.Lang "records.show.back" }}</a>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr>
+                            <td colspan="7">{{ t .Lang "common.empty" }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

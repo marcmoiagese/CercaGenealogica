@@ -1,0 +1,13 @@
+/* Secció de recursos */
+.taula-resultats ul {
+    padding-left: 20px;
+}
+.taula-resultats li {
+    margin-bottom: 8px;
+}
+.taula-resultats a {
+    color: var(--secondary-color);
+}
+.taula-resultats a:hover {
+    text-decoration: underline;
+}
