@@ -42,6 +42,31 @@ func buildInPlaceholders(style string, count int) string {
 	}
 }
 
+func parseBoolValue(val interface{}) bool {
+	switch v := val.(type) {
+	case bool:
+		return v
+	case int:
+		return v != 0
+	case int64:
+		return v != 0
+	case int32:
+		return v != 0
+	case uint:
+		return v != 0
+	case uint64:
+		return v != 0
+	case []byte:
+		s := strings.ToLower(strings.TrimSpace(string(v)))
+		return s == "1" || s == "t" || s == "true" || s == "yes" || s == "y"
+	case string:
+		s := strings.ToLower(strings.TrimSpace(v))
+		return s == "1" || s == "t" || s == "true" || s == "yes" || s == "y"
+	default:
+		return false
+	}
+}
+
 type sqlHelper struct {
 	db     *sql.DB
 	style  string
@@ -868,6 +893,14 @@ func (h sqlHelper) updateMunicipiModeracio(id int, estat, motiu string, moderato
 
 func (h sqlHelper) updateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error {
 	stmt := `UPDATE arquebisbats SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	now := time.Now()
+	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, now, now, id)
+	return err
+}
+
+func (h sqlHelper) updateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error {
+	stmt := `UPDATE transcripcions_raw SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE id = ?`
 	stmt = formatPlaceholders(h.style, stmt)
 	now := time.Now()
 	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, now, now, id)
@@ -2173,6 +2206,10 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 		clauses = append(clauses, "a.entitat_eclesiastica_id = ?")
 		args = append(args, filter.EntitatID)
 	}
+	if filter.MunicipiID > 0 {
+		clauses = append(clauses, "a.municipi_id = ?")
+		args = append(args, filter.MunicipiID)
+	}
 	if strings.TrimSpace(filter.Status) != "" {
 		clauses = append(clauses, "a.moderation_status = ?")
 		args = append(args, strings.TrimSpace(filter.Status))
@@ -2421,7 +2458,7 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
         SELECT l.id, l.arquevisbat_id, l.municipi_id, l.nom_esglesia, l.codi_digital, l.codi_fisic,
                l.titol, l.tipus_llibre, l.cronologia, l.volum, l.abat, l.contingut, l.llengua,
                l.requeriments_tecnics, l.unitat_catalogacio, l.unitat_instalacio, l.pagines,
-               l.url_base, l.url_imatge_prefix, l.pagina,
+               l.url_base, l.url_imatge_prefix, l.pagina, l.indexacio_completa,
                l.created_by, l.moderation_status, l.moderated_by, l.moderated_at, l.moderation_notes,
                ae.nom as arquebisbat_nom, m.nom as municipi_nom
         FROM llibres l
@@ -2442,7 +2479,7 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 			&lr.ID, &lr.ArquebisbatID, &lr.MunicipiID, &lr.NomEsglesia, &lr.CodiDigital, &lr.CodiFisic,
 			&lr.Titol, &lr.TipusLlibre, &lr.Cronologia, &lr.Volum, &lr.Abat, &lr.Contingut, &lr.Llengua,
 			&lr.Requeriments, &lr.UnitatCatalogacio, &lr.UnitatInstalacio, &lr.Pagines,
-			&lr.URLBase, &lr.URLImatgePrefix, &lr.Pagina,
+			&lr.URLBase, &lr.URLImatgePrefix, &lr.Pagina, &lr.IndexacioCompleta,
 			&lr.CreatedBy, &lr.ModeracioEstat, &lr.ModeratedBy, &lr.ModeratedAt, &lr.ModeracioMotiu,
 			&lr.ArquebisbatNom, &lr.MunicipiNom,
 		); err != nil {
@@ -2458,7 +2495,7 @@ func (h sqlHelper) getLlibre(id int) (*Llibre, error) {
         SELECT id, arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic,
                titol, tipus_llibre, cronologia, volum, abat, contingut, llengua,
                requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines,
-               url_base, url_imatge_prefix, pagina,
+               url_base, url_imatge_prefix, pagina, indexacio_completa,
                created_by, moderation_status, moderated_by, moderated_at, moderation_notes
         FROM llibres WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
@@ -2468,7 +2505,7 @@ func (h sqlHelper) getLlibre(id int) (*Llibre, error) {
 		&l.ID, &l.ArquebisbatID, &l.MunicipiID, &l.NomEsglesia, &l.CodiDigital, &l.CodiFisic,
 		&l.Titol, &l.TipusLlibre, &l.Cronologia, &l.Volum, &l.Abat, &l.Contingut, &l.Llengua,
 		&l.Requeriments, &l.UnitatCatalogacio, &l.UnitatInstalacio, &l.Pagines,
-		&l.URLBase, &l.URLImatgePrefix, &l.Pagina,
+		&l.URLBase, &l.URLImatgePrefix, &l.Pagina, &l.IndexacioCompleta,
 		&l.CreatedBy, &l.ModeracioEstat, &l.ModeratedBy, &l.ModeratedAt, &l.ModeracioMotiu,
 	); err != nil {
 		return nil, err
@@ -2480,16 +2517,16 @@ func (h sqlHelper) createLlibre(l *Llibre) (int, error) {
 	query := `
         INSERT INTO llibres
             (arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic, titol, tipus_llibre, cronologia, volum, abat, contingut, llengua,
-             requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines, url_base, url_imatge_prefix, pagina,
+             requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines, url_base, url_imatge_prefix, pagina, indexacio_completa,
              created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	if h.style == "postgres" {
 		query += ` RETURNING id`
 	}
 	query = formatPlaceholders(h.style, query)
 	args := []interface{}{
 		l.ArquebisbatID, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.TipusLlibre, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
-		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina,
+		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina, l.IndexacioCompleta,
 		l.CreatedBy, l.ModeracioEstat, l.ModeratedBy, l.ModeratedAt, l.ModeracioMotiu,
 	}
 	if h.style == "postgres" {
@@ -2512,15 +2549,109 @@ func (h sqlHelper) updateLlibre(l *Llibre) error {
 	query := `
         UPDATE llibres
         SET arquevisbat_id=?, municipi_id=?, nom_esglesia=?, codi_digital=?, codi_fisic=?, titol=?, tipus_llibre=?, cronologia=?, volum=?, abat=?, contingut=?, llengua=?,
-            requeriments_tecnics=?, unitat_catalogacio=?, unitat_instalacio=?, pagines=?, url_base=?, url_imatge_prefix=?, pagina=?,
+            requeriments_tecnics=?, unitat_catalogacio=?, unitat_instalacio=?, pagines=?, url_base=?, url_imatge_prefix=?, pagina=?, indexacio_completa=?,
             moderation_status=?, moderated_by=?, moderated_at=?, moderation_notes=?, updated_at=` + h.nowFun + `
         WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
 	_, err := h.db.Exec(query,
 		l.ArquebisbatID, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.TipusLlibre, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
-		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina,
+		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina, l.IndexacioCompleta,
 		l.ModeracioEstat, l.ModeratedBy, l.ModeratedAt, l.ModeracioMotiu, l.ID)
 	return err
+}
+
+func (h sqlHelper) getLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error) {
+	res := map[int]LlibreIndexacioStats{}
+	if len(ids) == 0 {
+		return res, nil
+	}
+	placeholders := buildInPlaceholders(h.style, len(ids))
+	query := `
+        SELECT llibre_id, total_registres, total_camps, camps_emplenats, percentatge, updated_at
+        FROM llibres_indexacio_stats
+        WHERE llibre_id IN (` + placeholders + `)`
+	args := make([]interface{}, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var s LlibreIndexacioStats
+		if err := rows.Scan(&s.LlibreID, &s.TotalRegistres, &s.TotalCamps, &s.CampsEmplenats, &s.Percentatge, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		res[s.LlibreID] = s
+	}
+	return res, nil
+}
+
+func (h sqlHelper) upsertLlibreIndexacioStats(s *LlibreIndexacioStats) error {
+	switch h.style {
+	case "mysql":
+		stmt := `INSERT INTO llibres_indexacio_stats (llibre_id, total_registres, total_camps, camps_emplenats, percentatge, updated_at)
+		         VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)
+		         ON DUPLICATE KEY UPDATE total_registres = VALUES(total_registres), total_camps = VALUES(total_camps),
+		         camps_emplenats = VALUES(camps_emplenats), percentatge = VALUES(percentatge), updated_at = ` + h.nowFun
+		_, err := h.db.Exec(formatPlaceholders(h.style, stmt), s.LlibreID, s.TotalRegistres, s.TotalCamps, s.CampsEmplenats, s.Percentatge)
+		return err
+	case "postgres":
+		stmt := `INSERT INTO llibres_indexacio_stats (llibre_id, total_registres, total_camps, camps_emplenats, percentatge, updated_at)
+		         VALUES ($1, $2, $3, $4, $5, ` + h.nowFun + `)
+		         ON CONFLICT (llibre_id) DO UPDATE SET total_registres = EXCLUDED.total_registres, total_camps = EXCLUDED.total_camps,
+		         camps_emplenats = EXCLUDED.camps_emplenats, percentatge = EXCLUDED.percentatge, updated_at = ` + h.nowFun
+		_, err := h.db.Exec(stmt, s.LlibreID, s.TotalRegistres, s.TotalCamps, s.CampsEmplenats, s.Percentatge)
+		return err
+	default: // sqlite
+		stmt := `INSERT INTO llibres_indexacio_stats (llibre_id, total_registres, total_camps, camps_emplenats, percentatge, updated_at)
+		         VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)
+		         ON CONFLICT(llibre_id) DO UPDATE SET total_registres = excluded.total_registres, total_camps = excluded.total_camps,
+		         camps_emplenats = excluded.camps_emplenats, percentatge = excluded.percentatge, updated_at = ` + h.nowFun
+		_, err := h.db.Exec(formatPlaceholders(h.style, stmt), s.LlibreID, s.TotalRegistres, s.TotalCamps, s.CampsEmplenats, s.Percentatge)
+		return err
+	}
+}
+
+func (h sqlHelper) hasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error) {
+	if municipiID <= 0 {
+		return false, nil
+	}
+	tipus = strings.TrimSpace(tipus)
+	cronologia = strings.TrimSpace(cronologia)
+	if tipus == "" || cronologia == "" {
+		return false, nil
+	}
+	codes := []string{}
+	args := []interface{}{municipiID, tipus, cronologia}
+	if cd := strings.TrimSpace(codiDigital); cd != "" {
+		codes = append(codes, "codi_digital = ?")
+		args = append(args, cd)
+	}
+	if cf := strings.TrimSpace(codiFisic); cf != "" {
+		codes = append(codes, "codi_fisic = ?")
+		args = append(args, cf)
+	}
+	if len(codes) == 0 {
+		return false, nil
+	}
+	query := `
+        SELECT COUNT(1)
+        FROM llibres
+        WHERE municipi_id = ? AND tipus_llibre = ? AND cronologia = ? AND (` + strings.Join(codes, " OR ") + `)`
+	if excludeID > 0 {
+		query += " AND id <> ?"
+		args = append(args, excludeID)
+	}
+	query = formatPlaceholders(h.style, query)
+	var count int
+	if err := h.db.QueryRow(query, args...).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func (h sqlHelper) listLlibrePagines(llibreID int) ([]LlibrePagina, error) {
@@ -2808,6 +2939,54 @@ func (h sqlHelper) deleteTranscripcioRaw(id int) error {
 	return err
 }
 
+func (h sqlHelper) deleteTranscripcionsByLlibre(llibreID int) error {
+	if llibreID == 0 {
+		return nil
+	}
+	stmtDrafts := formatPlaceholders(h.style, `DELETE FROM transcripcions_raw_drafts WHERE llibre_id = ?`)
+	if _, err := h.db.Exec(stmtDrafts, llibreID); err != nil {
+		return err
+	}
+	stmt := formatPlaceholders(h.style, `DELETE FROM transcripcions_raw WHERE llibre_id = ?`)
+	_, err := h.db.Exec(stmt, llibreID)
+	return err
+}
+
+func (h sqlHelper) createTranscripcioRawChange(c *TranscripcioRawChange) (int, error) {
+	query := `
+        INSERT INTO transcripcions_raw_canvis (
+            transcripcio_id, change_type, field_key, old_value, new_value, metadata, changed_by, changed_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += " RETURNING id"
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{
+		c.TranscripcioID,
+		c.ChangeType,
+		c.FieldKey,
+		c.OldValue,
+		c.NewValue,
+		c.Metadata,
+		c.ChangedBy,
+	}
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(query, args...).Scan(&c.ID); err != nil {
+			return 0, err
+		}
+		return c.ID, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		c.ID = int(id)
+	}
+	return c.ID, nil
+}
+
 func (h sqlHelper) listTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	query := `
         SELECT id, transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat, sexe, sexe_estat,
@@ -2980,6 +3159,60 @@ func (h sqlHelper) saveTranscripcioDraft(userID, llibreID int, payload string) e
 func (h sqlHelper) deleteTranscripcioDraft(userID, llibreID int) error {
 	stmt := formatPlaceholders(h.style, `DELETE FROM transcripcions_raw_drafts WHERE llibre_id = ? AND user_id = ?`)
 	_, err := h.db.Exec(stmt, llibreID, userID)
+	return err
+}
+
+func (h sqlHelper) listTranscripcioMarks(transcripcioIDs []int) ([]TranscripcioRawMark, error) {
+	if len(transcripcioIDs) == 0 {
+		return []TranscripcioRawMark{}, nil
+	}
+	placeholders := buildInPlaceholders(h.style, len(transcripcioIDs))
+	query := fmt.Sprintf(`
+        SELECT id, transcripcio_id, user_id, tipus, is_public, created_at, updated_at
+        FROM transcripcions_raw_marques
+        WHERE transcripcio_id IN (%s)`, placeholders)
+	args := make([]interface{}, len(transcripcioIDs))
+	for i, id := range transcripcioIDs {
+		args[i] = id
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []TranscripcioRawMark
+	for rows.Next() {
+		var m TranscripcioRawMark
+		var isPublic interface{}
+		if err := rows.Scan(&m.ID, &m.TranscripcioID, &m.UserID, &m.Tipus, &isPublic, &m.CreatedAt, &m.UpdatedAt); err != nil {
+			return nil, err
+		}
+		m.IsPublic = parseBoolValue(isPublic)
+		res = append(res, m)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) upsertTranscripcioMark(m *TranscripcioRawMark) error {
+	query := `
+        INSERT INTO transcripcions_raw_marques (transcripcio_id, user_id, tipus, is_public, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	switch h.style {
+	case "postgres", "sqlite":
+		query += ` ON CONFLICT (transcripcio_id, user_id)
+        DO UPDATE SET tipus = excluded.tipus, is_public = excluded.is_public, updated_at = ` + h.nowFun
+	case "mysql":
+		query += ` ON DUPLICATE KEY UPDATE tipus = VALUES(tipus), is_public = VALUES(is_public), updated_at = ` + h.nowFun
+	}
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, m.TranscripcioID, m.UserID, m.Tipus, m.IsPublic)
+	return err
+}
+
+func (h sqlHelper) deleteTranscripcioMark(transcripcioID, userID int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM transcripcions_raw_marques WHERE transcripcio_id = ? AND user_id = ?`)
+	_, err := h.db.Exec(stmt, transcripcioID, userID)
 	return err
 }
 

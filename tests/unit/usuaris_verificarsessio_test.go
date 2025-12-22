@@ -300,6 +300,9 @@ func (f *fakeDBVerificar) UpdateTranscripcioRaw(t *db.TranscripcioRaw) error {
 func (f *fakeDBVerificar) DeleteTranscripcioRaw(id int) error {
 	return nil
 }
+func (f *fakeDBVerificar) DeleteTranscripcionsByLlibre(llibreID int) error {
+	return nil
+}
 func (f *fakeDBVerificar) ListTranscripcioPersones(transcripcioID int) ([]db.TranscripcioPersonaRaw, error) {
 	return nil, nil
 }
@@ -338,6 +341,31 @@ func (f *fakeDBVerificar) SearchPersones(filt db.PersonaSearchFilter) ([]db.Pers
 }
 func (f *fakeDBVerificar) ListRegistresByPersona(personaID int, tipus string) ([]db.PersonaRegistreRow, error) {
 	return nil, nil
+}
+func (f *fakeDBVerificar) UpsertTranscripcioMark(m *db.TranscripcioRawMark) error {
+	return nil
+}
+func (f *fakeDBVerificar) DeleteTranscripcioMark(transcripcioID, userID int) error {
+	return nil
+}
+func (f *fakeDBVerificar) ListTranscripcioMarks(transcripcioIDs []int) ([]db.TranscripcioRawMark, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDBVerificar) CreateTranscripcioRawChange(c *db.TranscripcioRawChange) (int, error) {
+	return 0, nil
+}
+
+func (f *fakeDBVerificar) HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error) {
+	return false, nil
+}
+func (f *fakeDBVerificar) GetLlibresIndexacioStats(ids []int) (map[int]db.LlibreIndexacioStats, error) {
+	return map[int]db.LlibreIndexacioStats{}, nil
+}
+func (f *fakeDBVerificar) UpsertLlibreIndexacioStats(stats *db.LlibreIndexacioStats) error {
+	return nil
 }
 
 // Crea una App només amb la fake DB per testejar VerificarSessio.

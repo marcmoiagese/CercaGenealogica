@@ -184,6 +184,7 @@ func (a *App) AdminCommitIndexer(w http.ResponseWriter, r *http.Request) {
 	}
 	if created > 0 {
 		_ = a.DB.DeleteTranscripcioDraft(user.ID, llibreID)
+		_, _ = a.recalcLlibreIndexacioStats(llibreID)
 	}
 	http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/registres?imported="+strconv.Itoa(created)+"&failed=0", http.StatusSeeOther)
 }
@@ -694,7 +695,7 @@ func indexerFieldLabel(lang string, f indexerField) string {
 
 func personFieldBaseLabel(lang, role, field string) string {
 	fieldLabel := T(lang, "records.field."+field)
-	if role == "batejat" {
+	if role == "batejat" || role == "confirmat" || role == "difunt" {
 		return fieldLabel
 	}
 	roleLabel := T(lang, "records.role."+role)

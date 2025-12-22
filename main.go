@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +18,16 @@ func applyMiddleware(fn http.HandlerFunc, middlewares ...func(http.HandlerFunc) 
 		fn = mw(fn)
 	}
 	return fn
+}
+
+func extractID(path string) int {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for _, part := range parts {
+		if id, err := strconv.Atoi(part); err == nil {
+			return id
+		}
+	}
+	return 0
 }
 
 func main() {
@@ -153,6 +164,7 @@ func main() {
 	http.HandleFunc("/arxius/", applyMiddleware(app.ShowArxiu, core.BlockIPs, core.RateLimit))
 
 	// Persones (bàsic: llista pública i creació/edició amb moderació)
+	http.HandleFunc("/persones/cerca", applyMiddleware(app.AdminSearchPersonesJSON, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/persones", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			applyMiddleware(app.RequireLogin(app.ListPersonesPublic), core.BlockIPs, core.RateLimit)(w, r)
@@ -259,7 +271,17 @@ func main() {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/save"):
 			applyMiddleware(app.AdminSaveMunicipi, core.BlockIPs, core.RateLimit)(w, r)
 		default:
+			if r.Method == http.MethodGet {
+				parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+				if len(parts) >= 3 {
+					if _, err := strconv.Atoi(parts[2]); err == nil {
+						applyMiddleware(app.MunicipiPublic, core.BlockIPs, core.RateLimit)(w, r)
+						return
+					}
+				}
+			}
 			applyMiddleware(app.AdminListMunicipis, core.BlockIPs, core.RateLimit)(w, r)
+			return
 		}
 	})
 
@@ -331,6 +353,8 @@ func main() {
 	http.HandleFunc("/moderacio", applyMiddleware(app.AdminModeracioList, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/moderacio/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case strings.HasSuffix(r.URL.Path, "/bulk"):
+			applyMiddleware(app.AdminModeracioBulk, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/aprovar"):
 			applyMiddleware(app.AdminModeracioAprovar, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/rebutjar"):
@@ -383,26 +407,34 @@ func main() {
 			applyMiddleware(app.AdminIndexarLlibre, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):
 			applyMiddleware(app.AdminNewLlibre, core.BlockIPs, core.RateLimit)(w, r)
-		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/registres/import"):
-			applyMiddleware(app.AdminImportRegistresView, core.BlockIPs, core.RateLimit)(w, r)
-		case strings.HasSuffix(r.URL.Path, "/registres/import/errors"):
+		case strings.HasSuffix(r.URL.Path, "/importar/errors"):
 			applyMiddleware(app.AdminDownloadImportErrors, core.BlockIPs, core.RateLimit)(w, r)
-		case strings.HasSuffix(r.URL.Path, "/registres/export"):
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/importar"):
+			applyMiddleware(app.AdminImportRegistresGlobalView, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/importar"):
+			applyMiddleware(app.AdminImportRegistresGlobal, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/import"):
+			applyMiddleware(app.AdminImportRegistresView, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/import/errors"):
+			applyMiddleware(app.AdminDownloadImportErrors, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/export"):
 			applyMiddleware(app.AdminExportRegistresLlibre, core.BlockIPs, core.RateLimit)(w, r)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/registres/import"):
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/import"):
 			applyMiddleware(app.AdminImportRegistresLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/indexacio"):
+			applyMiddleware(app.AdminToggleIndexacioLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/indexacio/recalc"):
+			applyMiddleware(app.AdminRecalcIndexacioLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/edit"):
+			applyMiddleware(app.AdminEditLlibre, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/registres/nou"):
 			applyMiddleware(app.AdminNewRegistre, core.BlockIPs, core.RateLimit)(w, r)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/registres"):
+		case strings.HasSuffix(r.URL.Path, "/registres") && r.Method == http.MethodPost:
 			applyMiddleware(app.AdminCreateRegistre, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/registres"):
 			applyMiddleware(app.AdminListRegistresLlibre, core.BlockIPs, core.RateLimit)(w, r)
-		case strings.HasSuffix(r.URL.Path, "/edit"):
-			applyMiddleware(app.AdminEditLlibre, core.BlockIPs, core.RateLimit)(w, r)
-		case strings.HasSuffix(r.URL.Path, "/pagines/save"):
-			applyMiddleware(app.AdminSaveLlibrePagina, core.BlockIPs, core.RateLimit)(w, r)
-		case strings.HasSuffix(r.URL.Path, "/pagines"):
-			applyMiddleware(app.AdminLlibrePagines, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/pagines"):
+			http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(extractID(r.URL.Path))+"/indexar", http.StatusSeeOther)
 		case strings.Contains(r.URL.Path, "/arxius/") && strings.HasSuffix(r.URL.Path, "/update"):
 			applyMiddleware(app.AdminUpdateLlibreArxiu, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/arxius/") && strings.HasSuffix(r.URL.Path, "/delete"):
@@ -419,6 +451,8 @@ func main() {
 	})
 	http.HandleFunc("/documentals/llibres/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case strings.HasSuffix(r.URL.Path, "/registres/purge") && r.Method == http.MethodPost:
+			applyMiddleware(app.AdminPurgeLlibreRegistres, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/indexar/draft") && r.Method == http.MethodPost:
 			applyMiddleware(app.AdminIndexarDraft, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/indexar/clear") && r.Method == http.MethodPost:
@@ -429,26 +463,34 @@ func main() {
 			applyMiddleware(app.AdminIndexarLlibre, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):
 			applyMiddleware(app.AdminNewLlibre, core.BlockIPs, core.RateLimit)(w, r)
-		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/registres/import"):
-			applyMiddleware(app.AdminImportRegistresView, core.BlockIPs, core.RateLimit)(w, r)
-		case strings.HasSuffix(r.URL.Path, "/registres/import/errors"):
+		case strings.HasSuffix(r.URL.Path, "/importar/errors"):
 			applyMiddleware(app.AdminDownloadImportErrors, core.BlockIPs, core.RateLimit)(w, r)
-		case strings.HasSuffix(r.URL.Path, "/registres/export"):
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/importar"):
+			applyMiddleware(app.AdminImportRegistresGlobalView, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/importar"):
+			applyMiddleware(app.AdminImportRegistresGlobal, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/import"):
+			applyMiddleware(app.AdminImportRegistresView, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/import/errors"):
+			applyMiddleware(app.AdminDownloadImportErrors, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/export"):
 			applyMiddleware(app.AdminExportRegistresLlibre, core.BlockIPs, core.RateLimit)(w, r)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/registres/import"):
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/import"):
 			applyMiddleware(app.AdminImportRegistresLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/indexacio"):
+			applyMiddleware(app.AdminToggleIndexacioLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/indexacio/recalc"):
+			applyMiddleware(app.AdminRecalcIndexacioLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/edit"):
+			applyMiddleware(app.AdminEditLlibre, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/registres/nou"):
 			applyMiddleware(app.AdminNewRegistre, core.BlockIPs, core.RateLimit)(w, r)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/registres"):
+		case strings.HasSuffix(r.URL.Path, "/registres") && r.Method == http.MethodPost:
 			applyMiddleware(app.AdminCreateRegistre, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/registres"):
 			applyMiddleware(app.AdminListRegistresLlibre, core.BlockIPs, core.RateLimit)(w, r)
-		case strings.HasSuffix(r.URL.Path, "/edit"):
-			applyMiddleware(app.AdminEditLlibre, core.BlockIPs, core.RateLimit)(w, r)
-		case strings.HasSuffix(r.URL.Path, "/pagines/save"):
-			applyMiddleware(app.AdminSaveLlibrePagina, core.BlockIPs, core.RateLimit)(w, r)
-		case strings.HasSuffix(r.URL.Path, "/pagines"):
-			applyMiddleware(app.AdminLlibrePagines, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/pagines"):
+			http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(extractID(r.URL.Path))+"/indexar", http.StatusSeeOther)
 		case strings.Contains(r.URL.Path, "/arxius/") && strings.HasSuffix(r.URL.Path, "/update"):
 			applyMiddleware(app.AdminUpdateLlibreArxiu, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/arxius/") && strings.HasSuffix(r.URL.Path, "/delete"):
@@ -468,6 +510,16 @@ func main() {
 	http.HandleFunc("/documentals/registres/cercar", applyMiddleware(app.AdminSearchRegistres, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/documentals/registres/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case strings.HasSuffix(r.URL.Path, "/marcar"):
+			applyMiddleware(app.AdminSetRegistreMark, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/desmarcar"):
+			applyMiddleware(app.AdminClearRegistreMark, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/inline"):
+			applyMiddleware(app.AdminInlineUpdateRegistreField, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/persones") && r.Method == http.MethodGet:
+			applyMiddleware(app.AdminListRegistrePersonesJSON, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/convertir"):
+			applyMiddleware(app.AdminConvertRegistreToPersona, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/persones/") && strings.HasSuffix(r.URL.Path, "/enllacar"):
 			applyMiddleware(app.AdminLinkPersonaToRaw, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/persones/") && strings.HasSuffix(r.URL.Path, "/desenllacar"):

@@ -453,6 +453,9 @@ func (f *fakeDB) UpdateTranscripcioRaw(t *db.TranscripcioRaw) error {
 func (f *fakeDB) DeleteTranscripcioRaw(id int) error {
 	return nil
 }
+func (f *fakeDB) DeleteTranscripcionsByLlibre(llibreID int) error {
+	return nil
+}
 func (f *fakeDB) ListTranscripcioPersones(transcripcioID int) ([]db.TranscripcioPersonaRaw, error) {
 	return nil, nil
 }
@@ -491,6 +494,31 @@ func (f *fakeDB) SearchPersones(filt db.PersonaSearchFilter) ([]db.PersonaSearch
 }
 func (f *fakeDB) ListRegistresByPersona(personaID int, tipus string) ([]db.PersonaRegistreRow, error) {
 	return nil, nil
+}
+func (f *fakeDB) UpsertTranscripcioMark(m *db.TranscripcioRawMark) error {
+	return nil
+}
+func (f *fakeDB) DeleteTranscripcioMark(transcripcioID, userID int) error {
+	return nil
+}
+func (f *fakeDB) ListTranscripcioMarks(transcripcioIDs []int) ([]db.TranscripcioRawMark, error) {
+	return nil, nil
+}
+func (f *fakeDB) UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDB) CreateTranscripcioRawChange(c *db.TranscripcioRawChange) (int, error) {
+	return 0, nil
+}
+
+func (f *fakeDB) HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error) {
+	return false, nil
+}
+func (f *fakeDB) GetLlibresIndexacioStats(ids []int) (map[int]db.LlibreIndexacioStats, error) {
+	return map[int]db.LlibreIndexacioStats{}, nil
+}
+func (f *fakeDB) UpsertLlibreIndexacioStats(stats *db.LlibreIndexacioStats) error {
+	return nil
 }
 
 // Helper per crear una App amb fakeDB

@@ -1,9 +1,9 @@
-{{ define "admin-llibres-registres-import.html" }}
+{{ define "admin-llibres-registres-import-global.html" }}
 <!DOCTYPE html>
 <html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>{{ t .Lang "records.import.file" }}</title>
+    <title>{{ t .Lang "records.import.title" }}</title>
     {{ template "styles-private" . }}
     <link rel="stylesheet" href="/static/css/taula.css">
 </head>
@@ -14,18 +14,52 @@
         <section class="card">
             <header class="card-header card-header-flex">
                 <div>
-                    <h1>{{ t .Lang "records.import.file" }}</h1>
-                    <p class="muted">{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</p>
+                    <h1>{{ t .Lang "records.import.title" }}</h1>
+                    <p class="muted">{{ t .Lang "records.import.module.help" }}</p>
                 </div>
                 <div class="arxiu-header-actions">
-                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/indexar">{{ t .Lang "records.show.back" }}</a>
+                    <a class="boto-secundari" href="/documentals/llibres">{{ t .Lang "records.show.back" }}</a>
                 </div>
             </header>
             <div class="alert alert-error" id="import-error-banner" hidden>
                 {{ t .Lang "records.import.progress.error" }}
             </div>
 
-            <form class="filtres import-form" method="post" action="/documentals/llibres/{{ .Data.Llibre.ID }}/import" enctype="multipart/form-data">
+            {{ if or (gt .Data.Imported 0) (gt .Data.Failed 0) }}
+            <div class="missatge-info">
+                {{ t .Lang "records.import.result" }}: {{ .Data.Imported }} · {{ t .Lang "records.import.updated" }}: {{ .Data.Updated }} · {{ t .Lang "records.import.failed" }}: {{ .Data.Failed }}
+                {{ if .Data.ErrorsToken }}
+                <a href="/documentals/llibres/importar/errors?token={{ .Data.ErrorsToken }}">{{ t .Lang "records.import.errors.download" }}</a>
+                {{ end }}
+            </div>
+            {{ end }}
+
+            <form class="filtres import-form" method="post" action="/documentals/llibres/importar" enctype="multipart/form-data">
+                <div class="grup-camp">
+                    <label for="import-model">{{ t .Lang "records.import.module" }}</label>
+                    <select id="import-model" name="model">
+                        <option value="generic">{{ t .Lang "records.import.model.generic" }}</option>
+                        <option value="baptismes_marcmoia">{{ t .Lang "records.import.model.baptismes_marcmoia" }}</option>
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="import-municipi">{{ t .Lang "records.import.filter.municipi" }}</label>
+                    <select id="import-municipi" name="municipi_id">
+                        <option value="">{{ t .Lang "records.import.filter.any" }}</option>
+                        {{ range .Data.Municipis }}
+                        <option value="{{ .ID }}">{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="import-arxiu">{{ t .Lang "records.import.filter.arxiu" }}</label>
+                    <select id="import-arxiu" name="arxiu_id">
+                        <option value="">{{ t .Lang "records.import.filter.any" }}</option>
+                        {{ range .Data.Arxius }}
+                        <option value="{{ .ID }}">{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
                 <div class="grup-camp">
                     <label for="import-file">{{ t .Lang "records.import.file" }}</label>
                     <input id="import-file" type="file" name="csv_file" accept=".csv" required>
@@ -33,8 +67,8 @@
                 <div class="grup-camp">
                     <label for="import-sep">{{ t .Lang "records.import.separator" }}</label>
                     <select id="import-sep" name="separator">
-                        <option value=",">,</option>
                         <option value=";">;</option>
+                        <option value=",">,</option>
                     </select>
                 </div>
                 <button type="submit" class="boto-primari">{{ t .Lang "records.import.submit" }}</button>

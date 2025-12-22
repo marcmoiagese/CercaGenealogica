@@ -96,7 +96,7 @@
                                         <span class="muted">#{{ $p.PersonaID.Int64 }}</span>
                                     {{ end }}
                                     <form class="inline-form" method="post" action="/documentals/registres/{{ $.Data.Registre.ID }}/persones/{{ $p.ID }}/desenllacar">
-                                        <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                         <input type="hidden" name="return_to" value="/documentals/registres/{{ $.Data.Registre.ID }}">
                                         <button type="submit" class="boto-secundari btn-mini">{{ t $.Lang "records.link.unlink" }}</button>
                                     </form>
@@ -158,7 +158,7 @@
                                                     {{ if .Any }}<span class="muted"> · {{ .Any }}</span>{{ end }}
                                                 </div>
                                                 <form method="post" action="/documentals/registres/{{ $.Data.Registre.ID }}/persones/{{ $p.ID }}/enllacar">
-                                                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                                     <input type="hidden" name="persona_id" value="{{ .ID }}">
                                                     <input type="hidden" name="return_to" value="/documentals/registres/{{ $.Data.Registre.ID }}">
                                                     <button type="submit" class="boto-primari btn-mini">{{ t $.Lang "records.link.confirm" }}</button>
@@ -179,7 +179,7 @@
                                                     {{ if .Any }}<span class="muted"> · {{ .Any }}</span>{{ end }}
                                                 </div>
                                                 <form method="post" action="/documentals/registres/{{ $.Data.Registre.ID }}/persones/{{ $p.ID }}/enllacar">
-                                                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                                     <input type="hidden" name="persona_id" value="{{ .ID }}">
                                                     <input type="hidden" name="return_to" value="/documentals/registres/{{ $.Data.Registre.ID }}">
                                                     <button type="submit" class="boto-primari btn-mini">{{ t $.Lang "records.link.confirm" }}</button>

@@ -2,11 +2,13 @@ package core
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -78,6 +80,304 @@ var transcripcioQualitat = []string{
 	"no_consta",
 }
 
+func isQualityField(f indexerField) bool {
+	if f.Key == "qualitat_general" || f.RawField == "data_acte_estat" {
+		return true
+	}
+	if f.Target == "person" && strings.HasSuffix(f.PersonField, "_estat") {
+		return true
+	}
+	return false
+}
+
+func registreFieldQuality(f indexerField, raw db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw, atributs map[string]db.TranscripcioAtributRaw, cache map[string]*db.TranscripcioPersonaRaw) string {
+	if f.Target == "person" && f.PersonField != "" && !strings.HasSuffix(f.PersonField, "_estat") {
+		qualField := f
+		qualField.PersonField = f.PersonField + "_estat"
+		return registreCellValue(qualField, raw, persones, atributs, cache)
+	}
+	if f.Target == "attr" && f.AttrKey != "" {
+		if attr, ok := atributs[f.AttrKey]; ok {
+			return attr.Estat
+		}
+	}
+	return ""
+}
+
+type registreTableColumn struct {
+	Key        string
+	Label      string
+	Filterable bool
+	Options    map[string]string
+	Field      indexerField
+	IsStatus   bool
+	IsActions  bool
+}
+
+type registreTableRow struct {
+	ID                 int
+	ModeracioEstat     string
+	Cells              map[string]interface{}
+	RawValues          map[string]interface{}
+	Qualitats          map[string]interface{}
+	MarkType           string
+	MarkPublic         bool
+	MarkOwn            bool
+	LinkPersonID       int
+	LinkPersonName     string
+	LinkPersonMunicipi string
+	LinkPersonAny      string
+	ConvertPerson      int
+	HasPeople          bool
+	PrimaryRole        string
+}
+
+func buildRegistreTableColumns(lang string, cfg indexerConfig) []registreTableColumn {
+	cols := make([]registreTableColumn, 0, len(cfg.Fields)+2)
+	for _, f := range cfg.Fields {
+		if isQualityField(f) {
+			continue
+		}
+		optLabels := map[string]string{}
+		for _, opt := range f.Options {
+			optLabels[opt.Value] = opt.Label
+		}
+		cols = append(cols, registreTableColumn{
+			Key:        f.Key,
+			Label:      f.Label,
+			Filterable: true,
+			Options:    optLabels,
+			Field:      f,
+		})
+	}
+	cols = append(cols, registreTableColumn{
+		Key:        "_status",
+		Label:      T(lang, "records.table.status"),
+		Filterable: true,
+		IsStatus:   true,
+	})
+	cols = append(cols, registreTableColumn{
+		Key:       "_actions",
+		Label:     T(lang, "records.table.actions"),
+		IsActions: true,
+	})
+	return cols
+}
+
+type registreColumnMeta struct {
+	Key         string          `json:"key"`
+	Input       string          `json:"input"`
+	Target      string          `json:"target"`
+	RawField    string          `json:"raw_field,omitempty"`
+	AttrKey     string          `json:"attr_key,omitempty"`
+	AttrType    string          `json:"attr_type,omitempty"`
+	PersonKey   string          `json:"person_key,omitempty"`
+	Role        string          `json:"role,omitempty"`
+	PersonField string          `json:"person_field,omitempty"`
+	Options     []indexerOption `json:"options,omitempty"`
+}
+
+func findIndexerField(cfg indexerConfig, key string) *indexerField {
+	for i := range cfg.Fields {
+		if cfg.Fields[i].Key == key {
+			return &cfg.Fields[i]
+		}
+	}
+	return nil
+}
+
+func findPersonForFieldMutable(persones []db.TranscripcioPersonaRaw, role, key string) *db.TranscripcioPersonaRaw {
+	if role == "" {
+		return nil
+	}
+	idx := personKeyIndex(key) - 1
+	list := make([]*db.TranscripcioPersonaRaw, 0)
+	for i := range persones {
+		if persones[i].Rol == role {
+			list = append(list, &persones[i])
+		}
+	}
+	if len(list) == 0 {
+		return nil
+	}
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].ID < list[j].ID
+	})
+	if idx < 0 || idx >= len(list) {
+		return nil
+	}
+	return list[idx]
+}
+
+func clearRawField(raw *db.TranscripcioRaw, field string) {
+	switch field {
+	case "num_pagina_text":
+		raw.NumPaginaText = ""
+	case "posicio_pagina":
+		raw.PosicioPagina = sql.NullInt64{}
+	case "any_doc":
+		raw.AnyDoc = sql.NullInt64{}
+	case "data_acte_iso":
+		raw.DataActeISO = sql.NullString{}
+		raw.DataActeText = ""
+	case "data_acte_estat":
+		raw.DataActeEstat = ""
+	case "notes_marginals":
+		raw.NotesMarginals = ""
+	case "observacions_paleografiques":
+		raw.ObservacionsPaleografiques = ""
+	}
+}
+
+func personKeyIndex(key string) int {
+	i := len(key)
+	for i > 0 && unicode.IsDigit(rune(key[i-1])) {
+		i--
+	}
+	if i == len(key) {
+		return 1
+	}
+	if idx, err := strconv.Atoi(key[i:]); err == nil && idx > 0 {
+		return idx
+	}
+	return 1
+}
+
+func personForField(persones []db.TranscripcioPersonaRaw, role, key string, cache map[string]*db.TranscripcioPersonaRaw) *db.TranscripcioPersonaRaw {
+	if cached, ok := cache[key]; ok {
+		return cached
+	}
+	if role == "" {
+		return nil
+	}
+	roleBuckets := map[string][]db.TranscripcioPersonaRaw{}
+	for _, p := range persones {
+		roleBuckets[p.Rol] = append(roleBuckets[p.Rol], p)
+	}
+	for r := range roleBuckets {
+		sort.Slice(roleBuckets[r], func(i, j int) bool {
+			return roleBuckets[r][i].ID < roleBuckets[r][j].ID
+		})
+	}
+	list := roleBuckets[role]
+	if len(list) == 0 {
+		return nil
+	}
+	idx := personKeyIndex(key)
+	if idx > len(list) {
+		idx = 1
+	}
+	cache[key] = &list[idx-1]
+	return cache[key]
+}
+
+func rawFieldValue(r db.TranscripcioRaw, field string) string {
+	switch field {
+	case "num_pagina_text":
+		return r.NumPaginaText
+	case "posicio_pagina":
+		if r.PosicioPagina.Valid {
+			return strconv.FormatInt(r.PosicioPagina.Int64, 10)
+		}
+	case "any_doc":
+		if r.AnyDoc.Valid {
+			return strconv.FormatInt(r.AnyDoc.Int64, 10)
+		}
+	case "data_acte_iso":
+		if r.DataActeISO.Valid {
+			return formatDateDisplay(r.DataActeISO.String)
+		}
+		return r.DataActeText
+	case "data_acte_estat":
+		return r.DataActeEstat
+	case "notes_marginals":
+		return r.NotesMarginals
+	case "observacions_paleografiques":
+		return r.ObservacionsPaleografiques
+	}
+	return ""
+}
+
+func attrValueStringRaw(a db.TranscripcioAtributRaw) string {
+	if a.ValorDate.Valid {
+		return formatDateDisplay(a.ValorDate.String)
+	}
+	if a.ValorInt.Valid {
+		return strconv.FormatInt(a.ValorInt.Int64, 10)
+	}
+	if a.ValorBool.Valid {
+		if a.ValorBool.Bool {
+			return "1"
+		}
+		return "0"
+	}
+	return a.ValorText
+}
+
+func personFieldValue(p *db.TranscripcioPersonaRaw, field string) string {
+	if p == nil {
+		return ""
+	}
+	switch field {
+	case "nom":
+		return p.Nom
+	case "nom_estat":
+		return p.NomEstat
+	case "cognom1":
+		return p.Cognom1
+	case "cognom1_estat":
+		return p.Cognom1Estat
+	case "cognom2":
+		return p.Cognom2
+	case "cognom2_estat":
+		return p.Cognom2Estat
+	case "sexe":
+		return p.Sexe
+	case "sexe_estat":
+		return p.SexeEstat
+	case "edat":
+		return p.EdatText
+	case "edat_estat":
+		return p.EdatEstat
+	case "estat_civil":
+		return p.EstatCivilText
+	case "estat_civil_estat":
+		return p.EstatCivilEstat
+	case "municipi":
+		return p.MunicipiText
+	case "municipi_estat":
+		return p.MunicipiEstat
+	case "ofici":
+		return p.OficiText
+	case "ofici_estat":
+		return p.OficiEstat
+	case "casa":
+		return p.CasaNom
+	case "casa_estat":
+		return p.CasaEstat
+	case "notes":
+		return p.Notes
+	}
+	return ""
+}
+
+func registreCellValue(f indexerField, raw db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw, atributs map[string]db.TranscripcioAtributRaw, cache map[string]*db.TranscripcioPersonaRaw) string {
+	switch f.Target {
+	case "raw":
+		return rawFieldValue(raw, f.RawField)
+	case "attr":
+		if attr, ok := atributs[f.AttrKey]; ok {
+			return attrValueStringRaw(attr)
+		}
+		return ""
+	case "person":
+		person := personForField(persones, f.Role, f.PersonKey, cache)
+		return personFieldValue(person, f.PersonField)
+	default:
+		return ""
+	}
+}
+
 func transcripcioQualitatLabels(lang string) map[string]string {
 	labels := make(map[string]string, len(transcripcioQualitat))
 	for _, opt := range transcripcioQualitat {
@@ -131,6 +431,16 @@ func personaSearchYear(p db.PersonaSearchResult) string {
 	return ""
 }
 
+func cloneValues(v url.Values) url.Values {
+	out := url.Values{}
+	for key, vals := range v {
+		copied := make([]string, len(vals))
+		copy(copied, vals)
+		out[key] = copied
+	}
+	return out
+}
+
 func parseNullString(val string) sql.NullString {
 	val = strings.TrimSpace(val)
 	if val == "" {
@@ -178,6 +488,38 @@ func subjectFromPersons(tipus string, persones []db.TranscripcioPersonaRaw) stri
 		}
 	}
 	return ""
+}
+
+func primaryPersonForTipus(tipus string, persones []db.TranscripcioPersonaRaw) *db.TranscripcioPersonaRaw {
+	tipus = normalizeRole(tipus)
+	roles := []string{}
+	switch tipus {
+	case "baptisme":
+		roles = []string{"batejat", "baptizat", "infant"}
+	case "obit":
+		roles = []string{"difunt", "defunt", "mort"}
+	case "matrimoni":
+		roles = []string{"marit", "espos", "esposo", "esposa", "nuvi", "novia"}
+	case "confirmacio":
+		roles = []string{"confirmat", "confirmand", "confirmanda"}
+	case "padro":
+		roles = []string{"capfamilia", "capdefamilia", "cap"}
+	case "reclutament":
+		roles = []string{"recluta", "soldat"}
+	}
+	for _, role := range roles {
+		for i := range persones {
+			if normalizeRole(persones[i].Rol) == role {
+				return &persones[i]
+			}
+		}
+	}
+	for i := range persones {
+		if persones[i].Nom != "" || persones[i].Cognom1 != "" || persones[i].Cognom2 != "" {
+			return &persones[i]
+		}
+	}
+	return nil
 }
 
 func personDisplayName(p db.TranscripcioPersonaRaw) string {
@@ -270,6 +612,18 @@ func attrValueByKeys(attrs map[string]string, keys ...string) string {
 		k := normalizeRole(key)
 		if v, ok := attrs[k]; ok {
 			return v
+		}
+	}
+	return ""
+}
+
+func attrValueByKeysRaw(attrs []db.TranscripcioAtributRaw, keys ...string) string {
+	for _, key := range keys {
+		k := normalizeRole(key)
+		for _, a := range attrs {
+			if normalizeRole(a.Clau) == k {
+				return attrValueStringRaw(a)
+			}
 		}
 	}
 	return ""
@@ -582,72 +936,478 @@ func (a *App) AdminListRegistresLlibre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lang := ResolveLang(r)
-	filter, page, limit := parseTranscripcioFilterFromRequest(r, 25)
-	filter.LlibreID = 0
-	total, _ := a.DB.CountTranscripcionsRaw(llibreID, filter)
-	registres, _ := a.DB.ListTranscripcionsRaw(llibreID, filter)
-	pagines, _ := a.DB.ListLlibrePagines(llibreID)
-	rows := make([]registreRow, 0, len(registres))
-	for _, r := range registres {
-		persones, _ := a.DB.ListTranscripcioPersones(r.ID)
-		atributs, _ := a.DB.ListTranscripcioAtributs(r.ID)
-		subjecte := subjectFromPersons(r.TipusActe, persones)
-		if subjecte == "" {
-			subjecte = "-"
+	cfg := buildIndexerConfig(lang, llibre)
+	columns := buildRegistreTableColumns(lang, cfg)
+	page := 1
+	perPage := 25
+	if val := strings.TrimSpace(r.URL.Query().Get("page")); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n > 0 {
+			page = n
 		}
-		detall := registreDetailSummary(lang, r.TipusActe, persones, atributs)
-		rows = append(rows, registreRow{
-			TranscripcioRaw: r,
-			Subjecte:        subjecte,
-			Detall:          detall,
-			Persones:        buildPersonDetails(persones),
-			Atributs:        buildAttrDetails(atributs, lang),
-		})
 	}
-	totalPages := 1
-	if limit > 0 {
-		totalPages = (total + limit - 1) / limit
+	if val := strings.TrimSpace(r.URL.Query().Get("per_page")); val != "" {
+		if n, err := strconv.Atoi(val); err == nil {
+			switch n {
+			case 10, 25, 50, 100:
+				perPage = n
+			}
+		}
+	}
+	filterValues := map[string]string{}
+	filterMatch := map[string]string{}
+	for _, col := range columns {
+		if !col.Filterable {
+			continue
+		}
+		paramKey := "f_" + col.Key
+		if val := strings.TrimSpace(r.URL.Query().Get(paramKey)); val != "" {
+			filterValues[col.Key] = val
+			filterMatch[col.Key] = strings.ToLower(val)
+		}
+	}
+	filterOrder := []string{}
+	if orderParam := strings.TrimSpace(r.URL.Query().Get("order")); orderParam != "" {
+		for _, key := range strings.Split(orderParam, ",") {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	}
+	if len(filterOrder) == 0 {
+		for _, col := range columns {
+			if _, ok := filterMatch[col.Key]; ok {
+				filterOrder = append(filterOrder, col.Key)
+			}
+		}
+	} else {
+		seen := map[string]bool{}
+		for _, key := range filterOrder {
+			seen[key] = true
+		}
+		for _, col := range columns {
+			if _, ok := filterMatch[col.Key]; ok && !seen[col.Key] {
+				filterOrder = append(filterOrder, col.Key)
+			}
+		}
+	}
+	filtered := len(filterMatch) > 0
+	total := 0
+	pageRegistres := []db.TranscripcioRaw{}
+	if !filtered {
+		total, _ = a.DB.CountTranscripcionsRaw(llibreID, db.TranscripcioFilter{})
+		totalPages := (total + perPage - 1) / perPage
 		if totalPages < 1 {
 			totalPages = 1
 		}
-	}
-	pages := make([]int, 0, totalPages)
-	for i := 1; i <= totalPages; i++ {
-		pages = append(pages, i)
-	}
-	filterQuery := transcripcioFilterQuery(filter)
-	var importSummary map[string]int
-	importErrorToken := strings.TrimSpace(r.URL.Query().Get("errors_token"))
-	if v := strings.TrimSpace(r.URL.Query().Get("imported")); v != "" {
-		if created, err := strconv.Atoi(v); err == nil {
-			failed := 0
-			if e := strings.TrimSpace(r.URL.Query().Get("failed")); e != "" {
-				if n, err := strconv.Atoi(e); err == nil {
-					failed = n
+		if page > totalPages {
+			page = totalPages
+		}
+		offset := (page - 1) * perPage
+		registres, _ := a.DB.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{
+			Limit:  perPage,
+			Offset: offset,
+		})
+		pageRegistres = registres
+	} else {
+		colByKey := map[string]registreTableColumn{}
+		needsPeople := false
+		needsAttrs := false
+		for _, col := range columns {
+			colByKey[col.Key] = col
+		}
+		for key := range filterMatch {
+			if col, ok := colByKey[key]; ok {
+				if col.IsStatus {
+					continue
+				}
+				switch col.Field.Target {
+				case "person":
+					needsPeople = true
+				case "attr":
+					needsAttrs = true
 				}
 			}
-			importSummary = map[string]int{"Created": created, "Failed": failed}
 		}
+		registres, _ := a.DB.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{Limit: -1})
+		start := (page - 1) * perPage
+		end := start + perPage
+		for _, reg := range registres {
+			var persones []db.TranscripcioPersonaRaw
+			atributs := map[string]db.TranscripcioAtributRaw{}
+			if needsPeople {
+				persones, _ = a.DB.ListTranscripcioPersones(reg.ID)
+			}
+			if needsAttrs {
+				atributsList, _ := a.DB.ListTranscripcioAtributs(reg.ID)
+				for _, attr := range atributsList {
+					if _, ok := atributs[attr.Clau]; ok {
+						continue
+					}
+					atributs[attr.Clau] = attr
+				}
+			}
+			cache := map[string]*db.TranscripcioPersonaRaw{}
+			match := true
+			for _, key := range filterOrder {
+				filterVal := filterMatch[key]
+				if filterVal == "" {
+					continue
+				}
+				col, ok := colByKey[key]
+				if !ok {
+					continue
+				}
+				val := ""
+				switch {
+				case col.IsStatus:
+					val = T(lang, "activity.status."+reg.ModeracioEstat)
+				case col.Field.Target == "raw":
+					val = rawFieldValue(reg, col.Field.RawField)
+				default:
+					val = registreCellValue(col.Field, reg, persones, atributs, cache)
+				}
+				if val != "" && len(col.Options) > 0 {
+					if label, ok := col.Options[val]; ok {
+						val = label
+					}
+				}
+				if !strings.Contains(strings.ToLower(val), filterVal) {
+					match = false
+					break
+				}
+			}
+			if !match {
+				continue
+			}
+			if total >= start && total < end {
+				pageRegistres = append(pageRegistres, reg)
+			}
+			total++
+		}
+		if total == 0 {
+			page = 1
+		} else {
+			totalPages := (total + perPage - 1) / perPage
+			if page > totalPages {
+				page = totalPages
+			}
+		}
+	}
+	marksByReg := map[int]db.TranscripcioRawMark{}
+	if len(pageRegistres) > 0 {
+		ids := make([]int, 0, len(pageRegistres))
+		for _, reg := range pageRegistres {
+			ids = append(ids, reg.ID)
+		}
+		if marks, err := a.DB.ListTranscripcioMarks(ids); err == nil {
+			for _, mark := range marks {
+				if mark.UserID == user.ID {
+					marksByReg[mark.TranscripcioID] = mark
+				}
+			}
+		} else {
+			Errorf("Error carregant marques de registre: %v", err)
+		}
+	}
+	rows := make([]registreTableRow, 0, len(pageRegistres))
+	for _, reg := range pageRegistres {
+		persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
+		atributsList, _ := a.DB.ListTranscripcioAtributs(reg.ID)
+		atributs := map[string]db.TranscripcioAtributRaw{}
+		for _, attr := range atributsList {
+			if _, ok := atributs[attr.Clau]; ok {
+				continue
+			}
+			atributs[attr.Clau] = attr
+		}
+		cache := map[string]*db.TranscripcioPersonaRaw{}
+		cells := map[string]interface{}{}
+		rawValues := map[string]interface{}{}
+		qualitats := map[string]interface{}{}
+		for _, col := range columns {
+			if col.IsStatus || col.IsActions {
+				continue
+			}
+			rawVal := registreCellValue(col.Field, reg, persones, atributs, cache)
+			val := rawVal
+			if val != "" && len(col.Options) > 0 {
+				if label, ok := col.Options[val]; ok {
+					val = label
+				}
+			}
+			cells[col.Key] = val
+			rawValues[col.Key] = rawVal
+			qualitat := registreFieldQuality(col.Field, reg, persones, atributs, cache)
+			if qualitat != "" {
+				qualitats[col.Key] = qualitat
+			}
+		}
+		hasPeople := len(persones) > 0
+		linkPersonID := 0
+		linkPersonName := ""
+		linkPersonMunicipi := ""
+		linkPersonAny := ""
+		primaryRole := ""
+		var primaryPerson *db.TranscripcioPersonaRaw
+		if primary := primaryPersonForTipus(reg.TipusActe, persones); primary != nil {
+			primaryPerson = primary
+			primaryRole = primary.Rol
+		}
+		var displayPerson *db.TranscripcioPersonaRaw
+		if primaryPerson != nil {
+			displayPerson = primaryPerson
+		}
+		if displayPerson == nil {
+			for i := range persones {
+				p := &persones[i]
+				if p.Nom == "" && p.Cognom1 == "" && p.Cognom2 == "" {
+					continue
+				}
+				displayPerson = p
+				break
+			}
+		}
+		if displayPerson != nil {
+			linkPersonID = displayPerson.ID
+			linkPersonName = personDisplayName(*displayPerson)
+			linkPersonMunicipi = displayPerson.MunicipiText
+		}
+		if reg.AnyDoc.Valid {
+			linkPersonAny = strconv.Itoa(int(reg.AnyDoc.Int64))
+		}
+		convertPersonID := 0
+		if primaryPerson != nil && !primaryPerson.PersonaID.Valid {
+			convertPersonID = primaryPerson.ID
+		}
+		markType := ""
+		markPublic := false
+		markOwn := false
+		if mark, ok := marksByReg[reg.ID]; ok {
+			markType = mark.Tipus
+			markPublic = mark.IsPublic
+			markOwn = true
+		}
+		rows = append(rows, registreTableRow{
+			ID:                 reg.ID,
+			ModeracioEstat:     reg.ModeracioEstat,
+			Cells:              cells,
+			RawValues:          rawValues,
+			Qualitats:          qualitats,
+			MarkType:           markType,
+			MarkPublic:         markPublic,
+			MarkOwn:            markOwn,
+			LinkPersonID:       linkPersonID,
+			LinkPersonName:     linkPersonName,
+			LinkPersonMunicipi: linkPersonMunicipi,
+			LinkPersonAny:      linkPersonAny,
+			ConvertPerson:      convertPersonID,
+			HasPeople:          hasPeople,
+			PrimaryRole:        primaryRole,
+		})
+	}
+	municipiNom := ""
+	if llibre.MunicipiID != 0 {
+		if mun, err := a.DB.GetMunicipi(llibre.MunicipiID); err == nil && mun != nil {
+			municipiNom = mun.Nom
+		}
+	}
+	totalPages := (total + perPage - 1) / perPage
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	pageLinks := make([]map[string]interface{}, 0, totalPages+4)
+	queryBase := url.Values{}
+	queryBase.Set("per_page", strconv.Itoa(perPage))
+	for key, val := range filterValues {
+		queryBase.Set("f_"+key, val)
+	}
+	if len(filterOrder) > 0 {
+		queryBase.Set("order", strings.Join(filterOrder, ","))
+	}
+	addPageLink := func(label string, target int, current bool, isNav bool) {
+		q := cloneValues(queryBase)
+		q.Set("page", strconv.Itoa(target))
+		pageLinks = append(pageLinks, map[string]interface{}{
+			"Label":   label,
+			"URL":     "/documentals/llibres/" + strconv.Itoa(llibreID) + "/registres?" + q.Encode(),
+			"Current": current,
+			"IsNav":   isNav,
+		})
+	}
+	if page > 1 {
+		addPageLink("<<", 1, false, true)
+		addPageLink("<", page-1, false, true)
+	}
+	windowSize := 10
+	start := 1
+	end := totalPages
+	if totalPages > windowSize {
+		half := windowSize / 2
+		start = page - half
+		if start < 1 {
+			start = 1
+		}
+		end = start + windowSize - 1
+		if end > totalPages {
+			end = totalPages
+			start = end - windowSize + 1
+		}
+	}
+	for i := start; i <= end; i++ {
+		addPageLink(strconv.Itoa(i), i, i == page, false)
+	}
+	if page < totalPages {
+		addPageLink(">", page+1, false, true)
+		addPageLink(">>", totalPages, false, true)
+	}
+	filterValuesTemplate := map[string]interface{}{}
+	for key, val := range filterValues {
+		filterValuesTemplate[key] = val
+	}
+	columnsMeta := map[string]registreColumnMeta{}
+	for _, col := range columns {
+		if col.IsStatus || col.IsActions {
+			continue
+		}
+		field := col.Field
+		columnsMeta[col.Key] = registreColumnMeta{
+			Key:         col.Key,
+			Input:       field.Input,
+			Target:      field.Target,
+			RawField:    field.RawField,
+			AttrKey:     field.AttrKey,
+			AttrType:    field.AttrType,
+			PersonKey:   field.PersonKey,
+			Role:        field.Role,
+			PersonField: field.PersonField,
+			Options:     field.Options,
+		}
+	}
+	statusLabels := map[string]string{
+		"pendent":  T(lang, "activity.status.pendent"),
+		"publicat": T(lang, "activity.status.publicat"),
+		"rebutjat": T(lang, "activity.status.rebutjat"),
 	}
 	RenderPrivateTemplate(w, r, "admin-llibres-registres-list.html", map[string]interface{}{
 		"Llibre":            llibre,
-		"Registres":         rows,
-		"Filter":            filter,
-		"Pagines":           pagines,
-		"TipusActeOptions":  transcripcioTipusActe,
-		"QualitatOptions":   transcripcioQualitat,
-		"QualitatLabels":    transcripcioQualitatLabels(lang),
-		"FilterQuery":       filterQuery,
-		"ImportSummary":     importSummary,
-		"ImportErrorToken":  importErrorToken,
-		"Total":             total,
+		"Columns":           columns,
+		"Rows":              rows,
+		"MunicipiNom":       municipiNom,
 		"Page":              page,
-		"Limit":             limit,
-		"Pages":             pages,
+		"PerPage":           perPage,
+		"Total":             total,
+		"PageLinks":         pageLinks,
+		"FilterValues":      filterValuesTemplate,
+		"FilterOrder":       strings.Join(filterOrder, ","),
+		"ColumnsMeta":       columnsMeta,
+		"StatusLabels":      statusLabels,
 		"User":              user,
 		"CanManageArxius":   canManageArxius,
 		"CanManagePolicies": canManagePolicies,
 		"CanModerate":       canModerate,
+	})
+}
+
+func (a *App) AdminSearchPersonesJSON(w http.ResponseWriter, r *http.Request) {
+	_, _, ok := a.requirePermission(w, r, permArxius)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	municipi := strings.TrimSpace(r.URL.Query().Get("municipi"))
+	anyMin, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("any_min")))
+	anyMax, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("any_max")))
+	filter := db.PersonaSearchFilter{
+		Query:    query,
+		Municipi: municipi,
+		AnyMin:   anyMin,
+		AnyMax:   anyMax,
+		Limit:    25,
+	}
+	results, err := a.DB.SearchPersones(filter)
+	if err != nil {
+		http.Error(w, "No s'han pogut cercar persones", http.StatusInternalServerError)
+		return
+	}
+	payload := make([]personaLinkSuggestion, 0, len(results))
+	for _, res := range results {
+		payload = append(payload, personaLinkSuggestion{
+			ID:       res.ID,
+			Nom:      personaSearchName(res),
+			Municipi: res.Municipi,
+			Any:      personaSearchYear(res),
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+type rawPersonLinkItem struct {
+	ID          int    `json:"ID"`
+	Rol         string `json:"Rol"`
+	Nom         string `json:"Nom"`
+	Cognom1     string `json:"Cognom1"`
+	Cognom2     string `json:"Cognom2"`
+	PersonaID   int    `json:"PersonaID"`
+	DisplayName string `json:"DisplayName"`
+}
+
+func (a *App) AdminListRegistrePersonesJSON(w http.ResponseWriter, r *http.Request) {
+	_, _, ok := a.requirePermission(w, r, permArxius)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	registreID := extractID(r.URL.Path)
+	if registreID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	registre, err := a.DB.GetTranscripcioRaw(registreID)
+	if err != nil || registre == nil {
+		http.NotFound(w, r)
+		return
+	}
+	persones, err := a.DB.ListTranscripcioPersones(registreID)
+	if err != nil {
+		http.Error(w, "No s'han pogut carregar persones", http.StatusInternalServerError)
+		return
+	}
+	primaryRole := ""
+	if primary := primaryPersonForTipus(registre.TipusActe, persones); primary != nil {
+		primaryRole = primary.Rol
+	}
+	items := make([]rawPersonLinkItem, 0, len(persones))
+	for _, p := range persones {
+		personaID := 0
+		if p.PersonaID.Valid {
+			personaID = int(p.PersonaID.Int64)
+		}
+		items = append(items, rawPersonLinkItem{
+			ID:          p.ID,
+			Rol:         p.Rol,
+			Nom:         p.Nom,
+			Cognom1:     p.Cognom1,
+			Cognom2:     p.Cognom2,
+			PersonaID:   personaID,
+			DisplayName: personDisplayName(p),
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"primary_role": primaryRole,
+		"people":       items,
 	})
 }
 
@@ -755,6 +1515,7 @@ func (a *App) AdminCreateRegistre(w http.ResponseWriter, r *http.Request) {
 		atributs[i].TranscripcioID = id
 		_, _ = a.DB.CreateTranscripcioAtribut(&atributs[i])
 	}
+	_, _ = a.recalcLlibreIndexacioStats(llibreID)
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
 }
 
@@ -927,6 +1688,8 @@ func (a *App) AdminUpdateRegistre(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	beforePersones, _ := a.DB.ListTranscripcioPersones(id)
+	beforeAtributs, _ := a.DB.ListTranscripcioAtributs(id)
 	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	if returnURL == "" {
 		returnURL = "/documentals/llibres/" + strconv.Itoa(existing.LlibreID) + "/registres"
@@ -970,7 +1733,218 @@ func (a *App) AdminUpdateRegistre(w http.ResponseWriter, r *http.Request) {
 		atributs[i].TranscripcioID = id
 		_, _ = a.DB.CreateTranscripcioAtribut(&atributs[i])
 	}
+	meta := map[string]interface{}{
+		"before": map[string]interface{}{
+			"raw":      existing,
+			"persones": beforePersones,
+			"atributs": beforeAtributs,
+		},
+		"after": map[string]interface{}{
+			"raw":      registre,
+			"persones": persones,
+			"atributs": atributs,
+		},
+	}
+	metaJSON, _ := json.Marshal(meta)
+	_, _ = a.DB.CreateTranscripcioRawChange(&db.TranscripcioRawChange{
+		TranscripcioID: id,
+		ChangeType:     "form",
+		FieldKey:       "bulk",
+		OldValue:       "",
+		NewValue:       "",
+		Metadata:       string(metaJSON),
+		ChangedBy:      sqlNullIntFromInt(user.ID),
+	})
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, "", "editar_registre", "registre", &id, "pendent", nil, "")
+	_, _ = a.recalcLlibreIndexacioStats(existing.LlibreID)
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
+}
+
+type inlineRegistreUpdatePayload struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func (a *App) AdminInlineUpdateRegistreField(w http.ResponseWriter, r *http.Request) {
+	user, _, ok := a.requirePermission(w, r, permArxius)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	csrfToken := r.Header.Get("X-CSRF-Token")
+	if csrfToken == "" {
+		csrfToken = r.FormValue("csrf_token")
+	}
+	if !validateCSRF(r, csrfToken) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	var payload inlineRegistreUpdatePayload
+	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "Payload invàlid", http.StatusBadRequest)
+			return
+		}
+	} else {
+		payload.Key = r.FormValue("key")
+		payload.Value = r.FormValue("value")
+	}
+	payload.Key = strings.TrimSpace(payload.Key)
+	if payload.Key == "" {
+		http.Error(w, "Camp invàlid", http.StatusBadRequest)
+		return
+	}
+	registreID := extractID(r.URL.Path)
+	if registreID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	registre, err := a.DB.GetTranscripcioRaw(registreID)
+	if err != nil || registre == nil {
+		http.NotFound(w, r)
+		return
+	}
+	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
+	cfg := buildIndexerConfig(ResolveLang(r), llibre)
+	field := findIndexerField(cfg, payload.Key)
+	if field == nil {
+		http.Error(w, "Camp desconegut", http.StatusBadRequest)
+		return
+	}
+	persones, _ := a.DB.ListTranscripcioPersones(registreID)
+	atributsList, _ := a.DB.ListTranscripcioAtributs(registreID)
+	attrMap := map[string]*db.TranscripcioAtributRaw{}
+	for i := range atributsList {
+		attrMap[atributsList[i].Clau] = &atributsList[i]
+	}
+	oldAttrs := map[string]db.TranscripcioAtributRaw{}
+	for key, attr := range attrMap {
+		if attr == nil {
+			continue
+		}
+		oldAttrs[key] = *attr
+	}
+	oldCache := map[string]*db.TranscripcioPersonaRaw{}
+	oldValue := registreCellValue(*field, *registre, persones, oldAttrs, oldCache)
+	val := strings.TrimSpace(payload.Value)
+	switch field.Target {
+	case "raw":
+		if val == "" {
+			clearRawField(registre, field.RawField)
+		} else {
+			applyRawField(registre, field.RawField, val)
+		}
+	case "attr":
+		attr := attrMap[field.AttrKey]
+		if attr == nil {
+			attr = &db.TranscripcioAtributRaw{Clau: field.AttrKey, TipusValor: field.AttrType}
+			attrMap[field.AttrKey] = attr
+		}
+		if val == "" {
+			attr.ValorText = ""
+			attr.ValorInt = sql.NullInt64{}
+			attr.ValorDate = sql.NullString{}
+			attr.ValorBool = sql.NullBool{}
+		} else {
+			if attr.TipusValor == "" {
+				attr.TipusValor = field.AttrType
+			}
+			applyAttrValue(attr, val)
+		}
+	case "person":
+		person := findPersonForFieldMutable(persones, field.Role, field.PersonKey)
+		if person == nil {
+			persones = append(persones, db.TranscripcioPersonaRaw{Rol: field.Role})
+			person = &persones[len(persones)-1]
+		}
+		applyPersonField(person, field.PersonField, val)
+	default:
+		http.Error(w, "Camp invàlid", http.StatusBadRequest)
+		return
+	}
+	registre.ModeracioEstat = "pendent"
+	registre.ModeratedBy = sql.NullInt64{}
+	registre.ModeratedAt = sql.NullTime{}
+	registre.ModeracioMotiu = ""
+	if err := a.DB.UpdateTranscripcioRaw(registre); err != nil {
+		http.Error(w, "No s'ha pogut actualitzar el registre", http.StatusInternalServerError)
+		return
+	}
+	if field.Target == "person" {
+		_ = a.DB.DeleteTranscripcioPersones(registreID)
+		for i := range persones {
+			persones[i].TranscripcioID = registreID
+			if isEmptyPerson(&persones[i]) {
+				continue
+			}
+			_, _ = a.DB.CreateTranscripcioPersona(&persones[i])
+		}
+	}
+	if field.Target == "attr" {
+		_ = a.DB.DeleteTranscripcioAtributs(registreID)
+		for _, attr := range attrMap {
+			attr.TranscripcioID = registreID
+			if isEmptyAttr(attr) {
+				continue
+			}
+			_, _ = a.DB.CreateTranscripcioAtribut(attr)
+		}
+	}
+	newAttrs := map[string]db.TranscripcioAtributRaw{}
+	for key, attr := range attrMap {
+		if attr == nil {
+			continue
+		}
+		newAttrs[key] = *attr
+	}
+	newCache := map[string]*db.TranscripcioPersonaRaw{}
+	newValue := registreCellValue(*field, *registre, persones, newAttrs, newCache)
+	if oldValue != newValue {
+		changeMeta := map[string]interface{}{
+			"target":       field.Target,
+			"raw_field":    field.RawField,
+			"attr_key":     field.AttrKey,
+			"attr_type":    field.AttrType,
+			"role":         field.Role,
+			"person_field": field.PersonField,
+			"person_key":   field.PersonKey,
+		}
+		metaJSON, _ := json.Marshal(changeMeta)
+		_, _ = a.DB.CreateTranscripcioRawChange(&db.TranscripcioRawChange{
+			TranscripcioID: registreID,
+			ChangeType:     "inline",
+			FieldKey:       payload.Key,
+			OldValue:       oldValue,
+			NewValue:       newValue,
+			Metadata:       string(metaJSON),
+			ChangedBy:      sqlNullIntFromInt(user.ID),
+		})
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, "", "editar_registre", "registre", &registreID, "pendent", nil, payload.Key)
+		_, _ = a.recalcLlibreIndexacioStats(registre.LlibreID)
+	}
+	displayAttrs := map[string]db.TranscripcioAtributRaw{}
+	for _, attr := range attrMap {
+		displayAttrs[attr.Clau] = *attr
+	}
+	cache := map[string]*db.TranscripcioPersonaRaw{}
+	display := registreCellValue(*field, *registre, persones, displayAttrs, cache)
+	for _, opt := range field.Options {
+		if opt.Value == display {
+			display = opt.Label
+			break
+		}
+	}
+	writeJSON(w, map[string]interface{}{
+		"ok":     true,
+		"value":  display,
+		"raw":    val,
+		"status": registre.ModeracioEstat,
+		"field":  payload.Key,
+		"user":   user.ID,
+	})
 }
 
 func (a *App) AdminDeleteRegistre(w http.ResponseWriter, r *http.Request) {
@@ -985,6 +1959,7 @@ func (a *App) AdminDeleteRegistre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = a.DB.DeleteTranscripcioRaw(id)
+	_, _ = a.recalcLlibreIndexacioStats(registre.LlibreID)
 	http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(registre.LlibreID)+"/registres", http.StatusSeeOther)
 }
 
@@ -1092,4 +2067,172 @@ func (a *App) AdminUnlinkPersonaFromRaw(w http.ResponseWriter, r *http.Request) 
 		returnURL = "/documentals/registres/" + strconv.Itoa(registreID)
 	}
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
+}
+
+func isValidRegistreMarkType(t string) bool {
+	switch t {
+	case "consanguini", "politic", "interes":
+		return true
+	default:
+		return false
+	}
+}
+
+func (a *App) AdminSetRegistreMark(w http.ResponseWriter, r *http.Request) {
+	user, _, ok := a.requirePermission(w, r, permArxius)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.Header.Get("X-CSRF-Token")) && !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	registreID := extractID(r.URL.Path)
+	if registreID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	tipus := strings.TrimSpace(r.FormValue("type"))
+	if !isValidRegistreMarkType(tipus) {
+		http.Error(w, "Tipus invàlid", http.StatusBadRequest)
+		return
+	}
+	publicVal := strings.TrimSpace(r.FormValue("public"))
+	isPublic := true
+	if publicVal != "" {
+		lower := strings.ToLower(publicVal)
+		isPublic = lower == "1" || lower == "true" || lower == "yes" || lower == "si" || lower == "on"
+	}
+	mark := db.TranscripcioRawMark{
+		TranscripcioID: registreID,
+		UserID:         user.ID,
+		Tipus:          tipus,
+		IsPublic:       isPublic,
+	}
+	if err := a.DB.UpsertTranscripcioMark(&mark); err != nil {
+		Errorf("Error desant marca de registre: %v", err)
+		http.Error(w, "No s'ha pogut desar la marca", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]interface{}{
+		"ok":        true,
+		"type":      tipus,
+		"is_public": isPublic,
+		"own":       true,
+	})
+}
+
+func (a *App) AdminClearRegistreMark(w http.ResponseWriter, r *http.Request) {
+	user, _, ok := a.requirePermission(w, r, permArxius)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.Header.Get("X-CSRF-Token")) && !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	registreID := extractID(r.URL.Path)
+	if registreID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	if err := a.DB.DeleteTranscripcioMark(registreID, user.ID); err != nil {
+		Errorf("Error eliminant marca de registre: %v", err)
+		http.Error(w, "No s'ha pogut eliminar la marca", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]interface{}{
+		"ok":        true,
+		"type":      "",
+		"is_public": false,
+		"own":       false,
+	})
+}
+
+func (a *App) AdminConvertRegistreToPersona(w http.ResponseWriter, r *http.Request) {
+	user, _, ok := a.requirePermission(w, r, permCreatePerson)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	registreID := extractID(r.URL.Path)
+	if registreID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	registre, err := a.DB.GetTranscripcioRaw(registreID)
+	if err != nil || registre == nil {
+		http.NotFound(w, r)
+		return
+	}
+	persones, _ := a.DB.ListTranscripcioPersones(registreID)
+	atributs, _ := a.DB.ListTranscripcioAtributs(registreID)
+	rawPersonID, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("raw_person_id")))
+	var target *db.TranscripcioPersonaRaw
+	if rawPersonID != 0 {
+		for i := range persones {
+			if persones[i].ID == rawPersonID {
+				target = &persones[i]
+				break
+			}
+		}
+	}
+	if target == nil {
+		target = primaryPersonForTipus(registre.TipusActe, persones)
+	}
+	if target == nil {
+		http.Error(w, "No s'ha trobat cap persona per convertir", http.StatusBadRequest)
+		return
+	}
+	persona := db.Persona{
+		Nom:            target.Nom,
+		Cognom1:        target.Cognom1,
+		Cognom2:        target.Cognom2,
+		Municipi:       target.MunicipiText,
+		Ofici:          target.OficiText,
+		EstatCivil:     target.EstatCivilText,
+		ModeracioEstat: "pendent",
+		CreatedBy:      sqlNullIntFromInt(user.ID),
+		UpdatedBy:      sqlNullIntFromInt(user.ID),
+	}
+	if val := attrValueByKeysRaw(atributs, "data_naixement", "datanaixement", "naixement"); val != "" {
+		persona.DataNaixement = parseNullString(val)
+	}
+	if val := attrValueByKeysRaw(atributs, "data_bateig", "databateig", "data_baptisme", "databaptisme"); val != "" {
+		persona.DataBateig = parseNullString(val)
+	}
+	if val := attrValueByKeysRaw(atributs, "data_defuncio", "datadefuncio", "defuncio"); val != "" {
+		persona.DataDefuncio = parseNullString(val)
+	}
+	personaID, err := a.DB.CreatePersona(&persona)
+	if err != nil {
+		http.Error(w, "No s'ha pogut crear la persona", http.StatusInternalServerError)
+		return
+	}
+	_ = a.DB.LinkTranscripcioPersona(target.ID, personaID, user.ID)
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, "persona_create", "crear", "persona", &personaID, "pendent", nil, "convertida_des_de_registre")
+	returnURL := strings.TrimSpace(r.FormValue("return_to"))
+	if returnURL == "" {
+		returnURL = "/documentals/llibres/" + strconv.Itoa(registre.LlibreID) + "/registres"
+	}
+	sep := "?"
+	if strings.Contains(returnURL, "?") {
+		sep = "&"
+	}
+	http.Redirect(w, r, returnURL+sep+"converted=1", http.StatusSeeOther)
 }

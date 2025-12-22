@@ -384,6 +384,15 @@ func (d *MySQL) CreateLlibre(l *Llibre) (int, error) {
 func (d *MySQL) UpdateLlibre(l *Llibre) error {
 	return d.help.updateLlibre(l)
 }
+func (d *MySQL) HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error) {
+	return d.help.hasLlibreDuplicate(municipiID, tipus, cronologia, codiDigital, codiFisic, excludeID)
+}
+func (d *MySQL) GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error) {
+	return d.help.getLlibresIndexacioStats(ids)
+}
+func (d *MySQL) UpsertLlibreIndexacioStats(stats *LlibreIndexacioStats) error {
+	return d.help.upsertLlibreIndexacioStats(stats)
+}
 func (d *MySQL) UpdateLlibreModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateLlibreModeracio(id, estat, motiu, moderatorID)
 }
@@ -418,8 +427,18 @@ func (d *MySQL) CreateTranscripcioRaw(t *TranscripcioRaw) (int, error) {
 func (d *MySQL) UpdateTranscripcioRaw(t *TranscripcioRaw) error {
 	return d.help.updateTranscripcioRaw(t)
 }
+func (d *MySQL) UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateTranscripcioModeracio(id, estat, motiu, moderatorID)
+}
 func (d *MySQL) DeleteTranscripcioRaw(id int) error {
 	return d.help.deleteTranscripcioRaw(id)
+}
+
+func (d *MySQL) DeleteTranscripcionsByLlibre(llibreID int) error {
+	return d.help.deleteTranscripcionsByLlibre(llibreID)
+}
+func (d *MySQL) CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, error) {
+	return d.help.createTranscripcioRawChange(c)
 }
 func (d *MySQL) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersones(transcripcioID)
@@ -453,6 +472,15 @@ func (d *MySQL) SaveTranscripcioDraft(userID, llibreID int, payload string) erro
 }
 func (d *MySQL) DeleteTranscripcioDraft(userID, llibreID int) error {
 	return d.help.deleteTranscripcioDraft(userID, llibreID)
+}
+func (d *MySQL) UpsertTranscripcioMark(m *TranscripcioRawMark) error {
+	return d.help.upsertTranscripcioMark(m)
+}
+func (d *MySQL) DeleteTranscripcioMark(transcripcioID, userID int) error {
+	return d.help.deleteTranscripcioMark(transcripcioID, userID)
+}
+func (d *MySQL) ListTranscripcioMarks(transcripcioIDs []int) ([]TranscripcioRawMark, error) {
+	return d.help.listTranscripcioMarks(transcripcioIDs)
 }
 func (d *MySQL) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
 	return d.help.searchPersones(f)

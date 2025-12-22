@@ -17,6 +17,7 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	canManage := a.hasPerm(perms, permArxius)
+	isAdmin := a.hasPerm(perms, permAdmin)
 	filter := db.LlibreFilter{
 		Text: strings.TrimSpace(r.URL.Query().Get("q")),
 	}
@@ -42,17 +43,21 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	}
 	filter.Status = status
 	llibres, _ := a.DB.ListLlibres(filter)
+	indexacioStats := a.buildLlibresIndexacioViews(llibres)
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	arxius, _ := a.DB.ListArxius(db.ArxiuFilter{Limit: 200})
 	RenderPrivateTemplate(w, r, "admin-llibres-list.html", map[string]interface{}{
 		"Llibres":         llibres,
+		"IndexacioStats":  indexacioStats,
 		"Filter":          filter,
 		"Arquebisbats":    arquebisbats,
 		"Municipis":       municipis,
 		"Arxius":          arxius,
 		"CanManageArxius": canManage,
+		"IsAdmin":         isAdmin,
 		"User":            user,
+		"CurrentURL":      r.URL.RequestURI(),
 	})
 }
 
@@ -103,6 +108,62 @@ func (a *App) AdminEditLlibre(w http.ResponseWriter, r *http.Request) {
 	a.renderLlibreForm(w, r, llibre, false, "", returnURL, selectedArxiu)
 }
 
+func (a *App) AdminToggleIndexacioLlibre(w http.ResponseWriter, r *http.Request) {
+	_, _, ok := a.requirePermission(w, r, permArxius)
+	if !ok {
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	llibreID := extractID(r.URL.Path)
+	llibre, err := a.DB.GetLlibre(llibreID)
+	if err != nil || llibre == nil {
+		http.NotFound(w, r)
+		return
+	}
+	setIndexat := strings.TrimSpace(r.FormValue("indexacio_completa")) == "1"
+	llibre.IndexacioCompleta = setIndexat
+	if err := a.DB.UpdateLlibre(llibre); err != nil {
+		Errorf("Error actualitzant indexacio completa del llibre %d: %v", llibreID, err)
+		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
+		return
+	}
+	returnTo := strings.TrimSpace(r.FormValue("return_to"))
+	if returnTo == "" {
+		returnTo = "/documentals/llibres"
+	}
+	http.Redirect(w, r, returnTo, http.StatusSeeOther)
+}
+
+func (a *App) AdminRecalcIndexacioLlibre(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	llibreID := extractID(r.URL.Path)
+	if llibreID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	if _, err := a.recalcLlibreIndexacioStats(llibreID); err != nil {
+		Errorf("Error recalculant indexacio del llibre %d: %v", llibreID, err)
+	}
+	returnTo := strings.TrimSpace(r.FormValue("return_to"))
+	if returnTo == "" {
+		returnTo = "/documentals/llibres"
+	}
+	http.Redirect(w, r, returnTo, http.StatusSeeOther)
+}
+
 func parseNullInt64(val string) sql.NullInt64 {
 	if strings.TrimSpace(val) == "" {
 		return sql.NullInt64{}
@@ -146,6 +207,7 @@ func parseLlibreForm(r *http.Request) *db.Llibre {
 		URLBase:           strings.TrimSpace(r.FormValue("url_base")),
 		URLImatgePrefix:   strings.TrimSpace(r.FormValue("url_imatge_prefix")),
 		Pagina:            strings.TrimSpace(r.FormValue("pagina")),
+		IndexacioCompleta: strings.TrimSpace(r.FormValue("indexacio_completa")) != "",
 	}
 }
 
@@ -158,6 +220,17 @@ func (a *App) validateLlibre(l *db.Llibre, arxiuID int) string {
 	}
 	if arxiuID == 0 {
 		return "Cal indicar l'arxiu."
+	}
+	if (strings.TrimSpace(l.CodiDigital) != "" || strings.TrimSpace(l.CodiFisic) != "") &&
+		strings.TrimSpace(l.TipusLlibre) != "" && strings.TrimSpace(l.Cronologia) != "" {
+		dup, err := a.DB.HasLlibreDuplicate(l.MunicipiID, l.TipusLlibre, l.Cronologia, l.CodiDigital, l.CodiFisic, l.ID)
+		if err != nil {
+			Errorf("Error comprovant duplicats de llibre: %v", err)
+			return "No s'ha pogut validar el llibre."
+		}
+		if dup {
+			return "Ja existeix un llibre amb el mateix tipus, cronologia i codi dins del municipi."
+		}
 	}
 	return ""
 }
@@ -325,6 +398,11 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 	if user == nil {
 		user, _ = a.VerificarSessio(r)
 	}
+	isAdmin := false
+	if user != nil {
+		perms := a.getPermissionsForUser(user.ID)
+		isAdmin = a.hasPerm(perms, permAdmin)
+	}
 	if (user == nil || !a.CanManageArxius(user)) && llibre.ModeracioEstat != "publicat" {
 		http.NotFound(w, r)
 		return
@@ -351,6 +429,7 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 	}
 	arxius, _ := a.DB.ListLlibreArxius(id)
 	arxiusOpts, _ := a.DB.ListArxius(db.ArxiuFilter{Limit: 200})
+	purgeStatus := strings.TrimSpace(r.URL.Query().Get("purge"))
 	RenderPrivateTemplate(w, r, "admin-llibres-show.html", map[string]interface{}{
 		"Llibre":          llibre,
 		"Arxius":          arxius,
@@ -359,7 +438,45 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		"RegistresTotal":  len(registres),
 		"User":            user,
 		"CanManageArxius": true,
+		"IsAdmin":         isAdmin,
+		"PurgeStatus":     purgeStatus,
 	})
+}
+
+func (a *App) AdminPurgeLlibreRegistres(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	llibreID := extractID(r.URL.Path)
+	user, _ := a.VerificarSessio(r)
+	if user == nil {
+		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"?purge=error", http.StatusSeeOther)
+		return
+	}
+	password := strings.TrimSpace(r.FormValue("confirm_password"))
+	if password == "" {
+		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"?purge=required", http.StatusSeeOther)
+		return
+	}
+	if _, err := a.DB.AuthenticateUser(user.Usuari, password); err != nil {
+		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"?purge=auth", http.StatusSeeOther)
+		return
+	}
+	if err := a.DB.DeleteTranscripcionsByLlibre(llibreID); err != nil {
+		Errorf("Error eliminant registres del llibre %d: %v", llibreID, err)
+		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"?purge=error", http.StatusSeeOther)
+		return
+	}
+	_, _ = a.recalcLlibreIndexacioStats(llibreID)
+	http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"?purge=success", http.StatusSeeOther)
 }
 
 func (a *App) AdminAddLlibreArxiu(w http.ResponseWriter, r *http.Request) {

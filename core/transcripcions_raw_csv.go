@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -210,6 +211,7 @@ var personFields = []string{
 type importErrorEntry struct {
 	Row    int
 	Reason string
+	Fields map[string]string
 }
 
 type importErrorStore struct {
@@ -376,7 +378,7 @@ func applyAttrValue(a *db.TranscripcioAtributRaw, val string) {
 }
 
 func (a *App) AdminImportRegistresView(w http.ResponseWriter, r *http.Request) {
-	_, _, ok := a.requirePermission(w, r, permArxius)
+	user, perms, ok := a.requirePermission(w, r, permArxius)
 	if !ok {
 		return
 	}
@@ -391,7 +393,11 @@ func (a *App) AdminImportRegistresView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	RenderPrivateTemplate(w, r, "admin-llibres-registres-import.html", map[string]interface{}{
-		"Llibre": llibre,
+		"Llibre":            llibre,
+		"User":              user,
+		"CanManageArxius":   a.hasPerm(perms, permArxius),
+		"CanManagePolicies": a.hasPerm(perms, permPolicies),
+		"CanModerate":       a.hasPerm(perms, permModerate),
 	})
 }
 
@@ -408,7 +414,7 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 	file, _, err := r.FormFile("csv_file")
 	if err != nil {
 		token := storeImportErrors([]importErrorEntry{{Row: 0, Reason: "fitxer CSV no vàlid"}})
-		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/registres?imported=0&failed=1&errors_token="+token, http.StatusSeeOther)
+		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/indexar?imported=0&failed=1&errors_token="+token, http.StatusSeeOther)
 		return
 	}
 	defer file.Close()
@@ -420,7 +426,7 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 	headers, err := reader.Read()
 	if err != nil {
 		token := storeImportErrors([]importErrorEntry{{Row: 0, Reason: "capçalera CSV invàlida"}})
-		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/registres?imported=0&failed=1&errors_token="+token, http.StatusSeeOther)
+		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/indexar?imported=0&failed=1&errors_token="+token, http.StatusSeeOther)
 		return
 	}
 	columns := make([]csvColumn, len(headers))
@@ -564,7 +570,10 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 		created++
 	}
 	token := storeImportErrors(errors)
-	target := fmt.Sprintf("/documentals/llibres/%d/registres?imported=%d&failed=%d", llibreID, created, failed)
+	if created > 0 {
+		_, _ = a.recalcLlibreIndexacioStats(llibreID)
+	}
+	target := fmt.Sprintf("/documentals/llibres/%d/indexar?imported=%d&failed=%d", llibreID, created, failed)
 	if token != "" {
 		target += "&errors_token=" + token
 	}
@@ -589,9 +598,25 @@ func (a *App) AdminDownloadImportErrors(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=import-errors.csv")
 	writer := csv.NewWriter(w)
-	_ = writer.Write([]string{"row", "error"})
+	fieldSet := map[string]struct{}{}
 	for _, e := range entries {
-		_ = writer.Write([]string{strconv.Itoa(e.Row), e.Reason})
+		for k := range e.Fields {
+			fieldSet[k] = struct{}{}
+		}
+	}
+	fieldKeys := make([]string, 0, len(fieldSet))
+	for k := range fieldSet {
+		fieldKeys = append(fieldKeys, k)
+	}
+	sort.Strings(fieldKeys)
+	header := append([]string{"row", "error"}, fieldKeys...)
+	_ = writer.Write(header)
+	for _, e := range entries {
+		row := []string{strconv.Itoa(e.Row), e.Reason}
+		for _, key := range fieldKeys {
+			row = append(row, e.Fields[key])
+		}
+		_ = writer.Write(row)
 	}
 	writer.Flush()
 }

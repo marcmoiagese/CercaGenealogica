@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
@@ -15,10 +16,25 @@ type SQLite struct {
 }
 
 func (d *SQLite) Connect() error {
-	conn, err := sql.Open("sqlite3", d.Path)
+	dsn := d.Path
+	if !strings.HasPrefix(dsn, "file:") {
+		dsn = "file:" + dsn
+	}
+	sep := "?"
+	if strings.Contains(dsn, "?") {
+		sep = "&"
+	}
+	dsn = dsn + sep + "_foreign_keys=1&_journal_mode=WAL&_busy_timeout=15000"
+	conn, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return fmt.Errorf("error connectant a SQLite: %w", err)
 	}
+	conn.SetMaxOpenConns(1)
+	conn.SetMaxIdleConns(1)
+	_, _ = conn.Exec("PRAGMA foreign_keys = ON")
+	_, _ = conn.Exec("PRAGMA journal_mode = WAL")
+	_, _ = conn.Exec("PRAGMA busy_timeout = 15000")
+	_, _ = conn.Exec("PRAGMA synchronous = NORMAL")
 	d.Conn = conn
 	d.help = newSQLHelper(conn, "sqlite", "datetime('now')")
 	logInfof("Conectat a SQLite")
@@ -387,6 +403,15 @@ func (d *SQLite) CreateLlibre(l *Llibre) (int, error) {
 func (d *SQLite) UpdateLlibre(l *Llibre) error {
 	return d.help.updateLlibre(l)
 }
+func (d *SQLite) HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error) {
+	return d.help.hasLlibreDuplicate(municipiID, tipus, cronologia, codiDigital, codiFisic, excludeID)
+}
+func (d *SQLite) GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error) {
+	return d.help.getLlibresIndexacioStats(ids)
+}
+func (d *SQLite) UpsertLlibreIndexacioStats(stats *LlibreIndexacioStats) error {
+	return d.help.upsertLlibreIndexacioStats(stats)
+}
 func (d *SQLite) UpdateLlibreModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateLlibreModeracio(id, estat, motiu, moderatorID)
 }
@@ -421,8 +446,18 @@ func (d *SQLite) CreateTranscripcioRaw(t *TranscripcioRaw) (int, error) {
 func (d *SQLite) UpdateTranscripcioRaw(t *TranscripcioRaw) error {
 	return d.help.updateTranscripcioRaw(t)
 }
+func (d *SQLite) UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateTranscripcioModeracio(id, estat, motiu, moderatorID)
+}
 func (d *SQLite) DeleteTranscripcioRaw(id int) error {
 	return d.help.deleteTranscripcioRaw(id)
+}
+
+func (d *SQLite) DeleteTranscripcionsByLlibre(llibreID int) error {
+	return d.help.deleteTranscripcionsByLlibre(llibreID)
+}
+func (d *SQLite) CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, error) {
+	return d.help.createTranscripcioRawChange(c)
 }
 func (d *SQLite) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersones(transcripcioID)
@@ -456,6 +491,15 @@ func (d *SQLite) SaveTranscripcioDraft(userID, llibreID int, payload string) err
 }
 func (d *SQLite) DeleteTranscripcioDraft(userID, llibreID int) error {
 	return d.help.deleteTranscripcioDraft(userID, llibreID)
+}
+func (d *SQLite) UpsertTranscripcioMark(m *TranscripcioRawMark) error {
+	return d.help.upsertTranscripcioMark(m)
+}
+func (d *SQLite) DeleteTranscripcioMark(transcripcioID, userID int) error {
+	return d.help.deleteTranscripcioMark(transcripcioID, userID)
+}
+func (d *SQLite) ListTranscripcioMarks(transcripcioIDs []int) ([]TranscripcioRawMark, error) {
+	return d.help.listTranscripcioMarks(transcripcioIDs)
 }
 func (d *SQLite) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
 	return d.help.searchPersones(f)

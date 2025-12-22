@@ -5,235 +5,276 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "records.list.title" }}</title>
     {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/registres-taula.css">
 </head>
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
-    <main class="contingut-principal">
-        <section class="card">
+    <main class="contingut-principal indexer-wide">
+        <section class="card registre-card">
             <header class="card-header card-header-flex">
                 <div>
                     <h1>{{ t .Lang "records.list.title" }}</h1>
-                    <p class="muted">{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</p>
+                    <p class="muted">
+                        {{ if .Data.MunicipiNom }}{{ .Data.MunicipiNom }} - {{ end }}
+                        {{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}
+                    </p>
                 </div>
                 <div class="arxiu-header-actions">
-                    <a class="boto-primari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/registres/nou">{{ t .Lang "records.list.new" }}</a>
-                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/registres/import">{{ t .Lang "records.import.file" }}</a>
-                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/registres/export?{{ .Data.FilterQuery }}">{{ t .Lang "records.list.export" }}</a>
+                    <a class="boto-primari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/indexar">
+                        <i class="fas fa-pen-nib"></i>
+                        <span>{{ t .Lang "books.action.index" }}</span>
+                    </a>
+                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}">
+                        {{ t .Lang "records.show.back" }}
+                    </a>
                 </div>
             </header>
-            {{ if .Data.ImportSummary }}
-            <div class="alert {{ if gt .Data.ImportSummary.Failed 0 }}alert-error{{ else }}alert-success{{ end }}">
-                {{ t .Lang "records.import.summary" }}: {{ .Data.ImportSummary.Created }} / {{ .Data.ImportSummary.Failed }}
-            </div>
-            {{ end }}
-            {{ if .Data.ImportErrorToken }}
-            <div class="alert alert-warning">
-                <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Llibre.ID }}/registres/import/errors?token={{ .Data.ImportErrorToken }}">{{ t .Lang "records.import.errors" }}</a>
-            </div>
-            {{ end }}
 
-            <form method="get" class="filtres registres-filtres">
-                <div class="grup-camp">
-                    <label for="f-tipus">{{ t .Lang "records.list.filter.type" }}</label>
-                    <select id="f-tipus" name="tipus_acte">
-                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
-                        {{ range .Data.TipusActeOptions }}
-                        <option value="{{ . }}" {{ if eq $.Data.Filter.TipusActe . }}selected{{ end }}>{{ t $.Lang (printf "records.type.%s" .) }}</option>
-                        {{ end }}
+            <div class="taula-resultats">
+                <div class="barra-superior">
+                    <button type="button" id="configColumnes" class="boto-engranatge">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+                <div class="taula-container">
+                    <table class="taula taula-registres" id="registresTable" data-server-pagination="1" data-filter-order="{{ .Data.FilterOrder }}" data-inline-url="/documentals/registres" data-csrf="{{ .Data.CSRFToken }}" data-select-label="{{ t .Lang "common.select" }}" data-edit-label="{{ t .Lang "records.action.edit" }}" data-confirm-label="{{ t .Lang "records.form.save" }}" data-cancel-label="{{ t .Lang "records.form.cancel" }}">
+                        <thead>
+                            <tr id="filtraFila">
+                                {{ range $i, $col := .Data.Columns }}
+                                <th data-col="{{ $i }}" data-key="{{ $col.Key }}">
+                                    {{ if $col.Filterable }}
+                                    <input type="text" placeholder="{{ $col.Label }}" data-col="{{ $i }}" data-key="{{ $col.Key }}" value="{{ index $.Data.FilterValues $col.Key }}">
+                                    {{ end }}
+                                </th>
+                                {{ end }}
+                            </tr>
+                            <tr>
+                                {{ range $i, $col := .Data.Columns }}
+                                <th data-col="{{ $i }}" data-key="{{ $col.Key }}">{{ $col.Label }}</th>
+                                {{ end }}
+                            </tr>
+                        </thead>
+                        <tbody id="taulaDades">
+                            {{ range $row := .Data.Rows }}
+                            <tr data-registre-id="{{ $row.ID }}" data-mark-type="{{ $row.MarkType }}" data-mark-public="{{ if $row.MarkPublic }}1{{ else }}0{{ end }}" data-mark-own="{{ if $row.MarkOwn }}1{{ else }}0{{ end }}"{{ if $row.MarkType }} class="mark-{{ $row.MarkType }}"{{ end }}>
+                                {{ range $i, $col := $.Data.Columns }}
+                                    {{ if $col.IsActions }}
+                                    <td data-col="{{ $i }}" data-key="{{ $col.Key }}" class="cell-actions">
+                                        <a class="icon-action" href="/documentals/registres/{{ $row.ID }}" title="{{ t $.Lang "records.action.view" }}">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        {{ if $row.HasPeople }}
+                                        <button type="button" class="btn-interconnectar" data-registre-id="{{ $row.ID }}" data-raw-id="{{ $row.LinkPersonID }}" data-raw-name="{{ $row.LinkPersonName }}" data-raw-municipi="{{ $row.LinkPersonMunicipi }}" data-raw-any="{{ $row.LinkPersonAny }}" data-primary-role="{{ $row.PrimaryRole }}" title="{{ t $.Lang "records.action.link" }}">
+                                            <i class="fas fa-link"></i>
+                                        </button>
+                                        {{ end }}
+                                        <button type="button" class="btn-marcar" data-registre-id="{{ $row.ID }}" title="{{ t $.Lang "records.mark.title" }}">
+                                            <i class="fas fa-flag"></i>
+                                        </button>
+                                        {{ if gt $row.ConvertPerson 0 }}
+                                        <form method="post" action="/documentals/registres/{{ $row.ID }}/convertir" class="inline-form">
+                                            <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                            <input type="hidden" name="raw_person_id" value="{{ $row.ConvertPerson }}">
+                                            <input type="hidden" name="return_to" value="/documentals/llibres/{{ $.Data.Llibre.ID }}/registres">
+                                            <button type="submit" class="icon-action" title="{{ t $.Lang "records.action.convert" }}">
+                                                <i class="fas fa-user-plus"></i>
+                                            </button>
+                                        </form>
+                                        {{ end }}
+                                    </td>
+                                    {{ else if $col.IsStatus }}
+                                    <td data-col="{{ $i }}" data-key="{{ $col.Key }}">
+                                        <span class="badge">{{ t $.Lang (printf "activity.status.%s" $row.ModeracioEstat) }}</span>
+                                    </td>
+                                    {{ else }}
+                                    {{ $q := index $row.Qualitats $col.Key }}
+                                    <td data-col="{{ $i }}" data-key="{{ $col.Key }}" data-value="{{ index $row.RawValues $col.Key }}" data-quality="{{ $q }}">
+                                        <div class="editable-cell">
+                                            {{ $raw := index $row.RawValues $col.Key }}
+                                            <span class="cell-text">
+                                                {{ if and (eq $col.Key "pagina_digital") $raw $.Data.Llibre.URLBase }}
+                                                <a href="{{ printf "%s%s%v" $.Data.Llibre.URLBase $.Data.Llibre.URLImatgePrefix $raw }}" target="_blank" rel="noopener">
+                                                    {{ index $row.Cells $col.Key }}
+                                                </a>
+                                                {{ else }}
+                                                {{ index $row.Cells $col.Key }}
+                                                {{ end }}
+                                            </span>
+                                            {{ if and $q (ne $q "clar") }}
+                                            <button type="button" class="qualitat-icon" data-quality="{{ $q }}" title="{{ t $.Lang (printf "records.quality.%s" $q) }}">
+                                                {{ if eq $q "dubtos" }}
+                                                <i class="fas fa-question-circle"></i>
+                                                {{ else if eq $q "incomplet" }}
+                                                <i class="fas fa-file-excel"></i>
+                                                {{ else if eq $q "illegible" }}
+                                                <i class="fas fa-eye-slash"></i>
+                                                {{ else if eq $q "no_consta" }}
+                                                <i class="fas fa-minus-circle"></i>
+                                                {{ end }}
+                                            </button>
+                                            {{ end }}
+                                            <span class="edit-icons">
+                                                <button type="button" class="edit-icon" aria-label="{{ t $.Lang "records.action.edit" }}">
+                                                    <i class="fa fa-pencil"></i>
+                                                </button>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    {{ end }}
+                                {{ end }}
+                            </tr>
+                            {{ else }}
+                            <tr>
+                                <td colspan="{{ len .Data.Columns }}">{{ t .Lang "common.empty" }}</td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="paginador" id="paginador">
+                    {{ range .Data.PageLinks }}
+                    <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
+                        {{ .Label }}
+                    </button>
+                    {{ end }}
+                </div>
+            </div>
+
+            <div id="modalInterconnectar" class="modal-interconnexio" data-csrf="{{ .Data.CSRFToken }}" data-return-to="/documentals/llibres/{{ .Data.Llibre.ID }}/registres" data-search-endpoint="/persones/cerca" data-label-link="{{ t .Lang "records.link.confirm" }}" data-label-empty="{{ t .Lang "common.empty" }}" data-label-search="{{ t .Lang "records.link.search" }}" data-label-search-placeholder="{{ t .Lang "records.link.search.placeholder" }}" data-label-select-role="{{ t .Lang "records.link.select.role" }}" data-label-raw-person="{{ t .Lang "records.link.raw_person" }}" data-label-select-person="{{ t .Lang "records.link.select.person" }}">
+                <div class="modal-content-interconnexio">
+                    <span class="tanca-modal-interconnexio">&times;</span>
+                    <h3>{{ t .Lang "records.link.title" }}</h3>
+                    <p class="muted link-person-name" id="link-person-name"></p>
+
+                    <label for="tipusConnexio">{{ t .Lang "records.link.type" }}</label>
+                    <select id="tipusConnexio">
+                        <option value="">{{ t .Lang "common.select" }}</option>
+                        <option value="persona_principal">{{ t .Lang "records.role.principal" }}</option>
+                        <option value="pare">{{ t .Lang "records.role.pare" }}</option>
+                        <option value="mare">{{ t .Lang "records.role.mare" }}</option>
+                        <option value="avi_patern">{{ t .Lang "records.role.avi_patern" }}</option>
+                        <option value="avia_paterna">{{ t .Lang "records.role.avia_paterna" }}</option>
+                        <option value="avi_matern">{{ t .Lang "records.role.avi_matern" }}</option>
+                        <option value="avia_materna">{{ t .Lang "records.role.avia_materna" }}</option>
+                        <option value="padri">{{ t .Lang "records.role.padri" }}</option>
+                        <option value="padrina">{{ t .Lang "records.role.padrina" }}</option>
+                        <option value="parella">{{ t .Lang "records.role.parella" }}</option>
+                        <option value="testimoni">{{ t .Lang "records.role.testimoni" }}</option>
                     </select>
+
+                    <div id="formulariConnexio"></div>
                 </div>
-                <div class="grup-camp">
-                    <label for="f-any">{{ t .Lang "records.list.filter.year" }}</label>
-                    <input id="f-any" type="number" name="any_doc" value="{{ if gt .Data.Filter.AnyDoc 0 }}{{ .Data.Filter.AnyDoc }}{{ end }}">
+            </div>
+
+            <div id="modalQualitat" class="modal-qualitat">
+                <div class="modal-qualitat-content">
+                    <button type="button" class="tanca-modal-qualitat" aria-label="{{ t .Lang "common.close" }}">×</button>
+                    <h3>{{ t .Lang "records.quality.legend.title" }}</h3>
+                    <ul class="qualitat-legend">
+                        <li>
+                            <i class="fas fa-question-circle"></i>
+                            <strong>{{ t .Lang "records.quality.dubtos" }}</strong>
+                            <span>{{ t .Lang "records.quality.desc.dubtos" }}</span>
+                        </li>
+                        <li>
+                            <i class="fas fa-file-excel"></i>
+                            <strong>{{ t .Lang "records.quality.incomplet" }}</strong>
+                            <span>{{ t .Lang "records.quality.desc.incomplet" }}</span>
+                        </li>
+                        <li>
+                            <i class="fas fa-eye-slash"></i>
+                            <strong>{{ t .Lang "records.quality.illegible" }}</strong>
+                            <span>{{ t .Lang "records.quality.desc.illegible" }}</span>
+                        </li>
+                        <li>
+                            <i class="fas fa-minus-circle"></i>
+                            <strong>{{ t .Lang "records.quality.no_consta" }}</strong>
+                            <span>{{ t .Lang "records.quality.desc.no_consta" }}</span>
+                        </li>
+                    </ul>
                 </div>
-                <div class="grup-camp">
-                    <label for="f-pagina">{{ t .Lang "records.list.filter.page" }}</label>
-                    <select id="f-pagina" name="pagina_id">
-                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
-                        {{ range .Data.Pagines }}
-                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaginaID .ID }}selected{{ end }}>{{ .NumPagina }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="f-status">{{ t .Lang "records.list.filter.status" }}</label>
-                    <select id="f-status" name="status">
-                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
-                        <option value="publicat" {{ if eq $.Data.Filter.Status "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
-                        <option value="pendent" {{ if eq $.Data.Filter.Status "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
-                        <option value="rebutjat" {{ if eq $.Data.Filter.Status "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="f-qualitat">{{ t .Lang "records.list.filter.quality" }}</label>
-                    <select id="f-qualitat" name="qualitat">
-                        <option value="">{{ t .Lang "records.list.filter.all" }}</option>
-                        {{ range .Data.QualitatOptions }}
-                        <option value="{{ . }}" {{ if eq $.Data.Filter.Qualitat . }}selected{{ end }}>{{ t $.Lang (printf "records.quality.%s" .) }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="f-q">{{ t .Lang "records.list.filter.search" }}</label>
-                    <input id="f-q" type="text" name="q" value="{{ .Data.Filter.Search }}">
-                </div>
-                <div class="grup-camp grup-camp-inline">
+            </div>
+
+            <div id="modalMarcar" class="modal-qualitat" data-llibre-id="{{ .Data.Llibre.ID }}" data-csrf="{{ .Data.CSRFToken }}">
+                <div class="modal-qualitat-content">
+                    <button type="button" class="tanca-modal-marcar" aria-label="{{ t .Lang "common.close" }}">×</button>
+                    <h3>{{ t .Lang "records.mark.title" }}</h3>
+                    <div class="form-group">
+                        <label for="mark-type">{{ t .Lang "records.mark.select" }}</label>
+                        <select id="mark-type">
+                            <option value="">{{ t .Lang "common.select" }}</option>
+                            <option value="consanguini">{{ t .Lang "records.mark.consanguini" }}</option>
+                            <option value="politic">{{ t .Lang "records.mark.politic" }}</option>
+                            <option value="interes">{{ t .Lang "records.mark.interes" }}</option>
+                        </select>
+                    </div>
                     <label class="checkbox-linia">
-                        <input type="checkbox" name="fts" value="1" {{ if .Data.Filter.UseFullText }}checked{{ end }}>
-                        <span>{{ t .Lang "records.list.filter.fts" }}</span>
+                        <input type="checkbox" id="mark-public" checked>
+                        <span>{{ t .Lang "records.mark.public" }}</span>
                     </label>
+                    <div class="form-accio">
+                        <button type="button" class="boto-primari" id="mark-save">{{ t .Lang "records.mark.save" }}</button>
+                        <button type="button" class="boto-secundari" id="mark-clear">{{ t .Lang "records.mark.clear" }}</button>
+                    </div>
                 </div>
-                <div class="grup-camp">
-                    <label for="f-limit">{{ t .Lang "records.list.filter.limit" }}</label>
-                    <select id="f-limit" name="limit">
-                        {{ range $opt := (list "10" "25" "50" "100") }}
-                        <option value="{{ $opt }}" {{ if eq (printf "%d" $.Data.Limit) $opt }}selected{{ end }}>{{ $opt }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <button type="submit" class="boto-secundari">{{ t .Lang "records.list.filter.submit" }}</button>
-            </form>
-
-            <div class="columnes-toggle">
-                <span class="muted">{{ t .Lang "records.columns.title" }}</span>
-                <label><input type="checkbox" data-column-toggle value="page" checked> {{ t .Lang "records.table.page" }}</label>
-                <label><input type="checkbox" data-column-toggle value="position" checked> {{ t .Lang "records.table.position" }}</label>
-                <label><input type="checkbox" data-column-toggle value="type" checked> {{ t .Lang "records.table.type" }}</label>
-                <label><input type="checkbox" data-column-toggle value="year" checked> {{ t .Lang "records.table.year" }}</label>
-                <label><input type="checkbox" data-column-toggle value="subject" checked> {{ t .Lang "records.table.subject" }}</label>
-                <label><input type="checkbox" data-column-toggle value="detail" checked> {{ t .Lang "records.table.detail" }}</label>
-                <label><input type="checkbox" data-column-toggle value="status" checked> {{ t .Lang "records.table.status" }}</label>
-                <label><input type="checkbox" data-column-toggle value="actions" checked> {{ t .Lang "records.table.actions" }}</label>
             </div>
-
-            <div class="taula-wrapper">
-                <table class="taula">
-                    <thead>
-                        <tr>
-                            <th data-column="page">{{ t .Lang "records.table.page" }}</th>
-                            <th data-column="position">{{ t .Lang "records.table.position" }}</th>
-                            <th data-column="type">{{ t .Lang "records.table.type" }}</th>
-                            <th data-column="year">{{ t .Lang "records.table.year" }}</th>
-                            <th data-column="subject">{{ t .Lang "records.table.subject" }}</th>
-                            <th data-column="detail">{{ t .Lang "records.table.detail" }}</th>
-                            <th data-column="status">{{ t .Lang "records.table.status" }}</th>
-                            <th data-column="actions">{{ t .Lang "records.table.actions" }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {{ range .Data.Registres }}
-                        <tr>
-                            <td data-column="page">{{ if .PaginaID.Valid }}{{ .PaginaID.Int64 }}{{ else }}{{ if .NumPaginaText }}{{ .NumPaginaText }}{{ else }}-{{ end }}{{ end }}</td>
-                            <td data-column="position">{{ if .PosicioPagina.Valid }}{{ .PosicioPagina.Int64 }}{{ end }}</td>
-                            <td data-column="type">{{ t $.Lang (printf "records.type.%s" .TipusActe) }}</td>
-                            <td data-column="year">{{ if .AnyDoc.Valid }}{{ .AnyDoc.Int64 }}{{ end }}</td>
-                            <td data-column="subject">{{ .Subjecte }}</td>
-                            <td data-column="detail">
-                                {{ if .Detall }}
-                                <div class="registre-detall-resum">{{ .Detall }}</div>
-                                {{ end }}
-                                {{ if or (gt (len .Persones) 0) (gt (len .Atributs) 0) }}
-                                <details class="registre-detall">
-                                    <summary>{{ t $.Lang "records.detail.more" }}</summary>
-                                    <div class="registre-detall-body">
-                                        <div>
-                                            <h4>{{ t $.Lang "records.detail.persons" }}</h4>
-                                            <ul class="registre-detall-list">
-                                                {{ range .Persones }}
-                                                <li><strong>{{ .Rol }}</strong>: {{ .Nom }}</li>
-                                                {{ end }}
-                                                {{ if eq (len .Persones) 0 }}
-                                                <li class="muted">{{ t $.Lang "records.detail.none" }}</li>
-                                                {{ end }}
-                                            </ul>
-                                        </div>
-                                        <div>
-                                            <h4>{{ t $.Lang "records.detail.attributes" }}</h4>
-                                            <ul class="registre-detall-list">
-                                                {{ range .Atributs }}
-                                                <li><strong>{{ .Key }}</strong>: {{ .Value }}</li>
-                                                {{ end }}
-                                                {{ if eq (len .Atributs) 0 }}
-                                                <li class="muted">{{ t $.Lang "records.detail.none" }}</li>
-                                                {{ end }}
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </details>
-                                {{ else }}
-                                <span class="muted">-</span>
-                                {{ end }}
-                            </td>
-                            <td data-column="status"><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
-                            <td data-column="actions" class="accions">
-                                <a href="/documentals/registres/{{ .ID }}">{{ t $.Lang "records.action.view" }}</a> |
-                                <a href="/documentals/registres/{{ .ID }}/editar">{{ t $.Lang "records.action.edit" }}</a>
-                            </td>
-                        </tr>
-                        {{ else }}
-                        <tr>
-                            <td colspan="8">{{ t .Lang "common.empty" }}</td>
-                        </tr>
-                        {{ end }}
-                    </tbody>
-                </table>
-            </div>
-
-            {{ if gt .Data.Total 0 }}
-            <div class="paginacio">
-                {{ range .Data.Pages }}
-                <a class="boto-secundari {{ if eq $.Data.Page . }}actiu{{ end }}" href="?{{ $.Data.FilterQuery }}&page={{ . }}&limit={{ $.Data.Limit }}">{{ . }}</a>
-                {{ end }}
-            </div>
-            {{ end }}
         </section>
     </main>
+
+    <div class="modal-config" id="modalConfigColumnes">
+        <div class="modal-content-config">
+            <button type="button" class="tanca-modal-config" aria-label="{{ t .Lang "common.close" }}">×</button>
+            <h2>{{ t .Lang "records.columns.title" }}</h2>
+            <div class="form-group">
+                <label for="filesPerPagina">{{ t .Lang "records.columns.per_page" }}</label>
+                <select id="filesPerPagina">
+                    <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
+                    <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
+                    <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
+                    <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
+                </select>
+            </div>
+            <div class="columns-config">
+                <div class="columns-list">
+                    <label for="cols-actives">{{ t .Lang "records.columns.visible" }}</label>
+                    <select id="cols-actives" size="10" multiple></select>
+                    <div class="columns-actions">
+                        <button type="button" id="cols-up" class="columns-icon" aria-label="{{ t .Lang "records.columns.up" }}" title="{{ t .Lang "records.columns.up" }}">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <button type="button" id="cols-down" class="columns-icon" aria-label="{{ t .Lang "records.columns.down" }}" title="{{ t .Lang "records.columns.down" }}">
+                            <i class="fas fa-arrow-down"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="columns-controls">
+                    <button type="button" id="cols-hide" class="columns-icon" aria-label="{{ t .Lang "records.columns.hide" }}" title="{{ t .Lang "records.columns.hide" }}">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                    <button type="button" id="cols-show" class="columns-icon" aria-label="{{ t .Lang "records.columns.show" }}" title="{{ t .Lang "records.columns.show" }}">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                </div>
+                <div class="columns-list">
+                    <label for="cols-hidden">{{ t .Lang "records.columns.hidden" }}</label>
+                    <select id="cols-hidden" size="10" multiple></select>
+                </div>
+            </div>
+            <div class="columns-save">
+                <span id="cols-save-status" class="muted" aria-live="polite"></span>
+                <button type="button" id="cols-save" class="boto-primari" data-saved-label="{{ t .Lang "common.saved" }}">
+                    {{ t .Lang "records.columns.save" }}
+                </button>
+            </div>
+        </div>
+    </div>
+
     {{ template "footer" . }}
+    <script type="application/json" id="records-columns-meta">{{ toJsonJS .Data.ColumnsMeta }}</script>
+    <script type="application/json" id="records-status-labels">{{ toJsonJS .Data.StatusLabels }}</script>
     {{ template "scripts-private" . }}
-    <script>
-        (function () {
-            const form = document.querySelector(".registres-filtres");
-            if (form) {
-                const search = form.querySelector("input[name='q']");
-                if (search) {
-                    let timer;
-                    search.addEventListener("input", function () {
-                        clearTimeout(timer);
-                        timer = setTimeout(() => form.submit(), 450);
-                    });
-                }
-                form.querySelectorAll("select").forEach((sel) => {
-                    sel.addEventListener("change", () => form.submit());
-                });
-            }
-            const table = document.querySelector(".taula");
-            const toggles = document.querySelectorAll("[data-column-toggle]");
-            if (!table || toggles.length === 0) {
-                return;
-            }
-            const storageKey = "records.columns";
-            const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
-            toggles.forEach((toggle) => {
-                const col = toggle.value;
-                if (stored[col] === false) {
-                    toggle.checked = false;
-                }
-            });
-            const apply = () => {
-                toggles.forEach((toggle) => {
-                    const col = toggle.value;
-                    table.querySelectorAll(`[data-column='${col}']`).forEach((cell) => {
-                        cell.style.display = toggle.checked ? "" : "none";
-                    });
-                    stored[col] = toggle.checked;
-                });
-                localStorage.setItem(storageKey, JSON.stringify(stored));
-            };
-            toggles.forEach((toggle) => toggle.addEventListener("change", apply));
-            apply();
-        })();
-    </script>
+    <script src="/static/js/registres-taula.js"></script>
 </body>
 </html>
 {{ end }}

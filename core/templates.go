@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
 var Templates *template.Template
@@ -30,11 +32,32 @@ var templateFuncs = template.FuncMap{
 	"t": func(lang, key string) string {
 		return T(lang, key)
 	},
-	"index": func(m map[string]interface{}, k string) interface{} {
+	"index": func(m interface{}, k string) interface{} {
 		if m == nil {
 			return nil
 		}
-		return m[k]
+		switch mm := m.(type) {
+		case map[string]interface{}:
+			return mm[k]
+		case map[string]string:
+			return mm[k]
+		case map[string]int:
+			return mm[k]
+		case map[string]bool:
+			return mm[k]
+		case map[string]float64:
+			return mm[k]
+		default:
+			v := reflect.ValueOf(m)
+			if v.IsValid() && v.Kind() == reflect.Map && v.Type().Key().Kind() == reflect.String {
+				key := reflect.ValueOf(k)
+				val := v.MapIndex(key)
+				if val.IsValid() {
+					return val.Interface()
+				}
+			}
+		}
+		return nil
 	},
 	"list": func(values ...string) []string {
 		return values
@@ -170,7 +193,7 @@ func RenderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 func RenderPrivateTemplate(w http.ResponseWriter, r *http.Request, tmpl string, data interface{}) {
 	lang := ResolveLang(r)
 	csrfToken, _ := ensureCSRF(w, r)
-	data = injectUserIfMissing(r, injectCSRFToken(data, csrfToken))
+	data = injectPermsIfMissing(r, injectUserIfMissing(r, injectCSRFToken(data, csrfToken)))
 	err := Templates.ExecuteTemplate(w, tmpl, &DataContext{
 		UserLoggedIn: true,
 		Lang:         lang,
@@ -187,7 +210,7 @@ func RenderPrivateTemplate(w http.ResponseWriter, r *http.Request, tmpl string, 
 // RenderPrivateTemplateLang permet forçar l'idioma (p.ex. idioma preferit de l'usuari logat).
 func RenderPrivateTemplateLang(w http.ResponseWriter, r *http.Request, tmpl string, lang string, data interface{}) {
 	csrfToken, _ := ensureCSRF(w, r)
-	data = injectUserIfMissing(r, injectCSRFToken(data, csrfToken))
+	data = injectPermsIfMissing(r, injectUserIfMissing(r, injectCSRFToken(data, csrfToken)))
 	err := Templates.ExecuteTemplate(w, tmpl, &DataContext{
 		UserLoggedIn: true,
 		Lang:         lang,
@@ -252,6 +275,29 @@ func injectUserIfMissing(r *http.Request, data interface{}) interface{} {
 	}
 	if u := userFromContext(r); u != nil {
 		m["User"] = u
+	}
+	return m
+}
+
+// injectPermsIfMissing afegeix flags de permisos per renderitzar el menú privat quan no s'han passat explícitament.
+func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
+	m, ok := data.(map[string]interface{})
+	if !ok {
+		return data
+	}
+	permsVal := r.Context().Value(permissionsKey)
+	perms, ok := permsVal.(db.PolicyPermissions)
+	if !ok {
+		return data
+	}
+	if _, found := m["CanManageArxius"]; !found {
+		m["CanManageArxius"] = perms.Admin || perms.CanManageArchives
+	}
+	if _, found := m["CanManagePolicies"]; !found {
+		m["CanManagePolicies"] = perms.Admin || perms.CanManagePolicies
+	}
+	if _, found := m["CanModerate"]; !found {
+		m["CanModerate"] = perms.Admin || perms.CanModerate
 	}
 	return m
 }

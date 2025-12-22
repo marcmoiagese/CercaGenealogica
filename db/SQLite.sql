@@ -283,6 +283,7 @@ CREATE TABLE IF NOT EXISTS llibres (
     url_base TEXT,                         -- ex: "https://arxiuenlinia.ahat.cat/Document/ "
     url_imatge_prefix TEXT DEFAULT "#imatge-", -- prefix comú per afegir pàgina
     pagina TEXT,                            -- Pàgina específica (si es vol navegar directe a una pàgina concreta) ex: "7", "05-0023" (Urgell)
+    indexacio_completa INTEGER NOT NULL DEFAULT 0,
     created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
     moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
     moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
@@ -373,6 +374,16 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS llibres_indexacio_stats (
+  llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,
+  total_registres INTEGER NOT NULL DEFAULT 0,
+  total_camps INTEGER NOT NULL DEFAULT 0,
+  camps_emplenats INTEGER NOT NULL DEFAULT 0,
+  percentatge INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (llibre_id)
+);
+
 CREATE TABLE IF NOT EXISTS transcripcions_persones_raw (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   transcripcio_id INTEGER NOT NULL REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
@@ -424,12 +435,45 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw_drafts (
   UNIQUE (llibre_id, user_id)
 );
 
+CREATE TABLE IF NOT EXISTS transcripcions_raw_marques (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transcripcio_id INTEGER NOT NULL REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  tipus TEXT CHECK(tipus IN ('consanguini','politic','interes')) NOT NULL,
+  is_public INTEGER NOT NULL DEFAULT 1 CHECK (is_public IN (0,1)),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (transcripcio_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_marques_transcripcio
+  ON transcripcions_raw_marques(transcripcio_id);
+CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_marques_user
+  ON transcripcions_raw_marques(user_id);
+
+CREATE TABLE IF NOT EXISTS transcripcions_raw_canvis (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transcripcio_id INTEGER NOT NULL REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+  change_type TEXT NOT NULL,
+  field_key TEXT NOT NULL,
+  old_value TEXT,
+  new_value TEXT,
+  metadata TEXT,
+  changed_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_canvis_transcripcio
+  ON transcripcions_raw_canvis(transcripcio_id);
+CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_canvis_changed_by
+  ON transcripcions_raw_canvis(changed_by);
+
 CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_llibre_pagina
   ON transcripcions_raw(llibre_id, pagina_id, posicio_pagina);
 CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_llibre_tipus_any
   ON transcripcions_raw(llibre_id, tipus_acte, any_doc);
 CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_status
   ON transcripcions_raw(moderation_status);
+CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_status_sort
+  ON transcripcions_raw(moderation_status, any_doc, pagina_id, posicio_pagina, id);
 
 CREATE INDEX IF NOT EXISTS idx_transcripcions_persones_raw_rol
   ON transcripcions_persones_raw(transcripcio_id, rol);

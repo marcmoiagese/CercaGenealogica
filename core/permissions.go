@@ -89,11 +89,11 @@ func (a *App) requirePermission(w http.ResponseWriter, r *http.Request, check fu
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return nil, db.PolicyPermissions{}, false
 	}
-	r = a.withUser(r, user)
+	*r = *a.withUser(r, user)
 	perms, found := a.permissionsFromContext(r)
 	if !found {
 		perms = a.getPermissionsForUser(user.ID)
-		r = a.withPermissions(r, perms)
+		*r = *a.withPermissions(r, perms)
 	}
 	if !a.hasPerm(perms, check) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -118,7 +118,13 @@ func permCreatePerson(p db.PolicyPermissions) bool {
 func (a *App) RequireLogin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if user, ok := a.VerificarSessio(r); ok && user != nil {
-			next(w, a.withUser(r, user))
+			*r = *a.withUser(r, user)
+			perms, found := a.permissionsFromContext(r)
+			if !found {
+				perms = a.getPermissionsForUser(user.ID)
+				*r = *a.withPermissions(r, perms)
+			}
+			next(w, r)
 			return
 		}
 		http.Redirect(w, r, "/login", http.StatusSeeOther)

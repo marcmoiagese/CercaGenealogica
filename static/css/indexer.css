@@ -9,6 +9,7 @@
 
 .contingut-principal.indexer-wide {
     max-width: none;
+    width: 100%;
 }
 
 .indexer-card .card-header {

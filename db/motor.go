@@ -79,6 +79,7 @@ type DB interface {
 	UpdateNivellModeracio(id int, estat, motiu string, moderatorID int) error
 	UpdateMunicipiModeracio(id int, estat, motiu string, moderatorID int) error
 	UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error
+	UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error
 	// Arxius CRUD
 	ListArxius(filter ArxiuFilter) ([]ArxiuWithCount, error)
 	GetArxiu(id int) (*Arxiu, error)
@@ -95,6 +96,9 @@ type DB interface {
 	GetLlibre(id int) (*Llibre, error)
 	CreateLlibre(l *Llibre) (int, error)
 	UpdateLlibre(l *Llibre) error
+	HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error)
+	GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error)
+	UpsertLlibreIndexacioStats(stats *LlibreIndexacioStats) error
 	ListLlibrePagines(llibreID int) ([]LlibrePagina, error)
 	SaveLlibrePagina(p *LlibrePagina) (int, error)
 	RecalcLlibrePagines(llibreID, total int) error
@@ -107,6 +111,8 @@ type DB interface {
 	CreateTranscripcioRaw(t *TranscripcioRaw) (int, error)
 	UpdateTranscripcioRaw(t *TranscripcioRaw) error
 	DeleteTranscripcioRaw(id int) error
+	DeleteTranscripcionsByLlibre(llibreID int) error
+	CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, error)
 	ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error)
 	CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error)
 	DeleteTranscripcioPersones(transcripcioID int) error
@@ -118,6 +124,9 @@ type DB interface {
 	GetTranscripcioDraft(userID, llibreID int) (*TranscripcioDraft, error)
 	SaveTranscripcioDraft(userID, llibreID int, payload string) error
 	DeleteTranscripcioDraft(userID, llibreID int) error
+	UpsertTranscripcioMark(m *TranscripcioRawMark) error
+	DeleteTranscripcioMark(transcripcioID, userID int) error
+	ListTranscripcioMarks(transcripcioIDs []int) ([]TranscripcioRawMark, error)
 	SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error)
 	ListRegistresByPersona(personaID int, tipus string) ([]PersonaRegistreRow, error)
 
@@ -479,14 +488,15 @@ type Arxiu struct {
 }
 
 type ArxiuFilter struct {
-	Text      string
-	Tipus     string
-	Acces     string
-	EntitatID int
-	PaisID    int
-	Limit     int
-	Offset    int
-	Status    string
+	Text       string
+	Tipus      string
+	Acces      string
+	EntitatID  int
+	MunicipiID int
+	PaisID     int
+	Limit      int
+	Offset     int
+	Status     string
 }
 
 type ArxiuWithCount struct {
@@ -538,6 +548,7 @@ type Llibre struct {
 	URLBase           string
 	URLImatgePrefix   string
 	Pagina            string
+	IndexacioCompleta bool
 	CreatedBy         sql.NullInt64
 	ModeracioEstat    string
 	ModeracioMotiu    string
@@ -549,6 +560,15 @@ type LlibreRow struct {
 	Llibre
 	ArquebisbatNom sql.NullString
 	MunicipiNom    sql.NullString
+}
+
+type LlibreIndexacioStats struct {
+	LlibreID       int
+	TotalRegistres int
+	TotalCamps     int
+	CampsEmplenats int
+	Percentatge    int
+	UpdatedAt      time.Time
 }
 
 type LlibreFilter struct {
@@ -640,6 +660,28 @@ type TranscripcioDraft struct {
 	UserID    int
 	Payload   string
 	UpdatedAt time.Time
+}
+
+type TranscripcioRawMark struct {
+	ID             int
+	TranscripcioID int
+	UserID         int
+	Tipus          string
+	IsPublic       bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type TranscripcioRawChange struct {
+	ID             int
+	TranscripcioID int
+	ChangeType     string
+	FieldKey       string
+	OldValue       string
+	NewValue       string
+	Metadata       string
+	ChangedBy      sql.NullInt64
+	ChangedAt      time.Time
 }
 
 type PersonaSearchFilter struct {

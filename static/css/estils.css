@@ -379,6 +379,77 @@ body {
     font-size: 0.85rem;
 }
 
+.cell-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: 0.35rem;
+}
+
+.icon-action {
+    border: none;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    font-size: 0.95rem;
+    padding: 0.2rem;
+    line-height: 1;
+}
+
+.icon-action.is-on {
+    color: #166088;
+}
+
+.icon-action.is-off {
+    color: #94a3b8;
+}
+
+.icon-action:hover {
+    color: #0f172a;
+}
+
+.icon-action.danger {
+    color: #b91c1c;
+}
+
+.icon-action.danger:hover {
+    color: #7f1d1d;
+}
+
+.indexacio-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.barra-progres {
+    display: inline-block;
+    width: 100px;
+    height: 10px;
+    background-color: #e0e0e0;
+    border-radius: 5px;
+    overflow: hidden;
+    vertical-align: middle;
+}
+
+.barra-progres .progres {
+    height: 100%;
+    width: 0%;
+    background-color: #4caf50;
+    transition: width 0.3s ease;
+}
+
+.barra-progres .progres.verd { background-color: #4caf50; }
+.barra-progres .progres.groc { background-color: #ffeb3b; }
+.barra-progres .progres.taronja { background-color: #ff9800; }
+.barra-progres .progres.rosa { background-color: #f44336; }
+
+.percentatge-text {
+    font-size: 0.85rem;
+    color: #475569;
+    white-space: nowrap;
+}
+
 .link-persona {
     font-weight: 600;
 }
@@ -430,6 +501,89 @@ body {
 
 .modal-close:hover {
     background: #e3ebf2;
+}
+
+.import-box {
+    width: min(520px, 95vw);
+}
+
+.import-progress {
+    height: 10px;
+    background: #eef3f7;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.import-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #166088, #1d7aa6, #166088);
+    transition: width 0.2s ease;
+}
+
+.import-progress.is-processing {
+    background: #f2f5f8;
+}
+
+.import-progress.is-processing .import-progress-bar {
+    width: 32%;
+    animation: import-sweep 1.25s ease-in-out infinite;
+}
+
+.import-processing {
+    margin-top: 0.75rem;
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.import-processing-title {
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+}
+
+.import-complete {
+    margin-top: 0.9rem;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.import-complete .boto-primari {
+    justify-self: flex-start;
+}
+
+.import-spinner {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 3px solid #d9e2eb;
+    border-top-color: #166088;
+    animation: import-spin 0.9s linear infinite;
+    flex-shrink: 0;
+}
+
+.import-progress-meta {
+    margin-top: 0.5rem;
+    text-align: right;
+}
+
+@keyframes import-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes import-sweep {
+    0% {
+        transform: translateX(-120%);
+    }
+    50% {
+        transform: translateX(120%);
+    }
+    100% {
+        transform: translateX(320%);
+    }
 }
 
 .link-search {
@@ -533,6 +687,64 @@ body {
     background: #f7f7f9;
     border-radius: 8px;
     padding: 0.75rem 0.9rem;
+}
+
+.hierarchy-tree {
+    list-style: none;
+    padding: 0 0 0 1.25rem;
+    margin: 0;
+    position: relative;
+}
+
+.hierarchy-tree::before {
+    content: "";
+    position: absolute;
+    top: 0.35rem;
+    bottom: 0.35rem;
+    left: 0.35rem;
+    width: 2px;
+    background: #d6e0ea;
+}
+
+.hierarchy-item {
+    position: relative;
+    padding: 0.5rem 0.75rem 0.5rem 1.5rem;
+    margin-bottom: 0.65rem;
+    border-radius: 10px;
+    background: #f7f7f9;
+    display: grid;
+    gap: 0.25rem;
+}
+
+.hierarchy-item::before {
+    content: "";
+    position: absolute;
+    left: -0.1rem;
+    top: 1rem;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    background: #166088;
+    box-shadow: 0 0 0 4px rgba(22, 96, 136, 0.15);
+}
+
+.hierarchy-label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #607386;
+    font-weight: 600;
+}
+
+.hierarchy-value {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #1f2d3d;
+}
+
+.hierarchy-meta {
+    font-size: 0.85rem;
+    color: #7a8a9a;
 }
 
 /* Utilitats */

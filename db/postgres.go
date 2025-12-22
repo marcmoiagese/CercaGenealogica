@@ -385,6 +385,15 @@ func (d *PostgreSQL) CreateLlibre(l *Llibre) (int, error) {
 func (d *PostgreSQL) UpdateLlibre(l *Llibre) error {
 	return d.help.updateLlibre(l)
 }
+func (d *PostgreSQL) HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error) {
+	return d.help.hasLlibreDuplicate(municipiID, tipus, cronologia, codiDigital, codiFisic, excludeID)
+}
+func (d *PostgreSQL) GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error) {
+	return d.help.getLlibresIndexacioStats(ids)
+}
+func (d *PostgreSQL) UpsertLlibreIndexacioStats(stats *LlibreIndexacioStats) error {
+	return d.help.upsertLlibreIndexacioStats(stats)
+}
 func (d *PostgreSQL) UpdateLlibreModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateLlibreModeracio(id, estat, motiu, moderatorID)
 }
@@ -419,8 +428,18 @@ func (d *PostgreSQL) CreateTranscripcioRaw(t *TranscripcioRaw) (int, error) {
 func (d *PostgreSQL) UpdateTranscripcioRaw(t *TranscripcioRaw) error {
 	return d.help.updateTranscripcioRaw(t)
 }
+func (d *PostgreSQL) UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateTranscripcioModeracio(id, estat, motiu, moderatorID)
+}
 func (d *PostgreSQL) DeleteTranscripcioRaw(id int) error {
 	return d.help.deleteTranscripcioRaw(id)
+}
+
+func (d *PostgreSQL) DeleteTranscripcionsByLlibre(llibreID int) error {
+	return d.help.deleteTranscripcionsByLlibre(llibreID)
+}
+func (d *PostgreSQL) CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, error) {
+	return d.help.createTranscripcioRawChange(c)
 }
 func (d *PostgreSQL) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersones(transcripcioID)
@@ -454,6 +473,15 @@ func (d *PostgreSQL) SaveTranscripcioDraft(userID, llibreID int, payload string)
 }
 func (d *PostgreSQL) DeleteTranscripcioDraft(userID, llibreID int) error {
 	return d.help.deleteTranscripcioDraft(userID, llibreID)
+}
+func (d *PostgreSQL) UpsertTranscripcioMark(m *TranscripcioRawMark) error {
+	return d.help.upsertTranscripcioMark(m)
+}
+func (d *PostgreSQL) DeleteTranscripcioMark(transcripcioID, userID int) error {
+	return d.help.deleteTranscripcioMark(transcripcioID, userID)
+}
+func (d *PostgreSQL) ListTranscripcioMarks(transcripcioIDs []int) ([]TranscripcioRawMark, error) {
+	return d.help.listTranscripcioMarks(transcripcioIDs)
 }
 func (d *PostgreSQL) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
 	return d.help.searchPersones(f)

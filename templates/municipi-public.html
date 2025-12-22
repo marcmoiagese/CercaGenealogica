@@ -1,0 +1,221 @@
+{{ define "municipi-public.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "municipis.title" }} · {{ .Data.Municipi.Nom }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/registres-taula.css">
+</head>
+<body>
+    {{ if .UserLoggedIn }}
+        {{ template "header-private" . }}
+        {{ template "menu" . }}
+    {{ else }}
+        {{ template "header-public" . }}
+    {{ end }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ .Data.Municipi.Nom }}</h1>
+                <p class="camp-helper">{{ t .Lang "municipi.public.section.info" }}</p>
+                {{ if and .UserLoggedIn (or .Data.CanManageTerritory .Data.CanModerate) }}
+                <span class="badge {{ if eq .Data.Municipi.ModeracioEstat "publicat" }}verd{{ else if eq .Data.Municipi.ModeracioEstat "pendent" }}taronja{{ else }}vermell{{ end }}">
+                    {{ t .Lang (printf "activity.status.%s" .Data.Municipi.ModeracioEstat) }}
+                </span>
+                {{ end }}
+            </header>
+            <ul class="dades-grid">
+                <li>
+                    <strong>{{ t .Lang "municipis.form.type" }}:</strong>
+                    {{ $typeKey := printf "municipis.type.%s" .Data.Municipi.Tipus }}
+                    {{ $typeLabel := t .Lang $typeKey }}
+                    {{ if eq $typeLabel $typeKey }}{{ .Data.Municipi.Tipus }}{{ else }}{{ $typeLabel }}{{ end }}
+                </li>
+                <li><strong>{{ t .Lang "municipis.form.state" }}:</strong> {{ t .Lang (printf "municipis.state.%s" .Data.Municipi.Estat) }}</li>
+                <li><strong>{{ t .Lang "municipis.form.postal" }}:</strong> {{ if .Data.Municipi.CodiPostal }}{{ .Data.Municipi.CodiPostal }}{{ else }}-{{ end }}</li>
+                <li><strong>{{ t .Lang "municipis.form.lat" }}:</strong> {{ if .Data.Municipi.Latitud.Valid }}{{ .Data.Municipi.Latitud.Float64 }}{{ else }}-{{ end }}</li>
+                <li><strong>{{ t .Lang "municipis.form.lon" }}:</strong> {{ if .Data.Municipi.Longitud.Valid }}{{ .Data.Municipi.Longitud.Float64 }}{{ else }}-{{ end }}</li>
+                <li><strong>{{ t .Lang "municipis.form.w3w" }}:</strong> {{ if .Data.Municipi.What3Words }}{{ .Data.Municipi.What3Words }}{{ else }}-{{ end }}</li>
+                <li><strong>{{ t .Lang "municipis.form.web" }}:</strong> {{ if .Data.Municipi.Web }}<a href="{{ .Data.Municipi.Web }}" target="_blank">{{ .Data.Municipi.Web }}</a>{{ else }}-{{ end }}</li>
+                <li><strong>{{ t .Lang "municipis.form.wikipedia" }}:</strong> {{ if .Data.Municipi.Wikipedia }}<a href="{{ .Data.Municipi.Wikipedia }}" target="_blank">{{ .Data.Municipi.Wikipedia }}</a>{{ else }}-{{ end }}</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <header class="card-header">
+                <h2>{{ t .Lang "municipi.public.section.hierarchy" }}</h2>
+            </header>
+            <ol class="hierarchy-tree">
+                {{ if .Data.CountryLabel }}
+                <li class="hierarchy-item">
+                    <span class="hierarchy-label">{{ t .Lang "municipis.col.country" }}</span>
+                    <span class="hierarchy-value">{{ .Data.CountryLabel }}</span>
+                </li>
+                {{ end }}
+                {{ if .Data.Hierarchy }}
+                    {{ range .Data.Hierarchy }}
+                    <li class="hierarchy-item">
+                        <span class="hierarchy-label">{{ .Tipus }}</span>
+                        <span class="hierarchy-value">{{ .Nom }}</span>
+                        <span class="hierarchy-meta">{{ t $.Lang "levels.col.level" }} {{ .Nivel }}</span>
+                    </li>
+                    {{ end }}
+                {{ else }}
+                    <li class="hierarchy-item">{{ t .Lang "common.empty" }}</li>
+                {{ end }}
+            </ol>
+        </section>
+
+        <section class="card">
+            <header class="card-header">
+                <h2>{{ t .Lang "municipi.public.section.archives" }}</h2>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "archives.col.name" }}</th>
+                            <th>{{ t .Lang "archives.col.type" }}</th>
+                            <th>{{ t .Lang "archives.col.access" }}</th>
+                            <th>{{ t .Lang "archives.col.web" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ if .Data.Arxius }}
+                            {{ range .Data.Arxius }}
+                            <tr>
+                                <td><a href="/documentals/arxius/{{ .ID }}">{{ .Nom }}</a></td>
+                                <td>{{ t $.Lang (printf "archives.type.%s" .Tipus) }}</td>
+                                <td>{{ t $.Lang (printf "archives.access.%s" .Acces) }}</td>
+                                <td>{{ if .Web }}<a href="{{ .Web }}" target="_blank">{{ t $.Lang "archives.link" }}</a>{{ else }}-{{ end }}</td>
+                            </tr>
+                            {{ end }}
+                        {{ else }}
+                            <tr><td colspan="4">{{ t .Lang "common.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card registre-card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h2>{{ t .Lang "municipi.public.section.records" }}</h2>
+                    <p class="muted">{{ .Data.Municipi.Nom }}</p>
+                </div>
+            </header>
+            <div class="taula-resultats">
+                <div class="barra-superior">
+                    <button type="button" id="configColumnes" class="boto-engranatge">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+                <div class="taula-container">
+                    <table class="taula taula-registres" id="registresTable">
+                        <thead>
+                            <tr id="filtraFila">
+                                {{ range $i, $col := .Data.RecordColumns }}
+                                <th data-col="{{ $i }}" data-key="{{ $col.Key }}">
+                                    {{ if $col.Filterable }}
+                                    <input type="text" placeholder="{{ $col.Label }}" data-col="{{ $i }}" data-key="{{ $col.Key }}">
+                                    {{ end }}
+                                </th>
+                                {{ end }}
+                            </tr>
+                            <tr>
+                                {{ range $i, $col := .Data.RecordColumns }}
+                                <th data-col="{{ $i }}" data-key="{{ $col.Key }}">{{ $col.Label }}</th>
+                                {{ end }}
+                            </tr>
+                        </thead>
+                        <tbody id="taulaDades">
+                            {{ range $row := .Data.RecordRows }}
+                            <tr>
+                                {{ range $i, $col := $.Data.RecordColumns }}
+                                    {{ if $col.IsActions }}
+                                    <td data-col="{{ $i }}" data-key="{{ $col.Key }}" class="cell-actions">
+                                        <a class="icon-action" href="/documentals/registres/{{ $row.ID }}" title="{{ t $.Lang "records.action.view" }}">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                    {{ else if $col.IsStatus }}
+                                    <td data-col="{{ $i }}" data-key="{{ $col.Key }}">
+                                        <span class="badge">{{ t $.Lang (printf "activity.status.%s" $row.ModeracioEstat) }}</span>
+                                    </td>
+                                    {{ else }}
+                                    <td data-col="{{ $i }}" data-key="{{ $col.Key }}">{{ index $row.Cells $col.Key }}</td>
+                                    {{ end }}
+                                {{ end }}
+                            </tr>
+                            {{ else }}
+                            <tr>
+                                <td colspan="{{ len .Data.RecordColumns }}">{{ t .Lang "common.empty" }}</td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="paginador" id="paginador"></div>
+            </div>
+
+            <div class="modal-config" id="modalConfigColumnes">
+                <div class="modal-content-config">
+                    <button type="button" class="tanca-modal-config" aria-label="{{ t .Lang "common.close" }}">×</button>
+                    <h2>{{ t .Lang "records.columns.title" }}</h2>
+                    <div class="form-group">
+                        <label for="filesPerPagina">{{ t .Lang "records.columns.per_page" }}</label>
+                        <select id="filesPerPagina">
+                            <option value="10">10</option>
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="columns-config">
+                        <div class="columns-list">
+                            <label for="cols-actives">{{ t .Lang "records.columns.visible" }}</label>
+                            <select id="cols-actives" size="10" multiple></select>
+                            <div class="columns-actions">
+                                <button type="button" id="cols-up" class="columns-icon" aria-label="{{ t .Lang "records.columns.up" }}" title="{{ t .Lang "records.columns.up" }}">
+                                    <i class="fas fa-arrow-up"></i>
+                                </button>
+                                <button type="button" id="cols-down" class="columns-icon" aria-label="{{ t .Lang "records.columns.down" }}" title="{{ t .Lang "records.columns.down" }}">
+                                    <i class="fas fa-arrow-down"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="columns-controls">
+                            <button type="button" id="cols-hide" class="columns-icon" aria-label="{{ t .Lang "records.columns.hide" }}" title="{{ t .Lang "records.columns.hide" }}">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                            <button type="button" id="cols-show" class="columns-icon" aria-label="{{ t .Lang "records.columns.show" }}" title="{{ t .Lang "records.columns.show" }}">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                        </div>
+                        <div class="columns-list">
+                            <label for="cols-hidden">{{ t .Lang "records.columns.hidden" }}</label>
+                            <select id="cols-hidden" size="10" multiple></select>
+                        </div>
+                    </div>
+                    <div class="columns-save">
+                        <span id="cols-save-status" class="muted" aria-live="polite"></span>
+                        <button type="button" id="cols-save" class="boto-primari" data-saved-label="{{ t .Lang "common.saved" }}">
+                            {{ t .Lang "records.columns.save" }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ if .UserLoggedIn }}
+        {{ template "scripts-private" . }}
+    {{ else }}
+        {{ template "scripts-public" . }}
+    {{ end }}
+    <script src="/static/js/registres-taula.js"></script>
+</body>
+</html>
+{{ end }}

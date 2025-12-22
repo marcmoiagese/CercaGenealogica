@@ -312,6 +312,7 @@ CREATE TABLE IF NOT EXISTS llibres (
     url_base VARCHAR(255),
     url_imatge_prefix VARCHAR(50) DEFAULT '#imatge-',
     pagina VARCHAR(50),
+    indexacio_completa TINYINT(1) NOT NULL DEFAULT 0,
     created_by INT UNSIGNED NULL,
     moderation_status ENUM('pendent','publicat','rebutjat') DEFAULT 'pendent',
     moderated_by INT UNSIGNED NULL,
@@ -323,6 +324,16 @@ CREATE TABLE IF NOT EXISTS llibres (
     FOREIGN KEY(municipi_id) REFERENCES municipis(id) ON DELETE RESTRICT,
     FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS llibres_indexacio_stats (
+    llibre_id INT UNSIGNED NOT NULL PRIMARY KEY,
+    total_registres INT NOT NULL DEFAULT 0,
+    total_camps INT NOT NULL DEFAULT 0,
+    camps_emplenats INT NOT NULL DEFAULT 0,
+    percentatge INT NOT NULL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Taules de GESTIÓ DE SESSIONS
@@ -602,12 +613,49 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw_drafts (
   FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS transcripcions_raw_marques (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  transcripcio_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
+  tipus ENUM('consanguini','politic','interes') NOT NULL,
+  is_public TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_transcripcions_raw_marques (transcripcio_id, user_id),
+  FOREIGN KEY (transcripcio_id) REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS transcripcions_raw_canvis (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  transcripcio_id INT UNSIGNED NOT NULL,
+  change_type VARCHAR(50) NOT NULL,
+  field_key VARCHAR(100) NOT NULL,
+  old_value TEXT,
+  new_value TEXT,
+  metadata TEXT,
+  changed_by INT UNSIGNED NULL,
+  changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transcripcio_id) REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+  FOREIGN KEY (changed_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE INDEX idx_transcripcions_raw_llibre_pagina
   ON transcripcions_raw(llibre_id, pagina_id, posicio_pagina);
 CREATE INDEX idx_transcripcions_raw_llibre_tipus_any
   ON transcripcions_raw(llibre_id, tipus_acte, any_doc);
 CREATE INDEX idx_transcripcions_raw_status
   ON transcripcions_raw(moderation_status);
+CREATE INDEX idx_transcripcions_raw_status_sort
+  ON transcripcions_raw(moderation_status, any_doc, pagina_id, posicio_pagina, id);
+CREATE INDEX idx_transcripcions_raw_marques_transcripcio
+  ON transcripcions_raw_marques(transcripcio_id);
+CREATE INDEX idx_transcripcions_raw_marques_user
+  ON transcripcions_raw_marques(user_id);
+CREATE INDEX idx_transcripcions_raw_canvis_transcripcio
+  ON transcripcions_raw_canvis(transcripcio_id);
+CREATE INDEX idx_transcripcions_raw_canvis_changed_by
+  ON transcripcions_raw_canvis(changed_by);
 
 CREATE INDEX idx_transcripcions_persones_raw_rol
   ON transcripcions_persones_raw(transcripcio_id, rol);

@@ -11,9 +11,12 @@
     {{ template "menu" . }}
     <main class="contingut-principal">
         <section class="card">
-            <header class="card-header">
+            <header class="card-header card-header-flex">
                 <h1>{{ t .Lang "books.title" }}</h1>
-                <a class="boto-primari" href="/documentals/llibres/new">{{ t .Lang "books.new" }}</a>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="/documentals/llibres/importar">{{ t .Lang "records.import.file" }}</a>
+                    <a class="boto-primari" href="/documentals/llibres/new">{{ t .Lang "books.new" }}</a>
+                </div>
             </header>
             <form class="filtres-arxius" method="get" action="/documentals/llibres">
                 <div class="grup-camp">
@@ -77,6 +80,8 @@
                             <th>{{ t .Lang "books.col.municipi" }}</th>
                             <th>{{ t .Lang "books.col.chrono" }}</th>
                             <th>{{ t .Lang "books.col.pages" }}</th>
+                            <th>{{ t .Lang "books.col.records" }}</th>
+                            <th>{{ t .Lang "books.col.indexed" }}</th>
                             <th>{{ t .Lang "moderation.status" }}</th>
                             <th>{{ t .Lang "books.col.actions" }}</th>
                         </tr>
@@ -89,12 +94,57 @@
                             <td>{{ .MunicipiNom.String }}</td>
                             <td>{{ .Cronologia }}</td>
                             <td>{{ if .Pagines.Valid }}{{ .Pagines.Int64 }}{{ end }}</td>
+                            {{ $stat := index $.Data.IndexacioStats (printf "%d" .ID) }}
+                            <td>{{ $stat.TotalRegistres }}</td>
+                            <td>
+                                <div class="indexacio-cell">
+                                    <div class="barra-progres">
+                                        <div class="progres {{ $stat.ColorClass }}" style="width: {{ $stat.Percentatge }}%;"></div>
+                                    </div>
+                                    <span class="percentatge-text">{{ $stat.Percentatge }}%</span>
+                                </div>
+                            </td>
                             <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
                             <td>
-                                <a href="/documentals/llibres/{{ .ID }}/edit">{{ t $.Lang "books.action.edit" }}</a> |
-                                <a href="/documentals/llibres/{{ .ID }}/indexar">{{ t $.Lang "books.action.index" }}</a> |
-                                <a href="/documentals/llibres/{{ .ID }}/registres">{{ t $.Lang "books.action.records" }}</a> |
-                                <a href="/documentals/llibres/{{ .ID }}/pagines">{{ t $.Lang "books.action.pages" }}</a>
+                                <span class="cell-actions">
+                                    <a class="icon-action" href="/documentals/llibres/{{ .ID }}/edit" title="{{ t $.Lang "books.action.edit" }}" aria-label="{{ t $.Lang "books.action.edit" }}">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <a class="icon-action" href="/documentals/llibres/{{ .ID }}/indexar" title="{{ t $.Lang "books.action.index" }}" aria-label="{{ t $.Lang "books.action.index" }}">
+                                        <i class="fas fa-pen"></i>
+                                    </a>
+                                    <a class="icon-action" href="/documentals/llibres/{{ .ID }}/registres" title="{{ t $.Lang "books.action.records" }}" aria-label="{{ t $.Lang "books.action.records" }}">
+                                        <i class="fas fa-table"></i>
+                                    </a>
+                                    <a class="icon-action" href="/documentals/llibres/{{ .ID }}/import" title="{{ t $.Lang "records.import.file" }}" aria-label="{{ t $.Lang "records.import.file" }}">
+                                        <i class="fas fa-file-import"></i>
+                                    </a>
+                                    <a class="icon-action" href="/documentals/llibres/{{ .ID }}/export" title="{{ t $.Lang "records.list.export" }}" aria-label="{{ t $.Lang "records.list.export" }}">
+                                        <i class="fas fa-file-export"></i>
+                                    </a>
+                                    <form method="post" action="/documentals/llibres/{{ .ID }}/indexacio" class="inline-form">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <input type="hidden" name="indexacio_completa" value="{{ if .IndexacioCompleta }}0{{ else }}1{{ end }}">
+                                        <input type="hidden" name="return_to" value="{{ $.Data.CurrentURL }}">
+                                        <button type="submit" class="icon-action {{ if .IndexacioCompleta }}is-on{{ else }}is-off{{ end }}" title="{{ t $.Lang "books.indexed.tooltip" }}" aria-label="{{ t $.Lang "books.indexed.tooltip" }}">
+                                            <i class="fas fa-check-circle"></i>
+                                        </button>
+                                    </form>
+                                    {{ if $.Data.IsAdmin }}
+                                    <form method="post" action="/documentals/llibres/{{ .ID }}/indexacio/recalc" class="inline-form">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <input type="hidden" name="return_to" value="{{ $.Data.CurrentURL }}">
+                                        <button type="submit" class="icon-action" title="{{ t $.Lang "books.indexed.recalc" }}" aria-label="{{ t $.Lang "books.indexed.recalc" }}">
+                                            <i class="fas fa-sync-alt"></i>
+                                        </button>
+                                    </form>
+                                    {{ end }}
+                                    {{ if $.Data.IsAdmin }}
+                                    <button type="button" class="icon-action danger purge-trigger" title="{{ t $.Lang "books.purge.action" }}" aria-label="{{ t $.Lang "books.purge.action" }}" data-llibre-id="{{ .ID }}" data-llibre-title="{{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    {{ end }}
+                                </span>
                             </td>
                         </tr>
                         {{ end }}
@@ -104,6 +154,68 @@
         </section>
     </main>
     {{ template "footer" . }}
+    {{ if .Data.IsAdmin }}
+    <div class="modal-overlay" id="purge-modal" role="dialog" aria-modal="true" aria-labelledby="purge-modal-title">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div>
+                    <h2 id="purge-modal-title">{{ t .Lang "books.purge.action" }}</h2>
+                    <p class="muted" id="purge-modal-book"></p>
+                </div>
+                <button type="button" class="modal-close" data-close-purge aria-label="{{ t .Lang "common.close" }}">×</button>
+            </div>
+            <form id="purge-form" method="post" action="">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="grup-camp">
+                    <label for="purge-password">{{ t .Lang "books.purge.password" }}</label>
+                    <input id="purge-password" type="password" name="confirm_password" autocomplete="current-password" required>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-perill">{{ t .Lang "books.purge.submit" }}</button>
+                    <button type="button" class="boto-secundari" data-close-purge>{{ t .Lang "common.cancel" }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        (function () {
+            const modal = document.getElementById('purge-modal');
+            if (!modal) return;
+            const form = document.getElementById('purge-form');
+            const title = document.getElementById('purge-modal-book');
+            const closeButtons = modal.querySelectorAll('[data-close-purge]');
+            const openButtons = document.querySelectorAll('.purge-trigger');
+            const actionTemplate = '/documentals/llibres/__ID__/registres/purge';
+
+            openButtons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-llibre-id');
+                    const label = btn.getAttribute('data-llibre-title') || '';
+                    form.action = actionTemplate.replace('__ID__', id || '');
+                    title.textContent = label;
+                    modal.classList.add('is-open');
+                    const input = modal.querySelector('#purge-password');
+                    if (input) {
+                        input.value = '';
+                        input.focus();
+                    }
+                });
+            });
+
+            closeButtons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    modal.classList.remove('is-open');
+                });
+            });
+
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    modal.classList.remove('is-open');
+                }
+            });
+        })();
+    </script>
+    {{ end }}
     {{ template "scripts-private" . }}
 </body>
 </html>

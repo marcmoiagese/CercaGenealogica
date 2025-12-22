@@ -77,7 +77,7 @@
                     <tbody>
                         {{ range .Data.Municipis }}
                         <tr>
-                            <td>{{ .Nom }}</td>
+                            <td><a href="/territori/municipis/{{ .ID }}">{{ .Nom }}</a></td>
                             <td>{{ if .Tipus }}{{ t $.Lang (printf "municipis.type.%s" .Tipus) }}{{ else }}-{{ end }}</td>
                             <td>{{ t $.Lang (printf "municipis.state.%s" .Estat) }}</td>
                             <td>{{ .CodiPostal }}</td>

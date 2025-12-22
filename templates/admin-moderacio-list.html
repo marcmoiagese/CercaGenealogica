@@ -41,6 +41,63 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.04);
             resize: vertical;
         }
+        .moderacio-resum {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+            margin: 0 0 1rem;
+            color: #54616b;
+            font-size: 0.95rem;
+        }
+        .moderacio-bulk {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 0 0 1rem;
+            padding: 0.75rem 0.9rem;
+            border-radius: 12px;
+            background: #f4f6f8;
+            border: 1px solid rgba(0,0,0,0.06);
+        }
+        .moderacio-bulk label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #3b4650;
+        }
+        .moderacio-bulk select,
+        .moderacio-bulk input[type="text"] {
+            padding: 0.45rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid #d5d5d5;
+            background: #fff;
+        }
+        .moderacio-bulk .bulk-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .moderacio-bulk input[type="text"] {
+            min-width: 220px;
+        }
+        .moderacio-select {
+            width: 16px;
+            height: 16px;
+        }
+        .moderacio-paginacio {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+            margin-top: 1.2rem;
+        }
+        .moderacio-paginacio select {
+            padding: 0.45rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid #d5d5d5;
+            background: #fff;
+        }
     </style>
 </head>
 <body>
@@ -54,10 +111,68 @@
             {{ if .Data.Msg }}
             <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
             {{ end }}
+            <div class="moderacio-resum">
+                <span>{{ t .Lang "moderation.pending.total" }}: <strong>{{ .Data.Total }}</strong></span>
+                {{ if gt .Data.Total 0 }}
+                <span>{{ t .Lang "moderation.pending.showing" }} {{ .Data.PageStart }}-{{ .Data.PageEnd }}</span>
+                {{ end }}
+                <label for="per-page">{{ t .Lang "records.columns.per_page" }}</label>
+                <select id="per-page" name="per_page" onchange="location.href='/moderacio?per_page=' + this.value">
+                    {{ $current := .Data.PerPage }}
+                    <option value="10" {{ if eq $current 10 }}selected{{ end }}>10</option>
+                    <option value="25" {{ if eq $current 25 }}selected{{ end }}>25</option>
+                    <option value="50" {{ if eq $current 50 }}selected{{ end }}>50</option>
+                    <option value="100" {{ if eq $current 100 }}selected{{ end }}>100</option>
+                </select>
+            </div>
+            <form id="bulk-form" class="moderacio-bulk" method="post" action="/moderacio/bulk">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="bulk-group">
+                    <label for="bulk-action">{{ t .Lang "moderation.bulk.action" }}</label>
+                    <select id="bulk-action" name="bulk_action">
+                        <option value="approve">{{ t .Lang "moderation.table.approve" }}</option>
+                        <option value="reject">{{ t .Lang "moderation.table.reject" }}</option>
+                    </select>
+                </div>
+                <div class="bulk-group">
+                    <label for="bulk-scope">{{ t .Lang "moderation.bulk.scope" }}</label>
+                    <select id="bulk-scope" name="bulk_scope">
+                        <option value="page">{{ t .Lang "moderation.bulk.scope.page" }}</option>
+                        {{ if .Data.IsAdmin }}
+                        <option value="all">{{ t .Lang "moderation.bulk.scope.all" }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                {{ if .Data.IsAdmin }}
+                <div class="bulk-group" id="bulk-type-group">
+                    <label for="bulk-type">{{ t .Lang "moderation.bulk.type" }}</label>
+                    <select id="bulk-type" name="bulk_type">
+                        <option value="all">{{ t .Lang "moderation.bulk.type.all" }}</option>
+                        <option value="persona">{{ t .Lang "moderation.type.persona" }}</option>
+                        <option value="arxiu">{{ t .Lang "moderation.type.arxiu" }}</option>
+                        <option value="llibre">{{ t .Lang "moderation.type.llibre" }}</option>
+                        <option value="nivell">{{ t .Lang "moderation.type.nivell" }}</option>
+                        <option value="municipi">{{ t .Lang "moderation.type.municipi" }}</option>
+                        <option value="eclesiastic">{{ t .Lang "moderation.type.eclesiastic" }}</option>
+                        <option value="registre">{{ t .Lang "moderation.type.registre" }}</option>
+                    </select>
+                </div>
+                {{ end }}
+                <div class="bulk-group">
+                    <label for="bulk-reason">{{ t .Lang "moderation.table.reason" }}</label>
+                    <input type="text" id="bulk-reason" name="bulk_reason" placeholder="{{ t .Lang "moderation.bulk.reason.placeholder" }}">
+                </div>
+                <button type="submit" class="boto-primari">{{ t .Lang "moderation.bulk.apply" }}</button>
+                <label for="select-all">
+                    <input type="checkbox" id="select-all" class="moderacio-select">
+                    {{ t .Lang "moderation.bulk.select_all" }}
+                </label>
+            </form>
             <div class="taula-wrapper">
                 <table class="taula">
                     <thead>
                         <tr>
+                            <th></th>
                             <th>{{ t .Lang "moderation.table.id" }}</th>
                             <th>{{ t .Lang "moderation.table.type" }}</th>
                             <th>{{ t .Lang "moderation.table.name" }}</th>
@@ -71,6 +186,7 @@
                     <tbody>
                         {{ range .Data.Persones }}
                         <tr>
+                            <td><input type="checkbox" class="moderacio-select" name="selected" value="{{ .Type }}:{{ .ID }}" form="bulk-form"></td>
                             <td>{{ .ID }}</td>
                             <td>{{ t $.Lang (printf "moderation.type.%s" .Type) }}</td>
                             <td>{{ .Nom }}</td>
@@ -101,15 +217,64 @@
                             </td>
                         </tr>
                         {{ else }}
-                        <tr><td colspan="8">{{ t $.Lang "moderation.table.empty" }}</td></tr>
+                        <tr><td colspan="9">{{ t $.Lang "moderation.table.empty" }}</td></tr>
                         {{ end }}
                     </tbody>
                 </table>
             </div>
+            {{ if gt .Data.TotalPages 1 }}
+            <div class="moderacio-paginacio">
+                {{ if .Data.HasPrev }}
+                    <a class="boto-secundari" href="{{ .Data.PageBase }}&page={{ .Data.PrevPage }}">{{ t .Lang "common.prev" }}</a>
+                {{ end }}
+                <span>{{ .Data.Page }} / {{ .Data.TotalPages }}</span>
+                {{ if .Data.HasNext }}
+                    <a class="boto-secundari" href="{{ .Data.PageBase }}&page={{ .Data.NextPage }}">{{ t .Lang "common.next" }}</a>
+                {{ end }}
+            </div>
+            {{ end }}
         </section>
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script>
+        (function () {
+            var selectAll = document.getElementById('select-all');
+            if (!selectAll) {
+                return;
+            }
+            var checkboxes = document.querySelectorAll('.moderacio-select');
+            selectAll.addEventListener('change', function () {
+                checkboxes.forEach(function (box) {
+                    if (box.id === 'select-all') {
+                        return;
+                    }
+                    box.checked = selectAll.checked;
+                });
+            });
+            var actionSelect = document.getElementById('bulk-action');
+            var reasonField = document.getElementById('bulk-reason');
+            var scopeSelect = document.getElementById('bulk-scope');
+            var typeGroup = document.getElementById('bulk-type-group');
+            if (scopeSelect && typeGroup) {
+                var toggleType = function () {
+                    var show = scopeSelect.value === 'all';
+                    typeGroup.style.display = show ? 'flex' : 'none';
+                };
+                toggleType();
+                scopeSelect.addEventListener('change', toggleType);
+            }
+            if (actionSelect && reasonField) {
+                var toggleReason = function () {
+                    var show = actionSelect.value === 'reject';
+                    reasonField.disabled = !show;
+                    reasonField.style.opacity = show ? '1' : '0.5';
+                };
+                toggleReason();
+                actionSelect.addEventListener('change', toggleReason);
+            }
+        })();
+    </script>
 </body>
 </html>
 {{ end }}

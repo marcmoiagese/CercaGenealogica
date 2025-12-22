@@ -117,7 +117,7 @@ func TestAdminExportRegistresCSVIncludesDerivedColumns(t *testing.T) {
 		Cognom1:        "Soler",
 	})
 
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/documentals/llibres/%d/registres/export", llibreID), nil)
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/documentals/llibres/%d/export", llibreID), nil)
 	req.AddCookie(&http.Cookie{Name: "cg_session", Value: sessionID})
 	rr := httptest.NewRecorder()
 
@@ -179,7 +179,7 @@ func TestAdminImportRegistresCSVCreatesRows(t *testing.T) {
 		t.Fatalf("Close multipart ha fallat: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/documentals/llibres/%d/registres/import", llibreID), &buf)
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/documentals/llibres/%d/import", llibreID), &buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.AddCookie(&http.Cookie{Name: "cg_session", Value: sessionID})
 	rr := httptest.NewRecorder()
