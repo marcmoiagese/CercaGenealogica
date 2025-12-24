@@ -433,6 +433,8 @@ func main() {
 			applyMiddleware(app.AdminCreateRegistre, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/registres"):
 			applyMiddleware(app.AdminListRegistresLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/pagines/stats/save"):
+			applyMiddleware(app.AdminUpdateLlibrePageStat, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/pagines"):
 			http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(extractID(r.URL.Path))+"/indexar", http.StatusSeeOther)
 		case strings.Contains(r.URL.Path, "/arxius/") && strings.HasSuffix(r.URL.Path, "/update"):
@@ -489,6 +491,8 @@ func main() {
 			applyMiddleware(app.AdminCreateRegistre, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/registres"):
 			applyMiddleware(app.AdminListRegistresLlibre, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/pagines/stats/save"):
+			applyMiddleware(app.AdminUpdateLlibrePageStat, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/pagines"):
 			http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(extractID(r.URL.Path))+"/indexar", http.StatusSeeOther)
 		case strings.Contains(r.URL.Path, "/arxius/") && strings.HasSuffix(r.URL.Path, "/update"):

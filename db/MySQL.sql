@@ -613,6 +613,22 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw_drafts (
   FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS transcripcions_raw_page_stats (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  llibre_id INT UNSIGNED NOT NULL,
+  pagina_id INT UNSIGNED NULL,
+  num_pagina_text VARCHAR(255),
+  tipus_pagina ENUM('normal','portada','index','visita','altres') NOT NULL DEFAULT 'normal',
+  exclosa TINYINT(1) NOT NULL DEFAULT 0,
+  indexacio_completa TINYINT(1) NOT NULL DEFAULT 0,
+  duplicada_de VARCHAR(255),
+  total_registres INT NOT NULL DEFAULT 0,
+  computed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_transcripcions_raw_page_stats (llibre_id, pagina_id, num_pagina_text),
+  FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE CASCADE,
+  FOREIGN KEY (pagina_id) REFERENCES llibre_pagines(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS transcripcions_raw_marques (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   transcripcio_id INT UNSIGNED NOT NULL,
@@ -666,6 +682,8 @@ CREATE INDEX idx_transcripcions_atributs_raw_clau
   ON transcripcions_atributs_raw(clau);
 CREATE INDEX idx_transcripcions_atributs_raw_transcripcio
   ON transcripcions_atributs_raw(transcripcio_id, clau);
+CREATE INDEX idx_transcripcions_atributs_raw_clau_transcripcio
+  ON transcripcions_atributs_raw(clau, transcripcio_id);
 
 -- Cerca per cognoms i nom (per coincidències exactes)
 -- CREATE INDEX idx_persona_nom_complet ON persona(nom_complet);

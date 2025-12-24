@@ -111,6 +111,9 @@ type DB interface {
 	CreateTranscripcioRaw(t *TranscripcioRaw) (int, error)
 	UpdateTranscripcioRaw(t *TranscripcioRaw) error
 	DeleteTranscripcioRaw(id int) error
+	ListTranscripcionsRawPageStats(llibreID int) ([]TranscripcioRawPageStat, error)
+	UpdateTranscripcionsRawPageStat(stat *TranscripcioRawPageStat) error
+	RecalcTranscripcionsRawPageStats(llibreID int) error
 	DeleteTranscripcionsByLlibre(llibreID int) error
 	CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, error)
 	ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error)
@@ -569,6 +572,19 @@ type LlibreIndexacioStats struct {
 	CampsEmplenats int
 	Percentatge    int
 	UpdatedAt      time.Time
+}
+
+type TranscripcioRawPageStat struct {
+	ID             int
+	LlibreID       int
+	PaginaID       sql.NullInt64
+	NumPaginaText  string
+	TipusPagina    string
+	Exclosa        int
+	IndexacioCompleta int
+	DuplicadaDe    sql.NullString
+	TotalRegistres int
+	ComputedAt     sql.NullTime
 }
 
 type LlibreFilter struct {

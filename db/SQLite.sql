@@ -435,6 +435,20 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw_drafts (
   UNIQUE (llibre_id, user_id)
 );
 
+CREATE TABLE IF NOT EXISTS transcripcions_raw_page_stats (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,
+  pagina_id INTEGER REFERENCES llibre_pagines(id) ON DELETE SET NULL,
+  num_pagina_text TEXT,
+  tipus_pagina TEXT NOT NULL DEFAULT 'normal' CHECK (tipus_pagina IN ('normal','portada','index','visita','altres')),
+  exclosa INTEGER NOT NULL DEFAULT 0 CHECK (exclosa IN (0,1)),
+  indexacio_completa INTEGER NOT NULL DEFAULT 0 CHECK (indexacio_completa IN (0,1)),
+  duplicada_de TEXT,
+  total_registres INTEGER NOT NULL DEFAULT 0,
+  computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (llibre_id, pagina_id, num_pagina_text)
+);
+
 CREATE TABLE IF NOT EXISTS transcripcions_raw_marques (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   transcripcio_id INTEGER NOT NULL REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
@@ -484,6 +498,8 @@ CREATE INDEX IF NOT EXISTS idx_transcripcions_atributs_raw_clau
   ON transcripcions_atributs_raw(clau);
 CREATE INDEX IF NOT EXISTS idx_transcripcions_atributs_raw_transcripcio
   ON transcripcions_atributs_raw(transcripcio_id, clau);
+CREATE INDEX IF NOT EXISTS idx_transcripcions_atributs_raw_clau_transcripcio
+  ON transcripcions_atributs_raw(clau, transcripcio_id);
 
 -- Taula de sessions (mapa token_hash -> usuari)
 CREATE TABLE IF NOT EXISTS sessions (

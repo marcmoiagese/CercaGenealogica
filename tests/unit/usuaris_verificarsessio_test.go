@@ -300,6 +300,15 @@ func (f *fakeDBVerificar) UpdateTranscripcioRaw(t *db.TranscripcioRaw) error {
 func (f *fakeDBVerificar) DeleteTranscripcioRaw(id int) error {
 	return nil
 }
+func (f *fakeDBVerificar) RecalcTranscripcionsRawPageStats(llibreID int) error {
+	return nil
+}
+func (f *fakeDBVerificar) ListTranscripcionsRawPageStats(llibreID int) ([]db.TranscripcioRawPageStat, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) UpdateTranscripcionsRawPageStat(stat *db.TranscripcioRawPageStat) error {
+	return nil
+}
 func (f *fakeDBVerificar) DeleteTranscripcionsByLlibre(llibreID int) error {
 	return nil
 }

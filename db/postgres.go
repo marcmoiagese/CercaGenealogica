@@ -434,6 +434,15 @@ func (d *PostgreSQL) UpdateTranscripcioModeracio(id int, estat, motiu string, mo
 func (d *PostgreSQL) DeleteTranscripcioRaw(id int) error {
 	return d.help.deleteTranscripcioRaw(id)
 }
+func (d *PostgreSQL) ListTranscripcionsRawPageStats(llibreID int) ([]TranscripcioRawPageStat, error) {
+	return d.help.listTranscripcionsRawPageStats(llibreID)
+}
+func (d *PostgreSQL) UpdateTranscripcionsRawPageStat(stat *TranscripcioRawPageStat) error {
+	return d.help.updateTranscripcionsRawPageStat(stat)
+}
+func (d *PostgreSQL) RecalcTranscripcionsRawPageStats(llibreID int) error {
+	return d.help.recalcTranscripcionsRawPageStats(llibreID)
+}
 
 func (d *PostgreSQL) DeleteTranscripcionsByLlibre(llibreID int) error {
 	return d.help.deleteTranscripcionsByLlibre(llibreID)

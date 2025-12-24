@@ -130,6 +130,11 @@ func (a *App) AdminToggleIndexacioLlibre(w http.ResponseWriter, r *http.Request)
 		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
 		return
 	}
+	if setIndexat {
+		if err := a.DB.RecalcTranscripcionsRawPageStats(llibreID); err != nil {
+			Errorf("Error recalculant registres per pagina del llibre %d: %v", llibreID, err)
+		}
+	}
 	returnTo := strings.TrimSpace(r.FormValue("return_to"))
 	if returnTo == "" {
 		returnTo = "/documentals/llibres"
@@ -156,6 +161,9 @@ func (a *App) AdminRecalcIndexacioLlibre(w http.ResponseWriter, r *http.Request)
 	}
 	if _, err := a.recalcLlibreIndexacioStats(llibreID); err != nil {
 		Errorf("Error recalculant indexacio del llibre %d: %v", llibreID, err)
+	}
+	if err := a.DB.RecalcTranscripcionsRawPageStats(llibreID); err != nil {
+		Errorf("Error recalculant registres per pagina del llibre %d: %v", llibreID, err)
 	}
 	returnTo := strings.TrimSpace(r.FormValue("return_to"))
 	if returnTo == "" {
@@ -292,6 +300,11 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 			_ = a.DB.AddArxiuLlibre(arxiuID, id, "", "")
 		}
 		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleLlibreCreate, "crear", "llibre", &id, "pendent", nil, "")
+		if llibre.IndexacioCompleta {
+			if err := a.DB.RecalcTranscripcionsRawPageStats(id); err != nil {
+				Errorf("Error recalculant registres per pagina del llibre %d: %v", id, err)
+			}
+		}
 	} else {
 		if err := a.DB.UpdateLlibre(llibre); err != nil {
 			Errorf("Error actualitzant llibre: %v", err)
@@ -302,6 +315,11 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 			_ = a.DB.AddArxiuLlibre(arxiuID, llibre.ID, "", "")
 		}
 		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleLlibreUpdate, "editar", "llibre", &llibre.ID, "pendent", nil, "")
+		if llibre.IndexacioCompleta {
+			if err := a.DB.RecalcTranscripcionsRawPageStats(llibre.ID); err != nil {
+				Errorf("Error recalculant registres per pagina del llibre %d: %v", llibre.ID, err)
+			}
+		}
 	}
 	if strings.TrimSpace(r.FormValue("recalc_pagines")) != "" && llibre.Pagines.Valid {
 		_ = a.DB.RecalcLlibrePagines(llibre.ID, int(llibre.Pagines.Int64))
@@ -415,6 +433,184 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		Status: statusFilter,
 		Limit:  10000,
 	})
+	pageStats, _ := a.DB.ListTranscripcionsRawPageStats(id)
+	recalced := false
+	if len(pageStats) == 0 {
+		if err := a.DB.RecalcTranscripcionsRawPageStats(id); err != nil {
+			Errorf("Error recalculant registres per pagina del llibre %d: %v", id, err)
+		} else {
+			pageStats, _ = a.DB.ListTranscripcionsRawPageStats(id)
+		}
+		recalced = true
+	}
+	if !recalced && len(pageStats) > 0 {
+		totalRegistres := 0
+		for _, stat := range pageStats {
+			totalRegistres += stat.TotalRegistres
+		}
+		if totalRegistres == 0 {
+			if err := a.DB.RecalcTranscripcionsRawPageStats(id); err != nil {
+				Errorf("Error recalculant registres per pagina del llibre %d: %v", id, err)
+			} else {
+				pageStats, _ = a.DB.ListTranscripcionsRawPageStats(id)
+			}
+		}
+	}
+	mergedStats := pageStats
+	if llibre.Pagines.Valid && llibre.Pagines.Int64 > 0 {
+		totalPages := int(llibre.Pagines.Int64)
+		seen := make(map[string]db.TranscripcioRawPageStat, len(pageStats))
+		for _, stat := range pageStats {
+			seen[stat.NumPaginaText] = stat
+		}
+		mergedStats = make([]db.TranscripcioRawPageStat, 0, totalPages+len(pageStats))
+		for i := 1; i <= totalPages; i++ {
+			key := strconv.Itoa(i)
+			if stat, ok := seen[key]; ok {
+				mergedStats = append(mergedStats, stat)
+				delete(seen, key)
+				continue
+			}
+			mergedStats = append(mergedStats, db.TranscripcioRawPageStat{
+				LlibreID:          llibre.ID,
+				NumPaginaText:     key,
+				TipusPagina:       "normal",
+				Exclosa:           0,
+				IndexacioCompleta: 0,
+				TotalRegistres:    0,
+			})
+		}
+		for _, stat := range seen {
+			mergedStats = append(mergedStats, stat)
+		}
+	}
+	paginesByNum := map[int]int{}
+	if pagines, err := a.DB.ListLlibrePagines(id); err == nil {
+		for _, p := range pagines {
+			paginesByNum[p.NumPagina] = p.ID
+		}
+	}
+	if len(paginesByNum) > 0 {
+		for i := range mergedStats {
+			if mergedStats[i].PaginaID.Valid {
+				continue
+			}
+			if n, err := strconv.Atoi(strings.TrimSpace(mergedStats[i].NumPaginaText)); err == nil {
+				if pid, ok := paginesByNum[n]; ok {
+					mergedStats[i].PaginaID = sql.NullInt64{Int64: int64(pid), Valid: true}
+				}
+			}
+		}
+	}
+	psFilter := strings.TrimSpace(r.URL.Query().Get("ps_filter"))
+	if psFilter != "" {
+		needle := strings.ToLower(psFilter)
+		filtered := make([]db.TranscripcioRawPageStat, 0, len(mergedStats))
+		for _, stat := range mergedStats {
+			if strings.Contains(strings.ToLower(stat.NumPaginaText), needle) {
+				filtered = append(filtered, stat)
+			}
+		}
+		mergedStats = filtered
+	}
+	psPerPage := 5
+	if val := strings.TrimSpace(r.URL.Query().Get("ps_per_page")); val != "" {
+		if n, err := strconv.Atoi(val); err == nil {
+			switch n {
+			case 5, 10, 25, 50, 100:
+				psPerPage = n
+			}
+		}
+	}
+	psPage := 1
+	if val := strings.TrimSpace(r.URL.Query().Get("ps_page")); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n > 0 {
+			psPage = n
+		}
+	}
+	psTotal := len(mergedStats)
+	psTotalPages := 0
+	if psPerPage > 0 {
+		psTotalPages = (psTotal + psPerPage - 1) / psPerPage
+	}
+	if psTotalPages == 0 {
+		psTotalPages = 1
+	}
+	if psPage > psTotalPages {
+		psPage = psTotalPages
+	}
+	psStart := (psPage - 1) * psPerPage
+	if psStart < 0 {
+		psStart = 0
+	}
+	psEnd := psStart + psPerPage
+	if psEnd > psTotal {
+		psEnd = psTotal
+	}
+	pageStatsPage := mergedStats
+	if psTotal > 0 && psStart < psEnd {
+		pageStatsPage = mergedStats[psStart:psEnd]
+	}
+	selectQuery := cloneValues(r.URL.Query())
+	selectQuery.Del("ps_page")
+	selectQuery.Del("ps_per_page")
+	selectBase := r.URL.Path
+	if len(selectQuery) > 0 {
+		selectBase = selectBase + "?" + selectQuery.Encode() + "&ps_per_page="
+	} else {
+		selectBase = selectBase + "?ps_per_page="
+	}
+	pageAnchor := "#page-stats-controls"
+	pageQuery := cloneValues(r.URL.Query())
+	pageQuery.Del("ps_page")
+	pageQuery.Set("ps_per_page", strconv.Itoa(psPerPage))
+	pageBase := r.URL.Path + "?" + pageQuery.Encode()
+	pageLinks := make([]map[string]interface{}, 0, psTotalPages+4)
+	addPageLink := func(label string, target int, current bool, isNav bool) {
+		q := cloneValues(pageQuery)
+		q.Set("ps_page", strconv.Itoa(target))
+		pageLinks = append(pageLinks, map[string]interface{}{
+			"Label":   label,
+			"URL":     r.URL.Path + "?" + q.Encode() + pageAnchor,
+			"Current": current,
+			"IsNav":   isNav,
+		})
+	}
+	if psPage > 1 {
+		addPageLink("<<", 1, false, true)
+		addPageLink("<", psPage-1, false, true)
+	}
+	windowSize := 10
+	start := 1
+	end := psTotalPages
+	if psTotalPages > windowSize {
+		half := windowSize / 2
+		start = psPage - half
+		if start < 1 {
+			start = 1
+		}
+		end = start + windowSize - 1
+		if end > psTotalPages {
+			end = psTotalPages
+			start = end - windowSize + 1
+		}
+	}
+	for i := start; i <= end; i++ {
+		addPageLink(strconv.Itoa(i), i, i == psPage, false)
+	}
+	if psPage < psTotalPages {
+		addPageLink(">", psPage+1, false, true)
+		addPageLink(">>", psTotalPages, false, true)
+	}
+	filterQuery := cloneValues(r.URL.Query())
+	filterQuery.Del("ps_page")
+	filterQuery.Del("ps_filter")
+	filterQuery.Set("ps_per_page", strconv.Itoa(psPerPage))
+	filterBase := r.URL.Path
+	if len(filterQuery) > 0 {
+		filterBase = filterBase + "?" + filterQuery.Encode()
+	}
+	filterBase += pageAnchor
 	type registreStat struct {
 		Tipus string
 		Count int
@@ -431,16 +627,90 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 	arxiusOpts, _ := a.DB.ListArxius(db.ArxiuFilter{Limit: 200})
 	purgeStatus := strings.TrimSpace(r.URL.Query().Get("purge"))
 	RenderPrivateTemplate(w, r, "admin-llibres-show.html", map[string]interface{}{
-		"Llibre":          llibre,
-		"Arxius":          arxius,
-		"ArxiusOptions":   arxiusOpts,
-		"RegistresStats":  stats,
-		"RegistresTotal":  len(registres),
-		"User":            user,
-		"CanManageArxius": true,
-		"IsAdmin":         isAdmin,
-		"PurgeStatus":     purgeStatus,
+		"Llibre":              llibre,
+		"Arxius":              arxius,
+		"ArxiusOptions":       arxiusOpts,
+		"RegistresStats":      stats,
+		"RegistresTotal":      len(registres),
+		"PageStats":           pageStatsPage,
+		"TotalPages":          llibre.Pagines,
+		"PageStatsTotal":      psTotal,
+		"PageStatsPage":       psPage,
+		"PageStatsPerPage":    psPerPage,
+		"PageStatsPages":      psTotalPages,
+		"PageStatsBase":       pageBase,
+		"PageStatsSelectBase": selectBase,
+		"PageStatsFilter":     psFilter,
+		"PageStatsFilterBase": filterBase,
+		"PageStatsAnchor":     pageAnchor,
+		"PageStatsLinks":      pageLinks,
+		"User":                user,
+		"CanManageArxius":     true,
+		"IsAdmin":             isAdmin,
+		"PurgeStatus":         purgeStatus,
+		"CurrentURL":          r.URL.RequestURI(),
 	})
+}
+
+func (a *App) AdminUpdateLlibrePageStat(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
+		return
+	}
+	statID := intFromForm(r.FormValue("stat_id"))
+	stat := &db.TranscripcioRawPageStat{
+		ID:                statID,
+		LlibreID:          intFromForm(r.FormValue("llibre_id")),
+		NumPaginaText:     strings.TrimSpace(r.FormValue("num_pagina_text")),
+		TipusPagina:       strings.TrimSpace(r.FormValue("tipus_pagina")),
+		Exclosa:           intFromForm(r.FormValue("exclosa")),
+		IndexacioCompleta: intFromForm(r.FormValue("indexacio_completa")),
+		DuplicadaDe:       parseNullString(r.FormValue("duplicada_de")),
+		TotalRegistres:    intFromForm(r.FormValue("total_registres")),
+		PaginaID:          parseNullInt64(r.FormValue("pagina_id")),
+	}
+	if stat.LlibreID == 0 {
+		stat.LlibreID = extractID(r.URL.Path)
+	}
+	if stat.LlibreID == 0 {
+		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
+		return
+	}
+	if stat.ID == 0 && stat.NumPaginaText == "" && !stat.PaginaID.Valid {
+		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
+		return
+	}
+	if stat.TipusPagina == "" {
+		stat.TipusPagina = "normal"
+	}
+	if err := a.DB.UpdateTranscripcionsRawPageStat(stat); err != nil {
+		Errorf("Error actualitzant stats de pagina %d: %v", statID, err)
+	} else {
+		if user, _ := a.VerificarSessio(r); user != nil {
+			objID := stat.LlibreID
+			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleLlibrePageStatsUpdate, "actualitzar", "llibre_pagina_stats", &objID, "validat", nil, "")
+		}
+	}
+	returnTo := strings.TrimSpace(r.FormValue("return_to"))
+	if returnTo == "" {
+		if stat.LlibreID > 0 {
+			returnTo = "/documentals/llibres/" + strconv.Itoa(stat.LlibreID)
+		} else {
+			returnTo = "/documentals/llibres"
+		}
+	}
+	http.Redirect(w, r, returnTo, http.StatusSeeOther)
 }
 
 func (a *App) AdminPurgeLlibreRegistres(w http.ResponseWriter, r *http.Request) {

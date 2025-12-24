@@ -452,6 +452,15 @@ func (d *SQLite) UpdateTranscripcioModeracio(id int, estat, motiu string, modera
 func (d *SQLite) DeleteTranscripcioRaw(id int) error {
 	return d.help.deleteTranscripcioRaw(id)
 }
+func (d *SQLite) ListTranscripcionsRawPageStats(llibreID int) ([]TranscripcioRawPageStat, error) {
+	return d.help.listTranscripcionsRawPageStats(llibreID)
+}
+func (d *SQLite) UpdateTranscripcionsRawPageStat(stat *TranscripcioRawPageStat) error {
+	return d.help.updateTranscripcionsRawPageStat(stat)
+}
+func (d *SQLite) RecalcTranscripcionsRawPageStats(llibreID int) error {
+	return d.help.recalcTranscripcionsRawPageStats(llibreID)
+}
 
 func (d *SQLite) DeleteTranscripcionsByLlibre(llibreID int) error {
 	return d.help.deleteTranscripcionsByLlibre(llibreID)

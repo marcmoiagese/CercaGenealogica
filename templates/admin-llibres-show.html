@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "books.title" }} - {{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</title>
     {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/registres-taula.css">
     <style>
         .purge-details {
             margin-top: 0.75rem;
@@ -26,6 +27,15 @@
         .purge-form input[type="password"] {
             min-width: 220px;
         }
+        .page-stats-table td {
+            vertical-align: middle;
+        }
+        .page-stat-value {
+            min-width: 90px;
+        }
+        .page-stat-cell .editable-cell {
+            min-width: 120px;
+        }
     </style>
 </head>
 <body>
@@ -37,7 +47,7 @@
             {{ t .Lang (printf "books.purge.%s" .Data.PurgeStatus) }}
         </div>
         {{ end }}
-        <section class="card">
+        <section class="card" id="page-stats">
             <header class="card-header">
                 <h1>{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</h1>
                 <div class="arxiu-header-actions">
@@ -93,6 +103,188 @@
                 {{ end }}
             </div>
         </section>
+
+        <section class="card">
+            <header class="card-header">
+                <h2>{{ t .Lang "books.pages.stats.title" }}</h2>
+                <p class="muted">{{ t .Lang "books.pages.stats.subtitle" }}</p>
+            </header>
+            <div class="page-stats-controls" id="page-stats-controls">
+                <div class="page-stats-filters">
+                    <label for="page-stats-per-page">{{ t .Lang "records.columns.per_page" }}</label>
+                    <select id="page-stats-per-page" onchange="location.href='{{ .Data.PageStatsSelectBase }}' + this.value + '{{ .Data.PageStatsAnchor }}'">
+                        <option value="5" {{ if eq .Data.PageStatsPerPage 5 }}selected{{ end }}>5</option>
+                        <option value="10" {{ if eq .Data.PageStatsPerPage 10 }}selected{{ end }}>10</option>
+                        <option value="25" {{ if eq .Data.PageStatsPerPage 25 }}selected{{ end }}>25</option>
+                        <option value="50" {{ if eq .Data.PageStatsPerPage 50 }}selected{{ end }}>50</option>
+                        <option value="100" {{ if eq .Data.PageStatsPerPage 100 }}selected{{ end }}>100</option>
+                    </select>
+                </div>
+                <form class="page-stats-jump" method="get" action="{{ .Data.PageStatsFilterBase }}">
+                    <label for="page-stats-filter">{{ t .Lang "books.pages.stats.filter.page" }}</label>
+                    <input id="page-stats-filter" type="text" name="ps_filter" value="{{ .Data.PageStatsFilter }}" placeholder="{{ t .Lang "books.pages.stats.filter.placeholder" }}">
+                    <input type="hidden" name="ps_per_page" value="{{ .Data.PageStatsPerPage }}">
+                    <input type="hidden" name="ps_page" value="1">
+                    <button type="submit" class="boto-secundari">{{ t .Lang "common.apply" }}</button>
+                </form>
+            </div>
+            <div class="taula-wrapper page-stats-table">
+                <form id="pageStatsForm" method="post" action="/documentals/llibres/{{ .Data.Llibre.ID }}/pagines/stats/save" style="display:none">
+                    <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                    <input type="hidden" name="stat_id" value="">
+                    <input type="hidden" name="llibre_id" value="{{ .Data.Llibre.ID }}">
+                    <input type="hidden" name="num_pagina_text" value="">
+                    <input type="hidden" name="pagina_id" value="">
+                    <input type="hidden" name="tipus_pagina" value="">
+                    <input type="hidden" name="exclosa" value="">
+                    <input type="hidden" name="indexacio_completa" value="">
+                    <input type="hidden" name="duplicada_de" value="">
+                    <input type="hidden" name="total_registres" value="">
+                    <input type="hidden" name="return_to" value="{{ .Data.CurrentURL }}#page-stats-controls">
+                </form>
+                <table class="taula taula-registres" id="pageStatsTable" data-csrf="{{ .Data.CSRFToken }}" data-edit-label="{{ t .Lang "common.edit" }}" data-confirm-label="{{ t .Lang "common.save" }}" data-cancel-label="{{ t .Lang "records.form.cancel" }}">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "books.pages.stats.col.page" }}</th>
+                            <th>{{ t .Lang "books.pages.stats.col.page_id" }}</th>
+                            <th>{{ t .Lang "books.pages.stats.col.total" }}</th>
+                            <th>{{ t .Lang "books.pages.stats.col.updated" }}</th>
+                            <th>{{ t .Lang "books.pages.stats.col.status" }}</th>
+                            <th>{{ t .Lang "books.pages.stats.col.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ if eq (len .Data.PageStats) 0 }}
+                        <tr>
+                            <td colspan="6">{{ t .Lang "common.empty" }}</td>
+                        </tr>
+                        {{ else }}
+                        {{ range .Data.PageStats }}
+                        <tr data-stat-id="{{ .ID }}" data-llibre-id="{{ .LlibreID }}" data-num-pagina="{{ .NumPaginaText }}" data-pagina-id="{{ if .PaginaID.Valid }}{{ .PaginaID.Int64 }}{{ end }}" data-total-registres="{{ .TotalRegistres }}" data-tipus-pagina="{{ if .TipusPagina }}{{ .TipusPagina }}{{ else }}normal{{ end }}" data-exclosa="{{ .Exclosa }}" data-indexacio-completa="{{ .IndexacioCompleta }}" data-duplicada-de="{{ if .DuplicadaDe.Valid }}{{ .DuplicadaDe.String }}{{ end }}">
+                            <td class="page-stat-cell" data-key="num_pagina_text" data-type="text">
+                                <div class="editable-cell">
+                                    <span class="cell-text page-stat-value">
+                                        {{ if and $.Data.Llibre.URLBase $.Data.Llibre.URLImatgePrefix .NumPaginaText }}
+                                        <a href="{{ printf "%s%s%s" $.Data.Llibre.URLBase $.Data.Llibre.URLImatgePrefix .NumPaginaText }}" target="_blank" rel="noopener">{{ .NumPaginaText }}</a>
+                                        {{ else }}
+                                        {{ .NumPaginaText }}
+                                        {{ end }}
+                                    </span>
+                                    {{ if $.Data.CanManageArxius }}
+                                    <span class="edit-icons">
+                                        <button type="button" class="edit-icon page-stat-edit" aria-label="{{ t $.Lang "common.edit" }}"><i class="fa fa-pencil"></i></button>
+                                    </span>
+                                    {{ end }}
+                                </div>
+                            </td>
+                            <td class="page-stat-cell" data-key="pagina_id" data-type="number">
+                                <div class="editable-cell">
+                                    <span class="cell-text page-stat-value">{{ if .PaginaID.Valid }}{{ .PaginaID.Int64 }}{{ else }}—{{ end }}</span>
+                                    {{ if $.Data.CanManageArxius }}
+                                    <span class="edit-icons">
+                                        <button type="button" class="edit-icon page-stat-edit" aria-label="{{ t $.Lang "common.edit" }}"><i class="fa fa-pencil"></i></button>
+                                    </span>
+                                    {{ end }}
+                                </div>
+                            </td>
+                            <td class="page-stat-cell" data-key="total_registres" data-type="number">
+                                <div class="editable-cell">
+                                    <span class="cell-text page-stat-value">{{ .TotalRegistres }}</span>
+                                    {{ if $.Data.CanManageArxius }}
+                                    <span class="edit-icons">
+                                        <button type="button" class="edit-icon page-stat-edit" aria-label="{{ t $.Lang "common.edit" }}"><i class="fa fa-pencil"></i></button>
+                                    </span>
+                                    {{ end }}
+                                </div>
+                            </td>
+                            <td>{{ if .ComputedAt.Valid }}{{ .ComputedAt.Time.Format "2006-01-02 15:04" }}{{ else }}—{{ end }}</td>
+                            <td>
+                                <div class="page-stat-meta">
+                                    <span class="badge">{{ t $.Lang (printf "books.pages.stats.type.%s" .TipusPagina) }}</span>
+                                    {{ if eq .Exclosa 1 }}
+                                    <span class="badge badge-warning">{{ t $.Lang "books.pages.stats.exclude.label" }}</span>
+                                    {{ else }}
+                                    <span class="badge badge-muted">{{ t $.Lang "books.pages.stats.status.normal" }}</span>
+                                    {{ end }}
+                                    {{ if eq .IndexacioCompleta 1 }}
+                                    <span class="badge badge-success">{{ t $.Lang "books.pages.stats.indexed.label" }}</span>
+                                    {{ end }}
+                                    {{ if .DuplicadaDe.Valid }}
+                                    <span class="badge badge-muted">{{ t $.Lang "books.pages.stats.col.duplicate" }}: {{ .DuplicadaDe.String }}</span>
+                                    {{ end }}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="page-stat-actions">
+                                    {{ if $.Data.CanManageArxius }}
+                                    <button type="button" class="boto-secundari page-stat-config icon-only" aria-label="{{ t $.Lang "books.pages.stats.actions.label" }}" title="{{ t $.Lang "books.pages.stats.actions.label" }}">
+                                        <i class="fas fa-sliders-h"></i>
+                                    </button>
+                                    {{ end }}
+                                </div>
+                            </td>
+                        </tr>
+                        {{ end }}
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+            {{ if gt .Data.PageStatsPages 1 }}
+            <div class="paginador">
+                {{ range .Data.PageStatsLinks }}
+                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
+                    {{ .Label }}
+                </button>
+                {{ end }}
+            </div>
+            {{ end }}
+        </section>
+
+        <div class="modal-overlay" id="page-stats-modal" role="dialog" aria-modal="true" aria-labelledby="page-stats-modal-title">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <div>
+                        <h2 id="page-stats-modal-title">{{ t .Lang "books.pages.stats.col.actions" }}</h2>
+                        <p class="muted">{{ t .Lang "books.pages.stats.subtitle" }}</p>
+                    </div>
+                    <button type="button" class="modal-close" data-page-stats-close aria-label="{{ t .Lang "common.close" }}">×</button>
+                </div>
+                <form id="page-stats-modal-form">
+                    <input type="hidden" name="stat_id" value="">
+                    <div class="grup-camp">
+                        <label for="page-stats-type">{{ t .Lang "books.pages.stats.col.type" }}</label>
+                        <select id="page-stats-type" name="tipus_pagina">
+                            <option value="normal">{{ t .Lang "books.pages.stats.type.normal" }}</option>
+                            <option value="portada">{{ t .Lang "books.pages.stats.type.portada" }}</option>
+                            <option value="index">{{ t .Lang "books.pages.stats.type.index" }}</option>
+                            <option value="visita">{{ t .Lang "books.pages.stats.type.visita" }}</option>
+                            <option value="altres">{{ t .Lang "books.pages.stats.type.altres" }}</option>
+                        </select>
+                    </div>
+                    <div class="grup-camp">
+                        <label class="checkbox-linia" for="page-stats-exclosa">
+                            <input id="page-stats-exclosa" type="checkbox" name="exclosa" value="1">
+                            <span>{{ t .Lang "books.pages.stats.exclude.label" }}</span>
+                        </label>
+                    </div>
+                    <div class="grup-camp">
+                        <label class="checkbox-linia" for="page-stats-indexat">
+                            <input id="page-stats-indexat" type="checkbox" name="indexacio_completa" value="1">
+                            <span>{{ t .Lang "books.pages.stats.indexed.label" }}</span>
+                        </label>
+                        <p class="camp-helper">{{ t .Lang "books.pages.stats.indexed.help" }}</p>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="page-stats-duplicada">{{ t .Lang "books.pages.stats.col.duplicate" }}</label>
+                        <input id="page-stats-duplicada" type="text" name="duplicada_de" placeholder="{{ t .Lang "books.pages.stats.duplicate.placeholder" }}">
+                    </div>
+                    <div class="form-accio">
+                        <button type="button" class="boto-primari" id="page-stats-modal-save">{{ t .Lang "common.save" }}</button>
+                        <button type="button" class="boto-secundari" data-page-stats-close>{{ t .Lang "records.form.cancel" }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
         <section class="card">
             <header class="card-header">
@@ -156,6 +348,8 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/scroll-restore.js?v=1"></script>
+    <script src="/static/js/page-stats.js?v=1"></script>
 </body>
 </html>
 {{ end }}

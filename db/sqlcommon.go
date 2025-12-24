@@ -171,6 +171,7 @@ func (h sqlHelper) ensureDefaultPointsRules() error {
 		{Code: "municipi_update", Name: "Editar municipi", Description: "Edició de municipi/localitat", Points: 1, Active: true},
 		{Code: "eclesiastic_create", Name: "Crear entitat eclesiàstica", Description: "Alta d'entitat eclesiàstica", Points: 2, Active: true},
 		{Code: "eclesiastic_update", Name: "Editar entitat eclesiàstica", Description: "Edició d'entitat eclesiàstica", Points: 1, Active: true},
+		{Code: "llibre_page_stats_update", Name: "Registres per pàgina", Description: "Actualitzar registres per pàgina d'un llibre", Points: 1, Active: true},
 	}
 	for _, r := range defaults {
 		stmt := `INSERT INTO punts_regles (codi, nom, descripcio, punts, actiu, data_creacio) VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)`
@@ -2855,6 +2856,127 @@ func (h sqlHelper) countTranscripcionsRaw(llibreID int, f TranscripcioFilter) (i
 
 func (h sqlHelper) countTranscripcionsRawGlobal(f TranscripcioFilter) (int, error) {
 	return h.countTranscripcionsRaw(0, f)
+}
+
+func (h sqlHelper) recalcTranscripcionsRawPageStats(llibreID int) error {
+	resetStmt := formatPlaceholders(h.style, `UPDATE transcripcions_raw_page_stats SET total_registres = 0, computed_at = `+h.nowFun+` WHERE llibre_id = ?`)
+	if _, err := h.db.Exec(resetStmt, llibreID); err != nil {
+		return err
+	}
+	insertStmt := `
+        INSERT INTO transcripcions_raw_page_stats (
+            llibre_id, pagina_id, num_pagina_text, total_registres, computed_at
+        )
+        SELECT
+            t.llibre_id,
+            t.pagina_id,
+            COALESCE(pd.valor_text, NULLIF(TRIM(t.num_pagina_text), '')) AS num_pagina_text,
+            COUNT(*),
+            ` + h.nowFun + `
+        FROM transcripcions_raw t
+        LEFT JOIN (
+            SELECT
+                pd.transcripcio_id,
+                MAX(NULLIF(TRIM(pd.valor_text), '')) AS valor_text
+            FROM transcripcions_atributs_raw pd
+            JOIN transcripcions_raw t2
+                ON t2.id = pd.transcripcio_id
+            WHERE pd.clau = 'pagina_digital'
+              AND t2.llibre_id = ?
+              AND pd.valor_text IS NOT NULL
+              AND TRIM(pd.valor_text) <> ''
+              AND pd.valor_text NOT LIKE '%-%'
+            GROUP BY pd.transcripcio_id
+        ) pd
+            ON pd.transcripcio_id = t.id
+        WHERE t.llibre_id = ?
+          AND COALESCE(pd.valor_text, NULLIF(TRIM(t.num_pagina_text), '')) IS NOT NULL
+          AND COALESCE(pd.valor_text, NULLIF(TRIM(t.num_pagina_text), '')) <> ''
+          AND COALESCE(pd.valor_text, NULLIF(TRIM(t.num_pagina_text), '')) NOT LIKE '%-%'
+        GROUP BY t.llibre_id, t.pagina_id, COALESCE(pd.valor_text, NULLIF(TRIM(t.num_pagina_text), ''))`
+	switch h.style {
+	case "mysql":
+		insertStmt += `
+        ON DUPLICATE KEY UPDATE
+            total_registres = VALUES(total_registres),
+            computed_at = VALUES(computed_at)`
+	case "postgres":
+		insertStmt += `
+        ON CONFLICT (llibre_id, pagina_id, num_pagina_text)
+        DO UPDATE SET
+            total_registres = EXCLUDED.total_registres,
+            computed_at = EXCLUDED.computed_at`
+	default:
+		insertStmt += `
+        ON CONFLICT (llibre_id, pagina_id, num_pagina_text)
+        DO UPDATE SET
+            total_registres = excluded.total_registres,
+            computed_at = excluded.computed_at`
+	}
+	insertStmt = formatPlaceholders(h.style, insertStmt)
+	_, err := h.db.Exec(insertStmt, llibreID, llibreID)
+	return err
+}
+
+func (h sqlHelper) listTranscripcionsRawPageStats(llibreID int) ([]TranscripcioRawPageStat, error) {
+	query := `
+        SELECT id, llibre_id, pagina_id, num_pagina_text,
+               COALESCE(tipus_pagina, 'normal') AS tipus_pagina,
+               COALESCE(exclosa, 0) AS exclosa,
+               COALESCE(indexacio_completa, 0) AS indexacio_completa,
+               duplicada_de,
+               total_registres, computed_at
+        FROM transcripcions_raw_page_stats
+        WHERE llibre_id = ?
+        ORDER BY num_pagina_text, pagina_id, id`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, llibreID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []TranscripcioRawPageStat
+	for rows.Next() {
+		var stat TranscripcioRawPageStat
+		if err := rows.Scan(
+			&stat.ID,
+			&stat.LlibreID,
+			&stat.PaginaID,
+			&stat.NumPaginaText,
+			&stat.TipusPagina,
+			&stat.Exclosa,
+			&stat.IndexacioCompleta,
+			&stat.DuplicadaDe,
+			&stat.TotalRegistres,
+			&stat.ComputedAt,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, stat)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) updateTranscripcionsRawPageStat(stat *TranscripcioRawPageStat) error {
+	if stat.TipusPagina == "" {
+		stat.TipusPagina = "normal"
+	}
+	if stat.ID == 0 {
+		query := `
+            INSERT INTO transcripcions_raw_page_stats
+                (llibre_id, pagina_id, num_pagina_text, tipus_pagina, exclosa, indexacio_completa, duplicada_de, total_registres, computed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `)`
+		query = formatPlaceholders(h.style, query)
+		_, err := h.db.Exec(query, stat.LlibreID, stat.PaginaID, stat.NumPaginaText, stat.TipusPagina, stat.Exclosa, stat.IndexacioCompleta, stat.DuplicadaDe, stat.TotalRegistres)
+		return err
+	}
+	query := `
+        UPDATE transcripcions_raw_page_stats
+        SET pagina_id = ?, num_pagina_text = ?, tipus_pagina = ?, exclosa = ?, indexacio_completa = ?, duplicada_de = ?, total_registres = ?, computed_at = ` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, stat.PaginaID, stat.NumPaginaText, stat.TipusPagina, stat.Exclosa, stat.IndexacioCompleta, stat.DuplicadaDe, stat.TotalRegistres, stat.ID)
+	return err
 }
 
 func (h sqlHelper) getTranscripcioRaw(id int) (*TranscripcioRaw, error) {

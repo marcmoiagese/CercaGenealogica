@@ -453,6 +453,15 @@ func (f *fakeDB) UpdateTranscripcioRaw(t *db.TranscripcioRaw) error {
 func (f *fakeDB) DeleteTranscripcioRaw(id int) error {
 	return nil
 }
+func (f *fakeDB) RecalcTranscripcionsRawPageStats(llibreID int) error {
+	return nil
+}
+func (f *fakeDB) ListTranscripcionsRawPageStats(llibreID int) ([]db.TranscripcioRawPageStat, error) {
+	return nil, nil
+}
+func (f *fakeDB) UpdateTranscripcionsRawPageStat(stat *db.TranscripcioRawPageStat) error {
+	return nil
+}
 func (f *fakeDB) DeleteTranscripcionsByLlibre(llibreID int) error {
 	return nil
 }

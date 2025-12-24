@@ -433,6 +433,15 @@ func (d *MySQL) UpdateTranscripcioModeracio(id int, estat, motiu string, moderat
 func (d *MySQL) DeleteTranscripcioRaw(id int) error {
 	return d.help.deleteTranscripcioRaw(id)
 }
+func (d *MySQL) ListTranscripcionsRawPageStats(llibreID int) ([]TranscripcioRawPageStat, error) {
+	return d.help.listTranscripcionsRawPageStats(llibreID)
+}
+func (d *MySQL) UpdateTranscripcionsRawPageStat(stat *TranscripcioRawPageStat) error {
+	return d.help.updateTranscripcionsRawPageStat(stat)
+}
+func (d *MySQL) RecalcTranscripcionsRawPageStats(llibreID int) error {
+	return d.help.recalcTranscripcionsRawPageStats(llibreID)
+}
 
 func (d *MySQL) DeleteTranscripcionsByLlibre(llibreID int) error {
 	return d.help.deleteTranscripcionsByLlibre(llibreID)

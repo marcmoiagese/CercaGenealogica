@@ -120,16 +120,16 @@
                     <input id="pagina" name="pagina" type="text" value="{{ .Data.Llibre.Pagina }}">
                 </div>
                 <div class="grup-camp">
-                    <label for="indexacio_completa">
+                    <label class="checkbox-linia" for="indexacio_completa">
                         <input type="checkbox" id="indexacio_completa" name="indexacio_completa" value="1" {{ if .Data.Llibre.IndexacioCompleta }}checked{{ end }}>
-                        {{ t .Lang "books.form.indexed" }}
+                        <span>{{ t .Lang "books.form.indexed" }}</span>
                     </label>
                     <p class="camp-helper">{{ t .Lang "books.form.indexed.help" }}</p>
                 </div>
                 <div class="grup-camp">
-                    <label for="recalc_pagines">
+                    <label class="checkbox-linia" for="recalc_pagines">
                         <input type="checkbox" id="recalc_pagines" name="recalc_pagines" value="1">
-                        {{ t .Lang "books.form.recalc" }}
+                        <span>{{ t .Lang "books.form.recalc" }}</span>
                     </label>
                 </div>
                 <div class="form-accio">

@@ -358,6 +358,109 @@ body {
     overflow: auto;
 }
 
+.page-stats-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    margin-bottom: 12px;
+}
+
+.page-stats-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-stats-pagination {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-stats-jump {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-stats-jump input {
+    width: 140px;
+    padding: 0.35rem 0.5rem;
+}
+
+.page-stat-control select,
+.page-stat-control input[type="text"] {
+    padding: 0.35rem 0.5rem;
+    border-radius: 8px;
+    border: 1px solid var(--color-borda);
+    background: #fff;
+    font-size: 0.9rem;
+}
+
+.page-stat-control {
+    vertical-align: middle;
+}
+
+.page-stat-select {
+    min-width: 130px;
+}
+
+.page-stat-input {
+    width: 120px;
+}
+
+.page-stat-checkbox-cell {
+    text-align: center;
+}
+
+.page-stat-checkbox {
+    transform: scale(1.05);
+    cursor: pointer;
+}
+
+.page-stat-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.page-stat-actions .boto-secundari {
+    align-self: flex-start;
+}
+
+.page-stat-actions .icon-only {
+    padding: 6px 8px;
+    min-width: unset;
+}
+
+.page-stat-actions .icon-only span {
+    display: none;
+}
+
+.page-stat-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.badge-warning {
+    background: #f2c94c;
+    color: #1f2a30;
+}
+
+.badge-success {
+    background: #cfe8d6;
+    color: #1f4b2f;
+}
+
+.badge-muted {
+    background: #e9ecef;
+    color: #3a4a52;
+}
+
 .taula code {
     white-space: pre-wrap;
     word-break: break-word;
@@ -1032,3 +1135,21 @@ body {
     color: var(--secondary-color);
 }
 
+.checkbox-linia {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: 0.6rem;
+    font-size: 0.95rem;
+    color: var(--color-text);
+    line-height: 1.35;
+}
+
+.checkbox-linia input {
+    margin-top: 0.2rem;
+}
+
+.checkbox-linia span {
+    display: block;
+    line-height: 1.4;
+}

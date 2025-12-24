@@ -1,5 +1,7 @@
 # Exclou tots els fitxers .db
 /database.db
+/database.db-shm
+/database.db-wal
 
 # Exclou tots els fitxers Excel a la carpeta db
 /db/Index_llibres_Digitals.xlsx
@@ -25,3 +27,5 @@ coverage.out
 
 # Excloc gitignore
 .gitignore
+
+plantilla-temporal/

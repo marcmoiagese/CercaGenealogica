@@ -92,7 +92,15 @@ func (a *App) recalcLlibreIndexacioStats(llibreID int) (*db.LlibreIndexacioStats
 	if stats.Percentatge > 100 {
 		stats.Percentatge = 100
 	}
-	return stats, a.DB.UpsertLlibreIndexacioStats(stats)
+	if err := a.DB.UpsertLlibreIndexacioStats(stats); err != nil {
+		return stats, err
+	}
+	if llibre.IndexacioCompleta {
+		if err := a.DB.RecalcTranscripcionsRawPageStats(llibreID); err != nil {
+			Errorf("Error recalculant registres per pagina del llibre %d: %v", llibreID, err)
+		}
+	}
+	return stats, nil
 }
 
 func indexerContentFields(fields []indexerField) []indexerField {
