@@ -159,6 +159,32 @@ func main() {
 	http.HandleFunc("/ranking", applyMiddleware(app.Ranking, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/u/", applyMiddleware(app.PublicUserProfile, core.BlockIPs, core.RateLimit))
 
+	// Cognoms
+	http.HandleFunc("/cognoms", applyMiddleware(app.RequireLogin(app.CognomsList), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/cognoms/cerca", applyMiddleware(app.RequireLogin(app.SearchCognomsJSON), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/cognoms/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/cognoms/")
+		parts := strings.Split(strings.Trim(path, "/"), "/")
+		if len(parts) == 0 || parts[0] == "" {
+			http.NotFound(w, r)
+			return
+		}
+		if len(parts) >= 3 && parts[1] == "variants" && parts[2] == "suggest" && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.CognomSuggestVariant), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) == 2 && parts[1] == "mapa" && r.Method == http.MethodGet {
+			applyMiddleware(app.RequireLogin(app.CognomMapa), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) == 1 && r.Method == http.MethodGet {
+			applyMiddleware(app.RequireLogin(app.CognomDetall), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	http.HandleFunc("/api/cognoms/", applyMiddleware(app.RequireLogin(app.CognomHeatmapJSON), core.BlockIPs, core.RateLimit))
+
 	// Arxius (lectura per a tots els usuaris autenticats)
 	http.HandleFunc("/arxius", applyMiddleware(app.ListArxius, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/arxius/", applyMiddleware(app.ShowArxiu, core.BlockIPs, core.RateLimit))
@@ -336,6 +362,11 @@ func main() {
 	http.HandleFunc("/admin/politiques/assignar-grup", applyMiddleware(app.AdminAssignarPoliticaGrup, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/politiques/treure-grup", applyMiddleware(app.AdminTreurePoliticaGrup, core.BlockIPs, core.RateLimit))
 
+	// Usuaris (administració)
+	http.HandleFunc("/admin/usuaris", applyMiddleware(app.AdminListUsuaris, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/usuaris/actiu", applyMiddleware(app.AdminSetUserActive, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/usuaris/ban", applyMiddleware(app.AdminSetUserBanned, core.BlockIPs, core.RateLimit))
+
 	// Regles de punts
 	http.HandleFunc("/admin/punts/regles", applyMiddleware(app.AdminListPuntsRegles, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/punts/regles/new", applyMiddleware(app.AdminNewPuntsRegla, core.BlockIPs, core.RateLimit))
@@ -348,6 +379,10 @@ func main() {
 		}
 		http.NotFound(w, r)
 	})
+	// Cognoms import/statistics
+	http.HandleFunc("/admin/cognoms/import", applyMiddleware(app.AdminCognomsImport, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/cognoms/import/run", applyMiddleware(app.AdminCognomsImportRun, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/cognoms/stats/run", applyMiddleware(app.AdminCognomsStatsRun, core.BlockIPs, core.RateLimit))
 
 	// Moderació
 	http.HandleFunc("/moderacio", applyMiddleware(app.AdminModeracioList, core.BlockIPs, core.RateLimit))
@@ -437,12 +472,18 @@ func main() {
 			applyMiddleware(app.AdminUpdateLlibrePageStat, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/pagines"):
 			http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(extractID(r.URL.Path))+"/indexar", http.StatusSeeOther)
+		case strings.Contains(r.URL.Path, "/arxius/") && strings.HasSuffix(r.URL.Path, "/edit"):
+			applyMiddleware(app.AdminEditLlibreArxiuLinks, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/arxius/") && strings.HasSuffix(r.URL.Path, "/update"):
 			applyMiddleware(app.AdminUpdateLlibreArxiu, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/arxius/") && strings.HasSuffix(r.URL.Path, "/delete"):
 			applyMiddleware(app.AdminDeleteLlibreArxiu, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/arxius/add"):
 			applyMiddleware(app.AdminAddLlibreArxiu, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/urls/") && strings.HasSuffix(r.URL.Path, "/delete"):
+			applyMiddleware(app.AdminDeleteLlibreURL, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/urls/add"):
+			applyMiddleware(app.AdminAddLlibreURL, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/save"):
 			applyMiddleware(app.AdminSaveLlibre, core.BlockIPs, core.RateLimit)(w, r)
 		case r.URL.Path != "/documentals/llibres":
@@ -495,12 +536,18 @@ func main() {
 			applyMiddleware(app.AdminUpdateLlibrePageStat, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/pagines"):
 			http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(extractID(r.URL.Path))+"/indexar", http.StatusSeeOther)
+		case strings.Contains(r.URL.Path, "/arxius/") && strings.HasSuffix(r.URL.Path, "/edit"):
+			applyMiddleware(app.AdminEditLlibreArxiuLinks, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/arxius/") && strings.HasSuffix(r.URL.Path, "/update"):
 			applyMiddleware(app.AdminUpdateLlibreArxiu, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/arxius/") && strings.HasSuffix(r.URL.Path, "/delete"):
 			applyMiddleware(app.AdminDeleteLlibreArxiu, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/arxius/add"):
 			applyMiddleware(app.AdminAddLlibreArxiu, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/urls/") && strings.HasSuffix(r.URL.Path, "/delete"):
+			applyMiddleware(app.AdminDeleteLlibreURL, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/urls/add"):
+			applyMiddleware(app.AdminAddLlibreURL, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/save"):
 			applyMiddleware(app.AdminSaveLlibre, core.BlockIPs, core.RateLimit)(w, r)
 		case r.URL.Path != "/documentals/llibres":

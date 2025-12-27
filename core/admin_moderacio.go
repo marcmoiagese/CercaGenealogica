@@ -87,8 +87,12 @@ func (a *App) buildModeracioItems(lang string, page, perPage int) ([]moderacioIt
 	if rows, err := a.DB.ListArquebisbats(db.ArquebisbatFilter{Status: "pendent"}); err == nil {
 		ents = rows
 	}
+	variants := []db.CognomVariant{}
+	if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err == nil {
+		variants = rows
+	}
 
-	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents)
+	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents) + len(variants)
 	regTotal := 0
 	if total, err := a.DB.CountTranscripcionsRawGlobal(db.TranscripcioFilter{Status: "pendent"}); err == nil {
 		regTotal = total
@@ -218,6 +222,40 @@ func (a *App) buildModeracioItems(lang string, page, perPage int) ([]moderacioIt
 			CreatedAt: time.Time{},
 			Motiu:     motiu,
 			EditURL:   fmt.Sprintf("/territori/eclesiastic/%d/edit?return_to=/moderacio", row.ID),
+		})
+	}
+
+	cognomCache := map[int]string{}
+	for _, v := range variants {
+		created := ""
+		var createdAt time.Time
+		if v.CreatedAt.Valid {
+			created = v.CreatedAt.Time.Format("2006-01-02 15:04")
+			createdAt = v.CreatedAt.Time
+		}
+		autorNom, autorURL := autorFromID(v.CreatedBy)
+		forma := cognomCache[v.CognomID]
+		if forma == "" {
+			if c, err := a.DB.GetCognom(v.CognomID); err == nil && c != nil {
+				forma = c.Forma
+				cognomCache[v.CognomID] = forma
+			}
+		}
+		context := strings.TrimSpace(fmt.Sprintf("%s → %s", forma, v.Variant))
+		if context == "" {
+			context = v.Variant
+		}
+		appendIfVisible(moderacioItem{
+			ID:        v.ID,
+			Type:      "cognom_variant",
+			Nom:       v.Variant,
+			Context:   context,
+			Autor:     autorNom,
+			AutorURL:  autorURL,
+			Created:   created,
+			CreatedAt: createdAt,
+			Motiu:     v.ModeracioMotiu,
+			EditURL:   fmt.Sprintf("/cognoms/%d", v.CognomID),
 		})
 	}
 
@@ -449,7 +487,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if scope == "all" {
-		types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "registre"}
+		types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "registre", "cognom_variant"}
 		if bulkType != "" && bulkType != "all" {
 			types = []string{bulkType}
 		}
@@ -497,6 +535,14 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 				}
 			case "eclesiastic":
 				if rows, err := a.DB.ListArquebisbats(db.ArquebisbatFilter{Status: "pendent"}); err == nil {
+					for _, row := range rows {
+						applyAction(objType, row.ID)
+					}
+				} else {
+					errCount++
+				}
+			case "cognom_variant":
+				if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err == nil {
 					for _, row := range rows {
 						applyAction(objType, row.ID)
 					}
@@ -638,6 +684,8 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.DB.UpdateArquebisbatModeracio(id, estat, motiu, moderatorID)
 	case "registre":
 		return a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID)
+	case "cognom_variant":
+		return a.DB.UpdateCognomVariantModeracio(id, estat, motiu, moderatorID)
 	default:
 		return fmt.Errorf("tipus desconegut")
 	}

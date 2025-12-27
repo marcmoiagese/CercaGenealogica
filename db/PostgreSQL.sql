@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS usuaris (
     data_creacio TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     token_activacio TEXT,
     expira_token TIMESTAMP WITHOUT TIME ZONE,
-    actiu BOOLEAN DEFAULT TRUE
+    actiu BOOLEAN DEFAULT TRUE,
+    banned BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS grups (
@@ -444,6 +445,60 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw_canvis (
   changed_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Cognoms normalitzats
+CREATE TABLE IF NOT EXISTS cognoms (
+  id SERIAL PRIMARY KEY,
+  forma TEXT NOT NULL,
+  key TEXT NOT NULL UNIQUE,
+  origen TEXT,
+  notes TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_cognoms_forma ON cognoms(forma);
+CREATE INDEX IF NOT EXISTS idx_cognoms_updated_at ON cognoms(updated_at);
+
+-- Variants de cognom (moderables)
+CREATE TABLE IF NOT EXISTS cognom_variants (
+  id SERIAL PRIMARY KEY,
+  cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
+  variant TEXT NOT NULL,
+  key TEXT NOT NULL,
+  llengua TEXT,
+  any_inici INTEGER,
+  any_fi INTEGER,
+  pais_id INTEGER REFERENCES paisos(id) ON DELETE SET NULL,
+  municipi_id INTEGER REFERENCES municipis(id) ON DELETE SET NULL,
+  moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP WITHOUT TIME ZONE,
+  moderation_notes TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (cognom_id, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cognom_variants_status ON cognom_variants(cognom_id, moderation_status);
+CREATE INDEX IF NOT EXISTS idx_cognom_variants_key ON cognom_variants(key);
+
+-- Estadístiques pre-agregades per cognom/municipi/any
+CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_any (
+  cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
+  municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+  any_doc INTEGER NOT NULL,
+  freq INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id, municipi_id, any_doc)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cognoms_freq_cognom_any
+  ON cognoms_freq_municipi_any(cognom_id, any_doc);
+CREATE INDEX IF NOT EXISTS idx_cognoms_freq_municipi_any
+  ON cognoms_freq_municipi_any(municipi_id, any_doc);
+
 CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_llibre_pagina
   ON transcripcions_raw(llibre_id, pagina_id, posicio_pagina);
 CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_llibre_tipus_any
@@ -615,6 +670,22 @@ CREATE INDEX IF NOT EXISTS idx_arxius_llibres_arxiu
 
 CREATE INDEX IF NOT EXISTS idx_arxius_llibres_llibre
     ON arxius_llibres(llibre_id);
+
+-- Enllaços alternatius per llibres
+CREATE TABLE IF NOT EXISTS llibres_urls (
+  id SERIAL PRIMARY KEY,
+  llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,
+  arxiu_id INTEGER REFERENCES arxius(id) ON DELETE SET NULL,
+  url TEXT NOT NULL,
+  tipus TEXT,
+  descripcio TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_llibres_urls_llibre
+    ON llibres_urls(llibre_id);
+CREATE INDEX IF NOT EXISTS idx_llibres_urls_arxiu
+    ON llibres_urls(arxiu_id);
 
 CREATE INDEX IF NOT EXISTS idx_llibre_pagines_estat
     ON llibre_pagines(llibre_id, estat);

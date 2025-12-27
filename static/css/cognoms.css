@@ -1,0 +1,133 @@
+.cognoms-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.cognoms-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+}
+
+.cognoms-panel {
+    border: 1px solid #e6e6e6;
+    border-radius: 12px;
+    padding: 1rem;
+    background: #fafbfc;
+}
+
+.cognoms-panel h2,
+.cognoms-panel h3 {
+    margin-top: 0;
+}
+
+.cognoms-variants-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.cognoms-variant {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.cognoms-variant .variant-name {
+    font-weight: 600;
+}
+
+.cognoms-variant.pendent .variant-name {
+    color: #7c2d12;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    background: #eef2f7;
+    color: #1f2a30;
+    font-size: 0.8rem;
+}
+
+.badge.warning {
+    background: #f2c94c;
+    color: #1f2a30;
+}
+
+.alert {
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+}
+
+.alert-success {
+    background: #e8f6ee;
+    color: #256d3b;
+}
+
+.alert-error {
+    background: #fdecee;
+    color: #9f1c1c;
+}
+
+.cognoms-suggest-form {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.cognoms-suggest-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+}
+
+.cognoms-map-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: flex-end;
+    margin-bottom: 0.75rem;
+}
+
+.cognoms-range label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--color-text-clar);
+    margin-bottom: 0.25rem;
+}
+
+.cognoms-range input {
+    width: 100%;
+}
+
+.cognoms-slider {
+    margin-bottom: 1rem;
+}
+
+.cognoms-map {
+    height: 320px;
+    border-radius: 12px;
+    border: 1px solid #e6e6e6;
+    overflow: hidden;
+}
+
+.cognoms-map .leaflet-overlay-pane,
+.cognoms-map .leaflet-marker-pane {
+    z-index: 420;
+}
+
+.cognoms-map .leaflet-heatmap-layer {
+    opacity: 0.85;
+}
+
+.cognom-link {
+    font-weight: 600;
+}

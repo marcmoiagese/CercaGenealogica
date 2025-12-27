@@ -1,0 +1,181 @@
+{{ define "admin-usuaris-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.users.title" }}</title>
+    {{ template "styles-private" . }}
+    <style>
+        .user-meta{display:flex;flex-direction:column;gap:2px}
+        .user-meta small{color:#777}
+        .user-status{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+        .user-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+        .user-actions form{margin:0}
+        .user-actions button{white-space:nowrap}
+        .admin-range{margin:8px 0 0;color:#666}
+        .form-filtres{margin:12px 0 18px}
+        .form-filtres .fila-camp{min-width:160px}
+        .user-self{display:inline-flex;gap:6px;align-items:center}
+        .user-self .boto-secundari{opacity:.5;cursor:not-allowed}
+    </style>
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header card-header-flex">
+                <h1>{{ t .Lang "admin.users.title" }}</h1>
+            </header>
+            {{ if .Data.Msg }}
+            <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
+            {{ end }}
+            <form class="form-filtres" method="get" action="/admin/usuaris">
+                <div class="fila-camp">
+                    <label for="filtre-q">{{ t .Lang "admin.users.filter.search" }}</label>
+                    <input id="filtre-q" type="text" name="q" value="{{ .Data.FilterQuery }}" placeholder="{{ t .Lang "admin.users.filter.search.placeholder" }}">
+                </div>
+                <div class="fila-camp">
+                    <label for="filtre-status">{{ t .Lang "admin.users.filter.status" }}</label>
+                    <select id="filtre-status" name="status">
+                        <option value="" {{ if eq .Data.FilterStatus "" }}selected{{ end }}>{{ t .Lang "common.all" }}</option>
+                        <option value="active" {{ if eq .Data.FilterStatus "active" }}selected{{ end }}>{{ t .Lang "common.active" }}</option>
+                        <option value="inactive" {{ if eq .Data.FilterStatus "inactive" }}selected{{ end }}>{{ t .Lang "common.inactive" }}</option>
+                    </select>
+                </div>
+                <div class="fila-camp">
+                    <label for="filtre-banned">{{ t .Lang "admin.users.filter.banned" }}</label>
+                    <select id="filtre-banned" name="banned">
+                        <option value="" {{ if eq .Data.FilterBanned "" }}selected{{ end }}>{{ t .Lang "common.all" }}</option>
+                        <option value="yes" {{ if eq .Data.FilterBanned "yes" }}selected{{ end }}>{{ t .Lang "admin.users.filter.banned.yes" }}</option>
+                        <option value="no" {{ if eq .Data.FilterBanned "no" }}selected{{ end }}>{{ t .Lang "admin.users.filter.banned.no" }}</option>
+                    </select>
+                </div>
+                <div class="fila-camp">
+                    <label for="filtre-perpage">{{ t .Lang "admin.users.filter.per_page" }}</label>
+                    <select id="filtre-perpage" name="per_page">
+                        <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
+                        <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
+                        <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
+                        <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
+                    </select>
+                </div>
+                <div class="fila-camp">
+                    <label>&nbsp;</label>
+                    <button type="submit" class="boto-primari pequeno"><i class="fas fa-filter"></i> <span>{{ t .Lang "common.apply" }}</span></button>
+                </div>
+                <input type="hidden" name="page" value="1">
+            </form>
+            {{ if gt .Data.Total 0 }}
+            <p class="admin-range">{{ t .Lang "admin.users.range" (printf "%d" .Data.RangeStart) (printf "%d" .Data.RangeEnd) (printf "%d" .Data.Total) }}</p>
+            {{ end }}
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "admin.users.table.user" }}</th>
+                            <th>{{ t .Lang "admin.users.table.name" }}</th>
+                            <th>{{ t .Lang "admin.users.table.email" }}</th>
+                            <th>{{ t .Lang "admin.users.table.created" }}</th>
+                            <th>{{ t .Lang "admin.users.table.last_login" }}</th>
+                            <th>{{ t .Lang "admin.users.table.status" }}</th>
+                            <th>{{ t .Lang "admin.users.table.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Users }}
+                        <tr>
+                            <td>
+                                <div class="user-meta">
+                                    <strong>{{ .Usuari }}</strong>
+                                    <small>ID {{ .ID }}</small>
+                                </div>
+                            </td>
+                            <td>
+                                {{ if or .Nom .Cognoms }}
+                                    {{ .Nom }} {{ .Cognoms }}
+                                {{ else }}
+                                    —
+                                {{ end }}
+                            </td>
+                            <td>{{ if .Email }}{{ .Email }}{{ else }}—{{ end }}</td>
+                            <td>{{ if .CreatedAt }}{{ .CreatedAt }}{{ else }}—{{ end }}</td>
+                            <td>
+                                {{ if .LastLogin }}
+                                    {{ .LastLogin }}
+                                {{ else }}
+                                    {{ t $.Lang "admin.users.last_login.never" }}
+                                {{ end }}
+                            </td>
+                            <td>
+                                <div class="user-status">
+                                    {{ if .Active }}
+                                    <span class="badge verd">{{ t $.Lang "common.active" }}</span>
+                                    {{ else }}
+                                    <span class="badge gris">{{ t $.Lang "common.inactive" }}</span>
+                                    {{ end }}
+                                    {{ if .Banned }}
+                                    <span class="badge vermell">{{ t $.Lang "admin.users.status.banned" }}</span>
+                                    {{ end }}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="user-actions">
+                                    {{ $isSelf := eq .ID $.Data.CurrentUserID }}
+                                    {{ if not $isSelf }}
+                                    <form method="post" action="/admin/usuaris/actiu">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <input type="hidden" name="user_id" value="{{ .ID }}">
+                                        <input type="hidden" name="active" value="{{ if .Active }}0{{ else }}1{{ end }}">
+                                        <input type="hidden" name="return_to" value="{{ $.Data.ReturnTo }}">
+                                        <button type="submit" class="boto-secundari">
+                                            {{ if .Active }}{{ t $.Lang "admin.users.action.deactivate" }}{{ else }}{{ t $.Lang "admin.users.action.activate" }}{{ end }}
+                                        </button>
+                                    </form>
+                                    <form method="post" action="/admin/usuaris/ban">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <input type="hidden" name="user_id" value="{{ .ID }}">
+                                        <input type="hidden" name="banned" value="{{ if .Banned }}0{{ else }}1{{ end }}">
+                                        <input type="hidden" name="return_to" value="{{ $.Data.ReturnTo }}">
+                                        <button type="submit" class="{{ if .Banned }}boto-secundari{{ else }}boto-perill{{ end }}">
+                                            {{ if .Banned }}{{ t $.Lang "admin.users.action.unban" }}{{ else }}{{ t $.Lang "admin.users.action.ban" }}{{ end }}
+                                        </button>
+                                    </form>
+                                    {{ else }}
+                                    <span class="user-self">
+                                        <button type="button" class="boto-secundari" disabled title="{{ t $.Lang "admin.users.action.self" }}">{{ t $.Lang "admin.users.action.deactivate" }}</button>
+                                        <button type="button" class="boto-secundari" disabled title="{{ t $.Lang "admin.users.action.self" }}">{{ t $.Lang "admin.users.action.ban" }}</button>
+                                    </span>
+                                    {{ end }}
+                                    {{ if $.Data.CanManagePolicies }}
+                                    <a class="boto-secundari" href="/admin/politiques/assignacions?user_id={{ .ID }}">{{ t $.Lang "admin.users.action.policies" }}</a>
+                                    {{ end }}
+                                </div>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="7">{{ t .Lang "common.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+            {{ if gt .Data.TotalPages 1 }}
+            <div class="paginacio">
+                <div class="paginacio-cont">
+                    {{ if .Data.HasPrev }}
+                    <a class="boto-secundari" href="/admin/usuaris?page={{ .Data.PrevPage }}{{ if .Data.PageBase }}&{{ .Data.PageBase }}{{ end }}">{{ t .Lang "common.prev" }}</a>
+                    {{ end }}
+                    <span class="paginacio-info">{{ t .Lang "points.ranking.pageInfo" (printf "%d" .Data.Page) (printf "%d" .Data.TotalPages) }}</span>
+                    {{ if .Data.HasNext }}
+                    <a class="boto-secundari" href="/admin/usuaris?page={{ .Data.NextPage }}{{ if .Data.PageBase }}&{{ .Data.PageBase }}{{ end }}">{{ t .Lang "common.next" }}</a>
+                    {{ end }}
+                </div>
+            </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

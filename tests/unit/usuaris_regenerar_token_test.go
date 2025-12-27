@@ -309,6 +309,11 @@ func (f *fakeDB) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride
 	return nil
 }
 func (f *fakeDB) DeleteArxiuLlibre(arxiuID, llibreID int) error { return nil }
+func (f *fakeDB) ListLlibreURLs(llibreID int) ([]db.LlibreURL, error) {
+	return nil, nil
+}
+func (f *fakeDB) AddLlibreURL(link *db.LlibreURL) error { return nil }
+func (f *fakeDB) DeleteLlibreURL(id int) error          { return nil }
 func (f *fakeDB) SearchLlibresSimple(q string, limit int) ([]db.LlibreSimple, error) {
 	return nil, nil
 }
@@ -374,6 +379,9 @@ func (f *fakeDB) RemoveGroupPolitica(groupID, politicaID int) error      { retur
 func (f *fakeDB) GetEffectivePoliticaPerms(userID int) (db.PolicyPermissions, error) {
 	return db.PolicyPermissions{}, nil
 }
+func (f *fakeDB) ListUsersAdmin() ([]db.UserAdminRow, error) { return nil, nil }
+func (f *fakeDB) SetUserActive(userID int, active bool) error { return nil }
+func (f *fakeDB) SetUserBanned(userID int, banned bool) error { return nil }
 
 // Punts i activitat (no-op)
 func (f *fakeDB) ListPointsRules() ([]db.PointsRule, error) { return nil, nil }
@@ -456,6 +464,9 @@ func (f *fakeDB) DeleteTranscripcioRaw(id int) error {
 func (f *fakeDB) RecalcTranscripcionsRawPageStats(llibreID int) error {
 	return nil
 }
+func (f *fakeDB) SetTranscripcionsRawPageStatsIndexacio(llibreID int, value int) error {
+	return nil
+}
 func (f *fakeDB) ListTranscripcionsRawPageStats(llibreID int) ([]db.TranscripcioRawPageStat, error) {
 	return nil, nil
 }
@@ -528,6 +539,38 @@ func (f *fakeDB) GetLlibresIndexacioStats(ids []int) (map[int]db.LlibreIndexacio
 }
 func (f *fakeDB) UpsertLlibreIndexacioStats(stats *db.LlibreIndexacioStats) error {
 	return nil
+}
+func (f *fakeDB) ListCognoms(q string, limit, offset int) ([]db.Cognom, error) {
+	return nil, nil
+}
+func (f *fakeDB) GetCognom(id int) (*db.Cognom, error) { return nil, nil }
+func (f *fakeDB) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) ListCognomVariants(filter db.CognomVariantFilter) ([]db.CognomVariant, error) {
+	return nil, nil
+}
+func (f *fakeDB) ResolveCognomPublicatByForma(forma string) (int, string, bool, error) {
+	return 0, "", false, nil
+}
+func (f *fakeDB) ListCognomFormesPublicades(cognomID int) ([]string, error) {
+	return nil, nil
+}
+func (f *fakeDB) CreateCognomVariant(v *db.CognomVariant) (int, error) { return 0, nil }
+func (f *fakeDB) UpdateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDB) UpsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error {
+	return nil
+}
+func (f *fakeDB) QueryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]db.CognomFreqRow, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListCognomImportRows(limit, offset int) ([]db.CognomImportRow, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListCognomStatsRows(limit, offset int) ([]db.CognomStatsRow, error) {
+	return nil, nil
 }
 
 // Helper per crear una App amb fakeDB

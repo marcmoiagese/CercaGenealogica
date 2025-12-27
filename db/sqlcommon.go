@@ -67,6 +67,30 @@ func parseBoolValue(val interface{}) bool {
 	}
 }
 
+func dbTimeString(val interface{}) string {
+	if val == nil {
+		return ""
+	}
+	switch v := val.(type) {
+	case time.Time:
+		if v.IsZero() {
+			return ""
+		}
+		return v.Format("2006-01-02 15:04:05")
+	case sql.NullTime:
+		if !v.Valid {
+			return ""
+		}
+		return v.Time.Format("2006-01-02 15:04:05")
+	case []byte:
+		return strings.TrimSpace(string(v))
+	case string:
+		return strings.TrimSpace(v)
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
 type sqlHelper struct {
 	db     *sql.DB
 	style  string
@@ -172,6 +196,7 @@ func (h sqlHelper) ensureDefaultPointsRules() error {
 		{Code: "eclesiastic_create", Name: "Crear entitat eclesiàstica", Description: "Alta d'entitat eclesiàstica", Points: 2, Active: true},
 		{Code: "eclesiastic_update", Name: "Editar entitat eclesiàstica", Description: "Edició d'entitat eclesiàstica", Points: 1, Active: true},
 		{Code: "llibre_page_stats_update", Name: "Registres per pàgina", Description: "Actualitzar registres per pàgina d'un llibre", Points: 1, Active: true},
+		{Code: "cognom_variant_create", Name: "Proposar variant de cognom", Description: "Aportar una nova variació (pendent de moderació)", Points: 1, Active: true},
 	}
 	for _, r := range defaults {
 		stmt := `INSERT INTO punts_regles (codi, nom, descripcio, punts, actiu, data_creacio) VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)`
@@ -1517,6 +1542,9 @@ func (h sqlHelper) ensureUserExtraColumns() {
 		if !h.columnExists("usuaris", "spoken_langs") {
 			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN spoken_langs TEXT")
 		}
+		if !h.columnExists("usuaris", "banned") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN banned BOOLEAN DEFAULT 0")
+		}
 	case "postgres":
 		if !h.columnExists("usuaris", "address") {
 			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS address TEXT")
@@ -1536,6 +1564,9 @@ func (h sqlHelper) ensureUserExtraColumns() {
 		if !h.columnExists("usuaris", "spoken_langs") {
 			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS spoken_langs TEXT")
 		}
+		if !h.columnExists("usuaris", "banned") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS banned BOOLEAN DEFAULT FALSE")
+		}
 	default: // sqlite
 		if !h.columnExists("usuaris", "address") {
 			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN address TEXT")
@@ -1554,6 +1585,9 @@ func (h sqlHelper) ensureUserExtraColumns() {
 		}
 		if !h.columnExists("usuaris", "spoken_langs") {
 			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN spoken_langs TEXT")
+		}
+		if !h.columnExists("usuaris", "banned") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN banned INTEGER NOT NULL DEFAULT 0")
 		}
 	}
 	for _, stmt := range stmts {
@@ -1782,7 +1816,7 @@ func (h sqlHelper) authenticateUser(usernameOrEmail, password string) (*User, er
 	query := formatPlaceholders(h.style, `
         SELECT id, usuari, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, address, employment_status, profession, phone, preferred_lang, spoken_langs, actiu 
         FROM usuaris 
-        WHERE (usuari = ? OR correu = ?) AND actiu = 1`)
+        WHERE (usuari = ? OR correu = ?) AND actiu = 1 AND (banned = 0 OR banned IS NULL)`)
 
 	row := h.db.QueryRow(query, usernameOrEmail, usernameOrEmail)
 
@@ -1808,7 +1842,7 @@ func (h sqlHelper) getSessionUser(sessionID string) (*User, error) {
         SELECT u.id, u.usuari, u.nom, u.cognoms, u.correu, u.contrasenya, u.data_naixement, u.pais, u.estat, u.provincia, u.poblacio, u.codi_postal, u.address, u.employment_status, u.profession, u.phone, u.preferred_lang, u.spoken_langs, u.data_creacio, u.actiu
         FROM usuaris u
         INNER JOIN sessions s ON u.id = s.usuari_id
-        WHERE s.token_hash = ? AND s.revocat = 0`)
+        WHERE s.token_hash = ? AND s.revocat = 0 AND u.actiu = 1 AND (u.banned = 0 OR u.banned IS NULL)`)
 
 	row := h.db.QueryRow(query, sessionID)
 
@@ -1932,6 +1966,211 @@ func (h sqlHelper) updateUserProfile(u *User) error {
 func (h sqlHelper) updateUserEmail(userID int, newEmail string) error {
 	stmt := formatPlaceholders(h.style, `UPDATE usuaris SET correu = ? WHERE id = ?`)
 	_, err := h.db.Exec(stmt, newEmail, userID)
+	return err
+}
+
+func (h sqlHelper) listUsersAdmin() ([]UserAdminRow, error) {
+	h.ensureUserExtraColumns()
+	query := `
+        SELECT u.id, u.usuari, u.nom, u.cognoms, u.correu, u.data_creacio,
+               CASE WHEN u.actiu THEN 1 ELSE 0 END AS actiu_val,
+               CASE WHEN u.banned THEN 1 ELSE 0 END AS banned_val,
+               MAX(COALESCE(sal.ts, s.creat)) AS last_login
+        FROM usuaris u
+        LEFT JOIN sessions s ON s.usuari_id = u.id
+        LEFT JOIN session_access_log sal ON sal.session_id = s.id
+        GROUP BY u.id, u.usuari, u.nom, u.cognoms, u.correu, u.data_creacio, u.actiu, u.banned
+        ORDER BY u.data_creacio DESC, u.id DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []UserAdminRow
+	for rows.Next() {
+		var row UserAdminRow
+		var createdRaw interface{}
+		var lastRaw interface{}
+		var actiuVal int
+		var bannedVal int
+		if err := rows.Scan(&row.ID, &row.Usuari, &row.Nom, &row.Cognoms, &row.Email, &createdRaw, &actiuVal, &bannedVal, &lastRaw); err != nil {
+			return nil, err
+		}
+		row.CreatedAt = dbTimeString(createdRaw)
+		row.LastLogin = dbTimeString(lastRaw)
+		row.Active = actiuVal == 1
+		row.Banned = bannedVal == 1
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listUsersAdminFiltered(filter UserAdminFilter) ([]UserAdminRow, error) {
+	h.ensureUserExtraColumns()
+	clauses := []string{"1=1"}
+	args := []interface{}{}
+	if filter.UserID > 0 {
+		clauses = append(clauses, "u.id = ?")
+		args = append(args, filter.UserID)
+	}
+	if q := strings.TrimSpace(filter.Query); q != "" {
+		like := "%" + strings.ToLower(q) + "%"
+		idExpr := "CAST(u.id AS TEXT)"
+		if h.style == "mysql" {
+			idExpr = "CAST(u.id AS CHAR)"
+		}
+		clauses = append(clauses, "(LOWER(COALESCE(u.usuari,'')) LIKE ? OR LOWER(COALESCE(u.nom,'')) LIKE ? OR LOWER(COALESCE(u.cognoms,'')) LIKE ? OR LOWER(COALESCE(u.correu,'')) LIKE ? OR "+idExpr+" LIKE ?)")
+		args = append(args, like, like, like, like, like)
+	}
+	if filter.Active != nil {
+		clauses = append(clauses, "u.actiu = ?")
+		if h.style == "postgres" {
+			args = append(args, *filter.Active)
+		} else {
+			if *filter.Active {
+				args = append(args, 1)
+			} else {
+				args = append(args, 0)
+			}
+		}
+	}
+	if filter.Banned != nil {
+		clauses = append(clauses, "u.banned = ?")
+		if h.style == "postgres" {
+			args = append(args, *filter.Banned)
+		} else {
+			if *filter.Banned {
+				args = append(args, 1)
+			} else {
+				args = append(args, 0)
+			}
+		}
+	}
+	limit := filter.Limit
+	offset := filter.Offset
+	if limit <= 0 {
+		limit = 25
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	args = append(args, limit, offset)
+	query := `
+        SELECT u.id, u.usuari, u.nom, u.cognoms, u.correu, u.data_creacio,
+               CASE WHEN u.actiu THEN 1 ELSE 0 END AS actiu_val,
+               CASE WHEN u.banned THEN 1 ELSE 0 END AS banned_val,
+               last.last_login
+        FROM usuaris u
+        LEFT JOIN (
+            SELECT s.usuari_id AS uid, MAX(COALESCE(sal.ts, s.creat)) AS last_login
+            FROM sessions s
+            LEFT JOIN session_access_log sal ON sal.session_id = s.id
+            GROUP BY s.usuari_id
+        ) last ON last.uid = u.id
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        ORDER BY u.data_creacio DESC, u.id DESC
+        LIMIT ? OFFSET ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []UserAdminRow
+	for rows.Next() {
+		var row UserAdminRow
+		var createdRaw interface{}
+		var lastRaw interface{}
+		var actiuVal int
+		var bannedVal int
+		if err := rows.Scan(&row.ID, &row.Usuari, &row.Nom, &row.Cognoms, &row.Email, &createdRaw, &actiuVal, &bannedVal, &lastRaw); err != nil {
+			return nil, err
+		}
+		row.CreatedAt = dbTimeString(createdRaw)
+		row.LastLogin = dbTimeString(lastRaw)
+		row.Active = actiuVal == 1
+		row.Banned = bannedVal == 1
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) countUsersAdmin(filter UserAdminFilter) (int, error) {
+	h.ensureUserExtraColumns()
+	clauses := []string{"1=1"}
+	args := []interface{}{}
+	if filter.UserID > 0 {
+		clauses = append(clauses, "u.id = ?")
+		args = append(args, filter.UserID)
+	}
+	if q := strings.TrimSpace(filter.Query); q != "" {
+		like := "%" + strings.ToLower(q) + "%"
+		idExpr := "CAST(u.id AS TEXT)"
+		if h.style == "mysql" {
+			idExpr = "CAST(u.id AS CHAR)"
+		}
+		clauses = append(clauses, "(LOWER(COALESCE(u.usuari,'')) LIKE ? OR LOWER(COALESCE(u.nom,'')) LIKE ? OR LOWER(COALESCE(u.cognoms,'')) LIKE ? OR LOWER(COALESCE(u.correu,'')) LIKE ? OR "+idExpr+" LIKE ?)")
+		args = append(args, like, like, like, like, like)
+	}
+	if filter.Active != nil {
+		clauses = append(clauses, "u.actiu = ?")
+		if h.style == "postgres" {
+			args = append(args, *filter.Active)
+		} else {
+			if *filter.Active {
+				args = append(args, 1)
+			} else {
+				args = append(args, 0)
+			}
+		}
+	}
+	if filter.Banned != nil {
+		clauses = append(clauses, "u.banned = ?")
+		if h.style == "postgres" {
+			args = append(args, *filter.Banned)
+		} else {
+			if *filter.Banned {
+				args = append(args, 1)
+			} else {
+				args = append(args, 0)
+			}
+		}
+	}
+	query := `SELECT COUNT(*) FROM usuaris u WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) setUserActive(userID int, active bool) error {
+	stmt := formatPlaceholders(h.style, `UPDATE usuaris SET actiu = ? WHERE id = ?`)
+	if h.style == "postgres" {
+		_, err := h.db.Exec(stmt, active, userID)
+		return err
+	}
+	val := 0
+	if active {
+		val = 1
+	}
+	_, err := h.db.Exec(stmt, val, userID)
+	return err
+}
+
+func (h sqlHelper) setUserBanned(userID int, banned bool) error {
+	stmt := formatPlaceholders(h.style, `UPDATE usuaris SET banned = ? WHERE id = ?`)
+	if h.style == "postgres" {
+		_, err := h.db.Exec(stmt, banned, userID)
+		return err
+	}
+	val := 0
+	if banned {
+		val = 1
+	}
+	_, err := h.db.Exec(stmt, val, userID)
 	return err
 }
 
@@ -2345,12 +2584,17 @@ func (h sqlHelper) listArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
 
 func (h sqlHelper) listLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
 	query := `
-        SELECT al.arxiu_id, al.llibre_id, al.signatura, al.url_override,
-               a.nom as arxiu_nom, m.nom as municipi
+        SELECT al.arxiu_id,
+               al.llibre_id,
+               MAX(al.signatura) as signatura,
+               MAX(al.url_override) as url_override,
+               a.nom as arxiu_nom,
+               m.nom as municipi
         FROM arxius_llibres al
         INNER JOIN arxius a ON a.id = al.arxiu_id
         LEFT JOIN municipis m ON m.id = a.municipi_id
         WHERE al.llibre_id = ?
+        GROUP BY al.arxiu_id, al.llibre_id, a.nom, m.nom
         ORDER BY a.nom`
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, llibreID)
@@ -2382,6 +2626,45 @@ func (h sqlHelper) updateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverri
         UPDATE arxius_llibres SET signatura = ?, url_override = ?
         WHERE arxiu_id = ? AND llibre_id = ?`)
 	_, err := h.db.Exec(stmt, signatura, urlOverride, arxiuID, llibreID)
+	return err
+}
+
+func (h sqlHelper) listLlibreURLs(llibreID int) ([]LlibreURL, error) {
+	query := `
+        SELECT lu.id, lu.llibre_id, lu.arxiu_id, lu.url, lu.tipus, lu.descripcio,
+               lu.created_by, lu.created_at, a.nom as arxiu_nom
+        FROM llibres_urls lu
+        LEFT JOIN arxius a ON a.id = lu.arxiu_id
+        WHERE lu.llibre_id = ?
+        ORDER BY lu.id DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, llibreID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []LlibreURL
+	for rows.Next() {
+		var d LlibreURL
+		if err := rows.Scan(&d.ID, &d.LlibreID, &d.ArxiuID, &d.URL, &d.Tipus, &d.Descripcio, &d.CreatedBy, &d.CreatedAt, &d.ArxiuNom); err != nil {
+			return nil, err
+		}
+		res = append(res, d)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) addLlibreURL(link *LlibreURL) error {
+	stmt := formatPlaceholders(h.style, `
+        INSERT INTO llibres_urls (llibre_id, arxiu_id, url, tipus, descripcio, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, `+h.nowFun+`)`)
+	_, err := h.db.Exec(stmt, link.LlibreID, link.ArxiuID, link.URL, link.Tipus, link.Descripcio, link.CreatedBy)
+	return err
+}
+
+func (h sqlHelper) deleteLlibreURL(id int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM llibres_urls WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
 	return err
 }
 
@@ -2918,6 +3201,15 @@ func (h sqlHelper) recalcTranscripcionsRawPageStats(llibreID int) error {
 	return err
 }
 
+func (h sqlHelper) setTranscripcionsRawPageStatsIndexacio(llibreID int, value int) error {
+	query := `UPDATE transcripcions_raw_page_stats
+        SET indexacio_completa = ?, computed_at = ` + h.nowFun + `
+        WHERE llibre_id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, value, llibreID)
+	return err
+}
+
 func (h sqlHelper) listTranscripcionsRawPageStats(llibreID int) ([]TranscripcioRawPageStat, error) {
 	query := `
         SELECT id, llibre_id, pagina_id, num_pagina_text,
@@ -2966,6 +3258,37 @@ func (h sqlHelper) updateTranscripcionsRawPageStat(stat *TranscripcioRawPageStat
             INSERT INTO transcripcions_raw_page_stats
                 (llibre_id, pagina_id, num_pagina_text, tipus_pagina, exclosa, indexacio_completa, duplicada_de, total_registres, computed_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `)`
+		switch h.style {
+		case "mysql":
+			query += `
+            ON DUPLICATE KEY UPDATE
+                tipus_pagina = VALUES(tipus_pagina),
+                exclosa = VALUES(exclosa),
+                indexacio_completa = VALUES(indexacio_completa),
+                duplicada_de = VALUES(duplicada_de),
+                total_registres = VALUES(total_registres),
+                computed_at = VALUES(computed_at)`
+		case "postgres":
+			query += `
+            ON CONFLICT (llibre_id, pagina_id, num_pagina_text)
+            DO UPDATE SET
+                tipus_pagina = EXCLUDED.tipus_pagina,
+                exclosa = EXCLUDED.exclosa,
+                indexacio_completa = EXCLUDED.indexacio_completa,
+                duplicada_de = EXCLUDED.duplicada_de,
+                total_registres = EXCLUDED.total_registres,
+                computed_at = EXCLUDED.computed_at`
+		default:
+			query += `
+            ON CONFLICT (llibre_id, pagina_id, num_pagina_text)
+            DO UPDATE SET
+                tipus_pagina = excluded.tipus_pagina,
+                exclosa = excluded.exclosa,
+                indexacio_completa = excluded.indexacio_completa,
+                duplicada_de = excluded.duplicada_de,
+                total_registres = excluded.total_registres,
+                computed_at = excluded.computed_at`
+		}
 		query = formatPlaceholders(h.style, query)
 		_, err := h.db.Exec(query, stat.LlibreID, stat.PaginaID, stat.NumPaginaText, stat.TipusPagina, stat.Exclosa, stat.IndexacioCompleta, stat.DuplicadaDe, stat.TotalRegistres)
 		return err
@@ -3345,10 +3668,20 @@ func (h sqlHelper) searchPersones(f PersonaSearchFilter) ([]PersonaSearchResult,
 	if h.style == "postgres" {
 		likeOp = "ILIKE"
 	}
+	expandedClause, expandedArgs := buildExpandedCognomClause(likeOp, f.UseCognomDictionary, f.ExpandedCognoms)
 	if strings.TrimSpace(f.Query) != "" {
 		q := "%" + strings.TrimSpace(f.Query) + "%"
-		where = append(where, "(nom "+likeOp+" ? OR cognom1 "+likeOp+" ? OR cognom2 "+likeOp+" ? OR nom_complet "+likeOp+" ?)")
-		args = append(args, q, q, q, q)
+		queryClause := "(nom " + likeOp + " ? OR cognom1 " + likeOp + " ? OR cognom2 " + likeOp + " ? OR nom_complet " + likeOp + " ?)"
+		queryArgs := []interface{}{q, q, q, q}
+		if expandedClause != "" {
+			queryClause = "(" + queryClause + " OR " + expandedClause + ")"
+			queryArgs = append(queryArgs, expandedArgs...)
+		}
+		where = append(where, queryClause)
+		args = append(args, queryArgs...)
+	} else if expandedClause != "" {
+		where = append(where, expandedClause)
+		args = append(args, expandedArgs...)
 	}
 	if strings.TrimSpace(f.Nom) != "" {
 		q := "%" + strings.TrimSpace(f.Nom) + "%"
@@ -3412,6 +3745,36 @@ func (h sqlHelper) searchPersones(f PersonaSearchFilter) ([]PersonaSearchResult,
 	return res, nil
 }
 
+func buildExpandedCognomClause(likeOp string, enabled bool, forms []string) (string, []interface{}) {
+	if !enabled || len(forms) == 0 {
+		return "", nil
+	}
+	const maxForms = 60
+	seen := map[string]struct{}{}
+	var parts []string
+	var args []interface{}
+	for _, form := range forms {
+		form = strings.TrimSpace(form)
+		if form == "" {
+			continue
+		}
+		key := strings.ToLower(form)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		parts = append(parts, "(cognom1 "+likeOp+" ? OR cognom2 "+likeOp+" ?)")
+		args = append(args, form, form)
+		if len(args)/2 >= maxForms {
+			break
+		}
+	}
+	if len(parts) == 0 {
+		return "", nil
+	}
+	return "(" + strings.Join(parts, " OR ") + ")", args
+}
+
 func (h sqlHelper) listRegistresByPersona(personaID int, tipus string) ([]PersonaRegistreRow, error) {
 	where := []string{"p.persona_id = ?"}
 	args := []interface{}{personaID}
@@ -3466,4 +3829,465 @@ func (h sqlHelper) recalcLlibrePagines(llibreID, total int) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// Cognoms
+func (h sqlHelper) listCognoms(q string, limit, offset int) ([]Cognom, error) {
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	query := fmt.Sprintf(`
+        SELECT id, forma, %s, origen, notes, created_by, created_at, updated_at
+        FROM cognoms`, keyCol)
+	var where []string
+	var args []interface{}
+	if strings.TrimSpace(q) != "" {
+		likeOp := "LIKE"
+		if h.style == "postgres" {
+			likeOp = "ILIKE"
+		}
+		where = append(where, "(forma "+likeOp+" ? OR "+keyCol+" "+likeOp+" ?)")
+		qLike := "%" + strings.TrimSpace(q) + "%"
+		args = append(args, qLike, qLike)
+	}
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += " ORDER BY forma"
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	if offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []Cognom
+	for rows.Next() {
+		var c Cognom
+		var origen sql.NullString
+		var notes sql.NullString
+		if err := rows.Scan(&c.ID, &c.Forma, &c.Key, &origen, &notes, &c.CreatedBy, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		c.Origen = origen.String
+		c.Notes = notes.String
+		res = append(res, c)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getCognom(id int) (*Cognom, error) {
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	query := fmt.Sprintf("SELECT id, forma, %s, origen, notes, created_by, created_at, updated_at FROM cognoms WHERE id = ?", keyCol)
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var c Cognom
+	var origen sql.NullString
+	var notes sql.NullString
+	if err := row.Scan(&c.ID, &c.Forma, &c.Key, &origen, &notes, &c.CreatedBy, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		return nil, err
+	}
+	c.Origen = origen.String
+	c.Notes = notes.String
+	return &c, nil
+}
+
+func (h sqlHelper) upsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	var createdByVal interface{}
+	if createdBy != nil {
+		createdByVal = *createdBy
+	}
+	if h.style == "postgres" {
+		stmt := fmt.Sprintf(`
+            INSERT INTO cognoms (forma, %s, origen, notes, created_by, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, %s, %s)
+            ON CONFLICT (%s) DO UPDATE
+            SET forma = EXCLUDED.forma, origen = EXCLUDED.origen, notes = EXCLUDED.notes, updated_at = %s
+            RETURNING id`, keyCol, h.nowFun, h.nowFun, keyCol, h.nowFun)
+		stmt = formatPlaceholders(h.style, stmt)
+		var id int
+		if err := h.db.QueryRow(stmt, forma, key, origen, notes, createdByVal).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+
+	stmt := fmt.Sprintf(`
+        INSERT INTO cognoms (forma, %s, origen, notes, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, %s, %s)`, keyCol, h.nowFun, h.nowFun)
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE forma=VALUES(forma), origen=VALUES(origen), notes=VALUES(notes), updated_at=" + h.nowFun
+	} else {
+		stmt += " ON CONFLICT(" + keyCol + ") DO UPDATE SET forma=excluded.forma, origen=excluded.origen, notes=excluded.notes, updated_at=" + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if _, err := h.db.Exec(stmt, forma, key, origen, notes, createdByVal); err != nil {
+		return 0, err
+	}
+	selectStmt := fmt.Sprintf("SELECT id FROM cognoms WHERE %s = ?", keyCol)
+	selectStmt = formatPlaceholders(h.style, selectStmt)
+	row := h.db.QueryRow(selectStmt, key)
+	var id int
+	if err := row.Scan(&id); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func (h sqlHelper) listCognomVariants(f CognomVariantFilter) ([]CognomVariant, error) {
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	query := fmt.Sprintf(`
+        SELECT id, cognom_id, variant, %s, llengua, any_inici, any_fi, pais_id, municipi_id,
+               moderation_status, moderated_by, moderated_at, moderation_notes, created_by, created_at, updated_at
+        FROM cognom_variants`, keyCol)
+	var where []string
+	var args []interface{}
+	if f.CognomID > 0 {
+		where = append(where, "cognom_id = ?")
+		args = append(args, f.CognomID)
+	}
+	if strings.TrimSpace(f.Status) != "" {
+		where = append(where, "moderation_status = ?")
+		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if strings.TrimSpace(f.Q) != "" {
+		likeOp := "LIKE"
+		if h.style == "postgres" {
+			likeOp = "ILIKE"
+		}
+		where = append(where, "(variant "+likeOp+" ? OR "+keyCol+" "+likeOp+" ?)")
+		qLike := "%" + strings.TrimSpace(f.Q) + "%"
+		args = append(args, qLike, qLike)
+	}
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += " ORDER BY id DESC"
+	if f.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, f.Limit)
+	}
+	if f.Offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, f.Offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomVariant
+	for rows.Next() {
+		var v CognomVariant
+		var llengua sql.NullString
+		var motiu sql.NullString
+		if err := rows.Scan(&v.ID, &v.CognomID, &v.Variant, &v.Key, &llengua, &v.AnyInici, &v.AnyFi, &v.PaisID, &v.MunicipiID, &v.ModeracioEstat, &v.ModeratedBy, &v.ModeratedAt, &motiu, &v.CreatedBy, &v.CreatedAt, &v.UpdatedAt); err != nil {
+			return nil, err
+		}
+		v.Llengua = llengua.String
+		v.ModeracioMotiu = motiu.String
+		res = append(res, v)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) resolveCognomPublicatByForma(forma string) (int, string, bool, error) {
+	key := normalizeCognomKey(forma)
+	if key == "" {
+		return 0, "", false, nil
+	}
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	query := fmt.Sprintf("SELECT id, forma FROM cognoms WHERE %s = ? LIMIT 1", keyCol)
+	query = formatPlaceholders(h.style, query)
+	var id int
+	var canon string
+	err := h.db.QueryRow(query, key).Scan(&id, &canon)
+	if err == nil {
+		return id, canon, true, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, "", false, err
+	}
+	variantKey := "v." + keyCol
+	query = fmt.Sprintf(`
+        SELECT c.id, c.forma
+        FROM cognom_variants v
+        JOIN cognoms c ON c.id = v.cognom_id
+        WHERE v.moderation_status = 'publicat' AND %s = ?
+        LIMIT 1`, variantKey)
+	query = formatPlaceholders(h.style, query)
+	err = h.db.QueryRow(query, key).Scan(&id, &canon)
+	if err == nil {
+		return id, canon, true, nil
+	}
+	if err == sql.ErrNoRows {
+		return 0, "", false, nil
+	}
+	return 0, "", false, err
+}
+
+func (h sqlHelper) listCognomFormesPublicades(cognomID int) ([]string, error) {
+	query := "SELECT forma FROM cognoms WHERE id = ?"
+	query = formatPlaceholders(h.style, query)
+	var canon string
+	if err := h.db.QueryRow(query, cognomID).Scan(&canon); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	forms := []string{}
+	seen := map[string]struct{}{}
+	canon = strings.TrimSpace(canon)
+	if canon != "" {
+		forms = append(forms, canon)
+		seen[strings.ToLower(canon)] = struct{}{}
+	}
+	query = `
+        SELECT variant
+        FROM cognom_variants
+        WHERE cognom_id = ? AND moderation_status = 'publicat'
+        ORDER BY variant
+        LIMIT 100`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, cognomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var variant string
+		if err := rows.Scan(&variant); err != nil {
+			return nil, err
+		}
+		variant = strings.TrimSpace(variant)
+		if variant == "" {
+			continue
+		}
+		key := strings.ToLower(variant)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		forms = append(forms, variant)
+	}
+	return forms, nil
+}
+
+func (h sqlHelper) createCognomVariant(v *CognomVariant) (int, error) {
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	status := v.ModeracioEstat
+	if strings.TrimSpace(status) == "" {
+		status = "pendent"
+	}
+	if h.style == "postgres" {
+		stmt := fmt.Sprintf(`
+            INSERT INTO cognom_variants (cognom_id, variant, %s, llengua, any_inici, any_fi, pais_id, municipi_id,
+                moderation_status, moderated_by, moderated_at, moderation_notes, created_by, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s, %s)
+            RETURNING id`, keyCol, h.nowFun, h.nowFun)
+		stmt = formatPlaceholders(h.style, stmt)
+		var id int
+		if err := h.db.QueryRow(stmt, v.CognomID, v.Variant, v.Key, v.Llengua, v.AnyInici, v.AnyFi, v.PaisID, v.MunicipiID, status, v.ModeratedBy, v.ModeratedAt, v.ModeracioMotiu, v.CreatedBy).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	stmt := fmt.Sprintf(`
+        INSERT INTO cognom_variants (cognom_id, variant, %s, llengua, any_inici, any_fi, pais_id, municipi_id,
+            moderation_status, moderated_by, moderated_at, moderation_notes, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s, %s)`, keyCol, h.nowFun, h.nowFun)
+	stmt = formatPlaceholders(h.style, stmt)
+	res, err := h.db.Exec(stmt, v.CognomID, v.Variant, v.Key, v.Llengua, v.AnyInici, v.AnyFi, v.PaisID, v.MunicipiID, status, v.ModeratedBy, v.ModeratedAt, v.ModeracioMotiu, v.CreatedBy)
+	if err != nil {
+		return 0, err
+	}
+	id, _ := res.LastInsertId()
+	if id == 0 {
+		row := h.db.QueryRow(formatPlaceholders(h.style, "SELECT id FROM cognom_variants WHERE cognom_id = ? AND "+keyCol+" = ?"), v.CognomID, v.Key)
+		if err := row.Scan(&id); err != nil {
+			return 0, err
+		}
+	}
+	return int(id), nil
+}
+
+func normalizeCognomKey(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	s = strings.ToLower(s)
+	s = stripDiacritics(s)
+	s = strings.ReplaceAll(s, "’", "")
+	s = strings.ReplaceAll(s, "'", "")
+	s = strings.ReplaceAll(s, "-", " ")
+	s = strings.ReplaceAll(s, ".", " ")
+	s = strings.ReplaceAll(s, ",", " ")
+	s = strings.Join(strings.Fields(s), " ")
+	s = strings.ReplaceAll(s, " ", "")
+	return strings.ToUpper(s)
+}
+
+func stripDiacritics(val string) string {
+	replacer := strings.NewReplacer(
+		"à", "a", "á", "a", "â", "a", "ä", "a", "ã", "a", "å", "a",
+		"è", "e", "é", "e", "ê", "e", "ë", "e",
+		"ì", "i", "í", "i", "î", "i", "ï", "i",
+		"ò", "o", "ó", "o", "ô", "o", "ö", "o", "õ", "o",
+		"ù", "u", "ú", "u", "û", "u", "ü", "u",
+		"ç", "c", "ñ", "n",
+		"·", "",
+	)
+	return replacer.Replace(val)
+}
+
+func (h sqlHelper) updateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error {
+	stmt := `UPDATE cognom_variants SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	now := time.Now()
+	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, now, now, id)
+	return err
+}
+
+func (h sqlHelper) listCognomImportRows(limit, offset int) ([]CognomImportRow, error) {
+	query := `
+        SELECT p.cognom1, p.cognom1_estat, p.cognom2, p.cognom2_estat
+        FROM transcripcions_persones_raw p
+        JOIN transcripcions_raw r ON r.id = p.transcripcio_id
+        WHERE r.moderation_status = 'publicat'
+        ORDER BY p.id`
+	var args []interface{}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	if offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomImportRow
+	for rows.Next() {
+		var row CognomImportRow
+		if err := rows.Scan(&row.Cognom1, &row.Cognom1Estat, &row.Cognom2, &row.Cognom2Estat); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listCognomStatsRows(limit, offset int) ([]CognomStatsRow, error) {
+	query := `
+        SELECT p.cognom1, p.cognom1_estat, p.cognom2, p.cognom2_estat, r.any_doc, l.municipi_id
+        FROM transcripcions_persones_raw p
+        JOIN transcripcions_raw r ON r.id = p.transcripcio_id
+        JOIN llibres l ON l.id = r.llibre_id
+        WHERE r.moderation_status = 'publicat'
+          AND r.any_doc BETWEEN 0 AND 2025
+          AND l.municipi_id IS NOT NULL
+        ORDER BY r.id`
+	var args []interface{}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	if offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomStatsRow
+	for rows.Next() {
+		var row CognomStatsRow
+		if err := rows.Scan(&row.Cognom1, &row.Cognom1Estat, &row.Cognom2, &row.Cognom2Estat, &row.AnyDoc, &row.MunicipiID); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) upsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error {
+	stmt := fmt.Sprintf(`
+        INSERT INTO cognoms_freq_municipi_any (cognom_id, municipi_id, any_doc, freq, updated_at)
+        VALUES (?, ?, ?, ?, %s)`, h.nowFun)
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE freq = VALUES(freq), updated_at = " + h.nowFun
+	} else {
+		stmt += " ON CONFLICT (cognom_id, municipi_id, any_doc) DO UPDATE SET freq = excluded.freq, updated_at = " + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, cognomID, municipiID, anyDoc, freq)
+	return err
+}
+
+func (h sqlHelper) queryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]CognomFreqRow, error) {
+	query := `
+        SELECT c.municipi_id, m.nom, m.latitud, m.longitud, 0, SUM(c.freq) as freq
+        FROM cognoms_freq_municipi_any c
+        JOIN municipis m ON m.id = c.municipi_id
+        WHERE c.cognom_id = ?`
+	args := []interface{}{cognomID}
+	if anyStart > 0 {
+		query += " AND c.any_doc >= ?"
+		args = append(args, anyStart)
+	}
+	if anyEnd > 0 {
+		query += " AND c.any_doc <= ?"
+		args = append(args, anyEnd)
+	}
+	query += " GROUP BY c.municipi_id, m.nom, m.latitud, m.longitud"
+	query += " ORDER BY m.nom"
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomFreqRow
+	for rows.Next() {
+		var r CognomFreqRow
+		if err := rows.Scan(&r.MunicipiID, &r.MunicipiNom, &r.Latitud, &r.Longitud, &r.AnyDoc, &r.Freq); err != nil {
+			return nil, err
+		}
+		res = append(res, r)
+	}
+	return res, nil
 }

@@ -1332,6 +1332,17 @@ func (a *App) AdminSearchPersonesJSON(w http.ResponseWriter, r *http.Request) {
 		AnyMax:   anyMax,
 		Limit:    25,
 	}
+	if query != "" {
+		cand := extractSurnameCandidate(query)
+		if len(cand) >= 3 {
+			if cognomID, _, ok, err := a.DB.ResolveCognomPublicatByForma(cand); err == nil && ok {
+				if forms, err := a.DB.ListCognomFormesPublicades(cognomID); err == nil && len(forms) > 0 {
+					filter.UseCognomDictionary = true
+					filter.ExpandedCognoms = forms
+				}
+			}
+		}
+	}
 	results, err := a.DB.SearchPersones(filter)
 	if err != nil {
 		http.Error(w, "No s'han pogut cercar persones", http.StatusInternalServerError)

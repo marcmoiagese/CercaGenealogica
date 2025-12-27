@@ -187,6 +187,26 @@ func (d *SQLite) UpdateUserEmail(userID int, newEmail string) error {
 	return d.help.updateUserEmail(userID, newEmail)
 }
 
+func (d *SQLite) ListUsersAdmin() ([]UserAdminRow, error) {
+	return d.help.listUsersAdmin()
+}
+
+func (d *SQLite) ListUsersAdminFiltered(filter UserAdminFilter) ([]UserAdminRow, error) {
+	return d.help.listUsersAdminFiltered(filter)
+}
+
+func (d *SQLite) CountUsersAdmin(filter UserAdminFilter) (int, error) {
+	return d.help.countUsersAdmin(filter)
+}
+
+func (d *SQLite) SetUserActive(userID int, active bool) error {
+	return d.help.setUserActive(userID, active)
+}
+
+func (d *SQLite) SetUserBanned(userID int, banned bool) error {
+	return d.help.setUserBanned(userID, banned)
+}
+
 func (d *SQLite) CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {
 	return d.help.createEmailChange(userID, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang)
 }
@@ -379,6 +399,18 @@ func (d *SQLite) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
 func (d *SQLite) ListLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
 	return d.help.listLlibreArxius(llibreID)
 }
+
+func (d *SQLite) ListLlibreURLs(llibreID int) ([]LlibreURL, error) {
+	return d.help.listLlibreURLs(llibreID)
+}
+
+func (d *SQLite) AddLlibreURL(link *LlibreURL) error {
+	return d.help.addLlibreURL(link)
+}
+
+func (d *SQLite) DeleteLlibreURL(id int) error {
+	return d.help.deleteLlibreURL(id)
+}
 func (d *SQLite) AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
 	return d.help.addArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
 }
@@ -460,6 +492,9 @@ func (d *SQLite) UpdateTranscripcionsRawPageStat(stat *TranscripcioRawPageStat) 
 }
 func (d *SQLite) RecalcTranscripcionsRawPageStats(llibreID int) error {
 	return d.help.recalcTranscripcionsRawPageStats(llibreID)
+}
+func (d *SQLite) SetTranscripcionsRawPageStatsIndexacio(llibreID int, value int) error {
+	return d.help.setTranscripcionsRawPageStatsIndexacio(llibreID, value)
 }
 
 func (d *SQLite) DeleteTranscripcionsByLlibre(llibreID int) error {
@@ -548,3 +583,41 @@ func (d *SQLite) GetRanking(f RankingFilter) ([]UserPoints, error) {
 	return d.help.getRanking(f)
 }
 func (d *SQLite) CountRanking(f RankingFilter) (int, error) { return d.help.countRanking(f) }
+
+// Cognoms
+func (d *SQLite) ListCognoms(q string, limit, offset int) ([]Cognom, error) {
+	return d.help.listCognoms(q, limit, offset)
+}
+func (d *SQLite) GetCognom(id int) (*Cognom, error) { return d.help.getCognom(id) }
+func (d *SQLite) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
+	return d.help.upsertCognom(forma, key, origen, notes, createdBy)
+}
+func (d *SQLite) ListCognomVariants(f CognomVariantFilter) ([]CognomVariant, error) {
+	return d.help.listCognomVariants(f)
+}
+func (d *SQLite) ResolveCognomPublicatByForma(forma string) (int, string, bool, error) {
+	return d.help.resolveCognomPublicatByForma(forma)
+}
+func (d *SQLite) ListCognomFormesPublicades(cognomID int) ([]string, error) {
+	return d.help.listCognomFormesPublicades(cognomID)
+}
+func (d *SQLite) CreateCognomVariant(v *CognomVariant) (int, error) {
+	return d.help.createCognomVariant(v)
+}
+func (d *SQLite) UpdateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateCognomVariantModeracio(id, estat, motiu, moderatorID)
+}
+func (d *SQLite) UpsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error {
+	return d.help.upsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq)
+}
+func (d *SQLite) QueryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]CognomFreqRow, error) {
+	return d.help.queryCognomHeatmap(cognomID, anyStart, anyEnd)
+}
+
+func (d *SQLite) ListCognomImportRows(limit, offset int) ([]CognomImportRow, error) {
+	return d.help.listCognomImportRows(limit, offset)
+}
+
+func (d *SQLite) ListCognomStatsRows(limit, offset int) ([]CognomStatsRow, error) {
+	return d.help.listCognomStatsRows(limit, offset)
+}

@@ -1,0 +1,51 @@
+{{ define "admin-llibres-arxiu-links.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "archives.books.links.manage" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "archives.books.links.manage" }}</h1>
+            </header>
+            <div class="info-resum">
+                <p><strong>{{ t .Lang "books.form.title" }}:</strong>
+                    {{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}
+                </p>
+                <p><strong>{{ t .Lang "admin.menu.archives" }}:</strong> {{ .Data.ArxiuLink.ArxiuNom.String }}</p>
+                <p><strong>{{ t .Lang "archives.books.links.original" }}:</strong>
+                    {{ if .Data.OriginalURL }}
+                        <a href="{{ .Data.OriginalURL }}" target="_blank">{{ t .Lang "archives.link" }}</a>
+                    {{ else }}
+                        <span class="muted">{{ t .Lang "archives.books.url.none" }}</span>
+                    {{ end }}
+                </p>
+            </div>
+            <form method="post" action="/documentals/llibres/{{ .Data.Llibre.ID }}/arxius/{{ .Data.ArxiuLink.ArxiuID }}/update">
+                <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+                <div class="grup-camp">
+                    <label for="signatura">{{ t .Lang "archives.books.add.signatura" }}</label>
+                    <input id="signatura" type="text" name="signatura" value="{{ .Data.ArxiuLink.Signatura.String }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="url_override">{{ t .Lang "archives.books.links.override" }}</label>
+                    <input id="url_override" type="text" name="url_override" value="{{ .Data.ArxiuLink.URLOverride.String }}">
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "common.save" }}</button>
+                    <a class="boto-secundari" href="{{ .Data.ReturnURL }}">{{ t .Lang "records.form.cancel" }}</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

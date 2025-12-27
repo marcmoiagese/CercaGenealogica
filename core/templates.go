@@ -3,6 +3,7 @@ package core
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -29,8 +30,13 @@ var templateFuncs = template.FuncMap{
 		}
 		return value
 	},
-	"t": func(lang, key string) string {
-		return T(lang, key)
+	"t": func(lang interface{}, key string, args ...interface{}) string {
+		langStr := fmt.Sprint(lang)
+		text := T(langStr, key)
+		if len(args) > 0 {
+			return fmt.Sprintf(text, args...)
+		}
+		return text
 	},
 	"index": func(m interface{}, k string) interface{} {
 		if m == nil {
@@ -292,6 +298,9 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	}
 	if _, found := m["CanManageArxius"]; !found {
 		m["CanManageArxius"] = perms.Admin || perms.CanManageArchives
+	}
+	if _, found := m["CanManageUsers"]; !found {
+		m["CanManageUsers"] = perms.Admin || perms.CanManageUsers
 	}
 	if _, found := m["CanManagePolicies"]; !found {
 		m["CanManagePolicies"] = perms.Admin || perms.CanManagePolicies

@@ -110,6 +110,15 @@ func (f *fakeDBVerificar) UpdateUserProfile(u *db.User) error {
 func (f *fakeDBVerificar) UpdateUserEmail(userID int, newEmail string) error {
 	return errors.New("UpdateUserEmail not implemented in fakeDBVerificar")
 }
+func (f *fakeDBVerificar) ListUsersAdmin() ([]db.UserAdminRow, error) {
+	return nil, errors.New("ListUsersAdmin not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) SetUserActive(userID int, active bool) error {
+	return errors.New("SetUserActive not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) SetUserBanned(userID int, banned bool) error {
+	return errors.New("SetUserBanned not implemented in fakeDBVerificar")
+}
 func (f *fakeDBVerificar) CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {
 	return errors.New("CreateEmailChange not implemented in fakeDBVerificar")
 }
@@ -150,6 +159,11 @@ func (f *fakeDBVerificar) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, ur
 	return nil
 }
 func (f *fakeDBVerificar) DeleteArxiuLlibre(arxiuID, llibreID int) error { return nil }
+func (f *fakeDBVerificar) ListLlibreURLs(llibreID int) ([]db.LlibreURL, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) AddLlibreURL(link *db.LlibreURL) error { return nil }
+func (f *fakeDBVerificar) DeleteLlibreURL(id int) error          { return nil }
 func (f *fakeDBVerificar) SearchLlibresSimple(q string, limit int) ([]db.LlibreSimple, error) {
 	return nil, nil
 }
@@ -303,6 +317,9 @@ func (f *fakeDBVerificar) DeleteTranscripcioRaw(id int) error {
 func (f *fakeDBVerificar) RecalcTranscripcionsRawPageStats(llibreID int) error {
 	return nil
 }
+func (f *fakeDBVerificar) SetTranscripcionsRawPageStatsIndexacio(llibreID int, value int) error {
+	return nil
+}
 func (f *fakeDBVerificar) ListTranscripcionsRawPageStats(llibreID int) ([]db.TranscripcioRawPageStat, error) {
 	return nil, nil
 }
@@ -375,6 +392,38 @@ func (f *fakeDBVerificar) GetLlibresIndexacioStats(ids []int) (map[int]db.Llibre
 }
 func (f *fakeDBVerificar) UpsertLlibreIndexacioStats(stats *db.LlibreIndexacioStats) error {
 	return nil
+}
+func (f *fakeDBVerificar) ListCognoms(q string, limit, offset int) ([]db.Cognom, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetCognom(id int) (*db.Cognom, error) { return nil, nil }
+func (f *fakeDBVerificar) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) ListCognomVariants(filter db.CognomVariantFilter) ([]db.CognomVariant, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) ResolveCognomPublicatByForma(forma string) (int, string, bool, error) {
+	return 0, "", false, nil
+}
+func (f *fakeDBVerificar) ListCognomFormesPublicades(cognomID int) ([]string, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) CreateCognomVariant(v *db.CognomVariant) (int, error) { return 0, nil }
+func (f *fakeDBVerificar) UpdateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDBVerificar) UpsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error {
+	return nil
+}
+func (f *fakeDBVerificar) QueryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]db.CognomFreqRow, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) ListCognomImportRows(limit, offset int) ([]db.CognomImportRow, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) ListCognomStatsRows(limit, offset int) ([]db.CognomStatsRow, error) {
+	return nil, nil
 }
 
 // Crea una App només amb la fake DB per testejar VerificarSessio.

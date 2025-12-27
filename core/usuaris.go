@@ -748,6 +748,26 @@ func formatDateDisplay(dateStr string) string {
 	return dateStr
 }
 
+func formatDateTimeDisplay(dateStr string) string {
+	if dateStr == "" {
+		return ""
+	}
+	layouts := []string{
+		time.RFC3339,
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, dateStr); err == nil {
+			if layout == "2006-01-02" {
+				return t.Format("02/01/2006")
+			}
+			return t.Format("02/01/2006 15:04")
+		}
+	}
+	return dateStr
+}
+
 func defaultPrivacySettings() *db.PrivacySettings {
 	return &db.PrivacySettings{
 		NomVisibility:           "private",

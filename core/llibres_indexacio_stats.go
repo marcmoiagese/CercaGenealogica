@@ -28,9 +28,22 @@ func (a *App) buildLlibresIndexacioViews(llibres []db.LlibreRow) map[string]Llib
 		stats = map[int]db.LlibreIndexacioStats{}
 	}
 	for _, llibre := range llibres {
-		stat := stats[llibre.ID]
+		stat, ok := stats[llibre.ID]
+		if !ok {
+			if recalced, err := a.recalcLlibreIndexacioStats(llibre.ID); err == nil && recalced != nil {
+				stat = *recalced
+				ok = true
+			}
+		}
+		totalRegistres := stat.TotalRegistres
+		if count, err := a.DB.CountTranscripcionsRaw(llibre.ID, db.TranscripcioFilter{}); err == nil {
+			totalRegistres = count
+			if ok && stat.TotalRegistres != count {
+				stat.TotalRegistres = count
+			}
+		}
 		view := LlibreIndexacioView{
-			TotalRegistres: stat.TotalRegistres,
+			TotalRegistres: totalRegistres,
 			Percentatge:    stat.Percentatge,
 			ColorClass:     indexacioColorClass(stat.Percentatge),
 		}

@@ -3,6 +3,7 @@ package core
 import (
 	"database/sql"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -133,6 +134,13 @@ func (a *App) AdminToggleIndexacioLlibre(w http.ResponseWriter, r *http.Request)
 	if setIndexat {
 		if err := a.DB.RecalcTranscripcionsRawPageStats(llibreID); err != nil {
 			Errorf("Error recalculant registres per pagina del llibre %d: %v", llibreID, err)
+		}
+		if err := a.DB.SetTranscripcionsRawPageStatsIndexacio(llibreID, 1); err != nil {
+			Errorf("Error marcant pagines indexades del llibre %d: %v", llibreID, err)
+		}
+	} else {
+		if err := a.DB.SetTranscripcionsRawPageStatsIndexacio(llibreID, 0); err != nil {
+			Errorf("Error desmarcant pagines indexades del llibre %d: %v", llibreID, err)
 		}
 	}
 	returnTo := strings.TrimSpace(r.FormValue("return_to"))
@@ -417,9 +425,11 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		user, _ = a.VerificarSessio(r)
 	}
 	isAdmin := false
+	canModerate := false
 	if user != nil {
 		perms := a.getPermissionsForUser(user.ID)
 		isAdmin = a.hasPerm(perms, permAdmin)
+		canModerate = a.hasPerm(perms, permModerate)
 	}
 	if (user == nil || !a.CanManageArxius(user)) && llibre.ModeracioEstat != "publicat" {
 		http.NotFound(w, r)
@@ -434,21 +444,9 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		Limit:  10000,
 	})
 	pageStats, _ := a.DB.ListTranscripcionsRawPageStats(id)
-	recalced := false
 	if len(pageStats) == 0 {
-		if err := a.DB.RecalcTranscripcionsRawPageStats(id); err != nil {
-			Errorf("Error recalculant registres per pagina del llibre %d: %v", id, err)
-		} else {
-			pageStats, _ = a.DB.ListTranscripcionsRawPageStats(id)
-		}
-		recalced = true
-	}
-	if !recalced && len(pageStats) > 0 {
-		totalRegistres := 0
-		for _, stat := range pageStats {
-			totalRegistres += stat.TotalRegistres
-		}
-		if totalRegistres == 0 {
+		totalAll, _ := a.DB.CountTranscripcionsRaw(id, db.TranscripcioFilter{})
+		if totalAll > 0 {
 			if err := a.DB.RecalcTranscripcionsRawPageStats(id); err != nil {
 				Errorf("Error recalculant registres per pagina del llibre %d: %v", id, err)
 			} else {
@@ -456,6 +454,7 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// no auto-recalc when totals are zero; admins can trigger recalculation explicitly
 	mergedStats := pageStats
 	if llibre.Pagines.Valid && llibre.Pagines.Int64 > 0 {
 		totalPages := int(llibre.Pagines.Int64)
@@ -624,12 +623,53 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		stats = append(stats, registreStat{Tipus: tipus, Count: counts[tipus]})
 	}
 	arxius, _ := a.DB.ListLlibreArxius(id)
+	if len(arxius) > 1 {
+		uniq := make(map[int]db.ArxiuLlibreDetail, len(arxius))
+		for _, rel := range arxius {
+			existing, ok := uniq[rel.ArxiuID]
+			if !ok {
+				uniq[rel.ArxiuID] = rel
+				continue
+			}
+			if !existing.URLOverride.Valid && rel.URLOverride.Valid {
+				uniq[rel.ArxiuID] = rel
+				continue
+			}
+			if !existing.Signatura.Valid && rel.Signatura.Valid {
+				uniq[rel.ArxiuID] = rel
+			}
+		}
+		arxius = arxius[:0]
+		for _, rel := range uniq {
+			arxius = append(arxius, rel)
+		}
+		sort.Slice(arxius, func(i, j int) bool {
+			return arxius[i].ArxiuNom.String < arxius[j].ArxiuNom.String
+		})
+	}
 	arxiusOpts, _ := a.DB.ListArxius(db.ArxiuFilter{Limit: 200})
+	links, _ := a.DB.ListLlibreURLs(id)
 	purgeStatus := strings.TrimSpace(r.URL.Query().Get("purge"))
+	entityName := ""
+	if llibre.ArquebisbatID > 0 {
+		if ae, err := a.DB.GetArquebisbat(llibre.ArquebisbatID); err == nil && ae != nil {
+			entityName = ae.Nom
+		}
+	}
+	municipiName := ""
+	if llibre.MunicipiID > 0 {
+		if m, err := a.DB.GetMunicipi(llibre.MunicipiID); err == nil && m != nil {
+			municipiName = m.Nom
+		}
+	}
 	RenderPrivateTemplate(w, r, "admin-llibres-show.html", map[string]interface{}{
 		"Llibre":              llibre,
+		"LlibreEntityName":    entityName,
+		"LlibreMunicipiName":  municipiName,
+		"LlibreCronologia":    formatCronologiaDisplay(llibre.Cronologia),
 		"Arxius":              arxius,
 		"ArxiusOptions":       arxiusOpts,
+		"LlibreLinks":         links,
 		"RegistresStats":      stats,
 		"RegistresTotal":      len(registres),
 		"PageStats":           pageStatsPage,
@@ -647,6 +687,7 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		"User":                user,
 		"CanManageArxius":     true,
 		"IsAdmin":             isAdmin,
+		"CanModerate":         canModerate,
 		"PurgeStatus":         purgeStatus,
 		"CurrentURL":          r.URL.RequestURI(),
 	})
@@ -795,4 +836,134 @@ func (a *App) AdminDeleteLlibreArxiu(w http.ResponseWriter, r *http.Request) {
 	arxiuID, _ := strconv.Atoi(parts[4])
 	_ = a.DB.DeleteArxiuLlibre(arxiuID, llibreID)
 	http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID), http.StatusSeeOther)
+}
+
+func (a *App) AdminAddLlibreURL(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	llibreID := extractID(r.URL.Path)
+	if llibreID == 0 {
+		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
+		return
+	}
+	url := strings.TrimSpace(r.FormValue("url"))
+	if url == "" {
+		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"?links=error", http.StatusSeeOther)
+		return
+	}
+	arxiuID := parseNullInt64(r.FormValue("arxiu_id"))
+	tipus := parseNullString(r.FormValue("tipus"))
+	descripcio := parseNullString(r.FormValue("descripcio"))
+	createdBy := sql.NullInt64{}
+	if user, _ := a.VerificarSessio(r); user != nil {
+		createdBy = sql.NullInt64{Int64: int64(user.ID), Valid: true}
+	}
+	link := &db.LlibreURL{
+		LlibreID:   llibreID,
+		ArxiuID:    arxiuID,
+		URL:        url,
+		Tipus:      tipus,
+		Descripcio: descripcio,
+		CreatedBy:  createdBy,
+	}
+	_ = a.DB.AddLlibreURL(link)
+	returnTo := strings.TrimSpace(r.FormValue("return_to"))
+	if returnTo == "" {
+		returnTo = "/documentals/llibres/" + strconv.Itoa(llibreID)
+	}
+	http.Redirect(w, r, returnTo, http.StatusSeeOther)
+}
+
+func (a *App) AdminDeleteLlibreURL(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) < 6 {
+		http.NotFound(w, r)
+		return
+	}
+	llibreID, _ := strconv.Atoi(parts[2])
+	linkID, _ := strconv.Atoi(parts[4])
+	if linkID == 0 {
+		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID), http.StatusSeeOther)
+		return
+	}
+	_ = a.DB.DeleteLlibreURL(linkID)
+	returnTo := strings.TrimSpace(r.FormValue("return_to"))
+	if returnTo == "" {
+		returnTo = "/documentals/llibres/" + strconv.Itoa(llibreID)
+	}
+	http.Redirect(w, r, returnTo, http.StatusSeeOther)
+}
+
+func (a *App) AdminEditLlibreArxiuLinks(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) < 6 {
+		http.NotFound(w, r)
+		return
+	}
+	llibreID, _ := strconv.Atoi(parts[2])
+	arxiuID, _ := strconv.Atoi(parts[4])
+	if llibreID == 0 || arxiuID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	llibre, err := a.DB.GetLlibre(llibreID)
+	if err != nil || llibre == nil {
+		http.NotFound(w, r)
+		return
+	}
+	arxius, err := a.DB.ListLlibreArxius(llibreID)
+	if err != nil {
+		Errorf("Error carregant enllaços d'arxiu: %v", err)
+		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID), http.StatusSeeOther)
+		return
+	}
+	var rel *db.ArxiuLlibreDetail
+	for i := range arxius {
+		if arxius[i].ArxiuID == arxiuID {
+			rel = &arxius[i]
+			break
+		}
+	}
+	if rel == nil {
+		http.NotFound(w, r)
+		return
+	}
+	originalURL := strings.TrimSpace(llibre.URLBase)
+	returnURL := r.URL.Query().Get("return_to")
+	if returnURL == "" {
+		returnURL = "/documentals/llibres/" + strconv.Itoa(llibreID)
+	}
+	RenderPrivateTemplate(w, r, "admin-llibres-arxiu-links.html", map[string]interface{}{
+		"Llibre":      llibre,
+		"ArxiuLink":   rel,
+		"OriginalURL": originalURL,
+		"ReturnURL":   returnURL,
+	})
 }

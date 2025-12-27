@@ -1,0 +1,74 @@
+{{ define "cognoms-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "surnames.title" }} - {{ t .Lang "app.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/cognoms.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card cognoms-card">
+            <header class="card-header">
+                <h1>{{ t .Lang "surnames.title" }}</h1>
+            </header>
+            <form class="form-filtres" method="get" action="/cognoms">
+                <div class="fila-camp">
+                    <label for="cognom-q">{{ t .Lang "surnames.search.placeholder" }}</label>
+                    <input id="cognom-q" type="text" name="q" value="{{ .Data.Q }}" placeholder="{{ t .Lang "surnames.search.placeholder" }}">
+                </div>
+                <div class="fila-camp">
+                    <label>&nbsp;</label>
+                    <button type="submit" class="boto-primari pequeno">
+                        <i class="fas fa-search"></i>
+                        <span>{{ t .Lang "common.apply" }}</span>
+                    </button>
+                </div>
+            </form>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "surnames.table.form" }}</th>
+                            <th>{{ t .Lang "surnames.table.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Cognoms }}
+                        <tr>
+                            <td>
+                                <a class="cognom-link" href="/cognoms/{{ .ID }}">{{ .Forma }}</a>
+                            </td>
+                            <td>
+                                <a class="boto-secundari" href="/cognoms/{{ .ID }}">{{ t $.Lang "common.view" }}</a>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="2">{{ t .Lang "common.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+            {{ if gt .Data.TotalPages 1 }}
+            <div class="paginacio">
+                <div class="paginacio-cont">
+                    {{ if .Data.HasPrev }}
+                    <a class="boto-secundari" href="{{ .Data.PageBase }}&page={{ .Data.PrevPage }}">{{ t .Lang "common.prev" }}</a>
+                    {{ end }}
+                    <span class="paginacio-info">{{ printf (t .Lang "common.page_info") .Data.Page .Data.TotalPages }}</span>
+                    {{ if .Data.HasNext }}
+                    <a class="boto-secundari" href="{{ .Data.PageBase }}&page={{ .Data.NextPage }}">{{ t .Lang "common.next" }}</a>
+                    {{ end }}
+                </div>
+            </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

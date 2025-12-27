@@ -1,0 +1,57 @@
+{{ define "cognom-mapa.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ .Data.Cognom.Forma }} - {{ t .Lang "surnames.map.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/cognoms.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card cognoms-card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ .Data.Cognom.Forma }}</h1>
+                    <p class="muted">{{ t .Lang "surnames.map.title" }}</p>
+                </div>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="/cognoms/{{ .Data.Cognom.ID }}">{{ t .Lang "common.back" }}</a>
+                </div>
+            </header>
+
+            <div class="cognoms-panel">
+                <h2>{{ t .Lang "surnames.map.period" }}</h2>
+                <div class="cognoms-map-tools">
+                    <div class="cognoms-range">
+                        <label for="cognom-y0">{{ t .Lang "surnames.detail.period.from" }}</label>
+                        <input id="cognom-y0" type="number" min="1500" max="{{ .Data.MaxYear }}" value="{{ .Data.Y0 }}">
+                    </div>
+                    <div class="cognoms-range">
+                        <label for="cognom-y1">{{ t .Lang "surnames.detail.period.to" }}</label>
+                        <input id="cognom-y1" type="number" min="1500" max="{{ .Data.MaxYear }}" value="{{ .Data.Y1 }}">
+                    </div>
+                    <button type="button" class="boto-secundari" id="cognom-update">{{ t .Lang "surnames.detail.update" }}</button>
+                </div>
+                <div id="cognom-range" class="cognoms-slider"></div>
+                <p id="cognom-map-status" class="muted"
+                   data-loading="{{ t .Lang "surnames.map.loading" }}"
+                   data-empty="{{ t .Lang "surnames.map.empty" }}"
+                   data-error="{{ t .Lang "surnames.map.error" }}">{{ t .Lang "surnames.map.loading" }}</p>
+                <div id="cognom-map" class="cognoms-map" data-cognom-id="{{ .Data.Cognom.ID }}"></div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+    <script src="/static/js/cognoms-mapa.js"></script>
+</body>
+</html>
+{{ end }}

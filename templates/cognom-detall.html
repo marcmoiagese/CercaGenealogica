@@ -1,0 +1,137 @@
+{{ define "cognom-detall.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ .Data.Cognom.Forma }} - {{ t .Lang "surnames.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/cognoms.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card cognoms-card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ .Data.Cognom.Forma }}</h1>
+                    {{ if .Data.Cognom.Key }}<p class="muted">#{{ .Data.Cognom.Key }}</p>{{ end }}
+                </div>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="/cognoms/{{ .Data.Cognom.ID }}/mapa">{{ t .Lang "surnames.map.title" }}</a>
+                    <a class="boto-secundari" href="/cognoms">{{ t .Lang "common.back" }}</a>
+                </div>
+            </header>
+
+            {{ if .Data.SuggestOk }}
+            <div class="alert alert-success" role="alert">{{ t .Lang "surnames.detail.suggest.success" }}</div>
+            {{ end }}
+            {{ if .Data.DuplicateVariant }}
+            <div class="alert alert-error" role="alert">{{ t .Lang "surnames.detail.suggest.duplicate" }}</div>
+            {{ end }}
+            {{ if .Data.SuggestError }}
+            <div class="alert alert-error" role="alert">{{ t .Lang "surnames.detail.suggest.error" }}</div>
+            {{ end }}
+
+            <div class="cognoms-detail-grid">
+                <div class="cognoms-panel">
+                    <h2>{{ t .Lang "surnames.detail.origin" }}</h2>
+                    <p>{{ if .Data.Cognom.Origen }}{{ .Data.Cognom.Origen }}{{ else }}<span class="muted">{{ t .Lang "common.empty" }}</span>{{ end }}</p>
+                    <h3>{{ t .Lang "surnames.detail.notes" }}</h3>
+                    <p>{{ if .Data.Cognom.Notes }}{{ .Data.Cognom.Notes }}{{ else }}<span class="muted">{{ t .Lang "common.empty" }}</span>{{ end }}</p>
+                </div>
+
+                <div class="cognoms-panel">
+                    <h2>{{ t .Lang "surnames.detail.variants" }}</h2>
+                    <ul class="cognoms-variants-list">
+                        {{ range .Data.Variants }}
+                        <li class="cognoms-variant">
+                            <span class="variant-name">{{ .Variant }}</span>
+                            {{ if .Llengua }}<span class="badge">{{ .Llengua }}</span>{{ end }}
+                            {{ if .AnyInici.Valid }}<span class="muted">{{ t $.Lang "surnames.detail.period.from" }} {{ .AnyInici.Int64 }}</span>{{ end }}
+                            {{ if .AnyFi.Valid }}<span class="muted">{{ t $.Lang "surnames.detail.period.to" }} {{ .AnyFi.Int64 }}</span>{{ end }}
+                        </li>
+                        {{ else }}
+                        <li class="muted">{{ t .Lang "common.empty" }}</li>
+                        {{ end }}
+                    </ul>
+                    {{ if and .Data.CanModerate (gt (len .Data.VariantsPendents) 0) }}
+                    <div class="cognoms-pendents">
+                        <h3>{{ t .Lang "surnames.detail.pending" }}</h3>
+                        <ul class="cognoms-variants-list">
+                            {{ range .Data.VariantsPendents }}
+                            <li class="cognoms-variant pendent">
+                                <span class="variant-name">{{ .Variant }}</span>
+                                <span class="badge warning">{{ t $.Lang "activity.status.pendent" }}</span>
+                            </li>
+                            {{ end }}
+                        </ul>
+                    </div>
+                    {{ end }}
+                </div>
+            </div>
+
+            <div class="cognoms-panel">
+                <h2>{{ t .Lang "surnames.detail.suggest" }}</h2>
+                <form class="cognoms-suggest-form" method="post" action="/cognoms/{{ .Data.Cognom.ID }}/variants/suggest">
+                    <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                    <div class="grup-camp">
+                        <label for="variant">{{ t .Lang "surnames.detail.suggest.placeholder" }}</label>
+                        <input id="variant" name="variant" type="text" required>
+                    </div>
+                    <div class="cognoms-suggest-grid">
+                        <div class="grup-camp">
+                            <label for="llengua">{{ t .Lang "surnames.detail.field.language" }}</label>
+                            <select id="llengua" name="llengua">
+                                <option value="">{{ t .Lang "common.select" }}</option>
+                                <option value="cat">{{ t .Lang "lang.name.cat" }}</option>
+                                <option value="en">{{ t .Lang "lang.name.en" }}</option>
+                                <option value="oc">{{ t .Lang "lang.name.oc" }}</option>
+                            </select>
+                        </div>
+                        <div class="grup-camp">
+                            <label for="any-inici">{{ t .Lang "surnames.detail.field.year_from" }}</label>
+                            <input id="any-inici" name="any_inici" type="number" min="1000" max="{{ .Data.MaxYear }}">
+                        </div>
+                        <div class="grup-camp">
+                            <label for="any-fi">{{ t .Lang "surnames.detail.field.year_to" }}</label>
+                            <input id="any-fi" name="any_fi" type="number" min="1000" max="{{ .Data.MaxYear }}">
+                        </div>
+                    </div>
+                    <button type="submit" class="boto-primari">{{ t .Lang "common.add" }}</button>
+                </form>
+            </div>
+
+            <div class="cognoms-panel">
+                <h2>{{ t .Lang "surnames.detail.map.title" }}</h2>
+                <div class="cognoms-map-tools">
+                    <div class="cognoms-range">
+                        <label for="cognom-y0">{{ t .Lang "surnames.detail.period.from" }}</label>
+                        <input id="cognom-y0" type="number" min="1500" max="{{ .Data.MaxYear }}" value="{{ .Data.Y0 }}">
+                    </div>
+                    <div class="cognoms-range">
+                        <label for="cognom-y1">{{ t .Lang "surnames.detail.period.to" }}</label>
+                        <input id="cognom-y1" type="number" min="1500" max="{{ .Data.MaxYear }}" value="{{ .Data.Y1 }}">
+                    </div>
+                    <button type="button" class="boto-secundari" id="cognom-update">{{ t .Lang "surnames.detail.update" }}</button>
+                </div>
+                <div id="cognom-range" class="cognoms-slider"></div>
+                <p id="cognom-map-status" class="muted"
+                   data-loading="{{ t .Lang "surnames.map.loading" }}"
+                   data-empty="{{ t .Lang "surnames.map.empty" }}"
+                   data-error="{{ t .Lang "surnames.map.error" }}">{{ t .Lang "surnames.map.loading" }}</p>
+                <div id="cognom-map" class="cognoms-map" data-cognom-id="{{ .Data.Cognom.ID }}"></div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+    <script src="/static/js/cognoms-mapa.js"></script>
+</body>
+</html>
+{{ end }}

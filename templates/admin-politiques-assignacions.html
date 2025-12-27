@@ -3,102 +3,215 @@
 <html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>Assignació de polítiques</title>
+    <title>{{ t .Lang "policies.assign.title" }}</title>
     {{ template "styles-private" . }}
+    <style>
+        .assign-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,0.8fr);gap:24px}
+        .assign-panel{background:#fff;border:1px solid #e6e8ef;border-radius:14px;padding:16px}
+        .assign-panel h2{margin:0 0 12px}
+        .assign-summary{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+        .assign-summary .muted{color:#6b7280}
+        .assign-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+        .assign-table td strong{display:block}
+        .assign-table td small{color:#777}
+        .assign-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    </style>
 </head>
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
     <main class="contingut-principal">
         <section class="card">
-            <header class="card-header">
-                <h1>Assignació de polítiques</h1>
+            <header class="card-header card-header-flex">
+                <h1>{{ t .Lang "policies.assign.title" }}</h1>
             </header>
-            <div class="grid-2col">
-                <div>
-                    <h2>Usuaris</h2>
-                    <form class="formulari-admin" method="get" action="/admin/politiques/assignacions">
-                        <label for="user_id">Selecciona usuari</label>
-                        <select id="user_id" name="user_id">
-                            <option value="">--</option>
-                            {{ range .Data.Users }}
-                            <option value="{{ .ID }}" {{ if eq $.Data.UserID .ID }}selected{{ end }}>{{ .ID }} - {{ .Usuari }} ({{ .Email }})</option>
-                            {{ end }}
-                        </select>
-                        <button type="submit" class="boto-primari">Veure</button>
+            <div class="assign-grid">
+                <div class="assign-panel">
+                    <h2>{{ t .Lang "policies.assign.users.title" }}</h2>
+                    <form class="form-filtres" method="get" action="/admin/politiques/assignacions">
+                        <div class="fila-camp">
+                            <label for="user-q">{{ t .Lang "policies.assign.users.search" }}</label>
+                            <input id="user-q" type="text" name="user_q" value="{{ .Data.UserQuery }}" placeholder="{{ t .Lang "policies.assign.users.search.placeholder" }}">
+                        </div>
+                        <div class="fila-camp">
+                            <label for="user-per-page">{{ t .Lang "policies.assign.users.per_page" }}</label>
+                            <select id="user-per-page" name="user_per_page">
+                                <option value="10" {{ if eq .Data.UserPerPage 10 }}selected{{ end }}>10</option>
+                                <option value="25" {{ if eq .Data.UserPerPage 25 }}selected{{ end }}>25</option>
+                                <option value="50" {{ if eq .Data.UserPerPage 50 }}selected{{ end }}>50</option>
+                                <option value="100" {{ if eq .Data.UserPerPage 100 }}selected{{ end }}>100</option>
+                            </select>
+                        </div>
+                        <div class="fila-camp">
+                            <label>&nbsp;</label>
+                            <button type="submit" class="boto-primari pequeno"><i class="fas fa-filter"></i> <span>{{ t .Lang "common.apply" }}</span></button>
+                        </div>
+                        <input type="hidden" name="user_page" value="1">
+                        {{ if .Data.UserID }}<input type="hidden" name="user_id" value="{{ .Data.UserID }}">{{ end }}
+                        {{ if .Data.GroupID }}<input type="hidden" name="group_id" value="{{ .Data.GroupID }}">{{ end }}
                     </form>
-
-                    {{ if .Data.UserID }}
-                    <form class="formulari-admin" method="post" action="/admin/politiques/assignar-usuari">
-                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
-                        <input type="hidden" name="user_id" value="{{ .Data.UserID }}">
-                        <label for="pol-usuari">Afegir política</label>
-                        <select id="pol-usuari" name="politica_id">
-                            {{ range .Data.Politiques }}
-                            <option value="{{ .ID }}">{{ .Nom }}</option>
-                            {{ end }}
-                        </select>
-                        <button type="submit" class="boto-primari">Afegir</button>
-                    </form>
-                    <h3>Polítiques actuals</h3>
-                    <ul class="llista-simple">
-                        {{ range .Data.UserPols }}
-                        <li>
-                            {{ .Nom }}
-                            <form style="display:inline" method="post" action="/admin/politiques/treure-usuari">
-                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
-                                <input type="hidden" name="user_id" value="{{ $.Data.UserID }}">
-                                <input type="hidden" name="politica_id" value="{{ .ID }}">
-                                <button type="submit" class="boto-secundari">Treure</button>
-                            </form>
-                        </li>
-                        {{ else }}
-                        <li>Sense polítiques assignades</li>
-                        {{ end }}
-                    </ul>
+                    {{ if gt .Data.UserTotal 0 }}
+                    <p class="admin-range">{{ t .Lang "admin.users.range" (printf "%d" .Data.UserRangeStart) (printf "%d" .Data.UserRangeEnd) (printf "%d" .Data.UserTotal) }}</p>
                     {{ end }}
-                </div>
-                <div>
-                    <h2>Grups</h2>
-                    <form class="formulari-admin" method="get" action="/admin/politiques/assignacions">
-                        <label for="group_id">Selecciona grup</label>
-                        <select id="group_id" name="group_id">
-                            <option value="">--</option>
-                            {{ range .Data.Groups }}
-                            <option value="{{ .ID }}" {{ if eq $.Data.GroupID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                    <div class="taula-wrapper">
+                        <table class="taula assign-table">
+                            <thead>
+                                <tr>
+                                    <th>{{ t .Lang "admin.users.table.user" }}</th>
+                                    <th>{{ t .Lang "admin.users.table.name" }}</th>
+                                    <th>{{ t .Lang "admin.users.table.status" }}</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{ range .Data.Users }}
+                                <tr>
+                                    <td>
+                                        <strong>@{{ .Usuari }}</strong>
+                                        <small>ID {{ .ID }}</small>
+                                    </td>
+                                    <td>{{ if or .Nom .Cognoms }}{{ .Nom }} {{ .Cognoms }}{{ else }}—{{ end }}</td>
+                                    <td>
+                                        <div class="user-status">
+                                            {{ if .Active }}
+                                            <span class="badge verd">{{ t $.Lang "common.active" }}</span>
+                                            {{ else }}
+                                            <span class="badge gris">{{ t $.Lang "common.inactive" }}</span>
+                                            {{ end }}
+                                            {{ if .Banned }}
+                                            <span class="badge vermell">{{ t $.Lang "admin.users.status.banned" }}</span>
+                                            {{ end }}
+                                        </div>
+                                    </td>
+                                    <td class="accions">
+                                        <a class="boto-secundari" href="/admin/politiques/assignacions?user_id={{ .ID }}{{ if $.Data.UserSelectBase }}&{{ $.Data.UserSelectBase }}{{ end }}">{{ t $.Lang "policies.assign.users.select" }}</a>
+                                    </td>
+                                </tr>
+                                {{ else }}
+                                <tr><td colspan="4">{{ t .Lang "common.empty" }}</td></tr>
+                                {{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+                    {{ if gt .Data.UserTotalPages 1 }}
+                    <div class="paginacio">
+                        <div class="paginacio-cont">
+                            {{ if .Data.UserHasPrev }}
+                            <a class="boto-secundari" href="/admin/politiques/assignacions?user_page={{ .Data.UserPrevPage }}{{ if .Data.UserPageBase }}&{{ .Data.UserPageBase }}{{ end }}">{{ t .Lang "common.prev" }}</a>
                             {{ end }}
-                        </select>
-                        <button type="submit" class="boto-primari">Veure</button>
-                    </form>
+                            <span class="paginacio-info">{{ t .Lang "points.ranking.pageInfo" (printf "%d" .Data.UserPage) (printf "%d" .Data.UserTotalPages) }}</span>
+                            {{ if .Data.UserHasNext }}
+                            <a class="boto-secundari" href="/admin/politiques/assignacions?user_page={{ .Data.UserNextPage }}{{ if .Data.UserPageBase }}&{{ .Data.UserPageBase }}{{ end }}">{{ t .Lang "common.next" }}</a>
+                            {{ end }}
+                        </div>
+                    </div>
+                    {{ end }}
 
+                    <div class="assign-panel" style="margin-top:16px">
+                        <h3>{{ t .Lang "policies.assign.users.selected" }}</h3>
+                        {{ if .Data.SelectedUser }}
+                        <div class="assign-summary">
+                            <strong>@{{ .Data.SelectedUser.Usuari }}</strong>
+                            <span class="muted">{{ if or .Data.SelectedUser.Nom .Data.SelectedUser.Cognoms }}{{ .Data.SelectedUser.Nom }} {{ .Data.SelectedUser.Cognoms }}{{ else }}—{{ end }}</span>
+                            <span class="muted">{{ if .Data.SelectedUser.Email }}{{ .Data.SelectedUser.Email }}{{ else }}—{{ end }}</span>
+                        </div>
+                        <form class="form-filtres" method="post" action="/admin/politiques/assignar-usuari">
+                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                            <input type="hidden" name="user_id" value="{{ .Data.SelectedUser.ID }}">
+                            <input type="hidden" name="return_to" value="{{ .Data.ReturnTo }}">
+                            <div class="fila-camp">
+                                <label for="pol-usuari">{{ t .Lang "policies.assign.users.add" }}</label>
+                                <select id="pol-usuari" name="politica_id">
+                                    {{ range .Data.Politiques }}
+                                    <option value="{{ .ID }}">{{ .Nom }}</option>
+                                    {{ end }}
+                                </select>
+                            </div>
+                            <div class="fila-camp">
+                                <label>&nbsp;</label>
+                                <button type="submit" class="boto-primari pequeno"><i class="fas fa-plus"></i> <span>{{ t .Lang "common.add" }}</span></button>
+                            </div>
+                        </form>
+                        <h4>{{ t .Lang "policies.assign.users.current" }}</h4>
+                        <ul class="llista-simple">
+                            {{ range .Data.UserPols }}
+                            <li class="assign-inline">
+                                <span>{{ .Nom }}</span>
+                                <form method="post" action="/admin/politiques/treure-usuari">
+                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                    <input type="hidden" name="user_id" value="{{ $.Data.SelectedUser.ID }}">
+                                    <input type="hidden" name="politica_id" value="{{ .ID }}">
+                                    <input type="hidden" name="return_to" value="{{ $.Data.ReturnTo }}">
+                                    <button type="submit" class="boto-secundari">{{ t $.Lang "common.remove" }}</button>
+                                </form>
+                            </li>
+                            {{ else }}
+                            <li>{{ t .Lang "policies.assign.none" }}</li>
+                            {{ end }}
+                        </ul>
+                        {{ else }}
+                        <p class="muted">{{ t .Lang "policies.assign.users.none" }}</p>
+                        {{ end }}
+                    </div>
+                </div>
+                <div class="assign-panel">
+                    <h2>{{ t .Lang "policies.assign.groups.title" }}</h2>
+                    <form class="form-filtres" method="get" action="/admin/politiques/assignacions">
+                        <div class="fila-camp">
+                            <label for="group_id">{{ t .Lang "policies.assign.groups.select" }}</label>
+                            <select id="group_id" name="group_id">
+                                <option value="">{{ t .Lang "common.select" }}</option>
+                                {{ range .Data.Groups }}
+                                <option value="{{ .ID }}" {{ if eq $.Data.GroupID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                                {{ end }}
+                            </select>
+                        </div>
+                        <div class="fila-camp">
+                            <label>&nbsp;</label>
+                            <button type="submit" class="boto-primari pequeno"><i class="fas fa-eye"></i> <span>{{ t .Lang "common.view" }}</span></button>
+                        </div>
+                        {{ if .Data.UserID }}<input type="hidden" name="user_id" value="{{ .Data.UserID }}">{{ end }}
+                        {{ if .Data.UserQuery }}<input type="hidden" name="user_q" value="{{ .Data.UserQuery }}">{{ end }}
+                        {{ if .Data.UserPerPage }}<input type="hidden" name="user_per_page" value="{{ .Data.UserPerPage }}">{{ end }}
+                        {{ if .Data.UserPage }}<input type="hidden" name="user_page" value="{{ .Data.UserPage }}">{{ end }}
+                    </form>
                     {{ if .Data.GroupID }}
-                    <form class="formulari-admin" method="post" action="/admin/politiques/assignar-grup">
+                    <form class="form-filtres" method="post" action="/admin/politiques/assignar-grup">
                         <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                         <input type="hidden" name="group_id" value="{{ .Data.GroupID }}">
-                        <label for="pol-grup">Afegir política</label>
-                        <select id="pol-grup" name="politica_id">
-                            {{ range .Data.Politiques }}
-                            <option value="{{ .ID }}">{{ .Nom }}</option>
-                            {{ end }}
-                        </select>
-                        <button type="submit" class="boto-primari">Afegir</button>
+                        <input type="hidden" name="return_to" value="{{ .Data.ReturnTo }}">
+                        <div class="fila-camp">
+                            <label for="pol-grup">{{ t .Lang "policies.assign.groups.add" }}</label>
+                            <select id="pol-grup" name="politica_id">
+                                {{ range .Data.Politiques }}
+                                <option value="{{ .ID }}">{{ .Nom }}</option>
+                                {{ end }}
+                            </select>
+                        </div>
+                        <div class="fila-camp">
+                            <label>&nbsp;</label>
+                            <button type="submit" class="boto-primari pequeno"><i class="fas fa-plus"></i> <span>{{ t .Lang "common.add" }}</span></button>
+                        </div>
                     </form>
-                    <h3>Polítiques del grup</h3>
+                    <h4>{{ t .Lang "policies.assign.groups.current" }}</h4>
                     <ul class="llista-simple">
                         {{ range .Data.GroupPols }}
-                        <li>
-                            {{ .Nom }}
-                            <form style="display:inline" method="post" action="/admin/politiques/treure-grup">
+                        <li class="assign-inline">
+                            <span>{{ .Nom }}</span>
+                            <form method="post" action="/admin/politiques/treure-grup">
                                 <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                 <input type="hidden" name="group_id" value="{{ $.Data.GroupID }}">
                                 <input type="hidden" name="politica_id" value="{{ .ID }}">
-                                <button type="submit" class="boto-secundari">Treure</button>
+                                <input type="hidden" name="return_to" value="{{ $.Data.ReturnTo }}">
+                                <button type="submit" class="boto-secundari">{{ t $.Lang "common.remove" }}</button>
                             </form>
                         </li>
                         {{ else }}
-                        <li>Sense polítiques assignades</li>
+                        <li>{{ t .Lang "policies.assign.none" }}</li>
                         {{ end }}
                     </ul>
+                    {{ else }}
+                    <p class="muted">{{ t .Lang "policies.assign.groups.none" }}</p>
                     {{ end }}
                 </div>
             </div>

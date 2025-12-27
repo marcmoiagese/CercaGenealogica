@@ -34,6 +34,10 @@ type DB interface {
 	SavePrivacySettings(userID int, p *PrivacySettings) error
 	UpdateUserProfile(u *User) error
 	UpdateUserEmail(userID int, newEmail string) error
+	// Admin users
+	ListUsersAdmin() ([]UserAdminRow, error)
+	SetUserActive(userID int, active bool) error
+	SetUserBanned(userID int, banned bool) error
 	CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error
 	ConfirmEmailChange(token string) (*EmailChange, error)
 	RevertEmailChange(token string) (*EmailChange, error)
@@ -67,6 +71,19 @@ type DB interface {
 	RecalcUserPoints() error
 	GetRanking(f RankingFilter) ([]UserPoints, error)
 	CountRanking(f RankingFilter) (int, error)
+	// Cognoms
+	ListCognoms(q string, limit, offset int) ([]Cognom, error)
+	GetCognom(id int) (*Cognom, error)
+	UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error)
+	ListCognomVariants(f CognomVariantFilter) ([]CognomVariant, error)
+	CreateCognomVariant(v *CognomVariant) (int, error)
+	UpdateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error
+	UpsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error
+	QueryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]CognomFreqRow, error)
+	ListCognomImportRows(limit, offset int) ([]CognomImportRow, error)
+	ListCognomStatsRows(limit, offset int) ([]CognomStatsRow, error)
+	ResolveCognomPublicatByForma(forma string) (int, string, bool, error)
+	ListCognomFormesPublicades(cognomID int) ([]string, error)
 
 	// Persones (moderació)
 	ListPersones(filter PersonaFilter) ([]Persona, error)
@@ -91,6 +108,9 @@ type DB interface {
 	AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error
 	UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error
 	DeleteArxiuLlibre(arxiuID, llibreID int) error
+	ListLlibreURLs(llibreID int) ([]LlibreURL, error)
+	AddLlibreURL(link *LlibreURL) error
+	DeleteLlibreURL(id int) error
 	SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error)
 	ListLlibres(filter LlibreFilter) ([]LlibreRow, error)
 	GetLlibre(id int) (*Llibre, error)
@@ -114,6 +134,7 @@ type DB interface {
 	ListTranscripcionsRawPageStats(llibreID int) ([]TranscripcioRawPageStat, error)
 	UpdateTranscripcionsRawPageStat(stat *TranscripcioRawPageStat) error
 	RecalcTranscripcionsRawPageStats(llibreID int) error
+	SetTranscripcionsRawPageStatsIndexacio(llibreID int, value int) error
 	DeleteTranscripcionsByLlibre(llibreID int) error
 	CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, error)
 	ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error)
@@ -186,6 +207,27 @@ type User struct {
 	Phone         string
 	PreferredLang string
 	SpokenLangs   string
+}
+
+type UserAdminRow struct {
+	ID        int
+	Usuari    string
+	Nom       string
+	Cognoms   string
+	Email     string
+	CreatedAt string
+	LastLogin string
+	Active    bool
+	Banned    bool
+}
+
+type UserAdminFilter struct {
+	UserID int
+	Query  string
+	Active *bool
+	Banned *bool
+	Limit  int
+	Offset int
 }
 
 type PasswordReset struct {
@@ -263,6 +305,69 @@ type RankingFilter struct {
 	Limit         int
 	Offset        int
 	PublicOnly    bool
+}
+
+type Cognom struct {
+	ID        int
+	Forma     string
+	Key       string
+	Origen    string
+	Notes     string
+	CreatedBy sql.NullInt64
+	CreatedAt sql.NullTime
+	UpdatedAt sql.NullTime
+}
+
+type CognomVariant struct {
+	ID             int
+	CognomID       int
+	Variant        string
+	Key            string
+	Llengua        string
+	AnyInici       sql.NullInt64
+	AnyFi          sql.NullInt64
+	PaisID         sql.NullInt64
+	MunicipiID     sql.NullInt64
+	ModeracioEstat string
+	ModeracioMotiu string
+	ModeratedBy    sql.NullInt64
+	ModeratedAt    sql.NullTime
+	CreatedBy      sql.NullInt64
+	CreatedAt      sql.NullTime
+	UpdatedAt      sql.NullTime
+}
+
+type CognomVariantFilter struct {
+	CognomID int
+	Status   string
+	Q        string
+	Limit    int
+	Offset   int
+}
+
+type CognomFreqRow struct {
+	MunicipiID  int
+	MunicipiNom sql.NullString
+	Latitud     sql.NullFloat64
+	Longitud    sql.NullFloat64
+	AnyDoc      int
+	Freq        int
+}
+
+type CognomImportRow struct {
+	Cognom1      sql.NullString
+	Cognom1Estat sql.NullString
+	Cognom2      sql.NullString
+	Cognom2Estat sql.NullString
+}
+
+type CognomStatsRow struct {
+	Cognom1      sql.NullString
+	Cognom1Estat sql.NullString
+	Cognom2      sql.NullString
+	Cognom2Estat sql.NullString
+	AnyDoc       sql.NullInt64
+	MunicipiID   sql.NullInt64
 }
 
 type Pais struct {
@@ -522,6 +627,18 @@ type ArxiuLlibreDetail struct {
 	Pagines     sql.NullInt64
 }
 
+type LlibreURL struct {
+	ID         int
+	LlibreID   int
+	ArxiuID    sql.NullInt64
+	ArxiuNom   sql.NullString
+	URL        string
+	Tipus      sql.NullString
+	Descripcio sql.NullString
+	CreatedBy  sql.NullInt64
+	CreatedAt  sql.NullTime
+}
+
 type LlibreSimple struct {
 	ID          int
 	Titol       string
@@ -709,6 +826,8 @@ type PersonaSearchFilter struct {
 	AnyMin   int
 	AnyMax   int
 	Limit    int
+	UseCognomDictionary bool
+	ExpandedCognoms     []string
 }
 
 type PersonaSearchResult struct {

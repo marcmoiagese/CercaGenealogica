@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS usuaris (
     token_activacio TEXT,
     expira_token DATETIME,
     actiu BOOLEAN DEFAULT TRUE, -- BOOLEAN es mapeja a TINYINT(1)
+    banned BOOLEAN DEFAULT FALSE,
     INDEX idx_usuaris_correu (correu),
     INDEX idx_usuaris_data_creacio (data_creacio)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -522,6 +523,23 @@ CREATE TABLE IF NOT EXISTS llibre_pagines (
 -- Índexs per accelerar consultes habituals
 CREATE INDEX idx_arxius_llibres_arxiu  ON arxius_llibres(arxiu_id);
 CREATE INDEX idx_arxius_llibres_llibre ON arxius_llibres(llibre_id);
+
+DROP TABLE IF EXISTS llibres_urls;
+CREATE TABLE IF NOT EXISTS llibres_urls (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  llibre_id INT UNSIGNED NOT NULL,
+  arxiu_id INT UNSIGNED NULL,
+  url TEXT NOT NULL,
+  tipus VARCHAR(50),
+  descripcio TEXT,
+  created_by INT UNSIGNED NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_llibres_urls_llibre FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE CASCADE,
+  CONSTRAINT fk_llibres_urls_arxiu FOREIGN KEY (arxiu_id) REFERENCES arxius(id) ON DELETE SET NULL,
+  CONSTRAINT fk_llibres_urls_created_by FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_llibres_urls_llibre ON llibres_urls(llibre_id);
+CREATE INDEX idx_llibres_urls_arxiu ON llibres_urls(arxiu_id);
 CREATE INDEX idx_llibre_pagines_estat  ON llibre_pagines(llibre_id, estat);
 
 -- Transcripcions RAW de registres
@@ -654,6 +672,64 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw_canvis (
   changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (transcripcio_id) REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
   FOREIGN KEY (changed_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Cognoms (forma canònica)
+CREATE TABLE IF NOT EXISTS cognoms (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  forma VARCHAR(255) NOT NULL,
+  `key` VARCHAR(255) NOT NULL,
+  origen TEXT,
+  notes TEXT,
+  created_by INT UNSIGNED,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_cognoms_key (`key`),
+  INDEX idx_cognoms_forma (forma),
+  INDEX idx_cognoms_updated_at (updated_at),
+  FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Variants de cognom (moderables)
+CREATE TABLE IF NOT EXISTS cognom_variants (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  cognom_id INT UNSIGNED NOT NULL,
+  variant VARCHAR(255) NOT NULL,
+  `key` VARCHAR(255) NOT NULL,
+  llengua VARCHAR(20),
+  any_inici INT,
+  any_fi INT,
+  pais_id INT UNSIGNED,
+  municipi_id INT UNSIGNED,
+  moderation_status VARCHAR(20) DEFAULT 'pendent',
+  moderated_by INT UNSIGNED,
+  moderated_at DATETIME,
+  moderation_notes TEXT,
+  created_by INT UNSIGNED,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_cognom_variants (cognom_id, `key`),
+  INDEX idx_cognom_variants_status (cognom_id, moderation_status),
+  INDEX idx_cognom_variants_key (`key`),
+  FOREIGN KEY (cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE,
+  FOREIGN KEY (pais_id) REFERENCES paisos(id) ON DELETE SET NULL,
+  FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE SET NULL,
+  FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Estadístiques pre-agregades per cognom/municipi/any
+CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_any (
+  cognom_id INT UNSIGNED NOT NULL,
+  municipi_id INT UNSIGNED NOT NULL,
+  any_doc INT NOT NULL,
+  freq INT NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id, municipi_id, any_doc),
+  INDEX idx_cognoms_freq_cognom_any (cognom_id, any_doc),
+  INDEX idx_cognoms_freq_municipi_any (municipi_id, any_doc),
+  FOREIGN KEY (cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE,
+  FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_transcripcions_raw_llibre_pagina

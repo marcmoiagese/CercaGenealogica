@@ -1,9 +1,10 @@
-document.addEventListener("DOMContentLoaded", () => {
-    const table = document.getElementById("pageStatsTable");
-    const form = document.getElementById("pageStatsForm");
-    if (!table || !form) {
-        return;
-    }
+(() => {
+    function initPageStats() {
+        const table = document.getElementById("pageStatsTable");
+        const form = document.getElementById("pageStatsForm");
+        if (!table || !form) {
+            return;
+        }
 
     const editLabel = table.dataset.editLabel || "Editar";
     const confirmLabel = table.dataset.confirmLabel || "Guardar";
@@ -160,7 +161,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const modalForm = document.getElementById("page-stats-modal-form");
     const modalType = document.getElementById("page-stats-type");
     const modalExclude = document.getElementById("page-stats-exclosa");
-    const modalIndexed = document.getElementById("page-stats-indexat");
     const modalDuplicate = document.getElementById("page-stats-duplicada");
     const modalSave = document.getElementById("page-stats-modal-save");
     const modalCloseButtons = modal ? modal.querySelectorAll("[data-page-stats-close]") : [];
@@ -188,21 +188,43 @@ document.addEventListener("DOMContentLoaded", () => {
         if (modalExclude) {
             modalExclude.checked = row.dataset.exclosa === "1";
         }
-        if (modalIndexed) {
-            modalIndexed.checked = row.dataset.indexacioCompleta === "1";
-        }
         if (modalDuplicate) {
             modalDuplicate.value = row.dataset.duplicadaDe || "";
         }
         modal.classList.add("is-open");
     }
 
-    table.querySelectorAll(".page-stat-config").forEach((button) => {
-        button.addEventListener("click", () => {
-            const row = button.closest("tr");
-            openModal(row);
+        table.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+            const configButton = target.closest(".page-stat-config");
+            if (configButton) {
+                const row = configButton.closest("tr");
+                openModal(row);
+                return;
+            }
+            const toggleButton = target.closest(".page-stat-toggle-indexed");
+            if (toggleButton) {
+                event.preventDefault();
+                const row = toggleButton.closest("tr");
+                if (!row) {
+                    return;
+                }
+                const current = row.dataset.indexacioCompleta === "1";
+                const nextValue = current ? "0" : "1";
+                row.dataset.indexacioCompleta = nextValue;
+                toggleButton.classList.toggle("is-active", nextValue === "1");
+                toggleButton.setAttribute("aria-pressed", nextValue === "1" ? "true" : "false");
+                const icon = toggleButton.querySelector("i");
+                if (icon) {
+                    icon.classList.toggle("fa-check-circle", nextValue === "1");
+                    icon.classList.toggle("fa-circle", nextValue !== "1");
+                }
+                submitRow(row);
+            }
         });
-    });
 
     if (modalSave) {
         modalSave.addEventListener("click", () => {
@@ -215,9 +237,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (modalExclude) {
                 activeRow.dataset.exclosa = modalExclude.checked ? "1" : "0";
-            }
-            if (modalIndexed) {
-                activeRow.dataset.indexacioCompleta = modalIndexed.checked ? "1" : "0";
             }
             if (modalDuplicate) {
                 activeRow.dataset.duplicadaDe = modalDuplicate.value.trim();
@@ -237,4 +256,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
-});
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initPageStats);
+    } else {
+        initPageStats();
+    }
+})();

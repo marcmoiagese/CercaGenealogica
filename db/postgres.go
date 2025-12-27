@@ -172,6 +172,26 @@ func (d *PostgreSQL) UpdateUserEmail(userID int, newEmail string) error {
 	return d.help.updateUserEmail(userID, newEmail)
 }
 
+func (d *PostgreSQL) ListUsersAdmin() ([]UserAdminRow, error) {
+	return d.help.listUsersAdmin()
+}
+
+func (d *PostgreSQL) ListUsersAdminFiltered(filter UserAdminFilter) ([]UserAdminRow, error) {
+	return d.help.listUsersAdminFiltered(filter)
+}
+
+func (d *PostgreSQL) CountUsersAdmin(filter UserAdminFilter) (int, error) {
+	return d.help.countUsersAdmin(filter)
+}
+
+func (d *PostgreSQL) SetUserActive(userID int, active bool) error {
+	return d.help.setUserActive(userID, active)
+}
+
+func (d *PostgreSQL) SetUserBanned(userID int, banned bool) error {
+	return d.help.setUserBanned(userID, banned)
+}
+
 func (d *PostgreSQL) CreateEmailChange(userID int, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang string) error {
 	return d.help.createEmailChange(userID, newEmail, tokenConfirm, expConfirm, tokenRevert, expRevert, lang)
 }
@@ -361,6 +381,18 @@ func (d *PostgreSQL) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) 
 func (d *PostgreSQL) ListLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
 	return d.help.listLlibreArxius(llibreID)
 }
+
+func (d *PostgreSQL) ListLlibreURLs(llibreID int) ([]LlibreURL, error) {
+	return d.help.listLlibreURLs(llibreID)
+}
+
+func (d *PostgreSQL) AddLlibreURL(link *LlibreURL) error {
+	return d.help.addLlibreURL(link)
+}
+
+func (d *PostgreSQL) DeleteLlibreURL(id int) error {
+	return d.help.deleteLlibreURL(id)
+}
 func (d *PostgreSQL) AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
 	return d.help.addArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
 }
@@ -442,6 +474,9 @@ func (d *PostgreSQL) UpdateTranscripcionsRawPageStat(stat *TranscripcioRawPageSt
 }
 func (d *PostgreSQL) RecalcTranscripcionsRawPageStats(llibreID int) error {
 	return d.help.recalcTranscripcionsRawPageStats(llibreID)
+}
+func (d *PostgreSQL) SetTranscripcionsRawPageStatsIndexacio(llibreID int, value int) error {
+	return d.help.setTranscripcionsRawPageStatsIndexacio(llibreID, value)
 }
 
 func (d *PostgreSQL) DeleteTranscripcionsByLlibre(llibreID int) error {
@@ -535,4 +570,42 @@ func (d *PostgreSQL) GetRanking(f RankingFilter) ([]UserPoints, error) {
 }
 func (d *PostgreSQL) CountRanking(f RankingFilter) (int, error) {
 	return d.help.countRanking(f)
+}
+
+// Cognoms
+func (d *PostgreSQL) ListCognoms(q string, limit, offset int) ([]Cognom, error) {
+	return d.help.listCognoms(q, limit, offset)
+}
+func (d *PostgreSQL) GetCognom(id int) (*Cognom, error) { return d.help.getCognom(id) }
+func (d *PostgreSQL) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
+	return d.help.upsertCognom(forma, key, origen, notes, createdBy)
+}
+func (d *PostgreSQL) ListCognomVariants(f CognomVariantFilter) ([]CognomVariant, error) {
+	return d.help.listCognomVariants(f)
+}
+func (d *PostgreSQL) ResolveCognomPublicatByForma(forma string) (int, string, bool, error) {
+	return d.help.resolveCognomPublicatByForma(forma)
+}
+func (d *PostgreSQL) ListCognomFormesPublicades(cognomID int) ([]string, error) {
+	return d.help.listCognomFormesPublicades(cognomID)
+}
+func (d *PostgreSQL) CreateCognomVariant(v *CognomVariant) (int, error) {
+	return d.help.createCognomVariant(v)
+}
+func (d *PostgreSQL) UpdateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateCognomVariantModeracio(id, estat, motiu, moderatorID)
+}
+func (d *PostgreSQL) UpsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error {
+	return d.help.upsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq)
+}
+func (d *PostgreSQL) QueryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]CognomFreqRow, error) {
+	return d.help.queryCognomHeatmap(cognomID, anyStart, anyEnd)
+}
+
+func (d *PostgreSQL) ListCognomImportRows(limit, offset int) ([]CognomImportRow, error) {
+	return d.help.listCognomImportRows(limit, offset)
+}
+
+func (d *PostgreSQL) ListCognomStatsRows(limit, offset int) ([]CognomStatsRow, error) {
+	return d.help.listCognomStatsRows(limit, offset)
 }
