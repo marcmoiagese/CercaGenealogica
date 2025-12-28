@@ -16,6 +16,7 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
+	*r = *a.withPermissions(r, perms)
 	filter := db.ArquebisbatFilter{
 		Text: strings.TrimSpace(r.URL.Query().Get("q")),
 	}

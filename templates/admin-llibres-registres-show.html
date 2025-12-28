@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "records.show.title" }}</title>
     {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/persona.css">
+    <link rel="stylesheet" href="/static/css/registres-taula.css">
 </head>
 <body>
     {{ template "header-private" . }}
@@ -22,11 +24,16 @@
                     <a class="boto-secundari" href="/documentals/registres/{{ .Data.Registre.ID }}/editar">{{ t .Lang "records.action.edit" }}</a>
                     <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Registre.LlibreID }}/registres">{{ t .Lang "records.show.back" }}</a>
                 </div>
-                {{ if .Data.Registre.ModeracioEstat }}
-                <span class="badge {{ if eq .Data.Registre.ModeracioEstat "publicat" }}verd{{ else if eq .Data.Registre.ModeracioEstat "pendent" }}taronja{{ else }}vermell{{ end }}">
-                    {{ t .Lang (printf "activity.status.%s" .Data.Registre.ModeracioEstat) }}
-                </span>
-                {{ end }}
+                <div class="opcions-dropdown">
+                    <button class="boto-opcions" id="botoOpcions">
+                        <i class="fas fa-cog"></i> {{ t .Lang "records.options.title" }} <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <ul class="dropdown-opcions" id="dropdownOpcions">
+                        <li><a href="/documentals/registres/{{ .Data.Registre.ID }}/historial"><i class="fas fa-clock-rotate-left"></i> {{ t .Lang "records.options.history" }}</a></li>
+                        <li><a href="/documentals/registres/{{ .Data.Registre.ID }}/estadistiques"><i class="fas fa-chart-line"></i> {{ t .Lang "records.options.stats" }}</a></li>
+                        <li><a href="#" class="btn-marcar" data-registre-id="{{ .Data.Registre.ID }}" onclick="event.preventDefault()"><i class="fas fa-eye"></i> {{ t .Lang "records.options.follow" }}</a></li>
+                    </ul>
+                </div>
             </header>
 
             <ul class="dades-grid">

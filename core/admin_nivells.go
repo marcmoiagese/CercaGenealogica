@@ -22,6 +22,8 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+	perms := a.getPermissionsForUser(user.ID)
+	*r = *a.withPermissions(r, perms)
 	paisID := extractID(r.URL.Path)
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {

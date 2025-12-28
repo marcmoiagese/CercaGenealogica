@@ -16,6 +16,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
+	*r = *a.withPermissions(r, perms)
 	filter := db.MunicipiFilter{
 		Text:   strings.TrimSpace(r.URL.Query().Get("q")),
 		Estat:  strings.TrimSpace(r.URL.Query().Get("estat")),

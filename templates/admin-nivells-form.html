@@ -68,7 +68,8 @@
                         {{ t .Lang "levels.form.parent" }}
                         <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-parent" aria-label="{{ t .Lang "levels.help.parent.button" }}">?</button>
                     </label>
-                    <select id="parent_id" name="parent_id">
+                    <input type="text" id="parent_search" class="input-text" placeholder="{{ t .Lang "levels.form.parent.search" }}" autocomplete="off">
+                    <select id="parent_id" name="parent_id" size="8" style="margin-top:0.5rem;">
                         <option value="">{{ t .Lang "levels.form.parent.none" }}</option>
                         {{ range .Data.Parents }}
                         <option value="{{ .ID }}" {{ if and $.Data.Nivell.ParentID.Valid (eq .ID (int $.Data.Nivell.ParentID.Int64)) }}selected{{ end }}>{{ .NomNivell }} ({{ .Nivel }})</option>
@@ -243,6 +244,8 @@
         const modals = document.querySelectorAll('.modal-ajuda');
         const tipusSearch = document.getElementById('tipus_search');
         const tipusSelect = document.getElementById('tipus_nivell');
+        const parentSearch = document.getElementById('parent_search');
+        const parentSelect = document.getElementById('parent_id');
         ajudaButtons.forEach(btn => {
             btn.addEventListener('click', ()=>{
                 const target = btn.getAttribute('aria-controls');
@@ -260,6 +263,16 @@
                 const q = tipusSearch.value.toLowerCase();
                 for(let i=0;i<tipusSelect.options.length;i++){
                     const opt = tipusSelect.options[i];
+                    if (!opt.value) { opt.style.display=''; continue; }
+                    opt.style.display = opt.textContent.toLowerCase().includes(q) ? '' : 'none';
+                }
+            });
+        }
+        if (parentSearch && parentSelect) {
+            parentSearch.addEventListener('input', ()=>{
+                const q = parentSearch.value.toLowerCase();
+                for(let i=0;i<parentSelect.options.length;i++){
+                    const opt = parentSelect.options[i];
                     if (!opt.value) { opt.style.display=''; continue; }
                     opt.style.display = opt.textContent.toLowerCase().includes(q) ? '' : 'none';
                 }

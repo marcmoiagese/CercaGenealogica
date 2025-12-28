@@ -3432,6 +3432,40 @@ func (h sqlHelper) createTranscripcioRawChange(c *TranscripcioRawChange) (int, e
 	return c.ID, nil
 }
 
+func (h sqlHelper) listTranscripcioRawChanges(transcripcioID int) ([]TranscripcioRawChange, error) {
+	query := `
+        SELECT id, transcripcio_id, change_type, field_key, old_value, new_value, metadata, changed_by, changed_at
+        FROM transcripcions_raw_canvis
+        WHERE transcripcio_id = ?
+        ORDER BY changed_at DESC, id DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, transcripcioID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res []TranscripcioRawChange
+	for rows.Next() {
+		var c TranscripcioRawChange
+		if err := rows.Scan(
+			&c.ID,
+			&c.TranscripcioID,
+			&c.ChangeType,
+			&c.FieldKey,
+			&c.OldValue,
+			&c.NewValue,
+			&c.Metadata,
+			&c.ChangedBy,
+			&c.ChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, c)
+	}
+	return res, rows.Err()
+}
+
 func (h sqlHelper) listTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	query := `
         SELECT id, transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat, sexe, sexe_estat,

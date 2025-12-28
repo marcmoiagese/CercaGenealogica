@@ -1,0 +1,192 @@
+.detall-persona {
+    background: white;
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    margin-bottom: 30px;
+}
+.seccio-titol {
+    color: var(--primary-color);
+    font-size: 1.2rem;
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.seccio-titol i {
+    color: var(--secondary-color);
+}
+.dades {
+    margin-left: 20px;
+}
+.dades dt {
+    font-weight: bold;
+    margin-top: 10px;
+}
+.document-link {
+    color: var(--secondary-color);
+    text-decoration: underline;
+}
+.imatge-persona {
+    max-width: 100%;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+.notes-usuari {
+    background: #f9f9f9;
+    padding: 15px;
+    border-left: 4px solid var(--secondary-color);
+    border-radius: 4px;
+    margin-top: 15px;
+}
+.recursos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+.recurso {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.1);
+}
+.recurso h4 {
+    margin-top: 0;
+}
+
+.opcions-dropdown {
+    position: relative;
+    display: inline-block;
+    float: right;
+    margin-bottom: 20px;
+}
+
+.boto-opcions {
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.boto-opcions:hover {
+    background-color: #0d4b6e;
+}
+
+.dropdown-opcions {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: white;
+    min-width: 200px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-radius: 4px;
+    display: none;
+    z-index: 1000;
+}
+
+.dropdown-opcions li a {
+    color: var(--primary-color);
+    padding: 10px 15px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dropdown-opcions li a:hover {
+    background-color: #f1f1f1;
+}
+
+@media (max-width: 768px) {
+    .opcions-dropdown {
+        position: relative;
+        top: auto;
+        right: auto;
+        text-align: center;
+    }
+}
+
+#modalSeguirPersona {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+#modalSeguirPersona .modal-contingut {
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 450px;
+    position: relative;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    z-index: 10000;
+}
+
+#modalSeguirPersona .modal-tanca {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    color: #666;
+    cursor: pointer;
+}
+#modalSeguirPersona .modal-tanca:hover {
+    color: var(--primary-color);
+}
+
+#modalSeguirPersona h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    text-align: center;
+    color: var(--primary-color);
+}
+
+#modalSeguirPersona .form-grup {
+    margin-bottom: 15px;
+}
+
+#modalSeguirPersona .form-grup label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+#modalSeguirPersona .form-grup select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--color-borda);
+    border-radius: 4px;
+}
+
+#modalSeguirPersona .form-grup label input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+#modalSeguirPersona .boto-login-modal {
+    width: 100%;
+    padding: 10px;
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}

@@ -1,0 +1,97 @@
+{{ define "admin-territori-import.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "territory.io.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "territory.io.kicker" }}</p>
+                    <h1>{{ t .Lang "territory.io.title" }}</h1>
+                </div>
+                <div class="card-actions">
+                    <a class="boto-secundari" href="/admin/territori/export">
+                        <i class="fas fa-file-export"></i>
+                        <span>{{ t .Lang "territory.io.export" }}</span>
+                    </a>
+                </div>
+            </header>
+            <p class="muted">{{ t .Lang "territory.io.description" }}</p>
+
+            {{ if .Data.Msg }}
+            <div class="alert alert-error">{{ .Data.Msg }}</div>
+            {{ end }}
+
+            <form class="form-vertical" method="post" action="/admin/territori/import/run" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="grup-camp">
+                    <label for="territori-file">{{ t .Lang "territory.io.import.file" }}</label>
+                    <input id="territori-file" type="file" name="import_file" accept="application/json" required>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">
+                        <i class="fas fa-file-import"></i>
+                        <span>{{ t .Lang "territory.io.import.run" }}</span>
+                    </button>
+                </div>
+            </form>
+
+            {{ if .Data.ImportRun }}
+            <h3>{{ t .Lang "territory.io.summary.title" }}</h3>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <tbody>
+                        <tr>
+                            <th>{{ t .Lang "territory.io.summary.countries" }}</th>
+                            <td>{{ .Data.CountriesCreated }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "territory.io.summary.levels_total" }}</th>
+                            <td>{{ .Data.LevelsTotal }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "territory.io.summary.levels_created" }}</th>
+                            <td>{{ .Data.LevelsCreated }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "territory.io.summary.levels_skipped" }}</th>
+                            <td>{{ .Data.LevelsSkipped }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "territory.io.summary.levels_errors" }}</th>
+                            <td>{{ .Data.LevelsErrors }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "territory.io.summary.municipis_total" }}</th>
+                            <td>{{ .Data.MunicipisTotal }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "territory.io.summary.municipis_created" }}</th>
+                            <td>{{ .Data.MunicipisCreated }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "territory.io.summary.municipis_skipped" }}</th>
+                            <td>{{ .Data.MunicipisSkipped }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "territory.io.summary.municipis_errors" }}</th>
+                            <td>{{ .Data.MunicipisErrors }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

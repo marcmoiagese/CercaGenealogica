@@ -1,5 +1,175 @@
 document.addEventListener("DOMContentLoaded", () => {
     const table = document.getElementById("registresTable");
+    const qualityModal = document.getElementById("modalQualitat");
+    if (qualityModal) {
+        const closeQualityBtn = qualityModal.querySelector(".tanca-modal-qualitat");
+        document.addEventListener("click", (event) => {
+            if (event.target.closest(".qualitat-icon")) {
+                qualityModal.style.display = "flex";
+            }
+        });
+        if (closeQualityBtn) {
+            closeQualityBtn.addEventListener("click", () => {
+                qualityModal.style.display = "none";
+            });
+        }
+        window.addEventListener("click", (event) => {
+            if (event.target === qualityModal) {
+                qualityModal.style.display = "none";
+            }
+        });
+    }
+
+    const markModal = document.getElementById("modalMarcar");
+    if (markModal) {
+        const closeMarkBtn = markModal.querySelector(".tanca-modal-marcar");
+        const markType = markModal.querySelector("#mark-type");
+        const markPublic = markModal.querySelector("#mark-public");
+        const markSave = markModal.querySelector("#mark-save");
+        const markClear = markModal.querySelector("#mark-clear");
+        const csrfToken = markModal.dataset.csrf || "";
+        let currentMarkRow = null;
+        let currentMarkID = 0;
+
+        function clearRowMarks(row) {
+            row.classList.remove("mark-consanguini", "mark-politic", "mark-interes");
+        }
+
+        function applyMark(row, markTypeValue) {
+            clearRowMarks(row);
+            if (!markTypeValue) {
+                return;
+            }
+            row.classList.add(`mark-${markTypeValue}`);
+        }
+
+        function updateRowMark(row, mark) {
+            row.dataset.markType = mark.type || "";
+            row.dataset.markPublic = mark.is_public ? "1" : "0";
+            row.dataset.markOwn = mark.own ? "1" : "0";
+            applyMark(row, mark.type);
+        }
+
+        function openMarkModal(button) {
+            currentMarkID = parseInt(button.dataset.registreId || "0", 10);
+            currentMarkRow = button.closest("tr");
+            if (!currentMarkRow) {
+                currentMarkRow = document.querySelector("[data-mark-row='1']");
+            }
+            if (!currentMarkRow) {
+                return;
+            }
+            const existingType = currentMarkRow.dataset.markType || "";
+            const existingPublic = currentMarkRow.dataset.markPublic !== "0";
+            if (markType) {
+                markType.value = existingType;
+            }
+            if (markPublic) {
+                markPublic.checked = existingType ? existingPublic : true;
+            }
+            if (markClear) {
+                markClear.disabled = currentMarkRow.dataset.markOwn !== "1";
+            }
+            markModal.style.display = "flex";
+        }
+
+        function closeMarkModal() {
+            markModal.style.display = "none";
+        }
+
+        document.addEventListener("click", (event) => {
+            const btn = event.target.closest(".btn-marcar");
+            if (!btn) {
+                return;
+            }
+            openMarkModal(btn);
+        });
+
+        if (markSave) {
+            markSave.addEventListener("click", () => {
+                if (!currentMarkID || !currentMarkRow) {
+                    return;
+                }
+                const typeValue = markType ? markType.value : "";
+                if (!typeValue) {
+                    return;
+                }
+                const body = new URLSearchParams();
+                body.set("csrf_token", csrfToken);
+                body.set("type", typeValue);
+                body.set("public", markPublic && markPublic.checked ? "1" : "0");
+                fetch(`/documentals/registres/${currentMarkID}/marcar`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: body.toString(),
+                    credentials: "same-origin",
+                })
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error("mark_failed");
+                        }
+                        return response.json();
+                    })
+                    .then((data) => {
+                        if (data && data.ok) {
+                            updateRowMark(currentMarkRow, {
+                                type: data.type || "",
+                                is_public: data.is_public,
+                                own: true,
+                            });
+                            closeMarkModal();
+                        }
+                    })
+                    .catch(() => {});
+            });
+        }
+
+        if (markClear) {
+            markClear.addEventListener("click", () => {
+                if (!currentMarkID || !currentMarkRow) {
+                    return;
+                }
+                if (currentMarkRow.dataset.markOwn !== "1") {
+                    closeMarkModal();
+                    return;
+                }
+                const body = new URLSearchParams();
+                body.set("csrf_token", csrfToken);
+                fetch(`/documentals/registres/${currentMarkID}/desmarcar`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: body.toString(),
+                    credentials: "same-origin",
+                })
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error("mark_clear_failed");
+                        }
+                        return response.json();
+                    })
+                    .then((data) => {
+                        if (data && data.ok) {
+                            updateRowMark(currentMarkRow, {
+                                type: data.type || "",
+                                is_public: data.is_public,
+                                own: false,
+                            });
+                            closeMarkModal();
+                        }
+                    })
+                    .catch(() => {});
+            });
+        }
+
+        if (closeMarkBtn) {
+            closeMarkBtn.addEventListener("click", closeMarkModal);
+        }
+        window.addEventListener("click", (event) => {
+            if (event.target === markModal) {
+                closeMarkModal();
+            }
+        });
+    }
     if (!table) {
         return;
     }
@@ -842,171 +1012,4 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    const qualityModal = document.getElementById("modalQualitat");
-    if (qualityModal) {
-        const closeQualityBtn = qualityModal.querySelector(".tanca-modal-qualitat");
-        document.addEventListener("click", (event) => {
-            if (event.target.closest(".qualitat-icon")) {
-                qualityModal.style.display = "flex";
-            }
-        });
-        if (closeQualityBtn) {
-            closeQualityBtn.addEventListener("click", () => {
-                qualityModal.style.display = "none";
-            });
-        }
-        window.addEventListener("click", (event) => {
-            if (event.target === qualityModal) {
-                qualityModal.style.display = "none";
-            }
-        });
-    }
-
-    const markModal = document.getElementById("modalMarcar");
-    if (markModal) {
-        const closeMarkBtn = markModal.querySelector(".tanca-modal-marcar");
-        const markType = markModal.querySelector("#mark-type");
-        const markPublic = markModal.querySelector("#mark-public");
-        const markSave = markModal.querySelector("#mark-save");
-        const markClear = markModal.querySelector("#mark-clear");
-        const csrfToken = markModal.dataset.csrf || "";
-        let currentMarkRow = null;
-        let currentMarkID = 0;
-
-        function clearRowMarks(row) {
-            row.classList.remove("mark-consanguini", "mark-politic", "mark-interes");
-        }
-
-        function applyMark(row, markTypeValue) {
-            clearRowMarks(row);
-            if (!markTypeValue) {
-                return;
-            }
-            row.classList.add(`mark-${markTypeValue}`);
-        }
-
-        function updateRowMark(row, mark) {
-            row.dataset.markType = mark.type || "";
-            row.dataset.markPublic = mark.is_public ? "1" : "0";
-            row.dataset.markOwn = mark.own ? "1" : "0";
-            applyMark(row, mark.type);
-        }
-
-        function openMarkModal(button) {
-            currentMarkID = parseInt(button.dataset.registreId || "0", 10);
-            currentMarkRow = button.closest("tr");
-            if (!currentMarkRow) {
-                return;
-            }
-            const existingType = currentMarkRow.dataset.markType || "";
-            const existingPublic = currentMarkRow.dataset.markPublic !== "0";
-            if (markType) {
-                markType.value = existingType;
-            }
-            if (markPublic) {
-                markPublic.checked = existingType ? existingPublic : true;
-            }
-            if (markClear) {
-                markClear.disabled = currentMarkRow.dataset.markOwn !== "1";
-            }
-            markModal.style.display = "flex";
-        }
-
-        function closeMarkModal() {
-            markModal.style.display = "none";
-        }
-
-        document.addEventListener("click", (event) => {
-            const btn = event.target.closest(".btn-marcar");
-            if (!btn) {
-                return;
-            }
-            openMarkModal(btn);
-        });
-
-        if (markSave) {
-            markSave.addEventListener("click", () => {
-                if (!currentMarkID || !currentMarkRow) {
-                    return;
-                }
-                const typeValue = markType ? markType.value : "";
-                if (!typeValue) {
-                    return;
-                }
-                const body = new URLSearchParams();
-                body.set("csrf_token", csrfToken);
-                body.set("type", typeValue);
-                body.set("public", markPublic && markPublic.checked ? "1" : "0");
-                fetch(`/documentals/registres/${currentMarkID}/marcar`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: body.toString(),
-                    credentials: "same-origin",
-                })
-                    .then((response) => {
-                        if (!response.ok) {
-                            throw new Error("mark_failed");
-                        }
-                        return response.json();
-                    })
-                    .then((data) => {
-                        if (data && data.ok) {
-                            updateRowMark(currentMarkRow, {
-                                type: data.type || "",
-                                is_public: data.is_public,
-                                own: true,
-                            });
-                            closeMarkModal();
-                        }
-                    })
-                    .catch(() => {});
-            });
-        }
-
-        if (markClear) {
-            markClear.addEventListener("click", () => {
-                if (!currentMarkID || !currentMarkRow) {
-                    return;
-                }
-                if (currentMarkRow.dataset.markOwn !== "1") {
-                    closeMarkModal();
-                    return;
-                }
-                const body = new URLSearchParams();
-                body.set("csrf_token", csrfToken);
-                fetch(`/documentals/registres/${currentMarkID}/desmarcar`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: body.toString(),
-                    credentials: "same-origin",
-                })
-                    .then((response) => {
-                        if (!response.ok) {
-                            throw new Error("mark_clear_failed");
-                        }
-                        return response.json();
-                    })
-                    .then((data) => {
-                        if (data && data.ok) {
-                            updateRowMark(currentMarkRow, {
-                                type: data.type || "",
-                                is_public: data.is_public,
-                                own: false,
-                            });
-                            closeMarkModal();
-                        }
-                    })
-                    .catch(() => {});
-            });
-        }
-
-        if (closeMarkBtn) {
-            closeMarkBtn.addEventListener("click", closeMarkModal);
-        }
-        window.addEventListener("click", (event) => {
-            if (event.target === markModal) {
-                closeMarkModal();
-            }
-        });
-    }
 });

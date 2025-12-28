@@ -485,6 +485,9 @@ func (d *PostgreSQL) DeleteTranscripcionsByLlibre(llibreID int) error {
 func (d *PostgreSQL) CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, error) {
 	return d.help.createTranscripcioRawChange(c)
 }
+func (d *PostgreSQL) ListTranscripcioRawChanges(transcripcioID int) ([]TranscripcioRawChange, error) {
+	return d.help.listTranscripcioRawChanges(transcripcioID)
+}
 func (d *PostgreSQL) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersones(transcripcioID)
 }

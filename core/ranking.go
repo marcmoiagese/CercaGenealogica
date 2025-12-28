@@ -22,6 +22,11 @@ type rankingRow struct {
 func (a *App) Ranking(w http.ResponseWriter, r *http.Request) {
 	lang := ResolveLang(r)
 	user, _ := a.VerificarSessio(r)
+	var perms db.PolicyPermissions
+	if user != nil {
+		perms = a.getPermissionsForUser(user.ID)
+		*r = *a.withPermissions(r, perms)
+	}
 	pageSize := 20
 	if szStr := r.URL.Query().Get("page_size"); szStr != "" {
 		if v, err := strconv.Atoi(szStr); err == nil && v > 0 {
@@ -82,11 +87,14 @@ func (a *App) Ranking(w http.ResponseWriter, r *http.Request) {
 			Initial:       initial,
 			PreferredLang: u.PreferredLang,
 			Position:      currentIndex + 1,
-			PreferredCode: strings.ToUpper(strings.TrimSpace(u.PreferredLang)),
-		})
+		PreferredCode: strings.ToUpper(strings.TrimSpace(u.PreferredLang)),
+	})
 		currentIndex++
 	}
-	canManageArxius := a.CanManageArxius(user)
+	canManageArxius := false
+	if user != nil {
+		canManageArxius = a.hasPerm(perms, permArxius)
+	}
 	RenderPrivateTemplateLang(w, r, "ranking.html", lang, map[string]interface{}{
 		"Ranking":         result,
 		"Page":            page,

@@ -484,6 +484,9 @@ func (d *MySQL) DeleteTranscripcionsByLlibre(llibreID int) error {
 func (d *MySQL) CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, error) {
 	return d.help.createTranscripcioRawChange(c)
 }
+func (d *MySQL) ListTranscripcioRawChanges(transcripcioID int) ([]TranscripcioRawChange, error) {
+	return d.help.listTranscripcioRawChanges(transcripcioID)
+}
 func (d *MySQL) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersones(transcripcioID)
 }

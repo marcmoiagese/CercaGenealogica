@@ -25,7 +25,9 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	canManage := a.CanManageArxius(user)
+	perms := a.getPermissionsForUser(user.ID)
+	*r = *a.withPermissions(r, perms)
+	canManage := a.hasPerm(perms, permArxius)
 	filter := db.ArxiuFilter{
 		Text:  strings.TrimSpace(r.URL.Query().Get("q")),
 		Tipus: strings.TrimSpace(r.URL.Query().Get("tipus")),
@@ -65,7 +67,9 @@ func (a *App) ShowArxiu(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	canManage := a.CanManageArxius(user)
+	perms := a.getPermissionsForUser(user.ID)
+	*r = *a.withPermissions(r, perms)
+	canManage := a.hasPerm(perms, permArxius)
 	id := extractID(r.URL.Path)
 	if id == 0 {
 		http.NotFound(w, r)
@@ -100,7 +104,7 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canManage := a.hasPerm(perms, permArxius)
+	*r = *a.withPermissions(r, perms)
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
 	if status == "" {
 		status = "publicat"
@@ -126,7 +130,6 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
 		"Arxius":          arxius,
 		"Filter":          filter,
-		"CanManageArxius": canManage,
 		"ArxiusBasePath":  "/documentals/arxius",
 		"Arquebisbats":    arquebisbats,
 		"User":            user,

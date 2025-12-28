@@ -503,6 +503,9 @@ func (d *SQLite) DeleteTranscripcionsByLlibre(llibreID int) error {
 func (d *SQLite) CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, error) {
 	return d.help.createTranscripcioRawChange(c)
 }
+func (d *SQLite) ListTranscripcioRawChanges(transcripcioID int) ([]TranscripcioRawChange, error) {
+	return d.help.listTranscripcioRawChanges(transcripcioID)
+}
 func (d *SQLite) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersones(transcripcioID)
 }

@@ -299,6 +299,12 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	if _, found := m["CanManageArxius"]; !found {
 		m["CanManageArxius"] = perms.Admin || perms.CanManageArchives
 	}
+	if _, found := m["CanManageTerritory"]; !found {
+		m["CanManageTerritory"] = perms.Admin || perms.CanManageTerritory
+	}
+	if _, found := m["CanManageEclesia"]; !found {
+		m["CanManageEclesia"] = perms.Admin || perms.CanManageEclesia
+	}
 	if _, found := m["CanManageUsers"]; !found {
 		m["CanManageUsers"] = perms.Admin || perms.CanManageUsers
 	}
@@ -307,6 +313,9 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	}
 	if _, found := m["CanModerate"]; !found {
 		m["CanModerate"] = perms.Admin || perms.CanModerate
+	}
+	if _, found := m["IsAdmin"]; !found {
+		m["IsAdmin"] = perms.Admin
 	}
 	return m
 }

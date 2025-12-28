@@ -72,10 +72,10 @@ func main() {
 		})
 	})
 
-	http.HandleFunc("/inici", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/inici", app.RequireLogin(func(w http.ResponseWriter, r *http.Request) {
 		// Verificar si l'usuari té una sessió vàlida
 		user, authenticated := app.VerificarSessio(r)
-		if !authenticated {
+		if !authenticated || user == nil {
 			// Redirigir a la pàgina principal si no té sessió
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
@@ -91,7 +91,7 @@ func main() {
 			"User":            user,
 			"CanManageArxius": canManageArxius,
 		})
-	})
+	}))
 
 	http.HandleFunc("/registre", applyMiddleware(app.RegistrarUsuari, core.BlockIPs, core.RateLimit))
 
@@ -383,6 +383,18 @@ func main() {
 	http.HandleFunc("/admin/cognoms/import", applyMiddleware(app.AdminCognomsImport, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/cognoms/import/run", applyMiddleware(app.AdminCognomsImportRun, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/cognoms/stats/run", applyMiddleware(app.AdminCognomsStatsRun, core.BlockIPs, core.RateLimit))
+	// Territori import/export
+	http.HandleFunc("/admin/territori/import", applyMiddleware(app.AdminTerritoriImport, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/territori/import/run", applyMiddleware(app.AdminTerritoriImportRun, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/territori/export", applyMiddleware(app.AdminTerritoriExport, core.BlockIPs, core.RateLimit))
+	// Entitats eclesiàstiques import/export
+	http.HandleFunc("/admin/eclesiastic/import", applyMiddleware(app.AdminEclesiasticImport, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/eclesiastic/import/run", applyMiddleware(app.AdminEclesiasticImportRun, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/eclesiastic/export", applyMiddleware(app.AdminEclesiasticExport, core.BlockIPs, core.RateLimit))
+	// Arxius import/export
+	http.HandleFunc("/admin/arxius/import", applyMiddleware(app.AdminArxiusImport, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/arxius/import/run", applyMiddleware(app.AdminArxiusImportRun, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/arxius/export", applyMiddleware(app.AdminArxiusExport, core.BlockIPs, core.RateLimit))
 
 	// Moderació
 	http.HandleFunc("/moderacio", applyMiddleware(app.AdminModeracioList, core.BlockIPs, core.RateLimit))

@@ -1,0 +1,93 @@
+{{ define "admin-eclesiastic-import.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "ecles.io.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "ecles.io.kicker" }}</p>
+                    <h1>{{ t .Lang "ecles.io.title" }}</h1>
+                </div>
+                <div class="card-actions">
+                    <a class="boto-secundari" href="/admin/eclesiastic/export">
+                        <i class="fas fa-file-export"></i>
+                        <span>{{ t .Lang "ecles.io.export" }}</span>
+                    </a>
+                </div>
+            </header>
+            <p class="muted">{{ t .Lang "ecles.io.description" }}</p>
+
+            {{ if .Data.Msg }}
+            <div class="alert alert-error">{{ .Data.Msg }}</div>
+            {{ end }}
+
+            <form class="form-vertical" method="post" action="/admin/eclesiastic/import/run" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="grup-camp">
+                    <label for="ecles-file">{{ t .Lang "ecles.io.import.file" }}</label>
+                    <input id="ecles-file" type="file" name="import_file" accept="application/json" required>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">
+                        <i class="fas fa-file-import"></i>
+                        <span>{{ t .Lang "ecles.io.import.run" }}</span>
+                    </button>
+                </div>
+            </form>
+
+            {{ if .Data.ImportRun }}
+            <h3>{{ t .Lang "ecles.io.summary.title" }}</h3>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <tbody>
+                        <tr>
+                            <th>{{ t .Lang "ecles.io.summary.entitats_total" }}</th>
+                            <td>{{ .Data.EntitatsTotal }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "ecles.io.summary.entitats_created" }}</th>
+                            <td>{{ .Data.EntitatsCreated }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "ecles.io.summary.entitats_skipped" }}</th>
+                            <td>{{ .Data.EntitatsSkipped }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "ecles.io.summary.entitats_errors" }}</th>
+                            <td>{{ .Data.EntitatsErrors }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "ecles.io.summary.rels_total" }}</th>
+                            <td>{{ .Data.RelacionsTotal }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "ecles.io.summary.rels_created" }}</th>
+                            <td>{{ .Data.RelacionsCreated }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "ecles.io.summary.rels_skipped" }}</th>
+                            <td>{{ .Data.RelacionsSkipped }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "ecles.io.summary.rels_errors" }}</th>
+                            <td>{{ .Data.RelacionsErrors }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

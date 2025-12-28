@@ -17,7 +17,7 @@
                 <li class="menu-opcio"><a href="/inici">{{ t .Lang "menu.item.home" }}</a></li>
             </ul>
         </div>
-        {{ if and .Data (or (index .Data "CanManageArxius") (index .Data "CanManagePolicies") (index .Data "CanModerate") (index .Data "CanManageUsers")) }}
+        {{ if and .Data (index .Data "IsAdmin") }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-tools"></i>
@@ -28,9 +28,14 @@
                 <li class="menu-opcio"><a href="/admin/usuaris"><i class="fas fa-user-cog"></i> {{ t .Lang "admin.menu.users" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/politiques"><i class="fas fa-shield-alt"></i> {{ t .Lang "admin.menu.policies" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/politiques/assignacions"><i class="fas fa-user-check"></i> {{ t .Lang "admin.menu.policies_assign" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/territori/import"><i class="fas fa-file-export"></i> {{ t .Lang "admin.menu.territory_io" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/eclesiastic/import"><i class="fas fa-church"></i> {{ t .Lang "admin.menu.ecles_io" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/arxius/import"><i class="fas fa-archive"></i> {{ t .Lang "admin.menu.archives_io" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/cognoms/import"><i class="fas fa-signature"></i> {{ t .Lang "admin.menu.surnames_import" }}</a></li>
             </ul>
         </div>
+        {{ end }}
+        {{ if and .Data (or (index .Data "CanManageTerritory") (index .Data "CanManageEclesia") (index .Data "IsAdmin")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-map"></i>
@@ -42,6 +47,8 @@
                 <li class="menu-opcio"><a href="/territori/eclesiastic"><i class="fas fa-church"></i> {{ t .Lang "admin.menu.ecles" }}</a></li>
             </ul>
         </div>
+        {{ end }}
+        {{ if and .Data (or (index .Data "CanManageArxius") (index .Data "IsAdmin")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-archive"></i>
@@ -52,6 +59,8 @@
                 <li class="menu-opcio"><a href="/documentals/llibres"><i class="fas fa-book"></i> {{ t .Lang "admin.menu.books" }}</a></li>
             </ul>
         </div>
+        {{ end }}
+        {{ if and .Data (or (index .Data "CanModerate") (index .Data "IsAdmin")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-clipboard-check"></i>
@@ -61,6 +70,7 @@
                 <li class="menu-opcio"><a href="/moderacio"><i class="fas fa-clipboard-check"></i> {{ t .Lang "admin.menu.moderation" }}</a></li>
             </ul>
         </div>
+        {{ end }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-star"></i>
@@ -68,7 +78,9 @@
             </div>
             <ul>
                 <li class="menu-opcio"><a href="/ranking"><i class="fas fa-trophy"></i> {{ t .Lang "points.ranking.title" }}</a></li>
+                {{ if and .Data (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/admin/punts/regles"><i class="fas fa-star"></i> {{ t .Lang "points.rules.title" }}</a></li>
+                {{ end }}
             </ul>
         </div>
         <div class="menu-seccio">
@@ -82,7 +94,6 @@
                 <li class="menu-opcio"><a href="/cognoms"><i class="fas fa-signature"></i> {{ t .Lang "menu.surnames" }}</a></li>
             </ul>
         </div>
-        {{ end }}
     </div>
 </aside>
 <div class="overlay-menu" id="overlayMenu"></div>

@@ -137,6 +137,7 @@ type DB interface {
 	SetTranscripcionsRawPageStatsIndexacio(llibreID int, value int) error
 	DeleteTranscripcionsByLlibre(llibreID int) error
 	CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, error)
+	ListTranscripcioRawChanges(transcripcioID int) ([]TranscripcioRawChange, error)
 	ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error)
 	CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error)
 	DeleteTranscripcioPersones(transcripcioID int) error

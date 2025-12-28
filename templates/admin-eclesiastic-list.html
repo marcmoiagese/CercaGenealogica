@@ -11,9 +11,14 @@
     {{ template "menu" . }}
     <main class="contingut-principal">
         <section class="card">
-            <header class="card-header">
+            <header class="card-header amb-accio">
                 <h1>{{ t .Lang "ecles.title" }}</h1>
-                <a class="boto-primari" href="/territori/eclesiastic/new">{{ t .Lang "ecles.button.new" }}</a>
+                <div class="card-actions">
+                    <a class="boto-primari" href="/territori/eclesiastic/new">{{ t .Lang "ecles.button.new" }}</a>
+                    {{ if $.Data.IsAdmin }}
+                    <a class="boto-secundari" href="/admin/eclesiastic/import">{{ t .Lang "ecles.io.title" }}</a>
+                    {{ end }}
+                </div>
             </header>
             <form class="filtres-arxius" method="get">
                 <div class="grup-camp">

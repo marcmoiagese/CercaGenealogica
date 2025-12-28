@@ -13,11 +13,16 @@
         {{ $viewBase := default $.Data.ArxiusBasePath "/documentals/arxius" }}
         {{ $manageBase := "/documentals/arxius" }}
         <section class="card">
-            <header class="card-header">
+            <header class="card-header amb-accio">
                 <h1>{{ t .Lang "archives.title" }}</h1>
-                {{ if $.Data.CanManageArxius }}
-                <a class="boto-primari" href="{{ $manageBase }}/new">{{ t .Lang "archives.button.new" }}</a>
-                {{ end }}
+                <div class="card-actions">
+                    {{ if $.Data.CanManageArxius }}
+                    <a class="boto-primari" href="{{ $manageBase }}/new">{{ t .Lang "archives.button.new" }}</a>
+                    {{ end }}
+                    {{ if $.Data.IsAdmin }}
+                    <a class="boto-secundari" href="/admin/arxius/import">{{ t .Lang "archives.io.title" }}</a>
+                    {{ end }}
+                </div>
             </header>
             <form class="filtres-arxius" method="get" action="{{ $viewBase }}">
                 <div class="grup-camp">
