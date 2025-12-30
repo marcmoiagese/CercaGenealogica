@@ -1,141 +1,125 @@
 # CercaGenealogica
 
-Aplicació web en **Go** orientada a construir una plataforma de recerca i col·laboració genealògica.
+Aplicació web en **Go** per a **recerca i col·laboració genealògica**, centrada en la **indexació de documentació històrica** (llibres, pàgines i registres) i la seva **vinculació amb persones**.
 
-## Què inclou aquesta versió
+> Servei local per defecte: `http://localhost:8080`
 
-- **Autenticació completa**: registre, activació per correu, inici/tancament de sessió, recuperació de contrasenya.
-- **Perfil d’usuari**: dades personals, canvi d’email amb confirmació/reversió, privacitat per camp, preferència d’idioma.
-- **Perfils públics** (`/u/...`) i **ranking** per punts.
-- **Punts i activitat**: regles de punts, registre d’accions, recalcul i rànquing.
-- **Moderació**: cua d’elements pendents i accions d’aprovar/rebutjar.
-- **Administració** (segons permisos):
-  - Territori: països, nivells administratius, municipis i noms/codis històrics.
-  - Eclesiàstic: arquebisbats/bisbats/arxiprestats i assignacions.
-  - Documentals: arxius i llibres (CRUD, enllaços arxiu↔llibre, pàgines).
-  - Polítiques i permisos, i regles de punts.
-- **Internacionalització (i18n)**: català, anglès i occità (cookie `lang`, `Accept-Language` i preferència d’usuari).
+## Què hi trobaràs (estat actual)
 
-## Estructura del repositori (resum)
+### Usuari, seguretat i perfils
+- Registre (opcional), activació per correu, login/logout i recuperació de contrasenya.
+- Perfil d’usuari (incloent privacitat per camp).
+- Perfils públics (`/u/...`) i rànquing per punts.
+- Mesures bàsiques: rate limit, bloqueig d’IP, CSRF, sessions.
 
-```text
-.
-├── cnf/        Configuració (config.cfg) + parser tipat
-├── core/       Lògica web (handlers, seguretat, plantilles, permisos, mail, etc.)
-├── db/         Capa de dades (DB interface + SQLite/MySQL/PostgreSQL + esquemes SQL)
-├── locales/    Traduccions (cat/en/oc en JSON)
-├── static/     CSS/JS/imatges + dades JSON (p.ex. countries.json)
-├── templates/  Plantilles HTML (públiques, privades i admin)
-├── tests/      Unit tests i integration tests
-├── tools/      Scripts d’utilitat (p.ex. tools/test.sh)
-└── main.go     Entrypoint: rutes HTTP i inicialització d’App/DB
-```
+### Documentals (arxius → llibres → pàgines → registres)
+- CRUD d’**arxius** i **llibres** (amb relacions i metadades).
+- Gestió de **pàgines**.
+- **Registres**: llistat, formularis, vista detall i taula de cerca.
+- Import/export (segons mòduls disponibles) i utilitats d’indexació.
+
+### Indexació literal (RAW) i moderació
+- Indexació RAW a taules `transcripcions_*`.
+- Vinculació registre ⇄ persona (segons fluxos actuals).
+- Moderació: cua d’elements pendents i accions d’aprovar/rebutjar (segons permisos).
+
+### Punts i rànquing
+- Regles de punts, registre d’activitat i recalcul.
+- Vista de rànquing.
+
+### Cognoms
+- Llistat/cerca i pàgina de detall.
+- Import i estadístiques.
+- **Mapa (heatmap)** per distribució.
+
+## Estructura del repositori
+
+- `main.go` — rutes principals i arrencada del servidor
+- `cnf/` — configuració (fitxer `cnf/config.cfg`)
+- `core/` — handlers, seguretat, render de plantilles, permisos, i18n
+- `db/` — capa d’accés a dades + esquemes `SQLite.sql`, `PostgreSQL.sql`, `MySQL.sql`
+- `templates/` — plantilles HTML (layouts i vistes)
+- `static/` — CSS/JS/assets
+- `locales/` — traduccions JSON (`cat`, `en`, `oc`)
+- `tests/` — tests unit i integració
+- `tools/` — scripts auxiliars (p. ex. `test.sh`)
+- `plantilla-temporal/` — maquetes/plantilles de referència (disseny)
 
 ## Requisits
 
-- Go (recomanat 1.21 o superior).
-- Si uses SQLite: entorn amb **CGO** habilitat (dependència habitual del driver SQLite).
+- **Go 1.23** (el `go.mod` inclou `toolchain go1.23.10`)
+- Compilació amb CGO (necessari per `github.com/mattn/go-sqlite3`)
+  - Ubuntu/Debian: `sudo apt-get install -y build-essential`
 
-## Configuració
+## Arrencada ràpida (SQLite)
 
-La configuració es carrega des de `cnf/config.cfg` (format `CLAU=valor`).
+1) Configura `cnf/config.cfg` (valors per defecte recomanats en local):
+- `DB_ENGINE=sqlite`
+- `DB_PATH=./database.db`
+- `RECREADB=true` (només desenvolupament; recrea l’esquema a l’arrencada)
+- `MAIL_ENABLED=false` (si no vols SMTP en local)
 
-Claus principals:
+2) Engega:
+```bash
+go run .
+```
 
-- `DB_ENGINE`: `sqlite` | `postgres` | `mysql`
-- `DB_PATH`: ruta del fitxer SQLite (quan `DB_ENGINE=sqlite`)
-- `DB_HOST`, `DB_USR`, `DB_PASS`, `DB_PORT`, `DB_NAME`: connexió Postgres/MySQL
-- `RECREADB`: `true|false` (si és `true`, aplica l’SQL de l’esquema a l’arrencada)
-- `REGISTERD`: `true|false` (habilita fluxos relacionats amb registre)
-- `MAIL_ENABLED`, `MAIL_FROM`, `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`
-- `LOG_LEVEL`: `silent|error` (només errors), `info`, `debug`
-- `ENVIRONMENT`: `development|production` (si no hi és, es mira la variable d’entorn `ENVIRONMENT`)
+3) Obre:
+- `http://localhost:8080`
 
-Veure `cnf/README.md` per exemples complets.
-
-## Execució
+### Correu en local (opcional)
+Si vols provar activacions i recuperació de contrasenya, pots aixecar un SMTP de desenvolupament (exemple amb Mailpit):
 
 ```bash
-go run ./...
+docker run --rm -p 1025:1025 -p 8025:8025 axllent/mailpit
 ```
 
-El servidor arrenca a:
+I a `cnf/config.cfg`:
+- `MAIL_ENABLED=true`
+- `MAIL_SMTP_HOST=localhost`
+- `MAIL_SMTP_PORT=1025`
 
-```text
-http://localhost:8080
-```
+UI de Mailpit: `http://localhost:8025`
 
-## Rutes principals
+## Configuració (`cnf/config.cfg`)
 
-### Públiques
-
-- `GET /` landing
-- `GET /condicions-us`
-- Canvi d’idioma: `GET /cat/`, `GET /en/`, `GET /oc/` (posa cookie i redirigeix al referer)
-- `POST /registre` (registre)
-- `GET /activar?token=...` (activació)
-- `GET|POST /regenerar-token` (regeneració de token d’activació)
-- `POST /login` (login)
-- `GET /recuperar` / `POST /recuperar` (recuperació de contrasenya)
-- `GET /u/...` (perfil públic)
-
-### Autenticades
-
-- `GET /inici`
-- `GET /logout`
-- `GET /perfil` i actualitzacions:
-  - `POST /perfil/dades`
-  - `POST /perfil/privacitat`
-  - `POST /perfil/contrasenya`
-  - `GET /perfil/email-confirm` i `GET /perfil/email-revert`
-- `GET /ranking`
-- Persones:
-  - `GET /persones` (llista, requereix login)
-  - `GET /persones/new`, `GET /persones/{id}`, `GET /persones/{id}/edit`
-  - `POST /persones` / `POST /persones/save` / `POST|PUT /persones/{id}`
-- Arxius (lectura): `GET /arxius` i `GET /arxius/{id}`
-
-### Administració (segons permisos)
-
-- Països: `/admin/paisos` …
-- Nivells administratius: `/territori/nivells` … i `/territori/paisos/{id}/nivells` …
-- Municipis: `/territori/municipis` … (codis postals, noms històrics, assignació eclesiàstica)
-- Eclesiàstic: `/territori/eclesiastic` …
-- Polítiques i assignacions: `/admin/politiques` …
-- Punts: `/admin/punts/regles` … + recalcul
-- Moderació: `/moderacio` …
-- Documentals:
-  - Arxius: `/documentals/arxius` …
-  - Llibres: `/documentals/llibres` … (inclou pàgines i relació arxiu↔llibre)
-
-## Base de dades
-
-El paquet `db/` proporciona un contracte `DB` i implementacions per SQLite/PostgreSQL/MySQL.
-
-- Esquemes:
-  - `db/SQLite.sql`
-  - `db/PostgreSQL.sql`
-  - `db/MySQL.sql`
-
-En arrencar, si `RECREADB=true`, l’aplicació aplica l’esquema segons el motor seleccionat.
-
-## Seguretat i hardening (resum)
-
-- **CSRF**: patró *double-submit* amb cookie HttpOnly `cg_csrf` + token al formulari.
-- **Rate limit**: *token bucket* per ruta i per IP (o sessió si existeix).
-- **Bloqueig per IP**: `BLOCKED_IPS` (llista separada per comes) a `config.cfg`.
-- **Static files**: servei controlat sota `/static/` (evita traversal i llistats, i filtra rutes).
+Claus principals:
+- `DB_ENGINE`: `sqlite` | `postgres` | `mysql`
+- `DB_PATH`: path del fitxer SQLite
+- `DB_HOST`, `DB_PORT`, `DB_USR`, `DB_PASS`, `DB_NAME`: per Postgres/MySQL
+- `RECREADB`: si és `true`, aplica l’esquema del motor a l’arrencada (**compte en entorns amb dades**)
+- `REGISTERD`: activa/desactiva el registre d’usuaris
+- `MAIL_ENABLED`, `MAIL_FROM`, `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`
+- `LOG_LEVEL`: `silent/error`, `info`, `debug`
+- `ENVIRONMENT`: si no es defineix, `development`
 
 ## Tests
 
-Per executar tota la suite amb cobertura:
-
+Executar tota la suite:
 ```bash
 ./tools/test.sh
 ```
 
-Documentació detallada a `tests/README.md`.
+> Nota: el repositori treballa amb SQLite i pot tenir proves d’integració multi-DB segons la configuració de tests.
 
-## Documentació interna
+## Esquema SQL i compatibilitat entre motors
 
-La carpeta `.codex/` conté documentació de treball i materials interns (estructura, guies, prompts/roadmap, etc.).
+Quan es toca l’esquema, cal mantenir homogeni:
+- `db/SQLite.sql`
+- `db/PostgreSQL.sql`
+- `db/MySQL.sql`
+
+## Documentació interna i roadmap
+
+A `.codex/` tens:
+- `overview/` — visió global i decisions
+- `prompts/roadmap/` — fases implementables (prompts per Codex)
+- `instructions/` — regles de treball per evitar regressions
+
+## Pendents destacats (backlog)
+
+- Fer visible l’**historial de canvis** i comparació de versions en registres (estil wiki/confluence).
+- Tancar el **fix de permisos** (evitar qualsevol elevació per defecte i garantir que assignar polítiques té efecte).
+- Evolució de la part genealògica (cerques i arbres amb càrrega progressiva).
+
+---
