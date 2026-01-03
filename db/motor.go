@@ -137,7 +137,10 @@ type DB interface {
 	SetTranscripcionsRawPageStatsIndexacio(llibreID int, value int) error
 	DeleteTranscripcionsByLlibre(llibreID int) error
 	CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, error)
+	GetTranscripcioRawChange(id int) (*TranscripcioRawChange, error)
 	ListTranscripcioRawChanges(transcripcioID int) ([]TranscripcioRawChange, error)
+	ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, error)
+	UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error
 	ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error)
 	CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error)
 	DeleteTranscripcioPersones(transcripcioID int) error
@@ -814,6 +817,10 @@ type TranscripcioRawChange struct {
 	OldValue       string
 	NewValue       string
 	Metadata       string
+	ModeracioEstat string
+	ModeratedBy    sql.NullInt64
+	ModeratedAt    sql.NullTime
+	ModeracioMotiu string
 	ChangedBy      sql.NullInt64
 	ChangedAt      time.Time
 }

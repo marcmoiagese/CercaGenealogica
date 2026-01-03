@@ -1,0 +1,60 @@
+{{ define "admin-llibres-registres-stats.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "records.stats.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/persona.css">
+    <link rel="stylesheet" href="/static/css/persona-estadistiques.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card detall-persona">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "records.stats.title" }}</h1>
+                    {{ if .Data.Llibre }}
+                    <p class="muted">{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</p>
+                    {{ end }}
+                </div>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="/documentals/registres/{{ .Data.Registre.ID }}">{{ t .Lang "records.stats.back" }}</a>
+                </div>
+            </header>
+
+            <div class="seccio-estadistiques">
+                <div class="seccio-titol">
+                    <i class="fas fa-chart-line"></i>
+                    <span>{{ t .Lang "records.stats.subtitle" }}</span>
+                </div>
+
+                <div class="grup-relacions">
+                    {{ range .Data.Groups }}
+                    <div class="relacio-grup">
+                        <div class="relacio-titol">{{ .Label }}</div>
+                        {{ if .Users }}
+                        <ul class="llista-usuaris">
+                            {{ range .Users }}
+                            <li class="usuari-item">
+                                <span class="usuari-nom">@{{ .Usuari }}</span>
+                                <a class="boto-perfil-usuari" href="/u/{{ .ID }}">{{ t $.Lang "records.stats.profile" }}</a>
+                            </li>
+                            {{ end }}
+                        </ul>
+                        {{ else }}
+                        <p class="muted">{{ t $.Lang "records.stats.empty" }}</p>
+                        {{ end }}
+                    </div>
+                    {{ end }}
+                </div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

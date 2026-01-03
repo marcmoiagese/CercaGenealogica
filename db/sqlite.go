@@ -506,6 +506,15 @@ func (d *SQLite) CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, err
 func (d *SQLite) ListTranscripcioRawChanges(transcripcioID int) ([]TranscripcioRawChange, error) {
 	return d.help.listTranscripcioRawChanges(transcripcioID)
 }
+func (d *SQLite) GetTranscripcioRawChange(id int) (*TranscripcioRawChange, error) {
+	return d.help.getTranscripcioRawChange(id)
+}
+func (d *SQLite) ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, error) {
+	return d.help.listTranscripcioRawChangesPending()
+}
+func (d *SQLite) UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateTranscripcioRawChangeModeracio(id, estat, motiu, moderatorID)
+}
 func (d *SQLite) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersones(transcripcioID)
 }

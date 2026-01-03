@@ -3398,11 +3398,17 @@ func (h sqlHelper) deleteTranscripcionsByLlibre(llibreID int) error {
 }
 
 func (h sqlHelper) createTranscripcioRawChange(c *TranscripcioRawChange) (int, error) {
+	estado := c.ModeracioEstat
+	if strings.TrimSpace(estado) == "" {
+		estado = "publicat"
+	}
 	query := `
         INSERT INTO transcripcions_raw_canvis (
-            transcripcio_id, change_type, field_key, old_value, new_value, metadata, changed_by, changed_at
+            transcripcio_id, change_type, field_key, old_value, new_value, metadata,
+            moderation_status, moderated_by, moderated_at, moderation_notes,
+            changed_by, changed_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `)`
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `)`
 	if h.style == "postgres" {
 		query += " RETURNING id"
 	}
@@ -3414,6 +3420,10 @@ func (h sqlHelper) createTranscripcioRawChange(c *TranscripcioRawChange) (int, e
 		c.OldValue,
 		c.NewValue,
 		c.Metadata,
+		estado,
+		c.ModeratedBy,
+		c.ModeratedAt,
+		c.ModeracioMotiu,
 		c.ChangedBy,
 	}
 	if h.style == "postgres" {
@@ -3434,7 +3444,9 @@ func (h sqlHelper) createTranscripcioRawChange(c *TranscripcioRawChange) (int, e
 
 func (h sqlHelper) listTranscripcioRawChanges(transcripcioID int) ([]TranscripcioRawChange, error) {
 	query := `
-        SELECT id, transcripcio_id, change_type, field_key, old_value, new_value, metadata, changed_by, changed_at
+        SELECT id, transcripcio_id, change_type, field_key, old_value, new_value, metadata,
+               moderation_status, moderated_by, moderated_at, moderation_notes,
+               changed_by, changed_at
         FROM transcripcions_raw_canvis
         WHERE transcripcio_id = ?
         ORDER BY changed_at DESC, id DESC`
@@ -3456,6 +3468,10 @@ func (h sqlHelper) listTranscripcioRawChanges(transcripcioID int) ([]Transcripci
 			&c.OldValue,
 			&c.NewValue,
 			&c.Metadata,
+			&c.ModeracioEstat,
+			&c.ModeratedBy,
+			&c.ModeratedAt,
+			&c.ModeracioMotiu,
 			&c.ChangedBy,
 			&c.ChangedAt,
 		); err != nil {
@@ -3464,6 +3480,85 @@ func (h sqlHelper) listTranscripcioRawChanges(transcripcioID int) ([]Transcripci
 		res = append(res, c)
 	}
 	return res, rows.Err()
+}
+
+func (h sqlHelper) getTranscripcioRawChange(id int) (*TranscripcioRawChange, error) {
+	query := `
+        SELECT id, transcripcio_id, change_type, field_key, old_value, new_value, metadata,
+               moderation_status, moderated_by, moderated_at, moderation_notes,
+               changed_by, changed_at
+        FROM transcripcions_raw_canvis
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	var c TranscripcioRawChange
+	if err := h.db.QueryRow(query, id).Scan(
+		&c.ID,
+		&c.TranscripcioID,
+		&c.ChangeType,
+		&c.FieldKey,
+		&c.OldValue,
+		&c.NewValue,
+		&c.Metadata,
+		&c.ModeracioEstat,
+		&c.ModeratedBy,
+		&c.ModeratedAt,
+		&c.ModeracioMotiu,
+		&c.ChangedBy,
+		&c.ChangedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (h sqlHelper) listTranscripcioRawChangesPending() ([]TranscripcioRawChange, error) {
+	query := `
+        SELECT id, transcripcio_id, change_type, field_key, old_value, new_value, metadata,
+               moderation_status, moderated_by, moderated_at, moderation_notes,
+               changed_by, changed_at
+        FROM transcripcions_raw_canvis
+        WHERE moderation_status = 'pendent'
+        ORDER BY changed_at DESC, id DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []TranscripcioRawChange
+	for rows.Next() {
+		var c TranscripcioRawChange
+		if err := rows.Scan(
+			&c.ID,
+			&c.TranscripcioID,
+			&c.ChangeType,
+			&c.FieldKey,
+			&c.OldValue,
+			&c.NewValue,
+			&c.Metadata,
+			&c.ModeracioEstat,
+			&c.ModeratedBy,
+			&c.ModeratedAt,
+			&c.ModeracioMotiu,
+			&c.ChangedBy,
+			&c.ChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, c)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) updateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error {
+	stmt := `UPDATE transcripcions_raw_canvis SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	now := time.Now()
+	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, now, id)
+	return err
 }
 
 func (h sqlHelper) listTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {

@@ -487,6 +487,15 @@ func (d *MySQL) CreateTranscripcioRawChange(c *TranscripcioRawChange) (int, erro
 func (d *MySQL) ListTranscripcioRawChanges(transcripcioID int) ([]TranscripcioRawChange, error) {
 	return d.help.listTranscripcioRawChanges(transcripcioID)
 }
+func (d *MySQL) GetTranscripcioRawChange(id int) (*TranscripcioRawChange, error) {
+	return d.help.getTranscripcioRawChange(id)
+}
+func (d *MySQL) ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, error) {
+	return d.help.listTranscripcioRawChangesPending()
+}
+func (d *MySQL) UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateTranscripcioRawChangeModeracio(id, estat, motiu, moderatorID)
+}
 func (d *MySQL) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersones(transcripcioID)
 }

@@ -587,6 +587,12 @@ func main() {
 			applyMiddleware(app.AdminLinkPersonaToRaw, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/persones/") && strings.HasSuffix(r.URL.Path, "/desenllacar"):
 			applyMiddleware(app.AdminUnlinkPersonaFromRaw, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/historial/revert"):
+			applyMiddleware(app.AdminRevertRegistreChange, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/historial"):
+			applyMiddleware(app.AdminRegistreHistory, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/estadistiques"):
+			applyMiddleware(app.AdminRegistreStats, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/editar"):
 			if r.Method == http.MethodPost {
 				applyMiddleware(app.AdminUpdateRegistre, core.BlockIPs, core.RateLimit)(w, r)

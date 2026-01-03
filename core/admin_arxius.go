@@ -28,6 +28,12 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 	perms := a.getPermissionsForUser(user.ID)
 	*r = *a.withPermissions(r, perms)
 	canManage := a.hasPerm(perms, permArxius)
+	isAdmin := a.hasPerm(perms, permAdmin)
+	canManageTerritory := a.hasPerm(perms, permTerritory)
+	canManageEclesia := a.hasPerm(perms, permEclesia)
+	canModerate := a.hasPerm(perms, permModerate)
+	canManageUsers := a.hasPerm(perms, permUsers)
+	canManagePolicies := a.hasPerm(perms, permPolicies)
 	filter := db.ArxiuFilter{
 		Text:  strings.TrimSpace(r.URL.Query().Get("q")),
 		Tipus: strings.TrimSpace(r.URL.Query().Get("tipus")),
@@ -51,12 +57,18 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 	}
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
-		"Arxius":          arxius,
-		"Filter":          filter,
-		"CanManageArxius": canManage,
-		"ArxiusBasePath":  "/arxius",
-		"Arquebisbats":    arquebisbats,
-		"User":            user,
+		"Arxius":             arxius,
+		"Filter":             filter,
+		"CanManageArxius":    canManage,
+		"ArxiusBasePath":     "/arxius",
+		"Arquebisbats":       arquebisbats,
+		"User":               user,
+		"IsAdmin":            isAdmin,
+		"CanManageTerritory": canManageTerritory,
+		"CanManageEclesia":   canManageEclesia,
+		"CanModerate":        canModerate,
+		"CanManageUsers":     canManageUsers,
+		"CanManagePolicies":  canManagePolicies,
 	})
 }
 
@@ -105,6 +117,12 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	*r = *a.withPermissions(r, perms)
+	isAdmin := a.hasPerm(perms, permAdmin)
+	canManageTerritory := a.hasPerm(perms, permTerritory)
+	canManageEclesia := a.hasPerm(perms, permEclesia)
+	canModerate := a.hasPerm(perms, permModerate)
+	canManageUsers := a.hasPerm(perms, permUsers)
+	canManagePolicies := a.hasPerm(perms, permPolicies)
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
 	if status == "" {
 		status = "publicat"
@@ -128,11 +146,17 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	}
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
-		"Arxius":          arxius,
-		"Filter":          filter,
-		"ArxiusBasePath":  "/documentals/arxius",
-		"Arquebisbats":    arquebisbats,
-		"User":            user,
+		"Arxius":             arxius,
+		"Filter":             filter,
+		"ArxiusBasePath":     "/documentals/arxius",
+		"Arquebisbats":       arquebisbats,
+		"User":               user,
+		"IsAdmin":            isAdmin,
+		"CanManageTerritory": canManageTerritory,
+		"CanManageEclesia":   canManageEclesia,
+		"CanModerate":        canModerate,
+		"CanManageUsers":     canManageUsers,
+		"CanManagePolicies":  canManagePolicies,
 	})
 }
 

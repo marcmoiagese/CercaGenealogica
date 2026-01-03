@@ -530,6 +530,18 @@ func (f *fakeDB) UpdateTranscripcioModeracio(id int, estat, motiu string, modera
 func (f *fakeDB) CreateTranscripcioRawChange(c *db.TranscripcioRawChange) (int, error) {
 	return 0, nil
 }
+func (f *fakeDB) ListTranscripcioRawChanges(transcripcioID int) ([]db.TranscripcioRawChange, error) {
+	return nil, nil
+}
+func (f *fakeDB) GetTranscripcioRawChange(id int) (*db.TranscripcioRawChange, error) {
+	return nil, fmt.Errorf("GetTranscripcioRawChange not implemented in fakeDB")
+}
+func (f *fakeDB) ListTranscripcioRawChangesPending() ([]db.TranscripcioRawChange, error) {
+	return nil, nil
+}
+func (f *fakeDB) UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error {
+	return nil
+}
 
 func (f *fakeDB) HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error) {
 	return false, nil

@@ -11,7 +11,13 @@
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
+    {{ $compareMode := .Data.CompareMode }}
+    {{ $readOnly := or .Data.ReadOnly $compareMode }}
+    {{ $showLink := and (not $readOnly) (not $compareMode) }}
     <main class="contingut-principal">
+        {{ if not $readOnly }}
+        <div id="registre-mark-state" data-mark-row="1" data-mark-type="{{ .Data.MarkType }}" data-mark-public="{{ if .Data.MarkPublic }}1{{ else }}0{{ end }}" data-mark-own="{{ if .Data.MarkOwn }}1{{ else }}0{{ end }}" hidden></div>
+        {{ end }}
         <section class="card">
             <header class="card-header card-header-flex">
                 <div>
@@ -19,11 +25,20 @@
                     {{ if .Data.Llibre }}
                     <p class="muted">{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</p>
                     {{ end }}
+                    {{ if .Data.DisplayLabel }}
+                    <p class="muted">{{ .Data.DisplayLabel }}</p>
+                    {{ end }}
+                    {{ if $compareMode }}
+                    <p class="muted">{{ t .Lang "records.history.compare" }}: {{ .Data.CompareLeftLabel }} · {{ .Data.CompareRightLabel }}</p>
+                    {{ end }}
                 </div>
                 <div class="arxiu-header-actions">
+                    {{ if not $readOnly }}
                     <a class="boto-secundari" href="/documentals/registres/{{ .Data.Registre.ID }}/editar">{{ t .Lang "records.action.edit" }}</a>
-                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.Registre.LlibreID }}/registres">{{ t .Lang "records.show.back" }}</a>
+                    {{ end }}
+                    <a class="boto-secundari" href="{{ .Data.BackURL }}">{{ t .Lang "records.show.back" }}</a>
                 </div>
+                {{ if not $readOnly }}
                 <div class="opcions-dropdown">
                     <button class="boto-opcions" id="botoOpcions">
                         <i class="fas fa-cog"></i> {{ t .Lang "records.options.title" }} <i class="fas fa-chevron-down"></i>
@@ -34,9 +49,22 @@
                         <li><a href="#" class="btn-marcar" data-registre-id="{{ .Data.Registre.ID }}" onclick="event.preventDefault()"><i class="fas fa-eye"></i> {{ t .Lang "records.options.follow" }}</a></li>
                     </ul>
                 </div>
+                {{ end }}
             </header>
 
             <ul class="dades-grid">
+                {{ if $compareMode }}
+                <li><strong>{{ t .Lang "records.form.type" }}:</strong> {{ diffField .Data.RawDiff.Tipus }}</li>
+                <li><strong>{{ t .Lang "records.form.year" }}:</strong> {{ diffField .Data.RawDiff.Any }}</li>
+                <li><strong>{{ t .Lang "records.form.page" }}:</strong> {{ diffField .Data.RawDiff.Pagina }}</li>
+                <li><strong>{{ t .Lang "records.form.page.position" }}:</strong> {{ diffField .Data.RawDiff.Posicio }}</li>
+                <li><strong>{{ t .Lang "records.form.date.text" }}:</strong> {{ diffField .Data.RawDiff.DataText }}</li>
+                <li><strong>{{ t .Lang "records.form.date.iso" }}:</strong> {{ diffField .Data.RawDiff.DataISO }}</li>
+                <li><strong>{{ t .Lang "records.form.date.state" }}:</strong> {{ diffField .Data.RawDiff.DataQualitat }}</li>
+                <li style="grid-column: 1 / -1;"><strong>{{ t .Lang "records.form.transcription" }}:</strong><br>{{ diffField .Data.RawDiff.Transcripcio }}</li>
+                <li style="grid-column: 1 / -1;"><strong>{{ t .Lang "records.form.notes.marginal" }}:</strong><br>{{ diffField .Data.RawDiff.NotesMarginal }}</li>
+                <li style="grid-column: 1 / -1;"><strong>{{ t .Lang "records.form.notes.paleo" }}:</strong><br>{{ diffField .Data.RawDiff.NotesPaleo }}</li>
+                {{ else }}
                 <li><strong>{{ t .Lang "records.form.type" }}:</strong> {{ t .Lang (printf "records.type.%s" .Data.Registre.TipusActe) }}</li>
                 <li><strong>{{ t .Lang "records.form.year" }}:</strong> {{ if .Data.Registre.AnyDoc.Valid }}{{ .Data.Registre.AnyDoc.Int64 }}{{ end }}</li>
                 <li><strong>{{ t .Lang "records.form.page" }}:</strong> {{ if .Data.Registre.PaginaID.Valid }}{{ .Data.Registre.PaginaID.Int64 }}{{ else }}{{ if .Data.Registre.NumPaginaText }}{{ .Data.Registre.NumPaginaText }}{{ else }}-{{ end }}{{ end }}</li>
@@ -50,6 +78,7 @@
                 {{ end }}
                 {{ if .Data.Registre.ObservacionsPaleografiques }}
                 <li style="grid-column: 1 / -1;"><strong>{{ t .Lang "records.form.notes.paleo" }}:</strong><br>{{ .Data.Registre.ObservacionsPaleografiques }}</li>
+                {{ end }}
                 {{ end }}
             </ul>
         </section>
@@ -73,10 +102,33 @@
                             <th>{{ t .Lang "records.form.people.job" }}</th>
                             <th>{{ t .Lang "records.form.people.house" }}</th>
                             <th>{{ t .Lang "records.form.notes" }}</th>
+                            {{ if $showLink }}
                             <th>{{ t .Lang "records.link.title" }}</th>
+                            {{ end }}
                         </tr>
                     </thead>
                     <tbody>
+                        {{ if $compareMode }}
+                        {{ range .Data.PersonDiffRows }}
+                        <tr>
+                            <td>{{ diffField .Rol }}</td>
+                            <td>{{ diffField .Nom }}</td>
+                            <td>{{ diffField .Cognom1 }}</td>
+                            <td>{{ diffField .Cognom2 }}</td>
+                            <td>{{ diffField .Sexe }}</td>
+                            <td>{{ diffField .Edat }}</td>
+                            <td>{{ diffField .EstatCivil }}</td>
+                            <td>{{ diffField .Municipi }}</td>
+                            <td>{{ diffField .Ofici }}</td>
+                            <td>{{ diffField .Casa }}</td>
+                            <td>{{ diffField .Notes }}</td>
+                        </tr>
+                        {{ else }}
+                        <tr>
+                            <td colspan="11">{{ t .Lang "common.empty" }}</td>
+                        </tr>
+                        {{ end }}
+                        {{ else }}
                         {{ range .Data.Persones }}
                         {{ $p := . }}
                         <tr>
@@ -91,6 +143,7 @@
                             <td>{{ $p.OficiText }}{{ if $p.OficiEstat }} <span class="muted">({{ t $.Lang (printf "records.quality.%s" $p.OficiEstat) }})</span>{{ end }}</td>
                             <td>{{ $p.CasaNom }}{{ if $p.CasaEstat }} <span class="muted">({{ t $.Lang (printf "records.quality.%s" $p.CasaEstat) }})</span>{{ end }}</td>
                             <td>{{ $p.Notes }}</td>
+                            {{ if $showLink }}
                             <td>
                                 {{ if $p.PersonaID.Valid }}
                                     {{ $pid := printf "%d" $p.PersonaID.Int64 }}
@@ -115,8 +168,9 @@
                                     {{ end }}
                                 {{ end }}
                             </td>
+                            {{ end }}
                         </tr>
-                        {{ if and (not $p.PersonaID.Valid) $.Data.CanLink }}
+                        {{ if and $showLink (not $p.PersonaID.Valid) $.Data.CanLink }}
                         <tr class="link-modal-row">
                             <td colspan="12">
                                 <div class="modal-overlay {{ if eq $.Data.LinkSearchTarget $p.ID }}is-open{{ end }}" id="link-modal-{{ $p.ID }}">
@@ -202,8 +256,9 @@
                         {{ end }}
                         {{ else }}
                         <tr>
-                            <td colspan="12">{{ t .Lang "common.empty" }}</td>
+                            <td colspan="{{ if $showLink }}12{{ else }}11{{ end }}">{{ t .Lang "common.empty" }}</td>
                         </tr>
+                        {{ end }}
                         {{ end }}
                     </tbody>
                 </table>
@@ -226,6 +281,21 @@
                         </tr>
                     </thead>
                     <tbody>
+                        {{ if $compareMode }}
+                        {{ range .Data.AttrDiffRows }}
+                        <tr>
+                            <td>{{ diffField .Clau }}</td>
+                            <td>{{ diffField .Tipus }}</td>
+                            <td>{{ diffField .Valor }}</td>
+                            <td>{{ diffField .Estat }}</td>
+                            <td>{{ diffField .Notes }}</td>
+                        </tr>
+                        {{ else }}
+                        <tr>
+                            <td colspan="5">{{ t .Lang "common.empty" }}</td>
+                        </tr>
+                        {{ end }}
+                        {{ else }}
                         {{ range .Data.Atributs }}
                         {{ $a := . }}
                         <tr>
@@ -240,13 +310,70 @@
                             <td colspan="5">{{ t .Lang "common.empty" }}</td>
                         </tr>
                         {{ end }}
+                        {{ end }}
                     </tbody>
                 </table>
             </div>
         </section>
+
+        {{ if not $readOnly }}
+        <div id="modalQualitat" class="modal-qualitat">
+            <div class="modal-qualitat-content">
+                <button type="button" class="tanca-modal-qualitat" aria-label="{{ t .Lang "common.close" }}">×</button>
+                <h3>{{ t .Lang "records.quality.legend.title" }}</h3>
+                <ul class="qualitat-legend">
+                    <li>
+                        <i class="fas fa-question-circle"></i>
+                        <strong>{{ t .Lang "records.quality.dubtos" }}</strong>
+                        <span>{{ t .Lang "records.quality.desc.dubtos" }}</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-file-excel"></i>
+                        <strong>{{ t .Lang "records.quality.incomplet" }}</strong>
+                        <span>{{ t .Lang "records.quality.desc.incomplet" }}</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-eye-slash"></i>
+                        <strong>{{ t .Lang "records.quality.illegible" }}</strong>
+                        <span>{{ t .Lang "records.quality.desc.illegible" }}</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-minus-circle"></i>
+                        <strong>{{ t .Lang "records.quality.no_consta" }}</strong>
+                        <span>{{ t .Lang "records.quality.desc.no_consta" }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="modalMarcar" class="modal-qualitat" data-llibre-id="{{ .Data.Registre.LlibreID }}" data-csrf="{{ .Data.CSRFToken }}">
+            <div class="modal-qualitat-content">
+                <button type="button" class="tanca-modal-marcar" aria-label="{{ t .Lang "common.close" }}">×</button>
+                <h3>{{ t .Lang "records.mark.title" }}</h3>
+                <div class="form-group">
+                    <label for="mark-type">{{ t .Lang "records.mark.select" }}</label>
+                    <select id="mark-type">
+                        <option value="">{{ t .Lang "common.select" }}</option>
+                        <option value="consanguini">{{ t .Lang "records.mark.consanguini" }}</option>
+                        <option value="politic">{{ t .Lang "records.mark.politic" }}</option>
+                        <option value="interes">{{ t .Lang "records.mark.interes" }}</option>
+                    </select>
+                </div>
+                <label class="checkbox-linia">
+                    <input type="checkbox" id="mark-public" checked>
+                    <span>{{ t .Lang "records.mark.public" }}</span>
+                </label>
+                <div class="form-accio">
+                    <button type="button" class="boto-primari" id="mark-save">{{ t .Lang "records.mark.save" }}</button>
+                    <button type="button" class="boto-secundari" id="mark-clear">{{ t .Lang "records.mark.clear" }}</button>
+                </div>
+            </div>
+        </div>
+        {{ end }}
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/registres-taula.js"></script>
     <script>
         document.querySelectorAll('[data-modal-open]').forEach(function(button) {
             button.addEventListener('click', function() {
@@ -264,6 +391,19 @@
                 }
             });
         });
+        const botoOpcions = document.getElementById("botoOpcions");
+        const dropdownOpcions = document.getElementById("dropdownOpcions");
+        if (botoOpcions && dropdownOpcions) {
+            botoOpcions.addEventListener("click", function(event) {
+                event.preventDefault();
+                dropdownOpcions.style.display = dropdownOpcions.style.display === "block" ? "none" : "block";
+            });
+            document.addEventListener("click", function(event) {
+                if (!event.target.closest(".opcions-dropdown")) {
+                    dropdownOpcions.style.display = "none";
+                }
+            });
+        }
     </script>
 </body>
 </html>

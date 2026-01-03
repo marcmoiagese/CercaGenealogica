@@ -551,3 +551,32 @@
     color: #166088;
     margin-top: 0.1rem;
 }
+
+.diff-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.diff-before {
+    background: #fdecea;
+    color: #8a1f1f;
+    border-left: 3px solid #e26b5a;
+    padding: 0.2rem 0.45rem;
+    border-radius: 4px;
+}
+
+.diff-after {
+    background: #e6f4ea;
+    color: #1b5e20;
+    border-left: 3px solid #2e7d32;
+    padding: 0.2rem 0.45rem;
+    border-radius: 4px;
+}
+
+.diff-version {
+    font-size: 0.75em;
+    margin-left: 0.35rem;
+    color: inherit;
+    opacity: 0.7;
+}

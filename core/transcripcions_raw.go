@@ -3,6 +3,7 @@ package core
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
@@ -319,6 +320,8 @@ func personFieldValue(p *db.TranscripcioPersonaRaw, field string) string {
 		return ""
 	}
 	switch field {
+	case "rol":
+		return p.Rol
 	case "nom":
 		return p.Nom
 	case "nom_estat":
@@ -1539,6 +1542,8 @@ func (a *App) AdminShowRegistre(w http.ResponseWriter, r *http.Request) {
 	canManagePolicies := perms.CanManagePolicies || perms.Admin
 	canModerate := perms.CanModerate || perms.Admin
 	lang := ResolveLang(r)
+	viewParam := strings.TrimSpace(r.URL.Query().Get("view"))
+	compareParam := strings.TrimSpace(r.URL.Query().Get("compare"))
 	id := extractID(r.URL.Path)
 	registre, err := a.DB.GetTranscripcioRaw(id)
 	if err != nil || registre == nil {
@@ -1548,50 +1553,263 @@ func (a *App) AdminShowRegistre(w http.ResponseWriter, r *http.Request) {
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
 	persones, _ := a.DB.ListTranscripcioPersones(id)
 	atributs, _ := a.DB.ListTranscripcioAtributs(id)
-	linkedPersones := map[string]*db.Persona{}
-	for _, p := range persones {
-		if p.PersonaID.Valid {
-			key := strconv.FormatInt(p.PersonaID.Int64, 10)
-			if _, ok := linkedPersones[key]; ok {
-				continue
+	displayRegistre := registre
+	displayPersones := persones
+	displayAtributs := atributs
+	readOnly := false
+	compareMode := false
+	displayLabel := ""
+	compareLeftLabel := ""
+	compareRightLabel := ""
+	var rawDiff registreRawDiff
+	var personDiffRows []registrePersonDiffRow
+	var attrDiffRows []registreAttrDiffRow
+	backURL := "/documentals/llibres/" + strconv.Itoa(registre.LlibreID) + "/registres"
+	var currentSnap *transcripcioSnapshot
+	if viewParam != "" || compareParam != "" {
+		changes, _ := a.DB.ListTranscripcioRawChanges(id)
+		totalChanges := len(changes)
+		offset := versionOffset(totalChanges)
+		seqByID := map[int]int{}
+		for i, ch := range changes {
+			seqByID[ch.ID] = totalChanges - i
+		}
+		snaps, _ := collectChangeSnapshotsWithSource(changes)
+		currentSnap = &transcripcioSnapshot{
+			Raw:      *registre,
+			Persones: persones,
+			Atributs: atributs,
+		}
+		snaps = fillMissingSnapshots(changes, snaps, currentSnap)
+		publishedSnap, publishedKey, publishedChangeID, _ := resolvePublishedSnapshot(registre, currentSnap, changes, snaps)
+		publishedVersion := publishedVersionNumber(publishedKey, publishedChangeID, seqByID, offset)
+		baseSnap := (*transcripcioSnapshot)(nil)
+		if totalChanges > 0 {
+			for i := len(changes) - 1; i >= 0; i-- {
+				snap := snaps[changes[i].ID]
+				if snap.Before != nil {
+					baseSnap = snap.Before
+					break
+				}
+				if baseSnap == nil && snap.After != nil {
+					baseSnap = snap.After
+				}
 			}
-			if persona, err := a.DB.GetPersona(int(p.PersonaID.Int64)); err == nil && persona != nil {
-				linkedPersones[key] = persona
+			if baseSnap == nil {
+				baseSnap = currentSnap
+			}
+		}
+		resolveSnapshot := func(token string) (*transcripcioSnapshot, string) {
+			token = strings.TrimSpace(token)
+			if token == "" || token == "current" {
+				if publishedVersion > 0 {
+					return currentSnap, fmt.Sprintf("%s #%d", T(lang, "records.history.version"), publishedVersion)
+				}
+				return currentSnap, T(lang, "records.history.current")
+			}
+			if token == "published" {
+				if publishedSnap != nil {
+					if publishedVersion > 0 {
+						return publishedSnap, fmt.Sprintf("%s #%d", T(lang, "records.history.version"), publishedVersion)
+					}
+					return publishedSnap, T(lang, "records.history.published")
+				}
+				return currentSnap, T(lang, "records.history.current")
+			}
+			if token == "base" && baseSnap != nil {
+				return baseSnap, fmt.Sprintf("%s #1", T(lang, "records.history.version"))
+			}
+			id, err := strconv.Atoi(token)
+			if err != nil || id <= 0 {
+				return nil, ""
+			}
+			snap, ok := snaps[id]
+			if !ok {
+				return nil, ""
+			}
+			viewSnap := pickSnapshotForView(snap)
+			if viewSnap == nil {
+				return nil, ""
+			}
+			seqLabel := versionNumberForChangeID(id, seqByID, offset)
+			if seqLabel == 0 {
+				seqLabel = id
+			}
+			return viewSnap, fmt.Sprintf("%s #%d", T(lang, "records.history.version"), seqLabel)
+		}
+		if compareParam != "" {
+			rankForToken := func(token string) int {
+				token = strings.TrimSpace(token)
+				switch token {
+				case "", "current":
+					if publishedVersion > 0 {
+						return publishedVersion
+					}
+					return totalChanges + offset
+				case "published":
+					if publishedVersion > 0 {
+						return publishedVersion
+					}
+					return totalChanges + offset
+				case "base":
+					return 1
+				}
+				if id, _ := strconv.Atoi(token); id > 0 {
+					if version := versionNumberForChangeID(id, seqByID, offset); version > 0 {
+						return version
+					}
+				}
+				return 0
+			}
+			parts := strings.Split(compareParam, ",")
+			tokens := make([]string, 0, len(parts))
+			seen := map[string]bool{}
+			for _, part := range parts {
+				token := strings.TrimSpace(part)
+				if token == "" || seen[token] {
+					continue
+				}
+				seen[token] = true
+				tokens = append(tokens, token)
+			}
+			if len(tokens) == 2 {
+				leftToken := strings.TrimSpace(tokens[0])
+				rightToken := strings.TrimSpace(tokens[1])
+				leftSnap, leftLabel := resolveSnapshot(leftToken)
+				rightSnap, rightLabel := resolveSnapshot(rightToken)
+				if leftSnap != nil && rightSnap != nil {
+					handled := false
+					comparePublishedID := publishedChangeID
+					if comparePublishedID == 0 && publishedKey != "" && publishedKey != "published" {
+						if parsed, err := strconv.Atoi(publishedKey); err == nil {
+							comparePublishedID = parsed
+						}
+					}
+					if comparePublishedID > 0 {
+						publishedToken := strconv.Itoa(comparePublishedID)
+						if (leftToken == "published" && rightToken == publishedToken) || (rightToken == "published" && leftToken == publishedToken) {
+							if snap, ok := snaps[comparePublishedID]; ok && snap.Before != nil && snap.After != nil {
+								leftSnap = snap.Before
+								rightSnap = snap.After
+								if version := versionNumberForChangeID(comparePublishedID, seqByID, offset); version > 0 {
+									if version > 1 {
+										leftLabel = fmt.Sprintf("%s #%d", T(lang, "records.history.version"), version-1)
+									}
+									rightLabel = fmt.Sprintf("%s #%d", T(lang, "records.history.version"), version)
+								}
+								handled = true
+							}
+						}
+					}
+					if !handled {
+						leftRank := rankForToken(leftToken)
+						rightRank := rankForToken(rightToken)
+						if leftRank > 0 && rightRank > 0 && leftRank > rightRank {
+							leftSnap, rightSnap = rightSnap, leftSnap
+							leftLabel, rightLabel = rightLabel, leftLabel
+						}
+					}
+					compareMode = true
+					readOnly = true
+					compareLeftLabel = leftLabel
+					compareRightLabel = rightLabel
+					rawDiff = buildRegistreRawDiff(lang, &leftSnap.Raw, &rightSnap.Raw)
+					personDiffRows = buildRegistrePersonDiffRows(lang, leftSnap.Persones, rightSnap.Persones)
+					attrDiffRows = buildRegistreAttrDiffRows(lang, leftSnap.Atributs, rightSnap.Atributs)
+				}
+			} else if len(tokens) > 2 {
+				entries := make([]snapshotVersion, 0, len(tokens))
+				for _, token := range tokens {
+					snap, label := resolveSnapshot(token)
+					if snap == nil {
+						continue
+					}
+					version := rankForToken(token)
+					if version <= 0 {
+						continue
+					}
+					entries = append(entries, snapshotVersion{
+						Snap:    snap,
+						Version: version,
+						Label:   label,
+					})
+				}
+				if len(entries) >= 2 {
+					sort.Slice(entries, func(i, j int) bool {
+						return entries[i].Version < entries[j].Version
+					})
+					compareMode = true
+					readOnly = true
+					compareLeftLabel = entries[0].Label
+					compareRightLabel = entries[len(entries)-1].Label
+					rawDiff = buildRegistreRawDiffMulti(lang, entries)
+					personDiffRows = buildRegistrePersonDiffRowsMulti(lang, entries)
+					attrDiffRows = buildRegistreAttrDiffRowsMulti(lang, entries)
+				}
+			}
+		}
+		if !compareMode && viewParam != "" {
+			viewSnap, label := resolveSnapshot(viewParam)
+			if viewSnap != nil {
+				displayRegistre = &viewSnap.Raw
+				displayPersones = viewSnap.Persones
+				displayAtributs = viewSnap.Atributs
+				displayLabel = label
+				readOnly = true
+			}
+		}
+	}
+	if readOnly || compareMode {
+		backURL = "/documentals/registres/" + strconv.Itoa(id) + "/historial"
+	}
+	linkedPersones := map[string]*db.Persona{}
+	if !readOnly && !compareMode {
+		for _, p := range persones {
+			if p.PersonaID.Valid {
+				key := strconv.FormatInt(p.PersonaID.Int64, 10)
+				if _, ok := linkedPersones[key]; ok {
+					continue
+				}
+				if persona, err := a.DB.GetPersona(int(p.PersonaID.Int64)); err == nil && persona != nil {
+					linkedPersones[key] = persona
+				}
 			}
 		}
 	}
 	linkSuggestions := map[string][]personaLinkSuggestion{}
-	for _, p := range persones {
-		if p.PersonaID.Valid {
-			continue
-		}
-		if p.Nom == "" && p.Cognom1 == "" && p.Cognom2 == "" {
-			continue
-		}
-		filter := db.PersonaSearchFilter{
-			Nom:      p.Nom,
-			Cognom1:  p.Cognom1,
-			Cognom2:  p.Cognom2,
-			Municipi: p.MunicipiText,
-			Limit:    5,
-		}
-		if registre.AnyDoc.Valid {
-			year := int(registre.AnyDoc.Int64)
-			filter.AnyMin = year - 5
-			filter.AnyMax = year + 5
-		}
-		results, _ := a.DB.SearchPersones(filter)
-		if len(results) == 0 {
-			continue
-		}
-		key := strconv.Itoa(p.ID)
-		for _, res := range results {
-			linkSuggestions[key] = append(linkSuggestions[key], personaLinkSuggestion{
-				ID:       res.ID,
-				Nom:      personaSearchName(res),
-				Municipi: res.Municipi,
-				Any:      personaSearchYear(res),
-			})
+	if !readOnly && !compareMode {
+		for _, p := range persones {
+			if p.PersonaID.Valid {
+				continue
+			}
+			if p.Nom == "" && p.Cognom1 == "" && p.Cognom2 == "" {
+				continue
+			}
+			filter := db.PersonaSearchFilter{
+				Nom:      p.Nom,
+				Cognom1:  p.Cognom1,
+				Cognom2:  p.Cognom2,
+				Municipi: p.MunicipiText,
+				Limit:    5,
+			}
+			if registre.AnyDoc.Valid {
+				year := int(registre.AnyDoc.Int64)
+				filter.AnyMin = year - 5
+				filter.AnyMax = year + 5
+			}
+			results, _ := a.DB.SearchPersones(filter)
+			if len(results) == 0 {
+				continue
+			}
+			key := strconv.Itoa(p.ID)
+			for _, res := range results {
+				linkSuggestions[key] = append(linkSuggestions[key], personaLinkSuggestion{
+					ID:       res.ID,
+					Nom:      personaSearchName(res),
+					Municipi: res.Municipi,
+					Any:      personaSearchYear(res),
+				})
+			}
 		}
 	}
 	linkTargetID, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("link_raw_id")))
@@ -1600,7 +1818,7 @@ func (a *App) AdminShowRegistre(w http.ResponseWriter, r *http.Request) {
 	searchAnyMin, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("any_min")))
 	searchAnyMax, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("any_max")))
 	var searchResults []personaLinkSuggestion
-	if linkTargetID > 0 && (searchQuery != "" || searchMunicipi != "" || searchAnyMin > 0 || searchAnyMax > 0) {
+	if !readOnly && !compareMode && linkTargetID > 0 && (searchQuery != "" || searchMunicipi != "" || searchAnyMin > 0 || searchAnyMax > 0) {
 		filter := db.PersonaSearchFilter{
 			Query:    searchQuery,
 			Municipi: searchMunicipi,
@@ -1618,11 +1836,35 @@ func (a *App) AdminShowRegistre(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
+	markType := ""
+	markPublic := true
+	markOwn := false
+	if !readOnly && !compareMode {
+		if marks, err := a.DB.ListTranscripcioMarks([]int{id}); err == nil {
+			for _, mark := range marks {
+				if mark.UserID == user.ID {
+					markType = mark.Tipus
+					markPublic = mark.IsPublic
+					markOwn = true
+					break
+				}
+			}
+		}
+	}
 	RenderPrivateTemplate(w, r, "admin-llibres-registres-show.html", map[string]interface{}{
 		"Llibre":             llibre,
-		"Registre":           registre,
-		"Persones":           persones,
-		"Atributs":           atributs,
+		"Registre":           displayRegistre,
+		"Persones":           displayPersones,
+		"Atributs":           displayAtributs,
+		"ReadOnly":           readOnly,
+		"CompareMode":        compareMode,
+		"DisplayLabel":       displayLabel,
+		"CompareLeftLabel":   compareLeftLabel,
+		"CompareRightLabel":  compareRightLabel,
+		"RawDiff":            rawDiff,
+		"PersonDiffRows":     personDiffRows,
+		"AttrDiffRows":       attrDiffRows,
+		"BackURL":            backURL,
 		"User":               user,
 		"LinkedPersones":     linkedPersones,
 		"LinkSuggestions":    linkSuggestions,
@@ -1632,7 +1874,10 @@ func (a *App) AdminShowRegistre(w http.ResponseWriter, r *http.Request) {
 		"LinkSearchMunicipi": searchMunicipi,
 		"LinkSearchAnyMin":   searchAnyMin,
 		"LinkSearchAnyMax":   searchAnyMax,
-		"CanLink":            registre.ModeracioEstat != "rebutjat",
+		"CanLink":            !readOnly && !compareMode && registre.ModeracioEstat != "rebutjat",
+		"MarkType":           markType,
+		"MarkPublic":         markPublic,
+		"MarkOwn":            markOwn,
 		"Lang":               lang,
 		"CanManageArxius":    canManageArxius,
 		"CanManagePolicies":  canManagePolicies,
@@ -1707,9 +1952,34 @@ func (a *App) AdminUpdateRegistre(w http.ResponseWriter, r *http.Request) {
 	}
 	registre, persones, atributs := parseTranscripcioForm(r, existing.LlibreID)
 	registre.ID = id
-	registre.ModeracioEstat = "pendent"
+	registre.ModeracioEstat = existing.ModeracioEstat
 	registre.CreatedBy = existing.CreatedBy
-	if err := a.DB.UpdateTranscripcioRaw(registre); err != nil {
+	afterRaw := registre
+	afterRaw.ModeracioEstat = "pendent"
+	meta := map[string]interface{}{
+		"before": map[string]interface{}{
+			"raw":      existing,
+			"persones": beforePersones,
+			"atributs": beforeAtributs,
+		},
+		"after": map[string]interface{}{
+			"raw":      afterRaw,
+			"persones": persones,
+			"atributs": atributs,
+		},
+	}
+	metaJSON, _ := json.Marshal(meta)
+	changeID, err := a.DB.CreateTranscripcioRawChange(&db.TranscripcioRawChange{
+		TranscripcioID: id,
+		ChangeType:     "form",
+		FieldKey:       "bulk",
+		OldValue:       "",
+		NewValue:       "",
+		Metadata:       string(metaJSON),
+		ModeracioEstat: "pendent",
+		ChangedBy:      sqlNullIntFromInt(user.ID),
+	})
+	if err != nil {
 		llibre, _ := a.DB.GetLlibre(existing.LlibreID)
 		pagines, _ := a.DB.ListLlibrePagines(existing.LlibreID)
 		roleOptions := ensureRoleOptions(transcripcioRoleOptions(lang, registre.TipusActe, llibre), persones)
@@ -1734,40 +2004,11 @@ func (a *App) AdminUpdateRegistre(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	_ = a.DB.DeleteTranscripcioPersones(id)
-	_ = a.DB.DeleteTranscripcioAtributs(id)
-	for i := range persones {
-		persones[i].TranscripcioID = id
-		_, _ = a.DB.CreateTranscripcioPersona(&persones[i])
+	changeDetail := ""
+	if changeID > 0 {
+		changeDetail = fmt.Sprintf("change:%d", changeID)
 	}
-	for i := range atributs {
-		atributs[i].TranscripcioID = id
-		_, _ = a.DB.CreateTranscripcioAtribut(&atributs[i])
-	}
-	meta := map[string]interface{}{
-		"before": map[string]interface{}{
-			"raw":      existing,
-			"persones": beforePersones,
-			"atributs": beforeAtributs,
-		},
-		"after": map[string]interface{}{
-			"raw":      registre,
-			"persones": persones,
-			"atributs": atributs,
-		},
-	}
-	metaJSON, _ := json.Marshal(meta)
-	_, _ = a.DB.CreateTranscripcioRawChange(&db.TranscripcioRawChange{
-		TranscripcioID: id,
-		ChangeType:     "form",
-		FieldKey:       "bulk",
-		OldValue:       "",
-		NewValue:       "",
-		Metadata:       string(metaJSON),
-		ChangedBy:      sqlNullIntFromInt(user.ID),
-	})
-	_, _ = a.RegisterUserActivity(r.Context(), user.ID, "", "editar_registre", "registre", &id, "pendent", nil, "")
-	_, _ = a.recalcLlibreIndexacioStats(existing.LlibreID)
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, "", "editar_registre", "registre", &id, "pendent", nil, changeDetail)
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
 }
 
@@ -1827,6 +2068,9 @@ func (a *App) AdminInlineUpdateRegistreField(w http.ResponseWriter, r *http.Requ
 	}
 	persones, _ := a.DB.ListTranscripcioPersones(registreID)
 	atributsList, _ := a.DB.ListTranscripcioAtributs(registreID)
+	beforeRaw := *registre
+	beforePersones := append([]db.TranscripcioPersonaRaw(nil), persones...)
+	beforeAtributs := append([]db.TranscripcioAtributRaw(nil), atributsList...)
 	attrMap := map[string]*db.TranscripcioAtributRaw{}
 	for i := range atributsList {
 		attrMap[atributsList[i].Clau] = &atributsList[i]
@@ -1876,34 +2120,6 @@ func (a *App) AdminInlineUpdateRegistreField(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Camp invàlid", http.StatusBadRequest)
 		return
 	}
-	registre.ModeracioEstat = "pendent"
-	registre.ModeratedBy = sql.NullInt64{}
-	registre.ModeratedAt = sql.NullTime{}
-	registre.ModeracioMotiu = ""
-	if err := a.DB.UpdateTranscripcioRaw(registre); err != nil {
-		http.Error(w, "No s'ha pogut actualitzar el registre", http.StatusInternalServerError)
-		return
-	}
-	if field.Target == "person" {
-		_ = a.DB.DeleteTranscripcioPersones(registreID)
-		for i := range persones {
-			persones[i].TranscripcioID = registreID
-			if isEmptyPerson(&persones[i]) {
-				continue
-			}
-			_, _ = a.DB.CreateTranscripcioPersona(&persones[i])
-		}
-	}
-	if field.Target == "attr" {
-		_ = a.DB.DeleteTranscripcioAtributs(registreID)
-		for _, attr := range attrMap {
-			attr.TranscripcioID = registreID
-			if isEmptyAttr(attr) {
-				continue
-			}
-			_, _ = a.DB.CreateTranscripcioAtribut(attr)
-		}
-	}
 	newAttrs := map[string]db.TranscripcioAtributRaw{}
 	for key, attr := range attrMap {
 		if attr == nil {
@@ -1914,6 +2130,14 @@ func (a *App) AdminInlineUpdateRegistreField(w http.ResponseWriter, r *http.Requ
 	newCache := map[string]*db.TranscripcioPersonaRaw{}
 	newValue := registreCellValue(*field, *registre, persones, newAttrs, newCache)
 	if oldValue != newValue {
+		afterPersones := append([]db.TranscripcioPersonaRaw(nil), persones...)
+		afterAtributs := make([]db.TranscripcioAtributRaw, 0, len(attrMap))
+		for _, attr := range attrMap {
+			if attr == nil {
+				continue
+			}
+			afterAtributs = append(afterAtributs, *attr)
+		}
 		changeMeta := map[string]interface{}{
 			"target":       field.Target,
 			"raw_field":    field.RawField,
@@ -1923,18 +2147,37 @@ func (a *App) AdminInlineUpdateRegistreField(w http.ResponseWriter, r *http.Requ
 			"person_field": field.PersonField,
 			"person_key":   field.PersonKey,
 		}
-		metaJSON, _ := json.Marshal(changeMeta)
-		_, _ = a.DB.CreateTranscripcioRawChange(&db.TranscripcioRawChange{
+		afterRaw := *registre
+		afterRaw.ModeracioEstat = "pendent"
+		metaPayload := map[string]interface{}{
+			"before": map[string]interface{}{
+				"raw":      beforeRaw,
+				"persones": beforePersones,
+				"atributs": beforeAtributs,
+			},
+			"after": map[string]interface{}{
+				"raw":      afterRaw,
+				"persones": afterPersones,
+				"atributs": afterAtributs,
+			},
+			"change": changeMeta,
+		}
+		metaJSON, _ := json.Marshal(metaPayload)
+		changeID, _ := a.DB.CreateTranscripcioRawChange(&db.TranscripcioRawChange{
 			TranscripcioID: registreID,
 			ChangeType:     "inline",
 			FieldKey:       payload.Key,
 			OldValue:       oldValue,
 			NewValue:       newValue,
 			Metadata:       string(metaJSON),
+			ModeracioEstat: "pendent",
 			ChangedBy:      sqlNullIntFromInt(user.ID),
 		})
-		_, _ = a.RegisterUserActivity(r.Context(), user.ID, "", "editar_registre", "registre", &registreID, "pendent", nil, payload.Key)
-		_, _ = a.recalcLlibreIndexacioStats(registre.LlibreID)
+		detail := payload.Key
+		if changeID > 0 {
+			detail = fmt.Sprintf("change:%d", changeID)
+		}
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, "", "editar_registre", "registre", &registreID, "pendent", nil, detail)
 	}
 	displayAttrs := map[string]db.TranscripcioAtributRaw{}
 	for _, attr := range attrMap {
@@ -1948,11 +2191,15 @@ func (a *App) AdminInlineUpdateRegistreField(w http.ResponseWriter, r *http.Requ
 			break
 		}
 	}
+	status := registre.ModeracioEstat
+	if oldValue != newValue {
+		status = "pendent"
+	}
 	writeJSON(w, map[string]interface{}{
 		"ok":     true,
 		"value":  display,
 		"raw":    val,
-		"status": registre.ModeracioEstat,
+		"status": status,
 		"field":  payload.Key,
 		"user":   user.ID,
 	})

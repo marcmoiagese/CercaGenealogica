@@ -2,6 +2,7 @@ package core
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -91,13 +92,17 @@ func (a *App) buildModeracioItems(lang string, page, perPage int) ([]moderacioIt
 	if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err == nil {
 		variants = rows
 	}
+	pendingChanges := []db.TranscripcioRawChange{}
+	if rows, err := a.DB.ListTranscripcioRawChangesPending(); err == nil {
+		pendingChanges = rows
+	}
 
 	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents) + len(variants)
 	regTotal := 0
 	if total, err := a.DB.CountTranscripcionsRawGlobal(db.TranscripcioFilter{Status: "pendent"}); err == nil {
 		regTotal = total
 	}
-	total := totalNonReg + regTotal
+	total := totalNonReg + regTotal + len(pendingChanges)
 	start := (page - 1) * perPage
 	if start < 0 {
 		start = 0
@@ -307,6 +312,56 @@ func (a *App) buildModeracioItems(lang string, page, perPage int) ([]moderacioIt
 				CreatedAt: createdAt,
 				Motiu:     reg.ModeracioMotiu,
 				EditURL:   fmt.Sprintf("/documentals/registres/%d/editar?return_to=/moderacio", reg.ID),
+			})
+		}
+	}
+
+	if len(pendingChanges) > 0 && index < end {
+		changeOffset := 0
+		if start > index {
+			changeOffset = start - index
+		}
+		changeLimit := end - maxInt(index, start)
+		if changeLimit < 0 {
+			changeLimit = 0
+		}
+		if start > index {
+			index = start
+		}
+		endIdx := changeOffset + changeLimit
+		if endIdx > len(pendingChanges) {
+			endIdx = len(pendingChanges)
+		}
+		for _, change := range pendingChanges[changeOffset:endIdx] {
+			autorNom, autorURL := autorFromID(change.ChangedBy)
+			created := ""
+			var createdAt time.Time
+			if !change.ChangedAt.IsZero() {
+				created = change.ChangedAt.Format("2006-01-02 15:04")
+				createdAt = change.ChangedAt
+			}
+			contextParts := []string{}
+			if change.ChangeType != "" {
+				contextParts = append(contextParts, change.ChangeType)
+			}
+			if change.FieldKey != "" {
+				contextParts = append(contextParts, change.FieldKey)
+			}
+			context := strings.Join(contextParts, " · ")
+			if context == "" {
+				context = fmt.Sprintf("Canvi %d", change.ID)
+			}
+			appendIfVisible(moderacioItem{
+				ID:        change.ID,
+				Type:      "registre_canvi",
+				Nom:       fmt.Sprintf("Registre %d", change.TranscripcioID),
+				Context:   context,
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				Created:   created,
+				CreatedAt: createdAt,
+				Motiu:     change.ModeracioMotiu,
+				EditURL:   fmt.Sprintf("/documentals/registres/%d/editar?return_to=/moderacio", change.TranscripcioID),
 			})
 		}
 	}
@@ -684,9 +739,133 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.DB.UpdateArquebisbatModeracio(id, estat, motiu, moderatorID)
 	case "registre":
 		return a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID)
+	case "registre_canvi":
+		return a.moderateRegistreChange(id, estat, motiu, moderatorID)
 	case "cognom_variant":
 		return a.DB.UpdateCognomVariantModeracio(id, estat, motiu, moderatorID)
 	default:
 		return fmt.Errorf("tipus desconegut")
 	}
+}
+
+func (a *App) moderateRegistreChange(changeID int, estat, motiu string, moderatorID int) error {
+	change, err := a.DB.GetTranscripcioRawChange(changeID)
+	if err != nil {
+		return err
+	}
+	if change == nil {
+		return fmt.Errorf("canvi no trobat")
+	}
+	if err := a.DB.UpdateTranscripcioRawChangeModeracio(changeID, estat, motiu, moderatorID); err != nil {
+		return err
+	}
+	if estat != "publicat" {
+		a.updateRegistreChangeActivities(change.TranscripcioID, changeID, moderatorID, false)
+		return nil
+	}
+	registre, err := a.DB.GetTranscripcioRaw(change.TranscripcioID)
+	if err != nil || registre == nil {
+		return fmt.Errorf("registre no trobat")
+	}
+	_, afterSnap := parseTranscripcioChangeMeta(*change)
+	if afterSnap == nil {
+		return fmt.Errorf("canvi sense dades")
+	}
+	after := *afterSnap
+	after.Persones = append([]db.TranscripcioPersonaRaw(nil), afterSnap.Persones...)
+	after.Atributs = append([]db.TranscripcioAtributRaw(nil), afterSnap.Atributs...)
+	after.Raw.ID = registre.ID
+	after.Raw.ModeracioEstat = "publicat"
+	after.Raw.ModeratedBy = sqlNullIntFromInt(moderatorID)
+	after.Raw.ModeratedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	after.Raw.ModeracioMotiu = motiu
+	if !after.Raw.CreatedBy.Valid {
+		after.Raw.CreatedBy = registre.CreatedBy
+	}
+	if err := a.DB.UpdateTranscripcioRaw(&after.Raw); err != nil {
+		return err
+	}
+	_ = a.DB.DeleteTranscripcioPersones(registre.ID)
+	for i := range after.Persones {
+		after.Persones[i].TranscripcioID = registre.ID
+		_, _ = a.DB.CreateTranscripcioPersona(&after.Persones[i])
+	}
+	_ = a.DB.DeleteTranscripcioAtributs(registre.ID)
+	for i := range after.Atributs {
+		after.Atributs[i].TranscripcioID = registre.ID
+		_, _ = a.DB.CreateTranscripcioAtribut(&after.Atributs[i])
+	}
+	a.updateRegistreChangeActivities(change.TranscripcioID, changeID, moderatorID, true)
+	if change.ChangeType == "revert" {
+		if srcID := parseRevertSourceChangeID(change.Metadata); srcID > 0 {
+			if srcChange, err := a.DB.GetTranscripcioRawChange(srcID); err == nil && srcChange != nil && srcChange.ChangedBy.Valid {
+				changedByID := int(srcChange.ChangedBy.Int64)
+				if acts, err := a.DB.ListActivityByObject("registre", change.TranscripcioID, "validat"); err == nil {
+					for _, act := range acts {
+						if act.UserID != changedByID || act.Action != "editar_registre" {
+							continue
+						}
+						_ = a.DB.UpdateUserActivityStatus(act.ID, "anulat", &moderatorID)
+						if act.Points != 0 {
+							_ = a.DB.AddPointsToUser(act.UserID, -act.Points)
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+	_, _ = a.recalcLlibreIndexacioStats(registre.LlibreID)
+	return nil
+}
+
+func (a *App) updateRegistreChangeActivities(registreID, changeID, moderatorID int, validate bool) {
+	acts, err := a.DB.ListActivityByObject("registre", registreID, "pendent")
+	if err != nil {
+		return
+	}
+	detailKey := fmt.Sprintf("change:%d", changeID)
+	for _, act := range acts {
+		if act.Details != "" && act.Details != detailKey {
+			continue
+		}
+		if validate {
+			_ = a.ValidateActivity(act.ID, moderatorID)
+		} else {
+			_ = a.CancelActivity(act.ID, moderatorID)
+		}
+	}
+}
+
+func parseRevertSourceChangeID(payload string) int {
+	if strings.TrimSpace(payload) == "" {
+		return 0
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(payload), &raw); err != nil {
+		return 0
+	}
+	revertRaw, ok := raw["revert"]
+	if !ok {
+		return 0
+	}
+	revertMap, ok := revertRaw.(map[string]interface{})
+	if !ok {
+		return 0
+	}
+	val, ok := revertMap["source_change_id"]
+	if !ok {
+		return 0
+	}
+	switch v := val.(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case string:
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return 0
 }

@@ -74,6 +74,62 @@ var templateFuncs = template.FuncMap{
 	"upper": func(s string) string {
 		return strings.ToUpper(s)
 	},
+	"diffField": func(v interface{}) template.HTML {
+		var fd fieldDiff
+		switch t := v.(type) {
+		case fieldDiff:
+			fd = t
+		case *fieldDiff:
+			if t == nil {
+				return template.HTML("")
+			}
+			fd = *t
+		default:
+			return template.HTML("")
+		}
+		before := strings.TrimSpace(fd.Before)
+		after := strings.TrimSpace(fd.After)
+		changed := fd.Changed || before != after
+		if !changed {
+			if after != "" {
+				return template.HTML(template.HTMLEscapeString(after))
+			}
+			return template.HTML(template.HTMLEscapeString(before))
+		}
+		var parts []string
+		renderLines := func(value string, class string, sign string) {
+			lines := strings.Split(value, "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				tag := ""
+				if idx := strings.LastIndex(line, "||v:"); idx != -1 {
+					tag = strings.TrimSpace(line[idx+4:])
+					line = strings.TrimSpace(line[:idx])
+				}
+				if line == "" {
+					continue
+				}
+				suffix := ""
+				if tag != "" {
+					suffix = fmt.Sprintf(`<sup class="diff-version">v%s</sup>`, template.HTMLEscapeString(tag))
+				}
+				parts = append(parts, fmt.Sprintf(`<div class="%s">%s %s%s</div>`, class, sign, template.HTMLEscapeString(line), suffix))
+			}
+		}
+		if before != "" {
+			renderLines(before, "diff-before", "−")
+		}
+		if after != "" {
+			renderLines(after, "diff-after", "+")
+		}
+		if len(parts) == 0 {
+			return template.HTML("")
+		}
+		return template.HTML(`<div class="diff-block">` + strings.Join(parts, "") + `</div>`)
+	},
 	// idx: accés segur a slices/arrays/mapes via reflect
 	"idx": func(collection interface{}, index int) interface{} {
 		v := reflect.ValueOf(collection)

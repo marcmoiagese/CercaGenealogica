@@ -668,9 +668,14 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw_canvis (
   old_value TEXT,
   new_value TEXT,
   metadata TEXT,
+  moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'pendent',
+  moderated_by INT UNSIGNED NULL,
+  moderated_at DATETIME NULL,
+  moderation_notes TEXT,
   changed_by INT UNSIGNED NULL,
   changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (transcripcio_id) REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+  FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
   FOREIGN KEY (changed_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

@@ -487,6 +487,10 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw_canvis (
   old_value TEXT,
   new_value TEXT,
   metadata TEXT,
+  moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP,
+  moderation_notes TEXT,
   changed_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
   changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

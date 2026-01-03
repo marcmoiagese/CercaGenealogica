@@ -1,0 +1,200 @@
+{{ define "admin-llibres-registres-history.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "records.history.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/persona.css">
+    <link rel="stylesheet" href="/static/css/persona-canvis.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card detall-persona">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "records.history.title" }}</h1>
+                    {{ if .Data.Llibre }}
+                    <p class="muted">{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</p>
+                    {{ end }}
+                </div>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="/documentals/registres/{{ .Data.Registre.ID }}">{{ t .Lang "records.history.back" }}</a>
+                </div>
+            </header>
+
+            <div class="seleccio-info">
+                <p><strong>{{ t .Lang "records.history.selected" }}</strong> <span id="history-selected-count">0</span></p>
+                <div class="accions-revisio">
+                    <button type="button" class="boto-comparar" id="history-compare" disabled>{{ t .Lang "records.history.compare" }}</button>
+                    {{ if .Data.PublishedKey }}
+                    <button type="button" class="boto-revertir history-revert" data-change-id="{{ .Data.PublishedKey }}">
+                        {{ t .Lang "records.history.revert" }} {{ t .Lang "records.history.published" }}
+                    </button>
+                    {{ end }}
+                </div>
+            </div>
+
+            <div class="timeline" id="history-timeline" data-record-url="/documentals/registres/{{ .Data.Registre.ID }}" data-published-key="{{ .Data.PublishedKey }}">
+                {{ range .Data.History }}
+                <div class="timeline-item">
+                    <input type="checkbox" class="revisio-check" data-change-id="{{ .Key }}" data-has-snapshot="{{ if .HasSnapshot }}1{{ else }}0{{ end }}" {{ if not .HasSnapshot }}disabled{{ end }}>
+                    <div class="timeline-bola"></div>
+                    <div class="info-revisio">
+                        {{ if eq .Key "published" }}
+                        <p><strong>{{ t $.Lang "records.history.version" }}:</strong> {{ if gt .Seq 0 }}#{{ .Seq }}{{ else }}{{ t $.Lang "records.history.published" }}{{ end }}</p>
+                        {{ else }}
+                        <p><strong>{{ t $.Lang "records.history.version" }}:</strong> #{{ .Seq }}</p>
+                        {{ end }}
+                        <p><strong>{{ t $.Lang "records.history.date" }}:</strong> {{ .ChangedAt }}</p>
+                        <p><strong>{{ t $.Lang "records.history.user" }}:</strong> {{ .ChangedBy }}</p>
+                        {{ if .ModeratedBy }}
+                        <p><strong>{{ t $.Lang "records.history.moderated_by" }}:</strong> {{ .ModeratedBy }}</p>
+                        {{ end }}
+                        {{ if .ModeratedAt }}
+                        <p><strong>{{ t $.Lang "records.history.moderated_at" }}:</strong> {{ .ModeratedAt }}</p>
+                        {{ end }}
+                        {{ if .ModeracioEstat }}
+                        <p><strong>{{ t $.Lang "moderation.status" }}:</strong> <span class="status-pill status-{{ .ModeracioEstat }}">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></p>
+                        {{ end }}
+                        {{ if .IsPublished }}
+                        <p><span class="status-pill status-publicat">{{ t $.Lang "records.history.published" }}</span></p>
+                        {{ end }}
+                        {{ if .ChangeType }}
+                        <p><strong>{{ t $.Lang "records.history.change" }}:</strong> {{ .ChangeType }}</p>
+                        {{ end }}
+                        {{ if .HasSnapshot }}
+                        <a href="/documentals/registres/{{ $.Data.Registre.ID }}?view={{ .Key }}">{{ t $.Lang "records.history.view" }}</a>
+                        {{ else }}
+                        <span class="muted">{{ t $.Lang "records.history.view" }}</span>
+                        {{ end }}
+                        {{ if not .HasSnapshot }}
+                        <p><strong>{{ t $.Lang "records.history.field" }}:</strong> {{ .FieldKey }}</p>
+                        <p><strong>{{ t $.Lang "records.history.before" }}:</strong> {{ .OldValue }}</p>
+                        <p><strong>{{ t $.Lang "records.history.after" }}:</strong> {{ .NewValue }}</p>
+                        {{ end }}
+                    </div>
+                    <div class="accions-revisio">
+                        {{ if and .HasSnapshot (not .IsPublished) }}
+                        <button type="button" class="boto-comparar history-compare-one" data-compare-id="{{ .Key }}">{{ t $.Lang "records.history.compare_published" }}</button>
+                        {{ end }}
+                        {{ if and .HasSnapshot (not .IsPublished) }}
+                        <button type="button" class="boto-revertir history-revert" data-change-id="{{ .Key }}">{{ t $.Lang "records.history.revert" }}</button>
+                        {{ end }}
+                    </div>
+                </div>
+                {{ else }}
+                <p class="muted">{{ t .Lang "records.history.no_changes" }}</p>
+                {{ end }}
+            </div>
+        </section>
+
+    </main>
+
+    <div class="modal-overlay" id="revert-modal" role="dialog" aria-modal="true">
+        <div class="modal-box">
+            <header class="modal-header">
+                <h3>{{ t .Lang "records.history.revert.title" }}</h3>
+                <button type="button" class="modal-close" data-modal-close="revert-modal">×</button>
+            </header>
+            <form method="post" action="/documentals/registres/{{ .Data.Registre.ID }}/historial/revert">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="change_id" id="revert-change-id">
+                <input type="hidden" name="return_to" value="/documentals/registres/{{ .Data.Registre.ID }}/historial">
+                <div class="grup-camp">
+                    <label for="revert-reason">{{ t .Lang "records.history.reason" }}</label>
+                    <textarea id="revert-reason" name="reason" rows="3" class="input-text" placeholder="{{ t .Lang "records.history.reason.placeholder" }}"></textarea>
+                    <p class="muted">{{ t .Lang "records.history.revert.helper" }}</p>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "records.history.submit" }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const timeline = document.getElementById('history-timeline');
+            const checks = Array.from(document.querySelectorAll('.revisio-check'));
+            const countEl = document.getElementById('history-selected-count');
+            const compareBtn = document.getElementById('history-compare');
+            const compareOne = document.querySelectorAll('.history-compare-one');
+            const revertButtons = document.querySelectorAll('.history-revert');
+            const modal = document.getElementById('revert-modal');
+            const modalClose = document.querySelectorAll('[data-modal-close="revert-modal"]');
+            const revertChangeInput = document.getElementById('revert-change-id');
+            const recordUrl = timeline ? timeline.dataset.recordUrl : '';
+            const publishedKey = timeline ? (timeline.dataset.publishedKey || '') : '';
+
+            const updateCount = () => {
+                const selected = checks.filter((el) => el.checked && el.dataset.hasSnapshot === "1");
+                if (countEl) {
+                    countEl.textContent = String(selected.length);
+                }
+                if (compareBtn) {
+                    compareBtn.disabled = selected.length < 2;
+                }
+            };
+
+            checks.forEach((el) => el.addEventListener('change', updateCount));
+            updateCount();
+
+            if (compareBtn) {
+                compareBtn.addEventListener('click', () => {
+                    const selected = checks.filter((el) => el.checked && el.dataset.hasSnapshot === "1").map((el) => el.dataset.changeId);
+                    if (selected.length < 2) {
+                        return;
+                    }
+                    if (!recordUrl) {
+                        return;
+                    }
+                    const params = new URLSearchParams();
+                    params.set('compare', selected.join(','));
+                    window.location.href = recordUrl + "?" + params.toString();
+                });
+            }
+
+            compareOne.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    if (!recordUrl) {
+                        return;
+                    }
+                    const compareId = btn.dataset.compareId;
+                    if (!compareId) {
+                        return;
+                    }
+                    const left = publishedKey ? "published" : "current";
+                    const params = new URLSearchParams();
+                    params.set('compare', `${left},${compareId}`);
+                    window.location.href = recordUrl + "?" + params.toString();
+                });
+            });
+
+            revertButtons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    if (revertChangeInput) {
+                        revertChangeInput.value = btn.dataset.changeId || '';
+                    }
+                    if (modal) {
+                        modal.classList.add('is-open');
+                    }
+                });
+            });
+
+            modalClose.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    if (modal) {
+                        modal.classList.remove('is-open');
+                    }
+                });
+            });
+        })();
+    </script>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}
