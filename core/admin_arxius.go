@@ -110,13 +110,12 @@ func (a *App) ShowArxiu(w http.ResponseWriter, r *http.Request) {
 
 // Admin: llistat d'arxius
 func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
-	user, authenticated := a.VerificarSessio(r)
-	if !authenticated || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyDocumentalsArxiusView)
+	if !ok {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	*r = *a.withPermissions(r, perms)
+	canManage := a.hasPerm(perms, permArxius)
 	isAdmin := a.hasPerm(perms, permAdmin)
 	canManageTerritory := a.hasPerm(perms, permTerritory)
 	canManageEclesia := a.hasPerm(perms, permEclesia)
@@ -127,6 +126,7 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	if status == "" {
 		status = "publicat"
 	}
+	scopeFilter := a.buildListScopeFilter(user.ID, permKeyDocumentalsArxiusView, ScopeArxiu)
 	filter := db.ArxiuFilter{
 		Text:   strings.TrimSpace(r.URL.Query().Get("q")),
 		Tipus:  strings.TrimSpace(r.URL.Query().Get("tipus")),
@@ -137,6 +137,31 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		if id, err := strconv.Atoi(v); err == nil {
 			filter.EntitatID = id
 		}
+	}
+	if !scopeFilter.hasGlobal {
+		if scopeFilter.isEmpty() {
+			RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
+				"Arxius":             []db.ArxiuWithCount{},
+				"Filter":             filter,
+				"ArxiusBasePath":     "/documentals/arxius",
+				"Arquebisbats":       []db.ArquebisbatRow{},
+				"CanManageArxius":    canManage,
+				"User":               user,
+				"IsAdmin":            isAdmin,
+				"CanManageTerritory": canManageTerritory,
+				"CanManageEclesia":   canManageEclesia,
+				"CanModerate":        canModerate,
+				"CanManageUsers":     canManageUsers,
+				"CanManagePolicies":  canManagePolicies,
+			})
+			return
+		}
+		filter.AllowedArxiuIDs = scopeFilter.arxiuIDs
+		filter.AllowedMunicipiIDs = scopeFilter.municipiIDs
+		filter.AllowedProvinciaIDs = scopeFilter.provinciaIDs
+		filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
+		filter.AllowedPaisIDs = scopeFilter.paisIDs
+		filter.AllowedEclesIDs = scopeFilter.eclesIDs
 	}
 	arxius, _ := a.DB.ListArxius(filter)
 	for i := range arxius {
@@ -150,6 +175,7 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		"Filter":             filter,
 		"ArxiusBasePath":     "/documentals/arxius",
 		"Arquebisbats":       arquebisbats,
+		"CanManageArxius":    canManage,
 		"User":               user,
 		"IsAdmin":            isAdmin,
 		"CanManageTerritory": canManageTerritory,
@@ -194,7 +220,7 @@ func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.
 
 // Alta
 func (a *App) AdminNewArxiu(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusCreate, PermissionTarget{})
 	if !ok {
 		return
 	}
@@ -203,7 +229,7 @@ func (a *App) AdminNewArxiu(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminCreateArxiu(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusCreate, PermissionTarget{})
 	if !ok {
 		return
 	}
@@ -236,11 +262,12 @@ func (a *App) AdminCreateArxiu(w http.ResponseWriter, r *http.Request) {
 
 // Edició
 func (a *App) AdminEditArxiu(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
+	id := extractID(r.URL.Path)
+	target := a.resolveArxiuTarget(id)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusEdit, target)
 	if !ok {
 		return
 	}
-	id := extractID(r.URL.Path)
 	arxiu, err := a.DB.GetArxiu(id)
 	if err != nil {
 		http.NotFound(w, r)
@@ -251,11 +278,12 @@ func (a *App) AdminEditArxiu(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminUpdateArxiu(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
+	id := extractID(r.URL.Path)
+	target := a.resolveArxiuTarget(id)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusEdit, target)
 	if !ok {
 		return
 	}
-	id := extractID(r.URL.Path)
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id)+"/edit", http.StatusSeeOther)
 		return
@@ -279,20 +307,22 @@ func (a *App) AdminUpdateArxiu(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminDeleteArxiu(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
+	id := extractID(r.URL.Path)
+	target := a.resolveArxiuTarget(id)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusDelete, target); !ok {
 		return
 	}
-	id := extractID(r.URL.Path)
 	_ = a.DB.DeleteArxiu(id)
 	http.Redirect(w, r, "/documentals/arxius", http.StatusSeeOther)
 }
 
 func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
+	id := extractID(r.URL.Path)
+	target := a.resolveArxiuTarget(id)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusView, target)
 	if !ok {
 		return
 	}
-	id := extractID(r.URL.Path)
 	arxiu, err := a.DB.GetArxiu(id)
 	if err != nil {
 		http.NotFound(w, r)
@@ -311,10 +341,11 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminAddArxiuLlibre(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
+	id := extractID(r.URL.Path)
+	target := a.resolveArxiuTarget(id)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusEdit, target); !ok {
 		return
 	}
-	id := extractID(r.URL.Path)
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
 		return
@@ -334,15 +365,16 @@ func (a *App) AdminAddArxiuLlibre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminUpdateArxiuLlibre(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
-		return
-	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(parts) < 5 {
 		http.NotFound(w, r)
 		return
 	}
 	arxiuID, _ := strconv.Atoi(parts[2])
+	target := a.resolveArxiuTarget(arxiuID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusEdit, target); !ok {
+		return
+	}
 	llibreID, _ := strconv.Atoi(parts[4])
 	signatura := strings.TrimSpace(r.FormValue("signatura"))
 	urlOverride := strings.TrimSpace(r.FormValue("url_override"))
@@ -351,15 +383,16 @@ func (a *App) AdminUpdateArxiuLlibre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminDeleteArxiuLlibre(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
-		return
-	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(parts) < 5 {
 		http.NotFound(w, r)
 		return
 	}
 	arxiuID, _ := strconv.Atoi(parts[2])
+	target := a.resolveArxiuTarget(arxiuID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusEdit, target); !ok {
+		return
+	}
 	llibreID, _ := strconv.Atoi(parts[4])
 	_ = a.DB.DeleteArxiuLlibre(arxiuID, llibreID)
 	http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(arxiuID), http.StatusSeeOther)

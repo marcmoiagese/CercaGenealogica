@@ -20,6 +20,13 @@
         .perm-indicator{position:absolute;right:12px;top:14px;width:18px;height:18px;border-radius:999px;border:2px solid #cdd4e0;box-shadow:inset 0 1px 2px rgba(0,0,0,0.05);background:#f8fafc;transition:all .15s ease}
         .llista-permisos .checkbox-linia.actiu .perm-indicator{background:#6f86f6;border-color:#6f86f6;box-shadow:0 0 0 4px rgba(111,134,246,0.18) inset}
         .grup-camp input,.grup-camp textarea{width:100%}
+        .grants-grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:8px}
+        .grants-card{border:1px solid #e2e6ef;border-radius:10px;background:#fff;padding:12px}
+        .grants-card h3{margin:0 0 10px 0;font-size:14px;color:#1f2c4d}
+        .grant-actions{display:flex;gap:6px;flex-wrap:wrap}
+        .grant-scope-row.is-hidden{display:none}
+        .grant-list .taula code{background:#f3f4f8;border-radius:6px;padding:2px 6px;font-size:12px}
+        @media (min-width: 900px){.grants-grid{grid-template-columns:minmax(260px,320px) 1fr;align-items:start}}
     </style>
 </head>
 <body>
@@ -46,15 +53,17 @@
                 </div>
                 <div class="grup-camp">
                     <label>{{ t .Lang "policies.permissions" }}</label>
+                    {{ $active := .Data.ActiveTab }}
                     <div class="policy-tabs">
                         <div class="tabs-botons" role="tablist">
-                            <button type="button" class="tab-boto actiu" data-target="tab-gui">{{ t .Lang "policies.tab.gui" }}</button>
-                            <button type="button" class="tab-boto" data-target="tab-json">{{ t .Lang "policies.tab.json" }}</button>
+                            <button type="button" class="tab-boto {{ if or (eq $active "") (eq $active "gui") }}actiu{{ end }}" data-target="tab-gui">{{ t .Lang "policies.tab.gui" }}</button>
+                            <button type="button" class="tab-boto {{ if eq $active "json" }}actiu{{ end }}" data-target="tab-json">{{ t .Lang "policies.tab.json" }}</button>
+                            <button type="button" class="tab-boto {{ if eq $active "grants" }}actiu{{ end }}" data-target="tab-grants">{{ t .Lang "policies.tab.grants" }}</button>
                         </div>
                     </div>
                     <p class="camp-helper">{{ t .Lang "policies.gui.helper" }}</p>
                     <div class="tabs-contingut">
-                        <section class="policy-tab tab-pane actiu" id="tab-gui">
+                        <section class="policy-tab tab-pane {{ if or (eq $active "") (eq $active "gui") }}actiu{{ end }}" id="tab-gui">
                             <div class="llista-permisos">
                                 {{ $perms := list "admin" "can_manage_users" "can_manage_territory" "can_manage_eclesiastic" "can_manage_archives" "can_create_person" "can_edit_any_person" "can_moderate" "can_manage_policies" }}
                                 {{ range $perms }}
@@ -69,9 +78,88 @@
                                 {{ end }}
                             </div>
                         </section>
-                        <section class="policy-tab tab-pane" id="tab-json">
+                        <section class="policy-tab tab-pane {{ if eq $active "json" }}actiu{{ end }}" id="tab-json">
                             <textarea id="permisos" name="permisos" rows="10" placeholder='{"admin":true,...}'>{{ .Data.Politica.Permisos }}</textarea>
                             <small>{{ t .Lang "policies.permissions.help" }}</small>
+                        </section>
+                        <section class="policy-tab tab-pane {{ if eq $active "grants" }}actiu{{ end }}" id="tab-grants">
+                            <p class="camp-helper">{{ t .Lang "policies.grants.helper" }}</p>
+                            {{ if .Data.IsNew }}
+                            <div class="camp-helper">{{ t .Lang "policies.grants.save_first" }}</div>
+                            {{ else }}
+                            {{ $grant := .Data.GrantForm }}
+                            <div class="grants-grid">
+                                <div class="grants-card">
+                                    <div class="grup-camp">
+                                        <label for="grant-perm-key">{{ t .Lang "policies.grants.perm_key" }}</label>
+                                        <select id="grant-perm-key" name="perm_key" form="grant-form" required>
+                                            <option value="">—</option>
+                                            {{ range .Data.PermissionCatalog }}
+                                            <option value="{{ . }}" {{ if and $grant (eq $grant.PermKey .) }}selected{{ end }}>{{ . }}</option>
+                                            {{ end }}
+                                        </select>
+                                    </div>
+                                    <div class="grup-camp">
+                                        <label for="grant-scope-type">{{ t .Lang "policies.grants.scope_type" }}</label>
+                                        <select id="grant-scope-type" name="scope_type" form="grant-form" required>
+                                            {{ range .Data.ScopeOptions }}
+                                            <option value="{{ .Value }}" {{ if and $grant (eq $grant.ScopeType .Value) }}selected{{ end }}>{{ t $.Lang .LabelKey }}</option>
+                                            {{ end }}
+                                        </select>
+                                    </div>
+                                    <div class="grup-camp grant-scope-row" id="grant-scope-row">
+                                        <label for="grant-scope-id">{{ t .Lang "policies.grants.scope_id" }}</label>
+                                        <input type="number" id="grant-scope-id" name="scope_id" form="grant-form" min="1" value="{{ if and $grant (gt $grant.ScopeID 0) }}{{ $grant.ScopeID }}{{ end }}">
+                                        <small class="camp-helper">{{ t .Lang "policies.grants.scope_id.helper" }}</small>
+                                    </div>
+                                    <div class="grup-camp">
+                                        <label class="checkbox">
+                                            <input type="checkbox" id="grant-include-children" name="include_children" form="grant-form" value="1" {{ if and $grant $grant.IncludeChildren }}checked{{ end }}>
+                                            {{ t .Lang "policies.grants.include_children" }}
+                                        </label>
+                                    </div>
+                                    <div class="accions-formulari grant-actions">
+                                        <button type="submit" class="boto-primari" form="grant-form" id="grant-submit" data-label-add="{{ t .Lang "policies.grants.add" }}" data-label-update="{{ t .Lang "policies.grants.update" }}">{{ t .Lang "policies.grants.add" }}</button>
+                                        <button type="button" class="boto-secundari" id="grant-cancel" style="display:none">{{ t .Lang "policies.grants.cancel_edit" }}</button>
+                                    </div>
+                                </div>
+                                <div class="grants-card grant-list">
+                                    <h3>{{ t .Lang "policies.grants.list" }}</h3>
+                                    <div class="taula-wrapper">
+                                        <table class="taula">
+                                            <thead>
+                                                <tr>
+                                                    <th>{{ t .Lang "policies.grants.perm_key" }}</th>
+                                                    <th>{{ t .Lang "policies.grants.scope_type" }}</th>
+                                                    <th>{{ t .Lang "policies.grants.scope_id" }}</th>
+                                                    <th>{{ t .Lang "policies.grants.include_children" }}</th>
+                                                    <th></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {{ range .Data.Grants }}
+                                                {{ $scopeLabel := index $.Data.ScopeLabels .ScopeType }}
+                                                <tr>
+                                                    <td><code>{{ .PermKey }}</code></td>
+                                                    <td>{{ if $scopeLabel }}{{ t $.Lang $scopeLabel }}{{ else }}{{ .ScopeType }}{{ end }}</td>
+                                                    <td>{{ if .ScopeIDValid }}{{ .ScopeID }}{{ else }}—{{ end }}</td>
+                                                    <td>{{ if .IncludeChildren }}{{ t $.Lang "common.yes" }}{{ else }}{{ t $.Lang "common.no" }}{{ end }}</td>
+                                                    <td>
+                                                        <div class="grant-actions">
+                                                            <button type="button" class="boto-secundari grant-edit" data-grant-id="{{ .ID }}" data-perm-key="{{ .PermKey }}" data-scope-type="{{ .ScopeType }}" data-scope-id="{{ if .ScopeIDValid }}{{ .ScopeID }}{{ end }}" data-include-children="{{ if .IncludeChildren }}1{{ else }}0{{ end }}">{{ t $.Lang "common.edit" }}</button>
+                                                            <button type="button" class="boto-secundari grant-delete" data-grant-id="{{ .ID }}">{{ t $.Lang "policies.grants.delete" }}</button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                {{ else }}
+                                                <tr><td colspan="5">{{ t .Lang "policies.grants.empty" }}</td></tr>
+                                                {{ end }}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            {{ end }}
                         </section>
                     </div>
                 </div>
@@ -80,6 +168,18 @@
                     <a href="/admin/politiques" class="boto-secundari">{{ t .Lang "policies.form.cancel" }}</a>
                 </div>
             </form>
+            {{ if not .Data.IsNew }}
+            <form method="POST" action="/admin/politiques/grants/save" id="grant-form">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="politica_id" value="{{ .Data.Politica.ID }}">
+                <input type="hidden" name="grant_id" id="grant-id" value="{{ with .Data.GrantForm }}{{ if gt .ID 0 }}{{ .ID }}{{ end }}{{ end }}">
+            </form>
+            <form method="POST" action="/admin/politiques/grants/delete" id="grant-delete-form">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="politica_id" value="{{ .Data.Politica.ID }}">
+                <input type="hidden" name="grant_id" id="grant-delete-id" value="">
+            </form>
+            {{ end }}
         </section>
     </main>
     {{ template "footer" . }}
@@ -129,11 +229,83 @@
                 btn.classList.add('actiu');
                 const target = document.getElementById(btn.dataset.target);
                 if(target) target.classList.add('actiu');
-                if(btn.dataset.target === 'tab-json') syncJSON();
-                else syncChecks(parsePerms());
+                if(btn.dataset.target === 'tab-json') {
+                    syncJSON();
+                } else if(btn.dataset.target === 'tab-gui') {
+                    syncChecks(parsePerms());
+                }
             });
         });
-        document.getElementById('policy-form').addEventListener('submit', syncJSON);
+        const policyForm = document.getElementById('policy-form');
+        if(policyForm) policyForm.addEventListener('submit', syncJSON);
+
+        const grantForm = document.getElementById('grant-form');
+        if(grantForm){
+            const grantId = document.getElementById('grant-id');
+            const grantPerm = document.getElementById('grant-perm-key');
+            const grantScopeType = document.getElementById('grant-scope-type');
+            const grantScopeId = document.getElementById('grant-scope-id');
+            const grantScopeRow = document.getElementById('grant-scope-row');
+            const grantInclude = document.getElementById('grant-include-children');
+            const grantSubmit = document.getElementById('grant-submit');
+            const grantCancel = document.getElementById('grant-cancel');
+            const deleteForm = document.getElementById('grant-delete-form');
+            const deleteId = document.getElementById('grant-delete-id');
+            const labelAdd = grantSubmit ? (grantSubmit.dataset.labelAdd || grantSubmit.textContent) : '';
+            const labelUpdate = grantSubmit ? (grantSubmit.dataset.labelUpdate || grantSubmit.textContent) : '';
+
+            const updateScopeVisibility = () => {
+                if(!grantScopeType || !grantScopeRow || !grantScopeId) return;
+                const isGlobal = grantScopeType.value === 'global';
+                grantScopeRow.classList.toggle('is-hidden', isGlobal);
+                grantScopeId.disabled = isGlobal;
+                if(grantInclude) grantInclude.disabled = isGlobal;
+            };
+
+            const initialState = {
+                id: grantId ? grantId.value : '',
+                permKey: grantPerm ? grantPerm.value : '',
+                scopeType: grantScopeType ? grantScopeType.value : 'global',
+                scopeId: grantScopeId ? grantScopeId.value : '',
+                includeChildren: grantInclude ? grantInclude.checked : false
+            };
+
+            const setGrantState = (state) => {
+                if(grantId) grantId.value = state.id || '';
+                if(grantPerm) grantPerm.value = state.permKey || '';
+                if(grantScopeType) grantScopeType.value = state.scopeType || 'global';
+                if(grantScopeId) grantScopeId.value = state.scopeId || '';
+                if(grantInclude) grantInclude.checked = !!state.includeChildren;
+                updateScopeVisibility();
+                if(grantSubmit) grantSubmit.textContent = state.id ? labelUpdate : labelAdd;
+                if(grantCancel) grantCancel.style.display = state.id ? 'inline-flex' : 'none';
+            };
+
+            updateScopeVisibility();
+            if(grantScopeType) grantScopeType.addEventListener('change', updateScopeVisibility);
+            if(grantCancel) grantCancel.addEventListener('click', () => setGrantState(initialState));
+
+            document.querySelectorAll('.grant-edit').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    setGrantState({
+                        id: btn.dataset.grantId || '',
+                        permKey: btn.dataset.permKey || '',
+                        scopeType: btn.dataset.scopeType || 'global',
+                        scopeId: btn.dataset.scopeId || '',
+                        includeChildren: btn.dataset.includeChildren === '1'
+                    });
+                });
+            });
+
+            document.querySelectorAll('.grant-delete').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if(!deleteForm || !deleteId) return;
+                    deleteId.value = btn.dataset.grantId || '';
+                    if(deleteForm.requestSubmit) deleteForm.requestSubmit();
+                    else deleteForm.submit();
+                });
+            });
+        }
     })();
     </script>
 </body>

@@ -10,13 +10,11 @@ import (
 )
 
 func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriEclesView, PermissionTarget{})
+	if !ok {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	*r = *a.withPermissions(r, perms)
 	filter := db.ArquebisbatFilter{
 		Text: strings.TrimSpace(r.URL.Query().Get("q")),
 	}
@@ -42,11 +40,17 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminNewEclesiastic(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permEclesia); !ok {
+	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
+	target := PermissionTarget{}
+	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
+		if v, err := strconv.Atoi(pid); err == nil && v > 0 {
+			target.PaisID = intPtr(v)
+		}
+	}
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriEclesCreate, target)
+	if !ok {
 		return
 	}
-	user, _ := a.VerificarSessio(r)
-	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	paisos, _ := a.DB.ListPaisos()
 	RenderPrivateTemplate(w, r, "admin-eclesiastic-form.html", map[string]interface{}{
 		"Entitat":         &db.Arquebisbat{TipusEntitat: "bisbat", ModeracioEstat: "pendent"},
@@ -60,15 +64,19 @@ func (a *App) AdminNewEclesiastic(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminEditEclesiastic(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permEclesia); !ok {
-		return
-	}
-	user, _ := a.VerificarSessio(r)
 	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	id := extractID(r.URL.Path)
 	ent, err := a.DB.GetArquebisbat(id)
 	if err != nil || ent == nil {
 		http.NotFound(w, r)
+		return
+	}
+	target := PermissionTarget{EclesID: intPtr(id)}
+	if ent.PaisID.Valid {
+		target.PaisID = intPtr(int(ent.PaisID.Int64))
+	}
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriEclesEdit, target)
+	if !ok {
 		return
 	}
 	paisos, _ := a.DB.ListPaisos()
@@ -85,17 +93,28 @@ func (a *App) AdminEditEclesiastic(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminSaveEclesiastic(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permEclesia); !ok {
-		return
-	}
-	user, _ := a.VerificarSessio(r)
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/territori/eclesiastic", http.StatusSeeOther)
 		return
 	}
 	id, _ := strconv.Atoi(r.FormValue("id"))
+	permKey := permKeyTerritoriEclesCreate
+	if id != 0 {
+		permKey = permKeyTerritoriEclesEdit
+	}
 	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	paisID := sqlNullInt(r.FormValue("pais_id"))
+	target := PermissionTarget{}
+	if paisID.Valid {
+		target.PaisID = intPtr(int(paisID.Int64))
+	}
+	if id != 0 {
+		target.EclesID = intPtr(id)
+	}
+	user, ok := a.requirePermissionKey(w, r, permKey, target)
+	if !ok {
+		return
+	}
 	parentID := sqlNullInt(r.FormValue("parent_id"))
 	nivell := sqlNullInt(r.FormValue("nivell"))
 	anyInici := sqlNullInt(r.FormValue("any_inici"))

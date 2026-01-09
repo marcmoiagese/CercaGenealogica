@@ -11,14 +11,14 @@ import (
 )
 
 func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyDocumentalsLlibresView)
+	if !ok {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	canManage := a.hasPerm(perms, permArxius)
 	isAdmin := a.hasPerm(perms, permAdmin)
+	scopeFilter := a.buildListScopeFilter(user.ID, permKeyDocumentalsLlibresView, ScopeLlibre)
 	filter := db.LlibreFilter{
 		Text: strings.TrimSpace(r.URL.Query().Get("q")),
 	}
@@ -43,6 +43,30 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		status = "publicat"
 	}
 	filter.Status = status
+	if !scopeFilter.hasGlobal {
+		if scopeFilter.isEmpty() {
+			RenderPrivateTemplate(w, r, "admin-llibres-list.html", map[string]interface{}{
+				"Llibres":         []db.LlibreRow{},
+				"IndexacioStats":  map[int]db.LlibreIndexacioStats{},
+				"Filter":          filter,
+				"Arquebisbats":    []db.ArquebisbatRow{},
+				"Municipis":       []db.MunicipiRow{},
+				"Arxius":          []db.ArxiuWithCount{},
+				"CanManageArxius": canManage,
+				"IsAdmin":         isAdmin,
+				"User":            user,
+				"CurrentURL":      r.URL.RequestURI(),
+			})
+			return
+		}
+		filter.AllowedLlibreIDs = scopeFilter.llibreIDs
+		filter.AllowedArxiuIDs = scopeFilter.arxiuIDs
+		filter.AllowedMunicipiIDs = scopeFilter.municipiIDs
+		filter.AllowedProvinciaIDs = scopeFilter.provinciaIDs
+		filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
+		filter.AllowedPaisIDs = scopeFilter.paisIDs
+		filter.AllowedEclesIDs = scopeFilter.eclesIDs
+	}
 	llibres, _ := a.DB.ListLlibres(filter)
 	indexacioStats := a.buildLlibresIndexacioViews(llibres)
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
@@ -73,7 +97,7 @@ var llibreTipusOptions = []string{
 }
 
 func (a *App) AdminNewLlibre(w http.ResponseWriter, r *http.Request) {
-	_, _, ok := a.requirePermission(w, r, permArxius)
+	_, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresCreate, PermissionTarget{})
 	if !ok {
 		return
 	}
@@ -91,11 +115,12 @@ func (a *App) AdminNewLlibre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminEditLlibre(w http.ResponseWriter, r *http.Request) {
-	_, _, ok := a.requirePermission(w, r, permArxius)
+	id := extractID(r.URL.Path)
+	target := a.resolveLlibreTarget(id)
+	_, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresEdit, target)
 	if !ok {
 		return
 	}
-	id := extractID(r.URL.Path)
 	llibre, err := a.DB.GetLlibre(id)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -110,7 +135,9 @@ func (a *App) AdminEditLlibre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminToggleIndexacioLlibre(w http.ResponseWriter, r *http.Request) {
-	_, _, ok := a.requirePermission(w, r, permArxius)
+	llibreID := extractID(r.URL.Path)
+	target := a.resolveLlibreTarget(llibreID)
+	_, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresMarkIndexed, target)
 	if !ok {
 		return
 	}
@@ -118,7 +145,6 @@ func (a *App) AdminToggleIndexacioLlibre(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
 	}
-	llibreID := extractID(r.URL.Path)
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -155,14 +181,15 @@ func (a *App) AdminRecalcIndexacioLlibre(w http.ResponseWriter, r *http.Request)
 		http.NotFound(w, r)
 		return
 	}
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	llibreID := extractID(r.URL.Path)
+	target := a.resolveLlibreTarget(llibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresRecalcIndex, target); !ok {
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
 		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
 	}
-	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.NotFound(w, r)
 		return
@@ -277,15 +304,21 @@ func intFromForm(val string) int {
 }
 
 func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	llibre := parseLlibreForm(r)
+	permKey := permKeyDocumentalsLlibresCreate
+	target := PermissionTarget{}
+	if llibre.ID != 0 {
+		permKey = permKeyDocumentalsLlibresEdit
+		target = a.resolveLlibreTarget(llibre.ID)
+	}
+	user, ok := a.requirePermissionKey(w, r, permKey, target)
+	if !ok {
+		return
+	}
 	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	arxiuID := intFromForm(r.FormValue("arxiu_id"))
 	isNew := llibre.ID == 0
@@ -340,11 +373,12 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminLlibrePagines(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
+	id := extractID(r.URL.Path)
+	target := a.resolveLlibreTarget(id)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresView, target)
 	if !ok {
 		return
 	}
-	id := extractID(r.URL.Path)
 	llibre, err := a.DB.GetLlibre(id)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -360,10 +394,6 @@ func (a *App) AdminLlibrePagines(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminSaveLlibrePagina(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
 		return
@@ -371,6 +401,11 @@ func (a *App) AdminSaveLlibrePagina(w http.ResponseWriter, r *http.Request) {
 	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(llibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresEdit, target)
+	if !ok {
 		return
 	}
 	if strings.TrimSpace(r.FormValue("recalc")) != "" {
@@ -414,8 +449,12 @@ func (a *App) AdminSaveLlibrePagina(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
-	user, _, _ := a.requirePermission(w, r, permArxius)
 	id := extractID(r.URL.Path)
+	target := a.resolveLlibreTarget(id)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresView, target)
+	if !ok {
+		return
+	}
 	llibre, err := a.DB.GetLlibre(id)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -694,25 +733,30 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminUpdateLlibrePageStat(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
-		return
-	}
-	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
 		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
 		return
 	}
+	llibreID := extractID(r.URL.Path)
+	if llibreID == 0 {
+		llibreID = intFromForm(r.FormValue("llibre_id"))
+	}
+	target := a.resolveLlibreTarget(llibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresEdit, target); !ok {
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
 	statID := intFromForm(r.FormValue("stat_id"))
 	stat := &db.TranscripcioRawPageStat{
 		ID:                statID,
-		LlibreID:          intFromForm(r.FormValue("llibre_id")),
+		LlibreID:          llibreID,
 		NumPaginaText:     strings.TrimSpace(r.FormValue("num_pagina_text")),
 		TipusPagina:       strings.TrimSpace(r.FormValue("tipus_pagina")),
 		Exclosa:           intFromForm(r.FormValue("exclosa")),
@@ -720,9 +764,6 @@ func (a *App) AdminUpdateLlibrePageStat(w http.ResponseWriter, r *http.Request) 
 		DuplicadaDe:       parseNullString(r.FormValue("duplicada_de")),
 		TotalRegistres:    intFromForm(r.FormValue("total_registres")),
 		PaginaID:          parseNullInt64(r.FormValue("pagina_id")),
-	}
-	if stat.LlibreID == 0 {
-		stat.LlibreID = extractID(r.URL.Path)
 	}
 	if stat.LlibreID == 0 {
 		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
@@ -755,18 +796,19 @@ func (a *App) AdminUpdateLlibrePageStat(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *App) AdminPurgeLlibreRegistres(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
+		return
+	}
+	llibreID := extractID(r.URL.Path)
+	target := a.resolveLlibreTarget(llibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresDelete, target); !ok {
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
 		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
 	}
-	llibreID := extractID(r.URL.Path)
 	user, _ := a.VerificarSessio(r)
 	if user == nil {
 		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"?purge=error", http.StatusSeeOther)
@@ -791,10 +833,11 @@ func (a *App) AdminPurgeLlibreRegistres(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *App) AdminAddLlibreArxiu(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
+	llibreID := extractID(r.URL.Path)
+	target := a.resolveLlibreTarget(llibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresEdit, target); !ok {
 		return
 	}
-	llibreID := extractID(r.URL.Path)
 	arxiuID, _ := strconv.Atoi(r.FormValue("arxiu_id"))
 	signatura := strings.TrimSpace(r.FormValue("signatura"))
 	urlOverride := strings.TrimSpace(r.FormValue("url_override"))
@@ -807,15 +850,16 @@ func (a *App) AdminAddLlibreArxiu(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminUpdateLlibreArxiu(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
-		return
-	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(parts) < 5 {
 		http.NotFound(w, r)
 		return
 	}
 	llibreID, _ := strconv.Atoi(parts[2])
+	target := a.resolveLlibreTarget(llibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresEdit, target); !ok {
+		return
+	}
 	arxiuID, _ := strconv.Atoi(parts[4])
 	signatura := strings.TrimSpace(r.FormValue("signatura"))
 	urlOverride := strings.TrimSpace(r.FormValue("url_override"))
@@ -824,33 +868,35 @@ func (a *App) AdminUpdateLlibreArxiu(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminDeleteLlibreArxiu(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
-		return
-	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(parts) < 5 {
 		http.NotFound(w, r)
 		return
 	}
 	llibreID, _ := strconv.Atoi(parts[2])
+	target := a.resolveLlibreTarget(llibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresEdit, target); !ok {
+		return
+	}
 	arxiuID, _ := strconv.Atoi(parts[4])
 	_ = a.DB.DeleteArxiuLlibre(arxiuID, llibreID)
 	http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID), http.StatusSeeOther)
 }
 
 func (a *App) AdminAddLlibreURL(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
+		return
+	}
+	llibreID := extractID(r.URL.Path)
+	target := a.resolveLlibreTarget(llibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresEdit, target); !ok {
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
 		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
 	}
-	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
 		return
@@ -884,15 +930,8 @@ func (a *App) AdminAddLlibreURL(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminDeleteLlibreURL(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
-		return
-	}
-	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
@@ -901,6 +940,14 @@ func (a *App) AdminDeleteLlibreURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	llibreID, _ := strconv.Atoi(parts[2])
+	target := a.resolveLlibreTarget(llibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresEdit, target); !ok {
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
 	linkID, _ := strconv.Atoi(parts[4])
 	if linkID == 0 {
 		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID), http.StatusSeeOther)
@@ -915,9 +962,6 @@ func (a *App) AdminDeleteLlibreURL(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminEditLlibreArxiuLinks(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permArxius); !ok {
-		return
-	}
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
@@ -928,6 +972,10 @@ func (a *App) AdminEditLlibreArxiuLinks(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	llibreID, _ := strconv.Atoi(parts[2])
+	target := a.resolveLlibreTarget(llibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresEdit, target); !ok {
+		return
+	}
 	arxiuID, _ := strconv.Atoi(parts[4])
 	if llibreID == 0 || arxiuID == 0 {
 		http.NotFound(w, r)

@@ -233,6 +233,15 @@ func (d *MySQL) GetPolitica(id int) (*Politica, error) {
 func (d *MySQL) SavePolitica(p *Politica) (int, error) {
 	return d.help.savePolitica(p)
 }
+func (d *MySQL) ListPoliticaGrants(politicaID int) ([]PoliticaGrant, error) {
+	return d.help.listPoliticaGrants(politicaID)
+}
+func (d *MySQL) SavePoliticaGrant(g *PoliticaGrant) (int, error) {
+	return d.help.savePoliticaGrant(g)
+}
+func (d *MySQL) DeletePoliticaGrant(id int) error {
+	return d.help.deletePoliticaGrant(id)
+}
 func (d *MySQL) ListUserPolitiques(userID int) ([]Politica, error) {
 	return d.help.listUserPolitiques(userID)
 }
@@ -253,6 +262,20 @@ func (d *MySQL) RemoveGroupPolitica(groupID, politicaID int) error {
 }
 func (d *MySQL) GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error) {
 	return d.help.getEffectivePoliticaPerms(userID)
+}
+func (d *MySQL) GetUserPermissionsVersion(userID int) (int, error) {
+	return d.help.getUserPermissionsVersion(userID)
+}
+func (d *MySQL) BumpUserPermissionsVersion(userID int) error {
+	return d.help.bumpUserPermissionsVersion(userID)
+}
+
+func (d *MySQL) BumpGroupPermissionsVersion(groupID int) error {
+	return d.help.bumpGroupPermissionsVersion(groupID)
+}
+
+func (d *MySQL) BumpPolicyPermissionsVersion(politicaID int) error {
+	return d.help.bumpPolicyPermissionsVersion(politicaID)
 }
 
 // Persones (moderació)

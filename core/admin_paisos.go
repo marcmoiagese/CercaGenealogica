@@ -35,7 +35,7 @@ func isUpperAlpha(s string) bool {
 }
 
 func (a *App) AdminListPaisos(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriPaisosView, PermissionTarget{}); !ok {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
@@ -52,7 +52,7 @@ func (a *App) AdminListPaisos(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminNewPais(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriPaisosCreate, PermissionTarget{}); !ok {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
@@ -67,11 +67,12 @@ func (a *App) AdminNewPais(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminEditPais(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
+	id := extractID(r.URL.Path)
+	target := PermissionTarget{PaisID: intPtr(id)}
+	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriPaisosEdit, target); !ok {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
-	id := extractID(r.URL.Path)
 	pais, err := a.DB.GetPais(id)
 	if err != nil || pais == nil {
 		http.NotFound(w, r)
@@ -88,14 +89,22 @@ func (a *App) AdminEditPais(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminSavePais(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/admin/paisos", http.StatusSeeOther)
 		return
 	}
 	id, _ := strconv.Atoi(r.FormValue("id"))
+	permKey := permKeyTerritoriPaisosCreate
+	if id != 0 {
+		permKey = permKeyTerritoriPaisosEdit
+	}
+	target := PermissionTarget{}
+	if id != 0 {
+		target.PaisID = intPtr(id)
+	}
+	if _, ok := a.requirePermissionKey(w, r, permKey, target); !ok {
+		return
+	}
 	pais := &db.Pais{
 		ID:          id,
 		CodiISO2:    strings.ToUpper(strings.TrimSpace(r.FormValue("codi_iso2"))),

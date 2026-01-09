@@ -13,10 +13,11 @@ import (
 )
 
 func (a *App) AdminImportRegistresGlobalView(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permArxius)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresImportCSV, PermissionTarget{})
 	if !ok {
 		return
 	}
+	perms := a.getPermissionsForUser(user.ID)
 	imported, _ := strconv.Atoi(r.URL.Query().Get("imported"))
 	updated, _ := strconv.Atoi(r.URL.Query().Get("updated"))
 	failed, _ := strconv.Atoi(r.URL.Query().Get("failed"))
@@ -38,7 +39,7 @@ func (a *App) AdminImportRegistresGlobalView(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *App) AdminImportRegistresGlobal(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresImportCSV, PermissionTarget{})
 	if !ok {
 		return
 	}

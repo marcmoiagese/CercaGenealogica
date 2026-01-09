@@ -13,13 +13,21 @@ type App struct {
 	Config map[string]string
 	DB     db.DB
 	Mail   MailConfig
+	permCache           *permissionCache
+	llibreTargetCache   *targetCache
+	arxiuTargetCache    *targetCache
+	municipiTargetCache *targetCache
 }
 
 func NewApp(cfg map[string]string, database db.DB) *App {
 	return &App{
-		Config: cfg,
-		DB:     database,
-		Mail:   NewMailConfig(cfg),
+		Config:              cfg,
+		DB:                  database,
+		Mail:                NewMailConfig(cfg),
+		permCache:           newPermissionCache(),
+		llibreTargetCache:   newTargetCache(targetCacheTTL, llibreTargetCacheMax),
+		arxiuTargetCache:    newTargetCache(targetCacheTTL, arxiuTargetCacheMax),
+		municipiTargetCache: newTargetCache(targetCacheTTL, municipiTargetCacheMax),
 	}
 }
 

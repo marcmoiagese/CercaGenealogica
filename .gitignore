@@ -1,31 +1,15 @@
-# Exclou tots els fitxers .db
 /database.db
 /database.db-shm
 /database.db-wal
-
-# Exclou tots els fitxers Excel a la carpeta db
 /db/Index_llibres_Digitals.xlsx
-
-# Excloc el csv
 /db/Index_llibres_Digitals_arbeca.csv
-
-# O alternativament, exclou tots els fitxers Excel
 *.xlsx
-
-# Carpeta per treballar amb Codex / ChatGPT
 .codex/
-
-# Carpeta per treballar amb vs code des de wsl
 .vscode/
-
-# Excloc readme tests
 /tests/README.md
-
-#excloc cache de go
 .gocache/
 coverage.out
-
-# Excloc gitignore
 .gitignore
-
+.cache/
+.continue/
 plantilla-temporal/

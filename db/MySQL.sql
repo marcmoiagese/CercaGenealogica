@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS usuaris (
     expira_token DATETIME,
     actiu BOOLEAN DEFAULT TRUE, -- BOOLEAN es mapeja a TINYINT(1)
     banned BOOLEAN DEFAULT FALSE,
+    permissions_version INT NOT NULL DEFAULT 0,
     INDEX idx_usuaris_correu (correu),
     INDEX idx_usuaris_data_creacio (data_creacio)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -60,6 +61,22 @@ CREATE TABLE IF NOT EXISTS politiques (
     data_creacio DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_politiques_nom (nom)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS politica_grants;
+CREATE TABLE IF NOT EXISTS politica_grants (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    politica_id INT UNSIGNED NOT NULL,
+    perm_key VARCHAR(255) NOT NULL,
+    scope_type VARCHAR(50) NOT NULL,
+    scope_id INT NULL,
+    include_children BOOLEAN NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (politica_id) REFERENCES politiques(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_politica_grants_politica ON politica_grants(politica_id);
+CREATE INDEX idx_politica_grants_perm ON politica_grants(perm_key);
+CREATE INDEX idx_politica_grants_perm_scope ON politica_grants(perm_key, scope_type, scope_id);
 
 CREATE TABLE IF NOT EXISTS usuaris_politiques (
     usuari_id INT UNSIGNED NOT NULL,
@@ -543,6 +560,10 @@ CREATE INDEX idx_llibres_urls_arxiu ON llibres_urls(arxiu_id);
 CREATE INDEX idx_llibre_pagines_estat  ON llibre_pagines(llibre_id, estat);
 
 -- Transcripcions RAW de registres
+DROP TABLE IF EXISTS transcripcions_raw_canvis;
+DROP TABLE IF EXISTS transcripcions_raw_marques;
+DROP TABLE IF EXISTS transcripcions_raw_page_stats;
+DROP TABLE IF EXISTS transcripcions_raw_drafts;
 DROP TABLE IF EXISTS transcripcions_atributs_raw;
 DROP TABLE IF EXISTS transcripcions_persones_raw;
 DROP TABLE IF EXISTS transcripcions_raw;

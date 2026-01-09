@@ -54,6 +54,9 @@ func main() {
 	_ = dbInstance.EnsureDefaultPolicies()
 	_ = dbInstance.EnsureDefaultPointsRules()
 	app := core.NewApp(configMap, dbInstance)
+	if err := app.EnsurePolicyGrants(); err != nil {
+		log.Printf("[permissions] error assegurant grants per polítiques: %v", err)
+	}
 	defer app.Close()
 
 	// Serveix recursos estàtics amb middleware de seguretat
@@ -356,6 +359,8 @@ func main() {
 		}
 	})
 	http.HandleFunc("/admin/politiques/save", applyMiddleware(app.AdminSavePolitica, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/politiques/grants/save", applyMiddleware(app.AdminSavePoliticaGrant, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/politiques/grants/delete", applyMiddleware(app.AdminDeletePoliticaGrant, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/politiques/assignacions", applyMiddleware(app.AdminAssignacionsPolitiques, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/politiques/assignar-usuari", applyMiddleware(app.AdminAssignarPoliticaUsuari, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/politiques/treure-usuari", applyMiddleware(app.AdminTreurePoliticaUsuari, core.BlockIPs, core.RateLimit))

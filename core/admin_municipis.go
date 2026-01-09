@@ -10,13 +10,11 @@ import (
 )
 
 func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisView, PermissionTarget{})
+	if !ok {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	*r = *a.withPermissions(r, perms)
 	filter := db.MunicipiFilter{
 		Text:   strings.TrimSpace(r.URL.Query().Get("q")),
 		Estat:  strings.TrimSpace(r.URL.Query().Get("estat")),
@@ -54,10 +52,16 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminNewMunicipi(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
+	target := PermissionTarget{}
+	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
+		if v, err := strconv.Atoi(pid); err == nil && v > 0 {
+			target.PaisID = intPtr(v)
+		}
+	}
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisCreate, target)
+	if !ok {
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	paisos, _ := a.DB.ListPaisos()
 	var (
@@ -102,15 +106,16 @@ func (a *App) AdminNewMunicipi(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminEditMunicipi(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
-		return
-	}
-	user, _ := a.VerificarSessio(r)
 	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	id := extractID(r.URL.Path)
 	mun, err := a.DB.GetMunicipi(id)
 	if err != nil || mun == nil {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveMunicipiTarget(mun.ID)
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisEdit, target)
+	if !ok {
 		return
 	}
 	paisos, _ := a.DB.ListPaisos()
@@ -179,15 +184,31 @@ func parseNullFloat(val string) sql.NullFloat64 {
 }
 
 func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/territori/municipis", http.StatusSeeOther)
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	id, _ := strconv.Atoi(r.FormValue("id"))
+	permKey := permKeyTerritoriMunicipisCreate
+	if id != 0 {
+		permKey = permKeyTerritoriMunicipisEdit
+	}
+	target := PermissionTarget{}
+	if id != 0 {
+		target = a.resolveMunicipiTarget(id)
+	} else {
+		if lvlStr := strings.TrimSpace(r.FormValue("nivell_administratiu_id_1")); lvlStr != "" {
+			if lvlID, err := strconv.Atoi(lvlStr); err == nil && lvlID > 0 {
+				if nivell, err := a.DB.GetNivell(lvlID); err == nil && nivell != nil && nivell.PaisID > 0 {
+					target.PaisID = intPtr(nivell.PaisID)
+				}
+			}
+		}
+	}
+	user, ok := a.requirePermissionKey(w, r, permKey, target)
+	if !ok {
+		return
+	}
 	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	parent := parseNullInt(r.FormValue("municipi_id"))
 	m := &db.Municipi{
@@ -300,9 +321,6 @@ func (a *App) renderMunicipiFormError(w http.ResponseWriter, r *http.Request, m 
 }
 
 func (a *App) AdminSaveCodiPostal(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/territori/municipis", http.StatusSeeOther)
 		return
@@ -310,6 +328,10 @@ func (a *App) AdminSaveCodiPostal(w http.ResponseWriter, r *http.Request) {
 	munID := extractID(r.URL.Path)
 	if munID == 0 {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveMunicipiTarget(munID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisEdit, target); !ok {
 		return
 	}
 	_, err := a.DB.GetMunicipi(munID)
@@ -335,9 +357,6 @@ func (a *App) AdminSaveCodiPostal(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminSaveMunicipiEcles(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/territori/municipis", http.StatusSeeOther)
 		return
@@ -345,6 +364,10 @@ func (a *App) AdminSaveMunicipiEcles(w http.ResponseWriter, r *http.Request) {
 	munID := extractID(r.URL.Path)
 	if munID == 0 {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveMunicipiTarget(munID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisEdit, target); !ok {
 		return
 	}
 	_, err := a.DB.GetMunicipi(munID)
@@ -372,9 +395,6 @@ func (a *App) AdminSaveMunicipiEcles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminSaveMunicipiNomHistoric(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/territori/municipis", http.StatusSeeOther)
 		return
@@ -382,6 +402,10 @@ func (a *App) AdminSaveMunicipiNomHistoric(w http.ResponseWriter, r *http.Reques
 	munID := extractID(r.URL.Path)
 	if munID == 0 {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveMunicipiTarget(munID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisEdit, target); !ok {
 		return
 	}
 	_, err := a.DB.GetMunicipi(munID)

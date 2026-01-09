@@ -167,6 +167,7 @@ func (a *App) AdminAssignarPoliticaUsuari(w http.ResponseWriter, r *http.Request
 	userID, _ := strconv.Atoi(r.FormValue("user_id"))
 	polID, _ := strconv.Atoi(r.FormValue("politica_id"))
 	_ = a.DB.AddUserPolitica(userID, polID)
+	_ = a.DB.BumpUserPermissionsVersion(userID)
 	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?user_id=%d", userID)), http.StatusSeeOther)
 }
 
@@ -186,6 +187,7 @@ func (a *App) AdminTreurePoliticaUsuari(w http.ResponseWriter, r *http.Request) 
 	userID, _ := strconv.Atoi(r.FormValue("user_id"))
 	polID, _ := strconv.Atoi(r.FormValue("politica_id"))
 	_ = a.DB.RemoveUserPolitica(userID, polID)
+	_ = a.DB.BumpUserPermissionsVersion(userID)
 	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?user_id=%d", userID)), http.StatusSeeOther)
 }
 
@@ -205,6 +207,7 @@ func (a *App) AdminAssignarPoliticaGrup(w http.ResponseWriter, r *http.Request) 
 	groupID, _ := strconv.Atoi(r.FormValue("group_id"))
 	polID, _ := strconv.Atoi(r.FormValue("politica_id"))
 	_ = a.DB.AddGroupPolitica(groupID, polID)
+	_ = a.DB.BumpGroupPermissionsVersion(groupID)
 	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?group_id=%d", groupID)), http.StatusSeeOther)
 }
 
@@ -224,5 +227,6 @@ func (a *App) AdminTreurePoliticaGrup(w http.ResponseWriter, r *http.Request) {
 	groupID, _ := strconv.Atoi(r.FormValue("group_id"))
 	polID, _ := strconv.Atoi(r.FormValue("politica_id"))
 	_ = a.DB.RemoveGroupPolitica(groupID, polID)
+	_ = a.DB.BumpGroupPermissionsVersion(groupID)
 	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?group_id=%d", groupID)), http.StatusSeeOther)
 }

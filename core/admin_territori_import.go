@@ -81,7 +81,7 @@ type territoriexportMunicipiRow struct {
 }
 
 func (a *App) AdminTerritoriImport(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminTerritoriImport, PermissionTarget{}); !ok {
 		return
 	}
 	q := r.URL.Query()
@@ -106,7 +106,7 @@ func (a *App) AdminTerritoriImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminTerritoriExport(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminTerritoriExport, PermissionTarget{}); !ok {
 		return
 	}
 	paisos, err := a.DB.ListPaisos()
@@ -236,7 +236,7 @@ func (a *App) AdminTerritoriExport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permAdmin)
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminTerritoriImport, PermissionTarget{})
 	if !ok {
 		return
 	}

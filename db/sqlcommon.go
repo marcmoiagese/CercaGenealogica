@@ -125,6 +125,7 @@ func (h sqlHelper) columnExists(table, column string) bool {
 
 // Policies
 func (h sqlHelper) ensureDefaultPolicies() error {
+	h.ensurePermissionsSchema()
 	defaultPerms := map[string]PolicyPermissions{
 		"admin": {
 			Admin:              true,
@@ -163,15 +164,32 @@ func (h sqlHelper) ensureDefaultPolicies() error {
 		upd := formatPlaceholders(h.style, `UPDATE politiques SET permisos = ? WHERE nom = ? AND (permisos IS NULL OR permisos = '' OR permisos = '{}' )`)
 		_, _ = h.db.Exec(upd, string(permsJSON), name)
 	}
-	// Bootstrap: assigna admin al primer usuari si no hi ha cap assignació
-	var assignCount int
-	if err := h.db.QueryRow("SELECT COUNT(*) FROM usuaris_politiques").Scan(&assignCount); err == nil && assignCount == 0 {
-		var userID int
-		if err := h.db.QueryRow("SELECT id FROM usuaris ORDER BY id ASC LIMIT 1").Scan(&userID); err == nil {
-			var policyID int
-			if err := h.db.QueryRow(formatPlaceholders(h.style, "SELECT id FROM politiques WHERE nom = ?"), "admin").Scan(&policyID); err == nil {
+	var adminID int
+	_ = h.db.QueryRow(formatPlaceholders(h.style, "SELECT id FROM politiques WHERE nom = ?"), "admin").Scan(&adminID)
+	var userPolicyID int
+	_ = h.db.QueryRow(formatPlaceholders(h.style, "SELECT id FROM politiques WHERE nom = ?"), "usuari").Scan(&userPolicyID)
+
+	// Assigna política base als usuaris sense cap assignació directa.
+	if userPolicyID > 0 {
+		stmt := `
+            INSERT INTO usuaris_politiques (usuari_id, politica_id)
+            SELECT u.id, ?
+            FROM usuaris u
+            LEFT JOIN usuaris_politiques up ON up.usuari_id = u.id
+            WHERE up.usuari_id IS NULL`
+		stmt = formatPlaceholders(h.style, stmt)
+		_, _ = h.db.Exec(stmt, userPolicyID)
+	}
+
+	// Assegura com a mínim un admin assignat explícitament.
+	if adminID > 0 {
+		var adminCount int
+		countStmt := formatPlaceholders(h.style, "SELECT COUNT(*) FROM usuaris_politiques WHERE politica_id = ?")
+		if err := h.db.QueryRow(countStmt, adminID).Scan(&adminCount); err == nil && adminCount == 0 {
+			var userID int
+			if err := h.db.QueryRow("SELECT id FROM usuaris ORDER BY id ASC LIMIT 1").Scan(&userID); err == nil {
 				stmt := formatPlaceholders(h.style, "INSERT INTO usuaris_politiques (usuari_id, politica_id) VALUES (?, ?)")
-				_, _ = h.db.Exec(stmt, userID, policyID)
+				_, _ = h.db.Exec(stmt, userID, adminID)
 			}
 		}
 	}
@@ -295,6 +313,66 @@ func (h sqlHelper) savePolitica(p *Politica) (int, error) {
 	return p.ID, err
 }
 
+func (h sqlHelper) listPoliticaGrants(politicaID int) ([]PoliticaGrant, error) {
+	query := `
+        SELECT id, politica_id, perm_key, scope_type, scope_id, include_children
+        FROM politica_grants
+        WHERE politica_id = ?
+        ORDER BY id`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, politicaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []PoliticaGrant
+	for rows.Next() {
+		var g PoliticaGrant
+		var includeRaw interface{}
+		if err := rows.Scan(&g.ID, &g.PoliticaID, &g.PermKey, &g.ScopeType, &g.ScopeID, &includeRaw); err != nil {
+			return nil, err
+		}
+		g.IncludeChildren = parseBoolValue(includeRaw)
+		res = append(res, g)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) savePoliticaGrant(g *PoliticaGrant) (int, error) {
+	if g.ID == 0 {
+		stmt := `INSERT INTO politica_grants (politica_id, perm_key, scope_type, scope_id, include_children)
+                 VALUES (?, ?, ?, ?, ?)`
+		stmt = formatPlaceholders(h.style, stmt)
+		if h.style == "postgres" {
+			stmt += " RETURNING id"
+			if err := h.db.QueryRow(stmt, g.PoliticaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren).Scan(&g.ID); err != nil {
+				return 0, err
+			}
+			return g.ID, nil
+		}
+		res, err := h.db.Exec(stmt, g.PoliticaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren)
+		if err != nil {
+			return 0, err
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			g.ID = int(id)
+		}
+		return g.ID, nil
+	}
+	stmt := `UPDATE politica_grants
+             SET politica_id = ?, perm_key = ?, scope_type = ?, scope_id = ?, include_children = ?
+             WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, g.PoliticaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren, g.ID)
+	return g.ID, err
+}
+
+func (h sqlHelper) deletePoliticaGrant(id int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM politica_grants WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
+	return err
+}
+
 func (h sqlHelper) listUserPolitiques(userID int) ([]Politica, error) {
 	query := `
         SELECT p.id, p.nom, p.descripcio, p.permisos
@@ -370,6 +448,49 @@ func (h sqlHelper) addGroupPolitica(groupID, politicaID int) error {
 func (h sqlHelper) removeGroupPolitica(groupID, politicaID int) error {
 	stmt := formatPlaceholders(h.style, `DELETE FROM grups_politiques WHERE grup_id = ? AND politica_id = ?`)
 	_, err := h.db.Exec(stmt, groupID, politicaID)
+	return err
+}
+
+func (h sqlHelper) getUserPermissionsVersion(userID int) (int, error) {
+	stmt := formatPlaceholders(h.style, `SELECT permissions_version FROM usuaris WHERE id = ?`)
+	var val sql.NullInt64
+	if err := h.db.QueryRow(stmt, userID).Scan(&val); err != nil {
+		return 0, err
+	}
+	if !val.Valid {
+		return 0, nil
+	}
+	return int(val.Int64), nil
+}
+
+func (h sqlHelper) bumpUserPermissionsVersion(userID int) error {
+	stmt := formatPlaceholders(h.style, `UPDATE usuaris SET permissions_version = COALESCE(permissions_version, 0) + 1 WHERE id = ?`)
+	_, err := h.db.Exec(stmt, userID)
+	return err
+}
+
+func (h sqlHelper) bumpGroupPermissionsVersion(groupID int) error {
+	stmt := formatPlaceholders(h.style, `UPDATE usuaris SET permissions_version = COALESCE(permissions_version, 0) + 1 WHERE id IN (SELECT usuari_id FROM usuaris_grups WHERE grup_id = ?)`)
+	_, err := h.db.Exec(stmt, groupID)
+	return err
+}
+
+func (h sqlHelper) bumpPolicyPermissionsVersion(politicaID int) error {
+	if politicaID <= 0 {
+		return nil
+	}
+	stmt := `
+        UPDATE usuaris
+        SET permissions_version = COALESCE(permissions_version, 0) + 1
+        WHERE id IN (SELECT usuari_id FROM usuaris_politiques WHERE politica_id = ?)
+           OR id IN (
+                SELECT ug.usuari_id
+                FROM usuaris_grups ug
+                INNER JOIN grups_politiques gp ON gp.grup_id = ug.grup_id
+                WHERE gp.politica_id = ?
+           )`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, politicaID, politicaID)
 	return err
 }
 
@@ -1520,6 +1641,79 @@ func (h sqlHelper) saveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error)
 	_, err := h.db.Exec(query, am.ArquebisbatID, am.AnyInici, am.AnyFi, am.Motiu, am.Font, am.ID)
 	return am.ID, err
 }
+
+func (h sqlHelper) ensurePermissionsSchema() {
+	h.ensureUserExtraColumns()
+	h.ensurePolicyGrantsTable()
+}
+
+func (h sqlHelper) ensurePolicyGrantsTable() {
+	var stmt string
+	switch h.style {
+	case "mysql":
+		stmt = `CREATE TABLE IF NOT EXISTS politica_grants (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            politica_id INT UNSIGNED NOT NULL,
+            perm_key VARCHAR(255) NOT NULL,
+            scope_type VARCHAR(50) NOT NULL,
+            scope_id INT NULL,
+            include_children BOOLEAN NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (politica_id) REFERENCES politiques(id) ON DELETE CASCADE
+        )`
+	case "postgres":
+		stmt = `CREATE TABLE IF NOT EXISTS politica_grants (
+            id SERIAL PRIMARY KEY,
+            politica_id INTEGER NOT NULL REFERENCES politiques(id) ON DELETE CASCADE,
+            perm_key TEXT NOT NULL,
+            scope_type TEXT NOT NULL,
+            scope_id INTEGER,
+            include_children BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`
+	default: // sqlite
+		stmt = `CREATE TABLE IF NOT EXISTS politica_grants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            politica_id INTEGER NOT NULL REFERENCES politiques(id) ON DELETE CASCADE,
+            perm_key TEXT NOT NULL,
+            scope_type TEXT NOT NULL,
+            scope_id INTEGER,
+            include_children INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`
+	}
+	if stmt != "" {
+		_, _ = h.db.Exec(stmt)
+	}
+	indexStmts := []string{}
+	switch h.style {
+	case "mysql":
+		indexStmts = []string{
+			"CREATE INDEX idx_politica_grants_politica ON politica_grants(politica_id)",
+			"CREATE INDEX idx_politica_grants_perm ON politica_grants(perm_key)",
+			"CREATE INDEX idx_politica_grants_perm_scope ON politica_grants(perm_key, scope_type, scope_id)",
+		}
+	case "postgres":
+		indexStmts = []string{
+			"CREATE INDEX IF NOT EXISTS idx_politica_grants_politica ON politica_grants(politica_id)",
+			"CREATE INDEX IF NOT EXISTS idx_politica_grants_perm ON politica_grants(perm_key)",
+			"CREATE INDEX IF NOT EXISTS idx_politica_grants_perm_scope ON politica_grants(perm_key, scope_type, scope_id)",
+		}
+	default: // sqlite
+		indexStmts = []string{
+			"CREATE INDEX IF NOT EXISTS idx_politica_grants_politica ON politica_grants(politica_id)",
+			"CREATE INDEX IF NOT EXISTS idx_politica_grants_perm ON politica_grants(perm_key)",
+			"CREATE INDEX IF NOT EXISTS idx_politica_grants_perm_scope ON politica_grants(perm_key, scope_type, scope_id)",
+		}
+	}
+	for _, idx := range indexStmts {
+		_, _ = h.db.Exec(idx)
+	}
+}
+
 func (h sqlHelper) ensureUserExtraColumns() {
 	stmts := []string{}
 	switch h.style {
@@ -1545,6 +1739,9 @@ func (h sqlHelper) ensureUserExtraColumns() {
 		if !h.columnExists("usuaris", "banned") {
 			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN banned BOOLEAN DEFAULT 0")
 		}
+		if !h.columnExists("usuaris", "permissions_version") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN permissions_version INT NOT NULL DEFAULT 0")
+		}
 	case "postgres":
 		if !h.columnExists("usuaris", "address") {
 			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS address TEXT")
@@ -1567,6 +1764,9 @@ func (h sqlHelper) ensureUserExtraColumns() {
 		if !h.columnExists("usuaris", "banned") {
 			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS banned BOOLEAN DEFAULT FALSE")
 		}
+		if !h.columnExists("usuaris", "permissions_version") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN IF NOT EXISTS permissions_version INTEGER NOT NULL DEFAULT 0")
+		}
 	default: // sqlite
 		if !h.columnExists("usuaris", "address") {
 			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN address TEXT")
@@ -1588,6 +1788,9 @@ func (h sqlHelper) ensureUserExtraColumns() {
 		}
 		if !h.columnExists("usuaris", "banned") {
 			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN banned INTEGER NOT NULL DEFAULT 0")
+		}
+		if !h.columnExists("usuaris", "permissions_version") {
+			stmts = append(stmts, "ALTER TABLE usuaris ADD COLUMN permissions_version INTEGER NOT NULL DEFAULT 0")
 		}
 	}
 	for _, stmt := range stmts {
@@ -2454,6 +2657,28 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 		clauses = append(clauses, "a.moderation_status = ?")
 		args = append(args, strings.TrimSpace(filter.Status))
 	}
+	allowedClauses := []string{}
+	allowedArgs := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		allowedClauses = append(allowedClauses, column+" IN ("+placeholders+")")
+		for _, id := range ids {
+			allowedArgs = append(allowedArgs, id)
+		}
+	}
+	inClause("a.id", filter.AllowedArxiuIDs)
+	inClause("a.municipi_id", filter.AllowedMunicipiIDs)
+	inClause("a.entitat_eclesiastica_id", filter.AllowedEclesIDs)
+	inClause("m.nivell_administratiu_id_3", filter.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", filter.AllowedComarcaIDs)
+	inClause("na1.pais_id", filter.AllowedPaisIDs)
+	if len(allowedClauses) > 0 {
+		clauses = append(clauses, "("+strings.Join(allowedClauses, " OR ")+")")
+		args = append(args, allowedArgs...)
+	}
 	limit := 50
 	offset := 0
 	if filter.Limit > 0 {
@@ -2470,6 +2695,7 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
                COALESCE(cnt.total, 0) AS llibres
         FROM arxius a
         LEFT JOIN municipis m ON m.id = a.municipi_id
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
         LEFT JOIN arquebisbats ae ON ae.id = a.entitat_eclesiastica_id
         LEFT JOIN (
             SELECT arxiu_id, COUNT(*) as total FROM arxius_llibres GROUP BY arxiu_id
@@ -2738,6 +2964,35 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 		clauses = append(clauses, "l.moderation_status = ?")
 		args = append(args, strings.TrimSpace(filter.Status))
 	}
+	allowedClauses := []string{}
+	allowedArgs := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		allowedClauses = append(allowedClauses, column+" IN ("+placeholders+")")
+		for _, id := range ids {
+			allowedArgs = append(allowedArgs, id)
+		}
+	}
+	inClause("l.id", filter.AllowedLlibreIDs)
+	inClause("l.municipi_id", filter.AllowedMunicipiIDs)
+	inClause("l.arquevisbat_id", filter.AllowedEclesIDs)
+	inClause("m.nivell_administratiu_id_3", filter.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", filter.AllowedComarcaIDs)
+	inClause("na1.pais_id", filter.AllowedPaisIDs)
+	if len(filter.AllowedArxiuIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.AllowedArxiuIDs)), ",")
+		allowedClauses = append(allowedClauses, "EXISTS (SELECT 1 FROM arxius_llibres al WHERE al.llibre_id = l.id AND al.arxiu_id IN ("+placeholders+"))")
+		for _, id := range filter.AllowedArxiuIDs {
+			allowedArgs = append(allowedArgs, id)
+		}
+	}
+	if len(allowedClauses) > 0 {
+		clauses = append(clauses, "("+strings.Join(allowedClauses, " OR ")+")")
+		args = append(args, allowedArgs...)
+	}
 	query := `
         SELECT l.id, l.arquevisbat_id, l.municipi_id, l.nom_esglesia, l.codi_digital, l.codi_fisic,
                l.titol, l.tipus_llibre, l.cronologia, l.volum, l.abat, l.contingut, l.llengua,
@@ -2748,6 +3003,7 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
         FROM llibres l
         LEFT JOIN arquebisbats ae ON ae.id = l.arquevisbat_id
         LEFT JOIN municipis m ON m.id = l.municipi_id
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
         WHERE ` + strings.Join(clauses, " AND ") + `
         ORDER BY l.titol`
 	query = formatPlaceholders(h.style, query)

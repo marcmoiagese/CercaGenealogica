@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS usuaris (
     token_activacio TEXT,
     expira_token DATETIME,
     actiu INTEGER NOT NULL DEFAULT 1 CHECK (actiu IN (0,1)),
-    banned INTEGER NOT NULL DEFAULT 0 CHECK (banned IN (0,1))
+    banned INTEGER NOT NULL DEFAULT 0 CHECK (banned IN (0,1)),
+    permissions_version INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS grups (
@@ -52,6 +53,20 @@ CREATE TABLE IF NOT EXISTS politiques (
     permisos TEXT NOT NULL,  -- JSON o text amb els permisos específics
     data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS politica_grants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    politica_id INTEGER NOT NULL REFERENCES politiques(id) ON DELETE CASCADE,
+    perm_key TEXT NOT NULL,
+    scope_type TEXT NOT NULL,
+    scope_id INTEGER,
+    include_children INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_politica_grants_politica ON politica_grants(politica_id);
+CREATE INDEX IF NOT EXISTS idx_politica_grants_perm ON politica_grants(perm_key);
+CREATE INDEX IF NOT EXISTS idx_politica_grants_perm_scope ON politica_grants(perm_key, scope_type, scope_id);
 
 CREATE TABLE IF NOT EXISTS usuaris_politiques (
     usuari_id INTEGER NOT NULL,

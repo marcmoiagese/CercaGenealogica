@@ -249,6 +249,15 @@ func (d *SQLite) GetPolitica(id int) (*Politica, error) {
 func (d *SQLite) SavePolitica(p *Politica) (int, error) {
 	return d.help.savePolitica(p)
 }
+func (d *SQLite) ListPoliticaGrants(politicaID int) ([]PoliticaGrant, error) {
+	return d.help.listPoliticaGrants(politicaID)
+}
+func (d *SQLite) SavePoliticaGrant(g *PoliticaGrant) (int, error) {
+	return d.help.savePoliticaGrant(g)
+}
+func (d *SQLite) DeletePoliticaGrant(id int) error {
+	return d.help.deletePoliticaGrant(id)
+}
 func (d *SQLite) ListUserPolitiques(userID int) ([]Politica, error) {
 	return d.help.listUserPolitiques(userID)
 }
@@ -272,6 +281,20 @@ func (d *SQLite) ListUserGroups(userID int) ([]Group, error) {
 }
 func (d *SQLite) GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error) {
 	return d.help.getEffectivePoliticaPerms(userID)
+}
+func (d *SQLite) GetUserPermissionsVersion(userID int) (int, error) {
+	return d.help.getUserPermissionsVersion(userID)
+}
+func (d *SQLite) BumpUserPermissionsVersion(userID int) error {
+	return d.help.bumpUserPermissionsVersion(userID)
+}
+
+func (d *SQLite) BumpGroupPermissionsVersion(groupID int) error {
+	return d.help.bumpGroupPermissionsVersion(groupID)
+}
+
+func (d *SQLite) BumpPolicyPermissionsVersion(politicaID int) error {
+	return d.help.bumpPolicyPermissionsVersion(politicaID)
 }
 
 // Persones (moderació)

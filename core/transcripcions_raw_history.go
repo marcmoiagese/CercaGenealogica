@@ -440,13 +440,6 @@ func buildSnapshotDiff(lang string, llibre *db.Llibre, before, after *transcripc
 }
 
 func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
-	canManageArxius := a.hasPerm(perms, permArxius)
-	canManagePolicies := perms.CanManagePolicies || perms.Admin
-	canModerate := perms.CanModerate || perms.Admin
 	lang := ResolveLang(r)
 	registreID := extractID(r.URL.Path)
 	if registreID == 0 {
@@ -458,6 +451,15 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsRegistresEdit, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	canManageArxius := a.hasPerm(perms, permArxius)
+	canManagePolicies := perms.CanManagePolicies || perms.Admin
+	canModerate := perms.CanModerate || perms.Admin
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
 	if llibre == nil {
 		llibre = &db.Llibre{TipusLlibre: registre.TipusActe}
@@ -837,10 +839,6 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminRevertRegistreChange(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -863,6 +861,11 @@ func (a *App) AdminRevertRegistreChange(w http.ResponseWriter, r *http.Request) 
 	registre, err := a.DB.GetTranscripcioRaw(registreID)
 	if err != nil || registre == nil {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsRegistresEdit, target)
+	if !ok {
 		return
 	}
 	beforePersones, _ := a.DB.ListTranscripcioPersones(registreID)
@@ -982,13 +985,6 @@ func (a *App) AdminRevertRegistreChange(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *App) AdminRegistreStats(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
-	canManageArxius := a.hasPerm(perms, permArxius)
-	canManagePolicies := perms.CanManagePolicies || perms.Admin
-	canModerate := perms.CanModerate || perms.Admin
 	lang := ResolveLang(r)
 	registreID := extractID(r.URL.Path)
 	if registreID == 0 {
@@ -1000,6 +996,15 @@ func (a *App) AdminRegistreStats(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresViewRegistres, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	canManageArxius := a.hasPerm(perms, permArxius)
+	canManagePolicies := perms.CanManagePolicies || perms.Admin
+	canModerate := perms.CanModerate || perms.Admin
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
 	if llibre == nil {
 		llibre = &db.Llibre{TipusLlibre: registre.TipusActe}

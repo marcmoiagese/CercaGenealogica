@@ -949,6 +949,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (query) {
                 params.set("q", query);
             }
+            params.set("registre_id", currentRegistreID.toString());
             fetch(`${searchEndpoint}?${params.toString()}`, {
                 method: "GET",
                 headers: { "Accept": "application/json" },

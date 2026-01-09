@@ -77,16 +77,15 @@ func buildRegistreRows(a *App, registres []db.TranscripcioRaw) []registreRow {
 }
 
 func (a *App) AdminExportRegistresLlibre(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.NotFound(w, r)
 		return
 	}
-	_ = user
+	target := a.resolveLlibreTarget(llibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresExportCSV, target); !ok {
+		return
+	}
 	filter, _, _ := parseTranscripcioFilterFromRequest(r, 25)
 	filter.Limit = -1
 	filter.Offset = 0
@@ -97,8 +96,7 @@ func (a *App) AdminExportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 }
 
 func (a *App) AdminExportRegistresGlobal(w http.ResponseWriter, r *http.Request) {
-	_, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresExportCSV, PermissionTarget{}); !ok {
 		return
 	}
 	filter, _, _ := parseTranscripcioFilterFromRequest(r, 25)
@@ -378,15 +376,17 @@ func applyAttrValue(a *db.TranscripcioAtributRaw, val string) {
 }
 
 func (a *App) AdminImportRegistresView(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.NotFound(w, r)
 		return
 	}
+	target := a.resolveLlibreTarget(llibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresImportCSV, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -402,13 +402,14 @@ func (a *App) AdminImportRegistresView(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(llibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresImportCSV, target)
+	if !ok {
 		return
 	}
 	file, _, err := r.FormFile("csv_file")
@@ -573,16 +574,15 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 	if created > 0 {
 		_, _ = a.recalcLlibreIndexacioStats(llibreID)
 	}
-	target := fmt.Sprintf("/documentals/llibres/%d/indexar?imported=%d&failed=%d", llibreID, created, failed)
+	redirectTarget := fmt.Sprintf("/documentals/llibres/%d/indexar?imported=%d&failed=%d", llibreID, created, failed)
 	if token != "" {
-		target += "&errors_token=" + token
+		redirectTarget += "&errors_token=" + token
 	}
-	http.Redirect(w, r, target, http.StatusSeeOther)
+	http.Redirect(w, r, redirectTarget, http.StatusSeeOther)
 }
 
 func (a *App) AdminDownloadImportErrors(w http.ResponseWriter, r *http.Request) {
-	_, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresImportCSV, PermissionTarget{}); !ok {
 		return
 	}
 	token := strings.TrimSpace(r.URL.Query().Get("token"))
@@ -622,7 +622,7 @@ func (a *App) AdminDownloadImportErrors(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *App) AdminSearchRegistres(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresViewRegistres, PermissionTarget{})
 	if !ok {
 		return
 	}

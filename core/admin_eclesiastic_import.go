@@ -46,7 +46,7 @@ type eclesiasticExportRel struct {
 }
 
 func (a *App) AdminEclesiasticImport(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminEclesImport, PermissionTarget{}); !ok {
 		return
 	}
 	q := r.URL.Query()
@@ -70,7 +70,7 @@ func (a *App) AdminEclesiasticImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminEclesiasticExport(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminEclesExport, PermissionTarget{}); !ok {
 		return
 	}
 	entRows, err := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
@@ -178,7 +178,7 @@ func (a *App) AdminEclesiasticExport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permAdmin)
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminEclesImport, PermissionTarget{})
 	if !ok {
 		return
 	}

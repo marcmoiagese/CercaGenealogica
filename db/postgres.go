@@ -234,6 +234,15 @@ func (d *PostgreSQL) GetPolitica(id int) (*Politica, error) {
 func (d *PostgreSQL) SavePolitica(p *Politica) (int, error) {
 	return d.help.savePolitica(p)
 }
+func (d *PostgreSQL) ListPoliticaGrants(politicaID int) ([]PoliticaGrant, error) {
+	return d.help.listPoliticaGrants(politicaID)
+}
+func (d *PostgreSQL) SavePoliticaGrant(g *PoliticaGrant) (int, error) {
+	return d.help.savePoliticaGrant(g)
+}
+func (d *PostgreSQL) DeletePoliticaGrant(id int) error {
+	return d.help.deletePoliticaGrant(id)
+}
 func (d *PostgreSQL) ListUserPolitiques(userID int) ([]Politica, error) {
 	return d.help.listUserPolitiques(userID)
 }
@@ -254,6 +263,20 @@ func (d *PostgreSQL) RemoveGroupPolitica(groupID, politicaID int) error {
 }
 func (d *PostgreSQL) GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error) {
 	return d.help.getEffectivePoliticaPerms(userID)
+}
+func (d *PostgreSQL) GetUserPermissionsVersion(userID int) (int, error) {
+	return d.help.getUserPermissionsVersion(userID)
+}
+func (d *PostgreSQL) BumpUserPermissionsVersion(userID int) error {
+	return d.help.bumpUserPermissionsVersion(userID)
+}
+
+func (d *PostgreSQL) BumpGroupPermissionsVersion(groupID int) error {
+	return d.help.bumpGroupPermissionsVersion(groupID)
+}
+
+func (d *PostgreSQL) BumpPolicyPermissionsVersion(politicaID int) error {
+	return d.help.bumpPolicyPermissionsVersion(politicaID)
 }
 
 // Persones (moderació)

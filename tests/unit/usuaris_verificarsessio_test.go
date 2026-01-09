@@ -221,9 +221,14 @@ func (f *fakeDBVerificar) ListArquebisbatMunicipis(munID int) ([]db.ArquebisbatM
 func (f *fakeDBVerificar) SaveArquebisbatMunicipi(am *db.ArquebisbatMunicipi) (int, error) {
 	return 0, nil
 }
-func (f *fakeDBVerificar) ListPolitiques() ([]db.Politica, error)                 { return nil, nil }
-func (f *fakeDBVerificar) GetPolitica(id int) (*db.Politica, error)               { return nil, nil }
-func (f *fakeDBVerificar) SavePolitica(p *db.Politica) (int, error)               { return 0, nil }
+func (f *fakeDBVerificar) ListPolitiques() ([]db.Politica, error)   { return nil, nil }
+func (f *fakeDBVerificar) GetPolitica(id int) (*db.Politica, error) { return nil, nil }
+func (f *fakeDBVerificar) SavePolitica(p *db.Politica) (int, error) { return 0, nil }
+func (f *fakeDBVerificar) ListPoliticaGrants(politicaID int) ([]db.PoliticaGrant, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) SavePoliticaGrant(g *db.PoliticaGrant) (int, error)     { return 0, nil }
+func (f *fakeDBVerificar) DeletePoliticaGrant(id int) error                       { return nil }
 func (f *fakeDBVerificar) ListUserPolitiques(userID int) ([]db.Politica, error)   { return nil, nil }
 func (f *fakeDBVerificar) AddUserPolitica(userID, politicaID int) error           { return nil }
 func (f *fakeDBVerificar) RemoveUserPolitica(userID, politicaID int) error        { return nil }
@@ -233,6 +238,10 @@ func (f *fakeDBVerificar) RemoveGroupPolitica(groupID, politicaID int) error    
 func (f *fakeDBVerificar) GetEffectivePoliticaPerms(userID int) (db.PolicyPermissions, error) {
 	return db.PolicyPermissions{}, nil
 }
+func (f *fakeDBVerificar) GetUserPermissionsVersion(userID int) (int, error) { return 0, nil }
+func (f *fakeDBVerificar) BumpUserPermissionsVersion(userID int) error       { return nil }
+func (f *fakeDBVerificar) BumpGroupPermissionsVersion(groupID int) error     { return nil }
+func (f *fakeDBVerificar) BumpPolicyPermissionsVersion(politicaID int) error { return nil }
 
 // Punts i activitat (no-op)
 func (f *fakeDBVerificar) ListPointsRules() ([]db.PointsRule, error) { return nil, nil }

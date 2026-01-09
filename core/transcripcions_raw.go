@@ -921,18 +921,20 @@ func parseTranscripcioAtributs(r *http.Request) []db.TranscripcioAtributRaw {
 }
 
 func (a *App) AdminListRegistresLlibre(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
-	canManageArxius := a.hasPerm(perms, permArxius)
-	canManagePolicies := perms.CanManagePolicies || perms.Admin
-	canModerate := perms.CanModerate || perms.Admin
 	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.NotFound(w, r)
 		return
 	}
+	target := a.resolveLlibreTarget(llibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresViewRegistres, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	canManageArxius := a.hasPerm(perms, permArxius)
+	canManagePolicies := perms.CanManagePolicies || perms.Admin
+	canModerate := perms.CanModerate || perms.Admin
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -1316,12 +1318,28 @@ func (a *App) AdminListRegistresLlibre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminSearchPersonesJSON(w http.ResponseWriter, r *http.Request) {
-	_, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
+		return
+	}
+	target := PermissionTarget{}
+	if lid := strings.TrimSpace(r.URL.Query().Get("llibre_id")); lid != "" {
+		if v, err := strconv.Atoi(lid); err == nil && v > 0 {
+			target = a.resolveLlibreTarget(v)
+		}
+	} else if rid := strings.TrimSpace(r.URL.Query().Get("registre_id")); rid != "" {
+		if v, err := strconv.Atoi(rid); err == nil && v > 0 {
+			if reg, err := a.DB.GetTranscripcioRaw(v); err == nil && reg != nil {
+				target = a.resolveLlibreTarget(reg.LlibreID)
+			}
+		}
+	}
+	_, ok := a.requireAnyPermissionKey(w, r, []string{
+		permKeyDocumentalsRegistresLinkPerson,
+		permKeyDocumentalsRegistresEdit,
+		permKeyDocumentalsRegistresEditInline,
+	}, target)
+	if !ok {
 		return
 	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
@@ -1375,10 +1393,6 @@ type rawPersonLinkItem struct {
 }
 
 func (a *App) AdminListRegistrePersonesJSON(w http.ResponseWriter, r *http.Request) {
-	_, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
@@ -1391,6 +1405,15 @@ func (a *App) AdminListRegistrePersonesJSON(w http.ResponseWriter, r *http.Reque
 	registre, err := a.DB.GetTranscripcioRaw(registreID)
 	if err != nil || registre == nil {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	_, ok := a.requireAnyPermissionKey(w, r, []string{
+		permKeyDocumentalsRegistresLinkPerson,
+		permKeyDocumentalsRegistresEdit,
+		permKeyDocumentalsRegistresEditInline,
+	}, target)
+	if !ok {
 		return
 	}
 	persones, err := a.DB.ListTranscripcioPersones(registreID)
@@ -1426,19 +1449,21 @@ func (a *App) AdminListRegistrePersonesJSON(w http.ResponseWriter, r *http.Reque
 }
 
 func (a *App) AdminNewRegistre(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
-	canManageArxius := a.hasPerm(perms, permArxius)
-	canManagePolicies := perms.CanManagePolicies || perms.Admin
-	canModerate := perms.CanModerate || perms.Admin
 	lang := ResolveLang(r)
 	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.NotFound(w, r)
 		return
 	}
+	target := a.resolveLlibreTarget(llibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsRegistresEdit, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	canManageArxius := a.hasPerm(perms, permArxius)
+	canManagePolicies := perms.CanManagePolicies || perms.Admin
+	canModerate := perms.CanModerate || perms.Admin
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -1471,19 +1496,21 @@ func (a *App) AdminNewRegistre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminCreateRegistre(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
-	canManageArxius := a.hasPerm(perms, permArxius)
-	canManagePolicies := perms.CanManagePolicies || perms.Admin
-	canModerate := perms.CanModerate || perms.Admin
 	lang := ResolveLang(r)
 	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.NotFound(w, r)
 		return
 	}
+	target := a.resolveLlibreTarget(llibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsRegistresEdit, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	canManageArxius := a.hasPerm(perms, permArxius)
+	canManagePolicies := perms.CanManagePolicies || perms.Admin
+	canModerate := perms.CanModerate || perms.Admin
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -1534,14 +1561,6 @@ func (a *App) AdminCreateRegistre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminShowRegistre(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
-	canManageArxius := a.hasPerm(perms, permArxius)
-	canManagePolicies := perms.CanManagePolicies || perms.Admin
-	canModerate := perms.CanModerate || perms.Admin
-	lang := ResolveLang(r)
 	viewParam := strings.TrimSpace(r.URL.Query().Get("view"))
 	compareParam := strings.TrimSpace(r.URL.Query().Get("compare"))
 	id := extractID(r.URL.Path)
@@ -1550,6 +1569,16 @@ func (a *App) AdminShowRegistre(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsRegistresEdit, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	canManageArxius := a.hasPerm(perms, permArxius)
+	canManagePolicies := perms.CanManagePolicies || perms.Admin
+	canModerate := perms.CanModerate || perms.Admin
+	lang := ResolveLang(r)
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
 	persones, _ := a.DB.ListTranscripcioPersones(id)
 	atributs, _ := a.DB.ListTranscripcioAtributs(id)
@@ -1886,13 +1915,6 @@ func (a *App) AdminShowRegistre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminEditRegistre(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
-	canManageArxius := a.hasPerm(perms, permArxius)
-	canManagePolicies := perms.CanManagePolicies || perms.Admin
-	canModerate := perms.CanModerate || perms.Admin
 	lang := ResolveLang(r)
 	id := extractID(r.URL.Path)
 	registre, err := a.DB.GetTranscripcioRaw(id)
@@ -1900,6 +1922,15 @@ func (a *App) AdminEditRegistre(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsRegistresEdit, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	canManageArxius := a.hasPerm(perms, permArxius)
+	canManagePolicies := perms.CanManagePolicies || perms.Admin
+	canModerate := perms.CanModerate || perms.Admin
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
 	persones, _ := a.DB.ListTranscripcioPersones(id)
 	atributs, _ := a.DB.ListTranscripcioAtributs(id)
@@ -1930,13 +1961,6 @@ func (a *App) AdminEditRegistre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminUpdateRegistre(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
-	canManageArxius := a.hasPerm(perms, permArxius)
-	canManagePolicies := perms.CanManagePolicies || perms.Admin
-	canModerate := perms.CanModerate || perms.Admin
 	lang := ResolveLang(r)
 	id := extractID(r.URL.Path)
 	existing, err := a.DB.GetTranscripcioRaw(id)
@@ -1944,6 +1968,15 @@ func (a *App) AdminUpdateRegistre(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	target := a.resolveLlibreTarget(existing.LlibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsRegistresEdit, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	canManageArxius := a.hasPerm(perms, permArxius)
+	canManagePolicies := perms.CanManagePolicies || perms.Admin
+	canModerate := perms.CanModerate || perms.Admin
 	beforePersones, _ := a.DB.ListTranscripcioPersones(id)
 	beforeAtributs, _ := a.DB.ListTranscripcioAtributs(id)
 	returnURL := strings.TrimSpace(r.FormValue("return_to"))
@@ -2018,10 +2051,6 @@ type inlineRegistreUpdatePayload struct {
 }
 
 func (a *App) AdminInlineUpdateRegistreField(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -2057,6 +2086,14 @@ func (a *App) AdminInlineUpdateRegistreField(w http.ResponseWriter, r *http.Requ
 	registre, err := a.DB.GetTranscripcioRaw(registreID)
 	if err != nil || registre == nil {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	user, ok := a.requireAnyPermissionKey(w, r, []string{
+		permKeyDocumentalsRegistresEditInline,
+		permKeyDocumentalsRegistresEdit,
+	}, target)
+	if !ok {
 		return
 	}
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
@@ -2206,14 +2243,14 @@ func (a *App) AdminInlineUpdateRegistreField(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *App) AdminDeleteRegistre(w http.ResponseWriter, r *http.Request) {
-	_, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	id := extractID(r.URL.Path)
 	registre, _ := a.DB.GetTranscripcioRaw(id)
 	if registre == nil {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsRegistresEdit, target); !ok {
 		return
 	}
 	_ = a.DB.DeleteTranscripcioRaw(id)
@@ -2237,10 +2274,6 @@ func parseRegistrePersonaIDs(path string) (int, int) {
 }
 
 func (a *App) AdminLinkPersonaToRaw(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permModerate)
-	if !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -2262,6 +2295,11 @@ func (a *App) AdminLinkPersonaToRaw(w http.ResponseWriter, r *http.Request) {
 	registre, err := a.DB.GetTranscripcioRaw(registreID)
 	if err != nil || registre == nil {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsRegistresLinkPerson, target)
+	if !ok {
 		return
 	}
 	if registre.ModeracioEstat == "rebutjat" {
@@ -2293,10 +2331,6 @@ func (a *App) AdminLinkPersonaToRaw(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminUnlinkPersonaFromRaw(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permModerate)
-	if !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -2313,6 +2347,11 @@ func (a *App) AdminUnlinkPersonaFromRaw(w http.ResponseWriter, r *http.Request) 
 	registre, err := a.DB.GetTranscripcioRaw(registreID)
 	if err != nil || registre == nil {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsRegistresLinkPerson, target)
+	if !ok {
 		return
 	}
 	if err := a.DB.UnlinkTranscripcioPersona(personaRawID, user.ID); err != nil {
@@ -2337,10 +2376,6 @@ func isValidRegistreMarkType(t string) bool {
 }
 
 func (a *App) AdminSetRegistreMark(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -2352,6 +2387,19 @@ func (a *App) AdminSetRegistreMark(w http.ResponseWriter, r *http.Request) {
 	registreID := extractID(r.URL.Path)
 	if registreID == 0 {
 		http.NotFound(w, r)
+		return
+	}
+	registre, err := a.DB.GetTranscripcioRaw(registreID)
+	if err != nil || registre == nil {
+		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	user, ok := a.requireAnyPermissionKey(w, r, []string{
+		permKeyDocumentalsLlibresViewRegistres,
+		permKeyDocumentalsRegistresEdit,
+	}, target)
+	if !ok {
 		return
 	}
 	tipus := strings.TrimSpace(r.FormValue("type"))
@@ -2385,10 +2433,6 @@ func (a *App) AdminSetRegistreMark(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminClearRegistreMark(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -2400,6 +2444,19 @@ func (a *App) AdminClearRegistreMark(w http.ResponseWriter, r *http.Request) {
 	registreID := extractID(r.URL.Path)
 	if registreID == 0 {
 		http.NotFound(w, r)
+		return
+	}
+	registre, err := a.DB.GetTranscripcioRaw(registreID)
+	if err != nil || registre == nil {
+		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	user, ok := a.requireAnyPermissionKey(w, r, []string{
+		permKeyDocumentalsLlibresViewRegistres,
+		permKeyDocumentalsRegistresEdit,
+	}, target)
+	if !ok {
 		return
 	}
 	if err := a.DB.DeleteTranscripcioMark(registreID, user.ID); err != nil {
@@ -2416,10 +2473,6 @@ func (a *App) AdminClearRegistreMark(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminConvertRegistreToPersona(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permCreatePerson)
-	if !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -2438,32 +2491,48 @@ func (a *App) AdminConvertRegistreToPersona(w http.ResponseWriter, r *http.Reque
 		http.NotFound(w, r)
 		return
 	}
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	*r = *a.withUser(r, user)
+	perms, found := a.permissionsFromContext(r)
+	if !found {
+		perms = a.getPermissionsForUser(user.ID)
+		*r = *a.withPermissions(r, perms)
+	}
+	llibreTarget := a.resolveLlibreTarget(registre.LlibreID)
+	if !a.HasPermission(user.ID, permKeyDocumentalsRegistresConvertToPerson, llibreTarget) && !a.hasPerm(perms, permCreatePerson) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	persones, _ := a.DB.ListTranscripcioPersones(registreID)
 	atributs, _ := a.DB.ListTranscripcioAtributs(registreID)
 	rawPersonID, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("raw_person_id")))
-	var target *db.TranscripcioPersonaRaw
+	var targetPerson *db.TranscripcioPersonaRaw
 	if rawPersonID != 0 {
 		for i := range persones {
 			if persones[i].ID == rawPersonID {
-				target = &persones[i]
+				targetPerson = &persones[i]
 				break
 			}
 		}
 	}
-	if target == nil {
-		target = primaryPersonForTipus(registre.TipusActe, persones)
+	if targetPerson == nil {
+		targetPerson = primaryPersonForTipus(registre.TipusActe, persones)
 	}
-	if target == nil {
+	if targetPerson == nil {
 		http.Error(w, "No s'ha trobat cap persona per convertir", http.StatusBadRequest)
 		return
 	}
 	persona := db.Persona{
-		Nom:            target.Nom,
-		Cognom1:        target.Cognom1,
-		Cognom2:        target.Cognom2,
-		Municipi:       target.MunicipiText,
-		Ofici:          target.OficiText,
-		EstatCivil:     target.EstatCivilText,
+		Nom:            targetPerson.Nom,
+		Cognom1:        targetPerson.Cognom1,
+		Cognom2:        targetPerson.Cognom2,
+		Municipi:       targetPerson.MunicipiText,
+		Ofici:          targetPerson.OficiText,
+		EstatCivil:     targetPerson.EstatCivilText,
 		ModeracioEstat: "pendent",
 		CreatedBy:      sqlNullIntFromInt(user.ID),
 		UpdatedBy:      sqlNullIntFromInt(user.ID),
@@ -2482,7 +2551,7 @@ func (a *App) AdminConvertRegistreToPersona(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "No s'ha pogut crear la persona", http.StatusInternalServerError)
 		return
 	}
-	_ = a.DB.LinkTranscripcioPersona(target.ID, personaID, user.ID)
+	_ = a.DB.LinkTranscripcioPersona(targetPerson.ID, personaID, user.ID)
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, "persona_create", "crear", "persona", &personaID, "pendent", nil, "convertida_des_de_registre")
 	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	if returnURL == "" {

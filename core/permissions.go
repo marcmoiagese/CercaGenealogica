@@ -29,17 +29,8 @@ func (a *App) getPermissionsForUser(userID int) db.PolicyPermissions {
 		Errorf("error carregant permisos per usuari %d: %v", userID, err)
 		return db.PolicyPermissions{}
 	}
-	// Si no hi ha cap permís assignat (BD buida o sense polítiques), donem admin per defecte per evitar bloquejos.
 	if perms == (db.PolicyPermissions{}) {
-		perms.Admin = true
-		perms.CanManageUsers = true
-		perms.CanManageTerritory = true
-		perms.CanManageEclesia = true
-		perms.CanManageArchives = true
-		perms.CanCreatePerson = true
-		perms.CanEditAnyPerson = true
-		perms.CanModerate = true
-		perms.CanManagePolicies = true
+		Debugf("usuari %d sense polítiques assignades; permisos mínims", userID)
 	}
 	return perms
 }

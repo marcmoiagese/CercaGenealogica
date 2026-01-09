@@ -32,7 +32,7 @@ type arxiuExportRecord struct {
 }
 
 func (a *App) AdminArxiusImport(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminArxiusImport, PermissionTarget{}); !ok {
 		return
 	}
 	q := r.URL.Query()
@@ -52,7 +52,7 @@ func (a *App) AdminArxiusImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminArxiusExport(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminArxiusExport, PermissionTarget{}); !ok {
 		return
 	}
 	levelISO := a.levelISOMap()
@@ -94,7 +94,7 @@ func (a *App) AdminArxiusExport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permAdmin)
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminArxiusImport, PermissionTarget{})
 	if !ok {
 		return
 	}

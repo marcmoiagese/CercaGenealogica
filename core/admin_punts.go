@@ -10,10 +10,10 @@ import (
 
 // Llista de regles de punts
 func (a *App) AdminListPuntsRegles(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	user, ok := a.requireAnyPermissionKey(w, r, []string{permKeyAdminPuntsAdd, permKeyAdminPuntsEdit}, PermissionTarget{})
+	if !ok {
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	regles, err := a.DB.ListPointsRules()
 	if err != nil {
 		http.Error(w, "Error llistant regles", http.StatusInternalServerError)
@@ -40,7 +40,7 @@ func (a *App) AdminListPuntsRegles(w http.ResponseWriter, r *http.Request) {
 
 // Nova regla
 func (a *App) AdminNewPuntsRegla(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPuntsAdd, PermissionTarget{}); !ok {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
@@ -57,7 +57,7 @@ func (a *App) AdminNewPuntsRegla(w http.ResponseWriter, r *http.Request) {
 
 // Edita regla
 func (a *App) AdminEditPuntsRegla(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPuntsEdit, PermissionTarget{}); !ok {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
@@ -80,10 +80,6 @@ func (a *App) AdminEditPuntsRegla(w http.ResponseWriter, r *http.Request) {
 
 // Desa regla
 func (a *App) AdminSavePuntsRegla(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
-		return
-	}
-	user, _ := a.VerificarSessio(r)
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -92,11 +88,19 @@ func (a *App) AdminSavePuntsRegla(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Formulari invàlid", http.StatusBadRequest)
 		return
 	}
+	id, _ := strconv.Atoi(r.FormValue("id"))
+	permKey := permKeyAdminPuntsAdd
+	if id > 0 {
+		permKey = permKeyAdminPuntsEdit
+	}
+	user, ok := a.requirePermissionKey(w, r, permKey, PermissionTarget{})
+	if !ok {
+		return
+	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
 		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
 	}
-	id, _ := strconv.Atoi(r.FormValue("id"))
 	code := strings.TrimSpace(r.FormValue("code"))
 	if id > 0 {
 		// No permetre canviar el codi via form (immutable)
@@ -143,7 +147,7 @@ func (a *App) AdminSavePuntsRegla(w http.ResponseWriter, r *http.Request) {
 
 // Recalcula usuaris_punts des de usuaris_activitat
 func (a *App) AdminRecalcPunts(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPuntsEdit, PermissionTarget{}); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {

@@ -367,9 +367,14 @@ func (f *fakeDB) ListArquebisbatMunicipis(munID int) ([]db.ArquebisbatMunicipi, 
 func (f *fakeDB) SaveArquebisbatMunicipi(am *db.ArquebisbatMunicipi) (int, error) {
 	return 0, nil
 }
-func (f *fakeDB) ListPolitiques() ([]db.Politica, error)                 { return nil, nil }
-func (f *fakeDB) GetPolitica(id int) (*db.Politica, error)               { return nil, nil }
-func (f *fakeDB) SavePolitica(p *db.Politica) (int, error)               { return 0, nil }
+func (f *fakeDB) ListPolitiques() ([]db.Politica, error)   { return nil, nil }
+func (f *fakeDB) GetPolitica(id int) (*db.Politica, error) { return nil, nil }
+func (f *fakeDB) SavePolitica(p *db.Politica) (int, error) { return 0, nil }
+func (f *fakeDB) ListPoliticaGrants(politicaID int) ([]db.PoliticaGrant, error) {
+	return nil, nil
+}
+func (f *fakeDB) SavePoliticaGrant(g *db.PoliticaGrant) (int, error)     { return 0, nil }
+func (f *fakeDB) DeletePoliticaGrant(id int) error                       { return nil }
 func (f *fakeDB) ListUserPolitiques(userID int) ([]db.Politica, error)   { return nil, nil }
 func (f *fakeDB) AddUserPolitica(userID, politicaID int) error           { return nil }
 func (f *fakeDB) RemoveUserPolitica(userID, politicaID int) error        { return nil }
@@ -379,9 +384,13 @@ func (f *fakeDB) RemoveGroupPolitica(groupID, politicaID int) error      { retur
 func (f *fakeDB) GetEffectivePoliticaPerms(userID int) (db.PolicyPermissions, error) {
 	return db.PolicyPermissions{}, nil
 }
-func (f *fakeDB) ListUsersAdmin() ([]db.UserAdminRow, error) { return nil, nil }
-func (f *fakeDB) SetUserActive(userID int, active bool) error { return nil }
-func (f *fakeDB) SetUserBanned(userID int, banned bool) error { return nil }
+func (f *fakeDB) GetUserPermissionsVersion(userID int) (int, error) { return 0, nil }
+func (f *fakeDB) BumpUserPermissionsVersion(userID int) error       { return nil }
+func (f *fakeDB) BumpGroupPermissionsVersion(groupID int) error     { return nil }
+func (f *fakeDB) BumpPolicyPermissionsVersion(politicaID int) error { return nil }
+func (f *fakeDB) ListUsersAdmin() ([]db.UserAdminRow, error)        { return nil, nil }
+func (f *fakeDB) SetUserActive(userID int, active bool) error       { return nil }
+func (f *fakeDB) SetUserBanned(userID int, banned bool) error       { return nil }
 
 // Punts i activitat (no-op)
 func (f *fakeDB) ListPointsRules() ([]db.PointsRule, error) { return nil, nil }

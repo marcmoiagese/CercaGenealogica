@@ -90,6 +90,7 @@ func TestAdminExportRegistresCSVIncludesDerivedColumns(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f7_export.sqlite3")
 
 	user, sessionID := createF7UserWithSession(t, database)
+	ensureAdminPolicyForUser(t, database, user.ID)
 	llibreID, paginaID := createF7LlibreWithPagina(t, database, user.ID)
 
 	registre := &db.TranscripcioRaw{
@@ -156,6 +157,7 @@ func TestAdminImportRegistresCSVCreatesRows(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f7_import.sqlite3")
 
 	user, sessionID := createF7UserWithSession(t, database)
+	ensureAdminPolicyForUser(t, database, user.ID)
 	llibreID, paginaID := createF7LlibreWithPagina(t, database, user.ID)
 
 	csvContent := strings.Join([]string{

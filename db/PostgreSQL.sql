@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS usuaris (
     token_activacio TEXT,
     expira_token TIMESTAMP WITHOUT TIME ZONE,
     actiu BOOLEAN DEFAULT TRUE,
-    banned BOOLEAN DEFAULT FALSE
+    banned BOOLEAN DEFAULT FALSE,
+    permissions_version INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS grups (
@@ -52,6 +53,20 @@ CREATE TABLE IF NOT EXISTS politiques (
     permisos TEXT NOT NULL,
     data_creacio TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS politica_grants (
+    id SERIAL PRIMARY KEY,
+    politica_id INTEGER NOT NULL REFERENCES politiques(id) ON DELETE CASCADE,
+    perm_key TEXT NOT NULL,
+    scope_type TEXT NOT NULL,
+    scope_id INTEGER,
+    include_children BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_politica_grants_politica ON politica_grants(politica_id);
+CREATE INDEX IF NOT EXISTS idx_politica_grants_perm ON politica_grants(perm_key);
+CREATE INDEX IF NOT EXISTS idx_politica_grants_perm_scope ON politica_grants(perm_key, scope_type, scope_id);
 
 CREATE TABLE IF NOT EXISTS usuaris_politiques (
     usuari_id INTEGER NOT NULL,

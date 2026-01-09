@@ -7,5 +7,9 @@ set -euo pipefail
 
 
 echo "Executant go test ./... amb cobertura ampliada"
+if [[ -z "${GOCACHE:-}" ]]; then
+  mkdir -p .cache/go-build
+  export GOCACHE="$PWD/.cache/go-build"
+fi
 go test ./... -covermode=count -coverpkg=./... -count=1
 echo "Tests superats correctament"

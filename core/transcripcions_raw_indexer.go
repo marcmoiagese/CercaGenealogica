@@ -43,19 +43,21 @@ type indexerPayload struct {
 }
 
 func (a *App) AdminIndexarLlibre(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
-	canManageArxius := a.hasPerm(perms, permArxius)
-	canManagePolicies := perms.CanManagePolicies || perms.Admin
-	canModerate := perms.CanModerate || perms.Admin
 	lang := ResolveLang(r)
 	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.NotFound(w, r)
 		return
 	}
+	target := a.resolveLlibreTarget(llibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresBulkIndex, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	canManageArxius := a.hasPerm(perms, permArxius)
+	canManagePolicies := perms.CanManagePolicies || perms.Admin
+	canModerate := perms.CanModerate || perms.Admin
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -91,10 +93,6 @@ func (a *App) AdminIndexarLlibre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminIndexarDraft(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	if !validateCSRF(r, r.Header.Get("X-CSRF-Token")) {
 		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
@@ -102,6 +100,11 @@ func (a *App) AdminIndexarDraft(w http.ResponseWriter, r *http.Request) {
 	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(llibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresBulkIndex, target)
+	if !ok {
 		return
 	}
 	payload, raw, err := parseIndexerPayload(r, 400)
@@ -120,10 +123,6 @@ func (a *App) AdminIndexarDraft(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminClearIndexerDraft(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	if !validateCSRF(r, r.Header.Get("X-CSRF-Token")) {
 		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
@@ -133,15 +132,16 @@ func (a *App) AdminClearIndexerDraft(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	target := a.resolveLlibreTarget(llibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresBulkIndex, target)
+	if !ok {
+		return
+	}
 	_ = a.DB.DeleteTranscripcioDraft(user.ID, llibreID)
 	writeJSON(w, map[string]interface{}{"ok": true})
 }
 
 func (a *App) AdminCommitIndexer(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permArxius)
-	if !ok {
-		return
-	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
 		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
@@ -149,6 +149,11 @@ func (a *App) AdminCommitIndexer(w http.ResponseWriter, r *http.Request) {
 	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(llibreID)
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresBulkIndex, target)
+	if !ok {
 		return
 	}
 	llibre, err := a.DB.GetLlibre(llibreID)

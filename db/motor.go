@@ -48,6 +48,9 @@ type DB interface {
 	ListPolitiques() ([]Politica, error)
 	GetPolitica(id int) (*Politica, error)
 	SavePolitica(p *Politica) (int, error)
+	ListPoliticaGrants(politicaID int) ([]PoliticaGrant, error)
+	SavePoliticaGrant(g *PoliticaGrant) (int, error)
+	DeletePoliticaGrant(id int) error
 	ListUserPolitiques(userID int) ([]Politica, error)
 	AddUserPolitica(userID, politicaID int) error
 	RemoveUserPolitica(userID, politicaID int) error
@@ -55,6 +58,10 @@ type DB interface {
 	AddGroupPolitica(groupID, politicaID int) error
 	RemoveGroupPolitica(groupID, politicaID int) error
 	GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error)
+	GetUserPermissionsVersion(userID int) (int, error)
+	BumpUserPermissionsVersion(userID int) error
+	BumpGroupPermissionsVersion(groupID int) error
+	BumpPolicyPermissionsVersion(politicaID int) error
 	EnsureDefaultPointsRules() error
 	// Punts i activitat
 	ListPointsRules() ([]PointsRule, error)
@@ -388,6 +395,15 @@ type Politica struct {
 	Permisos   string
 }
 
+type PoliticaGrant struct {
+	ID              int
+	PoliticaID      int
+	PermKey         string
+	ScopeType       string
+	ScopeID         sql.NullInt64
+	IncludeChildren bool
+}
+
 type PolicyPermissions struct {
 	Admin              bool `json:"admin"`
 	CanManageUsers     bool `json:"can_manage_users"`
@@ -541,6 +557,7 @@ type ArquebisbatRow struct {
 	ID             int
 	Nom            string
 	TipusEntitat   string
+	PaisID         int
 	PaisNom        sql.NullString
 	Nivell         sql.NullInt64
 	ParentNom      sql.NullString
@@ -600,15 +617,21 @@ type Arxiu struct {
 }
 
 type ArxiuFilter struct {
-	Text       string
-	Tipus      string
-	Acces      string
-	EntitatID  int
-	MunicipiID int
-	PaisID     int
-	Limit      int
-	Offset     int
-	Status     string
+	Text                string
+	Tipus               string
+	Acces               string
+	EntitatID           int
+	MunicipiID          int
+	PaisID              int
+	Limit               int
+	Offset              int
+	Status              string
+	AllowedArxiuIDs     []int
+	AllowedMunicipiIDs  []int
+	AllowedProvinciaIDs []int
+	AllowedComarcaIDs   []int
+	AllowedPaisIDs      []int
+	AllowedEclesIDs     []int
 }
 
 type ArxiuWithCount struct {
@@ -696,25 +719,32 @@ type LlibreIndexacioStats struct {
 }
 
 type TranscripcioRawPageStat struct {
-	ID             int
-	LlibreID       int
-	PaginaID       sql.NullInt64
-	NumPaginaText  string
-	TipusPagina    string
-	Exclosa        int
+	ID                int
+	LlibreID          int
+	PaginaID          sql.NullInt64
+	NumPaginaText     string
+	TipusPagina       string
+	Exclosa           int
 	IndexacioCompleta int
-	DuplicadaDe    sql.NullString
-	TotalRegistres int
-	ComputedAt     sql.NullTime
+	DuplicadaDe       sql.NullString
+	TotalRegistres    int
+	ComputedAt        sql.NullTime
 }
 
 type LlibreFilter struct {
-	Text          string
-	ArquebisbatID int
-	MunicipiID    int
-	ArxiuID       int
-	ArxiuTipus    string
-	Status        string
+	Text                string
+	ArquebisbatID       int
+	MunicipiID          int
+	ArxiuID             int
+	ArxiuTipus          string
+	Status              string
+	AllowedLlibreIDs    []int
+	AllowedArxiuIDs     []int
+	AllowedMunicipiIDs  []int
+	AllowedProvinciaIDs []int
+	AllowedComarcaIDs   []int
+	AllowedPaisIDs      []int
+	AllowedEclesIDs     []int
 }
 
 type LlibrePagina struct {
@@ -826,14 +856,14 @@ type TranscripcioRawChange struct {
 }
 
 type PersonaSearchFilter struct {
-	Query    string
-	Nom      string
-	Cognom1  string
-	Cognom2  string
-	Municipi string
-	AnyMin   int
-	AnyMax   int
-	Limit    int
+	Query               string
+	Nom                 string
+	Cognom1             string
+	Cognom2             string
+	Municipi            string
+	AnyMin              int
+	AnyMax              int
+	Limit               int
 	UseCognomDictionary bool
 	ExpandedCognoms     []string
 }

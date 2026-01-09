@@ -17,13 +17,11 @@ var nivellEstats = map[string]bool{
 }
 
 func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriNivellsView, PermissionTarget{})
+	if !ok {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	*r = *a.withPermissions(r, perms)
 	paisID := extractID(r.URL.Path)
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {
@@ -64,18 +62,19 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		"Pais":            pais,
 		"Paisos":          paisos,
 		"Filter":          filter,
-		"CanManageArxius": a.hasPerm(a.getPermissionsForUser(user.ID), permArxius),
+		"CanManageArxius": a.hasPerm(perms, permArxius),
 		"User":            user,
 	})
 }
 
 func (a *App) AdminNewNivell(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
-		return
-	}
-	user, _ := a.VerificarSessio(r)
 	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	paisID := extractID(r.URL.Path)
+	target := PermissionTarget{PaisID: intPtr(paisID)}
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriNivellsCreate, target)
+	if !ok {
+		return
+	}
 	pais, _ := a.DB.GetPais(paisID)
 	parents, _ := a.DB.ListNivells(db.NivellAdminFilter{PaisID: paisID})
 	paisLabel := ""
@@ -96,15 +95,16 @@ func (a *App) AdminNewNivell(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminEditNivell(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
-		return
-	}
-	user, _ := a.VerificarSessio(r)
 	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	id := extractID(r.URL.Path)
 	nivell, err := a.DB.GetNivell(id)
 	if err != nil || nivell == nil {
 		http.NotFound(w, r)
+		return
+	}
+	target := PermissionTarget{PaisID: intPtr(nivell.PaisID)}
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriNivellsEdit, target)
+	if !ok {
 		return
 	}
 	pais, _ := a.DB.GetPais(nivell.PaisID)
@@ -227,16 +227,21 @@ func parseNullInt(val string) sql.NullInt64 {
 }
 
 func (a *App) AdminSaveNivell(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/admin/paisos", http.StatusSeeOther)
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	id, _ := strconv.Atoi(r.FormValue("id"))
+	permKey := permKeyTerritoriNivellsCreate
+	if id != 0 {
+		permKey = permKeyTerritoriNivellsEdit
+	}
 	paisID, _ := strconv.Atoi(r.FormValue("pais_id"))
+	target := PermissionTarget{PaisID: intPtr(paisID)}
+	user, ok := a.requirePermissionKey(w, r, permKey, target)
+	if !ok {
+		return
+	}
 	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	nivel, _ := strconv.Atoi(r.FormValue("nivel"))
 	parentID := parseNullInt(r.FormValue("parent_id"))
@@ -350,9 +355,6 @@ func (a *App) renderNivellFormError(w http.ResponseWriter, r *http.Request, n *d
 }
 
 func (a *App) AdminSaveNivellNomHistoric(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permTerritory); !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/territori/nivells", http.StatusSeeOther)
 		return
@@ -365,6 +367,10 @@ func (a *App) AdminSaveNivellNomHistoric(w http.ResponseWriter, r *http.Request)
 	nivell, err := a.DB.GetNivell(nivID)
 	if err != nil || nivell == nil {
 		http.NotFound(w, r)
+		return
+	}
+	target := PermissionTarget{PaisID: intPtr(nivell.PaisID)}
+	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriNivellsEdit, target); !ok {
 		return
 	}
 	nhID, _ := strconv.Atoi(r.FormValue("nh_id"))
