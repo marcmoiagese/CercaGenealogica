@@ -21,13 +21,6 @@ func (a *App) EnsurePolicyGrants() error {
 		if policy.ID <= 0 {
 			continue
 		}
-		grants, err := a.DB.ListPoliticaGrants(policy.ID)
-		if err != nil {
-			return err
-		}
-		if len(grants) > 0 {
-			continue
-		}
 		permsRaw := strings.TrimSpace(policy.Permisos)
 		if permsRaw == "" {
 			continue
@@ -36,30 +29,47 @@ func (a *App) EnsurePolicyGrants() error {
 		if err := json.Unmarshal([]byte(permsRaw), &perms); err != nil {
 			continue
 		}
-		keys := legacyPermKeys(perms)
-		if len(keys) == 0 {
+		if err := a.ensurePolicyGrantsFromPerms(policy.ID, perms); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *App) ensurePolicyGrantsFromPerms(policyID int, perms db.PolicyPermissions) error {
+	if a == nil || a.DB == nil || policyID <= 0 {
+		return nil
+	}
+	grants, err := a.DB.ListPoliticaGrants(policyID)
+	if err != nil {
+		return err
+	}
+	if len(grants) > 0 {
+		return nil
+	}
+	keys := legacyPermKeys(perms)
+	if len(keys) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
 			continue
 		}
-		seen := map[string]struct{}{}
-		for _, key := range keys {
-			key = strings.TrimSpace(key)
-			if key == "" {
-				continue
-			}
-			if _, ok := seen[key]; ok {
-				continue
-			}
-			seen[key] = struct{}{}
-			grant := &db.PoliticaGrant{
-				PoliticaID:      policy.ID,
-				PermKey:         key,
-				ScopeType:       string(ScopeGlobal),
-				ScopeID:         sql.NullInt64{},
-				IncludeChildren: false,
-			}
-			if _, err := a.DB.SavePoliticaGrant(grant); err != nil {
-				return err
-			}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		grant := &db.PoliticaGrant{
+			PoliticaID:      policyID,
+			PermKey:         key,
+			ScopeType:       string(ScopeGlobal),
+			ScopeID:         sql.NullInt64{},
+			IncludeChildren: false,
+		}
+		if _, err := a.DB.SavePoliticaGrant(grant); err != nil {
+			return err
 		}
 	}
 	return nil

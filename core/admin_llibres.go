@@ -18,6 +18,8 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	perms := a.getPermissionsForUser(user.ID)
 	canManage := a.hasPerm(perms, permArxius)
 	isAdmin := a.hasPerm(perms, permAdmin)
+	canCreateLlibre := a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresCreate)
+	canImportRegistresGlobal := a.HasPermission(user.ID, permKeyDocumentalsLlibresImportCSV, PermissionTarget{})
 	scopeFilter := a.buildListScopeFilter(user.ID, permKeyDocumentalsLlibresView, ScopeLlibre)
 	filter := db.LlibreFilter{
 		Text: strings.TrimSpace(r.URL.Query().Get("q")),
@@ -46,16 +48,28 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	if !scopeFilter.hasGlobal {
 		if scopeFilter.isEmpty() {
 			RenderPrivateTemplate(w, r, "admin-llibres-list.html", map[string]interface{}{
-				"Llibres":         []db.LlibreRow{},
-				"IndexacioStats":  map[int]db.LlibreIndexacioStats{},
-				"Filter":          filter,
-				"Arquebisbats":    []db.ArquebisbatRow{},
-				"Municipis":       []db.MunicipiRow{},
-				"Arxius":          []db.ArxiuWithCount{},
-				"CanManageArxius": canManage,
-				"IsAdmin":         isAdmin,
-				"User":            user,
-				"CurrentURL":      r.URL.RequestURI(),
+				"Llibres":                  []db.LlibreRow{},
+				"IndexacioStats":           map[int]db.LlibreIndexacioStats{},
+				"Filter":                   filter,
+				"Arquebisbats":             []db.ArquebisbatRow{},
+				"Municipis":                []db.MunicipiRow{},
+				"Arxius":                   []db.ArxiuWithCount{},
+				"CanManageArxius":          canManage,
+				"CanCreateLlibre":          canCreateLlibre,
+				"CanImportRegistresGlobal": canImportRegistresGlobal,
+				"CanEditLlibre":            map[int]bool{},
+				"CanDeleteLlibre":          map[int]bool{},
+				"CanIndexLlibre":           map[int]bool{},
+				"CanViewRegistres":         map[int]bool{},
+				"CanImportCSV":             map[int]bool{},
+				"CanExportCSV":             map[int]bool{},
+				"CanMarkIndexed":           map[int]bool{},
+				"CanRecalcIndex":           map[int]bool{},
+				"ShowLlibreActions":        false,
+				"ShowPurgeModal":           false,
+				"IsAdmin":                  isAdmin,
+				"User":                     user,
+				"CurrentURL":               r.URL.RequestURI(),
 			})
 			return
 		}
@@ -69,20 +83,67 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	}
 	llibres, _ := a.DB.ListLlibres(filter)
 	indexacioStats := a.buildLlibresIndexacioViews(llibres)
+	canEditLlibre := make(map[int]bool, len(llibres))
+	canDeleteLlibre := make(map[int]bool, len(llibres))
+	canIndexLlibre := make(map[int]bool, len(llibres))
+	canViewRegistres := make(map[int]bool, len(llibres))
+	canImportCSV := make(map[int]bool, len(llibres))
+	canExportCSV := make(map[int]bool, len(llibres))
+	canMarkIndexed := make(map[int]bool, len(llibres))
+	canRecalcIndex := make(map[int]bool, len(llibres))
+	showLlibreActions := false
+	showPurgeModal := false
+	for _, llibre := range llibres {
+		target := a.resolveLlibreTarget(llibre.ID)
+		edit := a.HasPermission(user.ID, permKeyDocumentalsLlibresEdit, target)
+		del := a.HasPermission(user.ID, permKeyDocumentalsLlibresDelete, target)
+		index := a.HasPermission(user.ID, permKeyDocumentalsLlibresBulkIndex, target)
+		viewRegs := a.HasPermission(user.ID, permKeyDocumentalsLlibresViewRegistres, target)
+		importCSV := a.HasPermission(user.ID, permKeyDocumentalsLlibresImportCSV, target)
+		exportCSV := a.HasPermission(user.ID, permKeyDocumentalsLlibresExportCSV, target)
+		markIndexed := a.HasPermission(user.ID, permKeyDocumentalsLlibresMarkIndexed, target)
+		recalcIndex := a.HasPermission(user.ID, permKeyDocumentalsLlibresRecalcIndex, target)
+		canEditLlibre[llibre.ID] = edit
+		canDeleteLlibre[llibre.ID] = del
+		canIndexLlibre[llibre.ID] = index
+		canViewRegistres[llibre.ID] = viewRegs
+		canImportCSV[llibre.ID] = importCSV
+		canExportCSV[llibre.ID] = exportCSV
+		canMarkIndexed[llibre.ID] = markIndexed
+		canRecalcIndex[llibre.ID] = recalcIndex
+		if edit || del || index || viewRegs || importCSV || exportCSV || markIndexed || recalcIndex || isAdmin {
+			showLlibreActions = true
+		}
+		if del || isAdmin {
+			showPurgeModal = true
+		}
+	}
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	arxius, _ := a.DB.ListArxius(db.ArxiuFilter{Limit: 200})
 	RenderPrivateTemplate(w, r, "admin-llibres-list.html", map[string]interface{}{
-		"Llibres":         llibres,
-		"IndexacioStats":  indexacioStats,
-		"Filter":          filter,
-		"Arquebisbats":    arquebisbats,
-		"Municipis":       municipis,
-		"Arxius":          arxius,
-		"CanManageArxius": canManage,
-		"IsAdmin":         isAdmin,
-		"User":            user,
-		"CurrentURL":      r.URL.RequestURI(),
+		"Llibres":                  llibres,
+		"IndexacioStats":           indexacioStats,
+		"Filter":                   filter,
+		"Arquebisbats":             arquebisbats,
+		"Municipis":                municipis,
+		"Arxius":                   arxius,
+		"CanManageArxius":          canManage,
+		"CanCreateLlibre":          canCreateLlibre,
+		"CanImportRegistresGlobal": canImportRegistresGlobal,
+		"CanEditLlibre":            canEditLlibre,
+		"CanDeleteLlibre":          canDeleteLlibre,
+		"CanIndexLlibre":           canIndexLlibre,
+		"CanViewRegistres":         canViewRegistres,
+		"CanImportCSV":             canImportCSV,
+		"CanExportCSV":             canExportCSV,
+		"CanMarkIndexed":           canMarkIndexed,
+		"CanRecalcIndex":           canRecalcIndex,
+		"ShowLlibreActions":        showLlibreActions,
+		"ShowPurgeModal":           showPurgeModal,
+		"IsAdmin":                  isAdmin,
+		"User":                     user,
+		"CurrentURL":               r.URL.RequestURI(),
 	})
 }
 
@@ -97,12 +158,18 @@ var llibreTipusOptions = []string{
 }
 
 func (a *App) AdminNewLlibre(w http.ResponseWriter, r *http.Request) {
-	_, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresCreate, PermissionTarget{})
+	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
+	selectedArxiu := intFromForm(r.URL.Query().Get("arxiu_id"))
+	var ok bool
+	if selectedArxiu > 0 {
+		target := a.resolveArxiuTarget(selectedArxiu)
+		_, ok = a.requirePermissionKey(w, r, permKeyDocumentalsLlibresCreate, target)
+	} else {
+		_, ok = a.requirePermissionKeyAnyScope(w, r, permKeyDocumentalsLlibresCreate)
+	}
 	if !ok {
 		return
 	}
-	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
-	selectedArxiu := intFromForm(r.URL.Query().Get("arxiu_id"))
 	newLlibre := &db.Llibre{ModeracioEstat: "pendent"}
 	if selectedArxiu > 0 {
 		if arxiu, err := a.DB.GetArxiu(selectedArxiu); err == nil && arxiu != nil {
@@ -309,18 +376,20 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	llibre := parseLlibreForm(r)
+	arxiuID := intFromForm(r.FormValue("arxiu_id"))
 	permKey := permKeyDocumentalsLlibresCreate
 	target := PermissionTarget{}
 	if llibre.ID != 0 {
 		permKey = permKeyDocumentalsLlibresEdit
 		target = a.resolveLlibreTarget(llibre.ID)
+	} else if arxiuID > 0 {
+		target = a.resolveArxiuTarget(arxiuID)
 	}
 	user, ok := a.requirePermissionKey(w, r, permKey, target)
 	if !ok {
 		return
 	}
 	returnURL := strings.TrimSpace(r.FormValue("return_to"))
-	arxiuID := intFromForm(r.FormValue("arxiu_id"))
 	isNew := llibre.ID == 0
 	if msg := a.validateLlibre(llibre, arxiuID); msg != "" {
 		a.renderLlibreForm(w, r, llibre, isNew, msg, returnURL, arxiuID)
@@ -470,6 +539,14 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		isAdmin = a.hasPerm(perms, permAdmin)
 		canModerate = a.hasPerm(perms, permModerate)
 	}
+	canEditLlibre := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresEdit, target)
+	canDeleteLlibre := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresDelete, target)
+	canIndexLlibre := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresBulkIndex, target)
+	canViewRegistres := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresViewRegistres, target)
+	canImportCSV := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresImportCSV, target)
+	canExportCSV := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresExportCSV, target)
+	canMarkIndexed := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresMarkIndexed, target)
+	canRecalcIndex := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresRecalcIndex, target)
 	if (user == nil || !a.CanManageArxius(user)) && llibre.ModeracioEstat != "publicat" {
 		http.NotFound(w, r)
 		return
@@ -725,6 +802,14 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		"PageStatsLinks":      pageLinks,
 		"User":                user,
 		"CanManageArxius":     true,
+		"CanEditLlibre":       canEditLlibre,
+		"CanDeleteLlibre":     canDeleteLlibre,
+		"CanIndexLlibre":      canIndexLlibre,
+		"CanViewRegistres":    canViewRegistres,
+		"CanImportCSV":        canImportCSV,
+		"CanExportCSV":        canExportCSV,
+		"CanMarkIndexed":      canMarkIndexed,
+		"CanRecalcIndex":      canRecalcIndex,
 		"IsAdmin":             isAdmin,
 		"CanModerate":         canModerate,
 		"PurgeStatus":         purgeStatus,

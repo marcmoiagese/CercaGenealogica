@@ -13,7 +13,9 @@
         <section class="card">
             <header class="card-header">
                 <h1>{{ t .Lang "countries.title" }}</h1>
+                {{ if $.Data.CanCreatePais }}
                 <a class="boto-primari" href="/admin/paisos/new">{{ t .Lang "countries.button.new" }}</a>
+                {{ end }}
             </header>
             <div class="taula-wrapper">
                 <table class="taula">
@@ -23,7 +25,7 @@
                             <th>{{ t .Lang "countries.col.iso2" }}</th>
                             <th>{{ t .Lang "countries.col.iso3" }}</th>
                             <th>{{ t .Lang "countries.col.num" }}</th>
-                            <th>{{ t .Lang "countries.col.actions" }}</th>
+                            {{ if $.Data.ShowPaisActions }}<th>{{ t .Lang "countries.col.actions" }}</th>{{ end }}
                         </tr>
                     </thead>
                     <tbody>
@@ -33,7 +35,13 @@
                             <td>{{ .CodiISO2 }}</td>
                             <td>{{ .CodiISO3 }}</td>
                             <td>{{ .CodiPaisNum }}</td>
+                            {{ if $.Data.ShowPaisActions }}
+                            {{ if index $.Data.CanEditPais .ID }}
                             <td><a href="/admin/paisos/{{ .ID }}/edit">{{ t $.Lang "countries.action.edit" }}</a></td>
+                            {{ else }}
+                            <td></td>
+                            {{ end }}
+                            {{ end }}
                         </tr>
                         {{ end }}
                     </tbody>

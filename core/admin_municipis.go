@@ -10,11 +10,6 @@ import (
 )
 
 func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisView, PermissionTarget{})
-	if !ok {
-		return
-	}
-	perms := a.getPermissionsForUser(user.ID)
 	filter := db.MunicipiFilter{
 		Text:   strings.TrimSpace(r.URL.Query().Get("q")),
 		Estat:  strings.TrimSpace(r.URL.Query().Get("estat")),
@@ -33,6 +28,27 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 			filter.NivellID = v
 		}
 	}
+	nivellPaisID := 0
+	if filter.NivellID > 0 {
+		if nivell, err := a.DB.GetNivell(filter.NivellID); err == nil && nivell != nil && nivell.PaisID > 0 {
+			nivellPaisID = nivell.PaisID
+		}
+	}
+	createPaisID := filter.PaisID
+	if createPaisID == 0 && nivellPaisID > 0 {
+		createPaisID = nivellPaisID
+	}
+	target := PermissionTarget{}
+	if filter.PaisID > 0 {
+		target.PaisID = intPtr(filter.PaisID)
+	} else if nivellPaisID > 0 {
+		target.PaisID = intPtr(nivellPaisID)
+	}
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisView, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
 	muns, _ := a.DB.ListMunicipis(filter)
 	paisos, _ := a.DB.ListPaisos()
 	var nivells []db.NivellAdministratiu
@@ -41,13 +57,33 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 	} else {
 		nivells, _ = a.DB.ListNivells(db.NivellAdminFilter{})
 	}
+	canCreateMunicipi := false
+	if createPaisID > 0 {
+		canCreateMunicipi = a.HasPermission(user.ID, permKeyTerritoriMunicipisCreate, PermissionTarget{PaisID: intPtr(createPaisID)})
+	} else {
+		canCreateMunicipi = a.HasPermission(user.ID, permKeyTerritoriMunicipisCreate, PermissionTarget{})
+	}
+	canEditMunicipi := make(map[int]bool, len(muns))
+	showMunicipiActions := false
+	for _, mun := range muns {
+		munTarget := a.resolveMunicipiTarget(mun.ID)
+		canEdit := a.HasPermission(user.ID, permKeyTerritoriMunicipisEdit, munTarget)
+		canEditMunicipi[mun.ID] = canEdit
+		if canEdit {
+			showMunicipiActions = true
+		}
+	}
 	RenderPrivateTemplate(w, r, "admin-municipis-list.html", map[string]interface{}{
-		"Municipis":       muns,
-		"Filter":          filter,
-		"Paisos":          paisos,
-		"Nivells":         nivells,
-		"CanManageArxius": a.hasPerm(perms, permArxius),
-		"User":            user,
+		"Municipis":           muns,
+		"Filter":              filter,
+		"Paisos":              paisos,
+		"Nivells":             nivells,
+		"CanManageArxius":     a.hasPerm(perms, permArxius),
+		"CanCreateMunicipi":   canCreateMunicipi,
+		"CreatePaisID":        createPaisID,
+		"CanEditMunicipi":     canEditMunicipi,
+		"ShowMunicipiActions": showMunicipiActions,
+		"User":                user,
 	})
 }
 

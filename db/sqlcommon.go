@@ -1508,7 +1508,7 @@ func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, erro
 		args = append(args, strings.TrimSpace(f.Status))
 	}
 	query := `
-        SELECT a.id, a.nom, a.tipus_entitat, p.codi_iso3, a.nivell, parent.nom as parent_nom, a.any_inici, a.any_fi,
+        SELECT a.id, a.nom, a.tipus_entitat, a.pais_id, p.codi_iso3, a.nivell, parent.nom as parent_nom, a.any_inici, a.any_fi,
                a.moderation_status
         FROM arquebisbats a
         LEFT JOIN paisos p ON p.id = a.pais_id
@@ -1524,7 +1524,7 @@ func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, erro
 	var res []ArquebisbatRow
 	for rows.Next() {
 		var r ArquebisbatRow
-		if err := rows.Scan(&r.ID, &r.Nom, &r.TipusEntitat, &r.PaisNom, &r.Nivell, &r.ParentNom, &r.AnyInici, &r.AnyFi, &r.ModeracioEstat); err != nil {
+		if err := rows.Scan(&r.ID, &r.Nom, &r.TipusEntitat, &r.PaisID, &r.PaisNom, &r.Nivell, &r.ParentNom, &r.AnyInici, &r.AnyFi, &r.ModeracioEstat); err != nil {
 			return nil, err
 		}
 		res = append(res, r)

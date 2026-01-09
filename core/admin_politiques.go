@@ -183,9 +183,16 @@ func (a *App) AdminSavePolitica(w http.ResponseWriter, r *http.Request) {
 		Descripcio: desc,
 		Permisos:   string(permsClean),
 	}
-	if _, err := a.DB.SavePolitica(p); err != nil {
+	savedID, err := a.DB.SavePolitica(p)
+	if err != nil {
 		RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, p, id == 0, "gui", "No s'ha pogut desar la política", nil))
 		return
+	}
+	if savedID > 0 {
+		p.ID = savedID
+	}
+	if err := a.ensurePolicyGrantsFromPerms(p.ID, parsed); err != nil {
+		Errorf("No s'han pogut crear grants per la politica %d: %v", p.ID, err)
 	}
 	_ = a.DB.BumpPolicyPermissionsVersion(p.ID)
 	http.Redirect(w, r, "/admin/politiques", http.StatusSeeOther)

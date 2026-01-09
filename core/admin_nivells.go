@@ -17,17 +17,21 @@ var nivellEstats = map[string]bool{
 }
 
 func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriNivellsView, PermissionTarget{})
-	if !ok {
-		return
-	}
-	perms := a.getPermissionsForUser(user.ID)
 	paisID := extractID(r.URL.Path)
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {
 			paisID = v
 		}
 	}
+	target := PermissionTarget{}
+	if paisID > 0 {
+		target.PaisID = intPtr(paisID)
+	}
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriNivellsView, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
 	paisos, _ := a.DB.ListPaisos()
 	niv, _ := strconv.Atoi(r.URL.Query().Get("nivel"))
 	estat := strings.TrimSpace(r.URL.Query().Get("estat"))
@@ -50,6 +54,20 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 			nivells[i].PaisLabel = a.countryLabelFromISO(nivells[i].PaisISO2.String, ResolveLang(r))
 		}
 	}
+	canCreateNivell := false
+	if paisID > 0 {
+		canCreateNivell = a.HasPermission(user.ID, permKeyTerritoriNivellsCreate, PermissionTarget{PaisID: intPtr(paisID)})
+	}
+	canEditNivell := make(map[int]bool, len(nivells))
+	showNivellActions := false
+	for _, nivell := range nivells {
+		target := PermissionTarget{PaisID: intPtr(nivell.PaisID)}
+		canEdit := a.HasPermission(user.ID, permKeyTerritoriNivellsEdit, target)
+		canEditNivell[nivell.ID] = canEdit
+		if canEdit {
+			showNivellActions = true
+		}
+	}
 	var pais *db.Pais
 	if paisID > 0 {
 		pais, _ = a.DB.GetPais(paisID)
@@ -58,12 +76,15 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	RenderPrivateTemplate(w, r, "admin-nivells-list.html", map[string]interface{}{
-		"Nivells":         nivells,
-		"Pais":            pais,
-		"Paisos":          paisos,
-		"Filter":          filter,
-		"CanManageArxius": a.hasPerm(perms, permArxius),
-		"User":            user,
+		"Nivells":           nivells,
+		"Pais":              pais,
+		"Paisos":            paisos,
+		"Filter":            filter,
+		"CanManageArxius":   a.hasPerm(perms, permArxius),
+		"CanCreateNivell":   canCreateNivell,
+		"CanEditNivell":     canEditNivell,
+		"ShowNivellActions": showNivellActions,
+		"User":              user,
 	})
 }
 

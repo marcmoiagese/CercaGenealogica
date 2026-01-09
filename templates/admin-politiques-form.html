@@ -95,7 +95,9 @@
                                         <select id="grant-perm-key" name="perm_key" form="grant-form" required>
                                             <option value="">—</option>
                                             {{ range .Data.PermissionCatalog }}
-                                            <option value="{{ . }}" {{ if and $grant (eq $grant.PermKey .) }}selected{{ end }}>{{ . }}</option>
+                                            {{ $labelKey := printf "policies.grants.perm.%s" . }}
+                                            {{ $label := t $.Lang $labelKey }}
+                                            <option value="{{ . }}" {{ if and $grant (eq $grant.PermKey .) }}selected{{ end }}>{{ if eq $label $labelKey }}{{ . }}{{ else }}{{ $label }}{{ end }}</option>
                                             {{ end }}
                                         </select>
                                     </div>
@@ -140,7 +142,15 @@
                                                 {{ range .Data.Grants }}
                                                 {{ $scopeLabel := index $.Data.ScopeLabels .ScopeType }}
                                                 <tr>
-                                                    <td><code>{{ .PermKey }}</code></td>
+                                                    {{ $permLabelKey := printf "policies.grants.perm.%s" .PermKey }}
+                                                    {{ $permLabel := t $.Lang $permLabelKey }}
+                                                    <td>
+                                                        {{ if eq $permLabel $permLabelKey }}
+                                                        <code>{{ .PermKey }}</code>
+                                                        {{ else }}
+                                                        <span title="{{ .PermKey }}">{{ $permLabel }}</span>
+                                                        {{ end }}
+                                                    </td>
                                                     <td>{{ if $scopeLabel }}{{ t $.Lang $scopeLabel }}{{ else }}{{ .ScopeType }}{{ end }}</td>
                                                     <td>{{ if .ScopeIDValid }}{{ .ScopeID }}{{ else }}—{{ end }}</td>
                                                     <td>{{ if .IncludeChildren }}{{ t $.Lang "common.yes" }}{{ else }}{{ t $.Lang "common.no" }}{{ end }}</td>

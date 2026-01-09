@@ -122,6 +122,8 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	canModerate := a.hasPerm(perms, permModerate)
 	canManageUsers := a.hasPerm(perms, permUsers)
 	canManagePolicies := a.hasPerm(perms, permPolicies)
+	canCreateArxiu := a.hasAnyPermissionKey(user.ID, permKeyDocumentalsArxiusCreate)
+	canImportArxiu := a.HasPermission(user.ID, permKeyAdminArxiusImport, PermissionTarget{})
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
 	if status == "" {
 		status = "publicat"
@@ -146,6 +148,11 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 				"ArxiusBasePath":     "/documentals/arxius",
 				"Arquebisbats":       []db.ArquebisbatRow{},
 				"CanManageArxius":    canManage,
+				"CanCreateArxiu":     canCreateArxiu,
+				"CanImportArxiu":     canImportArxiu,
+				"CanEditArxiu":       map[int]bool{},
+				"CanDeleteArxiu":     map[int]bool{},
+				"ShowArxiuActions":   false,
 				"User":               user,
 				"IsAdmin":            isAdmin,
 				"CanManageTerritory": canManageTerritory,
@@ -169,6 +176,19 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 			arxius[i].Llibres = len(rels)
 		}
 	}
+	canEditArxiu := make(map[int]bool, len(arxius))
+	canDeleteArxiu := make(map[int]bool, len(arxius))
+	showArxiuActions := false
+	for _, arxiu := range arxius {
+		target := a.resolveArxiuTarget(arxiu.ID)
+		canEdit := a.HasPermission(user.ID, permKeyDocumentalsArxiusEdit, target)
+		canDelete := a.HasPermission(user.ID, permKeyDocumentalsArxiusDelete, target)
+		canEditArxiu[arxiu.ID] = canEdit
+		canDeleteArxiu[arxiu.ID] = canDelete
+		if canEdit || canDelete {
+			showArxiuActions = true
+		}
+	}
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
 		"Arxius":             arxius,
@@ -176,6 +196,11 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		"ArxiusBasePath":     "/documentals/arxius",
 		"Arquebisbats":       arquebisbats,
 		"CanManageArxius":    canManage,
+		"CanCreateArxiu":     canCreateArxiu,
+		"CanImportArxiu":     canImportArxiu,
+		"CanEditArxiu":       canEditArxiu,
+		"CanDeleteArxiu":     canDeleteArxiu,
+		"ShowArxiuActions":   showArxiuActions,
 		"User":               user,
 		"IsAdmin":            isAdmin,
 		"CanManageTerritory": canManageTerritory,
@@ -220,7 +245,7 @@ func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.
 
 // Alta
 func (a *App) AdminNewArxiu(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusCreate, PermissionTarget{})
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyDocumentalsArxiusCreate)
 	if !ok {
 		return
 	}
@@ -229,16 +254,28 @@ func (a *App) AdminNewArxiu(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminCreateArxiu(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusCreate, PermissionTarget{})
-	if !ok {
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/documentals/arxius", http.StatusSeeOther)
 		return
 	}
-	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	arxiu := parseArxiuForm(r)
+	target := PermissionTarget{}
+	if arxiu.EntitatEclesiasticaID.Valid {
+		entitatID := int(arxiu.EntitatEclesiasticaID.Int64)
+		if entitatID > 0 {
+			target.EclesID = intPtr(entitatID)
+		}
+	} else if arxiu.MunicipiID.Valid {
+		municipiID := int(arxiu.MunicipiID.Int64)
+		if municipiID > 0 {
+			target = a.resolveMunicipiTarget(municipiID)
+		}
+	}
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusCreate, target)
+	if !ok {
+		return
+	}
+	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	if arxiu.Nom == "" || len(arxiu.Nom) < 3 {
 		a.renderArxiuForm(w, r, arxiu, true, "El nom és obligatori (mínim 3 caràcters).", user, returnURL)
 		return
@@ -329,14 +366,36 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	llibres, _ := a.DB.ListArxiuLlibres(id)
+	canEditArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusEdit, target)
+	canDeleteArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusDelete, target)
+	canCreateLlibre := a.HasPermission(user.ID, permKeyDocumentalsLlibresCreate, target)
+	canEditLlibre := make(map[int]bool, len(llibres))
+	canViewLlibre := make(map[int]bool, len(llibres))
+	showLlibreActions := false
+	for _, llibre := range llibres {
+		llibreTarget := a.resolveLlibreTarget(llibre.LlibreID)
+		canEdit := a.HasPermission(user.ID, permKeyDocumentalsLlibresEdit, llibreTarget)
+		canView := a.HasPermission(user.ID, permKeyDocumentalsLlibresView, llibreTarget)
+		canEditLlibre[llibre.LlibreID] = canEdit
+		canViewLlibre[llibre.LlibreID] = canView
+		if canEdit || canView {
+			showLlibreActions = true
+		}
+	}
 	entNom := a.loadEntitatNom(arxiu)
 	RenderPrivateTemplate(w, r, "admin-arxius-show.html", map[string]interface{}{
-		"Arxiu":           arxiu,
-		"Llibres":         llibres,
-		"EntitatNom":      entNom,
-		"CanManageArxius": true,
-		"ArxiusBasePath":  "/documentals/arxius",
-		"User":            user,
+		"Arxiu":             arxiu,
+		"Llibres":           llibres,
+		"EntitatNom":        entNom,
+		"CanManageArxius":   true,
+		"CanEditArxiu":      canEditArxiu,
+		"CanDeleteArxiu":    canDeleteArxiu,
+		"CanCreateLlibre":   canCreateLlibre,
+		"CanEditLlibre":     canEditLlibre,
+		"CanViewLlibre":     canViewLlibre,
+		"ShowLlibreActions": showLlibreActions,
+		"ArxiusBasePath":    "/documentals/arxius",
+		"User":              user,
 	})
 }
 

@@ -16,10 +16,10 @@
             <header class="card-header amb-accio">
                 <h1>{{ t .Lang "archives.title" }}</h1>
                 <div class="card-actions">
-                    {{ if $.Data.CanManageArxius }}
+                    {{ if $.Data.CanCreateArxiu }}
                     <a class="boto-primari" href="{{ $manageBase }}/new">{{ t .Lang "archives.button.new" }}</a>
                     {{ end }}
-                    {{ if $.Data.IsAdmin }}
+                    {{ if $.Data.CanImportArxiu }}
                     <a class="boto-secundari" href="/admin/arxius/import">{{ t .Lang "archives.io.title" }}</a>
                     {{ end }}
                 </div>
@@ -80,7 +80,7 @@
                             <th>{{ t .Lang "archives.col.web" }}</th>
                             <th>{{ t .Lang "archives.col.books" }}</th>
                             <th>{{ t .Lang "moderation.status" }}</th>
-                            {{ if $.Data.CanManageArxius }}<th>{{ t .Lang "archives.col.actions" }}</th>{{ end }}
+                            {{ if $.Data.ShowArxiuActions }}<th>{{ t .Lang "archives.col.actions" }}</th>{{ end }}
                         </tr>
                     </thead>
                     <tbody>
@@ -94,12 +94,19 @@
                             <td>{{ if .Web }}<a href="{{ .Web }}" target="_blank">{{ t $.Lang "archives.link" }}</a>{{ end }}</td>
                             <td>{{ .Llibres }}</td>
                             <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
-                            {{ if $.Data.CanManageArxius }}
+                            {{ if $.Data.ShowArxiuActions }}
+                            {{ $canEdit := index $.Data.CanEditArxiu .ID }}
+                            {{ $canDelete := index $.Data.CanDeleteArxiu .ID }}
                             <td class="accions">
-                                <a href="{{ $manageBase }}/{{ .ID }}/edit">{{ t $.Lang "archives.action.edit" }}</a> |
+                                {{ if $canEdit }}
+                                <a href="{{ $manageBase }}/{{ .ID }}/edit">{{ t $.Lang "archives.action.edit" }}</a>
+                                {{ end }}
+                                {{ if and $canEdit $canDelete }} | {{ end }}
+                                {{ if $canDelete }}
                                 <form method="post" action="{{ $manageBase }}/{{ .ID }}/delete" style="display:inline;" onsubmit="return confirm('{{ t $.Lang "archives.confirm.delete" }}');">
                                     <button type="submit" class="enllaç">{{ t $.Lang "archives.action.delete" }}</button>
                                 </form>
+                                {{ end }}
                             </td>
                             {{ end }}
                         </tr>

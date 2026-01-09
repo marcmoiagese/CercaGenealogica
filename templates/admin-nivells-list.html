@@ -16,9 +16,9 @@
                     <p class="muted">{{ if .Data.Pais }}{{ t .Lang "levels.country" }}: {{ .Data.Pais.CodiISO3 }}{{ end }}</p>
                     <h1>{{ t .Lang "levels.title" }}</h1>
                 </div>
-                {{ if .Data.Pais }}
+                {{ if and .Data.Pais $.Data.CanCreateNivell }}
                 <a class="boto-primari" href="/territori/paisos/{{ .Data.Pais.ID }}/nivells/new">{{ t .Lang "levels.button.new" }}</a>
-                {{ else }}
+                {{ else if not .Data.Pais }}
                 <span class="muted">{{ t .Lang "levels.select.country" }}</span>
                 {{ end }}
             </header>
@@ -70,7 +70,7 @@
                             <th>{{ t .Lang "levels.col.years" }}</th>
                             <th>{{ t .Lang "levels.col.state" }}</th>
                             <th>{{ t .Lang "moderation.status" }}</th>
-                            <th>{{ t .Lang "levels.col.actions" }}</th>
+                            {{ if $.Data.ShowNivellActions }}<th>{{ t .Lang "levels.col.actions" }}</th>{{ end }}
                         </tr>
                     </thead>
                     <tbody>
@@ -85,10 +85,16 @@
                             <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
                             <td>{{ t $.Lang (printf "levels.state.%s" .Estat) }}</td>
                             <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                            {{ if $.Data.ShowNivellActions }}
+                            {{ if index $.Data.CanEditNivell .ID }}
                             <td><a href="/territori/nivells/{{ .ID }}/edit">{{ t $.Lang "levels.action.edit" }}</a></td>
+                            {{ else }}
+                            <td></td>
+                            {{ end }}
+                            {{ end }}
                         </tr>
                         {{ else }}
-                        <tr><td colspan="10">{{ t .Lang "common.empty" }}</td></tr>
+                        <tr><td colspan="{{ if $.Data.ShowNivellActions }}10{{ else }}9{{ end }}">{{ t .Lang "common.empty" }}</td></tr>
                         {{ end }}
                     </tbody>
                 </table>

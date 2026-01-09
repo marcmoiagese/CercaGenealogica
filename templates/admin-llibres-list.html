@@ -14,8 +14,12 @@
             <header class="card-header card-header-flex">
                 <h1>{{ t .Lang "books.title" }}</h1>
                 <div class="arxiu-header-actions">
+                    {{ if $.Data.CanImportRegistresGlobal }}
                     <a class="boto-secundari" href="/documentals/llibres/importar">{{ t .Lang "records.import.file" }}</a>
+                    {{ end }}
+                    {{ if $.Data.CanCreateLlibre }}
                     <a class="boto-primari" href="/documentals/llibres/new">{{ t .Lang "books.new" }}</a>
+                    {{ end }}
                 </div>
             </header>
             <form class="filtres-arxius" method="get" action="/documentals/llibres">
@@ -83,7 +87,7 @@
                             <th>{{ t .Lang "books.col.records" }}</th>
                             <th>{{ t .Lang "books.col.indexed" }}</th>
                             <th>{{ t .Lang "moderation.status" }}</th>
-                            <th>{{ t .Lang "books.col.actions" }}</th>
+                            {{ if $.Data.ShowLlibreActions }}<th>{{ t .Lang "books.col.actions" }}</th>{{ end }}
                         </tr>
                     </thead>
                     <tbody>
@@ -105,23 +109,43 @@
                                 </div>
                             </td>
                             <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                            {{ if $.Data.ShowLlibreActions }}
+                            {{ $canEdit := index $.Data.CanEditLlibre .ID }}
+                            {{ $canIndex := index $.Data.CanIndexLlibre .ID }}
+                            {{ $canViewReg := index $.Data.CanViewRegistres .ID }}
+                            {{ $canImport := index $.Data.CanImportCSV .ID }}
+                            {{ $canExport := index $.Data.CanExportCSV .ID }}
+                            {{ $canMark := index $.Data.CanMarkIndexed .ID }}
+                            {{ $canRecalc := index $.Data.CanRecalcIndex .ID }}
+                            {{ $canDelete := index $.Data.CanDeleteLlibre .ID }}
                             <td>
                                 <span class="cell-actions">
+                                    {{ if $canEdit }}
                                     <a class="icon-action" href="/documentals/llibres/{{ .ID }}/edit" title="{{ t $.Lang "books.action.edit" }}" aria-label="{{ t $.Lang "books.action.edit" }}">
                                         <i class="fas fa-edit"></i>
                                     </a>
+                                    {{ end }}
+                                    {{ if $canIndex }}
                                     <a class="icon-action" href="/documentals/llibres/{{ .ID }}/indexar" title="{{ t $.Lang "books.action.index" }}" aria-label="{{ t $.Lang "books.action.index" }}">
                                         <i class="fas fa-pen-nib"></i>
                                     </a>
+                                    {{ end }}
+                                    {{ if $canViewReg }}
                                     <a class="icon-action" href="/documentals/llibres/{{ .ID }}/registres" title="{{ t $.Lang "books.action.records" }}" aria-label="{{ t $.Lang "books.action.records" }}">
                                         <i class="fas fa-table"></i>
                                     </a>
+                                    {{ end }}
+                                    {{ if $canImport }}
                                     <a class="icon-action" href="/documentals/llibres/{{ .ID }}/import" title="{{ t $.Lang "records.import.file" }}" aria-label="{{ t $.Lang "records.import.file" }}">
                                         <i class="fas fa-file-import"></i>
                                     </a>
+                                    {{ end }}
+                                    {{ if $canExport }}
                                     <a class="icon-action" href="/documentals/llibres/{{ .ID }}/export" title="{{ t $.Lang "records.list.export" }}" aria-label="{{ t $.Lang "records.list.export" }}">
                                         <i class="fas fa-file-export"></i>
                                     </a>
+                                    {{ end }}
+                                    {{ if $canMark }}
                                     <form method="post" action="/documentals/llibres/{{ .ID }}/indexacio" class="inline-form">
                                         <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                         <input type="hidden" name="indexacio_completa" value="{{ if .IndexacioCompleta }}0{{ else }}1{{ end }}">
@@ -130,7 +154,8 @@
                                             <i class="fas fa-check-circle"></i>
                                         </button>
                                     </form>
-                                    {{ if $.Data.IsAdmin }}
+                                    {{ end }}
+                                    {{ if $canRecalc }}
                                     <form method="post" action="/documentals/llibres/{{ .ID }}/indexacio/recalc" class="inline-form">
                                         <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                         <input type="hidden" name="return_to" value="{{ $.Data.CurrentURL }}">
@@ -139,13 +164,14 @@
                                         </button>
                                     </form>
                                     {{ end }}
-                                    {{ if $.Data.IsAdmin }}
+                                    {{ if $canDelete }}
                                     <button type="button" class="icon-action danger purge-trigger" title="{{ t $.Lang "books.purge.action" }}" aria-label="{{ t $.Lang "books.purge.action" }}" data-llibre-id="{{ .ID }}" data-llibre-title="{{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                     {{ end }}
                                 </span>
                             </td>
+                            {{ end }}
                         </tr>
                         {{ end }}
                     </tbody>
@@ -154,7 +180,7 @@
         </section>
     </main>
     {{ template "footer" . }}
-    {{ if .Data.IsAdmin }}
+    {{ if .Data.ShowPurgeModal }}
     <div class="modal-overlay" id="purge-modal" role="dialog" aria-modal="true" aria-labelledby="purge-modal-title">
         <div class="modal-box">
             <div class="modal-header">

@@ -31,22 +31,32 @@
             <header class="card-header">
                 <h1>{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</h1>
                 <div class="arxiu-header-actions">
+                    {{ if $.Data.CanEditLlibre }}
                     <a class="icon-action" href="/documentals/llibres/{{ .Data.Llibre.ID }}/edit" title="{{ t .Lang "books.action.edit" }}" aria-label="{{ t .Lang "books.action.edit" }}">
                         <i class="fas fa-edit"></i>
                     </a>
+                    {{ end }}
+                    {{ if $.Data.CanIndexLlibre }}
                     <a class="icon-action" href="/documentals/llibres/{{ .Data.Llibre.ID }}/indexar" title="{{ t .Lang "books.action.index" }}" aria-label="{{ t .Lang "books.action.index" }}">
                         <i class="fas fa-pen-nib"></i>
                     </a>
+                    {{ end }}
+                    {{ if $.Data.CanViewRegistres }}
                     <a class="icon-action" href="/documentals/llibres/{{ .Data.Llibre.ID }}/registres" title="{{ t .Lang "books.action.records" }}" aria-label="{{ t .Lang "books.action.records" }}">
                         <i class="fas fa-table"></i>
                     </a>
+                    {{ end }}
+                    {{ if $.Data.CanImportCSV }}
                     <a class="icon-action" href="/documentals/llibres/{{ .Data.Llibre.ID }}/import" title="{{ t .Lang "records.import.file" }}" aria-label="{{ t .Lang "records.import.file" }}">
                         <i class="fas fa-file-import"></i>
                     </a>
+                    {{ end }}
+                    {{ if $.Data.CanExportCSV }}
                     <a class="icon-action" href="/documentals/llibres/{{ .Data.Llibre.ID }}/export" title="{{ t .Lang "records.list.export" }}" aria-label="{{ t .Lang "records.list.export" }}">
                         <i class="fas fa-file-export"></i>
                     </a>
-                    {{ if .Data.IsAdmin }}
+                    {{ end }}
+                    {{ if $.Data.CanDeleteLlibre }}
                     <button type="button" class="icon-action danger purge-trigger" title="{{ t .Lang "books.purge.action" }}" aria-label="{{ t .Lang "books.purge.action" }}" data-llibre-id="{{ .Data.Llibre.ID }}" data-llibre-title="{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}">
                         <i class="fas fa-trash"></i>
                     </button>
@@ -72,9 +82,11 @@
                     <h2>{{ t .Lang "records.summary.title" }}</h2>
                     <p class="muted">{{ t .Lang "records.summary.total" }}: {{ .Data.RegistresTotal }}</p>
                 </div>
+                {{ if $.Data.CanIndexLlibre }}
                 <a class="icon-action" href="/documentals/llibres/{{ .Data.Llibre.ID }}/indexar" title="{{ t .Lang "books.action.index" }}" aria-label="{{ t .Lang "books.action.index" }}">
                     <i class="fas fa-pen-nib"></i>
                 </a>
+                {{ end }}
             </header>
             <div class="stats-grid">
                 {{ range .Data.RegistresStats }}
@@ -152,7 +164,7 @@
                                         {{ .NumPaginaText }}
                                         {{ end }}
                                     </span>
-                                    {{ if $.Data.CanManageArxius }}
+                                    {{ if $.Data.CanEditLlibre }}
                                     <span class="edit-icons">
                                         <button type="button" class="edit-icon page-stat-edit" aria-label="{{ t $.Lang "common.edit" }}"><i class="fa fa-pencil"></i></button>
                                     </span>
@@ -162,7 +174,7 @@
                             <td class="page-stat-cell" data-key="pagina_id" data-type="number">
                                 <div class="editable-cell">
                                     <span class="cell-text page-stat-value">{{ if .PaginaID.Valid }}{{ .PaginaID.Int64 }}{{ else }}—{{ end }}</span>
-                                    {{ if $.Data.CanManageArxius }}
+                                    {{ if $.Data.CanEditLlibre }}
                                     <span class="edit-icons">
                                         <button type="button" class="edit-icon page-stat-edit" aria-label="{{ t $.Lang "common.edit" }}"><i class="fa fa-pencil"></i></button>
                                     </span>
@@ -172,7 +184,7 @@
                             <td class="page-stat-cell" data-key="total_registres" data-type="number">
                                 <div class="editable-cell">
                                     <span class="cell-text page-stat-value">{{ .TotalRegistres }}</span>
-                                    {{ if $.Data.CanManageArxius }}
+                                    {{ if $.Data.CanEditLlibre }}
                                     <span class="edit-icons">
                                         <button type="button" class="edit-icon page-stat-edit" aria-label="{{ t $.Lang "common.edit" }}"><i class="fa fa-pencil"></i></button>
                                     </span>
@@ -198,7 +210,7 @@
                             </td>
                             <td>
                                 <div class="page-stat-actions">
-                                    {{ if $.Data.CanManageArxius }}
+                                    {{ if $.Data.CanEditLlibre }}
                                     <form class="page-stat-toggle-form" method="post" action="/documentals/llibres/{{ $.Data.Llibre.ID }}/pagines/stats/save">
                                         <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                         <input type="hidden" name="stat_id" value="{{ .ID }}">
@@ -281,7 +293,7 @@
         <section class="card">
             <header class="card-header card-header-flex">
                 <h2>{{ t .Lang "archives.title" }}</h2>
-                {{ if $.Data.CanManageArxius }}
+                {{ if $.Data.CanEditLlibre }}
                 <button type="button" class="boto-secundari" data-open-arxiu-links>{{ t .Lang "archives.books.links.add" }}</button>
                 {{ end }}
             </header>
@@ -291,7 +303,7 @@
                         <tr>
                             <th>{{ t .Lang "admin.menu.archives" }}</th>
                             <th>{{ t .Lang "archives.books.col.url" }}</th>
-                            {{ if $.Data.CanManageArxius }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
+                            {{ if $.Data.CanEditLlibre }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
                         </tr>
                     </thead>
                     <tbody>
@@ -307,7 +319,7 @@
                                 <span class="muted">{{ t $.Lang "archives.books.url.none" }}</span>
                                 {{ end }}
                             </td>
-                            {{ if $.Data.CanManageArxius }}
+                            {{ if $.Data.CanEditLlibre }}
                             <td class="accions">
                                 <a class="boto-secundari icon-only" href="/documentals/llibres/{{ .LlibreID }}/arxius/{{ .ArxiuID }}/edit" aria-label="{{ t $.Lang "archives.books.links.manage" }}" title="{{ t $.Lang "archives.books.links.manage" }}">
                                     <i class="fas fa-link" aria-hidden="true"></i>
@@ -324,7 +336,7 @@
         <section class="card">
             <header class="card-header card-header-flex">
                 <h2>{{ t .Lang "books.links.title" }}</h2>
-                {{ if $.Data.CanManageArxius }}
+                {{ if $.Data.CanEditLlibre }}
                 <button type="button" class="boto-secundari" data-open-arxiu-links>{{ t .Lang "archives.books.links.add" }}</button>
                 {{ end }}
             </header>
@@ -336,7 +348,7 @@
                             <th>{{ t .Lang "books.links.col.url" }}</th>
                             <th>{{ t .Lang "books.links.col.type" }}</th>
                             <th>{{ t .Lang "books.links.col.notes" }}</th>
-                            {{ if $.Data.CanManageArxius }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
+                            {{ if $.Data.CanEditLlibre }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
                         </tr>
                     </thead>
                     <tbody>
@@ -346,7 +358,7 @@
                             <td><a href="{{ .URL }}" target="_blank">{{ .URL }}</a></td>
                             <td>{{ if .Tipus.Valid }}{{ t $.Lang (printf "books.links.type.%s" .Tipus.String) }}{{ end }}</td>
                             <td>{{ if .Descripcio.Valid }}{{ .Descripcio.String }}{{ end }}</td>
-                            {{ if $.Data.CanManageArxius }}
+                            {{ if $.Data.CanEditLlibre }}
                             <td class="accions">
                                 <form method="post" action="/documentals/llibres/{{ .LlibreID }}/urls/{{ .ID }}/delete" onsubmit="return confirm('{{ t $.Lang "books.links.delete.confirm" }}');">
                                     <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
@@ -362,14 +374,14 @@
                         {{ end }}
                         {{ if not .Data.LlibreLinks }}
                         <tr>
-                            <td colspan="5" class="muted">{{ t .Lang "common.empty" }}</td>
+                            <td colspan="{{ if $.Data.CanEditLlibre }}5{{ else }}4{{ end }}" class="muted">{{ t .Lang "common.empty" }}</td>
                         </tr>
                         {{ end }}
                     </tbody>
                 </table>
             </div>
         </section>
-        {{ if $.Data.CanManageArxius }}
+        {{ if $.Data.CanEditLlibre }}
         <div class="modal-overlay" id="arxiu-links-modal" role="dialog" aria-modal="true" aria-labelledby="arxiu-links-title">
             <div class="modal-box">
                 <div class="modal-header">
@@ -417,7 +429,7 @@
             </div>
         </div>
         {{ end }}
-        {{ if .Data.IsAdmin }}
+        {{ if .Data.CanDeleteLlibre }}
         <div class="modal-overlay" id="purge-modal" role="dialog" aria-modal="true" aria-labelledby="purge-modal-title">
             <div class="modal-box">
                 <div class="modal-header">
@@ -477,7 +489,7 @@
             }
         })();
     </script>
-    {{ if .Data.IsAdmin }}
+    {{ if .Data.CanDeleteLlibre }}
     <script>
         (function () {
             const modal = document.getElementById('purge-modal');

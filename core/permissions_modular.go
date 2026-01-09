@@ -407,6 +407,11 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 }
 
 func legacyPermKeys(perms db.PolicyPermissions) []string {
+	if perms.Admin {
+		keys := make([]string, len(permissionCatalogKeys))
+		copy(keys, permissionCatalogKeys)
+		return keys
+	}
 	keys := []string{}
 	if perms.CanManageTerritory {
 		keys = append(keys, legacyTerritoryPermKeys...)

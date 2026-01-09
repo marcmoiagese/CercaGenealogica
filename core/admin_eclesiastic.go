@@ -10,11 +10,6 @@ import (
 )
 
 func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriEclesView, PermissionTarget{})
-	if !ok {
-		return
-	}
-	perms := a.getPermissionsForUser(user.ID)
 	filter := db.ArquebisbatFilter{
 		Text: strings.TrimSpace(r.URL.Query().Get("q")),
 	}
@@ -28,14 +23,46 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 			filter.PaisID = v
 		}
 	}
+	target := PermissionTarget{}
+	if filter.PaisID > 0 {
+		target.PaisID = intPtr(filter.PaisID)
+	}
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriEclesView, target)
+	if !ok {
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	createPaisID := filter.PaisID
+	canCreateEcles := false
+	if createPaisID > 0 {
+		canCreateEcles = a.HasPermission(user.ID, permKeyTerritoriEclesCreate, PermissionTarget{PaisID: intPtr(createPaisID)})
+	} else {
+		canCreateEcles = a.HasPermission(user.ID, permKeyTerritoriEclesCreate, PermissionTarget{})
+	}
+	canImportEcles := a.HasPermission(user.ID, permKeyAdminEclesImport, PermissionTarget{})
 	entitats, _ := a.DB.ListArquebisbats(filter)
+	canEditEcles := make(map[int]bool, len(entitats))
+	showEclesActions := false
+	for _, ent := range entitats {
+		entTarget := PermissionTarget{EclesID: intPtr(ent.ID)}
+		canEdit := a.HasPermission(user.ID, permKeyTerritoriEclesEdit, entTarget)
+		canEditEcles[ent.ID] = canEdit
+		if canEdit {
+			showEclesActions = true
+		}
+	}
 	paisos, _ := a.DB.ListPaisos()
 	RenderPrivateTemplate(w, r, "admin-eclesiastic-list.html", map[string]interface{}{
-		"Entitats":        entitats,
-		"Filter":          filter,
-		"Paisos":          paisos,
-		"CanManageArxius": a.hasPerm(perms, permArxius),
-		"User":            user,
+		"Entitats":         entitats,
+		"Filter":           filter,
+		"Paisos":           paisos,
+		"CanManageArxius":  a.hasPerm(perms, permArxius),
+		"CanCreateEcles":   canCreateEcles,
+		"CreatePaisID":     createPaisID,
+		"CanImportEcles":   canImportEcles,
+		"CanEditEcles":     canEditEcles,
+		"ShowEclesActions": showEclesActions,
+		"User":             user,
 	})
 }
 
@@ -72,9 +99,6 @@ func (a *App) AdminEditEclesiastic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	target := PermissionTarget{EclesID: intPtr(id)}
-	if ent.PaisID.Valid {
-		target.PaisID = intPtr(int(ent.PaisID.Int64))
-	}
 	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriEclesEdit, target)
 	if !ok {
 		return
@@ -105,11 +129,10 @@ func (a *App) AdminSaveEclesiastic(w http.ResponseWriter, r *http.Request) {
 	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	paisID := sqlNullInt(r.FormValue("pais_id"))
 	target := PermissionTarget{}
-	if paisID.Valid {
-		target.PaisID = intPtr(int(paisID.Int64))
-	}
 	if id != 0 {
 		target.EclesID = intPtr(id)
+	} else if paisID.Valid {
+		target.PaisID = intPtr(int(paisID.Int64))
 	}
 	user, ok := a.requirePermissionKey(w, r, permKey, target)
 	if !ok {

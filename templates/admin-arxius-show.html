@@ -14,12 +14,16 @@
         <section class="card">
             <header class="card-header">
                 <h1>{{ .Data.Arxiu.Nom }}</h1>
-                {{ if $.Data.CanManageArxius }}
+                {{ if or $.Data.CanEditArxiu $.Data.CanDeleteArxiu }}
                 <div class="arxiu-header-actions">
+                    {{ if $.Data.CanEditArxiu }}
                     <a class="boto-secundari" href="{{ $manageBase }}/{{ .Data.Arxiu.ID }}/edit">{{ t .Lang "archives.action.edit" }}</a>
+                    {{ end }}
+                    {{ if $.Data.CanDeleteArxiu }}
                     <form method="post" action="{{ $manageBase }}/{{ .Data.Arxiu.ID }}/delete" style="display:inline;" onsubmit="return confirm('{{ t .Lang "archives.confirm.delete" }}');">
                         <button type="submit" class="boto-perill">{{ t .Lang "archives.action.delete" }}</button>
                     </form>
+                    {{ end }}
                 </div>
                 {{ end }}
                 {{ if .Data.Arxiu.ModeracioEstat }}
@@ -43,7 +47,7 @@
         <section class="card">
             <header class="card-header card-header-flex">
                 <h2>{{ t .Lang "archives.books.linked" }}</h2>
-                {{ if $.Data.CanManageArxius }}
+                {{ if $.Data.CanCreateLlibre }}
                 <a class="boto-primari" href="/documentals/llibres/new?arxiu_id={{ .Data.Arxiu.ID }}&return_to=/documentals/arxius/{{ .Data.Arxiu.ID }}">{{ t .Lang "archives.books.add.submit" }}</a>
                 {{ end }}
             </header>
@@ -57,7 +61,7 @@
                             <th>{{ t .Lang "books.col.pages" }}</th>
                             <th>{{ t .Lang "archives.books.col.signatura" }}</th>
                             <th>{{ t .Lang "archives.books.col.url" }}</th>
-                            {{ if $.Data.CanManageArxius }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
+                            {{ if $.Data.ShowLlibreActions }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
                         </tr>
                     </thead>
                     <tbody>
@@ -69,10 +73,17 @@
                             <td>{{ if .Pagines.Valid }}{{ .Pagines.Int64 }}{{ else }}-{{ end }}</td>
                             <td>{{ if .Signatura.Valid }}{{ .Signatura.String }}{{ end }}</td>
                             <td>{{ if .URLOverride.Valid }}<a href="{{ .URLOverride.String }}" target="_blank">{{ t $.Lang "archives.link" }}</a>{{ end }}</td>
-                            {{ if $.Data.CanManageArxius }}
+                            {{ if $.Data.ShowLlibreActions }}
+                            {{ $canEdit := index $.Data.CanEditLlibre .LlibreID }}
+                            {{ $canView := index $.Data.CanViewLlibre .LlibreID }}
                             <td class="accions">
-                                <a href="/documentals/llibres/{{ .LlibreID }}/edit">{{ t $.Lang "archives.action.edit" }}</a> |
+                                {{ if $canEdit }}
+                                <a href="/documentals/llibres/{{ .LlibreID }}/edit">{{ t $.Lang "archives.action.edit" }}</a>
+                                {{ end }}
+                                {{ if and $canEdit $canView }} | {{ end }}
+                                {{ if $canView }}
                                 <a href="/documentals/llibres/{{ .LlibreID }}/pagines">{{ t $.Lang "books.col.pages" }}</a>
+                                {{ end }}
                             </td>
                             {{ end }}
                         </tr>

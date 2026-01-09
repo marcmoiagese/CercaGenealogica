@@ -35,17 +35,31 @@ func isUpperAlpha(s string) bool {
 }
 
 func (a *App) AdminListPaisos(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriPaisosView, PermissionTarget{}); !ok {
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriPaisosView, PermissionTarget{})
+	if !ok {
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	paisos, err := a.DB.ListPaisos()
 	if err != nil {
 		http.Error(w, "Error obtenint països", http.StatusInternalServerError)
 		return
 	}
+	canCreatePais := a.HasPermission(user.ID, permKeyTerritoriPaisosCreate, PermissionTarget{})
+	canEditPais := make(map[int]bool, len(paisos))
+	showPaisActions := false
+	for _, pais := range paisos {
+		target := PermissionTarget{PaisID: intPtr(pais.ID)}
+		canEdit := a.HasPermission(user.ID, permKeyTerritoriPaisosEdit, target)
+		canEditPais[pais.ID] = canEdit
+		if canEdit {
+			showPaisActions = true
+		}
+	}
 	RenderPrivateTemplate(w, r, "admin-paisos-list.html", map[string]interface{}{
 		"Paisos":          paisos,
+		"CanCreatePais":   canCreatePais,
+		"CanEditPais":     canEditPais,
+		"ShowPaisActions": showPaisActions,
 		"CanManageArxius": true,
 		"User":            user,
 	})

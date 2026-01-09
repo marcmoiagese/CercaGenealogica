@@ -14,8 +14,10 @@
             <header class="card-header amb-accio">
                 <h1>{{ t .Lang "ecles.title" }}</h1>
                 <div class="card-actions">
-                    <a class="boto-primari" href="/territori/eclesiastic/new">{{ t .Lang "ecles.button.new" }}</a>
-                    {{ if $.Data.IsAdmin }}
+                    {{ if $.Data.CanCreateEcles }}
+                    <a class="boto-primari" href="/territori/eclesiastic/new{{ if $.Data.CreatePaisID }}?pais_id={{ $.Data.CreatePaisID }}{{ end }}">{{ t .Lang "ecles.button.new" }}</a>
+                    {{ end }}
+                    {{ if $.Data.CanImportEcles }}
                     <a class="boto-secundari" href="/admin/eclesiastic/import">{{ t .Lang "ecles.io.title" }}</a>
                     {{ end }}
                 </div>
@@ -57,7 +59,7 @@
                             <th>{{ t .Lang "ecles.col.parent" }}</th>
                             <th>{{ t .Lang "ecles.col.years" }}</th>
                             <th>{{ t .Lang "moderation.status" }}</th>
-                            <th>{{ t .Lang "ecles.col.actions" }}</th>
+                            {{ if $.Data.ShowEclesActions }}<th>{{ t .Lang "ecles.col.actions" }}</th>{{ end }}
                         </tr>
                     </thead>
                     <tbody>
@@ -70,11 +72,17 @@
                             <td>{{ .ParentNom.String }}</td>
                             <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
                             <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                            {{ if $.Data.ShowEclesActions }}
+                            {{ if index $.Data.CanEditEcles .ID }}
                             <td><a href="/territori/eclesiastic/{{ .ID }}/edit">{{ t $.Lang "ecles.action.edit" }}</a></td>
+                            {{ else }}
+                            <td></td>
+                            {{ end }}
+                            {{ end }}
                         </tr>
                         {{ else }}
                         <tr>
-                            <td colspan="8">{{ t .Lang "common.empty" }}</td>
+                            <td colspan="{{ if $.Data.ShowEclesActions }}8{{ else }}7{{ end }}">{{ t .Lang "common.empty" }}</td>
                         </tr>
                         {{ end }}
                     </tbody>

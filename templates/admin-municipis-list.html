@@ -13,7 +13,9 @@
         <section class="card">
             <header class="card-header">
                 <h1>{{ t .Lang "municipis.title" }}</h1>
-                <a class="boto-primari" href="/territori/municipis/new">{{ t .Lang "municipis.button.new" }}</a>
+                {{ if $.Data.CanCreateMunicipi }}
+                <a class="boto-primari" href="/territori/municipis/new{{ if $.Data.CreatePaisID }}?pais_id={{ $.Data.CreatePaisID }}{{ end }}">{{ t .Lang "municipis.button.new" }}</a>
+                {{ end }}
             </header>
             <form class="filtres-arxius" method="get">
                 <div class="grup-camp">
@@ -71,7 +73,7 @@
                             <th>{{ t .Lang "municipis.col.province" }}</th>
                             <th>{{ t .Lang "municipis.col.comarca" }}</th>
                             <th>{{ t .Lang "moderation.status" }}</th>
-                            <th>{{ t .Lang "municipis.col.actions" }}</th>
+                            {{ if $.Data.ShowMunicipiActions }}<th>{{ t .Lang "municipis.col.actions" }}</th>{{ end }}
                         </tr>
                     </thead>
                     <tbody>
@@ -85,11 +87,17 @@
                             <td>{{ .ProvNom.String }}</td>
                             <td>{{ .Comarca.String }}</td>
                             <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                            {{ if $.Data.ShowMunicipiActions }}
+                            {{ if index $.Data.CanEditMunicipi .ID }}
                             <td><a href="/territori/municipis/{{ .ID }}/edit">{{ t $.Lang "municipis.action.edit" }}</a></td>
+                            {{ else }}
+                            <td></td>
+                            {{ end }}
+                            {{ end }}
                         </tr>
                         {{ else }}
                         <tr>
-                            <td colspan="9">{{ t .Lang "common.empty" }}</td>
+                            <td colspan="{{ if $.Data.ShowMunicipiActions }}9{{ else }}8{{ end }}">{{ t .Lang "common.empty" }}</td>
                         </tr>
                         {{ end }}
                     </tbody>
