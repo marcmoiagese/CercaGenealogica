@@ -1122,6 +1122,16 @@ func (h sqlHelper) updatePais(p *Pais) error {
 func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, error) {
 	where := "1=1"
 	args := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		where += " AND " + column + " IN (" + placeholders + ")"
+		for _, id := range ids {
+			args = append(args, id)
+		}
+	}
 	if f.PaisID > 0 {
 		where += " AND n.pais_id = ?"
 		args = append(args, f.PaisID)
@@ -1138,6 +1148,7 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 		where += " AND n.moderation_status = ?"
 		args = append(args, strings.TrimSpace(f.Status))
 	}
+	inClause("n.pais_id", f.AllowedPaisIDs)
 	query := `
         SELECT n.id, n.pais_id, pi.codi_iso2, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
                n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat,
@@ -1228,6 +1239,16 @@ func (h sqlHelper) updateNivell(n *NivellAdministratiu) error {
 func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 	where := "1=1"
 	args := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		where += " AND " + column + " IN (" + placeholders + ")"
+		for _, id := range ids {
+			args = append(args, id)
+		}
+	}
 	if strings.TrimSpace(f.Text) != "" {
 		where += " AND lower(m.nom) LIKE ?"
 		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
@@ -1250,6 +1271,10 @@ func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 			args = append(args, f.NivellID)
 		}
 	}
+	inClause("m.id", f.AllowedMunicipiIDs)
+	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClause("na1.id", f.AllowedPaisIDs)
 	query := `
         SELECT m.id, m.nom, m.tipus, m.estat, m.codi_postal,
                na1.nom_nivell AS pais_nom,
@@ -1495,6 +1520,16 @@ func (h sqlHelper) saveNomHistoric(nh *NomHistoric) (int, error) {
 func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error) {
 	where := "1=1"
 	args := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		where += " AND " + column + " IN (" + placeholders + ")"
+		for _, id := range ids {
+			args = append(args, id)
+		}
+	}
 	if strings.TrimSpace(f.Text) != "" {
 		where += " AND lower(a.nom) LIKE ?"
 		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
@@ -1507,6 +1542,8 @@ func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, erro
 		where += " AND a.moderation_status = ?"
 		args = append(args, strings.TrimSpace(f.Status))
 	}
+	inClause("a.id", f.AllowedEclesIDs)
+	inClause("a.pais_id", f.AllowedPaisIDs)
 	query := `
         SELECT a.id, a.nom, a.tipus_entitat, a.pais_id, p.codi_iso3, a.nivell, parent.nom as parent_nom, a.any_inici, a.any_fi,
                a.moderation_status

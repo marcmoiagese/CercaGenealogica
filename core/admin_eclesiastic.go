@@ -23,15 +23,12 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 			filter.PaisID = v
 		}
 	}
-	target := PermissionTarget{}
-	if filter.PaisID > 0 {
-		target.PaisID = intPtr(filter.PaisID)
-	}
-	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriEclesView, target)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriEclesView)
 	if !ok {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
+	scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriEclesView, ScopeEcles)
 	createPaisID := filter.PaisID
 	canCreateEcles := false
 	if createPaisID > 0 {
@@ -40,6 +37,25 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 		canCreateEcles = a.HasPermission(user.ID, permKeyTerritoriEclesCreate, PermissionTarget{})
 	}
 	canImportEcles := a.HasPermission(user.ID, permKeyAdminEclesImport, PermissionTarget{})
+	if !scopeFilter.hasGlobal {
+		if scopeFilter.isEmpty() {
+			RenderPrivateTemplate(w, r, "admin-eclesiastic-list.html", map[string]interface{}{
+				"Entitats":         []db.ArquebisbatRow{},
+				"Filter":           filter,
+				"Paisos":           []db.Pais{},
+				"CanManageArxius":  a.hasPerm(perms, permArxius),
+				"CanCreateEcles":   canCreateEcles,
+				"CreatePaisID":     createPaisID,
+				"CanImportEcles":   canImportEcles,
+				"CanEditEcles":     map[int]bool{},
+				"ShowEclesActions": false,
+				"User":             user,
+			})
+			return
+		}
+		filter.AllowedEclesIDs = scopeFilter.eclesIDs
+		filter.AllowedPaisIDs = scopeFilter.paisIDs
+	}
 	entitats, _ := a.DB.ListArquebisbats(filter)
 	canEditEcles := make(map[int]bool, len(entitats))
 	showEclesActions := false
@@ -52,6 +68,19 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	paisos, _ := a.DB.ListPaisos()
+	if !scopeFilter.hasGlobal && len(scopeFilter.paisIDs) > 0 {
+		allowed := map[int]struct{}{}
+		for _, id := range scopeFilter.paisIDs {
+			allowed[id] = struct{}{}
+		}
+		filtered := make([]db.Pais, 0, len(paisos))
+		for _, pais := range paisos {
+			if _, ok := allowed[pais.ID]; ok {
+				filtered = append(filtered, pais)
+			}
+		}
+		paisos = filtered
+	}
 	RenderPrivateTemplate(w, r, "admin-eclesiastic-list.html", map[string]interface{}{
 		"Entitats":         entitats,
 		"Filter":           filter,

@@ -476,10 +476,11 @@ type NivellAdministratiu struct {
 }
 
 type NivellAdminFilter struct {
-	PaisID int
-	Nivel  int
-	Estat  string
-	Status string
+	PaisID         int
+	Nivel          int
+	Estat          string
+	Status         string
+	AllowedPaisIDs []int
 }
 
 type Municipi struct {
@@ -516,11 +517,15 @@ type MunicipiRow struct {
 }
 
 type MunicipiFilter struct {
-	Text     string
-	Estat    string
-	PaisID   int
-	NivellID int
-	Status   string
+	Text                string
+	Estat               string
+	PaisID              int
+	NivellID            int
+	Status              string
+	AllowedMunicipiIDs  []int
+	AllowedProvinciaIDs []int
+	AllowedComarcaIDs   []int
+	AllowedPaisIDs      []int
 }
 
 type CodiPostal struct {
@@ -567,9 +572,11 @@ type ArquebisbatRow struct {
 }
 
 type ArquebisbatFilter struct {
-	Text   string
-	PaisID int
-	Status string
+	Text            string
+	PaisID          int
+	Status          string
+	AllowedEclesIDs []int
+	AllowedPaisIDs  []int
 }
 
 type ArquebisbatMunicipi struct {

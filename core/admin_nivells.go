@@ -23,16 +23,26 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 			paisID = v
 		}
 	}
-	target := PermissionTarget{}
-	if paisID > 0 {
-		target.PaisID = intPtr(paisID)
-	}
-	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriNivellsView, target)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriNivellsView)
 	if !ok {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
+	scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriNivellsView, ScopePais)
 	paisos, _ := a.DB.ListPaisos()
+	if !scopeFilter.hasGlobal && len(scopeFilter.paisIDs) > 0 {
+		allowed := map[int]struct{}{}
+		for _, id := range scopeFilter.paisIDs {
+			allowed[id] = struct{}{}
+		}
+		filtered := make([]db.Pais, 0, len(paisos))
+		for _, pais := range paisos {
+			if _, ok := allowed[pais.ID]; ok {
+				filtered = append(filtered, pais)
+			}
+		}
+		paisos = filtered
+	}
 	niv, _ := strconv.Atoi(r.URL.Query().Get("nivel"))
 	estat := strings.TrimSpace(r.URL.Query().Get("estat"))
 	statusVals, statusExists := r.URL.Query()["status"]
@@ -47,6 +57,23 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		Nivel:  niv,
 		Estat:  estat,
 		Status: status,
+	}
+	if !scopeFilter.hasGlobal {
+		if scopeFilter.isEmpty() {
+			RenderPrivateTemplate(w, r, "admin-nivells-list.html", map[string]interface{}{
+				"Nivells":           []db.NivellAdministratiu{},
+				"Pais":              nil,
+				"Paisos":            []db.Pais{},
+				"Filter":            filter,
+				"CanManageArxius":   a.hasPerm(perms, permArxius),
+				"CanCreateNivell":   false,
+				"CanEditNivell":     map[int]bool{},
+				"ShowNivellActions": false,
+				"User":              user,
+			})
+			return
+		}
+		filter.AllowedPaisIDs = scopeFilter.paisIDs
 	}
 	nivells, _ := a.DB.ListNivells(filter)
 	for i := range nivells {
@@ -350,12 +377,25 @@ func (a *App) ensureNivellUnique(n *db.NivellAdministratiu) string {
 	if err != nil {
 		return ""
 	}
+	name := strings.TrimSpace(n.NomNivell)
+	if name == "" {
+		return ""
+	}
 	for _, e := range existents {
 		if n.ID != 0 && e.ID == n.ID {
 			continue
 		}
-		if strings.EqualFold(e.NomNivell, n.NomNivell) {
-			return "Ja existeix un nivell amb aquest nom i nivell per al país."
+		if !strings.EqualFold(strings.TrimSpace(e.NomNivell), name) {
+			continue
+		}
+		if n.ParentID.Valid {
+			if e.ParentID.Valid && e.ParentID.Int64 == n.ParentID.Int64 {
+				return "Ja existeix un nivell amb aquest nom dins aquest pare."
+			}
+			continue
+		}
+		if !e.ParentID.Valid {
+			return "Ja existeix un nivell amb aquest nom per al país."
 		}
 	}
 	return ""

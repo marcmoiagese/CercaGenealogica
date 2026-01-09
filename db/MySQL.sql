@@ -192,7 +192,7 @@ CREATE TABLE IF NOT EXISTS nivells_administratius (
     FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     INDEX idx_tipus_nivell (tipus_nivell),
-    UNIQUE KEY idx_nivell_pais_nom (pais_id, nivel, nom_nivell)
+    UNIQUE KEY idx_nivell_scope_nom (nivel, (IFNULL(parent_id, -pais_id)), nom_nivell)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS municipis (

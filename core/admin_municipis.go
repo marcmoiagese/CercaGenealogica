@@ -38,19 +38,48 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 	if createPaisID == 0 && nivellPaisID > 0 {
 		createPaisID = nivellPaisID
 	}
-	target := PermissionTarget{}
-	if filter.PaisID > 0 {
-		target.PaisID = intPtr(filter.PaisID)
-	} else if nivellPaisID > 0 {
-		target.PaisID = intPtr(nivellPaisID)
-	}
-	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisView, target)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriMunicipisView)
 	if !ok {
 		return
 	}
+	scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriMunicipisView, ScopeMunicipi)
 	perms := a.getPermissionsForUser(user.ID)
+	if !scopeFilter.hasGlobal {
+		if scopeFilter.isEmpty() {
+			RenderPrivateTemplate(w, r, "admin-municipis-list.html", map[string]interface{}{
+				"Municipis":           []db.MunicipiRow{},
+				"Filter":              filter,
+				"Paisos":              []db.Pais{},
+				"Nivells":             []db.NivellAdministratiu{},
+				"CanManageArxius":     a.hasPerm(perms, permArxius),
+				"CanCreateMunicipi":   false,
+				"CreatePaisID":        createPaisID,
+				"CanEditMunicipi":     map[int]bool{},
+				"ShowMunicipiActions": false,
+				"User":                user,
+			})
+			return
+		}
+		filter.AllowedMunicipiIDs = scopeFilter.municipiIDs
+		filter.AllowedProvinciaIDs = scopeFilter.provinciaIDs
+		filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
+		filter.AllowedPaisIDs = scopeFilter.paisIDs
+	}
 	muns, _ := a.DB.ListMunicipis(filter)
 	paisos, _ := a.DB.ListPaisos()
+	if !scopeFilter.hasGlobal && len(scopeFilter.paisIDs) > 0 {
+		allowed := map[int]struct{}{}
+		for _, id := range scopeFilter.paisIDs {
+			allowed[id] = struct{}{}
+		}
+		filtered := make([]db.Pais, 0, len(paisos))
+		for _, pais := range paisos {
+			if _, ok := allowed[pais.ID]; ok {
+				filtered = append(filtered, pais)
+			}
+		}
+		paisos = filtered
+	}
 	var nivells []db.NivellAdministratiu
 	if filter.PaisID > 0 {
 		nivells, _ = a.DB.ListNivells(db.NivellAdminFilter{PaisID: filter.PaisID})

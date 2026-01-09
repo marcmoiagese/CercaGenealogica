@@ -630,6 +630,34 @@ func grantAppliesToListScope(grant compiledGrant, listScope ScopeType) bool {
 		default:
 			return false
 		}
+	case ScopeMunicipi:
+		switch grant.scopeType {
+		case ScopePais, ScopeProvincia, ScopeComarca:
+			return true
+		default:
+			return false
+		}
+	case ScopeComarca:
+		switch grant.scopeType {
+		case ScopePais, ScopeProvincia:
+			return true
+		default:
+			return false
+		}
+	case ScopeProvincia:
+		switch grant.scopeType {
+		case ScopePais:
+			return true
+		default:
+			return false
+		}
+	case ScopeEcles:
+		switch grant.scopeType {
+		case ScopePais:
+			return true
+		default:
+			return false
+		}
 	default:
 		return false
 	}

@@ -675,8 +675,8 @@ CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token);
 CREATE INDEX IF NOT EXISTS idx_password_resets_expira ON password_resets(expira);
 
 -- Índexs útils per consultes habituals
-CREATE UNIQUE INDEX IF NOT EXISTS idx_nivell_pais_nom
-    ON nivells_administratius(pais_id, nivel, nom_nivell);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nivell_scope_nom
+    ON nivells_administratius(nivel, COALESCE(parent_id, -pais_id), nom_nivell);
 
 CREATE INDEX IF NOT EXISTS idx_usuaris_activitat_usuari_data
     ON usuaris_activitat(usuari_id, data_creacio DESC);

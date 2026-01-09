@@ -41,20 +41,20 @@ type territoriExportLevel struct {
 }
 
 type territoriExportMunicipi struct {
-	ID         int     `json:"id"`
-	PaisISO2   string  `json:"pais_iso2,omitempty"`
-	Nom        string  `json:"nom"`
-	Tipus      string  `json:"tipus"`
-	ParentID   *int    `json:"parent_id,omitempty"`
-	Nivells    []int   `json:"nivells"`
-	CodiPostal string  `json:"codi_postal"`
+	ID         int      `json:"id"`
+	PaisISO2   string   `json:"pais_iso2,omitempty"`
+	Nom        string   `json:"nom"`
+	Tipus      string   `json:"tipus"`
+	ParentID   *int     `json:"parent_id,omitempty"`
+	Nivells    []int    `json:"nivells"`
+	CodiPostal string   `json:"codi_postal"`
 	Latitud    *float64 `json:"latitud,omitempty"`
 	Longitud   *float64 `json:"longitud,omitempty"`
-	What3Words string  `json:"what3words"`
-	Web        string  `json:"web"`
-	Wikipedia  string  `json:"wikipedia"`
-	Altres     string  `json:"altres"`
-	Estat      string  `json:"estat"`
+	What3Words string   `json:"what3words"`
+	Web        string   `json:"web"`
+	Wikipedia  string   `json:"wikipedia"`
+	Altres     string   `json:"altres"`
+	Estat      string   `json:"estat"`
 }
 
 type territoriImportMunicipi struct {
@@ -276,6 +276,14 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 			paisByISO2[iso2] = p
 		}
 	}
+	existingLevels, _ := a.DB.ListNivells(db.NivellAdminFilter{})
+	levelKeyMap := map[string]int{}
+	for _, n := range existingLevels {
+		key := nivellUniqueKey(n.PaisID, n.Nivel, n.ParentID, n.NomNivell)
+		if key != "" {
+			levelKeyMap[key] = n.ID
+		}
+	}
 	countriesCreated := 0
 	for _, c := range payload.Countries {
 		iso2 := strings.ToUpper(strings.TrimSpace(c.ISO2))
@@ -348,12 +356,24 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 			if n.Estat == "" {
 				n.Estat = "actiu"
 			}
+			key := nivellUniqueKey(n.PaisID, n.Nivel, n.ParentID, n.NomNivell)
+			if key != "" {
+				if existingID, ok := levelKeyMap[key]; ok {
+					levelIDMap[l.ID] = existingID
+					levelsSkipped++
+					progressed = true
+					continue
+				}
+			}
 			id, err := a.DB.CreateNivell(&n)
 			if err != nil {
 				levelsErrors++
 				continue
 			}
 			levelIDMap[l.ID] = id
+			if key != "" {
+				levelKeyMap[key] = id
+			}
 			levelsCreated++
 			progressed = true
 			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleNivellCreate, "crear", "nivell", &id, "pendent", nil, "import")
@@ -469,6 +489,14 @@ func floatPtrToNull(v *float64) sql.NullFloat64 {
 		return sql.NullFloat64{}
 	}
 	return sql.NullFloat64{Float64: *v, Valid: true}
+}
+
+func nivellUniqueKey(paisID, nivel int, parentID sql.NullInt64, name string) string {
+	parentKey := "root"
+	if parentID.Valid && parentID.Int64 > 0 {
+		parentKey = "parent:" + strconv.FormatInt(parentID.Int64, 10)
+	}
+	return normalizeKey("pais:"+strconv.Itoa(paisID), "nivel:"+strconv.Itoa(nivel), parentKey, name)
 }
 
 func normalizeNivellSlice(v []int) []int {

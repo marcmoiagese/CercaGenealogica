@@ -35,14 +35,39 @@ func isUpperAlpha(s string) bool {
 }
 
 func (a *App) AdminListPaisos(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriPaisosView, PermissionTarget{})
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriPaisosView)
 	if !ok {
+		return
+	}
+	scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriPaisosView, ScopePais)
+	if !scopeFilter.hasGlobal && scopeFilter.isEmpty() {
+		RenderPrivateTemplate(w, r, "admin-paisos-list.html", map[string]interface{}{
+			"Paisos":          []db.Pais{},
+			"CanCreatePais":   a.HasPermission(user.ID, permKeyTerritoriPaisosCreate, PermissionTarget{}),
+			"CanEditPais":     map[int]bool{},
+			"ShowPaisActions": false,
+			"CanManageArxius": true,
+			"User":            user,
+		})
 		return
 	}
 	paisos, err := a.DB.ListPaisos()
 	if err != nil {
 		http.Error(w, "Error obtenint països", http.StatusInternalServerError)
 		return
+	}
+	if !scopeFilter.hasGlobal && len(scopeFilter.paisIDs) > 0 {
+		allowed := map[int]struct{}{}
+		for _, id := range scopeFilter.paisIDs {
+			allowed[id] = struct{}{}
+		}
+		filtered := make([]db.Pais, 0, len(paisos))
+		for _, pais := range paisos {
+			if _, ok := allowed[pais.ID]; ok {
+				filtered = append(filtered, pais)
+			}
+		}
+		paisos = filtered
 	}
 	canCreatePais := a.HasPermission(user.ID, permKeyTerritoriPaisosCreate, PermissionTarget{})
 	canEditPais := make(map[int]bool, len(paisos))
