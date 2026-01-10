@@ -128,6 +128,8 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	if status == "" {
 		status = "publicat"
 	}
+	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
+	page := parseListPage(r.URL.Query().Get("page"))
 	scopeFilter := a.buildListScopeFilter(user.ID, permKeyDocumentalsArxiusView, ScopeArxiu)
 	filter := db.ArxiuFilter{
 		Text:   strings.TrimSpace(r.URL.Query().Get("q")),
@@ -142,6 +144,7 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	}
 	if !scopeFilter.hasGlobal {
 		if scopeFilter.isEmpty() {
+			pagination := buildPagination(r, page, perPage, 0, "#page-stats-controls")
 			RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
 				"Arxius":             []db.ArxiuWithCount{},
 				"Filter":             filter,
@@ -153,6 +156,13 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 				"CanEditArxiu":       map[int]bool{},
 				"CanDeleteArxiu":     map[int]bool{},
 				"ShowArxiuActions":   false,
+				"Page":               pagination.Page,
+				"PerPage":            pagination.PerPage,
+				"Total":              pagination.Total,
+				"TotalPages":         pagination.TotalPages,
+				"PageLinks":          pagination.Links,
+				"PageSelectBase":     pagination.SelectBase,
+				"PageAnchor":         pagination.Anchor,
 				"User":               user,
 				"IsAdmin":            isAdmin,
 				"CanManageTerritory": canManageTerritory,
@@ -170,12 +180,11 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 		filter.AllowedEclesIDs = scopeFilter.eclesIDs
 	}
+	total, _ := a.DB.CountArxius(filter)
+	pagination := buildPagination(r, page, perPage, total, "#page-stats-controls")
+	filter.Limit = pagination.PerPage
+	filter.Offset = pagination.Offset
 	arxius, _ := a.DB.ListArxius(filter)
-	for i := range arxius {
-		if rels, err := a.DB.ListArxiuLlibres(arxius[i].ID); err == nil {
-			arxius[i].Llibres = len(rels)
-		}
-	}
 	canEditArxiu := make(map[int]bool, len(arxius))
 	canDeleteArxiu := make(map[int]bool, len(arxius))
 	showArxiuActions := false
@@ -201,6 +210,13 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		"CanEditArxiu":       canEditArxiu,
 		"CanDeleteArxiu":     canDeleteArxiu,
 		"ShowArxiuActions":   showArxiuActions,
+		"Page":               pagination.Page,
+		"PerPage":            pagination.PerPage,
+		"Total":              pagination.Total,
+		"TotalPages":         pagination.TotalPages,
+		"PageLinks":          pagination.Links,
+		"PageSelectBase":     pagination.SelectBase,
+		"PageAnchor":         pagination.Anchor,
 		"User":               user,
 		"IsAdmin":            isAdmin,
 		"CanManageTerritory": canManageTerritory,

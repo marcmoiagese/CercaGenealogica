@@ -332,6 +332,10 @@ func (d *SQLite) UpdatePais(p *Pais) error {
 func (d *SQLite) ListNivells(f NivellAdminFilter) ([]NivellAdministratiu, error) {
 	return d.help.listNivells(f)
 }
+
+func (d *SQLite) CountNivells(f NivellAdminFilter) (int, error) {
+	return d.help.countNivells(f)
+}
 func (d *SQLite) GetNivell(id int) (*NivellAdministratiu, error) {
 	return d.help.getNivell(id)
 }
@@ -348,6 +352,10 @@ func (d *SQLite) UpdateNivellModeracio(id int, estat, motiu string, moderatorID 
 // Municipis
 func (d *SQLite) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 	return d.help.listMunicipis(f)
+}
+
+func (d *SQLite) CountMunicipis(f MunicipiFilter) (int, error) {
+	return d.help.countMunicipis(f)
 }
 func (d *SQLite) GetMunicipi(id int) (*Municipi, error) {
 	return d.help.getMunicipi(id)
@@ -378,6 +386,10 @@ func (d *SQLite) SaveNomHistoric(nh *NomHistoric) (int, error) {
 func (d *SQLite) ListArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error) {
 	return d.help.listArquebisbats(f)
 }
+
+func (d *SQLite) CountArquebisbats(f ArquebisbatFilter) (int, error) {
+	return d.help.countArquebisbats(f)
+}
 func (d *SQLite) GetArquebisbat(id int) (*Arquebisbat, error) {
 	return d.help.getArquebisbat(id)
 }
@@ -400,6 +412,10 @@ func (d *SQLite) SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {
 // Arxius
 func (d *SQLite) ListArxius(f ArxiuFilter) ([]ArxiuWithCount, error) {
 	return d.help.listArxius(f)
+}
+
+func (d *SQLite) CountArxius(f ArxiuFilter) (int, error) {
+	return d.help.countArxius(f)
 }
 func (d *SQLite) GetArxiu(id int) (*Arxiu, error) {
 	return d.help.getArxiu(id)
@@ -448,6 +464,10 @@ func (d *SQLite) SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error
 }
 func (d *SQLite) ListLlibres(f LlibreFilter) ([]LlibreRow, error) {
 	return d.help.listLlibres(f)
+}
+
+func (d *SQLite) CountLlibres(f LlibreFilter) (int, error) {
+	return d.help.countLlibres(f)
 }
 func (d *SQLite) GetLlibre(id int) (*Llibre, error) {
 	return d.help.getLlibre(id)

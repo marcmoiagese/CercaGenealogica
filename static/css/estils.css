@@ -429,6 +429,36 @@ body {
     text-align: center;
 }
 
+.paginador {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 30px;
+    flex-wrap: wrap;
+}
+
+.paginador button {
+    border: 1px solid var(--color-borda);
+    background: #fff;
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.paginador button:hover {
+    background-color: #f1f1f1;
+}
+
+.paginador .actiu {
+    background: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+}
+
 .page-stat-checkbox {
     transform: scale(1.05);
     cursor: pointer;

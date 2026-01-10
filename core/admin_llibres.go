@@ -24,6 +24,8 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	filter := db.LlibreFilter{
 		Text: strings.TrimSpace(r.URL.Query().Get("q")),
 	}
+	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
+	page := parseListPage(r.URL.Query().Get("page"))
 	if v := strings.TrimSpace(r.URL.Query().Get("arquevisbat_id")); v != "" {
 		if id, err := strconv.Atoi(v); err == nil {
 			filter.ArquebisbatID = id
@@ -47,6 +49,7 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	filter.Status = status
 	if !scopeFilter.hasGlobal {
 		if scopeFilter.isEmpty() {
+			pagination := buildPagination(r, page, perPage, 0, "#page-stats-controls")
 			RenderPrivateTemplate(w, r, "admin-llibres-list.html", map[string]interface{}{
 				"Llibres":                  []db.LlibreRow{},
 				"IndexacioStats":           map[int]db.LlibreIndexacioStats{},
@@ -68,6 +71,13 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 				"ShowLlibreActions":        false,
 				"ShowPurgeModal":           false,
 				"IsAdmin":                  isAdmin,
+				"Page":                     pagination.Page,
+				"PerPage":                  pagination.PerPage,
+				"Total":                    pagination.Total,
+				"TotalPages":               pagination.TotalPages,
+				"PageLinks":                pagination.Links,
+				"PageSelectBase":           pagination.SelectBase,
+				"PageAnchor":               pagination.Anchor,
 				"User":                     user,
 				"CurrentURL":               r.URL.RequestURI(),
 			})
@@ -81,6 +91,10 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 		filter.AllowedEclesIDs = scopeFilter.eclesIDs
 	}
+	total, _ := a.DB.CountLlibres(filter)
+	pagination := buildPagination(r, page, perPage, total, "#page-stats-controls")
+	filter.Limit = pagination.PerPage
+	filter.Offset = pagination.Offset
 	llibres, _ := a.DB.ListLlibres(filter)
 	indexacioStats := a.buildLlibresIndexacioViews(llibres)
 	canEditLlibre := make(map[int]bool, len(llibres))
@@ -142,6 +156,13 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		"ShowLlibreActions":        showLlibreActions,
 		"ShowPurgeModal":           showPurgeModal,
 		"IsAdmin":                  isAdmin,
+		"Page":                     pagination.Page,
+		"PerPage":                  pagination.PerPage,
+		"Total":                    pagination.Total,
+		"TotalPages":               pagination.TotalPages,
+		"PageLinks":                pagination.Links,
+		"PageSelectBase":           pagination.SelectBase,
+		"PageAnchor":               pagination.Anchor,
 		"User":                     user,
 		"CurrentURL":               r.URL.RequestURI(),
 	})

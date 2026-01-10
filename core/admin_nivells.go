@@ -45,6 +45,8 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 	}
 	niv, _ := strconv.Atoi(r.URL.Query().Get("nivel"))
 	estat := strings.TrimSpace(r.URL.Query().Get("estat"))
+	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
+	page := parseListPage(r.URL.Query().Get("page"))
 	statusVals, statusExists := r.URL.Query()["status"]
 	status := ""
 	if statusExists {
@@ -60,6 +62,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 	}
 	if !scopeFilter.hasGlobal {
 		if scopeFilter.isEmpty() {
+			pagination := buildPagination(r, page, perPage, 0, "#page-stats-controls")
 			RenderPrivateTemplate(w, r, "admin-nivells-list.html", map[string]interface{}{
 				"Nivells":           []db.NivellAdministratiu{},
 				"Pais":              nil,
@@ -69,12 +72,23 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 				"CanCreateNivell":   false,
 				"CanEditNivell":     map[int]bool{},
 				"ShowNivellActions": false,
+				"Page":              pagination.Page,
+				"PerPage":           pagination.PerPage,
+				"Total":             pagination.Total,
+				"TotalPages":        pagination.TotalPages,
+				"PageLinks":         pagination.Links,
+				"PageSelectBase":    pagination.SelectBase,
+				"PageAnchor":        pagination.Anchor,
 				"User":              user,
 			})
 			return
 		}
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 	}
+	total, _ := a.DB.CountNivells(filter)
+	pagination := buildPagination(r, page, perPage, total, "#page-stats-controls")
+	filter.Limit = pagination.PerPage
+	filter.Offset = pagination.Offset
 	nivells, _ := a.DB.ListNivells(filter)
 	for i := range nivells {
 		if nivells[i].PaisISO2.Valid {
@@ -111,6 +125,13 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		"CanCreateNivell":   canCreateNivell,
 		"CanEditNivell":     canEditNivell,
 		"ShowNivellActions": showNivellActions,
+		"Page":              pagination.Page,
+		"PerPage":           pagination.PerPage,
+		"Total":             pagination.Total,
+		"TotalPages":        pagination.TotalPages,
+		"PageLinks":         pagination.Links,
+		"PageSelectBase":    pagination.SelectBase,
+		"PageAnchor":        pagination.Anchor,
 		"User":              user,
 	})
 }

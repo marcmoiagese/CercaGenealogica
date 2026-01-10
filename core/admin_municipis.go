@@ -28,6 +28,8 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 			filter.NivellID = v
 		}
 	}
+	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
+	page := parseListPage(r.URL.Query().Get("page"))
 	nivellPaisID := 0
 	if filter.NivellID > 0 {
 		if nivell, err := a.DB.GetNivell(filter.NivellID); err == nil && nivell != nil && nivell.PaisID > 0 {
@@ -46,6 +48,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 	perms := a.getPermissionsForUser(user.ID)
 	if !scopeFilter.hasGlobal {
 		if scopeFilter.isEmpty() {
+			pagination := buildPagination(r, page, perPage, 0, "#page-stats-controls")
 			RenderPrivateTemplate(w, r, "admin-municipis-list.html", map[string]interface{}{
 				"Municipis":           []db.MunicipiRow{},
 				"Filter":              filter,
@@ -56,6 +59,13 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 				"CreatePaisID":        createPaisID,
 				"CanEditMunicipi":     map[int]bool{},
 				"ShowMunicipiActions": false,
+				"Page":                pagination.Page,
+				"PerPage":             pagination.PerPage,
+				"Total":               pagination.Total,
+				"TotalPages":          pagination.TotalPages,
+				"PageLinks":           pagination.Links,
+				"PageSelectBase":      pagination.SelectBase,
+				"PageAnchor":          pagination.Anchor,
 				"User":                user,
 			})
 			return
@@ -65,6 +75,10 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 	}
+	total, _ := a.DB.CountMunicipis(filter)
+	pagination := buildPagination(r, page, perPage, total, "#page-stats-controls")
+	filter.Limit = pagination.PerPage
+	filter.Offset = pagination.Offset
 	muns, _ := a.DB.ListMunicipis(filter)
 	paisos, _ := a.DB.ListPaisos()
 	if !scopeFilter.hasGlobal && len(scopeFilter.paisIDs) > 0 {
@@ -121,6 +135,13 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		"CreatePaisID":        createPaisID,
 		"CanEditMunicipi":     canEditMunicipi,
 		"ShowMunicipiActions": showMunicipiActions,
+		"Page":                pagination.Page,
+		"PerPage":             pagination.PerPage,
+		"Total":               pagination.Total,
+		"TotalPages":          pagination.TotalPages,
+		"PageLinks":           pagination.Links,
+		"PageSelectBase":      pagination.SelectBase,
+		"PageAnchor":          pagination.Anchor,
 		"User":                user,
 	})
 }

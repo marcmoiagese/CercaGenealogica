@@ -314,6 +314,10 @@ func (d *PostgreSQL) UpdatePais(p *Pais) error {
 func (d *PostgreSQL) ListNivells(f NivellAdminFilter) ([]NivellAdministratiu, error) {
 	return d.help.listNivells(f)
 }
+
+func (d *PostgreSQL) CountNivells(f NivellAdminFilter) (int, error) {
+	return d.help.countNivells(f)
+}
 func (d *PostgreSQL) GetNivell(id int) (*NivellAdministratiu, error) {
 	return d.help.getNivell(id)
 }
@@ -330,6 +334,10 @@ func (d *PostgreSQL) UpdateNivellModeracio(id int, estat, motiu string, moderato
 // Municipis
 func (d *PostgreSQL) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 	return d.help.listMunicipis(f)
+}
+
+func (d *PostgreSQL) CountMunicipis(f MunicipiFilter) (int, error) {
+	return d.help.countMunicipis(f)
 }
 func (d *PostgreSQL) GetMunicipi(id int) (*Municipi, error) {
 	return d.help.getMunicipi(id)
@@ -360,6 +368,10 @@ func (d *PostgreSQL) SaveNomHistoric(nh *NomHistoric) (int, error) {
 func (d *PostgreSQL) ListArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error) {
 	return d.help.listArquebisbats(f)
 }
+
+func (d *PostgreSQL) CountArquebisbats(f ArquebisbatFilter) (int, error) {
+	return d.help.countArquebisbats(f)
+}
 func (d *PostgreSQL) GetArquebisbat(id int) (*Arquebisbat, error) {
 	return d.help.getArquebisbat(id)
 }
@@ -382,6 +394,10 @@ func (d *PostgreSQL) SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, erro
 // Arxius
 func (d *PostgreSQL) ListArxius(f ArxiuFilter) ([]ArxiuWithCount, error) {
 	return d.help.listArxius(f)
+}
+
+func (d *PostgreSQL) CountArxius(f ArxiuFilter) (int, error) {
+	return d.help.countArxius(f)
 }
 func (d *PostgreSQL) GetArxiu(id int) (*Arxiu, error) {
 	return d.help.getArxiu(id)
@@ -430,6 +446,10 @@ func (d *PostgreSQL) SearchLlibresSimple(q string, limit int) ([]LlibreSimple, e
 }
 func (d *PostgreSQL) ListLlibres(f LlibreFilter) ([]LlibreRow, error) {
 	return d.help.listLlibres(f)
+}
+
+func (d *PostgreSQL) CountLlibres(f LlibreFilter) (int, error) {
+	return d.help.countLlibres(f)
 }
 func (d *PostgreSQL) GetLlibre(id int) (*Llibre, error) {
 	return d.help.getLlibre(id)

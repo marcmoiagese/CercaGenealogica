@@ -313,6 +313,10 @@ func (d *MySQL) UpdatePais(p *Pais) error {
 func (d *MySQL) ListNivells(f NivellAdminFilter) ([]NivellAdministratiu, error) {
 	return d.help.listNivells(f)
 }
+
+func (d *MySQL) CountNivells(f NivellAdminFilter) (int, error) {
+	return d.help.countNivells(f)
+}
 func (d *MySQL) GetNivell(id int) (*NivellAdministratiu, error) {
 	return d.help.getNivell(id)
 }
@@ -329,6 +333,10 @@ func (d *MySQL) UpdateNivellModeracio(id int, estat, motiu string, moderatorID i
 // Municipis
 func (d *MySQL) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 	return d.help.listMunicipis(f)
+}
+
+func (d *MySQL) CountMunicipis(f MunicipiFilter) (int, error) {
+	return d.help.countMunicipis(f)
 }
 func (d *MySQL) GetMunicipi(id int) (*Municipi, error) {
 	return d.help.getMunicipi(id)
@@ -359,6 +367,10 @@ func (d *MySQL) SaveNomHistoric(nh *NomHistoric) (int, error) {
 func (d *MySQL) ListArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error) {
 	return d.help.listArquebisbats(f)
 }
+
+func (d *MySQL) CountArquebisbats(f ArquebisbatFilter) (int, error) {
+	return d.help.countArquebisbats(f)
+}
 func (d *MySQL) GetArquebisbat(id int) (*Arquebisbat, error) {
 	return d.help.getArquebisbat(id)
 }
@@ -381,6 +393,10 @@ func (d *MySQL) SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {
 // Arxius
 func (d *MySQL) ListArxius(f ArxiuFilter) ([]ArxiuWithCount, error) {
 	return d.help.listArxius(f)
+}
+
+func (d *MySQL) CountArxius(f ArxiuFilter) (int, error) {
+	return d.help.countArxius(f)
 }
 func (d *MySQL) GetArxiu(id int) (*Arxiu, error) {
 	return d.help.getArxiu(id)
@@ -429,6 +445,10 @@ func (d *MySQL) SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error)
 }
 func (d *MySQL) ListLlibres(f LlibreFilter) ([]LlibreRow, error) {
 	return d.help.listLlibres(f)
+}
+
+func (d *MySQL) CountLlibres(f LlibreFilter) (int, error) {
+	return d.help.countLlibres(f)
 }
 func (d *MySQL) GetLlibre(id int) (*Llibre, error) {
 	return d.help.getLlibre(id)

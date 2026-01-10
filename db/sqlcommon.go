@@ -1185,6 +1185,14 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
         LEFT JOIN paisos pi ON pi.id = n.pais_id
         WHERE ` + where + `
         ORDER BY n.nivel, n.nom_nivell`
+	if f.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, f.Limit)
+		if f.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, f.Offset)
+		}
+	}
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
@@ -1201,6 +1209,45 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 		res = append(res, n)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) countNivells(f NivellAdminFilter) (int, error) {
+	where := "1=1"
+	args := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		where += " AND " + column + " IN (" + placeholders + ")"
+		for _, id := range ids {
+			args = append(args, id)
+		}
+	}
+	if f.PaisID > 0 {
+		where += " AND n.pais_id = ?"
+		args = append(args, f.PaisID)
+	}
+	if f.Nivel > 0 {
+		where += " AND n.nivel = ?"
+		args = append(args, f.Nivel)
+	}
+	if strings.TrimSpace(f.Estat) != "" {
+		where += " AND n.estat = ?"
+		args = append(args, strings.TrimSpace(f.Estat))
+	}
+	if strings.TrimSpace(f.Status) != "" {
+		where += " AND n.moderation_status = ?"
+		args = append(args, strings.TrimSpace(f.Status))
+	}
+	inClause("n.pais_id", f.AllowedPaisIDs)
+	query := `SELECT COUNT(*) FROM nivells_administratius n WHERE ` + where
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (h sqlHelper) getNivell(id int) (*NivellAdministratiu, error) {
@@ -1317,6 +1364,14 @@ func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
         LEFT JOIN nivells_administratius na4 ON na4.id = m.nivell_administratiu_id_4
         WHERE ` + where + `
         ORDER BY m.nom`
+	if f.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, f.Limit)
+		if f.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, f.Offset)
+		}
+	}
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
@@ -1336,6 +1391,58 @@ func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 		res = append(res, r)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) countMunicipis(f MunicipiFilter) (int, error) {
+	where := "1=1"
+	args := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		where += " AND " + column + " IN (" + placeholders + ")"
+		for _, id := range ids {
+			args = append(args, id)
+		}
+	}
+	if strings.TrimSpace(f.Text) != "" {
+		where += " AND lower(m.nom) LIKE ?"
+		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
+	}
+	if strings.TrimSpace(f.Estat) != "" {
+		where += " AND m.estat = ?"
+		args = append(args, strings.TrimSpace(f.Estat))
+	}
+	if strings.TrimSpace(f.Status) != "" {
+		where += " AND m.moderation_status = ?"
+		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if f.PaisID > 0 {
+		where += " AND na1.id = ?"
+		args = append(args, f.PaisID)
+	}
+	if f.NivellID > 0 {
+		where += " AND (m.nivell_administratiu_id_1 = ? OR m.nivell_administratiu_id_2 = ? OR m.nivell_administratiu_id_3 = ? OR m.nivell_administratiu_id_4 = ? OR m.nivell_administratiu_id_5 = ? OR m.nivell_administratiu_id_6 = ? OR m.nivell_administratiu_id_7 = ?)"
+		for i := 0; i < 7; i++ {
+			args = append(args, f.NivellID)
+		}
+	}
+	inClause("m.id", f.AllowedMunicipiIDs)
+	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClause("na1.id", f.AllowedPaisIDs)
+	query := `
+        SELECT COUNT(*)
+        FROM municipis m
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+        WHERE ` + where
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (h sqlHelper) getMunicipi(id int) (*Municipi, error) {
@@ -1586,6 +1693,14 @@ func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, erro
         LEFT JOIN arquebisbats parent ON parent.id = a.parent_id
         WHERE ` + where + `
         ORDER BY a.nom`
+	if f.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, f.Limit)
+		if f.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, f.Offset)
+		}
+	}
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
@@ -1601,6 +1716,42 @@ func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, erro
 		res = append(res, r)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) countArquebisbats(f ArquebisbatFilter) (int, error) {
+	where := "1=1"
+	args := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		where += " AND " + column + " IN (" + placeholders + ")"
+		for _, id := range ids {
+			args = append(args, id)
+		}
+	}
+	if strings.TrimSpace(f.Text) != "" {
+		where += " AND lower(a.nom) LIKE ?"
+		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
+	}
+	if f.PaisID > 0 {
+		where += " AND a.pais_id = ?"
+		args = append(args, f.PaisID)
+	}
+	if strings.TrimSpace(f.Status) != "" {
+		where += " AND a.moderation_status = ?"
+		args = append(args, strings.TrimSpace(f.Status))
+	}
+	inClause("a.id", f.AllowedEclesIDs)
+	inClause("a.pais_id", f.AllowedPaisIDs)
+	query := `SELECT COUNT(*) FROM arquebisbats a WHERE ` + where
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (h sqlHelper) getArquebisbat(id int) (*Arquebisbat, error) {
@@ -2998,6 +3149,70 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 	return res, nil
 }
 
+func (h sqlHelper) countArxius(filter ArxiuFilter) (int, error) {
+	h.ensureUserExtraColumns()
+	args := []interface{}{}
+	clauses := []string{"1=1"}
+	if filter.Text != "" {
+		clauses = append(clauses, "a.nom LIKE ?")
+		args = append(args, "%"+filter.Text+"%")
+	}
+	if filter.Tipus != "" {
+		clauses = append(clauses, "a.tipus = ?")
+		args = append(args, filter.Tipus)
+	}
+	if filter.Acces != "" {
+		clauses = append(clauses, "a.acces = ?")
+		args = append(args, filter.Acces)
+	}
+	if filter.EntitatID > 0 {
+		clauses = append(clauses, "a.entitat_eclesiastica_id = ?")
+		args = append(args, filter.EntitatID)
+	}
+	if filter.MunicipiID > 0 {
+		clauses = append(clauses, "a.municipi_id = ?")
+		args = append(args, filter.MunicipiID)
+	}
+	if strings.TrimSpace(filter.Status) != "" {
+		clauses = append(clauses, "a.moderation_status = ?")
+		args = append(args, strings.TrimSpace(filter.Status))
+	}
+	allowedClauses := []string{}
+	allowedArgs := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		allowedClauses = append(allowedClauses, column+" IN ("+placeholders+")")
+		for _, id := range ids {
+			allowedArgs = append(allowedArgs, id)
+		}
+	}
+	inClause("a.id", filter.AllowedArxiuIDs)
+	inClause("a.municipi_id", filter.AllowedMunicipiIDs)
+	inClause("a.entitat_eclesiastica_id", filter.AllowedEclesIDs)
+	inClause("m.nivell_administratiu_id_3", filter.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", filter.AllowedComarcaIDs)
+	inClause("na1.pais_id", filter.AllowedPaisIDs)
+	if len(allowedClauses) > 0 {
+		clauses = append(clauses, "("+strings.Join(allowedClauses, " OR ")+")")
+		args = append(args, allowedArgs...)
+	}
+	query := `
+        SELECT COUNT(*)
+        FROM arxius a
+        LEFT JOIN municipis m ON m.id = a.municipi_id
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+        WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (h sqlHelper) getArxiu(id int) (*Arxiu, error) {
 	query := formatPlaceholders(h.style, `
         SELECT id, nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes,
@@ -3282,6 +3497,14 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
         LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
         WHERE ` + strings.Join(clauses, " AND ") + `
         ORDER BY l.titol`
+	if filter.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, filter.Offset)
+		}
+	}
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
@@ -3304,6 +3527,77 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 		res = append(res, lr)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) countLlibres(filter LlibreFilter) (int, error) {
+	args := []interface{}{}
+	clauses := []string{"1=1"}
+	if strings.TrimSpace(filter.Text) != "" {
+		like := "%" + strings.TrimSpace(filter.Text) + "%"
+		clauses = append(clauses, "(l.titol LIKE ? OR l.nom_esglesia LIKE ?)")
+		args = append(args, like, like)
+	}
+	if filter.ArquebisbatID > 0 {
+		clauses = append(clauses, "l.arquevisbat_id = ?")
+		args = append(args, filter.ArquebisbatID)
+	}
+	if filter.MunicipiID > 0 {
+		clauses = append(clauses, "l.municipi_id = ?")
+		args = append(args, filter.MunicipiID)
+	}
+	if filter.ArxiuID > 0 {
+		clauses = append(clauses, "EXISTS (SELECT 1 FROM arxius_llibres al WHERE al.llibre_id = l.id AND al.arxiu_id = ?)")
+		args = append(args, filter.ArxiuID)
+	}
+	if strings.TrimSpace(filter.ArxiuTipus) != "" {
+		clauses = append(clauses, "EXISTS (SELECT 1 FROM arxius_llibres al INNER JOIN arxius ax ON ax.id = al.arxiu_id WHERE al.llibre_id = l.id AND ax.tipus = ?)")
+		args = append(args, strings.TrimSpace(filter.ArxiuTipus))
+	}
+	if strings.TrimSpace(filter.Status) != "" {
+		clauses = append(clauses, "l.moderation_status = ?")
+		args = append(args, strings.TrimSpace(filter.Status))
+	}
+	allowedClauses := []string{}
+	allowedArgs := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		allowedClauses = append(allowedClauses, column+" IN ("+placeholders+")")
+		for _, id := range ids {
+			allowedArgs = append(allowedArgs, id)
+		}
+	}
+	inClause("l.id", filter.AllowedLlibreIDs)
+	inClause("l.municipi_id", filter.AllowedMunicipiIDs)
+	inClause("l.arquevisbat_id", filter.AllowedEclesIDs)
+	inClause("m.nivell_administratiu_id_3", filter.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", filter.AllowedComarcaIDs)
+	inClause("na1.pais_id", filter.AllowedPaisIDs)
+	if len(filter.AllowedArxiuIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.AllowedArxiuIDs)), ",")
+		allowedClauses = append(allowedClauses, "EXISTS (SELECT 1 FROM arxius_llibres al WHERE al.llibre_id = l.id AND al.arxiu_id IN ("+placeholders+"))")
+		for _, id := range filter.AllowedArxiuIDs {
+			allowedArgs = append(allowedArgs, id)
+		}
+	}
+	if len(allowedClauses) > 0 {
+		clauses = append(clauses, "("+strings.Join(allowedClauses, " OR ")+")")
+		args = append(args, allowedArgs...)
+	}
+	query := `
+        SELECT COUNT(*)
+        FROM llibres l
+        LEFT JOIN municipis m ON m.id = l.municipi_id
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+        WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (h sqlHelper) getLlibre(id int) (*Llibre, error) {

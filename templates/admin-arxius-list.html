@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "archives.title" }}</title>
     {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/registres-taula.css">
 </head>
 <body>
     {{ template "header-private" . }}
@@ -67,7 +68,21 @@
                     </select>
                 </div>
                 <button type="submit" class="boto-secundari">{{ t .Lang "archives.filter.submit" }}</button>
+                <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
+                <input type="hidden" name="page" value="1">
             </form>
+            <div class="page-stats-controls" id="page-stats-controls">
+                <div class="page-stats-filters">
+                    <label for="page-stats-per-page">{{ t .Lang "records.columns.per_page" }}</label>
+                    <select id="page-stats-per-page" onchange="location.href='{{ .Data.PageSelectBase }}' + this.value + '{{ .Data.PageAnchor }}'">
+                        <option value="5" {{ if eq .Data.PerPage 5 }}selected{{ end }}>5</option>
+                        <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
+                        <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
+                        <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
+                        <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
+                    </select>
+                </div>
+            </div>
             <div class="taula-wrapper">
                 <table class="taula">
                     <thead>
@@ -114,6 +129,15 @@
                     </tbody>
                 </table>
             </div>
+            {{ if gt .Data.TotalPages 1 }}
+            <div class="paginador">
+                {{ range .Data.PageLinks }}
+                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
+                    {{ .Label }}
+                </button>
+                {{ end }}
+            </div>
+            {{ end }}
         </section>
     </main>
     {{ template "footer" . }}

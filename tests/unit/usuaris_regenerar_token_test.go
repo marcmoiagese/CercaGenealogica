@@ -294,10 +294,11 @@ func (f *fakeDB) EnsureDefaultPointsRules() error { return nil }
 func (f *fakeDB) ListArxius(filter db.ArxiuFilter) ([]db.ArxiuWithCount, error) {
 	return nil, nil
 }
-func (f *fakeDB) GetArxiu(id int) (*db.Arxiu, error)   { return nil, nil }
-func (f *fakeDB) CreateArxiu(a *db.Arxiu) (int, error) { return 0, nil }
-func (f *fakeDB) UpdateArxiu(a *db.Arxiu) error        { return nil }
-func (f *fakeDB) DeleteArxiu(id int) error             { return nil }
+func (f *fakeDB) CountArxius(filter db.ArxiuFilter) (int, error) { return 0, nil }
+func (f *fakeDB) GetArxiu(id int) (*db.Arxiu, error)             { return nil, nil }
+func (f *fakeDB) CreateArxiu(a *db.Arxiu) (int, error)           { return 0, nil }
+func (f *fakeDB) UpdateArxiu(a *db.Arxiu) error                  { return nil }
+func (f *fakeDB) DeleteArxiu(id int) error                       { return nil }
 func (f *fakeDB) ListArxiuLlibres(arxiuID int) ([]db.ArxiuLlibreDetail, error) {
 	return nil, nil
 }
@@ -318,6 +319,7 @@ func (f *fakeDB) SearchLlibresSimple(q string, limit int) ([]db.LlibreSimple, er
 	return nil, nil
 }
 func (f *fakeDB) ListLlibres(filter db.LlibreFilter) ([]db.LlibreRow, error) { return nil, nil }
+func (f *fakeDB) CountLlibres(filter db.LlibreFilter) (int, error)           { return 0, nil }
 func (f *fakeDB) GetLlibre(id int) (*db.Llibre, error)                       { return nil, nil }
 func (f *fakeDB) CreateLlibre(l *db.Llibre) (int, error)                     { return 0, nil }
 func (f *fakeDB) UpdateLlibre(l *db.Llibre) error                            { return nil }
@@ -334,6 +336,7 @@ func (f *fakeDB) UpdatePais(p *db.Pais) error        { return nil }
 func (f *fakeDB) ListNivells(filt db.NivellAdminFilter) ([]db.NivellAdministratiu, error) {
 	return nil, nil
 }
+func (f *fakeDB) CountNivells(filt db.NivellAdminFilter) (int, error) { return 0, nil }
 func (f *fakeDB) GetNivell(id int) (*db.NivellAdministratiu, error) {
 	return nil, fmt.Errorf("not implemented")
 }
@@ -342,7 +345,8 @@ func (f *fakeDB) UpdateNivell(n *db.NivellAdministratiu) error        { return n
 func (f *fakeDB) ListMunicipis(filter db.MunicipiFilter) ([]db.MunicipiRow, error) {
 	return nil, nil
 }
-func (f *fakeDB) GetMunicipi(id int) (*db.Municipi, error) { return nil, nil }
+func (f *fakeDB) CountMunicipis(filter db.MunicipiFilter) (int, error) { return 0, nil }
+func (f *fakeDB) GetMunicipi(id int) (*db.Municipi, error)             { return nil, nil }
 func (f *fakeDB) CreateMunicipi(m *db.Municipi) (int, error) {
 	return 0, nil
 }
@@ -358,6 +362,9 @@ func (f *fakeDB) SaveNomHistoric(nh *db.NomHistoric) (int, error) { return 0, ni
 func (f *fakeDB) ListGroups() ([]db.Group, error)                 { return nil, nil }
 func (f *fakeDB) ListArquebisbats(filt db.ArquebisbatFilter) ([]db.ArquebisbatRow, error) {
 	return nil, nil
+}
+func (f *fakeDB) CountArquebisbats(filt db.ArquebisbatFilter) (int, error) {
+	return 0, nil
 }
 func (f *fakeDB) GetArquebisbat(id int) (*db.Arquebisbat, error)    { return nil, nil }
 func (f *fakeDB) CreateArquebisbat(ae *db.Arquebisbat) (int, error) { return 0, nil }

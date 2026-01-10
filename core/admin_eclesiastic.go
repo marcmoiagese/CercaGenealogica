@@ -23,6 +23,8 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 			filter.PaisID = v
 		}
 	}
+	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
+	page := parseListPage(r.URL.Query().Get("page"))
 	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriEclesView)
 	if !ok {
 		return
@@ -39,6 +41,7 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 	canImportEcles := a.HasPermission(user.ID, permKeyAdminEclesImport, PermissionTarget{})
 	if !scopeFilter.hasGlobal {
 		if scopeFilter.isEmpty() {
+			pagination := buildPagination(r, page, perPage, 0, "#page-stats-controls")
 			RenderPrivateTemplate(w, r, "admin-eclesiastic-list.html", map[string]interface{}{
 				"Entitats":         []db.ArquebisbatRow{},
 				"Filter":           filter,
@@ -49,6 +52,13 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 				"CanImportEcles":   canImportEcles,
 				"CanEditEcles":     map[int]bool{},
 				"ShowEclesActions": false,
+				"Page":             pagination.Page,
+				"PerPage":          pagination.PerPage,
+				"Total":            pagination.Total,
+				"TotalPages":       pagination.TotalPages,
+				"PageLinks":        pagination.Links,
+				"PageSelectBase":   pagination.SelectBase,
+				"PageAnchor":       pagination.Anchor,
 				"User":             user,
 			})
 			return
@@ -56,6 +66,10 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 		filter.AllowedEclesIDs = scopeFilter.eclesIDs
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 	}
+	total, _ := a.DB.CountArquebisbats(filter)
+	pagination := buildPagination(r, page, perPage, total, "#page-stats-controls")
+	filter.Limit = pagination.PerPage
+	filter.Offset = pagination.Offset
 	entitats, _ := a.DB.ListArquebisbats(filter)
 	canEditEcles := make(map[int]bool, len(entitats))
 	showEclesActions := false
@@ -91,6 +105,13 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 		"CanImportEcles":   canImportEcles,
 		"CanEditEcles":     canEditEcles,
 		"ShowEclesActions": showEclesActions,
+		"Page":             pagination.Page,
+		"PerPage":          pagination.PerPage,
+		"Total":            pagination.Total,
+		"TotalPages":       pagination.TotalPages,
+		"PageLinks":        pagination.Links,
+		"PageSelectBase":   pagination.SelectBase,
+		"PageAnchor":       pagination.Anchor,
 		"User":             user,
 	})
 }

@@ -106,6 +106,7 @@ type DB interface {
 	UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error
 	// Arxius CRUD
 	ListArxius(filter ArxiuFilter) ([]ArxiuWithCount, error)
+	CountArxius(filter ArxiuFilter) (int, error)
 	GetArxiu(id int) (*Arxiu, error)
 	CreateArxiu(a *Arxiu) (int, error)
 	UpdateArxiu(a *Arxiu) error
@@ -120,6 +121,7 @@ type DB interface {
 	DeleteLlibreURL(id int) error
 	SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error)
 	ListLlibres(filter LlibreFilter) ([]LlibreRow, error)
+	CountLlibres(filter LlibreFilter) (int, error)
 	GetLlibre(id int) (*Llibre, error)
 	CreateLlibre(l *Llibre) (int, error)
 	UpdateLlibre(l *Llibre) error
@@ -200,12 +202,14 @@ type DB interface {
 
 	// Nivells administratius
 	ListNivells(f NivellAdminFilter) ([]NivellAdministratiu, error)
+	CountNivells(f NivellAdminFilter) (int, error)
 	GetNivell(id int) (*NivellAdministratiu, error)
 	CreateNivell(n *NivellAdministratiu) (int, error)
 	UpdateNivell(n *NivellAdministratiu) error
 
 	// Municipis
 	ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error)
+	CountMunicipis(f MunicipiFilter) (int, error)
 	GetMunicipi(id int) (*Municipi, error)
 	CreateMunicipi(m *Municipi) (int, error)
 	UpdateMunicipi(m *Municipi) error
@@ -216,6 +220,7 @@ type DB interface {
 
 	// Entitats eclesiàstiques
 	ListArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, error)
+	CountArquebisbats(f ArquebisbatFilter) (int, error)
 	GetArquebisbat(id int) (*Arquebisbat, error)
 	CreateArquebisbat(ae *Arquebisbat) (int, error)
 	UpdateArquebisbat(ae *Arquebisbat) error
@@ -507,6 +512,8 @@ type NivellAdminFilter struct {
 	Nivel          int
 	Estat          string
 	Status         string
+	Limit          int
+	Offset         int
 	AllowedPaisIDs []int
 }
 
@@ -552,6 +559,8 @@ type MunicipiFilter struct {
 	PaisID              int
 	NivellID            int
 	Status              string
+	Limit               int
+	Offset              int
 	AllowedMunicipiIDs  []int
 	AllowedProvinciaIDs []int
 	AllowedComarcaIDs   []int
@@ -605,6 +614,8 @@ type ArquebisbatFilter struct {
 	Text            string
 	PaisID          int
 	Status          string
+	Limit           int
+	Offset          int
 	AllowedEclesIDs []int
 	AllowedPaisIDs  []int
 }
@@ -775,6 +786,8 @@ type LlibreFilter struct {
 	ArxiuID             int
 	ArxiuTipus          string
 	Status              string
+	Limit               int
+	Offset              int
 	AllowedLlibreIDs    []int
 	AllowedArxiuIDs     []int
 	AllowedMunicipiIDs  []int
