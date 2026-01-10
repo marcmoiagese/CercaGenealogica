@@ -709,4 +709,118 @@ CREATE INDEX IF NOT EXISTS idx_llibres_urls_arxiu
 CREATE INDEX IF NOT EXISTS idx_llibre_pagines_estat
     ON llibre_pagines(llibre_id, estat);
 
+-- Media (àlbums + ítems)
+DROP TABLE IF EXISTS media_access_logs;
+DROP TABLE IF EXISTS media_access_grants;
+DROP TABLE IF EXISTS user_credits_ledger;
+DROP TABLE IF EXISTS media_item_pages;
+DROP TABLE IF EXISTS media_items;
+DROP TABLE IF EXISTS media_albums;
+CREATE TABLE IF NOT EXISTS media_albums (
+  id SERIAL PRIMARY KEY,
+  public_id TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  description TEXT,
+  album_type TEXT NOT NULL DEFAULT 'other' CHECK (album_type IN ('book','memorial','photo','other')),
+  owner_user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  moderation_status TEXT NOT NULL DEFAULT 'pending' CHECK (moderation_status IN ('pending','approved','rejected')),
+  visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','registered','public','restricted_group','admins_only','custom_policy')),
+  restricted_group_id INTEGER REFERENCES grups(id) ON DELETE SET NULL,
+  access_policy_id INTEGER REFERENCES politiques(id) ON DELETE SET NULL,
+  credit_cost INTEGER NOT NULL DEFAULT 0,
+  difficulty_score INTEGER NOT NULL DEFAULT 0,
+  source_type TEXT DEFAULT 'online' CHECK (source_type IN ('online','offline_archive','family_private','other')),
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP,
+  moderation_notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS media_items (
+  id SERIAL PRIMARY KEY,
+  public_id TEXT NOT NULL UNIQUE,
+  album_id INTEGER NOT NULL REFERENCES media_albums(id) ON DELETE CASCADE,
+  title TEXT,
+  original_filename TEXT,
+  mime_type TEXT,
+  byte_size BIGINT,
+  width INTEGER,
+  height INTEGER,
+  checksum_sha256 TEXT,
+  storage_key_original TEXT NOT NULL,
+  thumb_path TEXT,
+  derivatives_status TEXT NOT NULL DEFAULT 'pending' CHECK (derivatives_status IN ('pending','ready','failed')),
+  moderation_status TEXT NOT NULL DEFAULT 'pending' CHECK (moderation_status IN ('pending','approved','rejected')),
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP,
+  moderation_notes TEXT,
+  credit_cost INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS media_item_pages (
+  id SERIAL PRIMARY KEY,
+  media_item_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+  llibre_id INTEGER REFERENCES llibres(id) ON DELETE SET NULL,
+  pagina_id INTEGER REFERENCES llibre_pagines(id) ON DELETE SET NULL,
+  page_order INTEGER DEFAULT 0,
+  notes TEXT,
+  UNIQUE (media_item_id, pagina_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_item_pages_pagina
+  ON media_item_pages(pagina_id);
+
+-- Media credits + grants
+CREATE TABLE IF NOT EXISTS user_credits_ledger (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  delta INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  ref_type TEXT,
+  ref_id INTEGER,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS media_access_grants (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  media_item_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+  grant_token TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMP NOT NULL,
+  credits_spent INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS media_access_logs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  media_item_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+  access_type TEXT NOT NULL,
+  credits_spent INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_credits_ledger_user
+  ON user_credits_ledger(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_credits_ledger_ref
+  ON user_credits_ledger(ref_type, ref_id);
+CREATE INDEX IF NOT EXISTS idx_media_access_grants_lookup
+  ON media_access_grants(user_id, media_item_id, expires_at);
+CREATE INDEX IF NOT EXISTS idx_media_access_logs_user
+  ON media_access_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_media_access_logs_item
+  ON media_access_logs(media_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_album
+  ON media_items(album_id);
+CREATE INDEX IF NOT EXISTS idx_media_items_moderation
+  ON media_items(moderation_status);
+CREATE INDEX IF NOT EXISTS idx_media_albums_owner
+  ON media_albums(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_media_albums_moderation
+  ON media_albums(moderation_status);
+
 COMMIT;

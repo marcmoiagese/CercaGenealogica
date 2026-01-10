@@ -6,6 +6,7 @@
     <title>{{ t .Lang "books.title" }} - {{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</title>
     {{ template "styles-private" . }}
     <link rel="stylesheet" href="/static/css/registres-taula.css">
+    <link rel="stylesheet" href="/static/css/media.css">
     <style>
         .page-stats-table td {
             vertical-align: middle;
@@ -15,6 +16,73 @@
         }
         .page-stat-cell .editable-cell {
             min-width: 120px;
+        }
+        .media-links-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+            margin: 0.5rem 0 1rem;
+        }
+        .media-links-controls select {
+            min-width: 180px;
+        }
+        .media-links-grid {
+            margin-top: 0.5rem;
+        }
+        .media-link-meta {
+            font-size: 0.85rem;
+            color: var(--color-text-clar);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .media-link-actions {
+            margin-top: 0.5rem;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .media-link-actions input[type="number"] {
+            width: 90px;
+        }
+        .media-search-results {
+            margin-top: 1rem;
+            max-height: 55vh;
+            overflow: auto;
+        }
+        .media-search-result {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid #e8edf2;
+        }
+        .media-search-thumb {
+            width: 64px;
+            height: 64px;
+            border-radius: 10px;
+            object-fit: cover;
+            background: #f4f6f8;
+            flex-shrink: 0;
+        }
+        .media-search-meta {
+            flex: 1;
+            min-width: 0;
+        }
+        .media-search-meta h4 {
+            margin: 0 0 0.2rem;
+            font-size: 0.95rem;
+        }
+        .media-search-meta p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--color-text-clar);
+        }
+        .media-search-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
         }
     </style>
 </head>
@@ -290,6 +358,125 @@
             </div>
         </div>
 
+        <section class="card" id="media-links">
+            <header class="card-header card-header-flex">
+                <h2>{{ t .Lang "media.page.links.title" }}</h2>
+                {{ if $.Data.CanEditLlibre }}
+                <button type="button" class="boto-secundari" data-open-media-links>{{ t .Lang "media.page.links.action" }}</button>
+                {{ end }}
+            </header>
+            <div class="media-links-controls">
+                <label for="media-page-select">{{ t .Lang "books.pages.stats.col.page" }}</label>
+                <select id="media-page-select" onchange="location.href='{{ .Data.MediaPageSelectBase }}' + this.value + '#media-links'">
+                    <option value="">{{ t .Lang "common.select" }}</option>
+                    {{ range .Data.MediaPageOptions }}
+                    <option value="{{ .ID }}" {{ if eq $.Data.MediaPageID .ID }}selected{{ end }}>{{ .NumPagina }}</option>
+                    {{ end }}
+                </select>
+            </div>
+            {{ if .Data.MediaPageID }}
+                {{ if .Data.MediaPageLinks }}
+                <div class="media-items-grid media-links-grid">
+                    {{ range .Data.MediaPageLinks }}
+                    <article class="media-item-card">
+                        <a class="media-item-link" href="/media/items/{{ .MediaItemPublicID }}" target="_blank" rel="noopener">
+                            {{ if .MediaItemThumbPath }}
+                            <img class="media-thumb" src="/media/items/{{ .MediaItemPublicID }}/thumb" alt="{{ .MediaItemTitle }}">
+                            {{ else }}
+                            <div class="media-thumb media-thumb-placeholder">
+                                <i class="fas fa-image"></i>
+                            </div>
+                            {{ end }}
+                        </a>
+                        <div class="media-item-meta">
+                            <h3><a href="/media/items/{{ .MediaItemPublicID }}" target="_blank" rel="noopener">{{ if .MediaItemTitle }}{{ .MediaItemTitle }}{{ else }}{{ .MediaItemPublicID }}{{ end }}</a></h3>
+                            <div class="media-chip-row">
+                                {{ if .AlbumTitle }}<span class="media-chip media-chip-muted">{{ .AlbumTitle }}</span>{{ end }}
+                                <span class="media-chip">{{ t $.Lang (printf "media.album.status.%s" .AlbumModerationStatus) }}</span>
+                            </div>
+                            <div class="media-link-meta">
+                                <span>{{ t $.Lang "media.page.links.order" }}: {{ .PageOrder }}</span>
+                            </div>
+                            {{ if $.Data.CanEditLlibre }}
+                            <form class="media-link-actions" method="post" action="/documentals/pagines/{{ $.Data.MediaPageID }}/media/unlink">
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="media_item_public_id" value="{{ .MediaItemPublicID }}">
+                                <input type="hidden" name="return_to" value="{{ $.Data.MediaReturnTo }}">
+                                <button type="submit" class="boto-secundari btn-mini">{{ t $.Lang "media.page.links.unlink" }}</button>
+                            </form>
+                            {{ end }}
+                        </div>
+                    </article>
+                    {{ end }}
+                </div>
+                {{ else }}
+                <p class="muted">{{ t .Lang "media.page.links.empty" }}</p>
+                {{ end }}
+            {{ else }}
+            <p class="muted">{{ t .Lang "media.page.links.no_pages" }}</p>
+            {{ end }}
+        </section>
+
+        {{ if $.Data.CanEditLlibre }}
+        <div class="modal-overlay {{ if .Data.MediaModalOpen }}is-open{{ end }}" id="media-links-modal" role="dialog" aria-modal="true" aria-labelledby="media-links-title">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <div>
+                        <h2 id="media-links-title">{{ t .Lang "media.page.links.action" }}</h2>
+                        <p class="muted">{{ t .Lang "media.page.links.search.label" }}</p>
+                    </div>
+                    <button type="button" class="modal-close" data-close-media-links aria-label="{{ t .Lang "common.close" }}">×</button>
+                </div>
+                <form method="get" action="/documentals/llibres/{{ .Data.Llibre.ID }}">
+                    <input type="hidden" name="media_page_id" value="{{ .Data.MediaPageID }}">
+                    <input type="hidden" name="media_modal" value="1">
+                    <div class="grup-camp">
+                        <label for="media-search">{{ t .Lang "media.page.links.search.label" }}</label>
+                        <input id="media-search" name="media_search" type="text" value="{{ .Data.MediaSearch }}" placeholder="{{ t .Lang "media.page.links.search.placeholder" }}">
+                    </div>
+                    <div class="form-accio">
+                        <button type="submit" class="boto-primari">{{ t .Lang "media.page.links.search.submit" }}</button>
+                        <button type="button" class="boto-secundari" data-close-media-links>{{ t .Lang "records.form.cancel" }}</button>
+                    </div>
+                </form>
+                {{ if .Data.MediaSearch }}
+                <div class="media-search-results">
+                    {{ if .Data.MediaSearchResults }}
+                        {{ range .Data.MediaSearchResults }}
+                        <div class="media-search-result">
+                            {{ if .MediaItemThumb }}
+                            <img class="media-search-thumb" src="/media/items/{{ .MediaItemPublicID }}/thumb" alt="{{ .MediaItemTitle }}">
+                            {{ else }}
+                            <div class="media-search-thumb media-thumb-placeholder">
+                                <i class="fas fa-image"></i>
+                            </div>
+                            {{ end }}
+                            <div class="media-search-meta">
+                                <h4>{{ if .MediaItemTitle }}{{ .MediaItemTitle }}{{ else }}{{ .MediaItemPublicID }}{{ end }}</h4>
+                                <p>{{ if .AlbumTitle }}{{ .AlbumTitle }}{{ else }}{{ .AlbumPublicID }}{{ end }}</p>
+                            </div>
+                            {{ if $.Data.MediaPageID }}
+                            <form class="media-search-actions" method="post" action="/documentals/pagines/{{ $.Data.MediaPageID }}/media/link">
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="media_item_public_id" value="{{ .MediaItemPublicID }}">
+                                <input type="hidden" name="return_to" value="{{ $.Data.MediaReturnTo }}">
+                                <input type="number" name="page_order" min="0" value="0" aria-label="{{ t $.Lang "media.page.links.order" }}">
+                                <button type="submit" class="boto-primari btn-mini">{{ t $.Lang "media.page.links.link" }}</button>
+                            </form>
+                            {{ else }}
+                            <span class="muted">{{ t $.Lang "media.page.links.no_pages" }}</span>
+                            {{ end }}
+                        </div>
+                        {{ end }}
+                    {{ else }}
+                    <p class="muted">{{ t .Lang "common.empty" }}</p>
+                    {{ end }}
+                </div>
+                {{ end }}
+            </div>
+        </div>
+        {{ end }}
+
         <section class="card">
             <header class="card-header card-header-flex">
                 <h2>{{ t .Lang "archives.title" }}</h2>
@@ -487,6 +674,36 @@
                     modal.classList.remove('is-open');
                 });
             }
+        })();
+    </script>
+    <script>
+        (function () {
+            const modal = document.getElementById('media-links-modal');
+            if (!modal) return;
+            const openBtns = document.querySelectorAll('[data-open-media-links]');
+            const closeBtns = modal.querySelectorAll('[data-close-media-links]');
+            const searchInput = modal.querySelector('#media-search');
+
+            openBtns.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    modal.classList.add('is-open');
+                    if (searchInput) {
+                        searchInput.focus();
+                    }
+                });
+            });
+
+            closeBtns.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    modal.classList.remove('is-open');
+                });
+            });
+
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    modal.classList.remove('is-open');
+                }
+            });
         })();
     </script>
     {{ if .Data.CanDeleteLlibre }}

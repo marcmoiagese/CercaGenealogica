@@ -455,11 +455,85 @@ func (d *PostgreSQL) UpdateLlibreModeracio(id int, estat, motiu string, moderato
 func (d *PostgreSQL) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {
 	return d.help.listLlibrePagines(llibreID)
 }
+func (d *PostgreSQL) GetLlibrePaginaByID(id int) (*LlibrePagina, error) {
+	return d.help.getLlibrePaginaByID(id)
+}
 func (d *PostgreSQL) SaveLlibrePagina(p *LlibrePagina) (int, error) {
 	return d.help.saveLlibrePagina(p)
 }
 func (d *PostgreSQL) RecalcLlibrePagines(llibreID, total int) error {
 	return d.help.recalcLlibrePagines(llibreID, total)
+}
+
+// Media
+func (d *PostgreSQL) ListMediaAlbumsByOwner(userID int) ([]MediaAlbum, error) {
+	return d.help.listMediaAlbumsByOwner(userID)
+}
+func (d *PostgreSQL) GetMediaAlbumByID(id int) (*MediaAlbum, error) {
+	return d.help.getMediaAlbumByID(id)
+}
+func (d *PostgreSQL) GetMediaAlbumByPublicID(publicID string) (*MediaAlbum, error) {
+	return d.help.getMediaAlbumByPublicID(publicID)
+}
+func (d *PostgreSQL) CreateMediaAlbum(a *MediaAlbum) (int, error) {
+	return d.help.createMediaAlbum(a)
+}
+func (d *PostgreSQL) ListMediaItemsByAlbum(albumID int) ([]MediaItem, error) {
+	return d.help.listMediaItemsByAlbum(albumID)
+}
+func (d *PostgreSQL) GetMediaItemByPublicID(publicID string) (*MediaItem, error) {
+	return d.help.getMediaItemByPublicID(publicID)
+}
+func (d *PostgreSQL) CreateMediaItem(item *MediaItem) (int, error) {
+	return d.help.createMediaItem(item)
+}
+func (d *PostgreSQL) UpdateMediaItemDerivativesStatus(itemID int, status string) error {
+	return d.help.updateMediaItemDerivativesStatus(itemID, status)
+}
+func (d *PostgreSQL) ListMediaAlbumsByStatus(status string) ([]MediaAlbum, error) {
+	return d.help.listMediaAlbumsByStatus(status)
+}
+func (d *PostgreSQL) ListMediaItemsByStatus(status string) ([]MediaItem, error) {
+	return d.help.listMediaItemsByStatus(status)
+}
+func (d *PostgreSQL) UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
+	return d.help.updateMediaAlbumModeration(id, status, visibility, restrictedGroupID, accessPolicyID, creditCost, difficultyScore, sourceType, notes, moderatorID)
+}
+func (d *PostgreSQL) UpdateMediaItemModeration(id int, status string, creditCost int, notes string, moderatorID int) error {
+	return d.help.updateMediaItemModeration(id, status, creditCost, notes, moderatorID)
+}
+func (d *PostgreSQL) GetUserCreditsBalance(userID int) (int, error) {
+	return d.help.getUserCreditsBalance(userID)
+}
+func (d *PostgreSQL) InsertUserCreditsLedger(entry *UserCreditsLedgerEntry) (int, error) {
+	return d.help.insertUserCreditsLedger(entry)
+}
+func (d *PostgreSQL) GetActiveMediaAccessGrant(userID, mediaItemID int) (*MediaAccessGrant, error) {
+	return d.help.getActiveMediaAccessGrant(userID, mediaItemID)
+}
+func (d *PostgreSQL) GetMediaAccessGrantByToken(token string) (*MediaAccessGrant, error) {
+	return d.help.getMediaAccessGrantByToken(token)
+}
+func (d *PostgreSQL) CreateMediaAccessGrant(grant *MediaAccessGrant) (int, error) {
+	return d.help.createMediaAccessGrant(grant)
+}
+func (d *PostgreSQL) InsertMediaAccessLog(entry *MediaAccessLog) (int, error) {
+	return d.help.insertMediaAccessLog(entry)
+}
+func (d *PostgreSQL) ListMediaItemLinksByPagina(paginaID int) ([]MediaItemPageLink, error) {
+	return d.help.listMediaItemLinksByPagina(paginaID)
+}
+func (d *PostgreSQL) UpsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder int, notes string) error {
+	return d.help.upsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder, notes)
+}
+func (d *PostgreSQL) DeleteMediaItemPageLink(mediaItemID, paginaID int) error {
+	return d.help.deleteMediaItemPageLink(mediaItemID, paginaID)
+}
+func (d *PostgreSQL) CountMediaItemLinksByAlbum(albumID int) (map[int]int, error) {
+	return d.help.countMediaItemLinksByAlbum(albumID)
+}
+func (d *PostgreSQL) SearchMediaItems(query string, limit int) ([]MediaItemSearchRow, error) {
+	return d.help.searchMediaItems(query, limit)
 }
 
 func (d *PostgreSQL) ListTranscripcionsRaw(llibreID int, f TranscripcioFilter) ([]TranscripcioRaw, error) {

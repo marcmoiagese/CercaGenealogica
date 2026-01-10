@@ -1,0 +1,103 @@
+{{ define "media-albums-show.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ .Data.Album.Title }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/media.css">
+</head>
+<body>
+    {{ if .UserLoggedIn }}
+        {{ template "header-private" . }}
+        {{ template "menu" . }}
+    {{ else }}
+        {{ template "header-public" . }}
+    {{ end }}
+    <main class="contingut-principal media-layout">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <h1>{{ .Data.Album.Title }}</h1>
+                    <div class="media-chip-row">
+                        <span class="media-chip">{{ t $.Lang (printf "media.album.type.%s" .Data.Album.AlbumType) }}</span>
+                        <span class="media-chip media-chip-muted">{{ t $.Lang (printf "media.album.status.%s" .Data.Album.ModerationStatus) }}</span>
+                    </div>
+                </div>
+                <div class="card-actions">
+                    {{ if .UserLoggedIn }}
+                        <a class="boto-secundari" href="/media/albums"><i class="fas fa-arrow-left"></i> {{ t .Lang "common.back" }}</a>
+                    {{ else }}
+                        <a class="boto-secundari" href="/"><i class="fas fa-arrow-left"></i> {{ t .Lang "common.back" }}</a>
+                    {{ end }}
+                </div>
+            </header>
+            {{ if .Data.Album.Description }}
+            <p class="media-album-description">{{ .Data.Album.Description }}</p>
+            {{ end }}
+            {{ if or (gt .Data.Uploaded 0) (gt .Data.Failed 0) }}
+            {{ $alertClass := "media-alert" }}
+            {{ if eq .Data.Failed 0 }}{{ $alertClass = "media-alert success" }}{{ end }}
+            <div class="{{ $alertClass }}">{{ t .Lang "media.upload.result" .Data.Uploaded .Data.Failed }}</div>
+            {{ end }}
+        </section>
+
+        {{ if .Data.CanUpload }}
+        <section class="card">
+            <header class="card-header">
+                <h2>{{ t .Lang "media.album.upload.title" }}</h2>
+                <p class="media-help">{{ t .Lang "media.album.upload.help" .Data.AllowedMimeCSV .Data.MaxUploadMB }}</p>
+            </header>
+            <form class="media-upload-form" method="post" action="/media/albums/{{ .Data.Album.PublicID }}/upload" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input class="media-file-input" type="file" name="media_files" accept="{{ .Data.AllowedMimeCSV }}" multiple>
+                <button class="boto-primari" type="submit"><i class="fas fa-upload"></i> {{ t .Lang "media.album.upload.submit" }}</button>
+            </form>
+        </section>
+        {{ end }}
+
+        <section class="card">
+            <header class="card-header">
+                <h2>{{ t .Lang "media.items.title" }}</h2>
+            </header>
+            {{ if .Data.Items }}
+            <div class="media-items-grid">
+                {{ range .Data.Items }}
+                <article class="media-item-card">
+                    <a class="media-item-link" href="/media/items/{{ .PublicID }}">
+                        {{ if .ThumbPath }}
+                        <img class="media-thumb" src="/media/items/{{ .PublicID }}/thumb" alt="{{ .Title }}">
+                        {{ else }}
+                        <div class="media-thumb media-thumb-placeholder">
+                            <i class="fas fa-image"></i>
+                        </div>
+                        {{ end }}
+                    </a>
+                    <div class="media-item-meta">
+                        <h3><a href="/media/items/{{ .PublicID }}">{{ .Title }}</a></h3>
+                        <div class="media-chip-row">
+                            <span class="media-chip media-chip-muted">{{ .MimeType }}</span>
+                            <span class="media-chip">{{ t $.Lang (printf "media.item.status.%s" .DerivativesStatus) }}</span>
+                            {{ $linkCount := index $.Data.ItemLinkCounts .ID }}
+                            {{ if $linkCount }}
+                            <span class="media-chip">{{ t $.Lang "media.item.linked" $linkCount }}</span>
+                            {{ end }}
+                        </div>
+                    </div>
+                </article>
+                {{ end }}
+            </div>
+            {{ else }}
+            <p class="media-empty">{{ t .Lang "media.items.empty" }}</p>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ if .UserLoggedIn }}
+        {{ template "scripts-private" . }}
+    {{ else }}
+        {{ template "scripts-public" . }}
+    {{ end }}
+</body>
+</html>
+{{ end }}

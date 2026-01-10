@@ -215,7 +215,8 @@ func ServeStatic(w http.ResponseWriter, r *http.Request) {
 		strings.HasPrefix(path, "css/") ||
 		strings.HasPrefix(path, "js/") ||
 		strings.HasPrefix(path, "img/") ||
-		strings.HasPrefix(path, "fonts/")
+		strings.HasPrefix(path, "fonts/") ||
+		strings.HasPrefix(path, "vendor/")
 	if !allowed {
 		Errorf("Fitxer no autoritzat: %s", path)
 		http.Error(w, "Aquest recurs no es pot servir", http.StatusForbidden)

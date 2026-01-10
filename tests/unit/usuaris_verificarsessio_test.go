@@ -174,6 +174,7 @@ func (f *fakeDBVerificar) GetLlibre(id int) (*db.Llibre, error)                 
 func (f *fakeDBVerificar) CreateLlibre(l *db.Llibre) (int, error)                    { return 0, nil }
 func (f *fakeDBVerificar) UpdateLlibre(l *db.Llibre) error                           { return nil }
 func (f *fakeDBVerificar) ListLlibrePagines(llibreID int) ([]db.LlibrePagina, error) { return nil, nil }
+func (f *fakeDBVerificar) GetLlibrePaginaByID(id int) (*db.LlibrePagina, error)      { return nil, nil }
 func (f *fakeDBVerificar) SaveLlibrePagina(p *db.LlibrePagina) (int, error)          { return 0, nil }
 func (f *fakeDBVerificar) RecalcLlibrePagines(llibreID, total int) error             { return nil }
 func (f *fakeDBVerificar) ListPaisos() ([]db.Pais, error)                            { return nil, nil }
@@ -445,6 +446,51 @@ func (f *fakeDBVerificar) ListCognomImportRows(limit, offset int) ([]db.CognomIm
 }
 func (f *fakeDBVerificar) ListCognomStatsRows(limit, offset int) ([]db.CognomStatsRow, error) {
 	return nil, nil
+}
+func (f *fakeDBVerificar) ListMediaAlbumsByStatus(status string) ([]db.MediaAlbum, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) ListMediaItemsByStatus(status string) ([]db.MediaItem, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDBVerificar) UpdateMediaItemModeration(id int, status string, creditCost int, notes string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDBVerificar) ListMediaItemLinksByPagina(paginaID int) ([]db.MediaItemPageLink, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) UpsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder int, notes string) error {
+	return nil
+}
+func (f *fakeDBVerificar) DeleteMediaItemPageLink(mediaItemID, paginaID int) error {
+	return nil
+}
+func (f *fakeDBVerificar) CountMediaItemLinksByAlbum(albumID int) (map[int]int, error) {
+	return map[int]int{}, nil
+}
+func (f *fakeDBVerificar) SearchMediaItems(query string, limit int) ([]db.MediaItemSearchRow, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetUserCreditsBalance(userID int) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) InsertUserCreditsLedger(entry *db.UserCreditsLedgerEntry) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) GetActiveMediaAccessGrant(userID, mediaItemID int) (*db.MediaAccessGrant, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetMediaAccessGrantByToken(token string) (*db.MediaAccessGrant, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) CreateMediaAccessGrant(grant *db.MediaAccessGrant) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) InsertMediaAccessLog(entry *db.MediaAccessLog) (int, error) {
+	return 0, nil
 }
 
 // Crea una App només amb la fake DB per testejar VerificarSessio.

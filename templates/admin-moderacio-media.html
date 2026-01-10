@@ -1,0 +1,278 @@
+{{ define "admin-moderacio-media.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "media.moderation.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/media.css">
+    <style>
+        .media-mod-section {
+            margin-top: 1.5rem;
+        }
+        .media-mod-card {
+            border: 1px solid #e0e5ec;
+            border-radius: 12px;
+            padding: 1rem;
+            margin-top: 1rem;
+            background: #fff;
+        }
+        .media-mod-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .media-mod-meta {
+            color: #5b6670;
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+        .media-mod-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+        .media-mod-grid label,
+        .media-mod-notes label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #3b4650;
+        }
+        .media-mod-grid input,
+        .media-mod-grid select,
+        .media-mod-notes textarea,
+        .media-mod-notes input {
+            padding: 0.5rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid #d5d5d5;
+            background: #fff;
+        }
+        .media-mod-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 0.75rem;
+        }
+        .media-mod-forms {
+            display: grid;
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+        .media-mod-item {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+        .media-mod-thumb {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            border: 1px solid #d5d5d5;
+            object-fit: cover;
+            background: #f1f3f5;
+        }
+        .media-mod-muted {
+            color: #7b8790;
+            font-size: 0.9rem;
+        }
+        .media-mod-notes {
+            display: grid;
+            gap: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "media.moderation.title" }}</h1>
+            </header>
+            {{ if .Data.Msg }}
+            <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
+            {{ end }}
+
+            <div class="media-mod-section">
+                <h2>{{ t .Lang "media.moderation.albums" }} ({{ len .Data.PendingAlbums }})</h2>
+                {{ if .Data.PendingAlbums }}
+                    {{ range .Data.PendingAlbums }}
+                    {{ $album := .Album }}
+                    <article class="media-mod-card">
+                        <div class="media-mod-head">
+                            <div>
+                                <h3>{{ $album.Title }}</h3>
+                                <div class="media-chip-row">
+                                    <span class="media-chip">{{ t $.Lang (printf "media.album.type.%s" $album.AlbumType) }}</span>
+                                    <span class="media-chip media-chip-muted">{{ t $.Lang (printf "media.album.status.%s" $album.ModerationStatus) }}</span>
+                                </div>
+                                <div class="media-mod-meta">
+                                    {{ t $.Lang "media.moderation.owner" }}:
+                                    {{ if .OwnerURL }}<a href="{{ .OwnerURL }}">@{{ .OwnerName }}</a>{{ else }}@{{ .OwnerName }}{{ end }}
+                                    · {{ $album.ItemsCount }} {{ t $.Lang "media.albums.items" }}
+                                </div>
+                            </div>
+                            <div class="media-mod-actions">
+                                <a class="boto-secundari" href="/media/albums/{{ $album.PublicID }}">{{ t $.Lang "common.view" }}</a>
+                            </div>
+                        </div>
+                        <form method="post" action="/admin/moderacio/media/albums/{{ $album.ID }}/approve">
+                            <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                            <div class="media-mod-grid">
+                                <label>
+                                    {{ t $.Lang "media.moderation.visibility" }}
+                                    <select name="visibility">
+                                        {{ range $.Data.VisibilityOptions }}
+                                        <option value="{{ . }}" {{ if eq . $album.Visibility }}selected{{ end }}>{{ t $.Lang (printf "media.visibility.%s" .) }}</option>
+                                        {{ end }}
+                                    </select>
+                                </label>
+                                <label>
+                                    {{ t $.Lang "media.moderation.group" }}
+                                    <select name="restricted_group_id">
+                                        <option value="">{{ t $.Lang "common.select" }}</option>
+                                        {{ range $.Data.Groups }}
+                                        <option value="{{ .ID }}" {{ if and $album.RestrictedGroupID.Valid (eq (printf "%d" .ID) (printf "%d" $album.RestrictedGroupID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                                        {{ end }}
+                                    </select>
+                                </label>
+                                <label>
+                                    {{ t $.Lang "media.moderation.policy" }}
+                                    <select name="access_policy_id">
+                                        <option value="">{{ t $.Lang "common.select" }}</option>
+                                        {{ range $.Data.Policies }}
+                                        <option value="{{ .ID }}" {{ if and $album.AccessPolicyID.Valid (eq (printf "%d" .ID) (printf "%d" $album.AccessPolicyID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                                        {{ end }}
+                                    </select>
+                                </label>
+                                <label>
+                                    {{ t $.Lang "media.moderation.credit_cost" }}
+                                    <input type="number" min="0" name="credit_cost" value="{{ $album.CreditCost }}">
+                                </label>
+                                <label>
+                                    {{ t $.Lang "media.moderation.difficulty" }}
+                                    <input type="number" min="0" name="difficulty_score" value="{{ $album.DifficultyScore }}">
+                                </label>
+                                <label>
+                                    {{ t $.Lang "media.moderation.source_type" }}
+                                    <select name="source_type">
+                                        {{ range $.Data.SourceTypes }}
+                                        <option value="{{ . }}" {{ if eq . $album.SourceType }}selected{{ end }}>{{ t $.Lang (printf "media.album.source.%s" .) }}</option>
+                                        {{ end }}
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="media-mod-notes">
+                                <label>
+                                    {{ t $.Lang "media.moderation.notes" }}
+                                    <textarea name="notes" rows="2" placeholder="{{ t $.Lang "moderation.table.reason.placeholder" }}">{{ $album.ModerationNotes }}</textarea>
+                                </label>
+                            </div>
+                            <div class="media-mod-actions">
+                                <button class="boto-primari" type="submit">{{ t $.Lang "moderation.table.approve" }}</button>
+                            </div>
+                        </form>
+                        <form method="post" action="/admin/moderacio/media/albums/{{ $album.ID }}/reject">
+                            <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                            <div class="media-mod-notes">
+                                <label>
+                                    {{ t $.Lang "moderation.table.reason" }}
+                                    <textarea name="notes" rows="2" placeholder="{{ t $.Lang "moderation.table.reason.placeholder" }}"></textarea>
+                                </label>
+                            </div>
+                            <div class="media-mod-actions">
+                                <button class="boto-secundari" type="submit">{{ t $.Lang "moderation.table.reject" }}</button>
+                            </div>
+                        </form>
+                    </article>
+                    {{ end }}
+                {{ else }}
+                    <p class="media-mod-muted">{{ t .Lang "media.moderation.empty_albums" }}</p>
+                {{ end }}
+            </div>
+
+            <div class="media-mod-section">
+                <h2>{{ t .Lang "media.moderation.items" }} ({{ len .Data.PendingItems }})</h2>
+                {{ if .Data.PendingItems }}
+                    {{ range .Data.PendingItems }}
+                    {{ $item := .Item }}
+                    <article class="media-mod-card">
+                        <div class="media-mod-item">
+                            <div>
+                                {{ if $item.PublicID }}
+                                    <img class="media-mod-thumb" src="/media/items/{{ $item.PublicID }}/thumb" alt="{{ $item.Title }}">
+                                {{ else }}
+                                    <div class="media-mod-thumb"></div>
+                                {{ end }}
+                            </div>
+                            <div>
+                                <h3>{{ if $item.Title }}{{ $item.Title }}{{ else }}{{ t $.Lang "media.viewer.page.untitled" }}{{ end }}</h3>
+                                <div class="media-chip-row">
+                                    <span class="media-chip media-chip-muted">{{ $item.MimeType }}</span>
+                                    <span class="media-chip">{{ t $.Lang (printf "media.item.status.%s" $item.DerivativesStatus) }}</span>
+                                </div>
+                                <div class="media-mod-meta">
+                                    {{ t $.Lang "media.moderation.album" }}:
+                                    {{ if .AlbumPublic }}
+                                        <a href="/media/albums/{{ .AlbumPublic }}">{{ .AlbumTitle }}</a>
+                                    {{ else }}
+                                        {{ .AlbumTitle }}
+                                    {{ end }}
+                                    · {{ t $.Lang "media.moderation.owner" }}:
+                                    {{ if .OwnerURL }}<a href="{{ .OwnerURL }}">@{{ .OwnerName }}</a>{{ else }}@{{ .OwnerName }}{{ end }}
+                                </div>
+                            </div>
+                        </div>
+                        <form method="post" action="/admin/moderacio/media/items/{{ $item.ID }}/approve">
+                            <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                            <input type="hidden" name="item_public_id" value="{{ $item.PublicID }}">
+                            <div class="media-mod-grid">
+                                <label>
+                                    {{ t $.Lang "media.moderation.credit_cost" }}
+                                    <input type="number" min="0" name="credit_cost" value="{{ $item.CreditCost }}">
+                                </label>
+                            </div>
+                            <div class="media-mod-notes">
+                                <label>
+                                    {{ t $.Lang "media.moderation.notes" }}
+                                    <textarea name="notes" rows="2" placeholder="{{ t $.Lang "moderation.table.reason.placeholder" }}">{{ $item.ModerationNotes }}</textarea>
+                                </label>
+                            </div>
+                            <div class="media-mod-actions">
+                                <button class="boto-primari" type="submit">{{ t $.Lang "moderation.table.approve" }}</button>
+                            </div>
+                        </form>
+                        <form method="post" action="/admin/moderacio/media/items/{{ $item.ID }}/reject">
+                            <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                            <input type="hidden" name="credit_cost" value="{{ $item.CreditCost }}">
+                            <input type="hidden" name="item_public_id" value="{{ $item.PublicID }}">
+                            <div class="media-mod-notes">
+                                <label>
+                                    {{ t $.Lang "moderation.table.reason" }}
+                                    <textarea name="notes" rows="2" placeholder="{{ t $.Lang "moderation.table.reason.placeholder" }}"></textarea>
+                                </label>
+                            </div>
+                            <div class="media-mod-actions">
+                                <button class="boto-secundari" type="submit">{{ t $.Lang "moderation.table.reject" }}</button>
+                            </div>
+                        </form>
+                    </article>
+                    {{ end }}
+                {{ else }}
+                    <p class="media-mod-muted">{{ t .Lang "media.moderation.empty_items" }}</p>
+                {{ end }}
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

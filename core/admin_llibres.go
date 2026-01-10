@@ -599,9 +599,11 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 			mergedStats = append(mergedStats, stat)
 		}
 	}
+	pagines := []db.LlibrePagina{}
 	paginesByNum := map[int]int{}
-	if pagines, err := a.DB.ListLlibrePagines(id); err == nil {
-		for _, p := range pagines {
+	if pageList, err := a.DB.ListLlibrePagines(id); err == nil {
+		pagines = pageList
+		for _, p := range pageList {
 			paginesByNum[p.NumPagina] = p.ID
 		}
 	}
@@ -778,6 +780,48 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 			municipiName = m.Nom
 		}
 	}
+	mediaPageID := parseIntDefault(r.URL.Query().Get("media_page_id"), 0)
+	if len(pagines) == 0 {
+		mediaPageID = 0
+	} else if mediaPageID == 0 {
+		mediaPageID = pagines[0].ID
+	} else {
+		found := false
+		for _, p := range pagines {
+			if p.ID == mediaPageID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			mediaPageID = pagines[0].ID
+		}
+	}
+	mediaSearch := strings.TrimSpace(r.URL.Query().Get("media_search"))
+	mediaModalOpen := r.URL.Query().Get("media_modal") == "1" || mediaSearch != ""
+	mediaLinks := []db.MediaItemPageLink{}
+	if mediaPageID > 0 {
+		if links, err := a.DB.ListMediaItemLinksByPagina(mediaPageID); err == nil {
+			mediaLinks = a.filterMediaItemLinks(r, user, links)
+		}
+	}
+	mediaSearchResults := []db.MediaItemSearchRow{}
+	if mediaSearch != "" {
+		if rows, err := a.DB.SearchMediaItems(mediaSearch, 100); err == nil {
+			mediaSearchResults = a.filterMediaSearchResults(r, user, rows)
+		}
+	}
+	mediaSelectQuery := cloneValues(r.URL.Query())
+	mediaSelectQuery.Del("media_page_id")
+	mediaSelectQuery.Del("media_modal")
+	mediaSelectQuery.Del("media_search")
+	mediaSelectBase := r.URL.Path
+	if len(mediaSelectQuery) > 0 {
+		mediaSelectBase = mediaSelectBase + "?" + mediaSelectQuery.Encode() + "&media_page_id="
+	} else {
+		mediaSelectBase = mediaSelectBase + "?media_page_id="
+	}
+	mediaReturnTo := r.URL.RequestURI() + "#media-links"
 	RenderPrivateTemplate(w, r, "admin-llibres-show.html", map[string]interface{}{
 		"Llibre":              llibre,
 		"LlibreEntityName":    entityName,
@@ -800,6 +844,14 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		"PageStatsFilterBase": filterBase,
 		"PageStatsAnchor":     pageAnchor,
 		"PageStatsLinks":      pageLinks,
+		"MediaPageOptions":    pagines,
+		"MediaPageID":         mediaPageID,
+		"MediaPageSelectBase": mediaSelectBase,
+		"MediaPageLinks":      mediaLinks,
+		"MediaSearch":         mediaSearch,
+		"MediaSearchResults":  mediaSearchResults,
+		"MediaModalOpen":      mediaModalOpen,
+		"MediaReturnTo":       mediaReturnTo,
 		"User":                user,
 		"CanManageArxius":     true,
 		"CanEditLlibre":       canEditLlibre,

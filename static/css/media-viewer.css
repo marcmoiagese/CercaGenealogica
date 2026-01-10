@@ -1,0 +1,248 @@
+.media-viewer-layout .card + .card {
+    margin-top: 0.5rem;
+}
+
+.media-viewer-shell {
+    position: relative;
+    width: 100%;
+    height: 70vh;
+    min-height: 420px;
+    border-radius: 12px;
+    border: 1px solid #d9e1ea;
+    background: #111820;
+    overflow: hidden;
+}
+
+.media-viewer {
+    position: absolute;
+    inset: 52px 0 0 0;
+    width: 100%;
+    height: calc(100% - 52px);
+    background: #111820;
+}
+
+.media-viewer-toolbar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    background: rgba(20, 20, 20, 0.9);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    z-index: 10;
+    backdrop-filter: blur(6px);
+    color: #fff;
+}
+
+.media-tool-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.media-page-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.media-page-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.media-tool-label {
+    font-size: 13px;
+    color: #c7cbd1;
+}
+
+.media-page-select {
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    padding: 0 8px;
+    font-weight: 600;
+    max-width: 260px;
+}
+
+.media-page-select option {
+    color: #111;
+}
+
+.media-tool-link {
+    color: #ddd;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.media-tool-link:hover {
+    color: #fff;
+}
+
+.media-tool-muted {
+    color: #9aa0a6;
+    font-size: 13px;
+}
+
+.media-tool-right {
+    display: flex;
+    gap: 8px;
+}
+
+.media-btn {
+    height: 34px;
+    min-width: 34px;
+    padding: 0 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+    cursor: pointer;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.media-btn-compact {
+    height: 30px;
+    min-width: 30px;
+    padding: 0 6px;
+}
+
+.media-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.media-btn:active {
+    transform: translateY(1px);
+}
+
+.media-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.media-btn:disabled:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.media-navigator-wrap {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    width: 170px;
+    height: 120px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(0, 0, 0, 0.35);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    z-index: 8;
+}
+
+#mediaNavigator {
+    width: 100%;
+    height: 100%;
+}
+
+.media-panel {
+    position: absolute;
+    top: 64px;
+    right: 12px;
+    width: 320px;
+    padding: 12px;
+    border-radius: 12px;
+    background: rgba(20, 20, 20, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    z-index: 12;
+    color: #fff;
+}
+
+.media-panel-title {
+    font-weight: 800;
+    margin-bottom: 10px;
+}
+
+.media-panel-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 60px;
+    gap: 10px;
+    align-items: center;
+    margin: 10px 0;
+    font-size: 13px;
+}
+
+.media-panel-row input[type="range"] {
+    width: 100%;
+}
+
+.media-panel-toggle {
+    grid-template-columns: 1fr auto;
+}
+
+.media-panel-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.media-hidden {
+    display: none;
+}
+
+.media-viewer-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    min-height: 320px;
+    color: var(--color-text-clar);
+    text-align: center;
+}
+
+.media-viewer-placeholder i {
+    font-size: 2rem;
+    color: #b5c0cc;
+}
+
+.media-viewer-hint {
+    margin-top: 0.75rem;
+    color: var(--color-text-clar);
+    font-size: 0.9rem;
+}
+
+.media-viewer-shell:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+}
+
+.media-viewer-shell:fullscreen .media-viewer {
+    height: calc(100% - 52px);
+}
+
+@media (max-width: 900px) {
+    .media-viewer-shell {
+        height: 60vh;
+        min-height: 320px;
+    }
+
+    .media-panel {
+        width: calc(100% - 24px);
+        right: 12px;
+        left: 12px;
+    }
+}

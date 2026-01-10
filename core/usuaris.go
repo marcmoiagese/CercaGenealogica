@@ -597,6 +597,11 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 	if up, err := a.DB.GetUserPoints(user.ID); err == nil {
 		userPoints = up
 	}
+	creditsBalance := 0
+	if balance, err := a.DB.GetUserCreditsBalance(user.ID); err == nil {
+		creditsBalance = balance
+	}
+	creditsCfg := a.mediaCreditsConfig()
 	// Heatmap d'últims 12 mesos
 	heatmap, heatTotal = buildHeatmap(a.DB, user.ID, lang)
 	if activeTab == "activitat" {
@@ -639,6 +644,8 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 		"ActFilter":          actFilter,
 		"Heatmap":            heatmap,
 		"HeatmapTotal":       heatTotal,
+		"CreditsBalance":     creditsBalance,
+		"PointsPerCredit":    creditsCfg.PointsPerCredit,
 	})
 }
 

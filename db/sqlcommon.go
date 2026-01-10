@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -114,6 +115,32 @@ func (h sqlHelper) columnExists(table, column string) bool {
 	default: // sqlite
 		query = fmt.Sprintf(`SELECT 1 FROM pragma_table_info('%s') WHERE name = ?`, table)
 		args = []interface{}{column}
+	}
+	row := h.db.QueryRow(query, args...)
+	var tmp int
+	if err := row.Scan(&tmp); err != nil {
+		return false
+	}
+	return true
+}
+
+func (h sqlHelper) tableExists(table string) bool {
+	table = strings.TrimSpace(table)
+	if table == "" {
+		return false
+	}
+	var query string
+	var args []interface{}
+	switch h.style {
+	case "mysql":
+		query = `SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`
+		args = []interface{}{table}
+	case "postgres":
+		query = `SELECT 1 FROM information_schema.tables WHERE table_name = $1`
+		args = []interface{}{table}
+	default: // sqlite
+		query = `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`
+		args = []interface{}{table}
 	}
 	row := h.db.QueryRow(query, args...)
 	var tmp int
@@ -1277,6 +1304,9 @@ func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 	inClause("na1.id", f.AllowedPaisIDs)
 	query := `
         SELECT m.id, m.nom, m.tipus, m.estat, m.codi_postal,
+               m.nivell_administratiu_id_1,
+               m.nivell_administratiu_id_3,
+               m.nivell_administratiu_id_4,
                na1.nom_nivell AS pais_nom,
                na3.nom_nivell AS provincia_nom,
                na4.nom_nivell AS comarca_nom,
@@ -1296,7 +1326,11 @@ func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 	var res []MunicipiRow
 	for rows.Next() {
 		var r MunicipiRow
-		if err := rows.Scan(&r.ID, &r.Nom, &r.Tipus, &r.Estat, &r.CodiPostal, &r.PaisNom, &r.ProvNom, &r.Comarca, &r.ModeracioEstat); err != nil {
+		if err := rows.Scan(
+			&r.ID, &r.Nom, &r.Tipus, &r.Estat, &r.CodiPostal,
+			&r.PaisID, &r.ProvinciaID, &r.ComarcaID,
+			&r.PaisNom, &r.ProvNom, &r.Comarca, &r.ModeracioEstat,
+		); err != nil {
 			return nil, err
 		}
 		res = append(res, r)
@@ -1682,6 +1716,8 @@ func (h sqlHelper) saveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error)
 func (h sqlHelper) ensurePermissionsSchema() {
 	h.ensureUserExtraColumns()
 	h.ensurePolicyGrantsTable()
+	h.ensureMediaModerationColumns()
+	h.ensureMediaCreditsTables()
 }
 
 func (h sqlHelper) ensurePolicyGrantsTable() {
@@ -1748,6 +1784,209 @@ func (h sqlHelper) ensurePolicyGrantsTable() {
 	}
 	for _, idx := range indexStmts {
 		_, _ = h.db.Exec(idx)
+	}
+}
+
+func (h sqlHelper) ensureMediaModerationColumns() {
+	if !h.tableExists("media_items") {
+		return
+	}
+	switch h.style {
+	case "mysql":
+		if !h.columnExists("media_items", "moderation_status") {
+			_, _ = h.db.Exec("ALTER TABLE media_items ADD COLUMN moderation_status VARCHAR(20) NOT NULL DEFAULT 'pending'")
+		}
+		if !h.columnExists("media_items", "moderated_by") {
+			_, _ = h.db.Exec("ALTER TABLE media_items ADD COLUMN moderated_by INT UNSIGNED NULL")
+		}
+		if !h.columnExists("media_items", "moderated_at") {
+			_, _ = h.db.Exec("ALTER TABLE media_items ADD COLUMN moderated_at DATETIME")
+		}
+		if !h.columnExists("media_items", "moderation_notes") {
+			_, _ = h.db.Exec("ALTER TABLE media_items ADD COLUMN moderation_notes TEXT")
+		}
+	case "postgres":
+		if !h.columnExists("media_items", "moderation_status") {
+			_, _ = h.db.Exec("ALTER TABLE media_items ADD COLUMN moderation_status TEXT NOT NULL DEFAULT 'pending'")
+		}
+		if !h.columnExists("media_items", "moderated_by") {
+			_, _ = h.db.Exec("ALTER TABLE media_items ADD COLUMN moderated_by INTEGER")
+		}
+		if !h.columnExists("media_items", "moderated_at") {
+			_, _ = h.db.Exec("ALTER TABLE media_items ADD COLUMN moderated_at TIMESTAMP")
+		}
+		if !h.columnExists("media_items", "moderation_notes") {
+			_, _ = h.db.Exec("ALTER TABLE media_items ADD COLUMN moderation_notes TEXT")
+		}
+	default: // sqlite
+		if !h.columnExists("media_items", "moderation_status") {
+			_, _ = h.db.Exec("ALTER TABLE media_items ADD COLUMN moderation_status TEXT NOT NULL DEFAULT 'pending'")
+		}
+		if !h.columnExists("media_items", "moderated_by") {
+			_, _ = h.db.Exec("ALTER TABLE media_items ADD COLUMN moderated_by INTEGER")
+		}
+		if !h.columnExists("media_items", "moderated_at") {
+			_, _ = h.db.Exec("ALTER TABLE media_items ADD COLUMN moderated_at TIMESTAMP")
+		}
+		if !h.columnExists("media_items", "moderation_notes") {
+			_, _ = h.db.Exec("ALTER TABLE media_items ADD COLUMN moderation_notes TEXT")
+		}
+	}
+
+	indexStmts := []string{}
+	switch h.style {
+	case "mysql":
+		indexStmts = []string{
+			"CREATE INDEX idx_media_items_moderation ON media_items(moderation_status)",
+			"CREATE INDEX idx_media_albums_moderation ON media_albums(moderation_status)",
+		}
+	case "postgres":
+		indexStmts = []string{
+			"CREATE INDEX IF NOT EXISTS idx_media_items_moderation ON media_items(moderation_status)",
+			"CREATE INDEX IF NOT EXISTS idx_media_albums_moderation ON media_albums(moderation_status)",
+		}
+	default: // sqlite
+		indexStmts = []string{
+			"CREATE INDEX IF NOT EXISTS idx_media_items_moderation ON media_items(moderation_status)",
+			"CREATE INDEX IF NOT EXISTS idx_media_albums_moderation ON media_albums(moderation_status)",
+		}
+	}
+	for _, stmt := range indexStmts {
+		_, _ = h.db.Exec(stmt)
+	}
+}
+
+func (h sqlHelper) ensureMediaCreditsTables() {
+	var ledgerStmt string
+	var grantsStmt string
+	var logsStmt string
+	switch h.style {
+	case "mysql":
+		ledgerStmt = `CREATE TABLE IF NOT EXISTS user_credits_ledger (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            delta INT NOT NULL,
+            reason VARCHAR(100) NOT NULL,
+            ref_type VARCHAR(50) NULL,
+            ref_id INT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE
+        )`
+		grantsStmt = `CREATE TABLE IF NOT EXISTS media_access_grants (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            media_item_id INT UNSIGNED NOT NULL,
+            grant_token VARCHAR(255) NOT NULL UNIQUE,
+            expires_at DATETIME NOT NULL,
+            credits_spent INT NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+            FOREIGN KEY (media_item_id) REFERENCES media_items(id) ON DELETE CASCADE
+        )`
+		logsStmt = `CREATE TABLE IF NOT EXISTS media_access_logs (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            media_item_id INT UNSIGNED NOT NULL,
+            access_type VARCHAR(20) NOT NULL,
+            credits_spent INT NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+            FOREIGN KEY (media_item_id) REFERENCES media_items(id) ON DELETE CASCADE
+        )`
+	case "postgres":
+		ledgerStmt = `CREATE TABLE IF NOT EXISTS user_credits_ledger (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+            delta INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            ref_type TEXT,
+            ref_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`
+		grantsStmt = `CREATE TABLE IF NOT EXISTS media_access_grants (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+            media_item_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+            grant_token TEXT NOT NULL UNIQUE,
+            expires_at TIMESTAMP NOT NULL,
+            credits_spent INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`
+		logsStmt = `CREATE TABLE IF NOT EXISTS media_access_logs (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+            media_item_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+            access_type TEXT NOT NULL,
+            credits_spent INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`
+	default: // sqlite
+		ledgerStmt = `CREATE TABLE IF NOT EXISTS user_credits_ledger (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+            delta INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            ref_type TEXT,
+            ref_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`
+		grantsStmt = `CREATE TABLE IF NOT EXISTS media_access_grants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+            media_item_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+            grant_token TEXT NOT NULL UNIQUE,
+            expires_at TIMESTAMP NOT NULL,
+            credits_spent INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`
+		logsStmt = `CREATE TABLE IF NOT EXISTS media_access_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+            media_item_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+            access_type TEXT NOT NULL,
+            credits_spent INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`
+	}
+	if ledgerStmt != "" {
+		_, _ = h.db.Exec(ledgerStmt)
+	}
+	if grantsStmt != "" {
+		_, _ = h.db.Exec(grantsStmt)
+	}
+	if logsStmt != "" {
+		_, _ = h.db.Exec(logsStmt)
+	}
+
+	indexStmts := []string{}
+	switch h.style {
+	case "mysql":
+		indexStmts = []string{
+			"CREATE INDEX idx_user_credits_ledger_user ON user_credits_ledger(user_id)",
+			"CREATE INDEX idx_user_credits_ledger_ref ON user_credits_ledger(ref_type, ref_id)",
+			"CREATE INDEX idx_media_access_grants_lookup ON media_access_grants(user_id, media_item_id, expires_at)",
+			"CREATE INDEX idx_media_access_logs_user ON media_access_logs(user_id)",
+			"CREATE INDEX idx_media_access_logs_item ON media_access_logs(media_item_id)",
+		}
+	case "postgres":
+		indexStmts = []string{
+			"CREATE INDEX IF NOT EXISTS idx_user_credits_ledger_user ON user_credits_ledger(user_id)",
+			"CREATE INDEX IF NOT EXISTS idx_user_credits_ledger_ref ON user_credits_ledger(ref_type, ref_id)",
+			"CREATE INDEX IF NOT EXISTS idx_media_access_grants_lookup ON media_access_grants(user_id, media_item_id, expires_at)",
+			"CREATE INDEX IF NOT EXISTS idx_media_access_logs_user ON media_access_logs(user_id)",
+			"CREATE INDEX IF NOT EXISTS idx_media_access_logs_item ON media_access_logs(media_item_id)",
+		}
+	default: // sqlite
+		indexStmts = []string{
+			"CREATE INDEX IF NOT EXISTS idx_user_credits_ledger_user ON user_credits_ledger(user_id)",
+			"CREATE INDEX IF NOT EXISTS idx_user_credits_ledger_ref ON user_credits_ledger(ref_type, ref_id)",
+			"CREATE INDEX IF NOT EXISTS idx_media_access_grants_lookup ON media_access_grants(user_id, media_item_id, expires_at)",
+			"CREATE INDEX IF NOT EXISTS idx_media_access_logs_user ON media_access_logs(user_id)",
+			"CREATE INDEX IF NOT EXISTS idx_media_access_logs_item ON media_access_logs(media_item_id)",
+		}
+	}
+	for _, stmt := range indexStmts {
+		_, _ = h.db.Exec(stmt)
 	}
 }
 
@@ -3254,6 +3493,20 @@ func (h sqlHelper) listLlibrePagines(llibreID int) ([]LlibrePagina, error) {
 	return res, nil
 }
 
+func (h sqlHelper) getLlibrePaginaByID(id int) (*LlibrePagina, error) {
+	query := `
+        SELECT id, llibre_id, num_pagina, estat, indexed_at, indexed_by, notes
+        FROM llibre_pagines
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var p LlibrePagina
+	if err := row.Scan(&p.ID, &p.LlibreID, &p.NumPagina, &p.Estat, &p.IndexedAt, &p.IndexedBy, &p.Notes); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
 func (h sqlHelper) saveLlibrePagina(p *LlibrePagina) (int, error) {
 	if p.ID == 0 {
 		query := `
@@ -4712,4 +4965,542 @@ func (h sqlHelper) queryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]Cog
 		res = append(res, r)
 	}
 	return res, nil
+}
+
+// Media
+func (h sqlHelper) listMediaAlbumsByOwner(userID int) ([]MediaAlbum, error) {
+	query := `
+        SELECT a.id, a.public_id, a.title, COALESCE(a.description, ''), a.album_type, a.owner_user_id,
+               a.moderation_status, a.visibility, a.restricted_group_id, a.access_policy_id,
+               a.credit_cost, a.difficulty_score, COALESCE(a.source_type, ''), a.moderated_by, a.moderated_at,
+               COALESCE(a.moderation_notes, ''), COALESCE(cnt.total, 0) as items_count
+        FROM media_albums a
+        LEFT JOIN (
+            SELECT album_id, COUNT(*) as total FROM media_items GROUP BY album_id
+        ) cnt ON cnt.album_id = a.id
+        WHERE a.owner_user_id = ?
+        ORDER BY a.created_at DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MediaAlbum
+	for rows.Next() {
+		var a MediaAlbum
+		if err := rows.Scan(
+			&a.ID, &a.PublicID, &a.Title, &a.Description, &a.AlbumType, &a.OwnerUserID,
+			&a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
+			&a.CreditCost, &a.DifficultyScore, &a.SourceType, &a.ModeratedBy, &a.ModeratedAt,
+			&a.ModerationNotes, &a.ItemsCount,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getMediaAlbumByID(id int) (*MediaAlbum, error) {
+	query := `
+        SELECT id, public_id, title, COALESCE(description, ''), album_type, owner_user_id,
+               moderation_status, visibility, restricted_group_id, access_policy_id,
+               credit_cost, difficulty_score, COALESCE(source_type, ''), moderated_by, moderated_at,
+               COALESCE(moderation_notes, '')
+        FROM media_albums WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var a MediaAlbum
+	if err := row.Scan(
+		&a.ID, &a.PublicID, &a.Title, &a.Description, &a.AlbumType, &a.OwnerUserID,
+		&a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
+		&a.CreditCost, &a.DifficultyScore, &a.SourceType, &a.ModeratedBy, &a.ModeratedAt,
+		&a.ModerationNotes,
+	); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (h sqlHelper) getMediaAlbumByPublicID(publicID string) (*MediaAlbum, error) {
+	query := `
+        SELECT id, public_id, title, COALESCE(description, ''), album_type, owner_user_id,
+               moderation_status, visibility, restricted_group_id, access_policy_id,
+               credit_cost, difficulty_score, COALESCE(source_type, ''), moderated_by, moderated_at,
+               COALESCE(moderation_notes, '')
+        FROM media_albums WHERE public_id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, publicID)
+	var a MediaAlbum
+	if err := row.Scan(
+		&a.ID, &a.PublicID, &a.Title, &a.Description, &a.AlbumType, &a.OwnerUserID,
+		&a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
+		&a.CreditCost, &a.DifficultyScore, &a.SourceType, &a.ModeratedBy, &a.ModeratedAt,
+		&a.ModerationNotes,
+	); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (h sqlHelper) createMediaAlbum(a *MediaAlbum) (int, error) {
+	query := `
+        INSERT INTO media_albums
+            (public_id, title, description, album_type, owner_user_id, moderation_status, visibility, restricted_group_id, access_policy_id,
+             credit_cost, difficulty_score, source_type, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += " RETURNING id"
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{
+		a.PublicID, a.Title, a.Description, a.AlbumType, a.OwnerUserID, a.ModerationStatus, a.Visibility, a.RestrictedGroupID, a.AccessPolicyID,
+		a.CreditCost, a.DifficultyScore, a.SourceType, a.ModeratedBy, a.ModeratedAt, a.ModerationNotes,
+	}
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(query, args...).Scan(&a.ID); err != nil {
+			return 0, err
+		}
+		return a.ID, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		a.ID = int(id)
+	}
+	return a.ID, nil
+}
+
+func (h sqlHelper) listMediaItemsByAlbum(albumID int) ([]MediaItem, error) {
+	query := `
+        SELECT id, public_id, album_id, COALESCE(title, ''), COALESCE(original_filename, ''), COALESCE(mime_type, ''),
+               COALESCE(byte_size, 0), COALESCE(width, 0), COALESCE(height, 0), COALESCE(checksum_sha256, ''),
+               storage_key_original, COALESCE(thumb_path, ''), derivatives_status, moderation_status,
+               moderated_by, moderated_at, COALESCE(moderation_notes, ''), credit_cost
+        FROM media_items WHERE album_id = ?
+        ORDER BY id ASC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MediaItem
+	for rows.Next() {
+		var item MediaItem
+		if err := rows.Scan(
+			&item.ID, &item.PublicID, &item.AlbumID, &item.Title, &item.OriginalFilename, &item.MimeType,
+			&item.ByteSize, &item.Width, &item.Height, &item.ChecksumSHA256,
+			&item.StorageKeyOriginal, &item.ThumbPath, &item.DerivativesStatus, &item.ModerationStatus,
+			&item.ModeratedBy, &item.ModeratedAt, &item.ModerationNotes, &item.CreditCost,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, item)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getMediaItemByPublicID(publicID string) (*MediaItem, error) {
+	query := `
+        SELECT id, public_id, album_id, COALESCE(title, ''), COALESCE(original_filename, ''), COALESCE(mime_type, ''),
+               COALESCE(byte_size, 0), COALESCE(width, 0), COALESCE(height, 0), COALESCE(checksum_sha256, ''),
+               storage_key_original, COALESCE(thumb_path, ''), derivatives_status, moderation_status,
+               moderated_by, moderated_at, COALESCE(moderation_notes, ''), credit_cost
+        FROM media_items WHERE public_id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, publicID)
+	var item MediaItem
+	if err := row.Scan(
+		&item.ID, &item.PublicID, &item.AlbumID, &item.Title, &item.OriginalFilename, &item.MimeType,
+		&item.ByteSize, &item.Width, &item.Height, &item.ChecksumSHA256,
+		&item.StorageKeyOriginal, &item.ThumbPath, &item.DerivativesStatus, &item.ModerationStatus,
+		&item.ModeratedBy, &item.ModeratedAt, &item.ModerationNotes, &item.CreditCost,
+	); err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (h sqlHelper) createMediaItem(item *MediaItem) (int, error) {
+	if item.ModerationStatus == "" {
+		item.ModerationStatus = "pending"
+	}
+	query := `
+        INSERT INTO media_items
+            (public_id, album_id, title, original_filename, mime_type, byte_size, width, height, checksum_sha256,
+             storage_key_original, thumb_path, derivatives_status, moderation_status, moderated_by, moderated_at,
+             moderation_notes, credit_cost, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += " RETURNING id"
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{
+		item.PublicID, item.AlbumID, item.Title, item.OriginalFilename, item.MimeType, item.ByteSize, item.Width, item.Height, item.ChecksumSHA256,
+		item.StorageKeyOriginal, item.ThumbPath, item.DerivativesStatus, item.ModerationStatus, item.ModeratedBy, item.ModeratedAt,
+		item.ModerationNotes, item.CreditCost,
+	}
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(query, args...).Scan(&item.ID); err != nil {
+			return 0, err
+		}
+		return item.ID, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		item.ID = int(id)
+	}
+	return item.ID, nil
+}
+
+func (h sqlHelper) updateMediaItemDerivativesStatus(itemID int, status string) error {
+	stmt := `UPDATE media_items SET derivatives_status = ?, updated_at = ` + h.nowFun + ` WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, status, itemID)
+	return err
+}
+
+func (h sqlHelper) listMediaAlbumsByStatus(status string) ([]MediaAlbum, error) {
+	query := `
+        SELECT a.id, a.public_id, a.title, COALESCE(a.description, ''), a.album_type, a.owner_user_id,
+               a.moderation_status, a.visibility, a.restricted_group_id, a.access_policy_id,
+               a.credit_cost, a.difficulty_score, COALESCE(a.source_type, ''), a.moderated_by, a.moderated_at,
+               COALESCE(a.moderation_notes, ''), COALESCE(cnt.total, 0) as items_count
+        FROM media_albums a
+        LEFT JOIN (
+            SELECT album_id, COUNT(*) as total FROM media_items GROUP BY album_id
+        ) cnt ON cnt.album_id = a.id
+        WHERE a.moderation_status = ?
+        ORDER BY a.created_at DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MediaAlbum
+	for rows.Next() {
+		var a MediaAlbum
+		if err := rows.Scan(
+			&a.ID, &a.PublicID, &a.Title, &a.Description, &a.AlbumType, &a.OwnerUserID,
+			&a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
+			&a.CreditCost, &a.DifficultyScore, &a.SourceType, &a.ModeratedBy, &a.ModeratedAt,
+			&a.ModerationNotes, &a.ItemsCount,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listMediaItemsByStatus(status string) ([]MediaItem, error) {
+	query := `
+        SELECT id, public_id, album_id, COALESCE(title, ''), COALESCE(original_filename, ''), COALESCE(mime_type, ''),
+               COALESCE(byte_size, 0), COALESCE(width, 0), COALESCE(height, 0), COALESCE(checksum_sha256, ''),
+               storage_key_original, COALESCE(thumb_path, ''), derivatives_status, moderation_status,
+               moderated_by, moderated_at, COALESCE(moderation_notes, ''), credit_cost
+        FROM media_items
+        WHERE moderation_status = ?
+        ORDER BY created_at DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MediaItem
+	for rows.Next() {
+		var item MediaItem
+		if err := rows.Scan(
+			&item.ID, &item.PublicID, &item.AlbumID, &item.Title, &item.OriginalFilename, &item.MimeType,
+			&item.ByteSize, &item.Width, &item.Height, &item.ChecksumSHA256,
+			&item.StorageKeyOriginal, &item.ThumbPath, &item.DerivativesStatus, &item.ModerationStatus,
+			&item.ModeratedBy, &item.ModeratedAt, &item.ModerationNotes, &item.CreditCost,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, item)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) updateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
+	restricted := sql.NullInt64{Int64: int64(restrictedGroupID), Valid: restrictedGroupID > 0}
+	accessPolicy := sql.NullInt64{Int64: int64(accessPolicyID), Valid: accessPolicyID > 0}
+	moderatedBy := sql.NullInt64{Int64: int64(moderatorID), Valid: moderatorID > 0}
+	stmt := `UPDATE media_albums
+        SET moderation_status = ?, visibility = ?, restricted_group_id = ?, access_policy_id = ?, credit_cost = ?,
+            difficulty_score = ?, source_type = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ` + h.nowFun + `,
+            updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, status, visibility, restricted, accessPolicy, creditCost, difficultyScore, sourceType, notes, moderatedBy, id)
+	return err
+}
+
+func (h sqlHelper) updateMediaItemModeration(id int, status string, creditCost int, notes string, moderatorID int) error {
+	moderatedBy := sql.NullInt64{Int64: int64(moderatorID), Valid: moderatorID > 0}
+	stmt := `UPDATE media_items
+        SET moderation_status = ?, credit_cost = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ` + h.nowFun + `,
+            updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, status, creditCost, notes, moderatedBy, id)
+	return err
+}
+
+func (h sqlHelper) listMediaItemLinksByPagina(paginaID int) ([]MediaItemPageLink, error) {
+	query := `
+        SELECT mp.id, mp.media_item_id, mp.page_order, COALESCE(mp.notes, ''),
+               i.public_id, COALESCE(i.title, ''), COALESCE(i.thumb_path, ''), i.moderation_status,
+               a.id, a.public_id, COALESCE(a.title, ''), a.owner_user_id, a.moderation_status,
+               a.visibility, a.restricted_group_id, a.access_policy_id
+        FROM media_item_pages mp
+        JOIN media_items i ON i.id = mp.media_item_id
+        JOIN media_albums a ON a.id = i.album_id
+        WHERE mp.pagina_id = ?
+        ORDER BY mp.page_order ASC, mp.id ASC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, paginaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MediaItemPageLink
+	for rows.Next() {
+		var row MediaItemPageLink
+		if err := rows.Scan(
+			&row.ID, &row.MediaItemID, &row.PageOrder, &row.Notes,
+			&row.MediaItemPublicID, &row.MediaItemTitle, &row.MediaItemThumbPath, &row.MediaItemStatus,
+			&row.AlbumID, &row.AlbumPublicID, &row.AlbumTitle, &row.AlbumOwnerUserID, &row.AlbumModerationStatus,
+			&row.AlbumVisibility, &row.AlbumRestrictedGroupID, &row.AlbumAccessPolicyID,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) upsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder int, notes string) error {
+	stmt := `
+        INSERT INTO media_item_pages (media_item_id, llibre_id, pagina_id, page_order, notes)
+        VALUES (?, ?, ?, ?, ?)`
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE page_order = VALUES(page_order), notes = VALUES(notes)"
+	} else {
+		stmt += " ON CONFLICT (media_item_id, pagina_id) DO UPDATE SET page_order = excluded.page_order, notes = excluded.notes"
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, mediaItemID, llibreID, paginaID, pageOrder, notes)
+	return err
+}
+
+func (h sqlHelper) deleteMediaItemPageLink(mediaItemID, paginaID int) error {
+	stmt := `DELETE FROM media_item_pages WHERE media_item_id = ? AND pagina_id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, mediaItemID, paginaID)
+	return err
+}
+
+func (h sqlHelper) countMediaItemLinksByAlbum(albumID int) (map[int]int, error) {
+	query := `
+        SELECT mp.media_item_id, COUNT(*)
+        FROM media_item_pages mp
+        JOIN media_items i ON i.id = mp.media_item_id
+        WHERE i.album_id = ?
+        GROUP BY mp.media_item_id`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	res := map[int]int{}
+	for rows.Next() {
+		var itemID int
+		var count int
+		if err := rows.Scan(&itemID, &count); err != nil {
+			return nil, err
+		}
+		res[itemID] = count
+	}
+	return res, nil
+}
+
+func (h sqlHelper) searchMediaItems(query string, limit int) ([]MediaItemSearchRow, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []MediaItemSearchRow{}, nil
+	}
+	search := "%" + strings.ToLower(query) + "%"
+	stmt := `
+        SELECT i.id, i.public_id, COALESCE(i.title, ''), COALESCE(i.thumb_path, ''), i.moderation_status,
+               a.id, a.public_id, COALESCE(a.title, ''), a.owner_user_id, a.moderation_status,
+               a.visibility, a.restricted_group_id, a.access_policy_id
+        FROM media_items i
+        JOIN media_albums a ON a.id = i.album_id
+        WHERE LOWER(COALESCE(i.title, '')) LIKE ?
+           OR LOWER(COALESCE(i.original_filename, '')) LIKE ?
+           OR LOWER(COALESCE(a.title, '')) LIKE ?
+           OR i.public_id = ?
+        ORDER BY a.title ASC, i.title ASC`
+	args := []interface{}{search, search, search, query}
+	if limit > 0 {
+		stmt += " LIMIT ?"
+		args = append(args, limit)
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	rows, err := h.db.Query(stmt, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MediaItemSearchRow
+	for rows.Next() {
+		var row MediaItemSearchRow
+		if err := rows.Scan(
+			&row.MediaItemID, &row.MediaItemPublicID, &row.MediaItemTitle, &row.MediaItemThumb, &row.MediaItemStatus,
+			&row.AlbumID, &row.AlbumPublicID, &row.AlbumTitle, &row.AlbumOwnerUserID, &row.AlbumStatus,
+			&row.AlbumVisibility, &row.AlbumRestrictedGroupID, &row.AlbumAccessPolicyID,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getUserCreditsBalance(userID int) (int, error) {
+	query := `SELECT COALESCE(SUM(delta), 0) FROM user_credits_ledger WHERE user_id = ?`
+	row := h.db.QueryRow(formatPlaceholders(h.style, query), userID)
+	var total int64
+	if err := row.Scan(&total); err != nil {
+		return 0, err
+	}
+	return int(total), nil
+}
+
+func (h sqlHelper) insertUserCreditsLedger(entry *UserCreditsLedgerEntry) (int, error) {
+	if entry == nil {
+		return 0, errors.New("entry nil")
+	}
+	stmt := `INSERT INTO user_credits_ledger (user_id, delta, reason, ref_type, ref_id, created_at)
+	         VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if h.style == "postgres" {
+		var id int
+		if err := h.db.QueryRow(stmt, entry.UserID, entry.Delta, entry.Reason, entry.RefType, entry.RefID).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	res, err := h.db.Exec(stmt, entry.UserID, entry.Delta, entry.Reason, entry.RefType, entry.RefID)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		return int(id), nil
+	}
+	return 0, nil
+}
+
+func (h sqlHelper) getActiveMediaAccessGrant(userID, mediaItemID int) (*MediaAccessGrant, error) {
+	query := `SELECT id, user_id, media_item_id, grant_token, expires_at, credits_spent, created_at
+	          FROM media_access_grants
+	          WHERE user_id = ? AND media_item_id = ? AND expires_at > ` + h.nowFun + `
+	          ORDER BY expires_at DESC
+	          LIMIT 1`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, userID, mediaItemID)
+	var g MediaAccessGrant
+	if err := row.Scan(&g.ID, &g.UserID, &g.MediaItemID, &g.GrantToken, &g.ExpiresAt, &g.CreditsSpent, &g.CreatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &g, nil
+}
+
+func (h sqlHelper) getMediaAccessGrantByToken(token string) (*MediaAccessGrant, error) {
+	query := `SELECT id, user_id, media_item_id, grant_token, expires_at, credits_spent, created_at
+	          FROM media_access_grants
+	          WHERE grant_token = ? AND expires_at > ` + h.nowFun + `
+	          LIMIT 1`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, token)
+	var g MediaAccessGrant
+	if err := row.Scan(&g.ID, &g.UserID, &g.MediaItemID, &g.GrantToken, &g.ExpiresAt, &g.CreditsSpent, &g.CreatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &g, nil
+}
+
+func (h sqlHelper) createMediaAccessGrant(grant *MediaAccessGrant) (int, error) {
+	if grant == nil {
+		return 0, errors.New("grant nil")
+	}
+	stmt := `INSERT INTO media_access_grants (user_id, media_item_id, grant_token, expires_at, credits_spent, created_at)
+	         VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if h.style == "postgres" {
+		var id int
+		if err := h.db.QueryRow(stmt, grant.UserID, grant.MediaItemID, grant.GrantToken, grant.ExpiresAt, grant.CreditsSpent).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	res, err := h.db.Exec(stmt, grant.UserID, grant.MediaItemID, grant.GrantToken, grant.ExpiresAt, grant.CreditsSpent)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		return int(id), nil
+	}
+	return 0, nil
+}
+
+func (h sqlHelper) insertMediaAccessLog(entry *MediaAccessLog) (int, error) {
+	if entry == nil {
+		return 0, errors.New("entry nil")
+	}
+	stmt := `INSERT INTO media_access_logs (user_id, media_item_id, access_type, credits_spent, created_at)
+	         VALUES (?, ?, ?, ?, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if h.style == "postgres" {
+		var id int
+		if err := h.db.QueryRow(stmt, entry.UserID, entry.MediaItemID, entry.AccessType, entry.CreditsSpent).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	res, err := h.db.Exec(stmt, entry.UserID, entry.MediaItemID, entry.AccessType, entry.CreditsSpent)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		return int(id), nil
+	}
+	return 0, nil
 }

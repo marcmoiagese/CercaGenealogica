@@ -454,11 +454,85 @@ func (d *MySQL) UpdateLlibreModeracio(id int, estat, motiu string, moderatorID i
 func (d *MySQL) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {
 	return d.help.listLlibrePagines(llibreID)
 }
+func (d *MySQL) GetLlibrePaginaByID(id int) (*LlibrePagina, error) {
+	return d.help.getLlibrePaginaByID(id)
+}
 func (d *MySQL) SaveLlibrePagina(p *LlibrePagina) (int, error) {
 	return d.help.saveLlibrePagina(p)
 }
 func (d *MySQL) RecalcLlibrePagines(llibreID, total int) error {
 	return d.help.recalcLlibrePagines(llibreID, total)
+}
+
+// Media
+func (d *MySQL) ListMediaAlbumsByOwner(userID int) ([]MediaAlbum, error) {
+	return d.help.listMediaAlbumsByOwner(userID)
+}
+func (d *MySQL) GetMediaAlbumByID(id int) (*MediaAlbum, error) {
+	return d.help.getMediaAlbumByID(id)
+}
+func (d *MySQL) GetMediaAlbumByPublicID(publicID string) (*MediaAlbum, error) {
+	return d.help.getMediaAlbumByPublicID(publicID)
+}
+func (d *MySQL) CreateMediaAlbum(a *MediaAlbum) (int, error) {
+	return d.help.createMediaAlbum(a)
+}
+func (d *MySQL) ListMediaItemsByAlbum(albumID int) ([]MediaItem, error) {
+	return d.help.listMediaItemsByAlbum(albumID)
+}
+func (d *MySQL) GetMediaItemByPublicID(publicID string) (*MediaItem, error) {
+	return d.help.getMediaItemByPublicID(publicID)
+}
+func (d *MySQL) CreateMediaItem(item *MediaItem) (int, error) {
+	return d.help.createMediaItem(item)
+}
+func (d *MySQL) UpdateMediaItemDerivativesStatus(itemID int, status string) error {
+	return d.help.updateMediaItemDerivativesStatus(itemID, status)
+}
+func (d *MySQL) ListMediaAlbumsByStatus(status string) ([]MediaAlbum, error) {
+	return d.help.listMediaAlbumsByStatus(status)
+}
+func (d *MySQL) ListMediaItemsByStatus(status string) ([]MediaItem, error) {
+	return d.help.listMediaItemsByStatus(status)
+}
+func (d *MySQL) UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
+	return d.help.updateMediaAlbumModeration(id, status, visibility, restrictedGroupID, accessPolicyID, creditCost, difficultyScore, sourceType, notes, moderatorID)
+}
+func (d *MySQL) UpdateMediaItemModeration(id int, status string, creditCost int, notes string, moderatorID int) error {
+	return d.help.updateMediaItemModeration(id, status, creditCost, notes, moderatorID)
+}
+func (d *MySQL) GetUserCreditsBalance(userID int) (int, error) {
+	return d.help.getUserCreditsBalance(userID)
+}
+func (d *MySQL) InsertUserCreditsLedger(entry *UserCreditsLedgerEntry) (int, error) {
+	return d.help.insertUserCreditsLedger(entry)
+}
+func (d *MySQL) GetActiveMediaAccessGrant(userID, mediaItemID int) (*MediaAccessGrant, error) {
+	return d.help.getActiveMediaAccessGrant(userID, mediaItemID)
+}
+func (d *MySQL) GetMediaAccessGrantByToken(token string) (*MediaAccessGrant, error) {
+	return d.help.getMediaAccessGrantByToken(token)
+}
+func (d *MySQL) CreateMediaAccessGrant(grant *MediaAccessGrant) (int, error) {
+	return d.help.createMediaAccessGrant(grant)
+}
+func (d *MySQL) InsertMediaAccessLog(entry *MediaAccessLog) (int, error) {
+	return d.help.insertMediaAccessLog(entry)
+}
+func (d *MySQL) ListMediaItemLinksByPagina(paginaID int) ([]MediaItemPageLink, error) {
+	return d.help.listMediaItemLinksByPagina(paginaID)
+}
+func (d *MySQL) UpsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder int, notes string) error {
+	return d.help.upsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder, notes)
+}
+func (d *MySQL) DeleteMediaItemPageLink(mediaItemID, paginaID int) error {
+	return d.help.deleteMediaItemPageLink(mediaItemID, paginaID)
+}
+func (d *MySQL) CountMediaItemLinksByAlbum(albumID int) (map[int]int, error) {
+	return d.help.countMediaItemLinksByAlbum(albumID)
+}
+func (d *MySQL) SearchMediaItems(query string, limit int) ([]MediaItemSearchRow, error) {
+	return d.help.searchMediaItems(query, limit)
 }
 
 func (d *MySQL) ListTranscripcionsRaw(llibreID int, f TranscripcioFilter) ([]TranscripcioRaw, error) {

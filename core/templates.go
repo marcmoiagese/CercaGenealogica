@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
@@ -38,33 +39,7 @@ var templateFuncs = template.FuncMap{
 		}
 		return text
 	},
-	"index": func(m interface{}, k string) interface{} {
-		if m == nil {
-			return nil
-		}
-		switch mm := m.(type) {
-		case map[string]interface{}:
-			return mm[k]
-		case map[string]string:
-			return mm[k]
-		case map[string]int:
-			return mm[k]
-		case map[string]bool:
-			return mm[k]
-		case map[string]float64:
-			return mm[k]
-		default:
-			v := reflect.ValueOf(m)
-			if v.IsValid() && v.Kind() == reflect.Map && v.Type().Key().Kind() == reflect.String {
-				key := reflect.ValueOf(k)
-				val := v.MapIndex(key)
-				if val.IsValid() {
-					return val.Interface()
-				}
-			}
-		}
-		return nil
-	},
+	"index": templateIndex,
 	"list": func(values ...string) []string {
 		return values
 	},
@@ -339,6 +314,174 @@ func injectUserIfMissing(r *http.Request, data interface{}) interface{} {
 		m["User"] = u
 	}
 	return m
+}
+
+func templateIndex(m interface{}, k interface{}) interface{} {
+	if m == nil {
+		return nil
+	}
+	v := reflect.ValueOf(m)
+	if !v.IsValid() {
+		return nil
+	}
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return nil
+		}
+		v = v.Elem()
+	}
+	switch v.Kind() {
+	case reflect.Map:
+		key, ok := coerceTemplateKey(k, v.Type().Key())
+		if !ok {
+			return nil
+		}
+		val := v.MapIndex(key)
+		if val.IsValid() {
+			return val.Interface()
+		}
+	case reflect.Slice, reflect.Array:
+		idx, ok := coerceIntIndex(k)
+		if !ok || idx < 0 || idx >= v.Len() {
+			return nil
+		}
+		return v.Index(idx).Interface()
+	}
+	return nil
+}
+
+func coerceTemplateKey(k interface{}, keyType reflect.Type) (reflect.Value, bool) {
+	if k == nil || keyType == nil {
+		return reflect.Value{}, false
+	}
+	key := reflect.ValueOf(k)
+	if !key.IsValid() {
+		return reflect.Value{}, false
+	}
+	if key.Type().AssignableTo(keyType) {
+		return key, true
+	}
+	if key.Type().ConvertibleTo(keyType) && keyType.Kind() != reflect.String {
+		return key.Convert(keyType), true
+	}
+	switch keyType.Kind() {
+	case reflect.String:
+		return reflect.ValueOf(fmt.Sprint(k)), true
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if v, ok := coerceInt64(k); ok {
+			return reflect.ValueOf(v).Convert(keyType), true
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if v, ok := coerceUint64(k); ok {
+			return reflect.ValueOf(v).Convert(keyType), true
+		}
+	}
+	return reflect.Value{}, false
+}
+
+func coerceIntIndex(k interface{}) (int, bool) {
+	if v, ok := coerceInt64(k); ok {
+		return int(v), true
+	}
+	return 0, false
+}
+
+func coerceInt64(k interface{}) (int64, bool) {
+	switch v := k.(type) {
+	case int:
+		return int64(v), true
+	case int8:
+		return int64(v), true
+	case int16:
+		return int64(v), true
+	case int32:
+		return int64(v), true
+	case int64:
+		return v, true
+	case uint:
+		return int64(v), true
+	case uint8:
+		return int64(v), true
+	case uint16:
+		return int64(v), true
+	case uint32:
+		return int64(v), true
+	case uint64:
+		if v > uint64(^uint64(0)>>1) {
+			return 0, false
+		}
+		return int64(v), true
+	case float32:
+		return int64(v), true
+	case float64:
+		return int64(v), true
+	case string:
+		if v == "" {
+			return 0, false
+		}
+		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return parsed, true
+		}
+	}
+	return 0, false
+}
+
+func coerceUint64(k interface{}) (uint64, bool) {
+	switch v := k.(type) {
+	case int:
+		if v < 0 {
+			return 0, false
+		}
+		return uint64(v), true
+	case int8:
+		if v < 0 {
+			return 0, false
+		}
+		return uint64(v), true
+	case int16:
+		if v < 0 {
+			return 0, false
+		}
+		return uint64(v), true
+	case int32:
+		if v < 0 {
+			return 0, false
+		}
+		return uint64(v), true
+	case int64:
+		if v < 0 {
+			return 0, false
+		}
+		return uint64(v), true
+	case uint:
+		return uint64(v), true
+	case uint8:
+		return uint64(v), true
+	case uint16:
+		return uint64(v), true
+	case uint32:
+		return uint64(v), true
+	case uint64:
+		return v, true
+	case float32:
+		if v < 0 {
+			return 0, false
+		}
+		return uint64(v), true
+	case float64:
+		if v < 0 {
+			return 0, false
+		}
+		return uint64(v), true
+	case string:
+		if v == "" {
+			return 0, false
+		}
+		if parsed, err := strconv.ParseUint(v, 10, 64); err == nil {
+			return parsed, true
+		}
+	}
+	return 0, false
 }
 
 // injectPermsIfMissing afegeix flags de permisos per renderitzar el menú privat quan no s'han passat explícitament.

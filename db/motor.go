@@ -127,8 +127,35 @@ type DB interface {
 	GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error)
 	UpsertLlibreIndexacioStats(stats *LlibreIndexacioStats) error
 	ListLlibrePagines(llibreID int) ([]LlibrePagina, error)
+	GetLlibrePaginaByID(id int) (*LlibrePagina, error)
 	SaveLlibrePagina(p *LlibrePagina) (int, error)
 	RecalcLlibrePagines(llibreID, total int) error
+	// Media
+	ListMediaAlbumsByOwner(userID int) ([]MediaAlbum, error)
+	GetMediaAlbumByID(id int) (*MediaAlbum, error)
+	GetMediaAlbumByPublicID(publicID string) (*MediaAlbum, error)
+	CreateMediaAlbum(a *MediaAlbum) (int, error)
+	ListMediaItemsByAlbum(albumID int) ([]MediaItem, error)
+	GetMediaItemByPublicID(publicID string) (*MediaItem, error)
+	CreateMediaItem(item *MediaItem) (int, error)
+	UpdateMediaItemDerivativesStatus(itemID int, status string) error
+	ListMediaAlbumsByStatus(status string) ([]MediaAlbum, error)
+	ListMediaItemsByStatus(status string) ([]MediaItem, error)
+	UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error
+	UpdateMediaItemModeration(id int, status string, creditCost int, notes string, moderatorID int) error
+	// Media credits + grants
+	GetUserCreditsBalance(userID int) (int, error)
+	InsertUserCreditsLedger(entry *UserCreditsLedgerEntry) (int, error)
+	GetActiveMediaAccessGrant(userID, mediaItemID int) (*MediaAccessGrant, error)
+	GetMediaAccessGrantByToken(token string) (*MediaAccessGrant, error)
+	CreateMediaAccessGrant(grant *MediaAccessGrant) (int, error)
+	InsertMediaAccessLog(entry *MediaAccessLog) (int, error)
+	// Media links to pages
+	ListMediaItemLinksByPagina(paginaID int) ([]MediaItemPageLink, error)
+	UpsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder int, notes string) error
+	DeleteMediaItemPageLink(mediaItemID, paginaID int) error
+	CountMediaItemLinksByAlbum(albumID int) (map[int]int, error)
+	SearchMediaItems(query string, limit int) ([]MediaItemSearchRow, error)
 	// Transcripcions RAW
 	ListTranscripcionsRaw(llibreID int, f TranscripcioFilter) ([]TranscripcioRaw, error)
 	ListTranscripcionsRawGlobal(f TranscripcioFilter) ([]TranscripcioRaw, error)
@@ -510,6 +537,9 @@ type MunicipiRow struct {
 	Tipus          string
 	Estat          string
 	CodiPostal     string
+	PaisID         sql.NullInt64
+	ProvinciaID    sql.NullInt64
+	ComarcaID      sql.NullInt64
 	PaisNom        sql.NullString
 	ProvNom        sql.NullString
 	Comarca        sql.NullString
@@ -762,6 +792,121 @@ type LlibrePagina struct {
 	IndexedAt sql.NullString
 	IndexedBy sql.NullInt64
 	Notes     string
+}
+
+// Media
+type MediaAlbum struct {
+	ID                int
+	PublicID          string
+	Title             string
+	Description       string
+	AlbumType         string
+	OwnerUserID       int
+	ModerationStatus  string
+	Visibility        string
+	RestrictedGroupID sql.NullInt64
+	AccessPolicyID    sql.NullInt64
+	CreditCost        int
+	DifficultyScore   int
+	SourceType        string
+	ModeratedBy       sql.NullInt64
+	ModeratedAt       sql.NullTime
+	ModerationNotes   string
+	ItemsCount        int
+}
+
+type MediaItem struct {
+	ID                 int
+	PublicID           string
+	AlbumID            int
+	Title              string
+	OriginalFilename   string
+	MimeType           string
+	ByteSize           int64
+	Width              int
+	Height             int
+	ChecksumSHA256     string
+	StorageKeyOriginal string
+	ThumbPath          string
+	DerivativesStatus  string
+	ModerationStatus   string
+	ModeratedBy        sql.NullInt64
+	ModeratedAt        sql.NullTime
+	ModerationNotes    string
+	CreditCost         int
+}
+
+type MediaItemPage struct {
+	ID          int
+	MediaItemID int
+	LlibreID    sql.NullInt64
+	PaginaID    sql.NullInt64
+	PageOrder   int
+	Notes       string
+}
+
+type MediaItemPageLink struct {
+	ID                     int
+	MediaItemID            int
+	MediaItemPublicID      string
+	MediaItemTitle         string
+	MediaItemThumbPath     string
+	MediaItemStatus        string
+	AlbumID                int
+	AlbumPublicID          string
+	AlbumTitle             string
+	AlbumOwnerUserID       int
+	AlbumModerationStatus  string
+	AlbumVisibility        string
+	AlbumRestrictedGroupID sql.NullInt64
+	AlbumAccessPolicyID    sql.NullInt64
+	PageOrder              int
+	Notes                  string
+}
+
+type MediaItemSearchRow struct {
+	MediaItemID            int
+	MediaItemPublicID      string
+	MediaItemTitle         string
+	MediaItemThumb         string
+	MediaItemStatus        string
+	AlbumID                int
+	AlbumPublicID          string
+	AlbumTitle             string
+	AlbumOwnerUserID       int
+	AlbumStatus            string
+	AlbumVisibility        string
+	AlbumRestrictedGroupID sql.NullInt64
+	AlbumAccessPolicyID    sql.NullInt64
+}
+
+type UserCreditsLedgerEntry struct {
+	ID        int
+	UserID    int
+	Delta     int
+	Reason    string
+	RefType   sql.NullString
+	RefID     sql.NullInt64
+	CreatedAt time.Time
+}
+
+type MediaAccessGrant struct {
+	ID           int
+	UserID       int
+	MediaItemID  int
+	GrantToken   string
+	ExpiresAt    time.Time
+	CreditsSpent int
+	CreatedAt    time.Time
+}
+
+type MediaAccessLog struct {
+	ID           int
+	UserID       int
+	MediaItemID  int
+	AccessType   string
+	CreditsSpent int
+	CreatedAt    time.Time
 }
 
 type TranscripcioRaw struct {

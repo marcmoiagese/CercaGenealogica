@@ -95,7 +95,16 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 	canEditMunicipi := make(map[int]bool, len(muns))
 	showMunicipiActions := false
 	for _, mun := range muns {
-		munTarget := a.resolveMunicipiTarget(mun.ID)
+		munTarget := PermissionTarget{MunicipiID: intPtr(mun.ID)}
+		if mun.ProvinciaID.Valid {
+			munTarget.ProvinciaID = intPtr(int(mun.ProvinciaID.Int64))
+		}
+		if mun.ComarcaID.Valid {
+			munTarget.ComarcaID = intPtr(int(mun.ComarcaID.Int64))
+		}
+		if mun.PaisID.Valid {
+			munTarget.PaisID = intPtr(int(mun.PaisID.Int64))
+		}
 		canEdit := a.HasPermission(user.ID, permKeyTerritoriMunicipisEdit, munTarget)
 		canEditMunicipi[mun.ID] = canEdit
 		if canEdit {

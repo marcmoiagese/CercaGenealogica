@@ -60,6 +60,15 @@
             </ul>
         </div>
         {{ end }}
+        <div class="menu-seccio">
+            <div class="menu-titol">
+                <i class="fas fa-photo-video"></i>
+                <h3>{{ t .Lang "menu.section.media" }}</h3>
+            </div>
+            <ul>
+                <li class="menu-opcio"><a href="/media/albums"><i class="fas fa-images"></i> {{ t .Lang "menu.media.albums" }}</a></li>
+            </ul>
+        </div>
         {{ if and .Data (or (index .Data "CanModerate") (index .Data "IsAdmin")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
@@ -68,6 +77,7 @@
             </div>
             <ul>
                 <li class="menu-opcio"><a href="/moderacio"><i class="fas fa-clipboard-check"></i> {{ t .Lang "admin.menu.moderation" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/moderacio/media"><i class="fas fa-photo-video"></i> {{ t .Lang "admin.menu.moderation_media" }}</a></li>
             </ul>
         </div>
         {{ end }}

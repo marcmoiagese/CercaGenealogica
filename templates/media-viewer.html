@@ -1,0 +1,122 @@
+{{ define "media-viewer.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ .Data.Item.Title }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/media.css">
+    <link rel="stylesheet" href="/static/css/media-viewer.css">
+</head>
+<body>
+    {{ if .UserLoggedIn }}
+        {{ template "header-private" . }}
+        {{ template "menu" . }}
+    {{ else }}
+        {{ template "header-public" . }}
+    {{ end }}
+    <main class="contingut-principal media-viewer-layout">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <h1>{{ .Data.Item.Title }}</h1>
+                    <div class="media-chip-row">
+                        <span class="media-chip">{{ t $.Lang (printf "media.album.type.%s" .Data.Album.AlbumType) }}</span>
+                        <span class="media-chip media-chip-muted">{{ t $.Lang (printf "media.album.status.%s" .Data.Album.ModerationStatus) }}</span>
+                    </div>
+                </div>
+                <div class="card-actions">
+                    <a class="boto-secundari" href="/media/albums/{{ .Data.Album.PublicID }}"><i class="fas fa-arrow-left"></i> {{ t .Lang "media.viewer.back" }}</a>
+                </div>
+            </header>
+            {{ if .Data.StatusMessage }}
+            <div class="media-alert">{{ .Data.StatusMessage }}</div>
+            {{ end }}
+        </section>
+
+        <section class="card">
+            {{ if .Data.StatusMessage }}
+            <div class="media-viewer-placeholder">
+                <i class="fas fa-hourglass-half"></i>
+                <p>{{ .Data.StatusMessage }}</p>
+            </div>
+            {{ else }}
+            <div class="media-viewer-shell" id="mediaViewerShell">
+                <div class="media-viewer-toolbar">
+                    <div class="media-tool-left">
+                        <a class="media-tool-link" href="/media/albums/{{ .Data.Album.PublicID }}"><i class="fas fa-arrow-left"></i> {{ t .Lang "media.viewer.back" }}</a>
+                        <div class="media-page-control">
+                            <div class="media-page-nav">
+                                <button class="media-btn media-btn-compact" id="mediaPrevBtn" data-target="{{ .Data.PrevItemID }}" title="{{ t .Lang "media.viewer.page.prev" }}" aria-label="{{ t .Lang "media.viewer.page.prev" }}" {{ if eq .Data.PrevItemID "" }}disabled{{ end }}>
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <button class="media-btn media-btn-compact" id="mediaNextBtn" data-target="{{ .Data.NextItemID }}" title="{{ t .Lang "media.viewer.page.next" }}" aria-label="{{ t .Lang "media.viewer.page.next" }}" {{ if eq .Data.NextItemID "" }}disabled{{ end }}>
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                            <label class="media-tool-label" for="mediaPageSelect">{{ t .Lang "media.viewer.page.label" }}</label>
+                            <select id="mediaPageSelect" class="media-page-select" aria-label="{{ t .Lang "media.viewer.page.label" }}">
+                                {{ range $i, $it := .Data.AlbumItems }}
+                                {{ $num := add $i 1 }}
+                                <option value="{{ $it.PublicID }}" {{ if eq $it.PublicID $.Data.Item.PublicID }}selected{{ end }}>
+                                    {{ $num }} - {{ if $it.Title }}{{ $it.Title }}{{ else }}{{ t $.Lang "media.viewer.page.untitled" }}{{ end }}
+                                </option>
+                                {{ end }}
+                            </select>
+                            <span class="media-tool-muted">{{ t .Lang "media.viewer.page.count" .Data.CurrentIndex .Data.TotalItems }}</span>
+                        </div>
+                    </div>
+                    <div class="media-tool-right">
+                        <button class="media-btn" id="mediaBtnHome" title="{{ t .Lang "media.viewer.toolbar.home" }}"><i class="fas fa-home"></i></button>
+                        <button class="media-btn" id="mediaBtnZoomOut" title="{{ t .Lang "media.viewer.toolbar.zoom_out" }}"><i class="fas fa-search-minus"></i></button>
+                        <button class="media-btn" id="mediaBtnZoomIn" title="{{ t .Lang "media.viewer.toolbar.zoom_in" }}"><i class="fas fa-search-plus"></i></button>
+                        <button class="media-btn" id="mediaBtnFull" title="{{ t .Lang "media.viewer.toolbar.fullscreen" }}"><i class="fas fa-expand"></i></button>
+                        <button class="media-btn" id="mediaBtnAdjust" title="{{ t .Lang "media.viewer.toolbar.adjust" }}"><i class="fas fa-adjust"></i></button>
+                        <button class="media-btn" id="mediaBtnRotL" title="{{ t .Lang "media.viewer.toolbar.rotate_left" }}"><i class="fas fa-undo"></i></button>
+                        <button class="media-btn" id="mediaBtnRotR" title="{{ t .Lang "media.viewer.toolbar.rotate_right" }}"><i class="fas fa-redo"></i></button>
+                    </div>
+                </div>
+
+                <div id="mediaViewer" class="media-viewer" data-dzi="/media/dz/{{ .Data.Item.PublicID }}/dz.dzi" data-token="{{ .Data.GrantToken }}"></div>
+
+                <div id="mediaNavigatorWrap" class="media-navigator-wrap">
+                    <div id="mediaNavigator"></div>
+                </div>
+
+                <div id="mediaAdjustPanel" class="media-panel media-hidden">
+                    <div class="media-panel-title">{{ t .Lang "media.viewer.adjust.title" }}</div>
+                    <label class="media-panel-row">
+                        <span>{{ t .Lang "media.viewer.adjust.brightness" }}</span>
+                        <input id="mediaBrightness" type="range" min="50" max="200" value="100">
+                        <span id="mediaBrightnessVal">100%</span>
+                    </label>
+                    <label class="media-panel-row">
+                        <span>{{ t .Lang "media.viewer.adjust.contrast" }}</span>
+                        <input id="mediaContrast" type="range" min="50" max="200" value="100">
+                        <span id="mediaContrastVal">100%</span>
+                    </label>
+                    <label class="media-panel-row media-panel-toggle">
+                        <span>{{ t .Lang "media.viewer.adjust.invert" }}</span>
+                        <input id="mediaInvert" type="checkbox">
+                    </label>
+                    <div class="media-panel-actions">
+                        <button class="media-btn" id="mediaBtnReset">{{ t .Lang "media.viewer.adjust.reset" }}</button>
+                        <button class="media-btn" id="mediaBtnClosePanel">{{ t .Lang "media.viewer.adjust.close" }}</button>
+                    </div>
+                </div>
+            </div>
+            <p class="media-viewer-hint">{{ t .Lang "media.viewer.hint" }}</p>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ if .UserLoggedIn }}
+        {{ template "scripts-private" . }}
+    {{ else }}
+        {{ template "scripts-public" . }}
+    {{ end }}
+    <script src="/static/vendor/openseadragon/openseadragon.min.js"></script>
+    <script src="/static/js/media-viewer.js"></script>
+</body>
+</html>
+{{ end }}

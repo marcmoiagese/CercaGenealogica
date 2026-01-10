@@ -559,6 +559,131 @@ CREATE INDEX idx_llibres_urls_llibre ON llibres_urls(llibre_id);
 CREATE INDEX idx_llibres_urls_arxiu ON llibres_urls(arxiu_id);
 CREATE INDEX idx_llibre_pagines_estat  ON llibre_pagines(llibre_id, estat);
 
+-- Media (àlbums + ítems)
+DROP TABLE IF EXISTS media_access_logs;
+DROP TABLE IF EXISTS media_access_grants;
+DROP TABLE IF EXISTS user_credits_ledger;
+DROP TABLE IF EXISTS media_item_pages;
+DROP TABLE IF EXISTS media_items;
+DROP TABLE IF EXISTS media_albums;
+CREATE TABLE IF NOT EXISTS media_albums (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  public_id VARCHAR(64) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  album_type VARCHAR(20) NOT NULL DEFAULT 'other',
+  owner_user_id INT UNSIGNED NOT NULL,
+  moderation_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  visibility VARCHAR(30) NOT NULL DEFAULT 'private',
+  restricted_group_id INT UNSIGNED NULL,
+  access_policy_id INT UNSIGNED NULL,
+  credit_cost INT NOT NULL DEFAULT 0,
+  difficulty_score INT NOT NULL DEFAULT 0,
+  source_type VARCHAR(30) DEFAULT 'online',
+  moderated_by INT UNSIGNED NULL,
+  moderated_at DATETIME,
+  moderation_notes TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY idx_media_albums_public_id (public_id),
+  INDEX idx_media_albums_owner (owner_user_id),
+  INDEX idx_media_albums_moderation (moderation_status),
+  CONSTRAINT chk_media_album_type CHECK (album_type IN ('book','memorial','photo','other')),
+  CONSTRAINT chk_media_album_status CHECK (moderation_status IN ('pending','approved','rejected')),
+  CONSTRAINT chk_media_album_visibility CHECK (visibility IN ('private','registered','public','restricted_group','admins_only','custom_policy')),
+  CONSTRAINT chk_media_album_source CHECK (source_type IN ('online','offline_archive','family_private','other')),
+  FOREIGN KEY (owner_user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  FOREIGN KEY (restricted_group_id) REFERENCES grups(id) ON DELETE SET NULL,
+  FOREIGN KEY (access_policy_id) REFERENCES politiques(id) ON DELETE SET NULL,
+  FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS media_items (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  public_id VARCHAR(64) NOT NULL,
+  album_id INT UNSIGNED NOT NULL,
+  title VARCHAR(255),
+  original_filename VARCHAR(255),
+  mime_type VARCHAR(100),
+  byte_size BIGINT,
+  width INT,
+  height INT,
+  checksum_sha256 VARCHAR(64),
+  storage_key_original VARCHAR(512) NOT NULL,
+  thumb_path VARCHAR(512),
+  derivatives_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  moderation_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  moderated_by INT UNSIGNED NULL,
+  moderated_at DATETIME,
+  moderation_notes TEXT,
+  credit_cost INT NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY idx_media_items_public_id (public_id),
+  INDEX idx_media_items_album (album_id),
+  INDEX idx_media_items_moderation (moderation_status),
+  CONSTRAINT chk_media_item_status CHECK (derivatives_status IN ('pending','ready','failed')),
+  CONSTRAINT chk_media_item_moderation CHECK (moderation_status IN ('pending','approved','rejected')),
+  FOREIGN KEY (album_id) REFERENCES media_albums(id) ON DELETE CASCADE,
+  FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS media_item_pages (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  media_item_id INT UNSIGNED NOT NULL,
+  llibre_id INT UNSIGNED NULL,
+  pagina_id INT UNSIGNED NULL,
+  page_order INT DEFAULT 0,
+  notes TEXT,
+  UNIQUE KEY idx_media_item_pages_unique (media_item_id, pagina_id),
+  INDEX idx_media_item_pages_item (media_item_id),
+  INDEX idx_media_item_pages_pagina (pagina_id),
+  FOREIGN KEY (media_item_id) REFERENCES media_items(id) ON DELETE CASCADE,
+  FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE SET NULL,
+  FOREIGN KEY (pagina_id) REFERENCES llibre_pagines(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Media credits + grants
+CREATE TABLE IF NOT EXISTS user_credits_ledger (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  delta INT NOT NULL,
+  reason VARCHAR(100) NOT NULL,
+  ref_type VARCHAR(50) NULL,
+  ref_id INT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user_credits_ledger_user (user_id),
+  INDEX idx_user_credits_ledger_ref (ref_type, ref_id),
+  FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS media_access_grants (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  media_item_id INT UNSIGNED NOT NULL,
+  grant_token VARCHAR(255) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  credits_spent INT NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY idx_media_access_grants_token (grant_token),
+  INDEX idx_media_access_grants_lookup (user_id, media_item_id, expires_at),
+  FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  FOREIGN KEY (media_item_id) REFERENCES media_items(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS media_access_logs (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  media_item_id INT UNSIGNED NOT NULL,
+  access_type VARCHAR(20) NOT NULL,
+  credits_spent INT NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_media_access_logs_user (user_id),
+  INDEX idx_media_access_logs_item (media_item_id),
+  FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  FOREIGN KEY (media_item_id) REFERENCES media_items(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Transcripcions RAW de registres
 DROP TABLE IF EXISTS transcripcions_raw_canvis;
 DROP TABLE IF EXISTS transcripcions_raw_marques;

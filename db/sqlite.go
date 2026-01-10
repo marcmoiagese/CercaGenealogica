@@ -473,11 +473,85 @@ func (d *SQLite) UpdateLlibreModeracio(id int, estat, motiu string, moderatorID 
 func (d *SQLite) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {
 	return d.help.listLlibrePagines(llibreID)
 }
+func (d *SQLite) GetLlibrePaginaByID(id int) (*LlibrePagina, error) {
+	return d.help.getLlibrePaginaByID(id)
+}
 func (d *SQLite) SaveLlibrePagina(p *LlibrePagina) (int, error) {
 	return d.help.saveLlibrePagina(p)
 }
 func (d *SQLite) RecalcLlibrePagines(llibreID, total int) error {
 	return d.help.recalcLlibrePagines(llibreID, total)
+}
+
+// Media
+func (d *SQLite) ListMediaAlbumsByOwner(userID int) ([]MediaAlbum, error) {
+	return d.help.listMediaAlbumsByOwner(userID)
+}
+func (d *SQLite) GetMediaAlbumByID(id int) (*MediaAlbum, error) {
+	return d.help.getMediaAlbumByID(id)
+}
+func (d *SQLite) GetMediaAlbumByPublicID(publicID string) (*MediaAlbum, error) {
+	return d.help.getMediaAlbumByPublicID(publicID)
+}
+func (d *SQLite) CreateMediaAlbum(a *MediaAlbum) (int, error) {
+	return d.help.createMediaAlbum(a)
+}
+func (d *SQLite) ListMediaItemsByAlbum(albumID int) ([]MediaItem, error) {
+	return d.help.listMediaItemsByAlbum(albumID)
+}
+func (d *SQLite) GetMediaItemByPublicID(publicID string) (*MediaItem, error) {
+	return d.help.getMediaItemByPublicID(publicID)
+}
+func (d *SQLite) CreateMediaItem(item *MediaItem) (int, error) {
+	return d.help.createMediaItem(item)
+}
+func (d *SQLite) UpdateMediaItemDerivativesStatus(itemID int, status string) error {
+	return d.help.updateMediaItemDerivativesStatus(itemID, status)
+}
+func (d *SQLite) ListMediaAlbumsByStatus(status string) ([]MediaAlbum, error) {
+	return d.help.listMediaAlbumsByStatus(status)
+}
+func (d *SQLite) ListMediaItemsByStatus(status string) ([]MediaItem, error) {
+	return d.help.listMediaItemsByStatus(status)
+}
+func (d *SQLite) UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
+	return d.help.updateMediaAlbumModeration(id, status, visibility, restrictedGroupID, accessPolicyID, creditCost, difficultyScore, sourceType, notes, moderatorID)
+}
+func (d *SQLite) UpdateMediaItemModeration(id int, status string, creditCost int, notes string, moderatorID int) error {
+	return d.help.updateMediaItemModeration(id, status, creditCost, notes, moderatorID)
+}
+func (d *SQLite) GetUserCreditsBalance(userID int) (int, error) {
+	return d.help.getUserCreditsBalance(userID)
+}
+func (d *SQLite) InsertUserCreditsLedger(entry *UserCreditsLedgerEntry) (int, error) {
+	return d.help.insertUserCreditsLedger(entry)
+}
+func (d *SQLite) GetActiveMediaAccessGrant(userID, mediaItemID int) (*MediaAccessGrant, error) {
+	return d.help.getActiveMediaAccessGrant(userID, mediaItemID)
+}
+func (d *SQLite) GetMediaAccessGrantByToken(token string) (*MediaAccessGrant, error) {
+	return d.help.getMediaAccessGrantByToken(token)
+}
+func (d *SQLite) CreateMediaAccessGrant(grant *MediaAccessGrant) (int, error) {
+	return d.help.createMediaAccessGrant(grant)
+}
+func (d *SQLite) InsertMediaAccessLog(entry *MediaAccessLog) (int, error) {
+	return d.help.insertMediaAccessLog(entry)
+}
+func (d *SQLite) ListMediaItemLinksByPagina(paginaID int) ([]MediaItemPageLink, error) {
+	return d.help.listMediaItemLinksByPagina(paginaID)
+}
+func (d *SQLite) UpsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder int, notes string) error {
+	return d.help.upsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder, notes)
+}
+func (d *SQLite) DeleteMediaItemPageLink(mediaItemID, paginaID int) error {
+	return d.help.deleteMediaItemPageLink(mediaItemID, paginaID)
+}
+func (d *SQLite) CountMediaItemLinksByAlbum(albumID int) (map[int]int, error) {
+	return d.help.countMediaItemLinksByAlbum(albumID)
+}
+func (d *SQLite) SearchMediaItems(query string, limit int) ([]MediaItemSearchRow, error) {
+	return d.help.searchMediaItems(query, limit)
 }
 
 func (d *SQLite) ListTranscripcionsRaw(llibreID int, f TranscripcioFilter) ([]TranscripcioRaw, error) {

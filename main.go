@@ -157,6 +157,7 @@ func main() {
 	http.HandleFunc("/perfil/dades", applyMiddleware(app.ActualitzarPerfilDades, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/perfil/privacitat", applyMiddleware(app.ActualitzarPerfilPrivacitat, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/perfil/contrasenya", applyMiddleware(app.ActualitzarPerfilContrasenya, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/perfil/credits/convert", applyMiddleware(app.RequireLogin(app.ConvertPointsToCredits), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/perfil/email-confirm", applyMiddleware(app.ConfirmarCanviEmail, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/perfil/email-revert", applyMiddleware(app.RevertirCanviEmail, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/ranking", applyMiddleware(app.Ranking, core.BlockIPs, core.RateLimit))
@@ -191,6 +192,13 @@ func main() {
 	// Arxius (lectura per a tots els usuaris autenticats)
 	http.HandleFunc("/arxius", applyMiddleware(app.ListArxius, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/arxius/", applyMiddleware(app.ShowArxiu, core.BlockIPs, core.RateLimit))
+
+	// Media
+	http.HandleFunc("/media/albums", applyMiddleware(app.RequireLogin(app.MediaAlbums), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/media/albums/new", applyMiddleware(app.RequireLogin(app.MediaAlbumNew), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/media/albums/", applyMiddleware(app.MediaAlbumDetail, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/media/items/", applyMiddleware(app.MediaItemRoute, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/media/dz/", applyMiddleware(app.MediaDeepZoom, core.BlockIPs, core.RateLimit))
 
 	// Persones (bàsic: llista pública i creació/edició amb moderació)
 	http.HandleFunc("/persones/cerca", applyMiddleware(app.AdminSearchPersonesJSON, core.BlockIPs, core.RateLimit))
@@ -415,6 +423,21 @@ func main() {
 			http.NotFound(w, r)
 		}
 	})
+	http.HandleFunc("/admin/moderacio/media", applyMiddleware(app.AdminModeracioMediaList, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/moderacio/media/", func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/albums/") && strings.HasSuffix(r.URL.Path, "/approve"):
+			applyMiddleware(app.AdminModeracioMediaAlbumApprove, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/albums/") && strings.HasSuffix(r.URL.Path, "/reject"):
+			applyMiddleware(app.AdminModeracioMediaAlbumReject, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/items/") && strings.HasSuffix(r.URL.Path, "/approve"):
+			applyMiddleware(app.AdminModeracioMediaItemApprove, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/items/") && strings.HasSuffix(r.URL.Path, "/reject"):
+			applyMiddleware(app.AdminModeracioMediaItemReject, core.BlockIPs, core.RateLimit)(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
 
 	// Admin arxius
 	http.HandleFunc("/documentals/arxius", func(w http.ResponseWriter, r *http.Request) {
@@ -574,6 +597,16 @@ func main() {
 		}
 	})
 	http.HandleFunc("/documentals/llibres/save", applyMiddleware(app.AdminSaveLlibre, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/documentals/pagines/", func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/media/link") && r.Method == http.MethodPost:
+			applyMiddleware(app.AdminLinkMediaToPagina, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/media/unlink") && r.Method == http.MethodPost:
+			applyMiddleware(app.AdminUnlinkMediaFromPagina, core.BlockIPs, core.RateLimit)(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
 	http.HandleFunc("/documentals/registres/cercar/export", applyMiddleware(app.AdminExportRegistresGlobal, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/documentals/registres/cercar", applyMiddleware(app.AdminSearchRegistres, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/documentals/registres/", func(w http.ResponseWriter, r *http.Request) {

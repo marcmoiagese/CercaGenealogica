@@ -322,6 +322,7 @@ func (f *fakeDB) GetLlibre(id int) (*db.Llibre, error)                       { r
 func (f *fakeDB) CreateLlibre(l *db.Llibre) (int, error)                     { return 0, nil }
 func (f *fakeDB) UpdateLlibre(l *db.Llibre) error                            { return nil }
 func (f *fakeDB) ListLlibrePagines(llibreID int) ([]db.LlibrePagina, error)  { return nil, nil }
+func (f *fakeDB) GetLlibrePaginaByID(id int) (*db.LlibrePagina, error)       { return nil, nil }
 func (f *fakeDB) SaveLlibrePagina(p *db.LlibrePagina) (int, error)           { return 0, nil }
 func (f *fakeDB) RecalcLlibrePagines(llibreID, total int) error              { return nil }
 func (f *fakeDB) ListPaisos() ([]db.Pais, error)                             { return nil, nil }
@@ -592,6 +593,51 @@ func (f *fakeDB) ListCognomImportRows(limit, offset int) ([]db.CognomImportRow, 
 }
 func (f *fakeDB) ListCognomStatsRows(limit, offset int) ([]db.CognomStatsRow, error) {
 	return nil, nil
+}
+func (f *fakeDB) ListMediaAlbumsByStatus(status string) ([]db.MediaAlbum, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListMediaItemsByStatus(status string) ([]db.MediaItem, error) {
+	return nil, nil
+}
+func (f *fakeDB) UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDB) UpdateMediaItemModeration(id int, status string, creditCost int, notes string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDB) ListMediaItemLinksByPagina(paginaID int) ([]db.MediaItemPageLink, error) {
+	return nil, nil
+}
+func (f *fakeDB) UpsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder int, notes string) error {
+	return nil
+}
+func (f *fakeDB) DeleteMediaItemPageLink(mediaItemID, paginaID int) error {
+	return nil
+}
+func (f *fakeDB) CountMediaItemLinksByAlbum(albumID int) (map[int]int, error) {
+	return map[int]int{}, nil
+}
+func (f *fakeDB) SearchMediaItems(query string, limit int) ([]db.MediaItemSearchRow, error) {
+	return nil, nil
+}
+func (f *fakeDB) GetUserCreditsBalance(userID int) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) InsertUserCreditsLedger(entry *db.UserCreditsLedgerEntry) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) GetActiveMediaAccessGrant(userID, mediaItemID int) (*db.MediaAccessGrant, error) {
+	return nil, nil
+}
+func (f *fakeDB) GetMediaAccessGrantByToken(token string) (*db.MediaAccessGrant, error) {
+	return nil, nil
+}
+func (f *fakeDB) CreateMediaAccessGrant(grant *db.MediaAccessGrant) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) InsertMediaAccessLog(entry *db.MediaAccessLog) (int, error) {
+	return 0, nil
 }
 
 // Helper per crear una App amb fakeDB

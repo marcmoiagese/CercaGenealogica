@@ -450,6 +450,23 @@
                                     <p class="kpi">{{ if .Data.UserPoints }}{{ .Data.UserPoints.Total }}{{ else }}0{{ end }}</p>
                                     <p class="muted">{{ t .Lang "points.profile.updated" }}: {{ if and .Data.UserPoints .Data.UserPoints.UltimaActualitzacio }}{{ .Data.UserPoints.UltimaActualitzacio.Format "2006-01-02" }}{{ else }}—{{ end }}</p>
                                 </div>
+                                <div class="card">
+                                    <h3>{{ t .Lang "profile.credits.balance" }}</h3>
+                                    <p class="kpi">{{ .Data.CreditsBalance }}</p>
+                                    <p class="muted">{{ t .Lang "profile.credits.rate" .Data.PointsPerCredit }}</p>
+                                </div>
+                            </div>
+                            <div class="card" style="margin-top:1rem;">
+                                <h3>{{ t .Lang "profile.credits.convert.title" }}</h3>
+                                <form class="form-vertical" method="post" action="/perfil/credits/convert">
+                                    <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                                    <div class="grup-camp">
+                                        <label for="convert-points">{{ t .Lang "profile.credits.convert.points" }}</label>
+                                        <input id="convert-points" name="points" type="number" min="{{ .Data.PointsPerCredit }}" step="{{ .Data.PointsPerCredit }}" value="{{ .Data.PointsPerCredit }}" {{ if .Data.UserPoints }}max="{{ .Data.UserPoints.Total }}"{{ end }}>
+                                        <p class="camp-helper">{{ t .Lang "profile.credits.convert.help" .Data.PointsPerCredit }}</p>
+                                    </div>
+                                    <button type="submit" class="boto-primari">{{ t .Lang "profile.credits.convert.submit" }}</button>
+                                </form>
                             </div>
                             <h3>{{ t .Lang "activity.title" }}</h3>
                             {{ $f := .Data.ActFilter }}
@@ -476,6 +493,9 @@
                                             <option value="municipi" {{ if eq $f.type "municipi" }}selected{{ end }}>{{ t .Lang "activity.object.municipi" }}</option>
                                             <option value="nivell" {{ if eq $f.type "nivell" }}selected{{ end }}>{{ t .Lang "activity.object.nivell" }}</option>
                                             <option value="eclesiastic" {{ if eq $f.type "eclesiastic" }}selected{{ end }}>{{ t .Lang "activity.object.eclesiastic" }}</option>
+                                            <option value="media_album" {{ if eq $f.type "media_album" }}selected{{ end }}>{{ t .Lang "activity.object.media_album" }}</option>
+                                            <option value="media_item" {{ if eq $f.type "media_item" }}selected{{ end }}>{{ t .Lang "activity.object.media_item" }}</option>
+                                            <option value="credits" {{ if eq $f.type "credits" }}selected{{ end }}>{{ t .Lang "activity.object.credits" }}</option>
                                         </select>
                                     </div>
                                     <div class="grup-camp">

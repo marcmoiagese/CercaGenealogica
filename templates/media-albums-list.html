@@ -1,0 +1,48 @@
+{{ define "media-albums-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "media.albums.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/media.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal media-layout">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <h1>{{ t .Lang "media.albums.title" }}</h1>
+                <div class="card-actions">
+                    <a class="boto-primari" href="/media/albums/new"><i class="fas fa-plus"></i> {{ t .Lang "media.albums.new" }}</a>
+                </div>
+            </header>
+            {{ if .Data.Albums }}
+            <div class="media-albums-grid">
+                {{ range .Data.Albums }}
+                <article class="media-album-card">
+                    <div class="media-album-meta">
+                        <h3><a href="/media/albums/{{ .PublicID }}">{{ .Title }}</a></h3>
+                        <div class="media-chip-row">
+                            <span class="media-chip">{{ t $.Lang (printf "media.album.type.%s" .AlbumType) }}</span>
+                            <span class="media-chip media-chip-muted">{{ t $.Lang (printf "media.album.status.%s" .ModerationStatus) }}</span>
+                        </div>
+                    </div>
+                    <div class="media-album-count">
+                        <span class="media-album-count-num">{{ .ItemsCount }}</span>
+                        <span class="media-album-count-label">{{ t $.Lang "media.albums.items" }}</span>
+                    </div>
+                </article>
+                {{ end }}
+            </div>
+            {{ else }}
+            <p class="media-empty">{{ t .Lang "media.albums.empty" }}</p>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

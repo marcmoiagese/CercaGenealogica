@@ -1,0 +1,58 @@
+{{ define "media-albums-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "media.album.form.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/media.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal media-layout">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "media.album.form.title" }}</h1>
+            </header>
+            {{ if .Data.FormError }}
+            <div class="media-alert">{{ .Data.FormError }}</div>
+            {{ end }}
+            <form class="formulari media-form" method="post" action="/media/albums">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="grup-camp">
+                    <label for="album-title">{{ t .Lang "media.album.title.label" }}</label>
+                    <input id="album-title" name="title" type="text" value="{{ .Data.FormTitle }}" placeholder="{{ t .Lang "media.album.title.placeholder" }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="album-type">{{ t .Lang "media.album.type.label" }}</label>
+                    <select id="album-type" name="album_type">
+                        {{ range .Data.AlbumTypes }}
+                        <option value="{{ . }}" {{ if eq $.Data.FormType . }}selected{{ end }}>{{ t $.Lang (printf "media.album.type.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="album-source">{{ t .Lang "media.album.source.label" }}</label>
+                    <select id="album-source" name="source_type">
+                        {{ range .Data.SourceTypes }}
+                        <option value="{{ . }}" {{ if eq $.Data.FormSource . }}selected{{ end }}>{{ t $.Lang (printf "media.album.source.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="album-desc">{{ t .Lang "media.album.description.label" }}</label>
+                    <textarea id="album-desc" name="description" rows="4" placeholder="{{ t .Lang "media.album.description.placeholder" }}">{{ .Data.FormDesc }}</textarea>
+                </div>
+                <div class="media-form-actions">
+                    <button class="boto-primari" type="submit"><i class="fas fa-save"></i> {{ t .Lang "media.album.form.submit" }}</button>
+                    <a class="boto-secundari" href="/media/albums">{{ t .Lang "common.back" }}</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}
