@@ -1,0 +1,52 @@
+{{ define "municipi-mapa-view.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "maps.title" }} · {{ .Data.Municipi.Nom }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/mapes.css">
+</head>
+<body>
+    {{ if .UserLoggedIn }}
+        {{ template "header-private" . }}
+        {{ template "menu" . }}
+    {{ else }}
+        {{ template "header-public" . }}
+    {{ end }}
+    <main class="contingut-principal">
+        <section class="card map-viewer-card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ .Data.Mapa.Title }}</h1>
+                    <p class="muted">{{ .Data.Municipi.Nom }}</p>
+                </div>
+                <div class="mapes-actions">
+                    <a class="boto-secundari" href="/territori/municipis/{{ .Data.Municipi.ID }}/mapes">{{ t .Lang "maps.back" }}</a>
+                </div>
+            </header>
+
+            <div id="municipiMapaViewer"
+                 class="map-viewer"
+                 data-map-id="{{ .Data.Mapa.ID }}"
+                 data-municipi-id="{{ .Data.Municipi.ID }}"
+                 data-version-id="{{ if .Data.Mapa.CurrentVersionID.Valid }}{{ .Data.Mapa.CurrentVersionID.Int64 }}{{ end }}"
+                 data-csrf="{{ .Data.CSRFToken }}">
+                <div class="map-canvas">
+                    <svg id="municipiMapaSvg" viewBox="0 0 1000 700" role="img" aria-label="{{ t .Lang "maps.viewer.aria" }}"></svg>
+                </div>
+                <p id="municipiMapaStatus" class="muted" data-loading="{{ t .Lang "common.loading" }}" data-empty="{{ t .Lang "maps.empty" }}"></p>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ if .UserLoggedIn }}
+        {{ template "scripts-private" . }}
+    {{ else }}
+        {{ template "scripts-public" . }}
+    {{ end }}
+    <script src="/static/js/cgmap.js"></script>
+    <script src="/static/js/municipi-mapa-viewer.js"></script>
+</body>
+</html>
+{{ end }}

@@ -243,6 +243,9 @@ func (h sqlHelper) ensureDefaultPointsRules() error {
 		{Code: "eclesiastic_update", Name: "Editar entitat eclesiàstica", Description: "Edició d'entitat eclesiàstica", Points: 1, Active: true},
 		{Code: "llibre_page_stats_update", Name: "Registres per pàgina", Description: "Actualitzar registres per pàgina d'un llibre", Points: 1, Active: true},
 		{Code: "cognom_variant_create", Name: "Proposar variant de cognom", Description: "Aportar una nova variació (pendent de moderació)", Points: 1, Active: true},
+		{Code: "municipi_mapa_submit", Name: "Proposar mapa", Description: "Enviar un mapa a moderació", Points: 15, Active: true},
+		{Code: "municipi_mapa_approve", Name: "Aprovar mapa", Description: "Aprovar un mapa pendent", Points: 3, Active: true},
+		{Code: "municipi_mapa_reject", Name: "Rebutjar mapa", Description: "Rebutjar un mapa pendent", Points: 0, Active: true},
 	}
 	for _, r := range defaults {
 		stmt := `INSERT INTO punts_regles (codi, nom, descripcio, punts, actiu, data_creacio) VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)`
@@ -6138,4 +6141,300 @@ func (h sqlHelper) insertMediaAccessLog(entry *MediaAccessLog) (int, error) {
 		return int(id), nil
 	}
 	return 0, nil
+}
+
+// Mapes municipi
+func (h sqlHelper) listMunicipiMapes(filter MunicipiMapaFilter) ([]MunicipiMapa, error) {
+	args := []interface{}{}
+	clauses := []string{"1=1"}
+	if filter.MunicipiID > 0 {
+		clauses = append(clauses, "municipi_id = ?")
+		args = append(args, filter.MunicipiID)
+	}
+	if strings.TrimSpace(filter.GroupType) != "" {
+		clauses = append(clauses, "group_type = ?")
+		args = append(args, strings.TrimSpace(filter.GroupType))
+	}
+	if filter.CreatedBy > 0 {
+		clauses = append(clauses, "created_by = ?")
+		args = append(args, filter.CreatedBy)
+	}
+	query := `
+        SELECT id, municipi_id, group_type, title, period_label, period_start, period_end, topic,
+               current_version_id, created_by, created_at, updated_at
+        FROM municipi_mapes
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        ORDER BY updated_at DESC, id DESC`
+	if filter.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+	}
+	if filter.Offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, filter.Offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MunicipiMapa
+	for rows.Next() {
+		var item MunicipiMapa
+		var periodLabel sql.NullString
+		var periodStart sql.NullInt64
+		var periodEnd sql.NullInt64
+		var topic sql.NullString
+		if err := rows.Scan(&item.ID, &item.MunicipiID, &item.GroupType, &item.Title, &periodLabel, &periodStart, &periodEnd, &topic,
+			&item.CurrentVersionID, &item.CreatedBy, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		item.PeriodLabel = periodLabel.String
+		item.PeriodStart = periodStart
+		item.PeriodEnd = periodEnd
+		item.Topic = topic.String
+		res = append(res, item)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getMunicipiMapa(id int) (*MunicipiMapa, error) {
+	query := `
+        SELECT id, municipi_id, group_type, title, period_label, period_start, period_end, topic,
+               current_version_id, created_by, created_at, updated_at
+        FROM municipi_mapes
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var item MunicipiMapa
+	var periodLabel sql.NullString
+	var periodStart sql.NullInt64
+	var periodEnd sql.NullInt64
+	var topic sql.NullString
+	if err := row.Scan(&item.ID, &item.MunicipiID, &item.GroupType, &item.Title, &periodLabel, &periodStart, &periodEnd, &topic,
+		&item.CurrentVersionID, &item.CreatedBy, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		return nil, err
+	}
+	item.PeriodLabel = periodLabel.String
+	item.PeriodStart = periodStart
+	item.PeriodEnd = periodEnd
+	item.Topic = topic.String
+	return &item, nil
+}
+
+func (h sqlHelper) createMunicipiMapa(m *MunicipiMapa) (int, error) {
+	if m == nil {
+		return 0, errors.New("mapa nil")
+	}
+	args := []interface{}{m.MunicipiID, m.GroupType, m.Title, m.PeriodLabel, m.PeriodStart, m.PeriodEnd, m.Topic, m.CurrentVersionID, m.CreatedBy}
+	query := `
+        INSERT INTO municipi_mapes (municipi_id, group_type, title, period_label, period_start, period_end, topic,
+                                    current_version_id, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += ` RETURNING id`
+	}
+	query = formatPlaceholders(h.style, query)
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(query, args...).Scan(&m.ID); err != nil {
+			return 0, err
+		}
+		return m.ID, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		m.ID = int(id)
+	}
+	return m.ID, nil
+}
+
+func (h sqlHelper) updateMunicipiMapa(m *MunicipiMapa) error {
+	if m == nil {
+		return errors.New("mapa nil")
+	}
+	query := `
+        UPDATE municipi_mapes
+        SET group_type = ?, title = ?, period_label = ?, period_start = ?, period_end = ?, topic = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, m.GroupType, m.Title, m.PeriodLabel, m.PeriodStart, m.PeriodEnd, m.Topic, m.ID)
+	return err
+}
+
+func (h sqlHelper) updateMunicipiMapaCurrentVersion(mapaID, versionID int) error {
+	query := `
+        UPDATE municipi_mapes
+        SET current_version_id = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, versionID, mapaID)
+	return err
+}
+
+func (h sqlHelper) nextMunicipiMapaVersionNumber(mapaID int) (int, error) {
+	query := `SELECT COALESCE(MAX(version), 0) + 1 FROM municipi_mapa_versions WHERE mapa_id = ?`
+	query = formatPlaceholders(h.style, query)
+	var next int
+	if err := h.db.QueryRow(query, mapaID).Scan(&next); err != nil {
+		return 0, err
+	}
+	return next, nil
+}
+
+func (h sqlHelper) listMunicipiMapaVersions(filter MunicipiMapaVersionFilter) ([]MunicipiMapaVersion, error) {
+	args := []interface{}{}
+	clauses := []string{"1=1"}
+	if filter.MapaID > 0 {
+		clauses = append(clauses, "mapa_id = ?")
+		args = append(args, filter.MapaID)
+	}
+	if strings.TrimSpace(filter.Status) != "" {
+		clauses = append(clauses, "status = ?")
+		args = append(args, strings.TrimSpace(filter.Status))
+	}
+	if filter.CreatedBy > 0 {
+		clauses = append(clauses, "created_by = ?")
+		args = append(args, filter.CreatedBy)
+	}
+	query := `
+        SELECT id, mapa_id, version, status, data_json, changelog, lock_version,
+               created_by, created_at, moderated_by, moderated_at, moderation_notes
+        FROM municipi_mapa_versions
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        ORDER BY version DESC`
+	if filter.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+	}
+	if filter.Offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, filter.Offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MunicipiMapaVersion
+	for rows.Next() {
+		var item MunicipiMapaVersion
+		if err := rows.Scan(&item.ID, &item.MapaID, &item.Version, &item.Status, &item.JSONData, &item.Changelog, &item.LockVersion,
+			&item.CreatedBy, &item.CreatedAt, &item.ModeratedBy, &item.ModeratedAt, &item.ModerationNotes); err != nil {
+			return nil, err
+		}
+		res = append(res, item)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getMunicipiMapaVersion(id int) (*MunicipiMapaVersion, error) {
+	query := `
+        SELECT id, mapa_id, version, status, data_json, changelog, lock_version,
+               created_by, created_at, moderated_by, moderated_at, moderation_notes
+        FROM municipi_mapa_versions
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var item MunicipiMapaVersion
+	if err := row.Scan(&item.ID, &item.MapaID, &item.Version, &item.Status, &item.JSONData, &item.Changelog, &item.LockVersion,
+		&item.CreatedBy, &item.CreatedAt, &item.ModeratedBy, &item.ModeratedAt, &item.ModerationNotes); err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (h sqlHelper) createMunicipiMapaVersion(v *MunicipiMapaVersion) (int, error) {
+	if v == nil {
+		return 0, errors.New("version nil")
+	}
+	query := `
+        INSERT INTO municipi_mapa_versions
+            (mapa_id, version, status, data_json, changelog, lock_version, created_by, created_at, moderated_by, moderated_at, moderation_notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ?, ?, ?)`
+	if h.style == "postgres" {
+		query += ` RETURNING id`
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{v.MapaID, v.Version, v.Status, v.JSONData, v.Changelog, v.LockVersion, v.CreatedBy, v.ModeratedBy, v.ModeratedAt, v.ModerationNotes}
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(query, args...).Scan(&v.ID); err != nil {
+			return 0, err
+		}
+		return v.ID, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		v.ID = int(id)
+	}
+	return v.ID, nil
+}
+
+func (h sqlHelper) saveMunicipiMapaDraft(versionID int, jsonData, changelog string, expectedLock int) (int, error) {
+	query := `
+        UPDATE municipi_mapa_versions
+        SET data_json = ?, changelog = ?, lock_version = lock_version + 1
+        WHERE id = ? AND lock_version = ? AND status = 'draft'`
+	query = formatPlaceholders(h.style, query)
+	res, err := h.db.Exec(query, jsonData, changelog, versionID, expectedLock)
+	if err != nil {
+		return 0, err
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return 0, ErrConflict
+	}
+	return expectedLock + 1, nil
+}
+
+func (h sqlHelper) updateMunicipiMapaVersionStatus(id int, status, notes string, moderatorID int) error {
+	var (
+		query string
+		args  []interface{}
+	)
+	if moderatorID > 0 {
+		query = `
+            UPDATE municipi_mapa_versions
+            SET status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?
+            WHERE id = ?`
+		args = []interface{}{status, notes, moderatorID, time.Now(), id}
+	} else {
+		query = `
+            UPDATE municipi_mapa_versions
+            SET status = ?, moderation_notes = ?, moderated_by = NULL, moderated_at = NULL
+            WHERE id = ?`
+		args = []interface{}{status, notes, id}
+	}
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, args...)
+	return err
+}
+
+func (h sqlHelper) resolveMunicipiIDByMapaID(mapaID int) (int, error) {
+	query := formatPlaceholders(h.style, `SELECT municipi_id FROM municipi_mapes WHERE id = ?`)
+	var id int
+	if err := h.db.QueryRow(query, mapaID).Scan(&id); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func (h sqlHelper) resolveMunicipiIDByMapaVersionID(versionID int) (int, error) {
+	query := `
+        SELECT m.municipi_id
+        FROM municipi_mapa_versions v
+        JOIN municipi_mapes m ON m.id = v.mapa_id
+        WHERE v.id = ?`
+	query = formatPlaceholders(h.style, query)
+	var id int
+	if err := h.db.QueryRow(query, versionID).Scan(&id); err != nil {
+		return 0, err
+	}
+	return id, nil
 }

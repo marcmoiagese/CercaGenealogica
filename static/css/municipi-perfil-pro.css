@@ -1,0 +1,394 @@
+.muni-page {
+    gap: 1.25rem;
+}
+
+.muni-page .muted {
+    color: var(--color-text-clar, #6b7c8f);
+}
+
+.muni-hero {
+    position: relative;
+    overflow: hidden;
+}
+
+.muni-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(1200px 260px at 10% 0%, rgba(79, 195, 247, 0.18), transparent 55%),
+        radial-gradient(900px 240px at 95% 10%, rgba(22, 96, 136, 0.12), transparent 60%);
+    pointer-events: none;
+}
+
+.muni-hero > * {
+    position: relative;
+}
+
+.muni-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.muni-title {
+    font-size: 1.9rem;
+    margin: 0;
+    color: var(--primary-color);
+}
+
+.muni-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.muni-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.38rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid #d5dde4;
+    background: #eef3f7;
+    color: var(--primary-color);
+    font-weight: 800;
+    font-size: 0.92rem;
+}
+
+.muni-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.38rem 0.8rem;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: 0.92rem;
+}
+
+.muni-subtitle {
+    margin: 0.25rem 0 0;
+    max-width: 70ch;
+}
+
+.muni-kv {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem 1rem;
+    margin: 0;
+}
+
+.muni-kv dt {
+    font-size: 0.82rem;
+    font-weight: 900;
+    color: #607386;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 0.15rem;
+}
+
+.muni-kv dd {
+    margin: 0;
+    font-weight: 800;
+}
+
+.muni-grid {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 1.25rem;
+    align-items: start;
+}
+
+.muni-left,
+.muni-right {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.muni-card {
+    padding: 1.25rem;
+}
+
+.muni-map {
+    width: 100%;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #f3f5f7;
+    border: 1px solid #e6edf3;
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.muni-map-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 1rem;
+    text-align: center;
+}
+
+.muni-map-empty i {
+    font-size: 1.55rem;
+    color: var(--secondary-color);
+    opacity: 0.9;
+}
+
+.muni-hierarchy {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.65rem;
+}
+
+.muni-h-item {
+    display: flex;
+    flex-direction: column;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid #e6edf3;
+    border-radius: 12px;
+    background: #fafbfc;
+    gap: 0.2rem;
+}
+
+.muni-h-label {
+    font-size: 0.78rem;
+    font-weight: 900;
+    color: #607386;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.muni-h-value {
+    font-weight: 900;
+    color: #1f2d3d;
+}
+
+.muni-callout {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 0.9rem;
+    align-items: start;
+    background: linear-gradient(135deg, rgba(22, 96, 136, 0.1), rgba(79, 195, 247, 0.1));
+    border: 1px solid rgba(22, 96, 136, 0.18);
+}
+
+.muni-callout-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    border: 1px solid rgba(22, 96, 136, 0.18);
+    color: var(--secondary-color);
+}
+
+.muni-callout-title {
+    margin: 0;
+    font-size: 1.07rem;
+    font-weight: 1000;
+}
+
+.muni-callout-text {
+    margin: 0.25rem 0 0;
+}
+
+.muni-callout-actions {
+    margin-top: 0.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.muni-maps-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.muni-maps-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+}
+
+.muni-section-subtitle {
+    margin: 0.25rem 0 0;
+    color: var(--color-text-clar, #6b7c8f);
+    font-weight: 700;
+}
+
+#muniMapsViewport {
+    margin-top: 0.85rem;
+    position: relative;
+    overflow: hidden;
+    height: 440px;
+    border: 1px solid #e6edf3;
+    border-radius: 16px;
+    background: #fff;
+}
+
+#muniMapsSlides {
+    position: absolute;
+    inset: 0;
+}
+
+#muniMapsSlides .muni-map-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+#muniMapsSlides .muni-map-slide.is-active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#muniMapsSlides svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+#muniMapsChip {
+    position: absolute;
+    left: 0.75rem;
+    bottom: 0.75rem;
+    z-index: 7;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid rgba(230, 237, 243, 0.95);
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(10px);
+    font-weight: 1100;
+    color: #1f2d3d;
+}
+
+#muniMapTooltip {
+    position: absolute;
+    z-index: 8;
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+    transition: opacity 0.12s ease, transform 0.16s ease;
+    pointer-events: none;
+    max-width: 380px;
+    padding: 0.55rem 0.65rem;
+    border-radius: 12px;
+    border: 1px solid rgba(230, 237, 243, 0.95);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 12px 28px rgba(15, 61, 90, 0.12);
+    color: #1f2d3d;
+    font-weight: 900;
+}
+
+#muniMapTooltip.is-visible {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+}
+
+#muniMapsPopover {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 300px;
+    border: 1px solid rgba(230, 237, 243, 0.98);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 18px 42px rgba(15, 61, 90, 0.14);
+    z-index: 9;
+    padding: 0.75rem 0.8rem 0.8rem;
+}
+
+#muniMapsPopover[hidden] {
+    display: none !important;
+}
+
+#muniMapsPopover .popover-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.6rem;
+}
+
+#muniMapsPopover .popover-title {
+    font-weight: 1100;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+}
+
+#muniMapsPopover .popover-close {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid rgba(230, 237, 243, 0.98);
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+#muniMapsPopover .popover-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem 0.6rem;
+}
+
+.muni-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    border: 1px solid #e6edf3;
+    border-radius: 12px;
+    padding: 0.6rem 0.7rem;
+    background: #fafbfc;
+}
+
+.muni-toggle span {
+    font-weight: 900;
+    color: #1f2d3d;
+}
+
+.muni-toggle input {
+    transform: scale(1.1);
+}
+
+@media (max-width: 1024px) {
+    .muni-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .muni-kv {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 900px) {
+    #muniMapsViewport {
+        height: 380px;
+    }
+    #muniMapsPopover .popover-grid {
+        grid-template-columns: 1fr;
+    }
+}

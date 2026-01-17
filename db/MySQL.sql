@@ -235,6 +235,46 @@ CREATE TABLE IF NOT EXISTS municipis (
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS municipi_mapes (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    municipi_id INT UNSIGNED NOT NULL,
+    group_type ENUM('actual','historic','community') NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    period_label VARCHAR(64) NULL,
+    period_start INT NULL,
+    period_end INT NULL,
+    topic VARCHAR(64) NULL,
+    current_version_id INT UNSIGNED NULL,
+    created_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_municipi_mapes_municipi_group (municipi_id, group_type),
+    INDEX idx_municipi_mapes_updated (municipi_id, updated_at),
+    FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS municipi_mapa_versions (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    mapa_id INT UNSIGNED NOT NULL,
+    version INT UNSIGNED NOT NULL,
+    status ENUM('draft','pendent','publicat','rebutjat') DEFAULT 'draft',
+    data_json LONGTEXT NOT NULL,
+    changelog TEXT NOT NULL,
+    lock_version INT UNSIGNED NOT NULL DEFAULT 0,
+    created_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
+    moderation_notes TEXT,
+    UNIQUE KEY idx_municipi_mapa_versions_unique (mapa_id, version),
+    INDEX idx_municipi_mapa_versions_status (status, created_at),
+    INDEX idx_municipi_mapa_versions_mapa_status (mapa_id, status),
+    FOREIGN KEY (mapa_id) REFERENCES municipi_mapes(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS noms_historics (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
 

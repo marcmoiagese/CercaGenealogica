@@ -91,6 +91,20 @@ type DB interface {
 	ListCognomStatsRows(limit, offset int) ([]CognomStatsRow, error)
 	ResolveCognomPublicatByForma(forma string) (int, string, bool, error)
 	ListCognomFormesPublicades(cognomID int) ([]string, error)
+	// Mapes municipi
+	ListMunicipiMapes(filter MunicipiMapaFilter) ([]MunicipiMapa, error)
+	GetMunicipiMapa(id int) (*MunicipiMapa, error)
+	CreateMunicipiMapa(m *MunicipiMapa) (int, error)
+	UpdateMunicipiMapa(m *MunicipiMapa) error
+	UpdateMunicipiMapaCurrentVersion(mapaID, versionID int) error
+	NextMunicipiMapaVersionNumber(mapaID int) (int, error)
+	CreateMunicipiMapaVersion(v *MunicipiMapaVersion) (int, error)
+	ListMunicipiMapaVersions(filter MunicipiMapaVersionFilter) ([]MunicipiMapaVersion, error)
+	GetMunicipiMapaVersion(id int) (*MunicipiMapaVersion, error)
+	SaveMunicipiMapaDraft(versionID int, jsonData, changelog string, expectedLock int) (int, error)
+	UpdateMunicipiMapaVersionStatus(id int, status, notes string, moderatorID int) error
+	ResolveMunicipiIDByMapaID(mapaID int) (int, error)
+	ResolveMunicipiIDByMapaVersionID(versionID int) (int, error)
 
 	// Persones (moderació)
 	ListPersones(filter PersonaFilter) ([]Persona, error)
@@ -414,6 +428,52 @@ type CognomStatsRow struct {
 	Cognom2Estat sql.NullString
 	AnyDoc       sql.NullInt64
 	MunicipiID   sql.NullInt64
+}
+
+type MunicipiMapa struct {
+	ID               int
+	MunicipiID       int
+	GroupType        string
+	Title            string
+	PeriodLabel      string
+	PeriodStart      sql.NullInt64
+	PeriodEnd        sql.NullInt64
+	Topic            string
+	CurrentVersionID sql.NullInt64
+	CreatedBy        sql.NullInt64
+	CreatedAt        sql.NullTime
+	UpdatedAt        sql.NullTime
+}
+
+type MunicipiMapaFilter struct {
+	MunicipiID int
+	GroupType  string
+	CreatedBy  int
+	Limit      int
+	Offset     int
+}
+
+type MunicipiMapaVersion struct {
+	ID             int
+	MapaID         int
+	Version        int
+	Status         string
+	JSONData       string
+	Changelog      string
+	LockVersion    int
+	CreatedBy      sql.NullInt64
+	CreatedAt      sql.NullTime
+	ModeratedBy    sql.NullInt64
+	ModeratedAt    sql.NullTime
+	ModerationNotes string
+}
+
+type MunicipiMapaVersionFilter struct {
+	MapaID    int
+	Status   string
+	CreatedBy int
+	Limit    int
+	Offset   int
 }
 
 type Pais struct {
@@ -1179,6 +1239,9 @@ func NewDB(config map[string]string) (DB, error) {
 			return nil, fmt.Errorf("error recreant BD amb %s: %v", engine, err)
 		}
 	}
+	if err := ensureMapTables(engine, dbInstance); err != nil {
+		return nil, fmt.Errorf("error assegurant taules mapes (%s): %v", engine, err)
+	}
 
 	return dbInstance, nil
 }
@@ -1278,5 +1341,136 @@ func CreateDatabaseFromSQL(sqlFile, engine string, db DB) error {
 	}
 
 	logInfof("BD recreada correctament")
+	return nil
+}
+
+func ensureMapTables(engine string, db DB) error {
+	if db == nil {
+		return nil
+	}
+	statements := []string{}
+	switch engine {
+	case "sqlite":
+		statements = []string{
+			`CREATE TABLE IF NOT EXISTS municipi_mapes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+    group_type TEXT NOT NULL CHECK(group_type IN ('actual','historic','community')),
+    title TEXT NOT NULL,
+    period_label TEXT,
+    period_start INTEGER,
+    period_end INTEGER,
+    topic TEXT,
+    current_version_id INTEGER,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`,
+			`CREATE TABLE IF NOT EXISTS municipi_mapa_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mapa_id INTEGER NOT NULL REFERENCES municipi_mapes(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('draft','pendent','publicat','rebutjat')) DEFAULT 'draft',
+    data_json TEXT NOT NULL,
+    changelog TEXT NOT NULL DEFAULT '',
+    lock_version INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
+    moderation_notes TEXT,
+    UNIQUE (mapa_id, version)
+);`,
+			`CREATE INDEX IF NOT EXISTS idx_municipi_mapes_municipi_group ON municipi_mapes(municipi_id, group_type);`,
+			`CREATE INDEX IF NOT EXISTS idx_municipi_mapes_updated ON municipi_mapes(municipi_id, updated_at DESC);`,
+			`CREATE INDEX IF NOT EXISTS idx_municipi_mapa_versions_status ON municipi_mapa_versions(status, created_at ASC);`,
+			`CREATE INDEX IF NOT EXISTS idx_municipi_mapa_versions_mapa_status ON municipi_mapa_versions(mapa_id, status);`,
+		}
+	case "postgres":
+		statements = []string{
+			`CREATE TABLE IF NOT EXISTS municipi_mapes (
+    id SERIAL PRIMARY KEY,
+    municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+    group_type TEXT NOT NULL CHECK(group_type IN ('actual','historic','community')),
+    title TEXT NOT NULL,
+    period_label TEXT,
+    period_start INTEGER,
+    period_end INTEGER,
+    topic TEXT,
+    current_version_id INTEGER,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);`,
+			`CREATE TABLE IF NOT EXISTS municipi_mapa_versions (
+    id SERIAL PRIMARY KEY,
+    mapa_id INTEGER NOT NULL REFERENCES municipi_mapes(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('draft','pendent','publicat','rebutjat')) DEFAULT 'draft',
+    data_json TEXT NOT NULL,
+    changelog TEXT NOT NULL DEFAULT '',
+    lock_version INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP WITHOUT TIME ZONE,
+    moderation_notes TEXT,
+    UNIQUE (mapa_id, version)
+);`,
+			`CREATE INDEX IF NOT EXISTS idx_municipi_mapes_municipi_group ON municipi_mapes(municipi_id, group_type);`,
+			`CREATE INDEX IF NOT EXISTS idx_municipi_mapes_updated ON municipi_mapes(municipi_id, updated_at DESC);`,
+			`CREATE INDEX IF NOT EXISTS idx_municipi_mapa_versions_status ON municipi_mapa_versions(status, created_at ASC);`,
+			`CREATE INDEX IF NOT EXISTS idx_municipi_mapa_versions_mapa_status ON municipi_mapa_versions(mapa_id, status);`,
+		}
+	case "mysql":
+		statements = []string{
+			`CREATE TABLE IF NOT EXISTS municipi_mapes (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    municipi_id INT UNSIGNED NOT NULL,
+    group_type ENUM('actual','historic','community') NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    period_label VARCHAR(64) NULL,
+    period_start INT NULL,
+    period_end INT NULL,
+    topic VARCHAR(64) NULL,
+    current_version_id INT UNSIGNED NULL,
+    created_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_municipi_mapes_municipi_group (municipi_id, group_type),
+    INDEX idx_municipi_mapes_updated (municipi_id, updated_at),
+    FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+			`CREATE TABLE IF NOT EXISTS municipi_mapa_versions (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    mapa_id INT UNSIGNED NOT NULL,
+    version INT UNSIGNED NOT NULL,
+    status ENUM('draft','pendent','publicat','rebutjat') DEFAULT 'draft',
+    data_json LONGTEXT NOT NULL,
+    changelog TEXT NOT NULL,
+    lock_version INT UNSIGNED NOT NULL DEFAULT 0,
+    created_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
+    moderation_notes TEXT,
+    UNIQUE KEY idx_municipi_mapa_versions_unique (mapa_id, version),
+    INDEX idx_municipi_mapa_versions_status (status, created_at),
+    INDEX idx_municipi_mapa_versions_mapa_status (mapa_id, status),
+    FOREIGN KEY (mapa_id) REFERENCES municipi_mapes(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+		}
+	}
+	for _, stmt := range statements {
+		if strings.TrimSpace(stmt) == "" {
+			continue
+		}
+		if _, err := db.Exec(stmt); err != nil {
+			return err
+		}
+	}
 	return nil
 }

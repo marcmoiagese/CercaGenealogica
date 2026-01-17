@@ -25,6 +25,9 @@ const (
 	ruleEclesiasticCreate = "eclesiastic_create"
 	ruleEclesiasticUpdate = "eclesiastic_update"
 	ruleLlibrePageStatsUpdate = "llibre_page_stats_update"
+	ruleMunicipiMapaSubmit  = "municipi_mapa_submit"
+	ruleMunicipiMapaApprove = "municipi_mapa_approve"
+	ruleMunicipiMapaReject  = "municipi_mapa_reject"
 )
 
 // RegisterUserActivity crea una entrada d'activitat i, si està validada, suma punts.

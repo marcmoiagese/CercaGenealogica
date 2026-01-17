@@ -367,6 +367,23 @@ func ApplyRateLimit(ip string) bool {
 	return b.allow(1)
 }
 
+func allowRouteLimit(r *http.Request, route string, rate, burst float64) bool {
+	if r == nil || rate <= 0 || burst <= 0 {
+		return false
+	}
+	key := getRequesterKey(r, route)
+
+	bucketRegistry.mu.Lock()
+	b, ok := bucketRegistry.buckets[key]
+	if !ok {
+		b = newTokenBucket(rate, burst)
+		bucketRegistry.buckets[key] = b
+	}
+	bucketRegistry.mu.Unlock()
+
+	return b.allow(1)
+}
+
 func getIP(r *http.Request) string {
 	Debugf("[getIP] RemoteAddr rebut: %v", r.RemoteAddr)
 	forwarded := r.Header.Get("X-Forwarded-For")

@@ -1,0 +1,110 @@
+{{ define "admin-moderacio-mapes.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "moderation.maps.title" }}</title>
+    {{ template "styles-private" . }}
+    <style>
+        .moderacio-accions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .moderacio-accions form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            align-items: center;
+        }
+        .moderacio-accions input[type="text"] {
+            min-width: 200px;
+            padding: 0.45rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid #d5d5d5;
+            background: #fff;
+        }
+        .moderacio-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            color: #607386;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "moderation.maps.title" }}</h1>
+            </header>
+            {{ if .Data.Msg }}
+            <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
+            {{ end }}
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "moderation.table.id" }}</th>
+                            <th>{{ t .Lang "moderation.table.municipi" }}</th>
+                            <th>{{ t .Lang "maps.table.title" }}</th>
+                            <th>{{ t .Lang "maps.table.group" }}</th>
+                            <th>{{ t .Lang "moderation.maps.version" }}</th>
+                            <th>{{ t .Lang "moderation.table.author" }}</th>
+                            <th>{{ t .Lang "moderation.table.created" }}</th>
+                            <th>{{ t .Lang "moderation.table.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ if .Data.Items }}
+                            {{ range .Data.Items }}
+                            <tr>
+                                <td>{{ .Version.ID }}</td>
+                                <td><a href="/territori/municipis/{{ .Municipi.ID }}">{{ .Municipi.Nom }}</a></td>
+                                <td>
+                                    <div><a href="{{ .ViewURL }}">{{ .Mapa.Title }}</a></div>
+                                    <div class="moderacio-meta">
+                                        {{ if .Mapa.PeriodLabel }}<span>{{ .Mapa.PeriodLabel }}</span>{{ end }}
+                                        {{ if .Mapa.PeriodStart.Valid }}<span>{{ .Mapa.PeriodStart.Int64 }}</span>{{ end }}
+                                        {{ if .Mapa.PeriodEnd.Valid }}<span>{{ .Mapa.PeriodEnd.Int64 }}</span>{{ end }}
+                                        {{ if .Mapa.Topic }}<span>{{ .Mapa.Topic }}</span>{{ end }}
+                                    </div>
+                                </td>
+                                <td>{{ t $.Lang (printf "maps.type.%s" .Mapa.GroupType) }}</td>
+                                <td>{{ .Version.Version }}</td>
+                                <td>
+                                    {{ if .AuthorURL }}<a href="{{ .AuthorURL }}">@{{ .AuthorName }}</a>{{ else }}@{{ .AuthorName }}{{ end }}
+                                </td>
+                                <td>{{ .CreatedAt }}</td>
+                                <td class="moderacio-accions">
+                                    <form method="post" action="/admin/moderacio/mapes/{{ .Version.ID }}/approve">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <button type="submit" class="boto-primari">{{ t $.Lang "moderation.table.approve" }}</button>
+                                        <a class="boto-secundari" href="{{ .ViewURL }}">{{ t $.Lang "common.view" }}</a>
+                                    </form>
+                                    <form method="post" action="/admin/moderacio/mapes/{{ .Version.ID }}/reject">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <input type="text" name="notes" placeholder="{{ t $.Lang "moderation.table.reason.placeholder" }}">
+                                        <button type="submit" class="boto-secundari">{{ t $.Lang "moderation.table.reject" }}</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {{ end }}
+                        {{ else }}
+                            <tr>
+                                <td colspan="8">{{ t .Lang "moderation.maps.empty" }}</td>
+                            </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

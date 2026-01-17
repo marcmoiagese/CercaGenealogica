@@ -25,9 +25,10 @@ func ensureCSRF(w http.ResponseWriter, r *http.Request) (string, error) {
 	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
 
 	env := strings.ToLower(os.Getenv("ENVIRONMENT"))
+	isLocalHost := strings.HasPrefix(r.Host, "localhost") || strings.HasPrefix(r.Host, "127.0.0.1") || strings.HasPrefix(r.Host, "0.0.0.0")
 	secure := true
 	sameSite := http.SameSiteStrictMode
-	if env == "development" {
+	if env == "development" || isLocalHost {
 		secure = r.TLS != nil
 		sameSite = http.SameSiteLaxMode
 	}

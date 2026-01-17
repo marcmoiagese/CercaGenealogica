@@ -1,0 +1,96 @@
+{{ define "municipi-mapes-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "maps.title" }} · {{ .Data.Municipi.Nom }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/mapes.css">
+</head>
+<body>
+    {{ if .UserLoggedIn }}
+        {{ template "header-private" . }}
+        {{ template "menu" . }}
+    {{ else }}
+        {{ template "header-public" . }}
+    {{ end }}
+    <main class="contingut-principal">
+        <section class="card mapes-card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "maps.title" }}</h1>
+                    <p class="muted">{{ .Data.Municipi.Nom }}</p>
+                </div>
+                <div class="mapes-actions">
+                    <a class="boto-secundari" href="/territori/municipis/{{ .Data.Municipi.ID }}">{{ t .Lang "common.back" }}</a>
+                </div>
+            </header>
+
+            <div id="mapesList"
+                 class="mapes-list"
+                 data-municipi-id="{{ .Data.Municipi.ID }}"
+                 data-csrf="{{ .Data.CSRFToken }}"
+                 data-can-create="{{ if .Data.CanCreate }}1{{ else }}0{{ end }}"
+                 data-can-edit="{{ if .Data.CanEdit }}1{{ else }}0{{ end }}"
+                 data-label-actual="{{ t .Lang "maps.type.actual" }}"
+                 data-label-historic="{{ t .Lang "maps.type.historic" }}"
+                 data-label-community="{{ t .Lang "maps.type.community" }}">
+                {{ if .Data.CanCreate }}
+                <form id="mapesCreateForm" class="mapes-form">
+                    <div class="mapes-form-row">
+                        <div class="form-group">
+                            <label for="mapaTitle">{{ t .Lang "maps.form.title" }}</label>
+                            <input id="mapaTitle" name="title" type="text" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="mapaGroup">{{ t .Lang "maps.form.group" }}</label>
+                            <select id="mapaGroup" name="group_type">
+                                <option value="actual">{{ t .Lang "maps.type.actual" }}</option>
+                                <option value="historic">{{ t .Lang "maps.type.historic" }}</option>
+                                <option value="community">{{ t .Lang "maps.type.community" }}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="mapaPeriod">{{ t .Lang "maps.form.period" }}</label>
+                            <input id="mapaPeriod" name="period_label" type="text">
+                        </div>
+                        <div class="form-group">
+                            <label for="mapaTopic">{{ t .Lang "maps.form.topic" }}</label>
+                            <input id="mapaTopic" name="topic" type="text">
+                        </div>
+                    </div>
+                    <div class="mapes-form-actions">
+                        <button type="submit" class="boto-primari">{{ t .Lang "maps.form.create" }}</button>
+                        <span class="muted" id="mapesCreateStatus" aria-live="polite"></span>
+                    </div>
+                </form>
+                {{ end }}
+
+                <div class="taula-wrapper">
+                    <table class="taula">
+                        <thead>
+                            <tr>
+                                <th>{{ t .Lang "maps.table.title" }}</th>
+                                <th>{{ t .Lang "maps.table.group" }}</th>
+                                <th>{{ t .Lang "maps.table.period" }}</th>
+                                <th>{{ t .Lang "maps.table.actions" }}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mapesListBody">
+                            <tr><td colspan="4">{{ t .Lang "common.loading" }}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ if .UserLoggedIn }}
+        {{ template "scripts-private" . }}
+    {{ else }}
+        {{ template "scripts-public" . }}
+    {{ end }}
+    <script src="/static/js/municipi-mapes-list.js"></script>
+</body>
+</html>
+{{ end }}

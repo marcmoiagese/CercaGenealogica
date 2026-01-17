@@ -204,6 +204,43 @@ CREATE TABLE IF NOT EXISTS municipis (
     ultima_modificacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Mapes de municipi
+CREATE TABLE IF NOT EXISTS municipi_mapes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+    group_type TEXT NOT NULL CHECK(group_type IN ('actual','historic','community')),
+    title TEXT NOT NULL,
+    period_label TEXT,
+    period_start INTEGER,
+    period_end INTEGER,
+    topic TEXT,
+    current_version_id INTEGER,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS municipi_mapa_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mapa_id INTEGER NOT NULL REFERENCES municipi_mapes(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('draft','pendent','publicat','rebutjat')) DEFAULT 'draft',
+    data_json TEXT NOT NULL,
+    changelog TEXT NOT NULL DEFAULT '',
+    lock_version INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
+    moderation_notes TEXT,
+    UNIQUE (mapa_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_municipi_mapes_municipi_group ON municipi_mapes(municipi_id, group_type);
+CREATE INDEX IF NOT EXISTS idx_municipi_mapes_updated ON municipi_mapes(municipi_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_municipi_mapa_versions_status ON municipi_mapa_versions(status, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_municipi_mapa_versions_mapa_status ON municipi_mapa_versions(mapa_id, status);
+
 
 -- Recorda: aquí no podem posar FKs condicionals segons entitat_tipus en SQLite,
 -- la coherència l’asseguraràs des del codi Go (validant abans de fer INSERT/UPDATE).

@@ -431,6 +431,45 @@ func (f *fakeDBVerificar) ResolveCognomPublicatByForma(forma string) (int, strin
 func (f *fakeDBVerificar) ListCognomFormesPublicades(cognomID int) ([]string, error) {
 	return nil, nil
 }
+func (f *fakeDBVerificar) ListMunicipiMapes(filter db.MunicipiMapaFilter) ([]db.MunicipiMapa, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetMunicipiMapa(id int) (*db.MunicipiMapa, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) CreateMunicipiMapa(m *db.MunicipiMapa) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) UpdateMunicipiMapa(m *db.MunicipiMapa) error {
+	return nil
+}
+func (f *fakeDBVerificar) UpdateMunicipiMapaCurrentVersion(mapaID, versionID int) error {
+	return nil
+}
+func (f *fakeDBVerificar) NextMunicipiMapaVersionNumber(mapaID int) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) CreateMunicipiMapaVersion(v *db.MunicipiMapaVersion) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) ListMunicipiMapaVersions(filter db.MunicipiMapaVersionFilter) ([]db.MunicipiMapaVersion, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetMunicipiMapaVersion(id int) (*db.MunicipiMapaVersion, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) SaveMunicipiMapaDraft(versionID int, jsonData, changelog string, expectedLock int) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) UpdateMunicipiMapaVersionStatus(id int, status, notes string, moderatorID int) error {
+	return nil
+}
+func (f *fakeDBVerificar) ResolveMunicipiIDByMapaID(mapaID int) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) ResolveMunicipiIDByMapaVersionID(versionID int) (int, error) {
+	return 0, nil
+}
 func (f *fakeDBVerificar) CreateCognomVariant(v *db.CognomVariant) (int, error) { return 0, nil }
 func (f *fakeDBVerificar) UpdateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error {
 	return nil

@@ -189,6 +189,9 @@ func main() {
 	})
 	http.HandleFunc("/api/cognoms/", applyMiddleware(app.RequireLogin(app.CognomHeatmapJSON), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/territori/municipis/suggest", applyMiddleware(app.RequireLogin(app.AdminMunicipisSuggest), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/territori/municipis/", applyMiddleware(app.MunicipiMapesAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/municipis/", applyMiddleware(app.MunicipiMapesAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/mapes/", applyMiddleware(app.MapesAPI, core.BlockIPs, core.RateLimit))
 
 	// Arxius (lectura per a tots els usuaris autenticats)
 	http.HandleFunc("/arxius", applyMiddleware(app.ListArxius, core.BlockIPs, core.RateLimit))
@@ -315,6 +318,19 @@ func main() {
 		default:
 			if r.Method == http.MethodGet {
 				parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+				if len(parts) >= 4 && parts[3] == "mapes" {
+					switch {
+					case len(parts) == 4:
+						applyMiddleware(app.MunicipiMapesListPage, core.BlockIPs, core.RateLimit)(w, r)
+						return
+					case len(parts) == 5:
+						applyMiddleware(app.MunicipiMapaViewPage, core.BlockIPs, core.RateLimit)(w, r)
+						return
+					case len(parts) == 6 && parts[5] == "editor":
+						applyMiddleware(app.MunicipiMapaEditorPage, core.BlockIPs, core.RateLimit)(w, r)
+						return
+					}
+				}
 				if len(parts) >= 3 {
 					if _, err := strconv.Atoi(parts[2]); err == nil {
 						applyMiddleware(app.MunicipiPublic, core.BlockIPs, core.RateLimit)(w, r)
@@ -439,6 +455,17 @@ func main() {
 			applyMiddleware(app.AdminModeracioMediaItemApprove, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/items/") && strings.HasSuffix(r.URL.Path, "/reject"):
 			applyMiddleware(app.AdminModeracioMediaItemReject, core.BlockIPs, core.RateLimit)(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	http.HandleFunc("/admin/moderacio/mapes", applyMiddleware(app.AdminModeracioMapesList, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/moderacio/mapes/", func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/approve"):
+			applyMiddleware(app.AdminModeracioMapesApprove, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.HasSuffix(r.URL.Path, "/reject"):
+			applyMiddleware(app.AdminModeracioMapesReject, core.BlockIPs, core.RateLimit)(w, r)
 		default:
 			http.NotFound(w, r)
 		}

@@ -747,3 +747,43 @@ func (d *PostgreSQL) ListCognomImportRows(limit, offset int) ([]CognomImportRow,
 func (d *PostgreSQL) ListCognomStatsRows(limit, offset int) ([]CognomStatsRow, error) {
 	return d.help.listCognomStatsRows(limit, offset)
 }
+
+func (d *PostgreSQL) ListMunicipiMapes(filter MunicipiMapaFilter) ([]MunicipiMapa, error) {
+	return d.help.listMunicipiMapes(filter)
+}
+func (d *PostgreSQL) GetMunicipiMapa(id int) (*MunicipiMapa, error) {
+	return d.help.getMunicipiMapa(id)
+}
+func (d *PostgreSQL) CreateMunicipiMapa(m *MunicipiMapa) (int, error) {
+	return d.help.createMunicipiMapa(m)
+}
+func (d *PostgreSQL) UpdateMunicipiMapa(m *MunicipiMapa) error {
+	return d.help.updateMunicipiMapa(m)
+}
+func (d *PostgreSQL) UpdateMunicipiMapaCurrentVersion(mapaID, versionID int) error {
+	return d.help.updateMunicipiMapaCurrentVersion(mapaID, versionID)
+}
+func (d *PostgreSQL) NextMunicipiMapaVersionNumber(mapaID int) (int, error) {
+	return d.help.nextMunicipiMapaVersionNumber(mapaID)
+}
+func (d *PostgreSQL) ListMunicipiMapaVersions(filter MunicipiMapaVersionFilter) ([]MunicipiMapaVersion, error) {
+	return d.help.listMunicipiMapaVersions(filter)
+}
+func (d *PostgreSQL) GetMunicipiMapaVersion(id int) (*MunicipiMapaVersion, error) {
+	return d.help.getMunicipiMapaVersion(id)
+}
+func (d *PostgreSQL) CreateMunicipiMapaVersion(v *MunicipiMapaVersion) (int, error) {
+	return d.help.createMunicipiMapaVersion(v)
+}
+func (d *PostgreSQL) SaveMunicipiMapaDraft(versionID int, jsonData, changelog string, expectedLock int) (int, error) {
+	return d.help.saveMunicipiMapaDraft(versionID, jsonData, changelog, expectedLock)
+}
+func (d *PostgreSQL) UpdateMunicipiMapaVersionStatus(id int, status, notes string, moderatorID int) error {
+	return d.help.updateMunicipiMapaVersionStatus(id, status, notes, moderatorID)
+}
+func (d *PostgreSQL) ResolveMunicipiIDByMapaID(mapaID int) (int, error) {
+	return d.help.resolveMunicipiIDByMapaID(mapaID)
+}
+func (d *PostgreSQL) ResolveMunicipiIDByMapaVersionID(versionID int) (int, error) {
+	return d.help.resolveMunicipiIDByMapaVersionID(versionID)
+}

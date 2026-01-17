@@ -58,6 +58,9 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 	canModerate := user != nil && a.hasPerm(perms, permModerate)
 	canManageArxius := user != nil && a.hasPerm(perms, permArxius)
 	canManagePolicies := user != nil && (perms.CanManagePolicies || perms.Admin)
+	munTarget := a.resolveMunicipiTarget(mun.ID)
+	canViewMap := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisMapesView, munTarget)
+	canCreateMap := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisMapesCreate, munTarget)
 
 	if mun.ModeracioEstat != "" && mun.ModeracioEstat != "publicat" && !(canManageTerritory || canModerate) {
 		http.NotFound(w, r)
@@ -109,6 +112,20 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 			countryLabel = a.countryLabelFromISO(lvl.PaisISO2.String, lang)
 			break
 		}
+	}
+	typeKey := fmt.Sprintf("municipis.type.%s", mun.Tipus)
+	typeLabel := T(lang, typeKey)
+	if typeLabel == typeKey {
+		typeLabel = mun.Tipus
+	}
+	regionLabel := ""
+	if len(levelViews) > 0 {
+		regionLabel = levelViews[len(levelViews)-1].Nom
+	}
+	mapesData := map[string]interface{}{
+		"municipi_id": mun.ID,
+		"mapes_api":   fmt.Sprintf("/api/municipis/%d/mapes", mun.ID),
+		"mapes_page":  fmt.Sprintf("/territori/municipis/%d/mapes", mun.ID),
 	}
 
 	recordsColumns := []municipiRecordColumn{
@@ -187,6 +204,8 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 		"Municipi":          mun,
 		"Hierarchy":         levelViews,
 		"CountryLabel":      countryLabel,
+		"TypeLabel":         typeLabel,
+		"RegionLabel":       regionLabel,
 		"Arxius":            arxius,
 		"RecordColumns":     recordsColumns,
 		"RecordRows":        recordsRows,
@@ -195,12 +214,16 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 		"CanManagePolicies": canManagePolicies,
 		"CanModerate":       canModerate,
 		"CanManageTerritory": canManageTerritory,
+		"CanViewMap":        canViewMap,
+		"CanCreateMap":      canCreateMap,
+		"ShowStatusBadge":   canManageTerritory || canModerate,
+		"MapesData":         mapesData,
 	}
 	if user != nil {
-		RenderPrivateTemplate(w, r, "municipi-public.html", data)
+		RenderPrivateTemplate(w, r, "municipi-perfil-pro.html", data)
 		return
 	}
-	RenderTemplate(w, r, "municipi-public.html", data)
+	RenderTemplate(w, r, "municipi-perfil-pro.html", data)
 }
 
 func formatAny(val sql.NullInt64) string {

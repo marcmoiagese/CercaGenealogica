@@ -1,0 +1,179 @@
+{{ define "municipi-mapa-editor.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "maps.editor.title" }} · {{ .Data.Municipi.Nom }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/mapes.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal taula-ample">
+        <section class="card map-editor-card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "maps.editor.title" }}</h1>
+                    <p class="muted">{{ .Data.Mapa.Title }} · {{ .Data.Municipi.Nom }}</p>
+                </div>
+                <div class="mapes-actions">
+                    <a class="boto-secundari" href="/territori/municipis/{{ .Data.Municipi.ID }}/mapes">{{ t .Lang "maps.back" }}</a>
+                </div>
+            </header>
+
+            <div id="mapEditor"
+                 class="map-editor"
+                 data-map-id="{{ .Data.Mapa.ID }}"
+                 data-municipi-id="{{ .Data.Municipi.ID }}"
+                 data-csrf="{{ .Data.CSRFToken }}"
+                 data-delete-confirm="{{ t .Lang "maps.editor.panel.delete_confirm" }}"
+                 data-historic-remove="{{ t .Lang "maps.editor.field.historic_remove" }}"
+                 data-person-search-endpoint="/api/municipis/{{ .Data.Municipi.ID }}/persones/cerca"
+                 data-person-empty="{{ t .Lang "maps.editor.field.people_empty" }}"
+                 data-person-add="{{ t .Lang "maps.editor.field.people_add" }}">
+                <div class="map-editor-topbar">
+                    <div class="map-editor-tools">
+                        <button type="button" class="map-tool" data-tool="select" data-tool-label="{{ t .Lang "maps.editor.tool.select" }}" title="{{ t .Lang "maps.editor.tool.select" }}">
+                            <i class="fa-solid fa-arrow-pointer" aria-hidden="true"></i>
+                            <span>{{ t .Lang "maps.editor.tool.select" }}</span>
+                        </button>
+                        <button type="button" class="map-tool" data-tool="house-rect" data-tool-label="{{ t .Lang "maps.editor.tool.house_rect" }}" title="{{ t .Lang "maps.editor.tool.house_rect" }}">
+                            <i class="fa-regular fa-square" aria-hidden="true"></i>
+                            <span>{{ t .Lang "maps.editor.tool.house_rect" }}</span>
+                        </button>
+                        <button type="button" class="map-tool" data-tool="house-poly" data-tool-label="{{ t .Lang "maps.editor.tool.house_poly" }}" title="{{ t .Lang "maps.editor.tool.house_poly" }}">
+                            <i class="fa-solid fa-draw-polygon" aria-hidden="true"></i>
+                            <span>{{ t .Lang "maps.editor.tool.house_poly" }}</span>
+                        </button>
+                        <button type="button" class="map-tool" data-tool="street" data-tool-label="{{ t .Lang "maps.editor.tool.street" }}" title="{{ t .Lang "maps.editor.tool.street" }}">
+                            <i class="fa-solid fa-road" aria-hidden="true"></i>
+                            <span>{{ t .Lang "maps.editor.tool.street" }}</span>
+                        </button>
+                        <button type="button" class="map-tool" data-tool="river" data-tool-label="{{ t .Lang "maps.editor.tool.river" }}" title="{{ t .Lang "maps.editor.tool.river" }}">
+                            <i class="fa-solid fa-water" aria-hidden="true"></i>
+                            <span>{{ t .Lang "maps.editor.tool.river" }}</span>
+                        </button>
+                        <button type="button" class="map-tool" data-tool="element" data-tool-label="{{ t .Lang "maps.editor.tool.element" }}" title="{{ t .Lang "maps.editor.tool.element" }}">
+                            <i class="fa-solid fa-tree" aria-hidden="true"></i>
+                            <span>{{ t .Lang "maps.editor.tool.element" }}</span>
+                        </button>
+                        <button type="button" class="map-tool" data-tool="text" data-tool-label="{{ t .Lang "maps.editor.tool.text" }}" title="{{ t .Lang "maps.editor.tool.text" }}">
+                            <i class="fa-solid fa-font" aria-hidden="true"></i>
+                            <span>{{ t .Lang "maps.editor.tool.text" }}</span>
+                        </button>
+                        <button type="button" class="map-tool" data-tool="marker" data-tool-label="{{ t .Lang "maps.editor.tool.marker" }}" title="{{ t .Lang "maps.editor.tool.marker" }}">
+                            <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                            <span>{{ t .Lang "maps.editor.tool.marker" }}</span>
+                        </button>
+                    </div>
+                    <div class="map-editor-actions">
+                        <button type="button" class="boto-primari" id="mapSave">{{ t .Lang "maps.editor.save" }}</button>
+                        <button type="button" class="boto-secundari" id="mapSubmit">{{ t .Lang "maps.editor.submit" }}</button>
+                    </div>
+                </div>
+
+                <div class="map-editor-hints">
+                    <span id="mapEditorHint" class="muted">{{ t .Lang "maps.editor.hint" }}</span>
+                    <span id="mapEditorStatus" class="muted" aria-live="polite"></span>
+                </div>
+
+                <div class="map-editor-grid">
+                    <div class="map-editor-canvas">
+                        <svg id="mapEditorSvg" viewBox="0 0 1000 700" role="img" aria-label="{{ t .Lang "maps.editor.canvas" }}"></svg>
+                        <svg id="mapEditorOverlay" viewBox="0 0 1000 700" aria-hidden="true"></svg>
+                    </div>
+
+                    <aside class="map-editor-side">
+                        <div class="map-editor-panel">
+                            <div class="map-editor-panel-header">
+                                <h2>{{ t .Lang "maps.editor.panel.title" }}</h2>
+                                <button type="button" class="boto-secundari map-editor-delete" id="mapEditorDelete">{{ t .Lang "maps.editor.panel.delete" }}</button>
+                            </div>
+                            <p class="map-editor-empty muted" id="mapEditorEmpty">{{ t .Lang "maps.editor.panel.empty" }}</p>
+                            <div class="map-editor-form" id="mapEditorForm" hidden>
+                                <div class="map-editor-field" data-layer="houses streets rivers toponyms">
+                                    <label for="mapEditorLabel">{{ t .Lang "maps.editor.field.label" }}</label>
+                                    <input id="mapEditorLabel" type="text" autocomplete="off">
+                                </div>
+                                <div class="map-editor-field" data-layer="streets">
+                                    <label for="mapEditorStreetType">{{ t .Lang "maps.editor.street_type.label" }}</label>
+                                    <select id="mapEditorStreetType">
+                                        <option value="asfaltat">{{ t .Lang "maps.editor.street_type.asfaltat" }}</option>
+                                        <option value="empedrat">{{ t .Lang "maps.editor.street_type.empedrat" }}</option>
+                                        <option value="terra">{{ t .Lang "maps.editor.street_type.terra" }}</option>
+                                        <option value="carretera">{{ t .Lang "maps.editor.street_type.carretera" }}</option>
+                                        <option value="autopista">{{ t .Lang "maps.editor.street_type.autopista" }}</option>
+                                    </select>
+                                </div>
+                                <div class="map-editor-field" data-layer="rivers">
+                                    <label for="mapEditorRiverType">{{ t .Lang "maps.editor.river_type.label" }}</label>
+                                    <select id="mapEditorRiverType">
+                                        <option value="riu">{{ t .Lang "maps.editor.river_type.riu" }}</option>
+                                        <option value="riera">{{ t .Lang "maps.editor.river_type.riera" }}</option>
+                                        <option value="rierol">{{ t .Lang "maps.editor.river_type.rierol" }}</option>
+                                    </select>
+                                </div>
+                                <div class="map-editor-field" data-layer="elements">
+                                    <label for="mapEditorElementType">{{ t .Lang "maps.editor.element_type.label" }}</label>
+                                    <select id="mapEditorElementType">
+                                        <option value="tree">{{ t .Lang "maps.editor.element_type.tree" }}</option>
+                                        <option value="fountain">{{ t .Lang "maps.editor.element_type.fountain" }}</option>
+                                        <option value="well">{{ t .Lang "maps.editor.element_type.well" }}</option>
+                                        <option value="bench">{{ t .Lang "maps.editor.element_type.bench" }}</option>
+                                    </select>
+                                </div>
+                                <div class="map-editor-field" data-layer="houses streets rivers toponyms bounds">
+                                    <label for="mapEditorNotes">{{ t .Lang "maps.editor.field.notes" }}</label>
+                                    <textarea id="mapEditorNotes" rows="4"></textarea>
+                                </div>
+                                <div class="map-editor-field" data-layer="houses streets rivers bounds">
+                                    <div class="map-editor-field-header">
+                                        <label>{{ t .Lang "maps.editor.field.points" }}</label>
+                                    </div>
+                                    <div class="map-editor-points-list" id="mapEditorPoints"></div>
+                                    <p class="map-editor-help muted">{{ t .Lang "maps.editor.field.points_hint" }}</p>
+                                </div>
+                                <div class="map-editor-field" data-layer="houses">
+                                    <label for="mapEditorPeopleSearch">{{ t .Lang "maps.editor.field.people" }}</label>
+                                    <input id="mapEditorPeopleSearch" type="text" autocomplete="off" placeholder="{{ t .Lang "maps.editor.field.people_placeholder" }}">
+                                    <div class="map-editor-people-results" id="mapEditorPeopleResults"></div>
+                                    <div class="map-editor-people-list" id="mapEditorPeopleList"></div>
+                                </div>
+                                <div class="map-editor-field" data-layer="houses">
+                                    <label>{{ t .Lang "maps.editor.field.house_coords" }}</label>
+                                    <div class="map-editor-coords">
+                                        <input id="mapEditorHouseCoordX" type="number" step="1" placeholder="X">
+                                        <input id="mapEditorHouseCoordY" type="number" step="1" placeholder="Y">
+                                    </div>
+                                </div>
+                                <div class="map-editor-field" data-layer="houses streets">
+                                    <div class="map-editor-field-header">
+                                        <label>{{ t .Lang "maps.editor.field.historic" }}</label>
+                                        <button type="button" class="boto-secundari" id="mapEditorHistoricAdd">{{ t .Lang "maps.editor.field.historic_add" }}</button>
+                                    </div>
+                                    <div class="map-editor-historic-list" id="mapEditorHistoricList"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="map-editor-panel">
+                            <div class="map-editor-panel-header">
+                                <h2>{{ t .Lang "maps.editor.panel.changes" }}</h2>
+                            </div>
+                            <div class="map-editor-field">
+                                <label for="mapEditorChangelog">{{ t .Lang "maps.editor.field.changelog" }}</label>
+                                <textarea id="mapEditorChangelog" rows="3"></textarea>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script src="/static/js/cgmap.js"></script>
+    <script src="/static/js/municipi-mapa-editor.js"></script>
+</body>
+</html>
+{{ end }}
