@@ -65,6 +65,35 @@
 .taula-registres th,
 .taula-registres td {
     padding: 15px;
+    vertical-align: middle;
+}
+
+.filtres-avancats-panel {
+    display: none;
+    border: 1px solid var(--color-borda);
+    border-radius: 10px;
+    background: #f8fafc;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.filtres-avancats-panel.is-open {
+    display: block;
+}
+
+.filtres-avancats-panel .filtres-arxius {
+    margin: 0;
+}
+
+.filtres-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.filtres-toggle.is-open {
+    background: rgba(22, 96, 136, 0.12);
+    border-color: rgba(22, 96, 136, 0.4);
 }
 
 .editable-cell {
@@ -118,6 +147,18 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+.indexacio-resum {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    align-items: flex-start;
+}
+
+.indexacio-registres {
+    font-weight: 600;
+    color: var(--color-text);
 }
 
 .icon-action {
@@ -319,6 +360,11 @@
     border-color: var(--primary-color);
 }
 .contingut-principal.indexer-wide {
+    max-width: none;
+    width: 100%;
+}
+
+.contingut-principal.taula-ample {
     max-width: none;
     width: 100%;
 }

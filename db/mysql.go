@@ -338,6 +338,15 @@ func (d *MySQL) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 func (d *MySQL) CountMunicipis(f MunicipiFilter) (int, error) {
 	return d.help.countMunicipis(f)
 }
+func (d *MySQL) ListMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowseRow, error) {
+	return d.help.listMunicipisBrowse(f)
+}
+func (d *MySQL) CountMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
+	return d.help.countMunicipisBrowse(f)
+}
+func (d *MySQL) SuggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRow, error) {
+	return d.help.suggestMunicipis(f)
+}
 func (d *MySQL) GetMunicipi(id int) (*Municipi, error) {
 	return d.help.getMunicipi(id)
 }

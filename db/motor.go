@@ -210,6 +210,9 @@ type DB interface {
 	// Municipis
 	ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error)
 	CountMunicipis(f MunicipiFilter) (int, error)
+	ListMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowseRow, error)
+	CountMunicipisBrowse(f MunicipiBrowseFilter) (int, error)
+	SuggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRow, error)
 	GetMunicipi(id int) (*Municipi, error)
 	CreateMunicipi(m *Municipi) (int, error)
 	UpdateMunicipi(m *Municipi) error
@@ -510,6 +513,7 @@ type NivellAdministratiu struct {
 type NivellAdminFilter struct {
 	PaisID         int
 	Nivel          int
+	Text           string
 	Estat          string
 	Status         string
 	Limit          int
@@ -566,6 +570,53 @@ type MunicipiFilter struct {
 	AllowedComarcaIDs   []int
 	AllowedPaisIDs      []int
 }
+
+type MunicipiBrowseFilter struct {
+	Text                string
+	Estat               string
+	Status              string
+	PaisID              int
+	MunicipiID          int
+	NivellID            int
+	Tipus               string
+	LevelIDs            [7]int
+	Sort                string
+	SortDir             string
+	Limit               int
+	Offset              int
+	AllowedMunicipiIDs  []int
+	AllowedProvinciaIDs []int
+	AllowedComarcaIDs   []int
+	AllowedPaisIDs      []int
+}
+
+type MunicipiBrowseRow struct {
+	ID                int
+	Nom               string
+	Tipus             string
+	Estat             string
+	CodiPostal        string
+	ModeracioEstat    string
+	LevelIDs          [7]sql.NullInt64
+	LevelNames        [7]sql.NullString
+	Latitud           sql.NullFloat64
+	Longitud          sql.NullFloat64
+	RegistresTotal    int64
+	RegistresIndexats int64
+}
+
+type MunicipiSuggestRow struct {
+	ID         int
+	Nom        string
+	Tipus      string
+	PaisID     int
+	LevelIDs   [7]sql.NullInt64
+	LevelNames [7]sql.NullString
+	LevelTypes [7]sql.NullString
+	Latitud    sql.NullFloat64
+	Longitud   sql.NullFloat64
+}
+
 
 type CodiPostal struct {
 	ID         int
@@ -785,6 +836,7 @@ type LlibreFilter struct {
 	MunicipiID          int
 	ArxiuID             int
 	ArxiuTipus          string
+	TipusLlibre         string
 	Status              string
 	Limit               int
 	Offset              int

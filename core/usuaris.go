@@ -550,6 +550,11 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
+	*r = *a.withUser(r, user)
+	if _, found := a.permissionsFromContext(r); !found {
+		perms := a.getPermissionsForUser(user.ID)
+		*r = *a.withPermissions(r, perms)
+	}
 	lang := ResolveLang(r)
 	if pref := strings.TrimSpace(user.PreferredLang); pref != "" && isSupportedLang(pref) {
 		lang = pref

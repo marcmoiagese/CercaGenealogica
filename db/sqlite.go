@@ -357,6 +357,15 @@ func (d *SQLite) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 func (d *SQLite) CountMunicipis(f MunicipiFilter) (int, error) {
 	return d.help.countMunicipis(f)
 }
+func (d *SQLite) ListMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowseRow, error) {
+	return d.help.listMunicipisBrowse(f)
+}
+func (d *SQLite) CountMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
+	return d.help.countMunicipisBrowse(f)
+}
+func (d *SQLite) SuggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRow, error) {
+	return d.help.suggestMunicipis(f)
+}
 func (d *SQLite) GetMunicipi(id int) (*Municipi, error) {
 	return d.help.getMunicipi(id)
 }

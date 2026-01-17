@@ -42,21 +42,65 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	filter.ArxiuTipus = strings.TrimSpace(r.URL.Query().Get("arxiu_tipus"))
+	filter.TipusLlibre = strings.TrimSpace(r.URL.Query().Get("tipus_llibre"))
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
 	if status == "" {
 		status = "publicat"
 	}
 	filter.Status = status
+	lang := ResolveLang(r)
+	filterKeys := []string{"titol", "entitat", "municipi", "crono", "pagines", "status"}
+	filterValues := map[string]string{}
+	filterMatch := map[string]string{}
+	for _, key := range filterKeys {
+		paramKey := "f_" + key
+		if val := strings.TrimSpace(r.URL.Query().Get(paramKey)); val != "" {
+			filterValues[key] = val
+			filterMatch[key] = strings.ToLower(val)
+		}
+	}
+	filterOrder := []string{}
+	if orderParam := strings.TrimSpace(r.URL.Query().Get("order")); orderParam != "" {
+		for _, key := range strings.Split(orderParam, ",") {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	}
+	if len(filterOrder) == 0 {
+		for _, key := range filterKeys {
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	} else {
+		seen := map[string]bool{}
+		for _, key := range filterOrder {
+			seen[key] = true
+		}
+		for _, key := range filterKeys {
+			if _, ok := filterMatch[key]; ok && !seen[key] {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	}
 	if !scopeFilter.hasGlobal {
 		if scopeFilter.isEmpty() {
-			pagination := buildPagination(r, page, perPage, 0, "#page-stats-controls")
+			pagination := buildPagination(r, page, perPage, 0, "#llibresTable")
 			RenderPrivateTemplate(w, r, "admin-llibres-list.html", map[string]interface{}{
 				"Llibres":                  []db.LlibreRow{},
-				"IndexacioStats":           map[int]db.LlibreIndexacioStats{},
+				"IndexacioStats":           map[string]LlibreIndexacioView{},
 				"Filter":                   filter,
+				"FilterValues":             filterValues,
+				"FilterOrder":              strings.Join(filterOrder, ","),
 				"Arquebisbats":             []db.ArquebisbatRow{},
-				"Municipis":                []db.MunicipiRow{},
+				"MunicipiLabel":            "",
 				"Arxius":                   []db.ArxiuWithCount{},
+				"TipusOptions":             llibreTipusOptions,
 				"CanManageArxius":          canManage,
 				"CanCreateLlibre":          canCreateLlibre,
 				"CanImportRegistresGlobal": canImportRegistresGlobal,
@@ -91,12 +135,58 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 		filter.AllowedEclesIDs = scopeFilter.eclesIDs
 	}
-	total, _ := a.DB.CountLlibres(filter)
-	pagination := buildPagination(r, page, perPage, total, "#page-stats-controls")
-	filter.Limit = pagination.PerPage
-	filter.Offset = pagination.Offset
-	llibres, _ := a.DB.ListLlibres(filter)
-	indexacioStats := a.buildLlibresIndexacioViews(llibres)
+	llibres := []db.LlibreRow{}
+	total := 0
+	pagination := Pagination{}
+	filtered := len(filterMatch) > 0
+	indexacioStats := map[string]LlibreIndexacioView{}
+	if filtered {
+		listFilter := filter
+		listFilter.Limit = 0
+		listFilter.Offset = 0
+		allLlibres, _ := a.DB.ListLlibres(listFilter)
+		matches := make([]db.LlibreRow, 0, len(allLlibres))
+		for _, llibre := range allLlibres {
+			match := true
+			for _, key := range filterOrder {
+				filterVal := filterMatch[key]
+				if filterVal == "" {
+					continue
+				}
+				value := strings.ToLower(llibreFilterValue(llibre, nil, key, lang))
+				if !strings.Contains(value, filterVal) {
+					match = false
+					break
+				}
+			}
+			if match {
+				matches = append(matches, llibre)
+			}
+		}
+		total = len(matches)
+		pagination = buildPagination(r, page, perPage, total, "#llibresTable")
+		start := pagination.Offset
+		end := start + pagination.PerPage
+		if start < 0 {
+			start = 0
+		}
+		if start > total {
+			start = total
+		}
+		if end > total {
+			end = total
+		}
+		llibres = matches[start:end]
+		indexacioStats = a.buildLlibresIndexacioViews(llibres)
+	} else {
+		total, _ = a.DB.CountLlibres(filter)
+		pagination = buildPagination(r, page, perPage, total, "#llibresTable")
+		listFilter := filter
+		listFilter.Limit = pagination.PerPage
+		listFilter.Offset = pagination.Offset
+		llibres, _ = a.DB.ListLlibres(listFilter)
+		indexacioStats = a.buildLlibresIndexacioViews(llibres)
+	}
 	canEditLlibre := make(map[int]bool, len(llibres))
 	canDeleteLlibre := make(map[int]bool, len(llibres))
 	canIndexLlibre := make(map[int]bool, len(llibres))
@@ -133,15 +223,23 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
-	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
+	municipiLabel := ""
+	if filter.MunicipiID > 0 {
+		if mun, err := a.DB.GetMunicipi(filter.MunicipiID); err == nil && mun != nil {
+			municipiLabel = mun.Nom
+		}
+	}
 	arxius, _ := a.DB.ListArxius(db.ArxiuFilter{Limit: 200})
 	RenderPrivateTemplate(w, r, "admin-llibres-list.html", map[string]interface{}{
 		"Llibres":                  llibres,
 		"IndexacioStats":           indexacioStats,
 		"Filter":                   filter,
+		"FilterValues":             filterValues,
+		"FilterOrder":              strings.Join(filterOrder, ","),
 		"Arquebisbats":             arquebisbats,
-		"Municipis":                municipis,
+		"MunicipiLabel":            municipiLabel,
 		"Arxius":                   arxius,
+		"TipusOptions":             llibreTipusOptions,
 		"CanManageArxius":          canManage,
 		"CanCreateLlibre":          canCreateLlibre,
 		"CanImportRegistresGlobal": canImportRegistresGlobal,
@@ -166,6 +264,52 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		"User":                     user,
 		"CurrentURL":               r.URL.RequestURI(),
 	})
+}
+
+func llibreFilterValue(llibre db.LlibreRow, stats map[string]LlibreIndexacioView, key, lang string) string {
+	switch key {
+	case "titol":
+		title := strings.TrimSpace(llibre.Titol)
+		nom := strings.TrimSpace(llibre.NomEsglesia)
+		if title == "" {
+			return nom
+		}
+		if nom == "" {
+			return title
+		}
+		return title + " " + nom
+	case "entitat":
+		if llibre.ArquebisbatNom.Valid {
+			return llibre.ArquebisbatNom.String
+		}
+	case "municipi":
+		if llibre.MunicipiNom.Valid {
+			return llibre.MunicipiNom.String
+		}
+	case "crono":
+		return llibre.Cronologia
+	case "pagines":
+		if llibre.Pagines.Valid {
+			return strconv.FormatInt(llibre.Pagines.Int64, 10)
+		}
+	case "registres":
+		if stats != nil {
+			if stat, ok := stats[strconv.Itoa(llibre.ID)]; ok {
+				return strconv.Itoa(stat.TotalRegistres)
+			}
+		}
+	case "indexat":
+		if stats != nil {
+			if stat, ok := stats[strconv.Itoa(llibre.ID)]; ok {
+				return strings.TrimSpace(strconv.Itoa(stat.Percentatge) + "% " + strconv.Itoa(stat.Percentatge))
+			}
+		}
+	case "status":
+		if llibre.ModeracioEstat != "" {
+			return strings.TrimSpace(T(lang, "activity.status."+llibre.ModeracioEstat) + " " + llibre.ModeracioEstat)
+		}
+	}
+	return ""
 }
 
 var llibreTipusOptions = []string{

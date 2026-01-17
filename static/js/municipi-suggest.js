@@ -1,0 +1,156 @@
+document.addEventListener("DOMContentLoaded", () => {
+    const input = document.getElementById("filtre-mun");
+    const hidden = document.getElementById("filtre-mun-id");
+    const suggestions = document.getElementById("filtre-mun-suggestions");
+    if (!input || !hidden || !suggestions) {
+        return;
+    }
+    const api = input.dataset.api || "";
+    if (!api) {
+        return;
+    }
+
+    const emptyLabel = input.dataset.emptyLabel || "No results";
+    let lastItems = [];
+    let activeIndex = -1;
+    let debounceTimer = null;
+
+    function clearSuggestions() {
+        suggestions.innerHTML = "";
+        suggestions.classList.remove("is-open");
+        lastItems = [];
+        activeIndex = -1;
+    }
+
+    function setActive(index) {
+        const items = Array.from(suggestions.querySelectorAll("li"));
+        items.forEach((el, idx) => {
+            if (idx === index) {
+                el.classList.add("is-active");
+            } else {
+                el.classList.remove("is-active");
+            }
+        });
+        activeIndex = index;
+    }
+
+    function buildContext(item) {
+        const names = Array.isArray(item.nivells_nom) ? item.nivells_nom : [];
+        const types = Array.isArray(item.nivells_tipus) ? item.nivells_tipus : [];
+        const country = names[0] || "";
+        const chain = [];
+        for (let i = 1; i < names.length; i++) {
+            const name = names[i];
+            if (!name) {
+                continue;
+            }
+            const label = types[i] ? `${types[i]}: ${name}` : name;
+            chain.push(label);
+        }
+        const parts = [];
+        if (country) {
+            parts.push(country);
+        }
+        if (chain.length) {
+            parts.push(chain.join(" / "));
+        }
+        return parts.join(" - ");
+    }
+
+    function renderSuggestions(items) {
+        suggestions.innerHTML = "";
+        lastItems = items || [];
+        activeIndex = -1;
+        if (!items || items.length === 0) {
+            const li = document.createElement("li");
+            li.textContent = emptyLabel;
+            li.className = "suggestion-empty";
+            suggestions.appendChild(li);
+            suggestions.classList.add("is-open");
+            return;
+        }
+        items.forEach((item, idx) => {
+            const li = document.createElement("li");
+            li.dataset.index = String(idx);
+            const title = document.createElement("span");
+            title.className = "suggestion-title";
+            title.textContent = item.nom || "";
+            const contextText = buildContext(item);
+            li.appendChild(title);
+            if (contextText) {
+                const context = document.createElement("span");
+                context.className = "suggestion-context";
+                context.textContent = contextText;
+                li.appendChild(context);
+            }
+            li.addEventListener("click", () => applySuggestion(item));
+            suggestions.appendChild(li);
+        });
+        suggestions.classList.add("is-open");
+    }
+
+    function applySuggestion(item) {
+        if (!item) {
+            return;
+        }
+        hidden.value = item.id ? String(item.id) : "";
+        input.value = item.nom || "";
+        clearSuggestions();
+    }
+
+    function fetchSuggestions(query) {
+        const params = new URLSearchParams();
+        params.set("q", query);
+        params.set("limit", "10");
+        fetch(`${api}?${params.toString()}`, { credentials: "same-origin" })
+            .then((resp) => resp.json())
+            .then((data) => {
+                renderSuggestions(data.items || []);
+            })
+            .catch(() => {
+                clearSuggestions();
+            });
+    }
+
+    function handleInput() {
+        hidden.value = "";
+        const value = input.value.trim();
+        if (value.length < 1) {
+            clearSuggestions();
+            return;
+        }
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => fetchSuggestions(value), 300);
+    }
+
+    input.addEventListener("input", handleInput);
+    input.addEventListener("keydown", (event) => {
+        if (suggestions.children.length === 0) {
+            return;
+        }
+        if (event.key === "ArrowDown") {
+            event.preventDefault();
+            const next = Math.min(activeIndex + 1, suggestions.children.length - 1);
+            setActive(next);
+        } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            const prev = Math.max(activeIndex - 1, 0);
+            setActive(prev);
+        } else if (event.key === "Enter") {
+            if (lastItems.length > 0) {
+                event.preventDefault();
+                const item = lastItems[activeIndex >= 0 ? activeIndex : 0];
+                applySuggestion(item);
+            }
+        } else if (event.key === "Escape") {
+            clearSuggestions();
+        }
+    });
+
+    document.addEventListener("click", (event) => {
+        if (event.target === input || suggestions.contains(event.target)) {
+            return;
+        }
+        clearSuggestions();
+    });
+});

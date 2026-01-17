@@ -10,11 +10,15 @@
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
-    <main class="contingut-principal">
+    <main class="contingut-principal taula-ample">
         <section class="card">
             <header class="card-header amb-accio">
                 <h1>{{ t .Lang "ecles.title" }}</h1>
                 <div class="card-actions">
+                    <button type="button" id="toggleFilters" class="boto-secundari filtres-toggle" aria-controls="filtersPanel" aria-expanded="false">
+                        <i class="fas fa-sliders-h"></i>
+                        <span>{{ t .Lang "filters.advanced" }}</span>
+                    </button>
                     {{ if $.Data.CanCreateEcles }}
                     <a class="boto-primari" href="/territori/eclesiastic/new{{ if $.Data.CreatePaisID }}?pais_id={{ $.Data.CreatePaisID }}{{ end }}">{{ t .Lang "ecles.button.new" }}</a>
                     {{ end }}
@@ -23,88 +27,109 @@
                     {{ end }}
                 </div>
             </header>
-            <form class="filtres-arxius" method="get">
-                <div class="grup-camp">
-                    <label for="f-q">{{ t .Lang "ecles.filter.search" }}</label>
-                    <input id="f-q" type="text" name="q" value="{{ .Data.Filter.Text }}">
-                </div>
-                <div class="grup-camp">
-                    <label for="f-pais">{{ t .Lang "ecles.filter.country" }}</label>
-                    <select id="f-pais" name="pais_id">
-                        <option value="">{{ t .Lang "ecles.filter.country.any" }}</option>
-                        {{ range .Data.Paisos }}
-                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaisID .ID }}selected{{ end }}>{{ .CodiISO3 }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="f-status">{{ t .Lang "moderation.status" }}</label>
-                    {{ $st := .Data.Filter.Status }}
-                    <select id="f-status" name="status">
-                        <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
-                        <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
-                        <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
-                        <option value="">{{ t .Lang "common.all" }}</option>
-                    </select>
-                </div>
-                <button class="boto-secundari" type="submit">{{ t .Lang "ecles.filter.submit" }}</button>
-                <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
-                <input type="hidden" name="page" value="1">
-            </form>
-            <div class="page-stats-controls" id="page-stats-controls">
-                <div class="page-stats-filters">
-                    <label for="page-stats-per-page">{{ t .Lang "records.columns.per_page" }}</label>
-                    <select id="page-stats-per-page" onchange="location.href='{{ .Data.PageSelectBase }}' + this.value + '{{ .Data.PageAnchor }}'">
-                        <option value="5" {{ if eq .Data.PerPage 5 }}selected{{ end }}>5</option>
-                        <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
-                        <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
-                        <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
-                        <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
-                    </select>
-                </div>
+            <div class="filtres-avancats-panel" id="filtersPanel">
+                <form class="filtres-arxius" method="get">
+                    <div class="grup-camp">
+                        <label for="f-q">{{ t .Lang "ecles.filter.search" }}</label>
+                        <input id="f-q" type="text" name="q" value="{{ .Data.Filter.Text }}">
+                    </div>
+                    <div class="grup-camp">
+                        <label for="f-pais">{{ t .Lang "ecles.filter.country" }}</label>
+                        <select id="f-pais" name="pais_id">
+                            <option value="">{{ t .Lang "ecles.filter.country.any" }}</option>
+                            {{ range .Data.Paisos }}
+                            <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaisID .ID }}selected{{ end }}>{{ .CodiISO3 }}</option>
+                            {{ end }}
+                        </select>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="f-status">{{ t .Lang "moderation.status" }}</label>
+                        {{ $st := .Data.Filter.Status }}
+                        <select id="f-status" name="status">
+                            <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
+                            <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
+                            <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                            <option value="">{{ t .Lang "common.all" }}</option>
+                        </select>
+                    </div>
+                    <button class="boto-secundari" type="submit">{{ t .Lang "ecles.filter.submit" }}</button>
+                    <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
+                    <input type="hidden" name="page" value="1">
+                </form>
             </div>
-            <div class="taula-wrapper">
-                <table class="taula">
-                    <thead>
-                        <tr>
-                            <th>{{ t .Lang "ecles.col.name" }}</th>
-                            <th>{{ t .Lang "ecles.col.type" }}</th>
-                            <th>{{ t .Lang "ecles.col.country" }}</th>
-                            <th>{{ t .Lang "ecles.col.level" }}</th>
-                            <th>{{ t .Lang "ecles.col.parent" }}</th>
-                            <th>{{ t .Lang "ecles.col.years" }}</th>
-                            <th>{{ t .Lang "moderation.status" }}</th>
-                            {{ if $.Data.ShowEclesActions }}<th>{{ t .Lang "ecles.col.actions" }}</th>{{ end }}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {{ range .Data.Entitats }}
-                        <tr>
-                            <td>{{ .Nom }}</td>
-                            <td>{{ .TipusEntitat }}</td>
-                            <td>{{ .PaisNom.String }}</td>
-                            <td>{{ if .Nivell.Valid }}{{ .Nivell.Int64 }}{{ end }}</td>
-                            <td>{{ .ParentNom.String }}</td>
-                            <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
-                            <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
-                            {{ if $.Data.ShowEclesActions }}
-                            {{ if index $.Data.CanEditEcles .ID }}
-                            <td><a href="/territori/eclesiastic/{{ .ID }}/edit">{{ t $.Lang "ecles.action.edit" }}</a></td>
+            <div class="taula-resultats">
+                <div class="barra-superior">
+                    <button type="button" id="configColumnes" class="boto-engranatge">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+                <div class="taula-container">
+                    <table class="taula taula-registres" id="eclesTable" data-filter-order="{{ .Data.FilterOrder }}">
+                        <thead>
+                            <tr id="filtraFila">
+                                <th data-col="0" data-key="nom">
+                                    <input type="text" placeholder="{{ t .Lang "ecles.col.name" }}" data-col="0" data-key="nom" value="{{ index $.Data.FilterValues "nom" }}">
+                                </th>
+                                <th data-col="1" data-key="tipus">
+                                    <input type="text" placeholder="{{ t .Lang "ecles.col.type" }}" data-col="1" data-key="tipus" value="{{ index $.Data.FilterValues "tipus" }}">
+                                </th>
+                                <th data-col="2" data-key="pais">
+                                    <input type="text" placeholder="{{ t .Lang "ecles.col.country" }}" data-col="2" data-key="pais" value="{{ index $.Data.FilterValues "pais" }}">
+                                </th>
+                                <th data-col="3" data-key="nivell">
+                                    <input type="text" placeholder="{{ t .Lang "ecles.col.level" }}" data-col="3" data-key="nivell" value="{{ index $.Data.FilterValues "nivell" }}">
+                                </th>
+                                <th data-col="4" data-key="parent">
+                                    <input type="text" placeholder="{{ t .Lang "ecles.col.parent" }}" data-col="4" data-key="parent" value="{{ index $.Data.FilterValues "parent" }}">
+                                </th>
+                                <th data-col="5" data-key="anys">
+                                    <input type="text" placeholder="{{ t .Lang "ecles.col.years" }}" data-col="5" data-key="anys" value="{{ index $.Data.FilterValues "anys" }}">
+                                </th>
+                                <th data-col="6" data-key="status">
+                                    <input type="text" placeholder="{{ t .Lang "moderation.status" }}" data-col="6" data-key="status" value="{{ index $.Data.FilterValues "status" }}">
+                                </th>
+                                {{ if $.Data.ShowEclesActions }}<th data-col="7" data-key="actions"></th>{{ end }}
+                            </tr>
+                            <tr>
+                                <th data-col="0" data-key="nom">{{ t .Lang "ecles.col.name" }}</th>
+                                <th data-col="1" data-key="tipus">{{ t .Lang "ecles.col.type" }}</th>
+                                <th data-col="2" data-key="pais">{{ t .Lang "ecles.col.country" }}</th>
+                                <th data-col="3" data-key="nivell">{{ t .Lang "ecles.col.level" }}</th>
+                                <th data-col="4" data-key="parent">{{ t .Lang "ecles.col.parent" }}</th>
+                                <th data-col="5" data-key="anys">{{ t .Lang "ecles.col.years" }}</th>
+                                <th data-col="6" data-key="status">{{ t .Lang "moderation.status" }}</th>
+                                {{ if $.Data.ShowEclesActions }}<th data-col="7" data-key="actions">{{ t .Lang "ecles.col.actions" }}</th>{{ end }}
+                            </tr>
+                        </thead>
+                        <tbody id="taulaDades">
+                            {{ range .Data.Entitats }}
+                            <tr>
+                                <td data-col="0" data-key="nom">{{ .Nom }}</td>
+                                <td data-col="1" data-key="tipus">{{ .TipusEntitat }}</td>
+                                <td data-col="2" data-key="pais">{{ .PaisNom.String }}</td>
+                                <td data-col="3" data-key="nivell">{{ if .Nivell.Valid }}{{ .Nivell.Int64 }}{{ end }}</td>
+                                <td data-col="4" data-key="parent">{{ .ParentNom.String }}</td>
+                                <td data-col="5" data-key="anys">{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
+                                <td data-col="6" data-key="status"><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                                {{ if $.Data.ShowEclesActions }}
+                                {{ if index $.Data.CanEditEcles .ID }}
+                                <td data-col="7" data-key="actions"><a href="/territori/eclesiastic/{{ .ID }}/edit">{{ t $.Lang "ecles.action.edit" }}</a></td>
+                                {{ else }}
+                                <td data-col="7" data-key="actions"></td>
+                                {{ end }}
+                                {{ end }}
+                            </tr>
                             {{ else }}
-                            <td></td>
+                            <tr>
+                                <td colspan="{{ if $.Data.ShowEclesActions }}8{{ else }}7{{ end }}">{{ t .Lang "common.empty" }}</td>
+                            </tr>
                             {{ end }}
-                            {{ end }}
-                        </tr>
-                        {{ else }}
-                        <tr>
-                            <td colspan="{{ if $.Data.ShowEclesActions }}8{{ else }}7{{ end }}">{{ t .Lang "common.empty" }}</td>
-                        </tr>
-                        {{ end }}
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
+                </div>
             </div>
             {{ if gt .Data.TotalPages 1 }}
-            <div class="paginador">
+            <div class="paginador" id="paginador">
                 {{ range .Data.PageLinks }}
                 <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
                     {{ .Label }}
@@ -114,8 +139,56 @@
             {{ end }}
         </section>
     </main>
+    <div class="modal-config" id="modalConfigColumnes">
+        <div class="modal-content-config">
+            <button type="button" class="tanca-modal-config" aria-label="{{ t .Lang "common.close" }}">×</button>
+            <h2>{{ t .Lang "records.columns.title" }}</h2>
+            <div class="form-group">
+                <label for="filesPerPagina">{{ t .Lang "records.columns.per_page" }}</label>
+                <select id="filesPerPagina">
+                    <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
+                    <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
+                    <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
+                    <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
+                </select>
+            </div>
+            <div class="columns-config">
+                <div class="columns-list">
+                    <label for="cols-actives">{{ t .Lang "records.columns.visible" }}</label>
+                    <select id="cols-actives" size="10" multiple></select>
+                    <div class="columns-actions">
+                        <button type="button" id="cols-up" class="columns-icon" aria-label="{{ t .Lang "records.columns.up" }}" title="{{ t .Lang "records.columns.up" }}">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <button type="button" id="cols-down" class="columns-icon" aria-label="{{ t .Lang "records.columns.down" }}" title="{{ t .Lang "records.columns.down" }}">
+                            <i class="fas fa-arrow-down"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="columns-controls">
+                    <button type="button" id="cols-hide" class="columns-icon" aria-label="{{ t .Lang "records.columns.hide" }}" title="{{ t .Lang "records.columns.hide" }}">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                    <button type="button" id="cols-show" class="columns-icon" aria-label="{{ t .Lang "records.columns.show" }}" title="{{ t .Lang "records.columns.show" }}">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                </div>
+                <div class="columns-list">
+                    <label for="cols-hidden">{{ t .Lang "records.columns.hidden" }}</label>
+                    <select id="cols-hidden" size="10" multiple></select>
+                </div>
+            </div>
+            <div class="columns-save">
+                <span id="cols-save-status" class="muted" aria-live="polite"></span>
+                <button type="button" id="cols-save" class="boto-primari" data-saved-label="{{ t .Lang "common.saved" }}">
+                    {{ t .Lang "records.columns.save" }}
+                </button>
+            </div>
+        </div>
+    </div>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/ecles-taula.js"></script>
 </body>
 </html>
 {{ end }}

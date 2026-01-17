@@ -710,12 +710,6 @@ CREATE INDEX IF NOT EXISTS idx_llibre_pagines_estat
     ON llibre_pagines(llibre_id, estat);
 
 -- Media (àlbums + ítems)
-DROP TABLE IF EXISTS media_access_logs;
-DROP TABLE IF EXISTS media_access_grants;
-DROP TABLE IF EXISTS user_credits_ledger;
-DROP TABLE IF EXISTS media_item_pages;
-DROP TABLE IF EXISTS media_items;
-DROP TABLE IF EXISTS media_albums;
 CREATE TABLE IF NOT EXISTS media_albums (
   id SERIAL PRIMARY KEY,
   public_id TEXT NOT NULL UNIQUE,

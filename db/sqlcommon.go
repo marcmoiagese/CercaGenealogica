@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -1167,6 +1168,10 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 		where += " AND n.nivel = ?"
 		args = append(args, f.Nivel)
 	}
+	if strings.TrimSpace(f.Text) != "" {
+		where += " AND lower(n.nom_nivell) LIKE ?"
+		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
+	}
 	if strings.TrimSpace(f.Estat) != "" {
 		where += " AND n.estat = ?"
 		args = append(args, strings.TrimSpace(f.Estat))
@@ -1231,6 +1236,10 @@ func (h sqlHelper) countNivells(f NivellAdminFilter) (int, error) {
 	if f.Nivel > 0 {
 		where += " AND n.nivel = ?"
 		args = append(args, f.Nivel)
+	}
+	if strings.TrimSpace(f.Text) != "" {
+		where += " AND lower(n.nom_nivell) LIKE ?"
+		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
 	}
 	if strings.TrimSpace(f.Estat) != "" {
 		where += " AND n.estat = ?"
@@ -1443,6 +1452,325 @@ func (h sqlHelper) countMunicipis(f MunicipiFilter) (int, error) {
 		return 0, err
 	}
 	return total, nil
+}
+
+
+func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowseRow, error) {
+	where := "1=1"
+	args := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		where += " AND " + column + " IN (" + placeholders + ")"
+		for _, id := range ids {
+			args = append(args, id)
+		}
+	}
+	if strings.TrimSpace(f.Text) != "" {
+		text := "%" + strings.ToLower(strings.TrimSpace(f.Text)) + "%"
+		where += " AND (lower(m.nom) LIKE ? OR lower(na1.nom_nivell) LIKE ? OR lower(na2.nom_nivell) LIKE ? OR lower(na3.nom_nivell) LIKE ? OR lower(na4.nom_nivell) LIKE ? OR lower(na5.nom_nivell) LIKE ? OR lower(na6.nom_nivell) LIKE ? OR lower(na7.nom_nivell) LIKE ?)"
+		for i := 0; i < 8; i++ {
+			args = append(args, text)
+		}
+	}
+	if strings.TrimSpace(f.Estat) != "" {
+		where += " AND m.estat = ?"
+		args = append(args, strings.TrimSpace(f.Estat))
+	}
+	if strings.TrimSpace(f.Status) != "" {
+		where += " AND m.moderation_status = ?"
+		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if f.PaisID > 0 {
+		where += " AND na1.pais_id = ?"
+		args = append(args, f.PaisID)
+	}
+	if f.MunicipiID > 0 {
+		where += " AND m.id = ?"
+		args = append(args, f.MunicipiID)
+	}
+	if f.NivellID > 0 {
+		where += " AND (m.nivell_administratiu_id_1 = ? OR m.nivell_administratiu_id_2 = ? OR m.nivell_administratiu_id_3 = ? OR m.nivell_administratiu_id_4 = ? OR m.nivell_administratiu_id_5 = ? OR m.nivell_administratiu_id_6 = ? OR m.nivell_administratiu_id_7 = ?)"
+		for i := 0; i < 7; i++ {
+			args = append(args, f.NivellID)
+		}
+	}
+	if strings.TrimSpace(f.Tipus) != "" {
+		where += " AND m.tipus = ?"
+		args = append(args, strings.TrimSpace(f.Tipus))
+	}
+	for i, id := range f.LevelIDs {
+		if id <= 0 {
+			continue
+		}
+		where += " AND m.nivell_administratiu_id_" + strconv.Itoa(i+1) + " = ?"
+		args = append(args, id)
+	}
+	inClause("m.id", f.AllowedMunicipiIDs)
+	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClause("na1.pais_id", f.AllowedPaisIDs)
+	orderBy := "m.nom"
+	switch strings.TrimSpace(f.Sort) {
+	case "pais":
+		orderBy = "na1.nom_nivell"
+	case "level1":
+		orderBy = "na1.nom_nivell"
+	case "level2":
+		orderBy = "na2.nom_nivell"
+	case "level3":
+		orderBy = "na3.nom_nivell"
+	case "level4":
+		orderBy = "na4.nom_nivell"
+	case "level5":
+		orderBy = "na5.nom_nivell"
+	case "level6":
+		orderBy = "na6.nom_nivell"
+	case "level7":
+		orderBy = "na7.nom_nivell"
+	case "nom":
+		orderBy = "m.nom"
+	}
+	dir := "ASC"
+	if strings.EqualFold(strings.TrimSpace(f.SortDir), "desc") {
+		dir = "DESC"
+	}
+	query := `
+		SELECT m.id, m.nom, m.tipus, m.estat, m.codi_postal, m.moderation_status,
+		       m.nivell_administratiu_id_1, m.nivell_administratiu_id_2, m.nivell_administratiu_id_3,
+		       m.nivell_administratiu_id_4, m.nivell_administratiu_id_5, m.nivell_administratiu_id_6, m.nivell_administratiu_id_7,
+		       na1.nom_nivell, na2.nom_nivell, na3.nom_nivell, na4.nom_nivell, na5.nom_nivell, na6.nom_nivell, na7.nom_nivell,
+		       m.latitud, m.longitud,
+		       COUNT(l.id) AS llibres_total,
+		       COALESCE(CAST(ROUND(AVG(CASE WHEN s.percentatge IS NOT NULL THEN s.percentatge ELSE CASE WHEN l.indexacio_completa = 1 THEN 100 ELSE 0 END END)) AS INTEGER), 0) AS index_percent
+		FROM municipis m
+		LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+		LEFT JOIN nivells_administratius na2 ON na2.id = m.nivell_administratiu_id_2
+		LEFT JOIN nivells_administratius na3 ON na3.id = m.nivell_administratiu_id_3
+		LEFT JOIN nivells_administratius na4 ON na4.id = m.nivell_administratiu_id_4
+		LEFT JOIN nivells_administratius na5 ON na5.id = m.nivell_administratiu_id_5
+		LEFT JOIN nivells_administratius na6 ON na6.id = m.nivell_administratiu_id_6
+		LEFT JOIN nivells_administratius na7 ON na7.id = m.nivell_administratiu_id_7
+		LEFT JOIN llibres l ON l.municipi_id = m.id
+		LEFT JOIN llibres_indexacio_stats s ON s.llibre_id = l.id
+		WHERE ` + where + `
+		GROUP BY m.id, m.nom, m.tipus, m.estat, m.codi_postal, m.moderation_status,
+		         m.nivell_administratiu_id_1, m.nivell_administratiu_id_2, m.nivell_administratiu_id_3,
+		         m.nivell_administratiu_id_4, m.nivell_administratiu_id_5, m.nivell_administratiu_id_6, m.nivell_administratiu_id_7,
+		         na1.nom_nivell, na2.nom_nivell, na3.nom_nivell, na4.nom_nivell, na5.nom_nivell, na6.nom_nivell, na7.nom_nivell,
+		         m.latitud, m.longitud
+		ORDER BY ` + orderBy + ` ` + dir + `, m.nom`
+	if f.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, f.Limit)
+		if f.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, f.Offset)
+		}
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MunicipiBrowseRow
+	for rows.Next() {
+		var r MunicipiBrowseRow
+		if err := rows.Scan(
+			&r.ID, &r.Nom, &r.Tipus, &r.Estat, &r.CodiPostal, &r.ModeracioEstat,
+			&r.LevelIDs[0], &r.LevelIDs[1], &r.LevelIDs[2], &r.LevelIDs[3], &r.LevelIDs[4], &r.LevelIDs[5], &r.LevelIDs[6],
+			&r.LevelNames[0], &r.LevelNames[1], &r.LevelNames[2], &r.LevelNames[3], &r.LevelNames[4], &r.LevelNames[5], &r.LevelNames[6],
+			&r.Latitud, &r.Longitud,
+			&r.RegistresTotal, &r.RegistresIndexats,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, r)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) countMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
+	where := "1=1"
+	args := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		where += " AND " + column + " IN (" + placeholders + ")"
+		for _, id := range ids {
+			args = append(args, id)
+		}
+	}
+	if strings.TrimSpace(f.Text) != "" {
+		text := "%" + strings.ToLower(strings.TrimSpace(f.Text)) + "%"
+		where += " AND (lower(m.nom) LIKE ? OR lower(na1.nom_nivell) LIKE ? OR lower(na2.nom_nivell) LIKE ? OR lower(na3.nom_nivell) LIKE ? OR lower(na4.nom_nivell) LIKE ? OR lower(na5.nom_nivell) LIKE ? OR lower(na6.nom_nivell) LIKE ? OR lower(na7.nom_nivell) LIKE ?)"
+		for i := 0; i < 8; i++ {
+			args = append(args, text)
+		}
+	}
+	if strings.TrimSpace(f.Estat) != "" {
+		where += " AND m.estat = ?"
+		args = append(args, strings.TrimSpace(f.Estat))
+	}
+	if strings.TrimSpace(f.Status) != "" {
+		where += " AND m.moderation_status = ?"
+		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if f.PaisID > 0 {
+		where += " AND na1.pais_id = ?"
+		args = append(args, f.PaisID)
+	}
+	if f.MunicipiID > 0 {
+		where += " AND m.id = ?"
+		args = append(args, f.MunicipiID)
+	}
+	if f.NivellID > 0 {
+		where += " AND (m.nivell_administratiu_id_1 = ? OR m.nivell_administratiu_id_2 = ? OR m.nivell_administratiu_id_3 = ? OR m.nivell_administratiu_id_4 = ? OR m.nivell_administratiu_id_5 = ? OR m.nivell_administratiu_id_6 = ? OR m.nivell_administratiu_id_7 = ?)"
+		for i := 0; i < 7; i++ {
+			args = append(args, f.NivellID)
+		}
+	}
+	if strings.TrimSpace(f.Tipus) != "" {
+		where += " AND m.tipus = ?"
+		args = append(args, strings.TrimSpace(f.Tipus))
+	}
+	for i, id := range f.LevelIDs {
+		if id <= 0 {
+			continue
+		}
+		where += " AND m.nivell_administratiu_id_" + strconv.Itoa(i+1) + " = ?"
+		args = append(args, id)
+	}
+	inClause("m.id", f.AllowedMunicipiIDs)
+	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClause("na1.pais_id", f.AllowedPaisIDs)
+	query := `
+		SELECT COUNT(*)
+		FROM municipis m
+		LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+		LEFT JOIN nivells_administratius na2 ON na2.id = m.nivell_administratiu_id_2
+		LEFT JOIN nivells_administratius na3 ON na3.id = m.nivell_administratiu_id_3
+		LEFT JOIN nivells_administratius na4 ON na4.id = m.nivell_administratiu_id_4
+		LEFT JOIN nivells_administratius na5 ON na5.id = m.nivell_administratiu_id_5
+		LEFT JOIN nivells_administratius na6 ON na6.id = m.nivell_administratiu_id_6
+		LEFT JOIN nivells_administratius na7 ON na7.id = m.nivell_administratiu_id_7
+		WHERE ` + where
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) suggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRow, error) {
+	where := "1=1"
+	args := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		where += " AND " + column + " IN (" + placeholders + ")"
+		for _, id := range ids {
+			args = append(args, id)
+		}
+	}
+	if strings.TrimSpace(f.Text) != "" {
+		text := "%" + strings.ToLower(strings.TrimSpace(f.Text)) + "%"
+		where += " AND (lower(m.nom) LIKE ? OR lower(na1.nom_nivell) LIKE ? OR lower(na2.nom_nivell) LIKE ? OR lower(na3.nom_nivell) LIKE ? OR lower(na4.nom_nivell) LIKE ? OR lower(na5.nom_nivell) LIKE ? OR lower(na6.nom_nivell) LIKE ? OR lower(na7.nom_nivell) LIKE ?)"
+		for i := 0; i < 8; i++ {
+			args = append(args, text)
+		}
+	}
+	if strings.TrimSpace(f.Estat) != "" {
+		where += " AND m.estat = ?"
+		args = append(args, strings.TrimSpace(f.Estat))
+	}
+	if strings.TrimSpace(f.Status) != "" {
+		where += " AND m.moderation_status = ?"
+		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if f.PaisID > 0 {
+		where += " AND na1.pais_id = ?"
+		args = append(args, f.PaisID)
+	}
+	if f.MunicipiID > 0 {
+		where += " AND m.id = ?"
+		args = append(args, f.MunicipiID)
+	}
+	if f.NivellID > 0 {
+		where += " AND (m.nivell_administratiu_id_1 = ? OR m.nivell_administratiu_id_2 = ? OR m.nivell_administratiu_id_3 = ? OR m.nivell_administratiu_id_4 = ? OR m.nivell_administratiu_id_5 = ? OR m.nivell_administratiu_id_6 = ? OR m.nivell_administratiu_id_7 = ?)"
+		for i := 0; i < 7; i++ {
+			args = append(args, f.NivellID)
+		}
+	}
+	if strings.TrimSpace(f.Tipus) != "" {
+		where += " AND m.tipus = ?"
+		args = append(args, strings.TrimSpace(f.Tipus))
+	}
+	for i, id := range f.LevelIDs {
+		if id <= 0 {
+			continue
+		}
+		where += " AND m.nivell_administratiu_id_" + strconv.Itoa(i+1) + " = ?"
+		args = append(args, id)
+	}
+	inClause("m.id", f.AllowedMunicipiIDs)
+	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClause("na1.pais_id", f.AllowedPaisIDs)
+	query := `
+		SELECT m.id, m.nom, m.tipus,
+		       COALESCE(na1.pais_id, na2.pais_id, na3.pais_id, na4.pais_id, na5.pais_id, na6.pais_id, na7.pais_id, 0) AS pais_id,
+		       m.nivell_administratiu_id_1, m.nivell_administratiu_id_2, m.nivell_administratiu_id_3,
+		       m.nivell_administratiu_id_4, m.nivell_administratiu_id_5, m.nivell_administratiu_id_6, m.nivell_administratiu_id_7,
+		       na1.nom_nivell, na2.nom_nivell, na3.nom_nivell, na4.nom_nivell, na5.nom_nivell, na6.nom_nivell, na7.nom_nivell,
+		       na1.tipus_nivell, na2.tipus_nivell, na3.tipus_nivell, na4.tipus_nivell, na5.tipus_nivell, na6.tipus_nivell, na7.tipus_nivell,
+		       m.latitud, m.longitud
+		FROM municipis m
+		LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+		LEFT JOIN nivells_administratius na2 ON na2.id = m.nivell_administratiu_id_2
+		LEFT JOIN nivells_administratius na3 ON na3.id = m.nivell_administratiu_id_3
+		LEFT JOIN nivells_administratius na4 ON na4.id = m.nivell_administratiu_id_4
+		LEFT JOIN nivells_administratius na5 ON na5.id = m.nivell_administratiu_id_5
+		LEFT JOIN nivells_administratius na6 ON na6.id = m.nivell_administratiu_id_6
+		LEFT JOIN nivells_administratius na7 ON na7.id = m.nivell_administratiu_id_7
+		WHERE ` + where + `
+		ORDER BY m.nom`
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+	query += " LIMIT ?"
+	args = append(args, limit)
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MunicipiSuggestRow
+	for rows.Next() {
+		var r MunicipiSuggestRow
+		if err := rows.Scan(
+			&r.ID, &r.Nom, &r.Tipus, &r.PaisID,
+			&r.LevelIDs[0], &r.LevelIDs[1], &r.LevelIDs[2], &r.LevelIDs[3], &r.LevelIDs[4], &r.LevelIDs[5], &r.LevelIDs[6],
+			&r.LevelNames[0], &r.LevelNames[1], &r.LevelNames[2], &r.LevelNames[3], &r.LevelNames[4], &r.LevelNames[5], &r.LevelNames[6],
+			&r.LevelTypes[0], &r.LevelTypes[1], &r.LevelTypes[2], &r.LevelTypes[3], &r.LevelTypes[4], &r.LevelTypes[5], &r.LevelTypes[6],
+			&r.Latitud, &r.Longitud,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, r)
+	}
+	return res, nil
 }
 
 func (h sqlHelper) getMunicipi(id int) (*Municipi, error) {
@@ -3108,13 +3436,15 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 	}
 	limit := 50
 	offset := 0
-	if filter.Limit > 0 {
+	applyLimit := true
+	if filter.Limit < 0 {
+		applyLimit = false
+	} else if filter.Limit > 0 {
 		limit = filter.Limit
 	}
 	if filter.Offset > 0 {
 		offset = filter.Offset
 	}
-	args = append(args, limit, offset)
 	query := `
         SELECT a.id, a.nom, a.tipus, a.municipi_id, a.entitat_eclesiastica_id, a.adreca, a.ubicacio, a.web, a.acces, a.notes,
                a.created_by, a.moderation_status, a.moderated_by, a.moderated_at, a.moderation_notes,
@@ -3128,8 +3458,11 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
             SELECT arxiu_id, COUNT(*) as total FROM arxius_llibres GROUP BY arxiu_id
         ) cnt ON cnt.arxiu_id = a.id
         WHERE ` + strings.Join(clauses, " AND ") + `
-        ORDER BY a.nom ASC
-        LIMIT ? OFFSET ?`
+        ORDER BY a.nom ASC`
+	if applyLimit {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, limit, offset)
+	}
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
@@ -3451,6 +3784,10 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 		clauses = append(clauses, "EXISTS (SELECT 1 FROM arxius_llibres al INNER JOIN arxius ax ON ax.id = al.arxiu_id WHERE al.llibre_id = l.id AND ax.tipus = ?)")
 		args = append(args, strings.TrimSpace(filter.ArxiuTipus))
 	}
+	if strings.TrimSpace(filter.TipusLlibre) != "" {
+		clauses = append(clauses, "l.tipus_llibre = ?")
+		args = append(args, strings.TrimSpace(filter.TipusLlibre))
+	}
 	if strings.TrimSpace(filter.Status) != "" {
 		clauses = append(clauses, "l.moderation_status = ?")
 		args = append(args, strings.TrimSpace(filter.Status))
@@ -3552,6 +3889,10 @@ func (h sqlHelper) countLlibres(filter LlibreFilter) (int, error) {
 	if strings.TrimSpace(filter.ArxiuTipus) != "" {
 		clauses = append(clauses, "EXISTS (SELECT 1 FROM arxius_llibres al INNER JOIN arxius ax ON ax.id = al.arxiu_id WHERE al.llibre_id = l.id AND ax.tipus = ?)")
 		args = append(args, strings.TrimSpace(filter.ArxiuTipus))
+	}
+	if strings.TrimSpace(filter.TipusLlibre) != "" {
+		clauses = append(clauses, "l.tipus_llibre = ?")
+		args = append(args, strings.TrimSpace(filter.TipusLlibre))
 	}
 	if strings.TrimSpace(filter.Status) != "" {
 		clauses = append(clauses, "l.moderation_status = ?")

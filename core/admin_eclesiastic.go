@@ -23,8 +23,48 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 			filter.PaisID = v
 		}
 	}
+	lang := ResolveLang(r)
 	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
 	page := parseListPage(r.URL.Query().Get("page"))
+	filterKeys := []string{"nom", "tipus", "pais", "nivell", "parent", "anys", "status"}
+	filterValues := map[string]string{}
+	filterMatch := map[string]string{}
+	for _, key := range filterKeys {
+		paramKey := "f_" + key
+		if val := strings.TrimSpace(r.URL.Query().Get(paramKey)); val != "" {
+			filterValues[key] = val
+			filterMatch[key] = strings.ToLower(val)
+		}
+	}
+	filterOrder := []string{}
+	if orderParam := strings.TrimSpace(r.URL.Query().Get("order")); orderParam != "" {
+		for _, key := range strings.Split(orderParam, ",") {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	}
+	if len(filterOrder) == 0 {
+		for _, key := range filterKeys {
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	} else {
+		seen := map[string]bool{}
+		for _, key := range filterOrder {
+			seen[key] = true
+		}
+		for _, key := range filterKeys {
+			if _, ok := filterMatch[key]; ok && !seen[key] {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	}
 	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriEclesView)
 	if !ok {
 		return
@@ -41,10 +81,12 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 	canImportEcles := a.HasPermission(user.ID, permKeyAdminEclesImport, PermissionTarget{})
 	if !scopeFilter.hasGlobal {
 		if scopeFilter.isEmpty() {
-			pagination := buildPagination(r, page, perPage, 0, "#page-stats-controls")
+			pagination := buildPagination(r, page, perPage, 0, "#eclesTable")
 			RenderPrivateTemplate(w, r, "admin-eclesiastic-list.html", map[string]interface{}{
 				"Entitats":         []db.ArquebisbatRow{},
 				"Filter":           filter,
+				"FilterValues":     filterValues,
+				"FilterOrder":      strings.Join(filterOrder, ","),
 				"Paisos":           []db.Pais{},
 				"CanManageArxius":  a.hasPerm(perms, permArxius),
 				"CanCreateEcles":   canCreateEcles,
@@ -66,11 +108,55 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 		filter.AllowedEclesIDs = scopeFilter.eclesIDs
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 	}
-	total, _ := a.DB.CountArquebisbats(filter)
-	pagination := buildPagination(r, page, perPage, total, "#page-stats-controls")
-	filter.Limit = pagination.PerPage
-	filter.Offset = pagination.Offset
-	entitats, _ := a.DB.ListArquebisbats(filter)
+	entitats := []db.ArquebisbatRow{}
+	total := 0
+	pagination := Pagination{}
+	filtered := len(filterMatch) > 0
+	if filtered {
+		listFilter := filter
+		listFilter.Limit = 0
+		listFilter.Offset = 0
+		allEntitats, _ := a.DB.ListArquebisbats(listFilter)
+		matches := make([]db.ArquebisbatRow, 0, len(allEntitats))
+		for _, ent := range allEntitats {
+			match := true
+			for _, key := range filterOrder {
+				filterVal := filterMatch[key]
+				if filterVal == "" {
+					continue
+				}
+				value := strings.ToLower(eclesFilterValue(ent, key, lang))
+				if !strings.Contains(value, filterVal) {
+					match = false
+					break
+				}
+			}
+			if match {
+				matches = append(matches, ent)
+			}
+		}
+		total = len(matches)
+		pagination = buildPagination(r, page, perPage, total, "#eclesTable")
+		start := pagination.Offset
+		end := start + pagination.PerPage
+		if start < 0 {
+			start = 0
+		}
+		if start > total {
+			start = total
+		}
+		if end > total {
+			end = total
+		}
+		entitats = matches[start:end]
+	} else {
+		total, _ = a.DB.CountArquebisbats(filter)
+		pagination = buildPagination(r, page, perPage, total, "#eclesTable")
+		listFilter := filter
+		listFilter.Limit = pagination.PerPage
+		listFilter.Offset = pagination.Offset
+		entitats, _ = a.DB.ListArquebisbats(listFilter)
+	}
 	canEditEcles := make(map[int]bool, len(entitats))
 	showEclesActions := false
 	for _, ent := range entitats {
@@ -98,6 +184,8 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 	RenderPrivateTemplate(w, r, "admin-eclesiastic-list.html", map[string]interface{}{
 		"Entitats":         entitats,
 		"Filter":           filter,
+		"FilterValues":     filterValues,
+		"FilterOrder":      strings.Join(filterOrder, ","),
 		"Paisos":           paisos,
 		"CanManageArxius":  a.hasPerm(perms, permArxius),
 		"CanCreateEcles":   canCreateEcles,
@@ -114,6 +202,49 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 		"PageAnchor":       pagination.Anchor,
 		"User":             user,
 	})
+}
+
+func eclesYearsLabel(e db.ArquebisbatRow) string {
+	start := ""
+	end := ""
+	if e.AnyInici.Valid {
+		start = strconv.FormatInt(e.AnyInici.Int64, 10)
+	}
+	if e.AnyFi.Valid {
+		end = strconv.FormatInt(e.AnyFi.Int64, 10)
+	}
+	if start != "" && end != "" {
+		return start + " - " + end
+	}
+	return start + end
+}
+
+func eclesFilterValue(e db.ArquebisbatRow, key, lang string) string {
+	switch key {
+	case "nom":
+		return e.Nom
+	case "tipus":
+		return e.TipusEntitat
+	case "pais":
+		if e.PaisNom.Valid {
+			return e.PaisNom.String
+		}
+	case "nivell":
+		if e.Nivell.Valid {
+			return strconv.FormatInt(e.Nivell.Int64, 10)
+		}
+	case "parent":
+		if e.ParentNom.Valid {
+			return e.ParentNom.String
+		}
+	case "anys":
+		return eclesYearsLabel(e)
+	case "status":
+		if e.ModeracioEstat != "" {
+			return T(lang, "activity.status."+e.ModeracioEstat)
+		}
+	}
+	return ""
 }
 
 func (a *App) AdminNewEclesiastic(w http.ResponseWriter, r *http.Request) {

@@ -62,7 +62,6 @@ CREATE TABLE IF NOT EXISTS politiques (
     INDEX idx_politiques_nom (nom)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-DROP TABLE IF EXISTS politica_grants;
 CREATE TABLE IF NOT EXISTS politica_grants (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     politica_id INT UNSIGNED NOT NULL,
@@ -511,7 +510,6 @@ CREATE TABLE IF NOT EXISTS arxius (
   FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-DROP TABLE IF EXISTS arxius_llibres;
 CREATE TABLE IF NOT EXISTS arxius_llibres (
   arxiu_id INT UNSIGNED NOT NULL,
   llibre_id INT UNSIGNED NOT NULL,
@@ -522,7 +520,6 @@ CREATE TABLE IF NOT EXISTS arxius_llibres (
   FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-DROP TABLE IF EXISTS llibre_pagines;
 CREATE TABLE IF NOT EXISTS llibre_pagines (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   llibre_id INT UNSIGNED NOT NULL,
@@ -541,7 +538,6 @@ CREATE TABLE IF NOT EXISTS llibre_pagines (
 CREATE INDEX idx_arxius_llibres_arxiu  ON arxius_llibres(arxiu_id);
 CREATE INDEX idx_arxius_llibres_llibre ON arxius_llibres(llibre_id);
 
-DROP TABLE IF EXISTS llibres_urls;
 CREATE TABLE IF NOT EXISTS llibres_urls (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   llibre_id INT UNSIGNED NOT NULL,
@@ -560,12 +556,6 @@ CREATE INDEX idx_llibres_urls_arxiu ON llibres_urls(arxiu_id);
 CREATE INDEX idx_llibre_pagines_estat  ON llibre_pagines(llibre_id, estat);
 
 -- Media (àlbums + ítems)
-DROP TABLE IF EXISTS media_access_logs;
-DROP TABLE IF EXISTS media_access_grants;
-DROP TABLE IF EXISTS user_credits_ledger;
-DROP TABLE IF EXISTS media_item_pages;
-DROP TABLE IF EXISTS media_items;
-DROP TABLE IF EXISTS media_albums;
 CREATE TABLE IF NOT EXISTS media_albums (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   public_id VARCHAR(64) NOT NULL,
@@ -685,13 +675,6 @@ CREATE TABLE IF NOT EXISTS media_access_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Transcripcions RAW de registres
-DROP TABLE IF EXISTS transcripcions_raw_canvis;
-DROP TABLE IF EXISTS transcripcions_raw_marques;
-DROP TABLE IF EXISTS transcripcions_raw_page_stats;
-DROP TABLE IF EXISTS transcripcions_raw_drafts;
-DROP TABLE IF EXISTS transcripcions_atributs_raw;
-DROP TABLE IF EXISTS transcripcions_persones_raw;
-DROP TABLE IF EXISTS transcripcions_raw;
 CREATE TABLE IF NOT EXISTS transcripcions_raw (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   llibre_id INT UNSIGNED NOT NULL,

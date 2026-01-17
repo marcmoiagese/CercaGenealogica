@@ -339,6 +339,15 @@ func (d *PostgreSQL) ListMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 func (d *PostgreSQL) CountMunicipis(f MunicipiFilter) (int, error) {
 	return d.help.countMunicipis(f)
 }
+func (d *PostgreSQL) ListMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowseRow, error) {
+	return d.help.listMunicipisBrowse(f)
+}
+func (d *PostgreSQL) CountMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
+	return d.help.countMunicipisBrowse(f)
+}
+func (d *PostgreSQL) SuggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRow, error) {
+	return d.help.suggestMunicipis(f)
+}
 func (d *PostgreSQL) GetMunicipi(id int) (*Municipi, error) {
 	return d.help.getMunicipi(id)
 }

@@ -6,15 +6,20 @@
     <title>{{ t .Lang "books.title" }}</title>
     {{ template "styles-private" . }}
     <link rel="stylesheet" href="/static/css/registres-taula.css">
+    <link rel="stylesheet" href="/static/css/territori-municipis-browse.css">
 </head>
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
-    <main class="contingut-principal">
+    <main class="contingut-principal taula-ample">
         <section class="card">
             <header class="card-header card-header-flex">
                 <h1>{{ t .Lang "books.title" }}</h1>
                 <div class="arxiu-header-actions">
+                    <button type="button" id="toggleFilters" class="boto-secundari filtres-toggle" aria-controls="filtersPanel" aria-expanded="false">
+                        <i class="fas fa-sliders-h"></i>
+                        <span>{{ t .Lang "books.filter.advanced" }}</span>
+                    </button>
                     {{ if $.Data.CanImportRegistresGlobal }}
                     <a class="boto-secundari" href="/documentals/llibres/importar">{{ t .Lang "records.import.file" }}</a>
                     {{ end }}
@@ -23,177 +28,203 @@
                     {{ end }}
                 </div>
             </header>
-            <form class="filtres-arxius" method="get" action="/documentals/llibres">
-                <div class="grup-camp">
-                    <label for="filtre-q">{{ t .Lang "books.filter.search" }}</label>
-                    <input id="filtre-q" type="text" name="q" value="{{ .Data.Filter.Text }}">
-                </div>
-                <div class="grup-camp">
-                    <label for="filtre-arq">{{ t .Lang "books.filter.entity" }}</label>
-                    <select id="filtre-arq" name="arquevisbat_id">
-                        <option value="">{{ t .Lang "books.filter.entity.any" }}</option>
-                        {{ range .Data.Arquebisbats }}
-                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.ArquebisbatID .ID }}selected{{ end }}>{{ .Nom }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="filtre-mun">{{ t .Lang "books.filter.municipi" }}</label>
-                    <select id="filtre-mun" name="municipi_id">
-                        <option value="">{{ t .Lang "books.filter.municipi.any" }}</option>
-                        {{ range .Data.Municipis }}
-                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.MunicipiID .ID }}selected{{ end }}>{{ .Nom }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="filtre-arxiu">{{ t .Lang "books.filter.arxiu" }}</label>
-                    <select id="filtre-arxiu" name="arxiu_id">
-                        <option value="">{{ t .Lang "books.filter.arxiu.any" }}</option>
-                        {{ range .Data.Arxius }}
-                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.ArxiuID .ID }}selected{{ end }}>{{ .Nom }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="filtre-arxiu-tipus">{{ t .Lang "books.filter.arxiu_type" }}</label>
-                    <select id="filtre-arxiu-tipus" name="arxiu_tipus">
-                        <option value="">{{ t .Lang "books.filter.arxiu_type.any" }}</option>
-                        {{ range $opt := (list "parroquia" "arxiu_diocesa" "arxiu_capitular" "arxiu_comarcal" "portal_digital" "altre") }}
-                        <option value="{{ $opt }}" {{ if eq $.Data.Filter.ArxiuTipus $opt }}selected{{ end }}>{{ t $.Lang (printf "archives.type.%s" $opt) }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="filtre-status">{{ t .Lang "moderation.status" }}</label>
-                    {{ $st := .Data.Filter.Status }}
-                    <select id="filtre-status" name="status">
-                        <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
-                        <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
-                        <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
-                        <option value="">{{ t .Lang "common.all" }}</option>
-                    </select>
-                </div>
-                <button type="submit" class="boto-secundari">{{ t .Lang "books.filter.submit" }}</button>
-                <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
-                <input type="hidden" name="page" value="1">
-            </form>
-            <div class="page-stats-controls" id="page-stats-controls">
-                <div class="page-stats-filters">
-                    <label for="page-stats-per-page">{{ t .Lang "records.columns.per_page" }}</label>
-                    <select id="page-stats-per-page" onchange="location.href='{{ .Data.PageSelectBase }}' + this.value + '{{ .Data.PageAnchor }}'">
-                        <option value="5" {{ if eq .Data.PerPage 5 }}selected{{ end }}>5</option>
-                        <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
-                        <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
-                        <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
-                        <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
-                    </select>
-                </div>
-            </div>
-            <div class="taula-wrapper">
-                <table class="taula">
-                    <thead>
-                        <tr>
-                            <th>{{ t .Lang "books.col.title" }}</th>
-                            <th>{{ t .Lang "books.col.entity" }}</th>
-                            <th>{{ t .Lang "books.col.municipi" }}</th>
-                            <th>{{ t .Lang "books.col.chrono" }}</th>
-                            <th>{{ t .Lang "books.col.pages" }}</th>
-                            <th>{{ t .Lang "books.col.records" }}</th>
-                            <th>{{ t .Lang "books.col.indexed" }}</th>
-                            <th>{{ t .Lang "moderation.status" }}</th>
-                            {{ if $.Data.ShowLlibreActions }}<th>{{ t .Lang "books.col.actions" }}</th>{{ end }}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {{ range .Data.Llibres }}
-                        <tr>
-                            <td><a href="/documentals/llibres/{{ .ID }}">{{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}</a></td>
-                            <td>{{ .ArquebisbatNom.String }}</td>
-                            <td>{{ .MunicipiNom.String }}</td>
-                            <td>{{ .Cronologia }}</td>
-                            <td>{{ if .Pagines.Valid }}{{ .Pagines.Int64 }}{{ end }}</td>
-                            {{ $stat := index $.Data.IndexacioStats (printf "%d" .ID) }}
-                            <td>{{ $stat.TotalRegistres }}</td>
-                            <td>
-                                <div class="indexacio-cell">
-                                    <div class="barra-progres">
-                                        <div class="progres {{ $stat.ColorClass }}" style="width: {{ $stat.Percentatge }}%;"></div>
-                                    </div>
-                                    <span class="percentatge-text">{{ $stat.Percentatge }}%</span>
-                                </div>
-                            </td>
-                            <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
-                            {{ if $.Data.ShowLlibreActions }}
-                            {{ $canEdit := index $.Data.CanEditLlibre .ID }}
-                            {{ $canIndex := index $.Data.CanIndexLlibre .ID }}
-                            {{ $canViewReg := index $.Data.CanViewRegistres .ID }}
-                            {{ $canImport := index $.Data.CanImportCSV .ID }}
-                            {{ $canExport := index $.Data.CanExportCSV .ID }}
-                            {{ $canMark := index $.Data.CanMarkIndexed .ID }}
-                            {{ $canRecalc := index $.Data.CanRecalcIndex .ID }}
-                            {{ $canDelete := index $.Data.CanDeleteLlibre .ID }}
-                            <td>
-                                <span class="cell-actions">
-                                    {{ if $canEdit }}
-                                    <a class="icon-action" href="/documentals/llibres/{{ .ID }}/edit" title="{{ t $.Lang "books.action.edit" }}" aria-label="{{ t $.Lang "books.action.edit" }}">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                    {{ end }}
-                                    {{ if $canIndex }}
-                                    <a class="icon-action" href="/documentals/llibres/{{ .ID }}/indexar" title="{{ t $.Lang "books.action.index" }}" aria-label="{{ t $.Lang "books.action.index" }}">
-                                        <i class="fas fa-pen-nib"></i>
-                                    </a>
-                                    {{ end }}
-                                    {{ if $canViewReg }}
-                                    <a class="icon-action" href="/documentals/llibres/{{ .ID }}/registres" title="{{ t $.Lang "books.action.records" }}" aria-label="{{ t $.Lang "books.action.records" }}">
-                                        <i class="fas fa-table"></i>
-                                    </a>
-                                    {{ end }}
-                                    {{ if $canImport }}
-                                    <a class="icon-action" href="/documentals/llibres/{{ .ID }}/import" title="{{ t $.Lang "records.import.file" }}" aria-label="{{ t $.Lang "records.import.file" }}">
-                                        <i class="fas fa-file-import"></i>
-                                    </a>
-                                    {{ end }}
-                                    {{ if $canExport }}
-                                    <a class="icon-action" href="/documentals/llibres/{{ .ID }}/export" title="{{ t $.Lang "records.list.export" }}" aria-label="{{ t $.Lang "records.list.export" }}">
-                                        <i class="fas fa-file-export"></i>
-                                    </a>
-                                    {{ end }}
-                                    {{ if $canMark }}
-                                    <form method="post" action="/documentals/llibres/{{ .ID }}/indexacio" class="inline-form">
-                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
-                                        <input type="hidden" name="indexacio_completa" value="{{ if .IndexacioCompleta }}0{{ else }}1{{ end }}">
-                                        <input type="hidden" name="return_to" value="{{ $.Data.CurrentURL }}">
-                                        <button type="submit" class="icon-action {{ if .IndexacioCompleta }}is-on{{ else }}is-off{{ end }}" title="{{ t $.Lang "books.indexed.tooltip" }}" aria-label="{{ t $.Lang "books.indexed.tooltip" }}">
-                                            <i class="fas fa-check-circle"></i>
-                                        </button>
-                                    </form>
-                                    {{ end }}
-                                    {{ if $canRecalc }}
-                                    <form method="post" action="/documentals/llibres/{{ .ID }}/indexacio/recalc" class="inline-form">
-                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
-                                        <input type="hidden" name="return_to" value="{{ $.Data.CurrentURL }}">
-                                        <button type="submit" class="icon-action" title="{{ t $.Lang "books.indexed.recalc" }}" aria-label="{{ t $.Lang "books.indexed.recalc" }}">
-                                            <i class="fas fa-sync-alt"></i>
-                                        </button>
-                                    </form>
-                                    {{ end }}
-                                    {{ if $canDelete }}
-                                    <button type="button" class="icon-action danger purge-trigger" title="{{ t $.Lang "books.purge.action" }}" aria-label="{{ t $.Lang "books.purge.action" }}" data-llibre-id="{{ .ID }}" data-llibre-title="{{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                    {{ end }}
-                                </span>
-                            </td>
+            <div class="filtres-avancats-panel" id="filtersPanel">
+                <form class="filtres-arxius" method="get" action="/documentals/llibres">
+                    <div class="grup-camp">
+                        <label for="filtre-q">{{ t .Lang "books.filter.search" }}</label>
+                        <input id="filtre-q" type="text" name="q" value="{{ .Data.Filter.Text }}">
+                    </div>
+                    <div class="grup-camp">
+                        <label for="filtre-arq">{{ t .Lang "books.filter.entity" }}</label>
+                        <select id="filtre-arq" name="arquevisbat_id">
+                            <option value="">{{ t .Lang "books.filter.entity.any" }}</option>
+                            {{ range .Data.Arquebisbats }}
+                            <option value="{{ .ID }}" {{ if eq $.Data.Filter.ArquebisbatID .ID }}selected{{ end }}>{{ .Nom }}</option>
                             {{ end }}
-                        </tr>
-                        {{ end }}
-                    </tbody>
-                </table>
+                        </select>
+                    </div>
+                    <div class="grup-camp cerca-avancada">
+                        <label for="filtre-mun">{{ t .Lang "books.filter.municipi" }}</label>
+                        <input id="filtre-mun" type="text" placeholder="{{ t .Lang "books.filter.municipi.any" }}" autocomplete="off" data-api="/api/territori/municipis/suggest" data-empty-label="{{ t .Lang "municipis.search.empty" }}" value="{{ .Data.MunicipiLabel }}">
+                        <input type="hidden" id="filtre-mun-id" name="municipi_id" value="{{ if gt .Data.Filter.MunicipiID 0 }}{{ .Data.Filter.MunicipiID }}{{ end }}">
+                        <ul id="filtre-mun-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="filtre-arxiu">{{ t .Lang "books.filter.arxiu" }}</label>
+                        <select id="filtre-arxiu" name="arxiu_id">
+                            <option value="">{{ t .Lang "books.filter.arxiu.any" }}</option>
+                            {{ range .Data.Arxius }}
+                            <option value="{{ .ID }}" {{ if eq $.Data.Filter.ArxiuID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                            {{ end }}
+                        </select>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="filtre-arxiu-tipus">{{ t .Lang "books.filter.arxiu_type" }}</label>
+                        <select id="filtre-arxiu-tipus" name="arxiu_tipus">
+                            <option value="">{{ t .Lang "books.filter.arxiu_type.any" }}</option>
+                            {{ range $opt := (list "parroquia" "arxiu_diocesa" "arxiu_capitular" "arxiu_comarcal" "portal_digital" "altre") }}
+                            <option value="{{ $opt }}" {{ if eq $.Data.Filter.ArxiuTipus $opt }}selected{{ end }}>{{ t $.Lang (printf "archives.type.%s" $opt) }}</option>
+                            {{ end }}
+                        </select>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="filtre-llibre-tipus">{{ t .Lang "books.filter.type" }}</label>
+                        <select id="filtre-llibre-tipus" name="tipus_llibre">
+                            <option value="">{{ t .Lang "books.filter.type.any" }}</option>
+                            {{ range $.Data.TipusOptions }}
+                            <option value="{{ . }}" {{ if eq $.Data.Filter.TipusLlibre . }}selected{{ end }}>{{ t $.Lang (printf "books.type.%s" .) }}</option>
+                            {{ end }}
+                        </select>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="filtre-status">{{ t .Lang "moderation.status" }}</label>
+                        {{ $st := .Data.Filter.Status }}
+                        <select id="filtre-status" name="status">
+                            <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
+                            <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
+                            <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                            <option value="">{{ t .Lang "common.all" }}</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="boto-secundari">{{ t .Lang "books.filter.submit" }}</button>
+                    <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
+                    <input type="hidden" name="page" value="1">
+                </form>
+            </div>
+            <div class="taula-resultats">
+                <div class="barra-superior">
+                    <button type="button" id="configColumnes" class="boto-engranatge">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+                <div class="taula-container">
+                    <table class="taula taula-registres" id="llibresTable" data-filter-order="{{ .Data.FilterOrder }}">
+                        <thead>
+                            <tr id="filtraFila">
+                                <th data-col="0" data-key="titol">
+                                    <input type="text" placeholder="{{ t .Lang "books.col.title" }}" data-col="0" data-key="titol" value="{{ index $.Data.FilterValues "titol" }}">
+                                </th>
+                                <th data-col="1" data-key="entitat">
+                                    <input type="text" placeholder="{{ t .Lang "books.col.entity" }}" data-col="1" data-key="entitat" value="{{ index $.Data.FilterValues "entitat" }}">
+                                </th>
+                                <th data-col="2" data-key="municipi">
+                                    <input type="text" placeholder="{{ t .Lang "books.col.municipi" }}" data-col="2" data-key="municipi" value="{{ index $.Data.FilterValues "municipi" }}">
+                                </th>
+                                <th data-col="3" data-key="crono">
+                                    <input type="text" placeholder="{{ t .Lang "books.col.chrono" }}" data-col="3" data-key="crono" value="{{ index $.Data.FilterValues "crono" }}">
+                                </th>
+                                <th data-col="4" data-key="pagines">
+                                    <input type="text" placeholder="{{ t .Lang "books.col.pages" }}" data-col="4" data-key="pagines" value="{{ index $.Data.FilterValues "pagines" }}">
+                                </th>
+                                <th data-col="5" data-key="indexacio"></th>
+                                <th data-col="6" data-key="status">
+                                    <input type="text" placeholder="{{ t .Lang "moderation.status" }}" data-col="6" data-key="status" value="{{ index $.Data.FilterValues "status" }}">
+                                </th>
+                                {{ if $.Data.ShowLlibreActions }}<th data-col="7" data-key="actions"></th>{{ end }}
+                            </tr>
+                            <tr>
+                                <th data-col="0" data-key="titol">{{ t .Lang "books.col.title" }}</th>
+                                <th data-col="1" data-key="entitat">{{ t .Lang "books.col.entity" }}</th>
+                                <th data-col="2" data-key="municipi">{{ t .Lang "books.col.municipi" }}</th>
+                                <th data-col="3" data-key="crono">{{ t .Lang "books.col.chrono" }}</th>
+                                <th data-col="4" data-key="pagines">{{ t .Lang "books.col.pages" }}</th>
+                                <th data-col="5" data-key="indexacio">{{ t .Lang "books.col.records_indexing" }}</th>
+                                <th data-col="6" data-key="status">{{ t .Lang "moderation.status" }}</th>
+                                {{ if $.Data.ShowLlibreActions }}<th data-col="7" data-key="actions">{{ t .Lang "books.col.actions" }}</th>{{ end }}
+                            </tr>
+                        </thead>
+                        <tbody id="taulaDades">
+                            {{ range .Data.Llibres }}
+                            <tr>
+                                <td data-col="0" data-key="titol"><a href="/documentals/llibres/{{ .ID }}">{{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}</a></td>
+                                <td data-col="1" data-key="entitat">{{ .ArquebisbatNom.String }}</td>
+                                <td data-col="2" data-key="municipi">{{ .MunicipiNom.String }}</td>
+                                <td data-col="3" data-key="crono">{{ .Cronologia }}</td>
+                                <td data-col="4" data-key="pagines">{{ if .Pagines.Valid }}{{ .Pagines.Int64 }}{{ end }}</td>
+                                {{ $stat := index $.Data.IndexacioStats (printf "%d" .ID) }}
+                                <td data-col="5" data-key="indexacio">
+                                    <div class="indexacio-resum">
+                                        <span class="indexacio-registres">{{ $stat.TotalRegistres }}</span>
+                                        <div class="indexacio-cell">
+                                            <div class="barra-progres">
+                                                <div class="progres {{ $stat.ColorClass }}" style="width: {{ $stat.Percentatge }}%;"></div>
+                                            </div>
+                                            <span class="percentatge-text">{{ $stat.Percentatge }}%</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td data-col="6" data-key="status"><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                                {{ if $.Data.ShowLlibreActions }}
+                                {{ $canEdit := index $.Data.CanEditLlibre .ID }}
+                                {{ $canIndex := index $.Data.CanIndexLlibre .ID }}
+                                {{ $canViewReg := index $.Data.CanViewRegistres .ID }}
+                                {{ $canImport := index $.Data.CanImportCSV .ID }}
+                                {{ $canExport := index $.Data.CanExportCSV .ID }}
+                                {{ $canMark := index $.Data.CanMarkIndexed .ID }}
+                                {{ $canRecalc := index $.Data.CanRecalcIndex .ID }}
+                                {{ $canDelete := index $.Data.CanDeleteLlibre .ID }}
+                                <td data-col="7" data-key="actions">
+                                    <span class="cell-actions">
+                                        {{ if $canEdit }}
+                                        <a class="icon-action" href="/documentals/llibres/{{ .ID }}/edit" title="{{ t $.Lang "books.action.edit" }}" aria-label="{{ t $.Lang "books.action.edit" }}">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        {{ end }}
+                                        {{ if $canIndex }}
+                                        <a class="icon-action" href="/documentals/llibres/{{ .ID }}/indexar" title="{{ t $.Lang "books.action.index" }}" aria-label="{{ t $.Lang "books.action.index" }}">
+                                            <i class="fas fa-pen-nib"></i>
+                                        </a>
+                                        {{ end }}
+                                        {{ if $canViewReg }}
+                                        <a class="icon-action" href="/documentals/llibres/{{ .ID }}/registres" title="{{ t $.Lang "books.action.records" }}" aria-label="{{ t $.Lang "books.action.records" }}">
+                                            <i class="fas fa-table"></i>
+                                        </a>
+                                        {{ end }}
+                                        {{ if $canImport }}
+                                        <a class="icon-action" href="/documentals/llibres/{{ .ID }}/import" title="{{ t $.Lang "records.import.file" }}" aria-label="{{ t $.Lang "records.import.file" }}">
+                                            <i class="fas fa-file-import"></i>
+                                        </a>
+                                        {{ end }}
+                                        {{ if $canExport }}
+                                        <a class="icon-action" href="/documentals/llibres/{{ .ID }}/export" title="{{ t $.Lang "records.list.export" }}" aria-label="{{ t $.Lang "records.list.export" }}">
+                                            <i class="fas fa-file-export"></i>
+                                        </a>
+                                        {{ end }}
+                                        {{ if $canMark }}
+                                        <form method="post" action="/documentals/llibres/{{ .ID }}/indexacio" class="inline-form">
+                                            <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                            <input type="hidden" name="indexacio_completa" value="{{ if .IndexacioCompleta }}0{{ else }}1{{ end }}">
+                                            <input type="hidden" name="return_to" value="{{ $.Data.CurrentURL }}">
+                                            <button type="submit" class="icon-action {{ if .IndexacioCompleta }}is-on{{ else }}is-off{{ end }}" title="{{ t $.Lang "books.indexed.tooltip" }}" aria-label="{{ t $.Lang "books.indexed.tooltip" }}">
+                                                <i class="fas fa-check-circle"></i>
+                                            </button>
+                                        </form>
+                                        {{ end }}
+                                        {{ if $canRecalc }}
+                                        <form method="post" action="/documentals/llibres/{{ .ID }}/indexacio/recalc" class="inline-form">
+                                            <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                            <input type="hidden" name="return_to" value="{{ $.Data.CurrentURL }}">
+                                            <button type="submit" class="icon-action" title="{{ t $.Lang "books.indexed.recalc" }}" aria-label="{{ t $.Lang "books.indexed.recalc" }}">
+                                                <i class="fas fa-sync-alt"></i>
+                                            </button>
+                                        </form>
+                                        {{ end }}
+                                        {{ if $canDelete }}
+                                        <button type="button" class="icon-action danger purge-trigger" title="{{ t $.Lang "books.purge.action" }}" aria-label="{{ t $.Lang "books.purge.action" }}" data-llibre-id="{{ .ID }}" data-llibre-title="{{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                        {{ end }}
+                                    </span>
+                                </td>
+                                {{ end }}
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
             </div>
             {{ if gt .Data.TotalPages 1 }}
-            <div class="paginador">
+            <div class="paginador" id="paginador">
                 {{ range .Data.PageLinks }}
                 <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
                     {{ .Label }}
@@ -203,6 +234,53 @@
             {{ end }}
         </section>
     </main>
+    <div class="modal-config" id="modalConfigColumnes">
+        <div class="modal-content-config">
+            <button type="button" class="tanca-modal-config" aria-label="{{ t .Lang "common.close" }}">×</button>
+            <h2>{{ t .Lang "records.columns.title" }}</h2>
+            <div class="form-group">
+                <label for="filesPerPagina">{{ t .Lang "records.columns.per_page" }}</label>
+                <select id="filesPerPagina">
+                    <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
+                    <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
+                    <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
+                    <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
+                </select>
+            </div>
+            <div class="columns-config">
+                <div class="columns-list">
+                    <label for="cols-actives">{{ t .Lang "records.columns.visible" }}</label>
+                    <select id="cols-actives" size="10" multiple></select>
+                    <div class="columns-actions">
+                        <button type="button" id="cols-up" class="columns-icon" aria-label="{{ t .Lang "records.columns.up" }}" title="{{ t .Lang "records.columns.up" }}">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <button type="button" id="cols-down" class="columns-icon" aria-label="{{ t .Lang "records.columns.down" }}" title="{{ t .Lang "records.columns.down" }}">
+                            <i class="fas fa-arrow-down"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="columns-controls">
+                    <button type="button" id="cols-hide" class="columns-icon" aria-label="{{ t .Lang "records.columns.hide" }}" title="{{ t .Lang "records.columns.hide" }}">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                    <button type="button" id="cols-show" class="columns-icon" aria-label="{{ t .Lang "records.columns.show" }}" title="{{ t .Lang "records.columns.show" }}">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                </div>
+                <div class="columns-list">
+                    <label for="cols-hidden">{{ t .Lang "records.columns.hidden" }}</label>
+                    <select id="cols-hidden" size="10" multiple></select>
+                </div>
+            </div>
+            <div class="columns-save">
+                <span id="cols-save-status" class="muted" aria-live="polite"></span>
+                <button type="button" id="cols-save" class="boto-primari" data-saved-label="{{ t .Lang "common.saved" }}">
+                    {{ t .Lang "records.columns.save" }}
+                </button>
+            </div>
+        </div>
+    </div>
     {{ template "footer" . }}
     {{ if .Data.ShowPurgeModal }}
     <div class="modal-overlay" id="purge-modal" role="dialog" aria-modal="true" aria-labelledby="purge-modal-title">
@@ -267,6 +345,8 @@
     </script>
     {{ end }}
     <script src="/static/js/scroll-restore.js?v=1"></script>
+    <script src="/static/js/municipi-suggest.js"></script>
+    <script src="/static/js/llibres-taula.js"></script>
     {{ template "scripts-private" . }}
 </body>
 </html>

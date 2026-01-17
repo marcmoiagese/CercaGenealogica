@@ -188,6 +188,7 @@ func main() {
 		http.NotFound(w, r)
 	})
 	http.HandleFunc("/api/cognoms/", applyMiddleware(app.RequireLogin(app.CognomHeatmapJSON), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/territori/municipis/suggest", applyMiddleware(app.RequireLogin(app.AdminMunicipisSuggest), core.BlockIPs, core.RateLimit))
 
 	// Arxius (lectura per a tots els usuaris autenticats)
 	http.HandleFunc("/arxius", applyMiddleware(app.ListArxius, core.BlockIPs, core.RateLimit))
@@ -289,6 +290,8 @@ func main() {
 			applyMiddleware(app.AdminSaveMunicipiEcles, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/save"):
 			applyMiddleware(app.AdminSaveMunicipi, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/delete"):
+			applyMiddleware(app.AdminDeleteMunicipi, core.BlockIPs, core.RateLimit)(w, r)
 		default:
 			applyMiddleware(app.AdminListMunicipis, core.BlockIPs, core.RateLimit)(w, r)
 		}
@@ -307,6 +310,8 @@ func main() {
 			applyMiddleware(app.AdminSaveMunicipiEcles, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/save"):
 			applyMiddleware(app.AdminSaveMunicipi, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/delete"):
+			applyMiddleware(app.AdminDeleteMunicipi, core.BlockIPs, core.RateLimit)(w, r)
 		default:
 			if r.Method == http.MethodGet {
 				parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")

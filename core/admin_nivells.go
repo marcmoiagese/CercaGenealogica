@@ -45,6 +45,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 	}
 	niv, _ := strconv.Atoi(r.URL.Query().Get("nivel"))
 	estat := strings.TrimSpace(r.URL.Query().Get("estat"))
+	lang := ResolveLang(r)
 	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
 	page := parseListPage(r.URL.Query().Get("page"))
 	statusVals, statusExists := r.URL.Query()["status"]
@@ -60,14 +61,55 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		Estat:  estat,
 		Status: status,
 	}
+	filterKeys := []string{"nivel", "pais", "nom", "tipus", "codi", "parent", "anys", "estat", "status"}
+	filterValues := map[string]string{}
+	filterMatch := map[string]string{}
+	for _, key := range filterKeys {
+		paramKey := "f_" + key
+		if val := strings.TrimSpace(r.URL.Query().Get(paramKey)); val != "" {
+			filterValues[key] = val
+			filterMatch[key] = strings.ToLower(val)
+		}
+	}
+	filterOrder := []string{}
+	if orderParam := strings.TrimSpace(r.URL.Query().Get("order")); orderParam != "" {
+		for _, key := range strings.Split(orderParam, ",") {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	}
+	if len(filterOrder) == 0 {
+		for _, key := range filterKeys {
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	} else {
+		seen := map[string]bool{}
+		for _, key := range filterOrder {
+			seen[key] = true
+		}
+		for _, key := range filterKeys {
+			if _, ok := filterMatch[key]; ok && !seen[key] {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	}
 	if !scopeFilter.hasGlobal {
 		if scopeFilter.isEmpty() {
-			pagination := buildPagination(r, page, perPage, 0, "#page-stats-controls")
+			pagination := buildPagination(r, page, perPage, 0, "#nivellsTable")
 			RenderPrivateTemplate(w, r, "admin-nivells-list.html", map[string]interface{}{
 				"Nivells":           []db.NivellAdministratiu{},
 				"Pais":              nil,
 				"Paisos":            []db.Pais{},
 				"Filter":            filter,
+				"FilterValues":      filterValues,
+				"FilterOrder":       strings.Join(filterOrder, ","),
 				"CanManageArxius":   a.hasPerm(perms, permArxius),
 				"CanCreateNivell":   false,
 				"CanEditNivell":     map[int]bool{},
@@ -85,14 +127,61 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		}
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 	}
-	total, _ := a.DB.CountNivells(filter)
-	pagination := buildPagination(r, page, perPage, total, "#page-stats-controls")
-	filter.Limit = pagination.PerPage
-	filter.Offset = pagination.Offset
-	nivells, _ := a.DB.ListNivells(filter)
-	for i := range nivells {
-		if nivells[i].PaisISO2.Valid {
-			nivells[i].PaisLabel = a.countryLabelFromISO(nivells[i].PaisISO2.String, ResolveLang(r))
+	nivells := []db.NivellAdministratiu{}
+	total := 0
+	pagination := Pagination{}
+	filtered := len(filterMatch) > 0
+	if filtered {
+		listFilter := filter
+		allNivells, _ := a.DB.ListNivells(listFilter)
+		for i := range allNivells {
+			if allNivells[i].PaisISO2.Valid {
+				allNivells[i].PaisLabel = a.countryLabelFromISO(allNivells[i].PaisISO2.String, lang)
+			}
+		}
+		matches := make([]db.NivellAdministratiu, 0, len(allNivells))
+		for _, nivell := range allNivells {
+			match := true
+			for _, key := range filterOrder {
+				filterVal := filterMatch[key]
+				if filterVal == "" {
+					continue
+				}
+				value := strings.ToLower(nivellFilterValue(nivell, key, lang))
+				if !strings.Contains(value, filterVal) {
+					match = false
+					break
+				}
+			}
+			if match {
+				matches = append(matches, nivell)
+			}
+		}
+		total = len(matches)
+		pagination = buildPagination(r, page, perPage, total, "#nivellsTable")
+		start := pagination.Offset
+		end := start + pagination.PerPage
+		if start < 0 {
+			start = 0
+		}
+		if start > total {
+			start = total
+		}
+		if end > total {
+			end = total
+		}
+		nivells = matches[start:end]
+	} else {
+		total, _ = a.DB.CountNivells(filter)
+		pagination = buildPagination(r, page, perPage, total, "#nivellsTable")
+		listFilter := filter
+		listFilter.Limit = pagination.PerPage
+		listFilter.Offset = pagination.Offset
+		nivells, _ = a.DB.ListNivells(listFilter)
+		for i := range nivells {
+			if nivells[i].PaisISO2.Valid {
+				nivells[i].PaisLabel = a.countryLabelFromISO(nivells[i].PaisISO2.String, lang)
+			}
 		}
 	}
 	canCreateNivell := false
@@ -121,6 +210,8 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		"Pais":              pais,
 		"Paisos":            paisos,
 		"Filter":            filter,
+		"FilterValues":      filterValues,
+		"FilterOrder":       strings.Join(filterOrder, ","),
 		"CanManageArxius":   a.hasPerm(perms, permArxius),
 		"CanCreateNivell":   canCreateNivell,
 		"CanEditNivell":     canEditNivell,
@@ -134,6 +225,61 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		"PageAnchor":        pagination.Anchor,
 		"User":              user,
 	})
+}
+
+func nivellYearsLabel(n db.NivellAdministratiu) string {
+	start := ""
+	end := ""
+	if n.AnyInici.Valid {
+		start = strconv.FormatInt(n.AnyInici.Int64, 10)
+	}
+	if n.AnyFi.Valid {
+		end = strconv.FormatInt(n.AnyFi.Int64, 10)
+	}
+	if start != "" && end != "" {
+		return start + " - " + end
+	}
+	return start + end
+}
+
+func nivellFilterValue(n db.NivellAdministratiu, key, lang string) string {
+	switch key {
+	case "nivel":
+		if n.Nivel > 0 {
+			return strconv.Itoa(n.Nivel)
+		}
+	case "pais":
+		if n.PaisLabel != "" {
+			return n.PaisLabel
+		}
+		if n.PaisISO2.Valid {
+			return n.PaisISO2.String
+		}
+	case "nom":
+		return n.NomNivell
+	case "tipus":
+		if n.TipusNivell != "" {
+			return T(lang, "levels.types."+n.TipusNivell)
+		}
+	case "codi":
+		return n.CodiOficial
+	case "parent":
+		if n.ParentNom.Valid {
+			return n.ParentNom.String
+		}
+		return "-"
+	case "anys":
+		return nivellYearsLabel(n)
+	case "estat":
+		if n.Estat != "" {
+			return T(lang, "levels.state."+n.Estat)
+		}
+	case "status":
+		if n.ModeracioEstat != "" {
+			return T(lang, "activity.status."+n.ModeracioEstat)
+		}
+	}
+	return ""
 }
 
 func (a *App) AdminNewNivell(w http.ResponseWriter, r *http.Request) {

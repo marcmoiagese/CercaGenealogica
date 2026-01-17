@@ -49,16 +49,102 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 			filter.EntitatID = id
 		}
 	}
-	arxius, _ := a.DB.ListArxius(filter)
-	for i := range arxius {
-		if rels, err := a.DB.ListArxiuLlibres(arxius[i].ID); err == nil {
-			arxius[i].Llibres = len(rels)
+	lang := ResolveLang(r)
+	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
+	page := parseListPage(r.URL.Query().Get("page"))
+	filterKeys := []string{"nom", "tipus", "acces", "entitat", "municipi", "web", "llibres", "status"}
+	filterValues := map[string]string{}
+	filterMatch := map[string]string{}
+	for _, key := range filterKeys {
+		paramKey := "f_" + key
+		if val := strings.TrimSpace(r.URL.Query().Get(paramKey)); val != "" {
+			filterValues[key] = val
+			filterMatch[key] = strings.ToLower(val)
 		}
+	}
+	filterOrder := []string{}
+	if orderParam := strings.TrimSpace(r.URL.Query().Get("order")); orderParam != "" {
+		for _, key := range strings.Split(orderParam, ",") {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	}
+	if len(filterOrder) == 0 {
+		for _, key := range filterKeys {
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	} else {
+		seen := map[string]bool{}
+		for _, key := range filterOrder {
+			seen[key] = true
+		}
+		for _, key := range filterKeys {
+			if _, ok := filterMatch[key]; ok && !seen[key] {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	}
+	arxius := []db.ArxiuWithCount{}
+	total := 0
+	pagination := Pagination{}
+	filtered := len(filterMatch) > 0
+	if filtered {
+		listFilter := filter
+		listFilter.Limit = -1
+		allArxius, _ := a.DB.ListArxius(listFilter)
+		matches := make([]db.ArxiuWithCount, 0, len(allArxius))
+		for _, arxiu := range allArxius {
+			match := true
+			for _, key := range filterOrder {
+				filterVal := filterMatch[key]
+				if filterVal == "" {
+					continue
+				}
+				value := strings.ToLower(arxiuFilterValue(arxiu, key, lang))
+				if !strings.Contains(value, filterVal) {
+					match = false
+					break
+				}
+			}
+			if match {
+				matches = append(matches, arxiu)
+			}
+		}
+		total = len(matches)
+		pagination = buildPagination(r, page, perPage, total, "#arxiusTable")
+		start := pagination.Offset
+		end := start + pagination.PerPage
+		if start < 0 {
+			start = 0
+		}
+		if start > total {
+			start = total
+		}
+		if end > total {
+			end = total
+		}
+		arxius = matches[start:end]
+	} else {
+		total, _ = a.DB.CountArxius(filter)
+		pagination = buildPagination(r, page, perPage, total, "#arxiusTable")
+		listFilter := filter
+		listFilter.Limit = pagination.PerPage
+		listFilter.Offset = pagination.Offset
+		arxius, _ = a.DB.ListArxius(listFilter)
 	}
 	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
 		"Arxius":             arxius,
 		"Filter":             filter,
+		"FilterValues":       filterValues,
+		"FilterOrder":        strings.Join(filterOrder, ","),
 		"CanManageArxius":    canManage,
 		"ArxiusBasePath":     "/arxius",
 		"Arquebisbats":       arquebisbats,
@@ -69,6 +155,13 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 		"CanModerate":        canModerate,
 		"CanManageUsers":     canManageUsers,
 		"CanManagePolicies":  canManagePolicies,
+		"Page":               pagination.Page,
+		"PerPage":            pagination.PerPage,
+		"Total":              pagination.Total,
+		"TotalPages":         pagination.TotalPages,
+		"PageLinks":          pagination.Links,
+		"PageSelectBase":     pagination.SelectBase,
+		"PageAnchor":         pagination.Anchor,
 	})
 }
 
@@ -128,6 +221,7 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	if status == "" {
 		status = "publicat"
 	}
+	lang := ResolveLang(r)
 	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
 	page := parseListPage(r.URL.Query().Get("page"))
 	scopeFilter := a.buildListScopeFilter(user.ID, permKeyDocumentalsArxiusView, ScopeArxiu)
@@ -137,6 +231,45 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		Acces:  strings.TrimSpace(r.URL.Query().Get("acces")),
 		Status: status,
 	}
+	filterKeys := []string{"nom", "tipus", "acces", "entitat", "municipi", "web", "llibres", "status"}
+	filterValues := map[string]string{}
+	filterMatch := map[string]string{}
+	for _, key := range filterKeys {
+		paramKey := "f_" + key
+		if val := strings.TrimSpace(r.URL.Query().Get(paramKey)); val != "" {
+			filterValues[key] = val
+			filterMatch[key] = strings.ToLower(val)
+		}
+	}
+	filterOrder := []string{}
+	if orderParam := strings.TrimSpace(r.URL.Query().Get("order")); orderParam != "" {
+		for _, key := range strings.Split(orderParam, ",") {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	}
+	if len(filterOrder) == 0 {
+		for _, key := range filterKeys {
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	} else {
+		seen := map[string]bool{}
+		for _, key := range filterOrder {
+			seen[key] = true
+		}
+		for _, key := range filterKeys {
+			if _, ok := filterMatch[key]; ok && !seen[key] {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	}
 	if v := strings.TrimSpace(r.URL.Query().Get("entitat_id")); v != "" {
 		if id, err := strconv.Atoi(v); err == nil {
 			filter.EntitatID = id
@@ -144,10 +277,12 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	}
 	if !scopeFilter.hasGlobal {
 		if scopeFilter.isEmpty() {
-			pagination := buildPagination(r, page, perPage, 0, "#page-stats-controls")
+			pagination := buildPagination(r, page, perPage, 0, "#arxiusTable")
 			RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
 				"Arxius":             []db.ArxiuWithCount{},
 				"Filter":             filter,
+				"FilterValues":       filterValues,
+				"FilterOrder":        strings.Join(filterOrder, ","),
 				"ArxiusBasePath":     "/documentals/arxius",
 				"Arquebisbats":       []db.ArquebisbatRow{},
 				"CanManageArxius":    canManage,
@@ -180,11 +315,54 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 		filter.AllowedEclesIDs = scopeFilter.eclesIDs
 	}
-	total, _ := a.DB.CountArxius(filter)
-	pagination := buildPagination(r, page, perPage, total, "#page-stats-controls")
-	filter.Limit = pagination.PerPage
-	filter.Offset = pagination.Offset
-	arxius, _ := a.DB.ListArxius(filter)
+	arxius := []db.ArxiuWithCount{}
+	total := 0
+	pagination := Pagination{}
+	filtered := len(filterMatch) > 0
+	if filtered {
+		listFilter := filter
+		listFilter.Limit = -1
+		allArxius, _ := a.DB.ListArxius(listFilter)
+		matches := make([]db.ArxiuWithCount, 0, len(allArxius))
+		for _, arxiu := range allArxius {
+			match := true
+			for _, key := range filterOrder {
+				filterVal := filterMatch[key]
+				if filterVal == "" {
+					continue
+				}
+				value := strings.ToLower(arxiuFilterValue(arxiu, key, lang))
+				if !strings.Contains(value, filterVal) {
+					match = false
+					break
+				}
+			}
+			if match {
+				matches = append(matches, arxiu)
+			}
+		}
+		total = len(matches)
+		pagination = buildPagination(r, page, perPage, total, "#arxiusTable")
+		start := pagination.Offset
+		end := start + pagination.PerPage
+		if start < 0 {
+			start = 0
+		}
+		if start > total {
+			start = total
+		}
+		if end > total {
+			end = total
+		}
+		arxius = matches[start:end]
+	} else {
+		total, _ = a.DB.CountArxius(filter)
+		pagination = buildPagination(r, page, perPage, total, "#arxiusTable")
+		listFilter := filter
+		listFilter.Limit = pagination.PerPage
+		listFilter.Offset = pagination.Offset
+		arxius, _ = a.DB.ListArxius(listFilter)
+	}
 	canEditArxiu := make(map[int]bool, len(arxius))
 	canDeleteArxiu := make(map[int]bool, len(arxius))
 	showArxiuActions := false
@@ -202,6 +380,8 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
 		"Arxius":             arxius,
 		"Filter":             filter,
+		"FilterValues":       filterValues,
+		"FilterOrder":        strings.Join(filterOrder, ","),
 		"ArxiusBasePath":     "/documentals/arxius",
 		"Arquebisbats":       arquebisbats,
 		"CanManageArxius":    canManage,
@@ -225,6 +405,40 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		"CanManageUsers":     canManageUsers,
 		"CanManagePolicies":  canManagePolicies,
 	})
+}
+
+func arxiuFilterValue(a db.ArxiuWithCount, key, lang string) string {
+	switch key {
+	case "nom":
+		return a.Nom
+	case "tipus":
+		if a.Tipus == "" {
+			return ""
+		}
+		return strings.TrimSpace(T(lang, "archives.type."+a.Tipus) + " " + a.Tipus)
+	case "acces":
+		if a.Acces == "" {
+			return ""
+		}
+		return strings.TrimSpace(T(lang, "archives.access."+a.Acces) + " " + a.Acces)
+	case "entitat":
+		if a.EntitatNom.Valid {
+			return a.EntitatNom.String
+		}
+	case "municipi":
+		if a.MunicipiNom.Valid {
+			return a.MunicipiNom.String
+		}
+	case "web":
+		return a.Web
+	case "llibres":
+		return strconv.Itoa(a.Llibres)
+	case "status":
+		if a.ModeracioEstat != "" {
+			return strings.TrimSpace(T(lang, "activity.status."+a.ModeracioEstat) + " " + a.ModeracioEstat)
+		}
+	}
+	return ""
 }
 
 func parseArxiuForm(r *http.Request) *db.Arxiu {

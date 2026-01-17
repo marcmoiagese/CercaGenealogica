@@ -2,6 +2,7 @@ package core
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,37 +10,60 @@ import (
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
+type municipiLevelSelect struct {
+	Level      int
+	Label      string
+	Options    []db.NivellAdministratiu
+	SelectedID int
+}
+
+type municipiVisibleCol struct {
+	Level   int
+	Label   string
+	SortKey string
+}
+
 func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
-	filter := db.MunicipiFilter{
-		Text:   strings.TrimSpace(r.URL.Query().Get("q")),
-		Estat:  strings.TrimSpace(r.URL.Query().Get("estat")),
-		Status: strings.TrimSpace(r.URL.Query().Get("status")),
+	filter := db.MunicipiBrowseFilter{
+		Text:    strings.TrimSpace(r.URL.Query().Get("q")),
+		Estat:   strings.TrimSpace(r.URL.Query().Get("estat")),
+		Status:  strings.TrimSpace(r.URL.Query().Get("status")),
+		Tipus:   strings.TrimSpace(r.URL.Query().Get("tipus")),
+		Sort:    strings.TrimSpace(r.URL.Query().Get("sort")),
+		SortDir: strings.TrimSpace(r.URL.Query().Get("dir")),
 	}
 	if filter.Status == "" {
 		filter.Status = "publicat"
+	}
+	if filter.Sort == "" {
+		filter.Sort = "nom"
+	}
+	if !isMunicipiSortKey(filter.Sort) {
+		filter.Sort = "nom"
+	}
+	if filter.SortDir == "" || (!strings.EqualFold(filter.SortDir, "asc") && !strings.EqualFold(filter.SortDir, "desc")) {
+		filter.SortDir = "asc"
 	}
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {
 			filter.PaisID = v
 		}
 	}
-	if lid := strings.TrimSpace(r.URL.Query().Get("nivell_id")); lid != "" {
-		if v, err := strconv.Atoi(lid); err == nil {
-			filter.NivellID = v
+	for i := 0; i < 7; i++ {
+		key := fmt.Sprintf("nivell_id_%d", i+1)
+		if val := strings.TrimSpace(r.URL.Query().Get(key)); val != "" {
+			if v, err := strconv.Atoi(val); err == nil {
+				filter.LevelIDs[i] = v
+			}
+		}
+	}
+	if val := strings.TrimSpace(r.URL.Query().Get("municipi_id")); val != "" {
+		if v, err := strconv.Atoi(val); err == nil {
+			filter.MunicipiID = v
 		}
 	}
 	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
 	page := parseListPage(r.URL.Query().Get("page"))
-	nivellPaisID := 0
-	if filter.NivellID > 0 {
-		if nivell, err := a.DB.GetNivell(filter.NivellID); err == nil && nivell != nil && nivell.PaisID > 0 {
-			nivellPaisID = nivell.PaisID
-		}
-	}
-	createPaisID := filter.PaisID
-	if createPaisID == 0 && nivellPaisID > 0 {
-		createPaisID = nivellPaisID
-	}
 	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriMunicipisView)
 	if !ok {
 		return
@@ -50,15 +74,26 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		if scopeFilter.isEmpty() {
 			pagination := buildPagination(r, page, perPage, 0, "#page-stats-controls")
 			RenderPrivateTemplate(w, r, "admin-municipis-list.html", map[string]interface{}{
-				"Municipis":           []db.MunicipiRow{},
+				"Municipis":           []db.MunicipiBrowseRow{},
 				"Filter":              filter,
 				"Paisos":              []db.Pais{},
-				"Nivells":             []db.NivellAdministratiu{},
+				"LevelSelects":         []municipiLevelSelect{},
+				"VisibleLevelCols":     []municipiVisibleCol{},
+				"ShowTipus":           false,
+				"TipusOptions":        []municipiTypeOption{},
+				"TipusLabels":         map[string]string{},
+				"LevelTypeLabels":     []string{},
+				"LevelNamesByID":      map[int][]string{},
+				"BooksClassByID":      map[int]string{},
 				"CanManageArxius":     a.hasPerm(perms, permArxius),
 				"CanCreateMunicipi":   false,
-				"CreatePaisID":        createPaisID,
+				"CreatePaisID":        0,
 				"CanEditMunicipi":     map[int]bool{},
 				"ShowMunicipiActions": false,
+				"HasFilters":          false,
+				"SortKey":             filter.Sort,
+				"SortDir":             filter.SortDir,
+				"SortLinks":           map[string]string{},
 				"Page":                pagination.Page,
 				"PerPage":             pagination.PerPage,
 				"Total":               pagination.Total,
@@ -66,6 +101,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 				"PageLinks":           pagination.Links,
 				"PageSelectBase":      pagination.SelectBase,
 				"PageAnchor":          pagination.Anchor,
+				"ReturnURL":           currentRequestURL(r),
 				"User":                user,
 			})
 			return
@@ -75,11 +111,17 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 	}
-	total, _ := a.DB.CountMunicipis(filter)
-	pagination := buildPagination(r, page, perPage, total, "#page-stats-controls")
-	filter.Limit = pagination.PerPage
-	filter.Offset = pagination.Offset
-	muns, _ := a.DB.ListMunicipis(filter)
+	if filter.PaisID == 0 {
+		for _, id := range filter.LevelIDs {
+			if id <= 0 {
+				continue
+			}
+			if nivell, err := a.DB.GetNivell(id); err == nil && nivell != nil && nivell.PaisID > 0 {
+				filter.PaisID = nivell.PaisID
+				break
+			}
+		}
+	}
 	paisos, _ := a.DB.ListPaisos()
 	if !scopeFilter.hasGlobal && len(scopeFilter.paisIDs) > 0 {
 		allowed := map[int]struct{}{}
@@ -96,45 +138,112 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 	}
 	var nivells []db.NivellAdministratiu
 	if filter.PaisID > 0 {
-		nivells, _ = a.DB.ListNivells(db.NivellAdminFilter{PaisID: filter.PaisID})
-	} else {
-		nivells, _ = a.DB.ListNivells(db.NivellAdminFilter{})
+		nivells = a.municipiLevelsForPais(filter.PaisID)
 	}
+	levelSelects := []municipiLevelSelect{}
+	visibleCols := []municipiVisibleCol{}
+	showTipus := false
+	levelTypeLabels := []string{}
+	if filter.PaisID > 0 {
+		levelSelects, visibleCols, showTipus, levelTypeLabels = buildMunicipiLevelUI(nivells, filter.LevelIDs)
+	}
+	createPaisID := filter.PaisID
 	canCreateMunicipi := false
 	if createPaisID > 0 {
 		canCreateMunicipi = a.HasPermission(user.ID, permKeyTerritoriMunicipisCreate, PermissionTarget{PaisID: intPtr(createPaisID)})
 	} else {
 		canCreateMunicipi = a.HasPermission(user.ID, permKeyTerritoriMunicipisCreate, PermissionTarget{})
 	}
-	canEditMunicipi := make(map[int]bool, len(muns))
-	showMunicipiActions := false
-	for _, mun := range muns {
-		munTarget := PermissionTarget{MunicipiID: intPtr(mun.ID)}
-		if mun.ProvinciaID.Valid {
-			munTarget.ProvinciaID = intPtr(int(mun.ProvinciaID.Int64))
-		}
-		if mun.ComarcaID.Valid {
-			munTarget.ComarcaID = intPtr(int(mun.ComarcaID.Int64))
-		}
-		if mun.PaisID.Valid {
-			munTarget.PaisID = intPtr(int(mun.PaisID.Int64))
-		}
-		canEdit := a.HasPermission(user.ID, permKeyTerritoriMunicipisEdit, munTarget)
-		canEditMunicipi[mun.ID] = canEdit
-		if canEdit {
-			showMunicipiActions = true
+	hasFilters := filter.PaisID > 0 || filter.Text != ""
+	if filter.MunicipiID > 0 || strings.TrimSpace(filter.Tipus) != "" {
+		hasFilters = true
+	}
+	if !hasFilters {
+		for _, id := range filter.LevelIDs {
+			if id > 0 {
+				hasFilters = true
+				break
+			}
 		}
 	}
+	var (
+		muns             []db.MunicipiBrowseRow
+		total            int
+		levelNamesByID   = map[int][]string{}
+		booksClassByID   = map[int]string{}
+		canEditMunicipi  = map[int]bool{}
+		showActions      = false
+		pagination       Pagination
+	)
+	if hasFilters {
+		total, _ = a.DB.CountMunicipisBrowse(filter)
+		pagination = buildPagination(r, page, perPage, total, "#page-stats-controls")
+		filter.Limit = pagination.PerPage
+		filter.Offset = pagination.Offset
+		muns, _ = a.DB.ListMunicipisBrowse(filter)
+		for _, mun := range muns {
+			names := make([]string, 7)
+			for i := 0; i < 7; i++ {
+				if mun.LevelNames[i].Valid {
+					names[i] = strings.TrimSpace(mun.LevelNames[i].String)
+				}
+			}
+			levelNamesByID[mun.ID] = names
+			booksClassByID[mun.ID] = progressClassForPercent(mun.RegistresIndexats)
+			munTarget := PermissionTarget{MunicipiID: intPtr(mun.ID)}
+			if mun.LevelIDs[2].Valid {
+				munTarget.ProvinciaID = intPtr(int(mun.LevelIDs[2].Int64))
+			}
+			if mun.LevelIDs[3].Valid {
+				munTarget.ComarcaID = intPtr(int(mun.LevelIDs[3].Int64))
+			}
+			if mun.LevelIDs[0].Valid {
+				munTarget.PaisID = intPtr(int(mun.LevelIDs[0].Int64))
+			}
+			canEdit := a.HasPermission(user.ID, permKeyTerritoriMunicipisEdit, munTarget)
+			canEditMunicipi[mun.ID] = canEdit
+			if canEdit {
+				showActions = true
+			}
+		}
+	} else {
+		pagination = buildPagination(r, page, perPage, 0, "#page-stats-controls")
+	}
+	knownTypes := []string{"nucli_urba", "urbanitzacio", "masia", "poble", "ciutat", "barri", "llogaret"}
+	typeOptions := make([]municipiTypeOption, 0, len(knownTypes))
+	typeLabels := map[string]string{}
+	lang := ResolveLang(r)
+	for _, typ := range knownTypes {
+		label := T(lang, fmt.Sprintf("municipis.type.%s", typ))
+		typeLabels[typ] = label
+		typeOptions = append(typeOptions, municipiTypeOption{Value: typ, Label: label})
+	}
+	sortKeys := []string{"pais", "nom"}
+	for _, col := range visibleCols {
+		sortKeys = append(sortKeys, col.SortKey)
+	}
+	sortLinks := buildMunicipiSortLinks(r, sortKeys, filter.Sort, filter.SortDir)
 	RenderPrivateTemplate(w, r, "admin-municipis-list.html", map[string]interface{}{
 		"Municipis":           muns,
 		"Filter":              filter,
 		"Paisos":              paisos,
-		"Nivells":             nivells,
+		"LevelSelects":         levelSelects,
+		"VisibleLevelCols":     visibleCols,
+		"ShowTipus":           showTipus,
+		"TipusOptions":        typeOptions,
+		"TipusLabels":         typeLabels,
+		"LevelTypeLabels":     levelTypeLabels,
+		"LevelNamesByID":      levelNamesByID,
+		"BooksClassByID":      booksClassByID,
 		"CanManageArxius":     a.hasPerm(perms, permArxius),
 		"CanCreateMunicipi":   canCreateMunicipi,
 		"CreatePaisID":        createPaisID,
 		"CanEditMunicipi":     canEditMunicipi,
-		"ShowMunicipiActions": showMunicipiActions,
+		"ShowMunicipiActions": showActions,
+		"HasFilters":          hasFilters,
+		"SortKey":             filter.Sort,
+		"SortDir":             filter.SortDir,
+		"SortLinks":           sortLinks,
 		"Page":                pagination.Page,
 		"PerPage":             pagination.PerPage,
 		"Total":               pagination.Total,
@@ -142,8 +251,337 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		"PageLinks":           pagination.Links,
 		"PageSelectBase":      pagination.SelectBase,
 		"PageAnchor":          pagination.Anchor,
+		"ReturnURL":           currentRequestURL(r),
 		"User":                user,
 	})
+}
+
+type municipiTypeOption struct {
+	Value string
+	Label string
+}
+
+func buildMunicipiLevelUI(levels []db.NivellAdministratiu, selected [7]int) ([]municipiLevelSelect, []municipiVisibleCol, bool, []string) {
+	levelTypeLabels := make([]string, 7)
+	if len(levels) == 0 {
+		return nil, nil, true, levelTypeLabels
+	}
+	levelsByNumber := map[int][]db.NivellAdministratiu{}
+	minLevel := 0
+	maxLevel := 0
+	for _, lvl := range levels {
+		if lvl.Nivel <= 0 {
+			continue
+		}
+		levelsByNumber[lvl.Nivel] = append(levelsByNumber[lvl.Nivel], lvl)
+		if minLevel == 0 || lvl.Nivel < minLevel {
+			minLevel = lvl.Nivel
+		}
+		if lvl.Nivel > maxLevel {
+			maxLevel = lvl.Nivel
+		}
+	}
+	if minLevel == 0 {
+		return nil, nil, true, levelTypeLabels
+	}
+	startLevel := minLevel
+	for level, opts := range levelsByNumber {
+		if level < 1 || level > 7 || len(opts) == 0 {
+			continue
+		}
+		label := strings.TrimSpace(opts[0].TipusNivell)
+		if label == "" {
+			label = fmt.Sprintf("Nivell %d", level)
+		}
+		levelTypeLabels[level-1] = label
+	}
+	for level := startLevel; level <= maxLevel; level++ {
+		if len(levelsByNumber[level]) == 0 {
+			continue
+		}
+		startLevel = level
+		break
+	}
+	if startLevel > maxLevel || len(levelsByNumber[startLevel]) == 0 {
+		return nil, nil, true, levelTypeLabels
+	}
+	var (
+		selects    []municipiLevelSelect
+		cols       []municipiVisibleCol
+		showTipus  bool
+		parentID   int
+	)
+	for level := startLevel; level <= maxLevel; level++ {
+		opts := levelsByNumber[level]
+		if level > startLevel {
+			if parentID <= 0 {
+				break
+			}
+			filtered := make([]db.NivellAdministratiu, 0, len(opts))
+			for _, opt := range opts {
+				if opt.ParentID.Valid && int(opt.ParentID.Int64) == parentID {
+					filtered = append(filtered, opt)
+				}
+			}
+			opts = filtered
+		}
+		if len(opts) == 0 {
+			break
+		}
+		label := levelTypeLabels[level-1]
+		if label == "" {
+			label = fmt.Sprintf("Nivell %d", level)
+		}
+		selectedID := 0
+		if level >= 1 && level <= 7 {
+			selectedID = selected[level-1]
+		}
+		selects = append(selects, municipiLevelSelect{
+			Level:      level,
+			Label:      label,
+			Options:    opts,
+			SelectedID: selectedID,
+		})
+		if level > 1 {
+			cols = append(cols, municipiVisibleCol{
+				Level:   level,
+				Label:   label,
+				SortKey: fmt.Sprintf("level%d", level),
+			})
+		}
+		if selectedID <= 0 {
+			break
+		}
+		nextLevel := level + 1
+		if nextLevel > maxLevel {
+			showTipus = true
+			break
+		}
+		nextOpts := levelsByNumber[nextLevel]
+		filteredNext := make([]db.NivellAdministratiu, 0, len(nextOpts))
+		for _, opt := range nextOpts {
+			if opt.ParentID.Valid && int(opt.ParentID.Int64) == selectedID {
+				filteredNext = append(filteredNext, opt)
+			}
+		}
+		if len(filteredNext) == 0 {
+			showTipus = true
+			break
+		}
+		parentID = selectedID
+	}
+	return selects, cols, showTipus, levelTypeLabels
+}
+
+func buildMunicipiSortLinks(r *http.Request, keys []string, currentKey, currentDir string) map[string]string {
+	links := map[string]string{}
+	for _, key := range keys {
+		dir := "asc"
+		if key == currentKey && strings.EqualFold(currentDir, "asc") {
+			dir = "desc"
+		}
+		q := cloneValues(r.URL.Query())
+		q.Set("sort", key)
+		q.Set("dir", dir)
+		q.Set("page", "1")
+		url := r.URL.Path + "?" + q.Encode()
+		if strings.TrimSpace(url) == "" {
+			continue
+		}
+		url += "#page-stats-controls"
+		links[key] = url
+	}
+	return links
+}
+
+func isMunicipiSortKey(key string) bool {
+	switch strings.TrimSpace(key) {
+	case "pais", "nom", "level1", "level2", "level3", "level4", "level5", "level6", "level7":
+		return true
+	default:
+		return false
+	}
+}
+
+func progressClassForPercent(percent int64) string {
+	switch {
+	case percent >= 75:
+		return "verd"
+	case percent >= 50:
+		return "groc"
+	case percent >= 25:
+		return "taronja"
+	default:
+		return "rosa"
+	}
+}
+
+func currentRequestURL(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if r.URL.RawQuery == "" {
+		return r.URL.Path
+	}
+	return r.URL.Path + "?" + r.URL.RawQuery
+}
+
+func (a *App) municipiLevelsForPais(paisID int) []db.NivellAdministratiu {
+	if a == nil || a.DB == nil || paisID <= 0 {
+		return nil
+	}
+	levels, _ := a.DB.ListNivells(db.NivellAdminFilter{})
+	if len(levels) == 0 {
+		return nil
+	}
+	byID := make(map[int]db.NivellAdministratiu, len(levels))
+	for _, lvl := range levels {
+		byID[lvl.ID] = lvl
+	}
+	out := make([]db.NivellAdministratiu, 0, len(levels))
+	for _, lvl := range levels {
+		if resolveNivellPaisID(lvl.ID, byID) == paisID {
+			out = append(out, lvl)
+		}
+	}
+	return out
+}
+
+func resolveNivellPaisID(levelID int, byID map[int]db.NivellAdministratiu) int {
+	seen := map[int]struct{}{}
+	for levelID > 0 {
+		if _, ok := seen[levelID]; ok {
+			break
+		}
+		seen[levelID] = struct{}{}
+		lvl, ok := byID[levelID]
+		if !ok {
+			break
+		}
+		if lvl.PaisID > 0 {
+			return lvl.PaisID
+		}
+		if lvl.ParentID.Valid {
+			levelID = int(lvl.ParentID.Int64)
+			continue
+		}
+		break
+	}
+	return 0
+}
+
+func (a *App) AdminMunicipisSuggest(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriMunicipisView)
+	if !ok || user == nil {
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(query) < 1 {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	limit := 10
+	if val := strings.TrimSpace(r.URL.Query().Get("limit")); val != "" {
+		if v, err := strconv.Atoi(val); err == nil && v > 0 && v <= 25 {
+			limit = v
+		}
+	}
+	filter := db.MunicipiBrowseFilter{
+		Text:   query,
+		Status: "publicat",
+		Limit:  limit,
+	}
+	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
+		if v, err := strconv.Atoi(pid); err == nil {
+			filter.PaisID = v
+		}
+	}
+	scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriMunicipisView, ScopeMunicipi)
+	if !scopeFilter.hasGlobal && scopeFilter.isEmpty() {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	if !scopeFilter.hasGlobal {
+		filter.AllowedMunicipiIDs = scopeFilter.municipiIDs
+		filter.AllowedProvinciaIDs = scopeFilter.provinciaIDs
+		filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
+		filter.AllowedPaisIDs = scopeFilter.paisIDs
+	}
+	rows, _ := a.DB.SuggestMunicipis(filter)
+	items := make([]map[string]interface{}, 0, len(rows))
+	for _, row := range rows {
+		levelIDs := make([]interface{}, 7)
+		levelNames := make([]interface{}, 7)
+		levelTypes := make([]interface{}, 7)
+		for i := 0; i < 7; i++ {
+			if row.LevelIDs[i].Valid {
+				levelIDs[i] = int(row.LevelIDs[i].Int64)
+			}
+			if row.LevelNames[i].Valid {
+				levelNames[i] = strings.TrimSpace(row.LevelNames[i].String)
+			}
+			if row.LevelTypes[i].Valid {
+				levelTypes[i] = strings.TrimSpace(row.LevelTypes[i].String)
+			}
+		}
+		item := map[string]interface{}{
+			"id":            row.ID,
+			"nom":           row.Nom,
+			"tipus":         row.Tipus,
+			"pais_id":       row.PaisID,
+			"nivells":       levelIDs,
+			"nivells_nom":   levelNames,
+			"nivells_tipus": levelTypes,
+		}
+		if row.Latitud.Valid {
+			item["lat"] = row.Latitud.Float64
+		} else {
+			item["lat"] = nil
+		}
+		if row.Longitud.Valid {
+			item["lon"] = row.Longitud.Float64
+		} else {
+			item["lon"] = nil
+		}
+		items = append(items, item)
+	}
+	writeJSON(w, map[string]interface{}{"items": items})
+}
+
+func (a *App) AdminDeleteMunicipi(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invalid", http.StatusBadRequest)
+		return
+	}
+	id := extractID(r.URL.Path)
+	if id <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveMunicipiTarget(id)
+	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisEdit, target); !ok {
+		return
+	}
+	mun, err := a.DB.GetMunicipi(id)
+	if err != nil || mun == nil {
+		http.NotFound(w, r)
+		return
+	}
+	mun.Estat = "inactiu"
+	mun.ModeracioEstat = "pendent"
+	if err := a.DB.UpdateMunicipi(mun); err != nil {
+		http.Error(w, "No s'ha pogut eliminar", http.StatusInternalServerError)
+		return
+	}
+	returnTo := strings.TrimSpace(r.FormValue("return_to"))
+	if returnTo == "" {
+		returnTo = "/territori/municipis"
+	}
+	http.Redirect(w, r, returnTo, http.StatusSeeOther)
 }
 
 func (a *App) AdminNewMunicipi(w http.ResponseWriter, r *http.Request) {

@@ -13,3 +13,5 @@ coverage.out
 .cache/
 .continue/
 plantilla-temporal/
+*.zip
+data/*

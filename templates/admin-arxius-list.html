@@ -10,13 +10,17 @@
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
-    <main class="contingut-principal arxius-layout">
+    <main class="contingut-principal arxius-layout taula-ample">
         {{ $viewBase := default $.Data.ArxiusBasePath "/documentals/arxius" }}
         {{ $manageBase := "/documentals/arxius" }}
         <section class="card">
             <header class="card-header amb-accio">
                 <h1>{{ t .Lang "archives.title" }}</h1>
                 <div class="card-actions">
+                    <button type="button" id="toggleFilters" class="boto-secundari filtres-toggle" aria-controls="filtersPanel" aria-expanded="false">
+                        <i class="fas fa-sliders-h"></i>
+                        <span>{{ t .Lang "filters.advanced" }}</span>
+                    </button>
                     {{ if $.Data.CanCreateArxiu }}
                     <a class="boto-primari" href="{{ $manageBase }}/new">{{ t .Lang "archives.button.new" }}</a>
                     {{ end }}
@@ -25,112 +29,136 @@
                     {{ end }}
                 </div>
             </header>
-            <form class="filtres-arxius" method="get" action="{{ $viewBase }}">
-                <div class="grup-camp">
-                    <label for="filtre-q">{{ t .Lang "archives.filter.search" }}</label>
-                    <input id="filtre-q" type="text" name="q" placeholder="{{ t .Lang "archives.filter.search.placeholder" }}" value="{{ .Data.Filter.Text }}">
-                </div>
-                <div class="grup-camp">
-                    <label for="filtre-tipus">{{ t .Lang "archives.filter.type" }}</label>
-                    <select id="filtre-tipus" name="tipus">
-                        <option value="">{{ t .Lang "archives.filter.type.any" }}</option>
-                        {{ range $opt := (list "parroquia" "arxiu_diocesa" "arxiu_capitular" "arxiu_comarcal" "portal_digital" "altre") }}
-                        <option value="{{ $opt }}" {{ if eq $.Data.Filter.Tipus $opt }}selected{{ end }}>{{ t $.Lang (printf "archives.type.%s" $opt) }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="filtre-acces">{{ t .Lang "archives.filter.access" }}</label>
-                    <select id="filtre-acces" name="acces">
-                        <option value="">{{ t .Lang "archives.filter.access.any" }}</option>
-                        {{ range $opt := (list "online" "presencial" "mixt") }}
-                        <option value="{{ $opt }}" {{ if eq $.Data.Filter.Acces $opt }}selected{{ end }}>{{ t $.Lang (printf "archives.access.%s" $opt) }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="filtre-entitat">{{ t .Lang "archives.filter.entity" }}</label>
-                    <select id="filtre-entitat" name="entitat_id">
-                        <option value="">{{ t .Lang "archives.filter.entity.any" }}</option>
-                        {{ range .Data.Arquebisbats }}
-                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.EntitatID .ID }}selected{{ end }}>{{ .Nom }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="filtre-status">{{ t .Lang "moderation.status" }}</label>
-                    <select id="filtre-status" name="status">
-                        {{ $st := .Data.Filter.Status }}
-                        <option value="">{{ t .Lang "common.all" }}</option>
-                        <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
-                        <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
-                        <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
-                    </select>
-                </div>
-                <button type="submit" class="boto-secundari">{{ t .Lang "archives.filter.submit" }}</button>
-                <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
-                <input type="hidden" name="page" value="1">
-            </form>
-            <div class="page-stats-controls" id="page-stats-controls">
-                <div class="page-stats-filters">
-                    <label for="page-stats-per-page">{{ t .Lang "records.columns.per_page" }}</label>
-                    <select id="page-stats-per-page" onchange="location.href='{{ .Data.PageSelectBase }}' + this.value + '{{ .Data.PageAnchor }}'">
-                        <option value="5" {{ if eq .Data.PerPage 5 }}selected{{ end }}>5</option>
-                        <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
-                        <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
-                        <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
-                        <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
-                    </select>
-                </div>
-            </div>
-            <div class="taula-wrapper">
-                <table class="taula">
-                    <thead>
-                        <tr>
-                            <th>{{ t .Lang "archives.col.name" }}</th>
-                            <th>{{ t .Lang "archives.col.type" }}</th>
-                            <th>{{ t .Lang "archives.col.access" }}</th>
-                            <th>{{ t .Lang "archives.col.entity" }}</th>
-                            <th>{{ t .Lang "archives.col.municipi" }}</th>
-                            <th>{{ t .Lang "archives.col.web" }}</th>
-                            <th>{{ t .Lang "archives.col.books" }}</th>
-                            <th>{{ t .Lang "moderation.status" }}</th>
-                            {{ if $.Data.ShowArxiuActions }}<th>{{ t .Lang "archives.col.actions" }}</th>{{ end }}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {{ range .Data.Arxius }}
-                        <tr>
-                            <td><a href="{{ $viewBase }}/{{ .ID }}">{{ .Nom }}</a></td>
-                            <td>{{ t $.Lang (printf "archives.type.%s" .Tipus) }}</td>
-                            <td>{{ t $.Lang (printf "archives.access.%s" .Acces) }}</td>
-                            <td>{{ .EntitatNom.String }}</td>
-                            <td>{{ .MunicipiNom.String }}</td>
-                            <td>{{ if .Web }}<a href="{{ .Web }}" target="_blank">{{ t $.Lang "archives.link" }}</a>{{ end }}</td>
-                            <td>{{ .Llibres }}</td>
-                            <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
-                            {{ if $.Data.ShowArxiuActions }}
-                            {{ $canEdit := index $.Data.CanEditArxiu .ID }}
-                            {{ $canDelete := index $.Data.CanDeleteArxiu .ID }}
-                            <td class="accions">
-                                {{ if $canEdit }}
-                                <a href="{{ $manageBase }}/{{ .ID }}/edit">{{ t $.Lang "archives.action.edit" }}</a>
-                                {{ end }}
-                                {{ if and $canEdit $canDelete }} | {{ end }}
-                                {{ if $canDelete }}
-                                <form method="post" action="{{ $manageBase }}/{{ .ID }}/delete" style="display:inline;" onsubmit="return confirm('{{ t $.Lang "archives.confirm.delete" }}');">
-                                    <button type="submit" class="enllaç">{{ t $.Lang "archives.action.delete" }}</button>
-                                </form>
-                                {{ end }}
-                            </td>
+            <div class="filtres-avancats-panel" id="filtersPanel">
+                <form class="filtres-arxius" method="get" action="{{ $viewBase }}">
+                    <div class="grup-camp">
+                        <label for="filtre-q">{{ t .Lang "archives.filter.search" }}</label>
+                        <input id="filtre-q" type="text" name="q" placeholder="{{ t .Lang "archives.filter.search.placeholder" }}" value="{{ .Data.Filter.Text }}">
+                    </div>
+                    <div class="grup-camp">
+                        <label for="filtre-tipus">{{ t .Lang "archives.filter.type" }}</label>
+                        <select id="filtre-tipus" name="tipus">
+                            <option value="">{{ t .Lang "archives.filter.type.any" }}</option>
+                            {{ range $opt := (list "parroquia" "arxiu_diocesa" "arxiu_capitular" "arxiu_comarcal" "portal_digital" "altre") }}
+                            <option value="{{ $opt }}" {{ if eq $.Data.Filter.Tipus $opt }}selected{{ end }}>{{ t $.Lang (printf "archives.type.%s" $opt) }}</option>
                             {{ end }}
-                        </tr>
-                        {{ end }}
-                    </tbody>
-                </table>
+                        </select>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="filtre-acces">{{ t .Lang "archives.filter.access" }}</label>
+                        <select id="filtre-acces" name="acces">
+                            <option value="">{{ t .Lang "archives.filter.access.any" }}</option>
+                            {{ range $opt := (list "online" "presencial" "mixt") }}
+                            <option value="{{ $opt }}" {{ if eq $.Data.Filter.Acces $opt }}selected{{ end }}>{{ t $.Lang (printf "archives.access.%s" $opt) }}</option>
+                            {{ end }}
+                        </select>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="filtre-entitat">{{ t .Lang "archives.filter.entity" }}</label>
+                        <select id="filtre-entitat" name="entitat_id">
+                            <option value="">{{ t .Lang "archives.filter.entity.any" }}</option>
+                            {{ range .Data.Arquebisbats }}
+                            <option value="{{ .ID }}" {{ if eq $.Data.Filter.EntitatID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                            {{ end }}
+                        </select>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="filtre-status">{{ t .Lang "moderation.status" }}</label>
+                        <select id="filtre-status" name="status">
+                            {{ $st := .Data.Filter.Status }}
+                            <option value="">{{ t .Lang "common.all" }}</option>
+                            <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
+                            <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
+                            <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="boto-secundari">{{ t .Lang "archives.filter.submit" }}</button>
+                    <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
+                    <input type="hidden" name="page" value="1">
+                </form>
+            </div>
+            <div class="taula-resultats">
+                <div class="barra-superior">
+                    <button type="button" id="configColumnes" class="boto-engranatge">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+                <div class="taula-container">
+                    <table class="taula taula-registres" id="arxiusTable" data-filter-order="{{ .Data.FilterOrder }}">
+                        <thead>
+                            <tr id="filtraFila">
+                                <th data-col="0" data-key="nom">
+                                    <input type="text" placeholder="{{ t .Lang "archives.col.name" }}" data-col="0" data-key="nom" value="{{ index $.Data.FilterValues "nom" }}">
+                                </th>
+                                <th data-col="1" data-key="tipus">
+                                    <input type="text" placeholder="{{ t .Lang "archives.col.type" }}" data-col="1" data-key="tipus" value="{{ index $.Data.FilterValues "tipus" }}">
+                                </th>
+                                <th data-col="2" data-key="acces">
+                                    <input type="text" placeholder="{{ t .Lang "archives.col.access" }}" data-col="2" data-key="acces" value="{{ index $.Data.FilterValues "acces" }}">
+                                </th>
+                                <th data-col="3" data-key="entitat">
+                                    <input type="text" placeholder="{{ t .Lang "archives.col.entity" }}" data-col="3" data-key="entitat" value="{{ index $.Data.FilterValues "entitat" }}">
+                                </th>
+                                <th data-col="4" data-key="municipi">
+                                    <input type="text" placeholder="{{ t .Lang "archives.col.municipi" }}" data-col="4" data-key="municipi" value="{{ index $.Data.FilterValues "municipi" }}">
+                                </th>
+                                <th data-col="5" data-key="web">
+                                    <input type="text" placeholder="{{ t .Lang "archives.col.web" }}" data-col="5" data-key="web" value="{{ index $.Data.FilterValues "web" }}">
+                                </th>
+                                <th data-col="6" data-key="llibres">
+                                    <input type="text" placeholder="{{ t .Lang "archives.col.books" }}" data-col="6" data-key="llibres" value="{{ index $.Data.FilterValues "llibres" }}">
+                                </th>
+                                <th data-col="7" data-key="status">
+                                    <input type="text" placeholder="{{ t .Lang "moderation.status" }}" data-col="7" data-key="status" value="{{ index $.Data.FilterValues "status" }}">
+                                </th>
+                                {{ if $.Data.ShowArxiuActions }}<th data-col="8" data-key="actions"></th>{{ end }}
+                            </tr>
+                            <tr>
+                                <th data-col="0" data-key="nom">{{ t .Lang "archives.col.name" }}</th>
+                                <th data-col="1" data-key="tipus">{{ t .Lang "archives.col.type" }}</th>
+                                <th data-col="2" data-key="acces">{{ t .Lang "archives.col.access" }}</th>
+                                <th data-col="3" data-key="entitat">{{ t .Lang "archives.col.entity" }}</th>
+                                <th data-col="4" data-key="municipi">{{ t .Lang "archives.col.municipi" }}</th>
+                                <th data-col="5" data-key="web">{{ t .Lang "archives.col.web" }}</th>
+                                <th data-col="6" data-key="llibres">{{ t .Lang "archives.col.books" }}</th>
+                                <th data-col="7" data-key="status">{{ t .Lang "moderation.status" }}</th>
+                                {{ if $.Data.ShowArxiuActions }}<th data-col="8" data-key="actions">{{ t .Lang "archives.col.actions" }}</th>{{ end }}
+                            </tr>
+                        </thead>
+                        <tbody id="taulaDades">
+                            {{ range .Data.Arxius }}
+                            <tr>
+                                <td data-col="0" data-key="nom"><a href="{{ $viewBase }}/{{ .ID }}">{{ .Nom }}</a></td>
+                                <td data-col="1" data-key="tipus">{{ t $.Lang (printf "archives.type.%s" .Tipus) }}</td>
+                                <td data-col="2" data-key="acces">{{ t $.Lang (printf "archives.access.%s" .Acces) }}</td>
+                                <td data-col="3" data-key="entitat">{{ .EntitatNom.String }}</td>
+                                <td data-col="4" data-key="municipi">{{ .MunicipiNom.String }}</td>
+                                <td data-col="5" data-key="web">{{ if .Web }}<a href="{{ .Web }}" target="_blank">{{ t $.Lang "archives.link" }}</a>{{ end }}</td>
+                                <td data-col="6" data-key="llibres">{{ .Llibres }}</td>
+                                <td data-col="7" data-key="status"><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                                {{ if $.Data.ShowArxiuActions }}
+                                {{ $canEdit := index $.Data.CanEditArxiu .ID }}
+                                {{ $canDelete := index $.Data.CanDeleteArxiu .ID }}
+                                <td class="accions cell-actions" data-col="8" data-key="actions">
+                                    {{ if $canEdit }}
+                                    <a href="{{ $manageBase }}/{{ .ID }}/edit">{{ t $.Lang "archives.action.edit" }}</a>
+                                    {{ end }}
+                                    {{ if and $canEdit $canDelete }} | {{ end }}
+                                    {{ if $canDelete }}
+                                    <form method="post" action="{{ $manageBase }}/{{ .ID }}/delete" style="display:inline;" onsubmit="return confirm('{{ t $.Lang "archives.confirm.delete" }}');">
+                                        <button type="submit" class="enllaç">{{ t $.Lang "archives.action.delete" }}</button>
+                                    </form>
+                                    {{ end }}
+                                </td>
+                                {{ end }}
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
             </div>
             {{ if gt .Data.TotalPages 1 }}
-            <div class="paginador">
+            <div class="paginador" id="paginador">
                 {{ range .Data.PageLinks }}
                 <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
                     {{ .Label }}
@@ -140,8 +168,56 @@
             {{ end }}
         </section>
     </main>
+    <div class="modal-config" id="modalConfigColumnes">
+        <div class="modal-content-config">
+            <button type="button" class="tanca-modal-config" aria-label="{{ t .Lang "common.close" }}">×</button>
+            <h2>{{ t .Lang "records.columns.title" }}</h2>
+            <div class="form-group">
+                <label for="filesPerPagina">{{ t .Lang "records.columns.per_page" }}</label>
+                <select id="filesPerPagina">
+                    <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
+                    <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
+                    <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
+                    <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
+                </select>
+            </div>
+            <div class="columns-config">
+                <div class="columns-list">
+                    <label for="cols-actives">{{ t .Lang "records.columns.visible" }}</label>
+                    <select id="cols-actives" size="10" multiple></select>
+                    <div class="columns-actions">
+                        <button type="button" id="cols-up" class="columns-icon" aria-label="{{ t .Lang "records.columns.up" }}" title="{{ t .Lang "records.columns.up" }}">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <button type="button" id="cols-down" class="columns-icon" aria-label="{{ t .Lang "records.columns.down" }}" title="{{ t .Lang "records.columns.down" }}">
+                            <i class="fas fa-arrow-down"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="columns-controls">
+                    <button type="button" id="cols-hide" class="columns-icon" aria-label="{{ t .Lang "records.columns.hide" }}" title="{{ t .Lang "records.columns.hide" }}">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                    <button type="button" id="cols-show" class="columns-icon" aria-label="{{ t .Lang "records.columns.show" }}" title="{{ t .Lang "records.columns.show" }}">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                </div>
+                <div class="columns-list">
+                    <label for="cols-hidden">{{ t .Lang "records.columns.hidden" }}</label>
+                    <select id="cols-hidden" size="10" multiple></select>
+                </div>
+            </div>
+            <div class="columns-save">
+                <span id="cols-save-status" class="muted" aria-live="polite"></span>
+                <button type="button" id="cols-save" class="boto-primari" data-saved-label="{{ t .Lang "common.saved" }}">
+                    {{ t .Lang "records.columns.save" }}
+                </button>
+            </div>
+        </div>
+    </div>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/arxius-taula.js"></script>
 </body>
 </html>
 {{ end }}

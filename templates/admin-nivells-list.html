@@ -10,112 +10,149 @@
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
-    <main class="contingut-principal">
+    <main class="contingut-principal taula-ample">
         <section class="card">
             <header class="card-header">
                 <div>
                     <p class="muted">{{ if .Data.Pais }}{{ t .Lang "levels.country" }}: {{ .Data.Pais.CodiISO3 }}{{ end }}</p>
                     <h1>{{ t .Lang "levels.title" }}</h1>
                 </div>
-                {{ if and .Data.Pais $.Data.CanCreateNivell }}
-                <a class="boto-primari" href="/territori/paisos/{{ .Data.Pais.ID }}/nivells/new">{{ t .Lang "levels.button.new" }}</a>
-                {{ else if not .Data.Pais }}
-                <span class="muted">{{ t .Lang "levels.select.country" }}</span>
-                {{ end }}
+                <div class="card-actions">
+                    <button type="button" id="toggleFilters" class="boto-secundari filtres-toggle" aria-controls="filtersPanel" aria-expanded="false">
+                        <i class="fas fa-sliders-h"></i>
+                        <span>{{ t .Lang "filters.advanced" }}</span>
+                    </button>
+                    {{ if and .Data.Pais $.Data.CanCreateNivell }}
+                    <a class="boto-primari" href="/territori/paisos/{{ .Data.Pais.ID }}/nivells/new">{{ t .Lang "levels.button.new" }}</a>
+                    {{ else if not .Data.Pais }}
+                    <span class="muted">{{ t .Lang "levels.select.country" }}</span>
+                    {{ end }}
+                </div>
             </header>
-            <form class="filtres-arxius" method="get">
-                <div class="grup-camp">
-                    <label for="f-pais">{{ t .Lang "levels.country" }}</label>
-                    <select id="f-pais" name="pais_id">
-                        <option value="0">{{ t .Lang "levels.select.country" }}</option>
-                        {{ range .Data.Paisos }}
-                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaisID .ID }}selected{{ end }}>{{ .CodiISO3 }} - {{ .CodiISO2 }}</option>
-                        {{ end }}
-                    </select>
+            <form method="get" id="nivellsFilterForm">
+                <div class="filtres-arxius">
+                    <div class="grup-camp">
+                        <label for="f-pais">{{ t .Lang "levels.country" }}</label>
+                        <select id="f-pais" name="pais_id">
+                            <option value="0">{{ t .Lang "levels.select.country" }}</option>
+                            {{ range .Data.Paisos }}
+                            <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaisID .ID }}selected{{ end }}>{{ .CodiISO3 }} - {{ .CodiISO2 }}</option>
+                            {{ end }}
+                        </select>
+                    </div>
+                    <button class="boto-secundari" type="submit">{{ t .Lang "levels.filter.submit" }}</button>
                 </div>
-                <div class="grup-camp">
-                    <label for="f-nivel">{{ t .Lang "levels.filter.level" }}</label>
-                    <input type="number" id="f-nivel" name="nivel" min="1" max="7" value="{{ if .Data.Filter.Nivel }}{{ .Data.Filter.Nivel }}{{ end }}">
+                <div class="filtres-avancats-panel" id="filtersPanel">
+                    <div class="filtres-arxius">
+                        <div class="grup-camp">
+                            <label for="f-nivel">{{ t .Lang "levels.filter.level" }}</label>
+                            <input type="number" id="f-nivel" name="nivel" min="1" max="7" value="{{ if .Data.Filter.Nivel }}{{ .Data.Filter.Nivel }}{{ end }}">
+                        </div>
+                        <div class="grup-camp">
+                            <label for="f-estat">{{ t .Lang "levels.filter.state" }}</label>
+                            <select id="f-estat" name="estat">
+                                <option value="">{{ t .Lang "levels.filter.state.any" }}</option>
+                                {{ range $opt := (list "actiu" "inactiu" "fusionat" "abolit") }}
+                                <option value="{{ $opt }}" {{ if eq $.Data.Filter.Estat $opt }}selected{{ end }}>{{ t $.Lang (printf "levels.state.%s" $opt) }}</option>
+                                {{ end }}
+                            </select>
+                        </div>
+                        <div class="grup-camp">
+                            <label for="f-status">{{ t .Lang "moderation.status" }}</label>
+                            {{ $st := .Data.Filter.Status }}
+                            <select id="f-status" name="status">
+                                <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
+                                <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
+                                <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                                <option value="">{{ t .Lang "common.all" }}</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
-                <div class="grup-camp">
-                    <label for="f-estat">{{ t .Lang "levels.filter.state" }}</label>
-                    <select id="f-estat" name="estat">
-                        <option value="">{{ t .Lang "levels.filter.state.any" }}</option>
-                        {{ range $opt := (list "actiu" "inactiu" "fusionat" "abolit") }}
-                        <option value="{{ $opt }}" {{ if eq $.Data.Filter.Estat $opt }}selected{{ end }}>{{ t $.Lang (printf "levels.state.%s" $opt) }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="f-status">{{ t .Lang "moderation.status" }}</label>
-                    {{ $st := .Data.Filter.Status }}
-                    <select id="f-status" name="status">
-                        <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
-                        <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
-                        <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
-                        <option value="">{{ t .Lang "common.all" }}</option>
-                    </select>
-                </div>
-                <button class="boto-secundari" type="submit">{{ t .Lang "levels.filter.submit" }}</button>
                 <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
                 <input type="hidden" name="page" value="1">
             </form>
-            <div class="page-stats-controls" id="page-stats-controls">
-                <div class="page-stats-filters">
-                    <label for="page-stats-per-page">{{ t .Lang "records.columns.per_page" }}</label>
-                    <select id="page-stats-per-page" onchange="location.href='{{ .Data.PageSelectBase }}' + this.value + '{{ .Data.PageAnchor }}'">
-                        <option value="5" {{ if eq .Data.PerPage 5 }}selected{{ end }}>5</option>
-                        <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
-                        <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
-                        <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
-                        <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
-                    </select>
+            <div class="taula-resultats">
+                <div class="barra-superior">
+                    <button type="button" id="configColumnes" class="boto-engranatge">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+                <div class="taula-container">
+                    <table class="taula taula-registres" id="nivellsTable" data-filter-order="{{ .Data.FilterOrder }}">
+                        <thead>
+                            <tr id="filtraFila">
+                                <th data-col="0" data-key="nivel">
+                                    <input type="text" placeholder="{{ t .Lang "levels.col.level" }}" data-col="0" data-key="nivel" value="{{ index $.Data.FilterValues "nivel" }}">
+                                </th>
+                                <th data-col="1" data-key="pais">
+                                    <input type="text" placeholder="{{ t .Lang "levels.col.country" }}" data-col="1" data-key="pais" value="{{ index $.Data.FilterValues "pais" }}">
+                                </th>
+                                <th data-col="2" data-key="nom">
+                                    <input type="text" placeholder="{{ t .Lang "levels.col.name" }}" data-col="2" data-key="nom" value="{{ index $.Data.FilterValues "nom" }}">
+                                </th>
+                                <th data-col="3" data-key="tipus">
+                                    <input type="text" placeholder="{{ t .Lang "levels.col.type" }}" data-col="3" data-key="tipus" value="{{ index $.Data.FilterValues "tipus" }}">
+                                </th>
+                                <th data-col="4" data-key="codi">
+                                    <input type="text" placeholder="{{ t .Lang "levels.col.code" }}" data-col="4" data-key="codi" value="{{ index $.Data.FilterValues "codi" }}">
+                                </th>
+                                <th data-col="5" data-key="parent">
+                                    <input type="text" placeholder="{{ t .Lang "levels.col.parent" }}" data-col="5" data-key="parent" value="{{ index $.Data.FilterValues "parent" }}">
+                                </th>
+                                <th data-col="6" data-key="anys">
+                                    <input type="text" placeholder="{{ t .Lang "levels.col.years" }}" data-col="6" data-key="anys" value="{{ index $.Data.FilterValues "anys" }}">
+                                </th>
+                                <th data-col="7" data-key="estat">
+                                    <input type="text" placeholder="{{ t .Lang "levels.col.state" }}" data-col="7" data-key="estat" value="{{ index $.Data.FilterValues "estat" }}">
+                                </th>
+                                <th data-col="8" data-key="status">
+                                    <input type="text" placeholder="{{ t .Lang "moderation.status" }}" data-col="8" data-key="status" value="{{ index $.Data.FilterValues "status" }}">
+                                </th>
+                                {{ if $.Data.ShowNivellActions }}<th data-col="9" data-key="actions"></th>{{ end }}
+                            </tr>
+                            <tr>
+                                <th data-col="0" data-key="nivel">{{ t .Lang "levels.col.level" }}</th>
+                                <th data-col="1" data-key="pais">{{ t .Lang "levels.col.country" }}</th>
+                                <th data-col="2" data-key="nom">{{ t .Lang "levels.col.name" }}</th>
+                                <th data-col="3" data-key="tipus">{{ t .Lang "levels.col.type" }}</th>
+                                <th data-col="4" data-key="codi">{{ t .Lang "levels.col.code" }}</th>
+                                <th data-col="5" data-key="parent">{{ t .Lang "levels.col.parent" }}</th>
+                                <th data-col="6" data-key="anys">{{ t .Lang "levels.col.years" }}</th>
+                                <th data-col="7" data-key="estat">{{ t .Lang "levels.col.state" }}</th>
+                                <th data-col="8" data-key="status">{{ t .Lang "moderation.status" }}</th>
+                                {{ if $.Data.ShowNivellActions }}<th data-col="9" data-key="actions">{{ t .Lang "levels.col.actions" }}</th>{{ end }}
+                            </tr>
+                        </thead>
+                        <tbody id="taulaDades">
+                            {{ range .Data.Nivells }}
+                            <tr>
+                                <td data-col="0" data-key="nivel">{{ .Nivel }}</td>
+                                <td data-col="1" data-key="pais">{{ if .PaisLabel }}{{ .PaisLabel }}{{ else }}{{ .PaisISO2.String }}{{ end }}</td>
+                                <td data-col="2" data-key="nom">{{ .NomNivell }}</td>
+                                <td data-col="3" data-key="tipus">{{ t $.Lang (printf "levels.types.%s" .TipusNivell) }}</td>
+                                <td data-col="4" data-key="codi">{{ .CodiOficial }}</td>
+                                <td data-col="5" data-key="parent">{{ if .ParentNom.Valid }}{{ .ParentNom.String }}{{ else }}-{{ end }}</td>
+                                <td data-col="6" data-key="anys">{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
+                                <td data-col="7" data-key="estat">{{ t $.Lang (printf "levels.state.%s" .Estat) }}</td>
+                                <td data-col="8" data-key="status"><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                                {{ if $.Data.ShowNivellActions }}
+                                {{ if index $.Data.CanEditNivell .ID }}
+                                <td data-col="9" data-key="actions"><a href="/territori/nivells/{{ .ID }}/edit">{{ t $.Lang "levels.action.edit" }}</a></td>
+                                {{ else }}
+                                <td data-col="9" data-key="actions"></td>
+                                {{ end }}
+                                {{ end }}
+                            </tr>
+                            {{ else }}
+                            <tr><td colspan="{{ if $.Data.ShowNivellActions }}10{{ else }}9{{ end }}">{{ t .Lang "common.empty" }}</td></tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
                 </div>
             </div>
-            <div class="taula-wrapper">
-                <table class="taula">
-                    <thead>
-                        <tr>
-                            <th>{{ t .Lang "levels.col.level" }}</th>
-                            <th>{{ t .Lang "levels.col.country" }}</th>
-                            <th>{{ t .Lang "levels.col.name" }}</th>
-                            <th>{{ t .Lang "levels.col.type" }}</th>
-                            <th>{{ t .Lang "levels.col.code" }}</th>
-                            <th>{{ t .Lang "levels.col.parent" }}</th>
-                            <th>{{ t .Lang "levels.col.years" }}</th>
-                            <th>{{ t .Lang "levels.col.state" }}</th>
-                            <th>{{ t .Lang "moderation.status" }}</th>
-                            {{ if $.Data.ShowNivellActions }}<th>{{ t .Lang "levels.col.actions" }}</th>{{ end }}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {{ range .Data.Nivells }}
-                        <tr>
-                            <td>{{ .Nivel }}</td>
-                            <td>{{ if .PaisLabel }}{{ .PaisLabel }}{{ else }}{{ .PaisISO2.String }}{{ end }}</td>
-                            <td>{{ .NomNivell }}</td>
-                            <td>{{ t $.Lang (printf "levels.types.%s" .TipusNivell) }}</td>
-                            <td>{{ .CodiOficial }}</td>
-                            <td>{{ if .ParentNom.Valid }}{{ .ParentNom.String }}{{ else }}-{{ end }}</td>
-                            <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
-                            <td>{{ t $.Lang (printf "levels.state.%s" .Estat) }}</td>
-                            <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
-                            {{ if $.Data.ShowNivellActions }}
-                            {{ if index $.Data.CanEditNivell .ID }}
-                            <td><a href="/territori/nivells/{{ .ID }}/edit">{{ t $.Lang "levels.action.edit" }}</a></td>
-                            {{ else }}
-                            <td></td>
-                            {{ end }}
-                            {{ end }}
-                        </tr>
-                        {{ else }}
-                        <tr><td colspan="{{ if $.Data.ShowNivellActions }}10{{ else }}9{{ end }}">{{ t .Lang "common.empty" }}</td></tr>
-                        {{ end }}
-                    </tbody>
-                </table>
-            </div>
             {{ if gt .Data.TotalPages 1 }}
-            <div class="paginador">
+            <div class="paginador" id="paginador">
                 {{ range .Data.PageLinks }}
                 <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
                     {{ .Label }}
@@ -125,17 +162,66 @@
             {{ end }}
         </section>
     </main>
+    <div class="modal-config" id="modalConfigColumnes">
+        <div class="modal-content-config">
+            <button type="button" class="tanca-modal-config" aria-label="{{ t .Lang "common.close" }}">×</button>
+            <h2>{{ t .Lang "records.columns.title" }}</h2>
+            <div class="form-group">
+                <label for="filesPerPagina">{{ t .Lang "records.columns.per_page" }}</label>
+                <select id="filesPerPagina">
+                    <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
+                    <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
+                    <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
+                    <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
+                </select>
+            </div>
+            <div class="columns-config">
+                <div class="columns-list">
+                    <label for="cols-actives">{{ t .Lang "records.columns.visible" }}</label>
+                    <select id="cols-actives" size="10" multiple></select>
+                    <div class="columns-actions">
+                        <button type="button" id="cols-up" class="columns-icon" aria-label="{{ t .Lang "records.columns.up" }}" title="{{ t .Lang "records.columns.up" }}">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <button type="button" id="cols-down" class="columns-icon" aria-label="{{ t .Lang "records.columns.down" }}" title="{{ t .Lang "records.columns.down" }}">
+                            <i class="fas fa-arrow-down"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="columns-controls">
+                    <button type="button" id="cols-hide" class="columns-icon" aria-label="{{ t .Lang "records.columns.hide" }}" title="{{ t .Lang "records.columns.hide" }}">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                    <button type="button" id="cols-show" class="columns-icon" aria-label="{{ t .Lang "records.columns.show" }}" title="{{ t .Lang "records.columns.show" }}">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                </div>
+                <div class="columns-list">
+                    <label for="cols-hidden">{{ t .Lang "records.columns.hidden" }}</label>
+                    <select id="cols-hidden" size="10" multiple></select>
+                </div>
+            </div>
+            <div class="columns-save">
+                <span id="cols-save-status" class="muted" aria-live="polite"></span>
+                <button type="button" id="cols-save" class="boto-primari" data-saved-label="{{ t .Lang "common.saved" }}">
+                    {{ t .Lang "records.columns.save" }}
+                </button>
+            </div>
+        </div>
+    </div>
+
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
     <script>
     (function(){
-        const form = document.querySelector('.filtres-arxius');
+        const form = document.getElementById('nivellsFilterForm');
         const pais = document.getElementById('f-pais');
         if (pais && form) {
             pais.addEventListener('change', () => form.submit());
         }
     })();
     </script>
+    <script src="/static/js/nivells-taula.js"></script>
 </body>
 </html>
 {{ end }}

@@ -6,131 +6,244 @@
     <title>{{ t .Lang "municipis.title" }}</title>
     {{ template "styles-private" . }}
     <link rel="stylesheet" href="/static/css/registres-taula.css">
+    <link rel="stylesheet" href="/static/css/territori-municipis-browse.css">
 </head>
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
     <main class="contingut-principal">
-        <section class="card">
-            <header class="card-header">
+        <section class="card municipis-browse">
+            <header class="card-header municipis-header">
                 <h1>{{ t .Lang "municipis.title" }}</h1>
                 {{ if $.Data.CanCreateMunicipi }}
                 <a class="boto-primari" href="/territori/municipis/new{{ if $.Data.CreatePaisID }}?pais_id={{ $.Data.CreatePaisID }}{{ end }}">{{ t .Lang "municipis.button.new" }}</a>
                 {{ end }}
             </header>
-            <form class="filtres-arxius" method="get">
-                <div class="grup-camp">
-                    <label for="f-q">{{ t .Lang "municipis.filter.search" }}</label>
-                    <input id="f-q" type="text" name="q" value="{{ .Data.Filter.Text }}">
-                </div>
-                <div class="grup-camp">
-                    <label for="f-estat">{{ t .Lang "municipis.filter.state" }}</label>
-                    <select id="f-estat" name="estat">
-                        <option value="">{{ t .Lang "municipis.filter.state.any" }}</option>
-                        {{ range $opt := (list "actiu" "inactiu" "abandonat") }}
-                        <option value="{{ $opt }}" {{ if eq $.Data.Filter.Estat $opt }}selected{{ end }}>{{ t $.Lang (printf "municipis.state.%s" $opt) }}</option>
-                        {{ end }}
-                    </select>
-                </div>
-                <div class="grup-camp">
-                    <label for="f-pais">{{ t .Lang "municipis.filter.country" }}</label>
-                    <select id="f-pais" name="pais_id">
-                        <option value="">{{ t .Lang "municipis.filter.country.any" }}</option>
+
+            <div class="cerca-avancada">
+                <label for="municipi-search">{{ t .Lang "municipis.search.label" }}</label>
+                <input id="municipi-search" type="text" placeholder="{{ t .Lang "municipis.search.placeholder" }}" autocomplete="off" data-api="/api/territori/municipis/suggest" data-per-page="{{ .Data.PerPage }}" data-empty-label="{{ t .Lang "municipis.search.empty" }}">
+                <ul id="municipi-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
+            </div>
+
+            <form class="filtres-localitzacio" method="get" id="municipi-filters">
+                <div class="filtre-grup">
+                    <label for="pais-select">{{ t .Lang "municipis.filter.country" }}</label>
+                    <select id="pais-select" name="pais_id" onchange="this.form.submit()">
+                        <option value="">{{ t .Lang "municipis.filter.country.placeholder" }}</option>
                         {{ range .Data.Paisos }}
                         <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaisID .ID }}selected{{ end }}>{{ .CodiISO3 }}</option>
                         {{ end }}
                     </select>
                 </div>
-                <div class="grup-camp">
-                    <label for="f-nivell">{{ t .Lang "municipis.filter.level" }}</label>
-                    <select id="f-nivell" name="nivell_id">
-                        <option value="">{{ t .Lang "municipis.filter.level.any" }}</option>
-                        {{ range .Data.Nivells }}
-                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.NivellID .ID }}selected{{ end }}>{{ .NomNivell }} ({{ .Nivel }})</option>
+                {{ range .Data.LevelSelects }}
+                <div class="filtre-grup">
+                    <label for="nivell_id_{{ .Level }}">{{ .Label }}</label>
+                    <select id="nivell_id_{{ .Level }}" name="nivell_id_{{ .Level }}" onchange="this.form.submit()">
+                        <option value="">{{ t $.Lang "municipis.filter.level.placeholder" }}</option>
+                        {{ $selected := .SelectedID }}
+                        {{ range .Options }}
+                        <option value="{{ .ID }}" {{ if eq $selected .ID }}selected{{ end }}>{{ .NomNivell }}</option>
                         {{ end }}
                     </select>
                 </div>
-                <div class="grup-camp">
-                    <label for="f-status">{{ t .Lang "moderation.status" }}</label>
-                    {{ $st := .Data.Filter.Status }}
-                    <select id="f-status" name="status">
-                        <option value="publicat" {{ if eq $st "publicat" }}selected{{ end }}>{{ t .Lang "activity.status.validat" }}</option>
-                        <option value="pendent" {{ if eq $st "pendent" }}selected{{ end }}>{{ t .Lang "activity.status.pendent" }}</option>
-                        <option value="rebutjat" {{ if eq $st "rebutjat" }}selected{{ end }}>{{ t .Lang "activity.status.anulat" }}</option>
+                {{ end }}
+                {{ if .Data.ShowTipus }}
+                <div class="filtre-grup">
+                    <label for="tipus-select">{{ t .Lang "municipis.filter.type" }}</label>
+                    <select id="tipus-select" name="tipus" onchange="this.form.submit()">
                         <option value="">{{ t .Lang "common.all" }}</option>
+                        {{ range .Data.TipusOptions }}
+                        <option value="{{ .Value }}" {{ if eq $.Data.Filter.Tipus .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
                     </select>
                 </div>
-                <button class="boto-secundari" type="submit">{{ t .Lang "municipis.filter.submit" }}</button>
-                <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
+                {{ end }}
                 <input type="hidden" name="page" value="1">
+                <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
+                <input type="hidden" name="sort" value="{{ .Data.SortKey }}">
+                <input type="hidden" name="dir" value="{{ .Data.SortDir }}">
             </form>
-            <div class="page-stats-controls" id="page-stats-controls">
-                <div class="page-stats-filters">
-                    <label for="page-stats-per-page">{{ t .Lang "records.columns.per_page" }}</label>
-                    <select id="page-stats-per-page" onchange="location.href='{{ .Data.PageSelectBase }}' + this.value + '{{ .Data.PageAnchor }}'">
-                        <option value="5" {{ if eq .Data.PerPage 5 }}selected{{ end }}>5</option>
-                        <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
-                        <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
-                        <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
-                        <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
-                    </select>
-                </div>
-            </div>
+
             <div class="taula-wrapper">
-                <table class="taula">
+                <div class="taula-paginacio" id="page-stats-controls">
+                    <div class="paginacio-controls">
+                        <span class="pagina-info">{{ .Data.Page }}/{{ .Data.TotalPages }}</span>
+                        <span class="custom-select">
+                            <select id="page-stats-per-page" class="registres-per-pagina" onchange="location.href='{{ .Data.PageSelectBase }}' + this.value + '{{ .Data.PageAnchor }}'">
+                                <option value="5" {{ if eq .Data.PerPage 5 }}selected{{ end }}>5</option>
+                                <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
+                                <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
+                                <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
+                                <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
+                            </select>
+                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <table class="taula taula-municipis">
                     <thead>
                         <tr>
-                            <th>{{ t .Lang "municipis.col.name" }}</th>
-                            <th>{{ t .Lang "municipis.col.type" }}</th>
-                            <th>{{ t .Lang "municipis.col.state" }}</th>
-                            <th>{{ t .Lang "municipis.col.postal" }}</th>
-                            <th>{{ t .Lang "municipis.col.country" }}</th>
-                            <th>{{ t .Lang "municipis.col.province" }}</th>
-                            <th>{{ t .Lang "municipis.col.comarca" }}</th>
-                            <th>{{ t .Lang "moderation.status" }}</th>
+                            {{ $paisSort := index $.Data.SortLinks "pais" }}
+                            <th>
+                                {{ if $paisSort }}<a href="{{ $paisSort }}" class="sort-link">{{ end }}
+                                {{ t .Lang "municipis.col.country" }}
+                                <span class="sort-icon">{{ if eq $.Data.SortKey "pais" }}{{ if eq $.Data.SortDir "asc" }}&#9650;{{ else }}&#9660;{{ end }}{{ else }}&#9651;{{ end }}</span>
+                                {{ if $paisSort }}</a>{{ end }}
+                            </th>
+                            {{ range .Data.VisibleLevelCols }}
+                            {{ $key := .SortKey }}
+                            {{ $link := index $.Data.SortLinks $key }}
+                            <th>
+                                {{ if $link }}<a href="{{ $link }}" class="sort-link">{{ end }}
+                                {{ .Label }}
+                                <span class="sort-icon">{{ if eq $.Data.SortKey $key }}{{ if eq $.Data.SortDir "asc" }}&#9650;{{ else }}&#9660;{{ end }}{{ else }}&#9651;{{ end }}</span>
+                                {{ if $link }}</a>{{ end }}
+                            </th>
+                            {{ end }}
+                            {{ $nomSort := index $.Data.SortLinks "nom" }}
+                            <th>
+                                {{ if $nomSort }}<a href="{{ $nomSort }}" class="sort-link">{{ end }}
+                                {{ if $.Data.Filter.Tipus }}
+                                    {{ t $.Lang (printf "municipis.type.%s" $.Data.Filter.Tipus) }}
+                                {{ else }}
+                                    {{ t .Lang "municipis.col.name" }}
+                                {{ end }}
+                                <span class="sort-icon">{{ if eq $.Data.SortKey "nom" }}{{ if eq $.Data.SortDir "asc" }}&#9650;{{ else }}&#9660;{{ end }}{{ else }}&#9651;{{ end }}</span>
+                                {{ if $nomSort }}</a>{{ end }}
+                            </th>
+                            <th>{{ t .Lang "municipis.col.books" }}</th>
                             {{ if $.Data.ShowMunicipiActions }}<th>{{ t .Lang "municipis.col.actions" }}</th>{{ end }}
                         </tr>
                     </thead>
                     <tbody>
-                        {{ range .Data.Municipis }}
+                        {{ $colCount := add 3 (len .Data.VisibleLevelCols) }}
+                        {{ if $.Data.ShowMunicipiActions }}{{ $colCount = add $colCount 1 }}{{ end }}
+                        {{ if not .Data.HasFilters }}
                         <tr>
-                            <td><a href="/territori/municipis/{{ .ID }}">{{ .Nom }}</a></td>
-                            <td>{{ if .Tipus }}{{ t $.Lang (printf "municipis.type.%s" .Tipus) }}{{ else }}-{{ end }}</td>
-                            <td>{{ t $.Lang (printf "municipis.state.%s" .Estat) }}</td>
-                            <td>{{ .CodiPostal }}</td>
-                            <td>{{ .PaisNom.String }}</td>
-                            <td>{{ .ProvNom.String }}</td>
-                            <td>{{ .Comarca.String }}</td>
-                            <td><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
-                            {{ if $.Data.ShowMunicipiActions }}
-                            {{ if index $.Data.CanEditMunicipi .ID }}
-                            <td><a href="/territori/municipis/{{ .ID }}/edit">{{ t $.Lang "municipis.action.edit" }}</a></td>
-                            {{ else }}
-                            <td></td>
+                            <td colspan="{{ $colCount }}" class="empty-cell">{{ t .Lang "municipis.empty.prompt" }}</td>
+                        </tr>
+                        {{ else }}
+                        {{ range .Data.Municipis }}
+                        {{ $levelNames := index $.Data.LevelNamesByID .ID }}
+                        <tr>
+                            <td class="pais-cell">
+                                {{ $paisName := "" }}
+                                {{ if $levelNames }}{{ $paisName = index $levelNames 0 }}{{ end }}
+                                {{ if $paisName }}{{ $paisName }}{{ else }}-{{ end }}
+                            </td>
+                            {{ range $.Data.VisibleLevelCols }}
+                            {{ $idx := add .Level -1 }}
+                            {{ $val := "" }}
+                            {{ if $levelNames }}{{ $val = index $levelNames $idx }}{{ end }}
+                            <td>{{ if $val }}{{ $val }}{{ else }}-{{ end }}</td>
                             {{ end }}
+                            <td class="municipi-cell">
+                                <a href="/territori/municipis/{{ .ID }}">{{ .Nom }}</a>
+                            </td>
+                            <td class="llibres-cell">
+                                <span class="llibres-total">{{ .RegistresTotal }}</span>
+                                <span class="barra-progres">
+                                    <span class="progres {{ index $.Data.BooksClassByID .ID }}" style="width: {{ .RegistresIndexats }}%;"></span>
+                                </span>
+                                <span class="percentatge-text">{{ .RegistresIndexats }}%</span>
+                            </td>
+                            {{ if $.Data.ShowMunicipiActions }}
+                            <td class="actions-cell">
+                                <div class="actions-wrap">
+                                    <button type="button" class="icon-action" data-municipi-info
+                                        data-id="{{ .ID }}"
+                                        data-name="{{ .Nom }}"
+                                        data-type="{{ .Tipus }}"
+                                        data-pais="{{ if $levelNames }}{{ index $levelNames 0 }}{{ end }}"
+                                        data-levels='{{ toJson $levelNames }}'
+                                        data-lat="{{ if .Latitud.Valid }}{{ .Latitud.Float64 }}{{ end }}"
+                                        data-lon="{{ if .Longitud.Valid }}{{ .Longitud.Float64 }}{{ end }}"
+                                        aria-label="{{ t $.Lang "municipis.action.info" }}">
+                                        <i class="fas fa-circle-info"></i>
+                                    </button>
+                                    {{ if index $.Data.CanEditMunicipi .ID }}
+                                    <a class="icon-action" href="/territori/municipis/{{ .ID }}/edit?return_to={{ $.Data.ReturnURL | urlquery }}" aria-label="{{ t $.Lang "municipis.action.edit" }}">
+                                        <i class="fas fa-pen-to-square"></i>
+                                    </a>
+                                    <button type="button" class="icon-action danger" data-municipi-delete data-id="{{ .ID }}" data-name="{{ .Nom }}" aria-label="{{ t $.Lang "municipis.action.delete" }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    {{ end }}
+                                </div>
+                            </td>
                             {{ end }}
                         </tr>
                         {{ else }}
                         <tr>
-                            <td colspan="{{ if $.Data.ShowMunicipiActions }}9{{ else }}8{{ end }}">{{ t .Lang "common.empty" }}</td>
+                            <td colspan="{{ $colCount }}" class="empty-cell">{{ t .Lang "common.empty" }}</td>
                         </tr>
+                        {{ end }}
                         {{ end }}
                     </tbody>
                 </table>
-            </div>
-            {{ if gt .Data.TotalPages 1 }}
-            <div class="paginador">
-                {{ range .Data.PageLinks }}
-                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
-                    {{ .Label }}
-                </button>
+
+                {{ if gt .Data.TotalPages 1 }}
+                <div class="paginador">
+                    {{ range .Data.PageLinks }}
+                    <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
+                        {{ .Label }}
+                    </button>
+                    {{ end }}
+                </div>
                 {{ end }}
             </div>
-            {{ end }}
         </section>
     </main>
+
+    <div class="modal-overlay" id="municipi-info-modal" role="dialog" aria-modal="true" aria-labelledby="municipi-info-title" data-label-country="{{ t .Lang "municipis.col.country" }}" data-label-type="{{ t .Lang "municipis.col.type" }}" data-label-level="{{ t .Lang "municipis.form.level" }}">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div>
+                    <h2 id="municipi-info-title"></h2>
+                    <p class="muted" id="municipi-info-type"></p>
+                </div>
+                <button type="button" class="modal-close" data-municipi-info-close aria-label="{{ t .Lang "municipis.modal.close" }}">&times;</button>
+            </div>
+            <div class="municipi-info-body">
+                <dl class="municipi-info-list" id="municipi-info-list"></dl>
+                <div class="municipi-info-links">
+                    <a class="boto-secundari" id="municipi-map-google" target="_blank" rel="noopener">{{ t .Lang "municipis.map.google" }}</a>
+                    <a class="boto-secundari" id="municipi-map-osm" target="_blank" rel="noopener">{{ t .Lang "municipis.map.osm" }}</a>
+                    <a class="boto-secundari" id="municipi-map-here" target="_blank" rel="noopener">{{ t .Lang "municipis.map.here" }}</a>
+                    <a class="boto-secundari" id="municipi-map-mapy" target="_blank" rel="noopener">{{ t .Lang "municipis.map.mapy" }}</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="municipi-delete-modal" role="dialog" aria-modal="true" aria-labelledby="municipi-delete-title">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div>
+                    <h2 id="municipi-delete-title">{{ t .Lang "municipis.delete.title" }}</h2>
+                    <p class="muted" id="municipi-delete-name"></p>
+                </div>
+                <button type="button" class="modal-close" data-municipi-delete-close aria-label="{{ t .Lang "municipis.modal.close" }}">&times;</button>
+            </div>
+            <form method="post" id="municipi-delete-form">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
+                <div class="modal-actions">
+                    <button type="button" class="boto-secundari" data-municipi-delete-cancel>{{ t .Lang "municipis.delete.cancel" }}</button>
+                    <button type="submit" class="boto-primari danger">{{ t .Lang "municipis.delete.confirm" }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script id="municipi-type-labels" type="application/json">{{ toJson .Data.TipusLabels }}</script>
+    <script id="municipi-level-types" type="application/json">{{ toJson .Data.LevelTypeLabels }}</script>
+
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/territori-municipis-browse.js"></script>
 </body>
 </html>
 {{ end }}
