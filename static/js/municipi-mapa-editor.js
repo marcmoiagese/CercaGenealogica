@@ -4,11 +4,18 @@
 
     const mapId = editor.dataset.mapId;
     const csrf = editor.dataset.csrf;
+    const mapTitle = editor.dataset.mapTitle || "mapa";
     const deleteConfirm = editor.dataset.deleteConfirm || "";
     const historicRemoveLabel = editor.dataset.historicRemove || "";
     const personSearchEndpoint = editor.dataset.personSearchEndpoint || "";
     const personEmptyLabel = editor.dataset.personEmpty || "";
     const personAddLabel = editor.dataset.personAdd || "";
+    const exportEmptyLabel = editor.dataset.exportEmpty || "No hi ha mapa per exportar.";
+    const exportUnavailableLabel = editor.dataset.exportUnavailable || "No es pot exportar ara mateix.";
+    const exportSvgDoneLabel = editor.dataset.exportSvgDone || "SVG exportat.";
+    const exportJsonDoneLabel = editor.dataset.exportJsonDone || "Codi exportat.";
+    const importErrorLabel = editor.dataset.importError || "Codi invàlid.";
+    const importSuccessLabel = editor.dataset.importSuccess || "Mapa carregat.";
 
     const svg = document.getElementById("mapEditorSvg");
     const overlay = document.getElementById("mapEditorOverlay");
@@ -16,6 +23,9 @@
     const hintEl = document.getElementById("mapEditorHint");
     const saveBtn = document.getElementById("mapSave");
     const submitBtn = document.getElementById("mapSubmit");
+    const exportSvgBtn = document.getElementById("mapExportSvg");
+    const exportJsonBtn = document.getElementById("mapExportJson");
+    const importOpenBtn = document.getElementById("mapImportOpen");
     const streetTypeSelect = document.getElementById("mapEditorStreetType");
     const riverTypeSelect = document.getElementById("mapEditorRiverType");
     const elementTypeSelect = document.getElementById("mapEditorElementType");
@@ -32,6 +42,13 @@
     const emptyState = document.getElementById("mapEditorEmpty");
     const formEl = document.getElementById("mapEditorForm");
     const changelogInput = document.getElementById("mapEditorChangelog");
+    const importModal = document.getElementById("mapEditorCodeModal");
+    const importCloseBtn = document.getElementById("mapEditorCodeClose");
+    const importCancelBtn = document.getElementById("mapEditorCodeCancel");
+    const importApplyBtn = document.getElementById("mapEditorCodeApply");
+    const importInput = document.getElementById("mapEditorCodeInput");
+    const importFileInput = document.getElementById("mapEditorCodeFile");
+    const importStatus = document.getElementById("mapEditorCodeStatus");
     const toolButtons = editor.querySelectorAll("[data-tool]");
     const fieldBlocks = editor.querySelectorAll(".map-editor-field[data-layer]");
 
@@ -52,6 +69,144 @@
 
     function setStatus(msg) {
         if (statusEl) statusEl.textContent = msg || "";
+    }
+
+    function setImportStatus(msg) {
+        if (importStatus) importStatus.textContent = msg || "";
+    }
+
+    function sanitizeFileName(name) {
+        const base = String(name || "mapa");
+        const normalized = base.normalize ? base.normalize("NFD").replace(/[\u0300-\u036f]/g, "") : base;
+        const cleaned = normalized.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase();
+        return cleaned || "mapa";
+    }
+
+    function downloadBlob(filename, blob) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    function exportStyleText() {
+        return [
+            ".cg-house{fill:#d9cfc6;stroke:#8f7c6b;stroke-width:2;}",
+            ".cg-street{fill:none;stroke:#5c6b73;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;}",
+            ".cg-street--default{stroke:#5c6b73;stroke-width:4;}",
+            ".cg-street--asfaltat{stroke:#3b4b55;stroke-width:5;}",
+            ".cg-street--empedrat{stroke:#6c5b4c;stroke-width:5;stroke-dasharray:7 5;}",
+            ".cg-street--terra{stroke:#a9714b;stroke-width:4;opacity:.7;}",
+            ".cg-street--carretera{stroke:#1f2937;stroke-width:7;stroke-dasharray:10 6;stroke-linecap:round;}",
+            ".cg-street--autopista{stroke:#0f172a;stroke-width:11;stroke-linecap:round;}",
+            ".cg-river{fill:none;stroke:#3b82f6;stroke-width:6;opacity:.7;}",
+            ".cg-river--riu{stroke:#2563eb;stroke-width:7;}",
+            ".cg-river--riera{stroke:#38bdf8;stroke-width:5;stroke-dasharray:10 6;}",
+            ".cg-river--rierol{stroke:#7dd3fc;stroke-width:4;stroke-dasharray:5 6;}",
+            ".cg-street-label,.cg-house-label,.cg-toponym-label{font-size:18px;fill:#2b2b2b;}",
+            ".cg-marker{fill:#3f7fbf;stroke:#2b567f;stroke-width:2;}",
+            ".cg-element{fill:#3f7fbf;stroke:#1f3b57;stroke-width:2;}",
+            ".cg-element--tree{fill:#2f855a;stroke:#1f5c3a;}",
+            ".cg-element--fountain{fill:#0ea5e9;stroke:#0369a1;}",
+            ".cg-element--well{fill:#6b7280;stroke:#374151;}",
+            ".cg-element--bench{fill:#b45309;stroke:#78350f;}",
+            ".cg-boundary{fill:none;stroke:#9c8b7a;stroke-width:3;stroke-dasharray:6 6;}",
+        ].join("\n");
+    }
+
+    function exportSvg() {
+        if (!model) {
+            setStatus(exportEmptyLabel);
+            return;
+        }
+        ensureLayers();
+        if (!window.CGMap) {
+            setStatus(exportUnavailableLabel);
+            return;
+        }
+        const exportSvgEl = document.createElementNS(NS, "svg");
+        exportSvgEl.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        if (Array.isArray(model.viewBox) && model.viewBox.length >= 4) {
+            exportSvgEl.setAttribute("viewBox", model.viewBox.join(" "));
+        } else {
+            exportSvgEl.setAttribute("viewBox", "0 0 1000 700");
+        }
+        window.CGMap.render(exportSvgEl, model);
+        const metadata = document.createElementNS(NS, "metadata");
+        metadata.setAttribute("id", "cgmap-data");
+        metadata.textContent = JSON.stringify(model);
+        exportSvgEl.insertBefore(metadata, exportSvgEl.firstChild);
+        const style = document.createElementNS(NS, "style");
+        style.textContent = exportStyleText();
+        exportSvgEl.insertBefore(style, metadata);
+        const serializer = new XMLSerializer();
+        const svgText = serializer.serializeToString(exportSvgEl);
+        const payload = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgText;
+        const fileName = sanitizeFileName(mapTitle) + ".svg";
+        downloadBlob(fileName, new Blob([payload], { type: "image/svg+xml;charset=utf-8" }));
+        setStatus(exportSvgDoneLabel);
+    }
+
+    function exportJson() {
+        if (!model) {
+            setStatus(exportEmptyLabel);
+            return;
+        }
+        ensureLayers();
+        const payload = JSON.stringify(model, null, 2);
+        const fileName = sanitizeFileName(mapTitle) + ".json";
+        downloadBlob(fileName, new Blob([payload], { type: "application/json;charset=utf-8" }));
+        setStatus(exportJsonDoneLabel);
+    }
+
+    function openImportModal() {
+        if (!importModal) return;
+        importModal.classList.add("is-open");
+        setImportStatus("");
+        if (importInput) {
+            importInput.value = "";
+            importInput.focus();
+        }
+        if (importFileInput) {
+            importFileInput.value = "";
+        }
+    }
+
+    function closeImportModal() {
+        if (!importModal) return;
+        importModal.classList.remove("is-open");
+        setImportStatus("");
+    }
+
+    function applyImportText(raw) {
+        const text = (raw || "").trim();
+        if (!text) {
+            setImportStatus(importErrorLabel);
+            return;
+        }
+        try {
+            const parsed = JSON.parse(text);
+            if (!parsed || typeof parsed !== "object") {
+                throw new Error("invalid");
+            }
+            model = parsed;
+            ensureLayers();
+            clearSelection();
+            render();
+            setStatus(importSuccessLabel);
+            closeImportModal();
+        } catch (err) {
+            setImportStatus(importErrorLabel);
+        }
+    }
+
+    function applyImport() {
+        if (!importInput) return;
+        applyImportText(importInput.value);
     }
 
     function setHint(msg) {
@@ -962,6 +1117,40 @@
 
     if (saveBtn) saveBtn.addEventListener("click", saveDraftWithStatus);
     if (submitBtn) submitBtn.addEventListener("click", submitDraft);
+    if (exportSvgBtn) exportSvgBtn.addEventListener("click", exportSvg);
+    if (exportJsonBtn) exportJsonBtn.addEventListener("click", exportJson);
+    if (importOpenBtn) importOpenBtn.addEventListener("click", openImportModal);
+    if (importCloseBtn) importCloseBtn.addEventListener("click", closeImportModal);
+    if (importCancelBtn) importCancelBtn.addEventListener("click", closeImportModal);
+    if (importApplyBtn) importApplyBtn.addEventListener("click", applyImport);
+    if (importFileInput) {
+        importFileInput.addEventListener("change", () => {
+            const file = importFileInput.files && importFileInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                const text = typeof reader.result === "string" ? reader.result : "";
+                if (importInput) importInput.value = text;
+                applyImportText(text);
+            };
+            reader.onerror = () => {
+                setImportStatus(importErrorLabel);
+            };
+            reader.readAsText(file);
+        });
+    }
+    if (importModal) {
+        importModal.addEventListener("click", (event) => {
+            if (event.target === importModal) {
+                closeImportModal();
+            }
+        });
+    }
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && importModal && importModal.classList.contains("is-open")) {
+            closeImportModal();
+        }
+    });
 
     clearSelection();
     setTool("select");

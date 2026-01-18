@@ -26,12 +26,19 @@
                  class="map-editor"
                  data-map-id="{{ .Data.Mapa.ID }}"
                  data-municipi-id="{{ .Data.Municipi.ID }}"
+                 data-map-title="{{ .Data.Mapa.Title }}"
                  data-csrf="{{ .Data.CSRFToken }}"
                  data-delete-confirm="{{ t .Lang "maps.editor.panel.delete_confirm" }}"
                  data-historic-remove="{{ t .Lang "maps.editor.field.historic_remove" }}"
                  data-person-search-endpoint="/api/municipis/{{ .Data.Municipi.ID }}/persones/cerca"
                  data-person-empty="{{ t .Lang "maps.editor.field.people_empty" }}"
-                 data-person-add="{{ t .Lang "maps.editor.field.people_add" }}">
+                 data-person-add="{{ t .Lang "maps.editor.field.people_add" }}"
+                 data-export-empty="{{ t .Lang "maps.editor.export.empty" }}"
+                 data-export-unavailable="{{ t .Lang "maps.editor.export.unavailable" }}"
+                 data-export-svg-done="{{ t .Lang "maps.editor.export.svg_done" }}"
+                 data-export-json-done="{{ t .Lang "maps.editor.export.json_done" }}"
+                 data-import-error="{{ t .Lang "maps.editor.import.error" }}"
+                 data-import-success="{{ t .Lang "maps.editor.import.success" }}">
                 <div class="map-editor-topbar">
                     <div class="map-editor-tools">
                         <button type="button" class="map-tool" data-tool="select" data-tool-label="{{ t .Lang "maps.editor.tool.select" }}" title="{{ t .Lang "maps.editor.tool.select" }}">
@@ -70,6 +77,9 @@
                     <div class="map-editor-actions">
                         <button type="button" class="boto-primari" id="mapSave">{{ t .Lang "maps.editor.save" }}</button>
                         <button type="button" class="boto-secundari" id="mapSubmit">{{ t .Lang "maps.editor.submit" }}</button>
+                        <button type="button" class="boto-secundari" id="mapExportSvg">{{ t .Lang "maps.editor.export.svg" }}</button>
+                        <button type="button" class="boto-secundari" id="mapExportJson">{{ t .Lang "maps.editor.export.json" }}</button>
+                        <button type="button" class="boto-secundari" id="mapImportOpen">{{ t .Lang "maps.editor.import.open" }}</button>
                     </div>
                 </div>
 
@@ -170,6 +180,28 @@
             </div>
         </section>
     </main>
+    <div class="modal-overlay" id="mapEditorCodeModal" role="dialog" aria-modal="true" aria-labelledby="mapEditorCodeTitle">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div>
+                    <h2 id="mapEditorCodeTitle">{{ t .Lang "maps.editor.import.title" }}</h2>
+                </div>
+                <button type="button" class="modal-close" id="mapEditorCodeClose" aria-label="{{ t .Lang "common.close" }}">×</button>
+            </div>
+            <div class="map-editor-code">
+                <div class="map-editor-code-upload">
+                    <label for="mapEditorCodeFile">{{ t .Lang "maps.editor.import.file" }}</label>
+                    <input id="mapEditorCodeFile" type="file" accept="application/json,.json">
+                </div>
+                <textarea id="mapEditorCodeInput" rows="10" placeholder="{{ t .Lang "maps.editor.import.placeholder" }}"></textarea>
+                <div class="map-editor-code-actions">
+                    <button type="button" class="boto-primari" id="mapEditorCodeApply">{{ t .Lang "common.apply" }}</button>
+                    <button type="button" class="boto-secundari" id="mapEditorCodeCancel">{{ t .Lang "common.close" }}</button>
+                    <span class="muted" id="mapEditorCodeStatus" aria-live="polite"></span>
+                </div>
+            </div>
+        </div>
+    </div>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
     <script src="/static/js/cgmap.js"></script>

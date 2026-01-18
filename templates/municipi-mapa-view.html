@@ -23,6 +23,8 @@
                 </div>
                 <div class="mapes-actions">
                     <a class="boto-secundari" href="/territori/municipis/{{ .Data.Municipi.ID }}/mapes">{{ t .Lang "maps.back" }}</a>
+                    <button type="button" class="boto-secundari" id="mapViewExportSvg">{{ t .Lang "maps.editor.export.svg" }}</button>
+                    <button type="button" class="boto-secundari" id="mapViewExportJson">{{ t .Lang "maps.editor.export.json" }}</button>
                 </div>
             </header>
 
@@ -31,7 +33,12 @@
                  data-map-id="{{ .Data.Mapa.ID }}"
                  data-municipi-id="{{ .Data.Municipi.ID }}"
                  data-version-id="{{ if .Data.Mapa.CurrentVersionID.Valid }}{{ .Data.Mapa.CurrentVersionID.Int64 }}{{ end }}"
-                 data-csrf="{{ .Data.CSRFToken }}">
+                 data-csrf="{{ .Data.CSRFToken }}"
+                 data-map-title="{{ .Data.Mapa.Title }}"
+                 data-export-empty="{{ t .Lang "maps.editor.export.empty" }}"
+                 data-export-unavailable="{{ t .Lang "maps.editor.export.unavailable" }}"
+                 data-export-svg-done="{{ t .Lang "maps.editor.export.svg_done" }}"
+                 data-export-json-done="{{ t .Lang "maps.editor.export.json_done" }}">
                 <div class="map-canvas">
                     <svg id="municipiMapaSvg" viewBox="0 0 1000 700" role="img" aria-label="{{ t .Lang "maps.viewer.aria" }}"></svg>
                 </div>

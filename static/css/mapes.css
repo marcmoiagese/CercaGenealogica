@@ -137,6 +137,51 @@
     display: inline-flex;
     gap: 0.6rem;
     align-items: center;
+    flex-wrap: wrap;
+}
+
+.map-editor-code textarea {
+    width: 100%;
+    min-height: 220px;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid #d8dfe6;
+    border-radius: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+.map-editor-code-upload {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.map-editor-code-upload label {
+    font-weight: 600;
+    color: var(--color-text, #1f2d3d);
+    font-size: 0.92rem;
+}
+
+.map-editor-code-upload input[type="file"] {
+    padding: 0.35rem 0.2rem;
+    border-radius: 8px;
+    border: 1px solid #d8dfe6;
+    background: #fff;
+}
+
+.map-editor-code textarea:focus {
+    outline: none;
+    border-color: var(--secondary-color, #0f3d5a);
+    box-shadow: 0 0 0 3px rgba(67, 116, 197, 0.15);
+}
+
+.map-editor-code-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    align-items: center;
+    margin-top: 0.85rem;
 }
 
 .map-editor-hints {
