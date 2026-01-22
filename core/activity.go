@@ -28,6 +28,8 @@ const (
 	ruleMunicipiMapaSubmit  = "municipi_mapa_submit"
 	ruleMunicipiMapaApprove = "municipi_mapa_approve"
 	ruleMunicipiMapaReject  = "municipi_mapa_reject"
+	ruleMunicipiHistoriaGeneralSubmit = "municipi_historia_general_submit"
+	ruleMunicipiHistoriaFetSubmit     = "municipi_historia_fet_submit"
 )
 
 // RegisterUserActivity crea una entrada d'activitat i, si està validada, suma punts.

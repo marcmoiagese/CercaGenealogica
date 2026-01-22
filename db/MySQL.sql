@@ -275,6 +275,82 @@ CREATE TABLE IF NOT EXISTS municipi_mapa_versions (
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Historia del municipi
+CREATE TABLE IF NOT EXISTS municipi_historia (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    municipi_id INT UNSIGNED NOT NULL,
+    current_general_version_id INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY idx_municipi_historia_municipi (municipi_id),
+    FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS municipi_historia_general_versions (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    historia_id INT UNSIGNED NOT NULL,
+    version INT UNSIGNED NOT NULL,
+    titol VARCHAR(255) NULL,
+    resum TEXT,
+    cos_text LONGTEXT NOT NULL,
+    tags_json TEXT,
+    status ENUM('draft','pendent','publicat','rebutjat') DEFAULT 'draft',
+    moderation_notes TEXT,
+    lock_version INT UNSIGNED NOT NULL DEFAULT 0,
+    created_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
+    UNIQUE KEY idx_municipi_historia_general_unique (historia_id, version),
+    INDEX idx_municipi_historia_general_status (status, created_at),
+    INDEX idx_municipi_historia_general_historia (historia_id, version),
+    FOREIGN KEY (historia_id) REFERENCES municipi_historia(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS municipi_historia_fets (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    municipi_id INT UNSIGNED NOT NULL,
+    current_version_id INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_municipi_historia_fets_municipi (municipi_id),
+    FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS municipi_historia_fet_versions (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    fet_id INT UNSIGNED NOT NULL,
+    version INT UNSIGNED NOT NULL,
+    any_inici INT NULL,
+    any_fi INT NULL,
+    data_inici VARCHAR(32) NULL,
+    data_fi VARCHAR(32) NULL,
+    data_display VARCHAR(64) NULL,
+    titol VARCHAR(255) NOT NULL,
+    resum TEXT,
+    cos_text LONGTEXT NOT NULL,
+    tags_json TEXT,
+    fonts_json TEXT,
+    status ENUM('draft','pendent','publicat','rebutjat') DEFAULT 'draft',
+    moderation_notes TEXT,
+    lock_version INT UNSIGNED NOT NULL DEFAULT 0,
+    created_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
+    UNIQUE KEY idx_municipi_historia_fet_unique (fet_id, version),
+    INDEX idx_municipi_historia_fet_status (status, created_at),
+    INDEX idx_municipi_historia_fet_fet (fet_id, version),
+    INDEX idx_municipi_historia_fet_any (any_inici, any_fi),
+    FOREIGN KEY (fet_id) REFERENCES municipi_historia_fets(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS noms_historics (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
 

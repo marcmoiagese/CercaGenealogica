@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -128,6 +129,28 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 		"mapes_page":  fmt.Sprintf("/territori/municipis/%d/mapes", mun.ID),
 	}
 
+	historiaGeneral, historiaTimeline, historiaErr := a.DB.GetMunicipiHistoriaSummary(mun.ID)
+	if historiaErr != nil {
+		Errorf("Error carregant historia municipi %d: %v", mun.ID, historiaErr)
+	}
+	historiaSummary := ""
+	if historiaGeneral != nil {
+		if strings.TrimSpace(historiaGeneral.Resum) != "" {
+			historiaSummary = strings.TrimSpace(historiaGeneral.Resum)
+		} else {
+			historiaSummary = summarizeHistoriaText(historiaGeneral.CosText, 260)
+		}
+	}
+	historiaTimelineView := []map[string]string{}
+	for _, item := range historiaTimeline {
+		historiaTimelineView = append(historiaTimelineView, map[string]string{
+			"date":  historiaDateLabel(item),
+			"title": strings.TrimSpace(item.Titol),
+			"resum": strings.TrimSpace(item.Resum),
+		})
+	}
+	canAportarHistoria := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaCreate, munTarget)
+
 	recordsColumns := []municipiRecordColumn{
 		{Key: "llibre", Label: T(lang, "records.search.table.book"), Filterable: true},
 		{Key: "tipus", Label: T(lang, "records.table.type"), Filterable: true},
@@ -218,6 +241,10 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 		"CanCreateMap":      canCreateMap,
 		"ShowStatusBadge":   canManageTerritory || canModerate,
 		"MapesData":         mapesData,
+		"HistoriaGeneral":   historiaGeneral,
+		"HistoriaGeneralSummary": historiaSummary,
+		"HistoriaTimelineDestacat": historiaTimelineView,
+		"CanAportarHistoria": canAportarHistoria,
 	}
 	if user != nil {
 		RenderPrivateTemplate(w, r, "municipi-perfil-pro.html", data)
@@ -249,4 +276,39 @@ func bookDisplayTitle(llibre db.Llibre) string {
 		return llibre.Titol
 	}
 	return llibre.NomEsglesia
+}
+
+func summarizeHistoriaText(text string, maxLen int) string {
+	clean := strings.TrimSpace(text)
+	if clean == "" {
+		return ""
+	}
+	clean = strings.Join(strings.Fields(clean), " ")
+	if maxLen <= 0 || len(clean) <= maxLen {
+		return clean
+	}
+	cut := clean[:maxLen]
+	if idx := strings.LastIndex(cut, " "); idx > maxLen/2 {
+		cut = cut[:idx]
+	}
+	return strings.TrimSpace(cut) + "..."
+}
+
+func historiaDateLabel(item db.MunicipiHistoriaFetVersion) string {
+	if strings.TrimSpace(item.DataDisplay) != "" {
+		return strings.TrimSpace(item.DataDisplay)
+	}
+	if item.AnyInici.Valid && item.AnyFi.Valid {
+		if item.AnyInici.Int64 == item.AnyFi.Int64 {
+			return fmt.Sprintf("%d", item.AnyInici.Int64)
+		}
+		return fmt.Sprintf("%d-%d", item.AnyInici.Int64, item.AnyFi.Int64)
+	}
+	if item.AnyInici.Valid {
+		return fmt.Sprintf("%d", item.AnyInici.Int64)
+	}
+	if item.AnyFi.Valid {
+		return fmt.Sprintf("%d", item.AnyFi.Int64)
+	}
+	return ""
 }

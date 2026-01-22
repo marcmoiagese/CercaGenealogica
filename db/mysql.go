@@ -776,3 +776,64 @@ func (d *MySQL) ResolveMunicipiIDByMapaID(mapaID int) (int, error) {
 func (d *MySQL) ResolveMunicipiIDByMapaVersionID(versionID int) (int, error) {
 	return d.help.resolveMunicipiIDByMapaVersionID(versionID)
 }
+
+func (d *MySQL) EnsureMunicipiHistoria(municipiID int) (*MunicipiHistoria, error) {
+	return d.help.ensureMunicipiHistoria(municipiID)
+}
+func (d *MySQL) GetMunicipiHistoriaByMunicipiID(municipiID int) (*MunicipiHistoria, error) {
+	return d.help.getMunicipiHistoriaByMunicipiID(municipiID)
+}
+func (d *MySQL) ResolveMunicipiIDByHistoriaGeneralVersionID(versionID int) (int, error) {
+	return d.help.resolveMunicipiIDByHistoriaGeneralVersionID(versionID)
+}
+func (d *MySQL) ResolveMunicipiIDByHistoriaFetVersionID(versionID int) (int, error) {
+	return d.help.resolveMunicipiIDByHistoriaFetVersionID(versionID)
+}
+func (d *MySQL) NextMunicipiHistoriaGeneralVersion(historiaID int) (int, error) {
+	return d.help.nextMunicipiHistoriaGeneralVersion(historiaID)
+}
+func (d *MySQL) CreateMunicipiHistoriaGeneralDraft(historiaID int, createdBy int, baseFromCurrent bool) (int, error) {
+	return d.help.createMunicipiHistoriaGeneralDraft(historiaID, createdBy, baseFromCurrent)
+}
+func (d *MySQL) GetMunicipiHistoriaGeneralVersion(id int) (*MunicipiHistoriaGeneralVersion, error) {
+	return d.help.getMunicipiHistoriaGeneralVersion(id)
+}
+func (d *MySQL) UpdateMunicipiHistoriaGeneralDraft(v *MunicipiHistoriaGeneralVersion) error {
+	return d.help.updateMunicipiHistoriaGeneralDraft(v)
+}
+func (d *MySQL) SetMunicipiHistoriaGeneralStatus(versionID int, status, notes string, moderatorID *int) error {
+	return d.help.setMunicipiHistoriaGeneralStatus(versionID, status, notes, moderatorID)
+}
+func (d *MySQL) GetMunicipiHistoriaFet(id int) (*MunicipiHistoriaFet, error) {
+	return d.help.getMunicipiHistoriaFet(id)
+}
+func (d *MySQL) CreateMunicipiHistoriaFet(municipiID int, createdBy int) (int, error) {
+	return d.help.createMunicipiHistoriaFet(municipiID, createdBy)
+}
+func (d *MySQL) NextMunicipiHistoriaFetVersion(fetID int) (int, error) {
+	return d.help.nextMunicipiHistoriaFetVersion(fetID)
+}
+func (d *MySQL) CreateMunicipiHistoriaFetDraft(fetID int, createdBy int, baseFromCurrent bool) (int, error) {
+	return d.help.createMunicipiHistoriaFetDraft(fetID, createdBy, baseFromCurrent)
+}
+func (d *MySQL) GetMunicipiHistoriaFetVersion(id int) (*MunicipiHistoriaFetVersion, error) {
+	return d.help.getMunicipiHistoriaFetVersion(id)
+}
+func (d *MySQL) UpdateMunicipiHistoriaFetDraft(v *MunicipiHistoriaFetVersion) error {
+	return d.help.updateMunicipiHistoriaFetDraft(v)
+}
+func (d *MySQL) SetMunicipiHistoriaFetStatus(versionID int, status, notes string, moderatorID *int) error {
+	return d.help.setMunicipiHistoriaFetStatus(versionID, status, notes, moderatorID)
+}
+func (d *MySQL) GetMunicipiHistoriaSummary(municipiID int) (*MunicipiHistoriaGeneralVersion, []MunicipiHistoriaFetVersion, error) {
+	return d.help.getMunicipiHistoriaSummary(municipiID)
+}
+func (d *MySQL) ListMunicipiHistoriaTimeline(municipiID int, status string, limit, offset int, q string, anyFrom, anyTo *int) ([]MunicipiHistoriaFetVersion, int, error) {
+	return d.help.listMunicipiHistoriaTimeline(municipiID, status, limit, offset, q, anyFrom, anyTo)
+}
+func (d *MySQL) ListPendingMunicipiHistoriaGeneralVersions(limit, offset int) ([]MunicipiHistoriaGeneralVersion, int, error) {
+	return d.help.listPendingMunicipiHistoriaGeneralVersions(limit, offset)
+}
+func (d *MySQL) ListPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error) {
+	return d.help.listPendingMunicipiHistoriaFetVersions(limit, offset)
+}

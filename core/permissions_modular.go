@@ -35,6 +35,10 @@ const (
 	permKeyTerritoriMunicipisMapesEdit     = "municipis.mapes.edit"
 	permKeyTerritoriMunicipisMapesSubmit   = "municipis.mapes.submit"
 	permKeyTerritoriMunicipisMapesModerate = "municipis.mapes.moderate"
+	permKeyTerritoriMunicipisHistoriaCreate   = "municipis.historia.create"
+	permKeyTerritoriMunicipisHistoriaEdit     = "municipis.historia.edit"
+	permKeyTerritoriMunicipisHistoriaSubmit   = "municipis.historia.submit"
+	permKeyTerritoriMunicipisHistoriaModerate = "municipis.historia.moderate"
 	permKeyTerritoriEclesView       = "territori.eclesiastic.view"
 	permKeyTerritoriEclesCreate     = "territori.eclesiastic.create"
 	permKeyTerritoriEclesEdit       = "territori.eclesiastic.edit"
@@ -89,6 +93,10 @@ var permissionCatalogKeys = []string{
 	permKeyTerritoriMunicipisMapesEdit,
 	permKeyTerritoriMunicipisMapesSubmit,
 	permKeyTerritoriMunicipisMapesModerate,
+	permKeyTerritoriMunicipisHistoriaCreate,
+	permKeyTerritoriMunicipisHistoriaEdit,
+	permKeyTerritoriMunicipisHistoriaSubmit,
+	permKeyTerritoriMunicipisHistoriaModerate,
 	permKeyTerritoriEclesView,
 	permKeyTerritoriEclesCreate,
 	permKeyTerritoriEclesEdit,
@@ -173,6 +181,10 @@ var legacyTerritoryPermKeys = []string{
 	permKeyTerritoriMunicipisMapesEdit,
 	permKeyTerritoriMunicipisMapesSubmit,
 	permKeyTerritoriMunicipisMapesModerate,
+	permKeyTerritoriMunicipisHistoriaCreate,
+	permKeyTerritoriMunicipisHistoriaEdit,
+	permKeyTerritoriMunicipisHistoriaSubmit,
+	permKeyTerritoriMunicipisHistoriaModerate,
 	permKeyAdminTerritoriImport,
 	permKeyAdminTerritoriExport,
 }

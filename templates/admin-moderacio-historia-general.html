@@ -1,0 +1,122 @@
+{{ define "admin-moderacio-historia-general.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang (printf "moderation.type.%s" .Data.ObjectType) }} · {{ .Data.Municipi.Nom }}</title>
+    {{ template "styles-private" . }}
+    <style>
+        .moderacio-compare {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+        .moderacio-pane {
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 12px;
+            padding: 1rem;
+            background: #fff;
+        }
+        .moderacio-pane h2 {
+            margin-top: 0;
+            font-size: 1.1rem;
+        }
+        .moderacio-meta {
+            color: #5b6470;
+            font-size: 0.9rem;
+            margin-bottom: 0.75rem;
+        }
+        .moderacio-body {
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+        .moderacio-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .moderacio-forms {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: flex-start;
+            margin-top: 1rem;
+        }
+        .moderacio-reject textarea {
+            min-width: 260px;
+            border-radius: 8px;
+            border: 1px solid #d5d5d5;
+            padding: 0.6rem 0.75rem;
+        }
+    </style>
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang (printf "moderation.type.%s" .Data.ObjectType) }}</h1>
+                    <p class="muted">{{ .Data.Municipi.Nom }}</p>
+                </div>
+                <div class="moderacio-actions">
+                    <a class="boto-secundari" href="{{ .Data.ReturnURL }}">{{ t .Lang "common.back" }}</a>
+                    <a class="boto-secundari" href="{{ .Data.HistoriaURL }}">{{ t .Lang "municipi.history.view_all" }}</a>
+                </div>
+            </header>
+            <div class="moderacio-forms">
+                <form method="post" action="/moderacio/{{ .Data.Pending.ID }}/aprovar">
+                    <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                    <input type="hidden" name="object_type" value="{{ .Data.ObjectType }}">
+                    <button type="submit" class="boto-primari">{{ t .Lang "moderation.table.approve" }}</button>
+                </form>
+                <form class="moderacio-reject" method="post" action="/moderacio/{{ .Data.Pending.ID }}/rebutjar">
+                    <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                    <input type="hidden" name="object_type" value="{{ .Data.ObjectType }}">
+                    <textarea name="motiu" rows="2" placeholder="{{ t .Lang "moderation.table.reason.placeholder" }}"></textarea>
+                    <button type="submit" class="boto-secundari">{{ t .Lang "moderation.table.reject" }}</button>
+                </form>
+            </div>
+        </section>
+        <section class="card">
+            <div class="moderacio-compare">
+                <div class="moderacio-pane">
+                    <h2>{{ t .Lang "moderation.preview.proposal" }}</h2>
+                    {{ if .Data.Pending.Titol }}
+                        <h3>{{ .Data.Pending.Titol }}</h3>
+                    {{ end }}
+                    {{ if .Data.Pending.Resum }}
+                        <p class="moderacio-meta">{{ .Data.Pending.Resum }}</p>
+                    {{ end }}
+                    {{ if .Data.Pending.TagsJSON }}
+                        <p class="moderacio-meta">{{ t .Lang "municipi.history.form.general_tags" }}: {{ .Data.Pending.TagsJSON }}</p>
+                    {{ end }}
+                    <div class="moderacio-body">{{ .Data.Pending.CosText }}</div>
+                </div>
+                <div class="moderacio-pane">
+                    <h2>{{ t .Lang "moderation.preview.current" }}</h2>
+                    {{ if .Data.Current }}
+                        {{ if .Data.Current.Titol }}
+                            <h3>{{ .Data.Current.Titol }}</h3>
+                        {{ end }}
+                        {{ if .Data.Current.Resum }}
+                            <p class="moderacio-meta">{{ .Data.Current.Resum }}</p>
+                        {{ end }}
+                        {{ if .Data.Current.TagsJSON }}
+                            <p class="moderacio-meta">{{ t .Lang "municipi.history.form.general_tags" }}: {{ .Data.Current.TagsJSON }}</p>
+                        {{ end }}
+                        <div class="moderacio-body">{{ .Data.Current.CosText }}</div>
+                    {{ else }}
+                        <p class="muted">{{ t .Lang "moderation.preview.empty_current" }}</p>
+                    {{ end }}
+                </div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

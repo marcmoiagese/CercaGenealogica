@@ -1,0 +1,136 @@
+.historia-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.historia-hero {
+    padding: 1.25rem 1.5rem;
+}
+
+.historia-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.historia-general-title {
+    margin: 0.4rem 0 0;
+    font-size: 1.1rem;
+    font-weight: 900;
+}
+
+.historia-text {
+    margin-top: 0.6rem;
+    white-space: pre-wrap;
+}
+
+.historia-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin: 0.75rem 0 1rem;
+    align-items: end;
+}
+
+.historia-filters label {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #607386;
+}
+
+.historia-filters input {
+    padding: 0.5rem 0.6rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-borda);
+}
+
+.historia-timeline-list {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.historia-timeline-item {
+    border: 1px solid #e6edf3;
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    background: #fafbfc;
+}
+
+.historia-timeline-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.historia-timeline-date {
+    font-weight: 900;
+    color: #37516c;
+}
+
+.historia-timeline-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 900;
+}
+
+.historia-timeline-summary {
+    margin: 0.35rem 0 0;
+    color: #1f2d3d;
+}
+
+.historia-form {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.historia-form-row {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.historia-form label {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #607386;
+}
+
+.historia-form input,
+.historia-form textarea {
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-borda);
+    font-family: inherit;
+}
+
+.historia-form textarea {
+    min-height: 160px;
+    resize: vertical;
+}
+
+.historia-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+}
+
+.historia-status {
+    margin: 0.25rem 0 0;
+    font-weight: 800;
+    color: #607386;
+}
+
+.historia-status {
+    font-weight: 800;
+    color: #607386;
+}
+
+@media (max-width: 720px) {
+    .historia-hero {
+        padding: 1rem;
+    }
+}

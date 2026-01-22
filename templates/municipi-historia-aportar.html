@@ -1,0 +1,139 @@
+{{ define "municipi-historia-aportar.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "municipi.history.contribute" }} · {{ .Data.Municipi.Nom }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/municipi-historia.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal historia-page">
+        <section class="card historia-hero">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "municipi.history.contribute" }}</h1>
+                    <p class="muted">{{ .Data.Municipi.Nom }}</p>
+                </div>
+                <div class="historia-actions">
+                    <a class="boto-secundari" href="/territori/municipis/{{ .Data.Municipi.ID }}/historia">{{ t .Lang "municipi.history.view_all" }}</a>
+                </div>
+            </header>
+            {{ if .Data.Ok }}
+                <p class="muted">{{ .Data.Ok }}</p>
+            {{ else if .Data.Error }}
+                <p class="muted">{{ .Data.Error }}</p>
+            {{ end }}
+        </section>
+
+        <section class="card historia-general">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h2>{{ t .Lang "municipi.history.general" }}</h2>
+                    {{ if .Data.GeneralDraftStatus }}
+                        <p class="historia-status">{{ t .Lang "municipi.history.status" }}: {{ .Data.GeneralDraftStatus }}</p>
+                    {{ end }}
+                </div>
+            </header>
+            <form class="historia-form" method="post" action="/territori/municipis/{{ .Data.Municipi.ID }}/historia/general/save">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="version_id" value="{{ .Data.GeneralDraftID }}">
+                <input type="hidden" name="lock_version" value="{{ .Data.GeneralDraftLock }}">
+                <div class="historia-form-row">
+                    <label for="historiaGeneralTitle">{{ t .Lang "municipi.history.form.general_title" }}</label>
+                    <input id="historiaGeneralTitle" name="titol" type="text" value="{{ .Data.GeneralDraftTitle }}">
+                </div>
+                <div class="historia-form-row">
+                    <label for="historiaGeneralSummary">{{ t .Lang "municipi.history.form.general_summary" }}</label>
+                    <textarea id="historiaGeneralSummary" name="resum">{{ .Data.GeneralDraftResum }}</textarea>
+                </div>
+                <div class="historia-form-row">
+                    <label for="historiaGeneralBody">{{ t .Lang "municipi.history.form.general_body" }}</label>
+                    <textarea id="historiaGeneralBody" name="cos_text">{{ .Data.GeneralDraftBody }}</textarea>
+                </div>
+                <div class="historia-form-row">
+                    <label for="historiaGeneralTags">{{ t .Lang "municipi.history.form.general_tags" }}</label>
+                    <input id="historiaGeneralTags" name="tags_json" type="text" value="{{ .Data.GeneralDraftTags }}">
+                </div>
+                <div class="historia-form-actions">
+                    <button class="boto-primari" type="submit">{{ t .Lang "municipi.history.form.save_draft" }}</button>
+                </div>
+            </form>
+            {{ if .Data.GeneralDraftID }}
+                <form class="historia-form" method="post" action="/territori/municipis/{{ .Data.Municipi.ID }}/historia/general/submit">
+                    <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                    <input type="hidden" name="version_id" value="{{ .Data.GeneralDraftID }}">
+                    <div class="historia-form-actions">
+                        <button class="boto-secundari" type="submit">{{ t .Lang "municipi.history.form.submit_review" }}</button>
+                    </div>
+                </form>
+            {{ end }}
+        </section>
+
+        <section class="card historia-timeline">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h2>{{ t .Lang "municipi.history.form.fact_title" }}</h2>
+                    {{ if .Data.FetDraftStatus }}
+                        <p class="historia-status">{{ t .Lang "municipi.history.status" }}: {{ .Data.FetDraftStatus }}</p>
+                    {{ end }}
+                </div>
+            </header>
+            <form class="historia-form" method="post" action="{{ .Data.FetFormAction }}">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="version_id" value="{{ .Data.FetDraftID }}">
+                <input type="hidden" name="lock_version" value="{{ .Data.FetDraftLock }}">
+                <div class="historia-form-row">
+                    <label for="historiaFetDataDisplay">{{ t .Lang "municipi.history.form.fact_date" }}</label>
+                    <input id="historiaFetDataDisplay" name="data_display" type="text" value="{{ .Data.FetDraftDataDisplay }}">
+                </div>
+                <div class="historia-form-row">
+                    <label for="historiaFetAnyInici">{{ t .Lang "municipi.history.form.fact_year_from" }}</label>
+                    <input id="historiaFetAnyInici" name="any_inici" type="number" inputmode="numeric" value="{{ .Data.FetDraftAnyInici }}">
+                </div>
+                <div class="historia-form-row">
+                    <label for="historiaFetAnyFi">{{ t .Lang "municipi.history.form.fact_year_to" }}</label>
+                    <input id="historiaFetAnyFi" name="any_fi" type="number" inputmode="numeric" value="{{ .Data.FetDraftAnyFi }}">
+                </div>
+                <div class="historia-form-row">
+                    <label for="historiaFetTitle">{{ t .Lang "municipi.history.form.fact_title_label" }}</label>
+                    <input id="historiaFetTitle" name="titol" type="text" value="{{ .Data.FetDraftTitle }}">
+                </div>
+                <div class="historia-form-row">
+                    <label for="historiaFetSummary">{{ t .Lang "municipi.history.form.fact_summary" }}</label>
+                    <textarea id="historiaFetSummary" name="resum">{{ .Data.FetDraftResum }}</textarea>
+                </div>
+                <div class="historia-form-row">
+                    <label for="historiaFetBody">{{ t .Lang "municipi.history.form.fact_body" }}</label>
+                    <textarea id="historiaFetBody" name="cos_text">{{ .Data.FetDraftBody }}</textarea>
+                </div>
+                <div class="historia-form-row">
+                    <label for="historiaFetFonts">{{ t .Lang "municipi.history.form.fact_sources" }}</label>
+                    <textarea id="historiaFetFonts" name="fonts_json">{{ .Data.FetDraftFonts }}</textarea>
+                </div>
+                <div class="historia-form-row">
+                    <label for="historiaFetTags">{{ t .Lang "municipi.history.form.fact_tags" }}</label>
+                    <input id="historiaFetTags" name="tags_json" type="text" value="{{ .Data.FetDraftTags }}">
+                </div>
+                <div class="historia-form-actions">
+                    <button class="boto-primari" type="submit">{{ t .Lang "municipi.history.form.save_draft" }}</button>
+                </div>
+            </form>
+            {{ if .Data.FetDraftID }}
+                <form class="historia-form" method="post" action="/territori/municipis/{{ .Data.Municipi.ID }}/historia/fets/{{ .Data.FetDraftFetID }}/submit">
+                    <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                    <input type="hidden" name="version_id" value="{{ .Data.FetDraftID }}">
+                    <div class="historia-form-actions">
+                        <button class="boto-secundari" type="submit">{{ t .Lang "municipi.history.form.submit_review" }}</button>
+                    </div>
+                </form>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

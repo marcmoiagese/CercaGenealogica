@@ -17,6 +17,7 @@ type moderacioItem struct {
 	Type      string
 	Nom       string
 	Context   string
+	ContextURL string
 	Autor     string
 	AutorURL  string
 	Created   string
@@ -25,7 +26,7 @@ type moderacioItem struct {
 	EditURL   string
 }
 
-func (a *App) buildModeracioItems(lang string, page, perPage int) ([]moderacioItem, int) {
+func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User, canModerateAll bool) ([]moderacioItem, int) {
 	var items []moderacioItem
 	userCache := map[int]*db.User{}
 	autorFromID := func(id sql.NullInt64) (string, string) {
@@ -64,43 +65,80 @@ func (a *App) buildModeracioItems(lang string, page, perPage int) ([]moderacioIt
 		return username, "/u/" + strconv.Itoa(u.ID)
 	}
 
-	persones := []db.Persona{}
-	if pendents, err := a.DB.ListPersones(db.PersonaFilter{Estat: "pendent"}); err == nil {
-		persones = pendents
+	canModerateHistoriaAny := canModerateAll
+	if !canModerateAll && user != nil {
+		canModerateHistoriaAny = a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisHistoriaModerate)
 	}
-	arxius := []db.ArxiuWithCount{}
-	if rows, err := a.DB.ListArxius(db.ArxiuFilter{Status: "pendent"}); err == nil {
-		arxius = rows
-	}
-	llibres := []db.LlibreRow{}
-	if rows, err := a.DB.ListLlibres(db.LlibreFilter{Status: "pendent"}); err == nil {
-		llibres = rows
-	}
-	nivells := []db.NivellAdministratiu{}
-	if rows, err := a.DB.ListNivells(db.NivellAdminFilter{Status: "pendent"}); err == nil {
-		nivells = rows
-	}
-	municipis := []db.MunicipiRow{}
-	if rows, err := a.DB.ListMunicipis(db.MunicipiFilter{Status: "pendent"}); err == nil {
-		municipis = rows
-	}
-	ents := []db.ArquebisbatRow{}
-	if rows, err := a.DB.ListArquebisbats(db.ArquebisbatFilter{Status: "pendent"}); err == nil {
-		ents = rows
-	}
-	variants := []db.CognomVariant{}
-	if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err == nil {
-		variants = rows
-	}
-	pendingChanges := []db.TranscripcioRawChange{}
-	if rows, err := a.DB.ListTranscripcioRawChangesPending(); err == nil {
-		pendingChanges = rows
+	canModerateHistoriaItem := func(municipiID int) bool {
+		if canModerateAll {
+			return true
+		}
+		if user == nil || municipiID <= 0 {
+			return false
+		}
+		target := a.resolveMunicipiTarget(municipiID)
+		return a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaModerate, target)
 	}
 
-	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents) + len(variants)
+	persones := []db.Persona{}
+	arxius := []db.ArxiuWithCount{}
+	llibres := []db.LlibreRow{}
+	nivells := []db.NivellAdministratiu{}
+	municipis := []db.MunicipiRow{}
+	ents := []db.ArquebisbatRow{}
+	variants := []db.CognomVariant{}
+	pendingChanges := []db.TranscripcioRawChange{}
+	if canModerateAll {
+		if pendents, err := a.DB.ListPersones(db.PersonaFilter{Estat: "pendent"}); err == nil {
+			persones = pendents
+		}
+		if rows, err := a.DB.ListArxius(db.ArxiuFilter{Status: "pendent"}); err == nil {
+			arxius = rows
+		}
+		if rows, err := a.DB.ListLlibres(db.LlibreFilter{Status: "pendent"}); err == nil {
+			llibres = rows
+		}
+		if rows, err := a.DB.ListNivells(db.NivellAdminFilter{Status: "pendent"}); err == nil {
+			nivells = rows
+		}
+		if rows, err := a.DB.ListMunicipis(db.MunicipiFilter{Status: "pendent"}); err == nil {
+			municipis = rows
+		}
+		if rows, err := a.DB.ListArquebisbats(db.ArquebisbatFilter{Status: "pendent"}); err == nil {
+			ents = rows
+		}
+		if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err == nil {
+			variants = rows
+		}
+		if rows, err := a.DB.ListTranscripcioRawChangesPending(); err == nil {
+			pendingChanges = rows
+		}
+	}
+	historiaGeneral := []db.MunicipiHistoriaGeneralVersion{}
+	historiaFets := []db.MunicipiHistoriaFetVersion{}
+	if canModerateHistoriaAny {
+		if rows, _, err := a.DB.ListPendingMunicipiHistoriaGeneralVersions(0, 0); err == nil {
+			for _, row := range rows {
+				if canModerateHistoriaItem(row.MunicipiID) {
+					historiaGeneral = append(historiaGeneral, row)
+				}
+			}
+		}
+		if rows, _, err := a.DB.ListPendingMunicipiHistoriaFetVersions(0, 0); err == nil {
+			for _, row := range rows {
+				if canModerateHistoriaItem(row.MunicipiID) {
+					historiaFets = append(historiaFets, row)
+				}
+			}
+		}
+	}
+
+	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents) + len(variants) + len(historiaGeneral) + len(historiaFets)
 	regTotal := 0
-	if total, err := a.DB.CountTranscripcionsRawGlobal(db.TranscripcioFilter{Status: "pendent"}); err == nil {
-		regTotal = total
+	if canModerateAll {
+		if total, err := a.DB.CountTranscripcionsRawGlobal(db.TranscripcioFilter{Status: "pendent"}); err == nil {
+			regTotal = total
+		}
 	}
 	total := totalNonReg + regTotal + len(pendingChanges)
 	start := (page - 1) * perPage
@@ -119,152 +157,217 @@ func (a *App) buildModeracioItems(lang string, page, perPage int) ([]moderacioIt
 		index++
 	}
 
-	for _, p := range persones {
-		created := ""
-		var createdAt time.Time
-		if p.CreatedAt.Valid {
-			created = p.CreatedAt.Time.Format("2006-01-02 15:04")
-			createdAt = p.CreatedAt.Time
-		}
-		context := strings.TrimSpace(fmt.Sprintf("%s %s", p.Llibre, p.Pagina))
-		if context == "" {
-			context = p.Municipi
-		}
-		autorNom, autorURL := autorFromID(p.CreatedBy)
-		appendIfVisible(moderacioItem{
-			ID:        p.ID,
-			Type:      "persona",
-			Nom:       strings.TrimSpace(strings.Join([]string{p.Nom, p.Cognom1, p.Cognom2}, " ")),
-			Context:   context,
-			Autor:     autorNom,
-			AutorURL:  autorURL,
-			Created:   created,
-			CreatedAt: createdAt,
-			Motiu:     p.ModeracioMotiu,
-			EditURL:   fmt.Sprintf("/persones/%d?return_to=/moderacio", p.ID),
-		})
-	}
-
-	for _, arow := range arxius {
-		autorNom, autorURL := autorFromID(arow.CreatedBy)
-		appendIfVisible(moderacioItem{
-			ID:        arow.ID,
-			Type:      "arxiu",
-			Nom:       arow.Nom,
-			Context:   arow.Tipus,
-			Autor:     autorNom,
-			AutorURL:  autorURL,
-			Created:   "",
-			CreatedAt: time.Time{},
-			Motiu:     arow.ModeracioMotiu,
-			EditURL:   fmt.Sprintf("/documentals/arxius/%d/edit?return_to=/moderacio", arow.ID),
-		})
-	}
-
-	for _, l := range llibres {
-		autorNom, autorURL := autorFromID(l.CreatedBy)
-		appendIfVisible(moderacioItem{
-			ID:        l.ID,
-			Type:      "llibre",
-			Nom:       l.Titol,
-			Context:   l.NomEsglesia,
-			Autor:     autorNom,
-			AutorURL:  autorURL,
-			Created:   "",
-			CreatedAt: time.Time{},
-			Motiu:     l.ModeracioMotiu,
-			EditURL:   fmt.Sprintf("/documentals/llibres/%d/edit?return_to=/moderacio", l.ID),
-		})
-	}
-
-	for _, n := range nivells {
-		autorNom, autorURL := autorFromID(n.CreatedBy)
-		appendIfVisible(moderacioItem{
-			ID:        n.ID,
-			Type:      "nivell",
-			Nom:       n.NomNivell,
-			Context:   fmt.Sprintf("Nivell %d", n.Nivel),
-			Autor:     autorNom,
-			AutorURL:  autorURL,
-			Created:   "",
-			CreatedAt: time.Time{},
-			Motiu:     n.ModeracioMotiu,
-			EditURL:   fmt.Sprintf("/territori/nivells/%d/edit?return_to=/moderacio", n.ID),
-		})
-	}
-
-	for _, mrow := range municipis {
-		autorNom := "—"
-		autorURL := ""
-		motiu := ""
-		ctx := strings.TrimSpace(strings.Join([]string{mrow.PaisNom.String, mrow.ProvNom.String, mrow.Comarca.String}, " / "))
-		appendIfVisible(moderacioItem{
-			ID:        mrow.ID,
-			Type:      "municipi",
-			Nom:       mrow.Nom,
-			Context:   ctx,
-			Autor:     autorNom,
-			AutorURL:  autorURL,
-			Created:   "",
-			CreatedAt: time.Time{},
-			Motiu:     motiu,
-			EditURL:   fmt.Sprintf("/territori/municipis/%d/edit?return_to=/moderacio", mrow.ID),
-		})
-	}
-
-	for _, row := range ents {
-		autorNom := "—"
-		autorURL := ""
-		motiu := ""
-		appendIfVisible(moderacioItem{
-			ID:        row.ID,
-			Type:      "eclesiastic",
-			Nom:       row.Nom,
-			Context:   row.TipusEntitat,
-			Autor:     autorNom,
-			AutorURL:  autorURL,
-			Created:   "",
-			CreatedAt: time.Time{},
-			Motiu:     motiu,
-			EditURL:   fmt.Sprintf("/territori/eclesiastic/%d/edit?return_to=/moderacio", row.ID),
-		})
-	}
-
-	cognomCache := map[int]string{}
-	for _, v := range variants {
-		created := ""
-		var createdAt time.Time
-		if v.CreatedAt.Valid {
-			created = v.CreatedAt.Time.Format("2006-01-02 15:04")
-			createdAt = v.CreatedAt.Time
-		}
-		autorNom, autorURL := autorFromID(v.CreatedBy)
-		forma := cognomCache[v.CognomID]
-		if forma == "" {
-			if c, err := a.DB.GetCognom(v.CognomID); err == nil && c != nil {
-				forma = c.Forma
-				cognomCache[v.CognomID] = forma
+	if canModerateAll {
+		for _, p := range persones {
+			created := ""
+			var createdAt time.Time
+			if p.CreatedAt.Valid {
+				created = p.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = p.CreatedAt.Time
 			}
+			context := strings.TrimSpace(fmt.Sprintf("%s %s", p.Llibre, p.Pagina))
+			if context == "" {
+				context = p.Municipi
+			}
+			autorNom, autorURL := autorFromID(p.CreatedBy)
+			appendIfVisible(moderacioItem{
+				ID:        p.ID,
+				Type:      "persona",
+				Nom:       strings.TrimSpace(strings.Join([]string{p.Nom, p.Cognom1, p.Cognom2}, " ")),
+				Context:   context,
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				Created:   created,
+				CreatedAt: createdAt,
+				Motiu:     p.ModeracioMotiu,
+				EditURL:   fmt.Sprintf("/persones/%d?return_to=/moderacio", p.ID),
+			})
 		}
-		context := strings.TrimSpace(fmt.Sprintf("%s → %s", forma, v.Variant))
-		if context == "" {
-			context = v.Variant
+
+		for _, arow := range arxius {
+			autorNom, autorURL := autorFromID(arow.CreatedBy)
+			appendIfVisible(moderacioItem{
+				ID:        arow.ID,
+				Type:      "arxiu",
+				Nom:       arow.Nom,
+				Context:   arow.Tipus,
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				Created:   "",
+				CreatedAt: time.Time{},
+				Motiu:     arow.ModeracioMotiu,
+				EditURL:   fmt.Sprintf("/documentals/arxius/%d/edit?return_to=/moderacio", arow.ID),
+			})
+		}
+
+		for _, l := range llibres {
+			autorNom, autorURL := autorFromID(l.CreatedBy)
+			appendIfVisible(moderacioItem{
+				ID:        l.ID,
+				Type:      "llibre",
+				Nom:       l.Titol,
+				Context:   l.NomEsglesia,
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				Created:   "",
+				CreatedAt: time.Time{},
+				Motiu:     l.ModeracioMotiu,
+				EditURL:   fmt.Sprintf("/documentals/llibres/%d/edit?return_to=/moderacio", l.ID),
+			})
+		}
+
+		for _, n := range nivells {
+			autorNom, autorURL := autorFromID(n.CreatedBy)
+			appendIfVisible(moderacioItem{
+				ID:        n.ID,
+				Type:      "nivell",
+				Nom:       n.NomNivell,
+				Context:   fmt.Sprintf("Nivell %d", n.Nivel),
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				Created:   "",
+				CreatedAt: time.Time{},
+				Motiu:     n.ModeracioMotiu,
+				EditURL:   fmt.Sprintf("/territori/nivells/%d/edit?return_to=/moderacio", n.ID),
+			})
+		}
+
+		for _, mrow := range municipis {
+			autorNom := "—"
+			autorURL := ""
+			motiu := ""
+			ctx := strings.TrimSpace(strings.Join([]string{mrow.PaisNom.String, mrow.ProvNom.String, mrow.Comarca.String}, " / "))
+			appendIfVisible(moderacioItem{
+				ID:        mrow.ID,
+				Type:      "municipi",
+				Nom:       mrow.Nom,
+				Context:   ctx,
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				Created:   "",
+				CreatedAt: time.Time{},
+				Motiu:     motiu,
+				EditURL:   fmt.Sprintf("/territori/municipis/%d/edit?return_to=/moderacio", mrow.ID),
+			})
+		}
+
+		for _, row := range ents {
+			autorNom := "—"
+			autorURL := ""
+			motiu := ""
+			appendIfVisible(moderacioItem{
+				ID:        row.ID,
+				Type:      "eclesiastic",
+				Nom:       row.Nom,
+				Context:   row.TipusEntitat,
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				Created:   "",
+				CreatedAt: time.Time{},
+				Motiu:     motiu,
+				EditURL:   fmt.Sprintf("/territori/eclesiastic/%d/edit?return_to=/moderacio", row.ID),
+			})
+		}
+	}
+
+	for _, row := range historiaGeneral {
+		created := ""
+		var createdAt time.Time
+		if row.CreatedAt.Valid {
+			created = row.CreatedAt.Time.Format("2006-01-02 15:04")
+			createdAt = row.CreatedAt.Time
+		}
+		autorNom, autorURL := autorFromID(row.CreatedBy)
+		nomParts := []string{T(lang, "municipi.history.general")}
+		if strings.TrimSpace(row.MunicipiNom) != "" {
+			nomParts = append(nomParts, strings.TrimSpace(row.MunicipiNom))
 		}
 		appendIfVisible(moderacioItem{
-			ID:        v.ID,
-			Type:      "cognom_variant",
-			Nom:       v.Variant,
-			Context:   context,
-			Autor:     autorNom,
-			AutorURL:  autorURL,
-			Created:   created,
-			CreatedAt: createdAt,
-			Motiu:     v.ModeracioMotiu,
-			EditURL:   fmt.Sprintf("/cognoms/%d", v.CognomID),
+			ID:         row.ID,
+			Type:       "municipi_historia_general",
+			Nom:        strings.Join(nomParts, " · "),
+			Context:    strings.TrimSpace(row.MunicipiNom),
+			ContextURL: fmt.Sprintf("/territori/municipis/%d", row.MunicipiID),
+			Autor:      autorNom,
+			AutorURL:   autorURL,
+			Created:    created,
+			CreatedAt:  createdAt,
+			Motiu:      row.ModerationNotes,
+			EditURL:    fmt.Sprintf("/moderacio/municipis/historia/general/%d", row.ID),
 		})
 	}
 
-	if regTotal > 0 && index < end {
+	for _, row := range historiaFets {
+		created := ""
+		var createdAt time.Time
+		if row.CreatedAt.Valid {
+			created = row.CreatedAt.Time.Format("2006-01-02 15:04")
+			createdAt = row.CreatedAt.Time
+		}
+		autorNom, autorURL := autorFromID(row.CreatedBy)
+		dateLabel := strings.TrimSpace(historiaDateLabel(row))
+		nameParts := []string{}
+		if dateLabel != "" {
+			nameParts = append(nameParts, dateLabel)
+		}
+		if strings.TrimSpace(row.Titol) != "" {
+			nameParts = append(nameParts, strings.TrimSpace(row.Titol))
+		}
+		if strings.TrimSpace(row.MunicipiNom) != "" {
+			nameParts = append(nameParts, strings.TrimSpace(row.MunicipiNom))
+		}
+		appendIfVisible(moderacioItem{
+			ID:         row.ID,
+			Type:       "municipi_historia_fet",
+			Nom:        strings.Join(nameParts, " · "),
+			Context:    strings.TrimSpace(row.MunicipiNom),
+			ContextURL: fmt.Sprintf("/territori/municipis/%d", row.MunicipiID),
+			Autor:      autorNom,
+			AutorURL:   autorURL,
+			Created:    created,
+			CreatedAt:  createdAt,
+			Motiu:      row.ModerationNotes,
+			EditURL:    fmt.Sprintf("/moderacio/municipis/historia/fets/%d", row.ID),
+		})
+	}
+
+	if canModerateAll {
+		cognomCache := map[int]string{}
+		for _, v := range variants {
+			created := ""
+			var createdAt time.Time
+			if v.CreatedAt.Valid {
+				created = v.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = v.CreatedAt.Time
+			}
+			autorNom, autorURL := autorFromID(v.CreatedBy)
+			forma := cognomCache[v.CognomID]
+			if forma == "" {
+				if c, err := a.DB.GetCognom(v.CognomID); err == nil && c != nil {
+					forma = c.Forma
+					cognomCache[v.CognomID] = forma
+				}
+			}
+			context := strings.TrimSpace(fmt.Sprintf("%s → %s", forma, v.Variant))
+			if context == "" {
+				context = v.Variant
+			}
+			appendIfVisible(moderacioItem{
+				ID:        v.ID,
+				Type:      "cognom_variant",
+				Nom:       v.Variant,
+				Context:   context,
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				Created:   created,
+				CreatedAt: createdAt,
+				Motiu:     v.ModeracioMotiu,
+				EditURL:   fmt.Sprintf("/cognoms/%d", v.CognomID),
+			})
+		}
+	}
+
+	if canModerateAll && regTotal > 0 && index < end {
 		regOffset := 0
 		if start > index {
 			regOffset = start - index
@@ -316,7 +419,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int) ([]moderacioIt
 		}
 	}
 
-	if len(pendingChanges) > 0 && index < end {
+	if canModerateAll && len(pendingChanges) > 0 && index < end {
 		changeOffset := 0
 		if start > index {
 			changeOffset = start - index
@@ -396,9 +499,57 @@ func maxInt(a, b int) int {
 	return b
 }
 
+func (a *App) requireModeracioUser(w http.ResponseWriter, r *http.Request) (*db.User, db.PolicyPermissions, bool, bool) {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return nil, db.PolicyPermissions{}, false, false
+	}
+	*r = *a.withUser(r, user)
+	perms, found := a.permissionsFromContext(r)
+	if !found {
+		perms = a.getPermissionsForUser(user.ID)
+		*r = *a.withPermissions(r, perms)
+	}
+	canModerateAll := a.hasPerm(perms, permModerate)
+	if canModerateAll || a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisHistoriaModerate) {
+		return user, perms, canModerateAll, true
+	}
+	http.Error(w, "Forbidden", http.StatusForbidden)
+	return user, perms, false, false
+}
+
+func (a *App) canModerateHistoriaObject(user *db.User, perms db.PolicyPermissions, objectType string, versionID int) bool {
+	if user == nil {
+		return false
+	}
+	if a.hasPerm(perms, permModerate) {
+		return true
+	}
+	munID := 0
+	switch objectType {
+	case "municipi_historia_general":
+		if id, err := a.DB.ResolveMunicipiIDByHistoriaGeneralVersionID(versionID); err == nil {
+			munID = id
+		}
+	case "municipi_historia_fet":
+		if id, err := a.DB.ResolveMunicipiIDByHistoriaFetVersionID(versionID); err == nil {
+			munID = id
+		}
+	default:
+		return false
+	}
+	if munID <= 0 {
+		return false
+	}
+	target := a.resolveMunicipiTarget(munID)
+	return a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaModerate, target)
+}
+
 // Llista de persones pendents de moderació
 func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permModerate); !ok {
+	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
+	if !ok {
 		return
 	}
 	page := 1
@@ -416,7 +567,7 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	pageItems, total := a.buildModeracioItems(ResolveLang(r), page, perPage)
+	pageItems, total := a.buildModeracioItems(ResolveLang(r), page, perPage, user, canModerateAll)
 	totalPages := 1
 	if total > 0 {
 		totalPages = (total + perPage - 1) / perPage
@@ -438,8 +589,6 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 		pageStart = start + 1
 		pageEnd = end
 	}
-	user, _ := a.VerificarSessio(r)
-	perms := a.getPermissionsForUser(user.ID)
 	canManageArxius := a.hasPerm(perms, permArxius)
 	isAdmin := a.hasPerm(perms, permAdmin)
 	msg := ""
@@ -457,6 +606,7 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 		"IsAdmin":         isAdmin,
 		"Msg":             msg,
 		"Ok":              okFlag,
+		"CanBulk":         canModerateAll,
 		"User":            user,
 		"Total":           total,
 		"Page":            page,
@@ -542,7 +692,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if scope == "all" {
-		types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "registre", "cognom_variant"}
+		types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "municipi_historia_general", "municipi_historia_fet", "registre", "cognom_variant"}
 		if bulkType != "" && bulkType != "all" {
 			types = []string{bulkType}
 		}
@@ -604,6 +754,22 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 				} else {
 					errCount++
 				}
+			case "municipi_historia_general":
+				if rows, _, err := a.DB.ListPendingMunicipiHistoriaGeneralVersions(0, 0); err == nil {
+					for _, row := range rows {
+						applyAction(objType, row.ID)
+					}
+				} else {
+					errCount++
+				}
+			case "municipi_historia_fet":
+				if rows, _, err := a.DB.ListPendingMunicipiHistoriaFetVersions(0, 0); err == nil {
+					for _, row := range rows {
+						applyAction(objType, row.ID)
+					}
+				} else {
+					errCount++
+				}
 			case "registre":
 				const chunk = 200
 				for {
@@ -653,10 +819,10 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 
 // Aprovar persona
 func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permModerate); !ok {
+	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
+	if !ok {
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -671,6 +837,10 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 		objType = "persona"
 	}
 	_ = r.ParseForm()
+	if !canModerateAll && !a.canModerateHistoriaObject(user, perms, objType, id) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	if err := a.updateModeracioObject(objType, id, "publicat", "", user.ID); err != nil {
 		Errorf("Moderacio aprovar %s:%d ha fallat: %v", objType, id, err)
 		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
@@ -687,10 +857,10 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 
 // Rebutjar persona amb motiu
 func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permModerate); !ok {
+	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
+	if !ok {
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -706,6 +876,10 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := r.ParseForm(); err != nil {
 		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
+		return
+	}
+	if !canModerateAll && !a.canModerateHistoriaObject(user, perms, objType, id) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	motiu := r.FormValue("motiu")
@@ -743,6 +917,10 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.moderateRegistreChange(id, estat, motiu, moderatorID)
 	case "cognom_variant":
 		return a.DB.UpdateCognomVariantModeracio(id, estat, motiu, moderatorID)
+	case "municipi_historia_general":
+		return a.DB.SetMunicipiHistoriaGeneralStatus(id, estat, motiu, &moderatorID)
+	case "municipi_historia_fet":
+		return a.DB.SetMunicipiHistoriaFetStatus(id, estat, motiu, &moderatorID)
 	default:
 		return fmt.Errorf("tipus desconegut")
 	}

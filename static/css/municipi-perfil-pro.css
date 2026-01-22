@@ -372,6 +372,77 @@
     transform: scale(1.1);
 }
 
+.muni-history {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.muni-history-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.muni-history-subtitle {
+    margin: 0;
+}
+
+.muni-history-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 900;
+}
+
+.muni-history-text {
+    margin: 0.35rem 0 0;
+    color: #1f2d3d;
+}
+
+.muni-history-section {
+    margin: 0;
+    font-size: 0.92rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #607386;
+    font-weight: 800;
+}
+
+.muni-history-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.55rem 0 0;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.muni-history-item {
+    display: grid;
+    grid-template-columns: minmax(72px, auto) 1fr;
+    gap: 0.6rem;
+    align-items: start;
+    padding: 0.5rem 0.6rem;
+    border-radius: 10px;
+    border: 1px solid #e6edf3;
+    background: #fafbfc;
+}
+
+.muni-history-date {
+    font-weight: 900;
+    color: #37516c;
+}
+
+.muni-history-item-text {
+    font-weight: 700;
+    color: #1f2d3d;
+}
+
+.muni-history-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
 @media (max-width: 1024px) {
     .muni-grid {
         grid-template-columns: 1fr;
@@ -389,6 +460,12 @@
         height: 380px;
     }
     #muniMapsPopover .popover-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 980px) {
+    .muni-history-item {
         grid-template-columns: 1fr;
     }
 }

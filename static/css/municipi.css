@@ -1,0 +1,352 @@
+/* Inputs als headers */
+#filtraFila input {
+    width: 100%;
+    padding: 6px;
+    font-size: 14px;
+    border-radius: 4px;
+    border: 1px solid var(--color-borda);
+}
+
+/* Botó engranatge*/
+.config-columna {
+    text-align: center;
+    background-color: var(--primary-color); /* O el color que vulguis */
+}
+
+.boto-engranatge {
+    background: none;
+    border: none;
+    padding: 8px 12px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.boto-engranatge:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.boto-engranatge i.fas.fa-cog {
+    color: rgba(0, 0, 0, 0.5);
+    font-size: 18px; /* Més gran */
+}
+
+/* Modal Configuració Columnes */
+
+.modal-config {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(3px);
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content-config {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 1rem;
+  width: 90%;
+  max-width: 500px;
+  position: relative;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Animació */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Títol del modal */
+.modal-content-config h2 {
+  margin-bottom: 1.5rem;
+  font-size: 1.4rem;
+  color: #333;
+  text-align: center;
+}
+
+/* Botó de tancar */
+.tanca-modal-config {
+  position: absolute;
+  top: 1rem;
+  right: 1.2rem;
+  font-size: 1.5rem;
+  color: #888;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.tanca-modal-config:hover {
+  color: #000;
+}
+
+/* Grup d’inputs */
+.modal-content-config .form-group {
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-content-config .form-group label {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #444;
+}
+
+.modal-content-config .form-group select {
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.modal-content-config .form-group select:focus {
+  border-color: #007bff;
+}
+
+/* Llista de checkboxes */
+.checkboxes-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.checkboxes-container label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f8f8f8;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  transition: background 0.2s;
+  cursor: pointer;
+}
+
+.checkboxes-container label:hover {
+  background: #eaeaea;
+}
+
+.checkboxes-container input[type="checkbox"] {
+  accent-color: #007bff;
+  width: 1rem;
+  height: 1rem;
+}
+
+/* xivato per visualitzar si les columnes es desincronitzen */
+/* [data-col]::after {
+    content: " (" attr(data-col) ")";
+    font-size: 10px;
+    color: red;
+} */
+
+
+.barra-superior {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+}
+
+
+
+.paginador {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 15px;
+    font-size: 16px;
+}
+
+.paginador span,
+.paginador button {
+    cursor: pointer;
+    padding: 4px 8px;
+    border: 1px solid var(--color-borda);
+    border-radius: 4px;
+    background-color: white;
+}
+
+.paginador .actiu {
+    font-weight: bold;
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/*EDICIO CAMPS*/
+.edit-icons {
+  display: none;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+.editable-cell:hover .edit-icons {
+  display: inline;
+}
+
+.edit-icons i {
+  margin: 0 4px;
+}
+
+
+
+/*** MODAL CONNECTA ****/
+/*.modal {
+  position: fixed;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+}  */
+
+/* --- MODAL INTERCONNEXIÓ --- */
+
+#modalInterconnectar.modal-interconnexio {
+  display: none;
+  position: fixed;
+  z-index: 10000;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(2px);
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content-interconnexio {
+  background: #fff;
+  border-radius: 1rem;
+  padding: 2rem;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  position: relative;
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Animació */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Botó de tancar */
+.tanca-modal-interconnexio {
+  position: absolute;
+  top: 1rem;
+  right: 1.2rem;
+  font-size: 1.5rem;
+  color: #888;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.tanca-modal-interconnexio:hover {
+  color: #000;
+}
+
+/* Títol */
+.modal-content-interconnexio h3 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+  color: #333;
+}
+
+/* Select connexió */
+#modalInterconnexio select {
+  width: 100%;
+  padding: 0.6rem;
+  margin-top: 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+#modalInterconnexio select:focus {
+  border-color: #007bff;
+}
+
+/* Formulari dinàmic */
+#formulariConnexio .form-group {
+  margin-bottom: 1rem;
+}
+
+
+#formulariConnexio label {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 0.4rem;
+  color: #444;
+}
+
+#formulariConnexio input,
+#formulariConnexio select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+#formulariConnexio input:focus,
+#formulariConnexio select:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+#tipusConnexio {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  background-color: #f9f9f9;
+  border: 1px solid #ccc;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  border-radius: 0.5rem;
+  width: 100%;
+  color: #333;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='20,50 70,100 120,50' fill='none' stroke='%23666' stroke-width='15' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1rem;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+#tipusConnexio:hover {
+  border-color: #888;
+}
+
+#tipusConnexio:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
+  outline: none;
+}
+
+/* Botó d’interconnexió a la taula */
+.btn-interconnectar {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: #555;
+  transition: color 0.3s;
+}
+
+.btn-interconnectar:hover {
+  color: #007bff;
+}

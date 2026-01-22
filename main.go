@@ -301,6 +301,20 @@ func main() {
 	})
 	http.HandleFunc("/territori/municipis/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/historia"):
+			applyMiddleware(app.MunicipiHistoriaPublic, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/historia/aportar"):
+			applyMiddleware(app.MunicipiHistoriaAportar, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/historia/general/save"):
+			applyMiddleware(app.MunicipiHistoriaGeneralSave, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/historia/general/submit"):
+			applyMiddleware(app.MunicipiHistoriaGeneralSubmit, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/historia/fets/new"):
+			applyMiddleware(app.MunicipiHistoriaFetNew, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/historia/fets/") && strings.HasSuffix(r.URL.Path, "/save"):
+			applyMiddleware(app.MunicipiHistoriaFetSave, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/historia/fets/") && strings.HasSuffix(r.URL.Path, "/submit"):
+			applyMiddleware(app.MunicipiHistoriaFetSubmit, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/new"):
 			applyMiddleware(app.AdminNewMunicipi, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/edit"):
@@ -440,6 +454,10 @@ func main() {
 			applyMiddleware(app.AdminModeracioAprovar, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/rebutjar"):
 			applyMiddleware(app.AdminModeracioRebutjar, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/municipis/historia/general/"):
+			applyMiddleware(app.AdminModeracioHistoriaGeneralPreview, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/municipis/historia/fets/"):
+			applyMiddleware(app.AdminModeracioHistoriaFetPreview, core.BlockIPs, core.RateLimit)(w, r)
 		default:
 			http.NotFound(w, r)
 		}

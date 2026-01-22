@@ -787,3 +787,64 @@ func (d *PostgreSQL) ResolveMunicipiIDByMapaID(mapaID int) (int, error) {
 func (d *PostgreSQL) ResolveMunicipiIDByMapaVersionID(versionID int) (int, error) {
 	return d.help.resolveMunicipiIDByMapaVersionID(versionID)
 }
+
+func (d *PostgreSQL) EnsureMunicipiHistoria(municipiID int) (*MunicipiHistoria, error) {
+	return d.help.ensureMunicipiHistoria(municipiID)
+}
+func (d *PostgreSQL) GetMunicipiHistoriaByMunicipiID(municipiID int) (*MunicipiHistoria, error) {
+	return d.help.getMunicipiHistoriaByMunicipiID(municipiID)
+}
+func (d *PostgreSQL) ResolveMunicipiIDByHistoriaGeneralVersionID(versionID int) (int, error) {
+	return d.help.resolveMunicipiIDByHistoriaGeneralVersionID(versionID)
+}
+func (d *PostgreSQL) ResolveMunicipiIDByHistoriaFetVersionID(versionID int) (int, error) {
+	return d.help.resolveMunicipiIDByHistoriaFetVersionID(versionID)
+}
+func (d *PostgreSQL) NextMunicipiHistoriaGeneralVersion(historiaID int) (int, error) {
+	return d.help.nextMunicipiHistoriaGeneralVersion(historiaID)
+}
+func (d *PostgreSQL) CreateMunicipiHistoriaGeneralDraft(historiaID int, createdBy int, baseFromCurrent bool) (int, error) {
+	return d.help.createMunicipiHistoriaGeneralDraft(historiaID, createdBy, baseFromCurrent)
+}
+func (d *PostgreSQL) GetMunicipiHistoriaGeneralVersion(id int) (*MunicipiHistoriaGeneralVersion, error) {
+	return d.help.getMunicipiHistoriaGeneralVersion(id)
+}
+func (d *PostgreSQL) UpdateMunicipiHistoriaGeneralDraft(v *MunicipiHistoriaGeneralVersion) error {
+	return d.help.updateMunicipiHistoriaGeneralDraft(v)
+}
+func (d *PostgreSQL) SetMunicipiHistoriaGeneralStatus(versionID int, status, notes string, moderatorID *int) error {
+	return d.help.setMunicipiHistoriaGeneralStatus(versionID, status, notes, moderatorID)
+}
+func (d *PostgreSQL) GetMunicipiHistoriaFet(id int) (*MunicipiHistoriaFet, error) {
+	return d.help.getMunicipiHistoriaFet(id)
+}
+func (d *PostgreSQL) CreateMunicipiHistoriaFet(municipiID int, createdBy int) (int, error) {
+	return d.help.createMunicipiHistoriaFet(municipiID, createdBy)
+}
+func (d *PostgreSQL) NextMunicipiHistoriaFetVersion(fetID int) (int, error) {
+	return d.help.nextMunicipiHistoriaFetVersion(fetID)
+}
+func (d *PostgreSQL) CreateMunicipiHistoriaFetDraft(fetID int, createdBy int, baseFromCurrent bool) (int, error) {
+	return d.help.createMunicipiHistoriaFetDraft(fetID, createdBy, baseFromCurrent)
+}
+func (d *PostgreSQL) GetMunicipiHistoriaFetVersion(id int) (*MunicipiHistoriaFetVersion, error) {
+	return d.help.getMunicipiHistoriaFetVersion(id)
+}
+func (d *PostgreSQL) UpdateMunicipiHistoriaFetDraft(v *MunicipiHistoriaFetVersion) error {
+	return d.help.updateMunicipiHistoriaFetDraft(v)
+}
+func (d *PostgreSQL) SetMunicipiHistoriaFetStatus(versionID int, status, notes string, moderatorID *int) error {
+	return d.help.setMunicipiHistoriaFetStatus(versionID, status, notes, moderatorID)
+}
+func (d *PostgreSQL) GetMunicipiHistoriaSummary(municipiID int) (*MunicipiHistoriaGeneralVersion, []MunicipiHistoriaFetVersion, error) {
+	return d.help.getMunicipiHistoriaSummary(municipiID)
+}
+func (d *PostgreSQL) ListMunicipiHistoriaTimeline(municipiID int, status string, limit, offset int, q string, anyFrom, anyTo *int) ([]MunicipiHistoriaFetVersion, int, error) {
+	return d.help.listMunicipiHistoriaTimeline(municipiID, status, limit, offset, q, anyFrom, anyTo)
+}
+func (d *PostgreSQL) ListPendingMunicipiHistoriaGeneralVersions(limit, offset int) ([]MunicipiHistoriaGeneralVersion, int, error) {
+	return d.help.listPendingMunicipiHistoriaGeneralVersions(limit, offset)
+}
+func (d *PostgreSQL) ListPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error) {
+	return d.help.listPendingMunicipiHistoriaFetVersions(limit, offset)
+}

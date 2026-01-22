@@ -799,3 +799,64 @@ func (d *SQLite) ResolveMunicipiIDByMapaID(mapaID int) (int, error) {
 func (d *SQLite) ResolveMunicipiIDByMapaVersionID(versionID int) (int, error) {
 	return d.help.resolveMunicipiIDByMapaVersionID(versionID)
 }
+
+func (d *SQLite) EnsureMunicipiHistoria(municipiID int) (*MunicipiHistoria, error) {
+	return d.help.ensureMunicipiHistoria(municipiID)
+}
+func (d *SQLite) GetMunicipiHistoriaByMunicipiID(municipiID int) (*MunicipiHistoria, error) {
+	return d.help.getMunicipiHistoriaByMunicipiID(municipiID)
+}
+func (d *SQLite) ResolveMunicipiIDByHistoriaGeneralVersionID(versionID int) (int, error) {
+	return d.help.resolveMunicipiIDByHistoriaGeneralVersionID(versionID)
+}
+func (d *SQLite) ResolveMunicipiIDByHistoriaFetVersionID(versionID int) (int, error) {
+	return d.help.resolveMunicipiIDByHistoriaFetVersionID(versionID)
+}
+func (d *SQLite) NextMunicipiHistoriaGeneralVersion(historiaID int) (int, error) {
+	return d.help.nextMunicipiHistoriaGeneralVersion(historiaID)
+}
+func (d *SQLite) CreateMunicipiHistoriaGeneralDraft(historiaID int, createdBy int, baseFromCurrent bool) (int, error) {
+	return d.help.createMunicipiHistoriaGeneralDraft(historiaID, createdBy, baseFromCurrent)
+}
+func (d *SQLite) GetMunicipiHistoriaGeneralVersion(id int) (*MunicipiHistoriaGeneralVersion, error) {
+	return d.help.getMunicipiHistoriaGeneralVersion(id)
+}
+func (d *SQLite) UpdateMunicipiHistoriaGeneralDraft(v *MunicipiHistoriaGeneralVersion) error {
+	return d.help.updateMunicipiHistoriaGeneralDraft(v)
+}
+func (d *SQLite) SetMunicipiHistoriaGeneralStatus(versionID int, status, notes string, moderatorID *int) error {
+	return d.help.setMunicipiHistoriaGeneralStatus(versionID, status, notes, moderatorID)
+}
+func (d *SQLite) GetMunicipiHistoriaFet(id int) (*MunicipiHistoriaFet, error) {
+	return d.help.getMunicipiHistoriaFet(id)
+}
+func (d *SQLite) CreateMunicipiHistoriaFet(municipiID int, createdBy int) (int, error) {
+	return d.help.createMunicipiHistoriaFet(municipiID, createdBy)
+}
+func (d *SQLite) NextMunicipiHistoriaFetVersion(fetID int) (int, error) {
+	return d.help.nextMunicipiHistoriaFetVersion(fetID)
+}
+func (d *SQLite) CreateMunicipiHistoriaFetDraft(fetID int, createdBy int, baseFromCurrent bool) (int, error) {
+	return d.help.createMunicipiHistoriaFetDraft(fetID, createdBy, baseFromCurrent)
+}
+func (d *SQLite) GetMunicipiHistoriaFetVersion(id int) (*MunicipiHistoriaFetVersion, error) {
+	return d.help.getMunicipiHistoriaFetVersion(id)
+}
+func (d *SQLite) UpdateMunicipiHistoriaFetDraft(v *MunicipiHistoriaFetVersion) error {
+	return d.help.updateMunicipiHistoriaFetDraft(v)
+}
+func (d *SQLite) SetMunicipiHistoriaFetStatus(versionID int, status, notes string, moderatorID *int) error {
+	return d.help.setMunicipiHistoriaFetStatus(versionID, status, notes, moderatorID)
+}
+func (d *SQLite) GetMunicipiHistoriaSummary(municipiID int) (*MunicipiHistoriaGeneralVersion, []MunicipiHistoriaFetVersion, error) {
+	return d.help.getMunicipiHistoriaSummary(municipiID)
+}
+func (d *SQLite) ListMunicipiHistoriaTimeline(municipiID int, status string, limit, offset int, q string, anyFrom, anyTo *int) ([]MunicipiHistoriaFetVersion, int, error) {
+	return d.help.listMunicipiHistoriaTimeline(municipiID, status, limit, offset, q, anyFrom, anyTo)
+}
+func (d *SQLite) ListPendingMunicipiHistoriaGeneralVersions(limit, offset int) ([]MunicipiHistoriaGeneralVersion, int, error) {
+	return d.help.listPendingMunicipiHistoriaGeneralVersions(limit, offset)
+}
+func (d *SQLite) ListPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error) {
+	return d.help.listPendingMunicipiHistoriaFetVersions(limit, offset)
+}

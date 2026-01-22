@@ -106,6 +106,28 @@ type DB interface {
 	ResolveMunicipiIDByMapaID(mapaID int) (int, error)
 	ResolveMunicipiIDByMapaVersionID(versionID int) (int, error)
 
+	// Historia municipi
+	EnsureMunicipiHistoria(municipiID int) (*MunicipiHistoria, error)
+	GetMunicipiHistoriaByMunicipiID(municipiID int) (*MunicipiHistoria, error)
+	ResolveMunicipiIDByHistoriaGeneralVersionID(versionID int) (int, error)
+	ResolveMunicipiIDByHistoriaFetVersionID(versionID int) (int, error)
+	NextMunicipiHistoriaGeneralVersion(historiaID int) (int, error)
+	CreateMunicipiHistoriaGeneralDraft(historiaID int, createdBy int, baseFromCurrent bool) (int, error)
+	GetMunicipiHistoriaGeneralVersion(id int) (*MunicipiHistoriaGeneralVersion, error)
+	UpdateMunicipiHistoriaGeneralDraft(v *MunicipiHistoriaGeneralVersion) error
+	SetMunicipiHistoriaGeneralStatus(versionID int, status, notes string, moderatorID *int) error
+	GetMunicipiHistoriaFet(id int) (*MunicipiHistoriaFet, error)
+	CreateMunicipiHistoriaFet(municipiID int, createdBy int) (int, error)
+	NextMunicipiHistoriaFetVersion(fetID int) (int, error)
+	CreateMunicipiHistoriaFetDraft(fetID int, createdBy int, baseFromCurrent bool) (int, error)
+	GetMunicipiHistoriaFetVersion(id int) (*MunicipiHistoriaFetVersion, error)
+	UpdateMunicipiHistoriaFetDraft(v *MunicipiHistoriaFetVersion) error
+	SetMunicipiHistoriaFetStatus(versionID int, status, notes string, moderatorID *int) error
+	GetMunicipiHistoriaSummary(municipiID int) (*MunicipiHistoriaGeneralVersion, []MunicipiHistoriaFetVersion, error)
+	ListMunicipiHistoriaTimeline(municipiID int, status string, limit, offset int, q string, anyFrom, anyTo *int) ([]MunicipiHistoriaFetVersion, int, error)
+	ListPendingMunicipiHistoriaGeneralVersions(limit, offset int) ([]MunicipiHistoriaGeneralVersion, int, error)
+	ListPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error)
+
 	// Persones (moderació)
 	ListPersones(filter PersonaFilter) ([]Persona, error)
 	GetPersona(id int) (*Persona, error)
@@ -474,6 +496,75 @@ type MunicipiMapaVersionFilter struct {
 	CreatedBy int
 	Limit    int
 	Offset   int
+}
+
+type MunicipiHistoria struct {
+	ID                     int
+	MunicipiID             int
+	CurrentGeneralVersionID sql.NullInt64
+	CreatedAt              sql.NullTime
+	UpdatedAt              sql.NullTime
+}
+
+type MunicipiHistoriaGeneralVersion struct {
+	ID              int
+	HistoriaID      int
+	MunicipiID      int
+	MunicipiNom     string
+	Version         int
+	Titol           string
+	Resum           string
+	CosText         string
+	TagsJSON        string
+	Status          string
+	ModerationNotes string
+	LockVersion     int
+	CreatedBy       sql.NullInt64
+	CreatedAt       sql.NullTime
+	UpdatedAt       sql.NullTime
+	ModeratedBy     sql.NullInt64
+	ModeratedAt     sql.NullTime
+}
+
+type MunicipiHistoriaFet struct {
+	ID               int
+	MunicipiID       int
+	CurrentVersionID sql.NullInt64
+	CreatedAt        sql.NullTime
+	UpdatedAt        sql.NullTime
+}
+
+type MunicipiHistoriaFetVersion struct {
+	ID              int
+	FetID           int
+	MunicipiID      int
+	MunicipiNom     string
+	Version         int
+	AnyInici        sql.NullInt64
+	AnyFi           sql.NullInt64
+	DataInici       string
+	DataFi          string
+	DataDisplay     string
+	Titol           string
+	Resum           string
+	CosText         string
+	TagsJSON        string
+	FontsJSON       string
+	Status          string
+	ModerationNotes string
+	LockVersion     int
+	CreatedBy       sql.NullInt64
+	CreatedAt       sql.NullTime
+	UpdatedAt       sql.NullTime
+	ModeratedBy     sql.NullInt64
+	ModeratedAt     sql.NullTime
+}
+
+type MunicipiHistoriaVersionFilter struct {
+	MunicipiID int
+	Status     string
+	Limit      int
+	Offset     int
 }
 
 type Pais struct {

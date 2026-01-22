@@ -1,0 +1,122 @@
+{{ define "municipi-historia.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "municipi.history.title" }} · {{ .Data.Municipi.Nom }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/municipi-historia.css">
+</head>
+<body>
+    {{ if .UserLoggedIn }}
+        {{ template "header-private" . }}
+        {{ template "menu" . }}
+    {{ else }}
+        {{ template "header-public" . }}
+    {{ end }}
+    <main class="contingut-principal historia-page">
+        <section class="card historia-hero">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "municipi.history.title" }}</h1>
+                    <p class="muted">{{ .Data.Municipi.Nom }}</p>
+                </div>
+                <div class="historia-actions">
+                    <a class="boto-secundari" href="/territori/municipis/{{ .Data.Municipi.ID }}">{{ t .Lang "common.back" }}</a>
+                    {{ if .Data.CanAportarHistoria }}
+                        <a class="boto-primari" href="/territori/municipis/{{ .Data.Municipi.ID }}/historia/aportar">{{ t .Lang "municipi.history.contribute" }}</a>
+                    {{ end }}
+                </div>
+            </header>
+        </section>
+
+        <section class="card historia-general">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h2>{{ t .Lang "municipi.history.general" }}</h2>
+                </div>
+                {{ if .Data.CanAportarHistoria }}
+                    <a class="boto-secundari btn-mini" href="/territori/municipis/{{ .Data.Municipi.ID }}/historia/aportar">{{ t .Lang "municipi.history.contribute" }}</a>
+                {{ end }}
+            </header>
+            {{ if .Data.HistoriaGeneral }}
+                {{ if .Data.HistoriaGeneral.Titol }}
+                    <h3 class="historia-general-title">{{ .Data.HistoriaGeneral.Titol }}</h3>
+                {{ end }}
+                {{ if .Data.HistoriaGeneral.Resum }}
+                    <p class="historia-timeline-summary">{{ .Data.HistoriaGeneral.Resum }}</p>
+                {{ end }}
+                <div class="historia-text">{{ .Data.HistoriaGeneral.CosText }}</div>
+            {{ else }}
+                <p class="muted">{{ t .Lang "municipi.history.empty_general" }}</p>
+            {{ end }}
+        </section>
+
+        <section class="card historia-timeline">
+            <header class="card-header">
+                <h2>{{ t .Lang "municipi.history.timeline" }}</h2>
+            </header>
+            <form class="historia-filters" method="get">
+                {{ if ne .Data.PerPage 20 }}
+                    <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
+                {{ end }}
+                <div class="historia-form-row">
+                    <label for="historiaSearch">{{ t .Lang "municipi.history.filter.search" }}</label>
+                    <input id="historiaSearch" name="q" type="text" value="{{ .Data.FilterQ }}">
+                </div>
+                <div class="historia-form-row">
+                    <label for="historiaFrom">{{ t .Lang "municipi.history.filter.from" }}</label>
+                    <input id="historiaFrom" name="from" type="number" inputmode="numeric" value="{{ .Data.FilterFrom }}">
+                </div>
+                <div class="historia-form-row">
+                    <label for="historiaTo">{{ t .Lang "municipi.history.filter.to" }}</label>
+                    <input id="historiaTo" name="to" type="number" inputmode="numeric" value="{{ .Data.FilterTo }}">
+                </div>
+                <div class="historia-form-row">
+                    <button class="boto-secundari" type="submit">{{ t .Lang "common.apply" }}</button>
+                </div>
+            </form>
+            {{ if .Data.Timeline }}
+                <div class="historia-timeline-list">
+                    {{ range .Data.Timeline }}
+                        <article class="historia-timeline-item">
+                            <header class="historia-timeline-header">
+                                <span class="historia-timeline-date">{{ .Date }}</span>
+                                <h3 class="historia-timeline-title">{{ .Title }}</h3>
+                            </header>
+                            {{ if .Summary }}
+                                <p class="historia-timeline-summary">{{ .Summary }}</p>
+                            {{ end }}
+                            {{ if .Body }}
+                                <div class="historia-text">{{ .Body }}</div>
+                            {{ end }}
+                        </article>
+                    {{ end }}
+                </div>
+            {{ else }}
+                <p class="muted">{{ t .Lang "municipi.history.empty_timeline" }}</p>
+            {{ end }}
+            {{ if gt .Data.TotalPages 1 }}
+            <div class="paginacio">
+                <div class="paginacio-cont">
+                    {{ if .Data.HasPrev }}
+                        <a class="boto-secundari" href="{{ .Data.PageBase }}&page={{ .Data.PrevPage }}">{{ t .Lang "common.prev" }}</a>
+                    {{ end }}
+                    <span class="paginacio-info">{{ printf (t .Lang "common.page_info") .Data.Page .Data.TotalPages }}</span>
+                    {{ if .Data.HasNext }}
+                        <a class="boto-secundari" href="{{ .Data.PageBase }}&page={{ .Data.NextPage }}">{{ t .Lang "common.next" }}</a>
+                    {{ end }}
+                </div>
+            </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ if .UserLoggedIn }}
+        {{ template "scripts-private" . }}
+    {{ else }}
+        {{ template "scripts-public" . }}
+    {{ end }}
+</body>
+</html>
+{{ end }}

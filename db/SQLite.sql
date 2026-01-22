@@ -241,6 +241,75 @@ CREATE INDEX IF NOT EXISTS idx_municipi_mapes_updated ON municipi_mapes(municipi
 CREATE INDEX IF NOT EXISTS idx_municipi_mapa_versions_status ON municipi_mapa_versions(status, created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_municipi_mapa_versions_mapa_status ON municipi_mapa_versions(mapa_id, status);
 
+-- Historia del municipi
+CREATE TABLE IF NOT EXISTS municipi_historia (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+    current_general_version_id INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (municipi_id)
+);
+
+CREATE TABLE IF NOT EXISTS municipi_historia_general_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    historia_id INTEGER NOT NULL REFERENCES municipi_historia(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    titol TEXT,
+    resum TEXT,
+    cos_text TEXT NOT NULL,
+    tags_json TEXT,
+    status TEXT NOT NULL CHECK(status IN ('draft','pendent','publicat','rebutjat')) DEFAULT 'draft',
+    moderation_notes TEXT,
+    lock_version INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
+    UNIQUE (historia_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS municipi_historia_fets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+    current_version_id INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS municipi_historia_fet_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fet_id INTEGER NOT NULL REFERENCES municipi_historia_fets(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    any_inici INTEGER,
+    any_fi INTEGER,
+    data_inici TEXT,
+    data_fi TEXT,
+    data_display TEXT,
+    titol TEXT NOT NULL,
+    resum TEXT,
+    cos_text TEXT NOT NULL,
+    tags_json TEXT,
+    fonts_json TEXT,
+    status TEXT NOT NULL CHECK(status IN ('draft','pendent','publicat','rebutjat')) DEFAULT 'draft',
+    moderation_notes TEXT,
+    lock_version INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
+    UNIQUE (fet_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_municipi_historia_general_status ON municipi_historia_general_versions(status, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_municipi_historia_general_historia ON municipi_historia_general_versions(historia_id, version);
+CREATE INDEX IF NOT EXISTS idx_municipi_historia_fets_municipi ON municipi_historia_fets(municipi_id);
+CREATE INDEX IF NOT EXISTS idx_municipi_historia_fet_versions_status ON municipi_historia_fet_versions(status, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_municipi_historia_fet_versions_fet ON municipi_historia_fet_versions(fet_id, version);
+CREATE INDEX IF NOT EXISTS idx_municipi_historia_fet_versions_any ON municipi_historia_fet_versions(any_inici, any_fi);
+
 
 -- Recorda: aquí no podem posar FKs condicionals segons entitat_tipus en SQLite,
 -- la coherència l’asseguraràs des del codi Go (validant abans de fer INSERT/UPDATE).

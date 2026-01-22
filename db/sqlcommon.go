@@ -246,6 +246,8 @@ func (h sqlHelper) ensureDefaultPointsRules() error {
 		{Code: "municipi_mapa_submit", Name: "Proposar mapa", Description: "Enviar un mapa a moderació", Points: 15, Active: true},
 		{Code: "municipi_mapa_approve", Name: "Aprovar mapa", Description: "Aprovar un mapa pendent", Points: 3, Active: true},
 		{Code: "municipi_mapa_reject", Name: "Rebutjar mapa", Description: "Rebutjar un mapa pendent", Points: 0, Active: true},
+		{Code: "municipi_historia_general_submit", Name: "Proposar història general", Description: "Enviar història general a moderació", Points: 5, Active: true},
+		{Code: "municipi_historia_fet_submit", Name: "Proposar fet històric", Description: "Enviar un fet històric a moderació", Points: 3, Active: true},
 	}
 	for _, r := range defaults {
 		stmt := `INSERT INTO punts_regles (codi, nom, descripcio, punts, actiu, data_creacio) VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)`
@@ -6437,4 +6439,733 @@ func (h sqlHelper) resolveMunicipiIDByMapaVersionID(versionID int) (int, error) 
 		return 0, err
 	}
 	return id, nil
+}
+
+// Historia municipi
+func (h sqlHelper) ensureMunicipiHistoria(municipiID int) (*MunicipiHistoria, error) {
+	if municipiID <= 0 {
+		return nil, errors.New("municipi_id invalid")
+	}
+	if row, err := h.getMunicipiHistoriaByMunicipiID(municipiID); err == nil && row != nil {
+		return row, nil
+	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	query := `
+        INSERT INTO municipi_historia (municipi_id, created_at, updated_at)
+        VALUES (?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += " ON CONFLICT (municipi_id) DO NOTHING"
+	} else if h.style == "mysql" {
+		query += " ON DUPLICATE KEY UPDATE municipi_id = VALUES(municipi_id)"
+	} else {
+		query += " ON CONFLICT(municipi_id) DO NOTHING"
+	}
+	query = formatPlaceholders(h.style, query)
+	if _, err := h.db.Exec(query, municipiID); err != nil {
+		return nil, err
+	}
+	return h.getMunicipiHistoriaByMunicipiID(municipiID)
+}
+
+func (h sqlHelper) getMunicipiHistoriaByMunicipiID(municipiID int) (*MunicipiHistoria, error) {
+	query := `
+        SELECT id, municipi_id, current_general_version_id, created_at, updated_at
+        FROM municipi_historia
+        WHERE municipi_id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, municipiID)
+	var item MunicipiHistoria
+	if err := row.Scan(&item.ID, &item.MunicipiID, &item.CurrentGeneralVersionID, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (h sqlHelper) resolveMunicipiIDByHistoriaGeneralVersionID(versionID int) (int, error) {
+	query := `
+        SELECT h.municipi_id
+        FROM municipi_historia_general_versions v
+        JOIN municipi_historia h ON h.id = v.historia_id
+        WHERE v.id = ?`
+	query = formatPlaceholders(h.style, query)
+	var id int
+	if err := h.db.QueryRow(query, versionID).Scan(&id); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func (h sqlHelper) resolveMunicipiIDByHistoriaFetVersionID(versionID int) (int, error) {
+	query := `
+        SELECT f.municipi_id
+        FROM municipi_historia_fet_versions v
+        JOIN municipi_historia_fets f ON f.id = v.fet_id
+        WHERE v.id = ?`
+	query = formatPlaceholders(h.style, query)
+	var id int
+	if err := h.db.QueryRow(query, versionID).Scan(&id); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func (h sqlHelper) getMunicipiHistoriaFet(id int) (*MunicipiHistoriaFet, error) {
+	if id <= 0 {
+		return nil, errors.New("fet_id invalid")
+	}
+	query := `
+        SELECT id, municipi_id, current_version_id, created_at, updated_at
+        FROM municipi_historia_fets
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var item MunicipiHistoriaFet
+	if err := row.Scan(&item.ID, &item.MunicipiID, &item.CurrentVersionID, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (h sqlHelper) nextMunicipiHistoriaGeneralVersion(historiaID int) (int, error) {
+	query := formatPlaceholders(h.style, `
+        SELECT COALESCE(MAX(version), 0) + 1
+        FROM municipi_historia_general_versions
+        WHERE historia_id = ?`)
+	var next int
+	if err := h.db.QueryRow(query, historiaID).Scan(&next); err != nil {
+		return 0, err
+	}
+	return next, nil
+}
+
+func (h sqlHelper) createMunicipiHistoriaGeneralDraft(historiaID int, createdBy int, baseFromCurrent bool) (int, error) {
+	if historiaID <= 0 {
+		return 0, errors.New("historia_id invalid")
+	}
+	version, err := h.nextMunicipiHistoriaGeneralVersion(historiaID)
+	if err != nil {
+		return 0, err
+	}
+	titol := ""
+	resum := ""
+	cosText := ""
+	tags := ""
+	if baseFromCurrent {
+		query := `
+            SELECT v.titol, v.resum, v.cos_text, v.tags_json
+            FROM municipi_historia h
+            JOIN municipi_historia_general_versions v ON v.id = h.current_general_version_id
+            WHERE h.id = ?`
+		query = formatPlaceholders(h.style, query)
+		var titolVal sql.NullString
+		var resumVal sql.NullString
+		var cosVal sql.NullString
+		var tagsVal sql.NullString
+		if err := h.db.QueryRow(query, historiaID).Scan(&titolVal, &resumVal, &cosVal, &tagsVal); err == nil {
+			titol = titolVal.String
+			resum = resumVal.String
+			cosText = cosVal.String
+			tags = tagsVal.String
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return 0, err
+		}
+	}
+	createdByVal := sql.NullInt64{}
+	if createdBy > 0 {
+		createdByVal = sql.NullInt64{Int64: int64(createdBy), Valid: true}
+	}
+	titolVal := sql.NullString{String: strings.TrimSpace(titol), Valid: strings.TrimSpace(titol) != ""}
+	resumVal := sql.NullString{String: strings.TrimSpace(resum), Valid: strings.TrimSpace(resum) != ""}
+	tagsVal := sql.NullString{String: strings.TrimSpace(tags), Valid: strings.TrimSpace(tags) != ""}
+	if cosText == "" {
+		cosText = ""
+	}
+	query := `
+        INSERT INTO municipi_historia_general_versions
+            (historia_id, version, titol, resum, cos_text, tags_json, status, moderation_notes, lock_version, created_by, created_at, updated_at, moderated_by, moderated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'draft', '', 0, ?, ` + h.nowFun + `, ` + h.nowFun + `, NULL, NULL)`
+	if h.style == "postgres" {
+		query += " RETURNING id"
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{historiaID, version, titolVal, resumVal, cosText, tagsVal, createdByVal}
+	if h.style == "postgres" {
+		var id int
+		if err := h.db.QueryRow(query, args...).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		return int(id), nil
+	}
+	return 0, nil
+}
+
+func (h sqlHelper) getMunicipiHistoriaGeneralVersion(id int) (*MunicipiHistoriaGeneralVersion, error) {
+	query := `
+        SELECT id, historia_id, version, titol, resum, cos_text, tags_json, status, moderation_notes,
+               lock_version, created_by, created_at, updated_at, moderated_by, moderated_at
+        FROM municipi_historia_general_versions
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var item MunicipiHistoriaGeneralVersion
+	var titol sql.NullString
+	var resum sql.NullString
+	var tags sql.NullString
+	var notes sql.NullString
+	if err := row.Scan(&item.ID, &item.HistoriaID, &item.Version, &titol, &resum, &item.CosText, &tags, &item.Status, &notes,
+		&item.LockVersion, &item.CreatedBy, &item.CreatedAt, &item.UpdatedAt, &item.ModeratedBy, &item.ModeratedAt); err != nil {
+		return nil, err
+	}
+	item.Titol = titol.String
+	item.Resum = resum.String
+	item.TagsJSON = tags.String
+	item.ModerationNotes = notes.String
+	return &item, nil
+}
+
+func (h sqlHelper) updateMunicipiHistoriaGeneralDraft(v *MunicipiHistoriaGeneralVersion) error {
+	if v == nil {
+		return errors.New("version nil")
+	}
+	titolVal := sql.NullString{String: strings.TrimSpace(v.Titol), Valid: strings.TrimSpace(v.Titol) != ""}
+	resumVal := sql.NullString{String: strings.TrimSpace(v.Resum), Valid: strings.TrimSpace(v.Resum) != ""}
+	tagsVal := sql.NullString{String: strings.TrimSpace(v.TagsJSON), Valid: strings.TrimSpace(v.TagsJSON) != ""}
+	query := `
+        UPDATE municipi_historia_general_versions
+        SET titol = ?, resum = ?, cos_text = ?, tags_json = ?, lock_version = lock_version + 1, updated_at = ` + h.nowFun + `
+        WHERE id = ? AND lock_version = ? AND status = 'draft'`
+	query = formatPlaceholders(h.style, query)
+	res, err := h.db.Exec(query, titolVal, resumVal, v.CosText, tagsVal, v.ID, v.LockVersion)
+	if err != nil {
+		return err
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return ErrConflict
+	}
+	return nil
+}
+
+func (h sqlHelper) setMunicipiHistoriaGeneralStatus(versionID int, status, notes string, moderatorID *int) error {
+	var (
+		query string
+		args  []interface{}
+	)
+	notesVal := strings.TrimSpace(notes)
+	if moderatorID != nil && *moderatorID > 0 {
+		query = `
+            UPDATE municipi_historia_general_versions
+            SET status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ` + h.nowFun + `
+            WHERE id = ?`
+		args = []interface{}{status, notesVal, *moderatorID, time.Now(), versionID}
+	} else {
+		query = `
+            UPDATE municipi_historia_general_versions
+            SET status = ?, moderation_notes = ?, moderated_by = NULL, moderated_at = NULL, updated_at = ` + h.nowFun + `
+            WHERE id = ?`
+		args = []interface{}{status, notesVal, versionID}
+	}
+	query = formatPlaceholders(h.style, query)
+	if _, err := h.db.Exec(query, args...); err != nil {
+		return err
+	}
+	if status != "publicat" {
+		return nil
+	}
+	query = formatPlaceholders(h.style, `SELECT historia_id FROM municipi_historia_general_versions WHERE id = ?`)
+	var historiaID int
+	if err := h.db.QueryRow(query, versionID).Scan(&historiaID); err != nil {
+		return err
+	}
+	updateQuery := `
+        UPDATE municipi_historia
+        SET current_general_version_id = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	updateQuery = formatPlaceholders(h.style, updateQuery)
+	_, err := h.db.Exec(updateQuery, versionID, historiaID)
+	return err
+}
+
+func (h sqlHelper) createMunicipiHistoriaFet(municipiID int, createdBy int) (int, error) {
+	if municipiID <= 0 {
+		return 0, errors.New("municipi_id invalid")
+	}
+	query := `
+        INSERT INTO municipi_historia_fets (municipi_id, created_at, updated_at)
+        VALUES (?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += " RETURNING id"
+	}
+	query = formatPlaceholders(h.style, query)
+	if h.style == "postgres" {
+		var id int
+		if err := h.db.QueryRow(query, municipiID).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	res, err := h.db.Exec(query, municipiID)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		return int(id), nil
+	}
+	_ = createdBy
+	return 0, nil
+}
+
+func (h sqlHelper) nextMunicipiHistoriaFetVersion(fetID int) (int, error) {
+	query := formatPlaceholders(h.style, `
+        SELECT COALESCE(MAX(version), 0) + 1
+        FROM municipi_historia_fet_versions
+        WHERE fet_id = ?`)
+	var next int
+	if err := h.db.QueryRow(query, fetID).Scan(&next); err != nil {
+		return 0, err
+	}
+	return next, nil
+}
+
+func (h sqlHelper) createMunicipiHistoriaFetDraft(fetID int, createdBy int, baseFromCurrent bool) (int, error) {
+	if fetID <= 0 {
+		return 0, errors.New("fet_id invalid")
+	}
+	version, err := h.nextMunicipiHistoriaFetVersion(fetID)
+	if err != nil {
+		return 0, err
+	}
+	var (
+		anyInici    sql.NullInt64
+		anyFi       sql.NullInt64
+		dataInici   sql.NullString
+		dataFi      sql.NullString
+		dataDisplay sql.NullString
+		titol       sql.NullString
+		resum       sql.NullString
+		cosText     sql.NullString
+		tags        sql.NullString
+		fonts       sql.NullString
+	)
+	if baseFromCurrent {
+		query := `
+            SELECT v.any_inici, v.any_fi, v.data_inici, v.data_fi, v.data_display,
+                   v.titol, v.resum, v.cos_text, v.tags_json, v.fonts_json
+            FROM municipi_historia_fets f
+            JOIN municipi_historia_fet_versions v ON v.id = f.current_version_id
+            WHERE f.id = ?`
+		query = formatPlaceholders(h.style, query)
+		if err := h.db.QueryRow(query, fetID).Scan(&anyInici, &anyFi, &dataInici, &dataFi, &dataDisplay,
+			&titol, &resum, &cosText, &tags, &fonts); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return 0, err
+		}
+	}
+	createdByVal := sql.NullInt64{}
+	if createdBy > 0 {
+		createdByVal = sql.NullInt64{Int64: int64(createdBy), Valid: true}
+	}
+	if !cosText.Valid {
+		cosText = sql.NullString{String: "", Valid: true}
+	}
+	query := `
+        INSERT INTO municipi_historia_fet_versions
+            (fet_id, version, any_inici, any_fi, data_inici, data_fi, data_display,
+             titol, resum, cos_text, tags_json, fonts_json, status, moderation_notes, lock_version,
+             created_by, created_at, updated_at, moderated_by, moderated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', '', 0, ?, ` + h.nowFun + `, ` + h.nowFun + `, NULL, NULL)`
+	if h.style == "postgres" {
+		query += " RETURNING id"
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{fetID, version, anyInici, anyFi, dataInici, dataFi, dataDisplay, titol, resum, cosText, tags, fonts, createdByVal}
+	if h.style == "postgres" {
+		var id int
+		if err := h.db.QueryRow(query, args...).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		return int(id), nil
+	}
+	return 0, nil
+}
+
+func (h sqlHelper) getMunicipiHistoriaFetVersion(id int) (*MunicipiHistoriaFetVersion, error) {
+	query := `
+        SELECT id, fet_id, version, any_inici, any_fi, data_inici, data_fi, data_display,
+               titol, resum, cos_text, tags_json, fonts_json, status, moderation_notes,
+               lock_version, created_by, created_at, updated_at, moderated_by, moderated_at
+        FROM municipi_historia_fet_versions
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var item MunicipiHistoriaFetVersion
+	var dataInici sql.NullString
+	var dataFi sql.NullString
+	var dataDisplay sql.NullString
+	var resum sql.NullString
+	var tags sql.NullString
+	var fonts sql.NullString
+	var notes sql.NullString
+	if err := row.Scan(&item.ID, &item.FetID, &item.Version, &item.AnyInici, &item.AnyFi, &dataInici, &dataFi, &dataDisplay,
+		&item.Titol, &resum, &item.CosText, &tags, &fonts, &item.Status, &notes,
+		&item.LockVersion, &item.CreatedBy, &item.CreatedAt, &item.UpdatedAt, &item.ModeratedBy, &item.ModeratedAt); err != nil {
+		return nil, err
+	}
+	item.DataInici = dataInici.String
+	item.DataFi = dataFi.String
+	item.DataDisplay = dataDisplay.String
+	item.Resum = resum.String
+	item.TagsJSON = tags.String
+	item.FontsJSON = fonts.String
+	item.ModerationNotes = notes.String
+	return &item, nil
+}
+
+func (h sqlHelper) updateMunicipiHistoriaFetDraft(v *MunicipiHistoriaFetVersion) error {
+	if v == nil {
+		return errors.New("version nil")
+	}
+	dataInici := sql.NullString{String: strings.TrimSpace(v.DataInici), Valid: strings.TrimSpace(v.DataInici) != ""}
+	dataFi := sql.NullString{String: strings.TrimSpace(v.DataFi), Valid: strings.TrimSpace(v.DataFi) != ""}
+	dataDisplay := sql.NullString{String: strings.TrimSpace(v.DataDisplay), Valid: strings.TrimSpace(v.DataDisplay) != ""}
+	resumVal := sql.NullString{String: strings.TrimSpace(v.Resum), Valid: strings.TrimSpace(v.Resum) != ""}
+	tagsVal := sql.NullString{String: strings.TrimSpace(v.TagsJSON), Valid: strings.TrimSpace(v.TagsJSON) != ""}
+	fontsVal := sql.NullString{String: strings.TrimSpace(v.FontsJSON), Valid: strings.TrimSpace(v.FontsJSON) != ""}
+	query := `
+        UPDATE municipi_historia_fet_versions
+        SET any_inici = ?, any_fi = ?, data_inici = ?, data_fi = ?, data_display = ?,
+            titol = ?, resum = ?, cos_text = ?, tags_json = ?, fonts_json = ?,
+            lock_version = lock_version + 1, updated_at = ` + h.nowFun + `
+        WHERE id = ? AND lock_version = ? AND status = 'draft'`
+	query = formatPlaceholders(h.style, query)
+	res, err := h.db.Exec(query, v.AnyInici, v.AnyFi, dataInici, dataFi, dataDisplay,
+		v.Titol, resumVal, v.CosText, tagsVal, fontsVal, v.ID, v.LockVersion)
+	if err != nil {
+		return err
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return ErrConflict
+	}
+	return nil
+}
+
+func (h sqlHelper) setMunicipiHistoriaFetStatus(versionID int, status, notes string, moderatorID *int) error {
+	var (
+		query string
+		args  []interface{}
+	)
+	notesVal := strings.TrimSpace(notes)
+	if moderatorID != nil && *moderatorID > 0 {
+		query = `
+            UPDATE municipi_historia_fet_versions
+            SET status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ` + h.nowFun + `
+            WHERE id = ?`
+		args = []interface{}{status, notesVal, *moderatorID, time.Now(), versionID}
+	} else {
+		query = `
+            UPDATE municipi_historia_fet_versions
+            SET status = ?, moderation_notes = ?, moderated_by = NULL, moderated_at = NULL, updated_at = ` + h.nowFun + `
+            WHERE id = ?`
+		args = []interface{}{status, notesVal, versionID}
+	}
+	query = formatPlaceholders(h.style, query)
+	if _, err := h.db.Exec(query, args...); err != nil {
+		return err
+	}
+	if status != "publicat" {
+		return nil
+	}
+	query = formatPlaceholders(h.style, `SELECT fet_id FROM municipi_historia_fet_versions WHERE id = ?`)
+	var fetID int
+	if err := h.db.QueryRow(query, versionID).Scan(&fetID); err != nil {
+		return err
+	}
+	updateQuery := `
+        UPDATE municipi_historia_fets
+        SET current_version_id = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	updateQuery = formatPlaceholders(h.style, updateQuery)
+	_, err := h.db.Exec(updateQuery, versionID, fetID)
+	return err
+}
+
+func (h sqlHelper) getMunicipiHistoriaSummary(municipiID int) (*MunicipiHistoriaGeneralVersion, []MunicipiHistoriaFetVersion, error) {
+	var general *MunicipiHistoriaGeneralVersion
+	query := `
+        SELECT v.id, v.historia_id, v.version, v.titol, v.resum, v.cos_text, v.tags_json, v.status, v.moderation_notes,
+               v.lock_version, v.created_by, v.created_at, v.updated_at, v.moderated_by, v.moderated_at
+        FROM municipi_historia h
+        JOIN municipi_historia_general_versions v ON v.id = h.current_general_version_id
+        WHERE h.municipi_id = ?`
+	query = formatPlaceholders(h.style, query)
+	var row MunicipiHistoriaGeneralVersion
+	var titol sql.NullString
+	var resum sql.NullString
+	var tags sql.NullString
+	var notes sql.NullString
+	if err := h.db.QueryRow(query, municipiID).Scan(&row.ID, &row.HistoriaID, &row.Version, &titol, &resum, &row.CosText, &tags,
+		&row.Status, &notes, &row.LockVersion, &row.CreatedBy, &row.CreatedAt, &row.UpdatedAt, &row.ModeratedBy, &row.ModeratedAt); err == nil {
+		row.Titol = titol.String
+		row.Resum = resum.String
+		row.TagsJSON = tags.String
+		row.ModerationNotes = notes.String
+		general = &row
+	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, err
+	}
+
+	timeline := []MunicipiHistoriaFetVersion{}
+	query = `
+        SELECT v.id, v.fet_id, v.version, v.any_inici, v.any_fi, v.data_inici, v.data_fi, v.data_display,
+               v.titol, v.resum, v.cos_text, v.tags_json, v.fonts_json, v.status, v.moderation_notes,
+               v.lock_version, v.created_by, v.created_at, v.updated_at, v.moderated_by, v.moderated_at
+        FROM municipi_historia_fets f
+        JOIN municipi_historia_fet_versions v ON v.id = f.current_version_id
+        WHERE f.municipi_id = ? AND v.status = 'publicat'
+        ORDER BY
+            CASE WHEN v.any_inici IS NULL AND v.any_fi IS NULL THEN 1 ELSE 0 END,
+            COALESCE(v.any_inici, v.any_fi) ASC,
+            v.any_fi ASC,
+            v.created_at ASC,
+            v.id ASC
+        LIMIT 6`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, municipiID)
+	if err != nil {
+		return general, nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var item MunicipiHistoriaFetVersion
+		var dataInici sql.NullString
+		var dataFi sql.NullString
+		var dataDisplay sql.NullString
+		var resumVal sql.NullString
+		var tags sql.NullString
+		var fonts sql.NullString
+		var notes sql.NullString
+		if err := rows.Scan(&item.ID, &item.FetID, &item.Version, &item.AnyInici, &item.AnyFi, &dataInici, &dataFi, &dataDisplay,
+			&item.Titol, &resumVal, &item.CosText, &tags, &fonts, &item.Status, &notes,
+			&item.LockVersion, &item.CreatedBy, &item.CreatedAt, &item.UpdatedAt, &item.ModeratedBy, &item.ModeratedAt); err != nil {
+			return general, nil, err
+		}
+		item.DataInici = dataInici.String
+		item.DataFi = dataFi.String
+		item.DataDisplay = dataDisplay.String
+		item.Resum = resumVal.String
+		item.TagsJSON = tags.String
+		item.FontsJSON = fonts.String
+		item.ModerationNotes = notes.String
+		timeline = append(timeline, item)
+	}
+	return general, timeline, nil
+}
+
+func (h sqlHelper) listMunicipiHistoriaTimeline(municipiID int, status string, limit, offset int, q string, anyFrom, anyTo *int) ([]MunicipiHistoriaFetVersion, int, error) {
+	args := []interface{}{municipiID}
+	clauses := []string{"f.municipi_id = ?"}
+	if strings.TrimSpace(status) != "" {
+		clauses = append(clauses, "v.status = ?")
+		args = append(args, strings.TrimSpace(status))
+	}
+	if strings.TrimSpace(q) != "" {
+		qLike := "%" + strings.ToLower(strings.TrimSpace(q)) + "%"
+		clauses = append(clauses, "(LOWER(v.titol) LIKE ? OR LOWER(v.resum) LIKE ? OR LOWER(v.cos_text) LIKE ? OR LOWER(v.data_display) LIKE ?)")
+		args = append(args, qLike, qLike, qLike, qLike)
+	}
+	if anyFrom != nil {
+		clauses = append(clauses, "COALESCE(v.any_fi, v.any_inici) >= ?")
+		args = append(args, *anyFrom)
+	}
+	if anyTo != nil {
+		clauses = append(clauses, "COALESCE(v.any_inici, v.any_fi) <= ?")
+		args = append(args, *anyTo)
+	}
+	baseWhere := strings.Join(clauses, " AND ")
+	countQuery := `
+        SELECT COUNT(1)
+        FROM municipi_historia_fets f
+        JOIN municipi_historia_fet_versions v ON v.fet_id = f.id
+        WHERE ` + baseWhere
+	countQuery = formatPlaceholders(h.style, countQuery)
+	total := 0
+	if err := h.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := `
+        SELECT v.id, v.fet_id, v.version, v.any_inici, v.any_fi, v.data_inici, v.data_fi, v.data_display,
+               v.titol, v.resum, v.cos_text, v.tags_json, v.fonts_json, v.status, v.moderation_notes,
+               v.lock_version, v.created_by, v.created_at, v.updated_at, v.moderated_by, v.moderated_at
+        FROM municipi_historia_fets f
+        JOIN municipi_historia_fet_versions v ON v.fet_id = f.id
+        WHERE ` + baseWhere + `
+        ORDER BY
+            CASE WHEN v.any_inici IS NULL AND v.any_fi IS NULL THEN 1 ELSE 0 END,
+            COALESCE(v.any_inici, v.any_fi) ASC,
+            v.any_fi ASC,
+            v.created_at ASC,
+            v.id ASC`
+	listArgs := make([]interface{}, len(args))
+	copy(listArgs, args)
+	if limit > 0 {
+		query += " LIMIT ?"
+		listArgs = append(listArgs, limit)
+	}
+	if offset > 0 {
+		query += " OFFSET ?"
+		listArgs = append(listArgs, offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, listArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var res []MunicipiHistoriaFetVersion
+	for rows.Next() {
+		var item MunicipiHistoriaFetVersion
+		var dataInici sql.NullString
+		var dataFi sql.NullString
+		var dataDisplay sql.NullString
+		var resumVal sql.NullString
+		var tags sql.NullString
+		var fonts sql.NullString
+		var notes sql.NullString
+		if err := rows.Scan(&item.ID, &item.FetID, &item.Version, &item.AnyInici, &item.AnyFi, &dataInici, &dataFi, &dataDisplay,
+			&item.Titol, &resumVal, &item.CosText, &tags, &fonts, &item.Status, &notes,
+			&item.LockVersion, &item.CreatedBy, &item.CreatedAt, &item.UpdatedAt, &item.ModeratedBy, &item.ModeratedAt); err != nil {
+			return nil, 0, err
+		}
+		item.DataInici = dataInici.String
+		item.DataFi = dataFi.String
+		item.DataDisplay = dataDisplay.String
+		item.Resum = resumVal.String
+		item.TagsJSON = tags.String
+		item.FontsJSON = fonts.String
+		item.ModerationNotes = notes.String
+		res = append(res, item)
+	}
+	return res, total, nil
+}
+
+func (h sqlHelper) listPendingMunicipiHistoriaGeneralVersions(limit, offset int) ([]MunicipiHistoriaGeneralVersion, int, error) {
+	countQuery := formatPlaceholders(h.style, `SELECT COUNT(1) FROM municipi_historia_general_versions WHERE status = 'pendent'`)
+	total := 0
+	if err := h.db.QueryRow(countQuery).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	query := `
+        SELECT v.id, v.historia_id, h.municipi_id, m.nom, v.version, v.titol, v.resum, v.cos_text, v.tags_json, v.status, v.moderation_notes,
+               v.lock_version, v.created_by, v.created_at, v.updated_at, v.moderated_by, v.moderated_at
+        FROM municipi_historia_general_versions v
+        JOIN municipi_historia h ON h.id = v.historia_id
+        JOIN municipis m ON m.id = h.municipi_id
+        WHERE v.status = 'pendent'
+        ORDER BY v.created_at ASC, v.id ASC`
+	args := []interface{}{}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	if offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var res []MunicipiHistoriaGeneralVersion
+	for rows.Next() {
+		var item MunicipiHistoriaGeneralVersion
+		var titol sql.NullString
+		var resum sql.NullString
+		var tags sql.NullString
+		var notes sql.NullString
+		if err := rows.Scan(&item.ID, &item.HistoriaID, &item.MunicipiID, &item.MunicipiNom, &item.Version,
+			&titol, &resum, &item.CosText, &tags, &item.Status, &notes, &item.LockVersion, &item.CreatedBy,
+			&item.CreatedAt, &item.UpdatedAt, &item.ModeratedBy, &item.ModeratedAt); err != nil {
+			return nil, 0, err
+		}
+		item.Titol = titol.String
+		item.Resum = resum.String
+		item.TagsJSON = tags.String
+		item.ModerationNotes = notes.String
+		res = append(res, item)
+	}
+	return res, total, nil
+}
+
+func (h sqlHelper) listPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error) {
+	countQuery := formatPlaceholders(h.style, `SELECT COUNT(1) FROM municipi_historia_fet_versions WHERE status = 'pendent'`)
+	total := 0
+	if err := h.db.QueryRow(countQuery).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	query := `
+        SELECT v.id, v.fet_id, f.municipi_id, m.nom, v.version, v.any_inici, v.any_fi, v.data_inici, v.data_fi, v.data_display,
+               v.titol, v.resum, v.cos_text, v.tags_json, v.fonts_json, v.status, v.moderation_notes,
+               v.lock_version, v.created_by, v.created_at, v.updated_at, v.moderated_by, v.moderated_at
+        FROM municipi_historia_fet_versions v
+        JOIN municipi_historia_fets f ON f.id = v.fet_id
+        JOIN municipis m ON m.id = f.municipi_id
+        WHERE v.status = 'pendent'
+        ORDER BY v.created_at ASC, v.id ASC`
+	args := []interface{}{}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	if offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var res []MunicipiHistoriaFetVersion
+	for rows.Next() {
+		var item MunicipiHistoriaFetVersion
+		var dataInici sql.NullString
+		var dataFi sql.NullString
+		var dataDisplay sql.NullString
+		var resumVal sql.NullString
+		var tags sql.NullString
+		var fonts sql.NullString
+		var notes sql.NullString
+		if err := rows.Scan(&item.ID, &item.FetID, &item.MunicipiID, &item.MunicipiNom, &item.Version,
+			&item.AnyInici, &item.AnyFi, &dataInici, &dataFi, &dataDisplay,
+			&item.Titol, &resumVal, &item.CosText, &tags, &fonts, &item.Status, &notes,
+			&item.LockVersion, &item.CreatedBy, &item.CreatedAt, &item.UpdatedAt, &item.ModeratedBy, &item.ModeratedAt); err != nil {
+			return nil, 0, err
+		}
+		item.DataInici = dataInici.String
+		item.DataFi = dataFi.String
+		item.DataDisplay = dataDisplay.String
+		item.Resum = resumVal.String
+		item.TagsJSON = tags.String
+		item.FontsJSON = fonts.String
+		item.ModerationNotes = notes.String
+		res = append(res, item)
+	}
+	return res, total, nil
 }

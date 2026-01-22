@@ -125,6 +125,7 @@
                     <option value="100" {{ if eq $current 100 }}selected{{ end }}>100</option>
                 </select>
             </div>
+            {{ if .Data.CanBulk }}
             <form id="bulk-form" class="moderacio-bulk" method="post" action="/moderacio/bulk">
                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                 <div class="bulk-group">
@@ -154,6 +155,8 @@
                         <option value="nivell">{{ t .Lang "moderation.type.nivell" }}</option>
                         <option value="municipi">{{ t .Lang "moderation.type.municipi" }}</option>
                         <option value="eclesiastic">{{ t .Lang "moderation.type.eclesiastic" }}</option>
+                        <option value="municipi_historia_general">{{ t .Lang "moderation.type.municipi_historia_general" }}</option>
+                        <option value="municipi_historia_fet">{{ t .Lang "moderation.type.municipi_historia_fet" }}</option>
                         <option value="registre">{{ t .Lang "moderation.type.registre" }}</option>
                         <option value="cognom_variant">{{ t .Lang "moderation.type.cognom_variant" }}</option>
                     </select>
@@ -169,6 +172,7 @@
                     {{ t .Lang "moderation.bulk.select_all" }}
                 </label>
             </form>
+            {{ end }}
             <div class="taula-wrapper">
                 <table class="taula">
                     <thead>
@@ -187,11 +191,21 @@
                     <tbody>
                         {{ range .Data.Persones }}
                         <tr>
-                            <td><input type="checkbox" class="moderacio-select" name="selected" value="{{ .Type }}:{{ .ID }}" form="bulk-form"></td>
+                            <td>
+                                {{ if $.Data.CanBulk }}
+                                <input type="checkbox" class="moderacio-select" name="selected" value="{{ .Type }}:{{ .ID }}" form="bulk-form">
+                                {{ end }}
+                            </td>
                             <td>{{ .ID }}</td>
                             <td>{{ t $.Lang (printf "moderation.type.%s" .Type) }}</td>
                             <td>{{ .Nom }}</td>
-                            <td>{{ .Context }}</td>
+                            <td>
+                                {{ if .Context }}
+                                    {{ if .ContextURL }}<a href="{{ .ContextURL }}">{{ .Context }}</a>{{ else }}{{ .Context }}{{ end }}
+                                {{ else }}
+                                    —
+                                {{ end }}
+                            </td>
                             <td>
                                 {{ if .AutorURL }}<a href="{{ .AutorURL }}">@{{ .Autor }}</a>{{ else }}@{{ .Autor }}{{ end }}
                             </td>
