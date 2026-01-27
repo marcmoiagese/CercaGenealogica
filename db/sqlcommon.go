@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -41,6 +42,28 @@ func buildInPlaceholders(style string, count int) string {
 		return strings.Join(parts, ",")
 	default:
 		return strings.TrimRight(strings.Repeat("?,", count), ",")
+	}
+}
+
+func demografiaYearColumn(style string) string {
+	switch strings.ToLower(style) {
+	case "mysql":
+		return "`any`"
+	case "postgres":
+		return "\"any\""
+	default:
+		return "any"
+	}
+}
+
+func demografiaYearExpr(style string) string {
+	switch strings.ToLower(style) {
+	case "mysql":
+		return "COALESCE(t.any_doc, YEAR(t.data_acte_iso))"
+	case "postgres":
+		return "COALESCE(t.any_doc, EXTRACT(YEAR FROM t.data_acte_iso)::INT)"
+	default:
+		return "COALESCE(t.any_doc, CAST(strftime('%Y', t.data_acte_iso) AS INTEGER))"
 	}
 }
 
@@ -248,6 +271,7 @@ func (h sqlHelper) ensureDefaultPointsRules() error {
 		{Code: "municipi_mapa_reject", Name: "Rebutjar mapa", Description: "Rebutjar un mapa pendent", Points: 0, Active: true},
 		{Code: "municipi_historia_general_submit", Name: "Proposar història general", Description: "Enviar història general a moderació", Points: 5, Active: true},
 		{Code: "municipi_historia_fet_submit", Name: "Proposar fet històric", Description: "Enviar un fet històric a moderació", Points: 3, Active: true},
+		{Code: "municipi_anecdota_publicada", Name: "Proposar anècdota", Description: "Enviar una anècdota a moderació", Points: 5, Active: true},
 	}
 	for _, r := range defaults {
 		stmt := `INSERT INTO punts_regles (codi, nom, descripcio, punts, actiu, data_creacio) VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)`
@@ -260,6 +284,203 @@ func (h sqlHelper) ensureDefaultPointsRules() error {
 		}
 		stmt = formatPlaceholders(h.style, stmt)
 		h.db.Exec(stmt, r.Code, r.Name, r.Description, r.Points, r.Active)
+	}
+	return nil
+}
+
+func (h sqlHelper) ensureDefaultAchievements() error {
+	type ruleFilters struct {
+		RuleCodes   []string `json:"rule_codes,omitempty"`
+		Actions     []string `json:"actions,omitempty"`
+		ObjectTypes []string `json:"object_types,omitempty"`
+		Status      []string `json:"status,omitempty"`
+	}
+	type ruleSeed struct {
+		Type      string      `json:"type"`
+		Filters   ruleFilters `json:"filters,omitempty"`
+		Threshold int         `json:"threshold,omitempty"`
+		Window    string      `json:"window,omitempty"`
+		MinDays   int         `json:"min_days,omitempty"`
+	}
+	type achievementSeed struct {
+		Code        string
+		Name        string
+		Description string
+		Rarity      string
+		Visibility  string
+		Domain      string
+		Repeatable  bool
+		Rule        ruleSeed
+	}
+	seeds := []achievementSeed{
+		{
+			Code:        "ACH_FIRST_STEP",
+			Name:        "First step",
+			Description: "First validated contribution",
+			Rarity:      "common",
+			Visibility:  "visible",
+			Domain:      "general",
+			Rule: ruleSeed{
+				Type:      "count",
+				Filters:   ruleFilters{Status: []string{"validat"}},
+				Threshold: 1,
+			},
+		},
+		{
+			Code:        "ACH_STREAK_7",
+			Name:        "Seven day streak",
+			Description: "Seven days with validated activity",
+			Rarity:      "rare",
+			Visibility:  "visible",
+			Domain:      "general",
+			Rule: ruleSeed{
+				Type:    "streak_days",
+				Filters: ruleFilters{Status: []string{"validat"}},
+				MinDays: 7,
+			},
+		},
+		{
+			Code:        "ACH_INDEXER_10",
+			Name:        "Indexer",
+			Description: "Index 10 pages",
+			Rarity:      "common",
+			Visibility:  "visible",
+			Domain:      "llibres",
+			Rule: ruleSeed{
+				Type:      "count",
+				Filters:   ruleFilters{RuleCodes: []string{"llibre_pagina_index"}, Status: []string{"validat"}},
+				Threshold: 10,
+			},
+		},
+		{
+			Code:        "ACH_LIBRE_1",
+			Name:        "Llibre creator",
+			Description: "Create one book",
+			Rarity:      "rare",
+			Visibility:  "visible",
+			Domain:      "llibres",
+			Rule: ruleSeed{
+				Type:      "count",
+				Filters:   ruleFilters{RuleCodes: []string{"llibre_create"}, Status: []string{"validat"}},
+				Threshold: 1,
+			},
+		},
+		{
+			Code:        "ACH_MUN_1",
+			Name:        "Municipi founder",
+			Description: "Create one municipality",
+			Rarity:      "rare",
+			Visibility:  "visible",
+			Domain:      "municipis",
+			Rule: ruleSeed{
+				Type:      "count",
+				Filters:   ruleFilters{RuleCodes: []string{"municipi_create"}, Status: []string{"validat"}},
+				Threshold: 1,
+			},
+		},
+		{
+			Code:        "ACH_MUN_BURST_5",
+			Name:        "Rapid founder",
+			Description: "Create 5 municipalities in 24h",
+			Rarity:      "epic",
+			Visibility:  "hidden",
+			Domain:      "municipis",
+			Rule: ruleSeed{
+				Type:      "burst_count",
+				Filters:   ruleFilters{RuleCodes: []string{"municipi_create"}, Status: []string{"validat"}},
+				Threshold: 5,
+				Window:    "24h",
+			},
+		},
+		{
+			Code:        "ACH_MAP_SUBMIT",
+			Name:        "Cartographer",
+			Description: "Submit a municipality map",
+			Rarity:      "rare",
+			Visibility:  "visible",
+			Domain:      "municipis",
+			Rule: ruleSeed{
+				Type:      "count",
+				Filters:   ruleFilters{RuleCodes: []string{"municipi_mapa_submit"}, Status: []string{"validat"}},
+				Threshold: 1,
+			},
+		},
+		{
+			Code:        "ACH_HISTORIA_SUBMIT",
+			Name:        "Storyteller",
+			Description: "Submit municipality history",
+			Rarity:      "rare",
+			Visibility:  "visible",
+			Domain:      "municipis",
+			Rule: ruleSeed{
+				Type:      "count",
+				Filters:   ruleFilters{RuleCodes: []string{"municipi_historia_general_submit", "municipi_historia_fet_submit"}, Status: []string{"validat"}},
+				Threshold: 1,
+			},
+		},
+		{
+			Code:        "ACH_ANECDOTE",
+			Name:        "Anecdote maker",
+			Description: "Submit a local anecdote",
+			Rarity:      "common",
+			Visibility:  "visible",
+			Domain:      "municipis",
+			Rule: ruleSeed{
+				Type:      "count",
+				Filters:   ruleFilters{RuleCodes: []string{"municipi_anecdota_publicada"}, Status: []string{"validat"}},
+				Threshold: 1,
+			},
+		},
+		{
+			Code:        "ACH_MOD_10",
+			Name:        "Moderator",
+			Description: "Approve 10 items",
+			Rarity:      "rare",
+			Visibility:  "visible",
+			Domain:      "moderacio",
+			Rule: ruleSeed{
+				Type:      "count",
+				Filters:   ruleFilters{RuleCodes: []string{"moderacio_approve"}, Status: []string{"validat"}},
+				Threshold: 10,
+			},
+		},
+		{
+			Code:        "ACH_POINTS_100",
+			Name:        "Century",
+			Description: "Earn 100 points",
+			Rarity:      "epic",
+			Visibility:  "visible",
+			Domain:      "general",
+			Rule: ruleSeed{
+				Type:      "sum_points",
+				Filters:   ruleFilters{Status: []string{"validat"}},
+				Threshold: 100,
+			},
+		},
+	}
+	for _, seed := range seeds {
+		enabled := true
+		for _, code := range seed.Rule.Filters.RuleCodes {
+			if _, err := h.getPointsRuleByCode(code); err != nil {
+				enabled = false
+				break
+			}
+		}
+		ruleJSON, err := json.Marshal(seed.Rule)
+		if err != nil {
+			continue
+		}
+		stmt := `INSERT INTO achievements (code, name, description, rarity, visibility, domain, is_enabled, is_repeatable, icon_media_item_id, rule_json, created_at, updated_at)
+		         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			stmt += " ON CONFLICT (code) DO NOTHING"
+		} else if h.style == "mysql" {
+			stmt += " ON DUPLICATE KEY UPDATE name=VALUES(name), description=VALUES(description), rarity=VALUES(rarity), visibility=VALUES(visibility), domain=VALUES(domain), is_enabled=VALUES(is_enabled), is_repeatable=VALUES(is_repeatable), rule_json=VALUES(rule_json)"
+		} else {
+			stmt += " ON CONFLICT(code) DO NOTHING"
+		}
+		stmt = formatPlaceholders(h.style, stmt)
+		_, _ = h.db.Exec(stmt, seed.Code, seed.Name, seed.Description, seed.Rarity, seed.Visibility, seed.Domain, enabled, seed.Repeatable, nil, string(ruleJSON))
 	}
 	return nil
 }
@@ -710,6 +931,36 @@ func (h sqlHelper) listPointsRules() ([]PointsRule, error) {
 	return res, nil
 }
 
+func (h sqlHelper) listUserIDs(limit, offset int) ([]int, error) {
+	if limit <= 0 {
+		return nil, errors.New("limit invalid")
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	query := "SELECT id FROM usuaris ORDER BY id LIMIT ?"
+	args := []interface{}{limit}
+	if offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	res := []int{}
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		res = append(res, id)
+	}
+	return res, nil
+}
+
 func (h sqlHelper) getPointsRuleByCode(code string) (*PointsRule, error) {
 	row := h.db.QueryRow(`SELECT id, codi, nom, descripcio, punts, actiu, data_creacio FROM punts_regles WHERE codi = ?`, code)
 	var r PointsRule
@@ -988,6 +1239,367 @@ func (h sqlHelper) getRanking(f RankingFilter) ([]UserPoints, error) {
 	return res, nil
 }
 
+func (h sqlHelper) listEnabledAchievements() ([]Achievement, error) {
+	query := `SELECT id, code, name, description, rarity, visibility, domain, is_enabled, is_repeatable, icon_media_item_id, rule_json, created_at, updated_at
+	          FROM achievements WHERE is_enabled = 1 ORDER BY id`
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []Achievement
+	for rows.Next() {
+		var a Achievement
+		if err := rows.Scan(&a.ID, &a.Code, &a.Name, &a.Description, &a.Rarity, &a.Visibility, &a.Domain,
+			&a.IsEnabled, &a.IsRepeatable, &a.IconMediaItemID, &a.RuleJSON, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) isAchievementEventActive(code string, at time.Time) (bool, error) {
+	if strings.TrimSpace(code) == "" {
+		return false, errors.New("code invalid")
+	}
+	if at.IsZero() {
+		at = time.Now()
+	}
+	activeExpr := "is_enabled = 1"
+	if h.style == "postgres" {
+		activeExpr = "is_enabled = TRUE"
+	}
+	query := `SELECT COUNT(*) FROM achievement_events WHERE code = ? AND ` + activeExpr + ` AND start_at <= ? AND end_at >= ?`
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, code, at, at).Scan(&total); err != nil {
+		return false, err
+	}
+	return total > 0, nil
+}
+
+func (h sqlHelper) listAchievements() ([]Achievement, error) {
+	query := `SELECT id, code, name, description, rarity, visibility, domain, is_enabled, is_repeatable, icon_media_item_id, rule_json, created_at, updated_at
+	          FROM achievements ORDER BY id`
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []Achievement
+	for rows.Next() {
+		var a Achievement
+		if err := rows.Scan(&a.ID, &a.Code, &a.Name, &a.Description, &a.Rarity, &a.Visibility, &a.Domain,
+			&a.IsEnabled, &a.IsRepeatable, &a.IconMediaItemID, &a.RuleJSON, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getAchievement(id int) (*Achievement, error) {
+	query := `SELECT id, code, name, description, rarity, visibility, domain, is_enabled, is_repeatable, icon_media_item_id, rule_json, created_at, updated_at
+	          FROM achievements WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var a Achievement
+	if err := row.Scan(&a.ID, &a.Code, &a.Name, &a.Description, &a.Rarity, &a.Visibility, &a.Domain,
+		&a.IsEnabled, &a.IsRepeatable, &a.IconMediaItemID, &a.RuleJSON, &a.CreatedAt, &a.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (h sqlHelper) getAchievementByCode(code string) (*Achievement, error) {
+	query := `SELECT id, code, name, description, rarity, visibility, domain, is_enabled, is_repeatable, icon_media_item_id, rule_json, created_at, updated_at
+	          FROM achievements WHERE code = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, code)
+	var a Achievement
+	if err := row.Scan(&a.ID, &a.Code, &a.Name, &a.Description, &a.Rarity, &a.Visibility, &a.Domain,
+		&a.IsEnabled, &a.IsRepeatable, &a.IconMediaItemID, &a.RuleJSON, &a.CreatedAt, &a.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (h sqlHelper) saveAchievement(a *Achievement) (int, error) {
+	if a == nil {
+		return 0, errors.New("achievement nil")
+	}
+	if a.ID == 0 {
+		stmt := `INSERT INTO achievements (code, name, description, rarity, visibility, domain, is_enabled, is_repeatable, icon_media_item_id, rule_json, created_at, updated_at)
+		         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			stmt += " RETURNING id"
+		}
+		stmt = formatPlaceholders(h.style, stmt)
+		var icon interface{}
+		if a.IconMediaItemID.Valid {
+			icon = a.IconMediaItemID.Int64
+		}
+		if h.style == "postgres" {
+			if err := h.db.QueryRow(stmt, a.Code, a.Name, a.Description, a.Rarity, a.Visibility, a.Domain, a.IsEnabled, a.IsRepeatable, icon, a.RuleJSON).Scan(&a.ID); err != nil {
+				return 0, err
+			}
+			return a.ID, nil
+		}
+		res, err := h.db.Exec(stmt, a.Code, a.Name, a.Description, a.Rarity, a.Visibility, a.Domain, a.IsEnabled, a.IsRepeatable, icon, a.RuleJSON)
+		if err != nil {
+			return 0, err
+		}
+		id, _ := res.LastInsertId()
+		a.ID = int(id)
+		return a.ID, nil
+	}
+	stmt := formatPlaceholders(h.style, `UPDATE achievements SET code = ?, name = ?, description = ?, rarity = ?, visibility = ?, domain = ?, is_enabled = ?, is_repeatable = ?, icon_media_item_id = ?, rule_json = ?, updated_at = `+h.nowFun+` WHERE id = ?`)
+	var icon interface{}
+	if a.IconMediaItemID.Valid {
+		icon = a.IconMediaItemID.Int64
+	}
+	if _, err := h.db.Exec(stmt, a.Code, a.Name, a.Description, a.Rarity, a.Visibility, a.Domain, a.IsEnabled, a.IsRepeatable, icon, a.RuleJSON, a.ID); err != nil {
+		return 0, err
+	}
+	return a.ID, nil
+}
+
+func (h sqlHelper) awardAchievement(userID, achievementID int, status, metaJSON string) (bool, error) {
+	if userID <= 0 || achievementID <= 0 {
+		return false, errors.New("invalid ids")
+	}
+	if status == "" {
+		status = "active"
+	}
+	meta := interface{}(nil)
+	if strings.TrimSpace(metaJSON) != "" {
+		meta = metaJSON
+	}
+	stmt := `INSERT INTO achievements_user (user_id, achievement_id, awarded_at, status, meta_json)
+	         VALUES (?, ?, ` + h.nowFun + `, ?, ?)`
+	if h.style == "postgres" {
+		stmt += " ON CONFLICT (user_id, achievement_id) DO NOTHING"
+	} else if h.style == "mysql" {
+		stmt = "INSERT IGNORE INTO achievements_user (user_id, achievement_id, awarded_at, status, meta_json) VALUES (?, ?, " + h.nowFun + ", ?, ?)"
+	} else {
+		stmt = "INSERT OR IGNORE INTO achievements_user (user_id, achievement_id, awarded_at, status, meta_json) VALUES (?, ?, " + h.nowFun + ", ?, ?)"
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	res, err := h.db.Exec(stmt, userID, achievementID, status, meta)
+	if err != nil {
+		return false, err
+	}
+	if rows, err := res.RowsAffected(); err == nil && rows > 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (h sqlHelper) listUserAchievements(userID int) ([]AchievementUserView, error) {
+	query := `
+        SELECT a.id, a.code, a.name, a.description, a.rarity, a.visibility, a.domain, a.icon_media_item_id,
+               m.public_id, au.awarded_at, au.status, au.meta_json
+        FROM achievements_user au
+        INNER JOIN achievements a ON a.id = au.achievement_id
+        LEFT JOIN media_items m ON m.id = a.icon_media_item_id
+        WHERE au.user_id = ?
+        ORDER BY au.awarded_at DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []AchievementUserView
+	for rows.Next() {
+		var row AchievementUserView
+		if err := rows.Scan(&row.AchievementID, &row.Code, &row.Name, &row.Description, &row.Rarity, &row.Visibility, &row.Domain,
+			&row.IconMediaItemID, &row.IconPublicID, &row.AwardedAt, &row.Status, &row.MetaJSON); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listUserShowcase(userID int) ([]AchievementShowcaseView, error) {
+	query := `
+        SELECT s.slot, a.id, a.code, a.name, a.description, a.rarity, a.visibility, a.domain, a.icon_media_item_id,
+               m.public_id, au.awarded_at, au.status, au.meta_json
+        FROM achievements_showcase s
+        INNER JOIN achievements_user au ON au.user_id = s.user_id AND au.achievement_id = s.achievement_id
+        INNER JOIN achievements a ON a.id = s.achievement_id
+        LEFT JOIN media_items m ON m.id = a.icon_media_item_id
+        WHERE s.user_id = ?
+        ORDER BY s.slot ASC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []AchievementShowcaseView
+	for rows.Next() {
+		var row AchievementShowcaseView
+		if err := rows.Scan(&row.Slot, &row.AchievementID, &row.Code, &row.Name, &row.Description, &row.Rarity, &row.Visibility, &row.Domain,
+			&row.IconMediaItemID, &row.IconPublicID, &row.AwardedAt, &row.Status, &row.MetaJSON); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) setUserShowcaseSlot(userID, achievementID, slot int) error {
+	if userID <= 0 || achievementID <= 0 || slot <= 0 {
+		return errors.New("invalid ids")
+	}
+	clearStmt := formatPlaceholders(h.style, `DELETE FROM achievements_showcase WHERE user_id = ? AND achievement_id = ?`)
+	if _, err := h.db.Exec(clearStmt, userID, achievementID); err != nil {
+		return err
+	}
+	stmt := `INSERT INTO achievements_showcase (user_id, achievement_id, slot, created_at)
+	         VALUES (?, ?, ?, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		stmt += " ON CONFLICT (user_id, slot) DO UPDATE SET achievement_id = excluded.achievement_id, created_at = " + h.nowFun
+	} else if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE achievement_id = VALUES(achievement_id), created_at = " + h.nowFun
+	} else {
+		stmt += " ON CONFLICT(user_id, slot) DO UPDATE SET achievement_id = excluded.achievement_id, created_at = " + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, userID, achievementID, slot)
+	return err
+}
+
+func (h sqlHelper) clearUserShowcaseSlot(userID, slot int) error {
+	if userID <= 0 || slot <= 0 {
+		return errors.New("invalid ids")
+	}
+	stmt := formatPlaceholders(h.style, `DELETE FROM achievements_showcase WHERE user_id = ? AND slot = ?`)
+	_, err := h.db.Exec(stmt, userID, slot)
+	return err
+}
+
+func (h sqlHelper) achievementActivityFilters(f AchievementActivityFilter) (string, []string, []interface{}) {
+	join := ""
+	where := []string{"ua.usuari_id = ?"}
+	args := []interface{}{f.UserID}
+	if len(f.RuleCodes) > 0 {
+		join = "INNER JOIN punts_regles pr ON pr.id = ua.regla_id"
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(f.RuleCodes)), ",")
+		where = append(where, "pr.codi IN ("+placeholders+")")
+		for _, code := range f.RuleCodes {
+			args = append(args, code)
+		}
+	}
+	if len(f.Actions) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(f.Actions)), ",")
+		where = append(where, "ua.accio IN ("+placeholders+")")
+		for _, action := range f.Actions {
+			args = append(args, action)
+		}
+	}
+	if len(f.ObjectTypes) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(f.ObjectTypes)), ",")
+		where = append(where, "ua.objecte_tipus IN ("+placeholders+")")
+		for _, typ := range f.ObjectTypes {
+			args = append(args, typ)
+		}
+	}
+	if len(f.Statuses) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(f.Statuses)), ",")
+		where = append(where, "ua.estat IN ("+placeholders+")")
+		for _, status := range f.Statuses {
+			args = append(args, status)
+		}
+	}
+	if !f.From.IsZero() {
+		where = append(where, "ua.data_creacio >= ?")
+		args = append(args, f.From)
+	}
+	if !f.To.IsZero() {
+		where = append(where, "ua.data_creacio <= ?")
+		args = append(args, f.To)
+	}
+	return join, where, args
+}
+
+func (h sqlHelper) countUserActivities(f AchievementActivityFilter) (int, error) {
+	if f.UserID <= 0 {
+		return 0, errors.New("user_id invalid")
+	}
+	join, where, args := h.achievementActivityFilters(f)
+	query := `SELECT COUNT(*) FROM usuaris_activitat ua ` + join + ` WHERE ` + strings.Join(where, " AND ")
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) countUserActivitiesDistinctObject(f AchievementActivityFilter) (int, error) {
+	if f.UserID <= 0 {
+		return 0, errors.New("user_id invalid")
+	}
+	join, where, args := h.achievementActivityFilters(f)
+	where = append(where, "ua.objecte_id IS NOT NULL")
+	distinctExpr := "COUNT(DISTINCT ua.objecte_tipus || ':' || ua.objecte_id)"
+	if h.style == "mysql" || h.style == "postgres" {
+		distinctExpr = "COUNT(DISTINCT CONCAT(ua.objecte_tipus, ':', ua.objecte_id))"
+	}
+	query := `SELECT ` + distinctExpr + ` FROM usuaris_activitat ua ` + join + ` WHERE ` + strings.Join(where, " AND ")
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) sumUserActivityPoints(f AchievementActivityFilter) (int, error) {
+	if f.UserID <= 0 {
+		return 0, errors.New("user_id invalid")
+	}
+	join, where, args := h.achievementActivityFilters(f)
+	query := `SELECT COALESCE(SUM(ua.punts), 0) FROM usuaris_activitat ua ` + join + ` WHERE ` + strings.Join(where, " AND ")
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) listUserActivityDays(f AchievementActivityFilter) ([]time.Time, error) {
+	if f.UserID <= 0 {
+		return nil, errors.New("user_id invalid")
+	}
+	join, where, args := h.achievementActivityFilters(f)
+	query := `SELECT DISTINCT DATE(ua.data_creacio) as day FROM usuaris_activitat ua ` + join + ` WHERE ` + strings.Join(where, " AND ") + ` ORDER BY day`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []time.Time
+	for rows.Next() {
+		var dayStr string
+		if err := rows.Scan(&dayStr); err != nil {
+			return nil, err
+		}
+		day, err := time.Parse("2006-01-02", dayStr)
+		if err != nil {
+			continue
+		}
+		res = append(res, day)
+	}
+	return res, nil
+}
+
 func (h sqlHelper) countRanking(f RankingFilter) (int, error) {
 	query := `SELECT COUNT(1)
 			  FROM usuaris u
@@ -1085,6 +1697,27 @@ func (h sqlHelper) updateTranscripcioModeracio(id int, estat, motiu string, mode
 	now := time.Now()
 	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, now, now, id)
 	return err
+}
+
+func (h sqlHelper) updateTranscripcioModeracioWithDemografia(id int, estat, motiu string, moderatorID int, municipiID, year int, tipus string, delta int) error {
+	if delta == 0 || municipiID <= 0 || year <= 0 || strings.TrimSpace(tipus) == "" {
+		return h.updateTranscripcioModeracio(id, estat, motiu, moderatorID)
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stmt := `UPDATE transcripcions_raw SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	now := time.Now()
+	if _, err := tx.Exec(stmt, estat, motiu, moderatorID, now, now, id); err != nil {
+		return err
+	}
+	if err := h.applyMunicipiDemografiaDeltaTx(tx, municipiID, year, tipus, delta); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Paisos
@@ -1371,7 +2004,9 @@ func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
                na1.nom_nivell AS pais_nom,
                na3.nom_nivell AS provincia_nom,
                na4.nom_nivell AS comarca_nom,
-               m.moderation_status
+               m.moderation_status,
+               m.created_by,
+               m.data_creacio
         FROM municipis m
         LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
         LEFT JOIN nivells_administratius na3 ON na3.id = m.nivell_administratiu_id_3
@@ -1399,6 +2034,7 @@ func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 			&r.ID, &r.Nom, &r.Tipus, &r.Estat, &r.CodiPostal,
 			&r.PaisID, &r.ProvinciaID, &r.ComarcaID,
 			&r.PaisNom, &r.ProvNom, &r.Comarca, &r.ModeracioEstat,
+			&r.CreatedBy, &r.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -2558,6 +3194,27 @@ func (h sqlHelper) ensureUserExtraColumns() {
 	}
 }
 
+func (h sqlHelper) ensureArxiuExtraColumns() {
+	stmts := []string{}
+	switch h.style {
+	case "mysql":
+		if !h.columnExists("arxius", "what3words") {
+			stmts = append(stmts, "ALTER TABLE arxius ADD COLUMN what3words VARCHAR(255)")
+		}
+	case "postgres":
+		if !h.columnExists("arxius", "what3words") {
+			stmts = append(stmts, "ALTER TABLE arxius ADD COLUMN IF NOT EXISTS what3words TEXT")
+		}
+	default: // sqlite
+		if !h.columnExists("arxius", "what3words") {
+			stmts = append(stmts, "ALTER TABLE arxius ADD COLUMN what3words TEXT")
+		}
+	}
+	for _, stmt := range stmts {
+		_, _ = h.db.Exec(stmt)
+	}
+}
+
 func (h sqlHelper) ensurePrivacyExtraColumns() {
 	stmts := []string{}
 	switch h.style {
@@ -3391,6 +4048,7 @@ func (h sqlHelper) existsUserByEmail(email string) (bool, error) {
 // Arxius
 func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 	h.ensureUserExtraColumns() // no-op but keeps migrations consistent
+	h.ensureArxiuExtraColumns()
 	args := []interface{}{}
 	clauses := []string{"1=1"}
 	if filter.Text != "" {
@@ -3451,7 +4109,7 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 		offset = filter.Offset
 	}
 	query := `
-        SELECT a.id, a.nom, a.tipus, a.municipi_id, a.entitat_eclesiastica_id, a.adreca, a.ubicacio, a.web, a.acces, a.notes,
+        SELECT a.id, a.nom, a.tipus, a.municipi_id, a.entitat_eclesiastica_id, a.adreca, a.ubicacio, COALESCE(a.what3words, ''), a.web, a.acces, a.notes, a.accepta_donacions, COALESCE(a.donacions_url, ''),
                a.created_by, a.moderation_status, a.moderated_by, a.moderated_at, a.moderation_notes,
                m.nom as municipi_nom, ae.nom as entitat_nom,
                COALESCE(cnt.total, 0) AS llibres
@@ -3477,7 +4135,7 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 	var res []ArxiuWithCount
 	for rows.Next() {
 		var a ArxiuWithCount
-		if err := rows.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.Web, &a.Acces, &a.Notes,
+		if err := rows.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.What3Words, &a.Web, &a.Acces, &a.Notes, &a.AcceptaDonacions, &a.DonacionsURL,
 			&a.CreatedBy, &a.ModeracioEstat, &a.ModeratedBy, &a.ModeratedAt, &a.ModeracioMotiu,
 			&a.MunicipiNom, &a.EntitatNom, &a.Llibres); err != nil {
 			return nil, err
@@ -3552,13 +4210,14 @@ func (h sqlHelper) countArxius(filter ArxiuFilter) (int, error) {
 }
 
 func (h sqlHelper) getArxiu(id int) (*Arxiu, error) {
+	h.ensureArxiuExtraColumns()
 	query := formatPlaceholders(h.style, `
-        SELECT id, nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes,
+        SELECT id, nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, COALESCE(what3words, ''), web, acces, notes, accepta_donacions, COALESCE(donacions_url, ''),
                created_by, moderation_status, moderated_by, moderated_at, moderation_notes
         FROM arxius WHERE id = ?`)
 	row := h.db.QueryRow(query, id)
 	var a Arxiu
-	if err := row.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.Web, &a.Acces, &a.Notes,
+	if err := row.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.What3Words, &a.Web, &a.Acces, &a.Notes, &a.AcceptaDonacions, &a.DonacionsURL,
 		&a.CreatedBy, &a.ModeracioEstat, &a.ModeratedBy, &a.ModeratedAt, &a.ModeracioMotiu); err != nil {
 		return nil, err
 	}
@@ -3566,11 +4225,12 @@ func (h sqlHelper) getArxiu(id int) (*Arxiu, error) {
 }
 
 func (h sqlHelper) createArxiu(a *Arxiu) (int, error) {
-	args := []interface{}{a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.Web, a.Acces, a.Notes, a.CreatedBy, a.ModeracioEstat, a.ModeratedBy, a.ModeratedAt, a.ModeracioMotiu}
+	h.ensureArxiuExtraColumns()
+	args := []interface{}{a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.What3Words, a.Web, a.Acces, a.Notes, a.AcceptaDonacions, a.DonacionsURL, a.CreatedBy, a.ModeracioEstat, a.ModeratedBy, a.ModeratedAt, a.ModeracioMotiu}
 	if h.style == "postgres" {
 		query := `
-            INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes, created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)
+            INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, what3words, web, acces, notes, accepta_donacions, donacions_url, created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)
             RETURNING id`
 		query = formatPlaceholders(h.style, query)
 		if err := h.db.QueryRow(query, args...).Scan(&a.ID); err != nil {
@@ -3580,8 +4240,8 @@ func (h sqlHelper) createArxiu(a *Arxiu) (int, error) {
 	}
 
 	query := `
-        INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, web, acces, notes, created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+        INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, what3words, web, acces, notes, accepta_donacions, donacions_url, created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	query = formatPlaceholders(h.style, query)
 	res, err := h.db.Exec(query, args...)
 	if err != nil {
@@ -3594,13 +4254,14 @@ func (h sqlHelper) createArxiu(a *Arxiu) (int, error) {
 }
 
 func (h sqlHelper) updateArxiu(a *Arxiu) error {
+	h.ensureArxiuExtraColumns()
 	query := `
         UPDATE arxius
-        SET nom = ?, tipus = ?, municipi_id = ?, entitat_eclesiastica_id = ?, adreca = ?, ubicacio = ?, web = ?, acces = ?, notes = ?,
+        SET nom = ?, tipus = ?, municipi_id = ?, entitat_eclesiastica_id = ?, adreca = ?, ubicacio = ?, what3words = ?, web = ?, acces = ?, notes = ?, accepta_donacions = ?, donacions_url = ?,
             moderation_status = ?, moderated_by = ?, moderated_at = ?, moderation_notes = ?, updated_at = ` + h.nowFun + `
         WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
-	_, err := h.db.Exec(query, a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.Web, a.Acces, a.Notes, a.ModeracioEstat, a.ModeratedBy, a.ModeratedAt, a.ModeracioMotiu, a.ID)
+	_, err := h.db.Exec(query, a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.What3Words, a.Web, a.Acces, a.Notes, a.AcceptaDonacions, a.DonacionsURL, a.ModeracioEstat, a.ModeratedBy, a.ModeratedAt, a.ModeracioMotiu, a.ID)
 	return err
 }
 
@@ -3610,10 +4271,32 @@ func (h sqlHelper) deleteArxiu(id int) error {
 	return err
 }
 
+func (h sqlHelper) insertArxiuDonacioClick(arxiuID int, userID *int) error {
+	var uid interface{} = nil
+	if userID != nil {
+		uid = *userID
+	}
+	query := `
+        INSERT INTO arxius_donacions_clicks (arxiu_id, user_id, created_at)
+        VALUES (?, ?, ` + h.nowFun + `)`
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, arxiuID, uid)
+	return err
+}
+
+func (h sqlHelper) countArxiuDonacioClicks(arxiuID int) (int, error) {
+	query := formatPlaceholders(h.style, `SELECT COUNT(*) FROM arxius_donacions_clicks WHERE arxiu_id = ?`)
+	var total int
+	if err := h.db.QueryRow(query, arxiuID).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (h sqlHelper) listArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
 	query := `
         SELECT al.arxiu_id, al.llibre_id, al.signatura, al.url_override,
-               l.titol, l.nom_esglesia, l.cronologia, m.nom as municipi, a.nom as arxiu_nom,
+               l.titol, l.tipus_llibre, l.nom_esglesia, l.cronologia, m.nom as municipi, a.nom as arxiu_nom,
                l.pagines
         FROM arxius_llibres al
         INNER JOIN llibres l ON l.id = al.llibre_id
@@ -3629,7 +4312,7 @@ func (h sqlHelper) listArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
 	var res []ArxiuLlibreDetail
 	for rows.Next() {
 		var d ArxiuLlibreDetail
-		if err := rows.Scan(&d.ArxiuID, &d.LlibreID, &d.Signatura, &d.URLOverride, &d.Titol, &d.NomEsglesia, &d.Cronologia, &d.Municipi, &d.ArxiuNom, &d.Pagines); err != nil {
+		if err := rows.Scan(&d.ArxiuID, &d.LlibreID, &d.Signatura, &d.URLOverride, &d.Titol, &d.TipusLlibre, &d.NomEsglesia, &d.Cronologia, &d.Municipi, &d.ArxiuNom, &d.Pagines); err != nil {
 			return nil, err
 		}
 		res = append(res, d)
@@ -5264,6 +5947,97 @@ func (h sqlHelper) upsertCognom(forma, key, origen, notes string, createdBy *int
 	return id, nil
 }
 
+func (h sqlHelper) getNom(id int) (*Nom, error) {
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	query := fmt.Sprintf("SELECT id, forma, %s, notes, created_by, created_at, updated_at FROM noms WHERE id = ?", keyCol)
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var n Nom
+	var notes sql.NullString
+	if err := row.Scan(&n.ID, &n.Forma, &n.Key, &notes, &n.CreatedBy, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		return nil, err
+	}
+	n.Notes = notes.String
+	return &n, nil
+}
+
+func (h sqlHelper) upsertNom(forma, key, notes string, createdBy *int) (int, error) {
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	var createdByVal interface{}
+	if createdBy != nil {
+		createdByVal = *createdBy
+	}
+	if h.style == "postgres" {
+		stmt := fmt.Sprintf(`
+            INSERT INTO noms (forma, %s, notes, created_by, created_at, updated_at)
+            VALUES (?, ?, ?, ?, %s, %s)
+            ON CONFLICT (%s) DO UPDATE
+            SET forma = EXCLUDED.forma, notes = EXCLUDED.notes, updated_at = %s
+            RETURNING id`, keyCol, h.nowFun, h.nowFun, keyCol, h.nowFun)
+		stmt = formatPlaceholders(h.style, stmt)
+		var id int
+		if err := h.db.QueryRow(stmt, forma, key, notes, createdByVal).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+
+	stmt := fmt.Sprintf(`
+        INSERT INTO noms (forma, %s, notes, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, %s, %s)`, keyCol, h.nowFun, h.nowFun)
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE forma=VALUES(forma), notes=VALUES(notes), updated_at=" + h.nowFun
+	} else {
+		stmt += " ON CONFLICT(" + keyCol + ") DO UPDATE SET forma=excluded.forma, notes=excluded.notes, updated_at=" + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if _, err := h.db.Exec(stmt, forma, key, notes, createdByVal); err != nil {
+		return 0, err
+	}
+	selectStmt := fmt.Sprintf("SELECT id FROM noms WHERE %s = ?", keyCol)
+	selectStmt = formatPlaceholders(h.style, selectStmt)
+	row := h.db.QueryRow(selectStmt, key)
+	var id int
+	if err := row.Scan(&id); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func (h sqlHelper) resolveNomByForma(forma string) (int, string, bool, error) {
+	key := normalizeNomKey(forma)
+	if key == "" {
+		return 0, "", false, nil
+	}
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	query := fmt.Sprintf("SELECT id, forma FROM noms WHERE %s = ? LIMIT 1", keyCol)
+	query = formatPlaceholders(h.style, query)
+	var id int
+	var canon string
+	err := h.db.QueryRow(query, key).Scan(&id, &canon)
+	if err == nil {
+		return id, canon, true, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, "", false, err
+	}
+	cleanForma := strings.TrimSpace(forma)
+	id, err = h.upsertNom(cleanForma, key, "", nil)
+	if err != nil {
+		return 0, "", false, err
+	}
+	return id, cleanForma, true, nil
+}
+
 func (h sqlHelper) listCognomVariants(f CognomVariantFilter) ([]CognomVariant, error) {
 	keyCol := "key"
 	if h.style == "mysql" {
@@ -5469,6 +6243,23 @@ func normalizeCognomKey(s string) string {
 	return strings.ToUpper(s)
 }
 
+func normalizeNomKey(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	s = strings.ToLower(s)
+	s = stripDiacritics(s)
+	s = strings.ReplaceAll(s, "’", "")
+	s = strings.ReplaceAll(s, "'", "")
+	s = strings.ReplaceAll(s, "-", " ")
+	s = strings.ReplaceAll(s, ".", " ")
+	s = strings.ReplaceAll(s, ",", " ")
+	s = strings.Join(strings.Fields(s), " ")
+	s = strings.ReplaceAll(s, " ", "")
+	return strings.ToUpper(s)
+}
+
 func stripDiacritics(val string) string {
 	replacer := strings.NewReplacer(
 		"à", "a", "á", "a", "â", "a", "ä", "a", "ã", "a", "å", "a",
@@ -5571,6 +6362,347 @@ func (h sqlHelper) upsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, fre
 	stmt = formatPlaceholders(h.style, stmt)
 	_, err := h.db.Exec(stmt, cognomID, municipiID, anyDoc, freq)
 	return err
+}
+
+func (h sqlHelper) applyCognomFreqMunicipiAnyDelta(cognomID, municipiID, anyDoc, delta int) error {
+	if cognomID <= 0 || municipiID <= 0 || anyDoc <= 0 {
+		return errors.New("invalid ids")
+	}
+	if delta == 0 {
+		return nil
+	}
+	stmt := fmt.Sprintf(`
+        INSERT INTO cognoms_freq_municipi_any (cognom_id, municipi_id, any_doc, freq, updated_at)
+        VALUES (?, ?, ?, ?, %s)`, h.nowFun)
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE freq = freq + VALUES(freq), updated_at = " + h.nowFun
+	} else {
+		stmt += " ON CONFLICT (cognom_id, municipi_id, any_doc) DO UPDATE SET freq = cognoms_freq_municipi_any.freq + excluded.freq, updated_at = " + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if _, err := h.db.Exec(stmt, cognomID, municipiID, anyDoc, delta); err != nil {
+		return err
+	}
+	cleanup := formatPlaceholders(h.style, `DELETE FROM cognoms_freq_municipi_any WHERE cognom_id = ? AND municipi_id = ? AND any_doc = ? AND freq <= 0`)
+	if res, err := h.db.Exec(cleanup, cognomID, municipiID, anyDoc); err == nil && delta < 0 {
+		if rows, err := res.RowsAffected(); err == nil && rows > 0 {
+			logInfof("clamp cognoms_freq_municipi_any cognom=%d municipi=%d any=%d delta=%d", cognomID, municipiID, anyDoc, delta)
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) upsertNomFreqMunicipiAny(nomID, municipiID, anyDoc, delta int) error {
+	if nomID <= 0 || municipiID <= 0 || anyDoc <= 0 {
+		return errors.New("invalid ids")
+	}
+	if delta == 0 {
+		return nil
+	}
+	stmt := fmt.Sprintf(`
+        INSERT INTO noms_freq_municipi_any (nom_id, municipi_id, any_doc, freq, updated_at)
+        VALUES (?, ?, ?, ?, %s)`, h.nowFun)
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE freq = freq + VALUES(freq), updated_at = " + h.nowFun
+	} else {
+		stmt += " ON CONFLICT (nom_id, municipi_id, any_doc) DO UPDATE SET freq = noms_freq_municipi_any.freq + excluded.freq, updated_at = " + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if _, err := h.db.Exec(stmt, nomID, municipiID, anyDoc, delta); err != nil {
+		return err
+	}
+	cleanup := formatPlaceholders(h.style, `DELETE FROM noms_freq_municipi_any WHERE nom_id = ? AND municipi_id = ? AND any_doc = ? AND freq <= 0`)
+	if res, err := h.db.Exec(cleanup, nomID, municipiID, anyDoc); err == nil && delta < 0 {
+		if rows, err := res.RowsAffected(); err == nil && rows > 0 {
+			logInfof("clamp noms_freq_municipi_any nom=%d municipi=%d any=%d delta=%d", nomID, municipiID, anyDoc, delta)
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) upsertNomFreqMunicipiTotal(nomID, municipiID, delta int) error {
+	if nomID <= 0 || municipiID <= 0 {
+		return errors.New("invalid ids")
+	}
+	if delta == 0 {
+		return nil
+	}
+	stmt := fmt.Sprintf(`
+        INSERT INTO noms_freq_municipi_total (nom_id, municipi_id, total_freq, updated_at)
+        VALUES (?, ?, ?, %s)`, h.nowFun)
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE total_freq = total_freq + VALUES(total_freq), updated_at = " + h.nowFun
+	} else {
+		stmt += " ON CONFLICT (nom_id, municipi_id) DO UPDATE SET total_freq = noms_freq_municipi_total.total_freq + excluded.total_freq, updated_at = " + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if _, err := h.db.Exec(stmt, nomID, municipiID, delta); err != nil {
+		return err
+	}
+	cleanup := formatPlaceholders(h.style, `DELETE FROM noms_freq_municipi_total WHERE nom_id = ? AND municipi_id = ? AND total_freq <= 0`)
+	if res, err := h.db.Exec(cleanup, nomID, municipiID); err == nil && delta < 0 {
+		if rows, err := res.RowsAffected(); err == nil && rows > 0 {
+			logInfof("clamp noms_freq_municipi_total nom=%d municipi=%d delta=%d", nomID, municipiID, delta)
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) upsertCognomFreqMunicipiTotal(cognomID, municipiID, delta int) error {
+	if cognomID <= 0 || municipiID <= 0 {
+		return errors.New("invalid ids")
+	}
+	if delta == 0 {
+		return nil
+	}
+	stmt := fmt.Sprintf(`
+        INSERT INTO cognoms_freq_municipi_total (cognom_id, municipi_id, total_freq, updated_at)
+        VALUES (?, ?, ?, %s)`, h.nowFun)
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE total_freq = total_freq + VALUES(total_freq), updated_at = " + h.nowFun
+	} else {
+		stmt += " ON CONFLICT (cognom_id, municipi_id) DO UPDATE SET total_freq = cognoms_freq_municipi_total.total_freq + excluded.total_freq, updated_at = " + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if _, err := h.db.Exec(stmt, cognomID, municipiID, delta); err != nil {
+		return err
+	}
+	cleanup := formatPlaceholders(h.style, `DELETE FROM cognoms_freq_municipi_total WHERE cognom_id = ? AND municipi_id = ? AND total_freq <= 0`)
+	if res, err := h.db.Exec(cleanup, cognomID, municipiID); err == nil && delta < 0 {
+		if rows, err := res.RowsAffected(); err == nil && rows > 0 {
+			logInfof("clamp cognoms_freq_municipi_total cognom=%d municipi=%d delta=%d", cognomID, municipiID, delta)
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) listTopNomsByMunicipi(municipiID, limit int) ([]NomTotalRow, error) {
+	if municipiID <= 0 {
+		return nil, errors.New("municipi_id invalid")
+	}
+	query := `
+        SELECT n.id, t.municipi_id, t.total_freq, n.forma
+        FROM noms_freq_municipi_total t
+        JOIN noms n ON n.id = t.nom_id
+        WHERE t.municipi_id = ?
+        ORDER BY t.total_freq DESC, n.forma`
+	args := []interface{}{municipiID}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []NomTotalRow
+	for rows.Next() {
+		var row NomTotalRow
+		if err := rows.Scan(&row.NomID, &row.MunicipiID, &row.TotalFreq, &row.Forma); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listTopCognomsByMunicipi(municipiID, limit int) ([]CognomTotalRow, error) {
+	if municipiID <= 0 {
+		return nil, errors.New("municipi_id invalid")
+	}
+	query := `
+        SELECT c.id, t.municipi_id, t.total_freq, c.forma
+        FROM cognoms_freq_municipi_total t
+        JOIN cognoms c ON c.id = t.cognom_id
+        WHERE t.municipi_id = ?
+        ORDER BY t.total_freq DESC, c.forma`
+	args := []interface{}{municipiID}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomTotalRow
+	for rows.Next() {
+		var row CognomTotalRow
+		if err := rows.Scan(&row.CognomID, &row.MunicipiID, &row.TotalFreq, &row.Forma); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listNomSeries(municipiID, nomID int, bucket string) ([]NomFreqRow, error) {
+	if municipiID <= 0 || nomID <= 0 {
+		return nil, errors.New("invalid ids")
+	}
+	if bucket == "decade" {
+		query := `
+        SELECT (any_doc - (any_doc % 10)) AS decade, SUM(freq) AS freq
+        FROM noms_freq_municipi_any
+        WHERE municipi_id = ? AND nom_id = ?
+        GROUP BY decade
+        ORDER BY decade`
+		query = formatPlaceholders(h.style, query)
+		rows, err := h.db.Query(query, municipiID, nomID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var res []NomFreqRow
+		for rows.Next() {
+			var decade int
+			var freq int
+			if err := rows.Scan(&decade, &freq); err != nil {
+				return nil, err
+			}
+			res = append(res, NomFreqRow{
+				NomID:      nomID,
+				MunicipiID: municipiID,
+				AnyDoc:     decade,
+				Freq:       freq,
+			})
+		}
+		return res, nil
+	}
+	query := `
+        SELECT any_doc, freq
+        FROM noms_freq_municipi_any
+        WHERE municipi_id = ? AND nom_id = ?
+        ORDER BY any_doc`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, municipiID, nomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []NomFreqRow
+	for rows.Next() {
+		var year int
+		var freq int
+		if err := rows.Scan(&year, &freq); err != nil {
+			return nil, err
+		}
+		res = append(res, NomFreqRow{
+			NomID:      nomID,
+			MunicipiID: municipiID,
+			AnyDoc:     year,
+			Freq:       freq,
+		})
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listCognomSeries(municipiID, cognomID int, bucket string) ([]CognomFreqRow, error) {
+	if municipiID <= 0 || cognomID <= 0 {
+		return nil, errors.New("invalid ids")
+	}
+	if bucket == "decade" {
+		query := `
+        SELECT (any_doc - (any_doc % 10)) AS decade, SUM(freq) AS freq
+        FROM cognoms_freq_municipi_any
+        WHERE municipi_id = ? AND cognom_id = ?
+        GROUP BY decade
+        ORDER BY decade`
+		query = formatPlaceholders(h.style, query)
+		rows, err := h.db.Query(query, municipiID, cognomID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var res []CognomFreqRow
+		for rows.Next() {
+			var decade int
+			var freq int
+			if err := rows.Scan(&decade, &freq); err != nil {
+				return nil, err
+			}
+			res = append(res, CognomFreqRow{
+				MunicipiID: municipiID,
+				AnyDoc:     decade,
+				Freq:       freq,
+			})
+		}
+		return res, nil
+	}
+	query := `
+        SELECT any_doc, freq
+        FROM cognoms_freq_municipi_any
+        WHERE municipi_id = ? AND cognom_id = ?
+        ORDER BY any_doc`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, municipiID, cognomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomFreqRow
+	for rows.Next() {
+		var year int
+		var freq int
+		if err := rows.Scan(&year, &freq); err != nil {
+			return nil, err
+		}
+		res = append(res, CognomFreqRow{
+			MunicipiID: municipiID,
+			AnyDoc:     year,
+			Freq:       freq,
+		})
+	}
+	return res, nil
+}
+
+func (h sqlHelper) countNomTotalsByMunicipi(municipiID int) (int, error) {
+	if municipiID <= 0 {
+		return 0, errors.New("municipi_id invalid")
+	}
+	query := `SELECT COUNT(*) FROM noms_freq_municipi_total WHERE municipi_id = ? AND total_freq > 0`
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, municipiID).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) countCognomTotalsByMunicipi(municipiID int) (int, error) {
+	if municipiID <= 0 {
+		return 0, errors.New("municipi_id invalid")
+	}
+	query := `SELECT COUNT(*) FROM cognoms_freq_municipi_total WHERE municipi_id = ? AND total_freq > 0`
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, municipiID).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) clearNomCognomStatsByMunicipi(municipiID int) error {
+	if municipiID <= 0 {
+		return errors.New("municipi_id invalid")
+	}
+	queries := []string{
+		`DELETE FROM noms_freq_municipi_any WHERE municipi_id = ?`,
+		`DELETE FROM noms_freq_municipi_total WHERE municipi_id = ?`,
+		`DELETE FROM cognoms_freq_municipi_any WHERE municipi_id = ?`,
+		`DELETE FROM cognoms_freq_municipi_total WHERE municipi_id = ?`,
+	}
+	for _, query := range queries {
+		stmt := formatPlaceholders(h.style, query)
+		if _, err := h.db.Exec(stmt, municipiID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (h sqlHelper) queryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]CognomFreqRow, error) {
@@ -5742,6 +6874,69 @@ func (h sqlHelper) listMediaItemsByAlbum(albumID int) ([]MediaItem, error) {
 		res = append(res, item)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) listMediaItemsByAlbumType(albumType, status string) ([]MediaItem, error) {
+	albumType = strings.TrimSpace(albumType)
+	if albumType == "" {
+		return []MediaItem{}, nil
+	}
+	query := `
+        SELECT mi.id, mi.public_id, mi.album_id, COALESCE(mi.title, ''), COALESCE(mi.original_filename, ''), COALESCE(mi.mime_type, ''),
+               COALESCE(mi.byte_size, 0), COALESCE(mi.width, 0), COALESCE(mi.height, 0), COALESCE(mi.checksum_sha256, ''),
+               mi.storage_key_original, COALESCE(mi.thumb_path, ''), mi.derivatives_status, mi.moderation_status,
+               mi.moderated_by, mi.moderated_at, COALESCE(mi.moderation_notes, ''), mi.credit_cost
+        FROM media_items mi
+        INNER JOIN media_albums a ON a.id = mi.album_id
+        WHERE a.album_type = ?`
+	args := []interface{}{albumType}
+	status = strings.TrimSpace(status)
+	if status != "" {
+		query += " AND mi.moderation_status = ?"
+		args = append(args, status)
+	}
+	query += " ORDER BY mi.id ASC"
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MediaItem
+	for rows.Next() {
+		var item MediaItem
+		if err := rows.Scan(
+			&item.ID, &item.PublicID, &item.AlbumID, &item.Title, &item.OriginalFilename, &item.MimeType,
+			&item.ByteSize, &item.Width, &item.Height, &item.ChecksumSHA256,
+			&item.StorageKeyOriginal, &item.ThumbPath, &item.DerivativesStatus, &item.ModerationStatus,
+			&item.ModeratedBy, &item.ModeratedAt, &item.ModerationNotes, &item.CreditCost,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, item)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getMediaItemByID(id int) (*MediaItem, error) {
+	query := `
+        SELECT id, public_id, album_id, COALESCE(title, ''), COALESCE(original_filename, ''), COALESCE(mime_type, ''),
+               COALESCE(byte_size, 0), COALESCE(width, 0), COALESCE(height, 0), COALESCE(checksum_sha256, ''),
+               storage_key_original, COALESCE(thumb_path, ''), derivatives_status, moderation_status,
+               moderated_by, moderated_at, COALESCE(moderation_notes, ''), credit_cost
+        FROM media_items WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var item MediaItem
+	if err := row.Scan(
+		&item.ID, &item.PublicID, &item.AlbumID, &item.Title, &item.OriginalFilename, &item.MimeType,
+		&item.ByteSize, &item.Width, &item.Height, &item.ChecksumSHA256,
+		&item.StorageKeyOriginal, &item.ThumbPath, &item.DerivativesStatus, &item.ModerationStatus,
+		&item.ModeratedBy, &item.ModeratedAt, &item.ModerationNotes, &item.CreditCost,
+	); err != nil {
+		return nil, err
+	}
+	return &item, nil
 }
 
 func (h sqlHelper) getMediaItemByPublicID(publicID string) (*MediaItem, error) {
@@ -7168,4 +8363,874 @@ func (h sqlHelper) listPendingMunicipiHistoriaFetVersions(limit, offset int) ([]
 		res = append(res, item)
 	}
 	return res, total, nil
+}
+
+// Demografia municipi
+func (h sqlHelper) getMunicipiDemografiaMeta(municipiID int) (*MunicipiDemografiaMeta, error) {
+	if municipiID <= 0 {
+		return nil, errors.New("municipi_id invalid")
+	}
+	query := `SELECT municipi_id, any_min, any_max, total_natalitat, total_matrimonis, total_defuncions, updated_at
+	          FROM municipi_demografia_meta WHERE municipi_id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, municipiID)
+	var item MunicipiDemografiaMeta
+	if err := row.Scan(&item.MunicipiID, &item.AnyMin, &item.AnyMax, &item.TotalNatalitat, &item.TotalMatrimonis, &item.TotalDefuncions, &item.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (h sqlHelper) listMunicipiDemografiaAny(municipiID int, from, to int) ([]MunicipiDemografiaAny, error) {
+	if municipiID <= 0 {
+		return nil, errors.New("municipi_id invalid")
+	}
+	yearCol := demografiaYearColumn(h.style)
+	query := fmt.Sprintf(`
+        SELECT municipi_id, %s, natalitat, matrimonis, defuncions, updated_at
+        FROM municipi_demografia_any
+        WHERE municipi_id = ?`, yearCol)
+	args := []interface{}{municipiID}
+	if from > 0 {
+		query += fmt.Sprintf(" AND %s >= ?", yearCol)
+		args = append(args, from)
+	}
+	if to > 0 {
+		query += fmt.Sprintf(" AND %s <= ?", yearCol)
+		args = append(args, to)
+	}
+	query += " ORDER BY " + yearCol + " ASC"
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MunicipiDemografiaAny
+	for rows.Next() {
+		var row MunicipiDemografiaAny
+		if err := rows.Scan(&row.MunicipiID, &row.Any, &row.Natalitat, &row.Matrimonis, &row.Defuncions, &row.UpdatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listMunicipiDemografiaDecades(municipiID int, from, to int) ([]MunicipiDemografiaAny, error) {
+	rows, err := h.listMunicipiDemografiaAny(municipiID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	decades := map[int]*MunicipiDemografiaAny{}
+	for _, row := range rows {
+		if row.Any <= 0 {
+			continue
+		}
+		decade := (row.Any / 10) * 10
+		item := decades[decade]
+		if item == nil {
+			item = &MunicipiDemografiaAny{MunicipiID: row.MunicipiID, Any: decade}
+			decades[decade] = item
+		}
+		item.Natalitat += row.Natalitat
+		item.Matrimonis += row.Matrimonis
+		item.Defuncions += row.Defuncions
+		if !row.UpdatedAt.Valid {
+			continue
+		}
+		if !item.UpdatedAt.Valid || row.UpdatedAt.Time.After(item.UpdatedAt.Time) {
+			item.UpdatedAt = row.UpdatedAt
+		}
+	}
+	keys := make([]int, 0, len(decades))
+	for decade := range decades {
+		keys = append(keys, decade)
+	}
+	sort.Ints(keys)
+	res := make([]MunicipiDemografiaAny, 0, len(keys))
+	for _, decade := range keys {
+		res = append(res, *decades[decade])
+	}
+	return res, nil
+}
+
+func (h sqlHelper) applyMunicipiDemografiaDelta(municipiID, year int, tipus string, delta int) error {
+	if municipiID <= 0 || year <= 0 {
+		return errors.New("invalid ids")
+	}
+	if delta == 0 {
+		return nil
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := h.applyMunicipiDemografiaDeltaTx(tx, municipiID, year, tipus, delta); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (h sqlHelper) applyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year int, tipus string, delta int) error {
+	if tx == nil {
+		return errors.New("tx required")
+	}
+	if municipiID <= 0 || year <= 0 {
+		return errors.New("invalid ids")
+	}
+	if delta == 0 {
+		return nil
+	}
+	natalitat := 0
+	matrimonis := 0
+	defuncions := 0
+	switch strings.ToLower(strings.TrimSpace(tipus)) {
+	case "natalitat":
+		natalitat = delta
+	case "matrimonis":
+		matrimonis = delta
+	case "defuncions":
+		defuncions = delta
+	default:
+		return errors.New("tipus invalid")
+	}
+	yearCol := demografiaYearColumn(h.style)
+	var upsert string
+	switch h.style {
+	case "mysql":
+		upsert = fmt.Sprintf(`INSERT INTO municipi_demografia_any (municipi_id, %s, natalitat, matrimonis, defuncions, updated_at)
+            VALUES (?, ?, ?, ?, ?, `+h.nowFun+`)
+            ON DUPLICATE KEY UPDATE natalitat = natalitat + VALUES(natalitat),
+            matrimonis = matrimonis + VALUES(matrimonis),
+            defuncions = defuncions + VALUES(defuncions),
+            updated_at = `+h.nowFun, yearCol)
+	case "postgres":
+		upsert = fmt.Sprintf(`INSERT INTO municipi_demografia_any (municipi_id, %s, natalitat, matrimonis, defuncions, updated_at)
+            VALUES (?, ?, ?, ?, ?, `+h.nowFun+`)
+            ON CONFLICT (municipi_id, %s) DO UPDATE SET
+            natalitat = municipi_demografia_any.natalitat + EXCLUDED.natalitat,
+            matrimonis = municipi_demografia_any.matrimonis + EXCLUDED.matrimonis,
+            defuncions = municipi_demografia_any.defuncions + EXCLUDED.defuncions,
+            updated_at = `+h.nowFun, yearCol, yearCol)
+	default: // sqlite
+		upsert = fmt.Sprintf(`INSERT INTO municipi_demografia_any (municipi_id, %s, natalitat, matrimonis, defuncions, updated_at)
+            VALUES (?, ?, ?, ?, ?, `+h.nowFun+`)
+            ON CONFLICT(municipi_id, %s) DO UPDATE SET
+            natalitat = natalitat + excluded.natalitat,
+            matrimonis = matrimonis + excluded.matrimonis,
+            defuncions = defuncions + excluded.defuncions,
+            updated_at = `+h.nowFun, yearCol, yearCol)
+	}
+	upsert = formatPlaceholders(h.style, upsert)
+	if _, err := tx.Exec(upsert, municipiID, year, natalitat, matrimonis, defuncions); err != nil {
+		return err
+	}
+	selectStmt := fmt.Sprintf(`SELECT natalitat, matrimonis, defuncions
+        FROM municipi_demografia_any
+        WHERE municipi_id = ? AND %s = ?`, yearCol)
+	selectStmt = formatPlaceholders(h.style, selectStmt)
+	var curNat, curMat, curDef int
+	if err := tx.QueryRow(selectStmt, municipiID, year).Scan(&curNat, &curMat, &curDef); err != nil {
+		return err
+	}
+	changed := false
+	if curNat < 0 {
+		curNat = 0
+		changed = true
+	}
+	if curMat < 0 {
+		curMat = 0
+		changed = true
+	}
+	if curDef < 0 {
+		curDef = 0
+		changed = true
+	}
+	if curNat == 0 && curMat == 0 && curDef == 0 {
+		delStmt := fmt.Sprintf(`DELETE FROM municipi_demografia_any WHERE municipi_id = ? AND %s = ?`, yearCol)
+		delStmt = formatPlaceholders(h.style, delStmt)
+		if _, err := tx.Exec(delStmt, municipiID, year); err != nil {
+			return err
+		}
+	} else if changed {
+		updateStmt := fmt.Sprintf(`UPDATE municipi_demografia_any
+            SET natalitat = ?, matrimonis = ?, defuncions = ?, updated_at = `+h.nowFun+`
+            WHERE municipi_id = ? AND %s = ?`, yearCol)
+		updateStmt = formatPlaceholders(h.style, updateStmt)
+		if _, err := tx.Exec(updateStmt, curNat, curMat, curDef, municipiID, year); err != nil {
+			return err
+		}
+	}
+	insertMeta := `INSERT INTO municipi_demografia_meta (municipi_id, any_min, any_max, total_natalitat, total_matrimonis, total_defuncions, updated_at)
+        VALUES (?, NULL, NULL, 0, 0, 0, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		insertMeta += " ON CONFLICT (municipi_id) DO NOTHING"
+	} else if h.style == "mysql" {
+		insertMeta += " ON DUPLICATE KEY UPDATE municipi_id = VALUES(municipi_id)"
+	} else {
+		insertMeta += " ON CONFLICT(municipi_id) DO NOTHING"
+	}
+	insertMeta = formatPlaceholders(h.style, insertMeta)
+	if _, err := tx.Exec(insertMeta, municipiID); err != nil {
+		return err
+	}
+	updateTotals := `UPDATE municipi_demografia_meta
+        SET total_natalitat = CASE WHEN total_natalitat + ? < 0 THEN 0 ELSE total_natalitat + ? END,
+            total_matrimonis = CASE WHEN total_matrimonis + ? < 0 THEN 0 ELSE total_matrimonis + ? END,
+            total_defuncions = CASE WHEN total_defuncions + ? < 0 THEN 0 ELSE total_defuncions + ? END,
+            updated_at = ` + h.nowFun + `
+        WHERE municipi_id = ?`
+	updateTotals = formatPlaceholders(h.style, updateTotals)
+	if _, err := tx.Exec(updateTotals, natalitat, natalitat, matrimonis, matrimonis, defuncions, defuncions, municipiID); err != nil {
+		return err
+	}
+	minMaxStmt := fmt.Sprintf(`SELECT MIN(%s), MAX(%s) FROM municipi_demografia_any WHERE municipi_id = ?`, yearCol, yearCol)
+	minMaxStmt = formatPlaceholders(h.style, minMaxStmt)
+	var minAny sql.NullInt64
+	var maxAny sql.NullInt64
+	if err := tx.QueryRow(minMaxStmt, municipiID).Scan(&minAny, &maxAny); err != nil {
+		return err
+	}
+	updateRange := `UPDATE municipi_demografia_meta
+        SET any_min = ?, any_max = ?, updated_at = ` + h.nowFun + `
+        WHERE municipi_id = ?`
+	updateRange = formatPlaceholders(h.style, updateRange)
+	if _, err := tx.Exec(updateRange, minAny, maxAny, municipiID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (h sqlHelper) rebuildMunicipiDemografia(municipiID int) error {
+	if municipiID <= 0 {
+		return errors.New("municipi_id invalid")
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	delAny := formatPlaceholders(h.style, `DELETE FROM municipi_demografia_any WHERE municipi_id = ?`)
+	if _, err := tx.Exec(delAny, municipiID); err != nil {
+		return err
+	}
+	delMeta := formatPlaceholders(h.style, `DELETE FROM municipi_demografia_meta WHERE municipi_id = ?`)
+	if _, err := tx.Exec(delMeta, municipiID); err != nil {
+		return err
+	}
+	yearExpr := demografiaYearExpr(h.style)
+	query := fmt.Sprintf(`
+        SELECT %s AS any,
+               SUM(CASE WHEN t.tipus_acte='baptisme' THEN 1 ELSE 0 END) AS natalitat,
+               SUM(CASE WHEN t.tipus_acte='matrimoni' THEN 1 ELSE 0 END) AS matrimonis,
+               SUM(CASE WHEN t.tipus_acte='obit' THEN 1 ELSE 0 END) AS defuncions
+        FROM transcripcions_raw t
+        JOIN llibres l ON l.id = t.llibre_id
+        WHERE t.moderation_status='publicat'
+          AND t.tipus_acte IN ('baptisme','matrimoni','obit')
+          AND l.municipi_id = ?
+          AND %s BETWEEN 1200 AND 2100
+        GROUP BY %s
+        ORDER BY %s ASC`, yearExpr, yearExpr, yearExpr, yearExpr)
+	query = formatPlaceholders(h.style, query)
+	rows, err := tx.Query(query, municipiID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	yearCol := demografiaYearColumn(h.style)
+	insertAny := fmt.Sprintf(`INSERT INTO municipi_demografia_any (municipi_id, %s, natalitat, matrimonis, defuncions, updated_at)
+        VALUES (?, ?, ?, ?, ?, `+h.nowFun+`)`, yearCol)
+	insertAny = formatPlaceholders(h.style, insertAny)
+	first := true
+	minAny := 0
+	maxAny := 0
+	totalNat := 0
+	totalMat := 0
+	totalDef := 0
+	for rows.Next() {
+		var year int
+		var nat int
+		var mat int
+		var def int
+		if err := rows.Scan(&year, &nat, &mat, &def); err != nil {
+			return err
+		}
+		if year <= 0 {
+			continue
+		}
+		if _, err := tx.Exec(insertAny, municipiID, year, nat, mat, def); err != nil {
+			return err
+		}
+		totalNat += nat
+		totalMat += mat
+		totalDef += def
+		if first {
+			minAny = year
+			maxAny = year
+			first = false
+		} else {
+			if year < minAny {
+				minAny = year
+			}
+			if year > maxAny {
+				maxAny = year
+			}
+		}
+	}
+	if !first {
+		minVal := sql.NullInt64{Int64: int64(minAny), Valid: true}
+		maxVal := sql.NullInt64{Int64: int64(maxAny), Valid: true}
+		insertMeta := `INSERT INTO municipi_demografia_meta (municipi_id, any_min, any_max, total_natalitat, total_matrimonis, total_defuncions, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			insertMeta += " ON CONFLICT (municipi_id) DO UPDATE SET any_min = EXCLUDED.any_min, any_max = EXCLUDED.any_max, total_natalitat = EXCLUDED.total_natalitat, total_matrimonis = EXCLUDED.total_matrimonis, total_defuncions = EXCLUDED.total_defuncions, updated_at = " + h.nowFun
+		} else if h.style == "mysql" {
+			insertMeta += " ON DUPLICATE KEY UPDATE any_min = VALUES(any_min), any_max = VALUES(any_max), total_natalitat = VALUES(total_natalitat), total_matrimonis = VALUES(total_matrimonis), total_defuncions = VALUES(total_defuncions), updated_at = " + h.nowFun
+		} else {
+			insertMeta += " ON CONFLICT(municipi_id) DO UPDATE SET any_min = excluded.any_min, any_max = excluded.any_max, total_natalitat = excluded.total_natalitat, total_matrimonis = excluded.total_matrimonis, total_defuncions = excluded.total_defuncions, updated_at = " + h.nowFun
+		}
+		insertMeta = formatPlaceholders(h.style, insertMeta)
+		if _, err := tx.Exec(insertMeta, municipiID, minVal, maxVal, totalNat, totalMat, totalDef); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// Anecdotari municipi
+func (h sqlHelper) listMunicipiAnecdotariPublished(municipiID int, f MunicipiAnecdotariFilter) ([]MunicipiAnecdotariVersion, int, error) {
+	if municipiID <= 0 {
+		return nil, 0, errors.New("municipi_id invalid")
+	}
+	status := strings.TrimSpace(f.Status)
+	if status == "" {
+		status = "publicat"
+	}
+	args := []interface{}{municipiID, status}
+	clauses := []string{"i.municipi_id = ?", "v.status = ?"}
+	if tag := strings.TrimSpace(f.Tag); tag != "" {
+		clauses = append(clauses, "v.tag = ?")
+		args = append(args, tag)
+	}
+	if q := strings.TrimSpace(f.Query); q != "" {
+		qLike := "%" + strings.ToLower(q) + "%"
+		clauses = append(clauses, "(LOWER(v.titol) LIKE ? OR LOWER(v.text) LIKE ? OR LOWER(v.tag) LIKE ? OR LOWER(v.data_ref) LIKE ?)")
+		args = append(args, qLike, qLike, qLike, qLike)
+	}
+	baseWhere := strings.Join(clauses, " AND ")
+	countQuery := `
+        SELECT COUNT(1)
+        FROM municipi_anecdotari_items i
+        JOIN municipi_anecdotari_versions v ON v.id = i.current_version_id
+        WHERE ` + baseWhere
+	countQuery = formatPlaceholders(h.style, countQuery)
+	total := 0
+	if err := h.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := `
+        SELECT v.id, v.item_id, i.municipi_id, v.version, v.status, v.titol, v.tag, v.data_ref, v.text, v.font_url,
+               v.moderation_notes, v.lock_version, v.created_by, v.created_at, v.updated_at, v.moderated_by, v.moderated_at
+        FROM municipi_anecdotari_items i
+        JOIN municipi_anecdotari_versions v ON v.id = i.current_version_id
+        WHERE ` + baseWhere + `
+        ORDER BY v.created_at DESC, v.id DESC`
+	listArgs := make([]interface{}, len(args))
+	copy(listArgs, args)
+	if f.Limit > 0 {
+		query += " LIMIT ?"
+		listArgs = append(listArgs, f.Limit)
+	}
+	if f.Offset > 0 {
+		query += " OFFSET ?"
+		listArgs = append(listArgs, f.Offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, listArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var res []MunicipiAnecdotariVersion
+	for rows.Next() {
+		var item MunicipiAnecdotariVersion
+		var dataRef sql.NullString
+		var fontURL sql.NullString
+		var notes sql.NullString
+		if err := rows.Scan(&item.ID, &item.ItemID, &item.MunicipiID, &item.Version, &item.Status, &item.Titol, &item.Tag,
+			&dataRef, &item.Text, &fontURL, &notes, &item.LockVersion, &item.CreatedBy, &item.CreatedAt,
+			&item.UpdatedAt, &item.ModeratedBy, &item.ModeratedAt); err != nil {
+			return nil, 0, err
+		}
+		item.DataRef = dataRef.String
+		item.FontURL = fontURL.String
+		item.ModerationNotes = notes.String
+		res = append(res, item)
+	}
+	return res, total, nil
+}
+
+func (h sqlHelper) getMunicipiAnecdotariPublished(itemID int) (*MunicipiAnecdotariVersion, error) {
+	if itemID <= 0 {
+		return nil, errors.New("item_id invalid")
+	}
+	query := `
+        SELECT v.id, v.item_id, i.municipi_id, v.version, v.status, v.titol, v.tag, v.data_ref, v.text, v.font_url,
+               v.moderation_notes, v.lock_version, v.created_by, v.created_at, v.updated_at, v.moderated_by, v.moderated_at
+        FROM municipi_anecdotari_items i
+        JOIN municipi_anecdotari_versions v ON v.id = i.current_version_id
+        WHERE i.id = ? AND v.status = 'publicat'`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, itemID)
+	var item MunicipiAnecdotariVersion
+	var dataRef sql.NullString
+	var fontURL sql.NullString
+	var notes sql.NullString
+	if err := row.Scan(&item.ID, &item.ItemID, &item.MunicipiID, &item.Version, &item.Status, &item.Titol, &item.Tag,
+		&dataRef, &item.Text, &fontURL, &notes, &item.LockVersion, &item.CreatedBy, &item.CreatedAt,
+		&item.UpdatedAt, &item.ModeratedBy, &item.ModeratedAt); err != nil {
+		return nil, err
+	}
+	item.DataRef = dataRef.String
+	item.FontURL = fontURL.String
+	item.ModerationNotes = notes.String
+	return &item, nil
+}
+
+func (h sqlHelper) listMunicipiAnecdotariComments(itemID int, limit, offset int) ([]MunicipiAnecdotariComment, int, error) {
+	if itemID <= 0 {
+		return nil, 0, errors.New("item_id invalid")
+	}
+	countQuery := formatPlaceholders(h.style, `SELECT COUNT(1) FROM municipi_anecdotari_comments WHERE item_id = ?`)
+	total := 0
+	if err := h.db.QueryRow(countQuery, itemID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	query := `
+        SELECT id, item_id, user_id, body, created_at
+        FROM municipi_anecdotari_comments
+        WHERE item_id = ?
+        ORDER BY created_at ASC, id ASC`
+	args := []interface{}{itemID}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	if offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var res []MunicipiAnecdotariComment
+	for rows.Next() {
+		var item MunicipiAnecdotariComment
+		if err := rows.Scan(&item.ID, &item.ItemID, &item.UserID, &item.Body, &item.CreatedAt); err != nil {
+			return nil, 0, err
+		}
+		res = append(res, item)
+	}
+	return res, total, nil
+}
+
+func (h sqlHelper) createMunicipiAnecdotariItem(municipiID int, createdBy int) (int, error) {
+	if municipiID <= 0 {
+		return 0, errors.New("municipi_id invalid")
+	}
+	createdByVal := sql.NullInt64{}
+	if createdBy > 0 {
+		createdByVal = sql.NullInt64{Int64: int64(createdBy), Valid: true}
+	}
+	query := `
+        INSERT INTO municipi_anecdotari_items (municipi_id, current_version_id, created_by, created_at, updated_at)
+        VALUES (?, NULL, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += " RETURNING id"
+	}
+	query = formatPlaceholders(h.style, query)
+	if h.style == "postgres" {
+		var id int
+		if err := h.db.QueryRow(query, municipiID, createdByVal).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	res, err := h.db.Exec(query, municipiID, createdByVal)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		return int(id), nil
+	}
+	return 0, nil
+}
+
+func (h sqlHelper) nextMunicipiAnecdotariVersion(itemID int) (int, error) {
+	query := formatPlaceholders(h.style, `
+        SELECT COALESCE(MAX(version), 0) + 1
+        FROM municipi_anecdotari_versions
+        WHERE item_id = ?`)
+	var next int
+	if err := h.db.QueryRow(query, itemID).Scan(&next); err != nil {
+		return 0, err
+	}
+	return next, nil
+}
+
+func (h sqlHelper) createMunicipiAnecdotariDraft(itemID int, createdBy int, baseFromCurrent bool) (int, error) {
+	if itemID <= 0 {
+		return 0, errors.New("item_id invalid")
+	}
+	version, err := h.nextMunicipiAnecdotariVersion(itemID)
+	if err != nil {
+		return 0, err
+	}
+	titol := ""
+	tag := ""
+	text := ""
+	dataRef := sql.NullString{}
+	fontURL := sql.NullString{}
+	if baseFromCurrent {
+		query := `
+            SELECT v.titol, v.tag, v.data_ref, v.text, v.font_url
+            FROM municipi_anecdotari_items i
+            JOIN municipi_anecdotari_versions v ON v.id = i.current_version_id
+            WHERE i.id = ?`
+		query = formatPlaceholders(h.style, query)
+		var dataRefVal sql.NullString
+		var fontURLVal sql.NullString
+		if err := h.db.QueryRow(query, itemID).Scan(&titol, &tag, &dataRefVal, &text, &fontURLVal); err == nil {
+			dataRef = dataRefVal
+			fontURL = fontURLVal
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return 0, err
+		}
+	}
+	createdByVal := sql.NullInt64{}
+	if createdBy > 0 {
+		createdByVal = sql.NullInt64{Int64: int64(createdBy), Valid: true}
+	}
+	query := `
+        INSERT INTO municipi_anecdotari_versions
+            (item_id, version, status, titol, tag, data_ref, text, font_url, moderation_notes,
+             lock_version, created_by, created_at, updated_at, moderated_by, moderated_at)
+        VALUES (?, ?, 'draft', ?, ?, ?, ?, ?, '', 0, ?, ` + h.nowFun + `, ` + h.nowFun + `, NULL, NULL)`
+	if h.style == "postgres" {
+		query += " RETURNING id"
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{itemID, version, titol, tag, dataRef, text, fontURL, createdByVal}
+	if h.style == "postgres" {
+		var id int
+		if err := h.db.QueryRow(query, args...).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		return int(id), nil
+	}
+	return 0, nil
+}
+
+func (h sqlHelper) getMunicipiAnecdotariVersion(id int) (*MunicipiAnecdotariVersion, error) {
+	query := `
+        SELECT id, item_id, version, status, titol, tag, data_ref, text, font_url, moderation_notes,
+               lock_version, created_by, created_at, updated_at, moderated_by, moderated_at
+        FROM municipi_anecdotari_versions
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var item MunicipiAnecdotariVersion
+	var dataRef sql.NullString
+	var fontURL sql.NullString
+	var notes sql.NullString
+	if err := row.Scan(&item.ID, &item.ItemID, &item.Version, &item.Status, &item.Titol, &item.Tag,
+		&dataRef, &item.Text, &fontURL, &notes, &item.LockVersion, &item.CreatedBy, &item.CreatedAt,
+		&item.UpdatedAt, &item.ModeratedBy, &item.ModeratedAt); err != nil {
+		return nil, err
+	}
+	item.DataRef = dataRef.String
+	item.FontURL = fontURL.String
+	item.ModerationNotes = notes.String
+	return &item, nil
+}
+
+func (h sqlHelper) getPendingMunicipiAnecdotariVersionByItemID(itemID int) (*MunicipiAnecdotariVersion, error) {
+	if itemID <= 0 {
+		return nil, errors.New("item_id invalid")
+	}
+	query := `
+        SELECT id, item_id, version, status, titol, tag, data_ref, text, font_url, moderation_notes,
+               lock_version, created_by, created_at, updated_at, moderated_by, moderated_at
+        FROM municipi_anecdotari_versions
+        WHERE item_id = ? AND status = 'pendent'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, itemID)
+	var item MunicipiAnecdotariVersion
+	var dataRef sql.NullString
+	var fontURL sql.NullString
+	var notes sql.NullString
+	if err := row.Scan(&item.ID, &item.ItemID, &item.Version, &item.Status, &item.Titol, &item.Tag,
+		&dataRef, &item.Text, &fontURL, &notes, &item.LockVersion, &item.CreatedBy, &item.CreatedAt,
+		&item.UpdatedAt, &item.ModeratedBy, &item.ModeratedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	item.DataRef = dataRef.String
+	item.FontURL = fontURL.String
+	item.ModerationNotes = notes.String
+	return &item, nil
+}
+
+func (h sqlHelper) updateMunicipiAnecdotariDraft(v *MunicipiAnecdotariVersion) error {
+	if v == nil {
+		return errors.New("version nil")
+	}
+	dataRef := sql.NullString{String: strings.TrimSpace(v.DataRef), Valid: strings.TrimSpace(v.DataRef) != ""}
+	fontURL := sql.NullString{String: strings.TrimSpace(v.FontURL), Valid: strings.TrimSpace(v.FontURL) != ""}
+	query := `
+        UPDATE municipi_anecdotari_versions
+        SET titol = ?, tag = ?, data_ref = ?, text = ?, font_url = ?, lock_version = lock_version + 1, updated_at = ` + h.nowFun + `
+        WHERE id = ? AND lock_version = ? AND status = 'draft'`
+	query = formatPlaceholders(h.style, query)
+	res, err := h.db.Exec(query, strings.TrimSpace(v.Titol), strings.TrimSpace(v.Tag), dataRef, v.Text, fontURL, v.ID, v.LockVersion)
+	if err != nil {
+		return err
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return ErrConflict
+	}
+	return nil
+}
+
+func (h sqlHelper) submitMunicipiAnecdotariVersion(versionID int) error {
+	if versionID <= 0 {
+		return errors.New("version_id invalid")
+	}
+	query := `
+        UPDATE municipi_anecdotari_versions
+        SET status = 'pendent', updated_at = ` + h.nowFun + `
+        WHERE id = ? AND status = 'draft'`
+	query = formatPlaceholders(h.style, query)
+	res, err := h.db.Exec(query, versionID)
+	if err != nil {
+		return err
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return ErrConflict
+	}
+	return nil
+}
+
+func (h sqlHelper) listPendingMunicipiAnecdotariVersions(limit, offset int) ([]MunicipiAnecdotariVersion, int, error) {
+	countQuery := formatPlaceholders(h.style, `SELECT COUNT(1) FROM municipi_anecdotari_versions WHERE status = 'pendent'`)
+	total := 0
+	if err := h.db.QueryRow(countQuery).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	query := `
+        SELECT v.id, v.item_id, i.municipi_id, m.nom, v.version, v.status, v.titol, v.tag, v.data_ref, v.text, v.font_url,
+               v.moderation_notes, v.lock_version, v.created_by, v.created_at, v.updated_at, v.moderated_by, v.moderated_at
+        FROM municipi_anecdotari_versions v
+        JOIN municipi_anecdotari_items i ON i.id = v.item_id
+        JOIN municipis m ON m.id = i.municipi_id
+        WHERE v.status = 'pendent'
+        ORDER BY v.created_at ASC, v.id ASC`
+	args := []interface{}{}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	if offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var res []MunicipiAnecdotariVersion
+	for rows.Next() {
+		var item MunicipiAnecdotariVersion
+		var dataRef sql.NullString
+		var fontURL sql.NullString
+		var notes sql.NullString
+		if err := rows.Scan(&item.ID, &item.ItemID, &item.MunicipiID, &item.MunicipiNom, &item.Version, &item.Status,
+			&item.Titol, &item.Tag, &dataRef, &item.Text, &fontURL, &notes, &item.LockVersion,
+			&item.CreatedBy, &item.CreatedAt, &item.UpdatedAt, &item.ModeratedBy, &item.ModeratedAt); err != nil {
+			return nil, 0, err
+		}
+		item.DataRef = dataRef.String
+		item.FontURL = fontURL.String
+		item.ModerationNotes = notes.String
+		res = append(res, item)
+	}
+	return res, total, nil
+}
+
+func (h sqlHelper) approveMunicipiAnecdotariVersion(versionID int, moderatorID int) error {
+	if versionID <= 0 {
+		return errors.New("version_id invalid")
+	}
+	if moderatorID <= 0 {
+		return errors.New("moderator_id invalid")
+	}
+	query := `
+        UPDATE municipi_anecdotari_versions
+        SET status = 'publicat', moderation_notes = '', moderated_by = ?, moderated_at = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ? AND status = 'pendent'`
+	query = formatPlaceholders(h.style, query)
+	res, err := h.db.Exec(query, moderatorID, time.Now(), versionID)
+	if err != nil {
+		return err
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return ErrConflict
+	}
+	query = formatPlaceholders(h.style, `SELECT item_id FROM municipi_anecdotari_versions WHERE id = ?`)
+	var itemID int
+	if err := h.db.QueryRow(query, versionID).Scan(&itemID); err != nil {
+		return err
+	}
+	updateQuery := `
+        UPDATE municipi_anecdotari_items
+        SET current_version_id = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	updateQuery = formatPlaceholders(h.style, updateQuery)
+	_, err = h.db.Exec(updateQuery, versionID, itemID)
+	return err
+}
+
+func (h sqlHelper) rejectMunicipiAnecdotariVersion(versionID int, moderatorID int, notes string) error {
+	if versionID <= 0 {
+		return errors.New("version_id invalid")
+	}
+	if moderatorID <= 0 {
+		return errors.New("moderator_id invalid")
+	}
+	notesVal := strings.TrimSpace(notes)
+	query := `
+        UPDATE municipi_anecdotari_versions
+        SET status = 'rebutjat', moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ? AND status = 'pendent'`
+	query = formatPlaceholders(h.style, query)
+	res, err := h.db.Exec(query, notesVal, moderatorID, time.Now(), versionID)
+	if err != nil {
+		return err
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return ErrConflict
+	}
+	return nil
+}
+
+func (h sqlHelper) createMunicipiAnecdotariComment(itemID int, userID int, body string) (int, error) {
+	if itemID <= 0 {
+		return 0, errors.New("item_id invalid")
+	}
+	if userID <= 0 {
+		return 0, errors.New("user_id invalid")
+	}
+	bodyVal := strings.TrimSpace(body)
+	if bodyVal == "" {
+		return 0, errors.New("body empty")
+	}
+	query := `
+        INSERT INTO municipi_anecdotari_comments (item_id, user_id, body, created_at)
+        VALUES (?, ?, ?, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += " RETURNING id"
+	}
+	query = formatPlaceholders(h.style, query)
+	if h.style == "postgres" {
+		var id int
+		if err := h.db.QueryRow(query, itemID, userID, bodyVal).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	res, err := h.db.Exec(query, itemID, userID, bodyVal)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		return int(id), nil
+	}
+	return 0, nil
+}
+
+func (h sqlHelper) getMunicipiAnecdotariLastCommentAt(userID int) (time.Time, error) {
+	if userID <= 0 {
+		return time.Time{}, errors.New("user_id invalid")
+	}
+	query := `
+        SELECT created_at
+        FROM municipi_anecdotari_comments
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 1`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, userID)
+	var last sql.NullTime
+	if err := row.Scan(&last); err != nil {
+		if err == sql.ErrNoRows {
+			return time.Time{}, nil
+		}
+		return time.Time{}, err
+	}
+	if !last.Valid {
+		return time.Time{}, nil
+	}
+	return last.Time, nil
+}
+
+func (h sqlHelper) resolveMunicipiIDByAnecdotariItemID(itemID int) (int, error) {
+	if itemID <= 0 {
+		return 0, errors.New("item_id invalid")
+	}
+	query := formatPlaceholders(h.style, `SELECT municipi_id FROM municipi_anecdotari_items WHERE id = ?`)
+	var munID int
+	if err := h.db.QueryRow(query, itemID).Scan(&munID); err != nil {
+		return 0, err
+	}
+	return munID, nil
+}
+
+func (h sqlHelper) resolveMunicipiIDByAnecdotariVersionID(versionID int) (int, error) {
+	if versionID <= 0 {
+		return 0, errors.New("version_id invalid")
+	}
+	query := `
+        SELECT i.municipi_id
+        FROM municipi_anecdotari_versions v
+        JOIN municipi_anecdotari_items i ON i.id = v.item_id
+        WHERE v.id = ?`
+	query = formatPlaceholders(h.style, query)
+	var munID int
+	if err := h.db.QueryRow(query, versionID).Scan(&munID); err != nil {
+		return 0, err
+	}
+	return munID, nil
 }

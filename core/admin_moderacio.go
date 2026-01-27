@@ -79,6 +79,20 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		target := a.resolveMunicipiTarget(municipiID)
 		return a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaModerate, target)
 	}
+	canModerateAnecdotesAny := canModerateAll
+	if !canModerateAll && user != nil {
+		canModerateAnecdotesAny = a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisAnecdotesModerate)
+	}
+	canModerateAnecdoteItem := func(municipiID int) bool {
+		if canModerateAll {
+			return true
+		}
+		if user == nil || municipiID <= 0 {
+			return false
+		}
+		target := a.resolveMunicipiTarget(municipiID)
+		return a.HasPermission(user.ID, permKeyTerritoriMunicipisAnecdotesModerate, target)
+	}
 
 	persones := []db.Persona{}
 	arxius := []db.ArxiuWithCount{}
@@ -132,8 +146,18 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 			}
 		}
 	}
+	anecdotes := []db.MunicipiAnecdotariVersion{}
+	if canModerateAnecdotesAny {
+		if rows, _, err := a.DB.ListPendingMunicipiAnecdotariVersions(0, 0); err == nil {
+			for _, row := range rows {
+				if canModerateAnecdoteItem(row.MunicipiID) {
+					anecdotes = append(anecdotes, row)
+				}
+			}
+		}
+	}
 
-	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents) + len(variants) + len(historiaGeneral) + len(historiaFets)
+	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents) + len(variants) + len(historiaGeneral) + len(historiaFets) + len(anecdotes)
 	regTotal := 0
 	if canModerateAll {
 		if total, err := a.DB.CountTranscripcionsRawGlobal(db.TranscripcioFilter{Status: "pendent"}); err == nil {
@@ -233,8 +257,13 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 
 		for _, mrow := range municipis {
-			autorNom := "—"
-			autorURL := ""
+			created := ""
+			var createdAt time.Time
+			if mrow.CreatedAt.Valid {
+				created = mrow.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = mrow.CreatedAt.Time
+			}
+			autorNom, autorURL := autorFromID(mrow.CreatedBy)
 			motiu := ""
 			ctx := strings.TrimSpace(strings.Join([]string{mrow.PaisNom.String, mrow.ProvNom.String, mrow.Comarca.String}, " / "))
 			appendIfVisible(moderacioItem{
@@ -244,8 +273,8 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 				Context:   ctx,
 				Autor:     autorNom,
 				AutorURL:  autorURL,
-				Created:   "",
-				CreatedAt: time.Time{},
+				Created:   created,
+				CreatedAt: createdAt,
 				Motiu:     motiu,
 				EditURL:   fmt.Sprintf("/territori/municipis/%d/edit?return_to=/moderacio", mrow.ID),
 			})
@@ -328,6 +357,48 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 			CreatedAt:  createdAt,
 			Motiu:      row.ModerationNotes,
 			EditURL:    fmt.Sprintf("/moderacio/municipis/historia/fets/%d", row.ID),
+		})
+	}
+
+	for _, row := range anecdotes {
+		created := ""
+		var createdAt time.Time
+		if row.CreatedAt.Valid {
+			created = row.CreatedAt.Time.Format("2006-01-02 15:04")
+			createdAt = row.CreatedAt.Time
+		}
+		autorNom, autorURL := autorFromID(row.CreatedBy)
+		tagLabel := strings.TrimSpace(row.Tag)
+		if strings.TrimSpace(row.Tag) != "" {
+			labelKey := "municipi.anecdotes.tags." + strings.TrimSpace(row.Tag)
+			label := strings.TrimSpace(T(lang, labelKey))
+			if label != "" && label != labelKey {
+				tagLabel = label
+			}
+		}
+		contextParts := []string{}
+		if strings.TrimSpace(row.MunicipiNom) != "" {
+			contextParts = append(contextParts, strings.TrimSpace(row.MunicipiNom))
+		}
+		if strings.TrimSpace(tagLabel) != "" {
+			contextParts = append(contextParts, strings.TrimSpace(tagLabel))
+		}
+		name := strings.TrimSpace(row.Titol)
+		if name == "" {
+			name = T(lang, "municipi.anecdotes.title")
+		}
+		appendIfVisible(moderacioItem{
+			ID:         row.ID,
+			Type:       "municipi_anecdota_version",
+			Nom:        name,
+			Context:    strings.Join(contextParts, " · "),
+			ContextURL: fmt.Sprintf("/territori/municipis/%d", row.MunicipiID),
+			Autor:      autorNom,
+			AutorURL:   autorURL,
+			Created:    created,
+			CreatedAt:  createdAt,
+			Motiu:      row.ModerationNotes,
+			EditURL:    fmt.Sprintf("/territori/municipis/%d/anecdotes/%d?version_id=%d", row.MunicipiID, row.ItemID, row.ID),
 		})
 	}
 
@@ -512,14 +583,14 @@ func (a *App) requireModeracioUser(w http.ResponseWriter, r *http.Request) (*db.
 		*r = *a.withPermissions(r, perms)
 	}
 	canModerateAll := a.hasPerm(perms, permModerate)
-	if canModerateAll || a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisHistoriaModerate) {
+	if canModerateAll || a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisHistoriaModerate) || a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisAnecdotesModerate) {
 		return user, perms, canModerateAll, true
 	}
 	http.Error(w, "Forbidden", http.StatusForbidden)
 	return user, perms, false, false
 }
 
-func (a *App) canModerateHistoriaObject(user *db.User, perms db.PolicyPermissions, objectType string, versionID int) bool {
+func (a *App) canModerateTerritoriObject(user *db.User, perms db.PolicyPermissions, objectType string, versionID int) bool {
 	if user == nil {
 		return false
 	}
@@ -536,6 +607,10 @@ func (a *App) canModerateHistoriaObject(user *db.User, perms db.PolicyPermission
 		if id, err := a.DB.ResolveMunicipiIDByHistoriaFetVersionID(versionID); err == nil {
 			munID = id
 		}
+	case "municipi_anecdota_version":
+		if id, err := a.DB.ResolveMunicipiIDByAnecdotariVersionID(versionID); err == nil {
+			munID = id
+		}
 	default:
 		return false
 	}
@@ -543,7 +618,12 @@ func (a *App) canModerateHistoriaObject(user *db.User, perms db.PolicyPermission
 		return false
 	}
 	target := a.resolveMunicipiTarget(munID)
-	return a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaModerate, target)
+	switch objectType {
+	case "municipi_anecdota_version":
+		return a.HasPermission(user.ID, permKeyTerritoriMunicipisAnecdotesModerate, target)
+	default:
+		return a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaModerate, target)
+	}
 }
 
 // Llista de persones pendents de moderació
@@ -692,7 +772,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if scope == "all" {
-		types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "municipi_historia_general", "municipi_historia_fet", "registre", "cognom_variant"}
+		types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "municipi_historia_general", "municipi_historia_fet", "municipi_anecdota_version", "registre", "cognom_variant"}
 		if bulkType != "" && bulkType != "all" {
 			types = []string{bulkType}
 		}
@@ -770,6 +850,14 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 				} else {
 					errCount++
 				}
+			case "municipi_anecdota_version":
+				if rows, _, err := a.DB.ListPendingMunicipiAnecdotariVersions(0, 0); err == nil {
+					for _, row := range rows {
+						applyAction(objType, row.ID)
+					}
+				} else {
+					errCount++
+				}
 			case "registre":
 				const chunk = 200
 				for {
@@ -837,7 +925,7 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 		objType = "persona"
 	}
 	_ = r.ParseForm()
-	if !canModerateAll && !a.canModerateHistoriaObject(user, perms, objType, id) {
+	if !canModerateAll && !a.canModerateTerritoriObject(user, perms, objType, id) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -878,7 +966,7 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
 		return
 	}
-	if !canModerateAll && !a.canModerateHistoriaObject(user, perms, objType, id) {
+	if !canModerateAll && !a.canModerateTerritoriObject(user, perms, objType, id) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -912,7 +1000,42 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 	case "eclesiastic":
 		return a.DB.UpdateArquebisbatModeracio(id, estat, motiu, moderatorID)
 	case "registre":
-		return a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID)
+		reg, err := a.DB.GetTranscripcioRaw(id)
+		if err != nil {
+			return err
+		}
+		if reg == nil {
+			return fmt.Errorf("registre no trobat")
+		}
+		oldStatus := reg.ModeracioEstat
+		delta := demografiaDeltaFromStatus(oldStatus, estat)
+		if delta == 0 {
+			return a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID)
+		}
+		llibre, err := a.loadLlibreForRegistre(reg)
+		if err != nil || llibre == nil {
+			if err := a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID); err != nil {
+				return err
+			}
+			persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
+			a.applyNomCognomDeltaForRegistre(reg, persones, delta)
+			return nil
+		}
+		munID, year, tipus, ok := demografiaDeltaFromRegistre(reg, llibre)
+		if !ok {
+			if err := a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID); err != nil {
+				return err
+			}
+			persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
+			a.applyNomCognomDeltaForRegistre(reg, persones, delta)
+			return nil
+		}
+		if err := a.DB.UpdateTranscripcioModeracioWithDemografia(id, estat, motiu, moderatorID, munID, year, tipus, delta); err != nil {
+			return err
+		}
+		persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
+		a.applyNomCognomDeltaForRegistre(reg, persones, delta)
+		return nil
 	case "registre_canvi":
 		return a.moderateRegistreChange(id, estat, motiu, moderatorID)
 	case "cognom_variant":
@@ -921,6 +1044,30 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.DB.SetMunicipiHistoriaGeneralStatus(id, estat, motiu, &moderatorID)
 	case "municipi_historia_fet":
 		return a.DB.SetMunicipiHistoriaFetStatus(id, estat, motiu, &moderatorID)
+	case "municipi_anecdota_version":
+		if estat == "publicat" {
+			if err := a.DB.ApproveMunicipiAnecdotariVersion(id, moderatorID); err != nil {
+				return err
+			}
+			if version, err := a.DB.GetMunicipiAnecdotariVersion(id); err == nil && version != nil {
+				Infof("Anecdota aprovada version=%d item=%d municipi=%d moderator=%d", id, version.ItemID, version.MunicipiID, moderatorID)
+			} else {
+				Infof("Anecdota aprovada version=%d moderator=%d", id, moderatorID)
+			}
+			return nil
+		}
+		if estat == "rebutjat" {
+			if err := a.DB.RejectMunicipiAnecdotariVersion(id, moderatorID, motiu); err != nil {
+				return err
+			}
+			if version, err := a.DB.GetMunicipiAnecdotariVersion(id); err == nil && version != nil {
+				Infof("Anecdota rebutjada version=%d item=%d municipi=%d moderator=%d", id, version.ItemID, version.MunicipiID, moderatorID)
+			} else {
+				Infof("Anecdota rebutjada version=%d moderator=%d", id, moderatorID)
+			}
+			return nil
+		}
+		return fmt.Errorf("estat desconegut")
 	default:
 		return fmt.Errorf("tipus desconegut")
 	}
@@ -945,6 +1092,7 @@ func (a *App) moderateRegistreChange(changeID int, estat, motiu string, moderato
 	if err != nil || registre == nil {
 		return fmt.Errorf("registre no trobat")
 	}
+	beforePersones, _ := a.DB.ListTranscripcioPersones(registre.ID)
 	_, afterSnap := parseTranscripcioChangeMeta(*change)
 	if afterSnap == nil {
 		return fmt.Errorf("canvi sense dades")
@@ -972,6 +1120,18 @@ func (a *App) moderateRegistreChange(changeID int, estat, motiu string, moderato
 	for i := range after.Atributs {
 		after.Atributs[i].TranscripcioID = registre.ID
 		_, _ = a.DB.CreateTranscripcioAtribut(&after.Atributs[i])
+	}
+	if registre.ModeracioEstat == "publicat" {
+		a.applyDemografiaDeltaForRegistre(registre, -1)
+	}
+	if after.Raw.ModeracioEstat == "publicat" {
+		a.applyDemografiaDeltaForRegistre(&after.Raw, 1)
+	}
+	if registre.ModeracioEstat == "publicat" {
+		a.applyNomCognomDeltaForRegistre(registre, beforePersones, -1)
+	}
+	if after.Raw.ModeracioEstat == "publicat" {
+		a.applyNomCognomDeltaForRegistre(&after.Raw, after.Persones, 1)
 	}
 	a.updateRegistreChangeActivities(change.TranscripcioID, changeID, moderatorID, true)
 	if change.ChangeType == "revert" {

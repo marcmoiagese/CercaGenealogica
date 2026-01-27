@@ -36,6 +36,7 @@ var mediaAlbumTypes = map[string]bool{
 	"book":     true,
 	"memorial": true,
 	"photo":    true,
+	"achievement_icon": true,
 	"other":    true,
 }
 
@@ -176,9 +177,10 @@ func (a *App) MediaAlbumNew(w http.ResponseWriter, r *http.Request) {
 	}
 	user := userFromContext(r)
 	lang := resolveUserLang(r, user)
+	perms, _ := a.permissionsFromContext(r)
 	RenderPrivateTemplateLang(w, r, "media-albums-form.html", lang, map[string]interface{}{
 		"User":           user,
-		"AlbumTypes":     mediaAlbumTypeList(),
+		"AlbumTypes":     mediaAlbumTypeListForPerms(perms),
 		"SourceTypes":    mediaSourceTypeList(),
 		"FormTitle":      "",
 		"FormType":       "other",
@@ -282,11 +284,16 @@ func (a *App) mediaAlbumCreate(w http.ResponseWriter, r *http.Request, cfg media
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+	perms, _ := a.permissionsFromContext(r)
 
 	title := strings.TrimSpace(r.FormValue("title"))
 	desc := strings.TrimSpace(r.FormValue("description"))
 	albumType := normalizeMediaAlbumType(r.FormValue("album_type"))
 	sourceType := normalizeMediaSourceType(r.FormValue("source_type"))
+	if albumType == "achievement_icon" && !perms.Admin {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 
 	if title == "" {
 		a.renderMediaAlbumForm(w, r, user, cfg, title, albumType, sourceType, desc, T(resolveUserLang(r, user), "media.error.title_required"))
@@ -304,6 +311,10 @@ func (a *App) mediaAlbumCreate(w http.ResponseWriter, r *http.Request, cfg media
 		CreditCost:       0,
 		DifficultyScore:  0,
 		SourceType:       sourceType,
+	}
+	if albumType == "achievement_icon" {
+		album.Visibility = "admins_only"
+		album.ModerationStatus = "approved"
 	}
 	if _, err := a.DB.CreateMediaAlbum(album); err != nil {
 		Errorf("Error creant media album: %v", err)
@@ -667,7 +678,22 @@ func normalizeMediaVisibility(val string) string {
 }
 
 func mediaAlbumTypeList() []string {
-	return []string{"book", "memorial", "photo", "other"}
+	return []string{"book", "memorial", "photo", "achievement_icon", "other"}
+}
+
+func mediaAlbumTypeListForPerms(perms db.PolicyPermissions) []string {
+	list := mediaAlbumTypeList()
+	if perms.Admin {
+		return list
+	}
+	filtered := make([]string, 0, len(list))
+	for _, entry := range list {
+		if entry == "achievement_icon" {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
 }
 
 func mediaSourceTypeList() []string {
@@ -754,9 +780,10 @@ func extensionForMime(mime string) string {
 
 func (a *App) renderMediaAlbumForm(w http.ResponseWriter, r *http.Request, user *db.User, cfg mediaConfig, title, albumType, sourceType, desc, errMsg string) {
 	lang := resolveUserLang(r, user)
+	perms, _ := a.permissionsFromContext(r)
 	RenderPrivateTemplateLang(w, r, "media-albums-form.html", lang, map[string]interface{}{
 		"User":           user,
-		"AlbumTypes":     mediaAlbumTypeList(),
+		"AlbumTypes":     mediaAlbumTypeListForPerms(perms),
 		"SourceTypes":    mediaSourceTypeList(),
 		"FormTitle":      title,
 		"FormType":       albumType,

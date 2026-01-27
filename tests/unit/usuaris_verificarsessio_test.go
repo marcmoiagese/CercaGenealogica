@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/core"
 	"github.com/marcmoiagese/CercaGenealogica/db"
@@ -139,6 +140,7 @@ func (f *fakeDBVerificar) UserHasAnyPolicy(userID int, policies []string) (bool,
 }
 func (f *fakeDBVerificar) EnsureDefaultPolicies() error    { return nil }
 func (f *fakeDBVerificar) EnsureDefaultPointsRules() error { return nil }
+func (f *fakeDBVerificar) EnsureDefaultAchievements() error { return nil }
 func (f *fakeDBVerificar) ListArxius(filter db.ArxiuFilter) ([]db.ArxiuWithCount, error) {
 	return nil, nil
 }
@@ -146,6 +148,12 @@ func (f *fakeDBVerificar) GetArxiu(id int) (*db.Arxiu, error)   { return nil, ni
 func (f *fakeDBVerificar) CreateArxiu(a *db.Arxiu) (int, error) { return 0, nil }
 func (f *fakeDBVerificar) UpdateArxiu(a *db.Arxiu) error        { return nil }
 func (f *fakeDBVerificar) DeleteArxiu(id int) error             { return nil }
+func (f *fakeDBVerificar) InsertArxiuDonacioClick(arxiuID int, userID *int) error {
+	return nil
+}
+func (f *fakeDBVerificar) CountArxiuDonacioClicks(arxiuID int) (int, error) {
+	return 0, nil
+}
 func (f *fakeDBVerificar) ListArxiuLlibres(arxiuID int) ([]db.ArxiuLlibreDetail, error) {
 	return nil, nil
 }
@@ -253,6 +261,7 @@ func (f *fakeDBVerificar) GetPointsRuleByCode(code string) (*db.PointsRule, erro
 	return nil, fmt.Errorf("not found")
 }
 func (f *fakeDBVerificar) SavePointsRule(r *db.PointsRule) (int, error)       { return 0, nil }
+func (f *fakeDBVerificar) ListUserIDs(limit, offset int) ([]int, error)       { return nil, nil }
 func (f *fakeDBVerificar) InsertUserActivity(a *db.UserActivity) (int, error) { return 0, nil }
 func (f *fakeDBVerificar) GetUserActivity(id int) (*db.UserActivity, error) {
 	return nil, fmt.Errorf("not found")
@@ -274,6 +283,45 @@ func (f *fakeDBVerificar) RecalcUserPoints() error                              
 func (f *fakeDBVerificar) GetRanking(db.RankingFilter) ([]db.UserPoints, error) { return nil, nil }
 func (f *fakeDBVerificar) CountRanking(db.RankingFilter) (int, error)           { return 0, nil }
 func (f *fakeDBVerificar) ListUserGroups(userID int) ([]db.Group, error)        { return nil, nil }
+func (f *fakeDBVerificar) ListAchievements() ([]db.Achievement, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) ListEnabledAchievements() ([]db.Achievement, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetAchievement(id int) (*db.Achievement, error) {
+	return nil, errors.New("not found")
+}
+func (f *fakeDBVerificar) GetAchievementByCode(code string) (*db.Achievement, error) {
+	return nil, errors.New("not found")
+}
+func (f *fakeDBVerificar) SaveAchievement(a *db.Achievement) (int, error) { return 0, nil }
+func (f *fakeDBVerificar) AwardAchievement(userID, achievementID int, status, metaJSON string) (bool, error) {
+	return false, nil
+}
+func (f *fakeDBVerificar) ListUserAchievements(userID int) ([]db.AchievementUserView, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) ListUserShowcase(userID int) ([]db.AchievementShowcaseView, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) SetUserShowcaseSlot(userID, achievementID, slot int) error { return nil }
+func (f *fakeDBVerificar) ClearUserShowcaseSlot(userID, slot int) error              { return nil }
+func (f *fakeDBVerificar) IsAchievementEventActive(code string, at time.Time) (bool, error) {
+	return false, nil
+}
+func (f *fakeDBVerificar) CountUserActivities(filt db.AchievementActivityFilter) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) CountUserActivitiesDistinctObject(filt db.AchievementActivityFilter) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) SumUserActivityPoints(filt db.AchievementActivityFilter) (int, error) {
+	return 0, nil
+}
+func (f *fakeDBVerificar) ListUserActivityDays(filt db.AchievementActivityFilter) ([]time.Time, error) {
+	return nil, nil
+}
 func (f *fakeDBVerificar) ListPersones(filter db.PersonaFilter) ([]db.Persona, error) {
 	return nil, nil
 }
@@ -490,6 +538,12 @@ func (f *fakeDBVerificar) ListMediaAlbumsByStatus(status string) ([]db.MediaAlbu
 	return nil, nil
 }
 func (f *fakeDBVerificar) ListMediaItemsByStatus(status string) ([]db.MediaItem, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) ListMediaItemsByAlbumType(albumType, status string) ([]db.MediaItem, error) {
+	return nil, nil
+}
+func (f *fakeDBVerificar) GetMediaItemByID(id int) (*db.MediaItem, error) {
 	return nil, nil
 }
 func (f *fakeDBVerificar) UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {

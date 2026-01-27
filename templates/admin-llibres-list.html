@@ -20,6 +20,12 @@
                         <i class="fas fa-sliders-h"></i>
                         <span>{{ t .Lang "books.filter.advanced" }}</span>
                     </button>
+                    {{ if $.Data.CanImportLlibres }}
+                    <a class="boto-secundari" href="/admin/llibres/import">{{ t .Lang "books.io.import" }}</a>
+                    {{ end }}
+                    {{ if $.Data.CanExportLlibres }}
+                    <a class="boto-secundari" href="/admin/llibres/export">{{ t .Lang "books.io.export" }}</a>
+                    {{ end }}
                     {{ if $.Data.CanImportRegistresGlobal }}
                     <a class="boto-secundari" href="/documentals/llibres/importar">{{ t .Lang "records.import.file" }}</a>
                     {{ end }}

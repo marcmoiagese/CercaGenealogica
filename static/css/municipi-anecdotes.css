@@ -1,0 +1,196 @@
+.muni-anecdotes-slider {
+    border: 1px solid #d7dee6;
+    border-radius: 16px;
+    background: #f7f9fb;
+    padding: 16px;
+}
+
+.muni-anecdotes-track {
+    min-height: 160px;
+}
+
+.muni-anecdote-slide {
+    display: none;
+    gap: 12px;
+}
+
+.muni-anecdote-slide.is-active {
+    display: block;
+}
+
+.muni-anecdote-meta,
+.anecdote-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    font-size: 0.85rem;
+    color: #5f6b7a;
+    margin-bottom: 8px;
+}
+
+.muni-anecdote-tag,
+.anecdote-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: #eef3f7;
+    border: 1px solid #d5dde4;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #3c4a57;
+}
+
+.muni-anecdote-date,
+.anecdote-date {
+    font-size: 0.82rem;
+    color: #6b7280;
+}
+
+.muni-anecdote-title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin: 0 0 8px;
+}
+
+.muni-anecdote-snippet {
+    margin: 0 0 10px;
+    color: #4b5563;
+}
+
+.muni-anecdote-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--secondary-color);
+    font-weight: 700;
+}
+
+.muni-anecdotes-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.muni-anecdotes-actions {
+    margin-top: 12px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.muni-anecdotes-dots {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.muni-anecdotes-dots button {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    border: none;
+    background: #c8d2dd;
+    padding: 0;
+}
+
+.muni-anecdotes-dots button.is-active {
+    background: var(--primary-color);
+}
+
+.muni-anecdote-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+    color: #6b7280;
+}
+
+.anecdotes-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.anecdotes-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.anecdotes-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.anecdotes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.anecdote-card {
+    border: 1px solid #e0e6ed;
+    border-radius: 14px;
+    padding: 16px;
+    background: #fff;
+}
+
+.anecdote-title {
+    font-weight: 800;
+    margin: 6px 0 10px;
+}
+
+.anecdote-snippet {
+    margin: 0;
+    color: #4b5563;
+}
+
+.anecdote-detail .anecdote-text {
+    white-space: pre-wrap;
+    margin-top: 12px;
+    color: #2d3748;
+}
+
+.anecdote-comments-list {
+    display: grid;
+    gap: 12px;
+}
+
+.anecdote-comment {
+    border: 1px solid #e0e6ed;
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #fff;
+}
+
+.anecdote-comment-meta {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: #6b7280;
+}
+
+.anecdote-comment-form textarea {
+    min-height: 120px;
+}
+
+.anecdote-comment-actions {
+    margin-top: 8px;
+}
+
+.anecdotes-form textarea {
+    min-height: 180px;
+}
+
+.anecdotes-form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}

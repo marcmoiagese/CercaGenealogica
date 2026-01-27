@@ -1,41 +1,22 @@
 package core
 
 import (
-	"database/sql"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
-type municipiRecordColumn struct {
+type municipiCategoryView struct {
 	Key        string
 	Label      string
-	Filterable bool
-	IsStatus   bool
-	IsActions  bool
-}
-
-type municipiRecordRow struct {
-	ID             int
-	ModeracioEstat string
-	Cells          map[string]interface{}
-}
-
-func personByRoles(persones []db.TranscripcioPersonaRaw, roles ...string) *db.TranscripcioPersonaRaw {
-	if len(persones) == 0 {
-		return nil
-	}
-	for _, role := range roles {
-		for i := range persones {
-			if persones[i].Rol == role {
-				return &persones[i]
-			}
-		}
-	}
-	return nil
+	Count      int
+	Href       string
+	Icon       string
+	CountLabel string
 }
 
 func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +43,9 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 	munTarget := a.resolveMunicipiTarget(mun.ID)
 	canViewMap := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisMapesView, munTarget)
 	canCreateMap := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisMapesCreate, munTarget)
+	canViewLlibres := user != nil && a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresView)
+	canCreateLlibre := user != nil && a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresCreate)
+	canCreateAnecdote := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisAnecdotesCreate, munTarget)
 
 	if mun.ModeracioEstat != "" && mun.ModeracioEstat != "publicat" && !(canManageTerritory || canModerate) {
 		http.NotFound(w, r)
@@ -128,6 +112,12 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 		"mapes_api":   fmt.Sprintf("/api/municipis/%d/mapes", mun.ID),
 		"mapes_page":  fmt.Sprintf("/territori/municipis/%d/mapes", mun.ID),
 	}
+	if mun.Latitud.Valid {
+		mapesData["lat"] = mun.Latitud.Float64
+	}
+	if mun.Longitud.Valid {
+		mapesData["lon"] = mun.Longitud.Float64
+	}
 
 	historiaGeneral, historiaTimeline, historiaErr := a.DB.GetMunicipiHistoriaSummary(mun.ID)
 	if historiaErr != nil {
@@ -151,77 +141,86 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 	}
 	canAportarHistoria := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaCreate, munTarget)
 
-	recordsColumns := []municipiRecordColumn{
-		{Key: "llibre", Label: T(lang, "records.search.table.book"), Filterable: true},
-		{Key: "tipus", Label: T(lang, "records.table.type"), Filterable: true},
-		{Key: "any", Label: T(lang, "records.table.year"), Filterable: true},
-		{Key: "subjecte", Label: T(lang, "records.table.subject"), Filterable: true},
-		{Key: "pare", Label: T(lang, "records.detail.father"), Filterable: true},
-		{Key: "mare", Label: T(lang, "records.detail.mother"), Filterable: true},
-		{Key: "ofici", Label: T(lang, "persons.col.ofici"), Filterable: true},
-		{Key: "status", Label: T(lang, "records.table.status"), IsStatus: true},
-		{Key: "actions", Label: T(lang, "records.table.actions"), IsActions: true},
+	demografiaMeta, demografiaErr := a.DB.GetMunicipiDemografiaMeta(mun.ID)
+	if demografiaErr != nil {
+		Errorf("Error carregant demografia municipi %d: %v", mun.ID, demografiaErr)
 	}
-	recordsRows := []municipiRecordRow{}
-	recordStatus := "publicat"
+	demografiaSummary := buildDemografiaSummary(demografiaMeta)
+
+	llibreStatus := "publicat"
 	if canManageArxius {
-		recordStatus = ""
+		llibreStatus = ""
 	}
 	llibres, _ := a.DB.ListLlibres(db.LlibreFilter{
 		MunicipiID: mun.ID,
-		Status:     recordStatus,
+		Status:     llibreStatus,
 	})
+	categoryCounts := map[string]int{}
 	for _, llibre := range llibres {
-		registres, _ := a.DB.ListTranscripcionsRaw(llibre.ID, db.TranscripcioFilter{
-			Status: recordStatus,
-			Limit:  -1,
-		})
-		for _, reg := range registres {
-			persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
-			primary := primaryPersonForTipus(reg.TipusActe, persones)
-			father := personByRoles(persones, "pare", "pare_nuvi", "pare_novia")
-			mother := personByRoles(persones, "mare", "mare_nuvi", "mare_novia")
-
-			subjecte := ""
-			ofici := ""
-			if primary != nil {
-				subjecte = personDisplayName(*primary)
-				ofici = primary.OficiText
-			}
-
-			tipusKey := fmt.Sprintf("records.type.%s", reg.TipusActe)
-			tipusLabel := T(lang, tipusKey)
-			if tipusLabel == tipusKey {
-				tipusLabel = reg.TipusActe
-			}
-
-			cells := map[string]interface{}{
-				"llibre":   bookDisplayTitle(llibre.Llibre),
-				"tipus":    tipusLabel,
-				"any":      formatAny(reg.AnyDoc),
-				"subjecte": subjecte,
-				"pare":     personDisplayNameOrDash(father),
-				"mare":     personDisplayNameOrDash(mother),
-				"ofici":    ofici,
-			}
-
-			recordsRows = append(recordsRows, municipiRecordRow{
-				ID:             reg.ID,
-				ModeracioEstat: reg.ModeracioEstat,
-				Cells:          cells,
-			})
+		key := strings.TrimSpace(llibre.TipusLlibre)
+		if key == "" {
+			key = "altres"
 		}
+		categoryCounts[key]++
 	}
-
-	status := "publicat"
-	if canManageArxius {
-		status = ""
+	categoryOrder := []string{"baptismes", "confirmacions", "matrimonis", "obits", "padrons", "reclutaments", "altres"}
+	iconByType := map[string]string{
+		"baptismes":    "fa-droplet",
+		"confirmacions": "fa-user-check",
+		"matrimonis":   "fa-ring",
+		"obits":        "fa-cross",
+		"padrons":      "fa-users",
+		"reclutaments": "fa-shield-halved",
+		"altres":       "fa-book",
 	}
-	arxius, _ := a.DB.ListArxius(db.ArxiuFilter{
-		MunicipiID: mun.ID,
-		Status:     status,
-		Limit:      200,
-	})
+	countLabel := T(lang, "books.title")
+	allDocsURL := ""
+	if canViewLlibres {
+		allDocsURL = fmt.Sprintf("/documentals/llibres?municipi_id=%d", mun.ID)
+	}
+	categories := []municipiCategoryView{}
+	seenCategories := map[string]bool{}
+	appendCategory := func(key string, count int) {
+		if count == 0 {
+			return
+		}
+		labelKey := fmt.Sprintf("books.type.%s", key)
+		label := T(lang, labelKey)
+		if label == labelKey {
+			label = key
+		}
+		icon := iconByType[key]
+		if icon == "" {
+			icon = "fa-book"
+		}
+		href := "#"
+		if canViewLlibres {
+			href = fmt.Sprintf("/documentals/llibres?municipi_id=%d&tipus_llibre=%s", mun.ID, url.QueryEscape(key))
+		}
+		categories = append(categories, municipiCategoryView{
+			Key:        key,
+			Label:      label,
+			Count:      count,
+			Href:       href,
+			Icon:       icon,
+			CountLabel: countLabel,
+		})
+		seenCategories[key] = true
+	}
+	for _, key := range categoryOrder {
+		appendCategory(key, categoryCounts[key])
+	}
+	extraKeys := []string{}
+	for key := range categoryCounts {
+		if seenCategories[key] {
+			continue
+		}
+		extraKeys = append(extraKeys, key)
+	}
+	sort.Strings(extraKeys)
+	for _, key := range extraKeys {
+		appendCategory(key, categoryCounts[key])
+	}
 
 	data := map[string]interface{}{
 		"Municipi":          mun,
@@ -229,86 +228,29 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 		"CountryLabel":      countryLabel,
 		"TypeLabel":         typeLabel,
 		"RegionLabel":       regionLabel,
-		"Arxius":            arxius,
-		"RecordColumns":     recordsColumns,
-		"RecordRows":        recordsRows,
+		"LlibreCategories": categories,
+		"LlibresURL":        allDocsURL,
 		"User":              user,
 		"CanManageArxius":   canManageArxius,
+		"CanViewLlibres":    canViewLlibres,
+		"CanCreateLlibre":   canCreateLlibre,
 		"CanManagePolicies": canManagePolicies,
 		"CanModerate":       canModerate,
 		"CanManageTerritory": canManageTerritory,
 		"CanViewMap":        canViewMap,
 		"CanCreateMap":      canCreateMap,
+		"CanCreateAnecdote": canCreateAnecdote,
 		"ShowStatusBadge":   canManageTerritory || canModerate,
 		"MapesData":         mapesData,
 		"HistoriaGeneral":   historiaGeneral,
 		"HistoriaGeneralSummary": historiaSummary,
 		"HistoriaTimelineDestacat": historiaTimelineView,
 		"CanAportarHistoria": canAportarHistoria,
+		"DemografiaSummary":  demografiaSummary,
 	}
 	if user != nil {
 		RenderPrivateTemplate(w, r, "municipi-perfil-pro.html", data)
 		return
 	}
 	RenderTemplate(w, r, "municipi-perfil-pro.html", data)
-}
-
-func formatAny(val sql.NullInt64) string {
-	if val.Valid {
-		return fmt.Sprintf("%d", val.Int64)
-	}
-	return ""
-}
-
-func personDisplayNameOrDash(p *db.TranscripcioPersonaRaw) string {
-	if p == nil {
-		return "-"
-	}
-	name := personDisplayName(*p)
-	if name == "" {
-		return "-"
-	}
-	return name
-}
-
-func bookDisplayTitle(llibre db.Llibre) string {
-	if llibre.Titol != "" {
-		return llibre.Titol
-	}
-	return llibre.NomEsglesia
-}
-
-func summarizeHistoriaText(text string, maxLen int) string {
-	clean := strings.TrimSpace(text)
-	if clean == "" {
-		return ""
-	}
-	clean = strings.Join(strings.Fields(clean), " ")
-	if maxLen <= 0 || len(clean) <= maxLen {
-		return clean
-	}
-	cut := clean[:maxLen]
-	if idx := strings.LastIndex(cut, " "); idx > maxLen/2 {
-		cut = cut[:idx]
-	}
-	return strings.TrimSpace(cut) + "..."
-}
-
-func historiaDateLabel(item db.MunicipiHistoriaFetVersion) string {
-	if strings.TrimSpace(item.DataDisplay) != "" {
-		return strings.TrimSpace(item.DataDisplay)
-	}
-	if item.AnyInici.Valid && item.AnyFi.Valid {
-		if item.AnyInici.Int64 == item.AnyFi.Int64 {
-			return fmt.Sprintf("%d", item.AnyInici.Int64)
-		}
-		return fmt.Sprintf("%d-%d", item.AnyInici.Int64, item.AnyFi.Int64)
-	}
-	if item.AnyInici.Valid {
-		return fmt.Sprintf("%d", item.AnyInici.Int64)
-	}
-	if item.AnyFi.Valid {
-		return fmt.Sprintf("%d", item.AnyFi.Int64)
-	}
-	return ""
 }

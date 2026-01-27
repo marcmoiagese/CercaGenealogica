@@ -17,6 +17,7 @@ type App struct {
 	llibreTargetCache   *targetCache
 	arxiuTargetCache    *targetCache
 	municipiTargetCache *targetCache
+	achievementCache    *achievementCache
 }
 
 func NewApp(cfg map[string]string, database db.DB) *App {
@@ -28,6 +29,7 @@ func NewApp(cfg map[string]string, database db.DB) *App {
 		llibreTargetCache:   newTargetCache(targetCacheTTL, llibreTargetCacheMax),
 		arxiuTargetCache:    newTargetCache(targetCacheTTL, arxiuTargetCacheMax),
 		municipiTargetCache: newTargetCache(targetCacheTTL, municipiTargetCacheMax),
+		achievementCache:    newAchievementCache(),
 	}
 }
 

@@ -1,0 +1,77 @@
+{{ define "admin-llibres-import.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "books.io.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "books.io.kicker" }}</p>
+                    <h1>{{ t .Lang "books.io.title" }}</h1>
+                </div>
+                <div class="card-actions">
+                    <a class="boto-secundari" href="/admin/llibres/export">
+                        <i class="fas fa-file-export"></i>
+                        <span>{{ t .Lang "books.io.export" }}</span>
+                    </a>
+                </div>
+            </header>
+            <p class="muted">{{ t .Lang "books.io.description" }}</p>
+
+            {{ if .Data.Msg }}
+            <div class="alert alert-error">{{ .Data.Msg }}</div>
+            {{ end }}
+
+            <form class="form-vertical" method="post" action="/admin/llibres/import/run" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="grup-camp">
+                    <label for="llibres-file">{{ t .Lang "books.io.import.file" }}</label>
+                    <input id="llibres-file" type="file" name="import_file" accept="application/json" required>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">
+                        <i class="fas fa-file-import"></i>
+                        <span>{{ t .Lang "books.io.import.run" }}</span>
+                    </button>
+                </div>
+            </form>
+
+            {{ if .Data.ImportRun }}
+            <h3>{{ t .Lang "books.io.summary.title" }}</h3>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <tbody>
+                        <tr>
+                            <th>{{ t .Lang "books.io.summary.total" }}</th>
+                            <td>{{ .Data.LlibresTotal }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "books.io.summary.created" }}</th>
+                            <td>{{ .Data.LlibresCreated }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "books.io.summary.skipped" }}</th>
+                            <td>{{ .Data.LlibresSkipped }}</td>
+                        </tr>
+                        <tr>
+                            <th>{{ t .Lang "books.io.summary.errors" }}</th>
+                            <td>{{ .Data.LlibresErrors }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

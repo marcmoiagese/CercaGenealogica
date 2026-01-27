@@ -1,0 +1,185 @@
+.muni-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.25rem;
+}
+
+.muni-stats-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.muni-stats-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem;
+    border-radius: 999px;
+    background: #eef3f7;
+}
+
+.muni-stats-tab {
+    border: 0;
+    background: transparent;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999px;
+    font-weight: 700;
+    color: #516577;
+    cursor: pointer;
+}
+
+.muni-stats-tab.is-active {
+    background: #fff;
+    color: var(--primary-color);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.muni-stats-panel {
+    display: none;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.muni-stats-panel.is-active {
+    display: flex;
+}
+
+.muni-stats-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid #e6edf3;
+    border-radius: 12px;
+    background: #f9fbfc;
+}
+
+.muni-stats-meta-label {
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 800;
+    color: #607386;
+}
+
+.muni-stats-meta-value {
+    font-size: 1.25rem;
+    color: var(--primary-color);
+}
+
+.muni-stats-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.5rem;
+    counter-reset: muniRank;
+}
+
+.muni-stats-item {
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    gap: 0.6rem;
+    align-items: center;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #e6edf3;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.muni-stats-item::before {
+    content: counter(muniRank);
+    counter-increment: muniRank;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: #eef3f7;
+    color: #1f2d3d;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.muni-stats-item-label {
+    font-weight: 700;
+    color: #1f2d3d;
+}
+
+.muni-stats-item-value {
+    font-weight: 800;
+    color: var(--primary-color);
+}
+
+.muni-stats-empty {
+    padding: 0.7rem;
+    border: 1px dashed #d6dfe7;
+    border-radius: 12px;
+    color: var(--color-text-clar, #6b7c8f);
+}
+
+.muni-stats-select-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #607386;
+}
+
+.muni-stats-select {
+    padding: 0.45rem 0.6rem;
+    border-radius: 8px;
+    border: 1px solid #d6dfe7;
+    font-weight: 600;
+    width: 100%;
+}
+
+.muni-stats-series {
+    min-height: 200px;
+    border: 1px solid #e6edf3;
+    border-radius: 14px;
+    background: #fafbfc;
+    padding: 0.7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.muni-series-row {
+    display: grid;
+    grid-template-columns: 70px 1fr 60px;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.muni-series-label {
+    font-weight: 600;
+    color: #1f2d3d;
+}
+
+.muni-series-bar {
+    position: relative;
+    height: 10px;
+    background: #e6edf3;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.muni-series-bar span {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: linear-gradient(90deg, #4fc3f7, #166088);
+    border-radius: 999px;
+}
+
+.muni-series-value {
+    text-align: right;
+    font-weight: 700;
+    color: #1f2d3d;
+}
+
+@media (max-width: 900px) {
+    .muni-stats-grid {
+        grid-template-columns: 1fr;
+    }
+}

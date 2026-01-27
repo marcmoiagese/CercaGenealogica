@@ -63,11 +63,13 @@ type DB interface {
 	BumpGroupPermissionsVersion(groupID int) error
 	BumpPolicyPermissionsVersion(politicaID int) error
 	EnsureDefaultPointsRules() error
+	EnsureDefaultAchievements() error
 	// Punts i activitat
 	ListPointsRules() ([]PointsRule, error)
 	GetPointsRule(id int) (*PointsRule, error)
 	GetPointsRuleByCode(code string) (*PointsRule, error)
 	SavePointsRule(r *PointsRule) (int, error)
+	ListUserIDs(limit, offset int) ([]int, error)
 	GetUserActivity(id int) (*UserActivity, error)
 	InsertUserActivity(a *UserActivity) (int, error)
 	UpdateUserActivityStatus(id int, status string, moderatedBy *int) error
@@ -78,6 +80,22 @@ type DB interface {
 	RecalcUserPoints() error
 	GetRanking(f RankingFilter) ([]UserPoints, error)
 	CountRanking(f RankingFilter) (int, error)
+	// Achievements
+	ListAchievements() ([]Achievement, error)
+	ListEnabledAchievements() ([]Achievement, error)
+	GetAchievement(id int) (*Achievement, error)
+	GetAchievementByCode(code string) (*Achievement, error)
+	SaveAchievement(a *Achievement) (int, error)
+	AwardAchievement(userID, achievementID int, status, metaJSON string) (bool, error)
+	ListUserAchievements(userID int) ([]AchievementUserView, error)
+	ListUserShowcase(userID int) ([]AchievementShowcaseView, error)
+	SetUserShowcaseSlot(userID, achievementID, slot int) error
+	ClearUserShowcaseSlot(userID, slot int) error
+	IsAchievementEventActive(code string, at time.Time) (bool, error)
+	CountUserActivities(f AchievementActivityFilter) (int, error)
+	CountUserActivitiesDistinctObject(f AchievementActivityFilter) (int, error)
+	SumUserActivityPoints(f AchievementActivityFilter) (int, error)
+	ListUserActivityDays(f AchievementActivityFilter) ([]time.Time, error)
 	// Cognoms
 	ListCognoms(q string, limit, offset int) ([]Cognom, error)
 	GetCognom(id int) (*Cognom, error)
@@ -91,6 +109,21 @@ type DB interface {
 	ListCognomStatsRows(limit, offset int) ([]CognomStatsRow, error)
 	ResolveCognomPublicatByForma(forma string) (int, string, bool, error)
 	ListCognomFormesPublicades(cognomID int) ([]string, error)
+	// Noms
+	UpsertNom(forma, key, notes string, createdBy *int) (int, error)
+	GetNom(id int) (*Nom, error)
+	ResolveNomByForma(forma string) (int, string, bool, error)
+	UpsertNomFreqMunicipiAny(nomID, municipiID, anyDoc, delta int) error
+	UpsertNomFreqMunicipiTotal(nomID, municipiID, delta int) error
+	ApplyCognomFreqMunicipiAnyDelta(cognomID, municipiID, anyDoc, delta int) error
+	UpsertCognomFreqMunicipiTotal(cognomID, municipiID, delta int) error
+	ListTopNomsByMunicipi(municipiID, limit int) ([]NomTotalRow, error)
+	ListTopCognomsByMunicipi(municipiID, limit int) ([]CognomTotalRow, error)
+	ListNomSeries(municipiID, nomID int, bucket string) ([]NomFreqRow, error)
+	ListCognomSeries(municipiID, cognomID int, bucket string) ([]CognomFreqRow, error)
+	CountNomTotalsByMunicipi(municipiID int) (int, error)
+	CountCognomTotalsByMunicipi(municipiID int) (int, error)
+	ClearNomCognomStatsByMunicipi(municipiID int) error
 	// Mapes municipi
 	ListMunicipiMapes(filter MunicipiMapaFilter) ([]MunicipiMapa, error)
 	GetMunicipiMapa(id int) (*MunicipiMapa, error)
@@ -128,6 +161,32 @@ type DB interface {
 	ListPendingMunicipiHistoriaGeneralVersions(limit, offset int) ([]MunicipiHistoriaGeneralVersion, int, error)
 	ListPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error)
 
+	// Demografia municipi
+	GetMunicipiDemografiaMeta(municipiID int) (*MunicipiDemografiaMeta, error)
+	ListMunicipiDemografiaAny(municipiID int, from, to int) ([]MunicipiDemografiaAny, error)
+	ListMunicipiDemografiaDecades(municipiID int, from, to int) ([]MunicipiDemografiaAny, error)
+	ApplyMunicipiDemografiaDelta(municipiID, year int, tipus string, delta int) error
+	ApplyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year int, tipus string, delta int) error
+	RebuildMunicipiDemografia(municipiID int) error
+
+	// Anecdotari municipi
+	ListMunicipiAnecdotariPublished(municipiID int, f MunicipiAnecdotariFilter) ([]MunicipiAnecdotariVersion, int, error)
+	GetMunicipiAnecdotariPublished(itemID int) (*MunicipiAnecdotariVersion, error)
+	ListMunicipiAnecdotariComments(itemID int, limit, offset int) ([]MunicipiAnecdotariComment, int, error)
+	CreateMunicipiAnecdotariItem(municipiID int, createdBy int) (int, error)
+	CreateMunicipiAnecdotariDraft(itemID int, createdBy int, baseFromCurrent bool) (int, error)
+	GetMunicipiAnecdotariVersion(id int) (*MunicipiAnecdotariVersion, error)
+	GetPendingMunicipiAnecdotariVersionByItemID(itemID int) (*MunicipiAnecdotariVersion, error)
+	UpdateMunicipiAnecdotariDraft(v *MunicipiAnecdotariVersion) error
+	SubmitMunicipiAnecdotariVersion(versionID int) error
+	ListPendingMunicipiAnecdotariVersions(limit, offset int) ([]MunicipiAnecdotariVersion, int, error)
+	ApproveMunicipiAnecdotariVersion(versionID int, moderatorID int) error
+	RejectMunicipiAnecdotariVersion(versionID int, moderatorID int, notes string) error
+	CreateMunicipiAnecdotariComment(itemID int, userID int, body string) (int, error)
+	GetMunicipiAnecdotariLastCommentAt(userID int) (time.Time, error)
+	ResolveMunicipiIDByAnecdotariItemID(itemID int) (int, error)
+	ResolveMunicipiIDByAnecdotariVersionID(versionID int) (int, error)
+
 	// Persones (moderació)
 	ListPersones(filter PersonaFilter) ([]Persona, error)
 	GetPersona(id int) (*Persona, error)
@@ -140,6 +199,7 @@ type DB interface {
 	UpdateMunicipiModeracio(id int, estat, motiu string, moderatorID int) error
 	UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error
 	UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error
+	UpdateTranscripcioModeracioWithDemografia(id int, estat, motiu string, moderatorID int, municipiID, year int, tipus string, delta int) error
 	// Arxius CRUD
 	ListArxius(filter ArxiuFilter) ([]ArxiuWithCount, error)
 	CountArxius(filter ArxiuFilter) (int, error)
@@ -147,6 +207,8 @@ type DB interface {
 	CreateArxiu(a *Arxiu) (int, error)
 	UpdateArxiu(a *Arxiu) error
 	DeleteArxiu(id int) error
+	InsertArxiuDonacioClick(arxiuID int, userID *int) error
+	CountArxiuDonacioClicks(arxiuID int) (int, error)
 	ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error)
 	ListLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error)
 	AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error
@@ -174,6 +236,8 @@ type DB interface {
 	GetMediaAlbumByPublicID(publicID string) (*MediaAlbum, error)
 	CreateMediaAlbum(a *MediaAlbum) (int, error)
 	ListMediaItemsByAlbum(albumID int) ([]MediaItem, error)
+	ListMediaItemsByAlbumType(albumType, status string) ([]MediaItem, error)
+	GetMediaItemByID(id int) (*MediaItem, error)
 	GetMediaItemByPublicID(publicID string) (*MediaItem, error)
 	CreateMediaItem(item *MediaItem) (int, error)
 	UpdateMediaItemDerivativesStatus(itemID int, status string) error
@@ -373,6 +437,69 @@ type UserPoints struct {
 	UltimaActualitzacio time.Time
 }
 
+type Achievement struct {
+	ID              int
+	Code            string
+	Name            string
+	Description     string
+	Rarity          string
+	Visibility      string
+	Domain          string
+	IsEnabled       bool
+	IsRepeatable    bool
+	IconMediaItemID sql.NullInt64
+	RuleJSON        string
+	CreatedAt       sql.NullTime
+	UpdatedAt       sql.NullTime
+}
+
+type AchievementUser struct {
+	ID            int
+	UserID        int
+	AchievementID int
+	AwardedAt     sql.NullTime
+	Status        string
+	MetaJSON      sql.NullString
+}
+
+type AchievementUserView struct {
+	AchievementID  int
+	Code           string
+	Name           string
+	Description    string
+	Rarity         string
+	Visibility     string
+	Domain         string
+	IconMediaItemID sql.NullInt64
+	IconPublicID   sql.NullString
+	AwardedAt      sql.NullTime
+	Status         string
+	MetaJSON       sql.NullString
+}
+
+type AchievementShowcase struct {
+	UserID        int
+	AchievementID int
+	Slot          int
+	CreatedAt     sql.NullTime
+}
+
+type AchievementShowcaseView struct {
+	Slot           int
+	AchievementID  int
+	Code           string
+	Name           string
+	Description    string
+	Rarity         string
+	Visibility     string
+	Domain         string
+	IconMediaItemID sql.NullInt64
+	IconPublicID   sql.NullString
+	AwardedAt      sql.NullTime
+	Status         string
+	MetaJSON       sql.NullString
+}
+
 type ActivityFilter struct {
 	Status     string
 	ObjectType string
@@ -380,6 +507,16 @@ type ActivityFilter struct {
 	Offset     int
 	From       time.Time
 	To         time.Time
+}
+
+type AchievementActivityFilter struct {
+	UserID      int
+	RuleCodes   []string
+	Actions     []string
+	ObjectTypes []string
+	Statuses    []string
+	From        time.Time
+	To          time.Time
 }
 
 type RankingFilter struct {
@@ -394,6 +531,16 @@ type Cognom struct {
 	Forma     string
 	Key       string
 	Origen    string
+	Notes     string
+	CreatedBy sql.NullInt64
+	CreatedAt sql.NullTime
+	UpdatedAt sql.NullTime
+}
+
+type Nom struct {
+	ID        int
+	Forma     string
+	Key       string
 	Notes     string
 	CreatedBy sql.NullInt64
 	CreatedAt sql.NullTime
@@ -450,6 +597,27 @@ type CognomStatsRow struct {
 	Cognom2Estat sql.NullString
 	AnyDoc       sql.NullInt64
 	MunicipiID   sql.NullInt64
+}
+
+type NomFreqRow struct {
+	NomID      int
+	MunicipiID int
+	AnyDoc     int
+	Freq       int
+}
+
+type NomTotalRow struct {
+	NomID      int
+	MunicipiID int
+	TotalFreq  int
+	Forma      string
+}
+
+type CognomTotalRow struct {
+	CognomID   int
+	MunicipiID int
+	TotalFreq  int
+	Forma      string
 }
 
 type MunicipiMapa struct {
@@ -565,6 +733,83 @@ type MunicipiHistoriaVersionFilter struct {
 	Status     string
 	Limit      int
 	Offset     int
+}
+
+type MunicipiDemografiaAny struct {
+	MunicipiID int
+	Any        int
+	Natalitat  int
+	Matrimonis int
+	Defuncions int
+	UpdatedAt  sql.NullTime
+}
+
+type MunicipiDemografiaMeta struct {
+	MunicipiID      int
+	AnyMin          sql.NullInt64
+	AnyMax          sql.NullInt64
+	TotalNatalitat  int
+	TotalMatrimonis int
+	TotalDefuncions int
+	UpdatedAt       sql.NullTime
+}
+
+type DemografiaQueueItem struct {
+	ID         int
+	MunicipiID int
+	Tipus      string
+	Any        int
+	Delta      int
+	Source     string
+	SourceID   string
+	CreatedAt  sql.NullTime
+	ProcessedAt sql.NullTime
+}
+
+type MunicipiAnecdotariItem struct {
+	ID               int
+	MunicipiID       int
+	CurrentVersionID sql.NullInt64
+	CreatedBy        sql.NullInt64
+	CreatedAt        sql.NullTime
+	UpdatedAt        sql.NullTime
+}
+
+type MunicipiAnecdotariVersion struct {
+	ID              int
+	ItemID          int
+	MunicipiID      int
+	MunicipiNom     string
+	Version         int
+	Status          string
+	Titol           string
+	Tag             string
+	DataRef         string
+	Text            string
+	FontURL         string
+	ModerationNotes string
+	LockVersion     int
+	CreatedBy       sql.NullInt64
+	CreatedAt       sql.NullTime
+	UpdatedAt       sql.NullTime
+	ModeratedBy     sql.NullInt64
+	ModeratedAt     sql.NullTime
+}
+
+type MunicipiAnecdotariComment struct {
+	ID        int
+	ItemID    int
+	UserID    int
+	Body      string
+	CreatedAt sql.NullTime
+}
+
+type MunicipiAnecdotariFilter struct {
+	Tag    string
+	Query  string
+	Status string
+	Limit  int
+	Offset int
 }
 
 type Pais struct {
@@ -706,6 +951,8 @@ type MunicipiRow struct {
 	ProvNom        sql.NullString
 	Comarca        sql.NullString
 	ModeracioEstat string
+	CreatedBy      sql.NullInt64
+	CreatedAt      sql.NullTime
 }
 
 type MunicipiFilter struct {
@@ -856,9 +1103,12 @@ type Arxiu struct {
 	EntitatEclesiasticaID sql.NullInt64
 	Adreca                string
 	Ubicacio              string
+	What3Words            string
 	Web                   string
 	Acces                 string
 	Notes                 string
+	AcceptaDonacions      bool
+	DonacionsURL          string
 	CreatedBy             sql.NullInt64
 	ModeracioEstat        string
 	ModeracioMotiu        string
@@ -895,6 +1145,7 @@ type ArxiuLlibreDetail struct {
 	ArxiuID     int
 	LlibreID    int
 	Titol       string
+	TipusLlibre string
 	NomEsglesia string
 	Cronologia  string
 	Municipi    sql.NullString
@@ -1329,6 +1580,14 @@ func NewDB(config map[string]string) (DB, error) {
 		if err := CreateDatabaseFromSQL(sqlFile, engine, dbInstance); err != nil {
 			return nil, fmt.Errorf("error recreant BD amb %s: %v", engine, err)
 		}
+	} else {
+		ready, err := baseSchemaReady(engine, dbInstance)
+		if err != nil {
+			return nil, fmt.Errorf("error comprovant esquema BD (%s): %v", engine, err)
+		}
+		if !ready {
+			return nil, fmt.Errorf("la BD no te esquema base; cal RECREADB=true o executar %s manualment", getSQLFilePath(engine))
+		}
 	}
 	if err := ensureMapTables(engine, dbInstance); err != nil {
 		return nil, fmt.Errorf("error assegurant taules mapes (%s): %v", engine, err)
@@ -1564,4 +1823,29 @@ func ensureMapTables(engine string, db DB) error {
 		}
 	}
 	return nil
+}
+
+func baseSchemaReady(engine string, db DB) (bool, error) {
+	return tableExists(engine, db, "usuaris")
+}
+
+func tableExists(engine string, db DB, table string) (bool, error) {
+	table = strings.TrimSpace(table)
+	if table == "" {
+		return false, nil
+	}
+	var query string
+	switch engine {
+	case "postgres":
+		query = "SELECT 1 FROM information_schema.tables WHERE table_name = $1"
+	case "mysql":
+		query = "SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?"
+	default:
+		query = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?"
+	}
+	rows, err := db.Query(query, table)
+	if err != nil {
+		return false, err
+	}
+	return len(rows) > 0, nil
 }

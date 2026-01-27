@@ -9,6 +9,52 @@ import (
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
+type arxiuProBook struct {
+	ID          int    `json:"id"`
+	Titol       string `json:"titol"`
+	NomEsglesia string `json:"nom_esglesia,omitempty"`
+	Tipus       string `json:"tipus,omitempty"`
+	Cronologia  string `json:"cronologia,omitempty"`
+	Municipi    string `json:"municipi,omitempty"`
+	Pagines     *int   `json:"pagines,omitempty"`
+	Signatura   string `json:"signatura,omitempty"`
+	URL         string `json:"url,omitempty"`
+	Href        string `json:"href,omitempty"`
+	CanEdit     bool   `json:"can_edit,omitempty"`
+	CanView     bool   `json:"can_view,omitempty"`
+}
+
+type arxiuProMeta struct {
+	ID                   int    `json:"id"`
+	Nom                  string `json:"nom"`
+	Tipus                string `json:"tipus,omitempty"`
+	Acces                string `json:"acces,omitempty"`
+	MunicipiID           int    `json:"municipi_id,omitempty"`
+	MunicipiNom          string `json:"municipi_nom,omitempty"`
+	EntitatEclesiastica  string `json:"entitat_eclesiastica,omitempty"`
+	Adreca               string `json:"adreca,omitempty"`
+	Ubicacio             string `json:"ubicacio,omitempty"`
+	What3Words           string `json:"what3words,omitempty"`
+	Web                  string `json:"web,omitempty"`
+	Notes                string `json:"notes,omitempty"`
+	Estat                string `json:"estat,omitempty"`
+	EstatLabel           string `json:"estat_label,omitempty"`
+}
+
+type arxiuProDonacio struct {
+	Title string `json:"title,omitempty"`
+	Sub   string `json:"sub,omitempty"`
+	URL   string `json:"url,omitempty"`
+}
+
+type arxiuProData struct {
+	Arxiu             arxiuProMeta     `json:"arxiu"`
+	Llibres           []arxiuProBook   `json:"llibres"`
+	ShowActions       bool             `json:"show_actions,omitempty"`
+	AcceptaDonacions  bool             `json:"accepta_donacions,omitempty"`
+	Donacions         *arxiuProDonacio `json:"donacions,omitempty"`
+}
+
 // CanManageArxius és un helper públic per saber si l'usuari pot gestionar arxius.
 func (a *App) CanManageArxius(user *db.User) bool {
 	if user == nil {
@@ -40,9 +86,6 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 		Acces: strings.TrimSpace(r.URL.Query().Get("acces")),
 	}
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
-	if status == "" {
-		status = "publicat"
-	}
 	filter.Status = status
 	if v := strings.TrimSpace(r.URL.Query().Get("entitat_id")); v != "" {
 		if id, err := strconv.Atoi(v); err == nil {
@@ -191,14 +234,45 @@ func (a *App) ShowArxiu(w http.ResponseWriter, r *http.Request) {
 	}
 	llibres, _ := a.DB.ListArxiuLlibres(id)
 	entNom := a.loadEntitatNom(arxiu)
+	munNom := a.loadMunicipiNom(arxiu)
+	lang := ResolveLang(r)
+	arxiuPro := a.buildArxiuProData(lang, arxiu, entNom, munNom, llibres, nil, nil, false)
 	RenderPrivateTemplate(w, r, "admin-arxius-show.html", map[string]interface{}{
 		"Arxiu":           arxiu,
 		"Llibres":         llibres,
 		"EntitatNom":      entNom,
+		"MunicipiNom":     munNom,
+		"ArxiuProData":    arxiuPro,
+		"DonacionsClicks": 0,
 		"CanManageArxius": canManage,
 		"ArxiusBasePath":  "/arxius",
 		"User":            user,
 	})
+}
+
+func (a *App) ArxiuDonacionsRedirect(w http.ResponseWriter, r *http.Request) {
+	user, authenticated := a.VerificarSessio(r)
+	if !authenticated || user == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	id := extractID(r.URL.Path)
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	arxiu, err := a.DB.GetArxiu(id)
+	if err != nil || arxiu == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !arxiu.AcceptaDonacions || strings.TrimSpace(arxiu.DonacionsURL) == "" {
+		http.NotFound(w, r)
+		return
+	}
+	uid := user.ID
+	_ = a.DB.InsertArxiuDonacioClick(id, &uid)
+	http.Redirect(w, r, arxiu.DonacionsURL, http.StatusSeeOther)
 }
 
 // Admin: llistat d'arxius
@@ -445,6 +519,12 @@ func parseArxiuForm(r *http.Request) *db.Arxiu {
 	_ = r.ParseForm()
 	municipiID := sqlNullInt(r.FormValue("municipi_id"))
 	entitatID := sqlNullInt(r.FormValue("entitat_eclesiastica_id"))
+	acceptaDonacions := strings.TrimSpace(r.FormValue("accepta_donacions")) != ""
+	donacionsURL := strings.TrimSpace(r.FormValue("donacions_url"))
+	if !acceptaDonacions || donacionsURL == "" {
+		donacionsURL = ""
+		acceptaDonacions = false
+	}
 	return &db.Arxiu{
 		Nom:                   strings.TrimSpace(r.FormValue("nom")),
 		Tipus:                 strings.TrimSpace(r.FormValue("tipus")),
@@ -453,22 +533,25 @@ func parseArxiuForm(r *http.Request) *db.Arxiu {
 		EntitatEclesiasticaID: entitatID,
 		Adreca:                strings.TrimSpace(r.FormValue("adreca")),
 		Ubicacio:              strings.TrimSpace(r.FormValue("ubicacio")),
+		What3Words:            strings.TrimSpace(r.FormValue("what3words")),
 		Web:                   strings.TrimSpace(r.FormValue("web")),
 		Notes:                 strings.TrimSpace(r.FormValue("notes")),
+		AcceptaDonacions:      acceptaDonacions,
+		DonacionsURL:          donacionsURL,
 	}
 }
 
 func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.Arxiu, isNew bool, errMsg string, user *db.User, returnURL string) {
-	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
-	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
+	municipiLabel := a.loadMunicipiNom(arxiu)
+	entitatLabel := a.loadEntitatNom(arxiu)
 	RenderPrivateTemplate(w, r, "admin-arxius-form.html", map[string]interface{}{
 		"Arxiu":           arxiu,
 		"IsNew":           isNew,
 		"Error":           errMsg,
 		"ReturnURL":       returnURL,
 		"CanManageArxius": true,
-		"Municipis":       municipis,
-		"Arquebisbats":    arquebisbats,
+		"MunicipiLabel":   municipiLabel,
+		"EntitatLabel":    entitatLabel,
 		"User":            user,
 	})
 }
@@ -595,17 +678,42 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	donacionsClicks := 0
+	if arxiu.AcceptaDonacions && strings.TrimSpace(arxiu.DonacionsURL) != "" {
+		if total, err := a.DB.CountArxiuDonacioClicks(id); err == nil {
+			donacionsClicks = total
+		}
+	}
 	llibres, _ := a.DB.ListArxiuLlibres(id)
 	canEditArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusEdit, target)
 	canDeleteArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusDelete, target)
 	canCreateLlibre := a.HasPermission(user.ID, permKeyDocumentalsLlibresCreate, target)
+	canEditAll := a.HasPermission(user.ID, permKeyDocumentalsLlibresEdit, target)
+	canViewAll := a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) || canEditAll
+	viewScope := a.buildListScopeFilter(user.ID, permKeyDocumentalsLlibresView, ScopeLlibre)
+	editScope := a.buildListScopeFilter(user.ID, permKeyDocumentalsLlibresEdit, ScopeLlibre)
+	allowedView := map[int]bool{}
+	allowedEdit := map[int]bool{}
+	if !viewScope.hasGlobal {
+		for _, lid := range viewScope.llibreIDs {
+			if lid > 0 {
+				allowedView[lid] = true
+			}
+		}
+	}
+	if !editScope.hasGlobal {
+		for _, lid := range editScope.llibreIDs {
+			if lid > 0 {
+				allowedEdit[lid] = true
+			}
+		}
+	}
 	canEditLlibre := make(map[int]bool, len(llibres))
 	canViewLlibre := make(map[int]bool, len(llibres))
 	showLlibreActions := false
 	for _, llibre := range llibres {
-		llibreTarget := a.resolveLlibreTarget(llibre.LlibreID)
-		canEdit := a.HasPermission(user.ID, permKeyDocumentalsLlibresEdit, llibreTarget)
-		canView := a.HasPermission(user.ID, permKeyDocumentalsLlibresView, llibreTarget)
+		canEdit := canEditAll || allowedEdit[llibre.LlibreID]
+		canView := canViewAll || canEdit || allowedView[llibre.LlibreID]
 		canEditLlibre[llibre.LlibreID] = canEdit
 		canViewLlibre[llibre.LlibreID] = canView
 		if canEdit || canView {
@@ -613,10 +721,16 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	entNom := a.loadEntitatNom(arxiu)
+	munNom := a.loadMunicipiNom(arxiu)
+	lang := ResolveLang(r)
+	arxiuPro := a.buildArxiuProData(lang, arxiu, entNom, munNom, llibres, canEditLlibre, canViewLlibre, showLlibreActions)
 	RenderPrivateTemplate(w, r, "admin-arxius-show.html", map[string]interface{}{
 		"Arxiu":             arxiu,
 		"Llibres":           llibres,
 		"EntitatNom":        entNom,
+		"MunicipiNom":       munNom,
+		"ArxiuProData":      arxiuPro,
+		"DonacionsClicks":   donacionsClicks,
 		"CanManageArxius":   true,
 		"CanEditArxiu":      canEditArxiu,
 		"CanDeleteArxiu":    canDeleteArxiu,
@@ -721,4 +835,125 @@ func (a *App) loadEntitatNom(arxiu *db.Arxiu) string {
 		return ent.Nom
 	}
 	return ""
+}
+
+func (a *App) loadMunicipiNom(arxiu *db.Arxiu) string {
+	if arxiu == nil || !arxiu.MunicipiID.Valid {
+		return ""
+	}
+	if mun, err := a.DB.GetMunicipi(int(arxiu.MunicipiID.Int64)); err == nil && mun != nil {
+		return mun.Nom
+	}
+	return ""
+}
+
+func translateOrFallback(lang, key, fallback string) string {
+	if strings.TrimSpace(key) == "" {
+		return fallback
+	}
+	val := T(lang, key)
+	if val == key {
+		return fallback
+	}
+	return val
+}
+
+func (a *App) buildArxiuProData(lang string, arxiu *db.Arxiu, entNom, munNom string, llibres []db.ArxiuLlibreDetail, canEdit, canView map[int]bool, showActions bool) arxiuProData {
+	if arxiu == nil {
+		return arxiuProData{}
+	}
+	tipusLabel := strings.TrimSpace(arxiu.Tipus)
+	if tipusLabel != "" {
+		tipusLabel = translateOrFallback(lang, "archives.type."+arxiu.Tipus, arxiu.Tipus)
+	}
+	accesLabel := strings.TrimSpace(arxiu.Acces)
+	if accesLabel != "" {
+		accesLabel = translateOrFallback(lang, "archives.access."+arxiu.Acces, arxiu.Acces)
+	}
+	estatLabel := ""
+	if strings.TrimSpace(arxiu.ModeracioEstat) != "" {
+		estatLabel = translateOrFallback(lang, "activity.status."+arxiu.ModeracioEstat, arxiu.ModeracioEstat)
+	}
+	munID := 0
+	if arxiu.MunicipiID.Valid {
+		munID = int(arxiu.MunicipiID.Int64)
+	}
+	meta := arxiuProMeta{
+		ID:                  arxiu.ID,
+		Nom:                 strings.TrimSpace(arxiu.Nom),
+		Tipus:               tipusLabel,
+		Acces:               accesLabel,
+		MunicipiID:          munID,
+		MunicipiNom:         strings.TrimSpace(munNom),
+		EntitatEclesiastica: strings.TrimSpace(entNom),
+		Adreca:              strings.TrimSpace(arxiu.Adreca),
+		Ubicacio:            strings.TrimSpace(arxiu.Ubicacio),
+		What3Words:          strings.TrimSpace(arxiu.What3Words),
+		Web:                 strings.TrimSpace(arxiu.Web),
+		Notes:               strings.TrimSpace(arxiu.Notes),
+		Estat:               strings.TrimSpace(arxiu.ModeracioEstat),
+		EstatLabel:          estatLabel,
+	}
+	books := make([]arxiuProBook, 0, len(llibres))
+	for _, rel := range llibres {
+		title := strings.TrimSpace(rel.Titol)
+		if title == "" {
+			title = strings.TrimSpace(rel.NomEsglesia)
+		}
+		muni := ""
+		if rel.Municipi.Valid {
+			muni = strings.TrimSpace(rel.Municipi.String)
+		}
+		signatura := ""
+		if rel.Signatura.Valid {
+			signatura = strings.TrimSpace(rel.Signatura.String)
+		}
+		url := ""
+		if rel.URLOverride.Valid {
+			url = strings.TrimSpace(rel.URLOverride.String)
+		}
+		var pages *int
+		if rel.Pagines.Valid {
+			p := int(rel.Pagines.Int64)
+			pages = &p
+		}
+		tipusLlibre := strings.TrimSpace(rel.TipusLlibre)
+		if tipusLlibre != "" {
+			tipusLlibre = translateOrFallback(lang, "books.type."+rel.TipusLlibre, rel.TipusLlibre)
+		}
+		book := arxiuProBook{
+			ID:          rel.LlibreID,
+			Titol:       title,
+			NomEsglesia: strings.TrimSpace(rel.NomEsglesia),
+			Tipus:       tipusLlibre,
+			Cronologia:  strings.TrimSpace(rel.Cronologia),
+			Municipi:    muni,
+			Pagines:     pages,
+			Signatura:   signatura,
+			URL:         url,
+			Href:        "/documentals/llibres/" + strconv.Itoa(rel.LlibreID),
+		}
+		if canEdit != nil {
+			book.CanEdit = canEdit[rel.LlibreID]
+		}
+		if canView != nil {
+			book.CanView = canView[rel.LlibreID]
+		}
+		books = append(books, book)
+	}
+	donacionsURL := strings.TrimSpace(arxiu.DonacionsURL)
+	acceptaDonacions := arxiu.AcceptaDonacions && donacionsURL != ""
+	var donacions *arxiuProDonacio
+	if acceptaDonacions {
+		donacions = &arxiuProDonacio{
+			URL: "/documentals/arxius/" + strconv.Itoa(arxiu.ID) + "/donacions",
+		}
+	}
+	return arxiuProData{
+		Arxiu:            meta,
+		Llibres:          books,
+		ShowActions:      showActions,
+		AcceptaDonacions: acceptaDonacions,
+		Donacions:        donacions,
+	}
 }

@@ -204,6 +204,102 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (a *App) AdminEclesSuggest(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriEclesView)
+	if !ok || user == nil {
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(query) < 1 {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	limit := 10
+	if val := strings.TrimSpace(r.URL.Query().Get("limit")); val != "" {
+		if v, err := strconv.Atoi(val); err == nil && v > 0 && v <= 25 {
+			limit = v
+		}
+	}
+	filter := db.ArquebisbatFilter{
+		Text:   query,
+		Status: "publicat",
+		Limit:  limit,
+	}
+	scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriEclesView, ScopeEcles)
+	if !scopeFilter.hasGlobal && scopeFilter.isEmpty() {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	if !scopeFilter.hasGlobal {
+		filter.AllowedEclesIDs = scopeFilter.eclesIDs
+		filter.AllowedPaisIDs = scopeFilter.paisIDs
+	}
+	rows, _ := a.DB.ListArquebisbats(filter)
+	cache := map[int]*db.Arquebisbat{}
+	getEnt := func(id int) *db.Arquebisbat {
+		if id <= 0 {
+			return nil
+		}
+		if ent, ok := cache[id]; ok {
+			return ent
+		}
+		ent, err := a.DB.GetArquebisbat(id)
+		if err != nil || ent == nil {
+			cache[id] = nil
+			return nil
+		}
+		cache[id] = ent
+		return ent
+	}
+	items := make([]map[string]interface{}, 0, len(rows))
+	for _, row := range rows {
+		seen := map[int]struct{}{}
+		names := []string{}
+		types := []string{}
+		currID := row.ID
+		for currID > 0 {
+			if _, ok := seen[currID]; ok {
+				break
+			}
+			seen[currID] = struct{}{}
+			ent := getEnt(currID)
+			if ent == nil {
+				break
+			}
+			name := strings.TrimSpace(ent.Nom)
+			if name != "" {
+				names = append(names, name)
+				types = append(types, strings.TrimSpace(ent.TipusEntitat))
+			}
+			if !ent.ParentID.Valid {
+				break
+			}
+			currID = int(ent.ParentID.Int64)
+		}
+		for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 {
+			names[i], names[j] = names[j], names[i]
+		}
+		for i, j := 0, len(types)-1; i < j; i, j = i+1, j-1 {
+			types[i], types[j] = types[j], types[i]
+		}
+		nameItems := make([]interface{}, 0, len(names)+1)
+		typeItems := make([]interface{}, 0, len(types)+1)
+		nameItems = append(nameItems, "")
+		typeItems = append(typeItems, "")
+		for i := range names {
+			nameItems = append(nameItems, names[i])
+			typeItems = append(typeItems, types[i])
+		}
+		items = append(items, map[string]interface{}{
+			"id":            row.ID,
+			"nom":           row.Nom,
+			"nivells_nom":   nameItems,
+			"nivells_tipus": typeItems,
+		})
+	}
+	writeJSON(w, map[string]interface{}{"items": items})
+}
+
 func eclesYearsLabel(e db.ArquebisbatRow) string {
 	start := ""
 	end := ""

@@ -1,0 +1,76 @@
+{{ define "municipi-anecdotes-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "municipi.anecdotes.add" }}{{ else }}{{ t .Lang "municipi.anecdotes.edit" }}{{ end }} · {{ .Data.Municipi.Nom }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/municipi-anecdotes.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal anecdotes-page">
+        <section class="card anecdotes-hero">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ if .Data.IsNew }}{{ t .Lang "municipi.anecdotes.add" }}{{ else }}{{ t .Lang "municipi.anecdotes.edit" }}{{ end }}</h1>
+                    <p class="muted">{{ .Data.Municipi.Nom }}</p>
+                </div>
+                <div class="anecdotes-actions">
+                    <a class="boto-secundari" href="/territori/municipis/{{ .Data.Municipi.ID }}/anecdotes">{{ t .Lang "municipi.anecdotes.view_all" }}</a>
+                </div>
+            </header>
+            {{ if .Data.ErrorMessage }}
+                <p class="muted">{{ .Data.ErrorMessage }}</p>
+            {{ else if .Data.Conflict }}
+                <p class="muted">{{ t .Lang "municipi.anecdotes.form.conflict" }}</p>
+            {{ else if .Data.Ok }}
+                <p class="muted">{{ t .Lang "municipi.anecdotes.form.saved" }}</p>
+            {{ end }}
+        </section>
+
+        <section class="card anecdotes-form-card">
+            <header class="card-header">
+                <h2>{{ t .Lang "municipi.anecdotes.form.title_block" }}</h2>
+            </header>
+            <form class="anecdotes-form" method="post">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="version_id" value="{{ .Data.Form.VersionID }}">
+                <input type="hidden" name="lock_version" value="{{ .Data.Form.LockVersion }}">
+                <div class="anecdotes-form-row">
+                    <label for="anecdoteTitle">{{ t .Lang "municipi.anecdotes.form.title" }}</label>
+                    <input id="anecdoteTitle" name="titol" type="text" value="{{ .Data.Form.Title }}">
+                </div>
+                <div class="anecdotes-form-row">
+                    <label for="anecdoteTag">{{ t .Lang "municipi.anecdotes.form.tag" }}</label>
+                    <select id="anecdoteTag" name="tag">
+                        {{ range .Data.TagOptions }}
+                            <option value="{{ .Value }}" {{ if eq $.Data.Form.Tag .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="anecdotes-form-row">
+                    <label for="anecdoteDate">{{ t .Lang "municipi.anecdotes.form.date_ref" }}</label>
+                    <input id="anecdoteDate" name="data_ref" type="text" value="{{ .Data.Form.DataRef }}">
+                </div>
+                <div class="anecdotes-form-row">
+                    <label for="anecdoteText">{{ t .Lang "municipi.anecdotes.form.text" }}</label>
+                    <textarea id="anecdoteText" name="text">{{ .Data.Form.Text }}</textarea>
+                </div>
+                <div class="anecdotes-form-row">
+                    <label for="anecdoteSource">{{ t .Lang "municipi.anecdotes.form.font_url" }}</label>
+                    <input id="anecdoteSource" name="font_url" type="text" value="{{ .Data.Form.FontURL }}">
+                </div>
+                <div class="anecdotes-form-actions">
+                    <button class="boto-primari" type="submit" name="action" value="save">{{ t .Lang "municipi.anecdotes.form.save_draft" }}</button>
+                    <button class="boto-secundari" type="submit" name="action" value="submit">{{ t .Lang "municipi.anecdotes.form.submit_review" }}</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

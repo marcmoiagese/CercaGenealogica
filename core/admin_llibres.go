@@ -19,6 +19,8 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	canManage := a.hasPerm(perms, permArxius)
 	isAdmin := a.hasPerm(perms, permAdmin)
 	canCreateLlibre := a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresCreate)
+	canImportLlibres := a.HasPermission(user.ID, permKeyDocumentalsLlibresImport, PermissionTarget{})
+	canExportLlibres := a.HasPermission(user.ID, permKeyDocumentalsLlibresExport, PermissionTarget{})
 	canImportRegistresGlobal := a.HasPermission(user.ID, permKeyDocumentalsLlibresImportCSV, PermissionTarget{})
 	scopeFilter := a.buildListScopeFilter(user.ID, permKeyDocumentalsLlibresView, ScopeLlibre)
 	filter := db.LlibreFilter{
@@ -103,6 +105,8 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 				"TipusOptions":             llibreTipusOptions,
 				"CanManageArxius":          canManage,
 				"CanCreateLlibre":          canCreateLlibre,
+				"CanImportLlibres":         canImportLlibres,
+				"CanExportLlibres":         canExportLlibres,
 				"CanImportRegistresGlobal": canImportRegistresGlobal,
 				"CanEditLlibre":            map[int]bool{},
 				"CanDeleteLlibre":          map[int]bool{},
@@ -242,6 +246,8 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		"TipusOptions":             llibreTipusOptions,
 		"CanManageArxius":          canManage,
 		"CanCreateLlibre":          canCreateLlibre,
+		"CanImportLlibres":         canImportLlibres,
+		"CanExportLlibres":         canExportLlibres,
 		"CanImportRegistresGlobal": canImportRegistresGlobal,
 		"CanEditLlibre":            canEditLlibre,
 		"CanDeleteLlibre":          canDeleteLlibre,

@@ -351,6 +351,94 @@ CREATE TABLE IF NOT EXISTS municipi_historia_fet_versions (
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Anecdotari del municipi
+CREATE TABLE IF NOT EXISTS municipi_anecdotari_items (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    municipi_id INT UNSIGNED NOT NULL,
+    current_version_id INT UNSIGNED NULL,
+    created_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_municipi_anecdotari_items_municipi (municipi_id, updated_at),
+    FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS municipi_anecdotari_versions (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    item_id INT UNSIGNED NOT NULL,
+    version INT UNSIGNED NOT NULL,
+    status ENUM('draft','pendent','publicat','rebutjat') DEFAULT 'draft',
+    titol VARCHAR(255) NOT NULL,
+    tag VARCHAR(64) NOT NULL,
+    data_ref VARCHAR(32) NULL,
+    text LONGTEXT NOT NULL,
+    font_url TEXT,
+    moderation_notes TEXT,
+    lock_version INT UNSIGNED NOT NULL DEFAULT 0,
+    created_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
+    UNIQUE KEY idx_municipi_anecdotari_versions_unique (item_id, version),
+    INDEX idx_municipi_anecdotari_versions_status (status, created_at),
+    INDEX idx_municipi_anecdotari_versions_item (item_id, version),
+    FOREIGN KEY (item_id) REFERENCES municipi_anecdotari_items(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS municipi_anecdotari_comments (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    item_id INT UNSIGNED NOT NULL,
+    user_id INT UNSIGNED NOT NULL,
+    body TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_municipi_anecdotari_comments_item (item_id, created_at),
+    FOREIGN KEY (item_id) REFERENCES municipi_anecdotari_items(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Demografia del municipi (rollups)
+CREATE TABLE IF NOT EXISTS municipi_demografia_any (
+    municipi_id INT UNSIGNED NOT NULL,
+    `any` INT NOT NULL,
+    natalitat INT NOT NULL DEFAULT 0,
+    matrimonis INT NOT NULL DEFAULT 0,
+    defuncions INT NOT NULL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (municipi_id, `any`),
+    INDEX idx_municipi_demografia_any_municipi_any (municipi_id, `any`),
+    FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS municipi_demografia_meta (
+    municipi_id INT UNSIGNED NOT NULL PRIMARY KEY,
+    any_min INT NULL,
+    any_max INT NULL,
+    total_natalitat INT NOT NULL DEFAULT 0,
+    total_matrimonis INT NOT NULL DEFAULT 0,
+    total_defuncions INT NOT NULL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS demografia_queue (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    municipi_id INT UNSIGNED NOT NULL,
+    tipus ENUM('natalitat','matrimonis','defuncions') NOT NULL,
+    `any` INT NOT NULL,
+    delta INT NOT NULL,
+    source VARCHAR(64),
+    source_id VARCHAR(64),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    processed_at DATETIME NULL,
+    UNIQUE KEY idx_demografia_queue_unique (source, source_id, delta),
+    INDEX idx_demografia_queue_pending (processed_at),
+    FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS noms_historics (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
 
@@ -458,6 +546,8 @@ CREATE TABLE IF NOT EXISTS llibres (
     FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_llibres_municipi ON llibres(municipi_id);
 
 CREATE TABLE IF NOT EXISTS llibres_indexacio_stats (
     llibre_id INT UNSIGNED NOT NULL PRIMARY KEY,
@@ -587,7 +677,9 @@ CREATE TABLE IF NOT EXISTS usuaris_activitat (
     FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE,
     FOREIGN KEY (regla_id) REFERENCES punts_regles(id),
     FOREIGN KEY (moderat_per) REFERENCES usuaris(id) ON DELETE SET NULL,
-    INDEX idx_usuaris_activitat_usuari_data (usuari_id, data_creacio DESC),
+    INDEX idx_usuaris_activitat_usuari_data (usuari_id, data_creacio),
+    INDEX idx_usuaris_activitat_usuari_status_data (usuari_id, estat, data_creacio),
+    INDEX idx_usuaris_activitat_usuari_regla_status_data (usuari_id, regla_id, estat, data_creacio),
     INDEX idx_usuaris_activitat_objecte (objecte_tipus, objecte_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -596,6 +688,65 @@ CREATE TABLE IF NOT EXISTS usuaris_punts (
     punts_total INT NOT NULL DEFAULT 0,
     ultima_actualitzacio DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (usuari_id) REFERENCES usuaris(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Achievements
+CREATE TABLE IF NOT EXISTS achievements (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(100) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    rarity VARCHAR(50) NOT NULL,
+    visibility VARCHAR(50) NOT NULL,
+    domain VARCHAR(100) NOT NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    is_repeatable BOOLEAN NOT NULL DEFAULT FALSE,
+    icon_media_item_id INT UNSIGNED NULL,
+    rule_json TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_achievements_domain_enabled (domain, is_enabled),
+    INDEX idx_achievements_icon (icon_media_item_id),
+    FOREIGN KEY (icon_media_item_id) REFERENCES media_items(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS achievement_events (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(100) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    start_at DATETIME NOT NULL,
+    end_at DATETIME NOT NULL,
+    scope VARCHAR(50) NOT NULL DEFAULT 'global',
+    scope_id INT UNSIGNED NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_achievement_events_code_window (code, is_enabled, start_at, end_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS achievements_user (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    achievement_id INT UNSIGNED NOT NULL,
+    awarded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    meta_json TEXT,
+    UNIQUE KEY uniq_achievements_user (user_id, achievement_id),
+    INDEX idx_achievements_user_user (user_id, awarded_at DESC),
+    INDEX idx_achievements_user_achievement (achievement_id),
+    FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+    FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS achievements_showcase (
+    user_id INT UNSIGNED NOT NULL,
+    achievement_id INT UNSIGNED NOT NULL,
+    slot INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, slot),
+    UNIQUE KEY uniq_achievements_showcase (user_id, achievement_id),
+    FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+    FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =====================================================================
@@ -610,9 +761,12 @@ CREATE TABLE IF NOT EXISTS arxius (
   entitat_eclesiastica_id INT UNSIGNED NULL,
   adreca TEXT,
   ubicacio TEXT,
+  what3words VARCHAR(255),
   web VARCHAR(255),
   acces VARCHAR(20),
   notes TEXT,
+  accepta_donacions TINYINT(1) NOT NULL DEFAULT 0,
+  donacions_url VARCHAR(500),
   created_by INT UNSIGNED NULL,
   moderation_status ENUM('pendent','publicat','rebutjat') DEFAULT 'pendent',
   moderated_by INT UNSIGNED NULL,
@@ -625,6 +779,18 @@ CREATE TABLE IF NOT EXISTS arxius (
   FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
   FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS arxius_donacions_clicks (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  arxiu_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (arxiu_id) REFERENCES arxius(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_arxiu_donacions_clicks_arxiu ON arxius_donacions_clicks(arxiu_id);
+CREATE INDEX idx_arxiu_donacions_clicks_created ON arxius_donacions_clicks(created_at);
 
 CREATE TABLE IF NOT EXISTS arxius_llibres (
   arxiu_id INT UNSIGNED NOT NULL,
@@ -694,7 +860,7 @@ CREATE TABLE IF NOT EXISTS media_albums (
   UNIQUE KEY idx_media_albums_public_id (public_id),
   INDEX idx_media_albums_owner (owner_user_id),
   INDEX idx_media_albums_moderation (moderation_status),
-  CONSTRAINT chk_media_album_type CHECK (album_type IN ('book','memorial','photo','other')),
+  CONSTRAINT chk_media_album_type CHECK (album_type IN ('book','memorial','photo','achievement_icon','other')),
   CONSTRAINT chk_media_album_status CHECK (moderation_status IN ('pending','approved','rejected')),
   CONSTRAINT chk_media_album_visibility CHECK (visibility IN ('private','registered','public','restricted_group','admins_only','custom_policy')),
   CONSTRAINT chk_media_album_source CHECK (source_type IN ('online','offline_archive','family_private','other')),
@@ -940,6 +1106,21 @@ CREATE TABLE IF NOT EXISTS cognoms (
   FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Noms (forma canònica)
+CREATE TABLE IF NOT EXISTS noms (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  forma VARCHAR(255) NOT NULL,
+  `key` VARCHAR(255) NOT NULL,
+  notes TEXT,
+  created_by INT UNSIGNED,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_noms_key (`key`),
+  INDEX idx_noms_forma (forma),
+  INDEX idx_noms_updated_at (updated_at),
+  FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Variants de cognom (moderables)
 CREATE TABLE IF NOT EXISTS cognom_variants (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -979,6 +1160,44 @@ CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_any (
   INDEX idx_cognoms_freq_cognom_any (cognom_id, any_doc),
   INDEX idx_cognoms_freq_municipi_any (municipi_id, any_doc),
   FOREIGN KEY (cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE,
+  FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Totals per cognom/municipi
+CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_total (
+  cognom_id INT UNSIGNED NOT NULL,
+  municipi_id INT UNSIGNED NOT NULL,
+  total_freq INT NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id, municipi_id),
+  INDEX idx_cognoms_freq_municipi_total_municipi (municipi_id, total_freq),
+  FOREIGN KEY (cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE,
+  FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Estadístiques pre-agregades per nom/municipi/any
+CREATE TABLE IF NOT EXISTS noms_freq_municipi_any (
+  nom_id INT UNSIGNED NOT NULL,
+  municipi_id INT UNSIGNED NOT NULL,
+  any_doc INT NOT NULL,
+  freq INT NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (nom_id, municipi_id, any_doc),
+  INDEX idx_noms_freq_municipi_any_municipi_any (municipi_id, any_doc),
+  INDEX idx_noms_freq_municipi_any_nom_any (nom_id, any_doc),
+  FOREIGN KEY (nom_id) REFERENCES noms(id) ON DELETE CASCADE,
+  FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Totals per nom/municipi
+CREATE TABLE IF NOT EXISTS noms_freq_municipi_total (
+  nom_id INT UNSIGNED NOT NULL,
+  municipi_id INT UNSIGNED NOT NULL,
+  total_freq INT NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (nom_id, municipi_id),
+  INDEX idx_noms_freq_municipi_total_municipi (municipi_id, total_freq),
+  FOREIGN KEY (nom_id) REFERENCES noms(id) ON DELETE CASCADE,
   FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

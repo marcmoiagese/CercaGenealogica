@@ -1,0 +1,110 @@
+{{ define "admin-achievements-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "achievements.admin.new" }}{{ else }}{{ t .Lang "achievements.admin.edit" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/admin-achievements.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <form class="card formulari" method="post" action="/admin/achievements/save">
+            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+            <input type="hidden" name="id" value="{{ .Data.Achievement.ID }}">
+            <header class="card-header">
+                <h1>{{ if .Data.IsNew }}{{ t .Lang "achievements.admin.new" }}{{ else }}{{ t .Lang "achievements.admin.edit" }}{{ end }}</h1>
+                <p class="card-kicker">{{ t .Lang "achievements.admin.kicker" }}</p>
+            </header>
+            {{ if .Data.Error }}
+            <div class="alerta alerta-error">{{ .Data.Error }}</div>
+            {{ end }}
+            <div class="form-grid">
+                <div class="form-control">
+                    <label for="code">{{ t .Lang "achievements.field.code" }}</label>
+                    <input id="code" name="code" type="text" value="{{ .Data.Achievement.Code }}" {{ if not .Data.IsNew }}readonly{{ end }} required>
+                    {{ if not .Data.IsNew }}<p class="camp-helper">{{ t .Lang "achievements.field.code.help" }}</p>{{ end }}
+                </div>
+                <div class="form-control">
+                    <label for="name">{{ t .Lang "achievements.field.name" }}</label>
+                    <input id="name" name="name" type="text" value="{{ .Data.Achievement.Name }}" required>
+                </div>
+                <div class="form-control">
+                    <label for="description">{{ t .Lang "achievements.field.description" }}</label>
+                    <textarea id="description" name="description" rows="3">{{ .Data.Achievement.Description }}</textarea>
+                </div>
+                <div class="form-control">
+                    <label for="domain">{{ t .Lang "achievements.field.domain" }}</label>
+                    <select id="domain" name="domain">
+                        {{ range .Data.DomainOptions }}
+                        <option value="{{ . }}" {{ if eq $.Data.Achievement.Domain . }}selected{{ end }}>{{ t $.Lang (printf "achievements.domain.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label for="rarity">{{ t .Lang "achievements.field.rarity" }}</label>
+                    <select id="rarity" name="rarity">
+                        {{ range .Data.RarityOptions }}
+                        <option value="{{ . }}" {{ if eq $.Data.Achievement.Rarity . }}selected{{ end }}>{{ t $.Lang (printf "achievements.rarity.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label for="visibility">{{ t .Lang "achievements.field.visibility" }}</label>
+                    <select id="visibility" name="visibility">
+                        {{ range .Data.VisibilityOptions }}
+                        <option value="{{ . }}" {{ if eq $.Data.Achievement.Visibility . }}selected{{ end }}>{{ t $.Lang (printf "achievements.visibility.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label for="rule-json">{{ t .Lang "achievements.field.rule_json" }}</label>
+                    <textarea id="rule-json" name="rule_json" rows="6" placeholder='{"type":"count","filters":{"status":["validat"]},"threshold":1}'>{{ .Data.Achievement.RuleJSON }}</textarea>
+                    <p class="camp-helper">{{ t .Lang "achievements.rule.help" }}</p>
+                </div>
+                <div class="form-control check-inline">
+                    <label class="checkbox-linia">
+                        <input type="checkbox" name="is_enabled" value="1" {{ if .Data.Achievement.IsEnabled }}checked{{ end }}>
+                        <span>{{ t .Lang "achievements.field.enabled" }}</span>
+                    </label>
+                </div>
+                <div class="form-control check-inline">
+                    <label class="checkbox-linia">
+                        <input type="checkbox" name="is_repeatable" value="1" {{ if .Data.Achievement.IsRepeatable }}checked{{ end }}>
+                        <span>{{ t .Lang "achievements.field.repeatable" }}</span>
+                    </label>
+                </div>
+                <div class="form-control form-control-full">
+                    <label>{{ t .Lang "achievements.field.icon" }}</label>
+                    <p class="camp-helper">{{ t .Lang "achievements.icon.help" }}</p>
+                    <div class="achievement-icons">
+                        <label class="achievement-icon-option {{ if eq .Data.SelectedIconID 0 }}is-selected{{ end }}">
+                            <input type="radio" name="icon_media_item_id" value="0" {{ if eq .Data.SelectedIconID 0 }}checked{{ end }}>
+                            <span class="achievement-icon-placeholder">{{ t .Lang "achievements.icon.none" }}</span>
+                        </label>
+                        {{ range .Data.IconItems }}
+                        <label class="achievement-icon-option {{ if eq $.Data.SelectedIconID .ID }}is-selected{{ end }}">
+                            <input type="radio" name="icon_media_item_id" value="{{ .ID }}" {{ if eq $.Data.SelectedIconID .ID }}checked{{ end }}>
+                            <img src="/media/items/{{ .PublicID }}/thumb" alt="">
+                            <span class="achievement-icon-title">{{ .Title }}</span>
+                        </label>
+                        {{ end }}
+                    </div>
+                    <a class="boto-secundari achievement-icon-link" href="/media/albums" target="_blank" rel="noopener">{{ t .Lang "achievements.icon.manage" }}</a>
+                </div>
+            </div>
+            <div class="form-accio">
+                <a class="boto-secundari" href="/admin/achievements">{{ t .Lang "common.cancel" }}</a>
+                <button type="submit" class="boto-primari">
+                    <i class="fas fa-save"></i> <span>{{ t .Lang "common.save" }}</span>
+                </button>
+            </div>
+        </form>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

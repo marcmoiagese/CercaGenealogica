@@ -1,0 +1,112 @@
+{{ define "admin-achievements-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "achievements.admin.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/admin-achievements.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "achievements.admin.kicker" }}</p>
+                    <h1>{{ t .Lang "achievements.admin.title" }}</h1>
+                </div>
+                <div class="card-actions">
+                    <a href="/admin/achievements/new" class="boto-primari">
+                        <i class="fas fa-plus"></i> <span>{{ t .Lang "common.add" }}</span>
+                    </a>
+                </div>
+            </header>
+            {{ if .Data.Msg }}
+            <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
+            {{ end }}
+            <form class="form-grid achievements-recompute" method="post" action="/admin/achievements/recompute">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="form-control">
+                    <label for="recompute-achievement">{{ t .Lang "achievements.recompute.achievement" }}</label>
+                    <select id="recompute-achievement" name="achievement_id">
+                        <option value="0">{{ t .Lang "achievements.recompute.all" }}</option>
+                        {{ range .Data.Achievements }}
+                        <option value="{{ .ID }}">{{ .Name }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label for="recompute-user">{{ t .Lang "achievements.recompute.user" }}</label>
+                    <input id="recompute-user" name="user_id" type="number" min="1" placeholder="{{ t .Lang "achievements.recompute.user.placeholder" }}">
+                </div>
+                <div class="form-control check-inline">
+                    <label class="checkbox-linia">
+                        <input type="checkbox" name="dry_run" value="1">
+                        <span>{{ t .Lang "achievements.recompute.dry.label" }}</span>
+                    </label>
+                </div>
+                <div class="form-control">
+                    <button type="submit" class="boto-secundari">
+                        <i class="fas fa-rotate"></i> <span>{{ t .Lang "achievements.recompute.submit" }}</span>
+                    </button>
+                </div>
+            </form>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "achievements.field.icon" }}</th>
+                            <th>ID</th>
+                            <th>{{ t .Lang "achievements.field.code" }}</th>
+                            <th>{{ t .Lang "achievements.field.name" }}</th>
+                            <th>{{ t .Lang "achievements.field.domain" }}</th>
+                            <th>{{ t .Lang "achievements.field.rarity" }}</th>
+                            <th>{{ t .Lang "achievements.field.visibility" }}</th>
+                            <th>{{ t .Lang "achievements.field.enabled" }}</th>
+                            <th>{{ t .Lang "achievements.field.repeatable" }}</th>
+                            <th>{{ t .Lang "achievements.field.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Achievements }}
+                        <tr>
+                            <td>
+                                {{ with index $.Data.IconPublicIDs .ID }}
+                                <img src="/media/items/{{ . }}/thumb" alt="" style="width:32px;height:32px;object-fit:cover;border-radius:6px;">
+                                {{ else }}
+                                <span>—</span>
+                                {{ end }}
+                            </td>
+                            <td>{{ .ID }}</td>
+                            <td><code>{{ .Code }}</code></td>
+                            <td>{{ .Name }}</td>
+                            <td>{{ t $.Lang (printf "achievements.domain.%s" .Domain) }}</td>
+                            <td>{{ t $.Lang (printf "achievements.rarity.%s" .Rarity) }}</td>
+                            <td>{{ t $.Lang (printf "achievements.visibility.%s" .Visibility) }}</td>
+                            <td>
+                                {{ if .IsEnabled }}
+                                <span class="badge verd">{{ t $.Lang "common.active" }}</span>
+                                {{ else }}
+                                <span class="badge gris">{{ t $.Lang "common.inactive" }}</span>
+                                {{ end }}
+                            </td>
+                            <td>{{ if .IsRepeatable }}{{ t $.Lang "common.yes" }}{{ else }}{{ t $.Lang "common.no" }}{{ end }}</td>
+                            <td>
+                                <a class="boto-secundari" href="/admin/achievements/{{ .ID }}/edit">{{ t $.Lang "common.edit" }}</a>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="10">{{ t .Lang "common.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

@@ -6,6 +6,7 @@
     <title>{{ t .Lang "municipis.title" }} · {{ .Data.Municipi.Nom }}</title>
     {{ template "styles-private" . }}
     <link rel="stylesheet" href="/static/css/registres-taula.css">
+    <link rel="stylesheet" href="/static/css/municipi-anecdotes.css">
 </head>
 <body>
     {{ if .UserLoggedIn }}
@@ -40,6 +41,38 @@
                 <li><strong>{{ t .Lang "municipis.form.web" }}:</strong> {{ if .Data.Municipi.Web }}<a href="{{ .Data.Municipi.Web }}" target="_blank">{{ .Data.Municipi.Web }}</a>{{ else }}-{{ end }}</li>
                 <li><strong>{{ t .Lang "municipis.form.wikipedia" }}:</strong> {{ if .Data.Municipi.Wikipedia }}<a href="{{ .Data.Municipi.Wikipedia }}" target="_blank">{{ .Data.Municipi.Wikipedia }}</a>{{ else }}-{{ end }}</li>
             </ul>
+        </section>
+
+        <section class="card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h2>{{ t .Lang "municipi.anecdotes.title" }}</h2>
+                    <p class="muted">{{ t .Lang "municipi.anecdotes.subtitle" }}</p>
+                </div>
+                <div class="anecdotes-actions">
+                    <a class="boto-secundari" id="ctaAnecdotesAll" href="/territori/municipis/{{ .Data.Municipi.ID }}/anecdotes">{{ t .Lang "municipi.anecdotes.view_all" }}</a>
+                    {{ if .Data.CanCreateAnecdote }}
+                        <a class="boto-primari" id="ctaAddAnecdote" href="/territori/municipis/{{ .Data.Municipi.ID }}/anecdotes/new">{{ t .Lang "municipi.anecdotes.add" }}</a>
+                    {{ end }}
+                </div>
+            </header>
+            <div class="muni-anecdotes-slider" id="muniAnecdoteSlider"
+                 data-api="/api/municipis/{{ .Data.Municipi.ID }}/anecdotes"
+                 data-detail-base="/territori/municipis/{{ .Data.Municipi.ID }}/anecdotes/"
+                 data-empty="{{ t .Lang "municipi.anecdotes.empty" }}"
+                 data-loading="{{ t .Lang "common.loading" }}"
+                 data-read="{{ t .Lang "municipi.anecdotes.read" }}">
+                <div class="muni-anecdotes-track" id="muniAnecdoteTrack"></div>
+                <div class="muni-anecdotes-controls">
+                    <button class="boto-secundari btn-mini" type="button" id="muniAnecdotePrev" aria-label="{{ t .Lang "common.prev" }}">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <div class="muni-anecdotes-dots" id="muniAnecdoteDots"></div>
+                    <button class="boto-secundari btn-mini" type="button" id="muniAnecdoteNext" aria-label="{{ t .Lang "common.next" }}">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
         </section>
 
         <section class="card">
@@ -216,6 +249,7 @@
         {{ template "scripts-public" . }}
     {{ end }}
     <script src="/static/js/registres-taula.js"></script>
+    <script src="/static/js/municipi-anecdotes-slider.js"></script>
 </body>
 </html>
 {{ end }}

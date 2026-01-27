@@ -3,12 +3,16 @@
 <html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ t .Lang "municipis.title" }} · {{ .Data.Municipi.Nom }}</title>
     {{ template "styles-private" . }}
-    <link rel="stylesheet" href="/static/css/taula.css">
+    <link rel="stylesheet" href="/static/css/estils-v8.css">
     <link rel="stylesheet" href="/static/css/municipi.css">
     <link rel="stylesheet" href="/static/css/mapes.css">
+    <link rel="stylesheet" href="/static/css/municipi-anecdotes.css">
     <link rel="stylesheet" href="/static/css/municipi-perfil-pro.css">
+    <link rel="stylesheet" href="/static/css/municipi-demografia.css">
+    <link rel="stylesheet" href="/static/css/municipi-stats-noms-cognoms.css">
 </head>
 <body>
     {{ if .UserLoggedIn }}
@@ -18,76 +22,59 @@
         {{ template "header-public" . }}
     {{ end }}
     <main class="contingut-principal muni-page">
-        <section class="hero">
-            <h1>{{ t .Lang "activity.object.municipi" }}: <span id="nomMunicipi">{{ .Data.Municipi.Nom }}</span></h1>
-        </section>
-
-        <div class="taula-resultats">
-            <div class="barra-superior">
-                <button id="configColumnes" class="boto-engranatge"><i class="fas fa-cog"></i></button>
-            </div>
-            <div class="taula-container">
-                <table class="taula taula-registres" id="registresTable">
-                    <thead>
-                        <tr id="filtraFila">
-                            {{ range $i, $col := .Data.RecordColumns }}
-                            <th data-col="{{ $i }}" data-key="{{ $col.Key }}">
-                                {{ if $col.Filterable }}
-                                <input type="text" placeholder="{{ $col.Label }}" data-col="{{ $i }}" data-key="{{ $col.Key }}">
-                                {{ end }}
-                            </th>
-                            {{ end }}
-                        </tr>
-                        <tr>
-                            {{ range $i, $col := .Data.RecordColumns }}
-                            <th data-col="{{ $i }}" data-key="{{ $col.Key }}">{{ $col.Label }}</th>
-                            {{ end }}
-                        </tr>
-                    </thead>
-                    <tbody id="taulaDades">
-                        {{ range $row := .Data.RecordRows }}
-                        <tr>
-                            {{ range $i, $col := $.Data.RecordColumns }}
-                                {{ if $col.IsActions }}
-                                <td data-col="{{ $i }}" data-key="{{ $col.Key }}">
-                                    <a href="/documentals/registres/{{ $row.ID }}">{{ t $.Lang "records.action.view" }}</a>
-                                </td>
-                                {{ else if $col.IsStatus }}
-                                <td data-col="{{ $i }}" data-key="{{ $col.Key }}">
-                                    <span class="badge">{{ t $.Lang (printf "activity.status.%s" $row.ModeracioEstat) }}</span>
-                                </td>
-                                {{ else }}
-                                <td data-col="{{ $i }}" data-key="{{ $col.Key }}">{{ index $row.Cells $col.Key }}</td>
-                                {{ end }}
-                            {{ end }}
-                        </tr>
-                        {{ else }}
-                        <tr>
-                            <td colspan="{{ len .Data.RecordColumns }}">{{ t .Lang "common.empty" }}</td>
-                        </tr>
+        <section class="card muni-hero">
+            <div class="muni-hero-left">
+                <div class="muni-title-row">
+                    <h1 class="muni-title">{{ .Data.Municipi.Nom }}</h1>
+                    <div class="muni-badges">
+                        <span class="muni-pill"><i class="fas fa-location-dot"></i> {{ .Data.TypeLabel }}</span>
+                        {{ if .Data.ShowStatusBadge }}
+                        <span class="muni-badge {{ if eq .Data.Municipi.ModeracioEstat "publicat" }}badge-success{{ else if eq .Data.Municipi.ModeracioEstat "pendent" }}badge-warning{{ else }}badge-muted{{ end }}">
+                            {{ t .Lang (printf "activity.status.%s" .Data.Municipi.ModeracioEstat) }}
+                        </span>
                         {{ end }}
-                    </tbody>
-                </table>
-            </div>
-            <div id="paginador" class="paginador"></div>
-        </div>
-
-        <div id="modalConfigColumnes" class="modal-config">
-            <div class="modal-content-config">
-                <span class="tanca-modal-config">&times;</span>
-                <h2>{{ t .Lang "records.columns.title" }}</h2>
-                <div class="form-group">
-                    <label for="filesPerPagina">{{ t .Lang "records.columns.per_page" }}</label>
-                    <select id="filesPerPagina">
-                        <option value="10">10</option>
-                        <option value="25" selected>25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
+                        {{ if .Data.RegionLabel }}
+                        <span class="muni-badge badge-muted">{{ .Data.RegionLabel }}</span>
+                        {{ end }}
+                    </div>
                 </div>
-                <div class="checkboxes-container" id="llistaColumnes"></div>
+                <p class="muted muni-subtitle">{{ t .Lang "municipi.pro.hero.subtitle" }}</p>
+                {{ if or .Data.CanViewLlibres .Data.CanCreateLlibre }}
+                <div class="muni-actions">
+                    {{ if .Data.CanViewLlibres }}
+                    <a class="boto-primari" href="{{ .Data.LlibresURL }}"><i class="fas fa-folder-open"></i> {{ t .Lang "municipi.pro.cta.catalog" }}</a>
+                    {{ end }}
+                    {{ if .Data.CanCreateLlibre }}
+                    <a class="boto-secundari" href="/documentals/llibres/new"><i class="fas fa-plus"></i> {{ t .Lang "municipi.pro.cta.suggest" }}</a>
+                    {{ end }}
+                </div>
+                {{ end }}
             </div>
-        </div>
+            <div class="muni-hero-right">
+                <dl class="muni-kv">
+                    <div>
+                        <dt>{{ t .Lang "municipis.form.postal" }}</dt>
+                        <dd>{{ if .Data.Municipi.CodiPostal }}{{ .Data.Municipi.CodiPostal }}{{ else }}-{{ end }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ t .Lang "municipis.form.lat" }}</dt>
+                        <dd>{{ if .Data.Municipi.Latitud.Valid }}{{ .Data.Municipi.Latitud.Float64 }}{{ else }}-{{ end }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ t .Lang "municipis.form.lon" }}</dt>
+                        <dd>{{ if .Data.Municipi.Longitud.Valid }}{{ .Data.Municipi.Longitud.Float64 }}{{ else }}-{{ end }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ t .Lang "municipis.form.wikipedia" }}</dt>
+                        <dd>{{ if .Data.Municipi.Wikipedia }}<a class="enllaç" href="{{ .Data.Municipi.Wikipedia }}" target="_blank" rel="noreferrer">{{ t .Lang "common.view" }}</a>{{ else }}-{{ end }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ t .Lang "municipis.form.web" }}</dt>
+                        <dd>{{ if .Data.Municipi.Web }}<a class="enllaç" href="{{ .Data.Municipi.Web }}" target="_blank" rel="noreferrer">{{ t .Lang "common.view" }}</a>{{ else }}-{{ end }}</dd>
+                    </div>
+                </dl>
+            </div>
+        </section>
 
         <div class="muni-grid">
             <aside class="muni-left">
@@ -146,6 +133,154 @@
             </aside>
 
             <section class="muni-right">
+                <section class="card muni-card">
+                    <header class="card-header muni-card-header-row">
+                        <div>
+                            <h2>{{ t .Lang "books.title" }}</h2>
+                            <p class="muted">{{ t .Lang "books.filter.type" }}</p>
+                        </div>
+                        {{ if .Data.CanViewLlibres }}
+                        <a class="boto-secundari" href="{{ .Data.LlibresURL }}"><i class="fas fa-list"></i> {{ t .Lang "common.view" }}</a>
+                        {{ end }}
+                    </header>
+                    <div class="muni-cat-grid">
+                        {{ if .Data.LlibreCategories }}
+                            {{ range .Data.LlibreCategories }}
+                            <a class="muni-cat-card" href="{{ .Href }}">
+                                <div class="muni-cat-icon"><i class="fas {{ .Icon }}"></i></div>
+                                <div>
+                                    <div class="muni-cat-title">{{ .Label }}</div>
+                                    <div class="muni-cat-count">{{ .Count }} {{ .CountLabel }}</div>
+                                </div>
+                            </a>
+                            {{ end }}
+                        {{ else }}
+                            <div class="muted">{{ t .Lang "common.empty" }}</div>
+                        {{ end }}
+                    </div>
+                </section>
+                <section class="card muni-card muni-demografia" data-demografia-summary data-series-url="/api/municipis/{{ .Data.Municipi.ID }}/demografia/series">
+                    <header class="card-header muni-card-header-row">
+                        <div>
+                            <h2>{{ t .Lang "municipi.demografia.title" }}</h2>
+                            <p class="muted">{{ t .Lang "municipi.demografia.subtitle" }}</p>
+                        </div>
+                        <a class="boto-secundari btn-mini" href="/territori/municipis/{{ .Data.Municipi.ID }}/demografia">{{ t .Lang "municipi.demografia.view_all" }}</a>
+                    </header>
+                    <div class="demografia-summary">
+                        {{ if .Data.DemografiaSummary.HasData }}
+                            <div class="demografia-range">
+                                <span class="demografia-range-label">{{ t .Lang "municipi.demografia.range" }}</span>
+                                <span class="demografia-range-value">
+                                    {{ if and (gt .Data.DemografiaSummary.AnyMin 0) (gt .Data.DemografiaSummary.AnyMax 0) }}
+                                        {{ if eq .Data.DemografiaSummary.AnyMin .Data.DemografiaSummary.AnyMax }}
+                                            {{ .Data.DemografiaSummary.AnyMin }}
+                                        {{ else }}
+                                            {{ .Data.DemografiaSummary.AnyMin }} - {{ .Data.DemografiaSummary.AnyMax }}
+                                        {{ end }}
+                                    {{ else }}
+                                        -
+                                    {{ end }}
+                                </span>
+                            </div>
+                            <div class="demografia-kpis">
+                                <div class="demografia-kpi">
+                                    <span class="demografia-kpi-label">{{ t .Lang "municipi.demografia.natalitat" }}</span>
+                                    <strong class="demografia-kpi-value">{{ .Data.DemografiaSummary.TotalNatalitat }}</strong>
+                                </div>
+                                <div class="demografia-kpi">
+                                    <span class="demografia-kpi-label">{{ t .Lang "municipi.demografia.matrimonis" }}</span>
+                                    <strong class="demografia-kpi-value">{{ .Data.DemografiaSummary.TotalMatrimonis }}</strong>
+                                </div>
+                                <div class="demografia-kpi">
+                                    <span class="demografia-kpi-label">{{ t .Lang "municipi.demografia.defuncions" }}</span>
+                                    <strong class="demografia-kpi-value">{{ .Data.DemografiaSummary.TotalDefuncions }}</strong>
+                                </div>
+                            </div>
+                            <div class="demografia-footer">
+                                <div class="demografia-total">
+                                    <span class="demografia-total-label">{{ t .Lang "municipi.demografia.total" }}</span>
+                                    <strong class="demografia-total-value">{{ .Data.DemografiaSummary.Total }}</strong>
+                                </div>
+                                <div class="demografia-spark" data-demografia-spark aria-hidden="true"></div>
+                            </div>
+                        {{ else }}
+                            <p class="muted demografia-empty">{{ t .Lang "municipi.demografia.empty" }}</p>
+                            <div class="demografia-empty-actions">
+                                {{ if .Data.CanViewLlibres }}
+                                <a class="boto-secundari btn-mini" href="{{ .Data.LlibresURL }}">{{ t .Lang "municipi.pro.cta.catalog" }}</a>
+                                {{ end }}
+                                {{ if .Data.CanCreateLlibre }}
+                                <a class="boto-primari btn-mini" href="/documentals/llibres/new">{{ t .Lang "municipi.pro.cta.suggest" }}</a>
+                                {{ end }}
+                            </div>
+                        {{ end }}
+                    </div>
+                </section>
+                <div class="muni-stats-grid">
+                    <section class="card muni-card muni-stats-card"
+                             data-stats-card
+                             data-base-url="/api/municipis/{{ .Data.Municipi.ID }}/stats/top-noms"
+                             data-series-url="/api/municipis/{{ .Data.Municipi.ID }}/stats/nom-series"
+                             data-series-param="nom_id"
+                             data-empty-totals="{{ t .Lang "municipi.stats.empty.totals" }}"
+                             data-empty-series="{{ t .Lang "municipi.stats.empty.series" }}"
+                             data-bucket="decade">
+                        <header class="card-header muni-card-header-row">
+                            <div>
+                                <h2>{{ t .Lang "municipi.stats.noms.title" }}</h2>
+                                <p class="muted">{{ t .Lang "municipi.stats.noms.subtitle" }}</p>
+                            </div>
+                            <div class="muni-stats-tabs" role="tablist" aria-label="{{ t .Lang "municipi.stats.noms.title" }}">
+                                <button class="muni-stats-tab is-active" type="button" data-tab="totals">{{ t .Lang "municipi.stats.tab.totals" }}</button>
+                                <button class="muni-stats-tab" type="button" data-tab="series">{{ t .Lang "municipi.stats.tab.series" }}</button>
+                            </div>
+                        </header>
+                        <div class="muni-stats-panel is-active" data-panel="totals">
+                            <div class="muni-stats-meta">
+                                <span class="muni-stats-meta-label">{{ t .Lang "municipi.stats.total.distinct" }}</span>
+                                <strong class="muni-stats-meta-value" data-total-distinct>-</strong>
+                            </div>
+                            <ol class="muni-stats-list" id="muniTopNamesTotals" data-top-list></ol>
+                        </div>
+                        <div class="muni-stats-panel" data-panel="series">
+                            <label class="muni-stats-select-label" for="muniTopNamesSelect">{{ t .Lang "municipi.stats.select.nom" }}</label>
+                            <select class="muni-stats-select" id="muniTopNamesSelect"></select>
+                            <div class="muni-stats-series" id="muniTopNamesSeries" data-series-chart></div>
+                        </div>
+                    </section>
+                    <section class="card muni-card muni-stats-card"
+                             data-stats-card
+                             data-base-url="/api/municipis/{{ .Data.Municipi.ID }}/stats/top-cognoms"
+                             data-series-url="/api/municipis/{{ .Data.Municipi.ID }}/stats/cognom-series"
+                             data-series-param="cognom_id"
+                             data-empty-totals="{{ t .Lang "municipi.stats.empty.totals" }}"
+                             data-empty-series="{{ t .Lang "municipi.stats.empty.series" }}"
+                             data-bucket="decade">
+                        <header class="card-header muni-card-header-row">
+                            <div>
+                                <h2>{{ t .Lang "municipi.stats.cognoms.title" }}</h2>
+                                <p class="muted">{{ t .Lang "municipi.stats.cognoms.subtitle" }}</p>
+                            </div>
+                            <div class="muni-stats-tabs" role="tablist" aria-label="{{ t .Lang "municipi.stats.cognoms.title" }}">
+                                <button class="muni-stats-tab is-active" type="button" data-tab="totals">{{ t .Lang "municipi.stats.tab.totals" }}</button>
+                                <button class="muni-stats-tab" type="button" data-tab="series">{{ t .Lang "municipi.stats.tab.series" }}</button>
+                            </div>
+                        </header>
+                        <div class="muni-stats-panel is-active" data-panel="totals">
+                            <div class="muni-stats-meta">
+                                <span class="muni-stats-meta-label">{{ t .Lang "municipi.stats.total.distinct" }}</span>
+                                <strong class="muni-stats-meta-value" data-total-distinct>-</strong>
+                            </div>
+                            <ol class="muni-stats-list" id="muniTopSurnamesTotals" data-top-list></ol>
+                        </div>
+                        <div class="muni-stats-panel" data-panel="series">
+                            <label class="muni-stats-select-label" for="muniTopSurnamesSelect">{{ t .Lang "municipi.stats.select.cognom" }}</label>
+                            <select class="muni-stats-select" id="muniTopSurnamesSelect"></select>
+                            <div class="muni-stats-series" id="muniTopSurnamesSeries" data-series-chart></div>
+                        </div>
+                    </section>
+                </div>
                 <section class="card muni-card muni-maps">
                     <header class="card-header muni-maps-header">
                         <div>
@@ -236,73 +371,49 @@
                         </div>
                     </div>
                 </section>
+
+                <section class="card muni-card muni-anecdotes">
+                    <header class="card-header muni-card-header-row">
+                        <div>
+                            <h2>{{ t .Lang "municipi.anecdotes.title" }}</h2>
+                            <p class="muted">{{ t .Lang "municipi.anecdotes.subtitle" }}</p>
+                        </div>
+                        <a class="boto-secundari btn-mini" id="ctaAnecdotesAll" href="/territori/municipis/{{ .Data.Municipi.ID }}/anecdotes">
+                            {{ t .Lang "municipi.anecdotes.view_all" }}
+                        </a>
+                    </header>
+                    <div class="muni-anecdotes-slider" id="muniAnecdoteSlider"
+                         data-api="/api/municipis/{{ .Data.Municipi.ID }}/anecdotes"
+                         data-detail-base="/territori/municipis/{{ .Data.Municipi.ID }}/anecdotes/"
+                         data-empty="{{ t .Lang "municipi.anecdotes.empty" }}"
+                         data-loading="{{ t .Lang "common.loading" }}"
+                         data-read="{{ t .Lang "municipi.anecdotes.read" }}">
+                        <div class="muni-anecdotes-track" id="muniAnecdoteTrack"></div>
+                        <div class="muni-anecdotes-controls">
+                            <button class="boto-secundari btn-mini" type="button" id="muniAnecdotePrev" aria-label="{{ t .Lang "common.prev" }}">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <div class="muni-anecdotes-dots" id="muniAnecdoteDots"></div>
+                            <button class="boto-secundari btn-mini" type="button" id="muniAnecdoteNext" aria-label="{{ t .Lang "common.next" }}">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="muni-anecdotes-actions">
+                        {{ if .Data.CanCreateAnecdote }}
+                        <a class="boto-primari btn-mini" id="ctaAddAnecdote" href="/territori/municipis/{{ .Data.Municipi.ID }}/anecdotes/new">
+                            {{ t .Lang "municipi.anecdotes.add" }}
+                        </a>
+                        {{ end }}
+                    </div>
+                </section>
             </section>
         </div>
 
-        <section class="card">
-            <header class="card-header">
-                <h2>{{ t .Lang "municipi.public.section.archives" }}</h2>
-            </header>
-            <div class="taula-wrapper">
-                <table class="taula">
-                    <thead>
-                        <tr>
-                            <th>{{ t .Lang "archives.col.name" }}</th>
-                            <th>{{ t .Lang "archives.col.type" }}</th>
-                            <th>{{ t .Lang "archives.col.access" }}</th>
-                            <th>{{ t .Lang "archives.col.web" }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {{ if .Data.Arxius }}
-                            {{ range .Data.Arxius }}
-                            <tr>
-                                <td><a href="/documentals/arxius/{{ .ID }}">{{ .Nom }}</a></td>
-                                <td>{{ t $.Lang (printf "archives.type.%s" .Tipus) }}</td>
-                                <td>{{ t $.Lang (printf "archives.access.%s" .Acces) }}</td>
-                                <td>{{ if .Web }}<a href="{{ .Web }}" target="_blank">{{ t $.Lang "archives.link" }}</a>{{ else }}-{{ end }}</td>
-                            </tr>
-                            {{ end }}
-                        {{ else }}
-                            <tr><td colspan="4">{{ t .Lang "common.empty" }}</td></tr>
-                        {{ end }}
-                    </tbody>
-                </table>
-            </div>
-        </section>
+        
     </main>
 
-    <div id="modalInterconnectar" class="modal-interconnexio" style="display: none;">
-        <div class="modal-content-interconnexio">
-            <span class="tanca-modal-interconnexio">&times;</span>
-            <h3>Interconnectar persona</h3>
-
-            <label for="tipusConnexio">Tipus de connexió:</label>
-            <select id="tipusConnexio">
-                <option value="">-- Selecciona --</option>
-                <option value="pare">Pare</option>
-                <option value="mare">Mare</option>
-                <option value="avi_patern">Avi patern</option>
-                <option value="avia_paterna">Àvia paterna</option>
-                <option value="avi_matern">Avi matern</option>
-                <option value="avia_materna">Àvia materna</option>
-                <option value="pare_adoptiu">Pare adoptiu</option>
-                <option value="mare_adoptiva">Mare adoptiva</option>
-                <option value="avi_adoptiu">Avi adoptiu</option>
-                <option value="avia_adoptiva">Àvia adoptiva</option>
-                <option value="mare_de_llet">Mare de llet</option>
-                <option value="germans">Germà/Germana</option>
-                <option value="germans_llet">Germà de llet</option>
-                <option value="padri">Padrí</option>
-                <option value="padrina">Padrina</option>
-                <option value="matrimoni">Tertimoni matrimoni</option>
-                <option value="parella">Parella</option>
-            </select>
-
-            <div id="formulariConnexio" style="margin-top: 1em;"></div>
-        </div>
-    </div>
-
+    
     {{ template "footer" . }}
     {{ if .UserLoggedIn }}
         {{ template "scripts-private" . }}
@@ -310,9 +421,11 @@
         {{ template "scripts-public" . }}
     {{ end }}
     <script id="municipiProData" type="application/json">{{ toJsonJS .Data.MapesData }}</script>
-    <script src="/static/js/municipi.js"></script>
     <script src="/static/js/cgmap.js"></script>
     <script src="/static/js/municipi-perfil-pro.js"></script>
+    <script src="/static/js/municipi-demografia.js"></script>
+    <script src="/static/js/municipi-stats-noms-cognoms.js"></script>
+    <script src="/static/js/municipi-anecdotes-slider.js"></script>
 </body>
 </html>
 {{ end }}

@@ -1,0 +1,109 @@
+{{ define "municipi-anecdotes-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "municipi.anecdotes.title" }} · {{ .Data.Municipi.Nom }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/municipi-anecdotes.css">
+</head>
+<body>
+    {{ if .UserLoggedIn }}
+        {{ template "header-private" . }}
+        {{ template "menu" . }}
+    {{ else }}
+        {{ template "header-public" . }}
+    {{ end }}
+    <main class="contingut-principal anecdotes-page">
+        <section class="card anecdotes-hero">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "municipi.anecdotes.title" }}</h1>
+                    <p class="muted">{{ .Data.Municipi.Nom }}</p>
+                </div>
+                <div class="anecdotes-actions">
+                    <a class="boto-secundari" href="/territori/municipis/{{ .Data.Municipi.ID }}">{{ t .Lang "common.back" }}</a>
+                    {{ if .Data.CanCreateAnecdote }}
+                        <a class="boto-primari" href="/territori/municipis/{{ .Data.Municipi.ID }}/anecdotes/new">{{ t .Lang "municipi.anecdotes.add" }}</a>
+                    {{ end }}
+                </div>
+            </header>
+        </section>
+
+        <section class="card anecdotes-filters-card">
+            <header class="card-header">
+                <h2>{{ t .Lang "municipi.anecdotes.filter.title" }}</h2>
+            </header>
+            <form class="anecdotes-filters" method="get">
+                {{ if ne .Data.PerPage 12 }}
+                    <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
+                {{ end }}
+                <div class="anecdotes-form-row">
+                    <label for="anecdoteSearch">{{ t .Lang "municipi.anecdotes.filter.search" }}</label>
+                    <input id="anecdoteSearch" name="q" type="text" value="{{ .Data.FilterQ }}">
+                </div>
+                <div class="anecdotes-form-row">
+                    <label for="anecdoteTag">{{ t .Lang "municipi.anecdotes.filter.tag" }}</label>
+                    <select id="anecdoteTag" name="tag">
+                        <option value="">{{ t .Lang "municipi.anecdotes.filter.any" }}</option>
+                        {{ range .Data.TagOptions }}
+                            <option value="{{ .Value }}" {{ if eq $.Data.FilterTag .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="anecdotes-form-row">
+                    <button class="boto-secundari" type="submit">{{ t .Lang "common.apply" }}</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="card anecdotes-list">
+            <header class="card-header">
+                <h2>{{ t .Lang "municipi.anecdotes.view_all" }}</h2>
+            </header>
+            {{ if .Data.Anecdotes }}
+                <div class="anecdotes-grid">
+                    {{ range .Data.Anecdotes }}
+                        <article class="anecdote-card">
+                            <div class="anecdote-meta">
+                                <span class="anecdote-tag">{{ t $.Lang (printf "municipi.anecdotes.tags.%s" .Tag) }}</span>
+                                {{ if .DataRef }}
+                                    <span class="anecdote-date">{{ .DataRef }}</span>
+                                {{ end }}
+                            </div>
+                            <h3 class="anecdote-title">
+                                <a href="/territori/municipis/{{ $.Data.Municipi.ID }}/anecdotes/{{ .ItemID }}">{{ .Title }}</a>
+                            </h3>
+                            {{ if .Snippet }}
+                                <p class="anecdote-snippet">{{ .Snippet }}</p>
+                            {{ end }}
+                        </article>
+                    {{ end }}
+                </div>
+            {{ else }}
+                <p class="muted">{{ t .Lang "municipi.anecdotes.empty" }}</p>
+            {{ end }}
+            {{ if gt .Data.TotalPages 1 }}
+            <div class="paginacio">
+                <div class="paginacio-cont">
+                    {{ if .Data.HasPrev }}
+                        <a class="boto-secundari" href="{{ .Data.PageBase }}&page={{ .Data.PrevPage }}">{{ t .Lang "common.prev" }}</a>
+                    {{ end }}
+                    <span class="paginacio-info">{{ printf (t .Lang "common.page_info") .Data.Page .Data.TotalPages }}</span>
+                    {{ if .Data.HasNext }}
+                        <a class="boto-secundari" href="{{ .Data.PageBase }}&page={{ .Data.NextPage }}">{{ t .Lang "common.next" }}</a>
+                    {{ end }}
+                </div>
+            </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ if .UserLoggedIn }}
+        {{ template "scripts-private" . }}
+    {{ else }}
+        {{ template "scripts-public" . }}
+    {{ end }}
+</body>
+</html>
+{{ end }}

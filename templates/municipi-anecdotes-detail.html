@@ -1,0 +1,114 @@
+{{ define "municipi-anecdotes-detail.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "municipi.anecdotes.title" }} · {{ .Data.Municipi.Nom }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/municipi-anecdotes.css">
+</head>
+<body>
+    {{ if .UserLoggedIn }}
+        {{ template "header-private" . }}
+        {{ template "menu" . }}
+    {{ else }}
+        {{ template "header-public" . }}
+    {{ end }}
+    <main class="contingut-principal anecdotes-page">
+        <section class="card anecdotes-hero">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "municipi.anecdotes.title" }}</h1>
+                    <p class="muted">{{ .Data.Municipi.Nom }}</p>
+                </div>
+                <div class="anecdotes-actions">
+                    <a class="boto-secundari" href="/territori/municipis/{{ .Data.Municipi.ID }}/anecdotes">{{ t .Lang "municipi.anecdotes.view_all" }}</a>
+                    {{ if .Data.CanCreateAnecdote }}
+                        <a class="boto-primari" href="/territori/municipis/{{ .Data.Municipi.ID }}/anecdotes/new">{{ t .Lang "municipi.anecdotes.add" }}</a>
+                    {{ end }}
+                </div>
+            </header>
+            {{ if .Data.ErrorMessage }}
+                <p class="muted">{{ .Data.ErrorMessage }}</p>
+            {{ else if .Data.Submitted }}
+                <p class="muted">{{ t .Lang "municipi.anecdotes.submitted" }}</p>
+            {{ else if .Data.Ok }}
+                <p class="muted">{{ t .Lang "municipi.anecdotes.comment.ok" }}</p>
+            {{ end }}
+        </section>
+
+        <section class="card anecdote-detail">
+            <header class="card-header">
+                <div class="anecdote-meta">
+                    <span class="anecdote-tag">{{ t .Lang (printf "municipi.anecdotes.tags.%s" .Data.Anecdote.Tag) }}</span>
+                    {{ if .Data.AnecdoteDate }}
+                        <span class="anecdote-date">{{ .Data.AnecdoteDate }}</span>
+                    {{ end }}
+                </div>
+                <h2 class="anecdote-title">{{ .Data.Anecdote.Titol }}</h2>
+                {{ if .Data.Anecdote.FontURL }}
+                    <a class="enllaç" href="{{ .Data.Anecdote.FontURL }}" target="_blank" rel="noreferrer">{{ t .Lang "municipi.anecdotes.source" }}</a>
+                {{ end }}
+            </header>
+            <div class="anecdote-text">{{ .Data.Anecdote.Text }}</div>
+        </section>
+
+        <section class="card anecdote-comments">
+            <header class="card-header">
+                <h2>{{ t .Lang "municipi.anecdotes.comments.title" }}</h2>
+            </header>
+            {{ if .Data.Comments }}
+                <div class="anecdote-comments-list">
+                    {{ range .Data.Comments }}
+                        <article class="anecdote-comment">
+                            <div class="anecdote-comment-body">{{ .Body }}</div>
+                            {{ if .CreatedAt }}
+                                <div class="anecdote-comment-meta">{{ .CreatedAt }}</div>
+                            {{ end }}
+                        </article>
+                    {{ end }}
+                </div>
+            {{ else }}
+                <p class="muted">{{ t .Lang "municipi.anecdotes.comments.empty" }}</p>
+            {{ end }}
+
+            {{ if .UserLoggedIn }}
+                {{ if .Data.CanComment }}
+                    <form class="anecdote-comment-form" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                        <textarea name="comment_body" placeholder="{{ t .Lang "municipi.anecdotes.comment.placeholder" }}"></textarea>
+                        <div class="anecdote-comment-actions">
+                            <button class="boto-primari" type="submit">{{ t .Lang "municipi.anecdotes.comment.submit" }}</button>
+                        </div>
+                    </form>
+                {{ else }}
+                    <p class="muted">{{ t .Lang "municipi.anecdotes.comment.forbidden" }}</p>
+                {{ end }}
+            {{ else }}
+                <p class="muted">{{ t .Lang "municipi.anecdotes.comment.login" }}</p>
+            {{ end }}
+
+            {{ if gt .Data.TotalPages 1 }}
+            <div class="paginacio">
+                <div class="paginacio-cont">
+                    {{ if .Data.HasPrev }}
+                        <a class="boto-secundari" href="{{ .Data.PageBase }}?page={{ .Data.PrevPage }}">{{ t .Lang "common.prev" }}</a>
+                    {{ end }}
+                    <span class="paginacio-info">{{ printf (t .Lang "common.page_info") .Data.Page .Data.TotalPages }}</span>
+                    {{ if .Data.HasNext }}
+                        <a class="boto-secundari" href="{{ .Data.PageBase }}?page={{ .Data.NextPage }}">{{ t .Lang "common.next" }}</a>
+                    {{ end }}
+                </div>
+            </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ if .UserLoggedIn }}
+        {{ template "scripts-private" . }}
+    {{ else }}
+        {{ template "scripts-public" . }}
+    {{ end }}
+</body>
+</html>
+{{ end }}

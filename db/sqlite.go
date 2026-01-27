@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
@@ -237,6 +238,9 @@ func (d *SQLite) EnsureDefaultPolicies() error {
 func (d *SQLite) EnsureDefaultPointsRules() error {
 	return d.help.ensureDefaultPointsRules()
 }
+func (d *SQLite) EnsureDefaultAchievements() error {
+	return d.help.ensureDefaultAchievements()
+}
 func (d *SQLite) ListGroups() ([]Group, error) {
 	return d.help.listGroups()
 }
@@ -441,6 +445,12 @@ func (d *SQLite) UpdateArxiuModeracio(id int, estat, motiu string, moderatorID i
 func (d *SQLite) DeleteArxiu(id int) error {
 	return d.help.deleteArxiu(id)
 }
+func (d *SQLite) InsertArxiuDonacioClick(arxiuID int, userID *int) error {
+	return d.help.insertArxiuDonacioClick(arxiuID, userID)
+}
+func (d *SQLite) CountArxiuDonacioClicks(arxiuID int) (int, error) {
+	return d.help.countArxiuDonacioClicks(arxiuID)
+}
 func (d *SQLite) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
 	return d.help.listArxiuLlibres(arxiuID)
 }
@@ -528,6 +538,12 @@ func (d *SQLite) CreateMediaAlbum(a *MediaAlbum) (int, error) {
 func (d *SQLite) ListMediaItemsByAlbum(albumID int) ([]MediaItem, error) {
 	return d.help.listMediaItemsByAlbum(albumID)
 }
+func (d *SQLite) ListMediaItemsByAlbumType(albumType, status string) ([]MediaItem, error) {
+	return d.help.listMediaItemsByAlbumType(albumType, status)
+}
+func (d *SQLite) GetMediaItemByID(id int) (*MediaItem, error) {
+	return d.help.getMediaItemByID(id)
+}
 func (d *SQLite) GetMediaItemByPublicID(publicID string) (*MediaItem, error) {
 	return d.help.getMediaItemByPublicID(publicID)
 }
@@ -606,6 +622,9 @@ func (d *SQLite) UpdateTranscripcioRaw(t *TranscripcioRaw) error {
 }
 func (d *SQLite) UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateTranscripcioModeracio(id, estat, motiu, moderatorID)
+}
+func (d *SQLite) UpdateTranscripcioModeracioWithDemografia(id int, estat, motiu string, moderatorID int, municipiID, year int, tipus string, delta int) error {
+	return d.help.updateTranscripcioModeracioWithDemografia(id, estat, motiu, moderatorID, municipiID, year, tipus, delta)
 }
 func (d *SQLite) DeleteTranscripcioRaw(id int) error {
 	return d.help.deleteTranscripcioRaw(id)
@@ -699,6 +718,7 @@ func (d *SQLite) GetPointsRuleByCode(code string) (*PointsRule, error) {
 	return d.help.getPointsRuleByCode(code)
 }
 func (d *SQLite) SavePointsRule(r *PointsRule) (int, error)     { return d.help.savePointsRule(r) }
+func (d *SQLite) ListUserIDs(limit, offset int) ([]int, error)  { return d.help.listUserIDs(limit, offset) }
 func (d *SQLite) GetUserActivity(id int) (*UserActivity, error) { return d.help.getUserActivity(id) }
 func (d *SQLite) InsertUserActivity(a *UserActivity) (int, error) {
 	return d.help.insertUserActivity(a)
@@ -721,6 +741,51 @@ func (d *SQLite) GetRanking(f RankingFilter) ([]UserPoints, error) {
 	return d.help.getRanking(f)
 }
 func (d *SQLite) CountRanking(f RankingFilter) (int, error) { return d.help.countRanking(f) }
+
+// Achievements
+func (d *SQLite) ListAchievements() ([]Achievement, error) {
+	return d.help.listAchievements()
+}
+func (d *SQLite) ListEnabledAchievements() ([]Achievement, error) {
+	return d.help.listEnabledAchievements()
+}
+func (d *SQLite) GetAchievement(id int) (*Achievement, error) { return d.help.getAchievement(id) }
+func (d *SQLite) GetAchievementByCode(code string) (*Achievement, error) {
+	return d.help.getAchievementByCode(code)
+}
+func (d *SQLite) SaveAchievement(a *Achievement) (int, error) {
+	return d.help.saveAchievement(a)
+}
+func (d *SQLite) AwardAchievement(userID, achievementID int, status, metaJSON string) (bool, error) {
+	return d.help.awardAchievement(userID, achievementID, status, metaJSON)
+}
+func (d *SQLite) ListUserAchievements(userID int) ([]AchievementUserView, error) {
+	return d.help.listUserAchievements(userID)
+}
+func (d *SQLite) ListUserShowcase(userID int) ([]AchievementShowcaseView, error) {
+	return d.help.listUserShowcase(userID)
+}
+func (d *SQLite) SetUserShowcaseSlot(userID, achievementID, slot int) error {
+	return d.help.setUserShowcaseSlot(userID, achievementID, slot)
+}
+func (d *SQLite) ClearUserShowcaseSlot(userID, slot int) error {
+	return d.help.clearUserShowcaseSlot(userID, slot)
+}
+func (d *SQLite) IsAchievementEventActive(code string, at time.Time) (bool, error) {
+	return d.help.isAchievementEventActive(code, at)
+}
+func (d *SQLite) CountUserActivities(f AchievementActivityFilter) (int, error) {
+	return d.help.countUserActivities(f)
+}
+func (d *SQLite) CountUserActivitiesDistinctObject(f AchievementActivityFilter) (int, error) {
+	return d.help.countUserActivitiesDistinctObject(f)
+}
+func (d *SQLite) SumUserActivityPoints(f AchievementActivityFilter) (int, error) {
+	return d.help.sumUserActivityPoints(f)
+}
+func (d *SQLite) ListUserActivityDays(f AchievementActivityFilter) ([]time.Time, error) {
+	return d.help.listUserActivityDays(f)
+}
 
 // Cognoms
 func (d *SQLite) ListCognoms(q string, limit, offset int) ([]Cognom, error) {
@@ -748,6 +813,9 @@ func (d *SQLite) UpdateCognomVariantModeracio(id int, estat, motiu string, moder
 func (d *SQLite) UpsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error {
 	return d.help.upsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq)
 }
+func (d *SQLite) ApplyCognomFreqMunicipiAnyDelta(cognomID, municipiID, anyDoc, delta int) error {
+	return d.help.applyCognomFreqMunicipiAnyDelta(cognomID, municipiID, anyDoc, delta)
+}
 func (d *SQLite) QueryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]CognomFreqRow, error) {
 	return d.help.queryCognomHeatmap(cognomID, anyStart, anyEnd)
 }
@@ -758,6 +826,45 @@ func (d *SQLite) ListCognomImportRows(limit, offset int) ([]CognomImportRow, err
 
 func (d *SQLite) ListCognomStatsRows(limit, offset int) ([]CognomStatsRow, error) {
 	return d.help.listCognomStatsRows(limit, offset)
+}
+
+// Noms
+func (d *SQLite) UpsertNom(forma, key, notes string, createdBy *int) (int, error) {
+	return d.help.upsertNom(forma, key, notes, createdBy)
+}
+func (d *SQLite) GetNom(id int) (*Nom, error) { return d.help.getNom(id) }
+func (d *SQLite) ResolveNomByForma(forma string) (int, string, bool, error) {
+	return d.help.resolveNomByForma(forma)
+}
+func (d *SQLite) UpsertNomFreqMunicipiAny(nomID, municipiID, anyDoc, delta int) error {
+	return d.help.upsertNomFreqMunicipiAny(nomID, municipiID, anyDoc, delta)
+}
+func (d *SQLite) UpsertNomFreqMunicipiTotal(nomID, municipiID, delta int) error {
+	return d.help.upsertNomFreqMunicipiTotal(nomID, municipiID, delta)
+}
+func (d *SQLite) UpsertCognomFreqMunicipiTotal(cognomID, municipiID, delta int) error {
+	return d.help.upsertCognomFreqMunicipiTotal(cognomID, municipiID, delta)
+}
+func (d *SQLite) ListTopNomsByMunicipi(municipiID, limit int) ([]NomTotalRow, error) {
+	return d.help.listTopNomsByMunicipi(municipiID, limit)
+}
+func (d *SQLite) ListTopCognomsByMunicipi(municipiID, limit int) ([]CognomTotalRow, error) {
+	return d.help.listTopCognomsByMunicipi(municipiID, limit)
+}
+func (d *SQLite) ListNomSeries(municipiID, nomID int, bucket string) ([]NomFreqRow, error) {
+	return d.help.listNomSeries(municipiID, nomID, bucket)
+}
+func (d *SQLite) ListCognomSeries(municipiID, cognomID int, bucket string) ([]CognomFreqRow, error) {
+	return d.help.listCognomSeries(municipiID, cognomID, bucket)
+}
+func (d *SQLite) CountNomTotalsByMunicipi(municipiID int) (int, error) {
+	return d.help.countNomTotalsByMunicipi(municipiID)
+}
+func (d *SQLite) CountCognomTotalsByMunicipi(municipiID int) (int, error) {
+	return d.help.countCognomTotalsByMunicipi(municipiID)
+}
+func (d *SQLite) ClearNomCognomStatsByMunicipi(municipiID int) error {
+	return d.help.clearNomCognomStatsByMunicipi(municipiID)
 }
 
 func (d *SQLite) ListMunicipiMapes(filter MunicipiMapaFilter) ([]MunicipiMapa, error) {
@@ -859,4 +966,72 @@ func (d *SQLite) ListPendingMunicipiHistoriaGeneralVersions(limit, offset int) (
 }
 func (d *SQLite) ListPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error) {
 	return d.help.listPendingMunicipiHistoriaFetVersions(limit, offset)
+}
+
+func (d *SQLite) GetMunicipiDemografiaMeta(municipiID int) (*MunicipiDemografiaMeta, error) {
+	return d.help.getMunicipiDemografiaMeta(municipiID)
+}
+func (d *SQLite) ListMunicipiDemografiaAny(municipiID int, from, to int) ([]MunicipiDemografiaAny, error) {
+	return d.help.listMunicipiDemografiaAny(municipiID, from, to)
+}
+func (d *SQLite) ListMunicipiDemografiaDecades(municipiID int, from, to int) ([]MunicipiDemografiaAny, error) {
+	return d.help.listMunicipiDemografiaDecades(municipiID, from, to)
+}
+func (d *SQLite) ApplyMunicipiDemografiaDelta(municipiID, year int, tipus string, delta int) error {
+	return d.help.applyMunicipiDemografiaDelta(municipiID, year, tipus, delta)
+}
+func (d *SQLite) ApplyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year int, tipus string, delta int) error {
+	return d.help.applyMunicipiDemografiaDeltaTx(tx, municipiID, year, tipus, delta)
+}
+func (d *SQLite) RebuildMunicipiDemografia(municipiID int) error {
+	return d.help.rebuildMunicipiDemografia(municipiID)
+}
+
+func (d *SQLite) ListMunicipiAnecdotariPublished(municipiID int, f MunicipiAnecdotariFilter) ([]MunicipiAnecdotariVersion, int, error) {
+	return d.help.listMunicipiAnecdotariPublished(municipiID, f)
+}
+func (d *SQLite) GetMunicipiAnecdotariPublished(itemID int) (*MunicipiAnecdotariVersion, error) {
+	return d.help.getMunicipiAnecdotariPublished(itemID)
+}
+func (d *SQLite) ListMunicipiAnecdotariComments(itemID int, limit, offset int) ([]MunicipiAnecdotariComment, int, error) {
+	return d.help.listMunicipiAnecdotariComments(itemID, limit, offset)
+}
+func (d *SQLite) CreateMunicipiAnecdotariItem(municipiID int, createdBy int) (int, error) {
+	return d.help.createMunicipiAnecdotariItem(municipiID, createdBy)
+}
+func (d *SQLite) CreateMunicipiAnecdotariDraft(itemID int, createdBy int, baseFromCurrent bool) (int, error) {
+	return d.help.createMunicipiAnecdotariDraft(itemID, createdBy, baseFromCurrent)
+}
+func (d *SQLite) GetMunicipiAnecdotariVersion(id int) (*MunicipiAnecdotariVersion, error) {
+	return d.help.getMunicipiAnecdotariVersion(id)
+}
+func (d *SQLite) GetPendingMunicipiAnecdotariVersionByItemID(itemID int) (*MunicipiAnecdotariVersion, error) {
+	return d.help.getPendingMunicipiAnecdotariVersionByItemID(itemID)
+}
+func (d *SQLite) UpdateMunicipiAnecdotariDraft(v *MunicipiAnecdotariVersion) error {
+	return d.help.updateMunicipiAnecdotariDraft(v)
+}
+func (d *SQLite) SubmitMunicipiAnecdotariVersion(versionID int) error {
+	return d.help.submitMunicipiAnecdotariVersion(versionID)
+}
+func (d *SQLite) ListPendingMunicipiAnecdotariVersions(limit, offset int) ([]MunicipiAnecdotariVersion, int, error) {
+	return d.help.listPendingMunicipiAnecdotariVersions(limit, offset)
+}
+func (d *SQLite) ApproveMunicipiAnecdotariVersion(versionID int, moderatorID int) error {
+	return d.help.approveMunicipiAnecdotariVersion(versionID, moderatorID)
+}
+func (d *SQLite) RejectMunicipiAnecdotariVersion(versionID int, moderatorID int, notes string) error {
+	return d.help.rejectMunicipiAnecdotariVersion(versionID, moderatorID, notes)
+}
+func (d *SQLite) CreateMunicipiAnecdotariComment(itemID int, userID int, body string) (int, error) {
+	return d.help.createMunicipiAnecdotariComment(itemID, userID, body)
+}
+func (d *SQLite) GetMunicipiAnecdotariLastCommentAt(userID int) (time.Time, error) {
+	return d.help.getMunicipiAnecdotariLastCommentAt(userID)
+}
+func (d *SQLite) ResolveMunicipiIDByAnecdotariItemID(itemID int) (int, error) {
+	return d.help.resolveMunicipiIDByAnecdotariItemID(itemID)
+}
+func (d *SQLite) ResolveMunicipiIDByAnecdotariVersionID(versionID int) (int, error) {
+	return d.help.resolveMunicipiIDByAnecdotariVersionID(versionID)
 }

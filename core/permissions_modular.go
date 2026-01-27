@@ -20,6 +20,8 @@ const (
 	permKeyAdminArxiusExport    = "admin.arxius.export"
 	permKeyAdminPuntsAdd        = "admin.punts.regles.add"
 	permKeyAdminPuntsEdit       = "admin.punts.regles.edit"
+	permKeyAdminAchievementsAdd  = "admin.achievements.add"
+	permKeyAdminAchievementsEdit = "admin.achievements.edit"
 
 	permKeyTerritoriPaisosView      = "territori.paisos.view"
 	permKeyTerritoriPaisosCreate    = "territori.paisos.create"
@@ -39,6 +41,11 @@ const (
 	permKeyTerritoriMunicipisHistoriaEdit     = "municipis.historia.edit"
 	permKeyTerritoriMunicipisHistoriaSubmit   = "municipis.historia.submit"
 	permKeyTerritoriMunicipisHistoriaModerate = "municipis.historia.moderate"
+	permKeyTerritoriMunicipisAnecdotesCreate  = "municipis.anecdotes.create"
+	permKeyTerritoriMunicipisAnecdotesEdit    = "municipis.anecdotes.edit"
+	permKeyTerritoriMunicipisAnecdotesSubmit  = "municipis.anecdotes.submit"
+	permKeyTerritoriMunicipisAnecdotesComment = "municipis.anecdotes.comment"
+	permKeyTerritoriMunicipisAnecdotesModerate = "municipis.anecdotes.moderate"
 	permKeyTerritoriEclesView       = "territori.eclesiastic.view"
 	permKeyTerritoriEclesCreate     = "territori.eclesiastic.create"
 	permKeyTerritoriEclesEdit       = "territori.eclesiastic.edit"
@@ -79,6 +86,8 @@ var permissionCatalogKeys = []string{
 	permKeyAdminArxiusExport,
 	permKeyAdminPuntsAdd,
 	permKeyAdminPuntsEdit,
+	permKeyAdminAchievementsAdd,
+	permKeyAdminAchievementsEdit,
 	permKeyTerritoriPaisosView,
 	permKeyTerritoriPaisosCreate,
 	permKeyTerritoriPaisosEdit,
@@ -97,6 +106,11 @@ var permissionCatalogKeys = []string{
 	permKeyTerritoriMunicipisHistoriaEdit,
 	permKeyTerritoriMunicipisHistoriaSubmit,
 	permKeyTerritoriMunicipisHistoriaModerate,
+	permKeyTerritoriMunicipisAnecdotesCreate,
+	permKeyTerritoriMunicipisAnecdotesEdit,
+	permKeyTerritoriMunicipisAnecdotesSubmit,
+	permKeyTerritoriMunicipisAnecdotesComment,
+	permKeyTerritoriMunicipisAnecdotesModerate,
 	permKeyTerritoriEclesView,
 	permKeyTerritoriEclesCreate,
 	permKeyTerritoriEclesEdit,
@@ -185,6 +199,11 @@ var legacyTerritoryPermKeys = []string{
 	permKeyTerritoriMunicipisHistoriaEdit,
 	permKeyTerritoriMunicipisHistoriaSubmit,
 	permKeyTerritoriMunicipisHistoriaModerate,
+	permKeyTerritoriMunicipisAnecdotesCreate,
+	permKeyTerritoriMunicipisAnecdotesEdit,
+	permKeyTerritoriMunicipisAnecdotesSubmit,
+	permKeyTerritoriMunicipisAnecdotesComment,
+	permKeyTerritoriMunicipisAnecdotesModerate,
 	permKeyAdminTerritoriImport,
 	permKeyAdminTerritoriExport,
 }
@@ -228,6 +247,8 @@ var legacyArchivePermKeys = []string{
 var legacyPolicyPermKeys = []string{
 	permKeyAdminPuntsAdd,
 	permKeyAdminPuntsEdit,
+	permKeyAdminAchievementsAdd,
+	permKeyAdminAchievementsEdit,
 }
 
 type ScopeType string

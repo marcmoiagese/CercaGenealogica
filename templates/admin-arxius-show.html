@@ -5,96 +5,234 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "archives.title" }} - {{ .Data.Arxiu.Nom }}</title>
     {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/arxiu-pro.css">
 </head>
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
-    <main class="contingut-principal arxiu-layout">
+    <main class="contingut-principal arxiu-pro">
         {{ $manageBase := "/documentals/arxius" }}
-        <section class="card">
-            <header class="card-header">
-                <h1>{{ .Data.Arxiu.Nom }}</h1>
-                {{ if or $.Data.CanEditArxiu $.Data.CanDeleteArxiu }}
-                <div class="arxiu-header-actions">
+        <section class="card arxiu-pro-hero">
+            <div class="arxiu-pro-hero-top">
+                <div class="arxiu-pro-title">
+                    <div class="arxiu-pro-breadcrumbs">
+                        <a href="{{ $manageBase }}" style="color:inherit;text-decoration:none;">
+                            <i class="fas fa-archive"></i> {{ t .Lang "archives.title" }}
+                        </a>
+                        <span style="opacity:0.5;"> / </span>
+                        <span>Perfil</span>
+                    </div>
+
+                    <h1 id="arxiuNom">{{ .Data.Arxiu.Nom }}</h1>
+                    <div class="arxiu-pro-sub" id="arxiuSub">
+                        {{ if .Data.EntitatNom }}{{ .Data.EntitatNom }}{{ else }}Informació de l'arxiu{{ end }}
+                    </div>
+
+                    <div class="arxiu-pro-chips">
+                        <span class="badge {{ if eq .Data.Arxiu.ModeracioEstat "publicat" }}verd{{ else if eq .Data.Arxiu.ModeracioEstat "pendent" }}groc{{ else if .Data.Arxiu.ModeracioEstat }}gris{{ end }}" id="arxiuEstat">
+                            {{ if .Data.Arxiu.ModeracioEstat }}{{ t .Lang (printf "activity.status.%s" .Data.Arxiu.ModeracioEstat) }}{{ else }}—{{ end }}
+                        </span>
+                        <span class="chip"><span class="muted">{{ t .Lang "archives.details.type" }}</span> <span id="chipTipus">{{ if .Data.ArxiuProData.Arxiu.Tipus }}{{ .Data.ArxiuProData.Arxiu.Tipus }}{{ else }}—{{ end }}</span></span>
+                        <span class="chip"><span class="muted">{{ t .Lang "archives.details.access" }}</span> <span id="chipAcces">{{ if .Data.ArxiuProData.Arxiu.Acces }}{{ .Data.ArxiuProData.Arxiu.Acces }}{{ else }}—{{ end }}</span></span>
+                        <span class="chip"><span class="muted">Cobertura</span> <span id="chipCobertura">—</span></span>
+                    </div>
+                </div>
+
+                <div class="arxiu-pro-hero-actions">
                     {{ if $.Data.CanEditArxiu }}
-                    <a class="boto-secundari" href="{{ $manageBase }}/{{ .Data.Arxiu.ID }}/edit">{{ t .Lang "archives.action.edit" }}</a>
+                    <a class="boto-secundari" href="{{ $manageBase }}/{{ .Data.Arxiu.ID }}/edit"><i class="fas fa-pen"></i> {{ t .Lang "archives.action.edit" }}</a>
+                    {{ end }}
+                    {{ if $.Data.CanCreateLlibre }}
+                    <a class="boto-primari" href="/documentals/llibres/new?arxiu_id={{ .Data.Arxiu.ID }}&return_to=/documentals/arxius/{{ .Data.Arxiu.ID }}">
+                        <i class="fas fa-plus"></i> {{ t .Lang "archives.books.add" }}
+                    </a>
                     {{ end }}
                     {{ if $.Data.CanDeleteArxiu }}
                     <form method="post" action="{{ $manageBase }}/{{ .Data.Arxiu.ID }}/delete" style="display:inline;" onsubmit="return confirm('{{ t .Lang "archives.confirm.delete" }}');">
-                        <button type="submit" class="boto-perill">{{ t .Lang "archives.action.delete" }}</button>
+                        <button type="submit" class="boto-perill"><i class="fas fa-trash"></i> {{ t .Lang "archives.action.delete" }}</button>
                     </form>
                     {{ end }}
                 </div>
-                {{ end }}
-                {{ if .Data.Arxiu.ModeracioEstat }}
-                <span class="badge {{ if eq .Data.Arxiu.ModeracioEstat "publicat" }}verd{{ else if eq .Data.Arxiu.ModeracioEstat "pendent" }}taronja{{ else }}vermell{{ end }}">
-                    {{ t .Lang (printf "activity.status.%s" .Data.Arxiu.ModeracioEstat) }}
-                </span>
-                {{ end }}
-            </header>
-            <ul class="dades-grid">
-                <li><strong>{{ t .Lang "archives.details.type" }}:</strong> {{ t .Lang (printf "archives.type.%s" .Data.Arxiu.Tipus) }}</li>
-                <li><strong>{{ t .Lang "archives.details.access" }}:</strong> {{ t .Lang (printf "archives.access.%s" .Data.Arxiu.Acces) }}</li>
-                <li><strong>{{ t .Lang "archives.details.entity" }}:</strong> {{ if .Data.EntitatNom }}{{ .Data.EntitatNom }}{{ else }}-{{ end }}</li>
-                <li><strong>{{ t .Lang "archives.details.municipi" }}:</strong> {{ if .Data.Arxiu.MunicipiID.Valid }}{{ .Data.Arxiu.MunicipiID.Int64 }}{{ else }}-{{ end }}</li>
-                <li><strong>{{ t .Lang "archives.details.address" }}:</strong> {{ .Data.Arxiu.Adreca }}</li>
-                <li><strong>{{ t .Lang "archives.details.location" }}:</strong> {{ .Data.Arxiu.Ubicacio }}</li>
-                <li><strong>{{ t .Lang "archives.details.web" }}:</strong> {{ .Data.Arxiu.Web }}</li>
-                <li style="grid-column: 1 / -1;"><strong>{{ t .Lang "archives.details.notes" }}:</strong><br>{{ .Data.Arxiu.Notes }}</li>
-            </ul>
+            </div>
+
+            <div class="arxiu-pro-kpis" aria-label="Resum">
+                <div class="kpi">
+                    <div class="label"><i class="fas fa-book"></i> Llibres</div>
+                    <div class="value" id="kpiLlibres">—</div>
+                    <div class="hint">Mostra per pàgines, municipis i categories</div>
+                </div>
+                <div class="kpi">
+                    <div class="label"><i class="fas fa-map-marker-alt"></i> Municipis</div>
+                    <div class="value" id="kpiMunicipis">—</div>
+                    <div class="hint">Filtra i explora per poble</div>
+                </div>
+                <div class="kpi">
+                    <div class="label"><i class="fas fa-file-alt"></i> Pàgines</div>
+                    <div class="value" id="kpiPagines">—</div>
+                    <div class="hint">Volum total aproximat</div>
+                </div>
+                <div class="kpi">
+                    <div class="label"><i class="fas fa-calendar-alt"></i> Període</div>
+                    <div class="value" id="kpiAnys">—</div>
+                    <div class="hint">Any més antic i més recent</div>
+                </div>
+            </div>
         </section>
 
-        <section class="card">
-            <header class="card-header card-header-flex">
-                <h2>{{ t .Lang "archives.books.linked" }}</h2>
-                {{ if $.Data.CanCreateLlibre }}
-                <a class="boto-primari" href="/documentals/llibres/new?arxiu_id={{ .Data.Arxiu.ID }}&return_to=/documentals/arxius/{{ .Data.Arxiu.ID }}">{{ t .Lang "archives.books.add.submit" }}</a>
+        <section class="arxiu-pro-grid">
+            <aside class="arxiu-pro-sidebar">
+                <section class="card">
+                    <h3><i class="fas fa-id-card"></i> Fitxa</h3>
+                    <ul class="meta-list">
+                        <li class="meta-item"><div class="k">{{ t .Lang "archives.details.type" }}</div><div class="v" id="metaTipus">{{ if .Data.ArxiuProData.Arxiu.Tipus }}{{ .Data.ArxiuProData.Arxiu.Tipus }}{{ else }}—{{ end }}</div></li>
+                        <li class="meta-item"><div class="k">{{ t .Lang "archives.details.access" }}</div><div class="v" id="metaAcces">{{ if .Data.ArxiuProData.Arxiu.Acces }}{{ .Data.ArxiuProData.Arxiu.Acces }}{{ else }}—{{ end }}</div></li>
+                        <li class="meta-item"><div class="k">{{ t .Lang "archives.details.entity" }}</div><div class="v" id="metaEntitat">{{ if .Data.EntitatNom }}{{ .Data.EntitatNom }}{{ else }}—{{ end }}</div></li>
+                        <li class="meta-item"><div class="k">{{ t .Lang "archives.details.municipi" }}</div><div class="v" id="metaMunicipi">{{ if .Data.MunicipiNom }}{{ .Data.MunicipiNom }}{{ else if .Data.Arxiu.MunicipiID.Valid }}#{{ .Data.Arxiu.MunicipiID.Int64 }}{{ else }}—{{ end }}</div></li>
+                        <li class="meta-item"><div class="k">{{ t .Lang "archives.details.address" }}</div><div class="v" id="metaAdreca">{{ if .Data.Arxiu.Adreca }}{{ .Data.Arxiu.Adreca }}{{ else }}—{{ end }}</div></li>
+                        <li class="meta-item"><div class="k">{{ t .Lang "archives.details.location" }}</div><div class="v" id="metaUbicacio">{{ if .Data.Arxiu.Ubicacio }}{{ .Data.Arxiu.Ubicacio }}{{ else }}—{{ end }}</div></li>
+                        <li class="meta-item"><div class="k">{{ t .Lang "archives.details.what3words" }}</div><div class="v" id="metaWhat3Words">{{ if .Data.Arxiu.What3Words }}{{ .Data.Arxiu.What3Words }}{{ else }}—{{ end }}</div></li>
+                        <li class="meta-item"><div class="k">{{ t .Lang "archives.details.web" }}</div><div class="v" id="metaWeb">
+                            {{ if .Data.Arxiu.Web }}<a href="{{ .Data.Arxiu.Web }}" target="_blank" rel="noopener">{{ .Data.Arxiu.Web }}</a>{{ else }}—{{ end }}
+                        </div></li>
+                    </ul>
+
+                    <div class="meta-actions">
+                        <a class="boto-secundari" href="/documentals/llibres?arxiu_id={{ .Data.Arxiu.ID }}"><i class="fas fa-list"></i> Veure llistat complet</a>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <h3><i class="fas fa-sticky-note"></i> {{ t .Lang "archives.details.notes" }}</h3>
+                    <div style="color:var(--color-text-clar);font-weight:700;font-size:0.9rem;margin-bottom:0.6rem;">
+                        Comentaris interns / observacions (ràpides de consultar)
+                    </div>
+                    <div id="metaNotes" style="white-space:pre-wrap;">{{ if .Data.Arxiu.Notes }}{{ .Data.Arxiu.Notes }}{{ else }}—{{ end }}</div>
+                </section>
+
+                <section class="card donate-card" id="donateCard" {{ if not .Data.Arxiu.AcceptaDonacions }}style="display:none;"{{ end }}>
+                    <div class="donate-top">
+                        <div class="donate-icon" aria-hidden="true"><i class="fas fa-heart"></i></div>
+                        <div>
+                            <div class="donate-title">Ajuda a digitalitzar</div>
+                            <div class="donate-sub">Aquest bisbat accepta donacions per impulsar la digitalització i publicar més llibres.</div>
+                        </div>
+                    </div>
+                    <a class="donate-link" href="/documentals/arxius/{{ .Data.Arxiu.ID }}/donacions" target="_blank" rel="noopener">
+                        Fer una donació <i class="fas fa-arrow-right"></i>
+                    </a>
+                </section>
+                {{ if and .Data.CanManageArxius .Data.Arxiu.AcceptaDonacions }}
+                <section class="card">
+                    <h3><i class="fas fa-chart-line"></i> Donacions</h3>
+                    <div style="color:var(--color-text-clar);font-weight:700;font-size:0.9rem;margin-bottom:0.6rem;">
+                        Seguiment de clics
+                    </div>
+                    <div><strong>{{ .Data.DonacionsClicks }}</strong> clics totals</div>
+                </section>
                 {{ end }}
-            </header>
-            <div class="taula-wrapper">
-                <table class="taula">
-                    <thead>
-                        <tr>
-                            <th>{{ t .Lang "archives.books.col.title" }}</th>
-                            <th>{{ t .Lang "archives.books.col.chrono" }}</th>
-                            <th>{{ t .Lang "archives.books.col.municipi" }}</th>
-                            <th>{{ t .Lang "books.col.pages" }}</th>
-                            <th>{{ t .Lang "archives.books.col.signatura" }}</th>
-                            <th>{{ t .Lang "archives.books.col.url" }}</th>
-                            {{ if $.Data.ShowLlibreActions }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {{ range .Data.Llibres }}
-                        <tr>
-                            <td><a href="/documentals/llibres/{{ .LlibreID }}">{{ if .Titol }}{{ .Titol }}{{ else }}{{ .NomEsglesia }}{{ end }}</a></td>
-                            <td>{{ .Cronologia }}</td>
-                            <td>{{ .Municipi.String }}</td>
-                            <td>{{ if .Pagines.Valid }}{{ .Pagines.Int64 }}{{ else }}-{{ end }}</td>
-                            <td>{{ if .Signatura.Valid }}{{ .Signatura.String }}{{ end }}</td>
-                            <td>{{ if .URLOverride.Valid }}<a href="{{ .URLOverride.String }}" target="_blank">{{ t $.Lang "archives.link" }}</a>{{ end }}</td>
-                            {{ if $.Data.ShowLlibreActions }}
-                            {{ $canEdit := index $.Data.CanEditLlibre .LlibreID }}
-                            {{ $canView := index $.Data.CanViewLlibre .LlibreID }}
-                            <td class="accions">
-                                {{ if $canEdit }}
-                                <a href="/documentals/llibres/{{ .LlibreID }}/edit">{{ t $.Lang "archives.action.edit" }}</a>
-                                {{ end }}
-                                {{ if and $canEdit $canView }} | {{ end }}
-                                {{ if $canView }}
-                                <a href="/documentals/llibres/{{ .LlibreID }}/pagines">{{ t $.Lang "books.col.pages" }}</a>
-                                {{ end }}
-                            </td>
-                            {{ end }}
-                        </tr>
-                        {{ end }}
-                    </tbody>
-                </table>
-            </div>
+            </aside>
+
+            <section class="tabs">
+                <div class="tablist" role="tablist" aria-label="Seccions de l'arxiu">
+                    <button class="tab" role="tab" aria-selected="true" data-tab="llibres"><i class="fas fa-book"></i> Llibres</button>
+                    <button class="tab" role="tab" aria-selected="false" data-tab="municipis"><i class="fas fa-map-marker-alt"></i> Municipis</button>
+                    <button class="tab" role="tab" aria-selected="false" data-tab="cobertura"><i class="fas fa-chart-bar"></i> Cobertura</button>
+                </div>
+
+                <div class="tabpanel active" id="tab-llibres" role="tabpanel">
+                    <section class="card">
+                        <div class="card-header" style="margin-bottom:0.65rem;">
+                            <h2 style="font-size:1.2rem;"><i class="fas fa-filter"></i> Cerca i filtres</h2>
+                            <div class="results-meta" id="booksMeta">
+                                <span class="count">—</span>
+                            </div>
+                        </div>
+
+                        <div class="filtres-pro">
+                            <div class="fila">
+                                <input id="q" type="text" placeholder="Cerca per títol, municipi, cronologia, signatura...">
+                                <select id="filtreMunicipi" aria-label="Filtra per municipi"></select>
+                                <select id="filtreTipus" aria-label="Filtra per categoria"></select>
+                                <select id="filtreSort" aria-label="Ordenació">
+                                    <option value="titol:asc">Títol (A→Z)</option>
+                                    <option value="titol:desc">Títol (Z→A)</option>
+                                    <option value="municipi:asc">Municipi (A→Z)</option>
+                                    <option value="pagines:desc">Pàgines (desc)</option>
+                                    <option value="cronologia:asc">Cronologia (asc)</option>
+                                    <option value="cronologia:desc">Cronologia (desc)</option>
+                                </select>
+                            </div>
+
+                            <div class="fila-actions">
+                                <button class="boto-secundari" id="btnClear" type="button" disabled><i class="fas fa-eraser"></i> Neteja</button>
+                                <button class="boto-primari" id="btnMore" type="button"><i class="fas fa-plus"></i> Carrega'n més</button>
+                            </div>
+
+                            <div class="active-filters" id="activeFilters"></div>
+                        </div>
+                    </section>
+
+                    <section class="card">
+                        <div class="taula-wrapper">
+                            <table class="taula" aria-label="Llibres de l'arxiu" data-show-actions="{{ if .Data.ArxiuProData.ShowActions }}1{{ else }}0{{ end }}" data-label-edit="{{ t .Lang "archives.action.edit" }}" data-label-pages="{{ t .Lang "books.col.pages" }}" data-label-link="{{ t .Lang "archives.link" }}">
+                                <thead>
+                                    <tr>
+                                        <th>{{ t .Lang "archives.books.col.title" }}</th>
+                                        <th>Categoria</th>
+                                        <th>{{ t .Lang "archives.books.col.chrono" }}</th>
+                                        <th>{{ t .Lang "archives.books.col.municipi" }}</th>
+                                        <th>{{ t .Lang "books.col.pages" }}</th>
+                                        <th>{{ t .Lang "archives.books.col.signatura" }}</th>
+                                        <th>{{ t .Lang "archives.books.col.url" }}</th>
+                                        {{ if .Data.ArxiuProData.ShowActions }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
+                                    </tr>
+                                </thead>
+                                <tbody id="booksTableBody"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="tabpanel" id="tab-municipis" role="tabpanel">
+                    <section class="card">
+                        <div class="card-header">
+                            <h2 style="font-size:1.2rem;"><i class="fas fa-map-marker-alt"></i> Explora per municipi</h2>
+                            <div style="color:var(--color-text-clar);font-weight:700;">Clica “Filtra” per veure'n els llibres</div>
+                        </div>
+                        <div class="muni-list" id="muniList"></div>
+                    </section>
+                </div>
+
+                <div class="tabpanel" id="tab-cobertura" role="tabpanel">
+                    <section class="card">
+                        <div class="card-header">
+                            <h2 style="font-size:1.2rem;"><i class="fas fa-chart-bar"></i> Cobertura i volum</h2>
+                            <div style="color:var(--color-text-clar);font-weight:700;">Resum ràpid</div>
+                        </div>
+
+                        <div class="coverage-grid">
+                            <div>
+                                <h3 style="margin-bottom:0.6rem;color:var(--primary-color);">Distribució per segle</h3>
+                                <div class="coverage-bars" id="coverageBars"></div>
+                            </div>
+
+                            <div>
+                                <h3 style="margin-bottom:0.6rem;color:var(--primary-color);">Principals categories</h3>
+                                <div class="coverage-type-wrap">
+                                    <div class="coverage-type-list" id="coverageTypeList" aria-label="Cobertura per categoria"></div>
+                                    <button class="btn-ghost btn-small" id="coverageTypeMore" type="button" aria-expanded="false">Mostra'n més</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
         </section>
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script id="arxiuProData" type="application/json">{{ toJsonJS .Data.ArxiuProData }}</script>
+    <script src="/static/js/arxiu-pro.js"></script>
 </body>
 </html>
 {{ end }}

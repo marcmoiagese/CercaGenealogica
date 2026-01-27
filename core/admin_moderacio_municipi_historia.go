@@ -31,7 +31,7 @@ func (a *App) AdminModeracioHistoriaGeneralPreview(w http.ResponseWriter, r *htt
 		http.NotFound(w, r)
 		return
 	}
-	if !canModerateAll && !a.canModerateHistoriaObject(user, perms, "municipi_historia_general", versionID) {
+	if !canModerateAll && !a.canModerateTerritoriObject(user, perms, "municipi_historia_general", versionID) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -85,7 +85,7 @@ func (a *App) AdminModeracioHistoriaFetPreview(w http.ResponseWriter, r *http.Re
 		http.NotFound(w, r)
 		return
 	}
-	if !canModerateAll && !a.canModerateHistoriaObject(user, perms, "municipi_historia_fet", versionID) {
+	if !canModerateAll && !a.canModerateTerritoriObject(user, perms, "municipi_historia_fet", versionID) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

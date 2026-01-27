@@ -9,6 +9,18 @@
         data = {};
     }
 
+    const miniMap = document.getElementById("muniMiniMap");
+    const lat = typeof data.lat === "number" ? data.lat : parseFloat(data.lat);
+    const lon = typeof data.lon === "number" ? data.lon : parseFloat(data.lon);
+    if (miniMap && Number.isFinite(lat) && Number.isFinite(lon)) {
+        const delta = 0.04;
+        const bbox = [lon - delta, lat - delta, lon + delta, lat + delta]
+            .map((val) => val.toFixed(5))
+            .join("%2C");
+        const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat}%2C${lon}`;
+        miniMap.innerHTML = `<iframe title="OpenStreetMap" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="${src}"></iframe>`;
+    }
+
     const apiUrl = data.mapes_api || "";
     const viewport = document.getElementById("muniMapsViewport");
     const slidesEl = document.getElementById("muniMapsSlides");

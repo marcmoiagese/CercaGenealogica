@@ -306,6 +306,86 @@ CREATE INDEX IF NOT EXISTS idx_municipi_historia_fet_versions_status ON municipi
 CREATE INDEX IF NOT EXISTS idx_municipi_historia_fet_versions_fet ON municipi_historia_fet_versions(fet_id, version);
 CREATE INDEX IF NOT EXISTS idx_municipi_historia_fet_versions_any ON municipi_historia_fet_versions(any_inici, any_fi);
 
+-- Anecdotari del municipi
+CREATE TABLE IF NOT EXISTS municipi_anecdotari_items (
+    id SERIAL PRIMARY KEY,
+    municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+    current_version_id INTEGER,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS municipi_anecdotari_versions (
+    id SERIAL PRIMARY KEY,
+    item_id INTEGER NOT NULL REFERENCES municipi_anecdotari_items(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('draft','pendent','publicat','rebutjat')) DEFAULT 'draft',
+    titol TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    data_ref TEXT,
+    text TEXT NOT NULL,
+    font_url TEXT,
+    moderation_notes TEXT,
+    lock_version INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP WITHOUT TIME ZONE,
+    UNIQUE (item_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS municipi_anecdotari_comments (
+    id SERIAL PRIMARY KEY,
+    item_id INTEGER NOT NULL REFERENCES municipi_anecdotari_items(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_municipi_anecdotari_items_municipi ON municipi_anecdotari_items(municipi_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_municipi_anecdotari_versions_status ON municipi_anecdotari_versions(status, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_municipi_anecdotari_versions_item ON municipi_anecdotari_versions(item_id, version);
+CREATE INDEX IF NOT EXISTS idx_municipi_anecdotari_comments_item ON municipi_anecdotari_comments(item_id, created_at ASC);
+
+-- Demografia del municipi (rollups)
+CREATE TABLE IF NOT EXISTS municipi_demografia_any (
+    municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+    "any" INTEGER NOT NULL,
+    natalitat INTEGER NOT NULL DEFAULT 0,
+    matrimonis INTEGER NOT NULL DEFAULT 0,
+    defuncions INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (municipi_id, "any")
+);
+
+CREATE TABLE IF NOT EXISTS municipi_demografia_meta (
+    municipi_id INTEGER NOT NULL PRIMARY KEY REFERENCES municipis(id) ON DELETE CASCADE,
+    any_min INTEGER,
+    any_max INTEGER,
+    total_natalitat INTEGER NOT NULL DEFAULT 0,
+    total_matrimonis INTEGER NOT NULL DEFAULT 0,
+    total_defuncions INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS demografia_queue (
+    id SERIAL PRIMARY KEY,
+    municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+    tipus TEXT NOT NULL CHECK(tipus IN ('natalitat','matrimonis','defuncions')),
+    "any" INTEGER NOT NULL,
+    delta INTEGER NOT NULL,
+    source TEXT,
+    source_id TEXT,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    processed_at TIMESTAMP WITHOUT TIME ZONE,
+    UNIQUE (source, source_id, delta)
+);
+
+CREATE INDEX IF NOT EXISTS idx_municipi_demografia_any_municipi_any ON municipi_demografia_any(municipi_id, "any");
+CREATE INDEX IF NOT EXISTS idx_demografia_queue_pending ON demografia_queue(processed_at);
+
 CREATE TABLE IF NOT EXISTS noms_historics (
     id SERIAL PRIMARY KEY,
 
@@ -401,6 +481,8 @@ CREATE TABLE IF NOT EXISTS llibres (
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX IF NOT EXISTS idx_llibres_municipi ON llibres(municipi_id);
+
 CREATE TABLE IF NOT EXISTS llibres_indexacio_stats (
     llibre_id INTEGER NOT NULL PRIMARY KEY REFERENCES llibres(id) ON DELETE CASCADE,
     total_registres INTEGER NOT NULL DEFAULT 0,
@@ -422,9 +504,12 @@ CREATE TABLE IF NOT EXISTS arxius (
   entitat_eclesiastica_id INTEGER REFERENCES arquebisbats(id) ON DELETE SET NULL,
   adreca TEXT,
   ubicacio TEXT,
+  what3words TEXT,
   web TEXT,
   acces TEXT,
   notes TEXT,
+  accepta_donacions BOOLEAN NOT NULL DEFAULT FALSE,
+  donacions_url TEXT,
   created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
   moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
   moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
@@ -433,6 +518,16 @@ CREATE TABLE IF NOT EXISTS arxius (
   created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS arxius_donacions_clicks (
+  id SERIAL PRIMARY KEY,
+  arxiu_id INTEGER NOT NULL REFERENCES arxius(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_arxiu_donacions_clicks_arxiu ON arxius_donacions_clicks(arxiu_id);
+CREATE INDEX IF NOT EXISTS idx_arxiu_donacions_clicks_created ON arxius_donacions_clicks(created_at);
 
 CREATE TABLE IF NOT EXISTS arxius_llibres (
   arxiu_id INTEGER NOT NULL REFERENCES arxius(id) ON DELETE CASCADE,
@@ -584,6 +679,20 @@ CREATE TABLE IF NOT EXISTS cognoms (
 CREATE INDEX IF NOT EXISTS idx_cognoms_forma ON cognoms(forma);
 CREATE INDEX IF NOT EXISTS idx_cognoms_updated_at ON cognoms(updated_at);
 
+-- Noms normalitzats
+CREATE TABLE IF NOT EXISTS noms (
+  id SERIAL PRIMARY KEY,
+  forma TEXT NOT NULL,
+  key TEXT NOT NULL UNIQUE,
+  notes TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_noms_forma ON noms(forma);
+CREATE INDEX IF NOT EXISTS idx_noms_updated_at ON noms(updated_at);
+
 -- Variants de cognom (moderables)
 CREATE TABLE IF NOT EXISTS cognom_variants (
   id SERIAL PRIMARY KEY,
@@ -622,6 +731,45 @@ CREATE INDEX IF NOT EXISTS idx_cognoms_freq_cognom_any
   ON cognoms_freq_municipi_any(cognom_id, any_doc);
 CREATE INDEX IF NOT EXISTS idx_cognoms_freq_municipi_any
   ON cognoms_freq_municipi_any(municipi_id, any_doc);
+
+-- Totals per cognom/municipi
+CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_total (
+  cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
+  municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+  total_freq INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id, municipi_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cognoms_freq_municipi_total_municipi
+  ON cognoms_freq_municipi_total(municipi_id, total_freq DESC);
+
+-- Estadístiques pre-agregades per nom/municipi/any
+CREATE TABLE IF NOT EXISTS noms_freq_municipi_any (
+  nom_id INTEGER NOT NULL REFERENCES noms(id) ON DELETE CASCADE,
+  municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+  any_doc INTEGER NOT NULL,
+  freq INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (nom_id, municipi_id, any_doc)
+);
+
+CREATE INDEX IF NOT EXISTS idx_noms_freq_municipi_any_municipi_any
+  ON noms_freq_municipi_any(municipi_id, any_doc);
+CREATE INDEX IF NOT EXISTS idx_noms_freq_municipi_any_nom_any
+  ON noms_freq_municipi_any(nom_id, any_doc);
+
+-- Totals per nom/municipi
+CREATE TABLE IF NOT EXISTS noms_freq_municipi_total (
+  nom_id INTEGER NOT NULL REFERENCES noms(id) ON DELETE CASCADE,
+  municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+  total_freq INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (nom_id, municipi_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_noms_freq_municipi_total_municipi
+  ON noms_freq_municipi_total(municipi_id, total_freq DESC);
 
 CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_llibre_pagina
   ON transcripcions_raw(llibre_id, pagina_id, posicio_pagina);
@@ -753,6 +901,61 @@ CREATE TABLE IF NOT EXISTS usuaris_punts (
     ultima_actualitzacio TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Achievements
+CREATE TABLE IF NOT EXISTS achievements (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    rarity TEXT NOT NULL CHECK (rarity IN ('common','rare','epic','legendary')),
+    visibility TEXT NOT NULL CHECK (visibility IN ('visible','hidden','seasonal')),
+    domain TEXT NOT NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    is_repeatable BOOLEAN NOT NULL DEFAULT FALSE,
+    icon_media_item_id INTEGER REFERENCES media_items(id) ON DELETE SET NULL,
+    rule_json TEXT NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS achievement_events (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    start_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    end_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    scope TEXT NOT NULL DEFAULT 'global',
+    scope_id INTEGER,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS achievements_user (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    achievement_id INTEGER NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
+    awarded_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','revoked','hidden_by_user')),
+    meta_json TEXT,
+    UNIQUE (user_id, achievement_id)
+);
+
+CREATE TABLE IF NOT EXISTS achievements_showcase (
+    user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    achievement_id INTEGER NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
+    slot INTEGER NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, slot),
+    UNIQUE (user_id, achievement_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_achievements_domain_enabled ON achievements(domain, is_enabled);
+CREATE INDEX IF NOT EXISTS idx_achievements_icon ON achievements(icon_media_item_id);
+CREATE INDEX IF NOT EXISTS idx_achievements_user_user ON achievements_user(user_id, awarded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_achievements_user_achievement ON achievements_user(achievement_id);
+CREATE INDEX IF NOT EXISTS idx_achievement_events_code_window ON achievement_events(code, is_enabled, start_at, end_at);
+
 -- Índexs
 ------------------------------------------------------------------------------------------------------------------------
 
@@ -772,6 +975,10 @@ CREATE INDEX IF NOT EXISTS idx_politiques_nom ON politiques(nom);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user    ON sessions(usuari_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_revocat ON sessions(revocat);
+
+CREATE INDEX IF NOT EXISTS idx_usuaris_activitat_user_created ON usuaris_activitat(usuari_id, data_creacio);
+CREATE INDEX IF NOT EXISTS idx_usuaris_activitat_user_status_created ON usuaris_activitat(usuari_id, estat, data_creacio);
+CREATE INDEX IF NOT EXISTS idx_usuaris_activitat_user_regla_status_created ON usuaris_activitat(usuari_id, regla_id, estat, data_creacio);
 
 CREATE INDEX IF NOT EXISTS idx_access_session_ts ON session_access_log(session_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_access_ip_ts      ON session_access_log(ip, ts DESC);
@@ -820,7 +1027,7 @@ CREATE TABLE IF NOT EXISTS media_albums (
   public_id TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
   description TEXT,
-  album_type TEXT NOT NULL DEFAULT 'other' CHECK (album_type IN ('book','memorial','photo','other')),
+  album_type TEXT NOT NULL DEFAULT 'other' CHECK (album_type IN ('book','memorial','photo','achievement_icon','other')),
   owner_user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
   moderation_status TEXT NOT NULL DEFAULT 'pending' CHECK (moderation_status IN ('pending','approved','rejected')),
   visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','registered','public','restricted_group','admins_only','custom_policy')),

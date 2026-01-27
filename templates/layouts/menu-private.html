@@ -31,6 +31,7 @@
                 <li class="menu-opcio"><a href="/admin/territori/import"><i class="fas fa-file-export"></i> {{ t .Lang "admin.menu.territory_io" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/eclesiastic/import"><i class="fas fa-church"></i> {{ t .Lang "admin.menu.ecles_io" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/arxius/import"><i class="fas fa-archive"></i> {{ t .Lang "admin.menu.archives_io" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/llibres/import"><i class="fas fa-book"></i> {{ t .Lang "admin.menu.books_io" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/cognoms/import"><i class="fas fa-signature"></i> {{ t .Lang "admin.menu.surnames_import" }}</a></li>
             </ul>
         </div>
@@ -91,6 +92,7 @@
                 <li class="menu-opcio"><a href="/ranking"><i class="fas fa-trophy"></i> {{ t .Lang "points.ranking.title" }}</a></li>
                 {{ if and .Data (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/admin/punts/regles"><i class="fas fa-star"></i> {{ t .Lang "points.rules.title" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/achievements"><i class="fas fa-medal"></i> {{ t .Lang "achievements.admin.title" }}</a></li>
                 {{ end }}
             </ul>
         </div>

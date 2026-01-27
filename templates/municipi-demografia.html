@@ -1,0 +1,160 @@
+{{ define "municipi-demografia.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "municipi.demografia.title" }} · {{ .Data.Municipi.Nom }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/estils-v8.css">
+    <link rel="stylesheet" href="/static/css/municipi-demografia.css">
+</head>
+<body>
+    {{ if .UserLoggedIn }}
+        {{ template "header-private" . }}
+        {{ template "menu" . }}
+    {{ else }}
+        {{ template "header-public" . }}
+    {{ end }}
+    <main class="contingut-principal demografia-page">
+        <section class="card demografia-hero">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "municipi.demografia.title" }}</h1>
+                    <p class="muted">{{ .Data.Municipi.Nom }}</p>
+                </div>
+                <div class="demografia-actions">
+                    <a class="boto-secundari" href="/territori/municipis/{{ .Data.Municipi.ID }}">{{ t .Lang "common.back" }}</a>
+                    {{ if .Data.CanViewLlibres }}
+                        <a class="boto-primari" href="{{ .Data.LlibresURL }}">{{ t .Lang "municipi.pro.cta.catalog" }}</a>
+                    {{ end }}
+                </div>
+            </header>
+        </section>
+
+        <section class="card demografia-summary-card" data-demografia-summary data-series-url="{{ .Data.DemografiaSeriesAPI }}">
+            <header class="card-header">
+                <h2>{{ t .Lang "municipi.demografia.summary_title" }}</h2>
+            </header>
+            <div class="demografia-summary">
+                {{ if .Data.Summary.HasData }}
+                    <div class="demografia-range">
+                        <span class="demografia-range-label">{{ t .Lang "municipi.demografia.range" }}</span>
+                        <span class="demografia-range-value">
+                            {{ if and (gt .Data.Summary.AnyMin 0) (gt .Data.Summary.AnyMax 0) }}
+                                {{ if eq .Data.Summary.AnyMin .Data.Summary.AnyMax }}
+                                    {{ .Data.Summary.AnyMin }}
+                                {{ else }}
+                                    {{ .Data.Summary.AnyMin }} - {{ .Data.Summary.AnyMax }}
+                                {{ end }}
+                            {{ else }}
+                                -
+                            {{ end }}
+                        </span>
+                    </div>
+                    <div class="demografia-kpis">
+                        <div class="demografia-kpi">
+                            <span class="demografia-kpi-label">{{ t .Lang "municipi.demografia.natalitat" }}</span>
+                            <strong class="demografia-kpi-value" data-demografia-total="natalitat">{{ .Data.Summary.TotalNatalitat }}</strong>
+                        </div>
+                        <div class="demografia-kpi">
+                            <span class="demografia-kpi-label">{{ t .Lang "municipi.demografia.matrimonis" }}</span>
+                            <strong class="demografia-kpi-value" data-demografia-total="matrimonis">{{ .Data.Summary.TotalMatrimonis }}</strong>
+                        </div>
+                        <div class="demografia-kpi">
+                            <span class="demografia-kpi-label">{{ t .Lang "municipi.demografia.defuncions" }}</span>
+                            <strong class="demografia-kpi-value" data-demografia-total="defuncions">{{ .Data.Summary.TotalDefuncions }}</strong>
+                        </div>
+                    </div>
+                    <div class="demografia-footer">
+                        <div class="demografia-total">
+                            <span class="demografia-total-label">{{ t .Lang "municipi.demografia.total" }}</span>
+                            <strong class="demografia-total-value" data-demografia-total="total">{{ .Data.Summary.Total }}</strong>
+                        </div>
+                        <div class="demografia-spark" data-demografia-spark aria-hidden="true"></div>
+                    </div>
+                {{ else }}
+                    <p class="muted demografia-empty">{{ t .Lang "municipi.demografia.empty" }}</p>
+                    <div class="demografia-empty-actions">
+                        {{ if .Data.CanViewLlibres }}
+                            <a class="boto-secundari btn-mini" href="{{ .Data.LlibresURL }}">{{ t .Lang "municipi.pro.cta.catalog" }}</a>
+                        {{ end }}
+                        {{ if .Data.CanCreateLlibre }}
+                            <a class="boto-primari btn-mini" href="/documentals/llibres/new">{{ t .Lang "municipi.pro.cta.suggest" }}</a>
+                        {{ end }}
+                    </div>
+                {{ end }}
+            </div>
+        </section>
+
+        <section class="card demografia-chart-card" data-demografia-chart data-meta-url="{{ .Data.DemografiaMetaAPI }}" data-series-url="{{ .Data.DemografiaSeriesAPI }}" data-empty="{{ t .Lang "municipi.demografia.empty_chart" }}">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h2>{{ t .Lang "municipi.demografia.chart.title" }}</h2>
+                    <p class="muted">{{ t .Lang "municipi.demografia.chart.subtitle" }}</p>
+                </div>
+                {{ if .Data.CanRebuildDemografia }}
+                    <button class="boto-secundari btn-mini" type="button" data-demografia-rebuild data-rebuild-url="{{ .Data.DemografiaRebuildAPI }}">{{ t .Lang "municipi.demografia.rebuild" }}</button>
+                {{ end }}
+            </header>
+            <div class="demografia-controls">
+                <div class="demografia-control">
+                    <label for="demografiaBucket">{{ t .Lang "municipi.demografia.controls.bucket" }}</label>
+                    <select id="demografiaBucket">
+                        <option value="year">{{ t .Lang "municipi.demografia.bucket.year" }}</option>
+                        <option value="decade">{{ t .Lang "municipi.demografia.bucket.decade" }}</option>
+                    </select>
+                </div>
+                <div class="demografia-control">
+                    <label for="demografiaFrom">{{ t .Lang "municipi.demografia.controls.from" }}</label>
+                    <input id="demografiaFrom" type="number" inputmode="numeric" min="0">
+                </div>
+                <div class="demografia-control">
+                    <label for="demografiaTo">{{ t .Lang "municipi.demografia.controls.to" }}</label>
+                    <input id="demografiaTo" type="number" inputmode="numeric" min="0">
+                </div>
+                <div class="demografia-control">
+                    <button class="boto-primari" type="button" id="demografiaApply">{{ t .Lang "municipi.demografia.controls.apply" }}</button>
+                </div>
+            </div>
+            <div class="demografia-chart-wrap">
+                <div class="demografia-chart" id="demografiaChart">
+                    <svg viewBox="0 0 640 240" role="img" aria-label="{{ t .Lang "municipi.demografia.chart.title" }}"></svg>
+                    <div class="demografia-chart-empty" hidden></div>
+                </div>
+                <div class="demografia-legend">
+                    <span class="demografia-legend-item">
+                        <i class="demografia-dot natalitat"></i>{{ t .Lang "municipi.demografia.natalitat" }}
+                    </span>
+                    <span class="demografia-legend-item">
+                        <i class="demografia-dot matrimonis"></i>{{ t .Lang "municipi.demografia.matrimonis" }}
+                    </span>
+                    <span class="demografia-legend-item">
+                        <i class="demografia-dot defuncions"></i>{{ t .Lang "municipi.demografia.defuncions" }}
+                    </span>
+                </div>
+            </div>
+            <div class="demografia-table-wrap">
+                <table class="taula demografia-table">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "municipi.demografia.table.year" }}</th>
+                            <th>{{ t .Lang "municipi.demografia.natalitat" }}</th>
+                            <th>{{ t .Lang "municipi.demografia.matrimonis" }}</th>
+                            <th>{{ t .Lang "municipi.demografia.defuncions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody id="demografiaTableBody"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ if .UserLoggedIn }}
+        {{ template "scripts-private" . }}
+    {{ else }}
+        {{ template "scripts-public" . }}
+    {{ end }}
+    <script src="/static/js/municipi-demografia.js"></script>
+</body>
+</html>
+{{ end }}

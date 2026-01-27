@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/core"
 	"github.com/marcmoiagese/CercaGenealogica/db"
@@ -291,6 +292,7 @@ func (f *fakeDB) UserHasAnyPolicy(userID int, policies []string) (bool, error) {
 }
 func (f *fakeDB) EnsureDefaultPolicies() error    { return nil }
 func (f *fakeDB) EnsureDefaultPointsRules() error { return nil }
+func (f *fakeDB) EnsureDefaultAchievements() error { return nil }
 func (f *fakeDB) ListArxius(filter db.ArxiuFilter) ([]db.ArxiuWithCount, error) {
 	return nil, nil
 }
@@ -299,6 +301,12 @@ func (f *fakeDB) GetArxiu(id int) (*db.Arxiu, error)             { return nil, n
 func (f *fakeDB) CreateArxiu(a *db.Arxiu) (int, error)           { return 0, nil }
 func (f *fakeDB) UpdateArxiu(a *db.Arxiu) error                  { return nil }
 func (f *fakeDB) DeleteArxiu(id int) error                       { return nil }
+func (f *fakeDB) InsertArxiuDonacioClick(arxiuID int, userID *int) error {
+	return nil
+}
+func (f *fakeDB) CountArxiuDonacioClicks(arxiuID int) (int, error) {
+	return 0, nil
+}
 func (f *fakeDB) ListArxiuLlibres(arxiuID int) ([]db.ArxiuLlibreDetail, error) {
 	return nil, nil
 }
@@ -409,6 +417,7 @@ func (f *fakeDB) GetPointsRuleByCode(code string) (*db.PointsRule, error) {
 	return nil, fmt.Errorf("not found")
 }
 func (f *fakeDB) SavePointsRule(r *db.PointsRule) (int, error)       { return 0, nil }
+func (f *fakeDB) ListUserIDs(limit, offset int) ([]int, error)       { return nil, nil }
 func (f *fakeDB) InsertUserActivity(a *db.UserActivity) (int, error) { return 0, nil }
 func (f *fakeDB) GetUserActivity(id int) (*db.UserActivity, error) {
 	return nil, fmt.Errorf("not found")
@@ -430,6 +439,45 @@ func (f *fakeDB) RecalcUserPoints() error                              { return 
 func (f *fakeDB) GetRanking(db.RankingFilter) ([]db.UserPoints, error) { return nil, nil }
 func (f *fakeDB) CountRanking(db.RankingFilter) (int, error)           { return 0, nil }
 func (f *fakeDB) ListUserGroups(userID int) ([]db.Group, error)        { return nil, nil }
+func (f *fakeDB) ListAchievements() ([]db.Achievement, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListEnabledAchievements() ([]db.Achievement, error) {
+	return nil, nil
+}
+func (f *fakeDB) GetAchievement(id int) (*db.Achievement, error) {
+	return nil, fmt.Errorf("not found")
+}
+func (f *fakeDB) GetAchievementByCode(code string) (*db.Achievement, error) {
+	return nil, fmt.Errorf("not found")
+}
+func (f *fakeDB) SaveAchievement(a *db.Achievement) (int, error) { return 0, nil }
+func (f *fakeDB) AwardAchievement(userID, achievementID int, status, metaJSON string) (bool, error) {
+	return false, nil
+}
+func (f *fakeDB) ListUserAchievements(userID int) ([]db.AchievementUserView, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListUserShowcase(userID int) ([]db.AchievementShowcaseView, error) {
+	return nil, nil
+}
+func (f *fakeDB) SetUserShowcaseSlot(userID, achievementID, slot int) error { return nil }
+func (f *fakeDB) ClearUserShowcaseSlot(userID, slot int) error              { return nil }
+func (f *fakeDB) IsAchievementEventActive(code string, at time.Time) (bool, error) {
+	return false, nil
+}
+func (f *fakeDB) CountUserActivities(filt db.AchievementActivityFilter) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) CountUserActivitiesDistinctObject(filt db.AchievementActivityFilter) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) SumUserActivityPoints(filt db.AchievementActivityFilter) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) ListUserActivityDays(filt db.AchievementActivityFilter) ([]time.Time, error) {
+	return nil, nil
+}
 func (f *fakeDB) ListPersones(filter db.PersonaFilter) ([]db.Persona, error) {
 	return nil, nil
 }
@@ -644,6 +692,12 @@ func (f *fakeDB) ListMediaAlbumsByStatus(status string) ([]db.MediaAlbum, error)
 	return nil, nil
 }
 func (f *fakeDB) ListMediaItemsByStatus(status string) ([]db.MediaItem, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListMediaItemsByAlbumType(albumType, status string) ([]db.MediaItem, error) {
+	return nil, nil
+}
+func (f *fakeDB) GetMediaItemByID(id int) (*db.MediaItem, error) {
 	return nil, nil
 }
 func (f *fakeDB) UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {

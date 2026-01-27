@@ -6,6 +6,7 @@
     <title>{{ t .Lang "nav.profile" }} - {{ t .Lang "app.title" }}</title>
     {{ template "styles-private" . }}
     <link rel="stylesheet" href="/static/css/perfil-ajustos.css">
+    <link rel="stylesheet" href="/static/css/perfil-achievements.css">
 </head>
 <body>
     {{ template "header-private" . }}
@@ -35,6 +36,10 @@
                     <button class="tab-boto {{ if eq $tab "activitat" }}actiu{{ end }}" data-tab="activitat" role="tab" aria-selected="{{ if eq $tab "activitat" }}true{{ else }}false{{ end }}" aria-controls="tab-activitat">
                         <i class="fas fa-trophy"></i>
                         <span>{{ t .Lang "points.menu" }}</span>
+                    </button>
+                    <button class="tab-boto {{ if eq $tab "achievements" }}actiu{{ end }}" data-tab="achievements" role="tab" aria-selected="{{ if eq $tab "achievements" }}true{{ else }}false{{ end }}" aria-controls="tab-achievements">
+                        <i class="fas fa-medal"></i>
+                        <span>{{ t .Lang "profile.tab.achievements" }}</span>
                     </button>
                     <button class="tab-boto {{ if eq $tab "contrasenya" }}actiu{{ end }}" data-tab="contrasenya" role="tab" aria-selected="{{ if eq $tab "contrasenya" }}true{{ else }}false{{ end }}" aria-controls="tab-contrasenya">
                         <i class="fas fa-lock"></i>
@@ -439,8 +444,29 @@
                                     <strong>{{ t .Lang "profile.stats.summary" }}</strong> {{ .Data.HeatmapTotal }}
                                 </p>
                             </section>
-                            </form>
-                        </section>
+                        </form>
+                    </section>
+
+                    <section id="tab-achievements" class="tab-pane {{ if eq $tab "achievements" }}actiu{{ end }}" role="tabpanel" aria-labelledby="tab-achievements">
+                        <div class="achievements-panel" data-csrf="{{ .Data.CSRFToken }}" data-empty-option="{{ t .Lang "achievements.icon.none" }}" data-select-label="{{ t .Lang "common.select" }}" data-error-label="{{ t .Lang "common.error" }}">
+                            <header class="achievements-header">
+                                <h2>{{ t .Lang "achievements.admin.title" }}</h2>
+                                <p>{{ t .Lang "achievements.showcase.subtitle" }}</p>
+                            </header>
+                            <div class="achievements-section">
+                                <h3>{{ t .Lang "achievements.showcase.title" }}</h3>
+                                <div id="achievements-showcase" class="achievements-showcase" data-slot-count="6"></div>
+                                <p id="achievements-showcase-empty" class="achievements-empty">{{ t .Lang "achievements.showcase.empty" }}</p>
+                            </div>
+                            <div class="achievements-section">
+                                <h3>{{ t .Lang "achievements.gallery.title" }}</h3>
+                                <div id="achievements-gallery" class="achievements-gallery"></div>
+                                <p id="achievements-gallery-empty" class="achievements-empty">{{ t .Lang "achievements.gallery.empty" }}</p>
+                            </div>
+                            <p id="achievements-loading" class="achievements-loading">{{ t .Lang "achievements.loading" }}</p>
+                            <p id="achievements-error" class="achievements-error" role="alert"></p>
+                        </div>
+                    </section>
 
                         <!-- Pestanya: Contrasenya -->
                         <section id="tab-activitat" class="tab-pane {{ if eq $tab "activitat" }}actiu{{ end }}" role="tabpanel" aria-labelledby="tab-activitat">
@@ -688,6 +714,7 @@
 
     {{ template "scripts-private" . }}
     <script src="/static/js/perfil-ajustos.js"></script>
+    <script src="/static/js/perfil-achievements.js"></script>
 </body>
 </html>
 {{ end }}

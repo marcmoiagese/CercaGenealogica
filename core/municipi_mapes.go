@@ -92,6 +92,19 @@ func (a *App) MunicipiMapesAPI(w http.ResponseWriter, r *http.Request) {
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
+	case "anecdotes":
+		if len(parts) != 2 {
+			http.NotFound(w, r)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			a.municipiAnecdotesListJSON(w, r, munID)
+		case http.MethodPost:
+			a.municipiAnecdoteCreateJSON(w, r, munID)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
 	case "persones":
 		if len(parts) != 3 || parts[2] != "cerca" {
 			http.NotFound(w, r)
@@ -102,6 +115,48 @@ func (a *App) MunicipiMapesAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.municipiPersonesSearch(w, r, munID)
+	case "demografia":
+		if len(parts) != 3 {
+			http.NotFound(w, r)
+			return
+		}
+		switch parts[2] {
+		case "meta":
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			a.municipiDemografiaMetaJSON(w, r, munID)
+		case "series":
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			a.municipiDemografiaSeriesJSON(w, r, munID)
+		default:
+			http.NotFound(w, r)
+		}
+	case "stats":
+		if len(parts) != 3 {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		switch parts[2] {
+		case "top-noms":
+			a.municipiStatsTopNoms(w, r, munID)
+		case "nom-series":
+			a.municipiStatsNomSeries(w, r, munID)
+		case "top-cognoms":
+			a.municipiStatsTopCognoms(w, r, munID)
+		case "cognom-series":
+			a.municipiStatsCognomSeries(w, r, munID)
+		default:
+			http.NotFound(w, r)
+		}
 	default:
 		http.NotFound(w, r)
 	}

@@ -53,6 +53,7 @@ func main() {
 	}
 	_ = dbInstance.EnsureDefaultPolicies()
 	_ = dbInstance.EnsureDefaultPointsRules()
+	_ = dbInstance.EnsureDefaultAchievements()
 	app := core.NewApp(configMap, dbInstance)
 	if err := app.EnsurePolicyGrants(); err != nil {
 		log.Printf("[permissions] error assegurant grants per polítiques: %v", err)
@@ -160,6 +161,8 @@ func main() {
 	http.HandleFunc("/perfil/credits/convert", applyMiddleware(app.RequireLogin(app.ConvertPointsToCredits), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/perfil/email-confirm", applyMiddleware(app.ConfirmarCanviEmail, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/perfil/email-revert", applyMiddleware(app.RevertirCanviEmail, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/perfil/achievements", applyMiddleware(app.RequireLogin(app.PerfilAchievementsAPI), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/perfil/achievements/", applyMiddleware(app.RequireLogin(app.PerfilAchievementsAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/ranking", applyMiddleware(app.Ranking, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/u/", applyMiddleware(app.PublicUserProfile, core.BlockIPs, core.RateLimit))
 
@@ -189,9 +192,13 @@ func main() {
 	})
 	http.HandleFunc("/api/cognoms/", applyMiddleware(app.RequireLogin(app.CognomHeatmapJSON), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/territori/municipis/suggest", applyMiddleware(app.RequireLogin(app.AdminMunicipisSuggest), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/territori/eclesiastic/suggest", applyMiddleware(app.RequireLogin(app.AdminEclesSuggest), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/territori/municipis/", applyMiddleware(app.MunicipiMapesAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/municipis/", applyMiddleware(app.MunicipiMapesAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/admin/municipis/", applyMiddleware(app.MunicipiDemografiaAdminAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/mapes/", applyMiddleware(app.MapesAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/anecdotes/", applyMiddleware(app.AnecdotesAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/anecdote_versions/", applyMiddleware(app.AnecdoteVersionsAPI, core.BlockIPs, core.RateLimit))
 
 	// Arxius (lectura per a tots els usuaris autenticats)
 	http.HandleFunc("/arxius", applyMiddleware(app.ListArxius, core.BlockIPs, core.RateLimit))
@@ -305,6 +312,8 @@ func main() {
 			applyMiddleware(app.MunicipiHistoriaPublic, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/historia/aportar"):
 			applyMiddleware(app.MunicipiHistoriaAportar, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/demografia"):
+			applyMiddleware(app.MunicipiDemografiaPage, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/historia/general/save"):
 			applyMiddleware(app.MunicipiHistoriaGeneralSave, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/historia/general/submit"):
@@ -330,8 +339,27 @@ func main() {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/delete"):
 			applyMiddleware(app.AdminDeleteMunicipi, core.BlockIPs, core.RateLimit)(w, r)
 		default:
+			parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+			if len(parts) >= 4 && parts[3] == "anecdotes" {
+				switch {
+				case len(parts) == 4 && r.Method == http.MethodGet:
+					applyMiddleware(app.MunicipiAnecdotesListPage, core.BlockIPs, core.RateLimit)(w, r)
+					return
+				case len(parts) == 5 && parts[4] == "new":
+					applyMiddleware(app.RequireLogin(app.MunicipiAnecdoteNewPage), core.BlockIPs, core.RateLimit)(w, r)
+					return
+				case len(parts) == 5 && r.Method == http.MethodGet:
+					applyMiddleware(app.MunicipiAnecdoteDetailPage, core.BlockIPs, core.RateLimit)(w, r)
+					return
+				case len(parts) == 5 && r.Method == http.MethodPost:
+					applyMiddleware(app.RequireLogin(app.MunicipiAnecdoteDetailPage), core.BlockIPs, core.RateLimit)(w, r)
+					return
+				case len(parts) == 6 && parts[5] == "edit":
+					applyMiddleware(app.RequireLogin(app.MunicipiAnecdoteEditPage), core.BlockIPs, core.RateLimit)(w, r)
+					return
+				}
+			}
 			if r.Method == http.MethodGet {
-				parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 				if len(parts) >= 4 && parts[3] == "mapes" {
 					switch {
 					case len(parts) == 4:
@@ -427,6 +455,18 @@ func main() {
 		}
 		http.NotFound(w, r)
 	})
+	// Achievements
+	http.HandleFunc("/admin/achievements", applyMiddleware(app.AdminListAchievements, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/achievements/new", applyMiddleware(app.AdminNewAchievement, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/achievements/save", applyMiddleware(app.AdminSaveAchievement, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/achievements/recompute", applyMiddleware(app.AdminRecomputeAchievements, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/achievements/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/edit") {
+			applyMiddleware(app.AdminEditAchievement, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
 	// Cognoms import/statistics
 	http.HandleFunc("/admin/cognoms/import", applyMiddleware(app.AdminCognomsImport, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/cognoms/import/run", applyMiddleware(app.AdminCognomsImportRun, core.BlockIPs, core.RateLimit))
@@ -443,6 +483,10 @@ func main() {
 	http.HandleFunc("/admin/arxius/import", applyMiddleware(app.AdminArxiusImport, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/arxius/import/run", applyMiddleware(app.AdminArxiusImportRun, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/arxius/export", applyMiddleware(app.AdminArxiusExport, core.BlockIPs, core.RateLimit))
+	// Llibres import/export (JSON)
+	http.HandleFunc("/admin/llibres/import", applyMiddleware(app.AdminLlibresImport, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/llibres/import/run", applyMiddleware(app.AdminLlibresImportRun, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/llibres/export", applyMiddleware(app.AdminLlibresExport, core.BlockIPs, core.RateLimit))
 
 	// Moderació
 	http.HandleFunc("/moderacio", applyMiddleware(app.AdminModeracioList, core.BlockIPs, core.RateLimit))
@@ -501,6 +545,8 @@ func main() {
 	http.HandleFunc("/documentals/arxius/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
+		case strings.HasSuffix(path, "/donacions"):
+			applyMiddleware(app.ArxiuDonacionsRedirect, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(path, "/edit"):
 			applyMiddleware(app.AdminEditArxiu, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(path, "/delete"):

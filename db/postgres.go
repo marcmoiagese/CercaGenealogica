@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"time"
 
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -222,6 +223,9 @@ func (d *PostgreSQL) EnsureDefaultPolicies() error {
 func (d *PostgreSQL) EnsureDefaultPointsRules() error {
 	return d.help.ensureDefaultPointsRules()
 }
+func (d *PostgreSQL) EnsureDefaultAchievements() error {
+	return d.help.ensureDefaultAchievements()
+}
 func (d *PostgreSQL) ListGroups() ([]Group, error) {
 	return d.help.listGroups()
 }
@@ -423,6 +427,12 @@ func (d *PostgreSQL) UpdateArxiuModeracio(id int, estat, motiu string, moderator
 func (d *PostgreSQL) DeleteArxiu(id int) error {
 	return d.help.deleteArxiu(id)
 }
+func (d *PostgreSQL) InsertArxiuDonacioClick(arxiuID int, userID *int) error {
+	return d.help.insertArxiuDonacioClick(arxiuID, userID)
+}
+func (d *PostgreSQL) CountArxiuDonacioClicks(arxiuID int) (int, error) {
+	return d.help.countArxiuDonacioClicks(arxiuID)
+}
 func (d *PostgreSQL) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
 	return d.help.listArxiuLlibres(arxiuID)
 }
@@ -510,6 +520,12 @@ func (d *PostgreSQL) CreateMediaAlbum(a *MediaAlbum) (int, error) {
 func (d *PostgreSQL) ListMediaItemsByAlbum(albumID int) ([]MediaItem, error) {
 	return d.help.listMediaItemsByAlbum(albumID)
 }
+func (d *PostgreSQL) ListMediaItemsByAlbumType(albumType, status string) ([]MediaItem, error) {
+	return d.help.listMediaItemsByAlbumType(albumType, status)
+}
+func (d *PostgreSQL) GetMediaItemByID(id int) (*MediaItem, error) {
+	return d.help.getMediaItemByID(id)
+}
 func (d *PostgreSQL) GetMediaItemByPublicID(publicID string) (*MediaItem, error) {
 	return d.help.getMediaItemByPublicID(publicID)
 }
@@ -588,6 +604,9 @@ func (d *PostgreSQL) UpdateTranscripcioRaw(t *TranscripcioRaw) error {
 }
 func (d *PostgreSQL) UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateTranscripcioModeracio(id, estat, motiu, moderatorID)
+}
+func (d *PostgreSQL) UpdateTranscripcioModeracioWithDemografia(id int, estat, motiu string, moderatorID int, municipiID, year int, tipus string, delta int) error {
+	return d.help.updateTranscripcioModeracioWithDemografia(id, estat, motiu, moderatorID, municipiID, year, tipus, delta)
 }
 func (d *PostgreSQL) DeleteTranscripcioRaw(id int) error {
 	return d.help.deleteTranscripcioRaw(id)
@@ -681,6 +700,9 @@ func (d *PostgreSQL) GetPointsRuleByCode(code string) (*PointsRule, error) {
 	return d.help.getPointsRuleByCode(code)
 }
 func (d *PostgreSQL) SavePointsRule(r *PointsRule) (int, error) { return d.help.savePointsRule(r) }
+func (d *PostgreSQL) ListUserIDs(limit, offset int) ([]int, error) {
+	return d.help.listUserIDs(limit, offset)
+}
 func (d *PostgreSQL) GetUserActivity(id int) (*UserActivity, error) {
 	return d.help.getUserActivity(id)
 }
@@ -710,6 +732,51 @@ func (d *PostgreSQL) CountRanking(f RankingFilter) (int, error) {
 	return d.help.countRanking(f)
 }
 
+// Achievements
+func (d *PostgreSQL) ListAchievements() ([]Achievement, error) {
+	return d.help.listAchievements()
+}
+func (d *PostgreSQL) ListEnabledAchievements() ([]Achievement, error) {
+	return d.help.listEnabledAchievements()
+}
+func (d *PostgreSQL) GetAchievement(id int) (*Achievement, error) { return d.help.getAchievement(id) }
+func (d *PostgreSQL) GetAchievementByCode(code string) (*Achievement, error) {
+	return d.help.getAchievementByCode(code)
+}
+func (d *PostgreSQL) SaveAchievement(a *Achievement) (int, error) {
+	return d.help.saveAchievement(a)
+}
+func (d *PostgreSQL) AwardAchievement(userID, achievementID int, status, metaJSON string) (bool, error) {
+	return d.help.awardAchievement(userID, achievementID, status, metaJSON)
+}
+func (d *PostgreSQL) ListUserAchievements(userID int) ([]AchievementUserView, error) {
+	return d.help.listUserAchievements(userID)
+}
+func (d *PostgreSQL) ListUserShowcase(userID int) ([]AchievementShowcaseView, error) {
+	return d.help.listUserShowcase(userID)
+}
+func (d *PostgreSQL) SetUserShowcaseSlot(userID, achievementID, slot int) error {
+	return d.help.setUserShowcaseSlot(userID, achievementID, slot)
+}
+func (d *PostgreSQL) ClearUserShowcaseSlot(userID, slot int) error {
+	return d.help.clearUserShowcaseSlot(userID, slot)
+}
+func (d *PostgreSQL) IsAchievementEventActive(code string, at time.Time) (bool, error) {
+	return d.help.isAchievementEventActive(code, at)
+}
+func (d *PostgreSQL) CountUserActivities(f AchievementActivityFilter) (int, error) {
+	return d.help.countUserActivities(f)
+}
+func (d *PostgreSQL) CountUserActivitiesDistinctObject(f AchievementActivityFilter) (int, error) {
+	return d.help.countUserActivitiesDistinctObject(f)
+}
+func (d *PostgreSQL) SumUserActivityPoints(f AchievementActivityFilter) (int, error) {
+	return d.help.sumUserActivityPoints(f)
+}
+func (d *PostgreSQL) ListUserActivityDays(f AchievementActivityFilter) ([]time.Time, error) {
+	return d.help.listUserActivityDays(f)
+}
+
 // Cognoms
 func (d *PostgreSQL) ListCognoms(q string, limit, offset int) ([]Cognom, error) {
 	return d.help.listCognoms(q, limit, offset)
@@ -736,6 +803,9 @@ func (d *PostgreSQL) UpdateCognomVariantModeracio(id int, estat, motiu string, m
 func (d *PostgreSQL) UpsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error {
 	return d.help.upsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq)
 }
+func (d *PostgreSQL) ApplyCognomFreqMunicipiAnyDelta(cognomID, municipiID, anyDoc, delta int) error {
+	return d.help.applyCognomFreqMunicipiAnyDelta(cognomID, municipiID, anyDoc, delta)
+}
 func (d *PostgreSQL) QueryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]CognomFreqRow, error) {
 	return d.help.queryCognomHeatmap(cognomID, anyStart, anyEnd)
 }
@@ -746,6 +816,45 @@ func (d *PostgreSQL) ListCognomImportRows(limit, offset int) ([]CognomImportRow,
 
 func (d *PostgreSQL) ListCognomStatsRows(limit, offset int) ([]CognomStatsRow, error) {
 	return d.help.listCognomStatsRows(limit, offset)
+}
+
+// Noms
+func (d *PostgreSQL) UpsertNom(forma, key, notes string, createdBy *int) (int, error) {
+	return d.help.upsertNom(forma, key, notes, createdBy)
+}
+func (d *PostgreSQL) GetNom(id int) (*Nom, error) { return d.help.getNom(id) }
+func (d *PostgreSQL) ResolveNomByForma(forma string) (int, string, bool, error) {
+	return d.help.resolveNomByForma(forma)
+}
+func (d *PostgreSQL) UpsertNomFreqMunicipiAny(nomID, municipiID, anyDoc, delta int) error {
+	return d.help.upsertNomFreqMunicipiAny(nomID, municipiID, anyDoc, delta)
+}
+func (d *PostgreSQL) UpsertNomFreqMunicipiTotal(nomID, municipiID, delta int) error {
+	return d.help.upsertNomFreqMunicipiTotal(nomID, municipiID, delta)
+}
+func (d *PostgreSQL) UpsertCognomFreqMunicipiTotal(cognomID, municipiID, delta int) error {
+	return d.help.upsertCognomFreqMunicipiTotal(cognomID, municipiID, delta)
+}
+func (d *PostgreSQL) ListTopNomsByMunicipi(municipiID, limit int) ([]NomTotalRow, error) {
+	return d.help.listTopNomsByMunicipi(municipiID, limit)
+}
+func (d *PostgreSQL) ListTopCognomsByMunicipi(municipiID, limit int) ([]CognomTotalRow, error) {
+	return d.help.listTopCognomsByMunicipi(municipiID, limit)
+}
+func (d *PostgreSQL) ListNomSeries(municipiID, nomID int, bucket string) ([]NomFreqRow, error) {
+	return d.help.listNomSeries(municipiID, nomID, bucket)
+}
+func (d *PostgreSQL) ListCognomSeries(municipiID, cognomID int, bucket string) ([]CognomFreqRow, error) {
+	return d.help.listCognomSeries(municipiID, cognomID, bucket)
+}
+func (d *PostgreSQL) CountNomTotalsByMunicipi(municipiID int) (int, error) {
+	return d.help.countNomTotalsByMunicipi(municipiID)
+}
+func (d *PostgreSQL) CountCognomTotalsByMunicipi(municipiID int) (int, error) {
+	return d.help.countCognomTotalsByMunicipi(municipiID)
+}
+func (d *PostgreSQL) ClearNomCognomStatsByMunicipi(municipiID int) error {
+	return d.help.clearNomCognomStatsByMunicipi(municipiID)
 }
 
 func (d *PostgreSQL) ListMunicipiMapes(filter MunicipiMapaFilter) ([]MunicipiMapa, error) {
@@ -847,4 +956,72 @@ func (d *PostgreSQL) ListPendingMunicipiHistoriaGeneralVersions(limit, offset in
 }
 func (d *PostgreSQL) ListPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error) {
 	return d.help.listPendingMunicipiHistoriaFetVersions(limit, offset)
+}
+
+func (d *PostgreSQL) GetMunicipiDemografiaMeta(municipiID int) (*MunicipiDemografiaMeta, error) {
+	return d.help.getMunicipiDemografiaMeta(municipiID)
+}
+func (d *PostgreSQL) ListMunicipiDemografiaAny(municipiID int, from, to int) ([]MunicipiDemografiaAny, error) {
+	return d.help.listMunicipiDemografiaAny(municipiID, from, to)
+}
+func (d *PostgreSQL) ListMunicipiDemografiaDecades(municipiID int, from, to int) ([]MunicipiDemografiaAny, error) {
+	return d.help.listMunicipiDemografiaDecades(municipiID, from, to)
+}
+func (d *PostgreSQL) ApplyMunicipiDemografiaDelta(municipiID, year int, tipus string, delta int) error {
+	return d.help.applyMunicipiDemografiaDelta(municipiID, year, tipus, delta)
+}
+func (d *PostgreSQL) ApplyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year int, tipus string, delta int) error {
+	return d.help.applyMunicipiDemografiaDeltaTx(tx, municipiID, year, tipus, delta)
+}
+func (d *PostgreSQL) RebuildMunicipiDemografia(municipiID int) error {
+	return d.help.rebuildMunicipiDemografia(municipiID)
+}
+
+func (d *PostgreSQL) ListMunicipiAnecdotariPublished(municipiID int, f MunicipiAnecdotariFilter) ([]MunicipiAnecdotariVersion, int, error) {
+	return d.help.listMunicipiAnecdotariPublished(municipiID, f)
+}
+func (d *PostgreSQL) GetMunicipiAnecdotariPublished(itemID int) (*MunicipiAnecdotariVersion, error) {
+	return d.help.getMunicipiAnecdotariPublished(itemID)
+}
+func (d *PostgreSQL) ListMunicipiAnecdotariComments(itemID int, limit, offset int) ([]MunicipiAnecdotariComment, int, error) {
+	return d.help.listMunicipiAnecdotariComments(itemID, limit, offset)
+}
+func (d *PostgreSQL) CreateMunicipiAnecdotariItem(municipiID int, createdBy int) (int, error) {
+	return d.help.createMunicipiAnecdotariItem(municipiID, createdBy)
+}
+func (d *PostgreSQL) CreateMunicipiAnecdotariDraft(itemID int, createdBy int, baseFromCurrent bool) (int, error) {
+	return d.help.createMunicipiAnecdotariDraft(itemID, createdBy, baseFromCurrent)
+}
+func (d *PostgreSQL) GetMunicipiAnecdotariVersion(id int) (*MunicipiAnecdotariVersion, error) {
+	return d.help.getMunicipiAnecdotariVersion(id)
+}
+func (d *PostgreSQL) GetPendingMunicipiAnecdotariVersionByItemID(itemID int) (*MunicipiAnecdotariVersion, error) {
+	return d.help.getPendingMunicipiAnecdotariVersionByItemID(itemID)
+}
+func (d *PostgreSQL) UpdateMunicipiAnecdotariDraft(v *MunicipiAnecdotariVersion) error {
+	return d.help.updateMunicipiAnecdotariDraft(v)
+}
+func (d *PostgreSQL) SubmitMunicipiAnecdotariVersion(versionID int) error {
+	return d.help.submitMunicipiAnecdotariVersion(versionID)
+}
+func (d *PostgreSQL) ListPendingMunicipiAnecdotariVersions(limit, offset int) ([]MunicipiAnecdotariVersion, int, error) {
+	return d.help.listPendingMunicipiAnecdotariVersions(limit, offset)
+}
+func (d *PostgreSQL) ApproveMunicipiAnecdotariVersion(versionID int, moderatorID int) error {
+	return d.help.approveMunicipiAnecdotariVersion(versionID, moderatorID)
+}
+func (d *PostgreSQL) RejectMunicipiAnecdotariVersion(versionID int, moderatorID int, notes string) error {
+	return d.help.rejectMunicipiAnecdotariVersion(versionID, moderatorID, notes)
+}
+func (d *PostgreSQL) CreateMunicipiAnecdotariComment(itemID int, userID int, body string) (int, error) {
+	return d.help.createMunicipiAnecdotariComment(itemID, userID, body)
+}
+func (d *PostgreSQL) GetMunicipiAnecdotariLastCommentAt(userID int) (time.Time, error) {
+	return d.help.getMunicipiAnecdotariLastCommentAt(userID)
+}
+func (d *PostgreSQL) ResolveMunicipiIDByAnecdotariItemID(itemID int) (int, error) {
+	return d.help.resolveMunicipiIDByAnecdotariItemID(itemID)
+}
+func (d *PostgreSQL) ResolveMunicipiIDByAnecdotariVersionID(versionID int) (int, error) {
+	return d.help.resolveMunicipiIDByAnecdotariVersionID(versionID)
 }

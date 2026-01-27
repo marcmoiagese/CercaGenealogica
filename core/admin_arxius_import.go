@@ -24,8 +24,11 @@ type arxiuExportRecord struct {
 	Acces            string `json:"acces"`
 	Adreca           string `json:"adreca"`
 	Ubicacio         string `json:"ubicacio"`
+	What3Words       string `json:"what3words,omitempty"`
 	Web              string `json:"web"`
 	Notes            string `json:"notes"`
+	AcceptaDonacions bool   `json:"accepta_donacions,omitempty"`
+	DonacionsURL     string `json:"donacions_url,omitempty"`
 	MunicipiNom      string `json:"municipi_nom,omitempty"`
 	MunicipiPaisISO2 string `json:"municipi_pais_iso2,omitempty"`
 	EntitatNom       string `json:"entitat_nom,omitempty"`
@@ -62,7 +65,7 @@ func (a *App) AdminArxiusExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payload := arxiusExportPayload{
-		Version:    1,
+		Version:    3,
 		ExportedAt: time.Now().Format(time.RFC3339),
 	}
 	for _, row := range arxius {
@@ -79,8 +82,11 @@ func (a *App) AdminArxiusExport(w http.ResponseWriter, r *http.Request) {
 			Acces:            row.Acces,
 			Adreca:           row.Adreca,
 			Ubicacio:         row.Ubicacio,
+			What3Words:       row.What3Words,
 			Web:              row.Web,
 			Notes:            row.Notes,
+			AcceptaDonacions: row.AcceptaDonacions,
+			DonacionsURL:     row.DonacionsURL,
 			MunicipiNom:      row.MunicipiNom.String,
 			MunicipiPaisISO2: iso2,
 			EntitatNom:       row.EntitatNom.String,
@@ -139,11 +145,29 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	munMap := a.municipiNameMap()
+	munNameMap := map[string]int{}
+	if rows, err := a.DB.ListMunicipis(db.MunicipiFilter{}); err == nil {
+		for _, row := range rows {
+			nameKey := normalizeKey(row.Nom)
+			if nameKey != "" {
+				munNameMap[nameKey] = row.ID
+			}
+		}
+	}
 	for _, row := range payload.Arxius {
+		hasMunicipi := strings.TrimSpace(row.MunicipiNom) != ""
 		munID := 0
-		if row.MunicipiNom != "" {
+		if hasMunicipi {
 			key := normalizeKey(row.MunicipiNom, strings.ToUpper(row.MunicipiPaisISO2))
 			munID = munMap[key]
+			if munID == 0 {
+				munID = munNameMap[normalizeKey(row.MunicipiNom)]
+			}
+			if munID == 0 {
+				errors++
+				Errorf("Arxius import: municipi no trobat (%s, %s) per arxiu %s", row.MunicipiNom, row.MunicipiPaisISO2, row.Nom)
+				continue
+			}
 		}
 		entID := 0
 		if row.EntitatNom != "" {
@@ -151,10 +175,6 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 			if entID == 0 {
 				entID = entMap[normalizeKey(row.EntitatNom, row.Tipus)]
 			}
-		}
-		if munID == 0 {
-			errors++
-			continue
 		}
 		filter := db.ArxiuFilter{Text: row.Nom, MunicipiID: munID}
 		exists, _ := a.DB.ListArxius(filter)
@@ -168,8 +188,11 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 			Acces:          row.Acces,
 			Adreca:         row.Adreca,
 			Ubicacio:       row.Ubicacio,
+			What3Words:     row.What3Words,
 			Web:            row.Web,
 			Notes:          row.Notes,
+			AcceptaDonacions: row.AcceptaDonacions && strings.TrimSpace(row.DonacionsURL) != "",
+			DonacionsURL:     strings.TrimSpace(row.DonacionsURL),
 			CreatedBy:      sqlNullIntFromInt(user.ID),
 			ModeracioEstat: "pendent",
 			ModeratedBy:    sql.NullInt64{},
@@ -185,6 +208,7 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 		newID, err := a.DB.CreateArxiu(arxiu)
 		if err != nil {
 			errors++
+			Errorf("Arxius import: error creant arxiu %s: %v", row.Nom, err)
 			continue
 		}
 		created++

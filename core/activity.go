@@ -30,6 +30,14 @@ const (
 	ruleMunicipiMapaReject  = "municipi_mapa_reject"
 	ruleMunicipiHistoriaGeneralSubmit = "municipi_historia_general_submit"
 	ruleMunicipiHistoriaFetSubmit     = "municipi_historia_fet_submit"
+	ruleMunicipiAnecdotaPublicada      = "municipi_anecdota_publicada"
+)
+
+const (
+	antiAbuseBurstWindow   = 5 * time.Minute
+	antiAbuseBurstThreshold = 30
+	antiAbuseRejectWindow  = 24 * time.Hour
+	antiAbuseRejectThreshold = 10
 )
 
 // RegisterUserActivity crea una entrada d'activitat i, si està validada, suma punts.
@@ -76,7 +84,19 @@ func (a *App) RegisterUserActivity(ctx context.Context, userID int, ruleCode, ac
 			return id, err
 		}
 	}
-	_ = ctx
+	trigger := AchievementTrigger{
+		ActivityID: id,
+		RuleCode:   ruleCode,
+		Action:     action,
+		ObjectType: objectType,
+		Status:     act.Status,
+		CreatedAt:  act.CreatedAt,
+	}
+	if objectID != nil {
+		trigger.ObjectID = *objectID
+	}
+	a.EvaluateAchievementsForUser(ctx, userID, trigger)
+	a.logAntiAbuseSignals(userID, act.CreatedAt)
 	return id, nil
 }
 
@@ -97,10 +117,66 @@ func (a *App) ValidateActivity(activityID int, moderatorID int) error {
 			return err
 		}
 	}
+	ruleCode := ""
+	if act.RuleID.Valid {
+		if rule, err := a.DB.GetPointsRule(int(act.RuleID.Int64)); err == nil && rule != nil {
+			ruleCode = rule.Code
+		}
+	}
+	objID := 0
+	if act.ObjectID.Valid {
+		objID = int(act.ObjectID.Int64)
+	}
+	trigger := AchievementTrigger{
+		ActivityID: act.ID,
+		RuleCode:   ruleCode,
+		Action:     act.Action,
+		ObjectType: act.ObjectType,
+		ObjectID:   objID,
+		Status:     "validat",
+		CreatedAt:  act.CreatedAt,
+	}
+	a.EvaluateAchievementsForUser(context.Background(), act.UserID, trigger)
 	return nil
 }
 
 // CancelActivity marca una activitat com a anul·lada (no suma punts).
 func (a *App) CancelActivity(activityID int, moderatorID int) error {
-	return a.DB.UpdateUserActivityStatus(activityID, "anulat", &moderatorID)
+	act, err := a.DB.GetUserActivity(activityID)
+	if err != nil {
+		return err
+	}
+	if act.Status == "anulat" {
+		return nil
+	}
+	if err := a.DB.UpdateUserActivityStatus(activityID, "anulat", &moderatorID); err != nil {
+		return err
+	}
+	a.logAntiAbuseSignals(act.UserID, time.Now())
+	return nil
+}
+
+func (a *App) logAntiAbuseSignals(userID int, now time.Time) {
+	if userID <= 0 {
+		return
+	}
+	burstFilter := db.AchievementActivityFilter{
+		UserID: userID,
+		From:   now.Add(-antiAbuseBurstWindow),
+		To:     now,
+	}
+	burstCount, err := a.DB.CountUserActivities(burstFilter)
+	if err == nil && burstCount >= antiAbuseBurstThreshold {
+		Infof("Antiabuse burst user=%d count=%d window=%s", userID, burstCount, antiAbuseBurstWindow.String())
+	}
+	rejectFilter := db.AchievementActivityFilter{
+		UserID:   userID,
+		Statuses: []string{"anulat"},
+		From:     now.Add(-antiAbuseRejectWindow),
+		To:       now,
+	}
+	rejectCount, err := a.DB.CountUserActivities(rejectFilter)
+	if err == nil && rejectCount >= antiAbuseRejectThreshold {
+		Infof("Antiabuse rejects user=%d count=%d window=%s", userID, rejectCount, antiAbuseRejectWindow.String())
+	}
 }

@@ -217,6 +217,7 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	// Intenta bootstrap de polítiques (p.ex. assignar admin al primer usuari si no hi ha assignacions)
 	_ = a.DB.EnsureDefaultPolicies()
 	_ = a.DB.EnsureDefaultPointsRules()
+	_ = a.DB.EnsureDefaultAchievements()
 
 	Debugf(" IP de la petició: %s", ipStr)
 
@@ -587,7 +588,7 @@ func (a *App) Perfil(w http.ResponseWriter, r *http.Request) {
 
 	activeTab := r.URL.Query().Get("tab")
 	switch activeTab {
-	case "generals", "contrasenya", "privacitat", "eliminar", "activitat":
+	case "generals", "contrasenya", "privacitat", "eliminar", "activitat", "achievements":
 	default:
 		activeTab = "generals"
 	}

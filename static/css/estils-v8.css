@@ -1,0 +1,376 @@
+:root {
+    --primary-color: #2c3e50;
+    --secondary-color: #166088;
+    --accent-color: #4fc3f7;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+    --color-text: #333;
+    --color-text-clar: #777;
+    --color-borda: #ddd;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: var(--light-color);
+    color: var(--color-text);
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    width: 100%;
+}
+
+/* Capçalera */
+.header-genealogic {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    padding: 15px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+}
+
+.logo-idiomes {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+
+.controls-dreta {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-left: auto; /* Aquí es fa la màgia per posar-ho a la dreta */
+}
+
+.boto-selector-idioma,
+.boto-login {
+    white-space: nowrap;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    color: white;
+    text-decoration: none;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.logo img {
+    height: 40px;
+    margin-right: 10px;
+}
+
+.selector-idioma a {
+    color: white;
+    text-decoration: none;
+    margin-left: 15px;
+    padding: 5px 10px;
+    border-radius: 3px;
+}
+
+.selector-idioma a.active {
+    background-color: var(--accent-color);
+}
+
+/* Contingut principal */
+.contingut-principal {
+    flex: 1;
+    padding: 20px 0;
+}
+
+/* Hero section */
+.hero {
+    text-align: center;
+    padding: 60px 20px;
+    margin-bottom: 30px;
+}
+
+.hero h1 {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    color: var(--primary-color);
+}
+
+.hero p {
+    font-size: 1.2rem;
+    margin-bottom: 30px;
+    color: var(--color-text-clar);
+}
+
+.cerca-hero {
+    display: flex;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.cerca-hero input {
+    flex: 1;
+    padding: 12px 20px;
+    border: 1px solid var(--color-borda);
+    border-radius: 4px 0 0 4px;
+    font-size: 16px;
+}
+
+.cerca-hero button {
+    padding: 0 25px;
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+/* Footer */
+.footer-genealogic {
+    background-color: var(--dark-color);
+    color: white;
+    padding: 2rem 0;
+    margin-top: auto;
+}
+
+.footer-contenidor {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+.footer-seccio {
+    padding: 0 1rem;
+}
+
+.footer-seccio h3 {
+    color: var(--accent-color);
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+.footer-seccio p, 
+.footer-seccio a {
+    color: #ecf0f1;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.xarxes-socials {
+    display: flex;
+    gap: 10px;
+    margin-top: 1rem;
+}
+
+.xarxes-socials a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background-color: rgba(255,255,255,0.1);
+    border-radius: 50%;
+    color: white;
+    transition: background-color 0.2s;
+}
+
+.xarxes-socials a:hover {
+    background-color: var(--accent-color);
+}
+
+.copyright {
+    grid-column: 1 / -1;
+    text-align: center;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+    .footer-contenidor {
+        grid-template-columns: 1fr;
+    }
+    
+    .footer-seccio {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+}
+
+/* IDIOMA MENU */
+.selector-idioma-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.boto-selector-idioma {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.boto-selector-idioma:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.dropdown-idiomes {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: var(--primary-color);
+    min-width: 150px;
+    box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
+    z-index: 100;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-radius: 4px;
+    display: none;
+}
+
+.dropdown-idiomes li a {
+    color: white;
+    padding: 10px 15px;
+    text-decoration: none;
+    display: block;
+}
+
+.dropdown-idiomes li a:hover,
+.dropdown-idiomes li a.active {
+    background-color: var(--secondary-color);
+}
+/* END IDIOMA MENU */
+
+.boto-login {
+    color: white;
+    text-decoration: none;
+    margin-left: 15px;
+    padding: 8px 15px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.boto-login:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.boto-login i {
+    margin-right: 5px;
+}
+
+#cercaMunicipi {
+    width: 100%;
+    padding: 10px 15px;
+    border: 1px solid var(--color-borda);
+    border-radius: 4px;
+    font-size: 14px;
+    margin-top: 4px;
+}
+
+.resultats-cerca-municipi {
+    border: 1px solid var(--color-borda);
+    border-top: none;
+    max-height: 150px;
+    overflow-y: auto;
+    margin-top: -5px;
+    background: white;
+    color: #333;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    display: none;
+}
+
+.resultats-cerca-municipi li {
+    padding: 10px 15px;
+    cursor: pointer;
+}
+
+.resultats-cerca-municipi li:hover {
+    background-color: #f1f1f1;
+}
+
+/* ** */
+.dades-portal {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    padding: 30px;
+    margin: 0 auto 40px;
+    max-width: 900px;
+}
+
+.dades-portal h2 {
+    color: var(--primary-color);
+    margin: 30px 0 15px 0;
+    font-size: 1.5rem;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent-color);
+}
+
+.dades-portal h2:first-child {
+    margin-top: 0;
+}
+
+.dades-portal ul {
+    list-style: none;
+    padding-left: 0;
+    margin-bottom: 30px;
+}
+
+.dades-portal > ul > li {
+    margin-bottom: 15px;
+    padding-left: 30px;
+    position: relative;
+}
+
+.dades-portal ul ul {
+    margin: 10px 0 15px 15px;
+    padding-left: 20px;
+    border-left: 2px solid var(--color-borda);
+}
+
+.dades-portal ul ul li {
+    margin-bottom: 8px;
+    padding-left: 25px;
+}
+
+.dades-portal i {
+    position: absolute;
+    left: 0;
+    color: var(--secondary-color);
+    width: 20px;
+    text-align: center;
+}
+
+.dades-portal strong {
+    color: var(--secondary-color);
+}
+

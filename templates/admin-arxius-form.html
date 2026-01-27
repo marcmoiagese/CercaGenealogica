@@ -38,22 +38,42 @@
                     </select>
                 </div>
                 <div class="grup-camp">
-                    <label for="municipi_id">{{ t .Lang "archives.form.municipi" }}</label>
-                    <select id="municipi_id" name="municipi_id">
-                        <option value="">{{ t .Lang "archives.form.municipi.none" }}</option>
-                        {{ range .Data.Municipis }}
-                        <option value="{{ .ID }}" {{ if and $.Data.Arxiu.MunicipiID.Valid (eq .ID (int $.Data.Arxiu.MunicipiID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
-                        {{ end }}
-                    </select>
+                    <label for="municipi_search">{{ t .Lang "archives.form.municipi" }}</label>
+                    <div class="suggest-field">
+                        <input
+                            type="text"
+                            id="municipi_search"
+                            name="municipi_search"
+                            value="{{ .Data.MunicipiLabel }}"
+                            placeholder="{{ t .Lang "municipis.search.placeholder" }}"
+                            autocomplete="off"
+                            data-api="/api/territori/municipis/suggest"
+                            data-empty-label="{{ t .Lang "municipis.search.empty" }}"
+                            data-hidden="municipi_id"
+                            data-suggestions="municipi_suggestions"
+                            data-suggest="1">
+                        <input type="hidden" id="municipi_id" name="municipi_id" value="{{ if .Data.Arxiu.MunicipiID.Valid }}{{ .Data.Arxiu.MunicipiID.Int64 }}{{ end }}">
+                        <ul id="municipi_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
+                    </div>
                 </div>
                 <div class="grup-camp">
-                    <label for="entitat_eclesiastica_id">{{ t .Lang "archives.form.entity" }}</label>
-                    <select id="entitat_eclesiastica_id" name="entitat_eclesiastica_id">
-                        <option value="">{{ t .Lang "archives.form.entity.none" }}</option>
-                        {{ range .Data.Arquebisbats }}
-                        <option value="{{ .ID }}" {{ if and $.Data.Arxiu.EntitatEclesiasticaID.Valid (eq .ID (int $.Data.Arxiu.EntitatEclesiasticaID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
-                        {{ end }}
-                    </select>
+                    <label for="entitat_search">{{ t .Lang "archives.form.entity" }}</label>
+                    <div class="suggest-field">
+                        <input
+                            type="text"
+                            id="entitat_search"
+                            name="entitat_search"
+                            value="{{ .Data.EntitatLabel }}"
+                            placeholder="{{ t .Lang "ecles.search.placeholder" }}"
+                            autocomplete="off"
+                            data-api="/api/territori/eclesiastic/suggest"
+                            data-empty-label="{{ t .Lang "ecles.search.empty" }}"
+                            data-hidden="entitat_eclesiastica_id"
+                            data-suggestions="entitat_suggestions"
+                            data-suggest="1">
+                        <input type="hidden" id="entitat_eclesiastica_id" name="entitat_eclesiastica_id" value="{{ if .Data.Arxiu.EntitatEclesiasticaID.Valid }}{{ .Data.Arxiu.EntitatEclesiasticaID.Int64 }}{{ end }}">
+                        <ul id="entitat_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "ecles.search.suggestions" }}"></ul>
+                    </div>
                 </div>
                 <div class="grup-camp">
                     <label for="adreca">{{ t .Lang "archives.form.address" }}</label>
@@ -61,11 +81,26 @@
                 </div>
                 <div class="grup-camp">
                     <label for="ubicacio">{{ t .Lang "archives.form.location" }}</label>
-                    <input type="text" id="ubicacio" name="ubicacio" value="{{ .Data.Arxiu.Ubicacio }}">
+                    <input type="text" id="ubicacio" name="ubicacio" value="{{ .Data.Arxiu.Ubicacio }}" placeholder="41.3879, 2.1699">
+                </div>
+                <div class="grup-camp">
+                    <label for="what3words">{{ t .Lang "archives.form.what3words" }}</label>
+                    <input type="text" id="what3words" name="what3words" value="{{ .Data.Arxiu.What3Words }}" placeholder="filled.count.soap">
                 </div>
                 <div class="grup-camp">
                     <label for="web">{{ t .Lang "archives.form.web" }}</label>
                     <input type="url" id="web" name="web" value="{{ .Data.Arxiu.Web }}">
+                </div>
+                <div class="grup-camp donacions-toggle">
+                    <label class="checkbox-pill">
+                        <input type="checkbox" id="accepta_donacions" name="accepta_donacions" value="1" {{ if .Data.Arxiu.AcceptaDonacions }}checked{{ end }}>
+                        <span class="checkbox-ui" aria-hidden="true"></span>
+                        <span class="checkbox-text">{{ t .Lang "archives.form.donations.enable" }}</span>
+                    </label>
+                </div>
+                <div class="grup-camp" id="donacionsUrlWrap" {{ if not .Data.Arxiu.AcceptaDonacions }}style="display:none;"{{ end }}>
+                    <label for="donacions_url">{{ t .Lang "archives.form.donations.url" }}</label>
+                    <input type="url" id="donacions_url" name="donacions_url" value="{{ .Data.Arxiu.DonacionsURL }}" placeholder="https://">
                 </div>
                 <div class="grup-camp">
                     <label for="notes">{{ t .Lang "archives.form.notes" }}</label>
@@ -80,6 +115,19 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/arxiu-form-suggest.js"></script>
+    <script>
+        (function () {
+            var cb = document.getElementById("accepta_donacions");
+            var wrap = document.getElementById("donacionsUrlWrap");
+            if (!cb || !wrap) return;
+            var toggle = function () {
+                wrap.style.display = cb.checked ? "" : "none";
+            };
+            cb.addEventListener("change", toggle);
+            toggle();
+        })();
+    </script>
 </body>
 </html>
 {{ end }}

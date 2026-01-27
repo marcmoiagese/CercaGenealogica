@@ -313,6 +313,131 @@ body {
     width: 100%;
 }
 
+.grup-camp.donacions-toggle {
+    margin-top: 0.25rem;
+}
+
+.checkbox-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.9rem;
+    border-radius: 12px;
+    border: 1px solid #dde4eb;
+    background: #f4f6fa;
+    cursor: pointer;
+    user-select: none;
+}
+
+.checkbox-pill input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.checkbox-ui {
+    width: 44px;
+    height: 24px;
+    border-radius: 999px;
+    background: #cfd8e3;
+    position: relative;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+.checkbox-ui::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.checkbox-pill input:checked + .checkbox-ui {
+    background: var(--secondary-color);
+}
+
+.checkbox-pill input:checked + .checkbox-ui::after {
+    transform: translateX(20px);
+}
+
+.checkbox-pill:focus-within .checkbox-ui {
+    box-shadow: 0 0 0 3px rgba(67, 116, 197, 0.2);
+}
+
+.checkbox-text {
+    font-weight: 600;
+    color: var(--color-text);
+    font-size: 0.95rem;
+}
+
+.suggest-field {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.resultats-cerca {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--color-borda, #d9d9d9);
+    border-radius: 8px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+    display: none;
+    z-index: 20;
+}
+
+.resultats-cerca.is-open {
+    display: block;
+}
+
+.resultats-cerca li {
+    padding: 0.6rem 0.85rem;
+    border-bottom: 1px solid #eef1f4;
+    cursor: pointer;
+}
+
+.resultats-cerca li:last-child {
+    border-bottom: none;
+}
+
+.resultats-cerca li:hover,
+.resultats-cerca li.is-active {
+    background: #f5f7fa;
+}
+
+.resultats-cerca .suggestion-empty {
+    color: #94a3b8;
+    cursor: default;
+}
+
+.resultats-cerca .suggestion-title {
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.resultats-cerca .suggestion-context {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-top: 0.2rem;
+    display: block;
+}
+
 .boto-primari,
 .boto-secundari,
 .boto-perill,
