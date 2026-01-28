@@ -155,6 +155,23 @@ CREATE TABLE IF NOT EXISTS persona_possibles_duplicats (
     quinta VARCHAR(4)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Anecdotari de persona
+CREATE TABLE IF NOT EXISTS persona_anecdotari (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    persona_id INT UNSIGNED NOT NULL,
+    user_id INT UNSIGNED,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    tag VARCHAR(100),
+    status VARCHAR(20) NOT NULL DEFAULT 'pendent',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_persona_anecdotari_persona (persona_id, created_at),
+    INDEX idx_persona_anecdotari_status (status, created_at),
+    FOREIGN KEY (persona_id) REFERENCES persona(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Taules de DADES GEOGRÀFIQUES I HISTÒRIQUES
 ------------------------------------------------------------------------------------------------------------------------
 

@@ -913,6 +913,64 @@ func (h sqlHelper) createPersona(p *Persona) (int, error) {
 	return p.ID, nil
 }
 
+func (h sqlHelper) listPersonaAnecdotes(personaID int, userID int) ([]PersonaAnecdote, error) {
+	query := `
+        SELECT a.id, a.persona_id, a.user_id, u.usuari, a.title, a.body, COALESCE(a.tag, ''), a.status, a.created_at, a.updated_at
+        FROM persona_anecdotari a
+        LEFT JOIN usuaris u ON u.id = a.user_id
+        WHERE a.persona_id = ?`
+	args := []interface{}{personaID}
+	if userID > 0 {
+		query += " AND (a.status = 'publicat' OR a.user_id = ?)"
+		args = append(args, userID)
+	} else {
+		query += " AND a.status = 'publicat'"
+	}
+	query += " ORDER BY a.created_at DESC"
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []PersonaAnecdote
+	for rows.Next() {
+		var a PersonaAnecdote
+		if err := rows.Scan(&a.ID, &a.PersonaID, &a.UserID, &a.UserName, &a.Title, &a.Body, &a.Tag, &a.Status, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) createPersonaAnecdote(a *PersonaAnecdote) (int, error) {
+	status := strings.TrimSpace(a.Status)
+	if status == "" {
+		status = "pendent"
+	}
+	stmt := `INSERT INTO persona_anecdotari (persona_id, user_id, title, body, tag, status)
+            VALUES (?, ?, ?, ?, ?, ?)`
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(stmt, a.PersonaID, a.UserID, a.Title, a.Body, a.Tag, status).Scan(&a.ID); err != nil {
+			return 0, err
+		}
+		return a.ID, nil
+	}
+	res, err := h.db.Exec(stmt, a.PersonaID, a.UserID, a.Title, a.Body, a.Tag, status)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		a.ID = int(id)
+	}
+	return a.ID, nil
+}
+
 // Punts i activitat
 func (h sqlHelper) listPointsRules() ([]PointsRule, error) {
 	rows, err := h.db.Query(`SELECT id, codi, nom, descripcio, punts, actiu, data_creacio FROM punts_regles ORDER BY codi`)

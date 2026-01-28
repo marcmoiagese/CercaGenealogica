@@ -1,0 +1,59 @@
+{{ define "persona-anecdotes-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>Afegir anècdota · {{ .Data.NomComplet }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/municipi-anecdotes.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal anecdotes-page">
+        <section class="card anecdotes-hero">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>Afegir anècdota</h1>
+                    <p class="muted">{{ .Data.NomComplet }}</p>
+                </div>
+                <div class="anecdotes-actions">
+                    <a class="boto-secundari" href="/persones/{{ .Data.Persona.ID }}#anecdotes">Tornar</a>
+                </div>
+            </header>
+            {{ if .Data.ErrorMessage }}
+                <p class="muted">{{ .Data.ErrorMessage }}</p>
+            {{ else if .Data.Ok }}
+                <p class="muted">Anècdota desada correctament.</p>
+            {{ end }}
+        </section>
+
+        <section class="card anecdotes-form-card">
+            <header class="card-header">
+                <h2>Detall de l’anècdota</h2>
+            </header>
+            <form class="anecdotes-form" method="post" action="/persones/{{ .Data.Persona.ID }}/anecdotes">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="anecdotes-form-row">
+                    <label for="anecdoteTitle">Títol</label>
+                    <input id="anecdoteTitle" name="titol" type="text" value="{{ .Data.Form.Title }}">
+                </div>
+                <div class="anecdotes-form-row">
+                    <label for="anecdoteTag">Etiqueta</label>
+                    <input id="anecdoteTag" name="tag" type="text" value="{{ .Data.Form.Tag }}">
+                </div>
+                <div class="anecdotes-form-row">
+                    <label for="anecdoteText">Text</label>
+                    <textarea id="anecdoteText" name="text">{{ .Data.Form.Body }}</textarea>
+                </div>
+                <div class="anecdotes-form-actions">
+                    <button class="boto-primari" type="submit">Desar anècdota</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

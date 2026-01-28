@@ -5,45 +5,425 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "persons.title" }}</title>
     {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/persona.css">
+    <link rel="stylesheet" href="/static/css/persona-pro.css">
 </head>
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
-    <main class="contingut-principal">
-        <div class="persona-tabs">
-            <div class="tabs-botons" role="tablist" aria-label="{{ t .Lang "persons.tabs.label" }}">
-                <a class="tab-boto {{ if eq .Data.Tab "detall" }}actiu{{ end }}" href="/persones/{{ .Data.Persona.ID }}">
-                    {{ t .Lang "persons.tabs.detail" }}
-                </a>
-                <a class="tab-boto {{ if eq .Data.Tab "registres" }}actiu{{ end }}" href="/persones/{{ .Data.Persona.ID }}/registres">
-                    {{ t .Lang "persons.tabs.records" }}
-                </a>
-            </div>
-        </div>
-        <section class="card">
-            <header class="card-header">
-                <h1>{{ .Data.Persona.Nom }} {{ .Data.Persona.Cognom1 }} {{ .Data.Persona.Cognom2 }}</h1>
-                <p class="camp-helper">{{ t .Lang "persons.detail.published" }}</p>
-            </header>
-            <div class="detall-grid">
-                <div><strong>{{ t .Lang "persons.col.municipi" }}:</strong> {{ .Data.Persona.Municipi }}</div>
-                <div><strong>{{ t .Lang "persons.col.llibre" }}:</strong> {{ .Data.Persona.Llibre }}</div>
-                <div><strong>{{ t .Lang "persons.col.pagina" }}:</strong> {{ .Data.Persona.Pagina }}</div>
-                <div><strong>{{ t .Lang "persons.col.ofici" }}:</strong> {{ .Data.Persona.Ofici }}</div>
-                <div>
-                    <strong>{{ t .Lang "persons.col.status" }}:</strong>
-                    <span class="badge {{ if eq .Data.Persona.ModeracioEstat "publicat" }}verd{{ else if eq .Data.Persona.ModeracioEstat "pendent" }}taronja{{ else }}vermell{{ end }}">
-                        {{ t .Lang (printf "activity.status.%s" .Data.Persona.ModeracioEstat) }}
-                    </span>
+    <main class="contingut-principal container">
+        <section class="persona-hero card">
+            <div class="persona-hero__left">
+                <div class="persona-avatar" aria-label="{{ .Data.NomComplet }}">
+                    <span class="persona-avatar__initials">{{ .Data.Initials }}</span>
                 </div>
-                {{ if .Data.Persona.ModeracioMotiu }}
-                <div><strong>{{ t .Lang "moderation.reason" }}:</strong> {{ .Data.Persona.ModeracioMotiu }}</div>
+                <div class="persona-badges">
+                    {{ if eq .Data.Persona.ModeracioEstat "publicat" }}
+                    <span class="badge badge--info"><i class="fas fa-check-circle"></i> Fitxa verificada</span>
+                    {{ else }}
+                    <span class="badge"><i class="fas fa-hourglass-half"></i> Fitxa pendent</span>
+                    {{ end }}
+                    <span class="badge"><i class="fas fa-shield-alt"></i> Privacitat: pública</span>
+                </div>
+            </div>
+
+            <div class="persona-hero__main">
+                <div class="persona-hero__topline">
+                    <h1 class="persona-nom">{{ .Data.NomComplet }}</h1>
+                    {{ if or .Data.CanEditPersona .Data.CanModerate }}
+                    <div class="opcions-dropdown">
+                        <button class="boto-opcions" id="botoOpcions">
+                            <i class="fas fa-cog"></i> Opcions <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <ul class="dropdown-opcions" id="dropdownOpcions">
+                            {{ if .Data.CanEditPersona }}
+                            <li><a href="/persones/{{ .Data.Persona.ID }}/edit"><i class="fas fa-pen"></i> Editar fitxa</a></li>
+                            {{ end }}
+                            <li><a href="/persones/{{ .Data.Persona.ID }}/registres"><i class="fas fa-list"></i> Veure registres</a></li>
+                        </ul>
+                    </div>
+                    {{ end }}
+                </div>
+
+                <p class="persona-subtitol">
+                    {{ if .Data.Persona.Municipi }}
+                    <span class="chip"><i class="fas fa-location-dot"></i> {{ .Data.Persona.Municipi }}</span>
+                    {{ else if .Data.OriginMunicipi }}
+                    <span class="chip"><i class="fas fa-location-dot"></i> {{ .Data.OriginMunicipi }} <span class="muted">(registre)</span></span>
+                    {{ end }}
+                    {{ if .Data.Persona.Ofici }}
+                    <span class="chip"><i class="fas fa-briefcase"></i> {{ .Data.Persona.Ofici }}</span>
+                    {{ end }}
+                    {{ if .Data.LifeRange }}
+                    <span class="chip"><i class="fas fa-calendar"></i> {{ .Data.LifeRange }}</span>
+                    {{ end }}
+                </p>
+
+                <div class="persona-dates">
+                    <div class="kpi">
+                        <span class="kpi__label">Naixement</span>
+                        <span class="kpi__value">{{ if .Data.BirthLabel }}{{ .Data.BirthLabel }}{{ else }}—{{ end }}</span>
+                    </div>
+                    <div class="kpi">
+                        <span class="kpi__label">Defunció</span>
+                        <span class="kpi__value">{{ if .Data.DeathLabel }}{{ .Data.DeathLabel }}{{ else }}—{{ end }}</span>
+                    </div>
+                    <div class="kpi">
+                        <span class="kpi__label">Registre</span>
+                        <span class="kpi__value mono">P-{{ printf "%06d" .Data.Persona.ID }}</span>
+                    </div>
+                </div>
+
+                <div class="persona-hero__actions">
+                    {{ if .Data.CanEditPersona }}
+                    <a class="btn btn--primary" href="/persones/{{ .Data.Persona.ID }}/edit"><i class="fas fa-pen"></i> Editar fitxa</a>
+                    {{ end }}
+                    <a class="btn" href="/persones/{{ .Data.Persona.ID }}/registres"><i class="fas fa-folder-open"></i> Registres</a>
+                    <a class="btn" href="/persones/{{ .Data.Persona.ID }}"><i class="fas fa-link"></i> Enllaç directe</a>
+                </div>
+            </div>
+
+            <aside class="persona-hero__side">
+                <div class="sidecard">
+                    <div class="sidecard__title"><i class="fas fa-chart-pie"></i> Qualitat de dades</div>
+                    <div class="sidecard__row">
+                        <span class="muted">Completesa</span>
+                        <span><strong>{{ .Data.Completesa }}%</strong></span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress__bar" style="width:{{ .Data.Completesa }}%"></div>
+                    </div>
+                    <div class="sidecard__row">
+                        <span class="muted">Actualitzat</span>
+                        <span>{{ if .Data.LastUpdated }}{{ .Data.LastUpdated }}{{ else }}—{{ end }}</span>
+                    </div>
+                    <div class="sidecard__row">
+                        <span class="muted">Fonts</span>
+                        <span><strong>{{ .Data.DocTotal }}</strong></span>
+                    </div>
+                </div>
+
+                <div class="sidecard">
+                    <div class="sidecard__title"><i class="fas fa-tags"></i> Etiquetes</div>
+                    <div class="taglist">
+                        {{ if .Data.Persona.Municipi }}
+                        <span class="tag">{{ .Data.Persona.Municipi }}</span>
+                        {{ else if .Data.OriginMunicipi }}
+                        <span class="tag">{{ .Data.OriginMunicipi }}</span>
+                        {{ end }}
+                        {{ if .Data.Persona.Ofici }}<span class="tag">{{ .Data.Persona.Ofici }}</span>{{ end }}
+                        {{ if .Data.Persona.Llibre }}<span class="tag">{{ .Data.Persona.Llibre }}</span>{{ end }}
+                        {{ if .Data.Persona.Pagina }}<span class="tag">p. {{ .Data.Persona.Pagina }}</span>{{ end }}
+                        {{ if not (or .Data.Persona.Municipi .Data.OriginMunicipi .Data.Persona.Ofici) }}
+                        <span class="tag">Sense etiquetes</span>
+                        {{ end }}
+                    </div>
+                </div>
+            </aside>
+        </section>
+
+        <nav class="persona-tabs" aria-label="Navegació de seccions">
+            <button class="tab is-active" data-target="resum"><i class="fas fa-house"></i> Resum</button>
+            <button class="tab" data-target="familia"><i class="fas fa-people-group"></i> Família</button>
+            <button class="tab" data-target="vida"><i class="fas fa-timeline"></i> Vida</button>
+            <button class="tab" data-target="documents"><i class="fas fa-folder-open"></i> Documents</button>
+            <button class="tab" data-target="anecdotes"><i class="fas fa-comment-dots"></i> Anecdotari</button>
+            <button class="tab" data-target="historia"><i class="fas fa-book"></i> Fitxa històrica</button>
+        </nav>
+
+        <section id="resum" class="persona-panel is-active">
+            <div class="grid-2">
+                <article class="card">
+                    <div class="card__header">
+                        <h3><i class="fas fa-id-card"></i> Dades clau</h3>
+                        <span class="pill pill--ok"><i class="fas fa-check"></i> Publicada</span>
+                    </div>
+
+                    {{ $hasFacts := or (ne .Data.BirthDate "") (or (ne .Data.BaptismDate "") (ne .Data.DeathDate "")) }}
+                    {{ if $hasFacts }}
+                    <ul class="factlist">
+                        {{ if .Data.BirthDate }}
+                        <li class="fact">
+                            <span class="fact__icon"><i class="fas fa-baby"></i></span>
+                            <div class="fact__body">
+                                <div class="fact__title">Naixement</div>
+                                <div class="fact__meta">{{ .Data.BirthDate }}{{ if .Data.Persona.Municipi }} · {{ .Data.Persona.Municipi }}{{ else if .Data.OriginMunicipi }} · {{ .Data.OriginMunicipi }}{{ end }}</div>
+                            </div>
+                        </li>
+                        {{ end }}
+                        {{ if .Data.BaptismDate }}
+                        <li class="fact">
+                            <span class="fact__icon"><i class="fas fa-water"></i></span>
+                            <div class="fact__body">
+                                <div class="fact__title">Baptisme</div>
+                                <div class="fact__meta">{{ .Data.BaptismDate }}{{ if .Data.Persona.Municipi }} · {{ .Data.Persona.Municipi }}{{ else if .Data.OriginMunicipi }} · {{ .Data.OriginMunicipi }}{{ end }}</div>
+                            </div>
+                        </li>
+                        {{ end }}
+                        {{ if .Data.DeathDate }}
+                        <li class="fact">
+                            <span class="fact__icon"><i class="fas fa-skull"></i></span>
+                            <div class="fact__body">
+                                <div class="fact__title">Defunció</div>
+                                <div class="fact__meta">{{ .Data.DeathDate }}</div>
+                            </div>
+                        </li>
+                        {{ end }}
+                    </ul>
+                    {{ else }}
+                    <div class="callout callout--soft">
+                        <div class="callout__title"><i class="fas fa-circle-info"></i> Sense dades clau</div>
+                        <p class="muted">Encara no hi ha dates o fets destacats registrats.</p>
+                    </div>
+                    {{ end }}
+                </article>
+
+                <article class="card">
+                    <div class="card__header">
+                        <h3><i class="fas fa-align-left"></i> Resum biogràfic</h3>
+                        <span class="pill"><i class="fas fa-circle-info"></i> En revisió</span>
+                    </div>
+                    <p class="lead muted">
+                        Aquesta fitxa encara no disposa d’un resum biogràfic. Pots afegir context i fonts des de l’edició.
+                    </p>
+                    <div class="callout callout--soft">
+                        <div class="callout__title"><i class="fas fa-triangle-exclamation"></i> Dades pendents</div>
+                        <p class="muted">Falten detalls familiars, registres i context històric.</p>
+                    </div>
+                </article>
+            </div>
+
+            <article class="card">
+                <div class="card__header">
+                    <h3><i class="fas fa-map-pin"></i> Notes de residència</h3>
+                    <span class="pill"><i class="fas fa-route"></i> Sense moviments</span>
+                </div>
+                {{ if or .Data.Persona.Municipi .Data.OriginMunicipi }}
+                <div class="callout callout--soft">
+                    <div class="callout__title"><i class="fas fa-location-dot"></i> Primer lloc conegut</div>
+                    <p class="muted">
+                        {{ if .Data.Persona.Municipi }}{{ .Data.Persona.Municipi }}{{ else }}{{ .Data.OriginMunicipi }}{{ end }}
+                        {{ if .Data.OriginMunicipi }} <span class="tiny">(registre)</span>{{ end }}
+                    </p>
+                </div>
+                {{ else }}
+                <div class="callout callout--soft">
+                    <div class="callout__title"><i class="fas fa-circle-info"></i> Sense dades</div>
+                    <p class="muted">No hi ha moviments registrats encara.</p>
+                </div>
                 {{ end }}
+            </article>
+        </section>
+
+        <section id="familia" class="persona-panel">
+            <article class="card">
+                <div class="card__header">
+                    <h3><i class="fas fa-people-group"></i> Família</h3>
+                    <span class="pill"><i class="fas fa-user-plus"></i> Del registre</span>
+                </div>
+                {{ if .Data.Relacions }}
+                <div class="relacio-list">
+                    {{ range .Data.Relacions }}
+                    <div class="relacio-item">
+                        <div class="relacio-top">
+                            <div class="relacio-role">{{ if .RoleLabel }}{{ .RoleLabel }}{{ else }}Relació{{ end }}</div>
+                            <div class="relacio-name">{{ .Name }}</div>
+                        </div>
+                        {{ if or .Municipi .Ofici }}
+                        <div class="relacio-meta muted">
+                            {{ if .Municipi }}{{ .Municipi }}{{ end }}{{ if and .Municipi .Ofici }} · {{ end }}{{ if .Ofici }}{{ .Ofici }}{{ end }}
+                        </div>
+                        {{ end }}
+                        <div class="relacio-tags">
+                            {{ if .Linked }}
+                            <span class="badge badge--info"><i class="fas fa-link"></i> Enllaçat</span>
+                            {{ else }}
+                            <span class="badge badge--info"><i class="fas fa-link-slash"></i> Pendent d’enllaç</span>
+                            {{ end }}
+                            <span class="badge"><i class="fas fa-book"></i> Registre #{{ .RegistreID }}</span>
+                        </div>
+                    </div>
+                    {{ end }}
+                </div>
+                {{ else }}
+                <div class="callout callout--soft">
+                    <div class="callout__title"><i class="fas fa-circle-info"></i> Sense relacions</div>
+                    <p class="muted">Encara no hi ha familiars o testimonis associats al registre.</p>
+                </div>
+                {{ end }}
+            </article>
+        </section>
+
+        <section id="vida" class="persona-panel">
+            <article class="card">
+                <div class="card__header">
+                    <h3><i class="fas fa-timeline"></i> Timeline d’esdeveniments</h3>
+                    <div class="filters" aria-label="Filtres del timeline">
+                        <button class="filter is-active" data-filter="all">Tot</button>
+                        <button class="filter" data-filter="naixement">Naixement</button>
+                        <button class="filter" data-filter="sagrament">Sagraments</button>
+                        <button class="filter" data-filter="matrimoni">Matrimonis</button>
+                        <button class="filter" data-filter="residencia">Residència</button>
+                        <button class="filter" data-filter="feina">Feina</button>
+                        <button class="filter" data-filter="defuncio">Defunció</button>
+                    </div>
+                </div>
+
+                {{ $hasTimeline := gt (len .Data.TimelineEvents) 0 }}
+                {{ if $hasTimeline }}
+                <ol class="timeline">
+                    {{ range .Data.TimelineEvents }}
+                    <li class="t-event" data-type="{{ if .FilterType }}{{ .FilterType }}{{ else }}{{ .Type }}{{ end }}">
+                        <div class="t-dot"></div>
+                        <div class="t-card">
+                            <div class="t-top">
+                                <span class="t-date">{{ .Date }}</span>
+                                <span class="t-type"><i class="fas {{ .Icon }}"></i> {{ .Label }}</span>
+                            </div>
+                            <div class="t-title">{{ if .Title }}{{ .Title }}{{ else }}—{{ end }}</div>
+                            <p class="muted">Dada del registre.</p>
+                            {{ if .Source }}<div class="t-sources"><span class="muted">{{ .Source }}</span></div>{{ end }}
+                        </div>
+                    </li>
+                    {{ end }}
+                </ol>
+                {{ else }}
+                <div class="callout callout--soft">
+                    <div class="callout__title"><i class="fas fa-circle-info"></i> Sense esdeveniments</div>
+                    <p class="muted">Encara no hi ha dates registrades per construir el timeline.</p>
+                </div>
+                {{ end }}
+            </article>
+        </section>
+
+        <section id="documents" class="persona-panel">
+            <article class="card">
+                <div class="card__header">
+                    <h3><i class="fas fa-folder-open"></i> Documents relacionats</h3>
+                    <div class="doc-toolbar">
+                        <input class="doc-search" type="search" placeholder="Cerca per títol, llibre, any..." aria-label="Cerca documents">
+                        <select class="doc-select" aria-label="Filtre de tipus">
+                            <option value="all">Tots els tipus</option>
+                            {{ range .Data.TipusOptions }}
+                            <option value="{{ . }}">{{ t $.Lang (printf "records.type.%s" .) }}</option>
+                            {{ end }}
+                        </select>
+                    </div>
+                </div>
+
+                {{ if .Data.DocRegistres }}
+                <div class="doc-grid">
+                    {{ range .Data.DocRegistres }}
+                    <a class="doc-card" data-type="{{ .Tipus }}" href="/documentals/registres/{{ .ID }}">
+                        <div class="doc-card__icon"><i class="fas fa-file-lines"></i></div>
+                        <div class="doc-card__body">
+                            <div class="doc-card__title">{{ t $.Lang (printf "records.type.%s" .Tipus) }}{{ if .Any }} ({{ .Any }}){{ end }}</div>
+                            <div class="muted">{{ .Llibre }}{{ if .Pagina }} · p. {{ .Pagina }}{{ end }}</div>
+                            <div class="doc-card__meta">
+                                <span class="pill">{{ t $.Lang (printf "activity.status.%s" .Estat) }}</span>
+                            </div>
+                        </div>
+                    </a>
+                    {{ end }}
+                </div>
+                <div class="divider"></div>
+                <a class="btn" href="/persones/{{ $.Data.Persona.ID }}/registres"><i class="fas fa-list"></i> Veure tots els registres</a>
+                {{ else }}
+                <div class="callout callout--soft">
+                    <div class="callout__title"><i class="fas fa-circle-info"></i> Sense documents</div>
+                    <p class="muted">No hi ha documents vinculats a aquesta persona.</p>
+                </div>
+                {{ end }}
+            </article>
+        </section>
+
+        <section id="anecdotes" class="persona-panel">
+            <article class="card">
+                <div class="card__header">
+                    <h3><i class="fas fa-comment-dots"></i> Anecdotari d’usuaris</h3>
+                    <div class="anec-actions">
+                        <a class="btn btn--primary" href="/persones/{{ .Data.Persona.ID }}/anecdotes/new"><i class="fas fa-plus"></i> Afegir anècdota</a>
+                        <a class="btn" href="/persones/{{ .Data.Persona.ID }}#anecdotes"><i class="fas fa-filter"></i> Filtrar</a>
+                    </div>
+                </div>
+                {{ if .Data.Anecdotes }}
+                <div class="carousel" data-carousel>
+                    <button class="carousel__btn carousel__btn--prev" data-carousel-prev aria-label="Anterior"><i class="fas fa-chevron-left"></i></button>
+                    <button class="carousel__btn carousel__btn--next" data-carousel-next aria-label="Següent"><i class="fas fa-chevron-right"></i></button>
+                    <div class="carousel__track" data-carousel-track>
+                        {{ range $i, $a := .Data.Anecdotes }}
+                            {{ if lt $i 3 }}
+                            <div class="slide {{ if eq $i 0 }}is-active{{ end }}">
+                                <div class="slide__meta">
+                                    {{ if $a.Featured }}
+                                        <span class="pill pill--ok"><i class="fas fa-star"></i> Destacada</span>
+                                    {{ else if $a.Tag }}
+                                        <span class="pill"><i class="fas fa-comment"></i> {{ $a.Tag }}</span>
+                                    {{ end }}
+                                    <span class="muted">Afegida per <strong>@{{ $a.User }}</strong>{{ if $a.Date }} · {{ $a.Date }}{{ end }}</span>
+                                </div>
+                                <h4 class="slide__title">“{{ $a.Title }}”</h4>
+                                <p>{{ $a.Body }}</p>
+                            </div>
+                            {{ end }}
+                        {{ end }}
+                    </div>
+                    <div class="carousel__dots" data-carousel-dots aria-label="Punts de navegació"></div>
+                </div>
+                <div class="divider"></div>
+                <div class="stack">
+                    {{ range .Data.Anecdotes }}
+                    <div class="note">
+                        <div class="note__head">
+                            <strong>@{{ .User }}</strong>
+                            {{ if .Date }}<span class="muted">· {{ .Date }}</span>{{ end }}
+                            {{ if .Tag }}<span class="pill">{{ .Tag }}</span>{{ end }}
+                            {{ if ne .Status "publicat" }}<span class="pill"><i class="fas fa-clock"></i> Pendent</span>{{ end }}
+                        </div>
+                        <p>“{{ .Title }}” — {{ .Body }}</p>
+                    </div>
+                    {{ end }}
+                </div>
+                {{ else }}
+                <div class="callout callout--soft">
+                    <div class="callout__title"><i class="fas fa-circle-info"></i> Sense anècdotes</div>
+                    <p class="muted">Encara no hi ha anècdotes publicades per aquesta persona.</p>
+                </div>
+                {{ end }}
+            </article>
+        </section>
+
+        <section id="historia" class="persona-panel">
+            <div class="grid-2">
+                <article class="card">
+                    <div class="card__header">
+                        <h3><i class="fas fa-book"></i> Informació històrica</h3>
+                        <span class="pill"><i class="fas fa-scale-balanced"></i> En revisió</span>
+                    </div>
+                    <p class="muted">Encara no hi ha context històric publicat per aquesta fitxa.</p>
+                </article>
+
+                <article class="card">
+                    <div class="card__header">
+                        <h3><i class="fas fa-list-check"></i> Fitxa estructurada</h3>
+                        <span class="pill"><i class="fas fa-link"></i> Relacionable</span>
+                    </div>
+                    <div class="kv">
+                        <div class="kv__row"><div class="kv__k">Nom complet</div><div class="kv__v">{{ .Data.NomComplet }}</div></div>
+                        <div class="kv__row"><div class="kv__k">Municipi</div><div class="kv__v">{{ if .Data.Persona.Municipi }}{{ .Data.Persona.Municipi }}{{ else }}—{{ end }}</div></div>
+                        <div class="kv__row"><div class="kv__k">Ocupació</div><div class="kv__v">{{ if .Data.Persona.Ofici }}{{ .Data.Persona.Ofici }}{{ else }}—{{ end }}</div></div>
+                        <div class="kv__row"><div class="kv__k">Llibre</div><div class="kv__v">{{ if .Data.Persona.Llibre }}{{ .Data.Persona.Llibre }}{{ else }}—{{ end }}</div></div>
+                        <div class="kv__row"><div class="kv__k">Pàgina</div><div class="kv__v">{{ if .Data.Persona.Pagina }}{{ .Data.Persona.Pagina }}{{ else }}—{{ end }}</div></div>
+                        <div class="kv__row"><div class="kv__k">Registres</div><div class="kv__v">{{ .Data.DocTotal }}</div></div>
+                    </div>
+                </article>
             </div>
         </section>
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/persona.js"></script>
+    <script src="/static/js/persona-pro.js"></script>
 </body>
 </html>
 {{ end }}

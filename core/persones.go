@@ -198,13 +198,501 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 	if user != nil {
 		perms = a.getPermissionsForUser(user.ID)
 	}
+	lang := ResolveLang(r)
 	p, err := a.DB.GetPersona(id)
 	if err != nil || p == nil || p.ModeracioEstat != "publicat" {
 		http.NotFound(w, r)
 		return
 	}
+	fullName := strings.TrimSpace(strings.Join([]string{p.Nom, p.Cognom1, p.Cognom2}, " "))
+	if fullName == "" {
+		fullName = p.NomComplet
+	}
+	initials := ""
+	if p.Nom != "" {
+		r := []rune(strings.TrimSpace(p.Nom))
+		if len(r) > 0 {
+			initials += strings.ToUpper(string(r[0]))
+		}
+	}
+	if p.Cognom1 != "" {
+		r := []rune(strings.TrimSpace(p.Cognom1))
+		if len(r) > 0 {
+			initials += strings.ToUpper(string(r[0]))
+		}
+	}
+	if initials == "" {
+		initials = "?"
+	}
+	birthDate := ""
+	if p.DataNaixement.Valid {
+		birthDate = formatDateDisplay(p.DataNaixement.String)
+	}
+	baptismDate := ""
+	if p.DataBateig.Valid {
+		baptismDate = formatDateDisplay(p.DataBateig.String)
+	}
+	deathDate := ""
+	if p.DataDefuncio.Valid {
+		deathDate = formatDateDisplay(p.DataDefuncio.String)
+	}
+	lastUpdated := ""
+	if p.UpdatedAt.Valid {
+		lastUpdated = p.UpdatedAt.Time.Format("2006-01-02")
+	} else if p.CreatedAt.Valid {
+		lastUpdated = p.CreatedAt.Time.Format("2006-01-02")
+	}
+	totalFields := 0
+	filledFields := 0
+	addField := func(val string) {
+		totalFields++
+		if strings.TrimSpace(val) != "" {
+			filledFields++
+		}
+	}
+	addField(p.Nom)
+	addField(p.Cognom1)
+	addField(p.Cognom2)
+	addField(p.Municipi)
+	addField(p.Ofici)
+	addField(p.Llibre)
+	addField(p.Pagina)
+	totalFields += 2
+	if p.DataNaixement.Valid {
+		filledFields++
+	}
+	if p.DataDefuncio.Valid {
+		filledFields++
+	}
+	completesa := 0
+	if totalFields > 0 {
+		completesa = int(float64(filledFields) / float64(totalFields) * 100)
+		if completesa > 100 {
+			completesa = 100
+		}
+	}
+	canEditPersona := false
+	if user != nil {
+		if perms.Admin || perms.CanEditAnyPerson {
+			canEditPersona = true
+		} else if p.CreatedBy.Valid && int(p.CreatedBy.Int64) == user.ID {
+			canEditPersona = true
+		}
+	}
+	type docView struct {
+		ID     int
+		Tipus  string
+		Any    string
+		Llibre string
+		Pagina string
+		Estat  string
+	}
+	type timelineEvent struct {
+		Type        string
+		FilterType  string
+		Label       string
+		Icon        string
+		Date        string
+		Title       string
+		Source      string
+		RegistreID  int
+		RegistreAny string
+	}
+	type relationView struct {
+		Role            string
+		RoleLabel       string
+		Name            string
+		Municipi        string
+		Ofici           string
+		RegistreID      int
+		RegistreTipus   string
+		RegistreAny     string
+		Llibre          string
+		Linked          bool
+		LinkedPersonaID int
+	}
+	type anecdoteView struct {
+		ID       int
+		Title    string
+		Body     string
+		Tag      string
+		User     string
+		Date     string
+		Status   string
+		Featured bool
+	}
+	var docs []docView
+	var relacions []relationView
+	var timeline []timelineEvent
+	originMunicipi := ""
+	var anecdotes []anecdoteView
+	totalDocs := 0
+	if rows, err := a.DB.ListRegistresByPersona(id, ""); err == nil {
+		llibreCache := map[int]*db.Llibre{}
+		munCache := map[int]string{}
+		getMunicipiName := func(llibreID int) string {
+			if llibreID <= 0 {
+				return ""
+			}
+			if name, ok := munCache[llibreID]; ok {
+				return name
+			}
+			llibre, ok := llibreCache[llibreID]
+			if !ok {
+				llibre, _ = a.DB.GetLlibre(llibreID)
+				llibreCache[llibreID] = llibre
+			}
+			if llibre == nil || llibre.MunicipiID <= 0 {
+				munCache[llibreID] = ""
+				return ""
+			}
+			mun, err := a.DB.GetMunicipi(llibre.MunicipiID)
+			if err != nil || mun == nil {
+				munCache[llibreID] = ""
+				return ""
+			}
+			name := strings.TrimSpace(mun.Nom)
+			munCache[llibreID] = name
+			return name
+		}
+		totalDocs = len(rows)
+		for i, row := range rows {
+			if i >= 6 {
+				break
+			}
+			title := row.LlibreTitol.String
+			if title == "" {
+				title = row.LlibreNom.String
+			}
+			pagina := row.NumPaginaText
+			if row.PaginaID.Valid {
+				pagina = strconv.FormatInt(row.PaginaID.Int64, 10)
+			}
+			anyVal := ""
+			if row.AnyDoc.Valid {
+				anyVal = strconv.FormatInt(row.AnyDoc.Int64, 10)
+			}
+			docs = append(docs, docView{
+				ID:     row.RegistreID,
+				Tipus:  row.TipusActe,
+				Any:    anyVal,
+				Llibre: title,
+				Pagina: pagina,
+				Estat:  row.ModeracioEstat,
+			})
+		}
+		seenRel := map[string]bool{}
+		seenEvent := map[string]bool{}
+		getLabel := func(key, fallback string) string {
+			if v := T(lang, key); v != "" && v != key {
+				return v
+			}
+			return fallback
+		}
+		eventLabel := map[string]string{
+			"naixement":   getLabel("records.field.data_naixement", "Naixement"),
+			"baptisme":    getLabel("records.field.data_bateig", "Baptisme"),
+			"defuncio":    getLabel("records.field.data_defuncio", "Defunció"),
+			"enterrament": getLabel("records.field.data_enterrament", "Enterrament"),
+			"matrimoni":   getLabel("records.field.data_matrimoni", "Matrimoni"),
+			"confirmacio": getLabel("records.field.data_confirmacio", "Confirmació"),
+		}
+		eventIcon := map[string]string{
+			"naixement":   "fa-baby",
+			"baptisme":    "fa-water",
+			"defuncio":    "fa-skull-crossbones",
+			"enterrament": "fa-cross",
+			"matrimoni":   "fa-ring",
+			"confirmacio": "fa-star",
+			"altre":       "fa-calendar",
+		}
+		addEvent := func(ev timelineEvent) {
+			if strings.TrimSpace(ev.Date) == "" {
+				return
+			}
+			key := ev.Type + "|" + ev.Date + "|" + strconv.Itoa(ev.RegistreID)
+			if seenEvent[key] {
+				return
+			}
+			seenEvent[key] = true
+			timeline = append(timeline, ev)
+		}
+		acteDateFrom := func(reg *db.TranscripcioRaw) string {
+			if reg == nil {
+				return ""
+			}
+			if reg.DataActeISO.Valid {
+				if formatted := formatDateDisplay(reg.DataActeISO.String); formatted != "" {
+					return formatted
+				}
+			}
+			raw := strings.TrimSpace(reg.DataActeText)
+			if raw == "" {
+				return ""
+			}
+			if formatted := formatDateDisplay(raw); formatted != "" {
+				return formatted
+			}
+			return raw
+		}
+		for _, row := range rows {
+			persones, err := a.DB.ListTranscripcioPersones(row.RegistreID)
+			if err != nil {
+				continue
+			}
+			attrs, _ := a.DB.ListTranscripcioAtributs(row.RegistreID)
+			regRaw, _ := a.DB.GetTranscripcioRaw(row.RegistreID)
+			title := row.LlibreTitol.String
+			if title == "" {
+				title = row.LlibreNom.String
+			}
+			anyVal := ""
+			if row.AnyDoc.Valid {
+				anyVal = strconv.FormatInt(row.AnyDoc.Int64, 10)
+			}
+			munName := getMunicipiName(row.LlibreID)
+			tipus := normalizeRole(row.TipusActe)
+			if originMunicipi == "" {
+				if tipus == "baptisme" || tipus == "naixement" {
+					originMunicipi = munName
+				} else if originMunicipi == "" {
+					originMunicipi = munName
+				}
+			}
+			sourceType := ""
+			if tipus != "" {
+				key := "records.type." + tipus
+				if label := T(lang, key); label != key {
+					sourceType = label
+				} else {
+					sourceType = row.TipusActe
+				}
+			}
+			source := "Registre #" + strconv.Itoa(row.RegistreID)
+			if sourceType != "" {
+				source += " · " + sourceType
+			}
+			if munName != "" {
+				source += " · " + munName
+			}
+			baseEvent := func(eventType string, date string) {
+				label := eventLabel[eventType]
+				if label == "" {
+					label = sourceType
+				}
+				icon := eventIcon[eventType]
+				if icon == "" {
+					icon = eventIcon["altre"]
+				}
+				filterType := eventType
+				switch eventType {
+				case "baptisme", "confirmacio":
+					filterType = "sagrament"
+				case "enterrament":
+					filterType = "defuncio"
+				}
+				eventTitle := title
+				if munName != "" {
+					eventTitle = munName
+				}
+				addEvent(timelineEvent{
+					Type:        eventType,
+					FilterType:  filterType,
+					Label:       label,
+					Icon:        icon,
+					Date:        date,
+					Title:       eventTitle,
+					Source:      source,
+					RegistreID:  row.RegistreID,
+					RegistreAny: anyVal,
+				})
+			}
+			switch tipus {
+			case "baptisme":
+				if d := attrValueByKeysRaw(attrs,
+					"data_naixement", "datanaixement", "naixement",
+					"data_naixament", "datanaixament", "naixament",
+					"nascut", "data_nascut", "datanascut",
+				); d != "" {
+					baseEvent("naixement", d)
+				}
+				date := attrValueByKeysRaw(attrs,
+					"data_bateig", "databateig",
+					"data_baptisme", "databaptisme",
+					"bateig", "baptisme", "databapt", "data_bapt",
+				)
+				if date == "" {
+					date = acteDateFrom(regRaw)
+				}
+				baseEvent("baptisme", date)
+			case "obit", "defuncio":
+				date := attrValueByKeysRaw(attrs, "data_defuncio", "datadefuncio", "defuncio")
+				if date == "" {
+					date = acteDateFrom(regRaw)
+				}
+				baseEvent("defuncio", date)
+				if d := attrValueByKeysRaw(attrs, "data_enterrament", "enterrament", "data_enterr"); d != "" {
+					baseEvent("enterrament", d)
+				}
+			case "matrimoni":
+				date := attrValueByKeysRaw(attrs, "data_matrimoni", "datamatrimoni", "matrimoni", "data_casament", "casament")
+				if date == "" {
+					date = acteDateFrom(regRaw)
+				}
+				baseEvent("matrimoni", date)
+			case "confirmacio":
+				date := attrValueByKeysRaw(attrs, "data_confirmacio", "dataconfirmacio", "confirmacio")
+				if date == "" {
+					date = acteDateFrom(regRaw)
+				}
+				baseEvent("confirmacio", date)
+			default:
+				if date := acteDateFrom(regRaw); date != "" {
+					baseEvent(tipus, date)
+				}
+			}
+			for _, pr := range persones {
+				if pr.PersonaID.Valid && int(pr.PersonaID.Int64) == id {
+					continue
+				}
+				name := personDisplayName(pr)
+				if name == "" {
+					continue
+				}
+				role := strings.TrimSpace(pr.Rol)
+				roleLabel := role
+				normRole := normalizeRole(role)
+				if normRole != "" {
+					key := "records.role." + normRole
+					if label := T(lang, key); label != key {
+						roleLabel = label
+					}
+				}
+				uniq := strconv.Itoa(row.RegistreID) + "|" + normRole + "|" + name
+				if seenRel[uniq] {
+					continue
+				}
+				seenRel[uniq] = true
+				linkedID := 0
+				if pr.PersonaID.Valid {
+					linkedID = int(pr.PersonaID.Int64)
+				}
+				relacions = append(relacions, relationView{
+					Role:            role,
+					RoleLabel:       roleLabel,
+					Name:            name,
+					Municipi:        pr.MunicipiText,
+					Ofici:           pr.OficiText,
+					RegistreID:      row.RegistreID,
+					RegistreTipus:   row.TipusActe,
+					RegistreAny:     anyVal,
+					Llibre:          title,
+					Linked:          pr.PersonaID.Valid,
+					LinkedPersonaID: linkedID,
+				})
+			}
+		}
+	}
+	userID := 0
+	if user != nil {
+		userID = user.ID
+	}
+	if rows, err := a.DB.ListPersonaAnecdotes(id, userID); err == nil {
+		for i, row := range rows {
+			date := ""
+			if row.CreatedAt.Valid {
+				date = row.CreatedAt.Time.Format("2006-01-02")
+			}
+			userLabel := "usuari"
+			if row.UserName.Valid && strings.TrimSpace(row.UserName.String) != "" {
+				userLabel = strings.TrimSpace(row.UserName.String)
+			}
+			anecdotes = append(anecdotes, anecdoteView{
+				ID:       row.ID,
+				Title:    row.Title,
+				Body:     row.Body,
+				Tag:      row.Tag,
+				User:     userLabel,
+				Date:     date,
+				Status:   row.Status,
+				Featured: i == 0 && row.Status == "publicat",
+			})
+		}
+	}
+	if birthDate == "" {
+		for _, ev := range timeline {
+			if ev.Type == "naixement" && ev.Date != "" {
+				birthDate = ev.Date
+				break
+			}
+		}
+	}
+	if baptismDate == "" {
+		for _, ev := range timeline {
+			if ev.Type == "baptisme" && ev.Date != "" {
+				baptismDate = ev.Date
+				break
+			}
+		}
+	}
+	if deathDate == "" {
+		for _, ev := range timeline {
+			if ev.Type == "defuncio" && ev.Date != "" {
+				deathDate = ev.Date
+				break
+			}
+		}
+	}
+	locationLabel := strings.TrimSpace(p.Municipi)
+	if locationLabel == "" {
+		locationLabel = strings.TrimSpace(originMunicipi)
+	}
+	lifeRange := ""
+	if birthDate != "" {
+		lifeRange = birthDate
+	}
+	if deathDate != "" {
+		if lifeRange != "" {
+			lifeRange = lifeRange + " – " + deathDate
+		} else {
+			lifeRange = deathDate
+		}
+	}
+	birthLabel := ""
+	if birthDate != "" {
+		birthLabel = birthDate
+	}
+	if locationLabel != "" {
+		if birthLabel != "" {
+			birthLabel += " · " + locationLabel
+		} else {
+			birthLabel = locationLabel
+		}
+	}
+	deathLabel := ""
+	if deathDate != "" {
+		deathLabel = deathDate
+	}
 	RenderPrivateTemplate(w, r, "persona-detall.html", map[string]interface{}{
 		"Persona":           p,
+		"NomComplet":        fullName,
+		"Initials":          initials,
+		"BirthDate":         birthDate,
+		"BaptismDate":       baptismDate,
+		"DeathDate":         deathDate,
+		"LifeRange":         lifeRange,
+		"BirthLabel":        birthLabel,
+		"DeathLabel":        deathLabel,
+		"LastUpdated":       lastUpdated,
+		"Completesa":        completesa,
+		"CanEditPersona":    canEditPersona,
+		"DocRegistres":      docs,
+		"DocTotal":          totalDocs,
+		"OriginMunicipi":    originMunicipi,
+		"Relacions":         relacions,
+		"TimelineEvents":    timeline,
+		"Anecdotes":         anecdotes,
+		"TipusOptions":      transcripcioTipusActe,
 		"User":              user,
 		"CanManageArxius":   a.hasPerm(perms, permArxius),
 		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
@@ -275,6 +763,108 @@ func (a *App) PersonaRegistres(w http.ResponseWriter, r *http.Request) {
 		"CanModerate":       perms.CanModerate || perms.Admin,
 		"Tab":               "registres",
 	})
+}
+
+func (a *App) PersonaAnecdoteForm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	id := extractID(r.URL.Path)
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	persona, err := a.DB.GetPersona(id)
+	if err != nil || persona == nil {
+		http.NotFound(w, r)
+		return
+	}
+	fullName := strings.TrimSpace(strings.Join([]string{persona.Nom, persona.Cognom1, persona.Cognom2}, " "))
+	if fullName == "" {
+		fullName = persona.NomComplet
+	}
+	RenderPrivateTemplate(w, r, "persona-anecdotes-form.html", map[string]interface{}{
+		"Persona":    persona,
+		"NomComplet": fullName,
+		"Form": map[string]string{
+			"Title": "",
+			"Tag":   "",
+			"Body":  "",
+		},
+		"User": user,
+	})
+}
+
+func (a *App) PersonaAnecdoteCreate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	id := extractID(r.URL.Path)
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	persona, err := a.DB.GetPersona(id)
+	if err != nil || persona == nil {
+		http.NotFound(w, r)
+		return
+	}
+	_ = r.ParseForm()
+	title := strings.TrimSpace(r.FormValue("titol"))
+	body := strings.TrimSpace(r.FormValue("text"))
+	tag := strings.TrimSpace(r.FormValue("tag"))
+	if title == "" || body == "" {
+		fullName := strings.TrimSpace(strings.Join([]string{persona.Nom, persona.Cognom1, persona.Cognom2}, " "))
+		if fullName == "" {
+			fullName = persona.NomComplet
+		}
+		RenderPrivateTemplate(w, r, "persona-anecdotes-form.html", map[string]interface{}{
+			"Persona":      persona,
+			"NomComplet":   fullName,
+			"ErrorMessage": "El títol i el text són obligatoris.",
+			"Form": map[string]string{
+				"Title": title,
+				"Tag":   tag,
+				"Body":  body,
+			},
+			"User": user,
+		})
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	status := "pendent"
+	if perms.Admin || perms.CanModerate {
+		status = "publicat"
+	}
+	anecdote := &db.PersonaAnecdote{
+		PersonaID: id,
+		UserID:    user.ID,
+		Title:     title,
+		Body:      body,
+		Tag:       tag,
+		Status:    status,
+	}
+	if _, err := a.DB.CreatePersonaAnecdote(anecdote); err != nil {
+		http.Error(w, "No s'ha pogut desar l'anècdota", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/persones/"+strconv.Itoa(id)+"#anecdotes", http.StatusSeeOther)
 }
 
 // Creació de persona: qualsevol usuari amb permís can_create_person. Es guarda en estat pendent.

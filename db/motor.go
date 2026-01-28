@@ -192,6 +192,9 @@ type DB interface {
 	GetPersona(id int) (*Persona, error)
 	CreatePersona(p *Persona) (int, error)
 	UpdatePersona(p *Persona) error
+	// Anecdotari persona
+	ListPersonaAnecdotes(personaID int, userID int) ([]PersonaAnecdote, error)
+	CreatePersonaAnecdote(a *PersonaAnecdote) (int, error)
 	UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error
 	UpdateArxiuModeracio(id int, estat, motiu string, moderatorID int) error
 	UpdateLlibreModeracio(id int, estat, motiu string, moderatorID int) error
@@ -882,6 +885,19 @@ type Persona struct {
 type PersonaFilter struct {
 	Estat string
 	Limit int
+}
+
+type PersonaAnecdote struct {
+	ID        int
+	PersonaID int
+	UserID    int
+	UserName  sql.NullString
+	Title     string
+	Body      string
+	Tag       string
+	Status    string
+	CreatedAt sql.NullTime
+	UpdatedAt sql.NullTime
 }
 
 type NivellAdministratiu struct {

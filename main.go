@@ -227,6 +227,14 @@ func main() {
 	http.HandleFunc("/persones/new", applyMiddleware(app.PersonaForm, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/persones/save", applyMiddleware(app.PersonaSave, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/persones/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/anecdotes/new") && r.Method == http.MethodGet {
+			applyMiddleware(app.RequireLogin(app.PersonaAnecdoteForm), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/anecdotes") && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.PersonaAnecdoteCreate), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/registres") && r.Method == http.MethodGet {
 			applyMiddleware(app.RequireLogin(app.PersonaRegistres), core.BlockIPs, core.RateLimit)(w, r)
 			return

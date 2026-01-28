@@ -139,6 +139,24 @@ CREATE TABLE IF NOT EXISTS persona_possibles_duplicats (
     quinta TEXT
 );
 
+-- Anecdotari de persona
+CREATE TABLE IF NOT EXISTS persona_anecdotari (
+    id SERIAL PRIMARY KEY,
+    persona_id INTEGER NOT NULL REFERENCES persona(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    tag TEXT,
+    status TEXT NOT NULL DEFAULT 'pendent' CHECK (status IN ('pendent','publicat','rebutjat')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_persona_anecdotari_persona
+  ON persona_anecdotari(persona_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_persona_anecdotari_status
+  ON persona_anecdotari(status, created_at DESC);
+
 -- Taules de DADES GEOGRÀFIQUES I HISTÒRIQUES
 ------------------------------------------------------------------------------------------------------------------------
 

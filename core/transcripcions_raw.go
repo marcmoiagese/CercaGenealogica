@@ -301,7 +301,12 @@ func rawFieldValue(r db.TranscripcioRaw, field string) string {
 
 func attrValueStringRaw(a db.TranscripcioAtributRaw) string {
 	if a.ValorDate.Valid {
-		return formatDateDisplay(a.ValorDate.String)
+		if formatted := formatDateDisplay(a.ValorDate.String); formatted != "" {
+			return formatted
+		}
+	}
+	if a.ValorText != "" {
+		return a.ValorText
 	}
 	if a.ValorInt.Valid {
 		return strconv.FormatInt(a.ValorInt.Int64, 10)
@@ -312,7 +317,7 @@ func attrValueStringRaw(a db.TranscripcioAtributRaw) string {
 		}
 		return "0"
 	}
-	return a.ValorText
+	return ""
 }
 
 func personFieldValue(p *db.TranscripcioPersonaRaw, field string) string {
@@ -2537,14 +2542,59 @@ func (a *App) AdminConvertRegistreToPersona(w http.ResponseWriter, r *http.Reque
 		CreatedBy:      sqlNullIntFromInt(user.ID),
 		UpdatedBy:      sqlNullIntFromInt(user.ID),
 	}
-	if val := attrValueByKeysRaw(atributs, "data_naixement", "datanaixement", "naixement"); val != "" {
+	if val := attrValueByKeysRaw(atributs,
+		"data_naixement", "datanaixement", "naixement",
+		"data_naixament", "datanaixament", "naixament",
+		"nascut", "data_nascut", "datanascut",
+	); val != "" {
 		persona.DataNaixement = parseNullString(val)
 	}
-	if val := attrValueByKeysRaw(atributs, "data_bateig", "databateig", "data_baptisme", "databaptisme"); val != "" {
+	if val := attrValueByKeysRaw(atributs,
+		"data_bateig", "databateig",
+		"data_baptisme", "databaptisme",
+		"bateig", "baptisme", "databapt", "data_bapt",
+	); val != "" {
 		persona.DataBateig = parseNullString(val)
 	}
 	if val := attrValueByKeysRaw(atributs, "data_defuncio", "datadefuncio", "defuncio"); val != "" {
 		persona.DataDefuncio = parseNullString(val)
+	}
+	acte := normalizeRole(registre.TipusActe)
+	if !persona.DataNaixement.Valid && acte == "naixement" {
+		date := ""
+		if registre.DataActeISO.Valid {
+			date = strings.TrimSpace(registre.DataActeISO.String)
+		}
+		if date == "" {
+			date = strings.TrimSpace(registre.DataActeText)
+		}
+		if date != "" {
+			persona.DataNaixement = parseNullString(date)
+		}
+	}
+	if !persona.DataBateig.Valid && acte == "baptisme" {
+		date := ""
+		if registre.DataActeISO.Valid {
+			date = strings.TrimSpace(registre.DataActeISO.String)
+		}
+		if date == "" {
+			date = strings.TrimSpace(registre.DataActeText)
+		}
+		if date != "" {
+			persona.DataBateig = parseNullString(date)
+		}
+	}
+	if !persona.DataDefuncio.Valid && acte == "defuncio" {
+		date := ""
+		if registre.DataActeISO.Valid {
+			date = strings.TrimSpace(registre.DataActeISO.String)
+		}
+		if date == "" {
+			date = strings.TrimSpace(registre.DataActeText)
+		}
+		if date != "" {
+			persona.DataDefuncio = parseNullString(date)
+		}
 	}
 	personaID, err := a.DB.CreatePersona(&persona)
 	if err != nil {

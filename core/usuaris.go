@@ -738,6 +738,9 @@ func formatDateInput(dateStr string) string {
 	}
 	for _, layout := range layouts {
 		if t, err := time.Parse(layout, dateStr); err == nil {
+			if t.Year() <= 1 {
+				return ""
+			}
 			return t.Format("2006-01-02")
 		}
 	}
@@ -755,6 +758,9 @@ func formatDateDisplay(dateStr string) string {
 	}
 	for _, layout := range layouts {
 		if t, err := time.Parse(layout, dateStr); err == nil {
+			if t.Year() <= 1 {
+				return ""
+			}
 			return t.Format("02/01/2006")
 		}
 	}
@@ -772,6 +778,9 @@ func formatDateTimeDisplay(dateStr string) string {
 	}
 	for _, layout := range layouts {
 		if t, err := time.Parse(layout, dateStr); err == nil {
+			if t.Year() <= 1 {
+				return ""
+			}
 			if layout == "2006-01-02" {
 				return t.Format("02/01/2006")
 			}

@@ -295,6 +295,12 @@ func (d *MySQL) CreatePersona(p *Persona) (int, error) {
 func (d *MySQL) UpdatePersona(p *Persona) error {
 	return d.help.updatePersona(p)
 }
+func (d *MySQL) ListPersonaAnecdotes(personaID int, userID int) ([]PersonaAnecdote, error) {
+	return d.help.listPersonaAnecdotes(personaID, userID)
+}
+func (d *MySQL) CreatePersonaAnecdote(a *PersonaAnecdote) (int, error) {
+	return d.help.createPersonaAnecdote(a)
+}
 func (d *MySQL) UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updatePersonaModeracio(id, estat, motiu, moderatorID)
 }
