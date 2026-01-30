@@ -1,0 +1,53 @@
+{{ define "wiki-stats.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "wiki.stats.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/persona.css">
+    <link rel="stylesheet" href="/static/css/persona-estadistiques.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card detall-persona">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "wiki.stats.title" }}</h1>
+                    {{ if .Data.Title }}
+                    <p class="muted">{{ .Data.Title }}</p>
+                    {{ end }}
+                </div>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="{{ .Data.BackURL }}">{{ t .Lang "wiki.stats.back" }}</a>
+                </div>
+            </header>
+
+            <div class="seccio-estadistiques">
+                <div class="seccio-titol">
+                    <i class="fas fa-chart-line"></i>
+                    <span>{{ t .Lang "wiki.stats.subtitle" }}</span>
+                </div>
+
+                <div class="grup-relacions">
+                    {{ range .Data.Groups }}
+                    <div class="relacio-grup">
+                        <div class="relacio-titol">{{ .Label }}</div>
+                        {{ if gt .Count 0 }}
+                        <p class="muted"><strong>{{ .Count }}</strong> {{ t $.Lang "wiki.stats.count" }}</p>
+                        {{ else }}
+                        <p class="muted">{{ t $.Lang "wiki.stats.empty" }}</p>
+                        {{ end }}
+                    </div>
+                    {{ end }}
+                </div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

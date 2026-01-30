@@ -5,12 +5,20 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "archives.title" }} - {{ .Data.Arxiu.Nom }}</title>
     {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/persona.css">
     <link rel="stylesheet" href="/static/css/arxiu-pro.css">
 </head>
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
     <main class="contingut-principal arxiu-pro">
+        <div id="arxiu-mark-state"
+             data-arxiu-id="{{ .Data.Arxiu.ID }}"
+             data-mark-type="{{ .Data.MarkType }}"
+             data-mark-public="{{ if .Data.MarkPublic }}1{{ else }}0{{ end }}"
+             data-mark-own="{{ if .Data.MarkOwn }}1{{ else }}0{{ end }}"
+             data-csrf="{{ .Data.CSRFToken }}"
+             hidden></div>
         {{ $manageBase := "/documentals/arxius" }}
         <section class="card arxiu-pro-hero">
             <div class="arxiu-pro-hero-top">
@@ -39,6 +47,16 @@
                 </div>
 
                 <div class="arxiu-pro-hero-actions">
+                    <div class="opcions-dropdown">
+                        <button class="boto-opcions" id="botoOpcions">
+                            <i class="fas fa-cog"></i> {{ t .Lang "wiki.options.title" }} <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <ul class="dropdown-opcions" id="dropdownOpcions">
+                            <li><a href="/documentals/arxius/{{ .Data.Arxiu.ID }}/historial"><i class="fas fa-clock-rotate-left"></i> {{ t .Lang "wiki.options.history" }}</a></li>
+                            <li><a href="/documentals/arxius/{{ .Data.Arxiu.ID }}/estadistiques"><i class="fas fa-chart-line"></i> {{ t .Lang "wiki.options.stats" }}</a></li>
+                            <li><a href="#" class="btn-marcar" data-arxiu-id="{{ .Data.Arxiu.ID }}" onclick="event.preventDefault()"><i class="fas fa-eye"></i> {{ t .Lang "wiki.options.follow" }}</a></li>
+                        </ul>
+                    </div>
                     {{ if $.Data.CanEditArxiu }}
                     <a class="boto-secundari" href="{{ $manageBase }}/{{ .Data.Arxiu.ID }}/edit"><i class="fas fa-pen"></i> {{ t .Lang "archives.action.edit" }}</a>
                     {{ end }}
@@ -229,10 +247,171 @@
             </section>
         </section>
     </main>
+
+    <div class="modal-overlay" id="modalMarcarArxiu" role="dialog" aria-modal="true">
+        <div class="modal-box">
+            <header class="modal-header">
+                <h3>{{ t .Lang "wiki.mark.title" }}</h3>
+                <button type="button" class="modal-close" data-modal-close="modalMarcarArxiu">×</button>
+            </header>
+            <div class="grup-camp">
+                <label for="arxiu-mark-type">{{ t .Lang "wiki.mark.select" }}</label>
+                <select id="arxiu-mark-type" class="input-text">
+                    <option value="">{{ t .Lang "common.select" }}</option>
+                    <option value="consanguini">{{ t .Lang "wiki.mark.consanguini" }}</option>
+                    <option value="politic">{{ t .Lang "wiki.mark.politic" }}</option>
+                    <option value="interes">{{ t .Lang "wiki.mark.interes" }}</option>
+                </select>
+            </div>
+            <label class="checkbox-linia">
+                <input type="checkbox" id="arxiu-mark-public" checked>
+                <span>{{ t .Lang "wiki.mark.public" }}</span>
+            </label>
+            <div class="form-accio">
+                <button type="button" class="boto-primari" id="arxiu-mark-save">{{ t .Lang "wiki.mark.save" }}</button>
+                <button type="button" class="boto-secundari" id="arxiu-mark-clear">{{ t .Lang "wiki.mark.clear" }}</button>
+            </div>
+        </div>
+    </div>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
     <script id="arxiuProData" type="application/json">{{ toJsonJS .Data.ArxiuProData }}</script>
     <script src="/static/js/arxiu-pro.js"></script>
+    <script>
+        (function () {
+            const optionsBtn = document.getElementById("botoOpcions");
+            const dropdown = document.getElementById("dropdownOpcions");
+            if (optionsBtn && dropdown) {
+                optionsBtn.addEventListener("click", function (event) {
+                    event.preventDefault();
+                    dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
+                });
+                document.addEventListener("click", function (event) {
+                    if (!event.target.closest(".opcions-dropdown")) {
+                        dropdown.style.display = "none";
+                    }
+                });
+            }
+
+            const markState = document.getElementById("arxiu-mark-state");
+            const modal = document.getElementById("modalMarcarArxiu");
+            const openBtn = document.querySelector(".btn-marcar");
+            const closeBtns = document.querySelectorAll('[data-modal-close="modalMarcarArxiu"]');
+            if (!markState || !modal) {
+                return;
+            }
+            const markType = modal.querySelector("#arxiu-mark-type");
+            const markPublic = modal.querySelector("#arxiu-mark-public");
+            const markSave = modal.querySelector("#arxiu-mark-save");
+            const markClear = modal.querySelector("#arxiu-mark-clear");
+            const arxiuID = parseInt(markState.dataset.arxiuId || "0", 10);
+            const csrfToken = markState.dataset.csrf || "";
+
+            function openModal() {
+                const existingType = markState.dataset.markType || "";
+                const existingPublic = markState.dataset.markPublic !== "0";
+                const own = markState.dataset.markOwn === "1";
+                if (markType) {
+                    markType.value = existingType;
+                }
+                if (markPublic) {
+                    markPublic.checked = existingType ? existingPublic : true;
+                }
+                if (markClear) {
+                    markClear.disabled = !own;
+                }
+                modal.classList.add("is-open");
+            }
+
+            function closeModal() {
+                modal.classList.remove("is-open");
+            }
+
+            if (openBtn) {
+                openBtn.addEventListener("click", function () {
+                    if (!arxiuID) {
+                        return;
+                    }
+                    openModal();
+                });
+            }
+            closeBtns.forEach((btn) => {
+                btn.addEventListener("click", closeModal);
+            });
+
+            if (markSave) {
+                markSave.addEventListener("click", function () {
+                    if (!arxiuID) {
+                        return;
+                    }
+                    const typeValue = markType ? markType.value : "";
+                    if (!typeValue) {
+                        return;
+                    }
+                    const body = new URLSearchParams();
+                    body.set("csrf_token", csrfToken);
+                    body.set("type", typeValue);
+                    body.set("public", markPublic && markPublic.checked ? "1" : "0");
+                    fetch(`/documentals/arxius/${arxiuID}/marcar`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: body.toString(),
+                        credentials: "same-origin",
+                    })
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error("mark_failed");
+                            }
+                            return response.json();
+                        })
+                        .then((data) => {
+                            if (data && data.ok) {
+                                markState.dataset.markType = data.type || "";
+                                markState.dataset.markPublic = data.is_public ? "1" : "0";
+                                markState.dataset.markOwn = "1";
+                                closeModal();
+                            }
+                        })
+                        .catch(() => {});
+                });
+            }
+
+            if (markClear) {
+                markClear.addEventListener("click", function () {
+                    if (!arxiuID) {
+                        return;
+                    }
+                    if (markState.dataset.markOwn !== "1") {
+                        closeModal();
+                        return;
+                    }
+                    const body = new URLSearchParams();
+                    body.set("csrf_token", csrfToken);
+                    fetch(`/documentals/arxius/${arxiuID}/desmarcar`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: body.toString(),
+                        credentials: "same-origin",
+                    })
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error("mark_clear_failed");
+                            }
+                            return response.json();
+                        })
+                        .then((data) => {
+                            if (data && data.ok) {
+                                markState.dataset.markType = "";
+                                markState.dataset.markPublic = "0";
+                                markState.dataset.markOwn = "0";
+                                closeModal();
+                            }
+                        })
+                        .catch(() => {});
+                });
+            }
+        })();
+    </script>
 </body>
 </html>
 {{ end }}

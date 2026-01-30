@@ -2,6 +2,7 @@ package core
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -788,11 +789,49 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 		m.ID = createdID
 		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleMunicipiCreate, "crear", "municipi", &createdID, "pendent", nil, "")
 	} else {
-		if err := a.DB.UpdateMunicipi(m); err != nil {
-			a.renderMunicipiFormError(w, r, m, "No s'ha pogut actualitzar el municipi: "+err.Error(), false)
+		existing, err := a.DB.GetMunicipi(m.ID)
+		if err != nil || existing == nil {
+			a.renderMunicipiFormError(w, r, m, "No s'ha pogut carregar el municipi existent.", false)
 			return
 		}
-		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleMunicipiUpdate, "editar", "municipi", &id, "pendent", nil, "")
+		if existing.ModeracioEstat == "publicat" {
+			after := *m
+			after.ModeracioEstat = "pendent"
+			after.ModeracioMotiu = ""
+			after.ModeratedBy = sql.NullInt64{}
+			after.ModeratedAt = sql.NullTime{}
+			if existing.CreatedBy.Valid {
+				after.CreatedBy = existing.CreatedBy
+			}
+			beforeJSON, _ := json.Marshal(existing)
+			afterJSON, _ := json.Marshal(after)
+			meta, err := buildWikiChangeMetadata(beforeJSON, afterJSON, 0)
+			if err != nil {
+				a.renderMunicipiFormError(w, r, m, "No s'ha pogut preparar el canvi del municipi.", false)
+				return
+			}
+			changeID, err := a.createWikiChange(&db.WikiChange{
+				ObjectType:     "municipi",
+				ObjectID:       m.ID,
+				ChangeType:     "form",
+				FieldKey:       "bulk",
+				Metadata:       meta,
+				ModeracioEstat: "pendent",
+				ChangedBy:      sqlNullIntFromInt(user.ID),
+			})
+			if err != nil {
+				a.renderMunicipiFormError(w, r, m, "No s'ha pogut crear la proposta de canvi: "+err.Error(), false)
+				return
+			}
+			detail := fmt.Sprintf("municipi:%d", m.ID)
+			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleMunicipiUpdate, "editar", "municipi_canvi", &changeID, "pendent", nil, detail)
+		} else {
+			if err := a.DB.UpdateMunicipi(m); err != nil {
+				a.renderMunicipiFormError(w, r, m, "No s'ha pogut actualitzar el municipi: "+err.Error(), false)
+				return
+			}
+			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleMunicipiUpdate, "editar", "municipi", &id, "pendent", nil, "")
+		}
 	}
 	if returnURL != "" {
 		http.Redirect(w, r, returnURL, http.StatusSeeOther)

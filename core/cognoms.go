@@ -84,6 +84,21 @@ func (a *App) CognomDetall(w http.ResponseWriter, r *http.Request) {
 	user, _ := a.VerificarSessio(r)
 	perms := a.getPermissionsForUser(user.ID)
 	canModerate := a.hasPerm(perms, permModerate)
+	markType := ""
+	markPublic := true
+	markOwn := false
+	if user != nil {
+		if marks, err := a.DB.ListWikiMarks("cognom", []int{id}); err == nil {
+			for _, mark := range marks {
+				if mark.UserID == user.ID {
+					markType = mark.Tipus
+					markPublic = mark.IsPublic
+					markOwn = true
+					break
+				}
+			}
+		}
+	}
 	var pendents []db.CognomVariant
 	if canModerate {
 		if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{CognomID: id, Status: "pendent"}); err == nil {
@@ -96,6 +111,10 @@ func (a *App) CognomDetall(w http.ResponseWriter, r *http.Request) {
 		"Variants":        variants,
 		"VariantsPendents": pendents,
 		"CanModerate":     canModerate,
+		"MarkType":        markType,
+		"MarkPublic":      markPublic,
+		"MarkOwn":         markOwn,
+		"WikiPending":     strings.TrimSpace(r.URL.Query().Get("pending")) != "",
 		"MaxYear":         maxYear,
 		"Y0":              1800,
 		"Y1":              maxYear,
@@ -103,6 +122,56 @@ func (a *App) CognomDetall(w http.ResponseWriter, r *http.Request) {
 		"DuplicateVariant": r.URL.Query().Get("duplicate") != "",
 		"SuggestError":    r.URL.Query().Get("err") != "",
 	})
+}
+
+func (a *App) CognomProposeUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/cognoms", http.StatusSeeOther)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Redirect(w, r, "/cognoms?err=csrf", http.StatusSeeOther)
+		return
+	}
+	user, _ := a.VerificarSessio(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	id := extractID(r.URL.Path)
+	cognom, err := a.DB.GetCognom(id)
+	if err != nil || cognom == nil {
+		http.NotFound(w, r)
+		return
+	}
+	origen := strings.TrimSpace(r.FormValue("origen"))
+	notes := strings.TrimSpace(r.FormValue("notes"))
+	after := *cognom
+	after.Origen = origen
+	after.Notes = notes
+	beforeJSON, _ := json.Marshal(cognom)
+	afterJSON, _ := json.Marshal(after)
+	meta, err := buildWikiChangeMetadata(beforeJSON, afterJSON, 0)
+	if err != nil {
+		http.Error(w, "No s'ha pogut preparar la proposta", http.StatusInternalServerError)
+		return
+	}
+	changeID, err := a.createWikiChange(&db.WikiChange{
+		ObjectType:     "cognom",
+		ObjectID:       id,
+		ChangeType:     "form",
+		FieldKey:       "origen_notes",
+		Metadata:       meta,
+		ModeracioEstat: "pendent",
+		ChangedBy:      sqlNullIntFromInt(user.ID),
+	})
+	if err != nil {
+		http.Error(w, "No s'ha pogut crear la proposta", http.StatusInternalServerError)
+		return
+	}
+	detail := "cognom:" + strconv.Itoa(id)
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, "", "editar", "cognom_canvi", &changeID, "pendent", nil, detail)
+	http.Redirect(w, r, "/cognoms/"+strconv.Itoa(id)+"?pending=1", http.StatusSeeOther)
 }
 
 func (a *App) CognomSuggestVariant(w http.ResponseWriter, r *http.Request) {

@@ -585,6 +585,15 @@ func (f *fakeDBVerificar) CreateMediaAccessGrant(grant *db.MediaAccessGrant) (in
 func (f *fakeDBVerificar) InsertMediaAccessLog(entry *db.MediaAccessLog) (int, error) {
 	return 0, nil
 }
+func (f *fakeDBVerificar) GetWikiMark(objectType string, objectID int, userID int) (*db.WikiMark, error) {
+	return nil, errors.New("GetWikiMark not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) IncWikiPublicCount(objectType string, objectID int, tipus string, delta int) error {
+	return errors.New("IncWikiPublicCount not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) GetWikiPublicCounts(objectType string, objectID int) (map[string]int, error) {
+	return nil, errors.New("GetWikiPublicCounts not implemented in fakeDBVerificar")
+}
 
 // Crea una App només amb la fake DB per testejar VerificarSessio.
 func newAppVerificar(dbFake db.DB) *core.App {

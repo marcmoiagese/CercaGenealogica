@@ -739,6 +739,15 @@ func (f *fakeDB) CreateMediaAccessGrant(grant *db.MediaAccessGrant) (int, error)
 func (f *fakeDB) InsertMediaAccessLog(entry *db.MediaAccessLog) (int, error) {
 	return 0, nil
 }
+func (f *fakeDB) GetWikiMark(objectType string, objectID int, userID int) (*db.WikiMark, error) {
+	return nil, nil
+}
+func (f *fakeDB) IncWikiPublicCount(objectType string, objectID int, tipus string, delta int) error {
+	return nil
+}
+func (f *fakeDB) GetWikiPublicCounts(objectType string, objectID int) (map[string]int, error) {
+	return map[string]int{}, nil
+}
 
 // Helper per crear una App amb fakeDB
 func newFakeAppWithUsers(users map[string]*db.User) *core.App {

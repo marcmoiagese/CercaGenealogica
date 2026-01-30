@@ -2,6 +2,7 @@ package core
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -644,11 +645,49 @@ func (a *App) AdminUpdateArxiu(w http.ResponseWriter, r *http.Request) {
 	arxiu.ModeracioEstat = "pendent"
 	arxiu.ModeratedBy = sql.NullInt64{}
 	arxiu.ModeratedAt = sql.NullTime{}
-	if err := a.DB.UpdateArxiu(arxiu); err != nil {
-		a.renderArxiuForm(w, r, arxiu, false, "No s'ha pogut actualitzar.", user, returnURL)
+	existing, err := a.DB.GetArxiu(id)
+	if err != nil || existing == nil {
+		a.renderArxiuForm(w, r, arxiu, false, "No s'ha pogut carregar l'arxiu existent.", user, returnURL)
 		return
 	}
-	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuUpdate, "editar", "arxiu", &id, "pendent", nil, "")
+	if existing.ModeracioEstat == "publicat" {
+		after := *arxiu
+		after.ModeracioEstat = "pendent"
+		after.ModeracioMotiu = ""
+		after.ModeratedBy = sql.NullInt64{}
+		after.ModeratedAt = sql.NullTime{}
+		if existing.CreatedBy.Valid {
+			after.CreatedBy = existing.CreatedBy
+		}
+		beforeJSON, _ := json.Marshal(existing)
+		afterJSON, _ := json.Marshal(after)
+		meta, err := buildWikiChangeMetadata(beforeJSON, afterJSON, 0)
+		if err != nil {
+			a.renderArxiuForm(w, r, arxiu, false, "No s'ha pogut preparar el canvi de l'arxiu.", user, returnURL)
+			return
+		}
+		changeID, err := a.createWikiChange(&db.WikiChange{
+			ObjectType:     "arxiu",
+			ObjectID:       id,
+			ChangeType:     "form",
+			FieldKey:       "bulk",
+			Metadata:       meta,
+			ModeracioEstat: "pendent",
+			ChangedBy:      sqlNullIntFromInt(user.ID),
+		})
+		if err != nil {
+			a.renderArxiuForm(w, r, arxiu, false, "No s'ha pogut crear la proposta de canvi: "+err.Error(), user, returnURL)
+			return
+		}
+		detail := "arxiu:" + strconv.Itoa(id)
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuUpdate, "editar", "arxiu_canvi", &changeID, "pendent", nil, detail)
+	} else {
+		if err := a.DB.UpdateArxiu(arxiu); err != nil {
+			a.renderArxiuForm(w, r, arxiu, false, "No s'ha pogut actualitzar.", user, returnURL)
+			return
+		}
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuUpdate, "editar", "arxiu", &id, "pendent", nil, "")
+	}
 	if returnURL != "" {
 		http.Redirect(w, r, returnURL, http.StatusSeeOther)
 		return
@@ -682,6 +721,19 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 	if arxiu.AcceptaDonacions && strings.TrimSpace(arxiu.DonacionsURL) != "" {
 		if total, err := a.DB.CountArxiuDonacioClicks(id); err == nil {
 			donacionsClicks = total
+		}
+	}
+	markType := ""
+	markPublic := true
+	markOwn := false
+	if marks, err := a.DB.ListWikiMarks("arxiu", []int{id}); err == nil {
+		for _, mark := range marks {
+			if mark.UserID == user.ID {
+				markType = mark.Tipus
+				markPublic = mark.IsPublic
+				markOwn = true
+				break
+			}
 		}
 	}
 	llibres, _ := a.DB.ListArxiuLlibres(id)
@@ -731,6 +783,9 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 		"MunicipiNom":       munNom,
 		"ArxiuProData":      arxiuPro,
 		"DonacionsClicks":   donacionsClicks,
+		"MarkType":          markType,
+		"MarkPublic":        markPublic,
+		"MarkOwn":           markOwn,
 		"CanManageArxius":   true,
 		"CanEditArxiu":      canEditArxiu,
 		"CanDeleteArxiu":    canDeleteArxiu,

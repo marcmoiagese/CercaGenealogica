@@ -2,6 +2,7 @@ package core
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"sort"
 	"strconv"
@@ -587,18 +588,60 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		if err := a.DB.UpdateLlibre(llibre); err != nil {
-			Errorf("Error actualitzant llibre: %v", err)
-			a.renderLlibreForm(w, r, llibre, isNew, "No s'ha pogut actualitzar el llibre.", returnURL, arxiuID)
+		existing, err := a.DB.GetLlibre(llibre.ID)
+		if err != nil || existing == nil {
+			a.renderLlibreForm(w, r, llibre, isNew, "No s'ha pogut carregar el llibre existent.", returnURL, arxiuID)
 			return
 		}
-		if arxiuID > 0 {
-			_ = a.DB.AddArxiuLlibre(arxiuID, llibre.ID, "", "")
-		}
-		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleLlibreUpdate, "editar", "llibre", &llibre.ID, "pendent", nil, "")
-		if llibre.IndexacioCompleta {
-			if err := a.DB.RecalcTranscripcionsRawPageStats(llibre.ID); err != nil {
-				Errorf("Error recalculant registres per pagina del llibre %d: %v", llibre.ID, err)
+		if existing.ModeracioEstat == "publicat" {
+			after := *llibre
+			after.ModeracioEstat = "pendent"
+			after.ModeracioMotiu = ""
+			after.ModeratedBy = sql.NullInt64{}
+			after.ModeratedAt = sql.NullTime{}
+			if existing.CreatedBy.Valid {
+				after.CreatedBy = existing.CreatedBy
+			}
+			beforeJSON, _ := json.Marshal(existing)
+			afterJSON, _ := json.Marshal(after)
+			meta := map[string]interface{}{
+				"before": json.RawMessage(beforeJSON),
+				"after":  json.RawMessage(afterJSON),
+			}
+			if arxiuID > 0 {
+				meta["arxiu_id"] = arxiuID
+			}
+			metaJSON, _ := json.Marshal(meta)
+			changeID, err := a.createWikiChange(&db.WikiChange{
+				ObjectType:     "llibre",
+				ObjectID:       llibre.ID,
+				ChangeType:     "form",
+				FieldKey:       "bulk",
+				Metadata:       string(metaJSON),
+				ModeracioEstat: "pendent",
+				ChangedBy:      sqlNullIntFromInt(user.ID),
+			})
+			if err != nil {
+				Errorf("Error creant proposta llibre: %v", err)
+				a.renderLlibreForm(w, r, llibre, isNew, "No s'ha pogut crear la proposta de canvi.", returnURL, arxiuID)
+				return
+			}
+			detail := "llibre:" + strconv.Itoa(llibre.ID)
+			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleLlibreUpdate, "editar", "llibre_canvi", &changeID, "pendent", nil, detail)
+		} else {
+			if err := a.DB.UpdateLlibre(llibre); err != nil {
+				Errorf("Error actualitzant llibre: %v", err)
+				a.renderLlibreForm(w, r, llibre, isNew, "No s'ha pogut actualitzar el llibre.", returnURL, arxiuID)
+				return
+			}
+			if arxiuID > 0 {
+				_ = a.DB.AddArxiuLlibre(arxiuID, llibre.ID, "", "")
+			}
+			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleLlibreUpdate, "editar", "llibre", &llibre.ID, "pendent", nil, "")
+			if llibre.IndexacioCompleta {
+				if err := a.DB.RecalcTranscripcionsRawPageStats(llibre.ID); err != nil {
+					Errorf("Error recalculant registres per pagina del llibre %d: %v", llibre.ID, err)
+				}
 			}
 		}
 	}
@@ -718,6 +761,21 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 	canExportCSV := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresExportCSV, target)
 	canMarkIndexed := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresMarkIndexed, target)
 	canRecalcIndex := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresRecalcIndex, target)
+	markType := ""
+	markPublic := true
+	markOwn := false
+	if user != nil {
+		if marks, err := a.DB.ListWikiMarks("llibre", []int{id}); err == nil {
+			for _, mark := range marks {
+				if mark.UserID == user.ID {
+					markType = mark.Tipus
+					markPublic = mark.IsPublic
+					markOwn = true
+					break
+				}
+			}
+		}
+	}
 	if (user == nil || !a.CanManageArxius(user)) && llibre.ModeracioEstat != "publicat" {
 		http.NotFound(w, r)
 		return
@@ -1036,6 +1094,9 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		"IsAdmin":             isAdmin,
 		"CanModerate":         canModerate,
 		"PurgeStatus":         purgeStatus,
+		"MarkType":            markType,
+		"MarkPublic":          markPublic,
+		"MarkOwn":             markOwn,
 		"CurrentURL":          r.URL.RequestURI(),
 	})
 }

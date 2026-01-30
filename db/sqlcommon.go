@@ -92,6 +92,37 @@ func parseBoolValue(val interface{}) bool {
 	}
 }
 
+func parseIntValue(val interface{}) int {
+	switch v := val.(type) {
+	case int:
+		return v
+	case int32:
+		return int(v)
+	case int64:
+		return int(v)
+	case uint:
+		return int(v)
+	case uint64:
+		return int(v)
+	case float64:
+		return int(v)
+	case []byte:
+		n, err := strconv.Atoi(strings.TrimSpace(string(v)))
+		if err != nil {
+			return 0
+		}
+		return n
+	case string:
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return 0
+		}
+		return n
+	default:
+		return 0
+	}
+}
+
 func dbTimeString(val interface{}) string {
 	if val == nil {
 		return ""
@@ -5717,6 +5748,389 @@ func (h sqlHelper) deleteTranscripcioMark(transcripcioID, userID int) error {
 	return err
 }
 
+func (h sqlHelper) getWikiMark(objectType string, objectID int, userID int) (*WikiMark, error) {
+	if strings.TrimSpace(objectType) == "" || objectID == 0 || userID == 0 {
+		return nil, nil
+	}
+	query := `
+        SELECT id, object_type, object_id, user_id, tipus, is_public, created_at, updated_at
+        FROM wiki_marques
+        WHERE object_type = ? AND object_id = ? AND user_id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, objectType, objectID, userID)
+	var m WikiMark
+	var isPublic interface{}
+	if err := row.Scan(&m.ID, &m.ObjectType, &m.ObjectID, &m.UserID, &m.Tipus, &isPublic, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	m.IsPublic = parseBoolValue(isPublic)
+	return &m, nil
+}
+
+func (h sqlHelper) listWikiMarks(objectType string, objectIDs []int) ([]WikiMark, error) {
+	if strings.TrimSpace(objectType) == "" || len(objectIDs) == 0 {
+		return []WikiMark{}, nil
+	}
+	placeholders := buildInPlaceholders(h.style, len(objectIDs))
+	query := fmt.Sprintf(`
+        SELECT id, object_type, object_id, user_id, tipus, is_public, created_at, updated_at
+        FROM wiki_marques
+        WHERE object_type = ? AND object_id IN (%s)`, placeholders)
+	args := make([]interface{}, 0, len(objectIDs)+1)
+	args = append(args, objectType)
+	for _, id := range objectIDs {
+		args = append(args, id)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []WikiMark
+	for rows.Next() {
+		var m WikiMark
+		var isPublic interface{}
+		if err := rows.Scan(&m.ID, &m.ObjectType, &m.ObjectID, &m.UserID, &m.Tipus, &isPublic, &m.CreatedAt, &m.UpdatedAt); err != nil {
+			return nil, err
+		}
+		m.IsPublic = parseBoolValue(isPublic)
+		res = append(res, m)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) upsertWikiMark(m *WikiMark) error {
+	query := `
+        INSERT INTO wiki_marques (object_type, object_id, user_id, tipus, is_public, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	switch h.style {
+	case "postgres", "sqlite":
+		query += ` ON CONFLICT (object_type, object_id, user_id)
+        DO UPDATE SET tipus = excluded.tipus, is_public = excluded.is_public, updated_at = ` + h.nowFun
+	case "mysql":
+		query += ` ON DUPLICATE KEY UPDATE tipus = VALUES(tipus), is_public = VALUES(is_public), updated_at = ` + h.nowFun
+	}
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, m.ObjectType, m.ObjectID, m.UserID, m.Tipus, m.IsPublic)
+	return err
+}
+
+func (h sqlHelper) deleteWikiMark(objectType string, objectID int, userID int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM wiki_marques WHERE object_type = ? AND object_id = ? AND user_id = ?`)
+	_, err := h.db.Exec(stmt, objectType, objectID, userID)
+	return err
+}
+
+func (h sqlHelper) incWikiPublicCount(objectType string, objectID int, tipus string, delta int) error {
+	if strings.TrimSpace(objectType) == "" || objectID == 0 || strings.TrimSpace(tipus) == "" || delta == 0 {
+		return nil
+	}
+	if delta < 0 {
+		stmt := `
+            UPDATE wiki_marks_stats
+            SET public_count = CASE WHEN public_count + ? < 0 THEN 0 ELSE public_count + ? END,
+                updated_at = ` + h.nowFun + `
+            WHERE object_type = ? AND object_id = ? AND tipus = ?`
+		stmt = formatPlaceholders(h.style, stmt)
+		_, err := h.db.Exec(stmt, delta, delta, objectType, objectID, tipus)
+		return err
+	}
+	query := `
+        INSERT INTO wiki_marks_stats (object_type, object_id, tipus, public_count, updated_at)
+        VALUES (?, ?, ?, ?, ` + h.nowFun + `)`
+	switch h.style {
+	case "postgres", "sqlite":
+		query += ` ON CONFLICT (object_type, object_id, tipus)
+        DO UPDATE SET public_count = wiki_marks_stats.public_count + excluded.public_count,
+                      updated_at = ` + h.nowFun
+	case "mysql":
+		query += ` ON DUPLICATE KEY UPDATE public_count = public_count + VALUES(public_count),
+                      updated_at = ` + h.nowFun
+	}
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, objectType, objectID, tipus, delta)
+	return err
+}
+
+func (h sqlHelper) getWikiPublicCounts(objectType string, objectID int) (map[string]int, error) {
+	if strings.TrimSpace(objectType) == "" || objectID == 0 {
+		return map[string]int{}, nil
+	}
+	query := `
+        SELECT tipus, public_count
+        FROM wiki_marks_stats
+        WHERE object_type = ? AND object_id = ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, objectType, objectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	res := map[string]int{}
+	for rows.Next() {
+		var tipus string
+		var raw interface{}
+		if err := rows.Scan(&tipus, &raw); err != nil {
+			return nil, err
+		}
+		res[tipus] = parseIntValue(raw)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) createWikiChange(c *WikiChange) (int, error) {
+	estado := strings.TrimSpace(c.ModeracioEstat)
+	if estado == "" {
+		estado = "pendent"
+	}
+	query := `
+        INSERT INTO wiki_canvis (
+            object_type, object_id, change_type, field_key, old_value, new_value, metadata,
+            moderation_status, moderated_by, moderated_at, moderation_notes,
+            changed_by, changed_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += " RETURNING id"
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{
+		c.ObjectType,
+		c.ObjectID,
+		c.ChangeType,
+		c.FieldKey,
+		c.OldValue,
+		c.NewValue,
+		c.Metadata,
+		estado,
+		c.ModeratedBy,
+		c.ModeratedAt,
+		c.ModeracioMotiu,
+		c.ChangedBy,
+	}
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(query, args...).Scan(&c.ID); err != nil {
+			return 0, err
+		}
+		if estado == "pendent" {
+			if err := h.enqueueWikiPending(c); err != nil {
+				_, _ = h.db.Exec(formatPlaceholders(h.style, `DELETE FROM wiki_canvis WHERE id = ?`), c.ID)
+				return 0, err
+			}
+		}
+		return c.ID, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		c.ID = int(id)
+	}
+	if estado == "pendent" {
+		if err := h.enqueueWikiPending(c); err != nil {
+			_, _ = h.db.Exec(formatPlaceholders(h.style, `DELETE FROM wiki_canvis WHERE id = ?`), c.ID)
+			return 0, err
+		}
+	}
+	return c.ID, nil
+}
+
+func (h sqlHelper) getWikiChange(id int) (*WikiChange, error) {
+	query := `
+        SELECT id, object_type, object_id, change_type, field_key, old_value, new_value, metadata,
+               moderation_status, moderated_by, moderated_at, moderation_notes,
+               changed_by, changed_at
+        FROM wiki_canvis
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	var c WikiChange
+	if err := h.db.QueryRow(query, id).Scan(
+		&c.ID,
+		&c.ObjectType,
+		&c.ObjectID,
+		&c.ChangeType,
+		&c.FieldKey,
+		&c.OldValue,
+		&c.NewValue,
+		&c.Metadata,
+		&c.ModeracioEstat,
+		&c.ModeratedBy,
+		&c.ModeratedAt,
+		&c.ModeracioMotiu,
+		&c.ChangedBy,
+		&c.ChangedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (h sqlHelper) listWikiChanges(objectType string, objectID int) ([]WikiChange, error) {
+	query := `
+        SELECT id, object_type, object_id, change_type, field_key, old_value, new_value, metadata,
+               moderation_status, moderated_by, moderated_at, moderation_notes,
+               changed_by, changed_at
+        FROM wiki_canvis
+        WHERE object_type = ? AND object_id = ?
+        ORDER BY changed_at DESC, id DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, objectType, objectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []WikiChange
+	for rows.Next() {
+		var c WikiChange
+		if err := rows.Scan(
+			&c.ID,
+			&c.ObjectType,
+			&c.ObjectID,
+			&c.ChangeType,
+			&c.FieldKey,
+			&c.OldValue,
+			&c.NewValue,
+			&c.Metadata,
+			&c.ModeracioEstat,
+			&c.ModeratedBy,
+			&c.ModeratedAt,
+			&c.ModeracioMotiu,
+			&c.ChangedBy,
+			&c.ChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, c)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) listWikiChangesPending(objectType string, limit int) ([]WikiChange, error) {
+	where := `moderation_status = 'pendent'`
+	args := []interface{}{}
+	if strings.TrimSpace(objectType) != "" {
+		where += ` AND object_type = ?`
+		args = append(args, objectType)
+	}
+	query := `
+        SELECT id, object_type, object_id, change_type, field_key, old_value, new_value, metadata,
+               moderation_status, moderated_by, moderated_at, moderation_notes,
+               changed_by, changed_at
+        FROM wiki_canvis
+        WHERE ` + where + `
+        ORDER BY changed_at DESC, id DESC`
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", limit)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []WikiChange
+	for rows.Next() {
+		var c WikiChange
+		if err := rows.Scan(
+			&c.ID,
+			&c.ObjectType,
+			&c.ObjectID,
+			&c.ChangeType,
+			&c.FieldKey,
+			&c.OldValue,
+			&c.NewValue,
+			&c.Metadata,
+			&c.ModeracioEstat,
+			&c.ModeratedBy,
+			&c.ModeratedAt,
+			&c.ModeracioMotiu,
+			&c.ChangedBy,
+			&c.ChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, c)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) updateWikiChangeModeracio(id int, estat, motiu string, moderatorID int) error {
+	stmt := `UPDATE wiki_canvis SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	now := time.Now()
+	if _, err := h.db.Exec(stmt, estat, motiu, moderatorID, now, id); err != nil {
+		return err
+	}
+	if strings.TrimSpace(estat) != "pendent" {
+		if err := h.dequeueWikiPending(id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) enqueueWikiPending(change *WikiChange) error {
+	if change == nil || change.ID == 0 {
+		return fmt.Errorf("change invàlid")
+	}
+	changedAt := change.ChangedAt
+	if changedAt.IsZero() {
+		changedAt = time.Now()
+	}
+	createdAt := time.Now()
+	stmt := `
+        INSERT INTO wiki_pending_queue (change_id, object_type, object_id, changed_at, changed_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)`
+	switch h.style {
+	case "postgres", "sqlite":
+		stmt += ` ON CONFLICT (change_id) DO NOTHING`
+	case "mysql":
+		stmt += ` ON DUPLICATE KEY UPDATE change_id = change_id`
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, change.ID, change.ObjectType, change.ObjectID, changedAt, change.ChangedBy, createdAt)
+	return err
+}
+
+func (h sqlHelper) dequeueWikiPending(changeID int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM wiki_pending_queue WHERE change_id = ?`)
+	_, err := h.db.Exec(stmt, changeID)
+	return err
+}
+
+func (h sqlHelper) listWikiPending(limit int) ([]WikiPendingItem, error) {
+	query := `
+        SELECT change_id, object_type, object_id, changed_at, changed_by, created_at
+        FROM wiki_pending_queue
+        ORDER BY changed_at DESC, change_id DESC`
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", limit)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []WikiPendingItem
+	for rows.Next() {
+		var item WikiPendingItem
+		if err := rows.Scan(&item.ChangeID, &item.ObjectType, &item.ObjectID, &item.ChangedAt, &item.ChangedBy, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, item)
+	}
+	return res, rows.Err()
+}
+
 func (h sqlHelper) searchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
 	where := []string{"1=1"}
 	args := []interface{}{}
@@ -5957,6 +6371,13 @@ func (h sqlHelper) getCognom(id int) (*Cognom, error) {
 	c.Origen = origen.String
 	c.Notes = notes.String
 	return &c, nil
+}
+
+func (h sqlHelper) updateCognom(c *Cognom) error {
+	stmt := `UPDATE cognoms SET origen = ?, notes = ?, updated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, c.Origen, c.Notes, time.Now(), c.ID)
+	return err
 }
 
 func (h sqlHelper) upsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {

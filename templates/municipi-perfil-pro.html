@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ t .Lang "municipis.title" }} · {{ .Data.Municipi.Nom }}</title>
     {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/persona.css">
     <link rel="stylesheet" href="/static/css/estils-v8.css">
     <link rel="stylesheet" href="/static/css/municipi.css">
     <link rel="stylesheet" href="/static/css/mapes.css">
@@ -22,10 +23,31 @@
         {{ template "header-public" . }}
     {{ end }}
     <main class="contingut-principal muni-page">
+        {{ if .UserLoggedIn }}
+        <div id="municipi-mark-state"
+             data-municipi-id="{{ .Data.Municipi.ID }}"
+             data-mark-type="{{ .Data.MarkType }}"
+             data-mark-public="{{ if .Data.MarkPublic }}1{{ else }}0{{ end }}"
+             data-mark-own="{{ if .Data.MarkOwn }}1{{ else }}0{{ end }}"
+             data-csrf="{{ .Data.CSRFToken }}"
+             hidden></div>
+        {{ end }}
         <section class="card muni-hero">
             <div class="muni-hero-left">
                 <div class="muni-title-row">
                     <h1 class="muni-title">{{ .Data.Municipi.Nom }}</h1>
+                    {{ if .UserLoggedIn }}
+                    <div class="opcions-dropdown">
+                        <button class="boto-opcions" id="botoOpcions">
+                            <i class="fas fa-cog"></i> {{ t .Lang "wiki.options.title" }} <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <ul class="dropdown-opcions" id="dropdownOpcions">
+                            <li><a href="/territori/municipis/{{ .Data.Municipi.ID }}/historial"><i class="fas fa-clock-rotate-left"></i> {{ t .Lang "wiki.options.history" }}</a></li>
+                            <li><a href="/territori/municipis/{{ .Data.Municipi.ID }}/estadistiques"><i class="fas fa-chart-line"></i> {{ t .Lang "wiki.options.stats" }}</a></li>
+                            <li><a href="#" class="btn-marcar" data-municipi-id="{{ .Data.Municipi.ID }}" onclick="event.preventDefault()"><i class="fas fa-eye"></i> {{ t .Lang "wiki.options.follow" }}</a></li>
+                        </ul>
+                    </div>
+                    {{ end }}
                     <div class="muni-badges">
                         <span class="muni-pill"><i class="fas fa-location-dot"></i> {{ .Data.TypeLabel }}</span>
                         {{ if .Data.ShowStatusBadge }}
@@ -410,7 +432,33 @@
             </section>
         </div>
 
-        
+        {{ if .UserLoggedIn }}
+        <div class="modal-overlay" id="modalMarcarMunicipi" role="dialog" aria-modal="true">
+            <div class="modal-box">
+                <header class="modal-header">
+                    <h3>{{ t .Lang "wiki.mark.title" }}</h3>
+                    <button type="button" class="modal-close" data-modal-close="modalMarcarMunicipi">×</button>
+                </header>
+                <div class="grup-camp">
+                    <label for="muni-mark-type">{{ t .Lang "wiki.mark.select" }}</label>
+                    <select id="muni-mark-type" class="input-text">
+                        <option value="">{{ t .Lang "common.select" }}</option>
+                        <option value="consanguini">{{ t .Lang "wiki.mark.consanguini" }}</option>
+                        <option value="politic">{{ t .Lang "wiki.mark.politic" }}</option>
+                        <option value="interes">{{ t .Lang "wiki.mark.interes" }}</option>
+                    </select>
+                </div>
+                <label class="checkbox-linia">
+                    <input type="checkbox" id="muni-mark-public" checked>
+                    <span>{{ t .Lang "wiki.mark.public" }}</span>
+                </label>
+                <div class="form-accio">
+                    <button type="button" class="boto-primari" id="muni-mark-save">{{ t .Lang "wiki.mark.save" }}</button>
+                    <button type="button" class="boto-secundari" id="muni-mark-clear">{{ t .Lang "wiki.mark.clear" }}</button>
+                </div>
+            </div>
+        </div>
+        {{ end }}
     </main>
 
     
@@ -426,6 +474,141 @@
     <script src="/static/js/municipi-demografia.js"></script>
     <script src="/static/js/municipi-stats-noms-cognoms.js"></script>
     <script src="/static/js/municipi-anecdotes-slider.js"></script>
+    <script>
+        (function () {
+            const optionsBtn = document.getElementById("botoOpcions");
+            const dropdown = document.getElementById("dropdownOpcions");
+            if (optionsBtn && dropdown) {
+                optionsBtn.addEventListener("click", function (event) {
+                    event.preventDefault();
+                    dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
+                });
+                document.addEventListener("click", function (event) {
+                    if (!event.target.closest(".opcions-dropdown")) {
+                        dropdown.style.display = "none";
+                    }
+                });
+            }
+
+            const markState = document.getElementById("municipi-mark-state");
+            const modal = document.getElementById("modalMarcarMunicipi");
+            const openBtn = document.querySelector(".btn-marcar");
+            const closeBtns = document.querySelectorAll('[data-modal-close="modalMarcarMunicipi"]');
+            if (!markState || !modal) {
+                return;
+            }
+            const markType = modal.querySelector("#muni-mark-type");
+            const markPublic = modal.querySelector("#muni-mark-public");
+            const markSave = modal.querySelector("#muni-mark-save");
+            const markClear = modal.querySelector("#muni-mark-clear");
+            const municipiID = parseInt(markState.dataset.municipiId || "0", 10);
+            const csrfToken = markState.dataset.csrf || "";
+
+            function openModal() {
+                const existingType = markState.dataset.markType || "";
+                const existingPublic = markState.dataset.markPublic !== "0";
+                const own = markState.dataset.markOwn === "1";
+                if (markType) {
+                    markType.value = existingType;
+                }
+                if (markPublic) {
+                    markPublic.checked = existingType ? existingPublic : true;
+                }
+                if (markClear) {
+                    markClear.disabled = !own;
+                }
+                modal.classList.add("is-open");
+            }
+
+            function closeModal() {
+                modal.classList.remove("is-open");
+            }
+
+            if (openBtn) {
+                openBtn.addEventListener("click", function () {
+                    if (!municipiID) {
+                        return;
+                    }
+                    openModal();
+                });
+            }
+            closeBtns.forEach((btn) => {
+                btn.addEventListener("click", closeModal);
+            });
+
+            if (markSave) {
+                markSave.addEventListener("click", function () {
+                    if (!municipiID) {
+                        return;
+                    }
+                    const typeValue = markType ? markType.value : "";
+                    if (!typeValue) {
+                        return;
+                    }
+                    const body = new URLSearchParams();
+                    body.set("csrf_token", csrfToken);
+                    body.set("type", typeValue);
+                    body.set("public", markPublic && markPublic.checked ? "1" : "0");
+                    fetch(`/territori/municipis/${municipiID}/marcar`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: body.toString(),
+                        credentials: "same-origin",
+                    })
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error("mark_failed");
+                            }
+                            return response.json();
+                        })
+                        .then((data) => {
+                            if (data && data.ok) {
+                                markState.dataset.markType = data.type || "";
+                                markState.dataset.markPublic = data.is_public ? "1" : "0";
+                                markState.dataset.markOwn = "1";
+                                closeModal();
+                            }
+                        })
+                        .catch(() => {});
+                });
+            }
+
+            if (markClear) {
+                markClear.addEventListener("click", function () {
+                    if (!municipiID) {
+                        return;
+                    }
+                    if (markState.dataset.markOwn !== "1") {
+                        closeModal();
+                        return;
+                    }
+                    const body = new URLSearchParams();
+                    body.set("csrf_token", csrfToken);
+                    fetch(`/territori/municipis/${municipiID}/desmarcar`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: body.toString(),
+                        credentials: "same-origin",
+                    })
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error("mark_clear_failed");
+                            }
+                            return response.json();
+                        })
+                        .then((data) => {
+                            if (data && data.ok) {
+                                markState.dataset.markType = "";
+                                markState.dataset.markPublic = "0";
+                                markState.dataset.markOwn = "0";
+                                closeModal();
+                            }
+                        })
+                        .catch(() => {});
+                });
+            }
+        })();
+    </script>
 </body>
 </html>
 {{ end }}

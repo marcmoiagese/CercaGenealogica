@@ -1,0 +1,239 @@
+{{ define "wiki-history.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "wiki.history.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/persona.css">
+    <link rel="stylesheet" href="/static/css/persona-canvis.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card detall-persona">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "wiki.history.title" }}</h1>
+                    {{ if .Data.Title }}
+                    <p class="muted">{{ .Data.Title }}</p>
+                    {{ end }}
+                </div>
+                <div class="arxiu-header-actions">
+                    <a class="boto-secundari" href="{{ .Data.BackURL }}">{{ t .Lang "wiki.history.back" }}</a>
+                </div>
+            </header>
+
+            <div class="seleccio-info">
+                <p><strong>{{ t .Lang "wiki.history.selected" }}</strong> <span id="history-selected-count">0</span></p>
+                <div class="accions-revisio">
+                    <button type="button" class="boto-comparar" id="history-compare" disabled>{{ t .Lang "wiki.history.compare" }}</button>
+                </div>
+            </div>
+
+            <div class="timeline" id="history-timeline" data-history-url="{{ .Data.HistoryURL }}">
+                {{ range .Data.History }}
+                <div class="timeline-item">
+                    <input type="checkbox" class="revisio-check" data-change-id="{{ .ID }}" data-has-snapshot="{{ if .HasSnapshot }}1{{ else }}0{{ end }}" {{ if not .HasSnapshot }}disabled{{ end }}>
+                    <div class="timeline-bola"></div>
+                    <div class="info-revisio">
+                        <p><strong>{{ t $.Lang "wiki.history.version" }}:</strong> #{{ .Seq }}</p>
+                        <p><strong>{{ t $.Lang "wiki.history.date" }}:</strong> {{ .ChangedAt }}</p>
+                        <p><strong>{{ t $.Lang "wiki.history.user" }}:</strong> {{ .ChangedBy }}</p>
+                        {{ if .ModeratedBy }}
+                        <p><strong>{{ t $.Lang "wiki.history.moderated_by" }}:</strong> {{ .ModeratedBy }}</p>
+                        {{ end }}
+                        {{ if .ModeratedAt }}
+                        <p><strong>{{ t $.Lang "wiki.history.moderated_at" }}:</strong> {{ .ModeratedAt }}</p>
+                        {{ end }}
+                        {{ if .ModeracioEstat }}
+                        <p><strong>{{ t $.Lang "moderation.status" }}:</strong> <span class="status-pill status-{{ .ModeracioEstat }}">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></p>
+                        {{ end }}
+                        {{ if .ChangeType }}
+                        <p><strong>{{ t $.Lang "wiki.history.change" }}:</strong> {{ .ChangeType }}</p>
+                        {{ end }}
+                        {{ if .HasSnapshot }}
+                        <a href="{{ $.Data.HistoryURL }}?view={{ .ID }}">{{ t $.Lang "wiki.history.view" }}</a>
+                        {{ else }}
+                        <span class="muted">{{ t $.Lang "wiki.history.view" }}</span>
+                        {{ end }}
+                        {{ if not .HasSnapshot }}
+                        <p><strong>{{ t $.Lang "wiki.history.field" }}:</strong> {{ .FieldKey }}</p>
+                        <p><strong>{{ t $.Lang "wiki.history.before" }}:</strong> {{ .OldValue }}</p>
+                        <p><strong>{{ t $.Lang "wiki.history.after" }}:</strong> {{ .NewValue }}</p>
+                        {{ end }}
+                    </div>
+                    <div class="accions-revisio">
+                        {{ if and .HasSnapshot }}
+                        <button type="button" class="boto-comparar history-compare-one" data-compare-id="{{ .ID }}">{{ t $.Lang "wiki.history.compare_current" }}</button>
+                        {{ end }}
+                        {{ if and .HasSnapshot .CanRevert }}
+                        <button type="button" class="boto-revertir history-revert" data-change-id="{{ .ID }}">{{ t $.Lang "wiki.history.revert" }}</button>
+                        {{ end }}
+                    </div>
+                </div>
+                {{ else }}
+                <p class="muted">{{ t .Lang "wiki.history.no_changes" }}</p>
+                {{ end }}
+            </div>
+        </section>
+
+        {{ if .Data.ViewFields }}
+        <section class="card">
+            <header class="card-header">
+                <h2>{{ t .Lang "wiki.history.view" }} · {{ .Data.ViewLabel }}</h2>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "wiki.history.field" }}</th>
+                            <th>{{ t .Lang "wiki.history.value" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.ViewFields }}
+                        <tr>
+                            <td>{{ .Label }}</td>
+                            <td>{{ if .Value }}{{ .Value }}{{ else }}—{{ end }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {{ end }}
+
+        {{ if .Data.CompareFields }}
+        <section class="card">
+            <header class="card-header">
+                <h2>{{ t .Lang "wiki.history.diff" }}</h2>
+                {{ if .Data.CompareLeftLabel }}
+                <p class="muted">{{ .Data.CompareLeftLabel }} · {{ .Data.CompareRightLabel }}</p>
+                {{ end }}
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "wiki.history.field" }}</th>
+                            <th>{{ t .Lang "wiki.history.before" }}</th>
+                            <th>{{ t .Lang "wiki.history.after" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.CompareFields }}
+                        <tr>
+                            <td>{{ .Label }}</td>
+                            <td>{{ if .Before }}{{ .Before }}{{ else }}—{{ end }}</td>
+                            <td>{{ if .After }}{{ .After }}{{ else }}—{{ end }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {{ end }}
+    </main>
+
+    <div class="modal-overlay" id="revert-modal" role="dialog" aria-modal="true">
+        <div class="modal-box">
+            <header class="modal-header">
+                <h3>{{ t .Lang "wiki.history.revert.title" }}</h3>
+                <button type="button" class="modal-close" data-modal-close="revert-modal">×</button>
+            </header>
+            <form method="post" action="{{ .Data.RevertURL }}">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="change_id" id="revert-change-id">
+                <input type="hidden" name="return_to" value="{{ .Data.HistoryURL }}">
+                <div class="grup-camp">
+                    <label for="revert-reason">{{ t .Lang "wiki.history.reason" }}</label>
+                    <textarea id="revert-reason" name="reason" rows="3" class="input-text" placeholder="{{ t .Lang "wiki.history.reason.placeholder" }}"></textarea>
+                    <p class="muted">{{ t .Lang "wiki.history.revert.helper" }}</p>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "wiki.history.submit" }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const timeline = document.getElementById('history-timeline');
+            const checks = Array.from(document.querySelectorAll('.revisio-check'));
+            const countEl = document.getElementById('history-selected-count');
+            const compareBtn = document.getElementById('history-compare');
+            const compareOne = document.querySelectorAll('.history-compare-one');
+            const revertButtons = document.querySelectorAll('.history-revert');
+            const modal = document.getElementById('revert-modal');
+            const modalClose = document.querySelectorAll('[data-modal-close="revert-modal"]');
+            const revertChangeInput = document.getElementById('revert-change-id');
+            const historyUrl = timeline ? timeline.dataset.historyUrl : '';
+
+            const updateCount = () => {
+                const selected = checks.filter((el) => el.checked && el.dataset.hasSnapshot === "1");
+                if (countEl) {
+                    countEl.textContent = String(selected.length);
+                }
+                if (compareBtn) {
+                    compareBtn.disabled = selected.length < 2;
+                }
+            };
+
+            checks.forEach((el) => el.addEventListener('change', updateCount));
+            updateCount();
+
+            if (compareBtn) {
+                compareBtn.addEventListener('click', () => {
+                    const selected = checks.filter((el) => el.checked && el.dataset.hasSnapshot === "1").map((el) => el.dataset.changeId);
+                    if (selected.length < 2 || !historyUrl) {
+                        return;
+                    }
+                    const params = new URLSearchParams();
+                    params.set('compare', selected.join(','));
+                    window.location.href = historyUrl + "?" + params.toString();
+                });
+            }
+
+            compareOne.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    if (!historyUrl) {
+                        return;
+                    }
+                    const compareId = btn.dataset.compareId;
+                    if (!compareId) {
+                        return;
+                    }
+                    const params = new URLSearchParams();
+                    params.set('compare', `current,${compareId}`);
+                    window.location.href = historyUrl + "?" + params.toString();
+                });
+            });
+
+            revertButtons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    if (revertChangeInput) {
+                        revertChangeInput.value = btn.dataset.changeId || '';
+                    }
+                    if (modal) {
+                        modal.classList.add('is-open');
+                    }
+                });
+            });
+
+            modalClose.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    if (modal) {
+                        modal.classList.remove('is-open');
+                    }
+                });
+            });
+        })();
+    </script>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

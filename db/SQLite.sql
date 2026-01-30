@@ -828,6 +828,68 @@ CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_canvis_transcripcio
 CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_canvis_changed_by
   ON transcripcions_raw_canvis(changed_by);
 
+CREATE TABLE IF NOT EXISTS wiki_marques (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  tipus TEXT NOT NULL CHECK(tipus IN ('consanguini','politic','interes')),
+  is_public INTEGER NOT NULL DEFAULT 1 CHECK (is_public IN (0,1)),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (object_type, object_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_wiki_marques_object
+  ON wiki_marques(object_type, object_id);
+CREATE INDEX IF NOT EXISTS idx_wiki_marques_user
+  ON wiki_marques(user_id);
+
+CREATE TABLE IF NOT EXISTS wiki_marks_stats (
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_id INTEGER NOT NULL,
+  tipus TEXT NOT NULL CHECK(tipus IN ('consanguini','politic','interes')),
+  public_count INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (object_type, object_id, tipus)
+);
+CREATE INDEX IF NOT EXISTS idx_wiki_marks_stats_object
+  ON wiki_marks_stats(object_type, object_id);
+
+CREATE TABLE IF NOT EXISTS wiki_canvis (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_id INTEGER NOT NULL,
+  change_type TEXT NOT NULL,
+  field_key TEXT NOT NULL,
+  old_value TEXT,
+  new_value TEXT,
+  metadata TEXT,
+  moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP,
+  moderation_notes TEXT,
+  changed_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_wiki_canvis_object
+  ON wiki_canvis(object_type, object_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wiki_canvis_status_changed
+  ON wiki_canvis(moderation_status, changed_at DESC);
+
+CREATE TABLE IF NOT EXISTS wiki_pending_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  change_id INTEGER NOT NULL UNIQUE REFERENCES wiki_canvis(id) ON DELETE CASCADE,
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_id INTEGER NOT NULL,
+  changed_at TIMESTAMP NOT NULL,
+  changed_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_wiki_pending_changed_at
+  ON wiki_pending_queue(changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wiki_pending_object
+  ON wiki_pending_queue(object_type, object_id);
+
 -- Cognoms (forma canònica)
 CREATE TABLE IF NOT EXISTS cognoms (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

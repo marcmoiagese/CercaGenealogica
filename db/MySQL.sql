@@ -1107,6 +1107,67 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw_canvis (
   FOREIGN KEY (changed_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS wiki_marques (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  object_type VARCHAR(32) NOT NULL,
+  object_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
+  tipus ENUM('consanguini','politic','interes') NOT NULL,
+  is_public TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_wiki_marques (object_type, object_id, user_id),
+  INDEX idx_wiki_marques_object (object_type, object_id),
+  INDEX idx_wiki_marques_user (user_id),
+  FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS wiki_marks_stats (
+  object_type VARCHAR(32) NOT NULL,
+  object_id INT UNSIGNED NOT NULL,
+  tipus ENUM('consanguini','politic','interes') NOT NULL,
+  public_count INT UNSIGNED NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (object_type, object_id, tipus),
+  INDEX idx_wiki_marks_stats_object (object_type, object_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS wiki_canvis (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  object_type VARCHAR(32) NOT NULL,
+  object_id INT UNSIGNED NOT NULL,
+  change_type VARCHAR(50) NOT NULL,
+  field_key VARCHAR(100) NOT NULL,
+  old_value TEXT,
+  new_value TEXT,
+  metadata TEXT,
+  moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'pendent',
+  moderated_by INT UNSIGNED NULL,
+  moderated_at DATETIME NULL,
+  moderation_notes TEXT,
+  changed_by INT UNSIGNED NULL,
+  changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_wiki_canvis_object (object_type, object_id, changed_at),
+  INDEX idx_wiki_canvis_status_changed (moderation_status, changed_at),
+  FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+  FOREIGN KEY (changed_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS wiki_pending_queue (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  change_id INT UNSIGNED NOT NULL,
+  object_type VARCHAR(32) NOT NULL,
+  object_id INT UNSIGNED NOT NULL,
+  changed_at DATETIME NOT NULL,
+  changed_by INT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_wiki_pending_change (change_id),
+  INDEX idx_wiki_pending_changed_at (changed_at),
+  INDEX idx_wiki_pending_object (object_type, object_id),
+  FOREIGN KEY (change_id) REFERENCES wiki_canvis(id) ON DELETE CASCADE,
+  FOREIGN KEY (changed_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Cognoms (forma canònica)
 CREATE TABLE IF NOT EXISTS cognoms (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,

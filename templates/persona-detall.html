@@ -12,6 +12,16 @@
     {{ template "header-private" . }}
     {{ template "menu" . }}
     <main class="contingut-principal container">
+        <div id="persona-mark-state"
+             data-persona-id="{{ .Data.Persona.ID }}"
+             data-mark-type="{{ .Data.MarkType }}"
+             data-mark-public="{{ if .Data.MarkPublic }}1{{ else }}0{{ end }}"
+             data-mark-own="{{ if .Data.MarkOwn }}1{{ else }}0{{ end }}"
+             data-csrf="{{ .Data.CSRFToken }}"
+             hidden></div>
+        {{ if .Data.WikiPending }}
+        <div class="alert alert-success">{{ t .Lang "wiki.change.pending" }}</div>
+        {{ end }}
         <section class="persona-hero card">
             <div class="persona-hero__left">
                 <div class="persona-avatar" aria-label="{{ .Data.NomComplet }}">
@@ -30,16 +40,19 @@
             <div class="persona-hero__main">
                 <div class="persona-hero__topline">
                     <h1 class="persona-nom">{{ .Data.NomComplet }}</h1>
-                    {{ if or .Data.CanEditPersona .Data.CanModerate }}
+                    {{ if .Data.User }}
                     <div class="opcions-dropdown">
                         <button class="boto-opcions" id="botoOpcions">
-                            <i class="fas fa-cog"></i> Opcions <i class="fas fa-chevron-down"></i>
+                            <i class="fas fa-cog"></i> {{ t .Lang "wiki.options.title" }} <i class="fas fa-chevron-down"></i>
                         </button>
                         <ul class="dropdown-opcions" id="dropdownOpcions">
                             {{ if .Data.CanEditPersona }}
                             <li><a href="/persones/{{ .Data.Persona.ID }}/edit"><i class="fas fa-pen"></i> Editar fitxa</a></li>
                             {{ end }}
                             <li><a href="/persones/{{ .Data.Persona.ID }}/registres"><i class="fas fa-list"></i> Veure registres</a></li>
+                            <li><a href="/persones/{{ .Data.Persona.ID }}/historial"><i class="fas fa-clock-rotate-left"></i> {{ t .Lang "wiki.options.history" }}</a></li>
+                            <li><a href="/persones/{{ .Data.Persona.ID }}/estadistiques"><i class="fas fa-chart-line"></i> {{ t .Lang "wiki.options.stats" }}</a></li>
+                            <li><a href="#" class="btn-marcar" data-persona-id="{{ .Data.Persona.ID }}" onclick="event.preventDefault()"><i class="fas fa-eye"></i> {{ t .Lang "wiki.options.follow" }}</a></li>
                         </ul>
                     </div>
                     {{ end }}
@@ -410,20 +423,181 @@
                     </div>
                     <div class="kv">
                         <div class="kv__row"><div class="kv__k">Nom complet</div><div class="kv__v">{{ .Data.NomComplet }}</div></div>
-                        <div class="kv__row"><div class="kv__k">Municipi</div><div class="kv__v">{{ if .Data.Persona.Municipi }}{{ .Data.Persona.Municipi }}{{ else }}—{{ end }}</div></div>
+                        <div class="kv__row"><div class="kv__k">Municipi</div><div class="kv__v">{{ if .Data.Persona.Municipi }}{{ .Data.Persona.Municipi }}{{ else if .Data.OriginMunicipi }}{{ .Data.OriginMunicipi }}{{ else }}—{{ end }}</div></div>
                         <div class="kv__row"><div class="kv__k">Ocupació</div><div class="kv__v">{{ if .Data.Persona.Ofici }}{{ .Data.Persona.Ofici }}{{ else }}—{{ end }}</div></div>
-                        <div class="kv__row"><div class="kv__k">Llibre</div><div class="kv__v">{{ if .Data.Persona.Llibre }}{{ .Data.Persona.Llibre }}{{ else }}—{{ end }}</div></div>
-                        <div class="kv__row"><div class="kv__k">Pàgina</div><div class="kv__v">{{ if .Data.Persona.Pagina }}{{ .Data.Persona.Pagina }}{{ else }}—{{ end }}</div></div>
+                        <div class="kv__row"><div class="kv__k">Llibre</div><div class="kv__v">{{ if .Data.Persona.Llibre }}{{ .Data.Persona.Llibre }}{{ else if .Data.OriginLlibre }}{{ .Data.OriginLlibre }}{{ else }}—{{ end }}</div></div>
+                        <div class="kv__row"><div class="kv__k">Pàgina</div><div class="kv__v">{{ if .Data.Persona.Pagina }}{{ .Data.Persona.Pagina }}{{ else if .Data.OriginPagina }}{{ .Data.OriginPagina }}{{ else }}—{{ end }}</div></div>
+                        <div class="kv__row"><div class="kv__k">Registre origen</div><div class="kv__v">{{ if .Data.OriginRegistreID }}#{{ .Data.OriginRegistreID }}{{ if .Data.OriginAny }} · {{ .Data.OriginAny }}{{ end }}{{ else }}—{{ end }}</div></div>
                         <div class="kv__row"><div class="kv__k">Registres</div><div class="kv__v">{{ .Data.DocTotal }}</div></div>
                     </div>
                 </article>
             </div>
         </section>
+        <div class="modal-overlay" id="modalMarcarPersona" role="dialog" aria-modal="true">
+            <div class="modal-box">
+                <header class="modal-header">
+                    <h3>{{ t .Lang "wiki.mark.title" }}</h3>
+                    <button type="button" class="modal-close" data-modal-close="modalMarcarPersona">×</button>
+                </header>
+                <div class="grup-camp">
+                    <label for="persona-mark-type">{{ t .Lang "wiki.mark.select" }}</label>
+                    <select id="persona-mark-type" class="input-text">
+                        <option value="">{{ t .Lang "common.select" }}</option>
+                        <option value="consanguini">{{ t .Lang "wiki.mark.consanguini" }}</option>
+                        <option value="politic">{{ t .Lang "wiki.mark.politic" }}</option>
+                        <option value="interes">{{ t .Lang "wiki.mark.interes" }}</option>
+                    </select>
+                </div>
+                <label class="checkbox-linia">
+                    <input type="checkbox" id="persona-mark-public" checked>
+                    <span>{{ t .Lang "wiki.mark.public" }}</span>
+                </label>
+                <div class="form-accio">
+                    <button type="button" class="boto-primari" id="persona-mark-save">{{ t .Lang "wiki.mark.save" }}</button>
+                    <button type="button" class="boto-secundari" id="persona-mark-clear">{{ t .Lang "wiki.mark.clear" }}</button>
+                </div>
+            </div>
+        </div>
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
     <script src="/static/js/persona.js"></script>
     <script src="/static/js/persona-pro.js"></script>
+    <script>
+        (function () {
+            const optionsBtn = document.getElementById("botoOpcions");
+            const dropdown = document.getElementById("dropdownOpcions");
+            if (optionsBtn && dropdown) {
+                optionsBtn.addEventListener("click", function (event) {
+                    event.preventDefault();
+                    dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
+                });
+                document.addEventListener("click", function (event) {
+                    if (!event.target.closest(".opcions-dropdown")) {
+                        dropdown.style.display = "none";
+                    }
+                });
+            }
+
+            const markState = document.getElementById("persona-mark-state");
+            const modal = document.getElementById("modalMarcarPersona");
+            const openBtn = document.querySelector(".btn-marcar");
+            const closeBtns = document.querySelectorAll('[data-modal-close="modalMarcarPersona"]');
+            if (!markState || !modal) {
+                return;
+            }
+            const markType = modal.querySelector("#persona-mark-type");
+            const markPublic = modal.querySelector("#persona-mark-public");
+            const markSave = modal.querySelector("#persona-mark-save");
+            const markClear = modal.querySelector("#persona-mark-clear");
+            const personaID = parseInt(markState.dataset.personaId || "0", 10);
+            const csrfToken = markState.dataset.csrf || "";
+
+            function openModal() {
+                const existingType = markState.dataset.markType || "";
+                const existingPublic = markState.dataset.markPublic !== "0";
+                const own = markState.dataset.markOwn === "1";
+                if (markType) {
+                    markType.value = existingType;
+                }
+                if (markPublic) {
+                    markPublic.checked = existingType ? existingPublic : true;
+                }
+                if (markClear) {
+                    markClear.disabled = !own;
+                }
+                modal.classList.add("is-open");
+            }
+
+            function closeModal() {
+                modal.classList.remove("is-open");
+            }
+
+            if (openBtn) {
+                openBtn.addEventListener("click", function () {
+                    if (!personaID) {
+                        return;
+                    }
+                    openModal();
+                });
+            }
+            closeBtns.forEach((btn) => {
+                btn.addEventListener("click", closeModal);
+            });
+
+            if (markSave) {
+                markSave.addEventListener("click", function () {
+                    if (!personaID) {
+                        return;
+                    }
+                    const typeValue = markType ? markType.value : "";
+                    if (!typeValue) {
+                        return;
+                    }
+                    const body = new URLSearchParams();
+                    body.set("csrf_token", csrfToken);
+                    body.set("type", typeValue);
+                    body.set("public", markPublic && markPublic.checked ? "1" : "0");
+                    fetch(`/persones/${personaID}/marcar`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: body.toString(),
+                        credentials: "same-origin",
+                    })
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error("mark_failed");
+                            }
+                            return response.json();
+                        })
+                        .then((data) => {
+                            if (data && data.ok) {
+                                markState.dataset.markType = data.type || "";
+                                markState.dataset.markPublic = data.is_public ? "1" : "0";
+                                markState.dataset.markOwn = "1";
+                                closeModal();
+                            }
+                        })
+                        .catch(() => {});
+                });
+            }
+
+            if (markClear) {
+                markClear.addEventListener("click", function () {
+                    if (!personaID) {
+                        return;
+                    }
+                    if (markState.dataset.markOwn !== "1") {
+                        closeModal();
+                        return;
+                    }
+                    const body = new URLSearchParams();
+                    body.set("csrf_token", csrfToken);
+                    fetch(`/persones/${personaID}/desmarcar`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: body.toString(),
+                        credentials: "same-origin",
+                    })
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error("mark_clear_failed");
+                            }
+                            return response.json();
+                        })
+                        .then((data) => {
+                            if (data && data.ok) {
+                                markState.dataset.markType = "";
+                                markState.dataset.markPublic = "0";
+                                markState.dataset.markOwn = "0";
+                                closeModal();
+                            }
+                        })
+                        .catch(() => {});
+                });
+            }
+        })();
+    </script>
 </body>
 </html>
 {{ end }}

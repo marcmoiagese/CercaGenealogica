@@ -100,6 +100,7 @@ type DB interface {
 	ListCognoms(q string, limit, offset int) ([]Cognom, error)
 	GetCognom(id int) (*Cognom, error)
 	UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error)
+	UpdateCognom(c *Cognom) error
 	ListCognomVariants(f CognomVariantFilter) ([]CognomVariant, error)
 	CreateCognomVariant(v *CognomVariant) (int, error)
 	UpdateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error
@@ -294,6 +295,21 @@ type DB interface {
 	UpsertTranscripcioMark(m *TranscripcioRawMark) error
 	DeleteTranscripcioMark(transcripcioID, userID int) error
 	ListTranscripcioMarks(transcripcioIDs []int) ([]TranscripcioRawMark, error)
+	// Wiki
+	GetWikiMark(objectType string, objectID int, userID int) (*WikiMark, error)
+	UpsertWikiMark(m *WikiMark) error
+	DeleteWikiMark(objectType string, objectID int, userID int) error
+	ListWikiMarks(objectType string, objectIDs []int) ([]WikiMark, error)
+	IncWikiPublicCount(objectType string, objectID int, tipus string, delta int) error
+	GetWikiPublicCounts(objectType string, objectID int) (map[string]int, error)
+	CreateWikiChange(c *WikiChange) (int, error)
+	GetWikiChange(id int) (*WikiChange, error)
+	ListWikiChanges(objectType string, objectID int) ([]WikiChange, error)
+	ListWikiChangesPending(objectType string, limit int) ([]WikiChange, error)
+	UpdateWikiChangeModeracio(id int, estat, motiu string, moderatorID int) error
+	EnqueueWikiPending(change *WikiChange) error
+	DequeueWikiPending(changeID int) error
+	ListWikiPending(limit int) ([]WikiPendingItem, error)
 	SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error)
 	ListRegistresByPersona(personaID int, tipus string) ([]PersonaRegistreRow, error)
 
@@ -1488,6 +1504,43 @@ type TranscripcioRawChange struct {
 	ModeracioMotiu string
 	ChangedBy      sql.NullInt64
 	ChangedAt      time.Time
+}
+
+type WikiMark struct {
+	ID         int
+	ObjectType string
+	ObjectID   int
+	UserID     int
+	Tipus      string
+	IsPublic   bool
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type WikiChange struct {
+	ID             int
+	ObjectType     string
+	ObjectID       int
+	ChangeType     string
+	FieldKey       string
+	OldValue       string
+	NewValue       string
+	Metadata       string
+	ModeracioEstat string
+	ModeratedBy    sql.NullInt64
+	ModeratedAt    sql.NullTime
+	ModeracioMotiu string
+	ChangedBy      sql.NullInt64
+	ChangedAt      time.Time
+}
+
+type WikiPendingItem struct {
+	ChangeID  int
+	ObjectType string
+	ObjectID  int
+	ChangedAt time.Time
+	ChangedBy sql.NullInt64
+	CreatedAt time.Time
 }
 
 type PersonaSearchFilter struct {

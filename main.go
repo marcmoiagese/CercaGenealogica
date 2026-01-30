@@ -176,6 +176,30 @@ func main() {
 			http.NotFound(w, r)
 			return
 		}
+		if len(parts) >= 2 && parts[1] == "historial" && r.Method == http.MethodGet {
+			applyMiddleware(app.RequireLogin(app.CognomWikiHistory), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) >= 3 && parts[1] == "historial" && parts[2] == "revert" && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.CognomWikiRevert), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) >= 2 && parts[1] == "estadistiques" && r.Method == http.MethodGet {
+			applyMiddleware(app.RequireLogin(app.CognomWikiStats), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) >= 2 && parts[1] == "marcar" && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.CognomWikiMark), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) >= 2 && parts[1] == "desmarcar" && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.CognomWikiUnmark), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) >= 2 && parts[1] == "proposar" && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.CognomProposeUpdate), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
 		if len(parts) >= 3 && parts[1] == "variants" && parts[2] == "suggest" && r.Method == http.MethodPost {
 			applyMiddleware(app.RequireLogin(app.CognomSuggestVariant), core.BlockIPs, core.RateLimit)(w, r)
 			return
@@ -227,6 +251,26 @@ func main() {
 	http.HandleFunc("/persones/new", applyMiddleware(app.PersonaForm, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/persones/save", applyMiddleware(app.PersonaSave, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/persones/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/historial/revert") && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.PersonaWikiRevert), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/historial") && r.Method == http.MethodGet {
+			applyMiddleware(app.RequireLogin(app.PersonaWikiHistory), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/estadistiques") && r.Method == http.MethodGet {
+			applyMiddleware(app.RequireLogin(app.PersonaWikiStats), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/marcar") && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.PersonaWikiMark), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/desmarcar") && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.PersonaWikiUnmark), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/anecdotes/new") && r.Method == http.MethodGet {
 			applyMiddleware(app.RequireLogin(app.PersonaAnecdoteForm), core.BlockIPs, core.RateLimit)(w, r)
 			return
@@ -316,6 +360,16 @@ func main() {
 	})
 	http.HandleFunc("/territori/municipis/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/historial"):
+			applyMiddleware(app.RequireLogin(app.MunicipiWikiHistory), core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/estadistiques"):
+			applyMiddleware(app.RequireLogin(app.MunicipiWikiStats), core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/historial/revert"):
+			applyMiddleware(app.RequireLogin(app.MunicipiWikiRevert), core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/marcar"):
+			applyMiddleware(app.RequireLogin(app.MunicipiWikiMark), core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/desmarcar"):
+			applyMiddleware(app.RequireLogin(app.MunicipiWikiUnmark), core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/historia"):
 			applyMiddleware(app.MunicipiHistoriaPublic, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/historia/aportar"):
@@ -553,6 +607,16 @@ func main() {
 	http.HandleFunc("/documentals/arxius/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/historial"):
+			applyMiddleware(app.ArxiuWikiHistory, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/estadistiques"):
+			applyMiddleware(app.ArxiuWikiStats, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(path, "/historial/revert"):
+			applyMiddleware(app.ArxiuWikiRevert, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(path, "/marcar"):
+			applyMiddleware(app.ArxiuWikiMark, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(path, "/desmarcar"):
+			applyMiddleware(app.ArxiuWikiUnmark, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(path, "/donacions"):
 			applyMiddleware(app.ArxiuDonacionsRedirect, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(path, "/edit"):
@@ -638,6 +702,16 @@ func main() {
 	})
 	http.HandleFunc("/documentals/llibres/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/historial"):
+			applyMiddleware(app.LlibreWikiHistory, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/estadistiques"):
+			applyMiddleware(app.LlibreWikiStats, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/historial/revert"):
+			applyMiddleware(app.LlibreWikiRevert, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/marcar"):
+			applyMiddleware(app.LlibreWikiMark, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/desmarcar"):
+			applyMiddleware(app.LlibreWikiUnmark, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/registres/purge") && r.Method == http.MethodPost:
 			applyMiddleware(app.AdminPurgeLlibreRegistres, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/indexar/draft") && r.Method == http.MethodPost:

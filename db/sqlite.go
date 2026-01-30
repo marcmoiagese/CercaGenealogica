@@ -708,6 +708,48 @@ func (d *SQLite) DeleteTranscripcioMark(transcripcioID, userID int) error {
 func (d *SQLite) ListTranscripcioMarks(transcripcioIDs []int) ([]TranscripcioRawMark, error) {
 	return d.help.listTranscripcioMarks(transcripcioIDs)
 }
+func (d *SQLite) GetWikiMark(objectType string, objectID int, userID int) (*WikiMark, error) {
+	return d.help.getWikiMark(objectType, objectID, userID)
+}
+func (d *SQLite) UpsertWikiMark(m *WikiMark) error {
+	return d.help.upsertWikiMark(m)
+}
+func (d *SQLite) DeleteWikiMark(objectType string, objectID int, userID int) error {
+	return d.help.deleteWikiMark(objectType, objectID, userID)
+}
+func (d *SQLite) ListWikiMarks(objectType string, objectIDs []int) ([]WikiMark, error) {
+	return d.help.listWikiMarks(objectType, objectIDs)
+}
+func (d *SQLite) IncWikiPublicCount(objectType string, objectID int, tipus string, delta int) error {
+	return d.help.incWikiPublicCount(objectType, objectID, tipus, delta)
+}
+func (d *SQLite) GetWikiPublicCounts(objectType string, objectID int) (map[string]int, error) {
+	return d.help.getWikiPublicCounts(objectType, objectID)
+}
+func (d *SQLite) CreateWikiChange(c *WikiChange) (int, error) {
+	return d.help.createWikiChange(c)
+}
+func (d *SQLite) GetWikiChange(id int) (*WikiChange, error) {
+	return d.help.getWikiChange(id)
+}
+func (d *SQLite) ListWikiChanges(objectType string, objectID int) ([]WikiChange, error) {
+	return d.help.listWikiChanges(objectType, objectID)
+}
+func (d *SQLite) ListWikiChangesPending(objectType string, limit int) ([]WikiChange, error) {
+	return d.help.listWikiChangesPending(objectType, limit)
+}
+func (d *SQLite) UpdateWikiChangeModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateWikiChangeModeracio(id, estat, motiu, moderatorID)
+}
+func (d *SQLite) EnqueueWikiPending(change *WikiChange) error {
+	return d.help.enqueueWikiPending(change)
+}
+func (d *SQLite) DequeueWikiPending(changeID int) error {
+	return d.help.dequeueWikiPending(changeID)
+}
+func (d *SQLite) ListWikiPending(limit int) ([]WikiPendingItem, error) {
+	return d.help.listWikiPending(limit)
+}
 func (d *SQLite) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
 	return d.help.searchPersones(f)
 }
@@ -800,6 +842,9 @@ func (d *SQLite) ListCognoms(q string, limit, offset int) ([]Cognom, error) {
 func (d *SQLite) GetCognom(id int) (*Cognom, error) { return d.help.getCognom(id) }
 func (d *SQLite) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
 	return d.help.upsertCognom(forma, key, origen, notes, createdBy)
+}
+func (d *SQLite) UpdateCognom(c *Cognom) error {
+	return d.help.updateCognom(c)
 }
 func (d *SQLite) ListCognomVariants(f CognomVariantFilter) ([]CognomVariant, error) {
 	return d.help.listCognomVariants(f)

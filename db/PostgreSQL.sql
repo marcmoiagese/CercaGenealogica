@@ -682,6 +682,64 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw_canvis (
   changed_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS wiki_marques (
+  id SERIAL PRIMARY KEY,
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  tipus TEXT NOT NULL CHECK(tipus IN ('consanguini','politic','interes')),
+  is_public BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (object_type, object_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_wiki_marques_object ON wiki_marques(object_type, object_id);
+CREATE INDEX IF NOT EXISTS idx_wiki_marques_user ON wiki_marques(user_id);
+
+CREATE TABLE IF NOT EXISTS wiki_marks_stats (
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_id INTEGER NOT NULL,
+  tipus TEXT NOT NULL CHECK(tipus IN ('consanguini','politic','interes')),
+  public_count INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (object_type, object_id, tipus)
+);
+CREATE INDEX IF NOT EXISTS idx_wiki_marks_stats_object ON wiki_marks_stats(object_type, object_id);
+
+CREATE TABLE IF NOT EXISTS wiki_canvis (
+  id SERIAL PRIMARY KEY,
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_id INTEGER NOT NULL,
+  change_type TEXT NOT NULL,
+  field_key TEXT NOT NULL,
+  old_value TEXT,
+  new_value TEXT,
+  metadata TEXT,
+  moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP WITHOUT TIME ZONE,
+  moderation_notes TEXT,
+  changed_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  changed_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_wiki_canvis_object ON wiki_canvis(object_type, object_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wiki_canvis_status_changed ON wiki_canvis(moderation_status, changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wiki_canvis_pending_changed
+  ON wiki_canvis (changed_at DESC)
+  WHERE moderation_status = 'pendent';
+
+CREATE TABLE IF NOT EXISTS wiki_pending_queue (
+  id SERIAL PRIMARY KEY,
+  change_id INTEGER NOT NULL UNIQUE REFERENCES wiki_canvis(id) ON DELETE CASCADE,
+  object_type TEXT NOT NULL,
+  object_id INTEGER NOT NULL,
+  changed_at TIMESTAMP NOT NULL,
+  changed_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_wiki_pending_changed_at ON wiki_pending_queue(changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wiki_pending_object ON wiki_pending_queue(object_type, object_id);
+
 -- Cognoms normalitzats
 CREATE TABLE IF NOT EXISTS cognoms (
   id SERIAL PRIMARY KEY,

@@ -46,6 +46,21 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 	canViewLlibres := user != nil && a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresView)
 	canCreateLlibre := user != nil && a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresCreate)
 	canCreateAnecdote := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisAnecdotesCreate, munTarget)
+	markType := ""
+	markPublic := true
+	markOwn := false
+	if user != nil {
+		if marks, err := a.DB.ListWikiMarks("municipi", []int{mun.ID}); err == nil {
+			for _, mark := range marks {
+				if mark.UserID == user.ID {
+					markType = mark.Tipus
+					markPublic = mark.IsPublic
+					markOwn = true
+					break
+				}
+			}
+		}
+	}
 
 	if mun.ModeracioEstat != "" && mun.ModeracioEstat != "publicat" && !(canManageTerritory || canModerate) {
 		http.NotFound(w, r)
@@ -247,6 +262,9 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 		"HistoriaTimelineDestacat": historiaTimelineView,
 		"CanAportarHistoria": canAportarHistoria,
 		"DemografiaSummary":  demografiaSummary,
+		"MarkType":           markType,
+		"MarkPublic":         markPublic,
+		"MarkOwn":            markOwn,
 	}
 	if user != nil {
 		RenderPrivateTemplate(w, r, "municipi-perfil-pro.html", data)

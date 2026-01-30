@@ -689,6 +689,48 @@ func (d *MySQL) DeleteTranscripcioMark(transcripcioID, userID int) error {
 func (d *MySQL) ListTranscripcioMarks(transcripcioIDs []int) ([]TranscripcioRawMark, error) {
 	return d.help.listTranscripcioMarks(transcripcioIDs)
 }
+func (d *MySQL) GetWikiMark(objectType string, objectID int, userID int) (*WikiMark, error) {
+	return d.help.getWikiMark(objectType, objectID, userID)
+}
+func (d *MySQL) UpsertWikiMark(m *WikiMark) error {
+	return d.help.upsertWikiMark(m)
+}
+func (d *MySQL) DeleteWikiMark(objectType string, objectID int, userID int) error {
+	return d.help.deleteWikiMark(objectType, objectID, userID)
+}
+func (d *MySQL) ListWikiMarks(objectType string, objectIDs []int) ([]WikiMark, error) {
+	return d.help.listWikiMarks(objectType, objectIDs)
+}
+func (d *MySQL) IncWikiPublicCount(objectType string, objectID int, tipus string, delta int) error {
+	return d.help.incWikiPublicCount(objectType, objectID, tipus, delta)
+}
+func (d *MySQL) GetWikiPublicCounts(objectType string, objectID int) (map[string]int, error) {
+	return d.help.getWikiPublicCounts(objectType, objectID)
+}
+func (d *MySQL) CreateWikiChange(c *WikiChange) (int, error) {
+	return d.help.createWikiChange(c)
+}
+func (d *MySQL) GetWikiChange(id int) (*WikiChange, error) {
+	return d.help.getWikiChange(id)
+}
+func (d *MySQL) ListWikiChanges(objectType string, objectID int) ([]WikiChange, error) {
+	return d.help.listWikiChanges(objectType, objectID)
+}
+func (d *MySQL) ListWikiChangesPending(objectType string, limit int) ([]WikiChange, error) {
+	return d.help.listWikiChangesPending(objectType, limit)
+}
+func (d *MySQL) UpdateWikiChangeModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateWikiChangeModeracio(id, estat, motiu, moderatorID)
+}
+func (d *MySQL) EnqueueWikiPending(change *WikiChange) error {
+	return d.help.enqueueWikiPending(change)
+}
+func (d *MySQL) DequeueWikiPending(changeID int) error {
+	return d.help.dequeueWikiPending(changeID)
+}
+func (d *MySQL) ListWikiPending(limit int) ([]WikiPendingItem, error) {
+	return d.help.listWikiPending(limit)
+}
 func (d *MySQL) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
 	return d.help.searchPersones(f)
 }
@@ -777,6 +819,9 @@ func (d *MySQL) ListCognoms(q string, limit, offset int) ([]Cognom, error) {
 func (d *MySQL) GetCognom(id int) (*Cognom, error) { return d.help.getCognom(id) }
 func (d *MySQL) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
 	return d.help.upsertCognom(forma, key, origen, notes, createdBy)
+}
+func (d *MySQL) UpdateCognom(c *Cognom) error {
+	return d.help.updateCognom(c)
 }
 func (d *MySQL) ListCognomVariants(f CognomVariantFilter) ([]CognomVariant, error) {
 	return d.help.listCognomVariants(f)

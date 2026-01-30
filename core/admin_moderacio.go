@@ -102,6 +102,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 	ents := []db.ArquebisbatRow{}
 	variants := []db.CognomVariant{}
 	pendingChanges := []db.TranscripcioRawChange{}
+	wikiChanges := []db.WikiChange{}
 	if canModerateAll {
 		if pendents, err := a.DB.ListPersones(db.PersonaFilter{Estat: "pendent"}); err == nil {
 			persones = pendents
@@ -126,6 +127,22 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 		if rows, err := a.DB.ListTranscripcioRawChangesPending(); err == nil {
 			pendingChanges = rows
+		}
+		if items, err := a.DB.ListWikiPending(0); err == nil {
+			for _, item := range items {
+				if !isValidWikiObjectType(item.ObjectType) {
+					continue
+				}
+				change, err := a.DB.GetWikiChange(item.ChangeID)
+				if err != nil || change == nil {
+					continue
+				}
+				if change.ModeracioEstat != "pendent" {
+					_ = a.DB.DequeueWikiPending(change.ID)
+					continue
+				}
+				wikiChanges = append(wikiChanges, *change)
+			}
 		}
 	}
 	historiaGeneral := []db.MunicipiHistoriaGeneralVersion{}
@@ -157,7 +174,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 	}
 
-	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents) + len(variants) + len(historiaGeneral) + len(historiaFets) + len(anecdotes)
+	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents) + len(variants) + len(historiaGeneral) + len(historiaFets) + len(anecdotes) + len(wikiChanges)
 	regTotal := 0
 	if canModerateAll {
 		if total, err := a.DB.CountTranscripcionsRawGlobal(db.TranscripcioFilter{Status: "pendent"}); err == nil {
@@ -540,6 +557,123 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 	}
 
+	if canModerateAll && len(wikiChanges) > 0 && index < end {
+		wikiOffset := 0
+		if start > index {
+			wikiOffset = start - index
+		}
+		wikiLimit := end - maxInt(index, start)
+		if wikiLimit < 0 {
+			wikiLimit = 0
+		}
+		if start > index {
+			index = start
+		}
+		endIdx := wikiOffset + wikiLimit
+		if endIdx > len(wikiChanges) {
+			endIdx = len(wikiChanges)
+		}
+		typeMap := map[string]string{
+			"municipi": "municipi_canvi",
+			"arxiu":    "arxiu_canvi",
+			"llibre":   "llibre_canvi",
+			"persona":  "persona_canvi",
+			"cognom":   "cognom_canvi",
+		}
+		municipiCache := map[int]string{}
+		arxiuCache := map[int]string{}
+		llibreCache := map[int]string{}
+		personaCache := map[int]string{}
+		cognomCache := map[int]string{}
+		for _, change := range wikiChanges[wikiOffset:endIdx] {
+			objType := typeMap[change.ObjectType]
+			if objType == "" {
+				objType = "wiki_canvi"
+			}
+			autorNom, autorURL := autorFromID(change.ChangedBy)
+			created := ""
+			var createdAt time.Time
+			if !change.ChangedAt.IsZero() {
+				created = change.ChangedAt.Format("2006-01-02 15:04")
+				createdAt = change.ChangedAt
+			}
+			contextParts := []string{}
+			if change.ChangeType != "" {
+				contextParts = append(contextParts, change.ChangeType)
+			}
+			if change.FieldKey != "" {
+				contextParts = append(contextParts, change.FieldKey)
+			}
+			context := strings.Join(contextParts, " · ")
+			if context == "" {
+				context = fmt.Sprintf("Canvi %d", change.ID)
+			}
+			name := fmt.Sprintf("%s %d", change.ObjectType, change.ObjectID)
+			editURL := ""
+			contextURL := ""
+			switch change.ObjectType {
+			case "municipi":
+				if cached, ok := municipiCache[change.ObjectID]; ok {
+					name = cached
+				} else if mun, err := a.DB.GetMunicipi(change.ObjectID); err == nil && mun != nil {
+					name = mun.Nom
+					municipiCache[change.ObjectID] = name
+				}
+				contextURL = fmt.Sprintf("/territori/municipis/%d", change.ObjectID)
+				editURL = fmt.Sprintf("/territori/municipis/%d/historial?view=%d", change.ObjectID, change.ID)
+			case "arxiu":
+				if cached, ok := arxiuCache[change.ObjectID]; ok {
+					name = cached
+				} else if arxiu, err := a.DB.GetArxiu(change.ObjectID); err == nil && arxiu != nil {
+					name = arxiu.Nom
+					arxiuCache[change.ObjectID] = name
+				}
+				contextURL = fmt.Sprintf("/documentals/arxius/%d", change.ObjectID)
+				editURL = fmt.Sprintf("/documentals/arxius/%d/historial?view=%d", change.ObjectID, change.ID)
+			case "llibre":
+				if cached, ok := llibreCache[change.ObjectID]; ok {
+					name = cached
+				} else if llibre, err := a.DB.GetLlibre(change.ObjectID); err == nil && llibre != nil {
+					name = llibre.Titol
+					llibreCache[change.ObjectID] = name
+				}
+				contextURL = fmt.Sprintf("/documentals/llibres/%d", change.ObjectID)
+				editURL = fmt.Sprintf("/documentals/llibres/%d/historial?view=%d", change.ObjectID, change.ID)
+			case "persona":
+				if cached, ok := personaCache[change.ObjectID]; ok {
+					name = cached
+				} else if persona, err := a.DB.GetPersona(change.ObjectID); err == nil && persona != nil {
+					name = strings.TrimSpace(strings.Join([]string{persona.Nom, persona.Cognom1, persona.Cognom2}, " "))
+					personaCache[change.ObjectID] = name
+				}
+				contextURL = fmt.Sprintf("/persones/%d", change.ObjectID)
+				editURL = fmt.Sprintf("/persones/%d/historial?view=%d", change.ObjectID, change.ID)
+			case "cognom":
+				if cached, ok := cognomCache[change.ObjectID]; ok {
+					name = cached
+				} else if cognom, err := a.DB.GetCognom(change.ObjectID); err == nil && cognom != nil {
+					name = cognom.Forma
+					cognomCache[change.ObjectID] = name
+				}
+				contextURL = fmt.Sprintf("/cognoms/%d", change.ObjectID)
+				editURL = fmt.Sprintf("/cognoms/%d/historial?view=%d", change.ObjectID, change.ID)
+			}
+			appendIfVisible(moderacioItem{
+				ID:         change.ID,
+				Type:       objType,
+				Nom:        name,
+				Context:    context,
+				ContextURL: contextURL,
+				Autor:      autorNom,
+				AutorURL:   autorURL,
+				Created:    created,
+				CreatedAt:  createdAt,
+				Motiu:      change.ModeracioMotiu,
+				EditURL:    editURL,
+			})
+		}
+	}
+
 	return items, total
 }
 
@@ -772,7 +906,16 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if scope == "all" {
-		types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "municipi_historia_general", "municipi_historia_fet", "municipi_anecdota_version", "registre", "cognom_variant"}
+		wikiPendingByType := map[string][]int{}
+		if items, err := a.DB.ListWikiPending(0); err == nil {
+			for _, item := range items {
+				if !isValidWikiObjectType(item.ObjectType) {
+					continue
+				}
+				wikiPendingByType[item.ObjectType] = append(wikiPendingByType[item.ObjectType], item.ChangeID)
+			}
+		}
+		types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "municipi_historia_general", "municipi_historia_fet", "municipi_anecdota_version", "registre", "cognom_variant", "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi"}
 		if bulkType != "" && bulkType != "all" {
 			types = []string{bulkType}
 		}
@@ -857,6 +1000,26 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 					}
 				} else {
 					errCount++
+				}
+			case "municipi_canvi":
+				for _, id := range wikiPendingByType["municipi"] {
+					applyAction(objType, id)
+				}
+			case "arxiu_canvi":
+				for _, id := range wikiPendingByType["arxiu"] {
+					applyAction(objType, id)
+				}
+			case "llibre_canvi":
+				for _, id := range wikiPendingByType["llibre"] {
+					applyAction(objType, id)
+				}
+			case "persona_canvi":
+				for _, id := range wikiPendingByType["persona"] {
+					applyAction(objType, id)
+				}
+			case "cognom_canvi":
+				for _, id := range wikiPendingByType["cognom"] {
+					applyAction(objType, id)
 				}
 			case "registre":
 				const chunk = 200
@@ -1040,6 +1203,16 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.moderateRegistreChange(id, estat, motiu, moderatorID)
 	case "cognom_variant":
 		return a.DB.UpdateCognomVariantModeracio(id, estat, motiu, moderatorID)
+	case "municipi_canvi":
+		return a.moderateWikiChange(id, "municipi", estat, motiu, moderatorID)
+	case "arxiu_canvi":
+		return a.moderateWikiChange(id, "arxiu", estat, motiu, moderatorID)
+	case "llibre_canvi":
+		return a.moderateWikiChange(id, "llibre", estat, motiu, moderatorID)
+	case "persona_canvi":
+		return a.moderateWikiChange(id, "persona", estat, motiu, moderatorID)
+	case "cognom_canvi":
+		return a.moderateWikiChange(id, "cognom", estat, motiu, moderatorID)
 	case "municipi_historia_general":
 		return a.DB.SetMunicipiHistoriaGeneralStatus(id, estat, motiu, &moderatorID)
 	case "municipi_historia_fet":
@@ -1155,6 +1328,42 @@ func (a *App) moderateRegistreChange(changeID int, estat, motiu string, moderato
 	}
 	_, _ = a.recalcLlibreIndexacioStats(registre.LlibreID)
 	return nil
+}
+
+func (a *App) moderateWikiChange(changeID int, objectType string, estat, motiu string, moderatorID int) error {
+	change, err := a.DB.GetWikiChange(changeID)
+	if err != nil {
+		return err
+	}
+	if change == nil {
+		return fmt.Errorf("canvi no trobat")
+	}
+	if objectType != "" && change.ObjectType != objectType {
+		return fmt.Errorf("tipus de canvi no coincideix")
+	}
+	if err := a.DB.UpdateWikiChangeModeracio(changeID, estat, motiu, moderatorID); err != nil {
+		return err
+	}
+	if estat != "publicat" {
+		return nil
+	}
+	if !isValidWikiObjectType(change.ObjectType) {
+		return fmt.Errorf("tipus desconegut")
+	}
+	switch change.ObjectType {
+	case "municipi":
+		return a.applyWikiMunicipiChange(change, motiu, moderatorID)
+	case "arxiu":
+		return a.applyWikiArxiuChange(change, motiu, moderatorID)
+	case "llibre":
+		return a.applyWikiLlibreChange(change, motiu, moderatorID)
+	case "persona":
+		return a.applyWikiPersonaChange(change, motiu, moderatorID)
+	case "cognom":
+		return a.applyWikiCognomChange(change, motiu, moderatorID)
+	default:
+		return fmt.Errorf("tipus desconegut")
+	}
 }
 
 func (a *App) updateRegistreChangeActivities(registreID, changeID, moderatorID int, validate bool) {

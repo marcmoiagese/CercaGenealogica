@@ -690,6 +690,48 @@ func (d *PostgreSQL) DeleteTranscripcioMark(transcripcioID, userID int) error {
 func (d *PostgreSQL) ListTranscripcioMarks(transcripcioIDs []int) ([]TranscripcioRawMark, error) {
 	return d.help.listTranscripcioMarks(transcripcioIDs)
 }
+func (d *PostgreSQL) GetWikiMark(objectType string, objectID int, userID int) (*WikiMark, error) {
+	return d.help.getWikiMark(objectType, objectID, userID)
+}
+func (d *PostgreSQL) UpsertWikiMark(m *WikiMark) error {
+	return d.help.upsertWikiMark(m)
+}
+func (d *PostgreSQL) DeleteWikiMark(objectType string, objectID int, userID int) error {
+	return d.help.deleteWikiMark(objectType, objectID, userID)
+}
+func (d *PostgreSQL) ListWikiMarks(objectType string, objectIDs []int) ([]WikiMark, error) {
+	return d.help.listWikiMarks(objectType, objectIDs)
+}
+func (d *PostgreSQL) IncWikiPublicCount(objectType string, objectID int, tipus string, delta int) error {
+	return d.help.incWikiPublicCount(objectType, objectID, tipus, delta)
+}
+func (d *PostgreSQL) GetWikiPublicCounts(objectType string, objectID int) (map[string]int, error) {
+	return d.help.getWikiPublicCounts(objectType, objectID)
+}
+func (d *PostgreSQL) CreateWikiChange(c *WikiChange) (int, error) {
+	return d.help.createWikiChange(c)
+}
+func (d *PostgreSQL) GetWikiChange(id int) (*WikiChange, error) {
+	return d.help.getWikiChange(id)
+}
+func (d *PostgreSQL) ListWikiChanges(objectType string, objectID int) ([]WikiChange, error) {
+	return d.help.listWikiChanges(objectType, objectID)
+}
+func (d *PostgreSQL) ListWikiChangesPending(objectType string, limit int) ([]WikiChange, error) {
+	return d.help.listWikiChangesPending(objectType, limit)
+}
+func (d *PostgreSQL) UpdateWikiChangeModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateWikiChangeModeracio(id, estat, motiu, moderatorID)
+}
+func (d *PostgreSQL) EnqueueWikiPending(change *WikiChange) error {
+	return d.help.enqueueWikiPending(change)
+}
+func (d *PostgreSQL) DequeueWikiPending(changeID int) error {
+	return d.help.dequeueWikiPending(changeID)
+}
+func (d *PostgreSQL) ListWikiPending(limit int) ([]WikiPendingItem, error) {
+	return d.help.listWikiPending(limit)
+}
 func (d *PostgreSQL) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
 	return d.help.searchPersones(f)
 }
@@ -790,6 +832,9 @@ func (d *PostgreSQL) ListCognoms(q string, limit, offset int) ([]Cognom, error) 
 func (d *PostgreSQL) GetCognom(id int) (*Cognom, error) { return d.help.getCognom(id) }
 func (d *PostgreSQL) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
 	return d.help.upsertCognom(forma, key, origen, notes, createdBy)
+}
+func (d *PostgreSQL) UpdateCognom(c *Cognom) error {
+	return d.help.updateCognom(c)
 }
 func (d *PostgreSQL) ListCognomVariants(f CognomVariantFilter) ([]CognomVariant, error) {
 	return d.help.listCognomVariants(f)

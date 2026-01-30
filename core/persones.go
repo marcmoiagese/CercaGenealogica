@@ -130,6 +130,52 @@ func (a *App) PersonaSave(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = a.RegisterUserActivity(r.Context(), user.ID, rulePersonaCreate, "crear", "persona", &newID, "pendent", nil, "")
 	} else {
+		if existent, _ := a.DB.GetPersona(id); existent != nil && existent.ModeracioEstat == "publicat" {
+			after := *existent
+			after.Nom = p.Nom
+			after.Cognom1 = p.Cognom1
+			after.Cognom2 = p.Cognom2
+			after.Municipi = p.Municipi
+			after.Arquebisbat = p.Arquebisbat
+			after.Llibre = p.Llibre
+			after.Pagina = p.Pagina
+			after.Ofici = p.Ofici
+			after.ModeracioEstat = "pendent"
+			after.ModeracioMotiu = p.ModeracioMotiu
+			after.Quinta = p.Quinta
+			after.ModeratedBy = sql.NullInt64{}
+			after.ModeratedAt = sql.NullTime{}
+			after.UpdatedBy = updatedBy
+			after.DataNaixement = p.DataNaixement
+			after.DataDefuncio = p.DataDefuncio
+			if existent.CreatedBy.Valid {
+				after.CreatedBy = existent.CreatedBy
+			}
+			beforeJSON, _ := json.Marshal(existent)
+			afterJSON, _ := json.Marshal(after)
+			meta, err := buildWikiChangeMetadata(beforeJSON, afterJSON, 0)
+			if err != nil {
+				a.renderPersonaFormError(w, r, id, "No s'ha pogut preparar la proposta.")
+				return
+			}
+			changeID, err := a.createWikiChange(&db.WikiChange{
+				ObjectType:     "persona",
+				ObjectID:       id,
+				ChangeType:     "form",
+				FieldKey:       "bulk",
+				Metadata:       meta,
+				ModeracioEstat: "pendent",
+				ChangedBy:      sqlNullIntFromInt(user.ID),
+			})
+			if err != nil {
+				a.renderPersonaFormError(w, r, id, "No s'ha pogut crear la proposta.")
+				return
+			}
+			detail := "persona:" + strconv.Itoa(id)
+			_, _ = a.RegisterUserActivity(r.Context(), user.ID, rulePersonaUpdate, "editar", "persona_canvi", &changeID, "pendent", nil, detail)
+			http.Redirect(w, r, "/persones/"+strconv.Itoa(id)+"?pending=1", http.StatusSeeOther)
+			return
+		}
 		if err := a.DB.UpdatePersona(p); err != nil {
 			a.renderPersonaFormError(w, r, id, "No s'ha pogut actualitzar la persona.")
 			return
@@ -279,6 +325,22 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 			canEditPersona = true
 		}
 	}
+	markType := ""
+	markPublic := true
+	markOwn := false
+	if user != nil {
+		if marks, err := a.DB.ListWikiMarks("persona", []int{id}); err == nil {
+			for _, mark := range marks {
+				if mark.UserID == user.ID {
+					markType = mark.Tipus
+					markPublic = mark.IsPublic
+					markOwn = true
+					break
+				}
+			}
+		}
+	}
+	wikiPending := strings.TrimSpace(r.URL.Query().Get("pending")) != ""
 	type docView struct {
 		ID     int
 		Tipus  string
@@ -325,6 +387,10 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 	var relacions []relationView
 	var timeline []timelineEvent
 	originMunicipi := ""
+	originLlibre := ""
+	originPagina := ""
+	originRegistreID := 0
+	originAny := ""
 	var anecdotes []anecdoteView
 	totalDocs := 0
 	if rows, err := a.DB.ListRegistresByPersona(id, ""); err == nil {
@@ -356,6 +422,21 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 			return name
 		}
 		totalDocs = len(rows)
+		if len(rows) > 0 {
+			first := rows[0]
+			originRegistreID = first.RegistreID
+			if first.AnyDoc.Valid {
+				originAny = strconv.FormatInt(first.AnyDoc.Int64, 10)
+			}
+			originLlibre = first.LlibreTitol.String
+			if originLlibre == "" {
+				originLlibre = first.LlibreNom.String
+			}
+			originPagina = first.NumPaginaText
+			if first.PaginaID.Valid {
+				originPagina = strconv.FormatInt(first.PaginaID.Int64, 10)
+			}
+		}
 		for i, row := range rows {
 			if i >= 6 {
 				break
@@ -689,6 +770,10 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"DocRegistres":      docs,
 		"DocTotal":          totalDocs,
 		"OriginMunicipi":    originMunicipi,
+		"OriginLlibre":      originLlibre,
+		"OriginPagina":      originPagina,
+		"OriginRegistreID":  originRegistreID,
+		"OriginAny":         originAny,
 		"Relacions":         relacions,
 		"TimelineEvents":    timeline,
 		"Anecdotes":         anecdotes,
@@ -697,6 +782,10 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"CanManageArxius":   a.hasPerm(perms, permArxius),
 		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
 		"CanModerate":       perms.CanModerate || perms.Admin,
+		"MarkType":          markType,
+		"MarkPublic":        markPublic,
+		"MarkOwn":           markOwn,
+		"WikiPending":       wikiPending,
 		"Tab":               "detall",
 	})
 }
@@ -929,6 +1018,52 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 	}
 	if existent.CreatedBy.Valid && int(existent.CreatedBy.Int64) != user.ID && !a.hasPerm(perms, func(pp db.PolicyPermissions) bool { return pp.CanEditAnyPerson }) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if existent.ModeracioEstat == "publicat" {
+		after := *existent
+		after.Nom = req.Nom
+		after.Cognom1 = req.Cognom1
+		after.Cognom2 = req.Cognom2
+		after.Municipi = req.Municipi
+		after.Llibre = req.Llibre
+		after.Pagina = req.Pagina
+		after.Ofici = req.Ofici
+		after.ModeracioEstat = "pendent"
+		after.ModeracioMotiu = req.ModeracioMotiu
+		after.Quinta = req.ModeracioMotiu
+		after.ModeratedBy = sql.NullInt64{}
+		after.ModeratedAt = sql.NullTime{}
+		after.UpdatedBy = sql.NullInt64{Int64: int64(user.ID), Valid: true}
+		after.DataNaixement = sql.NullString{String: strings.TrimSpace(after.DataNaixement.String), Valid: after.DataNaixement.String != ""}
+		after.DataDefuncio = sql.NullString{String: strings.TrimSpace(after.DataDefuncio.String), Valid: after.DataDefuncio.String != ""}
+		if existent.CreatedBy.Valid {
+			after.CreatedBy = existent.CreatedBy
+		}
+		beforeJSON, _ := json.Marshal(existent)
+		afterJSON, _ := json.Marshal(after)
+		meta, err := buildWikiChangeMetadata(beforeJSON, afterJSON, 0)
+		if err != nil {
+			http.Error(w, "No s'ha pogut preparar la proposta", http.StatusInternalServerError)
+			return
+		}
+		changeID, err := a.createWikiChange(&db.WikiChange{
+			ObjectType:     "persona",
+			ObjectID:       id,
+			ChangeType:     "form",
+			FieldKey:       "bulk",
+			Metadata:       meta,
+			ModeracioEstat: "pendent",
+			ChangedBy:      sqlNullIntFromInt(user.ID),
+		})
+		if err != nil {
+			http.Error(w, "No s'ha pogut crear la proposta", http.StatusInternalServerError)
+			return
+		}
+		detail := "persona:" + strconv.Itoa(id)
+		_, _ = a.RegisterUserActivity(r.Context(), user.ID, rulePersonaUpdate, "editar", "persona_canvi", &changeID, "pendent", nil, detail)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": id, "estat": "pendent", "pending": true, "change_id": changeID})
 		return
 	}
 	existent.Nom = req.Nom
