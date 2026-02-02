@@ -26,20 +26,20 @@ type arxiuProBook struct {
 }
 
 type arxiuProMeta struct {
-	ID                   int    `json:"id"`
-	Nom                  string `json:"nom"`
-	Tipus                string `json:"tipus,omitempty"`
-	Acces                string `json:"acces,omitempty"`
-	MunicipiID           int    `json:"municipi_id,omitempty"`
-	MunicipiNom          string `json:"municipi_nom,omitempty"`
-	EntitatEclesiastica  string `json:"entitat_eclesiastica,omitempty"`
-	Adreca               string `json:"adreca,omitempty"`
-	Ubicacio             string `json:"ubicacio,omitempty"`
-	What3Words           string `json:"what3words,omitempty"`
-	Web                  string `json:"web,omitempty"`
-	Notes                string `json:"notes,omitempty"`
-	Estat                string `json:"estat,omitempty"`
-	EstatLabel           string `json:"estat_label,omitempty"`
+	ID                  int    `json:"id"`
+	Nom                 string `json:"nom"`
+	Tipus               string `json:"tipus,omitempty"`
+	Acces               string `json:"acces,omitempty"`
+	MunicipiID          int    `json:"municipi_id,omitempty"`
+	MunicipiNom         string `json:"municipi_nom,omitempty"`
+	EntitatEclesiastica string `json:"entitat_eclesiastica,omitempty"`
+	Adreca              string `json:"adreca,omitempty"`
+	Ubicacio            string `json:"ubicacio,omitempty"`
+	What3Words          string `json:"what3words,omitempty"`
+	Web                 string `json:"web,omitempty"`
+	Notes               string `json:"notes,omitempty"`
+	Estat               string `json:"estat,omitempty"`
+	EstatLabel          string `json:"estat_label,omitempty"`
 }
 
 type arxiuProDonacio struct {
@@ -49,11 +49,11 @@ type arxiuProDonacio struct {
 }
 
 type arxiuProData struct {
-	Arxiu             arxiuProMeta     `json:"arxiu"`
-	Llibres           []arxiuProBook   `json:"llibres"`
-	ShowActions       bool             `json:"show_actions,omitempty"`
-	AcceptaDonacions  bool             `json:"accepta_donacions,omitempty"`
-	Donacions         *arxiuProDonacio `json:"donacions,omitempty"`
+	Arxiu            arxiuProMeta     `json:"arxiu"`
+	Llibres          []arxiuProBook   `json:"llibres"`
+	ShowActions      bool             `json:"show_actions,omitempty"`
+	AcceptaDonacions bool             `json:"accepta_donacions,omitempty"`
+	Donacions        *arxiuProDonacio `json:"donacions,omitempty"`
 }
 
 // CanManageArxius és un helper públic per saber si l'usuari pot gestionar arxius.
@@ -651,6 +651,10 @@ func (a *App) AdminUpdateArxiu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if existing.ModeracioEstat == "publicat" {
+		lang := resolveUserLang(r, user)
+		if !a.ensureWikiChangeAllowed(w, r, lang) {
+			return
+		}
 		after := *arxiu
 		after.ModeracioEstat = "pendent"
 		after.ModeracioMotiu = ""
@@ -676,7 +680,11 @@ func (a *App) AdminUpdateArxiu(w http.ResponseWriter, r *http.Request) {
 			ChangedBy:      sqlNullIntFromInt(user.ID),
 		})
 		if err != nil {
-			a.renderArxiuForm(w, r, arxiu, false, "No s'ha pogut crear la proposta de canvi: "+err.Error(), user, returnURL)
+			if _, msg, ok := a.wikiGuardrailInfo(lang, err); ok {
+				a.renderArxiuForm(w, r, arxiu, false, msg, user, returnURL)
+				return
+			}
+			a.renderArxiuForm(w, r, arxiu, false, "No s'ha pogut crear la proposta de canvi.", user, returnURL)
 			return
 		}
 		detail := "arxiu:" + strconv.Itoa(id)

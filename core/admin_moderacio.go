@@ -1435,6 +1435,7 @@ func (a *App) moderateWikiChange(changeID int, objectType string, estat, motiu s
 		return fmt.Errorf("tipus de canvi no coincideix")
 	}
 	if err := a.DB.UpdateWikiChangeModeracio(changeID, estat, motiu, moderatorID); err != nil {
+		Errorf("WikiChangeModeracio failed change_id=%d object=%s object_id=%d err=%v", changeID, change.ObjectType, change.ObjectID, err)
 		return err
 	}
 	if estat != "publicat" {

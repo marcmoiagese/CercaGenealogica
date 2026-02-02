@@ -375,6 +375,10 @@ func (a *App) EventHistoricWikiRevert(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
+	lang := resolveUserLang(r, user)
+	if !a.ensureWikiChangeAllowed(w, r, lang) {
+		return
+	}
 	impacts, _ := a.DB.ListEventImpacts(event.ID)
 	beforeJSON, _ := buildEventHistoricSnapshot(event, impacts)
 	_, after := parseWikiChangeMeta(change.Metadata)
@@ -401,6 +405,10 @@ func (a *App) EventHistoricWikiRevert(w http.ResponseWriter, r *http.Request) {
 		ChangedBy:      sqlNullIntFromInt(user.ID),
 	})
 	if err != nil {
+		if status, msg, ok := a.wikiGuardrailInfo(lang, err); ok {
+			http.Error(w, msg, status)
+			return
+		}
 		http.Error(w, "No s'ha pogut crear la proposta", http.StatusInternalServerError)
 		return
 	}
@@ -441,6 +449,10 @@ func (a *App) EventHistoricWikiMark(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	lang := resolveUserLang(r, user)
+	if !a.ensureWikiMarkAllowed(w, r, lang) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
@@ -511,6 +523,10 @@ func (a *App) EventHistoricWikiUnmark(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	lang := resolveUserLang(r, user)
+	if !a.ensureWikiMarkAllowed(w, r, lang) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)

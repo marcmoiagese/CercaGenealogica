@@ -5921,7 +5921,7 @@ func (h sqlHelper) createWikiChange(c *WikiChange) (int, error) {
 		if estado == "pendent" {
 			if err := h.enqueueWikiPending(c); err != nil {
 				_, _ = h.db.Exec(formatPlaceholders(h.style, `DELETE FROM wiki_canvis WHERE id = ?`), c.ID)
-				return 0, err
+				return 0, fmt.Errorf("wiki_pending_enqueue: %w", err)
 			}
 		}
 		return c.ID, nil
@@ -5936,7 +5936,7 @@ func (h sqlHelper) createWikiChange(c *WikiChange) (int, error) {
 	if estado == "pendent" {
 		if err := h.enqueueWikiPending(c); err != nil {
 			_, _ = h.db.Exec(formatPlaceholders(h.style, `DELETE FROM wiki_canvis WHERE id = ?`), c.ID)
-			return 0, err
+			return 0, fmt.Errorf("wiki_pending_enqueue: %w", err)
 		}
 	}
 	return c.ID, nil
@@ -6073,7 +6073,7 @@ func (h sqlHelper) updateWikiChangeModeracio(id int, estat, motiu string, modera
 	}
 	if strings.TrimSpace(estat) != "pendent" {
 		if err := h.dequeueWikiPending(id); err != nil {
-			return err
+			return fmt.Errorf("wiki_pending_dequeue: %w", err)
 		}
 	}
 	return nil

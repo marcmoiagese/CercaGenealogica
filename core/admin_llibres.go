@@ -594,6 +594,10 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if existing.ModeracioEstat == "publicat" {
+			lang := resolveUserLang(r, user)
+			if !a.ensureWikiChangeAllowed(w, r, lang) {
+				return
+			}
 			after := *llibre
 			after.ModeracioEstat = "pendent"
 			after.ModeracioMotiu = ""
@@ -622,6 +626,10 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 				ChangedBy:      sqlNullIntFromInt(user.ID),
 			})
 			if err != nil {
+				if _, msg, ok := a.wikiGuardrailInfo(lang, err); ok {
+					a.renderLlibreForm(w, r, llibre, isNew, msg, returnURL, arxiuID)
+					return
+				}
 				Errorf("Error creant proposta llibre: %v", err)
 				a.renderLlibreForm(w, r, llibre, isNew, "No s'ha pogut crear la proposta de canvi.", returnURL, arxiuID)
 				return

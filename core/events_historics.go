@@ -47,17 +47,17 @@ type eventFormState struct {
 }
 
 type eventListItem struct {
-	ID          int
-	Slug        string
-	Title       string
-	TypeLabel   string
-	DateLabel   string
-	Summary     string
-	URL         string
-	HasDate     bool
-	DateYear    int
-	DateDecade  int
-	Intensity   int
+	ID         int
+	Slug       string
+	Title      string
+	TypeLabel  string
+	DateLabel  string
+	Summary    string
+	URL        string
+	HasDate    bool
+	DateYear   int
+	DateDecade int
+	Intensity  int
 }
 
 type eventImpactView struct {
@@ -507,6 +507,9 @@ func (a *App) EventHistoricUpdate(w http.ResponseWriter, r *http.Request) {
 			a.renderEventFormWithError(w, r, lang, form, T(lang, "events.form.error.save"), id, true)
 			return
 		}
+		if !a.ensureWikiChangeAllowed(w, r, lang) {
+			return
+		}
 		changeID, err := a.createWikiChange(&db.WikiChange{
 			ObjectType:     "event_historic",
 			ObjectID:       id,
@@ -517,6 +520,10 @@ func (a *App) EventHistoricUpdate(w http.ResponseWriter, r *http.Request) {
 			ChangedBy:      sqlNullIntFromInt(user.ID),
 		})
 		if err != nil {
+			if _, msg, ok := a.wikiGuardrailInfo(lang, err); ok {
+				a.renderEventFormWithError(w, r, lang, form, msg, id, true)
+				return
+			}
 			a.renderEventFormWithError(w, r, lang, form, T(lang, "events.form.error.save"), id, true)
 			return
 		}

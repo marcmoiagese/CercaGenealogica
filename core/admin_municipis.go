@@ -78,8 +78,8 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 				"Municipis":           []db.MunicipiBrowseRow{},
 				"Filter":              filter,
 				"Paisos":              []db.Pais{},
-				"LevelSelects":         []municipiLevelSelect{},
-				"VisibleLevelCols":     []municipiVisibleCol{},
+				"LevelSelects":        []municipiLevelSelect{},
+				"VisibleLevelCols":    []municipiVisibleCol{},
 				"ShowTipus":           false,
 				"TipusOptions":        []municipiTypeOption{},
 				"TipusLabels":         map[string]string{},
@@ -168,13 +168,13 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var (
-		muns             []db.MunicipiBrowseRow
-		total            int
-		levelNamesByID   = map[int][]string{}
-		booksClassByID   = map[int]string{}
-		canEditMunicipi  = map[int]bool{}
-		showActions      = false
-		pagination       Pagination
+		muns            []db.MunicipiBrowseRow
+		total           int
+		levelNamesByID  = map[int][]string{}
+		booksClassByID  = map[int]string{}
+		canEditMunicipi = map[int]bool{}
+		showActions     = false
+		pagination      Pagination
 	)
 	if hasFilters {
 		total, _ = a.DB.CountMunicipisBrowse(filter)
@@ -228,8 +228,8 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		"Municipis":           muns,
 		"Filter":              filter,
 		"Paisos":              paisos,
-		"LevelSelects":         levelSelects,
-		"VisibleLevelCols":     visibleCols,
+		"LevelSelects":        levelSelects,
+		"VisibleLevelCols":    visibleCols,
 		"ShowTipus":           showTipus,
 		"TipusOptions":        typeOptions,
 		"TipusLabels":         typeLabels,
@@ -307,10 +307,10 @@ func buildMunicipiLevelUI(levels []db.NivellAdministratiu, selected [7]int) ([]m
 		return nil, nil, true, levelTypeLabels
 	}
 	var (
-		selects    []municipiLevelSelect
-		cols       []municipiVisibleCol
-		showTipus  bool
-		parentID   int
+		selects   []municipiLevelSelect
+		cols      []municipiVisibleCol
+		showTipus bool
+		parentID  int
 	)
 	for level := startLevel; level <= maxLevel; level++ {
 		opts := levelsByNumber[level]
@@ -795,6 +795,10 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if existing.ModeracioEstat == "publicat" {
+			lang := resolveUserLang(r, user)
+			if !a.ensureWikiChangeAllowed(w, r, lang) {
+				return
+			}
 			after := *m
 			after.ModeracioEstat = "pendent"
 			after.ModeracioMotiu = ""
@@ -820,7 +824,11 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 				ChangedBy:      sqlNullIntFromInt(user.ID),
 			})
 			if err != nil {
-				a.renderMunicipiFormError(w, r, m, "No s'ha pogut crear la proposta de canvi: "+err.Error(), false)
+				if _, msg, ok := a.wikiGuardrailInfo(lang, err); ok {
+					a.renderMunicipiFormError(w, r, m, msg, false)
+					return
+				}
+				a.renderMunicipiFormError(w, r, m, "No s'ha pogut crear la proposta de canvi.", false)
 				return
 			}
 			detail := fmt.Sprintf("municipi:%d", m.ID)

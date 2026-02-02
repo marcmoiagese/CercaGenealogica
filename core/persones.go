@@ -131,6 +131,10 @@ func (a *App) PersonaSave(w http.ResponseWriter, r *http.Request) {
 		_, _ = a.RegisterUserActivity(r.Context(), user.ID, rulePersonaCreate, "crear", "persona", &newID, "pendent", nil, "")
 	} else {
 		if existent, _ := a.DB.GetPersona(id); existent != nil && existent.ModeracioEstat == "publicat" {
+			lang := resolveUserLang(r, user)
+			if !a.ensureWikiChangeAllowed(w, r, lang) {
+				return
+			}
 			after := *existent
 			after.Nom = p.Nom
 			after.Cognom1 = p.Cognom1
@@ -168,6 +172,10 @@ func (a *App) PersonaSave(w http.ResponseWriter, r *http.Request) {
 				ChangedBy:      sqlNullIntFromInt(user.ID),
 			})
 			if err != nil {
+				if _, msg, ok := a.wikiGuardrailInfo(lang, err); ok {
+					a.renderPersonaFormError(w, r, id, msg)
+					return
+				}
 				a.renderPersonaFormError(w, r, id, "No s'ha pogut crear la proposta.")
 				return
 			}
@@ -1021,6 +1029,10 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if existent.ModeracioEstat == "publicat" {
+		lang := resolveUserLang(r, user)
+		if !a.ensureWikiChangeAllowed(w, r, lang) {
+			return
+		}
 		after := *existent
 		after.Nom = req.Nom
 		after.Cognom1 = req.Cognom1
@@ -1057,6 +1069,10 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 			ChangedBy:      sqlNullIntFromInt(user.ID),
 		})
 		if err != nil {
+			if status, msg, ok := a.wikiGuardrailInfo(lang, err); ok {
+				http.Error(w, msg, status)
+				return
+			}
 			http.Error(w, "No s'ha pogut crear la proposta", http.StatusInternalServerError)
 			return
 		}

@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -31,7 +32,24 @@ func (a *App) createWikiChange(change *db.WikiChange) (int, error) {
 	if change.ObjectID <= 0 {
 		return 0, fmt.Errorf("object_id invàlid")
 	}
-	return a.DB.CreateWikiChange(change)
+	if err := a.applyWikiChangeGuardrails(change); err != nil {
+		return 0, err
+	}
+	start := time.Now()
+	id, err := a.DB.CreateWikiChange(change)
+	if err != nil {
+		userID := 0
+		if change.ChangedBy.Valid {
+			userID = int(change.ChangedBy.Int64)
+		}
+		Errorf("WikiChangeCreate failed object=%s object_id=%d user_id=%d err=%v", change.ObjectType, change.ObjectID, userID, err)
+		return 0, err
+	}
+	elapsed := time.Since(start)
+	if elapsed > time.Second {
+		Debugf("WikiChangeCreate slow object=%s object_id=%d dur=%s", change.ObjectType, change.ObjectID, elapsed)
+	}
+	return id, nil
 }
 
 func (a *App) updateWikiPublicCounts(objectType string, objectID int, prev *db.WikiMark, newType string, newPublic bool) error {

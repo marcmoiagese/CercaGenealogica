@@ -107,20 +107,20 @@ func (a *App) CognomDetall(w http.ResponseWriter, r *http.Request) {
 	}
 	maxYear := time.Now().Year()
 	RenderPrivateTemplate(w, r, "cognom-detall.html", map[string]interface{}{
-		"Cognom":          cognom,
-		"Variants":        variants,
+		"Cognom":           cognom,
+		"Variants":         variants,
 		"VariantsPendents": pendents,
-		"CanModerate":     canModerate,
-		"MarkType":        markType,
-		"MarkPublic":      markPublic,
-		"MarkOwn":         markOwn,
-		"WikiPending":     strings.TrimSpace(r.URL.Query().Get("pending")) != "",
-		"MaxYear":         maxYear,
-		"Y0":              1800,
-		"Y1":              maxYear,
-		"SuggestOk":       r.URL.Query().Get("suggest_ok") != "",
+		"CanModerate":      canModerate,
+		"MarkType":         markType,
+		"MarkPublic":       markPublic,
+		"MarkOwn":          markOwn,
+		"WikiPending":      strings.TrimSpace(r.URL.Query().Get("pending")) != "",
+		"MaxYear":          maxYear,
+		"Y0":               1800,
+		"Y1":               maxYear,
+		"SuggestOk":        r.URL.Query().Get("suggest_ok") != "",
 		"DuplicateVariant": r.URL.Query().Get("duplicate") != "",
-		"SuggestError":    r.URL.Query().Get("err") != "",
+		"SuggestError":     r.URL.Query().Get("err") != "",
 	})
 }
 
@@ -138,10 +138,14 @@ func (a *App) CognomProposeUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+	lang := resolveUserLang(r, user)
 	id := extractID(r.URL.Path)
 	cognom, err := a.DB.GetCognom(id)
 	if err != nil || cognom == nil {
 		http.NotFound(w, r)
+		return
+	}
+	if !a.ensureWikiChangeAllowed(w, r, lang) {
 		return
 	}
 	origen := strings.TrimSpace(r.FormValue("origen"))
@@ -166,6 +170,10 @@ func (a *App) CognomProposeUpdate(w http.ResponseWriter, r *http.Request) {
 		ChangedBy:      sqlNullIntFromInt(user.ID),
 	})
 	if err != nil {
+		if status, msg, ok := a.wikiGuardrailInfo(lang, err); ok {
+			http.Error(w, msg, status)
+			return
+		}
 		http.Error(w, "No s'ha pogut crear la proposta", http.StatusInternalServerError)
 		return
 	}

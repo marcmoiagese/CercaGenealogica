@@ -330,6 +330,10 @@ func (a *App) ArxiuWikiRevert(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
+	lang := resolveUserLang(r, user)
+	if !a.ensureWikiChangeAllowed(w, r, lang) {
+		return
+	}
 	beforeJSON, _ := json.Marshal(arxiu)
 	_, after := parseWikiChangeMeta(change.Metadata)
 	if len(after) == 0 {
@@ -355,6 +359,10 @@ func (a *App) ArxiuWikiRevert(w http.ResponseWriter, r *http.Request) {
 		ChangedBy:      sqlNullIntFromInt(user.ID),
 	})
 	if err != nil {
+		if status, msg, ok := a.wikiGuardrailInfo(lang, err); ok {
+			http.Error(w, msg, status)
+			return
+		}
 		http.Error(w, "No s'ha pogut crear la proposta", http.StatusInternalServerError)
 		return
 	}
@@ -394,6 +402,10 @@ func (a *App) ArxiuWikiMark(w http.ResponseWriter, r *http.Request) {
 	}
 	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusView, a.resolveArxiuTarget(arxiuID))
 	if !ok {
+		return
+	}
+	lang := resolveUserLang(r, user)
+	if !a.ensureWikiMarkAllowed(w, r, lang) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
@@ -463,6 +475,10 @@ func (a *App) ArxiuWikiUnmark(w http.ResponseWriter, r *http.Request) {
 	}
 	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusView, a.resolveArxiuTarget(arxiuID))
 	if !ok {
+		return
+	}
+	lang := resolveUserLang(r, user)
+	if !a.ensureWikiMarkAllowed(w, r, lang) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
