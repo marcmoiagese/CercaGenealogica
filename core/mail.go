@@ -16,6 +16,13 @@ type MailConfig struct {
 	SMTPPort string
 }
 
+var mailSendOverride func(to, subject, body string) error
+
+// SetMailSendOverride permet injectar un sender per tests.
+func SetMailSendOverride(fn func(to, subject, body string) error) {
+	mailSendOverride = fn
+}
+
 // NewMailConfig construeix una MailConfig a partir del map de configuració.
 func NewMailConfig(cfg map[string]string) MailConfig {
 	enabled := strings.ToLower(strings.TrimSpace(cfg["MAIL_ENABLED"])) == "true"
@@ -47,6 +54,9 @@ func NewMailConfig(cfg map[string]string) MailConfig {
 func (mc MailConfig) Send(to, subject, body string) error {
 	if !mc.Enabled {
 		return nil
+	}
+	if mailSendOverride != nil {
+		return mailSendOverride(to, subject, body)
 	}
 
 	msg := buildRFC822(mc.From, to, subject, body)

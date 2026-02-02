@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -13,17 +14,17 @@ import (
 )
 
 type moderacioItem struct {
-	ID        int
-	Type      string
-	Nom       string
-	Context   string
+	ID         int
+	Type       string
+	Nom        string
+	Context    string
 	ContextURL string
-	Autor     string
-	AutorURL  string
-	Created   string
-	CreatedAt time.Time
-	Motiu     string
-	EditURL   string
+	Autor      string
+	AutorURL   string
+	Created    string
+	CreatedAt  time.Time
+	Motiu      string
+	EditURL    string
 }
 
 func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User, canModerateAll bool) ([]moderacioItem, int) {
@@ -101,6 +102,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 	municipis := []db.MunicipiRow{}
 	ents := []db.ArquebisbatRow{}
 	variants := []db.CognomVariant{}
+	events := []db.EventHistoric{}
 	pendingChanges := []db.TranscripcioRawChange{}
 	wikiChanges := []db.WikiChange{}
 	if canModerateAll {
@@ -124,6 +126,9 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 		if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err == nil {
 			variants = rows
+		}
+		if rows, err := a.DB.ListEventsHistoric(db.EventHistoricFilter{Status: "pendent"}); err == nil {
+			events = rows
 		}
 		if rows, err := a.DB.ListTranscripcioRawChangesPending(); err == nil {
 			pendingChanges = rows
@@ -174,7 +179,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 	}
 
-	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents) + len(variants) + len(historiaGeneral) + len(historiaFets) + len(anecdotes) + len(wikiChanges)
+	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents) + len(variants) + len(events) + len(historiaGeneral) + len(historiaFets) + len(anecdotes) + len(wikiChanges)
 	regTotal := 0
 	if canModerateAll {
 		if total, err := a.DB.CountTranscripcionsRawGlobal(db.TranscripcioFilter{Status: "pendent"}); err == nil {
@@ -455,6 +460,38 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 	}
 
+	if canModerateAll {
+		for _, ev := range events {
+			created := ""
+			var createdAt time.Time
+			if ev.CreatedAt.Valid {
+				created = ev.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = ev.CreatedAt.Time
+			}
+			autorNom, autorURL := autorFromID(ev.CreatedBy)
+			contextParts := []string{}
+			if label := eventTypeLabel(lang, ev.Tipus); label != "" {
+				contextParts = append(contextParts, label)
+			}
+			if dateLabel := eventDateLabel(ev); dateLabel != "" {
+				contextParts = append(contextParts, dateLabel)
+			}
+			context := strings.Join(contextParts, " · ")
+			appendIfVisible(moderacioItem{
+				ID:        ev.ID,
+				Type:      "event_historic",
+				Nom:       strings.TrimSpace(ev.Titol),
+				Context:   context,
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				Created:   created,
+				CreatedAt: createdAt,
+				Motiu:     ev.ModerationNotes,
+				EditURL:   fmt.Sprintf("/historia/events/%d", ev.ID),
+			})
+		}
+	}
+
 	if canModerateAll && regTotal > 0 && index < end {
 		regOffset := 0
 		if start > index {
@@ -574,17 +611,19 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 			endIdx = len(wikiChanges)
 		}
 		typeMap := map[string]string{
-			"municipi": "municipi_canvi",
-			"arxiu":    "arxiu_canvi",
-			"llibre":   "llibre_canvi",
-			"persona":  "persona_canvi",
-			"cognom":   "cognom_canvi",
+			"municipi":       "municipi_canvi",
+			"arxiu":          "arxiu_canvi",
+			"llibre":         "llibre_canvi",
+			"persona":        "persona_canvi",
+			"cognom":         "cognom_canvi",
+			"event_historic": "event_historic_canvi",
 		}
 		municipiCache := map[int]string{}
 		arxiuCache := map[int]string{}
 		llibreCache := map[int]string{}
 		personaCache := map[int]string{}
 		cognomCache := map[int]string{}
+		eventCache := map[int]string{}
 		for _, change := range wikiChanges[wikiOffset:endIdx] {
 			objType := typeMap[change.ObjectType]
 			if objType == "" {
@@ -657,6 +696,15 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 				}
 				contextURL = fmt.Sprintf("/cognoms/%d", change.ObjectID)
 				editURL = fmt.Sprintf("/cognoms/%d/historial?view=%d", change.ObjectID, change.ID)
+			case "event_historic":
+				if cached, ok := eventCache[change.ObjectID]; ok {
+					name = cached
+				} else if ev, err := a.DB.GetEventHistoric(change.ObjectID); err == nil && ev != nil {
+					name = strings.TrimSpace(ev.Titol)
+					eventCache[change.ObjectID] = name
+				}
+				contextURL = fmt.Sprintf("/historia/events/%d", change.ObjectID)
+				editURL = fmt.Sprintf("/historia/events/%d/historial?view=%d", change.ObjectID, change.ID)
 			}
 			appendIfVisible(moderacioItem{
 				ID:         change.ID,
@@ -889,6 +937,9 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleModeracioApprove, "moderar_aprovar", objType, &id, "validat", nil, "")
+			if objType == "event_historic" {
+				a.registerEventHistoricModerationActivity(r.Context(), id, "publicat", user.ID, "")
+			}
 		case "reject":
 			if err := a.updateModeracioObject(objType, id, "rebutjat", motiu, user.ID); err != nil {
 				Errorf("Moderacio massiva rebutjar %s:%d ha fallat: %v", objType, id, err)
@@ -901,6 +952,9 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleModeracioReject, "moderar_rebutjar", objType, &id, "validat", nil, motiu)
+			if objType == "event_historic" {
+				a.registerEventHistoricModerationActivity(r.Context(), id, "rebutjat", user.ID, motiu)
+			}
 		default:
 			errCount++
 		}
@@ -915,7 +969,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 				wikiPendingByType[item.ObjectType] = append(wikiPendingByType[item.ObjectType], item.ChangeID)
 			}
 		}
-		types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "municipi_historia_general", "municipi_historia_fet", "municipi_anecdota_version", "registre", "cognom_variant", "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi"}
+		types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "municipi_historia_general", "municipi_historia_fet", "municipi_anecdota_version", "event_historic", "registre", "cognom_variant", "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi"}
 		if bulkType != "" && bulkType != "all" {
 			types = []string{bulkType}
 		}
@@ -1001,6 +1055,14 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 				} else {
 					errCount++
 				}
+			case "event_historic":
+				if rows, err := a.DB.ListEventsHistoric(db.EventHistoricFilter{Status: "pendent"}); err == nil {
+					for _, row := range rows {
+						applyAction(objType, row.ID)
+					}
+				} else {
+					errCount++
+				}
 			case "municipi_canvi":
 				for _, id := range wikiPendingByType["municipi"] {
 					applyAction(objType, id)
@@ -1019,6 +1081,10 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 				}
 			case "cognom_canvi":
 				for _, id := range wikiPendingByType["cognom"] {
+					applyAction(objType, id)
+				}
+			case "event_historic_canvi":
+				for _, id := range wikiPendingByType["event_historic"] {
 					applyAction(objType, id)
 				}
 			case "registre":
@@ -1103,6 +1169,9 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleModeracioApprove, "moderar_aprovar", objType, &id, "validat", nil, "")
+	if objType == "event_historic" {
+		a.registerEventHistoricModerationActivity(r.Context(), id, "publicat", user.ID, "")
+	}
 	http.Redirect(w, r, "/moderacio?ok=1", http.StatusSeeOther)
 }
 
@@ -1145,6 +1214,9 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleModeracioReject, "moderar_rebutjar", objType, &id, "validat", nil, motiu)
+	if objType == "event_historic" {
+		a.registerEventHistoricModerationActivity(r.Context(), id, "rebutjat", user.ID, motiu)
+	}
 	http.Redirect(w, r, "/moderacio?ok=1", http.StatusSeeOther)
 }
 
@@ -1203,6 +1275,8 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.moderateRegistreChange(id, estat, motiu, moderatorID)
 	case "cognom_variant":
 		return a.DB.UpdateCognomVariantModeracio(id, estat, motiu, moderatorID)
+	case "event_historic":
+		return a.DB.UpdateEventHistoricModeracio(id, estat, motiu, moderatorID)
 	case "municipi_canvi":
 		return a.moderateWikiChange(id, "municipi", estat, motiu, moderatorID)
 	case "arxiu_canvi":
@@ -1213,6 +1287,8 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.moderateWikiChange(id, "persona", estat, motiu, moderatorID)
 	case "cognom_canvi":
 		return a.moderateWikiChange(id, "cognom", estat, motiu, moderatorID)
+	case "event_historic_canvi":
+		return a.moderateWikiChange(id, "event_historic", estat, motiu, moderatorID)
 	case "municipi_historia_general":
 		return a.DB.SetMunicipiHistoriaGeneralStatus(id, estat, motiu, &moderatorID)
 	case "municipi_historia_fet":
@@ -1243,6 +1319,23 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return fmt.Errorf("estat desconegut")
 	default:
 		return fmt.Errorf("tipus desconegut")
+	}
+}
+
+func (a *App) registerEventHistoricModerationActivity(ctx context.Context, eventID int, status string, moderatorID int, reason string) {
+	if eventID <= 0 {
+		return
+	}
+	event, err := a.DB.GetEventHistoric(eventID)
+	if err != nil || event == nil || !event.CreatedBy.Valid {
+		return
+	}
+	authorID := int(event.CreatedBy.Int64)
+	switch status {
+	case "publicat":
+		_, _ = a.RegisterUserActivity(ctx, authorID, ruleEventHistoricApprove, "event_historic_approve", "event_historic", &eventID, "validat", &moderatorID, "")
+	case "rebutjat":
+		_, _ = a.RegisterUserActivity(ctx, authorID, ruleEventHistoricReject, "event_historic_reject", "event_historic", &eventID, "validat", &moderatorID, reason)
 	}
 }
 
@@ -1361,6 +1454,8 @@ func (a *App) moderateWikiChange(changeID int, objectType string, estat, motiu s
 		return a.applyWikiPersonaChange(change, motiu, moderatorID)
 	case "cognom":
 		return a.applyWikiCognomChange(change, motiu, moderatorID)
+	case "event_historic":
+		return a.applyWikiEventHistoricChange(change, motiu, moderatorID)
 	default:
 		return fmt.Errorf("tipus desconegut")
 	}

@@ -740,6 +740,23 @@ CREATE TABLE IF NOT EXISTS wiki_pending_queue (
 CREATE INDEX IF NOT EXISTS idx_wiki_pending_changed_at ON wiki_pending_queue(changed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_wiki_pending_object ON wiki_pending_queue(object_type, object_id);
 
+CREATE TABLE IF NOT EXISTS csv_import_templates (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  owner_user_id INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  visibility TEXT NOT NULL DEFAULT 'private' CHECK(visibility IN ('private','public')),
+  default_separator TEXT,
+  model_json TEXT NOT NULL,
+  signature TEXT NOT NULL,
+  created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (owner_user_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_csv_import_templates_owner_visibility ON csv_import_templates(owner_user_id, visibility);
+CREATE INDEX IF NOT EXISTS idx_csv_import_templates_visibility_created ON csv_import_templates(visibility, created_at);
+CREATE INDEX IF NOT EXISTS idx_csv_import_templates_signature ON csv_import_templates(signature);
+
 -- Cognoms normalitzats
 CREATE TABLE IF NOT EXISTS cognoms (
   id SERIAL PRIMARY KEY,
@@ -1204,5 +1221,110 @@ CREATE INDEX IF NOT EXISTS idx_media_albums_owner
   ON media_albums(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_media_albums_moderation
   ON media_albums(moderation_status);
+
+-- =====================================================================
+-- Esdeveniments historics
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS events_historics (
+  id SERIAL PRIMARY KEY,
+  titol TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  tipus TEXT NOT NULL,
+  resum TEXT,
+  descripcio TEXT,
+  data_inici DATE,
+  data_fi DATE,
+  data_inici_aprox BOOLEAN NOT NULL DEFAULT FALSE,
+  data_fi_aprox BOOLEAN NOT NULL DEFAULT FALSE,
+  precisio TEXT CHECK (precisio IN ('dia','mes','any','decada')),
+  fonts TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderation_status TEXT NOT NULL DEFAULT 'pendent' CHECK (moderation_status IN ('pendent','publicat','rebutjat')),
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP,
+  moderation_notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS events_historics_impactes (
+  id SERIAL PRIMARY KEY,
+  event_id INTEGER NOT NULL REFERENCES events_historics(id) ON DELETE CASCADE,
+  scope_type TEXT NOT NULL CHECK (scope_type IN ('pais','nivell_admin','municipi','entitat_eclesiastica')),
+  scope_id INTEGER NOT NULL,
+  impacte_tipus TEXT NOT NULL CHECK (impacte_tipus IN ('directe','indirecte','transit','rumor')),
+  intensitat INTEGER NOT NULL CHECK (intensitat BETWEEN 1 AND 5),
+  notes TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_historics_tipus_data_inici
+  ON events_historics(tipus, data_inici);
+CREATE INDEX IF NOT EXISTS idx_events_historics_moderation
+  ON events_historics(moderation_status, created_at);
+CREATE INDEX IF NOT EXISTS idx_events_historics_impactes_event
+  ON events_historics_impactes(event_id);
+CREATE INDEX IF NOT EXISTS idx_events_historics_impactes_scope
+  ON events_historics_impactes(scope_type, scope_id);
+CREATE INDEX IF NOT EXISTS idx_events_historics_impactes_scope_intensitat
+  ON events_historics_impactes(scope_type, scope_id, intensitat);
+
+CREATE TABLE IF NOT EXISTS dm_threads (
+  id SERIAL PRIMARY KEY,
+  user_low_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  user_high_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_message_at TIMESTAMP,
+  last_message_id INTEGER,
+  CHECK (user_low_id < user_high_id),
+  UNIQUE (user_low_id, user_high_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dm_threads_user_low
+  ON dm_threads(user_low_id);
+CREATE INDEX IF NOT EXISTS idx_dm_threads_user_high
+  ON dm_threads(user_high_id);
+CREATE INDEX IF NOT EXISTS idx_dm_threads_last_message_at
+  ON dm_threads(last_message_at DESC);
+
+CREATE TABLE IF NOT EXISTS dm_thread_state (
+  thread_id INTEGER NOT NULL REFERENCES dm_threads(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  last_read_message_id INTEGER,
+  archived BOOLEAN NOT NULL DEFAULT FALSE,
+  muted BOOLEAN NOT NULL DEFAULT FALSE,
+  deleted BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (thread_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dm_thread_state_user_archived
+  ON dm_thread_state(user_id, archived, updated_at);
+CREATE INDEX IF NOT EXISTS idx_dm_thread_state_user_deleted
+  ON dm_thread_state(user_id, deleted, updated_at);
+
+CREATE TABLE IF NOT EXISTS dm_messages (
+  id SERIAL PRIMARY KEY,
+  thread_id INTEGER NOT NULL REFERENCES dm_threads(id) ON DELETE CASCADE,
+  sender_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_dm_messages_thread_created
+  ON dm_messages(thread_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dm_messages_sender_created
+  ON dm_messages(sender_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS user_blocks (
+  blocker_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  blocked_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (blocker_id, blocked_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_blocks_blocker
+  ON user_blocks(blocker_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked
+  ON user_blocks(blocked_id, created_at DESC);
 
 COMMIT;

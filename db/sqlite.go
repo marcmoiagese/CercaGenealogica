@@ -180,6 +180,59 @@ func (d *SQLite) SavePrivacySettings(userID int, p *PrivacySettings) error {
 	return d.help.savePrivacySettings(userID, p)
 }
 
+// Missatgeria interna
+func (d *SQLite) GetOrCreateDMThread(userA, userB int) (*DMThread, error) {
+	return d.help.getOrCreateDMThread(userA, userB)
+}
+
+func (d *SQLite) GetDMThreadByUsers(userA, userB int) (*DMThread, error) {
+	return d.help.getDMThreadByUsers(userA, userB)
+}
+
+func (d *SQLite) GetDMThreadByID(threadID int) (*DMThread, error) {
+	return d.help.getDMThreadByID(threadID)
+}
+
+func (d *SQLite) ListDMThreadsForUser(userID int, f DMThreadListFilter) ([]DMThreadListItem, error) {
+	return d.help.listDMThreadsForUser(userID, f)
+}
+
+func (d *SQLite) ListDMMessages(threadID, limit, beforeID int) ([]DMMessage, error) {
+	return d.help.listDMMessages(threadID, limit, beforeID)
+}
+
+func (d *SQLite) CreateDMMessage(threadID, senderID int, body string) (int, error) {
+	return d.help.createDMMessage(threadID, senderID, body)
+}
+
+func (d *SQLite) UpdateDMThreadLastMessage(threadID, msgID int, at time.Time) error {
+	return d.help.updateDMThreadLastMessage(threadID, msgID, at)
+}
+
+func (d *SQLite) MarkDMThreadRead(threadID, userID, lastMsgID int) error {
+	return d.help.markDMThreadRead(threadID, userID, lastMsgID)
+}
+
+func (d *SQLite) SetDMThreadArchived(threadID, userID int, archived bool) error {
+	return d.help.setDMThreadArchived(threadID, userID, archived)
+}
+
+func (d *SQLite) SoftDeleteDMThread(threadID, userID int) error {
+	return d.help.softDeleteDMThread(threadID, userID)
+}
+
+func (d *SQLite) AddUserBlock(blockerID, blockedID int) error {
+	return d.help.addUserBlock(blockerID, blockedID)
+}
+
+func (d *SQLite) RemoveUserBlock(blockerID, blockedID int) error {
+	return d.help.removeUserBlock(blockerID, blockedID)
+}
+
+func (d *SQLite) IsUserBlocked(blockerID, blockedID int) (bool, error) {
+	return d.help.isUserBlocked(blockerID, blockedID)
+}
+
 func (d *SQLite) UpdateUserProfile(u *User) error {
 	return d.help.updateUserProfile(u)
 }
@@ -750,6 +803,21 @@ func (d *SQLite) DequeueWikiPending(changeID int) error {
 func (d *SQLite) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 	return d.help.listWikiPending(limit)
 }
+func (d *SQLite) CreateCSVImportTemplate(t *CSVImportTemplate) (int, error) {
+	return d.help.createCSVImportTemplate(t)
+}
+func (d *SQLite) UpdateCSVImportTemplate(t *CSVImportTemplate) error {
+	return d.help.updateCSVImportTemplate(t)
+}
+func (d *SQLite) GetCSVImportTemplate(id int) (*CSVImportTemplate, error) {
+	return d.help.getCSVImportTemplate(id)
+}
+func (d *SQLite) ListCSVImportTemplates(filter CSVImportTemplateFilter) ([]CSVImportTemplate, error) {
+	return d.help.listCSVImportTemplates(filter)
+}
+func (d *SQLite) DeleteCSVImportTemplate(id int) error {
+	return d.help.deleteCSVImportTemplate(id)
+}
 func (d *SQLite) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
 	return d.help.searchPersones(f)
 }
@@ -765,8 +833,10 @@ func (d *SQLite) GetPointsRule(id int) (*PointsRule, error) {
 func (d *SQLite) GetPointsRuleByCode(code string) (*PointsRule, error) {
 	return d.help.getPointsRuleByCode(code)
 }
-func (d *SQLite) SavePointsRule(r *PointsRule) (int, error)     { return d.help.savePointsRule(r) }
-func (d *SQLite) ListUserIDs(limit, offset int) ([]int, error)  { return d.help.listUserIDs(limit, offset) }
+func (d *SQLite) SavePointsRule(r *PointsRule) (int, error) { return d.help.savePointsRule(r) }
+func (d *SQLite) ListUserIDs(limit, offset int) ([]int, error) {
+	return d.help.listUserIDs(limit, offset)
+}
 func (d *SQLite) GetUserActivity(id int) (*UserActivity, error) { return d.help.getUserActivity(id) }
 func (d *SQLite) InsertUserActivity(a *UserActivity) (int, error) {
 	return d.help.insertUserActivity(a)
@@ -1085,4 +1155,41 @@ func (d *SQLite) ResolveMunicipiIDByAnecdotariItemID(itemID int) (int, error) {
 }
 func (d *SQLite) ResolveMunicipiIDByAnecdotariVersionID(versionID int) (int, error) {
 	return d.help.resolveMunicipiIDByAnecdotariVersionID(versionID)
+}
+
+// Esdeveniments historics
+func (d *SQLite) CreateEventHistoric(e *EventHistoric) (int, error) {
+	return d.help.createEventHistoric(e)
+}
+
+func (d *SQLite) GetEventHistoric(id int) (*EventHistoric, error) {
+	return d.help.getEventHistoric(id)
+}
+
+func (d *SQLite) GetEventHistoricBySlug(slug string) (*EventHistoric, error) {
+	return d.help.getEventHistoricBySlug(slug)
+}
+
+func (d *SQLite) UpdateEventHistoric(e *EventHistoric) error {
+	return d.help.updateEventHistoric(e)
+}
+
+func (d *SQLite) ListEventsHistoric(filter EventHistoricFilter) ([]EventHistoric, error) {
+	return d.help.listEventsHistoric(filter)
+}
+
+func (d *SQLite) UpdateEventHistoricModeracio(id int, estat, notes string, moderatorID int) error {
+	return d.help.updateEventHistoricModeracio(id, estat, notes, moderatorID)
+}
+
+func (d *SQLite) ListEventImpacts(eventID int) ([]EventHistoricImpact, error) {
+	return d.help.listEventImpacts(eventID)
+}
+
+func (d *SQLite) ReplaceEventImpacts(eventID int, impacts []EventHistoricImpact) error {
+	return d.help.replaceEventImpacts(eventID, impacts)
+}
+
+func (d *SQLite) ListEventsByScope(scopeType string, scopeID int, filter EventHistoricFilter) ([]EventHistoric, error) {
+	return d.help.listEventsByScope(scopeType, scopeID, filter)
 }

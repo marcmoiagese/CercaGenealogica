@@ -58,6 +58,9 @@ func main() {
 	if err := app.EnsurePolicyGrants(); err != nil {
 		log.Printf("[permissions] error assegurant grants per polítiques: %v", err)
 	}
+	if err := app.EnsureSystemImportTemplates(); err != nil {
+		log.Printf("[import-templates] error assegurant plantilles system: %v", err)
+	}
 	defer app.Close()
 
 	// Serveix recursos estàtics amb middleware de seguretat
@@ -164,6 +167,13 @@ func main() {
 	http.HandleFunc("/api/perfil/achievements", applyMiddleware(app.RequireLogin(app.PerfilAchievementsAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/perfil/achievements/", applyMiddleware(app.RequireLogin(app.PerfilAchievementsAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/ranking", applyMiddleware(app.Ranking, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/u/bloc", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.UserBlock), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
 	http.HandleFunc("/u/", applyMiddleware(app.PublicUserProfile, core.BlockIPs, core.RateLimit))
 
 	// Cognoms
@@ -223,6 +233,118 @@ func main() {
 	http.HandleFunc("/api/mapes/", applyMiddleware(app.MapesAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/anecdotes/", applyMiddleware(app.AnecdotesAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/anecdote_versions/", applyMiddleware(app.AnecdoteVersionsAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/import-templates", applyMiddleware(app.RequireLogin(app.ImportTemplatesAPI), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/import-templates/", applyMiddleware(app.RequireLogin(app.ImportTemplatesAPI), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/events", applyMiddleware(app.EventsAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/events/", applyMiddleware(app.EventsAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/scopes/search", applyMiddleware(app.ScopeSearchAPI, core.BlockIPs, core.RateLimit))
+
+	// Importador templates
+	http.HandleFunc("/importador/plantilles", applyMiddleware(app.RequireLogin(app.ImportTemplatesRoute), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/importador/plantilles/", applyMiddleware(app.RequireLogin(app.ImportTemplatesRoute), core.BlockIPs, core.RateLimit))
+
+	// Esdeveniments historics
+	http.HandleFunc("/historia/events", applyMiddleware(app.EventsListPage, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/historia/events/nou", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			applyMiddleware(app.RequireLogin(app.EventHistoricNew), core.BlockIPs, core.RateLimit)(w, r)
+		case http.MethodPost:
+			applyMiddleware(app.RequireLogin(app.EventHistoricCreate), core.BlockIPs, core.RateLimit)(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	http.HandleFunc("/historia/events/slug/", applyMiddleware(app.EventHistoricShowBySlug, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/historia/events/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/historial/revert") {
+			if r.Method == http.MethodPost {
+				applyMiddleware(app.RequireLogin(app.EventHistoricWikiRevert), core.BlockIPs, core.RateLimit)(w, r)
+				return
+			}
+			http.NotFound(w, r)
+			return
+		}
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(parts) >= 4 {
+			switch parts[3] {
+			case "editar":
+				if r.Method == http.MethodGet {
+					applyMiddleware(app.RequireLogin(app.EventHistoricEdit), core.BlockIPs, core.RateLimit)(w, r)
+					return
+				}
+				if r.Method == http.MethodPost {
+					applyMiddleware(app.RequireLogin(app.EventHistoricUpdate), core.BlockIPs, core.RateLimit)(w, r)
+					return
+				}
+			case "historial":
+				if r.Method == http.MethodGet {
+					applyMiddleware(app.RequireLogin(app.EventHistoricWikiHistory), core.BlockIPs, core.RateLimit)(w, r)
+					return
+				}
+			case "estadistiques":
+				if r.Method == http.MethodGet {
+					applyMiddleware(app.RequireLogin(app.EventHistoricWikiStats), core.BlockIPs, core.RateLimit)(w, r)
+					return
+				}
+			case "marcar":
+				if r.Method == http.MethodPost {
+					applyMiddleware(app.RequireLogin(app.EventHistoricWikiMark), core.BlockIPs, core.RateLimit)(w, r)
+					return
+				}
+			case "desmarcar":
+				if r.Method == http.MethodPost {
+					applyMiddleware(app.RequireLogin(app.EventHistoricWikiUnmark), core.BlockIPs, core.RateLimit)(w, r)
+					return
+				}
+			}
+		}
+		if r.Method == http.MethodGet {
+			applyMiddleware(app.EventHistoricShow, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
+	// Missatges
+	http.HandleFunc("/missatges", applyMiddleware(app.RequireLogin(app.MessagesInbox), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/missatges/nou", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.MessagesNew), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	http.HandleFunc("/missatges/fil/", func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/enviar"):
+			if r.Method == http.MethodPost {
+				applyMiddleware(app.RequireLogin(app.MessagesSend), core.BlockIPs, core.RateLimit)(w, r)
+				return
+			}
+		case strings.HasSuffix(r.URL.Path, "/arxivar"):
+			if r.Method == http.MethodPost {
+				applyMiddleware(app.RequireLogin(app.MessagesArchive), core.BlockIPs, core.RateLimit)(w, r)
+				return
+			}
+		case strings.HasSuffix(r.URL.Path, "/esborrar"):
+			if r.Method == http.MethodPost {
+				applyMiddleware(app.RequireLogin(app.MessagesDelete), core.BlockIPs, core.RateLimit)(w, r)
+				return
+			}
+		case strings.HasSuffix(r.URL.Path, "/bloc"):
+			if r.Method == http.MethodPost {
+				applyMiddleware(app.RequireLogin(app.MessagesBlock), core.BlockIPs, core.RateLimit)(w, r)
+				return
+			}
+		default:
+			if r.Method == http.MethodGet {
+				applyMiddleware(app.RequireLogin(app.MessagesThread), core.BlockIPs, core.RateLimit)(w, r)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
 
 	// Arxius (lectura per a tots els usuaris autenticats)
 	http.HandleFunc("/arxius", applyMiddleware(app.ListArxius, core.BlockIPs, core.RateLimit))
@@ -372,6 +494,8 @@ func main() {
 			applyMiddleware(app.RequireLogin(app.MunicipiWikiUnmark), core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/historia"):
 			applyMiddleware(app.MunicipiHistoriaPublic, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/events"):
+			applyMiddleware(app.MunicipiEventsListPage, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/historia/aportar"):
 			applyMiddleware(app.MunicipiHistoriaAportar, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/demografia"):

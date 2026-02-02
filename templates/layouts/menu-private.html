@@ -15,6 +15,7 @@
             </div>
             <ul>
                 <li class="menu-opcio"><a href="/inici">{{ t .Lang "menu.item.home" }}</a></li>
+                <li class="menu-opcio"><a href="/missatges"><i class="fas fa-envelope"></i> {{ t .Lang "menu.item.messages" }}</a></li>
             </ul>
         </div>
         {{ if and .Data (index .Data "IsAdmin") }}
@@ -58,6 +59,7 @@
             <ul>
                 <li class="menu-opcio"><a href="/documentals/arxius"><i class="fas fa-archive"></i> {{ t .Lang "admin.menu.archives" }}</a></li>
                 <li class="menu-opcio"><a href="/documentals/llibres"><i class="fas fa-book"></i> {{ t .Lang "admin.menu.books" }}</a></li>
+                <li class="menu-opcio"><a href="/importador/plantilles"><i class="fas fa-file-import"></i> {{ t .Lang "menu.item.import_templates" }}</a></li>
             </ul>
         </div>
         {{ end }}

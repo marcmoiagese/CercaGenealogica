@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,6 +37,30 @@ func (a *App) PublicUserProfile(w http.ResponseWriter, r *http.Request) {
 	showSpoken := privacy == nil || privacy.SpokenLangsVisibility == "public"
 	showPhone := privacy == nil || privacy.PhoneVisibility == "public"
 	showActivity := privacy == nil || privacy.ShowActivity
+	targetAllowsContact := privacy == nil || privacy.AllowContact
+	viewerAllowsContact := false
+	contactBlockedMessage := ""
+	canContact := false
+	showContact := false
+	viewerBlocked := false
+	if currentUser != nil && currentUser.ID != userID {
+		showContact = true
+		if viewerPrivacy, _ := a.DB.GetPrivacySettings(currentUser.ID); viewerPrivacy == nil || viewerPrivacy.AllowContact {
+			viewerAllowsContact = true
+		}
+		if blocked, _ := a.DB.IsUserBlocked(currentUser.ID, userID); blocked {
+			viewerBlocked = true
+			contactBlockedMessage = T(lang, "messages.contact.blocked.viewer")
+		} else if blocked, _ := a.DB.IsUserBlocked(userID, currentUser.ID); blocked {
+			contactBlockedMessage = T(lang, "messages.contact.blocked.target")
+		} else if !viewerAllowsContact {
+			contactBlockedMessage = T(lang, "messages.contact.disabled.viewer")
+		} else if !targetAllowsContact {
+			contactBlockedMessage = T(lang, "messages.contact.disabled.target")
+		} else {
+			canContact = true
+		}
+	}
 	points, _ := a.DB.GetUserPoints(userID)
 	totalPoints := 0
 	if points != nil {
@@ -85,26 +110,31 @@ func (a *App) PublicUserProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RenderPrivateTemplateLang(w, r, "user-public.html", lang, map[string]interface{}{
-		"ProfileUser":   u,
-		"Username":      username,
-		"RealName":      realName,
-		"ShowRealName":  realName != "",
-		"Name":          username,
-		"Initial":       initial,
-		"Points":        totalPoints,
-		"Activities":    activities,
-		"ShowActivity":  showActivity,
-		"Heatmap":       heatmap,
-		"HeatmapTotal":  heatTotal,
-		"ShowEmail":     showEmail,
-		"ShowPais":      showPais,
-		"ShowPoblacio":  showPoblacio,
-		"ShowLanguages": showLanguages,
-		"ShowSpoken":    showSpoken,
-		"SpokenLangs":   spoken,
-		"PreferredCode": strings.ToUpper(strings.TrimSpace(u.PreferredLang)),
-		"ShowPhone":     showPhone,
-		"User":          currentUser,
-		"CanManageArxius": a.CanManageArxius(currentUser),
+		"ProfileUser":           u,
+		"Username":              username,
+		"RealName":              realName,
+		"ShowRealName":          realName != "",
+		"Name":                  username,
+		"Initial":               initial,
+		"Points":                totalPoints,
+		"Activities":            activities,
+		"ShowActivity":          showActivity,
+		"Heatmap":               heatmap,
+		"HeatmapTotal":          heatTotal,
+		"ShowEmail":             showEmail,
+		"ShowPais":              showPais,
+		"ShowPoblacio":          showPoblacio,
+		"ShowLanguages":         showLanguages,
+		"ShowSpoken":            showSpoken,
+		"SpokenLangs":           spoken,
+		"PreferredCode":         strings.ToUpper(strings.TrimSpace(u.PreferredLang)),
+		"ShowPhone":             showPhone,
+		"User":                  currentUser,
+		"CanManageArxius":       a.CanManageArxius(currentUser),
+		"CanContact":            canContact,
+		"ShowContact":           showContact,
+		"ContactBlockedMessage": contactBlockedMessage,
+		"ViewerBlocked":         viewerBlocked,
+		"ContactURL":            fmt.Sprintf("/missatges?to=%d", u.ID),
 	})
 }

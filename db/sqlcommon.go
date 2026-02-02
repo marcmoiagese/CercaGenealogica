@@ -303,6 +303,9 @@ func (h sqlHelper) ensureDefaultPointsRules() error {
 		{Code: "municipi_historia_general_submit", Name: "Proposar història general", Description: "Enviar història general a moderació", Points: 5, Active: true},
 		{Code: "municipi_historia_fet_submit", Name: "Proposar fet històric", Description: "Enviar un fet històric a moderació", Points: 3, Active: true},
 		{Code: "municipi_anecdota_publicada", Name: "Proposar anècdota", Description: "Enviar una anècdota a moderació", Points: 5, Active: true},
+		{Code: "event_historic_submit", Name: "Proposar esdeveniment històric", Description: "Enviar un esdeveniment històric a moderació", Points: 0, Active: true},
+		{Code: "event_historic_approve", Name: "Aprovar esdeveniment històric", Description: "Aprovar un esdeveniment històric pendent", Points: 5, Active: true},
+		{Code: "event_historic_reject", Name: "Rebutjar esdeveniment històric", Description: "Rebutjar un esdeveniment històric pendent", Points: 0, Active: true},
 	}
 	for _, r := range defaults {
 		stmt := `INSERT INTO punts_regles (codi, nom, descripcio, punts, actiu, data_creacio) VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `)`
@@ -2183,7 +2186,6 @@ func (h sqlHelper) countMunicipis(f MunicipiFilter) (int, error) {
 	}
 	return total, nil
 }
-
 
 func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowseRow, error) {
 	where := "1=1"
@@ -6075,6 +6077,180 @@ func (h sqlHelper) updateWikiChangeModeracio(id int, estat, motiu string, modera
 		}
 	}
 	return nil
+}
+
+// CSV import templates
+func (h sqlHelper) createCSVImportTemplate(t *CSVImportTemplate) (int, error) {
+	if t == nil {
+		return 0, fmt.Errorf("template invalid")
+	}
+	name := strings.TrimSpace(t.Name)
+	if name == "" {
+		return 0, fmt.Errorf("name invalid")
+	}
+	modelJSON := strings.TrimSpace(t.ModelJSON)
+	if modelJSON == "" {
+		return 0, fmt.Errorf("model_json invalid")
+	}
+	signature := ComputeTemplateSignature(modelJSON)
+	t.Signature = signature
+	visibility := strings.TrimSpace(t.Visibility)
+	if visibility == "" {
+		visibility = "private"
+	}
+	var owner interface{}
+	if t.OwnerUserID.Valid {
+		owner = t.OwnerUserID.Int64
+	}
+	var description interface{}
+	if strings.TrimSpace(t.Description) != "" {
+		description = strings.TrimSpace(t.Description)
+	}
+	var sep interface{}
+	if strings.TrimSpace(t.DefaultSeparator) != "" {
+		sep = strings.TrimSpace(t.DefaultSeparator)
+	}
+	query := `
+        INSERT INTO csv_import_templates
+            (name, description, owner_user_id, visibility, default_separator, model_json, signature, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		query += " RETURNING id"
+	}
+	query = formatPlaceholders(h.style, query)
+	args := []interface{}{name, description, owner, visibility, sep, modelJSON, signature}
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(query, args...).Scan(&t.ID); err != nil {
+			return 0, err
+		}
+		return t.ID, nil
+	}
+	res, err := h.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		t.ID = int(id)
+	}
+	return t.ID, nil
+}
+
+func (h sqlHelper) updateCSVImportTemplate(t *CSVImportTemplate) error {
+	if t == nil || t.ID == 0 {
+		return fmt.Errorf("template invalid")
+	}
+	name := strings.TrimSpace(t.Name)
+	if name == "" {
+		return fmt.Errorf("name invalid")
+	}
+	modelJSON := strings.TrimSpace(t.ModelJSON)
+	if modelJSON == "" {
+		return fmt.Errorf("model_json invalid")
+	}
+	signature := ComputeTemplateSignature(modelJSON)
+	t.Signature = signature
+	visibility := strings.TrimSpace(t.Visibility)
+	if visibility == "" {
+		visibility = "private"
+	}
+	var description interface{}
+	if strings.TrimSpace(t.Description) != "" {
+		description = strings.TrimSpace(t.Description)
+	}
+	var sep interface{}
+	if strings.TrimSpace(t.DefaultSeparator) != "" {
+		sep = strings.TrimSpace(t.DefaultSeparator)
+	}
+	query := `
+        UPDATE csv_import_templates
+        SET name = ?, description = ?, visibility = ?, default_separator = ?, model_json = ?, signature = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	args := []interface{}{name, description, visibility, sep, modelJSON, signature, t.ID}
+	if t.OwnerUserID.Valid {
+		query += " AND owner_user_id = ?"
+		args = append(args, t.OwnerUserID.Int64)
+	}
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, args...)
+	return err
+}
+
+func (h sqlHelper) getCSVImportTemplate(id int) (*CSVImportTemplate, error) {
+	query := `
+        SELECT id, name, COALESCE(description, ''), owner_user_id, visibility,
+               COALESCE(default_separator, ''), model_json, signature, created_at, updated_at
+        FROM csv_import_templates
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var t CSVImportTemplate
+	if err := row.Scan(&t.ID, &t.Name, &t.Description, &t.OwnerUserID, &t.Visibility, &t.DefaultSeparator, &t.ModelJSON, &t.Signature, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &t, nil
+}
+
+func (h sqlHelper) listCSVImportTemplates(filter CSVImportTemplateFilter) ([]CSVImportTemplate, error) {
+	where := []string{"1=1"}
+	args := []interface{}{}
+	if filter.OwnerUserID > 0 {
+		if filter.IncludePublic {
+			where = append(where, "(owner_user_id = ? OR visibility = 'public')")
+			args = append(args, filter.OwnerUserID)
+		} else {
+			where = append(where, "owner_user_id = ?")
+			args = append(args, filter.OwnerUserID)
+		}
+	} else if filter.IncludePublic {
+		where = append(where, "visibility = 'public'")
+	} else {
+		return []CSVImportTemplate{}, nil
+	}
+	if q := strings.TrimSpace(filter.Query); q != "" {
+		likeOp := "LIKE"
+		if h.style == "postgres" {
+			likeOp = "ILIKE"
+		}
+		where = append(where, "(name "+likeOp+" ? OR description "+likeOp+" ?)")
+		q = "%" + q + "%"
+		args = append(args, q, q)
+	}
+	query := `
+        SELECT id, name, COALESCE(description, ''), owner_user_id, visibility,
+               COALESCE(default_separator, ''), model_json, signature, created_at, updated_at
+        FROM csv_import_templates
+        WHERE ` + strings.Join(where, " AND ") + `
+        ORDER BY created_at DESC`
+	if filter.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", filter.Limit)
+	}
+	if filter.Offset > 0 {
+		query += fmt.Sprintf(" OFFSET %d", filter.Offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CSVImportTemplate
+	for rows.Next() {
+		var t CSVImportTemplate
+		if err := rows.Scan(&t.ID, &t.Name, &t.Description, &t.OwnerUserID, &t.Visibility, &t.DefaultSeparator, &t.ModelJSON, &t.Signature, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, t)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) deleteCSVImportTemplate(id int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM csv_import_templates WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
+	return err
 }
 
 func (h sqlHelper) enqueueWikiPending(change *WikiChange) error {

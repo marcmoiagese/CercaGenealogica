@@ -20,6 +20,24 @@
                 </div>
             </header>
             <div class="card-body">
+                {{ if .Data.ShowContact }}
+                <div class="perfil-public-contact">
+                    {{ if .Data.CanContact }}
+                        <a class="boto-primari" href="{{ .Data.ContactURL }}">{{ t .Lang "messages.contact.cta" }}</a>
+                    {{ else if .Data.ContactBlockedMessage }}
+                        <p class="muted">{{ .Data.ContactBlockedMessage }}</p>
+                    {{ end }}
+                    <form method="post" action="/u/bloc">
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                        <input type="hidden" name="user_id" value="{{ .Data.ProfileUser.ID }}">
+                        <input type="hidden" name="return_to" value="/u/{{ .Data.ProfileUser.ID }}">
+                        <input type="hidden" name="blocked" value="{{ if .Data.ViewerBlocked }}0{{ else }}1{{ end }}">
+                        <button class="{{ if .Data.ViewerBlocked }}boto-secundari{{ else }}boto-perill{{ end }}" type="submit">
+                            {{ if .Data.ViewerBlocked }}{{ t .Lang "messages.thread.unblock" }}{{ else }}{{ t .Lang "messages.thread.block" }}{{ end }}
+                        </button>
+                    </form>
+                </div>
+                {{ end }}
                 <div class="perfil-public-dades">
                     <h2>{{ t .Lang "profile.title" }}</h2>
                     <dl class="dades-usuari">

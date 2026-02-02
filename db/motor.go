@@ -34,6 +34,20 @@ type DB interface {
 	SavePrivacySettings(userID int, p *PrivacySettings) error
 	UpdateUserProfile(u *User) error
 	UpdateUserEmail(userID int, newEmail string) error
+	// Missatgeria interna
+	GetOrCreateDMThread(userA, userB int) (*DMThread, error)
+	GetDMThreadByUsers(userA, userB int) (*DMThread, error)
+	GetDMThreadByID(threadID int) (*DMThread, error)
+	ListDMThreadsForUser(userID int, f DMThreadListFilter) ([]DMThreadListItem, error)
+	ListDMMessages(threadID, limit, beforeID int) ([]DMMessage, error)
+	CreateDMMessage(threadID, senderID int, body string) (int, error)
+	UpdateDMThreadLastMessage(threadID, msgID int, at time.Time) error
+	MarkDMThreadRead(threadID, userID, lastMsgID int) error
+	SetDMThreadArchived(threadID, userID int, archived bool) error
+	SoftDeleteDMThread(threadID, userID int) error
+	AddUserBlock(blockerID, blockedID int) error
+	RemoveUserBlock(blockerID, blockedID int) error
+	IsUserBlocked(blockerID, blockedID int) (bool, error)
 	// Admin users
 	ListUsersAdmin() ([]UserAdminRow, error)
 	SetUserActive(userID int, active bool) error
@@ -188,6 +202,17 @@ type DB interface {
 	ResolveMunicipiIDByAnecdotariItemID(itemID int) (int, error)
 	ResolveMunicipiIDByAnecdotariVersionID(versionID int) (int, error)
 
+	// Esdeveniments historics
+	CreateEventHistoric(e *EventHistoric) (int, error)
+	GetEventHistoric(id int) (*EventHistoric, error)
+	GetEventHistoricBySlug(slug string) (*EventHistoric, error)
+	UpdateEventHistoric(e *EventHistoric) error
+	ListEventsHistoric(filter EventHistoricFilter) ([]EventHistoric, error)
+	UpdateEventHistoricModeracio(id int, estat, notes string, moderatorID int) error
+	ListEventImpacts(eventID int) ([]EventHistoricImpact, error)
+	ReplaceEventImpacts(eventID int, impacts []EventHistoricImpact) error
+	ListEventsByScope(scopeType string, scopeID int, filter EventHistoricFilter) ([]EventHistoric, error)
+
 	// Persones (moderació)
 	ListPersones(filter PersonaFilter) ([]Persona, error)
 	GetPersona(id int) (*Persona, error)
@@ -310,6 +335,12 @@ type DB interface {
 	EnqueueWikiPending(change *WikiChange) error
 	DequeueWikiPending(changeID int) error
 	ListWikiPending(limit int) ([]WikiPendingItem, error)
+	// CSV import templates
+	CreateCSVImportTemplate(t *CSVImportTemplate) (int, error)
+	UpdateCSVImportTemplate(t *CSVImportTemplate) error
+	GetCSVImportTemplate(id int) (*CSVImportTemplate, error)
+	ListCSVImportTemplates(filter CSVImportTemplateFilter) ([]CSVImportTemplate, error)
+	DeleteCSVImportTemplate(id int) error
 	SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error)
 	ListRegistresByPersona(personaID int, tipus string) ([]PersonaRegistreRow, error)
 
@@ -425,6 +456,57 @@ type PrivacySettings struct {
 	AllowContact            bool
 }
 
+type DMThread struct {
+	ID            int
+	UserLowID     int
+	UserHighID    int
+	CreatedAt     sql.NullTime
+	LastMessageAt sql.NullTime
+	LastMessageID sql.NullInt64
+}
+
+type DMThreadState struct {
+	ThreadID          int
+	UserID            int
+	LastReadMessageID sql.NullInt64
+	Archived          bool
+	Muted             bool
+	Deleted           bool
+	UpdatedAt         sql.NullTime
+}
+
+type DMMessage struct {
+	ID        int
+	ThreadID  int
+	SenderID  int
+	Body      string
+	CreatedAt sql.NullTime
+}
+
+type DMThreadListFilter struct {
+	ThreadID int
+	Archived *bool
+	Deleted  *bool
+	Limit    int
+	Offset   int
+}
+
+type DMThreadListItem struct {
+	ThreadID             int
+	OtherUserID          int
+	ThreadCreatedAt      sql.NullTime
+	LastMessageID        sql.NullInt64
+	LastMessageAt        sql.NullTime
+	LastMessageBody      string
+	LastMessageSenderID  sql.NullInt64
+	LastMessageCreatedAt sql.NullTime
+	LastReadMessageID    sql.NullInt64
+	Archived             bool
+	Muted                bool
+	Deleted              bool
+	Unread               bool
+}
+
 // Regles de punts / activitat
 type PointsRule struct {
 	ID          int
@@ -482,18 +564,18 @@ type AchievementUser struct {
 }
 
 type AchievementUserView struct {
-	AchievementID  int
-	Code           string
-	Name           string
-	Description    string
-	Rarity         string
-	Visibility     string
-	Domain         string
+	AchievementID   int
+	Code            string
+	Name            string
+	Description     string
+	Rarity          string
+	Visibility      string
+	Domain          string
 	IconMediaItemID sql.NullInt64
-	IconPublicID   sql.NullString
-	AwardedAt      sql.NullTime
-	Status         string
-	MetaJSON       sql.NullString
+	IconPublicID    sql.NullString
+	AwardedAt       sql.NullTime
+	Status          string
+	MetaJSON        sql.NullString
 }
 
 type AchievementShowcase struct {
@@ -504,19 +586,19 @@ type AchievementShowcase struct {
 }
 
 type AchievementShowcaseView struct {
-	Slot           int
-	AchievementID  int
-	Code           string
-	Name           string
-	Description    string
-	Rarity         string
-	Visibility     string
-	Domain         string
+	Slot            int
+	AchievementID   int
+	Code            string
+	Name            string
+	Description     string
+	Rarity          string
+	Visibility      string
+	Domain          string
 	IconMediaItemID sql.NullInt64
-	IconPublicID   sql.NullString
-	AwardedAt      sql.NullTime
-	Status         string
-	MetaJSON       sql.NullString
+	IconPublicID    sql.NullString
+	AwardedAt       sql.NullTime
+	Status          string
+	MetaJSON        sql.NullString
 }
 
 type ActivityFilter struct {
@@ -663,34 +745,34 @@ type MunicipiMapaFilter struct {
 }
 
 type MunicipiMapaVersion struct {
-	ID             int
-	MapaID         int
-	Version        int
-	Status         string
-	JSONData       string
-	Changelog      string
-	LockVersion    int
-	CreatedBy      sql.NullInt64
-	CreatedAt      sql.NullTime
-	ModeratedBy    sql.NullInt64
-	ModeratedAt    sql.NullTime
+	ID              int
+	MapaID          int
+	Version         int
+	Status          string
+	JSONData        string
+	Changelog       string
+	LockVersion     int
+	CreatedBy       sql.NullInt64
+	CreatedAt       sql.NullTime
+	ModeratedBy     sql.NullInt64
+	ModeratedAt     sql.NullTime
 	ModerationNotes string
 }
 
 type MunicipiMapaVersionFilter struct {
 	MapaID    int
-	Status   string
+	Status    string
 	CreatedBy int
-	Limit    int
-	Offset   int
+	Limit     int
+	Offset    int
 }
 
 type MunicipiHistoria struct {
-	ID                     int
-	MunicipiID             int
+	ID                      int
+	MunicipiID              int
 	CurrentGeneralVersionID sql.NullInt64
-	CreatedAt              sql.NullTime
-	UpdatedAt              sql.NullTime
+	CreatedAt               sql.NullTime
+	UpdatedAt               sql.NullTime
 }
 
 type MunicipiHistoriaGeneralVersion struct {
@@ -774,14 +856,14 @@ type MunicipiDemografiaMeta struct {
 }
 
 type DemografiaQueueItem struct {
-	ID         int
-	MunicipiID int
-	Tipus      string
-	Any        int
-	Delta      int
-	Source     string
-	SourceID   string
-	CreatedAt  sql.NullTime
+	ID          int
+	MunicipiID  int
+	Tipus       string
+	Any         int
+	Delta       int
+	Source      string
+	SourceID    string
+	CreatedAt   sql.NullTime
 	ProcessedAt sql.NullTime
 }
 
@@ -829,6 +911,55 @@ type MunicipiAnecdotariFilter struct {
 	Status string
 	Limit  int
 	Offset int
+}
+
+type EventHistoric struct {
+	ID               int
+	Titol            string
+	Slug             string
+	Tipus            string
+	Resum            string
+	Descripcio       string
+	DataInici        string
+	DataFi           string
+	DataIniciAprox   bool
+	DataFiAprox      bool
+	Precisio         string
+	Fonts            string
+	CreatedBy        sql.NullInt64
+	ModerationStatus string
+	ModeratedBy      sql.NullInt64
+	ModeratedAt      sql.NullTime
+	ModerationNotes  string
+	CreatedAt        sql.NullTime
+	UpdatedAt        sql.NullTime
+}
+
+type EventHistoricImpact struct {
+	ID           int
+	EventID      int
+	ScopeType    string
+	ScopeID      int
+	ImpacteTipus string
+	Intensitat   int
+	Notes        string
+	CreatedBy    sql.NullInt64
+	CreatedAt    sql.NullTime
+	UpdatedAt    sql.NullTime
+}
+
+type EventHistoricFilter struct {
+	Query         string
+	Tipus         string
+	Status        string
+	ImpacteTipus  string
+	IntensitatMin int
+	OnlyWithDates bool
+	OrderBy       string
+	From          time.Time
+	To            time.Time
+	Limit         int
+	Offset        int
 }
 
 type Pais struct {
@@ -1046,7 +1177,6 @@ type MunicipiSuggestRow struct {
 	Latitud    sql.NullFloat64
 	Longitud   sql.NullFloat64
 }
-
 
 type CodiPostal struct {
 	ID         int
@@ -1535,12 +1665,33 @@ type WikiChange struct {
 }
 
 type WikiPendingItem struct {
-	ChangeID  int
+	ChangeID   int
 	ObjectType string
-	ObjectID  int
-	ChangedAt time.Time
-	ChangedBy sql.NullInt64
-	CreatedAt time.Time
+	ObjectID   int
+	ChangedAt  time.Time
+	ChangedBy  sql.NullInt64
+	CreatedAt  time.Time
+}
+
+type CSVImportTemplate struct {
+	ID               int
+	Name             string
+	Description      string
+	OwnerUserID      sql.NullInt64
+	Visibility       string
+	DefaultSeparator string
+	ModelJSON        string
+	Signature        string
+	CreatedAt        sql.NullTime
+	UpdatedAt        sql.NullTime
+}
+
+type CSVImportTemplateFilter struct {
+	OwnerUserID   int
+	IncludePublic bool
+	Query         string
+	Limit         int
+	Offset        int
 }
 
 type PersonaSearchFilter struct {

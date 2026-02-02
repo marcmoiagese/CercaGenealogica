@@ -1,0 +1,86 @@
+{{ define "messages-inbox.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "messages.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/messages.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal messages-page">
+        <section class="card messages-hero">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "messages.title" }}</h1>
+                    <p class="muted">{{ t .Lang "messages.subtitle" }}</p>
+                </div>
+                <div class="messages-actions">
+                    {{ if .Data.ArchivedView }}
+                        <a class="boto-secundari" href="/missatges">{{ t .Lang "messages.actions.view_inbox" }}</a>
+                    {{ else }}
+                        <a class="boto-secundari" href="/missatges?archived=1">{{ t .Lang "messages.actions.view_archived" }}</a>
+                    {{ end }}
+                </div>
+            </header>
+        </section>
+
+        {{ if .Data.NewMessageUser }}
+        <section class="card messages-new">
+            <header class="card-header">
+                <h2>{{ t .Lang "messages.new.title" }}</h2>
+            </header>
+            <div class="card-body">
+                <p class="muted">{{ t .Lang "messages.new.to" }} <strong>{{ .Data.NewMessageUserLabel }}</strong></p>
+                {{ if .Data.NewMessageBlocked }}
+                    <p class="message-alert">{{ .Data.NewMessageBlocked }}</p>
+                {{ else }}
+                    <form class="messages-form" method="post" action="/missatges/nou">
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                        <input type="hidden" name="recipient_id" value="{{ .Data.NewMessageUser.ID }}">
+                        <label for="messageBody">{{ t .Lang "messages.form.body" }}</label>
+                        <textarea id="messageBody" name="body" rows="5" maxlength="{{ .Data.MessageMaxLen }}"></textarea>
+                        <div class="messages-form-actions">
+                            <button class="boto-primari" type="submit">{{ t .Lang "messages.form.send" }}</button>
+                        </div>
+                    </form>
+                {{ end }}
+            </div>
+        </section>
+        {{ end }}
+
+        <section class="card messages-list-card">
+            <header class="card-header">
+                <h2>{{ t .Lang "messages.inbox.title" }}</h2>
+            </header>
+            {{ if .Data.Threads }}
+                <div class="messages-list">
+                    {{ range .Data.Threads }}
+                        <article class="message-thread {{ if .Unread }}unread{{ end }}">
+                            <a href="{{ .ThreadURL }}">
+                                <div class="message-thread-main">
+                                    <h3>{{ .OtherLabel }}</h3>
+                                    <p class="message-thread-snippet">{{ .LastMessage }}</p>
+                                </div>
+                                <div class="message-thread-meta">
+                                    {{ if .Unread }}
+                                        <span class="badge">{{ t $.Lang "messages.unread" }}</span>
+                                    {{ end }}
+                                    <span class="message-thread-date">{{ .LastMessageAt }}</span>
+                                </div>
+                            </a>
+                        </article>
+                    {{ end }}
+                </div>
+            {{ else }}
+                <p class="muted">{{ t .Lang "messages.empty" }}</p>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

@@ -24,6 +24,11 @@ func (a *App) AdminImportRegistresGlobalView(w http.ResponseWriter, r *http.Requ
 	errorsToken := strings.TrimSpace(r.URL.Query().Get("errors_token"))
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	arxius, _ := a.DB.ListArxius(db.ArxiuFilter{})
+	templates, _ := a.DB.ListCSVImportTemplates(db.CSVImportTemplateFilter{
+		OwnerUserID:   user.ID,
+		IncludePublic: true,
+		Limit:         200,
+	})
 	RenderPrivateTemplate(w, r, "admin-llibres-registres-import-global.html", map[string]interface{}{
 		"Imported":          imported,
 		"Updated":           updated,
@@ -31,6 +36,7 @@ func (a *App) AdminImportRegistresGlobalView(w http.ResponseWriter, r *http.Requ
 		"ErrorsToken":       errorsToken,
 		"Municipis":         municipis,
 		"Arxius":            arxius,
+		"ImportTemplates":   templates,
 		"User":              user,
 		"CanManageArxius":   a.hasPerm(perms, permArxius),
 		"CanManagePolicies": a.hasPerm(perms, permPolicies),
@@ -43,6 +49,10 @@ func (a *App) AdminImportRegistresGlobal(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "invalid csrf", http.StatusBadRequest)
+		return
+	}
 	file, _, err := r.FormFile("csv_file")
 	if err != nil {
 		token := storeImportErrors([]importErrorEntry{{Row: 0, Reason: "fitxer CSV no vàlid"}})
@@ -51,6 +61,9 @@ func (a *App) AdminImportRegistresGlobal(w http.ResponseWriter, r *http.Request)
 	}
 	defer file.Close()
 	model := strings.TrimSpace(r.FormValue("model"))
+	if model == "" {
+		model = "generic"
+	}
 	separator := parseCSVSeparator(strings.TrimSpace(r.FormValue("separator")))
 	ctx := importContext{
 		MunicipiID: parseIntValue(r.FormValue("municipi_id")),
@@ -58,9 +71,31 @@ func (a *App) AdminImportRegistresGlobal(w http.ResponseWriter, r *http.Request)
 	}
 	var result csvImportResult
 	switch model {
+	case "template":
+		templateID := parseIntValue(r.FormValue("template_id"))
+		template, err := a.DB.GetCSVImportTemplate(templateID)
+		perms := a.getPermissionsForUser(user.ID)
+		if err != nil || template == nil || !canViewImportTemplate(user, perms, template) {
+			result.Failed = 1
+			result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "plantilla no trobada"})
+			break
+		}
+		if separator == 0 && strings.TrimSpace(template.DefaultSeparator) != "" {
+			separator = parseCSVSeparator(template.DefaultSeparator)
+		}
+		if separator == 0 {
+			separator = ','
+		}
+		result = a.RunCSVTemplateImport(template, file, separator, user.ID, ctx, 0)
 	case "baptismes_marcmoia":
+		if separator == 0 {
+			separator = ','
+		}
 		result = a.importBaptismesMarcmoiaCSV(file, separator, user.ID, ctx)
 	case "generic":
+		if separator == 0 {
+			separator = ','
+		}
 		result = a.importGenericTranscripcionsCSV(file, separator, user.ID, ctx)
 	default:
 		result.Failed = 1

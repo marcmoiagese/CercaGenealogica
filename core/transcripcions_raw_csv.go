@@ -36,8 +36,22 @@ type registreRow struct {
 }
 
 func parseCSVSeparator(val string) rune {
-	if val == ";" {
+	val = strings.TrimSpace(val)
+	switch val {
+	case "":
+		return 0
+	case ";":
 		return ';'
+	case ",":
+		return ','
+	case "|":
+		return '|'
+	case "tab", "\\t", "\t":
+		return '\t'
+	default:
+		if len(val) == 1 {
+			return rune(val[0])
+		}
 	}
 	return ','
 }
@@ -91,6 +105,9 @@ func (a *App) AdminExportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 	filter.Offset = 0
 	registres, _ := a.DB.ListTranscripcionsRaw(llibreID, filter)
 	separator := parseCSVSeparator(strings.TrimSpace(r.URL.Query().Get("separator")))
+	if separator == 0 {
+		separator = ','
+	}
 	includeLiteral := strings.TrimSpace(r.URL.Query().Get("literal")) != "0"
 	writeRegistresCSV(a, w, registres, includeLiteral, separator)
 }
@@ -104,6 +121,9 @@ func (a *App) AdminExportRegistresGlobal(w http.ResponseWriter, r *http.Request)
 	filter.Offset = 0
 	registres, _ := a.DB.ListTranscripcionsRawGlobal(filter)
 	separator := parseCSVSeparator(strings.TrimSpace(r.URL.Query().Get("separator")))
+	if separator == 0 {
+		separator = ','
+	}
 	includeLiteral := strings.TrimSpace(r.URL.Query().Get("literal")) != "0"
 	writeRegistresCSV(a, w, registres, includeLiteral, separator)
 }
@@ -392,8 +412,14 @@ func (a *App) AdminImportRegistresView(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	templates, _ := a.DB.ListCSVImportTemplates(db.CSVImportTemplateFilter{
+		OwnerUserID:   user.ID,
+		IncludePublic: true,
+		Limit:         200,
+	})
 	RenderPrivateTemplate(w, r, "admin-llibres-registres-import.html", map[string]interface{}{
 		"Llibre":            llibre,
+		"ImportTemplates":   templates,
 		"User":              user,
 		"CanManageArxius":   a.hasPerm(perms, permArxius),
 		"CanManagePolicies": a.hasPerm(perms, permPolicies),
@@ -412,6 +438,10 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "invalid csrf", http.StatusBadRequest)
+		return
+	}
 	file, _, err := r.FormFile("csv_file")
 	if err != nil {
 		token := storeImportErrors([]importErrorEntry{{Row: 0, Reason: "fitxer CSV no vàlid"}})
@@ -419,16 +449,59 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	defer file.Close()
+	model := strings.TrimSpace(r.FormValue("model"))
+	if model == "" {
+		model = "generic"
+	}
 	separator := parseCSVSeparator(strings.TrimSpace(r.FormValue("separator")))
-	reader := csv.NewReader(file)
-	reader.Comma = separator
-	reader.TrimLeadingSpace = true
+	var result csvImportResult
+	switch model {
+	case "template":
+		templateID := parseIntValue(r.FormValue("template_id"))
+		template, err := a.DB.GetCSVImportTemplate(templateID)
+		perms := a.getPermissionsForUser(user.ID)
+		if err != nil || template == nil || !canViewImportTemplate(user, perms, template) {
+			result.Failed = 1
+			result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "plantilla no trobada"})
+			break
+		}
+		if separator == 0 && strings.TrimSpace(template.DefaultSeparator) != "" {
+			separator = parseCSVSeparator(template.DefaultSeparator)
+		}
+		if separator == 0 {
+			separator = ','
+		}
+		result = a.RunCSVTemplateImport(template, file, separator, user.ID, importContext{}, llibreID)
+	case "generic":
+		if separator == 0 {
+			separator = ','
+		}
+		result = a.importGenericTranscripcionsCSVForBook(file, separator, user.ID, llibreID)
+	default:
+		result.Failed = 1
+		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "model d'importació no suportat"})
+	}
+	token := storeImportErrors(result.Errors)
+	if result.Created > 0 || result.Updated > 0 {
+		_, _ = a.recalcLlibreIndexacioStats(llibreID)
+	}
+	redirectTarget := fmt.Sprintf("/documentals/llibres/%d/indexar?imported=%d&updated=%d&failed=%d", llibreID, result.Created, result.Updated, result.Failed)
+	if token != "" {
+		redirectTarget += "&errors_token=" + token
+	}
+	http.Redirect(w, r, redirectTarget, http.StatusSeeOther)
+}
 
-	headers, err := reader.Read()
+func (a *App) importGenericTranscripcionsCSVForBook(reader io.Reader, sep rune, userID int, llibreID int) csvImportResult {
+	result := csvImportResult{}
+	csvReader := csv.NewReader(reader)
+	csvReader.Comma = sep
+	csvReader.TrimLeadingSpace = true
+	headers, err := csvReader.Read()
 	if err != nil {
-		token := storeImportErrors([]importErrorEntry{{Row: 0, Reason: "capçalera CSV invàlida"}})
-		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/indexar?imported=0&failed=1&errors_token="+token, http.StatusSeeOther)
-		return
+		result.Failed = 1
+		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "capçalera CSV invàlida"})
+		return result
 	}
 	columns := make([]csvColumn, len(headers))
 	for i, h := range headers {
@@ -439,31 +512,22 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 	for _, p := range pagines {
 		paginaMap[p.ID] = true
 	}
-
-	created := 0
-	failed := 0
 	rowNum := 1
-	var errors []importErrorEntry
 	for {
-		record, err := reader.Read()
+		record, err := csvReader.Read()
 		if err == io.EOF {
 			break
 		}
-		if err != nil {
-			rowNum++
-			failed++
-			errors = append(errors, importErrorEntry{Row: rowNum, Reason: "error llegint fila"})
-			continue
-		}
 		rowNum++
-		fail := func(reason string) {
-			failed++
-			errors = append(errors, importErrorEntry{Row: rowNum, Reason: reason})
+		if err != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "error llegint fila"})
+			continue
 		}
 		t := db.TranscripcioRaw{
 			LlibreID:       llibreID,
 			ModeracioEstat: "pendent",
-			CreatedBy:      sql.NullInt64{Int64: int64(user.ID), Valid: true},
+			CreatedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
 		}
 		persones := map[string]*db.TranscripcioPersonaRaw{}
 		atributs := map[string]*db.TranscripcioAtributRaw{}
@@ -528,30 +592,33 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 				if col.AttrKey == "" {
 					continue
 				}
-				a := atributs[col.AttrKey]
-				if a == nil {
-					a = &db.TranscripcioAtributRaw{Clau: col.AttrKey, TipusValor: col.AttrType}
-					atributs[col.AttrKey] = a
+				attr := atributs[col.AttrKey]
+				if attr == nil {
+					attr = &db.TranscripcioAtributRaw{Clau: col.AttrKey, TipusValor: col.AttrType}
+					atributs[col.AttrKey] = attr
 				}
 				if col.AttrType == "estat" {
-					a.Estat = val
+					attr.Estat = val
 				} else {
-					a.TipusValor = col.AttrType
-					applyAttrValue(a, val)
+					attr.TipusValor = col.AttrType
+					applyAttrValue(attr, val)
 				}
 			}
 		}
 		if rowErr != "" {
-			fail(rowErr)
+			result.Failed++
+			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: rowErr})
 			continue
 		}
 		if !validTipusActe(t.TipusActe) {
-			fail("tipus_acte invàlid")
+			result.Failed++
+			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "tipus_acte invàlid"})
 			continue
 		}
 		id, err := a.DB.CreateTranscripcioRaw(&t)
 		if err != nil || id == 0 {
-			fail("no s'ha pogut crear el registre")
+			result.Failed++
+			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "no s'ha pogut crear el registre"})
 			continue
 		}
 		for _, p := range persones {
@@ -568,17 +635,10 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 			attr.TranscripcioID = id
 			_, _ = a.DB.CreateTranscripcioAtribut(attr)
 		}
-		created++
+		result.Created++
+		result.markBook(llibreID)
 	}
-	token := storeImportErrors(errors)
-	if created > 0 {
-		_, _ = a.recalcLlibreIndexacioStats(llibreID)
-	}
-	redirectTarget := fmt.Sprintf("/documentals/llibres/%d/indexar?imported=%d&failed=%d", llibreID, created, failed)
-	if token != "" {
-		redirectTarget += "&errors_token=" + token
-	}
-	http.Redirect(w, r, redirectTarget, http.StatusSeeOther)
+	return result
 }
 
 func (a *App) AdminDownloadImportErrors(w http.ResponseWriter, r *http.Request) {

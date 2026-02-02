@@ -35,11 +35,26 @@
             {{ end }}
 
             <form class="filtres import-form" method="post" action="/documentals/llibres/importar" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                 <div class="grup-camp">
                     <label for="import-model">{{ t .Lang "records.import.module" }}</label>
                     <select id="import-model" name="model">
                         <option value="generic">{{ t .Lang "records.import.model.generic" }}</option>
                         <option value="baptismes_marcmoia">{{ t .Lang "records.import.model.baptismes_marcmoia" }}</option>
+                        <option value="template">{{ t .Lang "records.import.model.template" }}</option>
+                    </select>
+                </div>
+                <div class="grup-camp" data-template-field hidden>
+                    <label for="import-template">{{ t .Lang "records.import.template" }}</label>
+                    <select id="import-template" name="template_id">
+                        {{ if .Data.ImportTemplates }}
+                        <option value="">{{ t .Lang "records.import.template.placeholder" }}</option>
+                        {{ range .Data.ImportTemplates }}
+                        <option value="{{ .ID }}">{{ .Name }}</option>
+                        {{ end }}
+                        {{ else }}
+                        <option value="">{{ t .Lang "records.import.template.none" }}</option>
+                        {{ end }}
                     </select>
                 </div>
                 <div class="grup-camp">
@@ -67,8 +82,11 @@
                 <div class="grup-camp">
                     <label for="import-sep">{{ t .Lang "records.import.separator" }}</label>
                     <select id="import-sep" name="separator">
+                        <option value="">{{ t .Lang "records.import.separator.default" }}</option>
                         <option value=";">;</option>
                         <option value=",">,</option>
+                        <option value="|">|</option>
+                        <option value="tab">{{ t .Lang "records.import.separator.tab" }}</option>
                     </select>
                 </div>
                 <button type="submit" class="boto-primari">{{ t .Lang "records.import.submit" }}</button>
@@ -125,6 +143,11 @@
             const errorsLink = document.getElementById('import-errors-link');
             const closeBtn = document.getElementById('import-close');
             const errorBanner = document.getElementById('import-error-banner');
+            const modelSelect = document.getElementById('import-model');
+            const templateField = document.querySelector('[data-template-field]');
+            const templateSelect = templateField ? templateField.querySelector('select') : null;
+            const separatorSelect = document.getElementById('import-sep');
+            let lastSeparator = separatorSelect ? separatorSelect.value : '';
             const titleUpload = {{ printf "%q" (t .Lang "records.import.progress.upload") }};
             const titleProcessing = {{ printf "%q" (t .Lang "records.import.progress.processing") }};
             const titleFinalizing = {{ printf "%q" (t .Lang "records.import.progress.finalizing") }};
@@ -132,6 +155,40 @@
             const msgKeepOpen = keepOpen ? keepOpen.textContent : titleProcessing;
             const originalTitle = document.title;
             if (!form || !overlay) return;
+
+            const updateTemplateField = function () {
+                if (!modelSelect || !templateField) return;
+                const isTemplate = modelSelect.value === 'template';
+                templateField.hidden = !isTemplate;
+                if (templateSelect) {
+                    templateSelect.required = isTemplate;
+                    if (!isTemplate) {
+                        templateSelect.value = '';
+                    }
+                }
+                if (separatorSelect) {
+                    if (isTemplate) {
+                        if (separatorSelect.value !== '') {
+                            lastSeparator = separatorSelect.value;
+                        }
+                        separatorSelect.value = '';
+                    } else if (separatorSelect.value === '') {
+                        if (lastSeparator) {
+                            separatorSelect.value = lastSeparator;
+                        } else {
+                            const options = Array.from(separatorSelect.options || []);
+                            const fallback = options.find((opt) => opt.value !== '');
+                            if (fallback) {
+                                separatorSelect.value = fallback.value;
+                            }
+                        }
+                    }
+                }
+            };
+            if (modelSelect) {
+                modelSelect.addEventListener('change', updateTemplateField);
+                updateTemplateField();
+            }
 
             form.addEventListener('submit', function (event) {
                 event.preventDefault();

@@ -748,6 +748,19 @@ func (f *fakeDB) IncWikiPublicCount(objectType string, objectID int, tipus strin
 func (f *fakeDB) GetWikiPublicCounts(objectType string, objectID int) (map[string]int, error) {
 	return map[string]int{}, nil
 }
+func (f *fakeDB) CreateCSVImportTemplate(tpl *db.CSVImportTemplate) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) UpdateCSVImportTemplate(tpl *db.CSVImportTemplate) error {
+	return nil
+}
+func (f *fakeDB) GetCSVImportTemplate(id int) (*db.CSVImportTemplate, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListCSVImportTemplates(filter db.CSVImportTemplateFilter) ([]db.CSVImportTemplate, error) {
+	return nil, nil
+}
+func (f *fakeDB) DeleteCSVImportTemplate(id int) error { return nil }
 
 // Helper per crear una App amb fakeDB
 func newFakeAppWithUsers(users map[string]*db.User) *core.App {

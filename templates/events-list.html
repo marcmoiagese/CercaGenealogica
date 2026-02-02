@@ -1,0 +1,222 @@
+{{ define "events-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "events.title" }}</title>
+    {{ if .UserLoggedIn }}
+        {{ template "styles-private" . }}
+    {{ else }}
+        {{ template "styles-public" . }}
+    {{ end }}
+    <link rel="stylesheet" href="/static/css/events.css">
+</head>
+<body>
+    {{ if .UserLoggedIn }}
+        {{ template "header-private" . }}
+        {{ template "menu" . }}
+    {{ else }}
+        {{ template "header-public" . }}
+    {{ end }}
+    <main class="contingut-principal events-page">
+        <section class="card events-hero">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "events.title" }}</h1>
+                    {{ if .Data.ScopeContext }}
+                        <p class="muted">{{ .Data.ScopeContext.Label }}</p>
+                    {{ else }}
+                        <p class="muted">{{ t .Lang "events.subtitle" }}</p>
+                    {{ end }}
+                </div>
+                <div class="events-actions">
+                    {{ if .Data.ScopeContext }}
+                        {{ if .Data.ScopeContext.Back }}
+                            <a class="boto-secundari" href="{{ .Data.ScopeContext.Back }}">{{ t .Lang "common.back" }}</a>
+                        {{ end }}
+                    {{ end }}
+                    {{ if .Data.CanCreate }}
+                        <a class="boto-primari" href="/historia/events/nou{{ if and .Data.FilterScopeType (gt .Data.FilterScopeID 0) }}?scope_type={{ .Data.FilterScopeType }}&scope_id={{ .Data.FilterScopeID }}{{ end }}">{{ t .Lang "events.actions.new" }}</a>
+                    {{ end }}
+                </div>
+            </header>
+        </section>
+
+        <section class="card events-filters">
+            <header class="card-header">
+                <h2>{{ t .Lang "events.filters.title" }}</h2>
+            </header>
+            <form class="events-filter-form" method="get">
+                <div class="events-form-row">
+                    <label for="eventsSearch">{{ t .Lang "events.filters.search" }}</label>
+                    <input id="eventsSearch" name="q" type="text" value="{{ .Data.FilterQ }}">
+                </div>
+                <div class="events-form-row">
+                    <label for="eventsType">{{ t .Lang "events.filters.type" }}</label>
+                    <select id="eventsType" name="tipus">
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                        {{ range .Data.EventTypes }}
+                            <option value="{{ .Value }}" {{ if eq $.Data.FilterTipus .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="events-form-row">
+                    <label for="eventsFrom">{{ t .Lang "events.filters.from" }}</label>
+                    <input id="eventsFrom" name="from" type="date" value="{{ .Data.FilterFrom }}">
+                </div>
+                <div class="events-form-row">
+                    <label for="eventsTo">{{ t .Lang "events.filters.to" }}</label>
+                    <input id="eventsTo" name="to" type="date" value="{{ .Data.FilterTo }}">
+                </div>
+                <div class="events-form-row">
+                    <label for="eventsView">{{ t .Lang "events.filters.view" }}</label>
+                    <select id="eventsView" name="view">
+                        <option value="">{{ t .Lang "events.filters.view.list" }}</option>
+                        <option value="timeline" {{ if .Data.IsTimeline }}selected{{ end }}>{{ t .Lang "events.filters.view.timeline" }}</option>
+                    </select>
+                </div>
+                {{ if .Data.IsTimeline }}
+                <div class="events-form-row">
+                    <label for="eventsGroup">{{ t .Lang "events.filters.timeline_group" }}</label>
+                    <select id="eventsGroup" name="group">
+                        {{ range .Data.TimelineGroupOpts }}
+                            <option value="{{ .Value }}" {{ if eq $.Data.FilterGroup .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                {{ end }}
+                <div class="events-form-row">
+                    <label>{{ t .Lang "events.filters.scope_type" }}</label>
+                    {{ if .Data.ScopeFixed }}
+                        <input type="hidden" name="scope_type" value="{{ .Data.FilterScopeType }}">
+                        <input type="hidden" name="scope_id" value="{{ .Data.FilterScopeID }}">
+                        <input type="hidden" name="scope_label" value="{{ .Data.FilterScopeLabel }}">
+                        <input type="text" value="{{ .Data.FilterScopeLabel }}" disabled>
+                    {{ else }}
+                        <div class="events-scope-filter" data-scope-suggest data-api="/api/scopes/search" data-empty-label="{{ t .Lang "common.empty" }}">
+                            <select name="scope_type" data-scope-type>
+                                <option value="">{{ t .Lang "common.select" }}</option>
+                                {{ range .Data.ScopeTypes }}
+                                    <option value="{{ .Value }}" {{ if eq $.Data.FilterScopeType .Value }}selected{{ end }}>{{ .Label }}</option>
+                                {{ end }}
+                            </select>
+                            <input type="text" data-scope-query placeholder="{{ t .Lang "events.filters.scope_placeholder" }}" value="{{ .Data.FilterScopeLabel }}">
+                            <input type="hidden" name="scope_id" data-scope-id value="{{ .Data.FilterScopeID }}">
+                            <input type="hidden" name="scope_label" data-scope-label value="{{ .Data.FilterScopeLabel }}">
+                            <ul class="resultats-cerca" data-scope-suggestions></ul>
+                        </div>
+                    {{ end }}
+                </div>
+                <div class="events-form-row">
+                    <label for="impactType">{{ t .Lang "events.filters.impact_type" }}</label>
+                    <select id="impactType" name="impacte_tipus">
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                        {{ range .Data.ImpactTypes }}
+                            <option value="{{ .Value }}" {{ if eq $.Data.FilterImpactType .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="events-form-row">
+                    <label for="impactIntensity">{{ t .Lang "events.filters.intensity_min" }}</label>
+                    <select id="impactIntensity" name="intensitat_min">
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                        {{ range .Data.IntensityOpts }}
+                            <option value="{{ .Value }}" {{ if eq (printf "%d" $.Data.FilterIntensitat) .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="events-form-row">
+                    <label for="eventsOrder">{{ t .Lang "events.filters.order" }}</label>
+                    <select id="eventsOrder" name="order">
+                        {{ range .Data.OrderOptions }}
+                            <option value="{{ .Value }}" {{ if eq $.Data.FilterOrder .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="events-form-row events-form-inline">
+                    <label class="checkbox-linia">
+                        <input type="checkbox" name="with_dates" value="1" {{ if .Data.FilterWithDates }}checked{{ end }}>
+                        <span>{{ t .Lang "events.filters.only_with_dates" }}</span>
+                    </label>
+                </div>
+                <div class="events-form-row">
+                    <button class="boto-secundari" type="submit">{{ t .Lang "common.apply" }}</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="card events-list-card">
+            <header class="card-header">
+                <h2>{{ t .Lang "events.list.title" }}</h2>
+            </header>
+            {{ if .Data.IsTimeline }}
+                {{ if .Data.TimelineGroups }}
+                    <div class="events-timeline">
+                        {{ range .Data.TimelineGroups }}
+                            <div class="timeline-group">
+                                <h3 class="timeline-group-title">{{ .Label }}</h3>
+                                <div class="events-list">
+                                    {{ range .Items }}
+                                        <article class="event-card">
+                                            <div>
+                                                <h3><a href="{{ .URL }}">{{ .Title }}</a></h3>
+                                                <div class="event-meta">{{ .TypeLabel }}{{ if .DateLabel }} · {{ .DateLabel }}{{ end }}</div>
+                                                {{ if .Summary }}
+                                                    <p class="event-summary">{{ .Summary }}</p>
+                                                {{ end }}
+                                            </div>
+                                            {{ if gt .Intensity 0 }}
+                                                <span class="event-intensity">{{ t $.Lang "events.impacts.intensity" }} {{ .Intensity }}/5</span>
+                                            {{ end }}
+                                        </article>
+                                    {{ end }}
+                                </div>
+                            </div>
+                        {{ end }}
+                    </div>
+                {{ else }}
+                    <p class="muted">{{ t .Lang "events.list.empty" }}</p>
+                {{ end }}
+            {{ else }}
+                {{ if .Data.Events }}
+                    <div class="events-list">
+                        {{ range .Data.Events }}
+                            <article class="event-card">
+                                <div>
+                                    <h3><a href="{{ .URL }}">{{ .Title }}</a></h3>
+                                    <div class="event-meta">{{ .TypeLabel }}{{ if .DateLabel }} · {{ .DateLabel }}{{ end }}</div>
+                                    {{ if .Summary }}
+                                        <p class="event-summary">{{ .Summary }}</p>
+                                    {{ end }}
+                                </div>
+                            </article>
+                        {{ end }}
+                    </div>
+                {{ else }}
+                    <p class="muted">{{ t .Lang "events.list.empty" }}</p>
+                {{ end }}
+            {{ end }}
+            {{ if or .Data.HasPrev .Data.HasNext }}
+                <div class="paginacio">
+                    <div class="paginacio-cont">
+                        {{ if .Data.HasPrev }}
+                            <a class="boto-secundari" href="{{ .Data.PageBase }}&page={{ .Data.PrevPage }}">{{ t .Lang "common.prev" }}</a>
+                        {{ end }}
+                        {{ if .Data.HasNext }}
+                            <a class="boto-secundari" href="{{ .Data.PageBase }}&page={{ .Data.NextPage }}">{{ t .Lang "common.next" }}</a>
+                        {{ end }}
+                    </div>
+                </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ if .UserLoggedIn }}
+        {{ template "scripts-private" . }}
+    {{ else }}
+        {{ template "scripts-public" . }}
+    {{ end }}
+    <script src="/static/js/events-form.js"></script>
+</body>
+</html>
+{{ end }}

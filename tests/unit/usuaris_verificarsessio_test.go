@@ -594,6 +594,21 @@ func (f *fakeDBVerificar) IncWikiPublicCount(objectType string, objectID int, ti
 func (f *fakeDBVerificar) GetWikiPublicCounts(objectType string, objectID int) (map[string]int, error) {
 	return nil, errors.New("GetWikiPublicCounts not implemented in fakeDBVerificar")
 }
+func (f *fakeDBVerificar) CreateCSVImportTemplate(tpl *db.CSVImportTemplate) (int, error) {
+	return 0, errors.New("CreateCSVImportTemplate not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) UpdateCSVImportTemplate(tpl *db.CSVImportTemplate) error {
+	return errors.New("UpdateCSVImportTemplate not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) GetCSVImportTemplate(id int) (*db.CSVImportTemplate, error) {
+	return nil, errors.New("GetCSVImportTemplate not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ListCSVImportTemplates(filter db.CSVImportTemplateFilter) ([]db.CSVImportTemplate, error) {
+	return nil, errors.New("ListCSVImportTemplates not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) DeleteCSVImportTemplate(id int) error {
+	return errors.New("DeleteCSVImportTemplate not implemented in fakeDBVerificar")
+}
 
 // Crea una App només amb la fake DB per testejar VerificarSessio.
 func newAppVerificar(dbFake db.DB) *core.App {

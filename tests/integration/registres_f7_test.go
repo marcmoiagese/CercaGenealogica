@@ -177,6 +177,10 @@ func TestAdminImportRegistresCSVCreatesRows(t *testing.T) {
 	if err := writer.WriteField("separator", ","); err != nil {
 		t.Fatalf("WriteField separator ha fallat: %v", err)
 	}
+	csrfToken := "csrf-f7-import"
+	if err := writer.WriteField("csrf_token", csrfToken); err != nil {
+		t.Fatalf("WriteField csrf_token ha fallat: %v", err)
+	}
 	if err := writer.Close(); err != nil {
 		t.Fatalf("Close multipart ha fallat: %v", err)
 	}
@@ -184,6 +188,7 @@ func TestAdminImportRegistresCSVCreatesRows(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/documentals/llibres/%d/import", llibreID), &buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.AddCookie(&http.Cookie{Name: "cg_session", Value: sessionID})
+	req.AddCookie(&http.Cookie{Name: "cg_csrf", Value: csrfToken})
 	rr := httptest.NewRecorder()
 
 	app.AdminImportRegistresLlibre(rr, req)

@@ -1,0 +1,104 @@
+{{ define "import-templates-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "importer.templates.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/import-templates.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal taula-ample">
+        <section class="card import-templates-card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "importer.templates.title" }}</h1>
+                    <p class="muted">{{ t .Lang "importer.templates.subtitle" }}</p>
+                </div>
+                <div class="import-templates-actions">
+                    <a class="boto-primari" href="/importador/plantilles/nova">{{ t .Lang "importer.templates.new" }}</a>
+                </div>
+            </header>
+
+            <div class="import-templates-toolbar">
+                <div class="import-templates-tabs">
+                    <a class="tab {{ if eq .Data.ActiveScope "mine" }}active{{ end }}" href="/importador/plantilles?scope=mine{{ if .Data.Query }}&q={{ urlquery .Data.Query }}{{ end }}">{{ t .Lang "importer.templates.tab.mine" }}</a>
+                    <a class="tab {{ if eq .Data.ActiveScope "public" }}active{{ end }}" href="/importador/plantilles?scope=public{{ if .Data.Query }}&q={{ urlquery .Data.Query }}{{ end }}">{{ t .Lang "importer.templates.tab.public" }}</a>
+                </div>
+                <form class="import-templates-search" method="get" action="/importador/plantilles">
+                    <input type="hidden" name="scope" value="{{ .Data.ActiveScope }}">
+                    <label class="sr-only" for="importTemplateSearch">{{ t .Lang "importer.templates.search.label" }}</label>
+                    <input id="importTemplateSearch" type="text" name="q" value="{{ .Data.Query }}" placeholder="{{ t .Lang "importer.templates.search.placeholder" }}">
+                    <button type="submit" class="boto-secundari btn-mini">{{ t .Lang "importer.templates.search.action" }}</button>
+                </form>
+            </div>
+
+            <div class="taula-container">
+                <table class="taula import-templates-table">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "importer.templates.columns.name" }}</th>
+                            <th>{{ t .Lang "importer.templates.columns.description" }}</th>
+                            <th>{{ t .Lang "importer.templates.columns.visibility" }}</th>
+                            <th>{{ t .Lang "importer.templates.columns.updated" }}</th>
+                            <th>{{ t .Lang "common.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Templates }}
+                        <tr>
+                            <td>
+                                <div class="template-title">{{ .Name }}</div>
+                            </td>
+                            <td class="template-description">
+                                {{ if .Description }}{{ .Description }}{{ else }}<span class="muted">—</span>{{ end }}
+                            </td>
+                            <td>
+                                <span class="template-badge {{ if .IsPublic }}badge-public{{ else }}badge-private{{ end }}">
+                                    {{ if .IsPublic }}{{ t $.Lang "importer.templates.visibility.public" }}{{ else }}{{ t $.Lang "importer.templates.visibility.private" }}{{ end }}
+                                </span>
+                            </td>
+                            <td class="template-updated">{{ if .UpdatedAt }}{{ .UpdatedAt }}{{ else }}—{{ end }}</td>
+                            <td>
+                                <div class="template-actions">
+                                    {{ if .CanEdit }}
+                                    <a class="boto-secundari btn-mini" href="/importador/plantilles/{{ .ID }}/editar">{{ t $.Lang "common.edit" }}</a>
+                                    {{ end }}
+                                    {{ if .CanClone }}
+                                    <form method="post" action="/importador/plantilles/{{ .ID }}/clone">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <button type="submit" class="boto-secundari btn-mini">{{ t $.Lang "importer.templates.action.clone" }}</button>
+                                    </form>
+                                    {{ end }}
+                                    {{ if .CanToggle }}
+                                    <form method="post" action="/importador/plantilles/{{ .ID }}/toggle-visibility">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <button type="submit" class="boto-secundari btn-mini">{{ if .IsPublic }}{{ t $.Lang "importer.templates.action.unpublish" }}{{ else }}{{ t $.Lang "importer.templates.action.publish" }}{{ end }}</button>
+                                    </form>
+                                    {{ end }}
+                                    {{ if .CanDelete }}
+                                    <form method="post" action="/importador/plantilles/{{ .ID }}/delete" onsubmit="return confirm('{{ t $.Lang "importer.templates.action.delete_confirm" }}');">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                        <button type="submit" class="boto-secundari btn-mini">{{ t $.Lang "common.remove" }}</button>
+                                    </form>
+                                    {{ end }}
+                                </div>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr>
+                            <td colspan="5" class="empty-state">{{ t .Lang "common.empty" }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

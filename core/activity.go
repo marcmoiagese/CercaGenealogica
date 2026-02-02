@@ -9,34 +9,37 @@ import (
 )
 
 const (
-	rulePersonaCreate   = "persona_create"
-	rulePersonaUpdate   = "persona_update"
-	rulePaginaIndex     = "llibre_pagina_index"
-	ruleModeracioApprove = "moderacio_approve"
-	ruleModeracioReject  = "moderacio_reject"
-	ruleArxiuCreate      = "arxiu_create"
-	ruleArxiuUpdate      = "arxiu_update"
-	ruleLlibreCreate     = "llibre_create"
-	ruleLlibreUpdate     = "llibre_update"
-	ruleNivellCreate     = "nivell_create"
-	ruleNivellUpdate     = "nivell_update"
-	ruleMunicipiCreate   = "municipi_create"
-	ruleMunicipiUpdate   = "municipi_update"
-	ruleEclesiasticCreate = "eclesiastic_create"
-	ruleEclesiasticUpdate = "eclesiastic_update"
-	ruleLlibrePageStatsUpdate = "llibre_page_stats_update"
-	ruleMunicipiMapaSubmit  = "municipi_mapa_submit"
-	ruleMunicipiMapaApprove = "municipi_mapa_approve"
-	ruleMunicipiMapaReject  = "municipi_mapa_reject"
+	rulePersonaCreate                 = "persona_create"
+	rulePersonaUpdate                 = "persona_update"
+	rulePaginaIndex                   = "llibre_pagina_index"
+	ruleModeracioApprove              = "moderacio_approve"
+	ruleModeracioReject               = "moderacio_reject"
+	ruleArxiuCreate                   = "arxiu_create"
+	ruleArxiuUpdate                   = "arxiu_update"
+	ruleLlibreCreate                  = "llibre_create"
+	ruleLlibreUpdate                  = "llibre_update"
+	ruleNivellCreate                  = "nivell_create"
+	ruleNivellUpdate                  = "nivell_update"
+	ruleMunicipiCreate                = "municipi_create"
+	ruleMunicipiUpdate                = "municipi_update"
+	ruleEclesiasticCreate             = "eclesiastic_create"
+	ruleEclesiasticUpdate             = "eclesiastic_update"
+	ruleLlibrePageStatsUpdate         = "llibre_page_stats_update"
+	ruleMunicipiMapaSubmit            = "municipi_mapa_submit"
+	ruleMunicipiMapaApprove           = "municipi_mapa_approve"
+	ruleMunicipiMapaReject            = "municipi_mapa_reject"
 	ruleMunicipiHistoriaGeneralSubmit = "municipi_historia_general_submit"
 	ruleMunicipiHistoriaFetSubmit     = "municipi_historia_fet_submit"
-	ruleMunicipiAnecdotaPublicada      = "municipi_anecdota_publicada"
+	ruleMunicipiAnecdotaPublicada     = "municipi_anecdota_publicada"
+	ruleEventHistoricSubmit           = "event_historic_submit"
+	ruleEventHistoricApprove          = "event_historic_approve"
+	ruleEventHistoricReject           = "event_historic_reject"
 )
 
 const (
-	antiAbuseBurstWindow   = 5 * time.Minute
-	antiAbuseBurstThreshold = 30
-	antiAbuseRejectWindow  = 24 * time.Hour
+	antiAbuseBurstWindow     = 5 * time.Minute
+	antiAbuseBurstThreshold  = 30
+	antiAbuseRejectWindow    = 24 * time.Hour
 	antiAbuseRejectThreshold = 10
 )
 

@@ -1,0 +1,200 @@
+{{ define "event-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.FormTitle }}{{ .Data.FormTitle }}{{ else }}{{ t .Lang "events.form.title" }}{{ end }} · {{ t .Lang "events.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/events.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal events-page">
+        <section class="card event-hero">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ if .Data.FormTitle }}{{ .Data.FormTitle }}{{ else }}{{ t .Lang "events.form.title" }}{{ end }}</h1>
+                    <p class="muted">{{ if .Data.FormSubtitle }}{{ .Data.FormSubtitle }}{{ else }}{{ t .Lang "events.form.subtitle" }}{{ end }}</p>
+                </div>
+                <div class="events-actions">
+                    <a class="boto-secundari" href="{{ if .Data.BackURL }}{{ .Data.BackURL }}{{ else }}/historia/events{{ end }}">{{ t .Lang "common.back" }}</a>
+                </div>
+            </header>
+            {{ if .Data.ErrorMessage }}
+                <p class="muted">{{ .Data.ErrorMessage }}</p>
+            {{ end }}
+        </section>
+
+        <section class="card event-form-card">
+            <header class="card-header">
+                <h2>{{ t .Lang "events.form.section.details" }}</h2>
+            </header>
+            <form class="event-form" method="post" {{ if .Data.FormAction }}action="{{ .Data.FormAction }}"{{ end }}>
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="events-form-row">
+                    <label for="eventTitle">{{ t .Lang "events.form.field.title" }}</label>
+                    <input id="eventTitle" name="titol" type="text" value="{{ .Data.Form.Titol }}">
+                </div>
+                <div class="events-form-row">
+                    <label for="eventType">{{ t .Lang "events.form.field.type" }}</label>
+                    <select id="eventType" name="tipus">
+                        <option value="">{{ t .Lang "common.select" }}</option>
+                        {{ range .Data.EventTypes }}
+                            <option value="{{ .Value }}" {{ if eq $.Data.Form.Tipus .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="events-form-row">
+                    <label for="eventSummary">{{ t .Lang "events.form.field.summary" }}</label>
+                    <textarea id="eventSummary" name="resum">{{ .Data.Form.Resum }}</textarea>
+                </div>
+                <div class="events-form-row">
+                    <label for="eventDesc">{{ t .Lang "events.form.field.description" }}</label>
+                    <textarea id="eventDesc" name="descripcio">{{ .Data.Form.Descripcio }}</textarea>
+                </div>
+                <div class="events-form-row">
+                    <label for="eventStart">{{ t .Lang "events.form.field.start_date" }}</label>
+                    <input id="eventStart" name="data_inici" type="date" value="{{ .Data.Form.DataInici }}">
+                </div>
+                <div class="events-form-row events-form-inline">
+                    <label class="checkbox-linia">
+                        <input type="checkbox" name="data_inici_aprox" {{ if .Data.Form.DataIniciAprox }}checked{{ end }}>
+                        <span>{{ t .Lang "events.form.field.start_date_approx" }}</span>
+                    </label>
+                </div>
+                <div class="events-form-row">
+                    <label for="eventEnd">{{ t .Lang "events.form.field.end_date" }}</label>
+                    <input id="eventEnd" name="data_fi" type="date" value="{{ .Data.Form.DataFi }}">
+                </div>
+                <div class="events-form-row events-form-inline">
+                    <label class="checkbox-linia">
+                        <input type="checkbox" name="data_fi_aprox" {{ if .Data.Form.DataFiAprox }}checked{{ end }}>
+                        <span>{{ t .Lang "events.form.field.end_date_approx" }}</span>
+                    </label>
+                </div>
+                <div class="events-form-row">
+                    <label for="eventPrecision">{{ t .Lang "events.form.field.precision" }}</label>
+                    <select id="eventPrecision" name="precisio">
+                        {{ range .Data.PrecisionTypes }}
+                            <option value="{{ .Value }}" {{ if eq $.Data.Form.Precisio .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="events-form-row">
+                    <label for="eventSources">{{ t .Lang "events.form.field.sources" }}</label>
+                    <textarea id="eventSources" name="fonts">{{ .Data.Form.Fonts }}</textarea>
+                </div>
+
+                <div class="event-form-section">
+                    <header class="section-header">
+                        <h3>{{ t .Lang "events.form.section.impacts" }}</h3>
+                        <button class="boto-secundari btn-mini" type="button" id="impactAddBtn">{{ t .Lang "events.form.add_impact" }}</button>
+                    </header>
+                    <div class="event-impacts" id="eventImpacts" data-api="/api/scopes/search" data-empty-label="{{ t .Lang "common.empty" }}">
+                        {{ range .Data.Form.Impacts }}
+                            {{ $row := . }}
+                            <div class="event-impact" data-impact-row data-scope-suggest data-api="/api/scopes/search" data-empty-label="{{ t $.Lang "common.empty" }}">
+                                <div class="events-form-row">
+                                    <label>{{ t $.Lang "events.form.field.scope_type" }}</label>
+                                    <select name="impact_scope_type" data-scope-type>
+                                        <option value="">{{ t $.Lang "common.select" }}</option>
+                                        {{ range $.Data.ScopeTypes }}
+                                            <option value="{{ .Value }}" {{ if eq $row.ScopeType .Value }}selected{{ end }}>{{ .Label }}</option>
+                                        {{ end }}
+                                    </select>
+                                </div>
+                                <div class="events-form-row">
+                                    <label>{{ t $.Lang "events.form.field.scope" }}</label>
+                                    <input type="text" data-scope-query placeholder="{{ t $.Lang "events.filters.scope_placeholder" }}" value="{{ $row.ScopeLabel }}">
+                                    <input type="hidden" name="impact_scope_id" data-scope-id value="{{ $row.ScopeID }}">
+                                    <input type="hidden" name="impact_scope_label" data-scope-label value="{{ $row.ScopeLabel }}">
+                                    <ul class="resultats-cerca" data-scope-suggestions></ul>
+                                </div>
+                                <div class="events-form-row">
+                                    <label>{{ t $.Lang "events.form.field.impact_type" }}</label>
+                                    <select name="impact_type">
+                                        <option value="">{{ t $.Lang "common.select" }}</option>
+                                        {{ range $.Data.ImpactTypes }}
+                                            <option value="{{ .Value }}" {{ if eq $row.ImpacteTipus .Value }}selected{{ end }}>{{ .Label }}</option>
+                                        {{ end }}
+                                    </select>
+                                </div>
+                                <div class="events-form-row">
+                                    <label>{{ t $.Lang "events.form.field.intensity" }}</label>
+                                    <select name="impact_intensitat">
+                                        <option value="">{{ t $.Lang "common.select" }}</option>
+                                        {{ range $.Data.IntensityOpts }}
+                                            <option value="{{ .Value }}" {{ if eq (printf "%d" $row.Intensitat) .Value }}selected{{ end }}>{{ .Label }}</option>
+                                        {{ end }}
+                                    </select>
+                                </div>
+                                <div class="events-form-row">
+                                    <label>{{ t $.Lang "events.form.field.notes" }}</label>
+                                    <textarea name="impact_notes">{{ $row.Notes }}</textarea>
+                                </div>
+                                <div class="events-form-row">
+                                    <button class="boto-secundari btn-mini" type="button" data-impact-remove>{{ t $.Lang "common.remove" }}</button>
+                                </div>
+                            </div>
+                        {{ end }}
+                    </div>
+                </div>
+
+                <div class="events-form-actions">
+                    <button class="boto-primari" type="submit">{{ if .Data.SubmitLabel }}{{ .Data.SubmitLabel }}{{ else }}{{ t .Lang "events.form.submit" }}{{ end }}</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script src="/static/js/events-form.js"></script>
+    <template id="impactRowTemplate">
+        <div class="event-impact" data-impact-row data-scope-suggest data-api="/api/scopes/search" data-empty-label="{{ t .Lang "common.empty" }}">
+            <div class="events-form-row">
+                <label>{{ t .Lang "events.form.field.scope_type" }}</label>
+                <select name="impact_scope_type" data-scope-type>
+                    <option value="">{{ t .Lang "common.select" }}</option>
+                    {{ range .Data.ScopeTypes }}
+                        <option value="{{ .Value }}">{{ .Label }}</option>
+                    {{ end }}
+                </select>
+            </div>
+            <div class="events-form-row">
+                <label>{{ t .Lang "events.form.field.scope" }}</label>
+                <input type="text" data-scope-query placeholder="{{ t .Lang "events.filters.scope_placeholder" }}">
+                <input type="hidden" name="impact_scope_id" data-scope-id>
+                <input type="hidden" name="impact_scope_label" data-scope-label>
+                <ul class="resultats-cerca" data-scope-suggestions></ul>
+            </div>
+            <div class="events-form-row">
+                <label>{{ t .Lang "events.form.field.impact_type" }}</label>
+                <select name="impact_type">
+                    <option value="">{{ t .Lang "common.select" }}</option>
+                    {{ range .Data.ImpactTypes }}
+                        <option value="{{ .Value }}">{{ .Label }}</option>
+                    {{ end }}
+                </select>
+            </div>
+            <div class="events-form-row">
+                <label>{{ t .Lang "events.form.field.intensity" }}</label>
+                <select name="impact_intensitat">
+                    <option value="">{{ t .Lang "common.select" }}</option>
+                    {{ range .Data.IntensityOpts }}
+                        <option value="{{ .Value }}">{{ .Label }}</option>
+                    {{ end }}
+                </select>
+            </div>
+            <div class="events-form-row">
+                <label>{{ t .Lang "events.form.field.notes" }}</label>
+                <textarea name="impact_notes"></textarea>
+            </div>
+            <div class="events-form-row">
+                <button class="boto-secundari btn-mini" type="button" data-impact-remove>{{ t .Lang "common.remove" }}</button>
+            </div>
+        </div>
+    </template>
+</body>
+</html>
+{{ end }}

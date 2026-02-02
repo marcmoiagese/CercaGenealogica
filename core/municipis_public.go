@@ -156,6 +156,36 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 	}
 	canAportarHistoria := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaCreate, munTarget)
 
+	eventViews := []map[string]interface{}{}
+	eventFilter := db.EventHistoricFilter{
+		Status: "publicat",
+		Limit:  6,
+	}
+	events, err := a.DB.ListEventsByScope("municipi", mun.ID, eventFilter)
+	if err != nil {
+		Errorf("Error carregant events historics municipi %d: %v", mun.ID, err)
+		events = []db.EventHistoric{}
+	}
+	for _, ev := range events {
+		intensitat := 0
+		if impacts, err := a.DB.ListEventImpacts(ev.ID); err == nil {
+			for _, impact := range impacts {
+				if impact.ScopeType == "municipi" && impact.ScopeID == mun.ID && impact.Intensitat > intensitat {
+					intensitat = impact.Intensitat
+				}
+			}
+		}
+		eventViews = append(eventViews, map[string]interface{}{
+			"ID":        ev.ID,
+			"Title":     strings.TrimSpace(ev.Titol),
+			"TypeLabel": eventTypeLabel(lang, ev.Tipus),
+			"DateLabel": eventDateLabel(ev),
+			"URL":       fmt.Sprintf("/historia/events/%d", ev.ID),
+			"Intensity": intensitat,
+		})
+	}
+	canCreateEvent := user != nil
+
 	demografiaMeta, demografiaErr := a.DB.GetMunicipiDemografiaMeta(mun.ID)
 	if demografiaErr != nil {
 		Errorf("Error carregant demografia municipi %d: %v", mun.ID, demografiaErr)
@@ -180,13 +210,13 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 	}
 	categoryOrder := []string{"baptismes", "confirmacions", "matrimonis", "obits", "padrons", "reclutaments", "altres"}
 	iconByType := map[string]string{
-		"baptismes":    "fa-droplet",
+		"baptismes":     "fa-droplet",
 		"confirmacions": "fa-user-check",
-		"matrimonis":   "fa-ring",
-		"obits":        "fa-cross",
-		"padrons":      "fa-users",
-		"reclutaments": "fa-shield-halved",
-		"altres":       "fa-book",
+		"matrimonis":    "fa-ring",
+		"obits":         "fa-cross",
+		"padrons":       "fa-users",
+		"reclutaments":  "fa-shield-halved",
+		"altres":        "fa-book",
 	}
 	countLabel := T(lang, "books.title")
 	allDocsURL := ""
@@ -238,33 +268,38 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"Municipi":          mun,
-		"Hierarchy":         levelViews,
-		"CountryLabel":      countryLabel,
-		"TypeLabel":         typeLabel,
-		"RegionLabel":       regionLabel,
-		"LlibreCategories": categories,
-		"LlibresURL":        allDocsURL,
-		"User":              user,
-		"CanManageArxius":   canManageArxius,
-		"CanViewLlibres":    canViewLlibres,
-		"CanCreateLlibre":   canCreateLlibre,
-		"CanManagePolicies": canManagePolicies,
-		"CanModerate":       canModerate,
-		"CanManageTerritory": canManageTerritory,
-		"CanViewMap":        canViewMap,
-		"CanCreateMap":      canCreateMap,
-		"CanCreateAnecdote": canCreateAnecdote,
-		"ShowStatusBadge":   canManageTerritory || canModerate,
-		"MapesData":         mapesData,
-		"HistoriaGeneral":   historiaGeneral,
-		"HistoriaGeneralSummary": historiaSummary,
-		"HistoriaTimelineDestacat": historiaTimelineView,
-		"CanAportarHistoria": canAportarHistoria,
-		"DemografiaSummary":  demografiaSummary,
-		"MarkType":           markType,
-		"MarkPublic":         markPublic,
-		"MarkOwn":            markOwn,
+		"Municipi":                  mun,
+		"Hierarchy":                 levelViews,
+		"CountryLabel":              countryLabel,
+		"TypeLabel":                 typeLabel,
+		"RegionLabel":               regionLabel,
+		"LlibreCategories":          categories,
+		"LlibresURL":                allDocsURL,
+		"User":                      user,
+		"CanManageArxius":           canManageArxius,
+		"CanViewLlibres":            canViewLlibres,
+		"CanCreateLlibre":           canCreateLlibre,
+		"CanManagePolicies":         canManagePolicies,
+		"CanModerate":               canModerate,
+		"CanManageTerritory":        canManageTerritory,
+		"CanViewMap":                canViewMap,
+		"CanCreateMap":              canCreateMap,
+		"CanCreateAnecdote":         canCreateAnecdote,
+		"ShowStatusBadge":           canManageTerritory || canModerate,
+		"MapesData":                 mapesData,
+		"HistoriaGeneral":           historiaGeneral,
+		"HistoriaGeneralSummary":    historiaSummary,
+		"HistoriaTimelineDestacat":  historiaTimelineView,
+		"CanAportarHistoria":        canAportarHistoria,
+		"HistoricEvents":            eventViews,
+		"HistoricEventsURL":         fmt.Sprintf("/territori/municipis/%d/events", mun.ID),
+		"HistoricEventsTimelineURL": fmt.Sprintf("/historia/events?scope_type=municipi&scope_id=%d&view=timeline", mun.ID),
+		"HistoricEventsNewURL":      fmt.Sprintf("/historia/events/nou?scope_type=municipi&scope_id=%d", mun.ID),
+		"CanCreateEvent":            canCreateEvent,
+		"DemografiaSummary":         demografiaSummary,
+		"MarkType":                  markType,
+		"MarkPublic":                markPublic,
+		"MarkOwn":                   markOwn,
 	}
 	if user != nil {
 		RenderPrivateTemplate(w, r, "municipi-perfil-pro.html", data)

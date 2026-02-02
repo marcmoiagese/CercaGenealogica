@@ -164,6 +164,59 @@ func (d *MySQL) SavePrivacySettings(userID int, p *PrivacySettings) error {
 	return d.help.savePrivacySettings(userID, p)
 }
 
+// Missatgeria interna
+func (d *MySQL) GetOrCreateDMThread(userA, userB int) (*DMThread, error) {
+	return d.help.getOrCreateDMThread(userA, userB)
+}
+
+func (d *MySQL) GetDMThreadByUsers(userA, userB int) (*DMThread, error) {
+	return d.help.getDMThreadByUsers(userA, userB)
+}
+
+func (d *MySQL) GetDMThreadByID(threadID int) (*DMThread, error) {
+	return d.help.getDMThreadByID(threadID)
+}
+
+func (d *MySQL) ListDMThreadsForUser(userID int, f DMThreadListFilter) ([]DMThreadListItem, error) {
+	return d.help.listDMThreadsForUser(userID, f)
+}
+
+func (d *MySQL) ListDMMessages(threadID, limit, beforeID int) ([]DMMessage, error) {
+	return d.help.listDMMessages(threadID, limit, beforeID)
+}
+
+func (d *MySQL) CreateDMMessage(threadID, senderID int, body string) (int, error) {
+	return d.help.createDMMessage(threadID, senderID, body)
+}
+
+func (d *MySQL) UpdateDMThreadLastMessage(threadID, msgID int, at time.Time) error {
+	return d.help.updateDMThreadLastMessage(threadID, msgID, at)
+}
+
+func (d *MySQL) MarkDMThreadRead(threadID, userID, lastMsgID int) error {
+	return d.help.markDMThreadRead(threadID, userID, lastMsgID)
+}
+
+func (d *MySQL) SetDMThreadArchived(threadID, userID int, archived bool) error {
+	return d.help.setDMThreadArchived(threadID, userID, archived)
+}
+
+func (d *MySQL) SoftDeleteDMThread(threadID, userID int) error {
+	return d.help.softDeleteDMThread(threadID, userID)
+}
+
+func (d *MySQL) AddUserBlock(blockerID, blockedID int) error {
+	return d.help.addUserBlock(blockerID, blockedID)
+}
+
+func (d *MySQL) RemoveUserBlock(blockerID, blockedID int) error {
+	return d.help.removeUserBlock(blockerID, blockedID)
+}
+
+func (d *MySQL) IsUserBlocked(blockerID, blockedID int) (bool, error) {
+	return d.help.isUserBlocked(blockerID, blockedID)
+}
+
 func (d *MySQL) UpdateUserProfile(u *User) error {
 	return d.help.updateUserProfile(u)
 }
@@ -731,6 +784,21 @@ func (d *MySQL) DequeueWikiPending(changeID int) error {
 func (d *MySQL) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 	return d.help.listWikiPending(limit)
 }
+func (d *MySQL) CreateCSVImportTemplate(t *CSVImportTemplate) (int, error) {
+	return d.help.createCSVImportTemplate(t)
+}
+func (d *MySQL) UpdateCSVImportTemplate(t *CSVImportTemplate) error {
+	return d.help.updateCSVImportTemplate(t)
+}
+func (d *MySQL) GetCSVImportTemplate(id int) (*CSVImportTemplate, error) {
+	return d.help.getCSVImportTemplate(id)
+}
+func (d *MySQL) ListCSVImportTemplates(filter CSVImportTemplateFilter) ([]CSVImportTemplate, error) {
+	return d.help.listCSVImportTemplates(filter)
+}
+func (d *MySQL) DeleteCSVImportTemplate(id int) error {
+	return d.help.deleteCSVImportTemplate(id)
+}
 func (d *MySQL) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
 	return d.help.searchPersones(f)
 }
@@ -746,8 +814,10 @@ func (d *MySQL) GetPointsRule(id int) (*PointsRule, error) {
 func (d *MySQL) GetPointsRuleByCode(code string) (*PointsRule, error) {
 	return d.help.getPointsRuleByCode(code)
 }
-func (d *MySQL) SavePointsRule(r *PointsRule) (int, error)       { return d.help.savePointsRule(r) }
-func (d *MySQL) ListUserIDs(limit, offset int) ([]int, error)    { return d.help.listUserIDs(limit, offset) }
+func (d *MySQL) SavePointsRule(r *PointsRule) (int, error) { return d.help.savePointsRule(r) }
+func (d *MySQL) ListUserIDs(limit, offset int) ([]int, error) {
+	return d.help.listUserIDs(limit, offset)
+}
 func (d *MySQL) GetUserActivity(id int) (*UserActivity, error)   { return d.help.getUserActivity(id) }
 func (d *MySQL) InsertUserActivity(a *UserActivity) (int, error) { return d.help.insertUserActivity(a) }
 func (d *MySQL) UpdateUserActivityStatus(id int, status string, moderatedBy *int) error {
@@ -1062,4 +1132,41 @@ func (d *MySQL) ResolveMunicipiIDByAnecdotariItemID(itemID int) (int, error) {
 }
 func (d *MySQL) ResolveMunicipiIDByAnecdotariVersionID(versionID int) (int, error) {
 	return d.help.resolveMunicipiIDByAnecdotariVersionID(versionID)
+}
+
+// Esdeveniments historics
+func (d *MySQL) CreateEventHistoric(e *EventHistoric) (int, error) {
+	return d.help.createEventHistoric(e)
+}
+
+func (d *MySQL) GetEventHistoric(id int) (*EventHistoric, error) {
+	return d.help.getEventHistoric(id)
+}
+
+func (d *MySQL) GetEventHistoricBySlug(slug string) (*EventHistoric, error) {
+	return d.help.getEventHistoricBySlug(slug)
+}
+
+func (d *MySQL) UpdateEventHistoric(e *EventHistoric) error {
+	return d.help.updateEventHistoric(e)
+}
+
+func (d *MySQL) ListEventsHistoric(filter EventHistoricFilter) ([]EventHistoric, error) {
+	return d.help.listEventsHistoric(filter)
+}
+
+func (d *MySQL) UpdateEventHistoricModeracio(id int, estat, notes string, moderatorID int) error {
+	return d.help.updateEventHistoricModeracio(id, estat, notes, moderatorID)
+}
+
+func (d *MySQL) ListEventImpacts(eventID int) ([]EventHistoricImpact, error) {
+	return d.help.listEventImpacts(eventID)
+}
+
+func (d *MySQL) ReplaceEventImpacts(eventID int, impacts []EventHistoricImpact) error {
+	return d.help.replaceEventImpacts(eventID, impacts)
+}
+
+func (d *MySQL) ListEventsByScope(scopeType string, scopeID int, filter EventHistoricFilter) ([]EventHistoric, error) {
+	return d.help.listEventsByScope(scopeType, scopeID, filter)
 }

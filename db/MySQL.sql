@@ -1168,6 +1168,24 @@ CREATE TABLE IF NOT EXISTS wiki_pending_queue (
   FOREIGN KEY (changed_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS csv_import_templates (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  description TEXT NULL,
+  owner_user_id INT UNSIGNED NULL,
+  visibility ENUM('private','public') NOT NULL DEFAULT 'private',
+  default_separator VARCHAR(8) NULL,
+  model_json TEXT NOT NULL,
+  signature VARCHAR(128) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_csv_import_templates_owner_name (owner_user_id, name),
+  INDEX idx_csv_import_templates_owner_visibility (owner_user_id, visibility),
+  INDEX idx_csv_import_templates_visibility_created (visibility, created_at),
+  INDEX idx_csv_import_templates_signature (signature),
+  FOREIGN KEY (owner_user_id) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Cognoms (forma canònica)
 CREATE TABLE IF NOT EXISTS cognoms (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -1277,6 +1295,114 @@ CREATE TABLE IF NOT EXISTS noms_freq_municipi_total (
   INDEX idx_noms_freq_municipi_total_municipi (municipi_id, total_freq),
   FOREIGN KEY (nom_id) REFERENCES noms(id) ON DELETE CASCADE,
   FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =====================================================================
+-- Esdeveniments historics
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS events_historics (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  titol VARCHAR(255) NOT NULL,
+  slug VARCHAR(255) NOT NULL,
+  tipus VARCHAR(64) NOT NULL,
+  resum TEXT,
+  descripcio TEXT,
+  data_inici DATE,
+  data_fi DATE,
+  data_inici_aprox TINYINT(1) NOT NULL DEFAULT 0,
+  data_fi_aprox TINYINT(1) NOT NULL DEFAULT 0,
+  precisio VARCHAR(20),
+  fonts TEXT,
+  created_by INT UNSIGNED,
+  moderation_status VARCHAR(20) NOT NULL DEFAULT 'pendent',
+  moderated_by INT UNSIGNED,
+  moderated_at DATETIME,
+  moderation_notes TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_events_historics_slug (slug),
+  INDEX idx_events_historics_tipus_data_inici (tipus, data_inici),
+  INDEX idx_events_historics_moderation (moderation_status, created_at),
+  CONSTRAINT chk_events_historics_precisio CHECK (precisio IN ('dia','mes','any','decada')),
+  CONSTRAINT chk_events_historics_moderation CHECK (moderation_status IN ('pendent','publicat','rebutjat')),
+  FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+  FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS events_historics_impactes (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  event_id INT UNSIGNED NOT NULL,
+  scope_type VARCHAR(32) NOT NULL,
+  scope_id INT UNSIGNED NOT NULL,
+  impacte_tipus VARCHAR(20) NOT NULL,
+  intensitat TINYINT NOT NULL,
+  notes TEXT,
+  created_by INT UNSIGNED,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_events_historics_impactes_event (event_id),
+  INDEX idx_events_historics_impactes_scope (scope_type, scope_id),
+  INDEX idx_events_historics_impactes_scope_intensitat (scope_type, scope_id, intensitat),
+  CONSTRAINT chk_events_historics_impactes_scope CHECK (scope_type IN ('pais','nivell_admin','municipi','entitat_eclesiastica')),
+  CONSTRAINT chk_events_historics_impactes_tipus CHECK (impacte_tipus IN ('directe','indirecte','transit','rumor')),
+  CONSTRAINT chk_events_historics_impactes_intensitat CHECK (intensitat BETWEEN 1 AND 5),
+  FOREIGN KEY (event_id) REFERENCES events_historics(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS dm_threads (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_low_id INT UNSIGNED NOT NULL,
+  user_high_id INT UNSIGNED NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_message_at DATETIME NULL,
+  last_message_id INT UNSIGNED NULL,
+  UNIQUE KEY uq_dm_threads_users (user_low_id, user_high_id),
+  INDEX idx_dm_threads_user_low (user_low_id),
+  INDEX idx_dm_threads_user_high (user_high_id),
+  INDEX idx_dm_threads_last_message_at (last_message_at DESC),
+  CONSTRAINT chk_dm_threads_order CHECK (user_low_id < user_high_id),
+  FOREIGN KEY (user_low_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_high_id) REFERENCES usuaris(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS dm_thread_state (
+  thread_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
+  last_read_message_id INT UNSIGNED NULL,
+  archived TINYINT(1) NOT NULL DEFAULT 0,
+  muted TINYINT(1) NOT NULL DEFAULT 0,
+  deleted TINYINT(1) NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (thread_id, user_id),
+  INDEX idx_dm_thread_state_user_archived (user_id, archived, updated_at),
+  INDEX idx_dm_thread_state_user_deleted (user_id, deleted, updated_at),
+  FOREIGN KEY (thread_id) REFERENCES dm_threads(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS dm_messages (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  thread_id INT UNSIGNED NOT NULL,
+  sender_id INT UNSIGNED NOT NULL,
+  body TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_dm_messages_thread_created (thread_id, created_at DESC),
+  INDEX idx_dm_messages_sender_created (sender_id, created_at DESC),
+  FOREIGN KEY (thread_id) REFERENCES dm_threads(id) ON DELETE CASCADE,
+  FOREIGN KEY (sender_id) REFERENCES usuaris(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS user_blocks (
+  blocker_id INT UNSIGNED NOT NULL,
+  blocked_id INT UNSIGNED NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (blocker_id, blocked_id),
+  INDEX idx_user_blocks_blocker (blocker_id, created_at),
+  INDEX idx_user_blocks_blocked (blocked_id, created_at),
+  FOREIGN KEY (blocker_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  FOREIGN KEY (blocked_id) REFERENCES usuaris(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_transcripcions_raw_llibre_pagina

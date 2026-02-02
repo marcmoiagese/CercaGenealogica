@@ -1,0 +1,78 @@
+{{ define "messages-thread.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "messages.thread.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/messages.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal messages-page">
+        <section class="card messages-hero">
+            <header class="card-header card-header-flex">
+                <div>
+                    <h1>{{ t .Lang "messages.thread.title" }}</h1>
+                    <p class="muted">{{ .Data.OtherLabel }}</p>
+                </div>
+                <div class="messages-actions">
+                    <a class="boto-secundari" href="/missatges">{{ t .Lang "messages.actions.back" }}</a>
+                    <form method="post" action="/missatges/fil/{{ .Data.ThreadID }}/arxivar">
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                        <input type="hidden" name="archived" value="{{ if .Data.Archived }}0{{ else }}1{{ end }}">
+                        <button class="boto-secundari" type="submit">
+                            {{ if .Data.Archived }}{{ t .Lang "messages.thread.unarchive" }}{{ else }}{{ t .Lang "messages.thread.archive" }}{{ end }}
+                        </button>
+                    </form>
+                    <form method="post" action="/missatges/fil/{{ .Data.ThreadID }}/bloc">
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                        <input type="hidden" name="blocked" value="{{ if .Data.ViewerBlocked }}0{{ else }}1{{ end }}">
+                        <button class="{{ if .Data.ViewerBlocked }}boto-secundari{{ else }}boto-perill{{ end }}" type="submit">
+                            {{ if .Data.ViewerBlocked }}{{ t .Lang "messages.thread.unblock" }}{{ else }}{{ t .Lang "messages.thread.block" }}{{ end }}
+                        </button>
+                    </form>
+                    <form method="post" action="/missatges/fil/{{ .Data.ThreadID }}/esborrar">
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                        <button class="boto-secundari" type="submit">{{ t .Lang "messages.thread.delete" }}</button>
+                    </form>
+                </div>
+            </header>
+        </section>
+
+        <section class="card messages-thread-card">
+            {{ if .Data.Messages }}
+                <div class="messages-thread-list">
+                    {{ range .Data.Messages }}
+                        <div class="message-bubble {{ if .IsOwn }}own{{ end }}">
+                            <div class="message-bubble-header">
+                                <span class="message-sender">{{ .Sender }}</span>
+                                <span class="message-date">{{ .CreatedAt }}</span>
+                            </div>
+                            <p class="message-body">{{ .Body }}</p>
+                        </div>
+                    {{ end }}
+                </div>
+            {{ else }}
+                <p class="muted">{{ t .Lang "messages.thread.empty" }}</p>
+            {{ end }}
+            {{ if .Data.CanSend }}
+                <form class="messages-form" method="post" action="/missatges/fil/{{ .Data.ThreadID }}/enviar">
+                    <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                    <label for="threadMessageBody">{{ t .Lang "messages.form.body" }}</label>
+                    <textarea id="threadMessageBody" name="body" rows="4" maxlength="{{ .Data.MessageMaxLen }}"></textarea>
+                    <div class="messages-form-actions">
+                        <button class="boto-primari" type="submit">{{ t .Lang "messages.form.send" }}</button>
+                    </div>
+                </form>
+            {{ else }}
+                <p class="message-alert">{{ .Data.SendBlocked }}</p>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

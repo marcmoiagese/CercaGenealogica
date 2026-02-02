@@ -890,6 +890,26 @@ CREATE INDEX IF NOT EXISTS idx_wiki_pending_changed_at
 CREATE INDEX IF NOT EXISTS idx_wiki_pending_object
   ON wiki_pending_queue(object_type, object_id);
 
+CREATE TABLE IF NOT EXISTS csv_import_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT,
+  owner_user_id INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  visibility TEXT NOT NULL DEFAULT 'private' CHECK(visibility IN ('private','public')),
+  default_separator TEXT,
+  model_json TEXT NOT NULL,
+  signature TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (owner_user_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_csv_import_templates_owner_visibility
+  ON csv_import_templates(owner_user_id, visibility);
+CREATE INDEX IF NOT EXISTS idx_csv_import_templates_visibility_created
+  ON csv_import_templates(visibility, created_at);
+CREATE INDEX IF NOT EXISTS idx_csv_import_templates_signature
+  ON csv_import_templates(signature);
+
 -- Cognoms (forma canònica)
 CREATE TABLE IF NOT EXISTS cognoms (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1202,6 +1222,111 @@ CREATE INDEX IF NOT EXISTS idx_achievement_events_code_window ON achievement_eve
 CREATE INDEX IF NOT EXISTS idx_usuaris_activitat_user_created ON usuaris_activitat(usuari_id, data_creacio);
 CREATE INDEX IF NOT EXISTS idx_usuaris_activitat_user_status_created ON usuaris_activitat(usuari_id, estat, data_creacio);
 CREATE INDEX IF NOT EXISTS idx_usuaris_activitat_user_regla_status_created ON usuaris_activitat(usuari_id, regla_id, estat, data_creacio);
+
+-- =====================================================================
+-- Esdeveniments historics
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS events_historics (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  titol TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  tipus TEXT NOT NULL,
+  resum TEXT,
+  descripcio TEXT,
+  data_inici DATE,
+  data_fi DATE,
+  data_inici_aprox INTEGER NOT NULL DEFAULT 0 CHECK (data_inici_aprox IN (0,1)),
+  data_fi_aprox INTEGER NOT NULL DEFAULT 0 CHECK (data_fi_aprox IN (0,1)),
+  precisio TEXT CHECK (precisio IN ('dia','mes','any','decada')),
+  fonts TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderation_status TEXT NOT NULL DEFAULT 'pendent' CHECK (moderation_status IN ('pendent','publicat','rebutjat')),
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP,
+  moderation_notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS events_historics_impactes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id INTEGER NOT NULL REFERENCES events_historics(id) ON DELETE CASCADE,
+  scope_type TEXT NOT NULL CHECK (scope_type IN ('pais','nivell_admin','municipi','entitat_eclesiastica')),
+  scope_id INTEGER NOT NULL,
+  impacte_tipus TEXT NOT NULL CHECK (impacte_tipus IN ('directe','indirecte','transit','rumor')),
+  intensitat INTEGER NOT NULL CHECK (intensitat BETWEEN 1 AND 5),
+  notes TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_historics_tipus_data_inici
+  ON events_historics(tipus, data_inici);
+CREATE INDEX IF NOT EXISTS idx_events_historics_moderation
+  ON events_historics(moderation_status, created_at);
+CREATE INDEX IF NOT EXISTS idx_events_historics_impactes_event
+  ON events_historics_impactes(event_id);
+CREATE INDEX IF NOT EXISTS idx_events_historics_impactes_scope
+  ON events_historics_impactes(scope_type, scope_id);
+CREATE INDEX IF NOT EXISTS idx_events_historics_impactes_scope_intensitat
+  ON events_historics_impactes(scope_type, scope_id, intensitat);
+
+CREATE TABLE IF NOT EXISTS dm_threads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_low_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  user_high_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_message_at TIMESTAMP,
+  last_message_id INTEGER,
+  CHECK (user_low_id < user_high_id),
+  UNIQUE (user_low_id, user_high_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dm_threads_user_low
+  ON dm_threads(user_low_id);
+CREATE INDEX IF NOT EXISTS idx_dm_threads_user_high
+  ON dm_threads(user_high_id);
+CREATE INDEX IF NOT EXISTS idx_dm_threads_last_message_at
+  ON dm_threads(last_message_at DESC);
+
+CREATE TABLE IF NOT EXISTS dm_thread_state (
+  thread_id INTEGER NOT NULL REFERENCES dm_threads(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  last_read_message_id INTEGER,
+  archived INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0,1)),
+  muted INTEGER NOT NULL DEFAULT 0 CHECK (muted IN (0,1)),
+  deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0,1)),
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (thread_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dm_thread_state_user_archived
+  ON dm_thread_state(user_id, archived, updated_at);
+CREATE INDEX IF NOT EXISTS idx_dm_thread_state_user_deleted
+  ON dm_thread_state(user_id, deleted, updated_at);
+
+CREATE TABLE IF NOT EXISTS dm_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  thread_id INTEGER NOT NULL REFERENCES dm_threads(id) ON DELETE CASCADE,
+  sender_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_dm_messages_thread_created
+  ON dm_messages(thread_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dm_messages_sender_created
+  ON dm_messages(sender_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS user_blocks (
+  blocker_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  blocked_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (blocker_id, blocked_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_blocks_blocker
+  ON user_blocks(blocker_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked
+  ON user_blocks(blocked_id, created_at DESC);
 
 -- Index per accelerar busquedes
 
