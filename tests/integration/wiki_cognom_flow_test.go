@@ -130,7 +130,7 @@ func TestWikiCognomFlowAndStats(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("mark private first expected 200, got %d", rr.Code)
 	}
-	counts, err = database.GetWikiPublicCounts("cognom", cognomID)
+	counts, err := database.GetWikiPublicCounts("cognom", cognomID)
 	if err != nil {
 		t.Fatalf("GetWikiPublicCounts ha fallat: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestWikiCognomFlowAndStats(t *testing.T) {
 		t.Fatalf("esperava 1 marca, got %d", count)
 	}
 
-	counts, err := database.GetWikiPublicCounts("cognom", cognomID)
+	counts, err = database.GetWikiPublicCounts("cognom", cognomID)
 	if err != nil {
 		t.Fatalf("GetWikiPublicCounts ha fallat: %v", err)
 	}

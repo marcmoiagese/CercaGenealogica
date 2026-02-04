@@ -14,6 +14,7 @@
         <section class="card cognoms-card">
             <header class="card-header">
                 <h1>{{ t .Lang "surnames.title" }}</h1>
+                <a class="boto-secundari" href="/cognoms/merge">{{ t .Lang "surnames.merge.cta" }}</a>
             </header>
             <form class="form-filtres" method="get" action="/cognoms">
                 <div class="fila-camp">
@@ -43,7 +44,12 @@
                                 <a class="cognom-link" href="/cognoms/{{ .ID }}">{{ .Forma }}</a>
                             </td>
                             <td>
-                                <a class="boto-secundari" href="/cognoms/{{ .ID }}">{{ t $.Lang "common.view" }}</a>
+                                <button type="button" class="icon-action" data-merge-mode="to" data-cognom-id="{{ .ID }}" data-cognom-nom="{{ .Forma }}" title="{{ t $.Lang "surnames.list.merge.to" }}">
+                                    <i class="fas fa-link"></i>
+                                </button>
+                                <button type="button" class="icon-action" data-merge-mode="from" data-cognom-id="{{ .ID }}" data-cognom-nom="{{ .Forma }}" title="{{ t $.Lang "surnames.list.merge.from" }}">
+                                    <i class="fas fa-random"></i>
+                                </button>
                             </td>
                         </tr>
                         {{ else }}
@@ -67,8 +73,98 @@
             {{ end }}
         </section>
     </main>
+    <div class="modal-overlay" id="cognoms-merge-to-modal" role="dialog" aria-modal="true">
+        <div class="modal-box">
+            <header class="modal-header">
+                <div>
+                    <h2>{{ t .Lang "surnames.list.merge.modal.title" }}</h2>
+                    <p class="muted" id="cognoms-merge-to-subtitle"></p>
+                </div>
+                <button type="button" class="modal-close" data-modal-close="cognoms-merge-to-modal">×</button>
+            </header>
+            <form id="cognoms-merge-to-form" class="cognoms-suggest-form" method="post" data-search-endpoint="/cognoms/cerca">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="canonical_id" id="merge-to-canonical-id">
+                <input type="hidden" name="alias_ids" id="merge-to-alias-ids">
+                <div class="grup-camp">
+                    <label for="merge-to-canonical-display">{{ t .Lang "surnames.merge.canonical" }}</label>
+                    <input id="merge-to-canonical-display" type="text" class="input-text is-locked" readonly>
+                    <p class="muted">{{ t .Lang "surnames.list.merge.locked" }}</p>
+                </div>
+                <div class="grup-camp">
+                    <label for="merge-to-alias-search">{{ t .Lang "surnames.merge.aliases" }}</label>
+                    <div class="suggest-field">
+                        <input id="merge-to-alias-search" type="text" autocomplete="off" placeholder="{{ t .Lang "surnames.search.placeholder" }}">
+                        <ul id="merge-to-alias-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "surnames.search.suggestions" }}" data-empty-label="{{ t .Lang "common.empty" }}"></ul>
+                    </div>
+                    <div id="merge-to-alias-selected" class="cognoms-merge-selected"></div>
+                </div>
+                <div class="grup-camp">
+                    <label for="merge-to-reason-type">{{ t .Lang "surnames.merge.reason" }}</label>
+                    <select id="merge-to-reason-type" name="reason_preset">
+                        <option value="">{{ t .Lang "common.select" }}</option>
+                        <option value="{{ t .Lang "surnames.merge.reason.misspelling" }}">{{ t .Lang "surnames.merge.reason.misspelling" }}</option>
+                        <option value="{{ t .Lang "surnames.merge.reason.phonetic" }}">{{ t .Lang "surnames.merge.reason.phonetic" }}</option>
+                        <option value="{{ t .Lang "surnames.merge.reason.administrative" }}">{{ t .Lang "surnames.merge.reason.administrative" }}</option>
+                        <option value="{{ t .Lang "surnames.merge.reason.transcription" }}">{{ t .Lang "surnames.merge.reason.transcription" }}</option>
+                        <option value="{{ t .Lang "surnames.merge.reason.simplified" }}">{{ t .Lang "surnames.merge.reason.simplified" }}</option>
+                        <option value="{{ t .Lang "surnames.merge.reason.other" }}">{{ t .Lang "surnames.merge.reason.other" }}</option>
+                    </select>
+                    <textarea id="merge-to-reason" name="reason_detail" rows="3" placeholder="{{ t .Lang "surnames.merge.reason.placeholder" }}"></textarea>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "surnames.merge.submit" }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="modal-overlay" id="cognoms-merge-from-modal" role="dialog" aria-modal="true">
+        <div class="modal-box">
+            <header class="modal-header">
+                <div>
+                    <h2>{{ t .Lang "surnames.list.merge.modal.title" }}</h2>
+                    <p class="muted" id="cognoms-merge-from-subtitle"></p>
+                </div>
+                <button type="button" class="modal-close" data-modal-close="cognoms-merge-from-modal">×</button>
+            </header>
+            <form id="cognoms-merge-from-form" class="cognoms-suggest-form" method="post" data-search-endpoint="/cognoms/cerca">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="canonical_id" id="merge-from-canonical-id">
+                <input type="hidden" name="alias_ids" id="merge-from-alias-ids">
+                <div class="grup-camp">
+                    <label for="merge-from-canonical-search">{{ t .Lang "surnames.merge.canonical" }}</label>
+                    <div class="suggest-field">
+                        <input id="merge-from-canonical-search" type="text" autocomplete="off" placeholder="{{ t .Lang "surnames.search.placeholder" }}">
+                        <ul id="merge-from-canonical-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "surnames.search.suggestions" }}" data-empty-label="{{ t .Lang "common.empty" }}"></ul>
+                    </div>
+                </div>
+                <div class="grup-camp">
+                    <label for="merge-from-alias-display">{{ t .Lang "surnames.merge.aliases" }}</label>
+                    <input id="merge-from-alias-display" type="text" class="input-text is-locked" readonly>
+                    <p class="muted">{{ t .Lang "surnames.list.merge.locked" }}</p>
+                </div>
+                <div class="grup-camp">
+                    <label for="merge-from-reason-type">{{ t .Lang "surnames.merge.reason" }}</label>
+                    <select id="merge-from-reason-type" name="reason_preset">
+                        <option value="">{{ t .Lang "common.select" }}</option>
+                        <option value="{{ t .Lang "surnames.merge.reason.misspelling" }}">{{ t .Lang "surnames.merge.reason.misspelling" }}</option>
+                        <option value="{{ t .Lang "surnames.merge.reason.phonetic" }}">{{ t .Lang "surnames.merge.reason.phonetic" }}</option>
+                        <option value="{{ t .Lang "surnames.merge.reason.administrative" }}">{{ t .Lang "surnames.merge.reason.administrative" }}</option>
+                        <option value="{{ t .Lang "surnames.merge.reason.transcription" }}">{{ t .Lang "surnames.merge.reason.transcription" }}</option>
+                        <option value="{{ t .Lang "surnames.merge.reason.simplified" }}">{{ t .Lang "surnames.merge.reason.simplified" }}</option>
+                        <option value="{{ t .Lang "surnames.merge.reason.other" }}">{{ t .Lang "surnames.merge.reason.other" }}</option>
+                    </select>
+                    <textarea id="merge-from-reason" name="reason_detail" rows="3" placeholder="{{ t .Lang "surnames.merge.reason.placeholder" }}"></textarea>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "surnames.merge.submit" }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/cognoms-list-merge.js"></script>
 </body>
 </html>
 {{ end }}

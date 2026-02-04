@@ -17,7 +17,7 @@ import (
 )
 
 func TestImportTemplatesCRUD(t *testing.T) {
-	app, _ := newTestAppForLogin(t, "test_f20_templates_crud.sqlite3")
+	app, database := newTestAppForLogin(t, "test_f20_templates_crud.sqlite3")
 	_, sessionID := createF7UserWithSession(t, database)
 
 	csrf := "csrf-f20-crud"

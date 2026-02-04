@@ -1,7 +1,9 @@
 package core
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -10,6 +12,127 @@ import (
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
+
+type cognomReferenciaView struct {
+	ID          int
+	Kind        string
+	KindLabel   string
+	Title       string
+	Description string
+	Page        string
+	LinkURL     string
+	LinkLabel   string
+	Status      string
+}
+
+func normalizeCognomReferenciaKind(raw string) string {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	switch raw {
+	case "llibre", "arxiu", "media", "url":
+		return raw
+	default:
+		return ""
+	}
+}
+
+func (a *App) buildCognomReferenciaViews(lang string, refs []db.CognomReferencia) []cognomReferenciaView {
+	if len(refs) == 0 {
+		return nil
+	}
+	arxius := map[int]*db.Arxiu{}
+	llibres := map[int]*db.Llibre{}
+	media := map[int]*db.MediaItem{}
+	var out []cognomReferenciaView
+	for _, ref := range refs {
+		view := cognomReferenciaView{
+			ID:          ref.ID,
+			Kind:        strings.TrimSpace(ref.Kind),
+			Title:       strings.TrimSpace(ref.Titol),
+			Description: strings.TrimSpace(ref.Descripcio),
+			Page:        strings.TrimSpace(ref.Pagina),
+			Status:      strings.TrimSpace(ref.ModeracioEstat),
+		}
+		if view.Kind != "" {
+			view.KindLabel = T(lang, "surnames.references.kind."+view.Kind)
+		}
+		if view.KindLabel == "" {
+			view.KindLabel = view.Kind
+		}
+		if ref.RefID.Valid {
+			id := int(ref.RefID.Int64)
+			switch view.Kind {
+			case "llibre":
+				llibre, ok := llibres[id]
+				if !ok {
+					row, err := a.DB.GetLlibre(id)
+					if err == nil {
+						llibre = row
+					}
+					llibres[id] = llibre
+				}
+				view.LinkURL = fmt.Sprintf("/documentals/llibres/%d", id)
+				if llibre != nil {
+					view.LinkLabel = strings.TrimSpace(llibre.Titol)
+					if view.LinkLabel == "" {
+						view.LinkLabel = strings.TrimSpace(llibre.NomEsglesia)
+					}
+				}
+				if view.LinkLabel == "" {
+					view.LinkLabel = fmt.Sprintf("%s #%d", T(lang, "surnames.references.kind.llibre"), id)
+				}
+			case "arxiu":
+				arxiu, ok := arxius[id]
+				if !ok {
+					row, err := a.DB.GetArxiu(id)
+					if err == nil {
+						arxiu = row
+					}
+					arxius[id] = arxiu
+				}
+				view.LinkURL = fmt.Sprintf("/documentals/arxius/%d", id)
+				if arxiu != nil {
+					view.LinkLabel = strings.TrimSpace(arxiu.Nom)
+				}
+				if view.LinkLabel == "" {
+					view.LinkLabel = fmt.Sprintf("%s #%d", T(lang, "surnames.references.kind.arxiu"), id)
+				}
+			case "media":
+				item, ok := media[id]
+				if !ok {
+					row, err := a.DB.GetMediaItemByID(id)
+					if err == nil {
+						item = row
+					}
+					media[id] = item
+				}
+				if item != nil && strings.TrimSpace(item.PublicID) != "" {
+					view.LinkURL = "/media/items/" + strings.TrimSpace(item.PublicID)
+				}
+				if item != nil {
+					view.LinkLabel = strings.TrimSpace(item.Title)
+					if view.LinkLabel == "" {
+						view.LinkLabel = strings.TrimSpace(item.PublicID)
+					}
+				}
+				if view.LinkLabel == "" {
+					view.LinkLabel = fmt.Sprintf("%s #%d", T(lang, "surnames.references.kind.media"), id)
+				}
+			}
+		}
+		if view.Kind == "url" {
+			view.LinkURL = strings.TrimSpace(ref.URL)
+			view.LinkLabel = view.LinkURL
+		}
+		if view.Title == "" {
+			view.Title = view.LinkLabel
+		}
+		if view.Title == "" {
+			view.Title = view.KindLabel
+		}
+		out = append(out, view)
+	}
+	return out
+}
 
 func (a *App) CognomsList(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
@@ -31,11 +154,13 @@ func (a *App) CognomsList(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * perPage
 	list, err := a.DB.ListCognoms(q, perPage, offset)
 	if err != nil {
+		Errorf("Error llistant cognoms (q=%s): %v", q, err)
 		http.Error(w, "Error carregant cognoms", http.StatusInternalServerError)
 		return
 	}
 	all, err := a.DB.ListCognoms(q, 0, 0)
 	if err != nil {
+		Errorf("Error comptant cognoms (q=%s): %v", q, err)
 		http.Error(w, "Error carregant cognoms", http.StatusInternalServerError)
 		return
 	}
@@ -68,6 +193,18 @@ func (a *App) CognomsList(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) CognomDetall(w http.ResponseWriter, r *http.Request) {
 	id := extractID(r.URL.Path)
+	if id > 0 {
+		canonID, redirected, err := a.resolveCognomCanonicalID(id)
+		if err != nil {
+			http.Error(w, "Error carregant cognom", http.StatusInternalServerError)
+			return
+		}
+		if redirected {
+			http.Redirect(w, r, fmt.Sprintf("/cognoms/%d", canonID), http.StatusSeeOther)
+			return
+		}
+		id = canonID
+	}
 	cognom, err := a.DB.GetCognom(id)
 	if err != nil || cognom == nil {
 		http.NotFound(w, r)
@@ -82,6 +219,10 @@ func (a *App) CognomDetall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
+	lang := ResolveLang(r)
+	if user != nil {
+		lang = resolveUserLang(r, user)
+	}
 	perms := a.getPermissionsForUser(user.ID)
 	canModerate := a.hasPerm(perms, permModerate)
 	markType := ""
@@ -105,6 +246,16 @@ func (a *App) CognomDetall(w http.ResponseWriter, r *http.Request) {
 			pendents = rows
 		}
 	}
+	refPub, _ := a.DB.ListCognomReferencies(db.CognomReferenciaFilter{CognomID: id, Status: "publicat"})
+	refViews := a.buildCognomReferenciaViews(lang, refPub)
+	redirects, _ := a.DB.ListCognomRedirectsByTo(id)
+	redirectViews := a.buildCognomRedirectViews(redirects)
+	var refPendingViews []cognomReferenciaView
+	if canModerate {
+		if refsPending, err := a.DB.ListCognomReferencies(db.CognomReferenciaFilter{CognomID: id, Status: "pendent"}); err == nil {
+			refPendingViews = a.buildCognomReferenciaViews(lang, refsPending)
+		}
+	}
 	maxYear := time.Now().Year()
 	RenderPrivateTemplate(w, r, "cognom-detall.html", map[string]interface{}{
 		"Cognom":           cognom,
@@ -115,6 +266,16 @@ func (a *App) CognomDetall(w http.ResponseWriter, r *http.Request) {
 		"MarkPublic":       markPublic,
 		"MarkOwn":          markOwn,
 		"WikiPending":      strings.TrimSpace(r.URL.Query().Get("pending")) != "",
+		"RefOk":            strings.TrimSpace(r.URL.Query().Get("ref_ok")) != "",
+		"RefError":         strings.TrimSpace(r.URL.Query().Get("ref_err")) != "",
+		"References":       refViews,
+		"MergeRedirects":   redirectViews,
+		"ReferencesPending": func() []cognomReferenciaView {
+			if len(refPendingViews) == 0 {
+				return nil
+			}
+			return refPendingViews
+		}(),
 		"MaxYear":          maxYear,
 		"Y0":               1800,
 		"Y1":               maxYear,
@@ -122,6 +283,25 @@ func (a *App) CognomDetall(w http.ResponseWriter, r *http.Request) {
 		"DuplicateVariant": r.URL.Query().Get("duplicate") != "",
 		"SuggestError":     r.URL.Query().Get("err") != "",
 	})
+}
+
+func buildCognomChangeMeta(cognom *db.Cognom, apply func(*db.Cognom)) (string, error) {
+	if cognom == nil {
+		return "", fmt.Errorf("cognom buit")
+	}
+	after := *cognom
+	if apply != nil {
+		apply(&after)
+	}
+	beforeJSON, err := json.Marshal(cognom)
+	if err != nil {
+		return "", err
+	}
+	afterJSON, err := json.Marshal(after)
+	if err != nil {
+		return "", err
+	}
+	return buildWikiChangeMetadata(beforeJSON, afterJSON, 0)
 }
 
 func (a *App) CognomProposeUpdate(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +320,11 @@ func (a *App) CognomProposeUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	lang := resolveUserLang(r, user)
 	id := extractID(r.URL.Path)
+	if id > 0 {
+		if canonID, _, err := a.resolveCognomCanonicalID(id); err == nil && canonID > 0 {
+			id = canonID
+		}
+	}
 	cognom, err := a.DB.GetCognom(id)
 	if err != nil || cognom == nil {
 		http.NotFound(w, r)
@@ -150,14 +335,12 @@ func (a *App) CognomProposeUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	origen := strings.TrimSpace(r.FormValue("origen"))
 	notes := strings.TrimSpace(r.FormValue("notes"))
-	after := *cognom
-	after.Origen = origen
-	after.Notes = notes
-	beforeJSON, _ := json.Marshal(cognom)
-	afterJSON, _ := json.Marshal(after)
-	meta, err := buildWikiChangeMetadata(beforeJSON, afterJSON, 0)
+	meta, err := buildCognomChangeMeta(cognom, func(after *db.Cognom) {
+		after.Origen = origen
+		after.Notes = notes
+	})
 	if err != nil {
-		http.Error(w, "No s'ha pogut preparar la proposta", http.StatusInternalServerError)
+		http.Error(w, T(lang, "surnames.detail.contribution.prepare_error"), http.StatusInternalServerError)
 		return
 	}
 	changeID, err := a.createWikiChange(&db.WikiChange{
@@ -174,12 +357,210 @@ func (a *App) CognomProposeUpdate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, msg, status)
 			return
 		}
-		http.Error(w, "No s'ha pogut crear la proposta", http.StatusInternalServerError)
+		http.Error(w, T(lang, "surnames.detail.contribution.create_error"), http.StatusInternalServerError)
 		return
 	}
 	detail := "cognom:" + strconv.Itoa(id)
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, "", "editar", "cognom_canvi", &changeID, "pendent", nil, detail)
 	http.Redirect(w, r, "/cognoms/"+strconv.Itoa(id)+"?pending=1", http.StatusSeeOther)
+}
+
+func (a *App) CognomSubmitHistoria(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/cognoms", http.StatusSeeOther)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Redirect(w, r, "/cognoms?err=csrf", http.StatusSeeOther)
+		return
+	}
+	user, _ := a.VerificarSessio(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	lang := resolveUserLang(r, user)
+	id := extractID(r.URL.Path)
+	if id > 0 {
+		if canonID, _, err := a.resolveCognomCanonicalID(id); err == nil && canonID > 0 {
+			id = canonID
+		}
+	}
+	cognom, err := a.DB.GetCognom(id)
+	if err != nil || cognom == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !a.ensureWikiChangeAllowed(w, r, lang) {
+		return
+	}
+	historia := strings.TrimSpace(r.FormValue("historia"))
+	meta, err := buildCognomChangeMeta(cognom, func(after *db.Cognom) {
+		after.Origen = historia
+	})
+	if err != nil {
+		http.Error(w, T(lang, "surnames.detail.contribution.prepare_error"), http.StatusInternalServerError)
+		return
+	}
+	changeID, err := a.createWikiChange(&db.WikiChange{
+		ObjectType:     "cognom",
+		ObjectID:       id,
+		ChangeType:     "form",
+		FieldKey:       "historia",
+		Metadata:       meta,
+		ModeracioEstat: "pendent",
+		ChangedBy:      sqlNullIntFromInt(user.ID),
+	})
+	if err != nil {
+		if status, msg, ok := a.wikiGuardrailInfo(lang, err); ok {
+			http.Error(w, msg, status)
+			return
+		}
+		http.Error(w, T(lang, "surnames.detail.contribution.create_error"), http.StatusInternalServerError)
+		return
+	}
+	detail := "cognom:" + strconv.Itoa(id)
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, "", "editar", "cognom_canvi", &changeID, "pendent", nil, detail)
+	http.Redirect(w, r, "/cognoms/"+strconv.Itoa(id)+"?pending=1", http.StatusSeeOther)
+}
+
+func (a *App) CognomSubmitNotes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/cognoms", http.StatusSeeOther)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Redirect(w, r, "/cognoms?err=csrf", http.StatusSeeOther)
+		return
+	}
+	user, _ := a.VerificarSessio(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	lang := resolveUserLang(r, user)
+	id := extractID(r.URL.Path)
+	if id > 0 {
+		if canonID, _, err := a.resolveCognomCanonicalID(id); err == nil && canonID > 0 {
+			id = canonID
+		}
+	}
+	cognom, err := a.DB.GetCognom(id)
+	if err != nil || cognom == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !a.ensureWikiChangeAllowed(w, r, lang) {
+		return
+	}
+	notes := strings.TrimSpace(r.FormValue("notes"))
+	meta, err := buildCognomChangeMeta(cognom, func(after *db.Cognom) {
+		after.Notes = notes
+	})
+	if err != nil {
+		http.Error(w, T(lang, "surnames.detail.contribution.prepare_error"), http.StatusInternalServerError)
+		return
+	}
+	changeID, err := a.createWikiChange(&db.WikiChange{
+		ObjectType:     "cognom",
+		ObjectID:       id,
+		ChangeType:     "form",
+		FieldKey:       "notes",
+		Metadata:       meta,
+		ModeracioEstat: "pendent",
+		ChangedBy:      sqlNullIntFromInt(user.ID),
+	})
+	if err != nil {
+		if status, msg, ok := a.wikiGuardrailInfo(lang, err); ok {
+			http.Error(w, msg, status)
+			return
+		}
+		http.Error(w, T(lang, "surnames.detail.contribution.create_error"), http.StatusInternalServerError)
+		return
+	}
+	detail := "cognom:" + strconv.Itoa(id)
+	_, _ = a.RegisterUserActivity(r.Context(), user.ID, "", "editar", "cognom_canvi", &changeID, "pendent", nil, detail)
+	http.Redirect(w, r, "/cognoms/"+strconv.Itoa(id)+"?pending=1", http.StatusSeeOther)
+}
+
+func (a *App) CognomSubmitReferencia(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/cognoms", http.StatusSeeOther)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Redirect(w, r, "/cognoms?err=csrf", http.StatusSeeOther)
+		return
+	}
+	user, _ := a.VerificarSessio(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	lang := resolveUserLang(r, user)
+	id := extractID(r.URL.Path)
+	if id > 0 {
+		if canonID, _, err := a.resolveCognomCanonicalID(id); err == nil && canonID > 0 {
+			id = canonID
+		}
+	}
+	cognom, err := a.DB.GetCognom(id)
+	if err != nil || cognom == nil {
+		http.NotFound(w, r)
+		return
+	}
+	kind := normalizeCognomReferenciaKind(r.FormValue("kind"))
+	if kind == "" {
+		http.Redirect(w, r, "/cognoms/"+strconv.Itoa(id)+"?ref_err=1", http.StatusSeeOther)
+		return
+	}
+	refID := sqlNullInt(r.FormValue("ref_id"))
+	urlVal := strings.TrimSpace(r.FormValue("url"))
+	if kind == "url" {
+		if urlVal == "" {
+			http.Redirect(w, r, "/cognoms/"+strconv.Itoa(id)+"?ref_err=1", http.StatusSeeOther)
+			return
+		}
+		refID = sql.NullInt64{}
+	} else if !refID.Valid {
+		http.Redirect(w, r, "/cognoms/"+strconv.Itoa(id)+"?ref_err=1", http.StatusSeeOther)
+		return
+	} else {
+		ref := int(refID.Int64)
+		switch kind {
+		case "llibre":
+			if row, err := a.DB.GetLlibre(ref); err != nil || row == nil {
+				http.Redirect(w, r, "/cognoms/"+strconv.Itoa(id)+"?ref_err=1", http.StatusSeeOther)
+				return
+			}
+		case "arxiu":
+			if row, err := a.DB.GetArxiu(ref); err != nil || row == nil {
+				http.Redirect(w, r, "/cognoms/"+strconv.Itoa(id)+"?ref_err=1", http.StatusSeeOther)
+				return
+			}
+		case "media":
+			if row, err := a.DB.GetMediaItemByID(ref); err != nil || row == nil {
+				http.Redirect(w, r, "/cognoms/"+strconv.Itoa(id)+"?ref_err=1", http.StatusSeeOther)
+				return
+			}
+		}
+	}
+	ref := &db.CognomReferencia{
+		CognomID:       id,
+		Kind:           kind,
+		RefID:          refID,
+		URL:            urlVal,
+		Titol:          strings.TrimSpace(r.FormValue("titol")),
+		Descripcio:     strings.TrimSpace(r.FormValue("descripcio")),
+		Pagina:         strings.TrimSpace(r.FormValue("pagina")),
+		ModeracioEstat: "pendent",
+		CreatedBy:      sqlNullIntFromInt(user.ID),
+	}
+	if _, err := a.DB.CreateCognomReferencia(ref); err != nil {
+		http.Error(w, T(lang, "surnames.references.error"), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/cognoms/"+strconv.Itoa(id)+"?ref_ok=1", http.StatusSeeOther)
 }
 
 func (a *App) CognomSuggestVariant(w http.ResponseWriter, r *http.Request) {
@@ -193,6 +574,11 @@ func (a *App) CognomSuggestVariant(w http.ResponseWriter, r *http.Request) {
 	}
 	user, _ := a.VerificarSessio(r)
 	id := extractID(r.URL.Path)
+	if id > 0 {
+		if canonID, _, err := a.resolveCognomCanonicalID(id); err == nil && canonID > 0 {
+			id = canonID
+		}
+	}
 	cognom, err := a.DB.GetCognom(id)
 	if err != nil || cognom == nil {
 		http.NotFound(w, r)
@@ -249,6 +635,7 @@ func (a *App) SearchCognomsJSON(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	list, err := a.DB.ListCognoms(q, 20, 0)
 	if err != nil {
+		Errorf("Error cerca cognoms JSON (q=%s): %v", q, err)
 		http.Error(w, "Error", http.StatusInternalServerError)
 		return
 	}
@@ -267,7 +654,7 @@ func (a *App) SearchCognomsJSON(w http.ResponseWriter, r *http.Request) {
 func (a *App) CognomHeatmapJSON(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/cognoms/")
 	parts := strings.Split(strings.Trim(path, "/"), "/")
-	if len(parts) < 2 || parts[0] == "" || parts[1] != "heatmap" {
+	if len(parts) < 2 || parts[0] == "" {
 		http.NotFound(w, r)
 		return
 	}
@@ -276,6 +663,23 @@ func (a *App) CognomHeatmapJSON(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if canonID, _, err := a.resolveCognomCanonicalID(id); err == nil && canonID > 0 {
+		id = canonID
+	}
+	switch parts[1] {
+	case "heatmap":
+		a.cognomHeatmapJSON(w, r, id)
+		return
+	case "stats":
+		a.cognomStatsAPI(w, r, id, parts[2:])
+		return
+	default:
+		http.NotFound(w, r)
+		return
+	}
+}
+
+func (a *App) cognomHeatmapJSON(w http.ResponseWriter, r *http.Request, id int) {
 	y0, _ := strconv.Atoi(r.URL.Query().Get("y0"))
 	y1, _ := strconv.Atoi(r.URL.Query().Get("y1"))
 	if y0 > 0 && y1 > 0 && y0 > y1 {

@@ -658,10 +658,18 @@ func (a *App) ScopeSearchAPI(w http.ResponseWriter, r *http.Request) {
 		rows, _ := a.DB.SuggestMunicipis(filter)
 		for _, row := range rows {
 			context := buildMunicipiSuggestContext(row, lang)
+			levelIDs := make([]int, 7)
+			for i := 0; i < 7; i++ {
+				if row.LevelIDs[i].Valid {
+					levelIDs[i] = int(row.LevelIDs[i].Int64)
+				}
+			}
 			items = append(items, map[string]interface{}{
 				"id":      row.ID,
 				"label":   row.Nom,
 				"context": context,
+				"pais_id": row.PaisID,
+				"nivells": levelIDs,
 			})
 		}
 	case "nivell_admin":

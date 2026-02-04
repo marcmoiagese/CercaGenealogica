@@ -1,0 +1,27 @@
+.field-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.field-link-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.2rem;
+}
+
+.field-link-target {
+    padding: 0.55rem 0.75rem;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #0f172a;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.field-link-form .grup-camp {
+    margin-bottom: 1rem;
+}

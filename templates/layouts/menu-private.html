@@ -16,6 +16,7 @@
             <ul>
                 <li class="menu-opcio"><a href="/inici">{{ t .Lang "menu.item.home" }}</a></li>
                 <li class="menu-opcio"><a href="/missatges"><i class="fas fa-envelope"></i> {{ t .Lang "menu.item.messages" }}</a></li>
+                <li class="menu-opcio"><a href="/cerca-avancada"><i class="fas fa-search-plus"></i> {{ t .Lang "search.advanced.title" }}</a></li>
             </ul>
         </div>
         {{ if and .Data (index .Data "IsAdmin") }}
@@ -34,6 +35,7 @@
                 <li class="menu-opcio"><a href="/admin/arxius/import"><i class="fas fa-archive"></i> {{ t .Lang "admin.menu.archives_io" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/llibres/import"><i class="fas fa-book"></i> {{ t .Lang "admin.menu.books_io" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/cognoms/import"><i class="fas fa-signature"></i> {{ t .Lang "admin.menu.surnames_import" }}</a></li>
+                <li class="menu-opcio"><a href="/admin/cognoms/merge"><i class="fas fa-link"></i> {{ t .Lang "admin.menu.surnames_merge" }}</a></li>
             </ul>
         </div>
         {{ end }}

@@ -102,6 +102,8 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 	municipis := []db.MunicipiRow{}
 	ents := []db.ArquebisbatRow{}
 	variants := []db.CognomVariant{}
+	referencies := []db.CognomReferencia{}
+	mergeSuggestions := []db.CognomRedirectSuggestion{}
 	events := []db.EventHistoric{}
 	pendingChanges := []db.TranscripcioRawChange{}
 	wikiChanges := []db.WikiChange{}
@@ -126,6 +128,12 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 		if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err == nil {
 			variants = rows
+		}
+		if rows, err := a.DB.ListCognomReferencies(db.CognomReferenciaFilter{Status: "pendent"}); err == nil {
+			referencies = rows
+		}
+		if rows, err := a.DB.ListCognomRedirectSuggestions(db.CognomRedirectSuggestionFilter{Status: "pendent"}); err == nil {
+			mergeSuggestions = rows
 		}
 		if rows, err := a.DB.ListEventsHistoric(db.EventHistoricFilter{Status: "pendent"}); err == nil {
 			events = rows
@@ -179,7 +187,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 	}
 
-	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents) + len(variants) + len(events) + len(historiaGeneral) + len(historiaFets) + len(anecdotes) + len(wikiChanges)
+	totalNonReg := len(persones) + len(arxius) + len(llibres) + len(nivells) + len(municipis) + len(ents) + len(variants) + len(referencies) + len(mergeSuggestions) + len(events) + len(historiaGeneral) + len(historiaFets) + len(anecdotes) + len(wikiChanges)
 	regTotal := 0
 	if canModerateAll {
 		if total, err := a.DB.CountTranscripcionsRawGlobal(db.TranscripcioFilter{Status: "pendent"}); err == nil {
@@ -456,6 +464,86 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 				CreatedAt: createdAt,
 				Motiu:     v.ModeracioMotiu,
 				EditURL:   fmt.Sprintf("/cognoms/%d", v.CognomID),
+			})
+		}
+		for _, ref := range referencies {
+			created := ""
+			var createdAt time.Time
+			if ref.CreatedAt.Valid {
+				created = ref.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = ref.CreatedAt.Time
+			}
+			autorNom, autorURL := autorFromID(ref.CreatedBy)
+			forma := cognomCache[ref.CognomID]
+			if forma == "" {
+				if c, err := a.DB.GetCognom(ref.CognomID); err == nil && c != nil {
+					forma = c.Forma
+					cognomCache[ref.CognomID] = forma
+				}
+			}
+			context := strings.TrimSpace(forma)
+			if context == "" {
+				context = fmt.Sprintf("Cognom %d", ref.CognomID)
+			}
+			name := strings.TrimSpace(ref.Titol)
+			if name == "" {
+				name = strings.TrimSpace(ref.URL)
+			}
+			if name == "" {
+				name = strings.TrimSpace(ref.Kind)
+			}
+			appendIfVisible(moderacioItem{
+				ID:         ref.ID,
+				Type:       "cognom_referencia",
+				Nom:        name,
+				Context:    context,
+				ContextURL: fmt.Sprintf("/cognoms/%d", ref.CognomID),
+				Autor:      autorNom,
+				AutorURL:   autorURL,
+				Created:    created,
+				CreatedAt:  createdAt,
+				Motiu:      ref.ModeracioMotiu,
+				EditURL:    fmt.Sprintf("/cognoms/%d", ref.CognomID),
+			})
+		}
+		for _, merge := range mergeSuggestions {
+			created := ""
+			var createdAt time.Time
+			if merge.CreatedAt.Valid {
+				created = merge.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = merge.CreatedAt.Time
+			}
+			autorNom, autorURL := autorFromID(merge.CreatedBy)
+			fromLabel := cognomCache[merge.FromCognomID]
+			if fromLabel == "" {
+				if c, err := a.DB.GetCognom(merge.FromCognomID); err == nil && c != nil {
+					fromLabel = c.Forma
+					cognomCache[merge.FromCognomID] = fromLabel
+				}
+			}
+			toLabel := cognomCache[merge.ToCognomID]
+			if toLabel == "" {
+				if c, err := a.DB.GetCognom(merge.ToCognomID); err == nil && c != nil {
+					toLabel = c.Forma
+					cognomCache[merge.ToCognomID] = toLabel
+				}
+			}
+			context := strings.TrimSpace(fmt.Sprintf("%s → %s", fromLabel, toLabel))
+			if context == "" {
+				context = fmt.Sprintf("Cognom %d → %d", merge.FromCognomID, merge.ToCognomID)
+			}
+			appendIfVisible(moderacioItem{
+				ID:         merge.ID,
+				Type:       "cognom_merge",
+				Nom:        context,
+				Context:    context,
+				ContextURL: fmt.Sprintf("/cognoms/%d", merge.ToCognomID),
+				Autor:      autorNom,
+				AutorURL:   autorURL,
+				Created:    created,
+				CreatedAt:  createdAt,
+				Motiu:      merge.Reason,
+				EditURL:    fmt.Sprintf("/admin/cognoms/merge"),
 			})
 		}
 	}
@@ -969,7 +1057,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 				wikiPendingByType[item.ObjectType] = append(wikiPendingByType[item.ObjectType], item.ChangeID)
 			}
 		}
-		types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "municipi_historia_general", "municipi_historia_fet", "municipi_anecdota_version", "event_historic", "registre", "cognom_variant", "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi"}
+		types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "municipi_historia_general", "municipi_historia_fet", "municipi_anecdota_version", "event_historic", "registre", "cognom_variant", "cognom_referencia", "cognom_merge", "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi"}
 		if bulkType != "" && bulkType != "all" {
 			types = []string{bulkType}
 		}
@@ -1025,6 +1113,22 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 				}
 			case "cognom_variant":
 				if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err == nil {
+					for _, row := range rows {
+						applyAction(objType, row.ID)
+					}
+				} else {
+					errCount++
+				}
+			case "cognom_referencia":
+				if rows, err := a.DB.ListCognomReferencies(db.CognomReferenciaFilter{Status: "pendent"}); err == nil {
+					for _, row := range rows {
+						applyAction(objType, row.ID)
+					}
+				} else {
+					errCount++
+				}
+			case "cognom_merge":
+				if rows, err := a.DB.ListCognomRedirectSuggestions(db.CognomRedirectSuggestionFilter{Status: "pendent"}); err == nil {
 					for _, row := range rows {
 						applyAction(objType, row.ID)
 					}
@@ -1223,7 +1327,20 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 func (a *App) updateModeracioObject(objectType string, id int, estat, motiu string, moderatorID int) error {
 	switch objectType {
 	case "persona":
-		return a.DB.UpdatePersonaModeracio(id, estat, motiu, moderatorID)
+		before, _ := a.DB.GetPersona(id)
+		if err := a.DB.UpdatePersonaModeracio(id, estat, motiu, moderatorID); err != nil {
+			return err
+		}
+		if estat == "publicat" {
+			if err := a.upsertSearchDocForPersonaID(id); err != nil {
+				Errorf("SearchIndex persona %d: %v", id, err)
+			}
+		} else if before != nil && before.ModeracioEstat == "publicat" {
+			if err := a.DB.DeleteSearchDoc("persona", id); err != nil {
+				Errorf("SearchIndex delete persona %d: %v", id, err)
+			}
+		}
+		return nil
 	case "arxiu":
 		return a.DB.UpdateArxiuModeracio(id, estat, motiu, moderatorID)
 	case "llibre":
@@ -1245,36 +1362,52 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		oldStatus := reg.ModeracioEstat
 		delta := demografiaDeltaFromStatus(oldStatus, estat)
 		if delta == 0 {
-			return a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID)
-		}
-		llibre, err := a.loadLlibreForRegistre(reg)
-		if err != nil || llibre == nil {
 			if err := a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID); err != nil {
 				return err
 			}
-			persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
-			a.applyNomCognomDeltaForRegistre(reg, persones, delta)
-			return nil
-		}
-		munID, year, tipus, ok := demografiaDeltaFromRegistre(reg, llibre)
-		if !ok {
-			if err := a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID); err != nil {
-				return err
+		} else {
+			llibre, err := a.loadLlibreForRegistre(reg)
+			if err != nil || llibre == nil {
+				if err := a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID); err != nil {
+					return err
+				}
+				persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
+				a.applyNomCognomDeltaForRegistre(reg, persones, delta)
+			} else {
+				munID, year, tipus, ok := demografiaDeltaFromRegistre(reg, llibre)
+				if !ok {
+					if err := a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID); err != nil {
+						return err
+					}
+					persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
+					a.applyNomCognomDeltaForRegistre(reg, persones, delta)
+				} else {
+					if err := a.DB.UpdateTranscripcioModeracioWithDemografia(id, estat, motiu, moderatorID, munID, year, tipus, delta); err != nil {
+						return err
+					}
+					persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
+					a.applyNomCognomDeltaForRegistre(reg, persones, delta)
+				}
 			}
-			persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
-			a.applyNomCognomDeltaForRegistre(reg, persones, delta)
-			return nil
 		}
-		if err := a.DB.UpdateTranscripcioModeracioWithDemografia(id, estat, motiu, moderatorID, munID, year, tipus, delta); err != nil {
-			return err
+		if estat == "publicat" {
+			if err := a.upsertSearchDocForRegistreID(reg.ID); err != nil {
+				Errorf("SearchIndex registre %d: %v", reg.ID, err)
+			}
+		} else if oldStatus == "publicat" {
+			if err := a.DB.DeleteSearchDoc("registre_raw", reg.ID); err != nil {
+				Errorf("SearchIndex delete registre %d: %v", reg.ID, err)
+			}
 		}
-		persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
-		a.applyNomCognomDeltaForRegistre(reg, persones, delta)
 		return nil
 	case "registre_canvi":
 		return a.moderateRegistreChange(id, estat, motiu, moderatorID)
 	case "cognom_variant":
 		return a.DB.UpdateCognomVariantModeracio(id, estat, motiu, moderatorID)
+	case "cognom_referencia":
+		return a.DB.UpdateCognomReferenciaModeracio(id, estat, motiu, moderatorID)
+	case "cognom_merge":
+		return a.moderateCognomMergeSuggestion(id, estat, motiu, moderatorID)
 	case "event_historic":
 		return a.DB.UpdateEventHistoricModeracio(id, estat, motiu, moderatorID)
 	case "municipi_canvi":
@@ -1320,6 +1453,33 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 	default:
 		return fmt.Errorf("tipus desconegut")
 	}
+}
+
+func (a *App) moderateCognomMergeSuggestion(id int, estat, motiu string, moderatorID int) error {
+	sugg, err := a.DB.GetCognomRedirectSuggestion(id)
+	if err != nil {
+		return err
+	}
+	if sugg == nil {
+		return fmt.Errorf("merge suggestion not found")
+	}
+	if estat == "publicat" {
+		toID := sugg.ToCognomID
+		if canonID, _, err := a.resolveCognomCanonicalID(toID); err == nil && canonID > 0 {
+			toID = canonID
+		}
+		if sugg.FromCognomID != toID {
+			var createdBy *int
+			if sugg.CreatedBy.Valid {
+				val := int(sugg.CreatedBy.Int64)
+				createdBy = &val
+			}
+			if err := a.DB.SetCognomRedirect(sugg.FromCognomID, toID, createdBy, sugg.Reason); err != nil {
+				return err
+			}
+		}
+	}
+	return a.DB.UpdateCognomRedirectSuggestionModeracio(id, estat, motiu, moderatorID)
 }
 
 func (a *App) registerEventHistoricModerationActivity(ctx context.Context, eventID int, status string, moderatorID int, reason string) {
@@ -1418,6 +1578,9 @@ func (a *App) moderateRegistreChange(changeID int, estat, motiu string, moderato
 				}
 			}
 		}
+	}
+	if err := a.upsertSearchDocForRegistreID(registre.ID); err != nil {
+		Errorf("SearchIndex registre %d: %v", registre.ID, err)
 	}
 	_, _ = a.recalcLlibreIndexacioStats(registre.LlibreID)
 	return nil

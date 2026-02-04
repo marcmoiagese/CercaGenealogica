@@ -348,6 +348,12 @@ func (d *MySQL) CreatePersona(p *Persona) (int, error) {
 func (d *MySQL) UpdatePersona(p *Persona) error {
 	return d.help.updatePersona(p)
 }
+func (d *MySQL) ListPersonaFieldLinks(personaID int) ([]PersonaFieldLink, error) {
+	return d.help.listPersonaFieldLinks(personaID)
+}
+func (d *MySQL) UpsertPersonaFieldLink(personaID int, fieldKey string, registreID int, userID int) error {
+	return d.help.upsertPersonaFieldLink(personaID, fieldKey, registreID, userID)
+}
 func (d *MySQL) ListPersonaAnecdotes(personaID int, userID int) ([]PersonaAnecdote, error) {
 	return d.help.listPersonaAnecdotes(personaID, userID)
 }
@@ -805,6 +811,15 @@ func (d *MySQL) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, er
 func (d *MySQL) ListRegistresByPersona(personaID int, tipus string) ([]PersonaRegistreRow, error) {
 	return d.help.listRegistresByPersona(personaID, tipus)
 }
+func (d *MySQL) GetPersonesByIDs(ids []int) (map[int]*Persona, error) {
+	return d.help.getPersonesByIDs(ids)
+}
+func (d *MySQL) FindBestBaptismeTranscripcioForPersona(personaID int) (int, bool, error) {
+	return d.help.findBestBaptismeTranscripcioForPersona(personaID)
+}
+func (d *MySQL) GetParentsFromTranscripcio(transcripcioID int) (int, int, error) {
+	return d.help.getParentsFromTranscripcio(transcripcioID)
+}
 
 // Punts i activitat
 func (d *MySQL) ListPointsRules() ([]PointsRule, error) { return d.help.listPointsRules() }
@@ -887,6 +902,9 @@ func (d *MySQL) ListCognoms(q string, limit, offset int) ([]Cognom, error) {
 	return d.help.listCognoms(q, limit, offset)
 }
 func (d *MySQL) GetCognom(id int) (*Cognom, error) { return d.help.getCognom(id) }
+func (d *MySQL) FindCognomIDByKey(key string) (int, error) {
+	return d.help.findCognomIDByKey(key)
+}
 func (d *MySQL) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
 	return d.help.upsertCognom(forma, key, origen, notes, createdBy)
 }
@@ -908,6 +926,71 @@ func (d *MySQL) CreateCognomVariant(v *CognomVariant) (int, error) {
 func (d *MySQL) UpdateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateCognomVariantModeracio(id, estat, motiu, moderatorID)
 }
+
+func (d *MySQL) GetCognomRedirect(fromID int) (*CognomRedirect, error) {
+	return d.help.getCognomRedirect(fromID)
+}
+
+func (d *MySQL) ListCognomRedirects() ([]CognomRedirect, error) {
+	return d.help.listCognomRedirects()
+}
+
+func (d *MySQL) ListCognomRedirectsByTo(toID int) ([]CognomRedirect, error) {
+	return d.help.listCognomRedirectsByTo(toID)
+}
+
+func (d *MySQL) SetCognomRedirect(fromID, toID int, createdBy *int, reason string) error {
+	return d.help.setCognomRedirect(fromID, toID, createdBy, reason)
+}
+
+func (d *MySQL) DeleteCognomRedirect(fromID int) error {
+	return d.help.deleteCognomRedirect(fromID)
+}
+
+func (d *MySQL) CreateCognomRedirectSuggestion(s *CognomRedirectSuggestion) (int, error) {
+	return d.help.createCognomRedirectSuggestion(s)
+}
+
+func (d *MySQL) GetCognomRedirectSuggestion(id int) (*CognomRedirectSuggestion, error) {
+	return d.help.getCognomRedirectSuggestion(id)
+}
+
+func (d *MySQL) ListCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) ([]CognomRedirectSuggestion, error) {
+	return d.help.listCognomRedirectSuggestions(f)
+}
+
+func (d *MySQL) UpdateCognomRedirectSuggestionModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateCognomRedirectSuggestionModeracio(id, estat, motiu, moderatorID)
+}
+
+func (d *MySQL) CreateCognomReferencia(ref *CognomReferencia) (int, error) {
+	return d.help.createCognomReferencia(ref)
+}
+
+func (d *MySQL) ListCognomReferencies(f CognomReferenciaFilter) ([]CognomReferencia, error) {
+	return d.help.listCognomReferencies(f)
+}
+
+func (d *MySQL) UpdateCognomReferenciaModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateCognomReferenciaModeracio(id, estat, motiu, moderatorID)
+}
+// Cercador avançat
+func (d *MySQL) UpsertSearchDoc(doc *SearchDoc) error { return d.help.upsertSearchDoc(doc) }
+func (d *MySQL) GetSearchDoc(entityType string, entityID int) (*SearchDoc, error) {
+	return d.help.getSearchDoc(entityType, entityID)
+}
+func (d *MySQL) DeleteSearchDoc(entityType string, entityID int) error {
+	return d.help.deleteSearchDoc(entityType, entityID)
+}
+func (d *MySQL) SearchDocs(filter SearchQueryFilter) ([]SearchDocRow, int, SearchFacets, error) {
+	return d.help.searchDocs(filter)
+}
+func (d *MySQL) ReplaceAdminClosure(descendantMunicipiID int, entries []AdminClosureEntry) error {
+	return d.help.replaceAdminClosure(descendantMunicipiID, entries)
+}
+func (d *MySQL) ListAdminClosure(descendantMunicipiID int) ([]AdminClosureEntry, error) {
+	return d.help.listAdminClosure(descendantMunicipiID)
+}
 func (d *MySQL) UpsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error {
 	return d.help.upsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq)
 }
@@ -924,6 +1007,30 @@ func (d *MySQL) ListCognomImportRows(limit, offset int) ([]CognomImportRow, erro
 
 func (d *MySQL) ListCognomStatsRows(limit, offset int) ([]CognomStatsRow, error) {
 	return d.help.listCognomStatsRows(limit, offset)
+}
+
+func (d *MySQL) RebuildCognomStats(cognomID int) error {
+	return d.help.rebuildCognomStats(cognomID)
+}
+
+func (d *MySQL) GetCognomStatsTotal(cognomID int) (*CognomStatsTotal, error) {
+	return d.help.getCognomStatsTotal(cognomID)
+}
+
+func (d *MySQL) ListCognomStatsAny(cognomID int, from, to int) ([]CognomStatsAnyRow, error) {
+	return d.help.listCognomStatsAny(cognomID, from, to)
+}
+
+func (d *MySQL) ListCognomStatsAnyDecade(cognomID int, from, to int) ([]CognomStatsAnyRow, error) {
+	return d.help.listCognomStatsAnyDecade(cognomID, from, to)
+}
+
+func (d *MySQL) ListCognomStatsAncestor(cognomID int, ancestorType string, level, any, limit int) ([]CognomStatsAncestorRow, error) {
+	return d.help.listCognomStatsAncestor(cognomID, ancestorType, level, any, limit)
+}
+
+func (d *MySQL) CountCognomStatsAncestorDistinct(cognomID int, ancestorType string, level, any int) (int, error) {
+	return d.help.countCognomStatsAncestorDistinct(cognomID, ancestorType, level, any)
 }
 
 // Noms

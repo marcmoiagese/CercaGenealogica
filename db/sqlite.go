@@ -367,6 +367,12 @@ func (d *SQLite) CreatePersona(p *Persona) (int, error) {
 func (d *SQLite) UpdatePersona(p *Persona) error {
 	return d.help.updatePersona(p)
 }
+func (d *SQLite) ListPersonaFieldLinks(personaID int) ([]PersonaFieldLink, error) {
+	return d.help.listPersonaFieldLinks(personaID)
+}
+func (d *SQLite) UpsertPersonaFieldLink(personaID int, fieldKey string, registreID int, userID int) error {
+	return d.help.upsertPersonaFieldLink(personaID, fieldKey, registreID, userID)
+}
 func (d *SQLite) ListPersonaAnecdotes(personaID int, userID int) ([]PersonaAnecdote, error) {
 	return d.help.listPersonaAnecdotes(personaID, userID)
 }
@@ -824,6 +830,15 @@ func (d *SQLite) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, e
 func (d *SQLite) ListRegistresByPersona(personaID int, tipus string) ([]PersonaRegistreRow, error) {
 	return d.help.listRegistresByPersona(personaID, tipus)
 }
+func (d *SQLite) GetPersonesByIDs(ids []int) (map[int]*Persona, error) {
+	return d.help.getPersonesByIDs(ids)
+}
+func (d *SQLite) FindBestBaptismeTranscripcioForPersona(personaID int) (int, bool, error) {
+	return d.help.findBestBaptismeTranscripcioForPersona(personaID)
+}
+func (d *SQLite) GetParentsFromTranscripcio(transcripcioID int) (int, int, error) {
+	return d.help.getParentsFromTranscripcio(transcripcioID)
+}
 
 // Punts i activitat
 func (d *SQLite) ListPointsRules() ([]PointsRule, error) { return d.help.listPointsRules() }
@@ -910,6 +925,9 @@ func (d *SQLite) ListCognoms(q string, limit, offset int) ([]Cognom, error) {
 	return d.help.listCognoms(q, limit, offset)
 }
 func (d *SQLite) GetCognom(id int) (*Cognom, error) { return d.help.getCognom(id) }
+func (d *SQLite) FindCognomIDByKey(key string) (int, error) {
+	return d.help.findCognomIDByKey(key)
+}
 func (d *SQLite) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
 	return d.help.upsertCognom(forma, key, origen, notes, createdBy)
 }
@@ -931,6 +949,74 @@ func (d *SQLite) CreateCognomVariant(v *CognomVariant) (int, error) {
 func (d *SQLite) UpdateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateCognomVariantModeracio(id, estat, motiu, moderatorID)
 }
+
+func (d *SQLite) GetCognomRedirect(fromID int) (*CognomRedirect, error) {
+	return d.help.getCognomRedirect(fromID)
+}
+
+func (d *SQLite) ListCognomRedirects() ([]CognomRedirect, error) {
+	return d.help.listCognomRedirects()
+}
+
+func (d *SQLite) ListCognomRedirectsByTo(toID int) ([]CognomRedirect, error) {
+	return d.help.listCognomRedirectsByTo(toID)
+}
+
+func (d *SQLite) SetCognomRedirect(fromID, toID int, createdBy *int, reason string) error {
+	return d.help.setCognomRedirect(fromID, toID, createdBy, reason)
+}
+
+func (d *SQLite) DeleteCognomRedirect(fromID int) error {
+	return d.help.deleteCognomRedirect(fromID)
+}
+
+func (d *SQLite) CreateCognomRedirectSuggestion(s *CognomRedirectSuggestion) (int, error) {
+	return d.help.createCognomRedirectSuggestion(s)
+}
+
+func (d *SQLite) GetCognomRedirectSuggestion(id int) (*CognomRedirectSuggestion, error) {
+	return d.help.getCognomRedirectSuggestion(id)
+}
+
+func (d *SQLite) ListCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) ([]CognomRedirectSuggestion, error) {
+	return d.help.listCognomRedirectSuggestions(f)
+}
+
+func (d *SQLite) UpdateCognomRedirectSuggestionModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateCognomRedirectSuggestionModeracio(id, estat, motiu, moderatorID)
+}
+
+func (d *SQLite) CreateCognomReferencia(ref *CognomReferencia) (int, error) {
+	return d.help.createCognomReferencia(ref)
+}
+
+func (d *SQLite) ListCognomReferencies(f CognomReferenciaFilter) ([]CognomReferencia, error) {
+	return d.help.listCognomReferencies(f)
+}
+
+func (d *SQLite) UpdateCognomReferenciaModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateCognomReferenciaModeracio(id, estat, motiu, moderatorID)
+}
+
+// Cercador avançat
+func (d *SQLite) UpsertSearchDoc(doc *SearchDoc) error {
+	return d.help.upsertSearchDoc(doc)
+}
+func (d *SQLite) GetSearchDoc(entityType string, entityID int) (*SearchDoc, error) {
+	return d.help.getSearchDoc(entityType, entityID)
+}
+func (d *SQLite) DeleteSearchDoc(entityType string, entityID int) error {
+	return d.help.deleteSearchDoc(entityType, entityID)
+}
+func (d *SQLite) SearchDocs(filter SearchQueryFilter) ([]SearchDocRow, int, SearchFacets, error) {
+	return d.help.searchDocs(filter)
+}
+func (d *SQLite) ReplaceAdminClosure(descendantMunicipiID int, entries []AdminClosureEntry) error {
+	return d.help.replaceAdminClosure(descendantMunicipiID, entries)
+}
+func (d *SQLite) ListAdminClosure(descendantMunicipiID int) ([]AdminClosureEntry, error) {
+	return d.help.listAdminClosure(descendantMunicipiID)
+}
 func (d *SQLite) UpsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error {
 	return d.help.upsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq)
 }
@@ -947,6 +1033,30 @@ func (d *SQLite) ListCognomImportRows(limit, offset int) ([]CognomImportRow, err
 
 func (d *SQLite) ListCognomStatsRows(limit, offset int) ([]CognomStatsRow, error) {
 	return d.help.listCognomStatsRows(limit, offset)
+}
+
+func (d *SQLite) RebuildCognomStats(cognomID int) error {
+	return d.help.rebuildCognomStats(cognomID)
+}
+
+func (d *SQLite) GetCognomStatsTotal(cognomID int) (*CognomStatsTotal, error) {
+	return d.help.getCognomStatsTotal(cognomID)
+}
+
+func (d *SQLite) ListCognomStatsAny(cognomID int, from, to int) ([]CognomStatsAnyRow, error) {
+	return d.help.listCognomStatsAny(cognomID, from, to)
+}
+
+func (d *SQLite) ListCognomStatsAnyDecade(cognomID int, from, to int) ([]CognomStatsAnyRow, error) {
+	return d.help.listCognomStatsAnyDecade(cognomID, from, to)
+}
+
+func (d *SQLite) ListCognomStatsAncestor(cognomID int, ancestorType string, level, any, limit int) ([]CognomStatsAncestorRow, error) {
+	return d.help.listCognomStatsAncestor(cognomID, ancestorType, level, any, limit)
+}
+
+func (d *SQLite) CountCognomStatsAncestorDistinct(cognomID int, ancestorType string, level, any int) (int, error) {
+	return d.help.countCognomStatsAncestorDistinct(cognomID, ancestorType, level, any)
 }
 
 // Noms

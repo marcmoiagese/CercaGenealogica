@@ -1,6 +1,7 @@
 package unit
 
 import (
+	"database/sql"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -761,6 +762,36 @@ func (f *fakeDB) ListCSVImportTemplates(filter db.CSVImportTemplateFilter) ([]db
 	return nil, nil
 }
 func (f *fakeDB) DeleteCSVImportTemplate(id int) error { return nil }
+
+func (f *fakeDB) AddUserBlock(blockerID, blockedID int) error    { return nil }
+func (f *fakeDB) RemoveUserBlock(blockerID, blockedID int) error { return nil }
+func (f *fakeDB) IsUserBlocked(blockerID, blockedID int) (bool, error) {
+	return false, nil
+}
+func (f *fakeDB) FindCognomIDByKey(key string) (int, error) { return 0, nil }
+func (f *fakeDB) UpsertSearchDoc(doc *db.SearchDoc) error   { return nil }
+func (f *fakeDB) GetSearchDoc(entityType string, entityID int) (*db.SearchDoc, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (f *fakeDB) DeleteSearchDoc(entityType string, entityID int) error { return nil }
+func (f *fakeDB) SearchDocs(filter db.SearchQueryFilter) ([]db.SearchDocRow, int, db.SearchFacets, error) {
+	return nil, 0, db.SearchFacets{}, nil
+}
+func (f *fakeDB) ReplaceAdminClosure(descendantMunicipiID int, entries []db.AdminClosureEntry) error {
+	return nil
+}
+func (f *fakeDB) ListAdminClosure(descendantMunicipiID int) ([]db.AdminClosureEntry, error) {
+	return nil, nil
+}
+func (f *fakeDB) ApplyCognomFreqMunicipiAnyDelta(cognomID, municipiID, anyDoc, delta int) error {
+	return nil
+}
+func (f *fakeDB) ApplyMunicipiDemografiaDelta(municipiID, anyDoc int, tipus string, delta int) error {
+	return nil
+}
+func (f *fakeDB) ApplyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, anyDoc int, tipus string, delta int) error {
+	return nil
+}
 
 // Helper per crear una App amb fakeDB
 func newFakeAppWithUsers(users map[string]*db.User) *core.App {

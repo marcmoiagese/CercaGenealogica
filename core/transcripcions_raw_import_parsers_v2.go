@@ -150,8 +150,8 @@ func buildPersonFromCognomsV2(raw, role string) *db.TranscripcioPersonaRaw {
 		restTokens := clean[consumed:]
 		restQuals := quals[consumed:]
 		if len(restTokens) == 1 {
-			cognom2 = restTokens[0]
-			cognom2Qual = restQuals[0]
+			nom = restTokens[0]
+			nomQual = restQuals[0]
 		} else if len(restTokens) >= 2 {
 			consumed2 := 0
 			cognom2, cognom2Qual, consumed2 = consumeSurnameFromStart(restTokens, restQuals)

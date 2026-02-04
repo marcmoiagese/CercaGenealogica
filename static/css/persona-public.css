@@ -1,0 +1,209 @@
+/* Pagina publica (no logat) - Perfil persona: nomes nom i placeholders */
+
+.persona-public {
+  padding: 28px 0 44px;
+}
+
+.persona-hero {
+  background: linear-gradient(135deg, rgba(44, 62, 80, 0.10), rgba(52, 152, 219, 0.08));
+  border: 1px solid rgba(44, 62, 80, 0.10);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.06);
+}
+
+.persona-hero__top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.persona-avatar {
+  width: 66px;
+  height: 66px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid rgba(44,62,80,0.14);
+  position: relative;
+  overflow: hidden;
+}
+
+.persona-avatar::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 14px;
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(44,62,80,0.10) 0px,
+    rgba(44,62,80,0.10) 10px,
+    rgba(255,255,255,0.0) 10px,
+    rgba(255,255,255,0.0) 20px
+  );
+  filter: blur(3px);
+}
+
+.persona-name {
+  margin: 0;
+  font-size: 1.7rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--primary-color);
+}
+
+.persona-subline {
+  margin: 6px 0 0;
+  color: rgba(44,62,80,0.78);
+  font-size: 0.98rem;
+}
+
+.persona-subline--muted {
+  margin-top: 4px;
+  font-size: 0.94rem;
+  color: rgba(44,62,80,0.70);
+}
+
+.persona-layout {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1.45fr 0.85fr;
+  gap: 18px;
+}
+
+@media (max-width: 920px) {
+  .persona-layout { grid-template-columns: 1fr; }
+}
+
+.card {
+  background: rgba(255,255,255,0.78);
+  border: 1px solid rgba(44,62,80,0.10);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.06);
+}
+
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  color: rgba(44,62,80,0.92);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.locked-wrap{
+  position: relative;
+}
+
+.locked-message{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 18px;
+  pointer-events: none;
+}
+
+.locked-message__inner{
+  max-width: 42ch;
+  font-weight: 700;
+  line-height: 1.25;
+  color: rgba(44,62,80,0.88);
+  background: rgba(255,255,255,0.78);
+  border: 1px solid rgba(44,62,80,0.10);
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.06);
+}
+
+.locked-skeleton {
+  height: 210px;
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid rgba(44,62,80,0.10);
+}
+
+.locked-skeleton::before {
+  content: "";
+  position: absolute;
+  inset: 14px;
+  border-radius: 10px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(44,62,80,0.16) 0px,
+      rgba(44,62,80,0.16) 10px,
+      transparent 10px,
+      transparent 24px
+    );
+  filter: blur(3px);
+  opacity: 0.95;
+}
+
+.locked-skeleton--short { height: 150px; }
+.locked-skeleton--tall { height: 260px; }
+
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.55) 45%, transparent 70%);
+  transform: translateX(-120%);
+  animation: shimmer 2.2s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+
+.cta {
+  display: grid;
+  gap: 12px;
+}
+
+.cta p {
+  margin: 0;
+  color: rgba(44,62,80,0.82);
+}
+
+.cta-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(44,62,80,0.14);
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform .08s ease, box-shadow .15s ease, background .15s ease;
+}
+
+.btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(0,0,0,0.10); }
+
+.btn--primary {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: #fff;
+  border-color: rgba(255,255,255,0.18);
+}
+
+.btn--ghost {
+  background: rgba(255,255,255,0.70);
+  color: var(--primary-color);
+}
+
+.note {
+  font-size: 0.92rem;
+  color: rgba(44,62,80,0.75);
+}

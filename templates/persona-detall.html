@@ -50,6 +50,7 @@
                             <li><a href="/persones/{{ .Data.Persona.ID }}/edit"><i class="fas fa-pen"></i> Editar fitxa</a></li>
                             {{ end }}
                             <li><a href="/persones/{{ .Data.Persona.ID }}/registres"><i class="fas fa-list"></i> Veure registres</a></li>
+                            <li><a href="/persones/{{ .Data.Persona.ID }}/arbre?view=pedigree&gens=3"><i class="fas fa-tree"></i> {{ t .Lang "tree.action.open" }}</a></li>
                             <li><a href="/persones/{{ .Data.Persona.ID }}/historial"><i class="fas fa-clock-rotate-left"></i> {{ t .Lang "wiki.options.history" }}</a></li>
                             <li><a href="/persones/{{ .Data.Persona.ID }}/estadistiques"><i class="fas fa-chart-line"></i> {{ t .Lang "wiki.options.stats" }}</a></li>
                             <li><a href="#" class="btn-marcar" data-persona-id="{{ .Data.Persona.ID }}" onclick="event.preventDefault()"><i class="fas fa-eye"></i> {{ t .Lang "wiki.options.follow" }}</a></li>
@@ -59,10 +60,11 @@
                 </div>
 
                 <p class="persona-subtitol">
-                    {{ if .Data.Persona.Municipi }}
-                    <span class="chip"><i class="fas fa-location-dot"></i> {{ .Data.Persona.Municipi }}</span>
-                    {{ else if .Data.OriginMunicipi }}
-                    <span class="chip"><i class="fas fa-location-dot"></i> {{ .Data.OriginMunicipi }} <span class="muted">(registre)</span></span>
+                    {{ if .Data.BirthLocation }}
+                    <span class="chip"><i class="fas fa-location-dot"></i> {{ .Data.BirthLocation }}</span>
+                    {{ end }}
+                    {{ if .Data.DeathLocation }}
+                    <span class="chip"><i class="fas fa-skull-crossbones"></i> {{ .Data.DeathLocation }}</span>
                     {{ end }}
                     {{ if .Data.Persona.Ofici }}
                     <span class="chip"><i class="fas fa-briefcase"></i> {{ .Data.Persona.Ofici }}</span>
@@ -92,6 +94,7 @@
                     <a class="btn btn--primary" href="/persones/{{ .Data.Persona.ID }}/edit"><i class="fas fa-pen"></i> Editar fitxa</a>
                     {{ end }}
                     <a class="btn" href="/persones/{{ .Data.Persona.ID }}/registres"><i class="fas fa-folder-open"></i> Registres</a>
+                    <a class="btn" href="/persones/{{ .Data.Persona.ID }}/arbre?view=pedigree&gens=3"><i class="fas fa-tree"></i> {{ t .Lang "tree.action.open" }}</a>
                     <a class="btn" href="/persones/{{ .Data.Persona.ID }}"><i class="fas fa-link"></i> Enllaç directe</a>
                 </div>
             </div>
@@ -119,15 +122,18 @@
                 <div class="sidecard">
                     <div class="sidecard__title"><i class="fas fa-tags"></i> Etiquetes</div>
                     <div class="taglist">
-                        {{ if .Data.Persona.Municipi }}
-                        <span class="tag">{{ .Data.Persona.Municipi }}</span>
+                        {{ if .Data.BirthLocation }}
+                        <span class="tag">{{ .Data.BirthLocation }}</span>
                         {{ else if .Data.OriginMunicipi }}
                         <span class="tag">{{ .Data.OriginMunicipi }}</span>
+                        {{ end }}
+                        {{ if and .Data.DeathLocation (ne .Data.DeathLocation .Data.BirthLocation) }}
+                        <span class="tag">{{ .Data.DeathLocation }}</span>
                         {{ end }}
                         {{ if .Data.Persona.Ofici }}<span class="tag">{{ .Data.Persona.Ofici }}</span>{{ end }}
                         {{ if .Data.Persona.Llibre }}<span class="tag">{{ .Data.Persona.Llibre }}</span>{{ end }}
                         {{ if .Data.Persona.Pagina }}<span class="tag">p. {{ .Data.Persona.Pagina }}</span>{{ end }}
-                        {{ if not (or .Data.Persona.Municipi .Data.OriginMunicipi .Data.Persona.Ofici) }}
+                        {{ if not (or .Data.BirthLocation .Data.OriginMunicipi .Data.Persona.Ofici) }}
                         <span class="tag">Sense etiquetes</span>
                         {{ end }}
                     </div>
@@ -160,7 +166,7 @@
                             <span class="fact__icon"><i class="fas fa-baby"></i></span>
                             <div class="fact__body">
                                 <div class="fact__title">Naixement</div>
-                                <div class="fact__meta">{{ .Data.BirthDate }}{{ if .Data.Persona.Municipi }} · {{ .Data.Persona.Municipi }}{{ else if .Data.OriginMunicipi }} · {{ .Data.OriginMunicipi }}{{ end }}</div>
+                        <div class="fact__meta">{{ .Data.BirthDate }}{{ if .Data.BirthLocation }} · {{ .Data.BirthLocation }}{{ end }}</div>
                             </div>
                         </li>
                         {{ end }}
@@ -169,7 +175,7 @@
                             <span class="fact__icon"><i class="fas fa-water"></i></span>
                             <div class="fact__body">
                                 <div class="fact__title">Baptisme</div>
-                                <div class="fact__meta">{{ .Data.BaptismDate }}{{ if .Data.Persona.Municipi }} · {{ .Data.Persona.Municipi }}{{ else if .Data.OriginMunicipi }} · {{ .Data.OriginMunicipi }}{{ end }}</div>
+                        <div class="fact__meta">{{ .Data.BaptismDate }}{{ if .Data.BirthLocation }} · {{ .Data.BirthLocation }}{{ end }}</div>
                             </div>
                         </li>
                         {{ end }}
@@ -178,7 +184,7 @@
                             <span class="fact__icon"><i class="fas fa-skull"></i></span>
                             <div class="fact__body">
                                 <div class="fact__title">Defunció</div>
-                                <div class="fact__meta">{{ .Data.DeathDate }}</div>
+                        <div class="fact__meta">{{ .Data.DeathDate }}{{ if .Data.DeathLocation }} · {{ .Data.DeathLocation }}{{ end }}</div>
                             </div>
                         </li>
                         {{ end }}
@@ -211,11 +217,11 @@
                     <h3><i class="fas fa-map-pin"></i> Notes de residència</h3>
                     <span class="pill"><i class="fas fa-route"></i> Sense moviments</span>
                 </div>
-                {{ if or .Data.Persona.Municipi .Data.OriginMunicipi }}
+                {{ if or .Data.BirthLocation .Data.OriginMunicipi }}
                 <div class="callout callout--soft">
                     <div class="callout__title"><i class="fas fa-location-dot"></i> Primer lloc conegut</div>
                     <p class="muted">
-                        {{ if .Data.Persona.Municipi }}{{ .Data.Persona.Municipi }}{{ else }}{{ .Data.OriginMunicipi }}{{ end }}
+                        {{ if .Data.BirthLocation }}{{ .Data.BirthLocation }}{{ else }}{{ .Data.OriginMunicipi }}{{ end }}
                         {{ if .Data.OriginMunicipi }} <span class="tiny">(registre)</span>{{ end }}
                     </p>
                 </div>
@@ -423,7 +429,8 @@
                     </div>
                     <div class="kv">
                         <div class="kv__row"><div class="kv__k">Nom complet</div><div class="kv__v">{{ .Data.NomComplet }}</div></div>
-                        <div class="kv__row"><div class="kv__k">Municipi</div><div class="kv__v">{{ if .Data.Persona.Municipi }}{{ .Data.Persona.Municipi }}{{ else if .Data.OriginMunicipi }}{{ .Data.OriginMunicipi }}{{ else }}—{{ end }}</div></div>
+                        <div class="kv__row"><div class="kv__k">Lloc de naixement</div><div class="kv__v">{{ if .Data.BirthLocation }}{{ .Data.BirthLocation }}{{ else if .Data.OriginMunicipi }}{{ .Data.OriginMunicipi }}{{ else }}—{{ end }}</div></div>
+                        <div class="kv__row"><div class="kv__k">Lloc de defunció</div><div class="kv__v">{{ if .Data.DeathLocation }}{{ .Data.DeathLocation }}{{ else if .Data.OriginDefuncio }}{{ .Data.OriginDefuncio }}{{ else }}—{{ end }}</div></div>
                         <div class="kv__row"><div class="kv__k">Ocupació</div><div class="kv__v">{{ if .Data.Persona.Ofici }}{{ .Data.Persona.Ofici }}{{ else }}—{{ end }}</div></div>
                         <div class="kv__row"><div class="kv__k">Llibre</div><div class="kv__v">{{ if .Data.Persona.Llibre }}{{ .Data.Persona.Llibre }}{{ else if .Data.OriginLlibre }}{{ .Data.OriginLlibre }}{{ else }}—{{ end }}</div></div>
                         <div class="kv__row"><div class="kv__k">Pàgina</div><div class="kv__v">{{ if .Data.Persona.Pagina }}{{ .Data.Persona.Pagina }}{{ else if .Data.OriginPagina }}{{ .Data.OriginPagina }}{{ else }}—{{ end }}</div></div>
@@ -465,20 +472,6 @@
     <script src="/static/js/persona-pro.js"></script>
     <script>
         (function () {
-            const optionsBtn = document.getElementById("botoOpcions");
-            const dropdown = document.getElementById("dropdownOpcions");
-            if (optionsBtn && dropdown) {
-                optionsBtn.addEventListener("click", function (event) {
-                    event.preventDefault();
-                    dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
-                });
-                document.addEventListener("click", function (event) {
-                    if (!event.target.closest(".opcions-dropdown")) {
-                        dropdown.style.display = "none";
-                    }
-                });
-            }
-
             const markState = document.getElementById("persona-mark-state");
             const modal = document.getElementById("modalMarcarPersona");
             const openBtn = document.querySelector(".btn-marcar");

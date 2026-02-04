@@ -175,10 +175,23 @@ func main() {
 		http.NotFound(w, r)
 	})
 	http.HandleFunc("/u/", applyMiddleware(app.PublicUserProfile, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/public/persones/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/arbre") && r.Method == http.MethodGet {
+			applyMiddleware(app.PersonaPublicArbre, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if r.Method == http.MethodGet {
+			applyMiddleware(app.PersonaPublic, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
 
 	// Cognoms
 	http.HandleFunc("/cognoms", applyMiddleware(app.RequireLogin(app.CognomsList), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/cognoms/cerca", applyMiddleware(app.RequireLogin(app.SearchCognomsJSON), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/cognoms/merge", applyMiddleware(app.RequireLogin(app.CognomMergeSuggest), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/cerca-avancada", applyMiddleware(app.RequireLogin(app.AdvancedSearchPage), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/cognoms/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/cognoms/")
 		parts := strings.Split(strings.Trim(path, "/"), "/")
@@ -191,6 +204,14 @@ func main() {
 			return
 		}
 		if len(parts) >= 3 && parts[1] == "historial" && parts[2] == "revert" && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.CognomWikiRevert), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) >= 2 && parts[1] == "compare" && r.Method == http.MethodGet {
+			applyMiddleware(app.RequireLogin(app.CognomWikiHistory), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) >= 2 && parts[1] == "revert" && r.Method == http.MethodPost {
 			applyMiddleware(app.RequireLogin(app.CognomWikiRevert), core.BlockIPs, core.RateLimit)(w, r)
 			return
 		}
@@ -210,8 +231,28 @@ func main() {
 			applyMiddleware(app.RequireLogin(app.CognomProposeUpdate), core.BlockIPs, core.RateLimit)(w, r)
 			return
 		}
+		if len(parts) >= 3 && parts[1] == "historia" && parts[2] == "submit" && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.CognomSubmitHistoria), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) >= 3 && parts[1] == "notes" && parts[2] == "submit" && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.CognomSubmitNotes), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) >= 3 && parts[1] == "referencies" && parts[2] == "submit" && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.CognomSubmitReferencia), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
 		if len(parts) >= 3 && parts[1] == "variants" && parts[2] == "suggest" && r.Method == http.MethodPost {
 			applyMiddleware(app.RequireLogin(app.CognomSuggestVariant), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) >= 3 && parts[1] == "merge" && parts[2] == "to" && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.CognomMergeSuggestTo), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		if len(parts) >= 3 && parts[1] == "merge" && parts[2] == "from" && r.Method == http.MethodPost {
+			applyMiddleware(app.RequireLogin(app.CognomMergeSuggestFrom), core.BlockIPs, core.RateLimit)(w, r)
 			return
 		}
 		if len(parts) == 2 && parts[1] == "mapa" && r.Method == http.MethodGet {
@@ -225,11 +266,14 @@ func main() {
 		http.NotFound(w, r)
 	})
 	http.HandleFunc("/api/cognoms/", applyMiddleware(app.RequireLogin(app.CognomHeatmapJSON), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/cognoms/variants/suggest", applyMiddleware(app.RequireLogin(app.CognomVariantsSuggestJSON), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/territori/municipis/suggest", applyMiddleware(app.RequireLogin(app.AdminMunicipisSuggest), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/territori/eclesiastic/suggest", applyMiddleware(app.RequireLogin(app.AdminEclesSuggest), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/territori/municipis/", applyMiddleware(app.MunicipiMapesAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/municipis/", applyMiddleware(app.MunicipiMapesAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/admin/municipis/", applyMiddleware(app.MunicipiDemografiaAdminAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/arbre/expand", applyMiddleware(app.RequireLogin(app.ArbreExpandAPI), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/persones/", applyMiddleware(app.RequireLogin(app.PersonaArbreAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/mapes/", applyMiddleware(app.MapesAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/anecdotes/", applyMiddleware(app.AnecdotesAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/anecdote_versions/", applyMiddleware(app.AnecdoteVersionsAPI, core.BlockIPs, core.RateLimit))
@@ -238,6 +282,9 @@ func main() {
 	http.HandleFunc("/api/events", applyMiddleware(app.EventsAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/events/", applyMiddleware(app.EventsAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/scopes/search", applyMiddleware(app.ScopeSearchAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/search", applyMiddleware(app.RequireLogin(app.SearchAPI), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/documentals/arxius/suggest", applyMiddleware(app.RequireLogin(app.SearchArxiusSuggestJSON), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/documentals/llibres/suggest", applyMiddleware(app.RequireLogin(app.SearchLlibresSuggestJSON), core.BlockIPs, core.RateLimit))
 
 	// Importador templates
 	http.HandleFunc("/importador/plantilles", applyMiddleware(app.RequireLogin(app.ImportTemplatesRoute), core.BlockIPs, core.RateLimit))
@@ -373,6 +420,10 @@ func main() {
 	http.HandleFunc("/persones/new", applyMiddleware(app.PersonaForm, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/persones/save", applyMiddleware(app.PersonaSave, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/persones/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/enllacar-dada") && r.Method == http.MethodPost {
+			applyMiddleware(app.PersonaLinkField, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/historial/revert") && r.Method == http.MethodPost {
 			applyMiddleware(app.RequireLogin(app.PersonaWikiRevert), core.BlockIPs, core.RateLimit)(w, r)
 			return
@@ -405,12 +456,20 @@ func main() {
 			applyMiddleware(app.RequireLogin(app.PersonaRegistres), core.BlockIPs, core.RateLimit)(w, r)
 			return
 		}
+		if strings.HasSuffix(r.URL.Path, "/arbre") && r.Method == http.MethodGet {
+			applyMiddleware(app.RequireLogin(app.PersonaArbre), core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/edit") && r.Method == http.MethodGet {
 			applyMiddleware(app.PersonaForm, core.BlockIPs, core.RateLimit)(w, r)
 			return
 		}
 		if r.Method == http.MethodGet {
-			applyMiddleware(app.RequireLogin(app.PersonaDetall), core.BlockIPs, core.RateLimit)(w, r)
+			if user, ok := app.VerificarSessio(r); ok && user != nil {
+				applyMiddleware(app.RequireLogin(app.PersonaDetall), core.BlockIPs, core.RateLimit)(w, r)
+				return
+			}
+			applyMiddleware(app.PersonaPublic, core.BlockIPs, core.RateLimit)(w, r)
 			return
 		}
 		if r.Method == http.MethodPut || r.Method == http.MethodPost {
@@ -657,6 +716,8 @@ func main() {
 	http.HandleFunc("/admin/cognoms/import", applyMiddleware(app.AdminCognomsImport, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/cognoms/import/run", applyMiddleware(app.AdminCognomsImportRun, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/cognoms/stats/run", applyMiddleware(app.AdminCognomsStatsRun, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/cognoms/merge", applyMiddleware(app.AdminCognomsMerge, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/cognoms/merge/delete", applyMiddleware(app.AdminCognomsMergeDelete, core.BlockIPs, core.RateLimit))
 	// Territori import/export
 	http.HandleFunc("/admin/territori/import", applyMiddleware(app.AdminTerritoriImport, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/territori/import/run", applyMiddleware(app.AdminTerritoriImportRun, core.BlockIPs, core.RateLimit))

@@ -104,6 +104,17 @@
     min-width: 140px;
 }
 
+.linked-person {
+    color: #15658b;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.linked-person:hover {
+    color: #0f3f57;
+    text-decoration: underline;
+}
+
 .editable-cell .edit-icons {
     display: none;
 }

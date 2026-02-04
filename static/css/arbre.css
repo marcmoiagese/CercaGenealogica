@@ -1,0 +1,446 @@
+:root {
+  --tree-bg: #f0f2f5;
+  --tree-link: rgba(120, 130, 140, 0.55);
+  --tree-node-bg: #ffffff;
+  --tree-node-stroke: rgba(0, 0, 0, 0.10);
+  --tree-shadow: 0 6px 18px rgba(0,0,0,0.10);
+  --tree-male: var(--secondary-color, #2b6cb0);
+  --tree-female: #e75480;
+  --tree-unknown: #9aa4b2;
+}
+
+/* Contenidor principal */
+.arbre-container {
+  width: 100%;
+  height: calc(100vh - 70px);
+  overflow: hidden;
+  background: var(--tree-bg);
+}
+
+/* Amplada completa per la vista d'arbre */
+.contingut-principal.arbre-full {
+  max-width: none;
+  padding: 20px 0;
+}
+
+.controls-arbre {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  align-items: center;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.controls-arbre select,
+.controls-arbre button {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.controls-arbre button:hover {
+  background-color: #f1f1f1;
+}
+
+.controls-arbre .controls-spacer {
+  flex: 1;
+}
+
+.controls-arbre .btn-toggle-drawer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.controls-arbre .view-person-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  text-decoration: none;
+  color: inherit;
+  background: #fff;
+}
+
+.controls-arbre .view-person-link:hover {
+  background-color: #f1f1f1;
+}
+
+.controls-arbre .view-person-link.is-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.controls-arbre .btn-toggle-drawer .btn-text {
+  font-weight: 700;
+}
+
+.controls-arbre .btn-toggle-drawer.is-off {
+  opacity: 0.75;
+}
+
+.arbre-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* SVG */
+#treeSvg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+#treeSvg:active {
+  cursor: grabbing;
+}
+
+.tree-link {
+  fill: none;
+  stroke: var(--tree-link);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tree-node {
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.12));
+}
+
+.tree-node rect.node-card {
+  fill: var(--tree-node-bg);
+  stroke: var(--tree-node-stroke);
+  stroke-width: 1;
+}
+
+.tree-node rect.node-strip {
+  stroke: none;
+}
+
+.tree-node .node-name {
+  font-size: 12px;
+  font-weight: 700;
+  fill: rgba(25, 30, 35, 0.95);
+}
+
+.tree-node .node-dates {
+  font-size: 11px;
+  fill: rgba(70, 80, 90, 0.85);
+}
+
+.tree-node .node-glyph {
+  font-size: 16px;
+  font-weight: 700;
+  fill: rgba(70, 80, 90, 0.8);
+}
+
+.tree-node.is-male rect.node-strip { fill: var(--tree-male); }
+.tree-node.is-female rect.node-strip { fill: var(--tree-female); }
+.tree-node.is-unknown rect.node-strip { fill: var(--tree-unknown); }
+
+.tree-node.is-placeholder rect.node-card {
+  fill: rgba(255,255,255,0.65);
+  stroke-dasharray: 4 4;
+}
+
+.tree-node:hover rect.node-card {
+  stroke: rgba(0, 0, 0, 0.18);
+}
+
+.tree-node.is-selected rect.node-card {
+  stroke: rgba(0,0,0,0.35);
+  stroke-width: 1.5;
+}
+
+.tree-node.is-trunk rect.node-card {
+  stroke: rgba(0,0,0,0.22);
+  stroke-width: 1.2;
+}
+
+.tree-node.is-trunk .node-name {
+  letter-spacing: 0.2px;
+}
+
+/* Fitxa lateral */
+.person-drawer {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 340px;
+  max-width: calc(100% - 32px);
+  height: calc(100% - 32px);
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: var(--tree-shadow);
+  overflow: hidden;
+  transform: translateX(110%);
+  transition: transform 180ms ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.person-drawer.is-open {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.drawer-title {
+  min-width: 0;
+}
+
+.drawer-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: rgba(20, 25, 30, 0.95);
+  line-height: 1.1;
+}
+
+.drawer-sub {
+  font-size: 12px;
+  color: rgba(60, 70, 80, 0.85);
+  margin-top: 6px;
+}
+
+.drawer-close {
+  border: 1px solid rgba(0,0,0,0.12);
+  background: #fff;
+  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 32px;
+}
+
+.drawer-close:hover {
+  background: rgba(0,0,0,0.04);
+}
+
+.drawer-body {
+  padding: 14px;
+  overflow: auto;
+}
+
+.drawer-empty {
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.04);
+  color: rgba(55, 65, 75, 0.85);
+}
+
+.drawer-block {
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.08);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.drawer-block .block-title {
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.05);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.drawer-block .block-content {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: rgba(35, 40, 45, 0.92);
+}
+
+.drawer-kv {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.drawer-kv .kv {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 10px;
+}
+
+.drawer-kv .k {
+  color: rgba(60, 70, 80, 0.75);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.drawer-kv .v {
+  color: rgba(20, 25, 30, 0.92);
+  word-break: break-word;
+}
+
+.drawer-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.drawer-label {
+  color: rgba(60, 70, 80, 0.75);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.drawer-value {
+  color: rgba(20, 25, 30, 0.92);
+  word-break: break-word;
+}
+
+.drawer-actions {
+  margin-top: 10px;
+}
+
+.drawer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.12);
+  color: rgba(20, 30, 40, 0.92);
+  font-weight: 700;
+  text-decoration: none;
+  background: rgba(0,0,0,0.02);
+}
+
+.drawer-link:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.person-drawer.is-disabled {
+  display: none;
+}
+
+/* Switch de vista (Pedigree / Familiar / Ventall) */
+.view-switch {
+  display: inline-flex;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(0,0,0,0.03);
+}
+
+.view-switch .view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(35, 45, 55, 0.9);
+  text-decoration: none;
+  border-right: 1px solid rgba(0,0,0,0.10);
+}
+
+.view-switch .view-btn:last-child {
+  border-right: none;
+}
+
+.view-switch .view-btn:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.view-switch .view-btn.is-active {
+  background: rgba(0,0,0,0.10);
+}
+
+/* Info del dataset */
+.dataset-info{
+  font-size: 12px;
+  opacity: .85;
+  padding: 6px 10px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 999px;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+/* =====================
+   Ventall (Fan chart)
+   ===================== */
+
+#fanSvg { width: 100%; height: 100%; display: block; background: transparent; }
+
+.fan-bg { fill: transparent; }
+
+.fan-hatch-line { stroke: rgba(30,45,65,0.22); }
+
+.fan-card { fill: rgba(255,255,255,0.92); stroke: rgba(20,35,55,0.12); stroke-width: 1; }
+.fan-card-name { font-size: 18px; font-weight: 700; fill: rgba(20,35,55,0.92); }
+.fan-card-sub { font-size: 12px; fill: rgba(20,35,55,0.65); }
+
+.fan-seg { cursor: pointer; transition: opacity .12s ease, stroke .12s ease; }
+.fan-seg-empty { cursor: default; opacity: 0.55; }
+.fan-seg.is-hover { stroke: rgba(25,110,210,0.40); stroke-width: 2; }
+.fan-seg.is-selected { stroke: rgba(0,0,0,0.35); stroke-width: 2.0; }
+
+svg .fan-seg:focus,
+svg .fan-seg-empty:focus,
+svg g.tree-node:focus,
+svg rect:focus,
+svg path:focus {
+  outline: none !important;
+}
+
+.fan-label-name { font-size: 11px; font-weight: 700; fill: rgba(20,35,55,0.92); paint-order: stroke; stroke: rgba(255,255,255,0.85); stroke-width: 3px; }
+.fan-label-sub { font-size: 10px; fill: rgba(20,35,55,0.68); paint-order: stroke; stroke: rgba(255,255,255,0.85); stroke-width: 3px; }
+
+@media (max-width: 900px) {
+  .fan-card-name { font-size: 16px; }
+  .fan-label-name { font-size: 10px; }
+  .controls-arbre { gap: 6px; }
+}
+
+/* Evitem que les línies capturin el clic */
+.link, .link path { pointer-events: none; }
+.node text, .node .node-glyph { pointer-events: none; }
+
+/* --- UX: evitar selecció/contorns --- */
+.tree-wrap, .fan-wrap, .tree-canvas, svg {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.view-switch a:focus,
+.view-switch a:focus-visible,
+svg :focus {
+  outline: none !important;
+}
+
+/* --- Ventall: banda fina per sexe --- */
+.fan-sexline.is-male { color: rgba(40, 120, 255, 0.85); }
+.fan-sexline.is-female { color: rgba(255, 80, 140, 0.85); }
+.fan-sexline.is-unknown { color: rgba(120, 130, 150, 0.60); }

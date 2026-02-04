@@ -76,7 +76,7 @@
                                         <form method="post" action="/documentals/registres/{{ $row.ID }}/convertir" class="inline-form">
                                             <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                             <input type="hidden" name="raw_person_id" value="{{ $row.ConvertPerson }}">
-                                            <input type="hidden" name="return_to" value="/documentals/llibres/{{ $.Data.Llibre.ID }}/registres">
+                                            <input type="hidden" name="return_to" value="{{ if $.Data.ReturnTo }}{{ $.Data.ReturnTo }}{{ else }}/documentals/llibres/{{ $.Data.Llibre.ID }}/registres{{ end }}">
                                             <button type="submit" class="icon-action" title="{{ t $.Lang "records.action.convert" }}">
                                                 <i class="fas fa-user-plus"></i>
                                             </button>
@@ -92,8 +92,13 @@
                                     <td data-col="{{ $i }}" data-key="{{ $col.Key }}" data-value="{{ index $row.RawValues $col.Key }}" data-quality="{{ $q }}">
                                         <div class="editable-cell">
                                             {{ $raw := index $row.RawValues $col.Key }}
+                                            {{ $personID := index $row.LinkedPersonIDs $col.Key }}
                                             <span class="cell-text">
-                                                {{ if and (eq $col.Key "pagina_digital") $raw $.Data.Llibre.URLBase }}
+                                                {{ if $personID }}
+                                                <a class="linked-person" href="/persones/{{ $personID }}">
+                                                    {{ index $row.Cells $col.Key }}
+                                                </a>
+                                                {{ else if and (eq $col.Key "pagina_digital") $raw $.Data.Llibre.URLBase }}
                                                 <a href="{{ printf "%s%s%v" $.Data.Llibre.URLBase $.Data.Llibre.URLImatgePrefix $raw }}" target="_blank" rel="noopener">
                                                     {{ index $row.Cells $col.Key }}
                                                 </a>
@@ -141,7 +146,7 @@
                 </div>
             </div>
 
-            <div id="modalInterconnectar" class="modal-interconnexio" data-csrf="{{ .Data.CSRFToken }}" data-return-to="/documentals/llibres/{{ .Data.Llibre.ID }}/registres" data-search-endpoint="/persones/cerca" data-label-link="{{ t .Lang "records.link.confirm" }}" data-label-empty="{{ t .Lang "common.empty" }}" data-label-search="{{ t .Lang "records.link.search" }}" data-label-search-placeholder="{{ t .Lang "records.link.search.placeholder" }}" data-label-select-role="{{ t .Lang "records.link.select.role" }}" data-label-raw-person="{{ t .Lang "records.link.raw_person" }}" data-label-select-person="{{ t .Lang "records.link.select.person" }}">
+            <div id="modalInterconnectar" class="modal-interconnexio" data-csrf="{{ .Data.CSRFToken }}" data-return-to="{{ if .Data.ReturnTo }}{{ .Data.ReturnTo }}{{ else }}/documentals/llibres/{{ .Data.Llibre.ID }}/registres{{ end }}" data-search-endpoint="/persones/cerca" data-label-link="{{ t .Lang "records.link.confirm" }}" data-label-empty="{{ t .Lang "common.empty" }}" data-label-search="{{ t .Lang "records.link.search" }}" data-label-search-placeholder="{{ t .Lang "records.link.search.placeholder" }}" data-label-select-role="{{ t .Lang "records.link.select.role" }}" data-label-raw-person="{{ t .Lang "records.link.raw_person" }}" data-label-select-person="{{ t .Lang "records.link.select.person" }}">
                 <div class="modal-content-interconnexio">
                     <span class="tanca-modal-interconnexio">&times;</span>
                     <h3>{{ t .Lang "records.link.title" }}</h3>

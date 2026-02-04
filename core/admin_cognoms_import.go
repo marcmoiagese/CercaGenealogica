@@ -221,6 +221,10 @@ func (a *App) AdminCognomsStatsRun(w http.ResponseWriter, r *http.Request) {
 		}
 		statsTotal++
 	}
+	if err := a.DB.RebuildCognomStats(0); err != nil {
+		http.Redirect(w, r, "/admin/cognoms/import?err=1", http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/admin/cognoms/import?stats=1&stats_total="+strconv.Itoa(statsTotal), http.StatusSeeOther)
 }
 

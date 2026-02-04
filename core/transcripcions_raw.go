@@ -121,6 +121,7 @@ type registreTableRow struct {
 	Cells              map[string]interface{}
 	RawValues          map[string]interface{}
 	Qualitats          map[string]interface{}
+	LinkedPersonIDs    map[string]int
 	MarkType           string
 	MarkPublic         bool
 	MarkOwn            bool
@@ -163,6 +164,15 @@ func buildRegistreTableColumns(lang string, cfg indexerConfig) []registreTableCo
 		IsActions: true,
 	})
 	return cols
+}
+
+func canLinkPersonField(field string) bool {
+	switch field {
+	case "nom", "cognom1", "cognom2":
+		return true
+	default:
+		return false
+	}
 }
 
 type registreColumnMeta struct {
@@ -1138,6 +1148,7 @@ func (a *App) AdminListRegistresLlibre(w http.ResponseWriter, r *http.Request) {
 		cells := map[string]interface{}{}
 		rawValues := map[string]interface{}{}
 		qualitats := map[string]interface{}{}
+		linkedPersonIDs := map[string]int{}
 		for _, col := range columns {
 			if col.IsStatus || col.IsActions {
 				continue
@@ -1154,6 +1165,12 @@ func (a *App) AdminListRegistresLlibre(w http.ResponseWriter, r *http.Request) {
 			qualitat := registreFieldQuality(col.Field, reg, persones, atributs, cache)
 			if qualitat != "" {
 				qualitats[col.Key] = qualitat
+			}
+			if col.Field.Target == "person" && canLinkPersonField(col.Field.PersonField) {
+				person := personForField(persones, col.Field.Role, col.Field.PersonKey, cache)
+				if person != nil && person.PersonaID.Valid && person.PersonaID.Int64 > 0 {
+					linkedPersonIDs[col.Key] = int(person.PersonaID.Int64)
+				}
 			}
 		}
 		hasPeople := len(persones) > 0
@@ -1207,6 +1224,7 @@ func (a *App) AdminListRegistresLlibre(w http.ResponseWriter, r *http.Request) {
 			Cells:              cells,
 			RawValues:          rawValues,
 			Qualitats:          qualitats,
+			LinkedPersonIDs:    linkedPersonIDs,
 			MarkType:           markType,
 			MarkPublic:         markPublic,
 			MarkOwn:            markOwn,
@@ -1315,6 +1333,7 @@ func (a *App) AdminListRegistresLlibre(w http.ResponseWriter, r *http.Request) {
 		"FilterOrder":       strings.Join(filterOrder, ","),
 		"ColumnsMeta":       columnsMeta,
 		"StatusLabels":      statusLabels,
+		"ReturnTo":          r.URL.RequestURI(),
 		"User":              user,
 		"CanManageArxius":   canManageArxius,
 		"CanManagePolicies": canManagePolicies,
@@ -2531,16 +2550,27 @@ func (a *App) AdminConvertRegistreToPersona(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "No s'ha trobat cap persona per convertir", http.StatusBadRequest)
 		return
 	}
+	acte := normalizeRole(registre.TipusActe)
+	municipiNaixement := ""
+	municipiDefuncio := ""
+	switch acte {
+	case "naixement", "baptisme":
+		municipiNaixement = targetPerson.MunicipiText
+	case "defuncio", "obit":
+		municipiDefuncio = targetPerson.MunicipiText
+	}
 	persona := db.Persona{
-		Nom:            targetPerson.Nom,
-		Cognom1:        targetPerson.Cognom1,
-		Cognom2:        targetPerson.Cognom2,
-		Municipi:       targetPerson.MunicipiText,
-		Ofici:          targetPerson.OficiText,
-		EstatCivil:     targetPerson.EstatCivilText,
-		ModeracioEstat: "pendent",
-		CreatedBy:      sqlNullIntFromInt(user.ID),
-		UpdatedBy:      sqlNullIntFromInt(user.ID),
+		Nom:               targetPerson.Nom,
+		Cognom1:           targetPerson.Cognom1,
+		Cognom2:           targetPerson.Cognom2,
+		Municipi:          targetPerson.MunicipiText,
+		MunicipiNaixement: municipiNaixement,
+		MunicipiDefuncio:  municipiDefuncio,
+		Ofici:             targetPerson.OficiText,
+		EstatCivil:        targetPerson.EstatCivilText,
+		ModeracioEstat:    "pendent",
+		CreatedBy:         sqlNullIntFromInt(user.ID),
+		UpdatedBy:         sqlNullIntFromInt(user.ID),
 	}
 	if val := attrValueByKeysRaw(atributs,
 		"data_naixement", "datanaixement", "naixement",
@@ -2559,7 +2589,6 @@ func (a *App) AdminConvertRegistreToPersona(w http.ResponseWriter, r *http.Reque
 	if val := attrValueByKeysRaw(atributs, "data_defuncio", "datadefuncio", "defuncio"); val != "" {
 		persona.DataDefuncio = parseNullString(val)
 	}
-	acte := normalizeRole(registre.TipusActe)
 	if !persona.DataNaixement.Valid && acte == "naixement" {
 		date := ""
 		if registre.DataActeISO.Valid {

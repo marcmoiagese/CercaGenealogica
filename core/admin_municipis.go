@@ -787,6 +787,7 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		m.ID = createdID
+		a.rebuildAdminClosureForMunicipi(m)
 		_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleMunicipiCreate, "crear", "municipi", &createdID, "pendent", nil, "")
 	} else {
 		existing, err := a.DB.GetMunicipi(m.ID)
@@ -838,6 +839,7 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 				a.renderMunicipiFormError(w, r, m, "No s'ha pogut actualitzar el municipi: "+err.Error(), false)
 				return
 			}
+			a.rebuildAdminClosureForMunicipi(m)
 			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleMunicipiUpdate, "editar", "municipi", &id, "pendent", nil, "")
 		}
 	}

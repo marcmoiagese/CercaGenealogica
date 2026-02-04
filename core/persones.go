@@ -12,15 +12,20 @@ import (
 
 // PersonaRequest és un DTO senzill per a creació/edició via JSON.
 type PersonaRequest struct {
-	Nom            string `json:"nom"`
-	Cognom1        string `json:"cognom1"`
-	Cognom2        string `json:"cognom2"`
-	Municipi       string `json:"municipi"`
-	Llibre         string `json:"llibre"`
-	Pagina         string `json:"pagina"`
-	Ofici          string `json:"ofici"`
-	Quinta         string `json:"quinta"`
-	ModeracioMotiu string `json:"motiu"`
+	Nom               string `json:"nom"`
+	Cognom1           string `json:"cognom1"`
+	Cognom2           string `json:"cognom2"`
+	Municipi          string `json:"municipi"`
+	MunicipiNaixement string `json:"municipi_naixement"`
+	MunicipiDefuncio  string `json:"municipi_defuncio"`
+	DataNaixement     string `json:"data_naixement"`
+	DataBateig        string `json:"data_bateig"`
+	DataDefuncio      string `json:"data_defuncio"`
+	Llibre            string `json:"llibre"`
+	Pagina            string `json:"pagina"`
+	Ofici             string `json:"ofici"`
+	Quinta            string `json:"quinta"`
+	ModeracioMotiu    string `json:"motiu"`
 }
 
 // Form per crear/editar persona (UI bàsica)
@@ -49,9 +54,54 @@ func (a *App) PersonaForm(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
 		p = &db.Persona{}
 	}
+	birthMunicipiValue := strings.TrimSpace(p.MunicipiNaixement)
+	if birthMunicipiValue == "" {
+		birthMunicipiValue = strings.TrimSpace(p.Municipi)
+	}
+	fieldLinkable := map[string]bool{}
+	if id > 0 {
+		fieldLinkable["data_naixement"] = p.DataNaixement.Valid && strings.TrimSpace(p.DataNaixement.String) != ""
+		fieldLinkable["data_bateig"] = p.DataBateig.Valid && strings.TrimSpace(p.DataBateig.String) != ""
+		fieldLinkable["data_defuncio"] = p.DataDefuncio.Valid && strings.TrimSpace(p.DataDefuncio.String) != ""
+		fieldLinkable["municipi_naixement"] = birthMunicipiValue != ""
+		fieldLinkable["municipi_defuncio"] = strings.TrimSpace(p.MunicipiDefuncio) != ""
+		if registres, err := a.DB.ListRegistresByPersona(id, ""); err == nil {
+			hasBirth := false
+			hasBaptism := false
+			hasDeath := false
+			for _, row := range registres {
+				switch normalizeRole(row.TipusActe) {
+				case "naixement":
+					hasBirth = true
+				case "baptisme":
+					hasBaptism = true
+				case "defuncio", "obit":
+					hasDeath = true
+				}
+			}
+			if hasBirth || hasBaptism {
+				fieldLinkable["data_naixement"] = false
+				fieldLinkable["municipi_naixement"] = false
+			}
+			if hasBaptism {
+				fieldLinkable["data_bateig"] = false
+			}
+			if hasDeath {
+				fieldLinkable["data_defuncio"] = false
+				fieldLinkable["municipi_defuncio"] = false
+			}
+		}
+		if links, err := a.DB.ListPersonaFieldLinks(id); err == nil {
+			for _, link := range links {
+				fieldLinkable[link.FieldKey] = false
+			}
+		}
+	}
 	RenderPrivateTemplate(w, r, "persona-form.html", map[string]interface{}{
 		"Persona":           p,
 		"IsNew":             id == 0,
+		"BirthMunicipi":     birthMunicipiValue,
+		"FieldLinkable":     fieldLinkable,
 		"User":              user,
 		"CanManageArxius":   canManageArxius,
 		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
@@ -78,6 +128,11 @@ func (a *App) PersonaSave(w http.ResponseWriter, r *http.Request) {
 	nom := strings.TrimSpace(r.FormValue("nom"))
 	cognom1 := strings.TrimSpace(r.FormValue("cognom1"))
 	cognom2 := strings.TrimSpace(r.FormValue("cognom2"))
+	municipiNaixement := strings.TrimSpace(r.FormValue("municipi_naixement"))
+	if municipiNaixement == "" {
+		municipiNaixement = strings.TrimSpace(r.FormValue("municipi"))
+	}
+	municipiDefuncio := strings.TrimSpace(r.FormValue("municipi_defuncio"))
 	if nom == "" {
 		a.renderPersonaFormError(w, r, id, "El nom és obligatori.")
 		return
@@ -105,22 +160,25 @@ func (a *App) PersonaSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p := &db.Persona{
-		ID:             id,
-		Nom:            nom,
-		Cognom1:        cognom1,
-		Cognom2:        cognom2,
-		Municipi:       r.FormValue("municipi"),
-		Arquebisbat:    r.FormValue("arquevisbat"),
-		Llibre:         r.FormValue("llibre"),
-		Pagina:         r.FormValue("pagina"),
-		Ofici:          r.FormValue("ofici"),
-		Quinta:         r.FormValue("motiu"),
-		ModeracioEstat: "pendent",
-		ModeracioMotiu: r.FormValue("motiu"),
-		CreatedBy:      createdBy,
-		UpdatedBy:      updatedBy,
-		DataNaixement:  sql.NullString{String: strings.TrimSpace(r.FormValue("data_naixement")), Valid: strings.TrimSpace(r.FormValue("data_naixement")) != ""},
-		DataDefuncio:   sql.NullString{String: strings.TrimSpace(r.FormValue("data_defuncio")), Valid: strings.TrimSpace(r.FormValue("data_defuncio")) != ""},
+		ID:                id,
+		Nom:               nom,
+		Cognom1:           cognom1,
+		Cognom2:           cognom2,
+		Municipi:          municipiNaixement,
+		MunicipiNaixement: municipiNaixement,
+		MunicipiDefuncio:  municipiDefuncio,
+		Arquebisbat:       r.FormValue("arquevisbat"),
+		Llibre:            r.FormValue("llibre"),
+		Pagina:            r.FormValue("pagina"),
+		Ofici:             r.FormValue("ofici"),
+		Quinta:            r.FormValue("motiu"),
+		ModeracioEstat:    "pendent",
+		ModeracioMotiu:    r.FormValue("motiu"),
+		CreatedBy:         createdBy,
+		UpdatedBy:         updatedBy,
+		DataNaixement:     sql.NullString{String: strings.TrimSpace(r.FormValue("data_naixement")), Valid: strings.TrimSpace(r.FormValue("data_naixement")) != ""},
+		DataBateig:        sql.NullString{String: strings.TrimSpace(r.FormValue("data_bateig")), Valid: strings.TrimSpace(r.FormValue("data_bateig")) != ""},
+		DataDefuncio:      sql.NullString{String: strings.TrimSpace(r.FormValue("data_defuncio")), Valid: strings.TrimSpace(r.FormValue("data_defuncio")) != ""},
 	}
 	if id == 0 {
 		newID, err := a.DB.CreatePersona(p)
@@ -140,6 +198,8 @@ func (a *App) PersonaSave(w http.ResponseWriter, r *http.Request) {
 			after.Cognom1 = p.Cognom1
 			after.Cognom2 = p.Cognom2
 			after.Municipi = p.Municipi
+			after.MunicipiNaixement = p.MunicipiNaixement
+			after.MunicipiDefuncio = p.MunicipiDefuncio
 			after.Arquebisbat = p.Arquebisbat
 			after.Llibre = p.Llibre
 			after.Pagina = p.Pagina
@@ -151,6 +211,7 @@ func (a *App) PersonaSave(w http.ResponseWriter, r *http.Request) {
 			after.ModeratedAt = sql.NullTime{}
 			after.UpdatedBy = updatedBy
 			after.DataNaixement = p.DataNaixement
+			after.DataBateig = p.DataBateig
 			after.DataDefuncio = p.DataDefuncio
 			if existent.CreatedBy.Valid {
 				after.CreatedBy = existent.CreatedBy
@@ -206,10 +267,55 @@ func (a *App) renderPersonaFormError(w http.ResponseWriter, r *http.Request, id 
 			p = existent
 		}
 	}
+	birthMunicipiValue := strings.TrimSpace(p.MunicipiNaixement)
+	if birthMunicipiValue == "" {
+		birthMunicipiValue = strings.TrimSpace(p.Municipi)
+	}
+	fieldLinkable := map[string]bool{}
+	if id > 0 {
+		fieldLinkable["data_naixement"] = p.DataNaixement.Valid && strings.TrimSpace(p.DataNaixement.String) != ""
+		fieldLinkable["data_bateig"] = p.DataBateig.Valid && strings.TrimSpace(p.DataBateig.String) != ""
+		fieldLinkable["data_defuncio"] = p.DataDefuncio.Valid && strings.TrimSpace(p.DataDefuncio.String) != ""
+		fieldLinkable["municipi_naixement"] = birthMunicipiValue != ""
+		fieldLinkable["municipi_defuncio"] = strings.TrimSpace(p.MunicipiDefuncio) != ""
+		if registres, err := a.DB.ListRegistresByPersona(id, ""); err == nil {
+			hasBirth := false
+			hasBaptism := false
+			hasDeath := false
+			for _, row := range registres {
+				switch normalizeRole(row.TipusActe) {
+				case "naixement":
+					hasBirth = true
+				case "baptisme":
+					hasBaptism = true
+				case "defuncio", "obit":
+					hasDeath = true
+				}
+			}
+			if hasBirth || hasBaptism {
+				fieldLinkable["data_naixement"] = false
+				fieldLinkable["municipi_naixement"] = false
+			}
+			if hasBaptism {
+				fieldLinkable["data_bateig"] = false
+			}
+			if hasDeath {
+				fieldLinkable["data_defuncio"] = false
+				fieldLinkable["municipi_defuncio"] = false
+			}
+		}
+		if links, err := a.DB.ListPersonaFieldLinks(id); err == nil {
+			for _, link := range links {
+				fieldLinkable[link.FieldKey] = false
+			}
+		}
+	}
 	RenderPrivateTemplate(w, r, "persona-form.html", map[string]interface{}{
 		"Persona":           p,
 		"IsNew":             id == 0,
 		"Error":             msg,
+		"BirthMunicipi":     birthMunicipiValue,
+		"FieldLinkable":     fieldLinkable,
 		"User":              user,
 		"CanManageArxius":   a.hasPerm(perms, permArxius),
 		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
@@ -228,6 +334,7 @@ func (a *App) ListPersonesPublic(w http.ResponseWriter, r *http.Request) {
 	canManageArxius := a.hasPerm(perms, permArxius)
 	persones, err := a.DB.ListPersones(db.PersonaFilter{Estat: "publicat", Limit: 500})
 	if err != nil {
+		Errorf("Error llistant persones: %v", err)
 		http.Error(w, "Error llistant persones", http.StatusInternalServerError)
 		return
 	}
@@ -307,12 +414,20 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 	addField(p.Nom)
 	addField(p.Cognom1)
 	addField(p.Cognom2)
-	addField(p.Municipi)
+	birthMunicipiValue := strings.TrimSpace(p.MunicipiNaixement)
+	if birthMunicipiValue == "" {
+		birthMunicipiValue = strings.TrimSpace(p.Municipi)
+	}
+	addField(birthMunicipiValue)
+	addField(p.MunicipiDefuncio)
 	addField(p.Ofici)
 	addField(p.Llibre)
 	addField(p.Pagina)
-	totalFields += 2
+	totalFields += 3
 	if p.DataNaixement.Valid {
+		filledFields++
+	}
+	if p.DataBateig.Valid {
 		filledFields++
 	}
 	if p.DataDefuncio.Valid {
@@ -395,6 +510,7 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 	var relacions []relationView
 	var timeline []timelineEvent
 	originMunicipi := ""
+	originDefuncioMunicipi := ""
 	originLlibre := ""
 	originPagina := ""
 	originRegistreID := 0
@@ -547,6 +663,9 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 				} else if originMunicipi == "" {
 					originMunicipi = munName
 				}
+			}
+			if originDefuncioMunicipi == "" && (tipus == "defuncio" || tipus == "obit") {
+				originDefuncioMunicipi = munName
 			}
 			sourceType := ""
 			if tipus != "" {
@@ -732,9 +851,16 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	locationLabel := strings.TrimSpace(p.Municipi)
-	if locationLabel == "" {
-		locationLabel = strings.TrimSpace(originMunicipi)
+	birthLocation := strings.TrimSpace(p.MunicipiNaixement)
+	if birthLocation == "" {
+		birthLocation = strings.TrimSpace(p.Municipi)
+	}
+	if birthLocation == "" {
+		birthLocation = strings.TrimSpace(originMunicipi)
+	}
+	deathLocation := strings.TrimSpace(p.MunicipiDefuncio)
+	if deathLocation == "" {
+		deathLocation = strings.TrimSpace(originDefuncioMunicipi)
 	}
 	lifeRange := ""
 	if birthDate != "" {
@@ -751,16 +877,23 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 	if birthDate != "" {
 		birthLabel = birthDate
 	}
-	if locationLabel != "" {
+	if birthLocation != "" {
 		if birthLabel != "" {
-			birthLabel += " · " + locationLabel
+			birthLabel += " · " + birthLocation
 		} else {
-			birthLabel = locationLabel
+			birthLabel = birthLocation
 		}
 	}
 	deathLabel := ""
 	if deathDate != "" {
 		deathLabel = deathDate
+	}
+	if deathLocation != "" {
+		if deathLabel != "" {
+			deathLabel += " · " + deathLocation
+		} else {
+			deathLabel = deathLocation
+		}
 	}
 	RenderPrivateTemplate(w, r, "persona-detall.html", map[string]interface{}{
 		"Persona":           p,
@@ -772,12 +905,15 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"LifeRange":         lifeRange,
 		"BirthLabel":        birthLabel,
 		"DeathLabel":        deathLabel,
+		"BirthLocation":     birthLocation,
+		"DeathLocation":     deathLocation,
 		"LastUpdated":       lastUpdated,
 		"Completesa":        completesa,
 		"CanEditPersona":    canEditPersona,
 		"DocRegistres":      docs,
 		"DocTotal":          totalDocs,
 		"OriginMunicipi":    originMunicipi,
+		"OriginDefuncio":    originDefuncioMunicipi,
 		"OriginLlibre":      originLlibre,
 		"OriginPagina":      originPagina,
 		"OriginRegistreID":  originRegistreID,
@@ -795,6 +931,87 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"MarkOwn":           markOwn,
 		"WikiPending":       wikiPending,
 		"Tab":               "detall",
+	})
+}
+
+// Vista d'arbre genealògic per persona (només publicades) per usuaris autenticats
+func (a *App) PersonaArbre(w http.ResponseWriter, r *http.Request) {
+	id := extractID(r.URL.Path)
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	lang := ResolveLang(r)
+	p, err := a.DB.GetPersona(id)
+	if err != nil || p == nil || p.ModeracioEstat != "publicat" {
+		http.NotFound(w, r)
+		return
+	}
+
+	view := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("view")))
+	if view != "familiar" && view != "ventall" {
+		view = "pedigree"
+	}
+	gens := parseTreeGens(r.URL.Query().Get("gens"), treeDefaultGens)
+
+	fullName := strings.TrimSpace(strings.Join([]string{p.Nom, p.Cognom1, p.Cognom2}, " "))
+	if fullName == "" {
+		fullName = p.NomComplet
+	}
+	if fullName == "" {
+		fullName = "?"
+	}
+
+	dataset, err := a.buildPersonaArbreDataset(p, gens)
+	if err != nil {
+		http.Error(w, "Error carregant arbre", http.StatusInternalServerError)
+		return
+	}
+
+	treeKeys := []string{
+		"tree.dataset",
+		"tree.visible",
+		"tree.error.d3",
+		"tree.error.root",
+		"tree.error.expand",
+		"tree.unknown.name",
+		"tree.unknown.person",
+		"tree.placeholder.father",
+		"tree.placeholder.mother",
+		"tree.drawer.section",
+		"tree.drawer.empty",
+		"tree.drawer.birth",
+		"tree.drawer.birth_place",
+		"tree.drawer.death",
+		"tree.drawer.death_place",
+		"tree.drawer.occupation",
+		"tree.drawer.sex",
+		"tree.drawer.select_person",
+		"tree.drawer.segment_hint",
+		"tree.drawer.no_extra",
+		"tree.drawer.open_profile",
+		"tree.sex.male",
+		"tree.sex.female",
+		"tree.sex.unknown",
+		"tree.fan.birth_prefix",
+		"tree.fan.death_prefix",
+	}
+	treeI18n := map[string]string{}
+	for _, key := range treeKeys {
+		treeI18n[key] = T(lang, key)
+	}
+
+	RenderPrivateTemplate(w, r, "persona-arbre.html", map[string]interface{}{
+		"Persona":      p,
+		"PersonaName":  fullName,
+		"View":         view,
+		"Gens":         gens,
+		"FamilyData":   dataset.FamilyData,
+		"FamilyLinks":  dataset.FamilyLinks,
+		"RootPersonId": dataset.RootPersonID,
+		"DatasetStats": dataset.DatasetStats,
+		"TreeI18n":     treeI18n,
 	})
 }
 
@@ -980,18 +1197,29 @@ func (a *App) CreatePersona(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := &db.Persona{
-		Nom:            req.Nom,
-		Cognom1:        req.Cognom1,
-		Cognom2:        req.Cognom2,
-		Municipi:       req.Municipi,
-		Llibre:         req.Llibre,
-		Pagina:         req.Pagina,
-		Ofici:          req.Ofici,
-		Quinta:         req.ModeracioMotiu,
-		ModeracioEstat: "pendent",
-		ModeracioMotiu: req.ModeracioMotiu,
-		CreatedBy:      sql.NullInt64{Int64: int64(user.ID), Valid: true},
+		Nom:               req.Nom,
+		Cognom1:           req.Cognom1,
+		Cognom2:           req.Cognom2,
+		Municipi:          strings.TrimSpace(req.Municipi),
+		MunicipiNaixement: strings.TrimSpace(req.MunicipiNaixement),
+		MunicipiDefuncio:  strings.TrimSpace(req.MunicipiDefuncio),
+		Llibre:            req.Llibre,
+		Pagina:            req.Pagina,
+		Ofici:             req.Ofici,
+		Quinta:            req.ModeracioMotiu,
+		ModeracioEstat:    "pendent",
+		ModeracioMotiu:    req.ModeracioMotiu,
+		CreatedBy:         sql.NullInt64{Int64: int64(user.ID), Valid: true},
 	}
+	if p.MunicipiNaixement == "" {
+		p.MunicipiNaixement = p.Municipi
+	}
+	if p.Municipi == "" {
+		p.Municipi = p.MunicipiNaixement
+	}
+	p.DataNaixement = sql.NullString{String: strings.TrimSpace(req.DataNaixement), Valid: strings.TrimSpace(req.DataNaixement) != ""}
+	p.DataBateig = sql.NullString{String: strings.TrimSpace(req.DataBateig), Valid: strings.TrimSpace(req.DataBateig) != ""}
+	p.DataDefuncio = sql.NullString{String: strings.TrimSpace(req.DataDefuncio), Valid: strings.TrimSpace(req.DataDefuncio) != ""}
 	id, err := a.DB.CreatePersona(p)
 	if err != nil {
 		http.Error(w, "No s'ha pogut crear", http.StatusInternalServerError)
@@ -1024,6 +1252,14 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	municipiNaixement := strings.TrimSpace(req.MunicipiNaixement)
+	if municipiNaixement == "" {
+		municipiNaixement = strings.TrimSpace(req.Municipi)
+	}
+	municipiDefuncio := strings.TrimSpace(req.MunicipiDefuncio)
+	dataNaixement := sql.NullString{String: strings.TrimSpace(req.DataNaixement), Valid: strings.TrimSpace(req.DataNaixement) != ""}
+	dataBateig := sql.NullString{String: strings.TrimSpace(req.DataBateig), Valid: strings.TrimSpace(req.DataBateig) != ""}
+	dataDefuncio := sql.NullString{String: strings.TrimSpace(req.DataDefuncio), Valid: strings.TrimSpace(req.DataDefuncio) != ""}
 	if existent.CreatedBy.Valid && int(existent.CreatedBy.Int64) != user.ID && !a.hasPerm(perms, func(pp db.PolicyPermissions) bool { return pp.CanEditAnyPerson }) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -1037,7 +1273,9 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 		after.Nom = req.Nom
 		after.Cognom1 = req.Cognom1
 		after.Cognom2 = req.Cognom2
-		after.Municipi = req.Municipi
+		after.Municipi = municipiNaixement
+		after.MunicipiNaixement = municipiNaixement
+		after.MunicipiDefuncio = municipiDefuncio
 		after.Llibre = req.Llibre
 		after.Pagina = req.Pagina
 		after.Ofici = req.Ofici
@@ -1047,8 +1285,9 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 		after.ModeratedBy = sql.NullInt64{}
 		after.ModeratedAt = sql.NullTime{}
 		after.UpdatedBy = sql.NullInt64{Int64: int64(user.ID), Valid: true}
-		after.DataNaixement = sql.NullString{String: strings.TrimSpace(after.DataNaixement.String), Valid: after.DataNaixement.String != ""}
-		after.DataDefuncio = sql.NullString{String: strings.TrimSpace(after.DataDefuncio.String), Valid: after.DataDefuncio.String != ""}
+		after.DataNaixement = dataNaixement
+		after.DataBateig = dataBateig
+		after.DataDefuncio = dataDefuncio
 		if existent.CreatedBy.Valid {
 			after.CreatedBy = existent.CreatedBy
 		}
@@ -1085,7 +1324,9 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 	existent.Nom = req.Nom
 	existent.Cognom1 = req.Cognom1
 	existent.Cognom2 = req.Cognom2
-	existent.Municipi = req.Municipi
+	existent.Municipi = municipiNaixement
+	existent.MunicipiNaixement = municipiNaixement
+	existent.MunicipiDefuncio = municipiDefuncio
 	existent.Llibre = req.Llibre
 	existent.Pagina = req.Pagina
 	existent.Ofici = req.Ofici
@@ -1093,8 +1334,9 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 	existent.ModeracioMotiu = req.ModeracioMotiu
 	existent.Quinta = req.ModeracioMotiu
 	existent.UpdatedBy = sql.NullInt64{Int64: int64(user.ID), Valid: true}
-	existent.DataNaixement = sql.NullString{String: strings.TrimSpace(existent.DataNaixement.String), Valid: existent.DataNaixement.String != ""}
-	existent.DataDefuncio = sql.NullString{String: strings.TrimSpace(existent.DataDefuncio.String), Valid: existent.DataDefuncio.String != ""}
+	existent.DataNaixement = dataNaixement
+	existent.DataBateig = dataBateig
+	existent.DataDefuncio = dataDefuncio
 	if err := a.DB.UpdatePersona(existent); err != nil {
 		http.Error(w, "No s'ha pogut actualitzar", http.StatusInternalServerError)
 		return
@@ -1102,4 +1344,64 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, rulePersonaUpdate, "editar", "persona", &id, "pendent", nil, "")
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": id, "estat": existent.ModeracioEstat})
+}
+
+func (a *App) PersonaLinkField(w http.ResponseWriter, r *http.Request) {
+	user, perms, ok := a.requirePermission(w, r, permCreatePerson)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	personaID := extractID(r.URL.Path)
+	if personaID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	fieldKey := strings.TrimSpace(r.FormValue("field_key"))
+	allowedKeys := map[string]bool{
+		"data_naixement":     true,
+		"data_bateig":        true,
+		"data_defuncio":      true,
+		"municipi_naixement": true,
+		"municipi_defuncio":  true,
+	}
+	if !allowedKeys[fieldKey] {
+		http.Error(w, "Camp invàlid", http.StatusBadRequest)
+		return
+	}
+	registreID, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("registre_id")))
+	if registreID == 0 {
+		http.Error(w, "Registre invàlid", http.StatusBadRequest)
+		return
+	}
+	persona, err := a.DB.GetPersona(personaID)
+	if err != nil || persona == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if persona.CreatedBy.Valid && int(persona.CreatedBy.Int64) != user.ID && !a.hasPerm(perms, func(pp db.PolicyPermissions) bool { return pp.CanEditAnyPerson }) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	registre, err := a.DB.GetTranscripcioRaw(registreID)
+	if err != nil || registre == nil {
+		http.NotFound(w, r)
+		return
+	}
+	target := a.resolveLlibreTarget(registre.LlibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsRegistresLinkPerson, target); !ok {
+		return
+	}
+	if err := a.DB.UpsertPersonaFieldLink(personaID, fieldKey, registreID, user.ID); err != nil {
+		http.Error(w, "No s'ha pogut enllaçar la dada", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/persones/"+strconv.Itoa(personaID)+"/edit", http.StatusSeeOther)
 }

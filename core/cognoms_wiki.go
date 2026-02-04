@@ -25,6 +25,13 @@ func (a *App) CognomWikiHistory(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if canonID, redirected, err := a.resolveCognomCanonicalID(cognomID); err == nil && canonID > 0 {
+		if redirected {
+			http.Redirect(w, r, fmt.Sprintf("/cognoms/%d/historial", canonID), http.StatusSeeOther)
+			return
+		}
+		cognomID = canonID
+	}
 	cognom, err := a.DB.GetCognom(cognomID)
 	if err != nil || cognom == nil {
 		http.NotFound(w, r)
@@ -171,6 +178,13 @@ func (a *App) CognomWikiHistory(w http.ResponseWriter, r *http.Request) {
 	compareLeftLabel := ""
 	compareRightLabel := ""
 	compareParam := strings.TrimSpace(r.URL.Query().Get("compare"))
+	if compareParam == "" {
+		v1 := strings.TrimSpace(r.URL.Query().Get("v1"))
+		v2 := strings.TrimSpace(r.URL.Query().Get("v2"))
+		if v1 != "" && v2 != "" {
+			compareParam = v1 + "," + v2
+		}
+	}
 	if compareParam != "" {
 		parts := strings.Split(compareParam, ",")
 		if len(parts) == 2 {
@@ -216,12 +230,15 @@ func (a *App) CognomWikiHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	title := fmt.Sprintf("%s: %s", T(lang, "surnames.title"), titleLabel)
 	historyURL := fmt.Sprintf("/cognoms/%d/historial", cognom.ID)
+	redirects, _ := a.DB.ListCognomRedirectsByTo(cognom.ID)
+	redirectViews := a.buildCognomRedirectViews(redirects)
 	RenderPrivateTemplate(w, r, "wiki-history.html", map[string]interface{}{
 		"Title":             title,
 		"BackURL":           fmt.Sprintf("/cognoms/%d", cognom.ID),
 		"HistoryURL":        historyURL,
 		"RevertURL":         fmt.Sprintf("/cognoms/%d/historial/revert", cognom.ID),
 		"History":           history,
+		"MergeHistory":      redirectViews,
 		"ViewFields":        viewFields,
 		"ViewLabel":         viewLabel,
 		"CompareFields":     compareFields,
@@ -245,6 +262,13 @@ func (a *App) CognomWikiStats(w http.ResponseWriter, r *http.Request) {
 	if cognomID == 0 {
 		http.NotFound(w, r)
 		return
+	}
+	if canonID, redirected, err := a.resolveCognomCanonicalID(cognomID); err == nil && canonID > 0 {
+		if redirected {
+			http.Redirect(w, r, fmt.Sprintf("/cognoms/%d/estadistiques", canonID), http.StatusSeeOther)
+			return
+		}
+		cognomID = canonID
 	}
 	cognom, err := a.DB.GetCognom(cognomID)
 	if err != nil || cognom == nil {
@@ -298,6 +322,9 @@ func (a *App) CognomWikiRevert(w http.ResponseWriter, r *http.Request) {
 	if cognomID == 0 {
 		http.NotFound(w, r)
 		return
+	}
+	if canonID, _, err := a.resolveCognomCanonicalID(cognomID); err == nil && canonID > 0 {
+		cognomID = canonID
 	}
 	cognom, err := a.DB.GetCognom(cognomID)
 	if err != nil || cognom == nil {
@@ -396,6 +423,9 @@ func (a *App) CognomWikiMark(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if canonID, _, err := a.resolveCognomCanonicalID(cognomID); err == nil && canonID > 0 {
+		cognomID = canonID
+	}
 	if cognom, err := a.DB.GetCognom(cognomID); err != nil || cognom == nil {
 		http.NotFound(w, r)
 		return
@@ -463,6 +493,9 @@ func (a *App) CognomWikiUnmark(w http.ResponseWriter, r *http.Request) {
 	if cognomID == 0 {
 		http.NotFound(w, r)
 		return
+	}
+	if canonID, _, err := a.resolveCognomCanonicalID(cognomID); err == nil && canonID > 0 {
+		cognomID = canonID
 	}
 	if cognom, err := a.DB.GetCognom(cognomID); err != nil || cognom == nil {
 		http.NotFound(w, r)

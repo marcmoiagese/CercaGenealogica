@@ -58,26 +58,124 @@
 
             <div class="cognoms-detail-grid">
                 <div class="cognoms-panel">
-                    <h2>{{ t .Lang "surnames.detail.origin" }}</h2>
-                    <p>{{ if .Data.Cognom.Origen }}{{ .Data.Cognom.Origen }}{{ else }}<span class="muted">{{ t .Lang "common.empty" }}</span>{{ end }}</p>
-                    <h3>{{ t .Lang "surnames.detail.notes" }}</h3>
-                    <p>{{ if .Data.Cognom.Notes }}{{ .Data.Cognom.Notes }}{{ else }}<span class="muted">{{ t .Lang "common.empty" }}</span>{{ end }}</p>
-                    <div class="cognoms-propose">
-                        <h3>{{ t .Lang "surnames.detail.propose.title" }}</h3>
-                        <p class="muted">{{ t .Lang "surnames.detail.propose.helper" }}</p>
-                        <form class="cognoms-suggest-form" method="post" action="/cognoms/{{ .Data.Cognom.ID }}/proposar">
+                    <h2>{{ t .Lang "surnames.detail.history.title" }}</h2>
+                    <div class="cognoms-text">{{ if .Data.Cognom.Origen }}{{ .Data.Cognom.Origen }}{{ else }}<span class="muted">{{ t .Lang "common.empty" }}</span>{{ end }}</div>
+                    <details class="cognoms-edit">
+                        <summary class="boto-secundari">
+                            {{ if .Data.Cognom.Origen }}{{ t .Lang "surnames.detail.history.edit" }}{{ else }}{{ t .Lang "surnames.detail.history.add" }}{{ end }}
+                        </summary>
+                        <form class="cognoms-edit-form" method="post" action="/cognoms/{{ .Data.Cognom.ID }}/historia/submit">
                             <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                             <div class="grup-camp">
-                                <label for="cognom-origen">{{ t .Lang "surnames.detail.origin" }}</label>
-                                <textarea id="cognom-origen" name="origen" rows="3">{{ .Data.Cognom.Origen }}</textarea>
+                                <label for="cognom-historia">{{ t .Lang "surnames.detail.history.label" }}</label>
+                                <textarea id="cognom-historia" name="historia" rows="6">{{ .Data.Cognom.Origen }}</textarea>
                             </div>
-                            <div class="grup-camp">
-                                <label for="cognom-notes">{{ t .Lang "surnames.detail.notes" }}</label>
-                                <textarea id="cognom-notes" name="notes" rows="3">{{ .Data.Cognom.Notes }}</textarea>
-                            </div>
+                            <p class="muted">{{ t .Lang "surnames.detail.contribution.notice" }}</p>
                             <button type="submit" class="boto-primari">{{ t .Lang "wiki.history.submit" }}</button>
                         </form>
+                    </details>
+                </div>
+
+                <div class="cognoms-panel">
+                    <h2>{{ t .Lang "surnames.detail.notes" }}</h2>
+                    <div class="cognoms-text">{{ if .Data.Cognom.Notes }}{{ .Data.Cognom.Notes }}{{ else }}<span class="muted">{{ t .Lang "common.empty" }}</span>{{ end }}</div>
+                    <details class="cognoms-edit">
+                        <summary class="boto-secundari">
+                            {{ if .Data.Cognom.Notes }}{{ t .Lang "surnames.detail.notes.edit" }}{{ else }}{{ t .Lang "surnames.detail.notes.add" }}{{ end }}
+                        </summary>
+                        <form class="cognoms-edit-form" method="post" action="/cognoms/{{ .Data.Cognom.ID }}/notes/submit">
+                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                            <div class="grup-camp">
+                                <label for="cognom-notes">{{ t .Lang "surnames.detail.notes" }}</label>
+                                <textarea id="cognom-notes" name="notes" rows="4">{{ .Data.Cognom.Notes }}</textarea>
+                            </div>
+                            <p class="muted">{{ t .Lang "surnames.detail.contribution.notice" }}</p>
+                            <button type="submit" class="boto-primari">{{ t .Lang "wiki.history.submit" }}</button>
+                        </form>
+                    </details>
+                </div>
+
+                <div class="cognoms-panel">
+                    <h2>{{ t .Lang "surnames.references.title" }}</h2>
+                    {{ if .Data.RefOk }}
+                    <div class="alert alert-success">{{ t .Lang "surnames.references.success" }}</div>
+                    {{ end }}
+                    {{ if .Data.RefError }}
+                    <div class="alert alert-error">{{ t .Lang "surnames.references.error" }}</div>
+                    {{ end }}
+                    <ul class="cognoms-referencies-list">
+                        {{ range .Data.References }}
+                        <li class="cognoms-referencia">
+                            <div class="cognoms-ref-head">
+                                {{ if .KindLabel }}<span class="badge">{{ .KindLabel }}</span>{{ end }}
+                            </div>
+                            <div class="cognoms-ref-title">{{ .Title }}</div>
+                            {{ if .Description }}<p class="muted">{{ .Description }}</p>{{ end }}
+                            {{ if .Page }}<p class="muted">{{ t $.Lang "surnames.references.page" }}: {{ .Page }}</p>{{ end }}
+                            {{ if .LinkURL }}<a class="cognoms-ref-link" href="{{ .LinkURL }}">{{ .LinkLabel }}</a>{{ end }}
+                        </li>
+                        {{ else }}
+                        <li class="muted">{{ t .Lang "surnames.references.empty" }}</li>
+                        {{ end }}
+                    </ul>
+                    {{ if .Data.ReferencesPending }}
+                    <div class="cognoms-pendents">
+                        <h3>{{ t .Lang "surnames.references.pending" }}</h3>
+                        <ul class="cognoms-referencies-list">
+                            {{ range .Data.ReferencesPending }}
+                            <li class="cognoms-referencia pendent">
+                                <div class="cognoms-ref-head">
+                                    {{ if .KindLabel }}<span class="badge">{{ .KindLabel }}</span>{{ end }}
+                                    <span class="badge warning">{{ t $.Lang "activity.status.pendent" }}</span>
+                                </div>
+                                <div class="cognoms-ref-title">{{ .Title }}</div>
+                                {{ if .Description }}<p class="muted">{{ .Description }}</p>{{ end }}
+                                {{ if .Page }}<p class="muted">{{ t $.Lang "surnames.references.page" }}: {{ .Page }}</p>{{ end }}
+                                {{ if .LinkURL }}<a class="cognoms-ref-link" href="{{ .LinkURL }}">{{ .LinkLabel }}</a>{{ end }}
+                            </li>
+                            {{ end }}
+                        </ul>
                     </div>
+                    {{ end }}
+                    <details class="cognoms-edit">
+                        <summary class="boto-secundari">{{ t .Lang "surnames.references.add" }}</summary>
+                        <form class="cognoms-edit-form" method="post" action="/cognoms/{{ .Data.Cognom.ID }}/referencies/submit">
+                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                            <div class="grup-camp">
+                                <label for="ref-kind">{{ t .Lang "surnames.references.field.kind" }}</label>
+                                <select id="ref-kind" name="kind">
+                                    <option value="">{{ t .Lang "common.select" }}</option>
+                                    <option value="llibre">{{ t .Lang "surnames.references.kind.llibre" }}</option>
+                                    <option value="arxiu">{{ t .Lang "surnames.references.kind.arxiu" }}</option>
+                                    <option value="media">{{ t .Lang "surnames.references.kind.media" }}</option>
+                                    <option value="url">{{ t .Lang "surnames.references.kind.url" }}</option>
+                                </select>
+                            </div>
+                            <div class="grup-camp">
+                                <label for="ref-id">{{ t .Lang "surnames.references.field.ref_id" }}</label>
+                                <input id="ref-id" name="ref_id" type="number" min="1" placeholder="123">
+                                <p class="muted">{{ t .Lang "surnames.references.field.ref_id.help" }}</p>
+                            </div>
+                            <div class="grup-camp">
+                                <label for="ref-url">{{ t .Lang "surnames.references.field.url" }}</label>
+                                <input id="ref-url" name="url" type="url" placeholder="https://">
+                            </div>
+                            <div class="grup-camp">
+                                <label for="ref-title">{{ t .Lang "surnames.references.field.title" }}</label>
+                                <input id="ref-title" name="titol" type="text">
+                            </div>
+                            <div class="grup-camp">
+                                <label for="ref-desc">{{ t .Lang "surnames.references.field.description" }}</label>
+                                <textarea id="ref-desc" name="descripcio" rows="3"></textarea>
+                            </div>
+                            <div class="grup-camp">
+                                <label for="ref-page">{{ t .Lang "surnames.references.field.page" }}</label>
+                                <input id="ref-page" name="pagina" type="text" placeholder="f. 12v / p. 33">
+                            </div>
+                            <p class="muted">{{ t .Lang "surnames.detail.contribution.notice" }}</p>
+                            <button type="submit" class="boto-primari">{{ t .Lang "surnames.references.submit" }}</button>
+                        </form>
+                    </details>
                 </div>
 
                 <div class="cognoms-panel">
@@ -94,6 +192,20 @@
                         <li class="muted">{{ t .Lang "common.empty" }}</li>
                         {{ end }}
                     </ul>
+                    {{ if .Data.MergeRedirects }}
+                    <div class="cognoms-pendents">
+                        <h3>{{ t .Lang "surnames.detail.merges" }}</h3>
+                        <ul class="cognoms-variants-list">
+                            {{ range .Data.MergeRedirects }}
+                            <li class="cognoms-variant">
+                                <a class="variant-name" href="/cognoms/{{ .FromID }}">{{ .FromLabel }}</a>
+                                {{ if .Reason }}<span class="muted">{{ .Reason }}</span>{{ end }}
+                                {{ if .CreatedAt }}<span class="muted">{{ .CreatedAt }}</span>{{ end }}
+                            </li>
+                            {{ end }}
+                        </ul>
+                    </div>
+                    {{ end }}
                     {{ if and .Data.CanModerate (gt (len .Data.VariantsPendents) 0) }}
                     <div class="cognoms-pendents">
                         <h3>{{ t .Lang "surnames.detail.pending" }}</h3>
@@ -139,6 +251,61 @@
                     </div>
                     <button type="submit" class="boto-primari">{{ t .Lang "common.add" }}</button>
                 </form>
+            </div>
+
+            <div class="cognoms-panel cognom-stats-panel"
+                 id="cognom-stats"
+                 data-total-url="/api/cognoms/{{ .Data.Cognom.ID }}/stats/total"
+                 data-series-url="/api/cognoms/{{ .Data.Cognom.ID }}/stats/series"
+                 data-top-url="/api/cognoms/{{ .Data.Cognom.ID }}/stats/top">
+                <h2>{{ t .Lang "surnames.stats.title" }}</h2>
+                <p class="muted">{{ t .Lang "surnames.stats.subtitle" }}</p>
+                <div class="cognom-stats-grid">
+                    <div class="cognom-stat-card">
+                        <span class="muted">{{ t .Lang "surnames.stats.total.people" }}</span>
+                        <strong data-stat="persones">-</strong>
+                    </div>
+                    <div class="cognom-stat-card">
+                        <span class="muted">{{ t .Lang "surnames.stats.total.appearances" }}</span>
+                        <strong data-stat="aparicions">-</strong>
+                    </div>
+                </div>
+                <div class="cognom-stats-series">
+                    <div class="cognom-stats-series-header">
+                        <h3>{{ t .Lang "surnames.stats.series.title" }}</h3>
+                        <div class="cognom-stats-controls">
+                            <label for="cognom-stats-bucket">{{ t .Lang "surnames.stats.series.bucket" }}</label>
+                            <select id="cognom-stats-bucket" data-series-bucket>
+                                <option value="year">{{ t .Lang "surnames.stats.bucket.year" }}</option>
+                                <option value="decade">{{ t .Lang "surnames.stats.bucket.decade" }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="cognom-stats-chart" data-series-chart data-empty="{{ t .Lang "surnames.stats.empty.series" }}"></div>
+                </div>
+                <div class="cognom-stats-top">
+                    <div class="cognom-stats-series-header">
+                        <h3>{{ t .Lang "surnames.stats.zones.title" }}</h3>
+                        <div class="cognom-stats-controls">
+                            <label for="cognom-stats-year">{{ t .Lang "surnames.stats.zones.year" }}</label>
+                            <select id="cognom-stats-year" data-top-year>
+                                <option value="">{{ t .Lang "surnames.stats.year.all" }}</option>
+                            </select>
+                            <label for="cognom-stats-scope">{{ t .Lang "surnames.stats.zones.scope" }}</label>
+                            <select id="cognom-stats-scope" data-top-scope>
+                                <option value="municipi">{{ t .Lang "surnames.stats.scope.municipi" }}</option>
+                                <option value="pais">{{ t .Lang "surnames.stats.scope.pais" }}</option>
+                                <option value="nivell_2">{{ t .Lang "surnames.stats.scope.nivell_2" }}</option>
+                                <option value="nivell_3">{{ t .Lang "surnames.stats.scope.nivell_3" }}</option>
+                                <option value="nivell_4">{{ t .Lang "surnames.stats.scope.nivell_4" }}</option>
+                                <option value="nivell_5">{{ t .Lang "surnames.stats.scope.nivell_5" }}</option>
+                                <option value="nivell_6">{{ t .Lang "surnames.stats.scope.nivell_6" }}</option>
+                                <option value="nivell_7">{{ t .Lang "surnames.stats.scope.nivell_7" }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <ol class="cognom-stats-list" data-top-list data-empty="{{ t .Lang "surnames.stats.empty.zones" }}"></ol>
+                </div>
             </div>
 
             <div class="cognoms-panel">
@@ -193,6 +360,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+    <script src="/static/js/cognoms-stats.js"></script>
     <script src="/static/js/cognoms-mapa.js"></script>
     <script>
         (function () {

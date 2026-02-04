@@ -1,0 +1,207 @@
+{{ define "cerca-avancada.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "search.advanced.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/cerca-avancada.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card cerca-avancada-card">
+            <header class="card-header">
+                <h1>{{ t .Lang "search.advanced.title" }}</h1>
+                <p class="muted">{{ t .Lang "search.advanced.subtitle" }}</p>
+            </header>
+
+            <form id="advancedSearchForm" class="filtres filtres-cerca-avancada" data-api="/api/search"
+                  data-label-loading="{{ t .Lang "common.loading" }}"
+                  data-label-error="{{ t .Lang "common.error" }}"
+                  data-label-empty="{{ t .Lang "search.results.empty" }}"
+                  data-label-total="{{ t .Lang "search.results.total" }}"
+                  data-label-prev="{{ t .Lang "common.prev" }}"
+                  data-label-next="{{ t .Lang "common.next" }}"
+                  data-label-entity-persona="{{ t .Lang "search.entity.persona" }}"
+                  data-label-entity-registre="{{ t .Lang "search.entity.registre_raw" }}"
+                  data-label-facet-entity="{{ t .Lang "search.facets.entity" }}"
+                  data-label-facet-tipus="{{ t .Lang "search.facets.tipus" }}">
+                <input type="hidden" name="page" value="{{ .Data.Filter.Page }}">
+                <div class="grup-camp">
+                    <label for="searchQuery">{{ t .Lang "search.filters.query" }}</label>
+                    <input id="searchQuery" type="text" name="q" value="{{ .Data.Filter.Q }}" placeholder="{{ t .Lang "search.filters.query_placeholder" }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="searchNom">{{ t .Lang "search.filters.name" }}</label>
+                    <input id="searchNom" type="text" name="nom" value="{{ .Data.Filter.Nom }}" placeholder="{{ t .Lang "search.filters.name_placeholder" }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="searchCognom1">{{ t .Lang "search.filters.surname1" }}</label>
+                    <input id="searchCognom1" type="text" name="cognom1" value="{{ .Data.Filter.CognomPatern }}" placeholder="{{ t .Lang "search.filters.surname1_placeholder" }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="searchCognom2">{{ t .Lang "search.filters.surname2" }}</label>
+                    <input id="searchCognom2" type="text" name="cognom2" value="{{ .Data.Filter.CognomMatern }}" placeholder="{{ t .Lang "search.filters.surname2_placeholder" }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="searchPare">{{ t .Lang "search.filters.father" }}</label>
+                    <input id="searchPare" type="text" name="pare" value="{{ .Data.Filter.Pare }}" placeholder="{{ t .Lang "search.filters.father_placeholder" }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="searchMare">{{ t .Lang "search.filters.mother" }}</label>
+                    <input id="searchMare" type="text" name="mare" value="{{ .Data.Filter.Mare }}" placeholder="{{ t .Lang "search.filters.mother_placeholder" }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="searchParella">{{ t .Lang "search.filters.partner" }}</label>
+                    <input id="searchParella" type="text" name="parella" value="{{ .Data.Filter.Parella }}" placeholder="{{ t .Lang "search.filters.partner_placeholder" }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="searchEntity">{{ t .Lang "search.filters.entity" }}</label>
+                    <select id="searchEntity" name="entity">
+                        <option value="all" {{ if eq .Data.Filter.Entity "all" }}selected{{ end }}>{{ t .Lang "search.entity.all" }}</option>
+                        <option value="persona" {{ if eq .Data.Filter.Entity "persona" }}selected{{ end }}>{{ t .Lang "search.entity.persona" }}</option>
+                        <option value="registre_raw" {{ if eq .Data.Filter.Entity "registre_raw" }}selected{{ end }}>{{ t .Lang "search.entity.registre_raw" }}</option>
+                    </select>
+                </div>
+                <div class="grup-camp grup-camp-full">
+                    <label>{{ t .Lang "search.filters.territory" }}</label>
+                    <div class="cerca-avancada-territori-block" data-territori-block>
+                        <div class="cerca-avancada-territori-free">
+                            <label for="territoriSearch">{{ t .Lang "search.filters.territory_search" }}</label>
+                            <input id="territoriSearch" type="text" autocomplete="off" placeholder="{{ t .Lang "search.filters.territory_placeholder" }}" data-api="/api/scopes/search" data-type="municipi" data-empty-label="{{ t .Lang "common.empty" }}" value="{{ .Data.Filter.AncestorLabel }}">
+                            <ul id="territoriSuggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "search.filters.territory_search" }}"></ul>
+                        </div>
+                        <div class="cerca-avancada-territori-selects">
+                            <div class="territori-field">
+                                <label for="searchPaisSelect">{{ t .Lang "municipis.filter.country" }}</label>
+                                <select id="searchPaisSelect" name="pais_id">
+                                    <option value="">{{ t .Lang "municipis.filter.country.placeholder" }}</option>
+                                    {{ range .Data.Paisos }}
+                                    <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaisID .ID }}selected{{ end }}>{{ .CodiISO3 }}</option>
+                                    {{ end }}
+                                </select>
+                            </div>
+                            {{ range .Data.LevelSelects }}
+                            <div class="territori-field">
+                                <label for="search_nivell_id_{{ .Level }}">{{ .Label }}</label>
+                                <select id="search_nivell_id_{{ .Level }}" name="nivell_id_{{ .Level }}" data-territori-level data-level="{{ .Level }}">
+                                    <option value="">{{ t $.Lang "municipis.filter.level.placeholder" }}</option>
+                                    {{ $selected := .SelectedID }}
+                                    {{ range .Options }}
+                                    <option value="{{ .ID }}" {{ if eq $selected .ID }}selected{{ end }}>{{ .NomNivell }}</option>
+                                    {{ end }}
+                                </select>
+                            </div>
+                            {{ end }}
+                            <div class="territori-field">
+                                <label for="territoriMunicipiId">{{ t .Lang "search.ancestor.municipi" }}</label>
+                                <select id="territoriMunicipiId" name="municipi_id">
+                                    <option value="">{{ t .Lang "common.select" }}</option>
+                                    {{ range .Data.MunicipiOptions }}
+                                    <option value="{{ .ID }}" {{ if eq $.Data.Filter.MunicipiID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                                    {{ end }}
+                                </select>
+                            </div>
+                        </div>
+                        <input type="hidden" id="ancestor_type" name="ancestor_type" value="{{ .Data.Filter.AncestorType }}">
+                        <input type="hidden" id="ancestor_id" name="ancestor_id" value="{{ .Data.Filter.AncestorID }}">
+                        <input type="hidden" id="ancestor_label" name="ancestor_label" value="{{ .Data.Filter.AncestorLabel }}">
+                    </div>
+                </div>
+                <div class="grup-camp">
+                    <label for="entitatSearch">{{ t .Lang "search.filters.ecles" }}</label>
+                    <input id="entitatSearch" type="text" name="entitat_label" data-suggest="1" data-api="/api/territori/eclesiastic/suggest" data-hidden="entitat_id" data-suggestions="entitat_suggestions" data-empty-label="{{ t .Lang "common.empty" }}" placeholder="{{ t .Lang "search.filters.ecles_placeholder" }}" value="{{ .Data.Filter.EntitatEclesiasticaLabel }}">
+                    <input type="hidden" id="entitat_id" name="entitat_eclesiastica_id" value="{{ .Data.Filter.EntitatEclesiasticaID }}">
+                    <ul id="entitat_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "search.filters.ecles" }}"></ul>
+                </div>
+                <div class="grup-camp">
+                    <label for="arxiuSearch">{{ t .Lang "search.filters.arxiu" }}</label>
+                    <input id="arxiuSearch" type="text" name="arxiu_label" data-suggest="1" data-api="/api/documentals/arxius/suggest" data-hidden="arxiu_id" data-suggestions="arxiu_suggestions" data-empty-label="{{ t .Lang "common.empty" }}" placeholder="{{ t .Lang "search.filters.arxiu_placeholder" }}" value="{{ .Data.Filter.ArxiuLabel }}">
+                    <input type="hidden" id="arxiu_id" name="arxiu_id" value="{{ .Data.Filter.ArxiuID }}">
+                    <ul id="arxiu_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "search.filters.arxiu" }}"></ul>
+                </div>
+                <div class="grup-camp">
+                    <label for="llibreSearch">{{ t .Lang "search.filters.llibre" }}</label>
+                    <input id="llibreSearch" type="text" name="llibre_label" data-suggest="1" data-api="/api/documentals/llibres/suggest" data-hidden="llibre_id" data-suggestions="llibre_suggestions" data-empty-label="{{ t .Lang "common.empty" }}" placeholder="{{ t .Lang "search.filters.llibre_placeholder" }}" value="{{ .Data.Filter.LlibreLabel }}">
+                    <input type="hidden" id="llibre_id" name="llibre_id" value="{{ .Data.Filter.LlibreID }}">
+                    <ul id="llibre_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "search.filters.llibre" }}"></ul>
+                </div>
+                <div class="grup-camp">
+                    <label for="searchFrom">{{ t .Lang "search.filters.date_from" }}</label>
+                    <input id="searchFrom" type="date" name="from" value="{{ .Data.Filter.DateFrom }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="searchTo">{{ t .Lang "search.filters.date_to" }}</label>
+                    <input id="searchTo" type="date" name="to" value="{{ .Data.Filter.DateTo }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="anyFrom">{{ t .Lang "search.filters.any_from" }}</label>
+                    <input id="anyFrom" type="number" name="any_from" value="{{ if gt .Data.Filter.AnyFrom 0 }}{{ .Data.Filter.AnyFrom }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="anyTo">{{ t .Lang "search.filters.any_to" }}</label>
+                    <input id="anyTo" type="number" name="any_to" value="{{ if gt .Data.Filter.AnyTo 0 }}{{ .Data.Filter.AnyTo }}{{ end }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="tipusActe">{{ t .Lang "search.filters.tipus_acte" }}</label>
+                    <select id="tipusActe" name="tipus_acte">
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                        {{ range .Data.TipusActeOptions }}
+                        <option value="{{ . }}" {{ if eq $.Data.Filter.TipusActe . }}selected{{ end }}>{{ t $.Lang (printf "records.type.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="searchSort">{{ t .Lang "search.filters.sort" }}</label>
+                    <select id="searchSort" name="sort">
+                        <option value="relevance" {{ if eq .Data.Filter.Sort "relevance" }}selected{{ end }}>{{ t .Lang "search.sort.relevance" }}</option>
+                        <option value="date_desc" {{ if eq .Data.Filter.Sort "date_desc" }}selected{{ end }}>{{ t .Lang "search.sort.date_desc" }}</option>
+                        <option value="date_asc" {{ if eq .Data.Filter.Sort "date_asc" }}selected{{ end }}>{{ t .Lang "search.sort.date_asc" }}</option>
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="pageSize">{{ t .Lang "search.filters.page_size" }}</label>
+                    <select id="pageSize" name="page_size">
+                        {{ range $opt := (list "10" "25" "50" "100") }}
+                        <option value="{{ $opt }}" {{ if eq (printf "%d" $.Data.Filter.PageSize) $opt }}selected{{ end }}>{{ $opt }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp grup-camp-toggle grup-camp-full">
+                    <label class="checkbox-pill">
+                        <input type="checkbox" name="only_surname" value="1" {{ if .Data.Filter.OnlySurnameDirect }}checked{{ end }}>
+                        <span class="checkbox-ui" aria-hidden="true"></span>
+                        <span class="checkbox-text">{{ t .Lang "search.filters.only_surname" }}</span>
+                    </label>
+                    <label class="checkbox-pill">
+                        <input type="checkbox" name="exact" value="1" {{ if .Data.Filter.Exact }}checked{{ end }}>
+                        <span class="checkbox-ui" aria-hidden="true"></span>
+                        <span class="checkbox-text">{{ t .Lang "search.filters.exact" }}</span>
+                    </label>
+                </div>
+                <div class="grup-camp grup-camp-inline">
+                    <button type="submit" class="boto-primari">{{ t .Lang "search.action.search" }}</button>
+                    <button type="button" class="boto-secundari" id="advancedSearchClear">{{ t .Lang "search.action.clear" }}</button>
+                </div>
+            </form>
+
+            <div class="cerca-avancada-resultats">
+                <div class="cerca-avancada-status">
+                    <span id="advancedSearchStatus" class="muted">{{ t .Lang "search.results.empty" }}</span>
+                </div>
+                <div id="advancedSearchFacets" class="cerca-avancada-facets"></div>
+                <div id="advancedSearchResults" class="cerca-avancada-list"></div>
+                <div id="advancedSearchPagination" class="paginacio"></div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script src="/static/js/events-form.js"></script>
+    <script src="/static/js/arxiu-form-suggest.js"></script>
+    <script src="/static/js/cerca-avancada.js"></script>
+</body>
+</html>
+{{ end }}

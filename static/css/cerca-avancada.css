@@ -1,0 +1,166 @@
+.cerca-avancada-card .filtres-cerca-avancada {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    align-items: end;
+}
+
+.filtres-cerca-avancada .grup-camp {
+    position: relative;
+}
+
+.grup-camp-full {
+    grid-column: 1 / -1;
+}
+
+.grup-camp-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 4px 0;
+    border: none;
+    background: transparent;
+    width: 100%;
+    align-self: stretch;
+}
+
+.cerca-avancada-territori-block {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    align-items: start;
+}
+
+.cerca-avancada-territori-free,
+.cerca-avancada-territori-selects {
+    display: grid;
+    gap: 10px 12px;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    align-items: end;
+}
+
+.territori-field {
+    display: grid;
+    gap: 6px;
+}
+
+.cerca-avancada-territori-free {
+    position: relative;
+}
+
+.cerca-avancada-territori-free .resultats-cerca {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 20;
+    margin-top: 0;
+}
+
+.cerca-avancada-territori {
+    display: grid;
+    grid-template-columns: minmax(140px, 1fr) minmax(160px, 2fr);
+    gap: 8px;
+    align-items: center;
+}
+
+.cerca-avancada-territori .resultats-cerca {
+    grid-column: 1 / -1;
+}
+
+.cerca-avancada-resultats {
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.cerca-avancada-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cerca-avancada-facets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.cerca-avancada-facet {
+    background: #f4f4f4;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+}
+
+.cerca-avancada-list {
+    display: grid;
+    gap: 12px;
+}
+
+.cerca-result-card {
+    border: 1px solid #e2e2e2;
+    border-radius: 12px;
+    padding: 16px;
+    background: #fff;
+}
+
+.cerca-result-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: baseline;
+}
+
+.cerca-result-title {
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: #1b1b1b;
+    text-decoration: none;
+}
+
+.cerca-result-title:hover {
+    text-decoration: underline;
+}
+
+.cerca-result-meta {
+    color: #5f5f5f;
+    font-size: 0.9rem;
+    margin-top: 6px;
+}
+
+.cerca-result-match {
+    margin-top: 6px;
+    color: #2b2b2b;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.cerca-result-reasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.cerca-result-reasons .badge {
+    font-size: 0.75rem;
+}
+
+.cerca-avancada-empty {
+    padding: 12px 0;
+    color: #6a6a6a;
+}
+
+@media (max-width: 720px) {
+    .cerca-avancada-territori {
+        grid-template-columns: 1fr;
+    }
+
+    .cerca-avancada-territori-block {
+        grid-template-columns: 1fr;
+    }
+}

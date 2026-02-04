@@ -349,6 +349,12 @@ func (d *PostgreSQL) CreatePersona(p *Persona) (int, error) {
 func (d *PostgreSQL) UpdatePersona(p *Persona) error {
 	return d.help.updatePersona(p)
 }
+func (d *PostgreSQL) ListPersonaFieldLinks(personaID int) ([]PersonaFieldLink, error) {
+	return d.help.listPersonaFieldLinks(personaID)
+}
+func (d *PostgreSQL) UpsertPersonaFieldLink(personaID int, fieldKey string, registreID int, userID int) error {
+	return d.help.upsertPersonaFieldLink(personaID, fieldKey, registreID, userID)
+}
 func (d *PostgreSQL) ListPersonaAnecdotes(personaID int, userID int) ([]PersonaAnecdote, error) {
 	return d.help.listPersonaAnecdotes(personaID, userID)
 }
@@ -806,6 +812,15 @@ func (d *PostgreSQL) SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResul
 func (d *PostgreSQL) ListRegistresByPersona(personaID int, tipus string) ([]PersonaRegistreRow, error) {
 	return d.help.listRegistresByPersona(personaID, tipus)
 }
+func (d *PostgreSQL) GetPersonesByIDs(ids []int) (map[int]*Persona, error) {
+	return d.help.getPersonesByIDs(ids)
+}
+func (d *PostgreSQL) FindBestBaptismeTranscripcioForPersona(personaID int) (int, bool, error) {
+	return d.help.findBestBaptismeTranscripcioForPersona(personaID)
+}
+func (d *PostgreSQL) GetParentsFromTranscripcio(transcripcioID int) (int, int, error) {
+	return d.help.getParentsFromTranscripcio(transcripcioID)
+}
 
 // Punts i activitat
 func (d *PostgreSQL) ListPointsRules() ([]PointsRule, error) { return d.help.listPointsRules() }
@@ -898,6 +913,9 @@ func (d *PostgreSQL) ListCognoms(q string, limit, offset int) ([]Cognom, error) 
 	return d.help.listCognoms(q, limit, offset)
 }
 func (d *PostgreSQL) GetCognom(id int) (*Cognom, error) { return d.help.getCognom(id) }
+func (d *PostgreSQL) FindCognomIDByKey(key string) (int, error) {
+	return d.help.findCognomIDByKey(key)
+}
 func (d *PostgreSQL) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
 	return d.help.upsertCognom(forma, key, origen, notes, createdBy)
 }
@@ -919,6 +937,71 @@ func (d *PostgreSQL) CreateCognomVariant(v *CognomVariant) (int, error) {
 func (d *PostgreSQL) UpdateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateCognomVariantModeracio(id, estat, motiu, moderatorID)
 }
+
+func (d *PostgreSQL) GetCognomRedirect(fromID int) (*CognomRedirect, error) {
+	return d.help.getCognomRedirect(fromID)
+}
+
+func (d *PostgreSQL) ListCognomRedirects() ([]CognomRedirect, error) {
+	return d.help.listCognomRedirects()
+}
+
+func (d *PostgreSQL) ListCognomRedirectsByTo(toID int) ([]CognomRedirect, error) {
+	return d.help.listCognomRedirectsByTo(toID)
+}
+
+func (d *PostgreSQL) SetCognomRedirect(fromID, toID int, createdBy *int, reason string) error {
+	return d.help.setCognomRedirect(fromID, toID, createdBy, reason)
+}
+
+func (d *PostgreSQL) DeleteCognomRedirect(fromID int) error {
+	return d.help.deleteCognomRedirect(fromID)
+}
+
+func (d *PostgreSQL) CreateCognomRedirectSuggestion(s *CognomRedirectSuggestion) (int, error) {
+	return d.help.createCognomRedirectSuggestion(s)
+}
+
+func (d *PostgreSQL) GetCognomRedirectSuggestion(id int) (*CognomRedirectSuggestion, error) {
+	return d.help.getCognomRedirectSuggestion(id)
+}
+
+func (d *PostgreSQL) ListCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) ([]CognomRedirectSuggestion, error) {
+	return d.help.listCognomRedirectSuggestions(f)
+}
+
+func (d *PostgreSQL) UpdateCognomRedirectSuggestionModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateCognomRedirectSuggestionModeracio(id, estat, motiu, moderatorID)
+}
+
+func (d *PostgreSQL) CreateCognomReferencia(ref *CognomReferencia) (int, error) {
+	return d.help.createCognomReferencia(ref)
+}
+
+func (d *PostgreSQL) ListCognomReferencies(f CognomReferenciaFilter) ([]CognomReferencia, error) {
+	return d.help.listCognomReferencies(f)
+}
+
+func (d *PostgreSQL) UpdateCognomReferenciaModeracio(id int, estat, motiu string, moderatorID int) error {
+	return d.help.updateCognomReferenciaModeracio(id, estat, motiu, moderatorID)
+}
+// Cercador avançat
+func (d *PostgreSQL) UpsertSearchDoc(doc *SearchDoc) error { return d.help.upsertSearchDoc(doc) }
+func (d *PostgreSQL) GetSearchDoc(entityType string, entityID int) (*SearchDoc, error) {
+	return d.help.getSearchDoc(entityType, entityID)
+}
+func (d *PostgreSQL) DeleteSearchDoc(entityType string, entityID int) error {
+	return d.help.deleteSearchDoc(entityType, entityID)
+}
+func (d *PostgreSQL) SearchDocs(filter SearchQueryFilter) ([]SearchDocRow, int, SearchFacets, error) {
+	return d.help.searchDocs(filter)
+}
+func (d *PostgreSQL) ReplaceAdminClosure(descendantMunicipiID int, entries []AdminClosureEntry) error {
+	return d.help.replaceAdminClosure(descendantMunicipiID, entries)
+}
+func (d *PostgreSQL) ListAdminClosure(descendantMunicipiID int) ([]AdminClosureEntry, error) {
+	return d.help.listAdminClosure(descendantMunicipiID)
+}
 func (d *PostgreSQL) UpsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error {
 	return d.help.upsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq)
 }
@@ -935,6 +1018,30 @@ func (d *PostgreSQL) ListCognomImportRows(limit, offset int) ([]CognomImportRow,
 
 func (d *PostgreSQL) ListCognomStatsRows(limit, offset int) ([]CognomStatsRow, error) {
 	return d.help.listCognomStatsRows(limit, offset)
+}
+
+func (d *PostgreSQL) RebuildCognomStats(cognomID int) error {
+	return d.help.rebuildCognomStats(cognomID)
+}
+
+func (d *PostgreSQL) GetCognomStatsTotal(cognomID int) (*CognomStatsTotal, error) {
+	return d.help.getCognomStatsTotal(cognomID)
+}
+
+func (d *PostgreSQL) ListCognomStatsAny(cognomID int, from, to int) ([]CognomStatsAnyRow, error) {
+	return d.help.listCognomStatsAny(cognomID, from, to)
+}
+
+func (d *PostgreSQL) ListCognomStatsAnyDecade(cognomID int, from, to int) ([]CognomStatsAnyRow, error) {
+	return d.help.listCognomStatsAnyDecade(cognomID, from, to)
+}
+
+func (d *PostgreSQL) ListCognomStatsAncestor(cognomID int, ancestorType string, level, any, limit int) ([]CognomStatsAncestorRow, error) {
+	return d.help.listCognomStatsAncestor(cognomID, ancestorType, level, any, limit)
+}
+
+func (d *PostgreSQL) CountCognomStatsAncestorDistinct(cognomID int, ancestorType string, level, any int) (int, error) {
+	return d.help.countCognomStatsAncestorDistinct(cognomID, ancestorType, level, any)
 }
 
 // Noms

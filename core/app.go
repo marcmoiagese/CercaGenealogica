@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -18,6 +19,7 @@ type App struct {
 	arxiuTargetCache    *targetCache
 	municipiTargetCache *targetCache
 	achievementCache    *achievementCache
+	searchIndexOnce     sync.Once
 }
 
 func NewApp(cfg map[string]string, database db.DB) *App {

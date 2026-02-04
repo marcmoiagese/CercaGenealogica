@@ -164,7 +164,7 @@ func TestMapesPermissionDenied(t *testing.T) {
 	ensureAdminPolicyForUser(t, database, adminUser.ID)
 	_, mapID := createMunicipiAndMap(t, database, adminUser.ID)
 
-	user, sessionID := createF7UserWithSession(t, database)
+	_, sessionID := createF7UserWithSession(t, database)
 	csrf := "csrf_mapes_perm_" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	req := newMapRequest(http.MethodPost, "/api/mapes/"+strconv.Itoa(mapID)+"/draft", `{"csrf_token":"`+csrf+`"}`, sessionID, csrf)
 	rr := httptest.NewRecorder()

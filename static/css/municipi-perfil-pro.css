@@ -46,6 +46,11 @@
     align-items: center;
 }
 
+.muni-badges .opcions-dropdown {
+    float: none;
+    margin-bottom: 0;
+}
+
 .muni-pill {
     display: inline-flex;
     align-items: center;

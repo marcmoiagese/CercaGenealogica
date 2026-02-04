@@ -1,0 +1,95 @@
+{{ define "persona-public.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index,follow">
+    <meta name="description" content="{{ t .Lang "public.person.meta_desc" }}">
+    <title>{{ .Data.PersonaName }} · {{ t .Lang "public.person.title" }}</title>
+    {{ template "styles-public" . }}
+    <link rel="stylesheet" href="/static/css/menu.css">
+    <link rel="stylesheet" href="/static/css/persona-public.css">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "ProfilePage",
+        "name": {{ toJsonJS .Data.PersonaName }},
+        "mainEntity": {
+            "@type": "Person",
+            "name": {{ toJsonJS .Data.PersonaName }}
+        }
+    }
+    </script>
+</head>
+<body>
+    {{ template "header-public" . }}
+
+    <main class="container persona-public">
+        <section class="persona-hero">
+            <div class="persona-hero__top">
+                <div class="persona-avatar" aria-hidden="true"></div>
+                <div>
+                    <h1 class="persona-name">{{ .Data.PersonaName }}</h1>
+                    <p class="persona-subline">{{ t .Lang "public.person.login_cta" }}</p>
+                    <p class="persona-subline persona-subline--muted">{{ t .Lang "public.person.login_hint" }}</p>
+                </div>
+            </div>
+
+            <div class="persona-layout">
+                <div class="card">
+                    <h2><i class="fa-solid fa-lock" aria-hidden="true"></i> {{ t .Lang "public.person.restricted.title" }}</h2>
+                    <div class="locked-wrap">
+                        <div class="locked-skeleton shimmer" aria-hidden="true"></div>
+                        <div class="locked-message">
+                            <div class="locked-message__inner">{{ t .Lang "public.person.restricted.body" }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <aside class="card cta">
+                    <h2><i class="fa-solid fa-user-shield" aria-hidden="true"></i> {{ t .Lang "public.person.access.title" }}</h2>
+                    <p>{{ t .Lang "public.person.access.body" }}</p>
+                    <div class="cta-actions">
+                        <a class="btn btn--primary" href="#" id="botoLoginAlt"><i class="fa-solid fa-right-to-bracket"></i> {{ t .Lang "nav.login" }}</a>
+                        <a class="btn btn--ghost" href="#" id="botoRegistreAlt"><i class="fa-solid fa-user-plus"></i> {{ t .Lang "nav.register" }}</a>
+                        <a class="btn btn--ghost" href="/public/persones/{{ .Data.PersonaID }}/arbre"><i class="fa-solid fa-diagram-project"></i> {{ t .Lang "public.person.view_tree" }}</a>
+                    </div>
+                    <p class="note">{{ t .Lang "public.person.access.note" }}</p>
+                </aside>
+            </div>
+        </section>
+    </main>
+
+    {{ template "footer" . }}
+    {{ template "modals-public" . }}
+    {{ template "scripts-public" . }}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const altLogin = document.getElementById('botoLoginAlt');
+            const altReg = document.getElementById('botoRegistreAlt');
+
+            if (altLogin) {
+                altLogin.addEventListener('click', (e) => {
+                    const modal = document.getElementById('modalLogin');
+                    if (modal) {
+                        e.preventDefault();
+                        modal.style.display = 'flex';
+                    }
+                });
+            }
+
+            if (altReg) {
+                altReg.addEventListener('click', (e) => {
+                    const modal = document.getElementById('modalRegistre');
+                    if (modal) {
+                        e.preventDefault();
+                        modal.style.display = 'flex';
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
+{{ end }}

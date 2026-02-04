@@ -29,6 +29,42 @@ func formatPlaceholders(style, query string) string {
 	return b.String()
 }
 
+func scanNullTime(value interface{}) (sql.NullTime, error) {
+	if value == nil {
+		return sql.NullTime{}, nil
+	}
+	switch v := value.(type) {
+	case time.Time:
+		return sql.NullTime{Time: v, Valid: true}, nil
+	case []byte:
+		return parseTimeString(string(v))
+	case string:
+		return parseTimeString(v)
+	default:
+		return sql.NullTime{}, fmt.Errorf("unsupported time type %T", value)
+	}
+}
+
+func parseTimeString(value string) (sql.NullTime, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return sql.NullTime{}, nil
+	}
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return sql.NullTime{Time: parsed, Valid: true}, nil
+		}
+	}
+	return sql.NullTime{}, fmt.Errorf("unable to parse time: %s", value)
+}
+
 func buildInPlaceholders(style string, count int) string {
 	if count <= 0 {
 		return ""
@@ -148,13 +184,33 @@ func dbTimeString(val interface{}) string {
 }
 
 type sqlHelper struct {
-	db     *sql.DB
-	style  string
-	nowFun string
+	db              *sql.DB
+	style           string
+	nowFun          string
+	supportsTrigram bool
 }
 
 func newSQLHelper(db *sql.DB, style, nowFun string) sqlHelper {
-	return sqlHelper{db: db, style: strings.ToLower(style), nowFun: nowFun}
+	helper := sqlHelper{db: db, style: strings.ToLower(style), nowFun: nowFun}
+	if helper.style == "postgres" {
+		helper.supportsTrigram = helper.postgresExtensionExists("pg_trgm")
+	}
+	return helper
+}
+
+func (h sqlHelper) postgresExtensionExists(name string) bool {
+	if h.db == nil || h.style != "postgres" {
+		return false
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	var tmp int
+	if err := h.db.QueryRow("SELECT 1 FROM pg_extension WHERE extname = $1", name).Scan(&tmp); err != nil {
+		return false
+	}
+	return true
 }
 
 func (h sqlHelper) columnExists(table, column string) bool {
@@ -867,8 +923,9 @@ func combinePermissions(base, add PolicyPermissions) PolicyPermissions {
 
 // Persones (moderació bàsica)
 func (h sqlHelper) listPersones(f PersonaFilter) ([]Persona, error) {
+	h.ensurePersonaExtraColumns()
 	query := `
-        SELECT id, nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, quinta,
+        SELECT id, nom, cognom1, cognom2, municipi, COALESCE(municipi_naixement, ''), COALESCE(municipi_defuncio, ''), arquevisbat, nom_complet, pagina, llibre, quinta,
                data_naixement, data_bateig, data_defuncio, ofici, estat_civil,
                created_by, created_at, updated_at, updated_by, moderated_by, moderated_at
         FROM persona`
@@ -895,7 +952,7 @@ func (h sqlHelper) listPersones(f PersonaFilter) ([]Persona, error) {
 	var res []Persona
 	for rows.Next() {
 		var p Persona
-		if err := rows.Scan(&p.ID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.Municipi, &p.Arquebisbat, &p.NomComplet, &p.Pagina, &p.Llibre, &p.Quinta, &p.DataNaixement, &p.DataBateig, &p.DataDefuncio, &p.Ofici, &p.ModeracioEstat, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt, &p.UpdatedBy, &p.ModeratedBy, &p.ModeratedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.Municipi, &p.MunicipiNaixement, &p.MunicipiDefuncio, &p.Arquebisbat, &p.NomComplet, &p.Pagina, &p.Llibre, &p.Quinta, &p.DataNaixement, &p.DataBateig, &p.DataDefuncio, &p.Ofici, &p.ModeracioEstat, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt, &p.UpdatedBy, &p.ModeratedBy, &p.ModeratedAt); err != nil {
 			return nil, err
 		}
 		// Guardem el motiu de moderació (si s'ha usat) dins de quinta per no ampliar esquema
@@ -906,14 +963,47 @@ func (h sqlHelper) listPersones(f PersonaFilter) ([]Persona, error) {
 }
 
 func (h sqlHelper) getPersona(id int) (*Persona, error) {
-	row := h.db.QueryRow(`SELECT id, nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, quinta,
+	row := h.db.QueryRow(`SELECT id, nom, cognom1, cognom2, municipi, COALESCE(municipi_naixement, ''), COALESCE(municipi_defuncio, ''), arquevisbat, nom_complet, pagina, llibre, quinta,
         data_naixement, data_bateig, data_defuncio, ofici, estat_civil, created_by, created_at, updated_at, updated_by, moderated_by, moderated_at FROM persona WHERE id = ?`, id)
 	var p Persona
-	if err := row.Scan(&p.ID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.Municipi, &p.Arquebisbat, &p.NomComplet, &p.Pagina, &p.Llibre, &p.Quinta, &p.DataNaixement, &p.DataBateig, &p.DataDefuncio, &p.Ofici, &p.ModeracioEstat, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt, &p.UpdatedBy, &p.ModeratedBy, &p.ModeratedAt); err != nil {
+	if err := row.Scan(&p.ID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.Municipi, &p.MunicipiNaixement, &p.MunicipiDefuncio, &p.Arquebisbat, &p.NomComplet, &p.Pagina, &p.Llibre, &p.Quinta, &p.DataNaixement, &p.DataBateig, &p.DataDefuncio, &p.Ofici, &p.ModeracioEstat, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt, &p.UpdatedBy, &p.ModeratedBy, &p.ModeratedAt); err != nil {
 		return nil, err
 	}
 	p.ModeracioMotiu = p.Quinta
 	return &p, nil
+}
+
+func (h sqlHelper) getPersonesByIDs(ids []int) (map[int]*Persona, error) {
+	res := map[int]*Persona{}
+	if len(ids) == 0 {
+		return res, nil
+	}
+	placeholders := buildInPlaceholders(h.style, len(ids))
+	query := `
+        SELECT id, nom, cognom1, cognom2, municipi, COALESCE(municipi_naixement, ''), COALESCE(municipi_defuncio, ''), arquevisbat, nom_complet, pagina, llibre, quinta,
+               data_naixement, data_bateig, data_defuncio, ofici, estat_civil,
+               created_by, created_at, updated_at, updated_by, moderated_by, moderated_at
+        FROM persona
+        WHERE id IN (` + placeholders + `)`
+	args := make([]interface{}, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p Persona
+		if err := rows.Scan(&p.ID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.Municipi, &p.MunicipiNaixement, &p.MunicipiDefuncio, &p.Arquebisbat, &p.NomComplet, &p.Pagina, &p.Llibre, &p.Quinta, &p.DataNaixement, &p.DataBateig, &p.DataDefuncio, &p.Ofici, &p.ModeracioEstat, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt, &p.UpdatedBy, &p.ModeratedBy, &p.ModeratedAt); err != nil {
+			return nil, err
+		}
+		p.ModeracioMotiu = p.Quinta
+		res[p.ID] = &p
+	}
+	return res, nil
 }
 
 func (h sqlHelper) createPersona(p *Persona) (int, error) {
@@ -925,19 +1015,19 @@ func (h sqlHelper) createPersona(p *Persona) (int, error) {
 	if strings.TrimSpace(nomComplet) == "" {
 		nomComplet = strings.TrimSpace(strings.Join([]string{p.Nom, p.Cognom1, p.Cognom2}, " "))
 	}
-	stmt := `INSERT INTO persona (nom, cognom1, cognom2, municipi, arquevisbat, nom_complet, pagina, llibre, quinta, data_naixement, data_bateig, data_defuncio, ofici, estat_civil, created_by, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	stmt := `INSERT INTO persona (nom, cognom1, cognom2, municipi, municipi_naixement, municipi_defuncio, arquevisbat, nom_complet, pagina, llibre, quinta, data_naixement, data_bateig, data_defuncio, ofici, estat_civil, created_by, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	if h.style == "postgres" {
 		stmt += " RETURNING id"
 	}
 	stmt = formatPlaceholders(h.style, stmt)
 	if h.style == "postgres" {
-		if err := h.db.QueryRow(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, status, p.CreatedBy, p.UpdatedBy).Scan(&p.ID); err != nil {
+		if err := h.db.QueryRow(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.MunicipiNaixement, p.MunicipiDefuncio, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, status, p.CreatedBy, p.UpdatedBy).Scan(&p.ID); err != nil {
 			return 0, err
 		}
 		return p.ID, nil
 	}
-	res, err := h.db.Exec(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, status, p.CreatedBy, p.UpdatedBy)
+	res, err := h.db.Exec(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.MunicipiNaixement, p.MunicipiDefuncio, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, status, p.CreatedBy, p.UpdatedBy)
 	if err != nil {
 		return 0, err
 	}
@@ -1728,10 +1818,71 @@ func (h sqlHelper) updatePersona(p *Persona) error {
 	}
 	stmt := `
         UPDATE persona
-        SET nom=?, cognom1=?, cognom2=?, municipi=?, arquevisbat=?, nom_complet=?, pagina=?, llibre=?, quinta=?, data_naixement=?, data_bateig=?, data_defuncio=?, ofici=?, estat_civil=?, updated_at=?, updated_by=?
+        SET nom=?, cognom1=?, cognom2=?, municipi=?, municipi_naixement=?, municipi_defuncio=?, arquevisbat=?, nom_complet=?, pagina=?, llibre=?, quinta=?, data_naixement=?, data_bateig=?, data_defuncio=?, ofici=?, estat_civil=?, updated_at=?, updated_by=?
         WHERE id = ?`
 	stmt = formatPlaceholders(h.style, stmt)
-	_, err := h.db.Exec(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, p.ModeracioEstat, time.Now(), p.UpdatedBy, p.ID)
+	_, err := h.db.Exec(stmt, p.Nom, p.Cognom1, p.Cognom2, p.Municipi, p.MunicipiNaixement, p.MunicipiDefuncio, p.Arquebisbat, nomComplet, p.Pagina, p.Llibre, p.ModeracioMotiu, p.DataNaixement, p.DataBateig, p.DataDefuncio, p.Ofici, p.ModeracioEstat, time.Now(), p.UpdatedBy, p.ID)
+	return err
+}
+
+func (h sqlHelper) listPersonaFieldLinks(personaID int) ([]PersonaFieldLink, error) {
+	if personaID <= 0 {
+		return []PersonaFieldLink{}, nil
+	}
+	if !h.tableExists("persona_field_links") {
+		return []PersonaFieldLink{}, nil
+	}
+	query := `
+        SELECT id, persona_id, field_key, registre_id, created_by, created_at
+        FROM persona_field_links
+        WHERE persona_id = ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, personaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []PersonaFieldLink
+	for rows.Next() {
+		var link PersonaFieldLink
+		if err := rows.Scan(&link.ID, &link.PersonaID, &link.FieldKey, &link.RegistreID, &link.CreatedBy, &link.CreatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, link)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) upsertPersonaFieldLink(personaID int, fieldKey string, registreID int, userID int) error {
+	if personaID <= 0 || registreID <= 0 || strings.TrimSpace(fieldKey) == "" {
+		return errors.New("invalid link")
+	}
+	if !h.tableExists("persona_field_links") {
+		return errors.New("missing persona_field_links table")
+	}
+	fieldKey = strings.TrimSpace(fieldKey)
+	var stmt string
+	switch h.style {
+	case "mysql":
+		stmt = `
+            INSERT INTO persona_field_links (persona_id, field_key, registre_id, created_by, created_at)
+            VALUES (?, ?, ?, ?, ` + h.nowFun + `)
+            ON DUPLICATE KEY UPDATE registre_id = VALUES(registre_id), created_by = VALUES(created_by), created_at = ` + h.nowFun
+	case "postgres":
+		stmt = `
+            INSERT INTO persona_field_links (persona_id, field_key, registre_id, created_by, created_at)
+            VALUES (?, ?, ?, ?, ` + h.nowFun + `)
+            ON CONFLICT (persona_id, field_key)
+            DO UPDATE SET registre_id = EXCLUDED.registre_id, created_by = EXCLUDED.created_by, created_at = ` + h.nowFun
+	default: // sqlite
+		stmt = `
+            INSERT INTO persona_field_links (persona_id, field_key, registre_id, created_by, created_at)
+            VALUES (?, ?, ?, ?, ` + h.nowFun + `)
+            ON CONFLICT(persona_id, field_key)
+            DO UPDATE SET registre_id = excluded.registre_id, created_by = excluded.created_by, created_at = ` + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, personaID, fieldKey, registreID, userID)
 	return err
 }
 
@@ -2926,6 +3077,8 @@ func (h sqlHelper) saveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error)
 
 func (h sqlHelper) ensurePermissionsSchema() {
 	h.ensureUserExtraColumns()
+	h.ensurePersonaExtraColumns()
+	h.ensurePersonaFieldLinksTable()
 	h.ensurePolicyGrantsTable()
 	h.ensureMediaModerationColumns()
 	h.ensureMediaCreditsTables()
@@ -3282,6 +3435,104 @@ func (h sqlHelper) ensureUserExtraColumns() {
 	}
 	for _, stmt := range stmts {
 		_, _ = h.db.Exec(stmt)
+	}
+}
+
+func (h sqlHelper) ensurePersonaExtraColumns() {
+	if !h.tableExists("persona") {
+		return
+	}
+	stmts := []string{}
+	switch h.style {
+	case "mysql":
+		if !h.columnExists("persona", "municipi_naixement") {
+			stmts = append(stmts, "ALTER TABLE persona ADD COLUMN municipi_naixement VARCHAR(255)")
+		}
+		if !h.columnExists("persona", "municipi_defuncio") {
+			stmts = append(stmts, "ALTER TABLE persona ADD COLUMN municipi_defuncio VARCHAR(255)")
+		}
+	case "postgres":
+		if !h.columnExists("persona", "municipi_naixement") {
+			stmts = append(stmts, "ALTER TABLE persona ADD COLUMN IF NOT EXISTS municipi_naixement TEXT")
+		}
+		if !h.columnExists("persona", "municipi_defuncio") {
+			stmts = append(stmts, "ALTER TABLE persona ADD COLUMN IF NOT EXISTS municipi_defuncio TEXT")
+		}
+	default: // sqlite
+		if !h.columnExists("persona", "municipi_naixement") {
+			stmts = append(stmts, "ALTER TABLE persona ADD COLUMN municipi_naixement TEXT")
+		}
+		if !h.columnExists("persona", "municipi_defuncio") {
+			stmts = append(stmts, "ALTER TABLE persona ADD COLUMN municipi_defuncio TEXT")
+		}
+	}
+	for _, stmt := range stmts {
+		_, _ = h.db.Exec(stmt)
+	}
+}
+
+func (h sqlHelper) ensurePersonaFieldLinksTable() {
+	var stmt string
+	switch h.style {
+	case "mysql":
+		stmt = `CREATE TABLE IF NOT EXISTS persona_field_links (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            persona_id INT UNSIGNED NOT NULL,
+            field_key VARCHAR(100) NOT NULL,
+            registre_id INT UNSIGNED NOT NULL,
+            created_by INT UNSIGNED NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_persona_field (persona_id, field_key),
+            INDEX idx_persona_field_links_persona (persona_id),
+            INDEX idx_persona_field_links_registre (registre_id),
+            FOREIGN KEY (persona_id) REFERENCES persona(id) ON DELETE CASCADE,
+            FOREIGN KEY (registre_id) REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+            FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
+        )`
+	case "postgres":
+		stmt = `CREATE TABLE IF NOT EXISTS persona_field_links (
+            id SERIAL PRIMARY KEY,
+            persona_id INTEGER NOT NULL REFERENCES persona(id) ON DELETE CASCADE,
+            field_key TEXT NOT NULL,
+            registre_id INTEGER NOT NULL REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+            created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(persona_id, field_key)
+        )`
+	default: // sqlite
+		stmt = `CREATE TABLE IF NOT EXISTS persona_field_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            persona_id INTEGER NOT NULL REFERENCES persona(id) ON DELETE CASCADE,
+            field_key TEXT NOT NULL,
+            registre_id INTEGER NOT NULL REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+            created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(persona_id, field_key)
+        )`
+	}
+	if !h.tableExists("persona_field_links") && stmt != "" {
+		_, _ = h.db.Exec(stmt)
+	}
+	indexStmts := []string{}
+	switch h.style {
+	case "mysql":
+		indexStmts = []string{
+			"CREATE INDEX idx_persona_field_links_persona ON persona_field_links(persona_id)",
+			"CREATE INDEX idx_persona_field_links_registre ON persona_field_links(registre_id)",
+		}
+	case "postgres":
+		indexStmts = []string{
+			"CREATE INDEX IF NOT EXISTS idx_persona_field_links_persona ON persona_field_links(persona_id)",
+			"CREATE INDEX IF NOT EXISTS idx_persona_field_links_registre ON persona_field_links(registre_id)",
+		}
+	default: // sqlite
+		indexStmts = []string{
+			"CREATE INDEX IF NOT EXISTS idx_persona_field_links_persona ON persona_field_links(persona_id)",
+			"CREATE INDEX IF NOT EXISTS idx_persona_field_links_registre ON persona_field_links(registre_id)",
+		}
+	}
+	for _, idx := range indexStmts {
+		_, _ = h.db.Exec(idx)
 	}
 }
 
@@ -5550,6 +5801,216 @@ func (h sqlHelper) listTranscripcioPersones(transcripcioID int) ([]TranscripcioP
 	return res, nil
 }
 
+type transcripcioPersonaCandidate struct {
+	ID          int
+	TipusActe   string
+	DataActeISO sql.NullString
+	DataActeTxt string
+	AnyDoc      sql.NullInt64
+	Rol         string
+}
+
+func normalizeTreeToken(val string) string {
+	val = strings.ToLower(strings.TrimSpace(val))
+	val = strings.ReplaceAll(val, "_", "")
+	val = strings.ReplaceAll(val, " ", "")
+	val = strings.ReplaceAll(val, "-", "")
+	val = strings.ReplaceAll(val, ".", "")
+	return val
+}
+
+func parseTreeDate(val string) (time.Time, bool) {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return time.Time{}, false
+	}
+	layouts := []string{
+		time.RFC3339,
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, val); err == nil {
+			if t.Year() <= 1 {
+				return time.Time{}, false
+			}
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+var treeBaptismeTypes = map[string]struct{}{
+	"baptisme": {},
+	"baptizat": {},
+	"bateig":   {},
+	"bautismo": {},
+	"bautisme": {},
+	"baptism":  {},
+	"baptismo": {},
+}
+
+var treeBaptismeSubjectRoles = map[string]struct{}{
+	"batejat":  {},
+	"baptizat": {},
+	"infant":   {},
+	"infante":  {},
+	"baptism":  {},
+}
+
+var treeFatherRoles = map[string]struct{}{
+	"pare":    {},
+	"padre":   {},
+	"father":  {},
+	"genitor": {},
+}
+
+var treeMotherRoles = map[string]struct{}{
+	"mare":     {},
+	"madre":    {},
+	"mother":   {},
+	"genitora": {},
+}
+
+func roleMatches(role string, set map[string]struct{}) bool {
+	if role == "" {
+		return false
+	}
+	_, ok := set[normalizeTreeToken(role)]
+	return ok
+}
+
+func (h sqlHelper) listTranscripcioCandidatesForPersona(personaID int) ([]transcripcioPersonaCandidate, error) {
+	query := `
+        SELECT t.id, t.tipus_acte, t.data_acte_iso, t.data_acte_text, t.any_doc, p.rol
+        FROM transcripcions_persones_raw p
+        JOIN transcripcions_raw t ON t.id = p.transcripcio_id
+        WHERE p.persona_id = ? AND t.moderation_status = 'publicat'
+        ORDER BY t.data_acte_iso, t.any_doc, t.id`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, personaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []transcripcioPersonaCandidate
+	for rows.Next() {
+		var c transcripcioPersonaCandidate
+		if err := rows.Scan(&c.ID, &c.TipusActe, &c.DataActeISO, &c.DataActeTxt, &c.AnyDoc, &c.Rol); err != nil {
+			return nil, err
+		}
+		res = append(res, c)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getParentsFromTranscripcio(transcripcioID int) (int, int, error) {
+	persones, err := h.listTranscripcioPersones(transcripcioID)
+	if err != nil {
+		return 0, 0, err
+	}
+	fatherID := 0
+	motherID := 0
+	for _, p := range persones {
+		if fatherID == 0 && roleMatches(p.Rol, treeFatherRoles) {
+			if p.PersonaID.Valid && p.PersonaID.Int64 > 0 {
+				fatherID = int(p.PersonaID.Int64)
+			}
+		}
+		if motherID == 0 && roleMatches(p.Rol, treeMotherRoles) {
+			if p.PersonaID.Valid && p.PersonaID.Int64 > 0 {
+				motherID = int(p.PersonaID.Int64)
+			}
+		}
+		if fatherID > 0 && motherID > 0 {
+			break
+		}
+	}
+	return fatherID, motherID, nil
+}
+
+func (h sqlHelper) findBestBaptismeTranscripcioForPersona(personaID int) (int, bool, error) {
+	candidates, err := h.listTranscripcioCandidatesForPersona(personaID)
+	if err != nil {
+		return 0, false, err
+	}
+	if len(candidates) == 0 {
+		return 0, false, nil
+	}
+
+	bestID := 0
+	bestScore := -1
+	var bestDate time.Time
+	bestHasDate := false
+	bestYear := int64(0)
+	bestOrder := 0
+
+	for idx, c := range candidates {
+		if !roleMatches(c.TipusActe, treeBaptismeTypes) {
+			continue
+		}
+		if !roleMatches(c.Rol, treeBaptismeSubjectRoles) {
+			continue
+		}
+
+		fatherID, motherID, err := h.getParentsFromTranscripcio(c.ID)
+		if err != nil {
+			return 0, false, err
+		}
+		score := 0
+		if fatherID > 0 {
+			score++
+		}
+		if motherID > 0 {
+			score++
+		}
+
+		var date time.Time
+		hasDate := false
+		if c.DataActeISO.Valid {
+			date, hasDate = parseTreeDate(c.DataActeISO.String)
+		}
+
+		year := int64(0)
+		if c.AnyDoc.Valid {
+			year = c.AnyDoc.Int64
+		}
+
+		better := false
+		if score > bestScore {
+			better = true
+		} else if score == bestScore {
+			if hasDate && !bestHasDate {
+				better = true
+			} else if hasDate && bestHasDate {
+				if date.Before(bestDate) {
+					better = true
+				}
+			} else if !hasDate && !bestHasDate {
+				if year > 0 && (bestYear == 0 || year < bestYear) {
+					better = true
+				} else if year == bestYear && idx < bestOrder {
+					better = true
+				}
+			}
+		}
+
+		if better {
+			bestID = c.ID
+			bestScore = score
+			bestDate = date
+			bestHasDate = hasDate
+			bestYear = year
+			bestOrder = idx
+		}
+	}
+
+	if bestID == 0 {
+		return 0, false, nil
+	}
+	return bestID, true, nil
+}
+
 func (h sqlHelper) createTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error) {
 	query := `
         INSERT INTO transcripcions_persones_raw (
@@ -6483,24 +6944,48 @@ func (h sqlHelper) listCognoms(q string, limit, offset int) ([]Cognom, error) {
 	if h.style == "mysql" {
 		keyCol = "`key`"
 	}
-	query := fmt.Sprintf(`
-        SELECT id, forma, %s, origen, notes, created_by, created_at, updated_at
-        FROM cognoms`, keyCol)
+	keyColC := "c." + keyCol
+	keyColCT := "ct." + keyCol
+	q = strings.TrimSpace(q)
+	var query string
 	var where []string
 	var args []interface{}
-	if strings.TrimSpace(q) != "" {
+	if q != "" {
 		likeOp := "LIKE"
 		if h.style == "postgres" {
 			likeOp = "ILIKE"
 		}
-		where = append(where, "(forma "+likeOp+" ? OR "+keyCol+" "+likeOp+" ?)")
-		qLike := "%" + strings.TrimSpace(q) + "%"
-		args = append(args, qLike, qLike)
+		qLike := "%" + q + "%"
+		query = fmt.Sprintf(`
+            SELECT DISTINCT
+                COALESCE(r.to_cognom_id, c.id) AS id,
+                COALESCE(ct.forma, c.forma) AS forma,
+                COALESCE(%s, %s) AS key_val,
+                COALESCE(ct.origen, c.origen) AS origen,
+                COALESCE(ct.notes, c.notes) AS notes,
+                COALESCE(ct.created_by, c.created_by) AS created_by,
+                COALESCE(ct.created_at, c.created_at) AS created_at,
+                COALESCE(ct.updated_at, c.updated_at) AS updated_at
+            FROM cognoms c
+            LEFT JOIN cognoms_redirects r ON r.from_cognom_id = c.id
+            LEFT JOIN cognoms ct ON ct.id = r.to_cognom_id`, keyColCT, keyColC)
+		where = append(where, "(c.forma "+likeOp+" ? OR "+keyColC+" "+likeOp+" ? OR ct.forma "+likeOp+" ? OR "+keyColCT+" "+likeOp+" ?)")
+		args = append(args, qLike, qLike, qLike, qLike)
+	} else {
+		query = fmt.Sprintf(`
+            SELECT c.id, c.forma, %s, c.origen, c.notes, c.created_by, c.created_at, c.updated_at
+            FROM cognoms c
+            LEFT JOIN cognoms_redirects r ON r.from_cognom_id = c.id`, keyColC)
+		where = append(where, "r.from_cognom_id IS NULL")
 	}
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
-	query += " ORDER BY forma"
+	if q != "" {
+		query += " ORDER BY COALESCE(ct.forma, c.forma)"
+	} else {
+		query += " ORDER BY forma"
+	}
 	if limit > 0 {
 		query += " LIMIT ?"
 		args = append(args, limit)
@@ -6520,9 +7005,21 @@ func (h sqlHelper) listCognoms(q string, limit, offset int) ([]Cognom, error) {
 		var c Cognom
 		var origen sql.NullString
 		var notes sql.NullString
-		if err := rows.Scan(&c.ID, &c.Forma, &c.Key, &origen, &notes, &c.CreatedBy, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		var createdVal interface{}
+		var updatedVal interface{}
+		if err := rows.Scan(&c.ID, &c.Forma, &c.Key, &origen, &notes, &c.CreatedBy, &createdVal, &updatedVal); err != nil {
 			return nil, err
 		}
+		createdAt, err := scanNullTime(createdVal)
+		if err != nil {
+			return nil, err
+		}
+		updatedAt, err := scanNullTime(updatedVal)
+		if err != nil {
+			return nil, err
+		}
+		c.CreatedAt = createdAt
+		c.UpdatedAt = updatedAt
 		c.Origen = origen.String
 		c.Notes = notes.String
 		res = append(res, c)
@@ -6547,6 +7044,38 @@ func (h sqlHelper) getCognom(id int) (*Cognom, error) {
 	c.Origen = origen.String
 	c.Notes = notes.String
 	return &c, nil
+}
+
+func (h sqlHelper) findCognomIDByKey(key string) (int, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return 0, nil
+	}
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	query := fmt.Sprintf("SELECT id FROM cognoms WHERE %s = ? LIMIT 1", keyCol)
+	query = formatPlaceholders(h.style, query)
+	var id int
+	if err := h.db.QueryRow(query, key).Scan(&id); err == nil {
+		return id, nil
+	} else if err != sql.ErrNoRows {
+		return 0, err
+	}
+	query = fmt.Sprintf(`
+        SELECT v.cognom_id
+        FROM cognom_variants v
+        WHERE v.%s = ? AND v.moderation_status = 'publicat'
+        LIMIT 1`, keyCol)
+	query = formatPlaceholders(h.style, query)
+	if err := h.db.QueryRow(query, key).Scan(&id); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return id, nil
 }
 
 func (h sqlHelper) updateCognom(c *Cognom) error {
@@ -6763,7 +7292,13 @@ func (h sqlHelper) resolveCognomPublicatByForma(forma string) (int, string, bool
 	if h.style == "mysql" {
 		keyCol = "`key`"
 	}
-	query := fmt.Sprintf("SELECT id, forma FROM cognoms WHERE %s = ? LIMIT 1", keyCol)
+	query := fmt.Sprintf(`
+        SELECT COALESCE(r.to_cognom_id, c.id) AS id, COALESCE(ct.forma, c.forma) AS forma
+        FROM cognoms c
+        LEFT JOIN cognoms_redirects r ON r.from_cognom_id = c.id
+        LEFT JOIN cognoms ct ON ct.id = r.to_cognom_id
+        WHERE c.%s = ?
+        LIMIT 1`, keyCol)
 	query = formatPlaceholders(h.style, query)
 	var id int
 	var canon string
@@ -6776,9 +7311,11 @@ func (h sqlHelper) resolveCognomPublicatByForma(forma string) (int, string, bool
 	}
 	variantKey := "v." + keyCol
 	query = fmt.Sprintf(`
-        SELECT c.id, c.forma
+        SELECT COALESCE(r.to_cognom_id, c.id) AS id, COALESCE(ct.forma, c.forma) AS forma
         FROM cognom_variants v
         JOIN cognoms c ON c.id = v.cognom_id
+        LEFT JOIN cognoms_redirects r ON r.from_cognom_id = c.id
+        LEFT JOIN cognoms ct ON ct.id = r.to_cognom_id
         WHERE v.moderation_status = 'publicat' AND %s = ?
         LIMIT 1`, variantKey)
 	query = formatPlaceholders(h.style, query)
@@ -6936,6 +7473,943 @@ func (h sqlHelper) updateCognomVariantModeracio(id int, estat, motiu string, mod
 	return err
 }
 
+func (h sqlHelper) getCognomRedirect(fromID int) (*CognomRedirect, error) {
+	query := `SELECT from_cognom_id, to_cognom_id, reason, created_by, created_at FROM cognoms_redirects WHERE from_cognom_id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, fromID)
+	var r CognomRedirect
+	var reason sql.NullString
+	if err := row.Scan(&r.FromCognomID, &r.ToCognomID, &reason, &r.CreatedBy, &r.CreatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	r.Reason = reason.String
+	return &r, nil
+}
+
+func (h sqlHelper) listCognomRedirects() ([]CognomRedirect, error) {
+	query := `SELECT from_cognom_id, to_cognom_id, reason, created_by, created_at FROM cognoms_redirects ORDER BY created_at DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomRedirect
+	for rows.Next() {
+		var r CognomRedirect
+		var reason sql.NullString
+		if err := rows.Scan(&r.FromCognomID, &r.ToCognomID, &reason, &r.CreatedBy, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		r.Reason = reason.String
+		res = append(res, r)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listCognomRedirectsByTo(toID int) ([]CognomRedirect, error) {
+	query := `SELECT from_cognom_id, to_cognom_id, reason, created_by, created_at FROM cognoms_redirects WHERE to_cognom_id = ? ORDER BY created_at DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, toID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomRedirect
+	for rows.Next() {
+		var r CognomRedirect
+		var reason sql.NullString
+		if err := rows.Scan(&r.FromCognomID, &r.ToCognomID, &reason, &r.CreatedBy, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		r.Reason = reason.String
+		res = append(res, r)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) setCognomRedirect(fromID, toID int, createdBy *int, reason string) error {
+	var createdByVal interface{}
+	if createdBy != nil {
+		createdByVal = *createdBy
+	}
+	reason = strings.TrimSpace(reason)
+	if h.style == "postgres" {
+		stmt := `
+            INSERT INTO cognoms_redirects (from_cognom_id, to_cognom_id, reason, created_by, created_at)
+            VALUES (?, ?, ?, ?, ` + h.nowFun + `)
+            ON CONFLICT (from_cognom_id) DO UPDATE
+            SET to_cognom_id = EXCLUDED.to_cognom_id,
+                reason = EXCLUDED.reason,
+                created_by = EXCLUDED.created_by,
+                created_at = EXCLUDED.created_at`
+		stmt = formatPlaceholders(h.style, stmt)
+		_, err := h.db.Exec(stmt, fromID, toID, reason, createdByVal)
+		return err
+	}
+	stmt := `
+        INSERT INTO cognoms_redirects (from_cognom_id, to_cognom_id, reason, created_by, created_at)
+        VALUES (?, ?, ?, ?, ` + h.nowFun + `)`
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE to_cognom_id=VALUES(to_cognom_id), reason=VALUES(reason), created_by=VALUES(created_by), created_at=VALUES(created_at)"
+	} else {
+		stmt += " ON CONFLICT(from_cognom_id) DO UPDATE SET to_cognom_id=excluded.to_cognom_id, reason=excluded.reason, created_by=excluded.created_by, created_at=excluded.created_at"
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, fromID, toID, reason, createdByVal)
+	return err
+}
+
+func (h sqlHelper) deleteCognomRedirect(fromID int) error {
+	stmt := `DELETE FROM cognoms_redirects WHERE from_cognom_id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, fromID)
+	return err
+}
+
+func (h sqlHelper) createCognomRedirectSuggestion(s *CognomRedirectSuggestion) (int, error) {
+	status := strings.TrimSpace(s.ModeracioEstat)
+	if status == "" {
+		status = "pendent"
+	}
+	reason := strings.TrimSpace(s.Reason)
+	if h.style == "postgres" {
+		stmt := `
+            INSERT INTO cognoms_redirects_suggestions
+                (from_cognom_id, to_cognom_id, reason, moderation_status, moderated_by, moderated_at, moderation_notes, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `)
+            RETURNING id`
+		stmt = formatPlaceholders(h.style, stmt)
+		var id int
+		if err := h.db.QueryRow(stmt, s.FromCognomID, s.ToCognomID, reason, status, s.ModeratedBy, s.ModeratedAt, s.ModeracioMotiu, s.CreatedBy).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	stmt := `
+        INSERT INTO cognoms_redirects_suggestions
+            (from_cognom_id, to_cognom_id, reason, moderation_status, moderated_by, moderated_at, moderation_notes, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `)`
+	stmt = formatPlaceholders(h.style, stmt)
+	res, err := h.db.Exec(stmt, s.FromCognomID, s.ToCognomID, reason, status, s.ModeratedBy, s.ModeratedAt, s.ModeracioMotiu, s.CreatedBy)
+	if err != nil {
+		return 0, err
+	}
+	id, _ := res.LastInsertId()
+	if id == 0 {
+		row := h.db.QueryRow(formatPlaceholders(h.style, "SELECT id FROM cognoms_redirects_suggestions WHERE from_cognom_id = ? AND to_cognom_id = ? ORDER BY id DESC LIMIT 1"), s.FromCognomID, s.ToCognomID)
+		if err := row.Scan(&id); err != nil {
+			return 0, err
+		}
+	}
+	return int(id), nil
+}
+
+func (h sqlHelper) getCognomRedirectSuggestion(id int) (*CognomRedirectSuggestion, error) {
+	query := `
+        SELECT id, from_cognom_id, to_cognom_id, reason, moderation_status, moderation_notes, moderated_by, moderated_at, created_by, created_at
+        FROM cognoms_redirects_suggestions WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var out CognomRedirectSuggestion
+	var reason sql.NullString
+	var motiu sql.NullString
+	if err := row.Scan(&out.ID, &out.FromCognomID, &out.ToCognomID, &reason, &out.ModeracioEstat, &motiu, &out.ModeratedBy, &out.ModeratedAt, &out.CreatedBy, &out.CreatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	out.Reason = reason.String
+	out.ModeracioMotiu = motiu.String
+	return &out, nil
+}
+
+func (h sqlHelper) listCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) ([]CognomRedirectSuggestion, error) {
+	query := `
+        SELECT id, from_cognom_id, to_cognom_id, reason, moderation_status, moderation_notes, moderated_by, moderated_at, created_by, created_at
+        FROM cognoms_redirects_suggestions`
+	var where []string
+	var args []interface{}
+	if strings.TrimSpace(f.Status) != "" {
+		where = append(where, "moderation_status = ?")
+		args = append(args, f.Status)
+	}
+	if f.FromCognomID > 0 {
+		where = append(where, "from_cognom_id = ?")
+		args = append(args, f.FromCognomID)
+	}
+	if f.ToCognomID > 0 {
+		where = append(where, "to_cognom_id = ?")
+		args = append(args, f.ToCognomID)
+	}
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += " ORDER BY created_at DESC"
+	if f.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, f.Limit)
+	}
+	if f.Offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, f.Offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomRedirectSuggestion
+	for rows.Next() {
+		var row CognomRedirectSuggestion
+		var reason sql.NullString
+		var motiu sql.NullString
+		if err := rows.Scan(&row.ID, &row.FromCognomID, &row.ToCognomID, &reason, &row.ModeracioEstat, &motiu, &row.ModeratedBy, &row.ModeratedAt, &row.CreatedBy, &row.CreatedAt); err != nil {
+			return nil, err
+		}
+		row.Reason = reason.String
+		row.ModeracioMotiu = motiu.String
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) updateCognomRedirectSuggestionModeracio(id int, estat, motiu string, moderatorID int) error {
+	stmt := `UPDATE cognoms_redirects_suggestions SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, time.Now(), id)
+	return err
+}
+
+func (h sqlHelper) createCognomReferencia(ref *CognomReferencia) (int, error) {
+	status := strings.TrimSpace(ref.ModeracioEstat)
+	if status == "" {
+		status = "pendent"
+	}
+	if h.style == "postgres" {
+		stmt := `
+            INSERT INTO cognoms_referencies (cognom_id, kind, ref_id, url, titol, descripcio, pagina,
+                moderation_status, moderated_by, moderated_at, moderation_notes, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `)
+            RETURNING id`
+		stmt = formatPlaceholders(h.style, stmt)
+		var id int
+		if err := h.db.QueryRow(stmt, ref.CognomID, ref.Kind, ref.RefID, ref.URL, ref.Titol, ref.Descripcio, ref.Pagina, status, ref.ModeratedBy, ref.ModeratedAt, ref.ModeracioMotiu, ref.CreatedBy).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	stmt := `
+        INSERT INTO cognoms_referencies (cognom_id, kind, ref_id, url, titol, descripcio, pagina,
+            moderation_status, moderated_by, moderated_at, moderation_notes, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `)`
+	stmt = formatPlaceholders(h.style, stmt)
+	res, err := h.db.Exec(stmt, ref.CognomID, ref.Kind, ref.RefID, ref.URL, ref.Titol, ref.Descripcio, ref.Pagina, status, ref.ModeratedBy, ref.ModeratedAt, ref.ModeracioMotiu, ref.CreatedBy)
+	if err != nil {
+		return 0, err
+	}
+	id, _ := res.LastInsertId()
+	return int(id), nil
+}
+
+func (h sqlHelper) listCognomReferencies(f CognomReferenciaFilter) ([]CognomReferencia, error) {
+	query := `
+        SELECT id, cognom_id, kind, ref_id, url, titol, descripcio, pagina,
+               moderation_status, moderated_by, moderated_at, moderation_notes, created_by, created_at
+        FROM cognoms_referencies`
+	var where []string
+	var args []interface{}
+	if f.CognomID > 0 {
+		where = append(where, "cognom_id = ?")
+		args = append(args, f.CognomID)
+	}
+	if strings.TrimSpace(f.Status) != "" {
+		where = append(where, "moderation_status = ?")
+		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += " ORDER BY created_at DESC, id DESC"
+	if f.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, f.Limit)
+	}
+	if f.Offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, f.Offset)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomReferencia
+	for rows.Next() {
+		var r CognomReferencia
+		var url sql.NullString
+		var titol sql.NullString
+		var desc sql.NullString
+		var pagina sql.NullString
+		var motiu sql.NullString
+		if err := rows.Scan(&r.ID, &r.CognomID, &r.Kind, &r.RefID, &url, &titol, &desc, &pagina, &r.ModeracioEstat, &r.ModeratedBy, &r.ModeratedAt, &motiu, &r.CreatedBy, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		r.URL = url.String
+		r.Titol = titol.String
+		r.Descripcio = desc.String
+		r.Pagina = pagina.String
+		r.ModeracioMotiu = motiu.String
+		res = append(res, r)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) updateCognomReferenciaModeracio(id int, estat, motiu string, moderatorID int) error {
+	stmt := `UPDATE cognoms_referencies SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ? WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, time.Now(), id)
+	return err
+}
+
+// Cercador avançat: search_docs
+func (h sqlHelper) upsertSearchDoc(doc *SearchDoc) error {
+	if doc == nil {
+		return nil
+	}
+	pubVal := 0
+	if doc.Published {
+		pubVal = 1
+	}
+	columns := []string{
+		"entity_type", "entity_id", "published", "municipi_id", "arxiu_id", "llibre_id", "entitat_eclesiastica_id",
+		"data_acte", "any_acte", "person_nom_norm", "person_cognoms_norm", "person_full_norm", "person_tokens_norm",
+		"cognoms_tokens_norm", "person_phonetic", "cognoms_phonetic", "cognoms_canon",
+	}
+	args := []interface{}{
+		doc.EntityType, doc.EntityID, pubVal, doc.MunicipiID, doc.ArxiuID, doc.LlibreID, doc.EntitatEclesiasticaID,
+		doc.DataActe, doc.AnyActe, doc.PersonNomNorm, doc.PersonCognomsNorm, doc.PersonFullNorm, doc.PersonTokensNorm,
+		doc.CognomsTokensNorm, doc.PersonPhonetic, doc.CognomsPhonetic, doc.CognomsCanon,
+	}
+	valuePlaceholders := strings.TrimRight(strings.Repeat("?,", len(columns)), ",")
+	setClauses := []string{
+		"published = EXCLUDED.published",
+		"municipi_id = EXCLUDED.municipi_id",
+		"arxiu_id = EXCLUDED.arxiu_id",
+		"llibre_id = EXCLUDED.llibre_id",
+		"entitat_eclesiastica_id = EXCLUDED.entitat_eclesiastica_id",
+		"data_acte = EXCLUDED.data_acte",
+		"any_acte = EXCLUDED.any_acte",
+		"person_nom_norm = EXCLUDED.person_nom_norm",
+		"person_cognoms_norm = EXCLUDED.person_cognoms_norm",
+		"person_full_norm = EXCLUDED.person_full_norm",
+		"person_tokens_norm = EXCLUDED.person_tokens_norm",
+		"cognoms_tokens_norm = EXCLUDED.cognoms_tokens_norm",
+		"person_phonetic = EXCLUDED.person_phonetic",
+		"cognoms_phonetic = EXCLUDED.cognoms_phonetic",
+		"cognoms_canon = EXCLUDED.cognoms_canon",
+	}
+	query := fmt.Sprintf(
+		`INSERT INTO search_docs (%s) VALUES (%s) ON CONFLICT (entity_type, entity_id) DO UPDATE SET %s`,
+		strings.Join(columns, ", "),
+		valuePlaceholders,
+		strings.Join(setClauses, ", "),
+	)
+	if h.style == "mysql" {
+		setClauses = []string{
+			"published = VALUES(published)",
+			"municipi_id = VALUES(municipi_id)",
+			"arxiu_id = VALUES(arxiu_id)",
+			"llibre_id = VALUES(llibre_id)",
+			"entitat_eclesiastica_id = VALUES(entitat_eclesiastica_id)",
+			"data_acte = VALUES(data_acte)",
+			"any_acte = VALUES(any_acte)",
+			"person_nom_norm = VALUES(person_nom_norm)",
+			"person_cognoms_norm = VALUES(person_cognoms_norm)",
+			"person_full_norm = VALUES(person_full_norm)",
+			"person_tokens_norm = VALUES(person_tokens_norm)",
+			"cognoms_tokens_norm = VALUES(cognoms_tokens_norm)",
+			"person_phonetic = VALUES(person_phonetic)",
+			"cognoms_phonetic = VALUES(cognoms_phonetic)",
+			"cognoms_canon = VALUES(cognoms_canon)",
+		}
+		query = fmt.Sprintf(
+			`INSERT INTO search_docs (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
+			strings.Join(columns, ", "),
+			valuePlaceholders,
+			strings.Join(setClauses, ", "),
+		)
+	}
+	query = formatPlaceholders(h.style, query)
+	_, err := h.db.Exec(query, args...)
+	return err
+}
+
+func (h sqlHelper) getSearchDoc(entityType string, entityID int) (*SearchDoc, error) {
+	query := `
+        SELECT id, entity_type, entity_id, published, municipi_id, arxiu_id, llibre_id, entitat_eclesiastica_id,
+               data_acte, any_acte, person_nom_norm, person_cognoms_norm, person_full_norm, person_tokens_norm,
+               cognoms_tokens_norm, person_phonetic, cognoms_phonetic, cognoms_canon
+        FROM search_docs WHERE entity_type = ? AND entity_id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, entityType, entityID)
+	var doc SearchDoc
+	var publishedVal int
+	if err := row.Scan(
+		&doc.ID, &doc.EntityType, &doc.EntityID, &publishedVal, &doc.MunicipiID, &doc.ArxiuID, &doc.LlibreID, &doc.EntitatEclesiasticaID,
+		&doc.DataActe, &doc.AnyActe, &doc.PersonNomNorm, &doc.PersonCognomsNorm, &doc.PersonFullNorm, &doc.PersonTokensNorm,
+		&doc.CognomsTokensNorm, &doc.PersonPhonetic, &doc.CognomsPhonetic, &doc.CognomsCanon,
+	); err != nil {
+		return nil, err
+	}
+	doc.Published = publishedVal != 0
+	return &doc, nil
+}
+
+func (h sqlHelper) deleteSearchDoc(entityType string, entityID int) error {
+	stmt := `DELETE FROM search_docs WHERE entity_type = ? AND entity_id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, entityType, entityID)
+	return err
+}
+
+func (h sqlHelper) searchDocs(f SearchQueryFilter) ([]SearchDocRow, int, SearchFacets, error) {
+	page := f.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := f.PageSize
+	if pageSize <= 0 {
+		pageSize = 25
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	offset := (page - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
+
+	queryNorm := strings.TrimSpace(f.QueryNorm)
+	queryPhonetic := strings.TrimSpace(f.QueryPhonetic)
+	queryLike := ""
+	if queryNorm != "" {
+		queryLike = "%" + queryNorm + "%"
+	}
+	phoneticLike := ""
+	if queryPhonetic != "" {
+		phoneticLike = "%" + queryPhonetic + "%"
+	}
+	filterTokens := func(input []string) []string {
+		out := []string{}
+		seen := map[string]struct{}{}
+		for _, token := range input {
+			token = strings.TrimSpace(token)
+			if len(token) < 2 {
+				continue
+			}
+			if _, ok := seen[token]; ok {
+				continue
+			}
+			seen[token] = struct{}{}
+			out = append(out, token)
+		}
+		return out
+	}
+	queryTokens := filterTokens(f.QueryTokens)
+	canonTokens := filterTokens(f.CanonTokens)
+	nameTokens := filterTokens(f.NameTokens)
+	surnameTokens := filterTokens(f.SurnameTokens)
+	surnameTokens1 := filterTokens(f.SurnameTokens1)
+	surnameTokens2 := filterTokens(f.SurnameTokens2)
+	nameNorm := strings.TrimSpace(f.NameNorm)
+	surnameNorm := strings.TrimSpace(f.SurnameNorm)
+	fatherTokens := filterTokens(f.FatherTokens)
+	motherTokens := filterTokens(f.MotherTokens)
+	partnerTokens := filterTokens(f.PartnerTokens)
+	preferCognom := len(canonTokens) > 0 || len(f.VariantTokens) > 0 || len(surnameTokens) > 0 || f.OnlySurnameDirect
+	usePersonTokens := !preferCognom
+	usePersonPhonetic := !preferCognom
+	buildTokenClause := func(token string) (string, []interface{}) {
+		like := "%" + token + "%"
+		if usePersonTokens {
+			return "(s.person_tokens_norm LIKE ? OR s.cognoms_tokens_norm LIKE ?)", []interface{}{like, like}
+		}
+		return "s.cognoms_tokens_norm LIKE ?", []interface{}{like}
+	}
+	buildTokenGroup := func(tokens []string, join string) (string, []interface{}) {
+		if len(tokens) == 0 {
+			return "", nil
+		}
+		clauses := make([]string, 0, len(tokens))
+		args := make([]interface{}, 0, len(tokens)*2)
+		for _, token := range tokens {
+			clause, clauseArgs := buildTokenClause(token)
+			if clause == "" {
+				continue
+			}
+			clauses = append(clauses, clause)
+			args = append(args, clauseArgs...)
+		}
+		if len(clauses) == 0 {
+			return "", nil
+		}
+		return "(" + strings.Join(clauses, " "+join+" ") + ")", args
+	}
+	buildCanonClause := func(tokens []string) (string, []interface{}) {
+		if len(tokens) == 0 {
+			return "", nil
+		}
+		clauses := make([]string, 0, len(tokens))
+		args := make([]interface{}, 0, len(tokens))
+		for _, token := range tokens {
+			clauses = append(clauses, "s.cognoms_canon LIKE ?")
+			args = append(args, "%"+token+"%")
+		}
+		return "(" + strings.Join(clauses, " OR ") + ")", args
+	}
+	buildNameClause := func(tokens []string) (string, []interface{}) {
+		if len(tokens) == 0 {
+			return "", nil
+		}
+		clauses := make([]string, 0, len(tokens))
+		args := make([]interface{}, 0, len(tokens))
+		for _, token := range tokens {
+			clauses = append(clauses, "s.person_tokens_norm LIKE ?")
+			args = append(args, "%"+token+"%")
+		}
+		return "(" + strings.Join(clauses, " AND ") + ")", args
+	}
+	buildSurnameClause := func(tokens []string, join string) (string, []interface{}) {
+		if len(tokens) == 0 {
+			return "", nil
+		}
+		clauses := make([]string, 0, len(tokens))
+		args := make([]interface{}, 0, len(tokens)*2)
+		for _, token := range tokens {
+			clauses = append(clauses, "(s.cognoms_tokens_norm LIKE ? OR s.cognoms_canon LIKE ?)")
+			args = append(args, "%"+token+"%", "%"+token+"%")
+		}
+		return "(" + strings.Join(clauses, " "+join+" ") + ")", args
+	}
+	fullNameExpr := ""
+	if h.style == "mysql" {
+		fullNameExpr = "CONCAT(COALESCE(tp.nom,''),' ',COALESCE(tp.cognom1,''),' ',COALESCE(tp.cognom2,''))"
+	} else {
+		fullNameExpr = "COALESCE(tp.nom,'') || ' ' || COALESCE(tp.cognom1,'') || ' ' || COALESCE(tp.cognom2,'')"
+	}
+	roleNormExpr := "lower(replace(replace(replace(COALESCE(tp.rol,''),'_',''),'-',''),' ',''))"
+	fullNormExpr := "lower(" + fullNameExpr + ")"
+	buildRoleClause := func(roleTokens []string, roles []string, join string) (string, []interface{}) {
+		if len(roleTokens) == 0 || len(roles) == 0 {
+			return "", nil
+		}
+		roleClauses := make([]string, 0, len(roles))
+		roleArgs := make([]interface{}, 0, len(roles))
+		for _, role := range roles {
+			roleClauses = append(roleClauses, roleNormExpr+" = ?")
+			roleArgs = append(roleArgs, role)
+		}
+		nameClauses := make([]string, 0, len(roleTokens))
+		nameArgs := make([]interface{}, 0, len(roleTokens))
+		for _, token := range roleTokens {
+			nameClauses = append(nameClauses, fullNormExpr+" LIKE ?")
+			nameArgs = append(nameArgs, "%"+strings.ToLower(token)+"%")
+		}
+		parts := []string{
+			"(" + strings.Join(roleClauses, " OR ") + ")",
+			"(" + strings.Join(nameClauses, " "+join+" ") + ")",
+		}
+		args := append(roleArgs, nameArgs...)
+		return strings.Join(parts, " AND "), args
+	}
+	allTokensClause, allTokensArgs := buildTokenGroup(queryTokens, "AND")
+	anyTokensClause, anyTokensArgs := buildTokenGroup(queryTokens, "OR")
+	canonClause, canonArgs := buildCanonClause(canonTokens)
+	trigramClause := ""
+	trigramArgs := []interface{}{}
+	if h.supportsTrigram && queryNorm != "" {
+		trigramClause = "(similarity(s.person_full_norm, ?) >= 0.3 OR similarity(s.cognoms_canon, ?) >= 0.3)"
+		trigramArgs = append(trigramArgs, queryNorm, queryNorm)
+	}
+
+	joins := []string{
+		"LEFT JOIN transcripcions_raw r ON s.entity_type = 'registre_raw' AND s.entity_id = r.id",
+	}
+	if strings.TrimSpace(f.AncestorType) != "" && f.AncestorID > 0 {
+		joins = append(joins, "JOIN admin_closure ac ON ac.descendant_municipi_id = s.municipi_id")
+	}
+
+	clauses := []string{}
+	args := []interface{}{}
+	if !f.IncludeUnpublished {
+		clauses = append(clauses, "s.published = 1")
+	}
+	entity := strings.TrimSpace(f.Entity)
+	if entity == "persona" || entity == "registre_raw" {
+		clauses = append(clauses, "s.entity_type = ?")
+		args = append(args, entity)
+	}
+	if strings.TrimSpace(f.AncestorType) != "" && f.AncestorID > 0 {
+		clauses = append(clauses, "ac.ancestor_type = ?", "ac.ancestor_id = ?")
+		args = append(args, strings.TrimSpace(f.AncestorType), f.AncestorID)
+	}
+	if f.EntitatEclesiasticaID > 0 {
+		clauses = append(clauses, "s.entitat_eclesiastica_id = ?")
+		args = append(args, f.EntitatEclesiasticaID)
+	}
+	if f.ArxiuID > 0 {
+		clauses = append(clauses, "s.arxiu_id = ?")
+		args = append(args, f.ArxiuID)
+	}
+	if f.LlibreID > 0 {
+		clauses = append(clauses, "s.llibre_id = ?")
+		args = append(args, f.LlibreID)
+	}
+	if strings.TrimSpace(f.DateFrom) != "" {
+		clauses = append(clauses, "s.data_acte >= ?")
+		args = append(args, strings.TrimSpace(f.DateFrom))
+	}
+	if strings.TrimSpace(f.DateTo) != "" {
+		clauses = append(clauses, "s.data_acte <= ?")
+		args = append(args, strings.TrimSpace(f.DateTo))
+	}
+	if f.AnyFrom > 0 {
+		clauses = append(clauses, "s.any_acte >= ?")
+		args = append(args, f.AnyFrom)
+	}
+	if f.AnyTo > 0 {
+		clauses = append(clauses, "s.any_acte <= ?")
+		args = append(args, f.AnyTo)
+	}
+	if strings.TrimSpace(f.TipusActe) != "" {
+		clauses = append(clauses, "s.entity_type = 'registre_raw'", "r.tipus_acte = ?")
+		args = append(args, strings.TrimSpace(f.TipusActe))
+	}
+	if queryNorm != "" {
+		or := []string{
+			"s.person_full_norm = ?",
+			"s.person_nom_norm = ?",
+			"s.person_cognoms_norm = ?",
+		}
+		orArgs := []interface{}{
+			queryNorm,
+			queryNorm,
+			queryNorm,
+		}
+		if f.Exact {
+			or = append(or, "s.cognoms_canon = ?")
+			orArgs = append(orArgs, queryNorm)
+		} else {
+			if canonClause != "" {
+				or = append(or, canonClause)
+				orArgs = append(orArgs, canonArgs...)
+			} else if queryLike != "" {
+				or = append(or, "s.cognoms_canon LIKE ?")
+				orArgs = append(orArgs, queryLike)
+			}
+			if anyTokensClause != "" {
+				or = append(or, anyTokensClause)
+				orArgs = append(orArgs, anyTokensArgs...)
+			} else if queryLike != "" {
+				or = append(or, "s.person_full_norm LIKE ?")
+				orArgs = append(orArgs, queryLike)
+			}
+			if trigramClause != "" {
+				or = append(or, trigramClause)
+				orArgs = append(orArgs, trigramArgs...)
+			}
+			if queryPhonetic != "" {
+				if usePersonPhonetic {
+					or = append(or, "s.person_phonetic LIKE ?", "s.cognoms_phonetic LIKE ?")
+					orArgs = append(orArgs, phoneticLike, phoneticLike)
+				} else {
+					or = append(or, "s.cognoms_phonetic LIKE ?")
+					orArgs = append(orArgs, phoneticLike)
+				}
+			}
+		}
+		clauses = append(clauses, "("+strings.Join(or, " OR ")+")")
+		args = append(args, orArgs...)
+	}
+	if f.Exact {
+		if nameNorm != "" {
+			clauses = append(clauses, "s.person_nom_norm = ?")
+			args = append(args, nameNorm)
+		}
+		if surnameNorm != "" {
+			clauses = append(clauses, "(s.cognoms_canon = ? OR s.person_cognoms_norm = ?)")
+			args = append(args, surnameNorm, surnameNorm)
+		}
+	} else {
+		if nameClause, nameArgs := buildNameClause(nameTokens); nameClause != "" {
+			clauses = append(clauses, nameClause)
+			args = append(args, nameArgs...)
+		}
+		if surnameClause, surnameArgs := buildSurnameClause(surnameTokens1, "AND"); surnameClause != "" {
+			clauses = append(clauses, surnameClause)
+			args = append(args, surnameArgs...)
+		}
+		if surnameClause, surnameArgs := buildSurnameClause(surnameTokens2, "AND"); surnameClause != "" {
+			clauses = append(clauses, surnameClause)
+			args = append(args, surnameArgs...)
+		}
+		if surnameClause, surnameArgs := buildSurnameClause(surnameTokens, "AND"); surnameClause != "" {
+			clauses = append(clauses, surnameClause)
+			args = append(args, surnameArgs...)
+		}
+	}
+	if f.OnlySurnameDirect {
+		directTokens := surnameTokens
+		if len(directTokens) == 0 {
+			directTokens = canonTokens
+		}
+		if len(directTokens) == 0 {
+			directTokens = queryTokens
+		}
+		if directClause, directArgs := buildSurnameClause(directTokens, "AND"); directClause != "" {
+			clauses = append(clauses, directClause)
+			args = append(args, directArgs...)
+		}
+	}
+	if len(fatherTokens) > 0 || len(motherTokens) > 0 || len(partnerTokens) > 0 {
+		clauses = append(clauses, "s.entity_type = 'registre_raw'")
+	}
+	if roleClause, roleArgs := buildRoleClause(fatherTokens, []string{"pare", "parenuvi", "parenovia"}, "AND"); roleClause != "" {
+		clauses = append(clauses, "EXISTS (SELECT 1 FROM transcripcions_persones_raw tp WHERE tp.transcripcio_id = s.entity_id AND "+roleClause+")")
+		args = append(args, roleArgs...)
+	}
+	if roleClause, roleArgs := buildRoleClause(motherTokens, []string{"mare", "marenuvi", "marenovia"}, "AND"); roleClause != "" {
+		clauses = append(clauses, "EXISTS (SELECT 1 FROM transcripcions_persones_raw tp WHERE tp.transcripcio_id = s.entity_id AND "+roleClause+")")
+		args = append(args, roleArgs...)
+	}
+	if roleClause, roleArgs := buildRoleClause(partnerTokens, []string{"parella", "marit", "espos", "esposo", "esposa", "nuvi", "novia"}, "AND"); roleClause != "" {
+		clauses = append(clauses, "EXISTS (SELECT 1 FROM transcripcions_persones_raw tp WHERE tp.transcripcio_id = s.entity_id AND "+roleClause+")")
+		args = append(args, roleArgs...)
+	}
+
+	base := "FROM search_docs s " + strings.Join(joins, " ")
+	whereClause := ""
+	if len(clauses) > 0 {
+		whereClause = " WHERE " + strings.Join(clauses, " AND ")
+	}
+
+	countQuery := "SELECT COUNT(*) " + base + whereClause
+	countQuery = formatPlaceholders(h.style, countQuery)
+	var total int
+	if err := h.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, SearchFacets{}, err
+	}
+
+	scoreExpr := "0"
+	scoreArgs := []interface{}{}
+	if queryNorm != "" {
+		parts := []string{
+			"WHEN s.person_full_norm = ? THEN 100",
+		}
+		scoreArgs = append(scoreArgs, queryNorm)
+		if f.Exact {
+			parts = append(parts, "WHEN s.person_cognoms_norm = ? THEN 95")
+			parts = append(parts, "WHEN s.person_nom_norm = ? THEN 95")
+			parts = append(parts, "WHEN s.cognoms_canon = ? THEN 90")
+			scoreArgs = append(scoreArgs, queryNorm, queryNorm, queryNorm)
+		} else {
+			if canonClause != "" {
+				parts = append(parts, "WHEN "+canonClause+" THEN 80")
+				scoreArgs = append(scoreArgs, canonArgs...)
+			} else if queryLike != "" {
+				parts = append(parts, "WHEN s.cognoms_canon LIKE ? THEN 80")
+				scoreArgs = append(scoreArgs, queryLike)
+			}
+			if allTokensClause != "" {
+				parts = append(parts, "WHEN "+allTokensClause+" THEN 60")
+				scoreArgs = append(scoreArgs, allTokensArgs...)
+			}
+			if anyTokensClause != "" {
+				parts = append(parts, "WHEN "+anyTokensClause+" THEN 30")
+				scoreArgs = append(scoreArgs, anyTokensArgs...)
+			}
+			if trigramClause != "" {
+				parts = append(parts, "WHEN "+trigramClause+" THEN 20")
+				scoreArgs = append(scoreArgs, trigramArgs...)
+			}
+			if queryPhonetic != "" {
+				if usePersonPhonetic {
+					parts = append(parts, "WHEN s.person_phonetic LIKE ? OR s.cognoms_phonetic LIKE ? THEN 25")
+					scoreArgs = append(scoreArgs, phoneticLike, phoneticLike)
+				} else {
+					parts = append(parts, "WHEN s.cognoms_phonetic LIKE ? THEN 25")
+					scoreArgs = append(scoreArgs, phoneticLike)
+				}
+			}
+		}
+		scoreExpr = "CASE " + strings.Join(parts, " ") + " ELSE 0 END"
+	}
+	if f.Exact && queryNorm == "" {
+		parts := []string{}
+		if nameNorm != "" {
+			parts = append(parts, "WHEN s.person_nom_norm = ? THEN 95")
+			scoreArgs = append(scoreArgs, nameNorm)
+		}
+		if surnameNorm != "" {
+			parts = append(parts, "WHEN s.cognoms_canon = ? THEN 90")
+			scoreArgs = append(scoreArgs, surnameNorm)
+		}
+		if len(parts) > 0 {
+			scoreExpr = "CASE " + strings.Join(parts, " ") + " ELSE 0 END"
+		}
+	}
+
+	order := "ORDER BY score DESC, s.data_acte DESC, s.any_acte DESC, s.entity_id DESC"
+	switch strings.ToLower(strings.TrimSpace(f.Sort)) {
+	case "date_desc":
+		order = "ORDER BY s.data_acte DESC, s.any_acte DESC, score DESC, s.entity_id DESC"
+	case "date_asc":
+		order = "ORDER BY s.data_acte ASC, s.any_acte ASC, score DESC, s.entity_id DESC"
+	}
+
+	selectQuery := `
+        SELECT s.entity_type, s.entity_id, s.published, s.municipi_id, s.arxiu_id, s.llibre_id, s.entitat_eclesiastica_id,
+               s.data_acte, s.any_acte, s.person_nom_norm, s.person_cognoms_norm, s.person_full_norm, s.person_tokens_norm,
+               s.cognoms_tokens_norm, s.person_phonetic, s.cognoms_phonetic, s.cognoms_canon, r.tipus_acte, ` + scoreExpr + ` AS score
+        ` + base + whereClause + " " + order + " LIMIT ? OFFSET ?"
+	selectQuery = formatPlaceholders(h.style, selectQuery)
+	selectArgs := make([]interface{}, 0, len(scoreArgs)+len(args)+2)
+	selectArgs = append(selectArgs, scoreArgs...)
+	selectArgs = append(selectArgs, args...)
+	selectArgs = append(selectArgs, pageSize, offset)
+
+	rows, err := h.db.Query(selectQuery, selectArgs...)
+	if err != nil {
+		return nil, 0, SearchFacets{}, err
+	}
+	defer rows.Close()
+	results := []SearchDocRow{}
+	for rows.Next() {
+		var row SearchDocRow
+		var publishedVal int
+		if err := rows.Scan(
+			&row.EntityType,
+			&row.EntityID,
+			&publishedVal,
+			&row.MunicipiID,
+			&row.ArxiuID,
+			&row.LlibreID,
+			&row.EntitatEclesiasticaID,
+			&row.DataActe,
+			&row.AnyActe,
+			&row.PersonNomNorm,
+			&row.PersonCognomsNorm,
+			&row.PersonFullNorm,
+			&row.PersonTokensNorm,
+			&row.CognomsTokensNorm,
+			&row.PersonPhonetic,
+			&row.CognomsPhonetic,
+			&row.CognomsCanon,
+			&row.TipusActe,
+			&row.Score,
+		); err != nil {
+			return nil, 0, SearchFacets{}, err
+		}
+		row.Published = publishedVal != 0
+		results = append(results, row)
+	}
+
+	facets := SearchFacets{
+		EntityType: map[string]int{},
+		TipusActe:  map[string]int{},
+	}
+	entityFacetQuery := "SELECT s.entity_type, COUNT(*) " + base + whereClause + " GROUP BY s.entity_type"
+	entityFacetQuery = formatPlaceholders(h.style, entityFacetQuery)
+	entityRows, err := h.db.Query(entityFacetQuery, args...)
+	if err == nil {
+		for entityRows.Next() {
+			var key string
+			var count int
+			if err := entityRows.Scan(&key, &count); err == nil {
+				facets.EntityType[key] = count
+			}
+		}
+		entityRows.Close()
+	}
+
+	tipusWhere := whereClause
+	tipusExtra := "s.entity_type = 'registre_raw' AND r.tipus_acte IS NOT NULL AND r.tipus_acte <> ''"
+	if tipusWhere == "" {
+		tipusWhere = " WHERE " + tipusExtra
+	} else {
+		tipusWhere = tipusWhere + " AND " + tipusExtra
+	}
+	tipusFacetQuery := "SELECT r.tipus_acte, COUNT(*) " + base + tipusWhere + " GROUP BY r.tipus_acte"
+	tipusFacetQuery = formatPlaceholders(h.style, tipusFacetQuery)
+	tipusRows, err := h.db.Query(tipusFacetQuery, args...)
+	if err == nil {
+		for tipusRows.Next() {
+			var key sql.NullString
+			var count int
+			if err := tipusRows.Scan(&key, &count); err == nil && key.Valid {
+				facets.TipusActe[key.String] = count
+			}
+		}
+		tipusRows.Close()
+	}
+
+	return results, total, facets, nil
+}
+
+// Cercador avançat: admin_closure
+func (h sqlHelper) replaceAdminClosure(descendantMunicipiID int, entries []AdminClosureEntry) error {
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	stmt := formatPlaceholders(h.style, `DELETE FROM admin_closure WHERE descendant_municipi_id = ?`)
+	if _, err := tx.Exec(stmt, descendantMunicipiID); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if len(entries) == 0 {
+		return tx.Commit()
+	}
+	placeholders := strings.TrimRight(strings.Repeat("(?, ?, ?),", len(entries)), ",")
+	query := fmt.Sprintf(`INSERT INTO admin_closure (descendant_municipi_id, ancestor_type, ancestor_id) VALUES %s`, placeholders)
+	query = formatPlaceholders(h.style, query)
+	args := make([]interface{}, 0, len(entries)*3)
+	for _, entry := range entries {
+		args = append(args, entry.DescendantMunicipiID, entry.AncestorType, entry.AncestorID)
+	}
+	if _, err := tx.Exec(query, args...); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+func (h sqlHelper) listAdminClosure(descendantMunicipiID int) ([]AdminClosureEntry, error) {
+	query := `SELECT descendant_municipi_id, ancestor_type, ancestor_id FROM admin_closure WHERE descendant_municipi_id = ? ORDER BY ancestor_type, ancestor_id`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, descendantMunicipiID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []AdminClosureEntry
+	for rows.Next() {
+		var row AdminClosureEntry
+		if err := rows.Scan(&row.DescendantMunicipiID, &row.AncestorType, &row.AncestorID); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
 func (h sqlHelper) listCognomImportRows(limit, offset int) ([]CognomImportRow, error) {
 	query := `
         SELECT p.cognom1, p.cognom1_estat, p.cognom2, p.cognom2_estat
@@ -7003,6 +8477,311 @@ func (h sqlHelper) listCognomStatsRows(limit, offset int) ([]CognomStatsRow, err
 		res = append(res, row)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) rebuildCognomStats(cognomID int) error {
+	if cognomID < 0 {
+		return errors.New("cognom_id invalid")
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	tables := []string{"cognoms_stats_total", "cognoms_stats_any", "cognoms_stats_ancestor_any"}
+	if cognomID > 0 {
+		for _, table := range tables {
+			stmt := formatPlaceholders(h.style, "DELETE FROM "+table+" WHERE cognom_id = ?")
+			if _, err := tx.Exec(stmt, cognomID); err != nil {
+				return err
+			}
+		}
+	} else {
+		for _, table := range tables {
+			if _, err := tx.Exec("DELETE FROM " + table); err != nil {
+				return err
+			}
+		}
+	}
+	args := []interface{}{}
+	where := ""
+	if cognomID > 0 {
+		where = " WHERE cognom_id = ?"
+		args = append(args, cognomID)
+	}
+	insertTotal := fmt.Sprintf(`INSERT INTO cognoms_stats_total (cognom_id, total_persones, total_aparicions, updated_at)
+        SELECT cognom_id, SUM(freq) AS total_persones, SUM(freq) AS total_aparicions, %s
+        FROM cognoms_freq_municipi_any%s
+        GROUP BY cognom_id`, h.nowFun, where)
+	insertTotal = formatPlaceholders(h.style, insertTotal)
+	if _, err := tx.Exec(insertTotal, args...); err != nil {
+		return err
+	}
+	yearCol := demografiaYearColumn(h.style)
+	insertAny := fmt.Sprintf(`INSERT INTO cognoms_stats_any (cognom_id, %s, total, updated_at)
+        SELECT cognom_id, any_doc, SUM(freq) AS total, %s
+        FROM cognoms_freq_municipi_any%s
+        GROUP BY cognom_id, any_doc`, yearCol, h.nowFun, where)
+	insertAny = formatPlaceholders(h.style, insertAny)
+	if _, err := tx.Exec(insertAny, args...); err != nil {
+		return err
+	}
+	insertMunicipi := fmt.Sprintf(`INSERT INTO cognoms_stats_ancestor_any (cognom_id, ancestor_type, ancestor_id, %s, total, updated_at)
+        SELECT cognom_id, 'municipi', municipi_id, any_doc, SUM(freq) AS total, %s
+        FROM cognoms_freq_municipi_any%s
+        GROUP BY cognom_id, municipi_id, any_doc`, yearCol, h.nowFun, where)
+	insertMunicipi = formatPlaceholders(h.style, insertMunicipi)
+	if _, err := tx.Exec(insertMunicipi, args...); err != nil {
+		return err
+	}
+	levelCols := []string{
+		"nivell_administratiu_id_1",
+		"nivell_administratiu_id_2",
+		"nivell_administratiu_id_3",
+		"nivell_administratiu_id_4",
+		"nivell_administratiu_id_5",
+		"nivell_administratiu_id_6",
+		"nivell_administratiu_id_7",
+	}
+	for _, col := range levelCols {
+		query := fmt.Sprintf(`INSERT INTO cognoms_stats_ancestor_any (cognom_id, ancestor_type, ancestor_id, %s, total, updated_at)
+            SELECT c.cognom_id, 'nivell_admin', m.%s, c.any_doc, SUM(c.freq) AS total, %s
+            FROM cognoms_freq_municipi_any c
+            JOIN municipis m ON m.id = c.municipi_id
+            WHERE m.%s IS NOT NULL`, yearCol, col, h.nowFun, col)
+		if cognomID > 0 {
+			query += " AND c.cognom_id = ?"
+		}
+		query += fmt.Sprintf(" GROUP BY c.cognom_id, m.%s, c.any_doc", col)
+		query = formatPlaceholders(h.style, query)
+		if _, err := tx.Exec(query, args...); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (h sqlHelper) getCognomStatsTotal(cognomID int) (*CognomStatsTotal, error) {
+	if cognomID <= 0 {
+		return nil, errors.New("cognom_id invalid")
+	}
+	query := `SELECT cognom_id, total_persones, total_aparicions, updated_at FROM cognoms_stats_total WHERE cognom_id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, cognomID)
+	var stat CognomStatsTotal
+	if err := row.Scan(&stat.CognomID, &stat.TotalPersones, &stat.TotalAparicions, &stat.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &stat, nil
+}
+
+func (h sqlHelper) listCognomStatsAny(cognomID int, from, to int) ([]CognomStatsAnyRow, error) {
+	if cognomID <= 0 {
+		return nil, errors.New("cognom_id invalid")
+	}
+	yearCol := demografiaYearColumn(h.style)
+	query := fmt.Sprintf(`SELECT cognom_id, %s, total FROM cognoms_stats_any WHERE cognom_id = ?`, yearCol)
+	args := []interface{}{cognomID}
+	if from > 0 {
+		query += fmt.Sprintf(" AND %s >= ?", yearCol)
+		args = append(args, from)
+	}
+	if to > 0 {
+		query += fmt.Sprintf(" AND %s <= ?", yearCol)
+		args = append(args, to)
+	}
+	query += " ORDER BY " + yearCol + " ASC"
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomStatsAnyRow
+	for rows.Next() {
+		var row CognomStatsAnyRow
+		if err := rows.Scan(&row.CognomID, &row.Any, &row.Total); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listCognomStatsAnyDecade(cognomID int, from, to int) ([]CognomStatsAnyRow, error) {
+	if cognomID <= 0 {
+		return nil, errors.New("cognom_id invalid")
+	}
+	yearCol := demografiaYearColumn(h.style)
+	decadeExpr := fmt.Sprintf("(%s - (%s %% 10))", yearCol, yearCol)
+	query := fmt.Sprintf(`SELECT %s AS decade, SUM(total) FROM cognoms_stats_any WHERE cognom_id = ?`, decadeExpr)
+	args := []interface{}{cognomID}
+	if from > 0 {
+		query += fmt.Sprintf(" AND %s >= ?", yearCol)
+		args = append(args, from)
+	}
+	if to > 0 {
+		query += fmt.Sprintf(" AND %s <= ?", yearCol)
+		args = append(args, to)
+	}
+	query += " GROUP BY decade ORDER BY decade ASC"
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomStatsAnyRow
+	for rows.Next() {
+		var decade int
+		var total int
+		if err := rows.Scan(&decade, &total); err != nil {
+			return nil, err
+		}
+		res = append(res, CognomStatsAnyRow{
+			CognomID: cognomID,
+			Any:      decade,
+			Total:    total,
+		})
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listCognomStatsAncestor(cognomID int, ancestorType string, level, any, limit int) ([]CognomStatsAncestorRow, error) {
+	if cognomID <= 0 {
+		return nil, errors.New("cognom_id invalid")
+	}
+	yearCol := demografiaYearColumn(h.style)
+	args := []interface{}{cognomID}
+	var query string
+	switch ancestorType {
+	case "municipi":
+		if any > 0 {
+			query = fmt.Sprintf(`SELECT s.ancestor_id, s.total, m.nom, s.%s
+                FROM cognoms_stats_ancestor_any s
+                JOIN municipis m ON m.id = s.ancestor_id
+                WHERE s.cognom_id = ? AND s.ancestor_type = 'municipi' AND s.%s = ?
+                ORDER BY s.total DESC, m.nom`, yearCol, yearCol)
+			args = append(args, any)
+		} else {
+			query = `SELECT s.ancestor_id, SUM(s.total) AS total, m.nom
+                FROM cognoms_stats_ancestor_any s
+                JOIN municipis m ON m.id = s.ancestor_id
+                WHERE s.cognom_id = ? AND s.ancestor_type = 'municipi'
+                GROUP BY s.ancestor_id, m.nom
+                ORDER BY total DESC, m.nom`
+		}
+	case "nivell_admin":
+		labelExpr := "COALESCE(NULLIF(n.nom_nivell,''), n.tipus_nivell, '')"
+		if any > 0 {
+			query = fmt.Sprintf(`SELECT s.ancestor_id, s.total, %s, n.nivel, s.%s
+                FROM cognoms_stats_ancestor_any s
+                JOIN nivells_administratius n ON n.id = s.ancestor_id
+                WHERE s.cognom_id = ? AND s.ancestor_type = 'nivell_admin'`, labelExpr, yearCol)
+			if level > 0 {
+				query += " AND n.nivel = ?"
+				args = append(args, level)
+			}
+			query += fmt.Sprintf(" AND s.%s = ? ORDER BY s.total DESC, %s", yearCol, labelExpr)
+			args = append(args, any)
+		} else {
+			query = fmt.Sprintf(`SELECT s.ancestor_id, SUM(s.total) AS total, %s, n.nivel
+                FROM cognoms_stats_ancestor_any s
+                JOIN nivells_administratius n ON n.id = s.ancestor_id
+                WHERE s.cognom_id = ? AND s.ancestor_type = 'nivell_admin'`, labelExpr)
+			if level > 0 {
+				query += " AND n.nivel = ?"
+				args = append(args, level)
+			}
+			query += fmt.Sprintf(" GROUP BY s.ancestor_id, %s, n.nivel ORDER BY total DESC, %s", labelExpr, labelExpr)
+		}
+	default:
+		return nil, errors.New("ancestor_type invalid")
+	}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomStatsAncestorRow
+	for rows.Next() {
+		row := CognomStatsAncestorRow{
+			CognomID:     cognomID,
+			AncestorType: ancestorType,
+			Any:          0,
+		}
+		if ancestorType == "municipi" {
+			if any > 0 {
+				if err := rows.Scan(&row.AncestorID, &row.Total, &row.Label, &row.Any); err != nil {
+					return nil, err
+				}
+			} else {
+				if err := rows.Scan(&row.AncestorID, &row.Total, &row.Label); err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			if any > 0 {
+				if err := rows.Scan(&row.AncestorID, &row.Total, &row.Label, &row.Level, &row.Any); err != nil {
+					return nil, err
+				}
+			} else {
+				if err := rows.Scan(&row.AncestorID, &row.Total, &row.Label, &row.Level); err != nil {
+					return nil, err
+				}
+			}
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) countCognomStatsAncestorDistinct(cognomID int, ancestorType string, level, any int) (int, error) {
+	if cognomID <= 0 {
+		return 0, errors.New("cognom_id invalid")
+	}
+	yearCol := demografiaYearColumn(h.style)
+	args := []interface{}{cognomID}
+	var query string
+	switch ancestorType {
+	case "municipi":
+		query = `SELECT COUNT(DISTINCT s.ancestor_id)
+            FROM cognoms_stats_ancestor_any s
+            WHERE s.cognom_id = ? AND s.ancestor_type = 'municipi'`
+		if any > 0 {
+			query += fmt.Sprintf(" AND s.%s = ?", yearCol)
+			args = append(args, any)
+		}
+	case "nivell_admin":
+		query = `SELECT COUNT(DISTINCT s.ancestor_id)
+            FROM cognoms_stats_ancestor_any s
+            JOIN nivells_administratius n ON n.id = s.ancestor_id
+            WHERE s.cognom_id = ? AND s.ancestor_type = 'nivell_admin'`
+		if level > 0 {
+			query += " AND n.nivel = ?"
+			args = append(args, level)
+		}
+		if any > 0 {
+			query += fmt.Sprintf(" AND s.%s = ?", yearCol)
+			args = append(args, any)
+		}
+	default:
+		return 0, errors.New("ancestor_type invalid")
+	}
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (h sqlHelper) upsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error {

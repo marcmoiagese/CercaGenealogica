@@ -79,6 +79,36 @@
             </div>
         </section>
 
+        {{ if .Data.MergeHistory }}
+        <section class="card">
+            <header class="card-header">
+                <h2>{{ t .Lang "surnames.history.merges" }}</h2>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "surnames.history.merge_from" }}</th>
+                            <th>{{ t .Lang "surnames.history.merge_reason" }}</th>
+                            <th>{{ t .Lang "surnames.history.merge_created" }}</th>
+                            <th>{{ t .Lang "surnames.history.merge_by" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.MergeHistory }}
+                        <tr>
+                            <td><a href="/cognoms/{{ .FromID }}">{{ .FromLabel }}</a></td>
+                            <td>{{ if .Reason }}{{ .Reason }}{{ else }}—{{ end }}</td>
+                            <td>{{ if .CreatedAt }}{{ .CreatedAt }}{{ else }}—{{ end }}</td>
+                            <td>{{ if .CreatedBy }}{{ .CreatedBy }}{{ else }}—{{ end }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {{ end }}
+
         {{ if .Data.ViewFields }}
         <section class="card">
             <header class="card-header">

@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ if .Data.IsNew }}Nova persona{{ else }}Editar persona{{ end }}</title>
     {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/persona-form.css">
 </head>
 <body>
     {{ template "header-private" . }}
@@ -39,16 +40,59 @@
                         <input type="text" id="cognom2" name="cognom2" value="{{ .Data.Persona.Cognom2 }}">
                     </div>
                     <div class="grup-camp">
-                        <label for="data_naixement">{{ t .Lang "persons.form.birth" }}</label>
+                        <div class="field-label">
+                            <label for="data_naixement">{{ t .Lang "persons.form.birth" }}</label>
+                            {{ if and (not .Data.IsNew) (index .Data.FieldLinkable "data_naixement") }}
+                            <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="data_naixement" data-field-label="{{ t .Lang "persons.form.birth" }}" title="{{ t .Lang "persons.link.button" }}">
+                                <i class="fas fa-link-slash"></i>
+                            </button>
+                            {{ end }}
+                        </div>
                         <input type="date" id="data_naixement" name="data_naixement" value="{{ if .Data.Persona.DataNaixement.Valid }}{{ .Data.Persona.DataNaixement.String }}{{ end }}">
                     </div>
                     <div class="grup-camp">
-                        <label for="data_defuncio">{{ t .Lang "persons.form.death" }}</label>
+                        <div class="field-label">
+                            <label for="data_bateig">{{ t .Lang "persons.form.baptism" }}</label>
+                            {{ if and (not .Data.IsNew) (index .Data.FieldLinkable "data_bateig") }}
+                            <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="data_bateig" data-field-label="{{ t .Lang "persons.form.baptism" }}" title="{{ t .Lang "persons.link.button" }}">
+                                <i class="fas fa-link-slash"></i>
+                            </button>
+                            {{ end }}
+                        </div>
+                        <input type="date" id="data_bateig" name="data_bateig" value="{{ if .Data.Persona.DataBateig.Valid }}{{ .Data.Persona.DataBateig.String }}{{ end }}">
+                    </div>
+                    <div class="grup-camp">
+                        <div class="field-label">
+                            <label for="data_defuncio">{{ t .Lang "persons.form.death" }}</label>
+                            {{ if and (not .Data.IsNew) (index .Data.FieldLinkable "data_defuncio") }}
+                            <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="data_defuncio" data-field-label="{{ t .Lang "persons.form.death" }}" title="{{ t .Lang "persons.link.button" }}">
+                                <i class="fas fa-link-slash"></i>
+                            </button>
+                            {{ end }}
+                        </div>
                         <input type="date" id="data_defuncio" name="data_defuncio" value="{{ if .Data.Persona.DataDefuncio.Valid }}{{ .Data.Persona.DataDefuncio.String }}{{ end }}">
                     </div>
                     <div class="grup-camp">
-                        <label for="municipi">{{ t .Lang "persons.form.municipi" }}</label>
-                        <input type="text" id="municipi" name="municipi" value="{{ .Data.Persona.Municipi }}" placeholder="{{ t .Lang "persons.form.optional" }}">
+                        <div class="field-label">
+                            <label for="municipi_naixement">{{ t .Lang "persons.form.birth_place" }}</label>
+                            {{ if and (not .Data.IsNew) (index .Data.FieldLinkable "municipi_naixement") }}
+                            <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="municipi_naixement" data-field-label="{{ t .Lang "persons.form.birth_place" }}" title="{{ t .Lang "persons.link.button" }}">
+                                <i class="fas fa-link-slash"></i>
+                            </button>
+                            {{ end }}
+                        </div>
+                        <input type="text" id="municipi_naixement" name="municipi_naixement" value="{{ .Data.BirthMunicipi }}" placeholder="{{ t .Lang "persons.form.optional" }}">
+                    </div>
+                    <div class="grup-camp">
+                        <div class="field-label">
+                            <label for="municipi_defuncio">{{ t .Lang "persons.form.death_place" }}</label>
+                            {{ if and (not .Data.IsNew) (index .Data.FieldLinkable "municipi_defuncio") }}
+                            <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="municipi_defuncio" data-field-label="{{ t .Lang "persons.form.death_place" }}" title="{{ t .Lang "persons.link.button" }}">
+                                <i class="fas fa-link-slash"></i>
+                            </button>
+                            {{ end }}
+                        </div>
+                        <input type="text" id="municipi_defuncio" name="municipi_defuncio" value="{{ .Data.Persona.MunicipiDefuncio }}" placeholder="{{ t .Lang "persons.form.optional" }}">
                     </div>
                     <div class="grup-camp">
                         <label for="ofici">{{ t .Lang "persons.form.job" }}</label>
@@ -85,8 +129,78 @@
             </form>
         </section>
     </main>
+    {{ if not .Data.IsNew }}
+    <div class="modal-overlay" id="persona-link-modal" role="dialog" aria-modal="true" aria-labelledby="persona-link-modal-title">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div>
+                    <h2 id="persona-link-modal-title">{{ t .Lang "persons.link.modal.title" }}</h2>
+                    <p class="muted">{{ t .Lang "persons.link.modal.helper" }}</p>
+                </div>
+                <button type="button" class="modal-close" data-close-persona-link aria-label="{{ t .Lang "common.close" }}">×</button>
+            </div>
+            <form method="post" action="/persones/{{ .Data.Persona.ID }}/enllacar-dada" class="field-link-form">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="field_key" id="persona-link-field">
+                <div class="grup-camp">
+                    <label>{{ t .Lang "persons.link.modal.field" }}</label>
+                    <div class="field-link-target" id="persona-link-field-label">—</div>
+                </div>
+                <div class="grup-camp">
+                    <label for="persona-link-registre">{{ t .Lang "persons.link.modal.registre_id" }}</label>
+                    <input type="number" id="persona-link-registre" name="registre_id" min="1" required>
+                </div>
+                <div class="accions-formulari">
+                    <button type="submit" class="boto-primari">{{ t .Lang "persons.link.modal.submit" }}</button>
+                    <button type="button" class="boto-secundari" data-close-persona-link>{{ t .Lang "persons.link.modal.cancel" }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {{ end }}
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    {{ if not .Data.IsNew }}
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const modal = document.getElementById("persona-link-modal");
+            if (!modal) {
+                return;
+            }
+            const fieldInput = document.getElementById("persona-link-field");
+            const fieldLabel = document.getElementById("persona-link-field-label");
+            const registreInput = document.getElementById("persona-link-registre");
+            const openButtons = document.querySelectorAll("[data-persona-link]");
+            const closeButtons = modal.querySelectorAll("[data-close-persona-link]");
+            const openModal = (btn) => {
+                fieldInput.value = btn.dataset.fieldKey || "";
+                fieldLabel.textContent = btn.dataset.fieldLabel || "—";
+                registreInput.value = "";
+                modal.classList.add("is-open");
+                registreInput.focus();
+            };
+            const closeModal = () => {
+                modal.classList.remove("is-open");
+            };
+            openButtons.forEach((btn) => {
+                btn.addEventListener("click", () => openModal(btn));
+            });
+            closeButtons.forEach((btn) => {
+                btn.addEventListener("click", closeModal);
+            });
+            modal.addEventListener("click", (event) => {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    closeModal();
+                }
+            });
+        });
+    </script>
+    {{ end }}
 </body>
 </html>
 {{ end }}

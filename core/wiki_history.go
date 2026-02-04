@@ -319,7 +319,11 @@ func (a *App) applyWikiMunicipiChange(change *db.WikiChange, motiu string, moder
 	mun.ModeracioMotiu = motiu
 	mun.ModeratedBy = sqlNullIntFromInt(moderatorID)
 	mun.ModeratedAt = sql.NullTime{Time: time.Now(), Valid: true}
-	return a.DB.UpdateMunicipi(&mun)
+	if err := a.DB.UpdateMunicipi(&mun); err != nil {
+		return err
+	}
+	a.rebuildAdminClosureForMunicipi(&mun)
+	return nil
 }
 
 func (a *App) applyWikiArxiuChange(change *db.WikiChange, motiu string, moderatorID int) error {
@@ -384,7 +388,13 @@ func (a *App) applyWikiPersonaChange(change *db.WikiChange, motiu string, modera
 	persona.ModeracioEstat = "publicat"
 	persona.ModeratedBy = sqlNullIntFromInt(moderatorID)
 	persona.ModeratedAt = sql.NullTime{Time: time.Now(), Valid: true}
-	return a.DB.UpdatePersona(&persona)
+	if err := a.DB.UpdatePersona(&persona); err != nil {
+		return err
+	}
+	if err := a.upsertSearchDocForPersonaID(persona.ID); err != nil {
+		Errorf("SearchIndex persona %d: %v", persona.ID, err)
+	}
+	return nil
 }
 
 func (a *App) applyWikiCognomChange(change *db.WikiChange, motiu string, moderatorID int) error {

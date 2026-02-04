@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,6 +17,13 @@ func (a *App) CognomMapa(w http.ResponseWriter, r *http.Request) {
 	if id <= 0 {
 		http.NotFound(w, r)
 		return
+	}
+	if canonID, redirected, err := a.resolveCognomCanonicalID(id); err == nil && canonID > 0 {
+		if redirected {
+			http.Redirect(w, r, fmt.Sprintf("/cognoms/%d/mapa", canonID), http.StatusSeeOther)
+			return
+		}
+		id = canonID
 	}
 	cognom, err := a.DB.GetCognom(id)
 	if err != nil || cognom == nil {

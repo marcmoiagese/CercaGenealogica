@@ -93,6 +93,8 @@ CREATE TABLE IF NOT EXISTS persona (
     cognom1 TEXT,
     cognom2 TEXT,
     municipi TEXT,
+    municipi_naixement TEXT,
+    municipi_defuncio TEXT,
     arquevisbat TEXT,
     nom_complet TEXT,
     pagina TEXT,
@@ -112,6 +114,19 @@ CREATE TABLE IF NOT EXISTS persona (
     FOREIGN KEY(created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     FOREIGN KEY(updated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     FOREIGN KEY(moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS persona_field_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    persona_id INTEGER NOT NULL,
+    field_key TEXT NOT NULL,
+    registre_id INTEGER NOT NULL,
+    created_by INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(persona_id, field_key),
+    FOREIGN KEY(persona_id) REFERENCES persona(id) ON DELETE CASCADE,
+    FOREIGN KEY(registre_id) REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+    FOREIGN KEY(created_by) REFERENCES usuaris(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS relacions (
@@ -221,6 +236,20 @@ CREATE TABLE IF NOT EXISTS municipis (
     data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     ultima_modificacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- TAULA CLOSURE TERRITORIAL (PER FILTRAR PER QUALSEVOL NIVELL ADMINISTRATIU)
+CREATE TABLE IF NOT EXISTS admin_closure (
+    descendant_municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+    ancestor_type TEXT NOT NULL CHECK (ancestor_type IN ('pais','nivell','municipi')),
+    ancestor_id INTEGER NOT NULL,
+    PRIMARY KEY (descendant_municipi_id, ancestor_type, ancestor_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_closure_ancestor
+  ON admin_closure(ancestor_type, ancestor_id);
+
+CREATE INDEX IF NOT EXISTS idx_admin_closure_descendant
+  ON admin_closure(descendant_municipi_id);
 
 -- Mapes de municipi
 CREATE TABLE IF NOT EXISTS municipi_mapes (
@@ -718,6 +747,39 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- TAULA D'INDEX DE CERCA UNIFICAT
+CREATE TABLE IF NOT EXISTS search_docs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('persona','registre_raw')),
+  entity_id INTEGER NOT NULL,
+  published INTEGER NOT NULL DEFAULT 1 CHECK (published IN (0,1)),
+  municipi_id INTEGER NULL REFERENCES municipis(id) ON DELETE SET NULL,
+  arxiu_id INTEGER NULL REFERENCES arxius(id) ON DELETE SET NULL,
+  llibre_id INTEGER NULL REFERENCES llibres(id) ON DELETE SET NULL,
+  entitat_eclesiastica_id INTEGER NULL REFERENCES arquebisbats(id) ON DELETE SET NULL,
+  data_acte DATE NULL,
+  any_acte INTEGER NULL,
+  person_nom_norm TEXT,
+  person_cognoms_norm TEXT,
+  person_full_norm TEXT,
+  person_tokens_norm TEXT,
+  cognoms_tokens_norm TEXT,
+  person_phonetic TEXT,
+  cognoms_phonetic TEXT,
+  cognoms_canon TEXT,
+  UNIQUE (entity_type, entity_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_search_docs_entity ON search_docs(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_search_docs_any ON search_docs(any_acte);
+CREATE INDEX IF NOT EXISTS idx_search_docs_data ON search_docs(data_acte);
+CREATE INDEX IF NOT EXISTS idx_search_docs_municipi ON search_docs(municipi_id);
+CREATE INDEX IF NOT EXISTS idx_search_docs_arxiu ON search_docs(arxiu_id);
+CREATE INDEX IF NOT EXISTS idx_search_docs_llibre ON search_docs(llibre_id);
+CREATE INDEX IF NOT EXISTS idx_search_docs_entitat ON search_docs(entitat_eclesiastica_id);
+CREATE INDEX IF NOT EXISTS idx_search_docs_full ON search_docs(person_full_norm);
+CREATE INDEX IF NOT EXISTS idx_search_docs_cognoms_canon ON search_docs(cognoms_canon);
+
 CREATE TABLE IF NOT EXISTS llibres_indexacio_stats (
   llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,
   total_registres INTEGER NOT NULL DEFAULT 0,
@@ -962,6 +1024,53 @@ CREATE TABLE IF NOT EXISTS cognom_variants (
 CREATE INDEX IF NOT EXISTS idx_cognom_variants_status ON cognom_variants(cognom_id, moderation_status);
 CREATE INDEX IF NOT EXISTS idx_cognom_variants_key ON cognom_variants(key);
 
+-- Redirects de cognoms (alias -> canònic)
+CREATE TABLE IF NOT EXISTS cognoms_redirects (
+  from_cognom_id INTEGER PRIMARY KEY REFERENCES cognoms(id) ON DELETE CASCADE,
+  to_cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
+  reason TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_cognoms_redirects_to ON cognoms_redirects(to_cognom_id);
+
+-- Propostes d'unificació de cognoms (moderables)
+CREATE TABLE IF NOT EXISTS cognoms_redirects_suggestions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  from_cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
+  to_cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
+  reason TEXT,
+  moderation_status TEXT CHECK(moderation_status IN ('pendent','publicat','rebutjat')) DEFAULT 'pendent',
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP,
+  moderation_notes TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_cognoms_redirects_suggestions_status ON cognoms_redirects_suggestions(moderation_status);
+CREATE INDEX IF NOT EXISTS idx_cognoms_redirects_suggestions_from ON cognoms_redirects_suggestions(from_cognom_id);
+CREATE INDEX IF NOT EXISTS idx_cognoms_redirects_suggestions_to ON cognoms_redirects_suggestions(to_cognom_id);
+
+-- Referències de cognoms (moderables)
+CREATE TABLE IF NOT EXISTS cognoms_referencies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  ref_id INTEGER,
+  url TEXT,
+  titol TEXT,
+  descripcio TEXT,
+  pagina TEXT,
+  moderation_status TEXT DEFAULT 'pendent',
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP,
+  moderation_notes TEXT,
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_cognoms_ref_cognom_status ON cognoms_referencies(cognom_id, moderation_status);
+CREATE INDEX IF NOT EXISTS idx_cognoms_ref_kind ON cognoms_referencies(kind);
+
 -- Estadístiques pre-agregades per cognom/municipi/any
 CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_any (
   cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
@@ -986,6 +1095,43 @@ CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_total (
 );
 CREATE INDEX IF NOT EXISTS idx_cognoms_freq_municipi_total_municipi
   ON cognoms_freq_municipi_total(municipi_id, total_freq);
+
+-- Estadístiques globals per cognom
+CREATE TABLE IF NOT EXISTS cognoms_stats_total (
+  cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
+  total_persones INTEGER NOT NULL DEFAULT 0,
+  total_aparicions INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cognoms_stats_total_aparicions
+  ON cognoms_stats_total(total_aparicions);
+
+-- Estadístiques per any per cognom
+CREATE TABLE IF NOT EXISTS cognoms_stats_any (
+  cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
+  any INTEGER NOT NULL,
+  total INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id, any)
+);
+CREATE INDEX IF NOT EXISTS idx_cognoms_stats_any_any
+  ON cognoms_stats_any(any);
+
+-- Estadístiques per ancestre (municipi/nivell) i any
+CREATE TABLE IF NOT EXISTS cognoms_stats_ancestor_any (
+  cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
+  ancestor_type TEXT NOT NULL,
+  ancestor_id INTEGER NOT NULL,
+  any INTEGER NOT NULL,
+  total INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id, ancestor_type, ancestor_id, any)
+);
+CREATE INDEX IF NOT EXISTS idx_cognoms_stats_ancestor_cognom_any
+  ON cognoms_stats_ancestor_any(cognom_id, ancestor_type, any);
+CREATE INDEX IF NOT EXISTS idx_cognoms_stats_ancestor_id
+  ON cognoms_stats_ancestor_any(ancestor_type, ancestor_id);
 
 -- Estadístiques pre-agregades per nom/municipi/any
 CREATE TABLE IF NOT EXISTS noms_freq_municipi_any (
@@ -1352,6 +1498,9 @@ CREATE INDEX IF NOT EXISTS idx_persona_municipi_quinta ON persona(municipi, quin
 -- Cercar per ofici o estat civil
 CREATE INDEX IF NOT EXISTS idx_persona_ofici ON persona(ofici);
 -- CREATE INDEX IF NOT EXISTS idx_persona_estat_civil ON persona(estat_civil);
+
+CREATE INDEX IF NOT EXISTS idx_persona_field_links_persona ON persona_field_links(persona_id);
+CREATE INDEX IF NOT EXISTS idx_persona_field_links_registre ON persona_field_links(registre_id);
 
 CREATE INDEX IF NOT EXISTS idx_usuaris_correu ON usuaris(correu);
 CREATE INDEX IF NOT EXISTS idx_usuaris_data_creacio ON usuaris(data_creacio);

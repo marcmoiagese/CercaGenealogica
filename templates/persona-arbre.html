@@ -1,0 +1,94 @@
+{{ define "persona-arbre.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t .Lang "tree.title" }} · {{ .Data.PersonaName }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/taula.css">
+    <link rel="stylesheet" href="/static/css/arbre.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal arbre-full">
+        <section class="controls-arbre">
+            <div class="view-switch" aria-label="{{ t .Lang "tree.controls.view_switch_aria" }}">
+                <a class="view-btn {{ if eq .Data.View "pedigree" }}is-active{{ end }}" href="/persones/{{ .Data.Persona.ID }}/arbre?view=pedigree&gens={{ .Data.Gens }}" title="{{ t .Lang "tree.view.pedigree" }}">{{ t .Lang "tree.view.pedigree" }}</a>
+                <a class="view-btn {{ if eq .Data.View "familiar" }}is-active{{ end }}" href="/persones/{{ .Data.Persona.ID }}/arbre?view=familiar&gens={{ .Data.Gens }}" title="{{ t .Lang "tree.view.familiar" }}">{{ t .Lang "tree.view.familiar" }}</a>
+                <a class="view-btn {{ if eq .Data.View "ventall" }}is-active{{ end }}" href="/persones/{{ .Data.Persona.ID }}/arbre?view=ventall&gens={{ .Data.Gens }}" title="{{ t .Lang "tree.view.ventall" }}">{{ t .Lang "tree.view.ventall" }}</a>
+            </div>
+
+            <label class="sr-only" for="generacionsSelect">{{ t .Lang "tree.controls.generations" }}</label>
+            <select id="generacionsSelect" aria-label="{{ t .Lang "tree.controls.generations" }}">
+                <option value="1" {{ if eq .Data.Gens 1 }}selected{{ end }}>1 {{ t .Lang "tree.controls.generation_singular" }}</option>
+                <option value="2" {{ if eq .Data.Gens 2 }}selected{{ end }}>2 {{ t .Lang "tree.controls.generation_plural" }}</option>
+                <option value="3" {{ if or (eq .Data.Gens 0) (eq .Data.Gens 3) }}selected{{ end }}>3 {{ t .Lang "tree.controls.generation_plural" }}</option>
+                <option value="4" {{ if eq .Data.Gens 4 }}selected{{ end }}>4 {{ t .Lang "tree.controls.generation_plural" }}</option>
+                <option value="5" {{ if eq .Data.Gens 5 }}selected{{ end }}>5 {{ t .Lang "tree.controls.generation_plural" }}</option>
+            </select>
+            <button id="zoomIn" type="button"><i class="fas fa-search-plus"></i> {{ t .Lang "tree.controls.zoom_in" }}</button>
+            <button id="zoomOut" type="button"><i class="fas fa-search-minus"></i> {{ t .Lang "tree.controls.zoom_out" }}</button>
+            <button id="fitView" type="button"><i class="fas fa-compress-arrows-alt"></i> {{ t .Lang "tree.controls.fit" }}</button>
+            <span id="datasetInfo" class="dataset-info" title="{{ t .Lang "tree.controls.dataset_title" }}"></span>
+            <span id="visibleInfo" class="dataset-info" title="{{ t .Lang "tree.controls.visible_title" }}"></span>
+            <span class="controls-spacer"></span>
+            <button id="toggleDrawer" class="btn-toggle-drawer" title="{{ t .Lang "tree.controls.drawer_title" }}" type="button">
+                <i class="fas fa-id-card"></i>
+                <span class="btn-text">{{ t .Lang "tree.controls.drawer" }}</span>
+            </button>
+            <a id="viewPersonBtn" class="view-person-link" href="/persones/{{ .Data.Persona.ID }}" title="{{ t .Lang "tree.controls.view_person" }}">
+                <i class="fas fa-user"></i>
+                <span class="btn-text">{{ t .Lang "tree.controls.view_person" }}</span>
+            </a>
+        </section>
+
+        <section class="arbre-container" id="arbreContainer">
+            <div class="arbre-shell" id="arbreShell">
+                {{ if eq .Data.View "ventall" }}
+                <svg id="fanSvg" aria-label="{{ t .Lang "tree.aria.fan" }}"></svg>
+                {{ else }}
+                <svg id="treeSvg" aria-label="{{ t .Lang "tree.aria.tree" }}"></svg>
+                {{ end }}
+
+                <aside class="person-drawer" id="personDrawer" aria-label="{{ t .Lang "tree.controls.drawer" }}" aria-hidden="true">
+                    <div class="drawer-header">
+                        <div class="drawer-title">
+                            <div class="drawer-name" id="drawerName">{{ t .Lang "tree.drawer.select_person" }}</div>
+                            <div class="drawer-sub" id="drawerSub"></div>
+                        </div>
+                        <button class="drawer-close" id="drawerClose" aria-label="{{ t .Lang "tree.drawer.close" }}">×</button>
+                    </div>
+                    <div class="drawer-body" id="drawerBody">
+                        {{ if eq .Data.View "ventall" }}
+                        <div class="drawer-empty">{{ t .Lang "tree.drawer.segment_hint" }}</div>
+                        {{ else }}
+                        <div class="drawer-empty">{{ t .Lang "tree.drawer.click_hint_node" }}</div>
+                        {{ end }}
+                    </div>
+                </aside>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+
+    <script id="tree-i18n" type="application/json">{{ toJsonJS .Data.TreeI18n }}</script>
+    <script>
+        window.familyData = {{ toJsonJS .Data.FamilyData }};
+        window.familyLinks = {{ toJsonJS .Data.FamilyLinks }};
+        window.rootPersonId = {{ .Data.RootPersonId }};
+        window.__DATASET_STATS = {{ toJsonJS .Data.DatasetStats }};
+    </script>
+    <script src="/static/vendor/d3.v7.min.js"></script>
+    {{ if eq .Data.View "ventall" }}
+    <script src="/static/js/arbre/arbre_ventall.js"></script>
+    {{ else if eq .Data.View "familiar" }}
+    <script src="/static/js/arbre/arbre_familiar.js"></script>
+    {{ else }}
+    <script src="/static/js/arbre/arbre.js"></script>
+    {{ end }}
+</body>
+</html>
+{{ end }}

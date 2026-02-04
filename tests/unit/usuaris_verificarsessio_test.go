@@ -1,6 +1,7 @@
 package unit
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -608,6 +609,46 @@ func (f *fakeDBVerificar) ListCSVImportTemplates(filter db.CSVImportTemplateFilt
 }
 func (f *fakeDBVerificar) DeleteCSVImportTemplate(id int) error {
 	return errors.New("DeleteCSVImportTemplate not implemented in fakeDBVerificar")
+}
+
+func (f *fakeDBVerificar) AddUserBlock(blockerID, blockedID int) error {
+	return errors.New("AddUserBlock not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) RemoveUserBlock(blockerID, blockedID int) error {
+	return errors.New("RemoveUserBlock not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) IsUserBlocked(blockerID, blockedID int) (bool, error) {
+	return false, errors.New("IsUserBlocked not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) FindCognomIDByKey(key string) (int, error) {
+	return 0, errors.New("FindCognomIDByKey not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) UpsertSearchDoc(doc *db.SearchDoc) error {
+	return errors.New("UpsertSearchDoc not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) GetSearchDoc(entityType string, entityID int) (*db.SearchDoc, error) {
+	return nil, errors.New("GetSearchDoc not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) DeleteSearchDoc(entityType string, entityID int) error {
+	return errors.New("DeleteSearchDoc not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) SearchDocs(filter db.SearchQueryFilter) ([]db.SearchDocRow, int, db.SearchFacets, error) {
+	return nil, 0, db.SearchFacets{}, errors.New("SearchDocs not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ReplaceAdminClosure(descendantMunicipiID int, entries []db.AdminClosureEntry) error {
+	return errors.New("ReplaceAdminClosure not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ListAdminClosure(descendantMunicipiID int) ([]db.AdminClosureEntry, error) {
+	return nil, errors.New("ListAdminClosure not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ApplyCognomFreqMunicipiAnyDelta(cognomID, municipiID, anyDoc, delta int) error {
+	return errors.New("ApplyCognomFreqMunicipiAnyDelta not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ApplyMunicipiDemografiaDelta(municipiID, anyDoc int, tipus string, delta int) error {
+	return errors.New("ApplyMunicipiDemografiaDelta not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ApplyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, anyDoc int, tipus string, delta int) error {
+	return errors.New("ApplyMunicipiDemografiaDeltaTx not implemented in fakeDBVerificar")
 }
 
 // Crea una App només amb la fake DB per testejar VerificarSessio.

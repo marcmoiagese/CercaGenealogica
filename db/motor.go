@@ -113,15 +113,44 @@ type DB interface {
 	// Cognoms
 	ListCognoms(q string, limit, offset int) ([]Cognom, error)
 	GetCognom(id int) (*Cognom, error)
+	FindCognomIDByKey(key string) (int, error)
 	UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error)
 	UpdateCognom(c *Cognom) error
 	ListCognomVariants(f CognomVariantFilter) ([]CognomVariant, error)
 	CreateCognomVariant(v *CognomVariant) (int, error)
 	UpdateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error
+	// Cognoms redirects (alias -> canònic)
+	GetCognomRedirect(fromID int) (*CognomRedirect, error)
+	ListCognomRedirects() ([]CognomRedirect, error)
+	ListCognomRedirectsByTo(toID int) ([]CognomRedirect, error)
+	SetCognomRedirect(fromID, toID int, createdBy *int, reason string) error
+	DeleteCognomRedirect(fromID int) error
+	// Cognoms merge suggestions (moderables)
+	CreateCognomRedirectSuggestion(s *CognomRedirectSuggestion) (int, error)
+	GetCognomRedirectSuggestion(id int) (*CognomRedirectSuggestion, error)
+	ListCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) ([]CognomRedirectSuggestion, error)
+	UpdateCognomRedirectSuggestionModeracio(id int, estat, motiu string, moderatorID int) error
+	// Cognoms referències (moderables)
+	CreateCognomReferencia(ref *CognomReferencia) (int, error)
+	ListCognomReferencies(f CognomReferenciaFilter) ([]CognomReferencia, error)
+	UpdateCognomReferenciaModeracio(id int, estat, motiu string, moderatorID int) error
+	// Cerca avançada
+	UpsertSearchDoc(doc *SearchDoc) error
+	GetSearchDoc(entityType string, entityID int) (*SearchDoc, error)
+	DeleteSearchDoc(entityType string, entityID int) error
+	SearchDocs(filter SearchQueryFilter) ([]SearchDocRow, int, SearchFacets, error)
+	ReplaceAdminClosure(descendantMunicipiID int, entries []AdminClosureEntry) error
+	ListAdminClosure(descendantMunicipiID int) ([]AdminClosureEntry, error)
 	UpsertCognomFreqMunicipiAny(cognomID, municipiID, anyDoc, freq int) error
 	QueryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]CognomFreqRow, error)
 	ListCognomImportRows(limit, offset int) ([]CognomImportRow, error)
 	ListCognomStatsRows(limit, offset int) ([]CognomStatsRow, error)
+	RebuildCognomStats(cognomID int) error
+	GetCognomStatsTotal(cognomID int) (*CognomStatsTotal, error)
+	ListCognomStatsAny(cognomID int, from, to int) ([]CognomStatsAnyRow, error)
+	ListCognomStatsAnyDecade(cognomID int, from, to int) ([]CognomStatsAnyRow, error)
+	ListCognomStatsAncestor(cognomID int, ancestorType string, level, any, limit int) ([]CognomStatsAncestorRow, error)
+	CountCognomStatsAncestorDistinct(cognomID int, ancestorType string, level, any int) (int, error)
 	ResolveCognomPublicatByForma(forma string) (int, string, bool, error)
 	ListCognomFormesPublicades(cognomID int) ([]string, error)
 	// Noms
@@ -218,6 +247,8 @@ type DB interface {
 	GetPersona(id int) (*Persona, error)
 	CreatePersona(p *Persona) (int, error)
 	UpdatePersona(p *Persona) error
+	ListPersonaFieldLinks(personaID int) ([]PersonaFieldLink, error)
+	UpsertPersonaFieldLink(personaID int, fieldKey string, registreID int, userID int) error
 	// Anecdotari persona
 	ListPersonaAnecdotes(personaID int, userID int) ([]PersonaAnecdote, error)
 	CreatePersonaAnecdote(a *PersonaAnecdote) (int, error)
@@ -343,6 +374,9 @@ type DB interface {
 	DeleteCSVImportTemplate(id int) error
 	SearchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error)
 	ListRegistresByPersona(personaID int, tipus string) ([]PersonaRegistreRow, error)
+	GetPersonesByIDs(ids []int) (map[int]*Persona, error)
+	FindBestBaptismeTranscripcioForPersona(personaID int) (int, bool, error)
+	GetParentsFromTranscripcio(transcripcioID int) (int, int, error)
 
 	// Paisos
 	ListPaisos() ([]Pais, error)
@@ -675,6 +709,59 @@ type CognomVariantFilter struct {
 	Offset   int
 }
 
+type CognomRedirect struct {
+	FromCognomID int
+	ToCognomID   int
+	Reason       string
+	CreatedBy    sql.NullInt64
+	CreatedAt    sql.NullTime
+}
+
+type CognomRedirectSuggestion struct {
+	ID             int
+	FromCognomID   int
+	ToCognomID     int
+	Reason         string
+	ModeracioEstat string
+	ModeracioMotiu string
+	ModeratedBy    sql.NullInt64
+	ModeratedAt    sql.NullTime
+	CreatedBy      sql.NullInt64
+	CreatedAt      sql.NullTime
+}
+
+type CognomRedirectSuggestionFilter struct {
+	Status       string
+	FromCognomID int
+	ToCognomID   int
+	Limit        int
+	Offset       int
+}
+
+type CognomReferencia struct {
+	ID             int
+	CognomID       int
+	Kind           string
+	RefID          sql.NullInt64
+	URL            string
+	Titol          string
+	Descripcio     string
+	Pagina         string
+	ModeracioEstat string
+	ModeracioMotiu string
+	ModeratedBy    sql.NullInt64
+	ModeratedAt    sql.NullTime
+	CreatedBy      sql.NullInt64
+	CreatedAt      sql.NullTime
+}
+
+type CognomReferenciaFilter struct {
+	CognomID int
+	Status   string
+	Limit    int
+	Offset   int
+}
+
 type CognomFreqRow struct {
 	MunicipiID  int
 	MunicipiNom sql.NullString
@@ -698,6 +785,29 @@ type CognomStatsRow struct {
 	Cognom2Estat sql.NullString
 	AnyDoc       sql.NullInt64
 	MunicipiID   sql.NullInt64
+}
+
+type CognomStatsTotal struct {
+	CognomID        int
+	TotalPersones   int
+	TotalAparicions int
+	UpdatedAt       sql.NullTime
+}
+
+type CognomStatsAnyRow struct {
+	CognomID int
+	Any      int
+	Total    int
+}
+
+type CognomStatsAncestorRow struct {
+	CognomID     int
+	AncestorType string
+	AncestorID   int
+	Any          int
+	Total        int
+	Label        string
+	Level        int
 }
 
 type NomFreqRow struct {
@@ -1004,29 +1114,40 @@ type Group struct {
 }
 
 type Persona struct {
-	ID             int
-	Nom            string
-	Cognom1        string
-	Cognom2        string
-	Municipi       string
-	Arquebisbat    string
-	NomComplet     string
-	Pagina         string
-	Llibre         string
-	Quinta         string
-	DataNaixement  sql.NullString
-	DataBateig     sql.NullString
-	DataDefuncio   sql.NullString
-	Ofici          string
-	EstatCivil     string
-	ModeracioEstat string
-	ModeracioMotiu string
-	CreatedBy      sql.NullInt64
-	CreatedAt      sql.NullTime
-	UpdatedAt      sql.NullTime
-	UpdatedBy      sql.NullInt64
-	ModeratedBy    sql.NullInt64
-	ModeratedAt    sql.NullTime
+	ID                int
+	Nom               string
+	Cognom1           string
+	Cognom2           string
+	Municipi          string
+	MunicipiNaixement string
+	MunicipiDefuncio  string
+	Arquebisbat       string
+	NomComplet        string
+	Pagina            string
+	Llibre            string
+	Quinta            string
+	DataNaixement     sql.NullString
+	DataBateig        sql.NullString
+	DataDefuncio      sql.NullString
+	Ofici             string
+	EstatCivil        string
+	ModeracioEstat    string
+	ModeracioMotiu    string
+	CreatedBy         sql.NullInt64
+	CreatedAt         sql.NullTime
+	UpdatedAt         sql.NullTime
+	UpdatedBy         sql.NullInt64
+	ModeratedBy       sql.NullInt64
+	ModeratedAt       sql.NullTime
+}
+
+type PersonaFieldLink struct {
+	ID         int
+	PersonaID  int
+	FieldKey   string
+	RegistreID int
+	CreatedBy  sql.NullInt64
+	CreatedAt  sql.NullTime
 }
 
 type PersonaFilter struct {
@@ -1559,6 +1680,85 @@ type TranscripcioRaw struct {
 	CreatedBy                  sql.NullInt64
 	CreatedAt                  time.Time
 	UpdatedAt                  time.Time
+}
+
+type SearchDoc struct {
+	ID                    int
+	EntityType            string
+	EntityID              int
+	Published             bool
+	MunicipiID            sql.NullInt64
+	ArxiuID               sql.NullInt64
+	LlibreID              sql.NullInt64
+	EntitatEclesiasticaID sql.NullInt64
+	DataActe              sql.NullString
+	AnyActe               sql.NullInt64
+	PersonNomNorm         string
+	PersonCognomsNorm     string
+	PersonFullNorm        string
+	PersonTokensNorm      string
+	CognomsTokensNorm     string
+	PersonPhonetic        string
+	CognomsPhonetic       string
+	CognomsCanon          string
+}
+
+type SearchQueryFilter struct {
+	Query                  string
+	QueryNorm              string
+	QueryPhonetic          string
+	QueryTokens            []string
+	CanonTokens            []string
+	VariantTokens          []string
+	Name                  string
+	Surname1              string
+	Surname2              string
+	NameNorm              string
+	SurnameNorm           string
+	NameTokens            []string
+	SurnameTokens         []string
+	SurnameTokens1        []string
+	SurnameTokens2        []string
+	Father                string
+	Mother                string
+	Partner               string
+	FatherTokens          []string
+	MotherTokens          []string
+	PartnerTokens         []string
+	Exact                 bool
+	OnlySurnameDirect     bool
+	Entity                 string
+	AncestorType           string
+	AncestorID             int
+	EntitatEclesiasticaID  int
+	ArxiuID                int
+	LlibreID               int
+	DateFrom               string
+	DateTo                 string
+	AnyFrom                int
+	AnyTo                  int
+	TipusActe              string
+	Page                   int
+	PageSize               int
+	Sort                   string
+	IncludeUnpublished     bool
+}
+
+type SearchDocRow struct {
+	SearchDoc
+	TipusActe sql.NullString
+	Score     int
+}
+
+type SearchFacets struct {
+	EntityType map[string]int
+	TipusActe  map[string]int
+}
+
+type AdminClosureEntry struct {
+	DescendantMunicipiID int
+	AncestorType         string
+	AncestorID           int
 }
 
 type TranscripcioPersonaRaw struct {

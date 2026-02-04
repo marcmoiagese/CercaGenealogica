@@ -104,6 +104,8 @@ CREATE TABLE IF NOT EXISTS persona (
     cognom1 VARCHAR(255),
     cognom2 VARCHAR(255),
     municipi VARCHAR(255),
+    municipi_naixement VARCHAR(255),
+    municipi_defuncio VARCHAR(255),
     arquevisbat VARCHAR(255),
     nom_complet TEXT,
     pagina VARCHAR(50),
@@ -127,6 +129,21 @@ CREATE TABLE IF NOT EXISTS persona (
     CONSTRAINT fk_persona_created_by FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     CONSTRAINT fk_persona_updated_by FOREIGN KEY (updated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     CONSTRAINT fk_persona_moderated_by FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS persona_field_links (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    persona_id INT UNSIGNED NOT NULL,
+    field_key VARCHAR(100) NOT NULL,
+    registre_id INT UNSIGNED NOT NULL,
+    created_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_persona_field (persona_id, field_key),
+    INDEX idx_persona_field_links_persona (persona_id),
+    INDEX idx_persona_field_links_registre (registre_id),
+    CONSTRAINT fk_persona_field_links_persona FOREIGN KEY (persona_id) REFERENCES persona(id) ON DELETE CASCADE,
+    CONSTRAINT fk_persona_field_links_registre FOREIGN KEY (registre_id) REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+    CONSTRAINT fk_persona_field_links_created_by FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS relacions (
@@ -250,6 +267,16 @@ CREATE TABLE IF NOT EXISTS municipis (
     FOREIGN KEY (municipi_id) REFERENCES municipis(id),
     FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS admin_closure (
+    descendant_municipi_id INT UNSIGNED NOT NULL,
+    ancestor_type ENUM('pais','nivell','municipi') NOT NULL,
+    ancestor_id INT UNSIGNED NOT NULL,
+    PRIMARY KEY (descendant_municipi_id, ancestor_type, ancestor_id),
+    INDEX idx_admin_closure_ancestor (ancestor_type, ancestor_id),
+    INDEX idx_admin_closure_descendant (descendant_municipi_id),
+    FOREIGN KEY (descendant_municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS municipi_mapes (
@@ -1002,6 +1029,40 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw (
   FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS search_docs (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  entity_type ENUM('persona','registre_raw') NOT NULL,
+  entity_id INT UNSIGNED NOT NULL,
+  published TINYINT(1) NOT NULL DEFAULT 1,
+  municipi_id INT UNSIGNED NULL,
+  arxiu_id INT UNSIGNED NULL,
+  llibre_id INT UNSIGNED NULL,
+  entitat_eclesiastica_id INT UNSIGNED NULL,
+  data_acte DATE NULL,
+  any_acte INT NULL,
+  person_nom_norm TEXT,
+  person_cognoms_norm TEXT,
+  person_full_norm TEXT,
+  person_tokens_norm TEXT,
+  cognoms_tokens_norm TEXT,
+  person_phonetic TEXT,
+  cognoms_phonetic TEXT,
+  cognoms_canon TEXT,
+  UNIQUE KEY idx_search_docs_entity (entity_type, entity_id),
+  INDEX idx_search_docs_any (any_acte),
+  INDEX idx_search_docs_data (data_acte),
+  INDEX idx_search_docs_municipi (municipi_id),
+  INDEX idx_search_docs_arxiu (arxiu_id),
+  INDEX idx_search_docs_llibre (llibre_id),
+  INDEX idx_search_docs_entitat (entitat_eclesiastica_id),
+  INDEX idx_search_docs_full (person_full_norm(191)),
+  INDEX idx_search_docs_cognoms_canon (cognoms_canon(191)),
+  FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE SET NULL,
+  FOREIGN KEY (arxiu_id) REFERENCES arxius(id) ON DELETE SET NULL,
+  FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE SET NULL,
+  FOREIGN KEY (entitat_eclesiastica_id) REFERENCES arquebisbats(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS transcripcions_persones_raw (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   transcripcio_id INT UNSIGNED NOT NULL,
@@ -1245,6 +1306,63 @@ CREATE TABLE IF NOT EXISTS cognom_variants (
   FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Redirects de cognoms (alias -> canònic)
+CREATE TABLE IF NOT EXISTS cognoms_redirects (
+  from_cognom_id INT UNSIGNED NOT NULL PRIMARY KEY,
+  to_cognom_id INT UNSIGNED NOT NULL,
+  reason TEXT,
+  created_by INT UNSIGNED NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_cognoms_redirects_to (to_cognom_id),
+  FOREIGN KEY (from_cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE,
+  FOREIGN KEY (to_cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Propostes d'unificació de cognoms (moderables)
+CREATE TABLE IF NOT EXISTS cognoms_redirects_suggestions (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  from_cognom_id INT UNSIGNED NOT NULL,
+  to_cognom_id INT UNSIGNED NOT NULL,
+  reason TEXT,
+  moderation_status VARCHAR(20) DEFAULT 'pendent',
+  moderated_by INT UNSIGNED NULL,
+  moderated_at DATETIME NULL,
+  moderation_notes TEXT,
+  created_by INT UNSIGNED NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_cognoms_redirects_suggestions_status (moderation_status),
+  INDEX idx_cognoms_redirects_suggestions_from (from_cognom_id),
+  INDEX idx_cognoms_redirects_suggestions_to (to_cognom_id),
+  FOREIGN KEY (from_cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE,
+  FOREIGN KEY (to_cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+  FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Referències de cognoms (moderables)
+CREATE TABLE IF NOT EXISTS cognoms_referencies (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  cognom_id INT UNSIGNED NOT NULL,
+  kind VARCHAR(20) NOT NULL,
+  ref_id INT UNSIGNED NULL,
+  url TEXT,
+  titol TEXT,
+  descripcio TEXT,
+  pagina TEXT,
+  moderation_status VARCHAR(20) DEFAULT 'pendent',
+  moderated_by INT UNSIGNED NULL,
+  moderated_at DATETIME,
+  moderation_notes TEXT,
+  created_by INT UNSIGNED NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_cognoms_ref_cognom_status (cognom_id, moderation_status),
+  INDEX idx_cognoms_ref_kind (kind),
+  FOREIGN KEY (cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE,
+  FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Estadístiques pre-agregades per cognom/municipi/any
 CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_any (
   cognom_id INT UNSIGNED NOT NULL,
@@ -1269,6 +1387,42 @@ CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_total (
   INDEX idx_cognoms_freq_municipi_total_municipi (municipi_id, total_freq),
   FOREIGN KEY (cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE,
   FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Estadístiques globals per cognom
+CREATE TABLE IF NOT EXISTS cognoms_stats_total (
+  cognom_id INT UNSIGNED NOT NULL,
+  total_persones INT NOT NULL DEFAULT 0,
+  total_aparicions INT NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id),
+  INDEX idx_cognoms_stats_total_aparicions (total_aparicions),
+  FOREIGN KEY (cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Estadístiques per any per cognom
+CREATE TABLE IF NOT EXISTS cognoms_stats_any (
+  cognom_id INT UNSIGNED NOT NULL,
+  `any` INT NOT NULL,
+  total INT NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id, `any`),
+  INDEX idx_cognoms_stats_any_any (`any`),
+  FOREIGN KEY (cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Estadístiques per ancestre (municipi/nivell) i any
+CREATE TABLE IF NOT EXISTS cognoms_stats_ancestor_any (
+  cognom_id INT UNSIGNED NOT NULL,
+  ancestor_type VARCHAR(32) NOT NULL,
+  ancestor_id INT UNSIGNED NOT NULL,
+  `any` INT NOT NULL,
+  total INT NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id, ancestor_type, ancestor_id, `any`),
+  INDEX idx_cognoms_stats_ancestor_cognom_any (cognom_id, ancestor_type, `any`),
+  INDEX idx_cognoms_stats_ancestor_id (ancestor_type, ancestor_id),
+  FOREIGN KEY (cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Estadístiques pre-agregades per nom/municipi/any
