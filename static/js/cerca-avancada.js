@@ -9,8 +9,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const resultsEl = document.getElementById("advancedSearchResults");
     const facetsEl = document.getElementById("advancedSearchFacets");
     const paginationEl = document.getElementById("advancedSearchPagination");
-    const clearBtn = document.getElementById("advancedSearchClear");
+    const clearButtons = Array.from(form.querySelectorAll("[data-advanced-clear]"));
+    const legacyClearBtn = document.getElementById("advancedSearchClear");
     const pageInput = form.querySelector("input[name='page']");
+    const quickQueryInput = form.querySelector("input[name='q']");
+    const entitySelect = document.getElementById("searchEntity");
+    const tipusActeSelect = document.getElementById("tipusActe");
     const territoriInput = document.getElementById("territoriSearch");
     const territoriSuggestions = document.getElementById("territoriSuggestions");
     const territoriMunicipiId = document.getElementById("territoriMunicipiId");
@@ -19,6 +23,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const territoriLabelInput = document.getElementById("ancestor_label");
     const paisSelect = document.getElementById("searchPaisSelect");
     const levelSelects = Array.from(form.querySelectorAll("[data-territori-level]"));
+    const advancedPanel = document.getElementById("advancedPanel");
+    const advancedToggle = document.getElementById("btnAdvanced");
+    const advancedClose = document.getElementById("btnAdvancedClose");
 
     const labels = {
         loading: form.dataset.labelLoading || "Loading...",
@@ -27,14 +34,36 @@ document.addEventListener("DOMContentLoaded", () => {
         total: form.dataset.labelTotal || "Total: %d",
         prev: form.dataset.labelPrev || "Prev",
         next: form.dataset.labelNext || "Next",
+        all: form.dataset.labelAll || "All",
         entityPersona: form.dataset.labelEntityPersona || "Persona",
         entityRegistre: form.dataset.labelEntityRegistre || "Registre",
         facetEntity: form.dataset.labelFacetEntity || "Entity",
         facetTipus: form.dataset.labelFacetTipus || "Tipus",
     };
 
+    let facetCache = null;
+    let facetCacheKey = "";
+
     function formatLabel(template, value) {
         return String(template).replace("%d", value).replace("{total}", value);
+    }
+
+    function buildFacetKey(params) {
+        const skipKeys = new Set(["page", "page_size", "entity", "tipus_acte"]);
+        const entries = [];
+        params.forEach((value, key) => {
+            if (skipKeys.has(key)) {
+                return;
+            }
+            entries.push([key, value]);
+        });
+        entries.sort((a, b) => {
+            if (a[0] === b[0]) {
+                return a[1].localeCompare(b[1]);
+            }
+            return a[0].localeCompare(b[0]);
+        });
+        return entries.map(([key, value]) => `${key}=${value}`).join("&");
     }
 
     function hasSearchFilters(params) {
@@ -49,6 +78,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 return true;
             }
         }
+        if (quickQueryInput && quickQueryInput.value.trim() !== "") {
+            return true;
+        }
         return false;
     }
 
@@ -62,6 +94,14 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             params.set(key, val);
         });
+        if (quickQueryInput) {
+            const q = quickQueryInput.value.trim();
+            if (q !== "") {
+                params.set("q", q);
+            } else {
+                params.delete("q");
+            }
+        }
         Object.keys(overrides).forEach((key) => {
             if (overrides[key] === null || overrides[key] === undefined || overrides[key] === "") {
                 params.delete(key);
@@ -121,46 +161,197 @@ document.addEventListener("DOMContentLoaded", () => {
         history.replaceState(null, "", url.toString());
     }
 
+    function setAdvanced(open, persist) {
+        if (!advancedPanel) return;
+        advancedPanel.classList.toggle("is-open", open);
+        advancedPanel.setAttribute("aria-hidden", open ? "false" : "true");
+        if (advancedToggle) {
+            advancedToggle.classList.toggle("is-active", open);
+        }
+        if (persist) {
+            try {
+                if (open) {
+                    sessionStorage.setItem("advancedSearchOpen", "1");
+                } else {
+                    sessionStorage.removeItem("advancedSearchOpen");
+                }
+            } catch (err) {
+                return;
+            }
+        }
+    }
+
+    if (advancedToggle) {
+        advancedToggle.addEventListener("click", () => {
+            const open = !(advancedPanel && advancedPanel.classList.contains("is-open"));
+            setAdvanced(open, true);
+        });
+    }
+    if (advancedClose) {
+        advancedClose.addEventListener("click", () => setAdvanced(false, true));
+    }
+
     function clearResults() {
         resultsEl.innerHTML = "";
         facetsEl.innerHTML = "";
         paginationEl.innerHTML = "";
     }
 
-    function renderFacets(facets) {
+    function tipusLabelMap() {
+        const map = {};
+        if (!tipusActeSelect) {
+            return map;
+        }
+        Array.from(tipusActeSelect.options || []).forEach((opt) => {
+            const value = String(opt.value || "").trim();
+            const label = String(opt.textContent || "").trim();
+            if (value) {
+                map[value] = label;
+            }
+        });
+        return map;
+    }
+
+    function renderFacetGroup(title, items) {
+        if (!items || items.length === 0) {
+            return null;
+        }
+        const group = document.createElement("div");
+        group.className = "facet-group";
+        if (title) {
+            const heading = document.createElement("div");
+            heading.className = "facet-group-title";
+            heading.textContent = title;
+            group.appendChild(heading);
+        }
+        const list = document.createElement("div");
+        list.className = "facet-list";
+        items.forEach((item) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "facet-row";
+            if (item.active) {
+                button.classList.add("active");
+            }
+            const left = document.createElement("span");
+            left.className = "facet-left";
+            const icon = document.createElement("span");
+            icon.className = "facet-icon";
+            if (item.icon) {
+                const i = document.createElement("i");
+                i.className = `fas ${item.icon}`;
+                icon.appendChild(i);
+            }
+            const name = document.createElement("span");
+            name.className = "facet-name";
+            name.textContent = item.label;
+            left.appendChild(icon);
+            left.appendChild(name);
+            const count = document.createElement("span");
+            count.className = "facet-count";
+            count.textContent = String(item.count || 0);
+            button.appendChild(left);
+            button.appendChild(count);
+            button.addEventListener("click", () => {
+                if (item.onClick) {
+                    item.onClick();
+                }
+            });
+            list.appendChild(button);
+        });
+        group.appendChild(list);
+        return group;
+    }
+
+    function renderFacets(facets, total) {
         facetsEl.innerHTML = "";
         if (!facets) {
             return;
         }
-        const entityCounts = facets.entity_type || {};
-        const tipusCounts = facets.tipus_acte || {};
-        const chips = [];
-        const pushChip = (label, value) => {
-            const span = document.createElement("span");
-            span.className = "cerca-avancada-facet";
-            span.textContent = `${label}: ${value}`;
-            chips.push(span);
+        const sourceFacets = facetCache ? facetCache.facets : facets;
+        const sourceTotal = facetCache ? facetCache.total : total;
+        const entityCounts = sourceFacets.entity_type || {};
+        const tipusCounts = sourceFacets.tipus_acte || {};
+        const tipusLabels = tipusLabelMap();
+        const activeEntity = entitySelect ? entitySelect.value : "all";
+        const activeTipus = tipusActeSelect ? tipusActeSelect.value : "";
+
+        const entityItems = [];
+        const applyEntityFilter = (entity) => {
+            if (entitySelect) {
+                entitySelect.value = entity;
+            }
+            if (tipusActeSelect) {
+                tipusActeSelect.value = "";
+            }
+            runSearch(1);
         };
-        const entityParts = [];
-        if (entityCounts.persona) {
-            entityParts.push(`${labels.entityPersona} ${entityCounts.persona}`);
-        }
-        if (entityCounts.registre_raw) {
-            entityParts.push(`${labels.entityRegistre} ${entityCounts.registre_raw}`);
-        }
-        if (entityParts.length > 0) {
-            pushChip(labels.facetEntity, entityParts.join(" · "));
-        }
-        const tipusParts = [];
-        Object.keys(tipusCounts || {}).forEach((key) => {
-            const count = tipusCounts[key];
-            if (!count) return;
-            tipusParts.push(`${key} ${count}`);
+        const applyTipusFilter = (tipus) => {
+            if (entitySelect) {
+                entitySelect.value = "registre_raw";
+            }
+            if (tipusActeSelect) {
+                tipusActeSelect.value = tipus;
+            }
+            runSearch(1);
+        };
+
+        entityItems.push({
+            label: labels.all,
+            count: sourceTotal || 0,
+            active: activeEntity === "all" && !activeTipus,
+            icon: "fa-layer-group",
+            onClick: () => applyEntityFilter("all"),
         });
-        if (tipusParts.length > 0) {
-            pushChip(labels.facetTipus, tipusParts.join(" · "));
+        entityItems.push({
+            label: labels.entityPersona,
+            count: entityCounts.persona || 0,
+            active: activeEntity === "persona",
+            icon: "fa-user",
+            onClick: () => applyEntityFilter("persona"),
+        });
+        entityItems.push({
+            label: labels.entityRegistre,
+            count: entityCounts.registre_raw || 0,
+            active: activeEntity === "registre_raw" && !activeTipus,
+            icon: "fa-book-open",
+            onClick: () => applyEntityFilter("registre_raw"),
+        });
+
+        const tipusItems = [];
+        const tipusKeys = Object.keys(tipusCounts || {});
+        if (tipusActeSelect) {
+            Array.from(tipusActeSelect.options || []).forEach((opt) => {
+                const key = String(opt.value || "").trim();
+                if (!key) return;
+                if (!tipusKeys.includes(key)) {
+                    tipusKeys.push(key);
+                }
+            });
         }
-        chips.forEach((chip) => facetsEl.appendChild(chip));
+        tipusKeys.forEach((key) => {
+            const count = tipusCounts[key] || 0;
+            if (!count && activeTipus !== key) {
+                return;
+            }
+            const label = tipusLabels[key] || key;
+            tipusItems.push({
+                label: label,
+                count: count,
+                active: activeTipus === key,
+                icon: "fa-file-lines",
+                onClick: () => applyTipusFilter(key),
+            });
+        });
+
+        const entityGroup = renderFacetGroup(labels.facetEntity, entityItems);
+        const tipusGroup = renderFacetGroup(labels.facetTipus, tipusItems);
+        if (entityGroup) {
+            facetsEl.appendChild(entityGroup);
+        }
+        if (tipusGroup) {
+            facetsEl.appendChild(tipusGroup);
+        }
     }
 
     function renderResults(data) {
@@ -170,7 +361,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (statusEl) {
             statusEl.textContent = total > 0 ? formatLabel(labels.total, total) : labels.empty;
         }
-        renderFacets(data.facets || {});
+        const activeEntity = entitySelect ? entitySelect.value : "all";
+        const activeTipus = tipusActeSelect ? tipusActeSelect.value : "";
+        if (activeEntity === "all" && !activeTipus) {
+            facetCache = { facets: data.facets || {}, total: total };
+        }
+        renderFacets(data.facets || {}, total);
         if (items.length === 0) {
             const empty = document.createElement("div");
             empty.className = "cerca-avancada-empty";
@@ -533,6 +729,11 @@ document.addEventListener("DOMContentLoaded", () => {
             pageInput.value = String(pageOverride);
         }
         const params = buildParams();
+        const nextFacetKey = buildFacetKey(params);
+        if (nextFacetKey !== facetCacheKey) {
+            facetCache = null;
+            facetCacheKey = nextFacetKey;
+        }
         if (!hasSearchFilters(params)) {
             clearResults();
             if (statusEl) {
@@ -568,8 +769,11 @@ document.addEventListener("DOMContentLoaded", () => {
         runSearch();
     });
 
-    if (clearBtn) {
-        clearBtn.addEventListener("click", () => {
+    if (legacyClearBtn) {
+        clearButtons.push(legacyClearBtn);
+    }
+    clearButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
             form.reset();
             form.querySelectorAll("input[type='hidden']").forEach((input) => {
                 if (input.name === "page") {
@@ -580,10 +784,17 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             runSearch(1);
         });
-    }
+    });
 
     const params = new URLSearchParams(window.location.search);
     if (hasSearchFilters(params)) {
         runSearch();
     }
+    let shouldOpen = false;
+    try {
+        shouldOpen = sessionStorage.getItem("advancedSearchOpen") === "1";
+    } catch (err) {
+        shouldOpen = false;
+    }
+    setAdvanced(shouldOpen, false);
 });
