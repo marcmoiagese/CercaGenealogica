@@ -135,6 +135,7 @@ func (a *App) applyNomCognomDelta(municipiID int, contrib nomCognomContrib, sign
 	if municipiID <= 0 || contrib.AnyDoc <= 0 || sign == 0 {
 		return nil
 	}
+	nivellIDs := a.listNivellAncestorsForMunicipi(municipiID)
 	for key, count := range contrib.NomCounts {
 		form := strings.TrimSpace(contrib.NomForms[key])
 		if form == "" {
@@ -150,6 +151,14 @@ func (a *App) applyNomCognomDelta(municipiID int, contrib nomCognomContrib, sign
 		}
 		if err := a.DB.UpsertNomFreqMunicipiTotal(nomID, municipiID, delta); err != nil {
 			return err
+		}
+		for _, nivellID := range nivellIDs {
+			if err := a.DB.UpsertNomFreqNivellAny(nomID, nivellID, contrib.AnyDoc, delta); err != nil {
+				return err
+			}
+			if err := a.DB.UpsertNomFreqNivellTotal(nomID, nivellID, delta); err != nil {
+				return err
+			}
 		}
 	}
 	for key, count := range contrib.CognomCounts {
@@ -167,6 +176,14 @@ func (a *App) applyNomCognomDelta(municipiID int, contrib nomCognomContrib, sign
 		}
 		if err := a.DB.UpsertCognomFreqMunicipiTotal(cognomID, municipiID, delta); err != nil {
 			return err
+		}
+		for _, nivellID := range nivellIDs {
+			if err := a.DB.ApplyCognomFreqNivellAnyDelta(cognomID, nivellID, contrib.AnyDoc, delta); err != nil {
+				return err
+			}
+			if err := a.DB.UpsertCognomFreqNivellTotal(cognomID, nivellID, delta); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -1082,6 +1082,36 @@ func (d *PostgreSQL) CountCognomTotalsByMunicipi(municipiID int) (int, error) {
 func (d *PostgreSQL) ClearNomCognomStatsByMunicipi(municipiID int) error {
 	return d.help.clearNomCognomStatsByMunicipi(municipiID)
 }
+func (d *PostgreSQL) UpsertNomFreqNivellAny(nomID, nivellID, anyDoc, delta int) error {
+	return d.help.upsertNomFreqNivellAny(nomID, nivellID, anyDoc, delta)
+}
+func (d *PostgreSQL) UpsertNomFreqNivellTotal(nomID, nivellID, delta int) error {
+	return d.help.upsertNomFreqNivellTotal(nomID, nivellID, delta)
+}
+func (d *PostgreSQL) ApplyCognomFreqNivellAnyDelta(cognomID, nivellID, anyDoc, delta int) error {
+	return d.help.upsertCognomFreqNivellAny(cognomID, nivellID, anyDoc, delta)
+}
+func (d *PostgreSQL) UpsertCognomFreqNivellTotal(cognomID, nivellID, delta int) error {
+	return d.help.upsertCognomFreqNivellTotal(cognomID, nivellID, delta)
+}
+func (d *PostgreSQL) ListTopNomsByNivell(nivellID, limit int) ([]NomTotalRow, error) {
+	return d.help.listTopNomsByNivell(nivellID, limit)
+}
+func (d *PostgreSQL) ListTopCognomsByNivell(nivellID, limit int) ([]CognomTotalRow, error) {
+	return d.help.listTopCognomsByNivell(nivellID, limit)
+}
+func (d *PostgreSQL) ListNomSeriesByNivell(nivellID, nomID int, bucket string) ([]NomFreqRow, error) {
+	return d.help.listNomSeriesByNivell(nivellID, nomID, bucket)
+}
+func (d *PostgreSQL) ListCognomSeriesByNivell(nivellID, cognomID int, bucket string) ([]CognomFreqRow, error) {
+	return d.help.listCognomSeriesByNivell(nivellID, cognomID, bucket)
+}
+func (d *PostgreSQL) ClearNomCognomStatsByNivell(nivellID int) error {
+	return d.help.clearNomCognomStatsByNivell(nivellID)
+}
+func (d *PostgreSQL) RebuildNivellNomCognomStats(nivellID int) error {
+	return d.help.rebuildNivellNomCognomStats(nivellID)
+}
 
 func (d *PostgreSQL) ListMunicipiMapes(filter MunicipiMapaFilter) ([]MunicipiMapa, error) {
 	return d.help.listMunicipiMapes(filter)
@@ -1201,6 +1231,21 @@ func (d *PostgreSQL) ApplyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year
 }
 func (d *PostgreSQL) RebuildMunicipiDemografia(municipiID int) error {
 	return d.help.rebuildMunicipiDemografia(municipiID)
+}
+func (d *PostgreSQL) GetNivellDemografiaMeta(nivellID int) (*NivellDemografiaMeta, error) {
+	return d.help.getNivellDemografiaMeta(nivellID)
+}
+func (d *PostgreSQL) ListNivellDemografiaAny(nivellID int, from, to int) ([]NivellDemografiaAny, error) {
+	return d.help.listNivellDemografiaAny(nivellID, from, to)
+}
+func (d *PostgreSQL) ListNivellDemografiaDecades(nivellID int, from, to int) ([]NivellDemografiaAny, error) {
+	return d.help.listNivellDemografiaDecades(nivellID, from, to)
+}
+func (d *PostgreSQL) ApplyNivellDemografiaDelta(nivellID, year int, tipus string, delta int) error {
+	return d.help.applyNivellDemografiaDelta(nivellID, year, tipus, delta)
+}
+func (d *PostgreSQL) RebuildNivellDemografia(nivellID int) error {
+	return d.help.rebuildNivellDemografia(nivellID)
 }
 
 func (d *PostgreSQL) ListMunicipiAnecdotariPublished(municipiID int, f MunicipiAnecdotariFilter) ([]MunicipiAnecdotariVersion, int, error) {

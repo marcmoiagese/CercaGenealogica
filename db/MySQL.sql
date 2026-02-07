@@ -468,6 +468,30 @@ CREATE TABLE IF NOT EXISTS municipi_demografia_meta (
     FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Demografia per nivell administratiu (rollups)
+CREATE TABLE IF NOT EXISTS nivell_demografia_any (
+    nivell_id INT UNSIGNED NOT NULL,
+    `any` INT NOT NULL,
+    natalitat INT NOT NULL DEFAULT 0,
+    matrimonis INT NOT NULL DEFAULT 0,
+    defuncions INT NOT NULL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (nivell_id, `any`),
+    INDEX idx_nivell_demografia_any_nivell_any (nivell_id, `any`),
+    FOREIGN KEY (nivell_id) REFERENCES nivells_administratius(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS nivell_demografia_meta (
+    nivell_id INT UNSIGNED NOT NULL PRIMARY KEY,
+    any_min INT NULL,
+    any_max INT NULL,
+    total_natalitat INT NOT NULL DEFAULT 0,
+    total_matrimonis INT NOT NULL DEFAULT 0,
+    total_defuncions INT NOT NULL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (nivell_id) REFERENCES nivells_administratius(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS demografia_queue (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     municipi_id INT UNSIGNED NOT NULL,
@@ -1389,6 +1413,32 @@ CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_total (
   FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Estadístiques pre-agregades per cognom/nivell/any
+CREATE TABLE IF NOT EXISTS cognoms_freq_nivell_any (
+  cognom_id INT UNSIGNED NOT NULL,
+  nivell_id INT UNSIGNED NOT NULL,
+  any_doc INT NOT NULL,
+  freq INT NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id, nivell_id, any_doc),
+  INDEX idx_cognoms_freq_nivell_any (nivell_id, any_doc),
+  INDEX idx_cognoms_freq_nivell_any_cognom (cognom_id, any_doc),
+  FOREIGN KEY (cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE,
+  FOREIGN KEY (nivell_id) REFERENCES nivells_administratius(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Totals per cognom/nivell
+CREATE TABLE IF NOT EXISTS cognoms_freq_nivell_total (
+  cognom_id INT UNSIGNED NOT NULL,
+  nivell_id INT UNSIGNED NOT NULL,
+  total_freq INT NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id, nivell_id),
+  INDEX idx_cognoms_freq_nivell_total (nivell_id, total_freq),
+  FOREIGN KEY (cognom_id) REFERENCES cognoms(id) ON DELETE CASCADE,
+  FOREIGN KEY (nivell_id) REFERENCES nivells_administratius(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Estadístiques globals per cognom
 CREATE TABLE IF NOT EXISTS cognoms_stats_total (
   cognom_id INT UNSIGNED NOT NULL,
@@ -1449,6 +1499,32 @@ CREATE TABLE IF NOT EXISTS noms_freq_municipi_total (
   INDEX idx_noms_freq_municipi_total_municipi (municipi_id, total_freq),
   FOREIGN KEY (nom_id) REFERENCES noms(id) ON DELETE CASCADE,
   FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Estadístiques pre-agregades per nom/nivell/any
+CREATE TABLE IF NOT EXISTS noms_freq_nivell_any (
+  nom_id INT UNSIGNED NOT NULL,
+  nivell_id INT UNSIGNED NOT NULL,
+  any_doc INT NOT NULL,
+  freq INT NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (nom_id, nivell_id, any_doc),
+  INDEX idx_noms_freq_nivell_any (nivell_id, any_doc),
+  INDEX idx_noms_freq_nivell_any_nom (nom_id, any_doc),
+  FOREIGN KEY (nom_id) REFERENCES noms(id) ON DELETE CASCADE,
+  FOREIGN KEY (nivell_id) REFERENCES nivells_administratius(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Totals per nom/nivell
+CREATE TABLE IF NOT EXISTS noms_freq_nivell_total (
+  nom_id INT UNSIGNED NOT NULL,
+  nivell_id INT UNSIGNED NOT NULL,
+  total_freq INT NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (nom_id, nivell_id),
+  INDEX idx_noms_freq_nivell_total (nivell_id, total_freq),
+  FOREIGN KEY (nom_id) REFERENCES noms(id) ON DELETE CASCADE,
+  FOREIGN KEY (nivell_id) REFERENCES nivells_administratius(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =====================================================================

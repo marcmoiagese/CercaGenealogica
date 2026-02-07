@@ -1385,6 +1385,7 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 					if err := a.DB.UpdateTranscripcioModeracioWithDemografia(id, estat, motiu, moderatorID, munID, year, tipus, delta); err != nil {
 						return err
 					}
+					a.applyNivellDemografiaDeltaForMunicipi(munID, year, tipus, delta)
 					persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
 					a.applyNomCognomDeltaForRegistre(reg, persones, delta)
 				}

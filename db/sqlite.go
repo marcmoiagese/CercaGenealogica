@@ -1097,6 +1097,36 @@ func (d *SQLite) CountCognomTotalsByMunicipi(municipiID int) (int, error) {
 func (d *SQLite) ClearNomCognomStatsByMunicipi(municipiID int) error {
 	return d.help.clearNomCognomStatsByMunicipi(municipiID)
 }
+func (d *SQLite) UpsertNomFreqNivellAny(nomID, nivellID, anyDoc, delta int) error {
+	return d.help.upsertNomFreqNivellAny(nomID, nivellID, anyDoc, delta)
+}
+func (d *SQLite) UpsertNomFreqNivellTotal(nomID, nivellID, delta int) error {
+	return d.help.upsertNomFreqNivellTotal(nomID, nivellID, delta)
+}
+func (d *SQLite) ApplyCognomFreqNivellAnyDelta(cognomID, nivellID, anyDoc, delta int) error {
+	return d.help.upsertCognomFreqNivellAny(cognomID, nivellID, anyDoc, delta)
+}
+func (d *SQLite) UpsertCognomFreqNivellTotal(cognomID, nivellID, delta int) error {
+	return d.help.upsertCognomFreqNivellTotal(cognomID, nivellID, delta)
+}
+func (d *SQLite) ListTopNomsByNivell(nivellID, limit int) ([]NomTotalRow, error) {
+	return d.help.listTopNomsByNivell(nivellID, limit)
+}
+func (d *SQLite) ListTopCognomsByNivell(nivellID, limit int) ([]CognomTotalRow, error) {
+	return d.help.listTopCognomsByNivell(nivellID, limit)
+}
+func (d *SQLite) ListNomSeriesByNivell(nivellID, nomID int, bucket string) ([]NomFreqRow, error) {
+	return d.help.listNomSeriesByNivell(nivellID, nomID, bucket)
+}
+func (d *SQLite) ListCognomSeriesByNivell(nivellID, cognomID int, bucket string) ([]CognomFreqRow, error) {
+	return d.help.listCognomSeriesByNivell(nivellID, cognomID, bucket)
+}
+func (d *SQLite) ClearNomCognomStatsByNivell(nivellID int) error {
+	return d.help.clearNomCognomStatsByNivell(nivellID)
+}
+func (d *SQLite) RebuildNivellNomCognomStats(nivellID int) error {
+	return d.help.rebuildNivellNomCognomStats(nivellID)
+}
 
 func (d *SQLite) ListMunicipiMapes(filter MunicipiMapaFilter) ([]MunicipiMapa, error) {
 	return d.help.listMunicipiMapes(filter)
@@ -1216,6 +1246,21 @@ func (d *SQLite) ApplyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year int
 }
 func (d *SQLite) RebuildMunicipiDemografia(municipiID int) error {
 	return d.help.rebuildMunicipiDemografia(municipiID)
+}
+func (d *SQLite) GetNivellDemografiaMeta(nivellID int) (*NivellDemografiaMeta, error) {
+	return d.help.getNivellDemografiaMeta(nivellID)
+}
+func (d *SQLite) ListNivellDemografiaAny(nivellID int, from, to int) ([]NivellDemografiaAny, error) {
+	return d.help.listNivellDemografiaAny(nivellID, from, to)
+}
+func (d *SQLite) ListNivellDemografiaDecades(nivellID int, from, to int) ([]NivellDemografiaAny, error) {
+	return d.help.listNivellDemografiaDecades(nivellID, from, to)
+}
+func (d *SQLite) ApplyNivellDemografiaDelta(nivellID, year int, tipus string, delta int) error {
+	return d.help.applyNivellDemografiaDelta(nivellID, year, tipus, delta)
+}
+func (d *SQLite) RebuildNivellDemografia(nivellID int) error {
+	return d.help.rebuildNivellDemografia(nivellID)
 }
 
 func (d *SQLite) ListMunicipiAnecdotariPublished(municipiID int, f MunicipiAnecdotariFilter) ([]MunicipiAnecdotariVersion, int, error) {

@@ -168,6 +168,16 @@ type DB interface {
 	CountNomTotalsByMunicipi(municipiID int) (int, error)
 	CountCognomTotalsByMunicipi(municipiID int) (int, error)
 	ClearNomCognomStatsByMunicipi(municipiID int) error
+	UpsertNomFreqNivellAny(nomID, nivellID, anyDoc, delta int) error
+	UpsertNomFreqNivellTotal(nomID, nivellID, delta int) error
+	ApplyCognomFreqNivellAnyDelta(cognomID, nivellID, anyDoc, delta int) error
+	UpsertCognomFreqNivellTotal(cognomID, nivellID, delta int) error
+	ListTopNomsByNivell(nivellID, limit int) ([]NomTotalRow, error)
+	ListTopCognomsByNivell(nivellID, limit int) ([]CognomTotalRow, error)
+	ListNomSeriesByNivell(nivellID, nomID int, bucket string) ([]NomFreqRow, error)
+	ListCognomSeriesByNivell(nivellID, cognomID int, bucket string) ([]CognomFreqRow, error)
+	ClearNomCognomStatsByNivell(nivellID int) error
+	RebuildNivellNomCognomStats(nivellID int) error
 	// Mapes municipi
 	ListMunicipiMapes(filter MunicipiMapaFilter) ([]MunicipiMapa, error)
 	GetMunicipiMapa(id int) (*MunicipiMapa, error)
@@ -212,6 +222,11 @@ type DB interface {
 	ApplyMunicipiDemografiaDelta(municipiID, year int, tipus string, delta int) error
 	ApplyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year int, tipus string, delta int) error
 	RebuildMunicipiDemografia(municipiID int) error
+	GetNivellDemografiaMeta(nivellID int) (*NivellDemografiaMeta, error)
+	ListNivellDemografiaAny(nivellID int, from, to int) ([]NivellDemografiaAny, error)
+	ListNivellDemografiaDecades(nivellID int, from, to int) ([]NivellDemografiaAny, error)
+	ApplyNivellDemografiaDelta(nivellID, year int, tipus string, delta int) error
+	RebuildNivellDemografia(nivellID int) error
 
 	// Anecdotari municipi
 	ListMunicipiAnecdotariPublished(municipiID int, f MunicipiAnecdotariFilter) ([]MunicipiAnecdotariVersion, int, error)
@@ -957,6 +972,25 @@ type MunicipiDemografiaAny struct {
 
 type MunicipiDemografiaMeta struct {
 	MunicipiID      int
+	AnyMin          sql.NullInt64
+	AnyMax          sql.NullInt64
+	TotalNatalitat  int
+	TotalMatrimonis int
+	TotalDefuncions int
+	UpdatedAt       sql.NullTime
+}
+
+type NivellDemografiaAny struct {
+	NivellID   int
+	Any        int
+	Natalitat  int
+	Matrimonis int
+	Defuncions int
+	UpdatedAt  sql.NullTime
+}
+
+type NivellDemografiaMeta struct {
+	NivellID        int
 	AnyMin          sql.NullInt64
 	AnyMax          sql.NullInt64
 	TotalNatalitat  int

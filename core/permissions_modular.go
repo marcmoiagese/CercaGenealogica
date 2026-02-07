@@ -29,6 +29,7 @@ const (
 	permKeyTerritoriNivellsView     = "territori.nivells.view"
 	permKeyTerritoriNivellsCreate   = "territori.nivells.create"
 	permKeyTerritoriNivellsEdit     = "territori.nivells.edit"
+	permKeyTerritoriNivellsRebuild  = "territori.nivells.rebuild"
 	permKeyTerritoriMunicipisView   = "territori.municipis.view"
 	permKeyTerritoriMunicipisCreate = "territori.municipis.create"
 	permKeyTerritoriMunicipisEdit   = "territori.municipis.edit"
@@ -94,6 +95,7 @@ var permissionCatalogKeys = []string{
 	permKeyTerritoriNivellsView,
 	permKeyTerritoriNivellsCreate,
 	permKeyTerritoriNivellsEdit,
+	permKeyTerritoriNivellsRebuild,
 	permKeyTerritoriMunicipisView,
 	permKeyTerritoriMunicipisCreate,
 	permKeyTerritoriMunicipisEdit,
@@ -187,6 +189,7 @@ var legacyTerritoryPermKeys = []string{
 	permKeyTerritoriNivellsView,
 	permKeyTerritoriNivellsCreate,
 	permKeyTerritoriNivellsEdit,
+	permKeyTerritoriNivellsRebuild,
 	permKeyTerritoriMunicipisView,
 	permKeyTerritoriMunicipisCreate,
 	permKeyTerritoriMunicipisEdit,

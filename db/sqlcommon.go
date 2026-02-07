@@ -8042,7 +8042,11 @@ func (h sqlHelper) searchDocs(f SearchQueryFilter) ([]SearchDocRow, int, SearchF
 	joins := []string{
 		"LEFT JOIN transcripcions_raw r ON s.entity_type = 'registre_raw' AND s.entity_id = r.id",
 	}
-	if strings.TrimSpace(f.AncestorType) != "" && f.AncestorID > 0 {
+	ancestorType := strings.TrimSpace(f.AncestorType)
+	if ancestorType == "nivell_admin" {
+		ancestorType = "nivell"
+	}
+	if ancestorType != "" && f.AncestorID > 0 && ancestorType != "municipi" {
 		joins = append(joins, "JOIN admin_closure ac ON ac.descendant_municipi_id = s.municipi_id")
 	}
 
@@ -8056,9 +8060,14 @@ func (h sqlHelper) searchDocs(f SearchQueryFilter) ([]SearchDocRow, int, SearchF
 		clauses = append(clauses, "s.entity_type = ?")
 		args = append(args, entity)
 	}
-	if strings.TrimSpace(f.AncestorType) != "" && f.AncestorID > 0 {
-		clauses = append(clauses, "ac.ancestor_type = ?", "ac.ancestor_id = ?")
-		args = append(args, strings.TrimSpace(f.AncestorType), f.AncestorID)
+	if ancestorType != "" && f.AncestorID > 0 {
+		if ancestorType == "municipi" {
+			clauses = append(clauses, "s.municipi_id = ?")
+			args = append(args, f.AncestorID)
+		} else {
+			clauses = append(clauses, "ac.ancestor_type = ?", "ac.ancestor_id = ?")
+			args = append(args, ancestorType, f.AncestorID)
+		}
 	}
 	if f.EntitatEclesiasticaID > 0 {
 		clauses = append(clauses, "s.entitat_eclesiastica_id = ?")
@@ -9137,6 +9146,389 @@ func (h sqlHelper) clearNomCognomStatsByMunicipi(municipiID int) error {
 		}
 	}
 	return nil
+}
+
+func (h sqlHelper) upsertCognomFreqNivellAny(cognomID, nivellID, anyDoc, delta int) error {
+	if cognomID <= 0 || nivellID <= 0 || anyDoc <= 0 {
+		return errors.New("invalid ids")
+	}
+	if delta == 0 {
+		return nil
+	}
+	stmt := fmt.Sprintf(`
+        INSERT INTO cognoms_freq_nivell_any (cognom_id, nivell_id, any_doc, freq, updated_at)
+        VALUES (?, ?, ?, ?, %s)`, h.nowFun)
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE freq = freq + VALUES(freq), updated_at = " + h.nowFun
+	} else {
+		stmt += " ON CONFLICT (cognom_id, nivell_id, any_doc) DO UPDATE SET freq = cognoms_freq_nivell_any.freq + excluded.freq, updated_at = " + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if _, err := h.db.Exec(stmt, cognomID, nivellID, anyDoc, delta); err != nil {
+		return err
+	}
+	cleanup := formatPlaceholders(h.style, `DELETE FROM cognoms_freq_nivell_any WHERE cognom_id = ? AND nivell_id = ? AND any_doc = ? AND freq <= 0`)
+	if res, err := h.db.Exec(cleanup, cognomID, nivellID, anyDoc); err == nil && delta < 0 {
+		if rows, err := res.RowsAffected(); err == nil && rows > 0 {
+			logInfof("clamp cognoms_freq_nivell_any cognom=%d nivell=%d any=%d delta=%d", cognomID, nivellID, anyDoc, delta)
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) upsertNomFreqNivellAny(nomID, nivellID, anyDoc, delta int) error {
+	if nomID <= 0 || nivellID <= 0 || anyDoc <= 0 {
+		return errors.New("invalid ids")
+	}
+	if delta == 0 {
+		return nil
+	}
+	stmt := fmt.Sprintf(`
+        INSERT INTO noms_freq_nivell_any (nom_id, nivell_id, any_doc, freq, updated_at)
+        VALUES (?, ?, ?, ?, %s)`, h.nowFun)
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE freq = freq + VALUES(freq), updated_at = " + h.nowFun
+	} else {
+		stmt += " ON CONFLICT (nom_id, nivell_id, any_doc) DO UPDATE SET freq = noms_freq_nivell_any.freq + excluded.freq, updated_at = " + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if _, err := h.db.Exec(stmt, nomID, nivellID, anyDoc, delta); err != nil {
+		return err
+	}
+	cleanup := formatPlaceholders(h.style, `DELETE FROM noms_freq_nivell_any WHERE nom_id = ? AND nivell_id = ? AND any_doc = ? AND freq <= 0`)
+	if res, err := h.db.Exec(cleanup, nomID, nivellID, anyDoc); err == nil && delta < 0 {
+		if rows, err := res.RowsAffected(); err == nil && rows > 0 {
+			logInfof("clamp noms_freq_nivell_any nom=%d nivell=%d any=%d delta=%d", nomID, nivellID, anyDoc, delta)
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) upsertNomFreqNivellTotal(nomID, nivellID, delta int) error {
+	if nomID <= 0 || nivellID <= 0 {
+		return errors.New("invalid ids")
+	}
+	if delta == 0 {
+		return nil
+	}
+	stmt := fmt.Sprintf(`
+        INSERT INTO noms_freq_nivell_total (nom_id, nivell_id, total_freq, updated_at)
+        VALUES (?, ?, ?, %s)`, h.nowFun)
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE total_freq = total_freq + VALUES(total_freq), updated_at = " + h.nowFun
+	} else {
+		stmt += " ON CONFLICT (nom_id, nivell_id) DO UPDATE SET total_freq = noms_freq_nivell_total.total_freq + excluded.total_freq, updated_at = " + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if _, err := h.db.Exec(stmt, nomID, nivellID, delta); err != nil {
+		return err
+	}
+	cleanup := formatPlaceholders(h.style, `DELETE FROM noms_freq_nivell_total WHERE nom_id = ? AND nivell_id = ? AND total_freq <= 0`)
+	if res, err := h.db.Exec(cleanup, nomID, nivellID); err == nil && delta < 0 {
+		if rows, err := res.RowsAffected(); err == nil && rows > 0 {
+			logInfof("clamp noms_freq_nivell_total nom=%d nivell=%d delta=%d", nomID, nivellID, delta)
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) upsertCognomFreqNivellTotal(cognomID, nivellID, delta int) error {
+	if cognomID <= 0 || nivellID <= 0 {
+		return errors.New("invalid ids")
+	}
+	if delta == 0 {
+		return nil
+	}
+	stmt := fmt.Sprintf(`
+        INSERT INTO cognoms_freq_nivell_total (cognom_id, nivell_id, total_freq, updated_at)
+        VALUES (?, ?, ?, %s)`, h.nowFun)
+	if h.style == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE total_freq = total_freq + VALUES(total_freq), updated_at = " + h.nowFun
+	} else {
+		stmt += " ON CONFLICT (cognom_id, nivell_id) DO UPDATE SET total_freq = cognoms_freq_nivell_total.total_freq + excluded.total_freq, updated_at = " + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if _, err := h.db.Exec(stmt, cognomID, nivellID, delta); err != nil {
+		return err
+	}
+	cleanup := formatPlaceholders(h.style, `DELETE FROM cognoms_freq_nivell_total WHERE cognom_id = ? AND nivell_id = ? AND total_freq <= 0`)
+	if res, err := h.db.Exec(cleanup, cognomID, nivellID); err == nil && delta < 0 {
+		if rows, err := res.RowsAffected(); err == nil && rows > 0 {
+			logInfof("clamp cognoms_freq_nivell_total cognom=%d nivell=%d delta=%d", cognomID, nivellID, delta)
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) listTopNomsByNivell(nivellID, limit int) ([]NomTotalRow, error) {
+	if nivellID <= 0 {
+		return nil, errors.New("nivell_id invalid")
+	}
+	query := `
+        SELECT n.id, t.nivell_id, t.total_freq, n.forma
+        FROM noms_freq_nivell_total t
+        JOIN noms n ON n.id = t.nom_id
+        WHERE t.nivell_id = ?
+        ORDER BY t.total_freq DESC, n.forma`
+	args := []interface{}{nivellID}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []NomTotalRow
+	for rows.Next() {
+		var row NomTotalRow
+		if err := rows.Scan(&row.NomID, &row.MunicipiID, &row.TotalFreq, &row.Forma); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listTopCognomsByNivell(nivellID, limit int) ([]CognomTotalRow, error) {
+	if nivellID <= 0 {
+		return nil, errors.New("nivell_id invalid")
+	}
+	query := `
+        SELECT c.id, t.nivell_id, t.total_freq, c.forma
+        FROM cognoms_freq_nivell_total t
+        JOIN cognoms c ON c.id = t.cognom_id
+        WHERE t.nivell_id = ?
+        ORDER BY t.total_freq DESC, c.forma`
+	args := []interface{}{nivellID}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomTotalRow
+	for rows.Next() {
+		var row CognomTotalRow
+		if err := rows.Scan(&row.CognomID, &row.MunicipiID, &row.TotalFreq, &row.Forma); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listNomSeriesByNivell(nivellID, nomID int, bucket string) ([]NomFreqRow, error) {
+	if nivellID <= 0 || nomID <= 0 {
+		return nil, errors.New("invalid ids")
+	}
+	if bucket == "decade" {
+		query := `
+        SELECT (any_doc - (any_doc % 10)) AS decade, SUM(freq) AS freq
+        FROM noms_freq_nivell_any
+        WHERE nivell_id = ? AND nom_id = ?
+        GROUP BY decade
+        ORDER BY decade`
+		query = formatPlaceholders(h.style, query)
+		rows, err := h.db.Query(query, nivellID, nomID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var res []NomFreqRow
+		for rows.Next() {
+			var decade int
+			var freq int
+			if err := rows.Scan(&decade, &freq); err != nil {
+				return nil, err
+			}
+			res = append(res, NomFreqRow{
+				NomID:      nomID,
+				MunicipiID: nivellID,
+				AnyDoc:     decade,
+				Freq:       freq,
+			})
+		}
+		return res, nil
+	}
+	query := `
+        SELECT any_doc, freq
+        FROM noms_freq_nivell_any
+        WHERE nivell_id = ? AND nom_id = ?
+        ORDER BY any_doc`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, nivellID, nomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []NomFreqRow
+	for rows.Next() {
+		var year int
+		var freq int
+		if err := rows.Scan(&year, &freq); err != nil {
+			return nil, err
+		}
+		res = append(res, NomFreqRow{
+			NomID:      nomID,
+			MunicipiID: nivellID,
+			AnyDoc:     year,
+			Freq:       freq,
+		})
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listCognomSeriesByNivell(nivellID, cognomID int, bucket string) ([]CognomFreqRow, error) {
+	if nivellID <= 0 || cognomID <= 0 {
+		return nil, errors.New("invalid ids")
+	}
+	if bucket == "decade" {
+		query := `
+        SELECT (any_doc - (any_doc % 10)) AS decade, SUM(freq) AS freq
+        FROM cognoms_freq_nivell_any
+        WHERE nivell_id = ? AND cognom_id = ?
+        GROUP BY decade
+        ORDER BY decade`
+		query = formatPlaceholders(h.style, query)
+		rows, err := h.db.Query(query, nivellID, cognomID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var res []CognomFreqRow
+		for rows.Next() {
+			var decade int
+			var freq int
+			if err := rows.Scan(&decade, &freq); err != nil {
+				return nil, err
+			}
+			res = append(res, CognomFreqRow{
+				MunicipiID: nivellID,
+				AnyDoc:     decade,
+				Freq:       freq,
+			})
+		}
+		return res, nil
+	}
+	query := `
+        SELECT any_doc, freq
+        FROM cognoms_freq_nivell_any
+        WHERE nivell_id = ? AND cognom_id = ?
+        ORDER BY any_doc`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, nivellID, cognomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CognomFreqRow
+	for rows.Next() {
+		var year int
+		var freq int
+		if err := rows.Scan(&year, &freq); err != nil {
+			return nil, err
+		}
+		res = append(res, CognomFreqRow{
+			MunicipiID: nivellID,
+			AnyDoc:     year,
+			Freq:       freq,
+		})
+	}
+	return res, nil
+}
+
+func (h sqlHelper) clearNomCognomStatsByNivell(nivellID int) error {
+	if nivellID <= 0 {
+		return errors.New("nivell_id invalid")
+	}
+	queries := []string{
+		`DELETE FROM noms_freq_nivell_any WHERE nivell_id = ?`,
+		`DELETE FROM noms_freq_nivell_total WHERE nivell_id = ?`,
+		`DELETE FROM cognoms_freq_nivell_any WHERE nivell_id = ?`,
+		`DELETE FROM cognoms_freq_nivell_total WHERE nivell_id = ?`,
+	}
+	for _, query := range queries {
+		stmt := formatPlaceholders(h.style, query)
+		if _, err := h.db.Exec(stmt, nivellID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) rebuildNivellNomCognomStats(nivellID int) error {
+	if nivellID <= 0 {
+		return errors.New("nivell_id invalid")
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	delQueries := []string{
+		`DELETE FROM noms_freq_nivell_any WHERE nivell_id = ?`,
+		`DELETE FROM noms_freq_nivell_total WHERE nivell_id = ?`,
+		`DELETE FROM cognoms_freq_nivell_any WHERE nivell_id = ?`,
+		`DELETE FROM cognoms_freq_nivell_total WHERE nivell_id = ?`,
+	}
+	for _, query := range delQueries {
+		stmt := formatPlaceholders(h.style, query)
+		if _, err := tx.Exec(stmt, nivellID); err != nil {
+			return err
+		}
+	}
+	insertNomAny := fmt.Sprintf(`
+        INSERT INTO noms_freq_nivell_any (nom_id, nivell_id, any_doc, freq, updated_at)
+        SELECT n.nom_id, ?, n.any_doc, SUM(n.freq), %s
+        FROM noms_freq_municipi_any n
+        JOIN admin_closure ac ON ac.descendant_municipi_id = n.municipi_id
+        WHERE ac.ancestor_type = 'nivell' AND ac.ancestor_id = ?
+        GROUP BY n.nom_id, n.any_doc`, h.nowFun)
+	insertNomAny = formatPlaceholders(h.style, insertNomAny)
+	if _, err := tx.Exec(insertNomAny, nivellID, nivellID); err != nil {
+		return err
+	}
+	insertNomTotal := fmt.Sprintf(`
+        INSERT INTO noms_freq_nivell_total (nom_id, nivell_id, total_freq, updated_at)
+        SELECT n.nom_id, ?, SUM(n.total_freq), %s
+        FROM noms_freq_municipi_total n
+        JOIN admin_closure ac ON ac.descendant_municipi_id = n.municipi_id
+        WHERE ac.ancestor_type = 'nivell' AND ac.ancestor_id = ?
+        GROUP BY n.nom_id`, h.nowFun)
+	insertNomTotal = formatPlaceholders(h.style, insertNomTotal)
+	if _, err := tx.Exec(insertNomTotal, nivellID, nivellID); err != nil {
+		return err
+	}
+	insertCognomAny := fmt.Sprintf(`
+        INSERT INTO cognoms_freq_nivell_any (cognom_id, nivell_id, any_doc, freq, updated_at)
+        SELECT c.cognom_id, ?, c.any_doc, SUM(c.freq), %s
+        FROM cognoms_freq_municipi_any c
+        JOIN admin_closure ac ON ac.descendant_municipi_id = c.municipi_id
+        WHERE ac.ancestor_type = 'nivell' AND ac.ancestor_id = ?
+        GROUP BY c.cognom_id, c.any_doc`, h.nowFun)
+	insertCognomAny = formatPlaceholders(h.style, insertCognomAny)
+	if _, err := tx.Exec(insertCognomAny, nivellID, nivellID); err != nil {
+		return err
+	}
+	insertCognomTotal := fmt.Sprintf(`
+        INSERT INTO cognoms_freq_nivell_total (cognom_id, nivell_id, total_freq, updated_at)
+        SELECT c.cognom_id, ?, SUM(c.total_freq), %s
+        FROM cognoms_freq_municipi_total c
+        JOIN admin_closure ac ON ac.descendant_municipi_id = c.municipi_id
+        WHERE ac.ancestor_type = 'nivell' AND ac.ancestor_id = ?
+        GROUP BY c.cognom_id`, h.nowFun)
+	insertCognomTotal = formatPlaceholders(h.style, insertCognomTotal)
+	if _, err := tx.Exec(insertCognomTotal, nivellID, nivellID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (h sqlHelper) queryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]CognomFreqRow, error) {
@@ -11131,6 +11523,340 @@ func (h sqlHelper) rebuildMunicipiDemografia(municipiID int) error {
 		}
 		insertMeta = formatPlaceholders(h.style, insertMeta)
 		if _, err := tx.Exec(insertMeta, municipiID, minVal, maxVal, totalNat, totalMat, totalDef); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (h sqlHelper) getNivellDemografiaMeta(nivellID int) (*NivellDemografiaMeta, error) {
+	if nivellID <= 0 {
+		return nil, errors.New("nivell_id invalid")
+	}
+	query := `SELECT nivell_id, any_min, any_max, total_natalitat, total_matrimonis, total_defuncions, updated_at
+	          FROM nivell_demografia_meta WHERE nivell_id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, nivellID)
+	var item NivellDemografiaMeta
+	if err := row.Scan(&item.NivellID, &item.AnyMin, &item.AnyMax, &item.TotalNatalitat, &item.TotalMatrimonis, &item.TotalDefuncions, &item.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (h sqlHelper) listNivellDemografiaAny(nivellID int, from, to int) ([]NivellDemografiaAny, error) {
+	if nivellID <= 0 {
+		return nil, errors.New("nivell_id invalid")
+	}
+	yearCol := demografiaYearColumn(h.style)
+	query := fmt.Sprintf(`
+        SELECT nivell_id, %s, natalitat, matrimonis, defuncions, updated_at
+        FROM nivell_demografia_any
+        WHERE nivell_id = ?`, yearCol)
+	args := []interface{}{nivellID}
+	if from > 0 {
+		query += fmt.Sprintf(" AND %s >= ?", yearCol)
+		args = append(args, from)
+	}
+	if to > 0 {
+		query += fmt.Sprintf(" AND %s <= ?", yearCol)
+		args = append(args, to)
+	}
+	query += " ORDER BY " + yearCol + " ASC"
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []NivellDemografiaAny
+	for rows.Next() {
+		var row NivellDemografiaAny
+		if err := rows.Scan(&row.NivellID, &row.Any, &row.Natalitat, &row.Matrimonis, &row.Defuncions, &row.UpdatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listNivellDemografiaDecades(nivellID int, from, to int) ([]NivellDemografiaAny, error) {
+	rows, err := h.listNivellDemografiaAny(nivellID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	decades := map[int]*NivellDemografiaAny{}
+	for _, row := range rows {
+		if row.Any <= 0 {
+			continue
+		}
+		decade := (row.Any / 10) * 10
+		item := decades[decade]
+		if item == nil {
+			item = &NivellDemografiaAny{NivellID: row.NivellID, Any: decade}
+			decades[decade] = item
+		}
+		item.Natalitat += row.Natalitat
+		item.Matrimonis += row.Matrimonis
+		item.Defuncions += row.Defuncions
+		if !row.UpdatedAt.Valid {
+			continue
+		}
+		if !item.UpdatedAt.Valid || row.UpdatedAt.Time.After(item.UpdatedAt.Time) {
+			item.UpdatedAt = row.UpdatedAt
+		}
+	}
+	keys := make([]int, 0, len(decades))
+	for decade := range decades {
+		keys = append(keys, decade)
+	}
+	sort.Ints(keys)
+	res := make([]NivellDemografiaAny, 0, len(keys))
+	for _, decade := range keys {
+		res = append(res, *decades[decade])
+	}
+	return res, nil
+}
+
+func (h sqlHelper) applyNivellDemografiaDelta(nivellID, year int, tipus string, delta int) error {
+	if nivellID <= 0 || year <= 0 {
+		return errors.New("invalid ids")
+	}
+	if delta == 0 {
+		return nil
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := h.applyNivellDemografiaDeltaTx(tx, nivellID, year, tipus, delta); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (h sqlHelper) applyNivellDemografiaDeltaTx(tx *sql.Tx, nivellID, year int, tipus string, delta int) error {
+	if tx == nil {
+		return errors.New("tx required")
+	}
+	if nivellID <= 0 || year <= 0 {
+		return errors.New("invalid ids")
+	}
+	if delta == 0 {
+		return nil
+	}
+	natalitat := 0
+	matrimonis := 0
+	defuncions := 0
+	switch strings.ToLower(strings.TrimSpace(tipus)) {
+	case "natalitat":
+		natalitat = delta
+	case "matrimonis":
+		matrimonis = delta
+	case "defuncions":
+		defuncions = delta
+	default:
+		return errors.New("tipus invalid")
+	}
+	yearCol := demografiaYearColumn(h.style)
+	var upsert string
+	switch h.style {
+	case "mysql":
+		upsert = fmt.Sprintf(`INSERT INTO nivell_demografia_any (nivell_id, %s, natalitat, matrimonis, defuncions, updated_at)
+            VALUES (?, ?, ?, ?, ?, `+h.nowFun+`)
+            ON DUPLICATE KEY UPDATE natalitat = natalitat + VALUES(natalitat),
+            matrimonis = matrimonis + VALUES(matrimonis),
+            defuncions = defuncions + VALUES(defuncions),
+            updated_at = `+h.nowFun, yearCol)
+	case "postgres":
+		upsert = fmt.Sprintf(`INSERT INTO nivell_demografia_any (nivell_id, %s, natalitat, matrimonis, defuncions, updated_at)
+            VALUES (?, ?, ?, ?, ?, `+h.nowFun+`)
+            ON CONFLICT (nivell_id, %s) DO UPDATE SET
+            natalitat = nivell_demografia_any.natalitat + EXCLUDED.natalitat,
+            matrimonis = nivell_demografia_any.matrimonis + EXCLUDED.matrimonis,
+            defuncions = nivell_demografia_any.defuncions + EXCLUDED.defuncions,
+            updated_at = `+h.nowFun, yearCol, yearCol)
+	default: // sqlite
+		upsert = fmt.Sprintf(`INSERT INTO nivell_demografia_any (nivell_id, %s, natalitat, matrimonis, defuncions, updated_at)
+            VALUES (?, ?, ?, ?, ?, `+h.nowFun+`)
+            ON CONFLICT(nivell_id, %s) DO UPDATE SET
+            natalitat = natalitat + excluded.natalitat,
+            matrimonis = matrimonis + excluded.matrimonis,
+            defuncions = defuncions + excluded.defuncions,
+            updated_at = `+h.nowFun, yearCol, yearCol)
+	}
+	upsert = formatPlaceholders(h.style, upsert)
+	if _, err := tx.Exec(upsert, nivellID, year, natalitat, matrimonis, defuncions); err != nil {
+		return err
+	}
+	selectStmt := fmt.Sprintf(`SELECT natalitat, matrimonis, defuncions
+        FROM nivell_demografia_any
+        WHERE nivell_id = ? AND %s = ?`, yearCol)
+	selectStmt = formatPlaceholders(h.style, selectStmt)
+	var curNat, curMat, curDef int
+	if err := tx.QueryRow(selectStmt, nivellID, year).Scan(&curNat, &curMat, &curDef); err != nil {
+		return err
+	}
+	changed := false
+	if curNat < 0 {
+		curNat = 0
+		changed = true
+	}
+	if curMat < 0 {
+		curMat = 0
+		changed = true
+	}
+	if curDef < 0 {
+		curDef = 0
+		changed = true
+	}
+	if curNat == 0 && curMat == 0 && curDef == 0 {
+		delStmt := fmt.Sprintf(`DELETE FROM nivell_demografia_any WHERE nivell_id = ? AND %s = ?`, yearCol)
+		delStmt = formatPlaceholders(h.style, delStmt)
+		if _, err := tx.Exec(delStmt, nivellID, year); err != nil {
+			return err
+		}
+	} else if changed {
+		updateStmt := fmt.Sprintf(`UPDATE nivell_demografia_any
+            SET natalitat = ?, matrimonis = ?, defuncions = ?, updated_at = `+h.nowFun+`
+            WHERE nivell_id = ? AND %s = ?`, yearCol)
+		updateStmt = formatPlaceholders(h.style, updateStmt)
+		if _, err := tx.Exec(updateStmt, curNat, curMat, curDef, nivellID, year); err != nil {
+			return err
+		}
+	}
+	insertMeta := `INSERT INTO nivell_demografia_meta (nivell_id, any_min, any_max, total_natalitat, total_matrimonis, total_defuncions, updated_at)
+        VALUES (?, NULL, NULL, 0, 0, 0, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		insertMeta += " ON CONFLICT (nivell_id) DO NOTHING"
+	} else if h.style == "mysql" {
+		insertMeta += " ON DUPLICATE KEY UPDATE nivell_id = VALUES(nivell_id)"
+	} else {
+		insertMeta += " ON CONFLICT(nivell_id) DO NOTHING"
+	}
+	insertMeta = formatPlaceholders(h.style, insertMeta)
+	if _, err := tx.Exec(insertMeta, nivellID); err != nil {
+		return err
+	}
+	updateTotals := `UPDATE nivell_demografia_meta
+        SET total_natalitat = CASE WHEN total_natalitat + ? < 0 THEN 0 ELSE total_natalitat + ? END,
+            total_matrimonis = CASE WHEN total_matrimonis + ? < 0 THEN 0 ELSE total_matrimonis + ? END,
+            total_defuncions = CASE WHEN total_defuncions + ? < 0 THEN 0 ELSE total_defuncions + ? END,
+            updated_at = ` + h.nowFun + `
+        WHERE nivell_id = ?`
+	updateTotals = formatPlaceholders(h.style, updateTotals)
+	if _, err := tx.Exec(updateTotals, natalitat, natalitat, matrimonis, matrimonis, defuncions, defuncions, nivellID); err != nil {
+		return err
+	}
+	minMaxStmt := fmt.Sprintf(`SELECT MIN(%s), MAX(%s) FROM nivell_demografia_any WHERE nivell_id = ?`, yearCol, yearCol)
+	minMaxStmt = formatPlaceholders(h.style, minMaxStmt)
+	var minAny sql.NullInt64
+	var maxAny sql.NullInt64
+	if err := tx.QueryRow(minMaxStmt, nivellID).Scan(&minAny, &maxAny); err != nil {
+		return err
+	}
+	updateRange := `UPDATE nivell_demografia_meta
+        SET any_min = ?, any_max = ?, updated_at = ` + h.nowFun + `
+        WHERE nivell_id = ?`
+	updateRange = formatPlaceholders(h.style, updateRange)
+	if _, err := tx.Exec(updateRange, minAny, maxAny, nivellID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (h sqlHelper) rebuildNivellDemografia(nivellID int) error {
+	if nivellID <= 0 {
+		return errors.New("nivell_id invalid")
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	delAny := formatPlaceholders(h.style, `DELETE FROM nivell_demografia_any WHERE nivell_id = ?`)
+	if _, err := tx.Exec(delAny, nivellID); err != nil {
+		return err
+	}
+	delMeta := formatPlaceholders(h.style, `DELETE FROM nivell_demografia_meta WHERE nivell_id = ?`)
+	if _, err := tx.Exec(delMeta, nivellID); err != nil {
+		return err
+	}
+	yearCol := demografiaYearColumn(h.style)
+	query := fmt.Sprintf(`
+        SELECT d.%s AS any,
+               SUM(d.natalitat) AS natalitat,
+               SUM(d.matrimonis) AS matrimonis,
+               SUM(d.defuncions) AS defuncions
+        FROM municipi_demografia_any d
+        JOIN admin_closure ac ON ac.descendant_municipi_id = d.municipi_id
+        WHERE ac.ancestor_type = 'nivell'
+          AND ac.ancestor_id = ?
+        GROUP BY d.%s
+        ORDER BY d.%s ASC`, yearCol, yearCol, yearCol)
+	query = formatPlaceholders(h.style, query)
+	rows, err := tx.Query(query, nivellID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	insertAny := fmt.Sprintf(`INSERT INTO nivell_demografia_any (nivell_id, %s, natalitat, matrimonis, defuncions, updated_at)
+        VALUES (?, ?, ?, ?, ?, `+h.nowFun+`)`, yearCol)
+	insertAny = formatPlaceholders(h.style, insertAny)
+	first := true
+	minAny := 0
+	maxAny := 0
+	totalNat := 0
+	totalMat := 0
+	totalDef := 0
+	for rows.Next() {
+		var year int
+		var nat int
+		var mat int
+		var def int
+		if err := rows.Scan(&year, &nat, &mat, &def); err != nil {
+			return err
+		}
+		if year <= 0 {
+			continue
+		}
+		if _, err := tx.Exec(insertAny, nivellID, year, nat, mat, def); err != nil {
+			return err
+		}
+		totalNat += nat
+		totalMat += mat
+		totalDef += def
+		if first {
+			minAny = year
+			maxAny = year
+			first = false
+		} else {
+			if year < minAny {
+				minAny = year
+			}
+			if year > maxAny {
+				maxAny = year
+			}
+		}
+	}
+	if !first {
+		minVal := sql.NullInt64{Int64: int64(minAny), Valid: true}
+		maxVal := sql.NullInt64{Int64: int64(maxAny), Valid: true}
+		insertMeta := `INSERT INTO nivell_demografia_meta (nivell_id, any_min, any_max, total_natalitat, total_matrimonis, total_defuncions, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			insertMeta += " ON CONFLICT (nivell_id) DO UPDATE SET any_min = EXCLUDED.any_min, any_max = EXCLUDED.any_max, total_natalitat = EXCLUDED.total_natalitat, total_matrimonis = EXCLUDED.total_matrimonis, total_defuncions = EXCLUDED.total_defuncions, updated_at = " + h.nowFun
+		} else if h.style == "mysql" {
+			insertMeta += " ON DUPLICATE KEY UPDATE any_min = VALUES(any_min), any_max = VALUES(any_max), total_natalitat = VALUES(total_natalitat), total_matrimonis = VALUES(total_matrimonis), total_defuncions = VALUES(total_defuncions), updated_at = " + h.nowFun
+		} else {
+			insertMeta += " ON CONFLICT(nivell_id) DO UPDATE SET any_min = excluded.any_min, any_max = excluded.any_max, total_natalitat = excluded.total_natalitat, total_matrimonis = excluded.total_matrimonis, total_defuncions = excluded.total_defuncions, updated_at = " + h.nowFun
+		}
+		insertMeta = formatPlaceholders(h.style, insertMeta)
+		if _, err := tx.Exec(insertMeta, nivellID, minVal, maxVal, totalNat, totalMat, totalDef); err != nil {
 			return err
 		}
 	}

@@ -28,6 +28,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
+	canRebuildNivellStats := a.HasPermission(user.ID, permKeyTerritoriNivellsRebuild, PermissionTarget{})
 	scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriNivellsView, ScopePais)
 	paisos, _ := a.DB.ListPaisos()
 	if !scopeFilter.hasGlobal && len(scopeFilter.paisIDs) > 0 {
@@ -114,6 +115,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 				"CanCreateNivell":   false,
 				"CanEditNivell":     map[int]bool{},
 				"ShowNivellActions": false,
+				"CanRebuildNivellStats": canRebuildNivellStats,
 				"Page":              pagination.Page,
 				"PerPage":           pagination.PerPage,
 				"Total":             pagination.Total,
@@ -216,6 +218,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		"CanCreateNivell":   canCreateNivell,
 		"CanEditNivell":     canEditNivell,
 		"ShowNivellActions": showNivellActions,
+		"CanRebuildNivellStats": canRebuildNivellStats,
 		"Page":              pagination.Page,
 		"PerPage":           pagination.PerPage,
 		"Total":             pagination.Total,
@@ -224,6 +227,20 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		"PageSelectBase":    pagination.SelectBase,
 		"PageAnchor":        pagination.Anchor,
 		"User":              user,
+	})
+}
+
+func (a *App) AdminNivellsRebuildPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriNivellsRebuild, PermissionTarget{})
+	if !ok {
+		return
+	}
+	RenderPrivateTemplate(w, r, "admin-nivells-rebuild.html", map[string]interface{}{
+		"User": user,
 	})
 }
 

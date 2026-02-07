@@ -360,5 +360,7 @@ func (a *App) applyDemografiaDeltaForRegistre(reg *db.TranscripcioRaw, delta int
 	}
 	if err := a.DB.ApplyMunicipiDemografiaDelta(munID, year, tipus, delta); err != nil {
 		Errorf("Error actualitzant demografia municipi %d: %v", munID, err)
+		return
 	}
+	a.applyNivellDemografiaDeltaForMunicipi(munID, year, tipus, delta)
 }

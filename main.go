@@ -272,6 +272,7 @@ func main() {
 	http.HandleFunc("/api/territori/municipis/", applyMiddleware(app.MunicipiMapesAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/municipis/", applyMiddleware(app.MunicipiMapesAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/admin/municipis/", applyMiddleware(app.MunicipiDemografiaAdminAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/admin/nivells/", applyMiddleware(app.NivellStatsAdminAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/arbre/expand", applyMiddleware(app.RequireLogin(app.ArbreExpandAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/persones/", applyMiddleware(app.RequireLogin(app.PersonaArbreAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/mapes/", applyMiddleware(app.MapesAPI, core.BlockIPs, core.RateLimit))
@@ -481,6 +482,8 @@ func main() {
 
 	// Admin països
 	http.HandleFunc("/admin/paisos", applyMiddleware(app.AdminListPaisos, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/nivells/rebuild", applyMiddleware(app.AdminNivellsRebuildPage, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/admin/nivells/rebuild/", applyMiddleware(app.NivellStatsAdminJobStatusAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/paisos/new", applyMiddleware(app.AdminNewPais, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/paisos/save", applyMiddleware(app.AdminSavePais, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/paisos/", func(w http.ResponseWriter, r *http.Request) {
@@ -514,6 +517,15 @@ func main() {
 		if strings.Contains(r.URL.Path, "/noms/") && strings.HasSuffix(r.URL.Path, "/save") {
 			applyMiddleware(app.AdminSaveNivellNomHistoric, core.BlockIPs, core.RateLimit)(w, r)
 			return
+		}
+		if r.Method == http.MethodGet {
+			parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+			if len(parts) >= 3 {
+				if _, err := strconv.Atoi(parts[2]); err == nil {
+					applyMiddleware(app.NivellPublic, core.BlockIPs, core.RateLimit)(w, r)
+					return
+				}
+			}
 		}
 		http.NotFound(w, r)
 	})

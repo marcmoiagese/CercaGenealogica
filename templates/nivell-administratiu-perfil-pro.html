@@ -1,0 +1,279 @@
+{{ define "nivell-administratiu-perfil-pro.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t .Lang "levels.title" }} · {{ .Data.AdminLevelName }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/estils-v8.css">
+    <link rel="stylesheet" href="/static/css/registres-taula.css">
+    <link rel="stylesheet" href="/static/css/nivell-administratiu-perfil-pro.css">
+</head>
+<body>
+    {{ if .UserLoggedIn }}
+        {{ template "header-private" . }}
+        {{ template "menu" . }}
+    {{ else }}
+        {{ template "header-public" . }}
+    {{ end }}
+
+    <main class="contingut-principal admin-page">
+        <section class="card admin-hero">
+            <div class="admin-hero-main">
+                <p class="admin-kicker"><i class="fas fa-sitemap"></i> Perfil territorial</p>
+                <h1 class="admin-title" id="adminName">—</h1>
+                <p class="admin-subtitle" id="adminSubtitle">—</p>
+
+                <div class="admin-badges">
+                    <span class="admin-pill" id="adminLevel"><i class="fas fa-layer-group"></i> —</span>
+                    <span class="admin-pill {{ .Data.StatusBadgeClass }}" id="adminStatus">—</span>
+                    <span class="admin-pill" id="adminCountry"><i class="fas fa-flag"></i> —</span>
+                </div>
+
+                {{ if .Data.HasActions }}
+                <div class="admin-actions">
+                    {{ if .Data.ShowBooksAnchor }}
+                    <a class="boto-primari" id="ctaLlibres" href="#"><i class="fas fa-book"></i> Veure llibres</a>
+                    {{ end }}
+                    {{ if .Data.CanViewMunicipis }}
+                    <a class="boto-secundari" id="ctaMunicipis" href="#"><i class="fas fa-map-marker-alt"></i> Veure municipis</a>
+                    {{ end }}
+                </div>
+                {{ end }}
+            </div>
+
+            <div class="admin-hero-side">
+                <dl class="admin-kv">
+                    <div><dt>Nivell</dt><dd id="kvLevel">—</dd></div>
+                    <div><dt>Codi intern</dt><dd id="kvCode">—</dd></div>
+                    <div><dt>Municipis inclosos</dt><dd id="kvMunicipis">0</dd></div>
+                    <div><dt>Darrera actualització</dt><dd id="kvUpdated">—</dd></div>
+                </dl>
+            </div>
+        </section>
+
+        <section class="admin-kpis" id="adminKpis"></section>
+
+        <div class="admin-layout">
+            <aside class="admin-left">
+                <section class="card admin-card" id="llibresTerritori">
+                    <header class="card-header"><h2>Jerarquia administrativa</h2></header>
+                    <ol class="admin-hierarchy" id="adminHierarchy"></ol>
+                </section>
+
+                <section class="card admin-card">
+                    <header class="card-header"><h2>Estat de la indexació</h2></header>
+                    <div id="indexGlobal" class="index-global"></div>
+                    <div id="indexByType" class="index-list"></div>
+                </section>
+
+                <section class="card admin-card admin-note">
+                    <i class="fas fa-circle-info"></i>
+                    <p>Aquesta fitxa agrega dades de tots els municipis i subnivells que pengen d’aquest territori.</p>
+                </section>
+            </aside>
+
+            <section class="admin-right">
+                <section class="card admin-card">
+                    <header class="card-header admin-table-head">
+                        <div>
+                            <h2>Unitats que engloba</h2>
+                            <p class="muted">Taula global de municipis i volum documental.</p>
+                        </div>
+                        <div class="table-tools">
+                            <input id="unitsFilter" type="search" placeholder="Filtra per nom o tipus..." />
+                        </div>
+                    </header>
+
+                    <div class="taula-wrapper">
+                        <table class="taula admin-table" id="unitsTable">
+                            <thead>
+                                <tr>
+                                    <th>Nom</th>
+                                    <th>Tipus</th>
+                                    <th>Nivell</th>
+                                    <th>Municipis</th>
+                                    <th>Llibres</th>
+                                    <th>Indexació</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="unitsTbody"></tbody>
+                        </table>
+                    </div>
+                    <div class="admin-table-footer">
+                        <div class="table-pagination" id="unitsPagination">
+                            <button class="boto-secundari btn-mini" id="unitsPrev" type="button"><i class="fas fa-chevron-left"></i> Anterior</button>
+                            <span class="muted" id="unitsPageInfo">—</span>
+                            <button class="boto-secundari btn-mini" id="unitsNext" type="button">Següent <i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card admin-card">
+                    <header class="card-header admin-card-header-row">
+                        <div>
+                            <h2>Llibres</h2>
+                            <p class="muted">Accés directe per tipus de llibre.</p>
+                        </div>
+                        {{ if .Data.CanViewLlibres }}
+                        <a class="boto-secundari" href="/documentals/llibres?nivell_id={{ .Data.NivellID }}"><i class="fas fa-list"></i> Veure tots</a>
+                        {{ end }}
+                    </header>
+                    <div class="muni-cat-grid">
+                        {{ if .Data.BookCategories }}
+                            {{ range .Data.BookCategories }}
+                            <a class="muni-cat-card" href="{{ .Href }}">
+                                <div class="muni-cat-icon"><i class="fas {{ .Icon }}"></i></div>
+                                <div>
+                                    <div class="muni-cat-title">{{ .Label }}</div>
+                                    <div class="muni-cat-count">{{ .Count }} {{ .CountLabel }}</div>
+                                </div>
+                            </a>
+                            {{ end }}
+                        {{ else }}
+                            <div class="muted">{{ t .Lang "common.empty" }}</div>
+                        {{ end }}
+                    </div>
+                </section>
+
+                <section class="card admin-card" id="llibresTerritori">
+                    <header class="card-header">
+                        <div>
+                            <h2>Llibres del territori</h2>
+                            <p class="muted">Resum de catàleg, períodes i cobertura d’indexació.</p>
+                        </div>
+                    </header>
+
+                    <div class="taula-wrapper">
+                        <table class="taula admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Categoria</th>
+                                    <th>Volums</th>
+                                    <th>Període</th>
+                                    <th>Registres estimats</th>
+                                    <th>Indexats</th>
+                                    <th>Cobertura</th>
+                                </tr>
+                            </thead>
+                            <tbody id="booksTbody"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="admin-icon-strip" id="adminTopIcons"></section>
+
+                <section class="card admin-card admin-demography-wide">
+                    <header class="card-header admin-stats-header">
+                        <div>
+                            <h2>Demografia (registres indexats)</h2>
+                            <p class="muted">Sèries agregades del territori. Gràfic ampli com al perfil de municipi.</p>
+                            {{ if .Data.StatsLimited }}
+                            <p class="muted">Territori molt gran: les estadístiques detallades es mostren millor en nivells inferiors.</p>
+                            {{ end }}
+                        </div>
+
+                        <div class="admin-tabs" role="tablist" aria-label="Sèries demogràfiques">
+                            <button class="admin-tab is-active" type="button" data-series="births"><i class="fas fa-baby"></i> Natalitat</button>
+                            <button class="admin-tab" type="button" data-series="marriages"><i class="fas fa-ring"></i> Matrimonis</button>
+                            <button class="admin-tab" type="button" data-series="deaths"><i class="fas fa-cross"></i> Defuncions</button>
+                        </div>
+                    </header>
+
+                    <div class="admin-metrics" id="adminMetrics"></div>
+                    <div class="admin-chart admin-chart-lg" id="adminLineChart"></div>
+                </section>
+
+                <div class="admin-row-2">
+                    <section class="card admin-card admin-top-block" id="topNamesBlock">
+                        <header class="card-header admin-stats-header">
+                            <div>
+                                <h2>Noms més comuns</h2>
+                                <p class="muted">Noms principals segons els registres indexats.</p>
+                                {{ if .Data.StatsLimited }}
+                                <p class="muted">Per a més detall, consulta un nivell inferior.</p>
+                                {{ end }}
+                            </div>
+
+                            <div class="admin-tabs" role="tablist" aria-label="Noms més comuns">
+                                <button class="admin-tab is-active" type="button" data-top="totals">Totals</button>
+                                <button class="admin-tab" type="button" data-top="series">Evolució</button>
+                            </div>
+                        </header>
+
+                        <div class="admin-chart" id="adminTopNamesTotals"></div>
+
+                        <div class="admin-select-row">
+                            <label for="adminTopNamesSelect">Nom</label>
+                            <select class="admin-select" id="adminTopNamesSelect"></select>
+                        </div>
+
+                        <div class="admin-chart" id="adminTopNamesSeries"></div>
+                    </section>
+
+                    <section class="card admin-card admin-top-block" id="topSurnamesBlock">
+                        <header class="card-header admin-stats-header">
+                            <div>
+                                <h2>Cognoms més comuns</h2>
+                                <p class="muted">Cognoms principals segons els registres indexats.</p>
+                                {{ if .Data.StatsLimited }}
+                                <p class="muted">Per a més detall, consulta un nivell inferior.</p>
+                                {{ end }}
+                            </div>
+
+                            <div class="admin-tabs" role="tablist" aria-label="Cognoms més comuns">
+                                <button class="admin-tab is-active" type="button" data-top="totals">Totals</button>
+                                <button class="admin-tab" type="button" data-top="series">Evolució</button>
+                            </div>
+                        </header>
+
+                        <div class="admin-chart" id="adminTopSurnamesTotals"></div>
+
+                        <div class="admin-select-row">
+                            <label for="adminTopSurnamesSelect">Cognom</label>
+                            <select class="admin-select" id="adminTopSurnamesSelect"></select>
+                        </div>
+
+                        <div class="admin-chart" id="adminTopSurnamesSeries"></div>
+                    </section>
+                </div>
+
+                <section class="card admin-card">
+                    <header class="card-header">
+                        <div>
+                            <h2>Esdeveniments històrics</h2>
+                            <p class="muted">Fets rellevants del territori.</p>
+                        </div>
+                    </header>
+                    <div class="timeline" id="historyEvents"></div>
+                </section>
+
+                <section class="admin-bottom-grid">
+                    <section class="card admin-card">
+                        <header class="card-header"><h2>Història de la regió</h2></header>
+                        <div class="history-text" id="historyText"></div>
+                    </section>
+
+                    <section class="card admin-card">
+                        <header class="card-header"><h2>Anècdotes i memòria oral</h2></header>
+                        <div class="memo-list" id="memoList"></div>
+                    </section>
+                </section>
+            </section>
+        </div>
+
+        <script id="adminLevelData" type="application/json">{{ toJsonJS .Data.AdminLevelData }}</script>
+    </main>
+
+    {{ template "footer" . }}
+    {{ if .UserLoggedIn }}
+        {{ template "scripts-private" . }}
+    {{ else }}
+        {{ template "scripts-public" . }}
+    {{ end }}
+    <script src="/static/js/nivell-administratiu-perfil-pro.js"></script>
+</body>
+</html>
+{{ end }}

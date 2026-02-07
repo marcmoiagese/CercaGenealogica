@@ -80,7 +80,7 @@ func TestCheckAvailability_UsernameTaken(t *testing.T) {
 			Usuari: "marc",
 		},
 	}
-	app := newFakeAppWithUsers(users) // fa servir la fakeDB dels tests de RegenerarToken
+	app := newFakeAppWithUsers(t, users) // fa servir la fakeDB dels tests de RegenerarToken
 
 	form := url.Values{}
 	form.Set("username", "marc")
@@ -119,7 +119,7 @@ func TestCheckAvailability_EmailFree(t *testing.T) {
 			Usuari: "marc",
 		},
 	}
-	app := newFakeAppWithUsers(users)
+	app := newFakeAppWithUsers(t, users)
 
 	form := url.Values{}
 	form.Set("username", "nou")          // nou usuari

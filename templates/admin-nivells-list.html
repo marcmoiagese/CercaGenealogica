@@ -22,6 +22,12 @@
                         <i class="fas fa-sliders-h"></i>
                         <span>{{ t .Lang "filters.advanced" }}</span>
                     </button>
+                    {{ if .Data.CanRebuildNivellStats }}
+                    <a class="boto-secundari" href="/admin/nivells/rebuild">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>{{ t .Lang "levels.rebuild.title" }}</span>
+                    </a>
+                    {{ end }}
                     {{ if and .Data.Pais $.Data.CanCreateNivell }}
                     <a class="boto-primari" href="/territori/paisos/{{ .Data.Pais.ID }}/nivells/new">{{ t .Lang "levels.button.new" }}</a>
                     {{ else if not .Data.Pais }}
@@ -129,7 +135,7 @@
                             <tr>
                                 <td data-col="0" data-key="nivel">{{ .Nivel }}</td>
                                 <td data-col="1" data-key="pais">{{ if .PaisLabel }}{{ .PaisLabel }}{{ else }}{{ .PaisISO2.String }}{{ end }}</td>
-                                <td data-col="2" data-key="nom">{{ .NomNivell }}</td>
+                                <td data-col="2" data-key="nom"><a class="enllaç" href="/territori/nivells/{{ .ID }}">{{ .NomNivell }}</a></td>
                                 <td data-col="3" data-key="tipus">{{ t $.Lang (printf "levels.types.%s" .TipusNivell) }}</td>
                                 <td data-col="4" data-key="codi">{{ .CodiOficial }}</td>
                                 <td data-col="5" data-key="parent">{{ if .ParentNom.Valid }}{{ .ParentNom.String }}{{ else }}-{{ end }}</td>

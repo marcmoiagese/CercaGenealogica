@@ -59,7 +59,7 @@ func (a *App) AdvancedSearchPage(w http.ResponseWriter, r *http.Request) {
 	if view.AncestorType == "pais" && view.PaisID == 0 && view.AncestorID > 0 {
 		view.PaisID = view.AncestorID
 	}
-	if view.AncestorType == "nivell_admin" && view.AncestorID > 0 {
+	if (view.AncestorType == "nivell_admin" || view.AncestorType == "nivell") && view.AncestorID > 0 {
 		needsLevels := true
 		for _, id := range view.LevelIDs {
 			if id > 0 {
@@ -401,6 +401,9 @@ func (a *App) parseAdvancedSearchFilter(r *http.Request) (db.SearchQueryFilter, 
 		entity = "all"
 	}
 	ancestorType := strings.TrimSpace(r.URL.Query().Get("ancestor_type"))
+	if ancestorType == "nivell_admin" {
+		ancestorType = "nivell"
+	}
 	ancestorID := parseFormInt(r.URL.Query().Get("ancestor_id"))
 	ancestorLabel := strings.TrimSpace(r.URL.Query().Get("ancestor_label"))
 	municipiID := parseFormInt(r.URL.Query().Get("municipi_id"))
@@ -520,7 +523,7 @@ func (a *App) parseAdvancedSearchFilter(r *http.Request) (db.SearchQueryFilter, 
 				}
 			}
 			if deepest > 0 {
-				ancestorType = "nivell_admin"
+				ancestorType = "nivell"
 				ancestorID = deepest
 			} else if paisID > 0 {
 				ancestorType = "pais"

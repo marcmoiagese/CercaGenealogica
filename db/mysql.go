@@ -1071,6 +1071,36 @@ func (d *MySQL) CountCognomTotalsByMunicipi(municipiID int) (int, error) {
 func (d *MySQL) ClearNomCognomStatsByMunicipi(municipiID int) error {
 	return d.help.clearNomCognomStatsByMunicipi(municipiID)
 }
+func (d *MySQL) UpsertNomFreqNivellAny(nomID, nivellID, anyDoc, delta int) error {
+	return d.help.upsertNomFreqNivellAny(nomID, nivellID, anyDoc, delta)
+}
+func (d *MySQL) UpsertNomFreqNivellTotal(nomID, nivellID, delta int) error {
+	return d.help.upsertNomFreqNivellTotal(nomID, nivellID, delta)
+}
+func (d *MySQL) ApplyCognomFreqNivellAnyDelta(cognomID, nivellID, anyDoc, delta int) error {
+	return d.help.upsertCognomFreqNivellAny(cognomID, nivellID, anyDoc, delta)
+}
+func (d *MySQL) UpsertCognomFreqNivellTotal(cognomID, nivellID, delta int) error {
+	return d.help.upsertCognomFreqNivellTotal(cognomID, nivellID, delta)
+}
+func (d *MySQL) ListTopNomsByNivell(nivellID, limit int) ([]NomTotalRow, error) {
+	return d.help.listTopNomsByNivell(nivellID, limit)
+}
+func (d *MySQL) ListTopCognomsByNivell(nivellID, limit int) ([]CognomTotalRow, error) {
+	return d.help.listTopCognomsByNivell(nivellID, limit)
+}
+func (d *MySQL) ListNomSeriesByNivell(nivellID, nomID int, bucket string) ([]NomFreqRow, error) {
+	return d.help.listNomSeriesByNivell(nivellID, nomID, bucket)
+}
+func (d *MySQL) ListCognomSeriesByNivell(nivellID, cognomID int, bucket string) ([]CognomFreqRow, error) {
+	return d.help.listCognomSeriesByNivell(nivellID, cognomID, bucket)
+}
+func (d *MySQL) ClearNomCognomStatsByNivell(nivellID int) error {
+	return d.help.clearNomCognomStatsByNivell(nivellID)
+}
+func (d *MySQL) RebuildNivellNomCognomStats(nivellID int) error {
+	return d.help.rebuildNivellNomCognomStats(nivellID)
+}
 
 func (d *MySQL) ListMunicipiMapes(filter MunicipiMapaFilter) ([]MunicipiMapa, error) {
 	return d.help.listMunicipiMapes(filter)
@@ -1190,6 +1220,21 @@ func (d *MySQL) ApplyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year int,
 }
 func (d *MySQL) RebuildMunicipiDemografia(municipiID int) error {
 	return d.help.rebuildMunicipiDemografia(municipiID)
+}
+func (d *MySQL) GetNivellDemografiaMeta(nivellID int) (*NivellDemografiaMeta, error) {
+	return d.help.getNivellDemografiaMeta(nivellID)
+}
+func (d *MySQL) ListNivellDemografiaAny(nivellID int, from, to int) ([]NivellDemografiaAny, error) {
+	return d.help.listNivellDemografiaAny(nivellID, from, to)
+}
+func (d *MySQL) ListNivellDemografiaDecades(nivellID int, from, to int) ([]NivellDemografiaAny, error) {
+	return d.help.listNivellDemografiaDecades(nivellID, from, to)
+}
+func (d *MySQL) ApplyNivellDemografiaDelta(nivellID, year int, tipus string, delta int) error {
+	return d.help.applyNivellDemografiaDelta(nivellID, year, tipus, delta)
+}
+func (d *MySQL) RebuildNivellDemografia(nivellID int) error {
+	return d.help.rebuildNivellDemografia(nivellID)
 }
 
 func (d *MySQL) ListMunicipiAnecdotariPublished(municipiID int, f MunicipiAnecdotariFilter) ([]MunicipiAnecdotariVersion, int, error) {

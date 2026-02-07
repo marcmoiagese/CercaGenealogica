@@ -427,6 +427,27 @@ CREATE TABLE IF NOT EXISTS municipi_demografia_meta (
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Demografia per nivell administratiu (rollups)
+CREATE TABLE IF NOT EXISTS nivell_demografia_any (
+    nivell_id INTEGER NOT NULL REFERENCES nivells_administratius(id) ON DELETE CASCADE,
+    "any" INTEGER NOT NULL,
+    natalitat INTEGER NOT NULL DEFAULT 0,
+    matrimonis INTEGER NOT NULL DEFAULT 0,
+    defuncions INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (nivell_id, "any")
+);
+
+CREATE TABLE IF NOT EXISTS nivell_demografia_meta (
+    nivell_id INTEGER NOT NULL PRIMARY KEY REFERENCES nivells_administratius(id) ON DELETE CASCADE,
+    any_min INTEGER,
+    any_max INTEGER,
+    total_natalitat INTEGER NOT NULL DEFAULT 0,
+    total_matrimonis INTEGER NOT NULL DEFAULT 0,
+    total_defuncions INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS demografia_queue (
     id SERIAL PRIMARY KEY,
     municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
@@ -441,6 +462,7 @@ CREATE TABLE IF NOT EXISTS demografia_queue (
 );
 
 CREATE INDEX IF NOT EXISTS idx_municipi_demografia_any_municipi_any ON municipi_demografia_any(municipi_id, "any");
+CREATE INDEX IF NOT EXISTS idx_nivell_demografia_any_nivell_any ON nivell_demografia_any(nivell_id, "any");
 CREATE INDEX IF NOT EXISTS idx_demografia_queue_pending ON demografia_queue(processed_at);
 
 CREATE TABLE IF NOT EXISTS noms_historics (
@@ -962,6 +984,33 @@ CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_total (
 CREATE INDEX IF NOT EXISTS idx_cognoms_freq_municipi_total_municipi
   ON cognoms_freq_municipi_total(municipi_id, total_freq DESC);
 
+-- Estadístiques pre-agregades per cognom/nivell/any
+CREATE TABLE IF NOT EXISTS cognoms_freq_nivell_any (
+  cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
+  nivell_id INTEGER NOT NULL REFERENCES nivells_administratius(id) ON DELETE CASCADE,
+  any_doc INTEGER NOT NULL,
+  freq INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id, nivell_id, any_doc)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cognoms_freq_nivell_any
+  ON cognoms_freq_nivell_any(nivell_id, any_doc);
+CREATE INDEX IF NOT EXISTS idx_cognoms_freq_nivell_any_cognom
+  ON cognoms_freq_nivell_any(cognom_id, any_doc);
+
+-- Totals per cognom/nivell
+CREATE TABLE IF NOT EXISTS cognoms_freq_nivell_total (
+  cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
+  nivell_id INTEGER NOT NULL REFERENCES nivells_administratius(id) ON DELETE CASCADE,
+  total_freq INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (cognom_id, nivell_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cognoms_freq_nivell_total
+  ON cognoms_freq_nivell_total(nivell_id, total_freq DESC);
+
 -- Estadístiques globals per cognom
 CREATE TABLE IF NOT EXISTS cognoms_stats_total (
   cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
@@ -1025,6 +1074,33 @@ CREATE TABLE IF NOT EXISTS noms_freq_municipi_total (
 
 CREATE INDEX IF NOT EXISTS idx_noms_freq_municipi_total_municipi
   ON noms_freq_municipi_total(municipi_id, total_freq DESC);
+
+-- Estadístiques pre-agregades per nom/nivell/any
+CREATE TABLE IF NOT EXISTS noms_freq_nivell_any (
+  nom_id INTEGER NOT NULL REFERENCES noms(id) ON DELETE CASCADE,
+  nivell_id INTEGER NOT NULL REFERENCES nivells_administratius(id) ON DELETE CASCADE,
+  any_doc INTEGER NOT NULL,
+  freq INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (nom_id, nivell_id, any_doc)
+);
+
+CREATE INDEX IF NOT EXISTS idx_noms_freq_nivell_any
+  ON noms_freq_nivell_any(nivell_id, any_doc);
+CREATE INDEX IF NOT EXISTS idx_noms_freq_nivell_any_nom
+  ON noms_freq_nivell_any(nom_id, any_doc);
+
+-- Totals per nom/nivell
+CREATE TABLE IF NOT EXISTS noms_freq_nivell_total (
+  nom_id INTEGER NOT NULL REFERENCES noms(id) ON DELETE CASCADE,
+  nivell_id INTEGER NOT NULL REFERENCES nivells_administratius(id) ON DELETE CASCADE,
+  total_freq INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (nom_id, nivell_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_noms_freq_nivell_total
+  ON noms_freq_nivell_total(nivell_id, total_freq DESC);
 
 CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_llibre_pagina
   ON transcripcions_raw(llibre_id, pagina_id, posicio_pagina);

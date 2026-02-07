@@ -46,6 +46,12 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	}
 	filter.ArxiuTipus = strings.TrimSpace(r.URL.Query().Get("arxiu_tipus"))
 	filter.TipusLlibre = strings.TrimSpace(r.URL.Query().Get("tipus_llibre"))
+	nivellID := 0
+	if v := strings.TrimSpace(r.URL.Query().Get("nivell_id")); v != "" {
+		if id, err := strconv.Atoi(v); err == nil {
+			nivellID = id
+		}
+	}
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
 	if status == "" {
 		status = "publicat"
@@ -139,6 +145,38 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 		filter.AllowedEclesIDs = scopeFilter.eclesIDs
+	}
+	if nivellID > 0 && filter.MunicipiID == 0 {
+		munRows, err := a.DB.ListMunicipisBrowse(db.MunicipiBrowseFilter{
+			NivellID: nivellID,
+			Sort:     "nom",
+			SortDir:  "asc",
+		})
+		if err != nil {
+			Errorf("Error carregant municipis per nivell %d: %v", nivellID, err)
+			munRows = []db.MunicipiBrowseRow{}
+		}
+		munIDs := make([]int, 0, len(munRows))
+		for _, mun := range munRows {
+			munIDs = append(munIDs, mun.ID)
+		}
+		if len(filter.AllowedMunicipiIDs) > 0 {
+			allowed := make(map[int]bool, len(filter.AllowedMunicipiIDs))
+			for _, id := range filter.AllowedMunicipiIDs {
+				allowed[id] = true
+			}
+			filtered := make([]int, 0, len(munIDs))
+			for _, id := range munIDs {
+				if allowed[id] {
+					filtered = append(filtered, id)
+				}
+			}
+			munIDs = filtered
+		}
+		if len(munIDs) == 0 {
+			munIDs = []int{-1}
+		}
+		filter.AllowedMunicipiIDs = munIDs
 	}
 	llibres := []db.LlibreRow{}
 	total := 0

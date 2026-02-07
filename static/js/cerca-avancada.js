@@ -134,7 +134,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         if (deepestLevel) {
-            params.set("ancestor_type", "nivell_admin");
+            params.set("ancestor_type", "nivell");
             params.set("ancestor_id", deepestLevel);
             params.delete("ancestor_label");
             return;

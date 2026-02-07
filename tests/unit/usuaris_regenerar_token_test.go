@@ -183,13 +183,31 @@ func TestRegenerarTokenActivacio_UserAlreadyActive(t *testing.T) {
 
 // fakeDB implementa db.DB però només el que necessitem per a RegenerarTokenActivacio.
 type fakeDB struct {
+	db.DB
 	users map[string]*db.User
 }
 
-func (f *fakeDB) Connect() error                                    { return nil }
-func (f *fakeDB) Close()                                            {}
-func (f *fakeDB) Exec(q string, args ...interface{}) (int64, error) { return 0, nil }
+func (f *fakeDB) Connect() error {
+	if f.DB != nil {
+		return f.DB.Connect()
+	}
+	return nil
+}
+func (f *fakeDB) Close() {
+	if f.DB != nil {
+		f.DB.Close()
+	}
+}
+func (f *fakeDB) Exec(q string, args ...interface{}) (int64, error) {
+	if f.DB != nil {
+		return f.DB.Exec(q, args...)
+	}
+	return 0, nil
+}
 func (f *fakeDB) Query(q string, args ...interface{}) ([]map[string]interface{}, error) {
+	if f.DB != nil {
+		return f.DB.Query(q, args...)
+	}
 	return nil, nil
 }
 
@@ -794,10 +812,19 @@ func (f *fakeDB) ApplyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, anyDoc i
 }
 
 // Helper per crear una App amb fakeDB
-func newFakeAppWithUsers(users map[string]*db.User) *core.App {
-	fdb := &fakeDB{users: users}
-	// Per aquests tests, la config ens és igual
-	return core.NewApp(map[string]string{}, fdb)
+func newFakeAppWithUsers(t *testing.T, users map[string]*db.User) *core.App {
+	t.Helper()
+	cfg := newTestConfig()
+	database, err := db.NewDB(cfg)
+	if err != nil {
+		t.Fatalf("db.NewDB: %v", err)
+	}
+	fdb := &fakeDB{DB: database, users: users}
+	app := core.NewApp(cfg, fdb)
+	t.Cleanup(func() {
+		app.Close()
+	})
+	return app
 }
 
 func TestRegenerarTokenActivacio_Success(t *testing.T) {
@@ -808,7 +835,7 @@ func TestRegenerarTokenActivacio_Success(t *testing.T) {
 			Active: false, // molt important: inactiu
 		},
 	}
-	app := newFakeAppWithUsers(users)
+	app := newFakeAppWithUsers(t, users)
 
 	form := url.Values{}
 	form.Set("csrf_token", "tok")
@@ -831,4 +858,64 @@ func TestRegenerarTokenActivacio_Success(t *testing.T) {
 	if !strings.Contains(body, "token") && !strings.Contains(body, "activació") {
 		t.Logf("cos de resposta: %s", body)
 	}
+}
+
+// --- Mètodes nous del DB per evitar errors de compilació en aquest fake ---
+
+func (f *fakeDB) UpsertNomFreqNivellAny(nomID, nivellID, anyDoc, delta int) error {
+	return nil
+}
+func (f *fakeDB) UpsertNomFreqNivellTotal(nomID, nivellID, delta int) error {
+	return nil
+}
+func (f *fakeDB) ApplyCognomFreqNivellAnyDelta(cognomID, nivellID, anyDoc, delta int) error {
+	return nil
+}
+func (f *fakeDB) UpsertCognomFreqNivellTotal(cognomID, nivellID, delta int) error {
+	return nil
+}
+func (f *fakeDB) ListTopNomsByNivell(nivellID, limit int) ([]db.NomTotalRow, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListTopCognomsByNivell(nivellID, limit int) ([]db.CognomTotalRow, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListNomSeriesByNivell(nivellID, nomID int, bucket string) ([]db.NomFreqRow, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListCognomSeriesByNivell(nivellID, cognomID int, bucket string) ([]db.CognomFreqRow, error) {
+	return nil, nil
+}
+func (f *fakeDB) ClearNomCognomStatsByNivell(nivellID int) error {
+	return nil
+}
+func (f *fakeDB) RebuildNivellNomCognomStats(nivellID int) error {
+	return nil
+}
+func (f *fakeDB) GetNivellDemografiaMeta(nivellID int) (*db.NivellDemografiaMeta, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListNivellDemografiaAny(nivellID int, from, to int) ([]db.NivellDemografiaAny, error) {
+	return nil, nil
+}
+func (f *fakeDB) ListNivellDemografiaDecades(nivellID int, from, to int) ([]db.NivellDemografiaAny, error) {
+	return nil, nil
+}
+func (f *fakeDB) ApplyNivellDemografiaDelta(nivellID, year int, tipus string, delta int) error {
+	return nil
+}
+func (f *fakeDB) RebuildNivellDemografia(nivellID int) error {
+	return nil
+}
+func (f *fakeDB) CountCognomStatsAncestorDistinct(cognomID int, ancestorType string, level, any int) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) CountCognomTotalsByMunicipi(municipiID int) (int, error) {
+	return 0, nil
+}
+func (f *fakeDB) ClearNomCognomStatsByMunicipi(municipiID int) error {
+	return nil
+}
+func (f *fakeDB) ApproveMunicipiAnecdotariVersion(versionID int, moderatorID int) error {
+	return nil
 }

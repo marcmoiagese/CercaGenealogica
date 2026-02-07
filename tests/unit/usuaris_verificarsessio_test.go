@@ -16,19 +16,35 @@ import (
 // fakeDBVerificar implementa db.DB però només fa servir GetSessionUser
 // per aquests tests. La resta de mètodes tornen un error "not implemented".
 type fakeDBVerificar struct {
+	db.DB
 	sessions map[string]*db.User
 }
 
 // --- Implementació de la interfície db.DB ---
 
-func (f *fakeDBVerificar) Connect() error { return nil }
-func (f *fakeDBVerificar) Close()         {}
+func (f *fakeDBVerificar) Connect() error {
+	if f.DB != nil {
+		return f.DB.Connect()
+	}
+	return nil
+}
+func (f *fakeDBVerificar) Close() {
+	if f.DB != nil {
+		f.DB.Close()
+	}
+}
 
 func (f *fakeDBVerificar) Exec(query string, args ...interface{}) (int64, error) {
+	if f.DB != nil {
+		return f.DB.Exec(query, args...)
+	}
 	return 0, errors.New("Exec not implemented in fakeDBVerificar")
 }
 
 func (f *fakeDBVerificar) Query(query string, args ...interface{}) ([]map[string]interface{}, error) {
+	if f.DB != nil {
+		return f.DB.Query(query, args...)
+	}
 	return nil, errors.New("Query not implemented in fakeDBVerificar")
 }
 
@@ -651,6 +667,23 @@ func (f *fakeDBVerificar) ApplyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID,
 	return errors.New("ApplyMunicipiDemografiaDeltaTx not implemented in fakeDBVerificar")
 }
 
+func newFakeDBVerificar(t *testing.T, sessions map[string]*db.User) *fakeDBVerificar {
+	t.Helper()
+	cfg := newTestConfig()
+	database, err := db.NewDB(cfg)
+	if err != nil {
+		t.Fatalf("db.NewDB: %v", err)
+	}
+	fake := &fakeDBVerificar{
+		DB:       database,
+		sessions: sessions,
+	}
+	t.Cleanup(func() {
+		fake.Close()
+	})
+	return fake
+}
+
 // Crea una App només amb la fake DB per testejar VerificarSessio.
 func newAppVerificar(dbFake db.DB) *core.App {
 	// FIX: aquí només hi ha Config i DB, res de Templates
@@ -662,7 +695,7 @@ func newAppVerificar(dbFake db.DB) *core.App {
 
 // Sense cap cookie de sessió → ha de tornar (nil, false)
 func TestVerificarSessio_NoCookie_ReturnsFalse(t *testing.T) {
-	fake := &fakeDBVerificar{sessions: map[string]*db.User{}}
+	fake := newFakeDBVerificar(t, map[string]*db.User{})
 	app := newAppVerificar(fake)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -678,7 +711,7 @@ func TestVerificarSessio_NoCookie_ReturnsFalse(t *testing.T) {
 
 // Cookie present però buida → també (nil, false)
 func TestVerificarSessio_EmptyCookie_ReturnsFalse(t *testing.T) {
-	fake := &fakeDBVerificar{sessions: map[string]*db.User{}}
+	fake := newFakeDBVerificar(t, map[string]*db.User{})
 	app := newAppVerificar(fake)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -698,7 +731,7 @@ func TestVerificarSessio_EmptyCookie_ReturnsFalse(t *testing.T) {
 
 // Cookie amb ID de sessió inexistent → (nil, false)
 func TestVerificarSessio_InvalidSession_ReturnsFalse(t *testing.T) {
-	fake := &fakeDBVerificar{sessions: map[string]*db.User{}}
+	fake := newFakeDBVerificar(t, map[string]*db.User{})
 	app := newAppVerificar(fake)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -728,11 +761,9 @@ func TestVerificarSessio_ValidSession_ReturnsUser(t *testing.T) {
 		Email:   "test@example.com",
 	}
 
-	fake := &fakeDBVerificar{
-		sessions: map[string]*db.User{
-			sessionID: expectedUser,
-		},
-	}
+	fake := newFakeDBVerificar(t, map[string]*db.User{
+		sessionID: expectedUser,
+	})
 	app := newAppVerificar(fake)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -754,4 +785,64 @@ func TestVerificarSessio_ValidSession_ReturnsUser(t *testing.T) {
 	if user.Usuari != expectedUser.Usuari {
 		t.Fatalf("esperava Usuari=%q, tinc %q", expectedUser.Usuari, user.Usuari)
 	}
+}
+
+// --- Mètodes nous del DB per evitar errors de compilació en aquest fake ---
+
+func (f *fakeDBVerificar) UpsertNomFreqNivellAny(nomID, nivellID, anyDoc, delta int) error {
+	return errors.New("UpsertNomFreqNivellAny not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) UpsertNomFreqNivellTotal(nomID, nivellID, delta int) error {
+	return errors.New("UpsertNomFreqNivellTotal not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ApplyCognomFreqNivellAnyDelta(cognomID, nivellID, anyDoc, delta int) error {
+	return errors.New("ApplyCognomFreqNivellAnyDelta not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) UpsertCognomFreqNivellTotal(cognomID, nivellID, delta int) error {
+	return errors.New("UpsertCognomFreqNivellTotal not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ListTopNomsByNivell(nivellID, limit int) ([]db.NomTotalRow, error) {
+	return nil, errors.New("ListTopNomsByNivell not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ListTopCognomsByNivell(nivellID, limit int) ([]db.CognomTotalRow, error) {
+	return nil, errors.New("ListTopCognomsByNivell not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ListNomSeriesByNivell(nivellID, nomID int, bucket string) ([]db.NomFreqRow, error) {
+	return nil, errors.New("ListNomSeriesByNivell not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ListCognomSeriesByNivell(nivellID, cognomID int, bucket string) ([]db.CognomFreqRow, error) {
+	return nil, errors.New("ListCognomSeriesByNivell not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ClearNomCognomStatsByNivell(nivellID int) error {
+	return errors.New("ClearNomCognomStatsByNivell not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) RebuildNivellNomCognomStats(nivellID int) error {
+	return errors.New("RebuildNivellNomCognomStats not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) GetNivellDemografiaMeta(nivellID int) (*db.NivellDemografiaMeta, error) {
+	return nil, errors.New("GetNivellDemografiaMeta not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ListNivellDemografiaAny(nivellID int, from, to int) ([]db.NivellDemografiaAny, error) {
+	return nil, errors.New("ListNivellDemografiaAny not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ListNivellDemografiaDecades(nivellID int, from, to int) ([]db.NivellDemografiaAny, error) {
+	return nil, errors.New("ListNivellDemografiaDecades not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ApplyNivellDemografiaDelta(nivellID, year int, tipus string, delta int) error {
+	return errors.New("ApplyNivellDemografiaDelta not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) RebuildNivellDemografia(nivellID int) error {
+	return errors.New("RebuildNivellDemografia not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) CountArquebisbats(filt db.ArquebisbatFilter) (int, error) {
+	return 0, errors.New("CountArquebisbats not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) CountArxius(filt db.ArxiuFilter) (int, error) {
+	return 0, errors.New("CountArxius not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ClearNomCognomStatsByMunicipi(municipiID int) error {
+	return errors.New("ClearNomCognomStatsByMunicipi not implemented in fakeDBVerificar")
+}
+func (f *fakeDBVerificar) ApproveMunicipiAnecdotariVersion(versionID int, moderatorID int) error {
+	return errors.New("ApproveMunicipiAnecdotariVersion not implemented in fakeDBVerificar")
 }

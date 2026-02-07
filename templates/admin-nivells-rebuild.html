@@ -1,0 +1,63 @@
+{{ define "admin-nivells-rebuild.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "levels.rebuild.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal taula-ample">
+        <section class="card">
+            <header class="card-header">
+                <div>
+                    <p class="muted">{{ t .Lang "levels.rebuild.subtitle" }}</p>
+                    <h1>{{ t .Lang "levels.rebuild.title" }}</h1>
+                </div>
+                <div class="card-actions">
+                    <a class="boto-secundari" href="/territori/nivells">
+                        <i class="fas fa-arrow-left"></i>
+                        <span>{{ t .Lang "common.back" }}</span>
+                    </a>
+                </div>
+            </header>
+            <div class="card-body">
+                <p class="muted">{{ t .Lang "levels.rebuild.help" }}</p>
+                <div class="card-actions">
+                    <button type="button" class="boto-secundari" data-rebuild-kind="demografia" data-confirm="{{ t .Lang "levels.rebuild.confirm.demography" }}">
+                        <i class="fas fa-chart-line"></i>
+                        <span>{{ t .Lang "levels.rebuild.button.demography" }}</span>
+                    </button>
+                    <button type="button" class="boto-secundari" data-rebuild-kind="stats" data-confirm="{{ t .Lang "levels.rebuild.confirm.stats" }}">
+                        <i class="fas fa-user-tag"></i>
+                        <span>{{ t .Lang "levels.rebuild.button.stats" }}</span>
+                    </button>
+                    <button type="button" class="boto-primari" data-rebuild-kind="all" data-confirm="{{ t .Lang "levels.rebuild.confirm.all" }}">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>{{ t .Lang "levels.rebuild.button.all" }}</span>
+                    </button>
+                </div>
+                <div class="muted" id="nivellsRebuildStatus"
+                     data-running="{{ t .Lang "levels.rebuild.status.running" }}"
+                     data-done="{{ t .Lang "levels.rebuild.status.done" }}"
+                     data-error="{{ t .Lang "levels.rebuild.status.error" }}">
+                </div>
+                <div class="card" style="margin-top:1rem;">
+                    <div class="card-body" style="white-space:pre-wrap;" id="nivellsRebuildLog"></div>
+                </div>
+                <input type="hidden" id="nivellsRebuildCsrf" value="{{ .Data.CSRFToken }}">
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ if .UserLoggedIn }}
+        {{ template "scripts-private" . }}
+    {{ else }}
+        {{ template "scripts-public" . }}
+    {{ end }}
+    <script src="/static/js/nivells-rebuild.js"></script>
+</body>
+</html>
+{{ end }}
