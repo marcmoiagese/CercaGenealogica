@@ -784,7 +784,13 @@
                     }
                 }
                 if (hint) {
-                    hint.textContent = buildTransformParamHint(name);
+                    if (needsParam) {
+                        hint.textContent = buildTransformParamHint(name);
+                        hint.removeAttribute("hidden");
+                    } else {
+                        hint.textContent = "";
+                        hint.setAttribute("hidden", "");
+                    }
                 }
                 if (desc) {
                     desc.textContent = buildTransformHelpText(name, colIndex, targetValue);
@@ -1066,7 +1072,7 @@
                     return `<option value="${opt.value}">${opt.label}</option>`;
                 }).join("");
                 const helpText = buildTransformHelpText(tr.name || "", colIndex, targetValue);
-                const hintText = buildTransformParamHint(tr.name || "");
+                const hintText = needsParam ? buildTransformParamHint(tr.name || "") : "";
                 const exampleText = buildTransformExampleText(tr.name || "", tr.value || "");
                 const needsParam = transformNeedsParam(tr.name || "");
                 row.innerHTML = `
@@ -1078,7 +1084,7 @@
                         <button type="button" class="boto-secundari btn-mini" data-action="remove-transform">${labels.removeTransform}</button>
                     </div>
                     <div class="transform-meta">
-                        <div class="transform-param-hint muted">${escapeHTML(hintText)}</div>
+                        <div class="transform-param-hint muted" ${needsParam ? "" : "hidden"}>${escapeHTML(hintText)}</div>
                         <div class="transform-desc muted">${escapeHTML(helpText)}</div>
                         <div class="transform-example muted" ${exampleText ? "" : "hidden"}>${escapeHTML(exampleText)}</div>
                     </div>

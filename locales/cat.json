@@ -2080,7 +2080,7 @@
   "importer.editor.transforms.example.set_default": "Exemple: buit → «%s»",
   "importer.editor.transforms.example.map_values": "Exemple: «%s» → «%s»",
   "importer.editor.transforms.example.regex_extract": "Exemple: «TEXT» → coincidència de /%s/",
-  "importer.editor.transforms.param.hint.none": "Aquest transform no necessita paràmetre.",
+  "importer.editor.transforms.param.hint.none": "",
   "importer.editor.transforms.param.hint.set_default": "Paràmetre: valor per defecte. Exemple: Sense dades",
   "importer.editor.transforms.param.hint.map_values": "Paràmetre: mapa de valors. Exemple: a=b;c=d",
   "importer.editor.transforms.param.hint.regex_extract": "Paràmetre: expressió regular. Exemple: \\d{4}",

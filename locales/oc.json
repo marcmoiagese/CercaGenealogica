@@ -2036,7 +2036,7 @@
   "importer.editor.transforms.example.set_default": "Exemple: void → «%s»",
   "importer.editor.transforms.example.map_values": "Exemple: «%s» → «%s»",
   "importer.editor.transforms.example.regex_extract": "Exemple: «TEXT» → correspondéncia de /%s/",
-  "importer.editor.transforms.param.hint.none": "Aqueste transformacion a pas besonh de paramètre.",
+  "importer.editor.transforms.param.hint.none": "",
   "importer.editor.transforms.param.hint.set_default": "Paramètre: valor per defaut. Exemple: Sens donadas",
   "importer.editor.transforms.param.hint.map_values": "Paramètre: mapa de valors. Exemple: a=b;c=d",
   "importer.editor.transforms.param.hint.regex_extract": "Paramètre: expression regulara. Exemple: \\d{4}",

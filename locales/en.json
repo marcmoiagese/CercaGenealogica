@@ -2080,7 +2080,7 @@
   "importer.editor.transforms.example.set_default": "Example: empty → “%s”",
   "importer.editor.transforms.example.map_values": "Example: “%s” → “%s”",
   "importer.editor.transforms.example.regex_extract": "Example: “TEXT” → match of /%s/",
-  "importer.editor.transforms.param.hint.none": "This transform does not need a parameter.",
+  "importer.editor.transforms.param.hint.none": "",
   "importer.editor.transforms.param.hint.set_default": "Parameter: default value. Example: No data",
   "importer.editor.transforms.param.hint.map_values": "Parameter: value map. Example: a=b;c=d",
   "importer.editor.transforms.param.hint.regex_extract": "Parameter: regular expression. Example: \\d{4}",
