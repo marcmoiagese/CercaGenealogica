@@ -13,6 +13,7 @@ import (
 )
 
 const importTemplateMaxBytes = 2 << 20
+const importTemplateWizardMaxColumns = 200
 
 type importTemplateListEntry struct {
 	ID          int
@@ -33,6 +34,33 @@ type importTemplateEditorView struct {
 	Model    interface{}
 	IsNew    bool
 	Error    string
+}
+
+type importTemplateWizardColumn struct {
+	Index int
+	Name  string
+	Target string
+}
+
+type importTemplateWizardView struct {
+	Step           int
+	ColumnCount    int
+	Separator      string
+	SeparatorLabel string
+	Columns        []importTemplateWizardColumn
+	Name           string
+	Description    string
+	Visibility     string
+	RecordType     string
+	MainRole       string
+	NameOrder      string
+	DateFormat     string
+	QualityLabels  bool
+	QualityDubtos  string
+	QualityNoConsta string
+	QualityIncomplet string
+	QualityIllegible string
+	Error          string
 }
 
 type importTemplatePayload struct {
@@ -61,11 +89,21 @@ func (a *App) ImportTemplatesRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if base == "nova" {
+		mode := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("mode")))
+		isAdvanced := mode == "advanced" || mode == "avancat"
 		switch r.Method {
 		case http.MethodGet:
-			a.importTemplateNewForm(w, r, user)
+			if isAdvanced {
+				a.importTemplateNewForm(w, r, user)
+			} else {
+				a.importTemplateWizardForm(w, r, user)
+			}
 		case http.MethodPost:
-			a.importTemplateCreate(w, r, user)
+			if isAdvanced {
+				a.importTemplateCreate(w, r, user)
+			} else {
+				a.importTemplateWizardSubmit(w, r, user)
+			}
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -208,6 +246,7 @@ func (a *App) importTemplatesListPage(w http.ResponseWriter, r *http.Request, us
 		scope = "mine"
 	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	created := strings.TrimSpace(r.URL.Query().Get("created")) == "1"
 	filter := db.CSVImportTemplateFilter{
 		Query: query,
 		Limit: 100,
@@ -231,6 +270,7 @@ func (a *App) importTemplatesListPage(w http.ResponseWriter, r *http.Request, us
 		"Templates":  items,
 		"ActiveScope": scope,
 		"Query":      query,
+		"Created":    created,
 	})
 }
 
@@ -253,6 +293,445 @@ func (a *App) importTemplateNewForm(w http.ResponseWriter, r *http.Request, user
 	RenderPrivateTemplate(w, r, "import-template-editor.html", map[string]interface{}{
 		"View": view,
 	})
+}
+
+func (a *App) importTemplateWizardForm(w http.ResponseWriter, r *http.Request, user *db.User) {
+	view := importTemplateWizardView{
+		Step:           1,
+		ColumnCount:    0,
+		Separator:      ",",
+		SeparatorLabel: wizardSeparatorLabel(","),
+		Visibility:     "private",
+		RecordType:     "baptisme",
+		MainRole:       "batejat",
+		NameOrder:      "cognoms_first",
+		DateFormat:     "dd/mm",
+		QualityDubtos:  "?",
+		QualityNoConsta: "¿",
+	}
+	a.renderImportTemplateWizard(w, r, view)
+}
+
+func (a *App) importTemplateWizardSubmit(w http.ResponseWriter, r *http.Request, user *db.User) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invalid", http.StatusBadRequest)
+		return
+	}
+	step := parseFormInt(r.FormValue("wizard_step"))
+	if step <= 0 {
+		step = 1
+	}
+	action := strings.TrimSpace(r.FormValue("wizard_action"))
+
+	columnCount, sepRaw, sepNorm, baseErr := parseWizardBasics(r)
+	if step == 1 {
+		if baseErr != "" {
+			view := importTemplateWizardView{
+				Step:        1,
+				ColumnCount: columnCount,
+				Separator:   sepRaw,
+				Error:       baseErr,
+			}
+			view.SeparatorLabel = wizardSeparatorLabel(view.Separator)
+			a.renderImportTemplateWizard(w, r, view)
+			return
+		}
+		view := importTemplateWizardView{
+			Step:           2,
+			ColumnCount:    columnCount,
+			Separator:      sepRaw,
+			SeparatorLabel: wizardSeparatorLabel(sepRaw),
+			Columns:        buildWizardColumns(columnCount, nil, nil),
+			RecordType:     "baptisme",
+			NameOrder:      "cognoms_first",
+		}
+		a.renderImportTemplateWizard(w, r, view)
+		return
+	}
+
+	if baseErr != "" {
+		view := importTemplateWizardView{
+			Step:        step,
+			ColumnCount: columnCount,
+			Separator:   sepRaw,
+			Error:       baseErr,
+		}
+		view.SeparatorLabel = wizardSeparatorLabel(view.Separator)
+		a.renderImportTemplateWizard(w, r, view)
+		return
+	}
+
+	if step == 2 {
+		if action == "back" {
+			view := importTemplateWizardView{
+				Step:        1,
+				ColumnCount: columnCount,
+				Separator:   sepRaw,
+			}
+			view.SeparatorLabel = wizardSeparatorLabel(view.Separator)
+			a.renderImportTemplateWizard(w, r, view)
+			return
+		}
+		recordType := strings.TrimSpace(r.FormValue("record_type"))
+		if recordType == "" {
+			recordType = "baptisme"
+		}
+		names, nameErr := parseWizardColumnNames(r, columnCount)
+		targets, targetErr := parseWizardColumnTargets(r, columnCount, recordType)
+		view := importTemplateWizardView{
+			Step:           2,
+			ColumnCount:    columnCount,
+			Separator:      sepRaw,
+			SeparatorLabel: wizardSeparatorLabel(sepRaw),
+			Columns:        buildWizardColumns(columnCount, names, targets),
+			Name:           strings.TrimSpace(r.FormValue("template_name")),
+			Description:    strings.TrimSpace(r.FormValue("template_description")),
+			Visibility:     normalizeTemplateVisibility(r.FormValue("visibility")),
+			RecordType:     recordType,
+			MainRole:       strings.TrimSpace(r.FormValue("main_role")),
+			NameOrder:      strings.TrimSpace(r.FormValue("name_order")),
+			DateFormat:     strings.TrimSpace(r.FormValue("date_format")),
+			QualityLabels:  strings.TrimSpace(r.FormValue("quality_labels")) == "1",
+			QualityDubtos:  strings.TrimSpace(r.FormValue("quality_dubtos")),
+			QualityNoConsta: strings.TrimSpace(r.FormValue("quality_no_consta")),
+			QualityIncomplet: strings.TrimSpace(r.FormValue("quality_incomplet")),
+			QualityIllegible: strings.TrimSpace(r.FormValue("quality_illegible")),
+		}
+		if view.Visibility == "" {
+			view.Visibility = "private"
+		}
+		if view.RecordType == "" {
+			view.RecordType = "baptisme"
+		}
+		if view.MainRole == "" {
+			view.MainRole = defaultWizardRole(view.RecordType)
+		}
+		if view.NameOrder == "" {
+			view.NameOrder = "cognoms_first"
+		}
+		if view.DateFormat == "" {
+			view.DateFormat = "dd/mm"
+		}
+		if view.QualityDubtos == "" {
+			view.QualityDubtos = "?"
+		}
+		if view.QualityNoConsta == "" {
+			view.QualityNoConsta = "¿"
+		}
+		if nameErr != "" {
+			view.Error = nameErr
+			a.renderImportTemplateWizard(w, r, view)
+			return
+		}
+		if targetErr != "" {
+			view.Error = targetErr
+			a.renderImportTemplateWizard(w, r, view)
+			return
+		}
+		view.Step = 3
+		a.renderImportTemplateWizard(w, r, view)
+		return
+	}
+
+	if step == 3 {
+		recordType := strings.TrimSpace(r.FormValue("record_type"))
+		if recordType == "" {
+			recordType = "baptisme"
+		}
+		names, nameErr := parseWizardColumnNames(r, columnCount)
+		targets, targetErr := parseWizardColumnTargets(r, columnCount, recordType)
+		view := importTemplateWizardView{
+			Step:           3,
+			ColumnCount:    columnCount,
+			Separator:      sepRaw,
+			SeparatorLabel: wizardSeparatorLabel(sepRaw),
+			Columns:        buildWizardColumns(columnCount, names, targets),
+			Name:           strings.TrimSpace(r.FormValue("template_name")),
+			Description:    strings.TrimSpace(r.FormValue("template_description")),
+			Visibility:     normalizeTemplateVisibility(r.FormValue("visibility")),
+			RecordType:     recordType,
+			MainRole:       strings.TrimSpace(r.FormValue("main_role")),
+			NameOrder:      strings.TrimSpace(r.FormValue("name_order")),
+			DateFormat:     strings.TrimSpace(r.FormValue("date_format")),
+			QualityLabels:  strings.TrimSpace(r.FormValue("quality_labels")) == "1",
+			QualityDubtos:  strings.TrimSpace(r.FormValue("quality_dubtos")),
+			QualityNoConsta: strings.TrimSpace(r.FormValue("quality_no_consta")),
+			QualityIncomplet: strings.TrimSpace(r.FormValue("quality_incomplet")),
+			QualityIllegible: strings.TrimSpace(r.FormValue("quality_illegible")),
+		}
+		if view.Visibility == "" {
+			view.Visibility = "private"
+		}
+		if view.RecordType == "" {
+			view.RecordType = "baptisme"
+		}
+		if view.MainRole == "" {
+			view.MainRole = defaultWizardRole(view.RecordType)
+		}
+		if view.NameOrder == "" {
+			view.NameOrder = "cognoms_first"
+		}
+		if view.DateFormat == "" {
+			view.DateFormat = "dd/mm"
+		}
+		if view.QualityDubtos == "" {
+			view.QualityDubtos = "?"
+		}
+		if view.QualityNoConsta == "" {
+			view.QualityNoConsta = "¿"
+		}
+		if action == "back" {
+			view.Step = 2
+			a.renderImportTemplateWizard(w, r, view)
+			return
+		}
+		if nameErr != "" {
+			view.Error = nameErr
+			a.renderImportTemplateWizard(w, r, view)
+			return
+		}
+		if targetErr != "" {
+			view.Error = targetErr
+			a.renderImportTemplateWizard(w, r, view)
+			return
+		}
+		if view.Name == "" {
+			view.Error = "El nom de la plantilla és obligatori."
+			a.renderImportTemplateWizard(w, r, view)
+			return
+		}
+		model := defaultImportTemplateModel(ResolveLang(r))
+		metadata := ensureMap(model, "metadata")
+		metadata["record_type"] = view.RecordType
+		model["date_format"] = view.DateFormat
+		model["name_order"] = view.NameOrder
+		model["quality"] = map[string]interface{}{
+			"labels": view.QualityLabels,
+			"markers": map[string]interface{}{
+				"dubtos": view.QualityDubtos,
+				"no_consta": view.QualityNoConsta,
+				"incomplet": view.QualityIncomplet,
+				"illegible": view.QualityIllegible,
+			},
+		}
+		if policies, ok := model["policies"].(map[string]interface{}); ok {
+			if merge, ok := policies["merge_existing"].(map[string]interface{}); ok {
+				merge["principal_roles"] = []interface{}{view.MainRole}
+			}
+		}
+		columns := make([]interface{}, 0, len(names))
+		for i, header := range names {
+			target := ""
+			if i < len(targets) {
+				target = targets[i]
+			}
+			columns = append(columns, buildWizardColumnMapping(header, target, view))
+		}
+		model["mapping"] = map[string]interface{}{"columns": columns}
+		modelJSON := encodeTemplateModel(model)
+		newTemplate := &db.CSVImportTemplate{
+			Name:             view.Name,
+			Description:      view.Description,
+			Visibility:       view.Visibility,
+			DefaultSeparator: sepNorm,
+			ModelJSON:        modelJSON,
+			OwnerUserID:      sql.NullInt64{Int64: int64(user.ID), Valid: true},
+		}
+		newID, err := a.DB.CreateCSVImportTemplate(newTemplate)
+		if err != nil || newID <= 0 {
+			view.Error = "No s'ha pogut crear la plantilla."
+			a.renderImportTemplateWizard(w, r, view)
+			return
+		}
+		http.Redirect(w, r, "/importador/plantilles?scope=mine&created=1", http.StatusSeeOther)
+		return
+	}
+
+	http.NotFound(w, r)
+}
+
+func (a *App) renderImportTemplateWizard(w http.ResponseWriter, r *http.Request, view importTemplateWizardView) {
+	RenderPrivateTemplate(w, r, "import-template-wizard.html", map[string]interface{}{
+		"View": view,
+	})
+}
+
+func buildWizardColumns(count int, names []string, kinds []string) []importTemplateWizardColumn {
+	if count <= 0 {
+		return []importTemplateWizardColumn{}
+	}
+	cols := make([]importTemplateWizardColumn, 0, count)
+	for i := 1; i <= count; i++ {
+		name := ""
+		if i-1 < len(names) {
+			name = names[i-1]
+		}
+		target := ""
+		if i-1 < len(kinds) {
+			target = kinds[i-1]
+		}
+		cols = append(cols, importTemplateWizardColumn{
+			Index: i,
+			Name:  name,
+			Target: target,
+		})
+	}
+	return cols
+}
+
+func parseWizardBasics(r *http.Request) (int, string, string, string) {
+	columnCount := parseFormInt(r.FormValue("column_count"))
+	if columnCount <= 0 {
+		return columnCount, strings.TrimSpace(r.FormValue("separator")), "", "Indica quantes columnes té el CSV."
+	}
+	if columnCount > importTemplateWizardMaxColumns {
+		return columnCount, strings.TrimSpace(r.FormValue("separator")), "", fmt.Sprintf("Massa columnes (màxim %d).", importTemplateWizardMaxColumns)
+	}
+	sepRaw := strings.TrimSpace(r.FormValue("separator"))
+	sepNorm := normalizeTemplateSeparator(sepRaw)
+	if sepNorm == "" {
+		return columnCount, sepRaw, "", "Selecciona un separador vàlid."
+	}
+	return columnCount, sepRaw, sepNorm, ""
+}
+
+func parseWizardColumnNames(r *http.Request, count int) ([]string, string) {
+	if count <= 0 {
+		return nil, "Indica quantes columnes té el CSV."
+	}
+	names := make([]string, count)
+	for i := 1; i <= count; i++ {
+		name := strings.TrimSpace(r.FormValue(fmt.Sprintf("col_%d", i)))
+		names[i-1] = name
+		if name == "" {
+			return names, fmt.Sprintf("El nom de la columna %d és obligatori.", i)
+		}
+	}
+	return names, ""
+}
+
+func parseWizardColumnTargets(r *http.Request, count int, recordType string) ([]string, string) {
+	if count <= 0 {
+		return nil, "Indica quantes columnes té el CSV."
+	}
+	targets := make([]string, count)
+	allowedTargets := allowedTemplateTargetsForRecordType(recordType)
+	for i := 1; i <= count; i++ {
+		val := strings.TrimSpace(r.FormValue(fmt.Sprintf("col_target_%d", i)))
+		val = strings.TrimSpace(strings.TrimPrefix(val, "target:"))
+		if val == "" {
+			val = legacyWizardTypeToTarget(strings.TrimSpace(r.FormValue(fmt.Sprintf("col_type_%d", i))), recordType)
+		}
+		if val == "" || val == "ignore" {
+			targets[i-1] = ""
+			continue
+		}
+		if allowedTargets != nil && !allowedTargets[val] {
+			return targets, fmt.Sprintf("Target invàlid per la columna %d.", i)
+		}
+		targets[i-1] = val
+	}
+	return targets, ""
+}
+
+func legacyWizardTypeToTarget(val string, recordType string) string {
+	switch strings.TrimSpace(val) {
+	case "base_llibre_id":
+		return "base.llibre_id"
+	case "base_pagina_id":
+		return "base.pagina_id"
+	case "base_num_pagina_text":
+		return "base.num_pagina_text"
+	case "base_any_doc":
+		return "base.any_doc"
+	case "base_data_acte":
+		return "base.data_acte_iso_text_estat"
+	case "base_transcripcio_literal":
+		return "base.transcripcio_literal"
+	case "person_full":
+		return "person." + defaultWizardRole(recordType)
+	case "person_nom":
+		return "person." + defaultWizardRole(recordType) + ".nom"
+	case "person_cognom1":
+		return "person." + defaultWizardRole(recordType) + ".cognom1"
+	case "person_cognom2":
+		return "person." + defaultWizardRole(recordType) + ".cognom2"
+	default:
+		return ""
+	}
+}
+
+func defaultWizardRole(recordType string) string {
+	switch strings.ToLower(strings.TrimSpace(recordType)) {
+	case "obit":
+		return "difunt"
+	case "matrimoni":
+		return "nuvi"
+	default:
+		return "batejat"
+	}
+}
+
+func buildWizardColumnMapping(header string, target string, view importTemplateWizardView) map[string]interface{} {
+	header = strings.TrimSpace(header)
+	column := map[string]interface{}{
+		"header":   header,
+		"aliases":  []interface{}{},
+		"required": false,
+		"map_to":   []interface{}{},
+	}
+	transforms := []interface{}{}
+	target = strings.TrimSpace(target)
+	if isWizardPersonRoleTarget(target) {
+		if view.NameOrder == "nom_first" {
+			transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_nom_marcmoia_v2"})
+		} else {
+			transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_cognoms_marcmoia_v2"})
+		}
+	}
+	if target == "base.data_acte_iso_text_estat" {
+		transforms = append(transforms, map[string]interface{}{"name": "parse_date_flexible_to_base_data_acte"})
+	}
+	if strings.HasPrefix(target, "attr.") && strings.HasSuffix(target, ".date_or_text_with_quality") {
+		transforms = append(transforms, map[string]interface{}{"name": "parse_date_flexible_to_date_or_text_with_quality"})
+	}
+	if target != "" {
+		column["map_to"] = []interface{}{
+			map[string]interface{}{
+				"target":     target,
+				"transforms": transforms,
+			},
+		}
+	}
+	return column
+}
+
+func isWizardPersonRoleTarget(target string) bool {
+	if !strings.HasPrefix(target, "person.") {
+		return false
+	}
+	rest := strings.TrimPrefix(target, "person.")
+	return rest != "" && !strings.Contains(rest, ".")
+}
+
+func wizardSeparatorLabel(raw string) string {
+	raw = strings.TrimSpace(raw)
+	switch raw {
+	case ",":
+		return "Coma (,)"
+	case ";":
+		return "Punt i coma (;)"
+	case "|":
+		return "Barra vertical (|)"
+	case "\\t", "\t":
+		return "Tabulador (\\t)"
+	default:
+		return raw
+	}
 }
 
 func (a *App) importTemplateCreate(w http.ResponseWriter, r *http.Request, user *db.User) {

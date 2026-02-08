@@ -101,6 +101,13 @@ body {
     gap: 1.25rem;
 }
 
+.contingut-principal.template-designer-wide {
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 16px 12px 28px;
+}
+
 /* Targetes bàsiques */
 .card {
     background: #fff;
@@ -315,6 +322,205 @@ body {
 
 .grup-camp.donacions-toggle {
     margin-top: 0.25rem;
+}
+
+/* Base layout for import template wizard/editor */
+.import-template-editor-card,
+.import-template-wizard-card {
+    display: block;
+}
+
+.template-editor-grid,
+.template-grid-2,
+.wizard-columns-grid,
+.template-section-grid {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.template-editor-grid {
+    grid-template-columns: 1fr;
+}
+
+.template-grid-2,
+.wizard-columns-grid,
+.template-section-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.template-section-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.25rem;
+}
+
+.template-panel,
+.wizard-column-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1rem;
+    border: 1px solid #e2e8f0;
+}
+
+.template-panel h2 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.1rem;
+}
+
+.template-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 0.85rem;
+}
+
+.template-field label {
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.template-field.inline-field {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.template-field input,
+.template-field select,
+.template-field textarea {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: #fff;
+    width: 100%;
+}
+
+.map-row,
+.transform-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.6rem;
+}
+
+.map-row-main {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.transform-row select,
+.transform-row input {
+    padding: 0.55rem 0.75rem;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: #fff;
+    width: 100%;
+}
+
+.transform-row-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.transform-param {
+    min-width: 0;
+}
+
+.transform-desc {
+    font-size: 0.82rem;
+    color: #667085;
+}
+
+.transform-meta {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.transform-example {
+    font-weight: 600;
+    color: #3b4a59;
+}
+
+.transform-row button {
+    justify-self: flex-end;
+}
+
+.map-row-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.transforms-block {
+    background: #eef3f8;
+    border: 1px solid #d6dee8;
+    border-radius: 10px;
+    padding: 0.5rem;
+}
+
+.transforms-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.transforms-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.transforms-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.5rem;
+}
+
+.transforms-header button {
+    white-space: nowrap;
+}
+
+.transforms-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.inline-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.inline-field input[type="checkbox"],
+.template-field.inline-field input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    accent-color: var(--secondary-color);
+}
+
+.import-wizard-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+.import-wizard-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
 }
 
 .checkbox-pill {

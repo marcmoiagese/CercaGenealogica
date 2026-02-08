@@ -1,0 +1,300 @@
+{{ define "import-template-wizard.html" }}
+{{ $view := .Data.View }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "importer.templates.new" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/import-templates.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal taula-ample template-designer-wide">
+        <section class="card import-template-editor-card import-template-wizard-card">
+            <header class="card-header card-header-flex">
+                <div>
+                    <p class="muted">{{ t .Lang "importer.wizard.subtitle" }}</p>
+                    <h1>{{ t .Lang "importer.templates.new" }}</h1>
+                </div>
+                <div class="import-templates-actions">
+                    <a class="boto-secundari" href="/importador/plantilles/nova?mode=advanced">{{ t .Lang "importer.wizard.action.advanced" }}</a>
+                    <a class="boto-secundari" href="/importador/plantilles">{{ t .Lang "common.back" }}</a>
+                </div>
+            </header>
+
+            <div class="import-wizard-steps">
+                <div class="import-wizard-step {{ if eq $view.Step 1 }}is-active{{ else if gt $view.Step 1 }}is-done{{ end }}">1 · {{ t .Lang "importer.wizard.step.basics" }}</div>
+                <div class="import-wizard-step {{ if eq $view.Step 2 }}is-active{{ else if gt $view.Step 2 }}is-done{{ end }}">2 · {{ t .Lang "importer.wizard.step.columns" }}</div>
+                <div class="import-wizard-step {{ if eq $view.Step 3 }}is-active{{ end }}">3 · {{ t .Lang "importer.wizard.step.details" }}</div>
+            </div>
+
+            {{ if $view.Error }}
+            <div class="alert alert-error">{{ $view.Error }}</div>
+            {{ end }}
+
+            {{ if eq $view.Step 1 }}
+            <form method="post" action="/importador/plantilles/nova">
+                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                <input type="hidden" name="wizard_step" value="1">
+                <div class="template-grid-2">
+                    <div class="template-field">
+                        <label for="wizardColumnCount">{{ t .Lang "importer.wizard.field.column_count" }}</label>
+                        <input id="wizardColumnCount" name="column_count" type="number" min="1" max="200" value="{{ if gt $view.ColumnCount 0 }}{{ $view.ColumnCount }}{{ end }}" required>
+                    </div>
+                    <div class="template-field">
+                        <label for="wizardSeparator">{{ t .Lang "importer.wizard.field.separator" }}</label>
+                        <select id="wizardSeparator" name="separator" required>
+                            <option value="," {{ if eq $view.Separator "," }}selected{{ end }}>{{ t .Lang "importer.wizard.separator.comma" }}</option>
+                            <option value=";" {{ if eq $view.Separator ";" }}selected{{ end }}>{{ t .Lang "importer.wizard.separator.semicolon" }}</option>
+                            <option value="|" {{ if eq $view.Separator "|" }}selected{{ end }}>{{ t .Lang "importer.wizard.separator.pipe" }}</option>
+                            <option value="\\t" {{ if or (eq $view.Separator "\\t") (eq $view.Separator "\t") }}selected{{ end }}>{{ t .Lang "importer.wizard.separator.tab" }}</option>
+                        </select>
+                        <small class="muted">{{ t .Lang "importer.wizard.help.separator" }}</small>
+                    </div>
+                </div>
+                <div class="import-wizard-actions">
+                    <span class="muted"></span>
+                    <button class="boto-primari" type="submit">{{ t .Lang "common.next" }}</button>
+                </div>
+            </form>
+            {{ else if eq $view.Step 2 }}
+            <form method="post" action="/importador/plantilles/nova">
+                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                <input type="hidden" name="wizard_step" value="2">
+                <input type="hidden" name="column_count" value="{{ $view.ColumnCount }}">
+                <input type="hidden" name="separator" value="{{ $view.Separator }}">
+                <input type="hidden" name="template_name" value="{{ $view.Name }}">
+                <input type="hidden" name="template_description" value="{{ $view.Description }}">
+                <input type="hidden" name="visibility" value="{{ $view.Visibility }}">
+                <input type="hidden" name="main_role" value="{{ $view.MainRole }}">
+                <input type="hidden" name="date_format" value="{{ $view.DateFormat }}">
+                <input type="hidden" name="quality_labels" value="{{ if $view.QualityLabels }}1{{ else }}0{{ end }}">
+                <input type="hidden" name="quality_dubtos" value="{{ $view.QualityDubtos }}">
+                <input type="hidden" name="quality_no_consta" value="{{ $view.QualityNoConsta }}">
+                <input type="hidden" name="quality_incomplet" value="{{ $view.QualityIncomplet }}">
+                <input type="hidden" name="quality_illegible" value="{{ $view.QualityIllegible }}">
+                <section class="template-panel wizard-config-panel">
+                    <h2>{{ t .Lang "importer.wizard.config.title" }}</h2>
+                    <p class="muted">{{ t .Lang "importer.wizard.columns.help" }}</p>
+                    <div class="template-grid-2">
+                        <div class="template-field">
+                            <label for="wizardRecordType">{{ t .Lang "importer.editor.field.record_type" }}</label>
+                            <select id="wizardRecordType" name="record_type">
+                                <option value="baptisme" {{ if eq $view.RecordType "baptisme" }}selected{{ end }}>{{ t .Lang "importer.editor.record_type.baptisme" }}</option>
+                                <option value="obit" {{ if eq $view.RecordType "obit" }}selected{{ end }}>{{ t .Lang "importer.editor.record_type.obit" }}</option>
+                                <option value="matrimoni" {{ if eq $view.RecordType "matrimoni" }}selected{{ end }}>{{ t .Lang "importer.editor.record_type.matrimoni" }}</option>
+                                <option value="generic" {{ if eq $view.RecordType "generic" }}selected{{ end }}>{{ t .Lang "importer.editor.record_type.generic" }}</option>
+                            </select>
+                        </div>
+                        <div class="template-field">
+                            <label for="wizardNameOrder">{{ t .Lang "importer.wizard.field.name_order" }}</label>
+                            <select id="wizardNameOrder" name="name_order">
+                                <option value="cognoms_first" {{ if eq $view.NameOrder "cognoms_first" }}selected{{ end }}>{{ t .Lang "importer.wizard.name_order.cognoms_first" }}</option>
+                                <option value="nom_first" {{ if eq $view.NameOrder "nom_first" }}selected{{ end }}>{{ t .Lang "importer.wizard.name_order.nom_first" }}</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+                <section class="template-panel wizard-mapping-panel">
+                    <h2>{{ t .Lang "importer.editor.section.columns" }}</h2>
+                    <p class="muted">{{ t .Lang "importer.wizard.columns.help" }}</p>
+                    <div class="wizard-columns-grid">
+                        {{ range $view.Columns }}
+                        <div class="wizard-column-card">
+                            <div class="wizard-column-header">
+                                <strong>{{ t $.Lang "importer.wizard.columns.label" }} {{ .Index }}</strong>
+                            </div>
+                            <div class="wizard-column-body">
+                                <div class="template-field">
+                                    <label for="col_{{ .Index }}">{{ t $.Lang "importer.editor.columns.header" }}</label>
+                                    <input id="col_{{ .Index }}" name="col_{{ .Index }}" type="text" value="{{ .Name }}" required>
+                                </div>
+                                <div class="template-field">
+                                    <label for="col_target_{{ .Index }}">{{ t $.Lang "importer.editor.columns.target" }}</label>
+                                    <select id="col_target_{{ .Index }}" name="col_target_{{ .Index }}">
+                                        <option value="" {{ if eq .Target "" }}selected{{ end }}>{{ t $.Lang "importer.wizard.columns.type.ignore" }}</option>
+                                        <optgroup label="{{ t $.Lang "importer.editor.targets.group.common" }}" data-group="common">
+                                            <option value="base.tipus_acte" {{ if eq .Target "base.tipus_acte" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.common.act_type" }}</option>
+                                            <option value="base.num_pagina_text" {{ if eq .Target "base.num_pagina_text" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.common.page_book" }}</option>
+                                            <option value="attr.pagina_digital.text" {{ if eq .Target "attr.pagina_digital.text" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.common.page_digital" }}</option>
+                                            <option value="base.any_doc" {{ if eq .Target "base.any_doc" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.common.year_doc" }}</option>
+                                            <option value="base.data_acte_iso_text_estat" {{ if eq .Target "base.data_acte_iso_text_estat" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.common.event_date" }}</option>
+                                            <option value="base.transcripcio_literal" {{ if eq .Target "base.transcripcio_literal" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.common.literal" }}</option>
+                                            <option value="base.notes_marginals" {{ if eq .Target "base.notes_marginals" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.common.notes_marginals" }}</option>
+                                            <option value="base.observacions_paleografiques" {{ if eq .Target "base.observacions_paleografiques" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.common.notes_paleo" }}</option>
+                                        </optgroup>
+                                        <optgroup label="{{ t $.Lang "importer.editor.targets.group.baptisme" }}" data-group="baptisme">
+                                            <option value="person.batejat" {{ if eq .Target "person.batejat" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.batejat" }}</option>
+                                            <option value="person.pare" {{ if eq .Target "person.pare" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.pare" }}</option>
+                                            <option value="person.mare" {{ if eq .Target "person.mare" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.mare" }}</option>
+                                            <option value="person.pare.ofici" {{ if eq .Target "person.pare.ofici" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.pare_ofici" }}</option>
+                                            <option value="person.avi_patern" {{ if eq .Target "person.avi_patern" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.avi_patern" }}</option>
+                                            <option value="person.avia_paterna" {{ if eq .Target "person.avia_paterna" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.avia_paterna" }}</option>
+                                            <option value="person.avi_matern" {{ if eq .Target "person.avi_matern" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.avi_matern" }}</option>
+                                            <option value="person.avia_materna" {{ if eq .Target "person.avia_materna" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.avia_materna" }}</option>
+                                            <option value="person.padri" {{ if eq .Target "person.padri" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.padri" }}</option>
+                                            <option value="person.padrina" {{ if eq .Target "person.padrina" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.padrina" }}</option>
+                                            <option value="attr.data_bateig.date_or_text_with_quality" {{ if eq .Target "attr.data_bateig.date_or_text_with_quality" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.data_bateig" }}</option>
+                                            <option value="attr.data_naixement.date_or_text_with_quality" {{ if eq .Target "attr.data_naixement.date_or_text_with_quality" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.data_naixement" }}</option>
+                                            <option value="attr.data_defuncio.date_or_text_with_quality" {{ if eq .Target "attr.data_defuncio.date_or_text_with_quality" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.data_defuncio" }}</option>
+                                        </optgroup>
+                                        <optgroup label="{{ t $.Lang "importer.editor.targets.group.obit" }}" data-group="obit">
+                                            <option value="person.difunt" {{ if eq .Target "person.difunt" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.difunt" }}</option>
+                                            <option value="person.pare" {{ if eq .Target "person.pare" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.pare" }}</option>
+                                            <option value="person.mare" {{ if eq .Target "person.mare" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.mare" }}</option>
+                                            <option value="person.parella" {{ if eq .Target "person.parella" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.parella" }}</option>
+                                            <option value="person.difunt.estat_civil" {{ if eq .Target "person.difunt.estat_civil" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.estat_civil" }}</option>
+                                            <option value="attr.data_defuncio.date_or_text_with_quality" {{ if eq .Target "attr.data_defuncio.date_or_text_with_quality" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.data_defuncio" }}</option>
+                                            <option value="attr.data_enterrament.date_or_text_with_quality" {{ if eq .Target "attr.data_enterrament.date_or_text_with_quality" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.data_enterrament" }}</option>
+                                            <option value="attr.edat.int_nullable" {{ if eq .Target "attr.edat.int_nullable" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.edat" }}</option>
+                                            <option value="attr.causa.text" {{ if eq .Target "attr.causa.text" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.causa" }}</option>
+                                            <option value="attr.classe_enterrament.text" {{ if eq .Target "attr.classe_enterrament.text" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.classe_enterrament" }}</option>
+                                        </optgroup>
+                                        <optgroup label="{{ t $.Lang "importer.editor.targets.group.matrimoni" }}" data-group="matrimoni">
+                                            <option value="person.nuvi" {{ if eq .Target "person.nuvi" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.nuvi" }}</option>
+                                            <option value="person.nuvi.ofici" {{ if eq .Target "person.nuvi.ofici" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.nuvi_ofici" }}</option>
+                                            <option value="person.nuvi.edat" {{ if eq .Target "person.nuvi.edat" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.nuvi_edat" }}</option>
+                                            <option value="person.pare_nuvi" {{ if eq .Target "person.pare_nuvi" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.pare_nuvi" }}</option>
+                                            <option value="person.mare_nuvi" {{ if eq .Target "person.mare_nuvi" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.mare_nuvi" }}</option>
+                                            <option value="person.novia" {{ if eq .Target "person.novia" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.novia" }}</option>
+                                            <option value="person.novia.edat" {{ if eq .Target "person.novia.edat" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.novia_edat" }}</option>
+                                            <option value="person.pare_novia" {{ if eq .Target "person.pare_novia" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.pare_novia" }}</option>
+                                            <option value="person.mare_novia" {{ if eq .Target "person.mare_novia" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.mare_novia" }}</option>
+                                            <option value="person.testimoni1" {{ if eq .Target "person.testimoni1" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.testimoni1" }}</option>
+                                            <option value="person.testimoni2" {{ if eq .Target "person.testimoni2" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.testimoni2" }}</option>
+                                            <option value="attr.data_matrimoni.date_or_text_with_quality" {{ if eq .Target "attr.data_matrimoni.date_or_text_with_quality" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.data_matrimoni" }}</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        {{ end }}
+                    </div>
+                </section>
+                <div class="import-wizard-actions">
+                    <button class="boto-secundari" type="submit" name="wizard_action" value="back">{{ t .Lang "common.back" }}</button>
+                    <button class="boto-primari" type="submit">{{ t .Lang "common.next" }}</button>
+                </div>
+            </form>
+            {{ else }}
+            <form method="post" action="/importador/plantilles/nova">
+                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                <input type="hidden" name="wizard_step" value="3">
+                <input type="hidden" name="column_count" value="{{ $view.ColumnCount }}">
+                <input type="hidden" name="separator" value="{{ $view.Separator }}">
+                {{ range $view.Columns }}
+                <input type="hidden" name="col_{{ .Index }}" value="{{ .Name }}">
+                <input type="hidden" name="col_target_{{ .Index }}" value="{{ .Target }}">
+                {{ end }}
+                <input type="hidden" name="record_type" value="{{ $view.RecordType }}">
+                <input type="hidden" name="name_order" value="{{ $view.NameOrder }}">
+                <div class="template-grid-2">
+                    <section class="template-panel">
+                        <h2>{{ t .Lang "importer.wizard.details.title" }}</h2>
+                        <p class="muted">{{ t .Lang "importer.wizard.details.help" }}</p>
+                        <div class="template-field">
+                            <label for="wizardTemplateName">{{ t .Lang "importer.editor.field.name" }}</label>
+                            <input id="wizardTemplateName" name="template_name" type="text" value="{{ $view.Name }}" required>
+                        </div>
+                        <div class="template-field">
+                            <label for="wizardTemplateDescription">{{ t .Lang "importer.editor.field.description" }}</label>
+                            <textarea id="wizardTemplateDescription" name="template_description" rows="3">{{ $view.Description }}</textarea>
+                        </div>
+                        <div class="template-field">
+                            <label for="wizardVisibility">{{ t .Lang "importer.editor.field.visibility" }}</label>
+                            <select id="wizardVisibility" name="visibility">
+                                <option value="private" {{ if eq $view.Visibility "private" }}selected{{ end }}>{{ t .Lang "importer.templates.visibility.private" }}</option>
+                                <option value="public" {{ if eq $view.Visibility "public" }}selected{{ end }}>{{ t .Lang "importer.templates.visibility.public" }}</option>
+                            </select>
+                        </div>
+                        <div class="template-field">
+                            <label for="wizardMainRole">{{ t .Lang "importer.wizard.field.main_role" }}</label>
+                            <select id="wizardMainRole" name="main_role">
+                                <option value="batejat" {{ if eq $view.MainRole "batejat" }}selected{{ end }}>{{ t .Lang "importer.wizard.main_role.batejat" }}</option>
+                                <option value="difunt" {{ if eq $view.MainRole "difunt" }}selected{{ end }}>{{ t .Lang "importer.wizard.main_role.difunt" }}</option>
+                                <option value="nuvi" {{ if eq $view.MainRole "nuvi" }}selected{{ end }}>{{ t .Lang "importer.wizard.main_role.nuvi" }}</option>
+                                <option value="novia" {{ if eq $view.MainRole "novia" }}selected{{ end }}>{{ t .Lang "importer.wizard.main_role.novia" }}</option>
+                            </select>
+                        </div>
+                        <div class="template-field">
+                            <label for="wizardDateFormat">{{ t .Lang "importer.wizard.field.date_format" }}</label>
+                            <select id="wizardDateFormat" name="date_format">
+                                <option value="dd/mm" {{ if eq $view.DateFormat "dd/mm" }}selected{{ end }}>{{ t .Lang "importer.wizard.date_format.ddmmyyyy" }}</option>
+                                <option value="mm/dd" {{ if eq $view.DateFormat "mm/dd" }}selected{{ end }}>{{ t .Lang "importer.wizard.date_format.mmddyyyy" }}</option>
+                                <option value="iso" {{ if eq $view.DateFormat "iso" }}selected{{ end }}>{{ t .Lang "importer.wizard.date_format.iso" }}</option>
+                            </select>
+                        </div>
+                        <div class="template-divider"></div>
+                        <div class="template-field">
+                            <label>
+                                <input type="checkbox" name="quality_labels" value="1" {{ if $view.QualityLabels }}checked{{ end }}>
+                                {{ t .Lang "importer.wizard.field.quality_labels" }}
+                            </label>
+                        </div>
+                        <div class="template-grid-2">
+                            <div class="template-field">
+                                <label for="wizardQualityDubtos">{{ t .Lang "importer.wizard.field.quality_dubtos" }}</label>
+                                <input id="wizardQualityDubtos" name="quality_dubtos" type="text" value="{{ $view.QualityDubtos }}">
+                            </div>
+                            <div class="template-field">
+                                <label for="wizardQualityNoConsta">{{ t .Lang "importer.wizard.field.quality_no_consta" }}</label>
+                                <input id="wizardQualityNoConsta" name="quality_no_consta" type="text" value="{{ $view.QualityNoConsta }}">
+                            </div>
+                            <div class="template-field">
+                                <label for="wizardQualityIncomplet">{{ t .Lang "importer.wizard.field.quality_incomplet" }}</label>
+                                <input id="wizardQualityIncomplet" name="quality_incomplet" type="text" value="{{ $view.QualityIncomplet }}">
+                            </div>
+                            <div class="template-field">
+                                <label for="wizardQualityIllegible">{{ t .Lang "importer.wizard.field.quality_illegible" }}</label>
+                                <input id="wizardQualityIllegible" name="quality_illegible" type="text" value="{{ $view.QualityIllegible }}">
+                            </div>
+                        </div>
+                    </section>
+                    <section class="import-wizard-summary">
+                        <h3>{{ t .Lang "importer.wizard.summary.title" }}</h3>
+                        <div>
+                            <strong>{{ t .Lang "importer.wizard.summary.separator" }}:</strong>
+                            <span>{{ $view.SeparatorLabel }}</span>
+                        </div>
+                        <div>
+                            <strong>{{ t .Lang "importer.wizard.summary.columns" }}:</strong>
+                            <ul>
+                                {{ range $view.Columns }}
+                                <li>{{ .Name }}</li>
+                                {{ end }}
+                            </ul>
+                        </div>
+                    </section>
+                </div>
+                <div class="import-wizard-actions">
+                    <button class="boto-secundari" type="submit" name="wizard_action" value="back">{{ t .Lang "common.back" }}</button>
+                    <button class="boto-primari" type="submit">{{ t .Lang "importer.wizard.action.create" }}</button>
+                </div>
+            </form>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script>
+    (function() {
+        const recordSelect = document.getElementById('wizardRecordType');
+        if (!recordSelect) return;
+        const groups = document.querySelectorAll('.wizard-mapping-panel optgroup[data-group]');
+        function applyFilters() {
+            const value = recordSelect.value || 'baptisme';
+            groups.forEach(function(group) {
+                const key = group.getAttribute('data-group') || '';
+                const enable = value === 'generic' || key === 'common' || key === value;
+                group.disabled = !enable;
+            });
+        }
+        recordSelect.addEventListener('change', applyFilters);
+        applyFilters();
+    })();
+    </script>
+</body>
+</html>
+{{ end }}

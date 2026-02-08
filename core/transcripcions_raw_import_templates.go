@@ -25,6 +25,9 @@ type templateImportModel struct {
 	BaseDefaults        map[string]string
 	Mapping             []templateColumn
 	Policies            templatePolicies
+	NameOrder           string
+	DateFormat          string
+	Quality             templateQualityConfig
 }
 
 type templatePolicies struct {
@@ -113,6 +116,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		}
 		return a.importGenericTranscripcionsCSV(reader, sep, userID, ctx)
 	}
+	parseCfg := buildTemplateParseConfig(model)
 
 	csvReader := csv.NewReader(reader)
 	csvReader.Comma = sep
@@ -188,7 +192,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			if rawVal == "" && !columnHasDefault(col) {
 				continue
 			}
-			applyTemplateColumn(col, rawVal, rowCtx, &t, persones, atributs, mappedValues)
+			applyTemplateColumn(col, rawVal, rowCtx, &t, persones, atributs, mappedValues, parseCfg)
 		}
 
 		if model.Policies.DedupWithin && len(model.Policies.DedupKeyFields) > 0 {
@@ -308,6 +312,21 @@ func parseTemplateImportModel(modelJSON string) (*templateImportModel, error) {
 	}
 	if v := asString(root["preset_code"]); v != "" {
 		model.PresetCode = v
+	}
+	if v := asString(root["name_order"]); v != "" {
+		model.NameOrder = v
+	}
+	if v := asString(root["date_format"]); v != "" {
+		model.DateFormat = v
+	}
+	if quality, ok := root["quality"].(map[string]interface{}); ok {
+		model.Quality.Labels = asBool(quality["labels"])
+		if markers, ok := quality["markers"].(map[string]interface{}); ok {
+			model.Quality.Markers = map[string]string{}
+			for key, val := range markers {
+				model.Quality.Markers[key] = strings.TrimSpace(asString(val))
+			}
+		}
 	}
 	if book, ok := root["book_resolution"].(map[string]interface{}); ok {
 		if v := asString(book["mode"]); v != "" {
@@ -590,7 +609,7 @@ func resolveTemplateBookID(model *templateImportModel, rowCtx templateRowContext
 	}
 }
 
-func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRowContext, t *db.TranscripcioRaw, persones map[string]*db.TranscripcioPersonaRaw, atributs map[string]*db.TranscripcioAtributRaw, mappedValues map[string]string) {
+func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRowContext, t *db.TranscripcioRaw, persones map[string]*db.TranscripcioPersonaRaw, atributs map[string]*db.TranscripcioAtributRaw, mappedValues map[string]string, parseCfg templateParseConfig) {
 	if t == nil {
 		return
 	}
@@ -618,11 +637,11 @@ func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRow
 		value := rawValue
 		extras := map[string]string{}
 		if len(preTransforms) > 0 {
-			value, extras = applyTemplateTransforms(value, preTransforms)
+			value, extras = applyTemplateTransforms(value, preTransforms, parseCfg)
 		}
 		personMode, personFound := "", false
 		if len(entry.Transforms) > 0 {
-			val, ex, mode, found := applyTemplateTransformsWithPerson(value, entry.Transforms)
+			val, ex, mode, found := applyTemplateTransformsWithPerson(value, entry.Transforms, parseCfg)
 			value = val
 			for k, v := range ex {
 				extras[k] = v
@@ -636,9 +655,9 @@ func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRow
 			var p *db.TranscripcioPersonaRaw
 			switch personMode {
 			case "nom_v2":
-				p = buildPersonFromNomV2(value, role)
+				p = buildPersonFromNomV2WithConfig(value, role, parseCfg)
 			case "cognoms_v2":
-				p = buildPersonFromCognomsV2(value, role)
+				p = buildPersonFromCognomsV2WithConfig(value, role, parseCfg)
 			case "nom":
 				p = buildPersonFromNom(value, role)
 			default:
@@ -648,7 +667,7 @@ func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRow
 				persones[role] = mergePerson(persones[role], p)
 			}
 		} else {
-			applyTemplateTarget(entry.Target, value, extras, t, persones, atributs)
+			applyTemplateTarget(entry.Target, value, extras, t, persones, atributs, parseCfg)
 		}
 		if mappedValues != nil {
 			mappedValues[entry.Target] = value
@@ -656,7 +675,7 @@ func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRow
 	}
 }
 
-func applyTemplateTransforms(value string, transforms []templateTransform) (string, map[string]string) {
+func applyTemplateTransforms(value string, transforms []templateTransform, parseCfg templateParseConfig) (string, map[string]string) {
 	extras := map[string]string{}
 	for _, tr := range transforms {
 		name := strings.TrimSpace(strings.ToLower(tr.Name))
@@ -670,7 +689,7 @@ func applyTemplateTransforms(value string, transforms []templateTransform) (stri
 		case "normalize_cronologia":
 			value = normalizeCronologia(value)
 		case "parse_ddmmyyyy_to_iso":
-			iso, estat := parseDDMMYYYYToISO(value)
+			iso, estat := parseDateToISOWithConfig(value, parseCfg)
 			value = iso
 			if estat != "" {
 				extras["date_estat"] = estat
@@ -690,7 +709,7 @@ func applyTemplateTransforms(value string, transforms []templateTransform) (stri
 		case "strip_marriage_order_text":
 			value = stripMarriageOrderText(value)
 		case "parse_date_flexible_to_base_data_acte", "parse_date_flexible_to_date_or_text_with_quality":
-			iso, textRaw, estat := parseFlexibleDateV2(value)
+			iso, textRaw, estat := parseFlexibleDateWithConfig(value, parseCfg)
 			if iso != "" {
 				value = iso
 			} else if textRaw != "" {
@@ -745,7 +764,7 @@ func applyTemplateTransforms(value string, transforms []templateTransform) (stri
 	return value, extras
 }
 
-func applyTemplateTransformsWithPerson(value string, transforms []templateTransform) (string, map[string]string, string, bool) {
+func applyTemplateTransformsWithPerson(value string, transforms []templateTransform, parseCfg templateParseConfig) (string, map[string]string, string, bool) {
 	extras := map[string]string{}
 	for _, tr := range transforms {
 		name := strings.TrimSpace(strings.ToLower(tr.Name))
@@ -763,7 +782,7 @@ func applyTemplateTransformsWithPerson(value string, transforms []templateTransf
 			}
 			return value, extras, mode, true
 		default:
-			val, ex := applyTemplateTransforms(value, []templateTransform{tr})
+			val, ex := applyTemplateTransforms(value, []templateTransform{tr}, parseCfg)
 			value = val
 			for k, v := range ex {
 				extras[k] = v
@@ -781,7 +800,7 @@ func isPersonRoleTarget(target string) bool {
 	return len(parts) == 1 || parts[1] == ""
 }
 
-func applyTemplateTarget(target string, value string, extras map[string]string, t *db.TranscripcioRaw, persones map[string]*db.TranscripcioPersonaRaw, atributs map[string]*db.TranscripcioAtributRaw) {
+func applyTemplateTarget(target string, value string, extras map[string]string, t *db.TranscripcioRaw, persones map[string]*db.TranscripcioPersonaRaw, atributs map[string]*db.TranscripcioAtributRaw, parseCfg templateParseConfig) {
 	target = strings.TrimSpace(target)
 	if target == "" || t == nil {
 		return
@@ -792,11 +811,11 @@ func applyTemplateTarget(target string, value string, extras map[string]string, 
 		return
 	}
 	if strings.HasPrefix(target, "person.") {
-		applyPersonTarget(strings.TrimPrefix(target, "person."), value, extras, persones)
+		applyPersonTarget(strings.TrimPrefix(target, "person."), value, extras, persones, parseCfg)
 		return
 	}
 	if strings.HasPrefix(target, "attr.") {
-		applyAttrTarget(strings.TrimPrefix(target, "attr."), value, extras, atributs)
+		applyAttrTarget(strings.TrimPrefix(target, "attr."), value, extras, atributs, parseCfg)
 		return
 	}
 }
@@ -863,7 +882,7 @@ func applyBaseTarget(field string, value string, extras map[string]string, t *db
 	}
 }
 
-func applyPersonTarget(field string, value string, extras map[string]string, persones map[string]*db.TranscripcioPersonaRaw) {
+func applyPersonTarget(field string, value string, extras map[string]string, persones map[string]*db.TranscripcioPersonaRaw, parseCfg templateParseConfig) {
 	parts := strings.Split(field, ".")
 	if len(parts) < 1 {
 		return
@@ -890,6 +909,24 @@ func applyPersonTarget(field string, value string, extras map[string]string, per
 		persones[role] = p
 	}
 	switch fieldName {
+	case "nom":
+		value, extras = applyTemplateQualityToPersonField(value, extras, parseCfg)
+		p.Nom = value
+		if extras["quality"] != "" {
+			p.NomEstat = extras["quality"]
+		}
+	case "cognom1":
+		value, extras = applyTemplateQualityToPersonField(value, extras, parseCfg)
+		p.Cognom1 = value
+		if extras["quality"] != "" {
+			p.Cognom1Estat = extras["quality"]
+		}
+	case "cognom2":
+		value, extras = applyTemplateQualityToPersonField(value, extras, parseCfg)
+		p.Cognom2 = value
+		if extras["quality"] != "" {
+			p.Cognom2Estat = extras["quality"]
+		}
 	case "ofici_text_with_quality":
 		p.OficiText = value
 		if extras["quality"] != "" {
@@ -905,7 +942,21 @@ func applyPersonTarget(field string, value string, extras map[string]string, per
 	}
 }
 
-func applyAttrTarget(field string, value string, extras map[string]string, atributs map[string]*db.TranscripcioAtributRaw) {
+func applyTemplateQualityToPersonField(value string, extras map[string]string, parseCfg templateParseConfig) (string, map[string]string) {
+	if extras == nil {
+		extras = map[string]string{}
+	}
+	cleaned, qual := extractQuality(value, parseCfg.Quality)
+	if cleaned != "" || qual != "" {
+		value = cleaned
+	}
+	if extras["quality"] == "" && qual != "" {
+		extras["quality"] = qual
+	}
+	return value, extras
+}
+
+func applyAttrTarget(field string, value string, extras map[string]string, atributs map[string]*db.TranscripcioAtributRaw, parseCfg templateParseConfig) {
 	parts := strings.Split(field, ".")
 	if len(parts) == 0 {
 		return
@@ -950,7 +1001,7 @@ func applyAttrTarget(field string, value string, extras map[string]string, atrib
 		if estat := extras["date_estat"]; estat != "" {
 			attr.Estat = estat
 		} else if value != "" {
-			_, estat := parseDDMMYYYYToISO(value)
+			_, estat := parseDateToISOWithConfig(value, parseCfg)
 			if estat != "" {
 				attr.Estat = estat
 			}

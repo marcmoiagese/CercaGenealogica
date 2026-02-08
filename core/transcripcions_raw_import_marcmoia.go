@@ -89,19 +89,7 @@ func splitParentheticals(val string) (string, []string) {
 }
 
 func mergeQuality(values ...string) string {
-	hasDubtos := false
-	for _, v := range values {
-		if v == "no_consta" {
-			return "no_consta"
-		}
-		if v == "dubtos" {
-			hasDubtos = true
-		}
-	}
-	if hasDubtos {
-		return "dubtos"
-	}
-	return ""
+	return mergeQualityStatus(values...)
 }
 
 func cleanToken(token string) (string, string) {
