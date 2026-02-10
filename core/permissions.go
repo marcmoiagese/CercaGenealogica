@@ -15,6 +15,10 @@ type userContextKey string
 
 const userKey userContextKey = "user"
 
+type unreadMessagesContextKey string
+
+const unreadMessagesKey unreadMessagesContextKey = "unread_messages"
+
 // PolicyPermissions is re-exported for convenience
 type PolicyPermissions = db.PolicyPermissions
 
@@ -55,6 +59,10 @@ func (a *App) withUser(r *http.Request, u *db.User) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), userKey, u))
 }
 
+func (a *App) withUnreadMessagesCount(r *http.Request, count int) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), unreadMessagesKey, count))
+}
+
 func userFromContext(r *http.Request) *db.User {
 	if r == nil {
 		return nil
@@ -65,6 +73,36 @@ func userFromContext(r *http.Request) *db.User {
 		}
 	}
 	return nil
+}
+
+func unreadMessagesCountFromContext(r *http.Request) (int, bool) {
+	if r == nil {
+		return 0, false
+	}
+	if val := r.Context().Value(unreadMessagesKey); val != nil {
+		if count, ok := val.(int); ok {
+			return count, true
+		}
+	}
+	return 0, false
+}
+
+func (a *App) ensureUnreadMessagesCount(r *http.Request, userID int) *http.Request {
+	if r == nil || userID <= 0 {
+		return r
+	}
+	if _, ok := unreadMessagesCountFromContext(r); ok {
+		return r
+	}
+	count := 0
+	if a.DB != nil {
+		if n, err := a.DB.CountDMUnread(userID); err == nil {
+			count = n
+		} else {
+			Errorf("Error comptant missatges pendents per usuari %d: %v", userID, err)
+		}
+	}
+	return a.withUnreadMessagesCount(r, count)
 }
 
 func (a *App) hasPerm(perms db.PolicyPermissions, check func(db.PolicyPermissions) bool) bool {
@@ -85,6 +123,10 @@ func (a *App) requirePermission(w http.ResponseWriter, r *http.Request, check fu
 	if !found {
 		perms = a.getPermissionsForUser(user.ID)
 		*r = *a.withPermissions(r, perms)
+	}
+	*r = *a.ensureUnreadMessagesCount(r, user.ID)
+	if _, found := permissionKeysFromContext(r); !found {
+		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
 	}
 	if !a.hasPerm(perms, check) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -114,6 +156,10 @@ func (a *App) RequireLogin(next http.HandlerFunc) http.HandlerFunc {
 			if !found {
 				perms = a.getPermissionsForUser(user.ID)
 				*r = *a.withPermissions(r, perms)
+			}
+			*r = *a.ensureUnreadMessagesCount(r, user.ID)
+			if _, found := permissionKeysFromContext(r); !found {
+				*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
 			}
 			next(w, r)
 			return

@@ -23,6 +23,10 @@ func buildCognomMergeReason(r *http.Request) string {
 }
 
 func (a *App) CognomMergeSuggest(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method == http.MethodPost {
 		a.cognomMergeSuggestSave(w, r)
 		return
@@ -31,28 +35,27 @@ func (a *App) CognomMergeSuggest(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
 	lang := resolveUserLang(r, user)
 	q := r.URL.Query()
 	msg := ""
-	ok := false
+	isOk := false
 	if q.Get("ok") != "" {
 		msg = T(lang, "surnames.merge.suggest.success")
-		ok = true
+		isOk = true
 	} else if q.Get("err") != "" {
 		msg = T(lang, "surnames.merge.suggest.error")
 	}
 	RenderPrivateTemplateLang(w, r, "cognoms-merge-suggest.html", lang, map[string]interface{}{
 		"Msg": msg,
-		"Ok":  ok,
+		"Ok":  isOk,
 	})
 }
 
 func (a *App) CognomMergeSuggestTo(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -63,11 +66,6 @@ func (a *App) CognomMergeSuggestTo(w http.ResponseWriter, r *http.Request) {
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
 		http.Redirect(w, r, "/cognoms?err=merge", http.StatusSeeOther)
-		return
-	}
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	toID := extractID(r.URL.Path)
@@ -99,6 +97,10 @@ func (a *App) CognomMergeSuggestTo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) CognomMergeSuggestFrom(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -109,11 +111,6 @@ func (a *App) CognomMergeSuggestFrom(w http.ResponseWriter, r *http.Request) {
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
 		http.Redirect(w, r, "/cognoms?err=merge", http.StatusSeeOther)
-		return
-	}
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	fromID := extractID(r.URL.Path)
@@ -144,6 +141,10 @@ func (a *App) CognomMergeSuggestFrom(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) cognomMergeSuggestSave(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -154,11 +155,6 @@ func (a *App) cognomMergeSuggestSave(w http.ResponseWriter, r *http.Request) {
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
 		http.Redirect(w, r, "/cognoms/merge?err=1", http.StatusSeeOther)
-		return
-	}
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	toID, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("canonical_id")))

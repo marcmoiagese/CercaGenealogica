@@ -24,6 +24,7 @@ type registreHistoryItem struct {
 	ChangedBy      string
 	ChangedByID    int
 	ModeratedBy    string
+	ModeratedByID  int
 	ModeratedAt    string
 	ModeracioEstat string
 	HasSnapshot    bool
@@ -460,6 +461,7 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 	canManageArxius := a.hasPerm(perms, permArxius)
 	canManagePolicies := perms.CanManagePolicies || perms.Admin
 	canModerate := perms.CanModerate || perms.Admin
+	canRevert := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
 	if llibre == nil {
 		llibre = &db.Llibre{TipusLlibre: registre.TipusActe}
@@ -573,6 +575,7 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 			ChangedBy:      changedBy,
 			ChangedByID:    changedByID,
 			ModeratedBy:    moderatedBy,
+			ModeratedByID:  moderatedByID,
 			ModeratedAt:    moderatedAt,
 			ModeracioEstat: estado,
 			HasSnapshot:    hasSnapshot,
@@ -606,9 +609,11 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 			baseChangedAt = baseSnap.Raw.CreatedAt.Format("02/01/2006 15:04")
 		}
 		baseModeratedBy := ""
+		baseModeratedByID := 0
 		baseModeratedAt := ""
 		if baseSnap != nil && baseSnap.Raw.ModeratedBy.Valid {
-			baseModeratedBy = resolveUserName(int(baseSnap.Raw.ModeratedBy.Int64))
+			baseModeratedByID = int(baseSnap.Raw.ModeratedBy.Int64)
+			baseModeratedBy = resolveUserName(baseModeratedByID)
 		}
 		if baseSnap != nil && baseSnap.Raw.ModeratedAt.Valid {
 			baseModeratedAt = baseSnap.Raw.ModeratedAt.Time.Format("02/01/2006 15:04")
@@ -625,6 +630,7 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 			ChangedBy:      baseChangedBy,
 			ChangedByID:    baseChangedByID,
 			ModeratedBy:    baseModeratedBy,
+			ModeratedByID:  baseModeratedByID,
 			ModeratedAt:    baseModeratedAt,
 			ModeracioEstat: func() string {
 				if publishedVersion == 1 {
@@ -655,8 +661,10 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 			changedAt = publishedSnap.Raw.CreatedAt.Format("02/01/2006 15:04")
 		}
 		moderatedBy := ""
+		moderatedByID := 0
 		if publishedSnap.Raw.ModeratedBy.Valid {
-			moderatedBy = resolveUserName(int(publishedSnap.Raw.ModeratedBy.Int64))
+			moderatedByID = int(publishedSnap.Raw.ModeratedBy.Int64)
+			moderatedBy = resolveUserName(moderatedByID)
 		}
 		moderatedAt := ""
 		if publishedSnap.Raw.ModeratedAt.Valid {
@@ -674,6 +682,7 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 			ChangedBy:      changedBy,
 			ChangedByID:    changedByID,
 			ModeratedBy:    moderatedBy,
+			ModeratedByID:  moderatedByID,
 			ModeratedAt:    moderatedAt,
 			ModeracioEstat: "publicat",
 			HasSnapshot:    true,
@@ -835,6 +844,7 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 		"CanManageArxius":   canManageArxius,
 		"CanManagePolicies": canManagePolicies,
 		"CanModerate":       canModerate,
+		"CanRevert":         canRevert,
 	})
 }
 
@@ -866,6 +876,10 @@ func (a *App) AdminRevertRegistreChange(w http.ResponseWriter, r *http.Request) 
 	target := a.resolveLlibreTarget(registre.LlibreID)
 	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsRegistresEdit, target)
 	if !ok {
+		return
+	}
+	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	beforePersones, _ := a.DB.ListTranscripcioPersones(registreID)

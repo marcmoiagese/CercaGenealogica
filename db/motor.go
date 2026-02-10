@@ -34,11 +34,17 @@ type DB interface {
 	SavePrivacySettings(userID int, p *PrivacySettings) error
 	UpdateUserProfile(u *User) error
 	UpdateUserEmail(userID int, newEmail string) error
+	ListDashboardWidgets(userID int) ([]DashboardWidgetConfig, error)
+	SaveDashboardWidgets(userID int, widgets []DashboardWidgetConfig) error
+	ClearDashboardWidgets(userID int) error
 	// Missatgeria interna
 	GetOrCreateDMThread(userA, userB int) (*DMThread, error)
 	GetDMThreadByUsers(userA, userB int) (*DMThread, error)
 	GetDMThreadByID(threadID int) (*DMThread, error)
 	ListDMThreadsForUser(userID int, f DMThreadListFilter) ([]DMThreadListItem, error)
+	CountDMUnread(userID int) (int, error)
+	ListDMThreadFolders(userID int) ([]string, error)
+	SetDMThreadFolder(threadID, userID int, folder string) error
 	ListDMMessages(threadID, limit, beforeID int) ([]DMMessage, error)
 	CreateDMMessage(threadID, senderID int, body string) (int, error)
 	UpdateDMThreadLastMessage(threadID, msgID int, at time.Time) error
@@ -278,6 +284,7 @@ type DB interface {
 	// Arxius CRUD
 	ListArxius(filter ArxiuFilter) ([]ArxiuWithCount, error)
 	CountArxius(filter ArxiuFilter) (int, error)
+	CountPaisos() (int, error)
 	GetArxiu(id int) (*Arxiu, error)
 	CreateArxiu(a *Arxiu) (int, error)
 	UpdateArxiu(a *Arxiu) error
@@ -295,6 +302,7 @@ type DB interface {
 	SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error)
 	ListLlibres(filter LlibreFilter) ([]LlibreRow, error)
 	CountLlibres(filter LlibreFilter) (int, error)
+	CountIndexedRegistres(status string) (int, error)
 	GetLlibre(id int) (*Llibre, error)
 	CreateLlibre(l *Llibre) (int, error)
 	UpdateLlibre(l *Llibre) error
@@ -454,6 +462,13 @@ type User struct {
 	SpokenLangs   string
 }
 
+type DashboardWidgetConfig struct {
+	WidgetID     string
+	Order        int
+	Hidden       bool
+	SettingsJSON string
+}
+
 type UserAdminRow struct {
 	ID        int
 	Usuari    string
@@ -536,6 +551,7 @@ type DMThreadListFilter struct {
 	ThreadID int
 	Archived *bool
 	Deleted  *bool
+	Folder   *string
 	Limit    int
 	Offset   int
 }
@@ -550,6 +566,7 @@ type DMThreadListItem struct {
 	LastMessageSenderID  sql.NullInt64
 	LastMessageCreatedAt sql.NullTime
 	LastReadMessageID    sql.NullInt64
+	Folder               string
 	Archived             bool
 	Muted                bool
 	Deleted              bool
@@ -1284,6 +1301,7 @@ type MunicipiFilter struct {
 	AllowedMunicipiIDs  []int
 	AllowedProvinciaIDs []int
 	AllowedComarcaIDs   []int
+	AllowedNivellIDs    []int
 	AllowedPaisIDs      []int
 }
 
@@ -1303,6 +1321,7 @@ type MunicipiBrowseFilter struct {
 	AllowedMunicipiIDs  []int
 	AllowedProvinciaIDs []int
 	AllowedComarcaIDs   []int
+	AllowedNivellIDs    []int
 	AllowedPaisIDs      []int
 }
 
@@ -1447,6 +1466,7 @@ type ArxiuFilter struct {
 	AllowedMunicipiIDs  []int
 	AllowedProvinciaIDs []int
 	AllowedComarcaIDs   []int
+	AllowedNivellIDs    []int
 	AllowedPaisIDs      []int
 	AllowedEclesIDs     []int
 }
@@ -1564,6 +1584,7 @@ type LlibreFilter struct {
 	AllowedMunicipiIDs  []int
 	AllowedProvinciaIDs []int
 	AllowedComarcaIDs   []int
+	AllowedNivellIDs    []int
 	AllowedPaisIDs      []int
 	AllowedEclesIDs     []int
 }
@@ -1586,6 +1607,7 @@ type MediaAlbum struct {
 	Description       string
 	AlbumType         string
 	OwnerUserID       int
+	LlibreID          sql.NullInt64
 	ModerationStatus  string
 	Visibility        string
 	RestrictedGroupID sql.NullInt64
@@ -1805,6 +1827,8 @@ type TranscripcioPersonaRaw struct {
 	Cognom1Estat    string
 	Cognom2         string
 	Cognom2Estat    string
+	CognomSoltera   string
+	CognomSolteraEstat string
 	Sexe            string
 	SexeEstat       string
 	EdatText        string

@@ -5,19 +5,269 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "app.title" }}</title>
     {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/taula.css">
+    <link rel="stylesheet" href="/static/css/dashboard-pro.css">
 </head>
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
 
     <main class="contingut-principal">
-        <h1>{{ t .Lang "private.welcome" }}</h1>
-        <p>{{ t .Lang "private.loggedIn" }}</p>
+        <div class="container dash-wrap">
+            <div class="dash-top">
+                <div class="dash-title">
+                    <h1>Benvingut/da, <span id="dashUserName">{{ with .Data.User }}{{ if .Name }}{{ .Name }}{{ if .Surname }} {{ .Surname }}{{ end }}{{ else }}{{ .Usuari }}{{ end }}{{ else }}investigador/a{{ end }}</span></h1>
+                    <p>
+                        Aqui tens un acces rapid a les eines mes utils: cerca, contribucio, grups de treball i novetats del projecte.
+                        Aquesta pantalla es <strong>personalitzable</strong> (pots amagar widgets i reordenar-los).
+                    </p>
+                </div>
+
+                <div class="dash-actions">
+                    <button type="button" id="dashCustomizeBtn"><i class="fas fa-sliders"></i> Personalitza</button>
+                    {{ if or (index .Data "CanViewSearch") (index .Data "IsAdmin") }}
+                    <a class="primary" href="/cerca-avancada"><i class="fas fa-magnifying-glass"></i> Nova cerca</a>
+                    {{ end }}
+                    {{ if or (index .Data "CanViewEvents") (index .Data "IsAdmin") }}
+                    <a href="/historia/events"><i class="fas fa-newspaper"></i> Novetats i events</a>
+                    {{ end }}
+                </div>
+            </div>
+
+            <input type="hidden" id="dashCsrfToken" value="{{ .Data.CSRFToken }}">
+
+            <div class="dash-grid" id="dashGrid">
+                {{ $ws := index .Data.WidgetStates "quick-search" }}
+                <section class="widget span-6{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="quick-search" data-widget-title="Cerca rapida" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                    <div class="widget-head">
+                        <h2 data-widget-title><i class="fas fa-magnifying-glass"></i> Cerca rapida</h2>
+                        <div class="muted">Anar directe a la cerca global</div>
+                    </div>
+
+                    <div class="search-row">
+                        <input id="dashQuickSearch" type="text" placeholder="Nom, cognom, municipi, any..." aria-label="Cerca rapida">
+                        <button id="dashQuickSearchBtn" type="button"><i class="fas fa-arrow-right"></i> Cercar</button>
+                    </div>
+
+                    <div class="badges-row" aria-label="Suggeriments">
+                        <span class="badge"><i class="fas fa-location-dot"></i> Municipis</span>
+                        <span class="badge"><i class="fas fa-user"></i> Persones</span>
+                        <span class="badge"><i class="fas fa-book"></i> Registres</span>
+                    </div>
+                </section>
+
+                {{ $ws = index .Data.WidgetStates "shortcuts" }}
+                <section class="widget span-6{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="shortcuts" data-widget-title="Acces rapid" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                    <div class="widget-head">
+                        <h2 data-widget-title><i class="fas fa-bolt"></i> Acces rapid</h2>
+                        <div class="muted">Dreceres a les pantalles mes usades</div>
+                    </div>
+
+                    <div class="quick-actions">
+                        <a href="/persones"><i class="fas fa-users"></i> Persones</a>
+                        {{ if or (index .Data "CanViewLlibres") (index .Data "CanManageArxius") (index .Data "IsAdmin") }}
+                        <a href="/documentals/llibres"><i class="fas fa-book"></i> Llibres</a>
+                        {{ end }}
+                        {{ if or (index .Data "CanViewArxius") (index .Data "CanManageArxius") (index .Data "IsAdmin") }}
+                        <a href="/documentals/arxius"><i class="fas fa-archive"></i> Arxius</a>
+                        {{ end }}
+                        {{ if or (index .Data "CanViewMunicipis") (index .Data "CanManageTerritory") (index .Data "IsAdmin") }}
+                        <a href="/territori/municipis"><i class="fas fa-map"></i> Municipis</a>
+                        {{ end }}
+                        <a href="/cognoms"><i class="fas fa-signature"></i> Cognoms</a>
+                        {{ if or (index .Data "CanImportTemplates") (index .Data "CanManageArxius") (index .Data "IsAdmin") }}
+                        <a href="/importador/plantilles"><i class="fas fa-file-csv"></i> Plantilles CSV</a>
+                        {{ end }}
+                    </div>
+
+                    <p class="muted" style="margin-top:12px;line-height:1.55">
+                        Punt d'integracio: pots adaptar aquestes dreceres segons permisos i moduls activats.
+                    </p>
+                </section>
+
+                {{ $ws = index .Data.WidgetStates "activity" }}
+                <section class="widget span-8{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="activity" data-widget-title="La meva activitat" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                    <div class="widget-head">
+                        <h2 data-widget-title><i class="fas fa-chart-line"></i> La meva activitat</h2>
+                        <div class="muted">Ultimes contribucions i seguiment</div>
+                    </div>
+
+                    <ul class="list">
+                        <li>
+                            <div>
+                                <div class="label"><i class="fas fa-keyboard"></i> Indexacio</div>
+                                <div class="muted">3 registres transcrits</div>
+                            </div>
+                            <div class="meta">Avui</div>
+                        </li>
+                        <li>
+                            <div>
+                                <div class="label"><i class="fas fa-link"></i> Vincles</div>
+                                <div class="muted">1 relacio creada</div>
+                            </div>
+                            <div class="meta">Ahir</div>
+                        </li>
+                        <li>
+                            <div>
+                                <div class="label"><i class="fas fa-check-circle"></i> Validacio</div>
+                                <div class="muted">2 elements revisats</div>
+                            </div>
+                            <div class="meta">Aquesta setmana</div>
+                        </li>
+                    </ul>
+
+                    <p class="muted" style="margin-top:12px;line-height:1.55">
+                        Punt d'integracio: substituir aquests items per dades reals (API/DB) i afegir historial complet.
+                    </p>
+                </section>
+
+                {{ $ws = index .Data.WidgetStates "points" }}
+                <section class="widget span-4{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="points" data-widget-title="Punts i bescanvi" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                    <div class="widget-head">
+                        <h2 data-widget-title><i class="fas fa-coins"></i> Punts i bescanvi</h2>
+                        <div class="muted">Acces a documentacio</div>
+                    </div>
+
+                    <p style="margin:0;color:#3c4a57;line-height:1.55">
+                        Els punts s'acumulen amb contribucions (indexacio, validacio, aportacions) i es poden bescanviar per accedir
+                        a documentacio o col.leccions especifiques.
+                    </p>
+
+                    <div class="quick-actions" style="margin-top:12px">
+                        {{ if or (index .Data "CanViewArxius") (index .Data "CanManageArxius") (index .Data "IsAdmin") }}
+                        <a href="/documentals/arxius"><i class="fas fa-ticket"></i> Bescanvia punts</a>
+                        {{ end }}
+                        <a href="/perfil#punts"><i class="fas fa-user"></i> Veure el meu saldo</a>
+                    </div>
+                </section>
+
+                {{ $ws = index .Data.WidgetStates "groups" }}
+                <section class="widget span-6{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="groups" data-widget-title="Grups de treball" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                    <div class="widget-head">
+                        <h2 data-widget-title><i class="fas fa-people-group"></i> Grups de treball</h2>
+                        <div class="muted">Familia i col.laboradors</div>
+                    </div>
+
+                    <ul class="list">
+                        <li>
+                            <div>
+                                <div class="label"><i class="fas fa-users"></i> Familia Moya</div>
+                                <div class="muted">3 membres - 12 troballes</div>
+                            </div>
+                            <div class="meta">Actiu</div>
+                        </li>
+                        <li>
+                            <div>
+                                <div class="label"><i class="fas fa-users"></i> Investigacio Urgell</div>
+                                <div class="muted">5 membres - 2 linies obertes</div>
+                            </div>
+                            <div class="meta">Actiu</div>
+                        </li>
+                    </ul>
+
+                    <div class="quick-actions" style="margin-top:12px">
+                        {{ if or (index .Data "CanViewMessages") (index .Data "IsAdmin") }}
+                        <a href="/missatges"><i class="fas fa-plus"></i> Crear grup</a>
+                        <a href="/missatges"><i class="fas fa-list"></i> Veure tots</a>
+                        {{ end }}
+                    </div>
+                </section>
+
+                {{ $ws = index .Data.WidgetStates "blog" }}
+                <section class="widget span-6{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="blog" data-widget-title="Novetats del blog" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                    <div class="widget-head">
+                        <h2 data-widget-title><i class="fas fa-newspaper"></i> Novetats del blog</h2>
+                        <div class="muted">Eines i canvis recents</div>
+                    </div>
+
+                    <ul class="list">
+                        <li>
+                            <div>
+                                <div class="label">Nova eina d'indexacio assistida</div>
+                                <div class="muted">Millores de cerca i suggeriments</div>
+                            </div>
+                            <div class="meta">Fa 2 dies</div>
+                        </li>
+                        <li>
+                            <div>
+                                <div class="label">Actualitzacio del visor d'imatges</div>
+                                <div class="muted">Zoom mes rapid i millor rendiment</div>
+                            </div>
+                            <div class="meta">La setmana passada</div>
+                        </li>
+                    </ul>
+
+                    <div class="quick-actions" style="margin-top:12px">
+                        {{ if or (index .Data "CanViewEvents") (index .Data "IsAdmin") }}
+                        <a href="/historia/events"><i class="fas fa-arrow-right"></i> Anar a events</a>
+                        {{ end }}
+                        <a href="/ajuda"><i class="fas fa-circle-question"></i> Ajuda</a>
+                    </div>
+                </section>
+
+                {{ $ws = index .Data.WidgetStates "getting-started" }}
+                <section class="widget span-12{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="getting-started" data-widget-title="Comenca en 3 passos" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                    <div class="widget-head">
+                        <h2 data-widget-title><i class="fas fa-flag"></i> Comenca en 3 passos</h2>
+                        <div class="muted">Configuracio rapida</div>
+                    </div>
+
+                    <div class="cards-grid">
+                        <article class="card" style="grid-column: span 4;">
+                            <div class="card-head">
+                                <div class="card-ico"><i class="fas fa-user-pen"></i></div>
+                                <h3>Completa el perfil</h3>
+                            </div>
+                            <p>Afegeix preferencies, idioma i configuracio basica per adaptar l'experiencia.</p>
+                        </article>
+
+                        <article class="card" style="grid-column: span 4;">
+                            <div class="card-head">
+                                <div class="card-ico"><i class="fas fa-star"></i></div>
+                                <h3>Defineix favorits</h3>
+                            </div>
+                            <p>Marca municipis, arxius o llibres i accedeix-hi rapidament des del menu.</p>
+                        </article>
+
+                        <article class="card" style="grid-column: span 4;">
+                            <div class="card-head">
+                                <div class="card-ico"><i class="fas fa-hand-holding-heart"></i></div>
+                                <h3>Fes la primera contribucio</h3>
+                            </div>
+                            <p>Indexa un registre o valida una dada. Cada aportacio ajuda a tota la comunitat.</p>
+                        </article>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <div class="modal-pro" id="dashCustomizeModal" role="dialog" aria-modal="true" aria-labelledby="dashCustomizeTitle">
+            <div class="modal-card">
+                <div class="modal-head">
+                    <h3 id="dashCustomizeTitle"><i class="fas fa-sliders"></i> Personalitza la pagina d'inici</h3>
+                    <button class="close" type="button" id="dashCustomizeClose"><i class="fas fa-xmark"></i> Tancar</button>
+                </div>
+
+                <div class="modal-body">
+                    <p style="margin:0 0 12px;color:#3c4a57;line-height:1.55">
+                        Arrossega per reordenar i marca/desmarca per mostrar o amagar widgets.
+                    </p>
+
+                    <ul class="widget-list" id="dashWidgetList"></ul>
+                </div>
+
+                <div class="modal-foot">
+                    <button type="button" id="dashCustomizeReset"><i class="fas fa-rotate-left"></i> Restablir</button>
+                    <button type="button" class="primary" id="dashCustomizeSave"><i class="fas fa-check"></i> Desar</button>
+                </div>
+            </div>
+        </div>
     </main>
 
     {{ template "footer" . }}
 
     {{ template "scripts-private" . }}
+    <script src="/static/js/dashboard-home.js?v=2"></script>
 </body>
 </html>
 {{ end }}

@@ -28,6 +28,10 @@ type PersonaRequest struct {
 	ModeracioMotiu    string `json:"motiu"`
 }
 
+func (a *App) requirePersonesView(w http.ResponseWriter, r *http.Request) (*db.User, bool) {
+	return a.requirePermissionKeyAnyScope(w, r, permKeyPersonsView)
+}
+
 // Form per crear/editar persona (UI bàsica)
 func (a *App) PersonaForm(w http.ResponseWriter, r *http.Request) {
 	user, perms, ok := a.requirePermission(w, r, permCreatePerson)
@@ -325,9 +329,8 @@ func (a *App) renderPersonaFormError(w http.ResponseWriter, r *http.Request, id 
 
 // API pública: llista de persones publicades
 func (a *App) ListPersonesPublic(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.VerificarSessio(r)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyPersonsView)
 	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
@@ -354,11 +357,11 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user := userFromContext(r)
-	perms := db.PolicyPermissions{}
-	if user != nil {
-		perms = a.getPermissionsForUser(user.ID)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyPersonsView)
+	if !ok || user == nil {
+		return
 	}
+	perms := a.getPermissionsForUser(user.ID)
 	lang := ResolveLang(r)
 	p, err := a.DB.GetPersona(id)
 	if err != nil || p == nil || p.ModeracioEstat != "publicat" {
@@ -936,6 +939,9 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 
 // Vista d'arbre genealògic per persona (només publicades) per usuaris autenticats
 func (a *App) PersonaArbre(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePersonesView(w, r); !ok {
+		return
+	}
 	id := extractID(r.URL.Path)
 	if id == 0 {
 		http.NotFound(w, r)
@@ -1016,6 +1022,9 @@ func (a *App) PersonaArbre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) PersonaRegistres(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePersonesView(w, r); !ok {
+		return
+	}
 	id := extractID(r.URL.Path)
 	if id == 0 {
 		http.NotFound(w, r)

@@ -78,6 +78,7 @@
                                             <option value="baptisme">{{ t .Lang "importer.editor.record_type.baptisme" }}</option>
                                             <option value="obit">{{ t .Lang "importer.editor.record_type.obit" }}</option>
                                             <option value="matrimoni">{{ t .Lang "importer.editor.record_type.matrimoni" }}</option>
+                                            <option value="padro">{{ t .Lang "importer.editor.record_type.padro" }}</option>
                                             <option value="generic">{{ t .Lang "importer.editor.record_type.generic" }}</option>
                                         </select>
                                     </div>
@@ -528,11 +529,14 @@
                     { value: "person.batejat", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.batejat") }} },
                     { value: "person.pare", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.pare") }} },
                     { value: "person.mare", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.mare") }} },
+                    { value: "person.mare.cognom_soltera", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.mare_cognom_soltera") }} },
                     { value: "person.pare.ofici", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.pare_ofici") }} },
                     { value: "person.avi_patern", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.avi_patern") }} },
                     { value: "person.avia_paterna", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.avia_paterna") }} },
+                    { value: "person.avia_paterna.cognom_soltera", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.avia_paterna_cognom_soltera") }} },
                     { value: "person.avi_matern", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.avi_matern") }} },
                     { value: "person.avia_materna", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.avia_materna") }} },
+                    { value: "person.avia_materna.cognom_soltera", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.avia_materna_cognom_soltera") }} },
                     { value: "person.padri", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.padri") }} },
                     { value: "person.padrina", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.padrina") }} },
                     { value: "attr.data_bateig.date_or_text_with_quality", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.data_bateig") }} },
@@ -546,6 +550,7 @@
                     { value: "person.difunt", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.difunt") }} },
                     { value: "person.pare", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.pare") }} },
                     { value: "person.mare", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.mare") }} },
+                    { value: "person.mare.cognom_soltera", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.mare_cognom_soltera") }} },
                     { value: "person.parella", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.parella") }} },
                     { value: "person.difunt.estat_civil", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.estat_civil") }} },
                     { value: "attr.data_defuncio.date_or_text_with_quality", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.data_defuncio") }} },
@@ -563,14 +568,37 @@
                     { value: "person.nuvi.edat", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.nuvi_edat") }} },
                     { value: "person.pare_nuvi", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.pare_nuvi") }} },
                     { value: "person.mare_nuvi", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.mare_nuvi") }} },
+                    { value: "person.mare_nuvi.cognom_soltera", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.mare_nuvi_cognom_soltera") }} },
                     { value: "person.novia", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.novia") }} },
                     { value: "person.novia.ofici", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.novia_ofici") }} },
                     { value: "person.novia.edat", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.novia_edat") }} },
                     { value: "person.pare_novia", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.pare_novia") }} },
                     { value: "person.mare_novia", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.mare_novia") }} },
+                    { value: "person.mare_novia.cognom_soltera", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.mare_novia_cognom_soltera") }} },
                     { value: "person.testimoni1", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.testimoni1") }} },
                     { value: "person.testimoni2", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.testimoni2") }} },
                     { value: "attr.data_matrimoni.date_or_text_with_quality", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.data_matrimoni") }} }
+                ]
+            },
+            padro: {
+                label: {{ printf "%q" (t .Lang "importer.editor.targets.group.padro") }},
+                fields: [
+                    { value: "person.cap_familia", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.cap_familia") }} },
+                    { value: "person.cap_familia.sexe", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.sexe") }} },
+                    { value: "person.cap_familia.edat", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.edat") }} },
+                    { value: "person.cap_familia.estat_civil", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.estat_civil") }} },
+                    { value: "person.cap_familia.ofici", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.ofici") }} },
+                    { value: "person.cap_familia.casa", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.casa") }} },
+                    { value: "attr.data_naixement.date_or_text_with_quality", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.data_naixement") }} },
+                    { value: "attr.carrer.text", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.carrer") }} },
+                    { value: "attr.numero_casa.text", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.numero_casa") }} },
+                    { value: "attr.adreca.text", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.adreca") }} },
+                    { value: "attr.localitat.text", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.localitat") }} },
+                    { value: "attr.procedencia.text", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.procedencia") }} },
+                    { value: "attr.alfabetitzat.bool", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.alfabetitzat") }} },
+                    { value: "attr.sap_llegir.bool", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.sap_llegir") }} },
+                    { value: "attr.sap_escriure.bool", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.sap_escriure") }} },
+                    { value: "attr.condicio_padro.text", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.condicio_padro") }} }
                 ]
             }
         };
@@ -594,6 +622,8 @@
             { value: "parse_person_from_nom", label: "parse_person_from_nom" },
             { value: "parse_person_from_cognoms_marcmoia_v2", label: "parse_person_from_cognoms_marcmoia_v2" },
             { value: "parse_person_from_nom_marcmoia_v2", label: "parse_person_from_nom_marcmoia_v2" },
+            { value: "parse_person_from_cognoms_marcmoia_v2_maternal_first", label: "parse_person_from_cognoms_marcmoia_v2_maternal_first" },
+            { value: "parse_person_from_nom_marcmoia_v2_maternal_first", label: "parse_person_from_nom_marcmoia_v2_maternal_first" },
             { value: "split_couple_i", label: "split_couple_i" },
             { value: "set_default", label: "set_default" },
             { value: "map_values", label: "map_values" },
@@ -615,7 +645,9 @@
             parse_person_from_cognoms: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_person_from_cognoms") }},
             parse_person_from_nom: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_person_from_nom") }},
             parse_person_from_cognoms_marcmoia_v2: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_person_from_cognoms_marcmoia_v2") }},
+            parse_person_from_cognoms_marcmoia_v2_maternal_first: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_person_from_cognoms_marcmoia_v2_maternal_first") }},
             parse_person_from_nom_marcmoia_v2: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_person_from_nom_marcmoia_v2") }},
+            parse_person_from_nom_marcmoia_v2_maternal_first: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_person_from_nom_marcmoia_v2_maternal_first") }},
             split_couple_i: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.split_couple_i") }},
             set_default: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.set_default") }},
             map_values: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.map_values") }},
@@ -1072,9 +1104,9 @@
                     return `<option value="${opt.value}">${opt.label}</option>`;
                 }).join("");
                 const helpText = buildTransformHelpText(tr.name || "", colIndex, targetValue);
+                const needsParam = transformNeedsParam(tr.name || "");
                 const hintText = needsParam ? buildTransformParamHint(tr.name || "") : "";
                 const exampleText = buildTransformExampleText(tr.name || "", tr.value || "");
-                const needsParam = transformNeedsParam(tr.name || "");
                 row.innerHTML = `
                     <div class="transform-row-fields">
                         <select data-field="transform-name">${options}</select>
@@ -1260,7 +1292,7 @@
                 if (idx % 3 === 2) return "¿12/03/1890";
                 return "12/03/1890";
             }
-            if (names.indexOf("parse_person_from_cognoms") !== -1 || names.indexOf("parse_person_from_nom") !== -1 || names.indexOf("parse_person_from_cognoms_marcmoia_v2") !== -1 || names.indexOf("parse_person_from_nom_marcmoia_v2") !== -1) {
+            if (names.indexOf("parse_person_from_cognoms") !== -1 || names.indexOf("parse_person_from_nom") !== -1 || names.indexOf("parse_person_from_cognoms_marcmoia_v2") !== -1 || names.indexOf("parse_person_from_nom_marcmoia_v2") !== -1 || names.indexOf("parse_person_from_cognoms_marcmoia_v2_maternal_first") !== -1 || names.indexOf("parse_person_from_nom_marcmoia_v2_maternal_first") !== -1) {
                 if (idx % 2 === 1) return "¿Maria Puig (Valls)";
                 return "Puig i Ferrer (Valls)";
             }

@@ -41,38 +41,115 @@
             </header>
         </section>
 
-        <section class="card messages-thread-card">
-            {{ if .Data.Messages }}
-                <div class="messages-thread-list">
-                    {{ range .Data.Messages }}
-                        <div class="message-bubble {{ if .IsOwn }}own{{ end }}">
-                            <div class="message-bubble-header">
-                                <span class="message-sender">{{ .Sender }}</span>
-                                <span class="message-date">{{ .CreatedAt }}</span>
-                            </div>
-                            <p class="message-body">{{ .Body }}</p>
-                        </div>
+        <section class="messages-layout">
+            <aside class="card messages-sidebar">
+                <header class="card-header">
+                    <div>
+                        <h2>Converses</h2>
+                        <p class="muted">Salta entre usuaris i carpetes</p>
+                    </div>
+                    <div class="messages-sidebar-search">
+                        <input type="text" id="messagesSidebarSearch" placeholder="Filtra converses">
+                    </div>
+                </header>
+                <div class="messages-folders">
+                    {{ $currentFolder := .Data.CurrentFolder }}
+                    {{ $threadBase := print "/missatges/fil/" .Data.ThreadID }}
+                    <a class="folder-chip {{ if eq $currentFolder "" }}is-active{{ end }}" href="{{ $threadBase }}">Totes</a>
+                    <a class="folder-chip {{ if eq $currentFolder .Data.FolderInboxToken }}is-active{{ end }}" href="{{ $threadBase }}?folder={{ .Data.FolderInboxToken }}">Sense carpeta</a>
+                    {{ range .Data.Folders }}
+                        <a class="folder-chip {{ if eq $currentFolder . }}is-active{{ end }}" href="{{ $threadBase }}?folder={{ . | urlquery }}">{{ . }}</a>
                     {{ end }}
                 </div>
-            {{ else }}
-                <p class="muted">{{ t .Lang "messages.thread.empty" }}</p>
-            {{ end }}
-            {{ if .Data.CanSend }}
-                <form class="messages-form" method="post" action="/missatges/fil/{{ .Data.ThreadID }}/enviar">
-                    <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
-                    <label for="threadMessageBody">{{ t .Lang "messages.form.body" }}</label>
-                    <textarea id="threadMessageBody" name="body" rows="4" maxlength="{{ .Data.MessageMaxLen }}"></textarea>
-                    <div class="messages-form-actions">
-                        <button class="boto-primari" type="submit">{{ t .Lang "messages.form.send" }}</button>
+                <div class="messages-sidebar-list">
+                    {{ range .Data.Threads }}
+                        <a class="messages-sidebar-item {{ if .IsActive }}is-active{{ end }} {{ if .Unread }}is-unread{{ end }}" href="{{ .ThreadURL }}">
+                            <div class="messages-sidebar-main">
+                                <span class="messages-sidebar-name">{{ .OtherLabel }}</span>
+                                <span class="messages-sidebar-snippet">{{ .LastMessage }}</span>
+                            </div>
+                            <div class="messages-sidebar-meta">
+                                {{ if .Unread }}<span class="messages-sidebar-dot"></span>{{ end }}
+                                <span class="messages-sidebar-date">{{ .LastMessageAt }}</span>
+                            </div>
+                        </a>
+                    {{ end }}
+                </div>
+            </aside>
+
+            <section class="card messages-thread-card">
+                <div class="messages-thread-tools">
+                    <form class="messages-folder-form" method="post" action="/missatges/fil/{{ .Data.ThreadID }}/carpeta" data-folder-form>
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                        <input type="hidden" name="return" value="/missatges/fil/{{ .Data.ThreadID }}{{ if .Data.CurrentFolder }}?folder={{ .Data.CurrentFolder | urlquery }}{{ end }}">
+                        <label class="messages-tool-label" for="threadFolderInput">Carpeta</label>
+                        <input id="threadFolderInput" name="folder" list="dmFolders" placeholder="Escriu per crear carpeta" value="{{ .Data.CurrentFolderName }}">
+                        <datalist id="dmFolders">
+                            {{ range .Data.Folders }}<option value="{{ . }}"></option>{{ end }}
+                        </datalist>
+                        <button class="boto-secundari" type="submit">Desar</button>
+                        <button class="boto-secundari" type="button" data-action="new-folder" data-folder-input="threadFolderInput">Nova carpeta</button>
+                    </form>
+                </div>
+                {{ if .Data.Messages }}
+                    <div class="messages-thread-list">
+                        {{ range .Data.Messages }}
+                            <div class="message-bubble {{ if .IsOwn }}own{{ end }}">
+                                <div class="message-bubble-header">
+                                    <span class="message-sender">
+                                        {{ if gt .SenderID 0 }}<a href="/u/{{ .SenderID }}">{{ .Sender }}</a>{{ else }}{{ .Sender }}{{ end }}
+                                    </span>
+                                    <span class="message-date">{{ .CreatedAt }}</span>
+                                </div>
+                                <div class="message-body">{{ messageHTML .Body }}</div>
+                            </div>
+                        {{ end }}
                     </div>
-                </form>
-            {{ else }}
-                <p class="message-alert">{{ .Data.SendBlocked }}</p>
-            {{ end }}
+                {{ else }}
+                    <p class="muted">{{ t .Lang "messages.thread.empty" }}</p>
+                {{ end }}
+                {{ if .Data.CanSend }}
+                    <form class="messages-form" method="post" action="/missatges/fil/{{ .Data.ThreadID }}/enviar">
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                        <label for="threadMessageBody">{{ t .Lang "messages.form.body" }}</label>
+                        <div class="messages-toolbar" data-message-toolbar data-target="threadMessageBody">
+                            <div class="messages-tool-group">
+                                <button type="button" class="messages-tool-btn" data-action="bold" title="Negreta"><i class="fas fa-bold"></i></button>
+                                <button type="button" class="messages-tool-btn" data-action="italic" title="Cursiva"><i class="fas fa-italic"></i></button>
+                                <button type="button" class="messages-tool-btn" data-action="indent" title="Identar"><i class="fas fa-indent"></i></button>
+                            </div>
+                            <div class="messages-tool-group">
+                                <label class="messages-tool-label" for="threadFontSize">Mida</label>
+                                <select id="threadFontSize" class="messages-tool-select" data-action="size">
+                                    <option value="">Normal</option>
+                                    <option value="small">Petita</option>
+                                    <option value="large">Gran</option>
+                                    <option value="xl">Molt gran</option>
+                                </select>
+                            </div>
+                            <div class="messages-tool-group">
+                                <button type="button" class="messages-tool-btn" data-action="table" title="Taula"><i class="fas fa-table"></i></button>
+                                <button type="button" class="messages-tool-btn" data-action="table-row" title="Afegir fila"><i class="fas fa-plus"></i></button>
+                                <button type="button" class="messages-tool-btn" data-action="table-col" title="Afegir columna"><i class="fas fa-columns"></i></button>
+                                <button type="button" class="messages-tool-btn" data-action="table-delete" title="Eliminar taula"><i class="fas fa-trash-alt"></i></button>
+                                <button type="button" class="messages-tool-btn" data-action="link" title="Enllac"><i class="fas fa-link"></i></button>
+                            </div>
+                        </div>
+                        <div class="messages-editor" contenteditable="true" data-editor="threadMessageBody" data-placeholder="Escriu el missatge..."></div>
+                        <textarea id="threadMessageBody" name="body" class="messages-editor-hidden" rows="4" maxlength="{{ .Data.MessageMaxLen }}"></textarea>
+                        <div class="messages-form-actions">
+                            <button class="boto-primari" type="submit">{{ t .Lang "messages.form.send" }}</button>
+                        </div>
+                    </form>
+                {{ else }}
+                    <p class="message-alert">{{ .Data.SendBlocked }}</p>
+                {{ end }}
+            </section>
         </section>
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/messages.js?v=1"></script>
 </body>
 </html>
 {{ end }}

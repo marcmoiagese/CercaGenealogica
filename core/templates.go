@@ -49,6 +49,7 @@ var templateFuncs = template.FuncMap{
 	"upper": func(s string) string {
 		return strings.ToUpper(s)
 	},
+	"messageHTML": renderMessageHTML,
 	"diffField": func(v interface{}) template.HTML {
 		var fd fieldDiff
 		switch t := v.(type) {
@@ -495,6 +496,13 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	if !ok {
 		return data
 	}
+	permKeys, permKeysFound := permissionKeysFromContext(r)
+	hasKey := func(key string) bool {
+		if !permKeysFound {
+			return false
+		}
+		return permKeys[key]
+	}
 	if _, found := m["CanManageArxius"]; !found {
 		m["CanManageArxius"] = perms.Admin || perms.CanManageArchives
 	}
@@ -515,6 +523,94 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	}
 	if _, found := m["IsAdmin"]; !found {
 		m["IsAdmin"] = perms.Admin
+	}
+	if _, found := m["CanViewArxius"]; !found {
+		m["CanViewArxius"] = perms.Admin || perms.CanManageArchives || hasKey(permKeyDocumentalsArxiusView) ||
+			hasKey(permKeyDocumentalsArxiusCreate) || hasKey(permKeyDocumentalsArxiusEdit) || hasKey(permKeyDocumentalsArxiusDelete) ||
+			hasKey(permKeyDocumentalsArxiusImport) || hasKey(permKeyDocumentalsArxiusExport)
+	}
+	if _, found := m["CanViewHome"]; !found {
+		m["CanViewHome"] = perms.Admin || hasKey(permKeyHomeView)
+	}
+	if _, found := m["CanViewMessages"]; !found {
+		m["CanViewMessages"] = perms.Admin || hasKey(permKeyMessagesView)
+	}
+	if _, found := m["CanViewSearch"]; !found {
+		m["CanViewSearch"] = perms.Admin || hasKey(permKeySearchAdvancedView)
+	}
+	if _, found := m["CanViewRanking"]; !found {
+		m["CanViewRanking"] = perms.Admin || hasKey(permKeyRankingView)
+	}
+	if _, found := m["CanViewPersones"]; !found {
+		m["CanViewPersones"] = perms.Admin || perms.CanCreatePerson || hasKey(permKeyPersonsView)
+	}
+	if _, found := m["CanCreatePerson"]; !found {
+		m["CanCreatePerson"] = perms.Admin || perms.CanCreatePerson
+	}
+	if _, found := m["CanViewCognoms"]; !found {
+		m["CanViewCognoms"] = perms.Admin || hasKey(permKeyCognomsView)
+	}
+	if _, found := m["CanViewMedia"]; !found {
+		m["CanViewMedia"] = perms.Admin || hasKey(permKeyMediaView)
+	}
+	if _, found := m["CanViewEvents"]; !found {
+		m["CanViewEvents"] = perms.Admin || hasKey(permKeyEventsView)
+	}
+	if _, found := m["CanViewLlibres"]; !found {
+		m["CanViewLlibres"] = perms.Admin || perms.CanManageArchives || hasKey(permKeyDocumentalsLlibresView) ||
+			hasKey(permKeyDocumentalsLlibresCreate) || hasKey(permKeyDocumentalsLlibresEdit) || hasKey(permKeyDocumentalsLlibresDelete) ||
+			hasKey(permKeyDocumentalsLlibresImport) || hasKey(permKeyDocumentalsLlibresExport) || hasKey(permKeyDocumentalsLlibresExportCSV) ||
+			hasKey(permKeyDocumentalsLlibresImportCSV) || hasKey(permKeyDocumentalsLlibresViewRegistres) || hasKey(permKeyDocumentalsLlibresBulkIndex) ||
+			hasKey(permKeyDocumentalsLlibresMarkIndexed) || hasKey(permKeyDocumentalsLlibresRecalcIndex) ||
+			hasKey(permKeyDocumentalsRegistresEdit) || hasKey(permKeyDocumentalsRegistresEditInline) ||
+			hasKey(permKeyDocumentalsRegistresLinkPerson) || hasKey(permKeyDocumentalsRegistresConvertToPerson)
+	}
+	if _, found := m["CanViewDocumentals"]; !found {
+		m["CanViewDocumentals"] = m["CanViewArxius"].(bool) || m["CanViewLlibres"].(bool)
+	}
+	if _, found := m["CanViewImportTemplates"]; !found {
+		m["CanViewImportTemplates"] = perms.Admin || hasKey(permKeyImportTemplatesView) ||
+			hasKey(permKeyDocumentalsLlibresImportCSV) || hasKey(permKeyDocumentalsLlibresImport)
+	}
+	if _, found := m["CanImportTemplates"]; !found {
+		m["CanImportTemplates"] = perms.Admin || perms.CanManageArchives ||
+			hasKey(permKeyDocumentalsLlibresImportCSV) || hasKey(permKeyDocumentalsLlibresImport)
+	}
+	if _, found := m["CanIndexRegistres"]; !found {
+		m["CanIndexRegistres"] = perms.Admin || perms.CanManageArchives ||
+			hasKey(permKeyDocumentalsRegistresEdit) || hasKey(permKeyDocumentalsRegistresEditInline)
+	}
+	if _, found := m["CanBulkIndex"]; !found {
+		m["CanBulkIndex"] = perms.Admin || perms.CanManageArchives || hasKey(permKeyDocumentalsLlibresBulkIndex)
+	}
+	if _, found := m["CanViewNivells"]; !found {
+		m["CanViewNivells"] = perms.Admin || perms.CanManageTerritory ||
+			hasKey(permKeyTerritoriNivellsView) || hasKey(permKeyTerritoriNivellsCreate) || hasKey(permKeyTerritoriNivellsEdit) ||
+			hasKey(permKeyTerritoriNivellsRebuild)
+	}
+	if _, found := m["CanViewMunicipis"]; !found {
+		m["CanViewMunicipis"] = perms.Admin || perms.CanManageTerritory ||
+			hasKey(permKeyTerritoriMunicipisView) || hasKey(permKeyTerritoriMunicipisCreate) || hasKey(permKeyTerritoriMunicipisEdit) ||
+			hasKey(permKeyTerritoriMunicipisMapesView) || hasKey(permKeyTerritoriMunicipisMapesCreate) || hasKey(permKeyTerritoriMunicipisMapesEdit) ||
+			hasKey(permKeyTerritoriMunicipisMapesSubmit) || hasKey(permKeyTerritoriMunicipisMapesModerate) ||
+			hasKey(permKeyTerritoriMunicipisHistoriaCreate) || hasKey(permKeyTerritoriMunicipisHistoriaEdit) ||
+			hasKey(permKeyTerritoriMunicipisHistoriaSubmit) || hasKey(permKeyTerritoriMunicipisHistoriaModerate) ||
+			hasKey(permKeyTerritoriMunicipisAnecdotesCreate) || hasKey(permKeyTerritoriMunicipisAnecdotesEdit) ||
+			hasKey(permKeyTerritoriMunicipisAnecdotesSubmit) || hasKey(permKeyTerritoriMunicipisAnecdotesComment) ||
+			hasKey(permKeyTerritoriMunicipisAnecdotesModerate)
+	}
+	if _, found := m["CanViewEcles"]; !found {
+		m["CanViewEcles"] = perms.Admin || perms.CanManageEclesia ||
+			hasKey(permKeyTerritoriEclesView) || hasKey(permKeyTerritoriEclesCreate) || hasKey(permKeyTerritoriEclesEdit) ||
+			hasKey(permKeyTerritoriEclesImportJSON)
+	}
+	if _, found := m["CanViewTerritory"]; !found {
+		m["CanViewTerritory"] = m["CanViewNivells"].(bool) || m["CanViewMunicipis"].(bool) || m["CanViewEcles"].(bool)
+	}
+	if _, found := m["UnreadMessagesCount"]; !found {
+		if count, ok := unreadMessagesCountFromContext(r); ok {
+			m["UnreadMessagesCount"] = count
+		}
 	}
 	return m
 }

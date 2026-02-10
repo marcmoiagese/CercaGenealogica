@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -22,6 +23,17 @@ const (
 	permKeyAdminPuntsEdit       = "admin.punts.regles.edit"
 	permKeyAdminAchievementsAdd  = "admin.achievements.add"
 	permKeyAdminAchievementsEdit = "admin.achievements.edit"
+
+	permKeyHomeView            = "home.view"
+	permKeyMessagesView        = "messages.view"
+	permKeySearchAdvancedView  = "search.advanced.view"
+	permKeyRankingView         = "ranking.view"
+	permKeyPersonsView         = "persons.view"
+	permKeyCognomsView         = "cognoms.view"
+	permKeyMediaView           = "media.view"
+	permKeyImportTemplatesView = "import.templates.view"
+	permKeyEventsView          = "events.view"
+	permKeyWikiRevert          = "wiki.revert"
 
 	permKeyTerritoriPaisosView      = "territori.paisos.view"
 	permKeyTerritoriPaisosCreate    = "territori.paisos.create"
@@ -89,6 +101,16 @@ var permissionCatalogKeys = []string{
 	permKeyAdminPuntsEdit,
 	permKeyAdminAchievementsAdd,
 	permKeyAdminAchievementsEdit,
+	permKeyHomeView,
+	permKeyMessagesView,
+	permKeySearchAdvancedView,
+	permKeyRankingView,
+	permKeyPersonsView,
+	permKeyCognomsView,
+	permKeyMediaView,
+	permKeyImportTemplatesView,
+	permKeyEventsView,
+	permKeyWikiRevert,
 	permKeyTerritoriPaisosView,
 	permKeyTerritoriPaisosCreate,
 	permKeyTerritoriPaisosEdit,
@@ -149,8 +171,7 @@ type scopeOption struct {
 var permissionScopeOptions = []scopeOption{
 	{Value: ScopeGlobal, LabelKey: "policies.grants.scope.global"},
 	{Value: ScopePais, LabelKey: "policies.grants.scope.pais"},
-	{Value: ScopeProvincia, LabelKey: "policies.grants.scope.provincia"},
-	{Value: ScopeComarca, LabelKey: "policies.grants.scope.comarca"},
+	{Value: ScopeNivell, LabelKey: "policies.grants.scope.nivell"},
 	{Value: ScopeMunicipi, LabelKey: "policies.grants.scope.municipi"},
 	{Value: ScopeEcles, LabelKey: "policies.grants.scope.entitat_eclesiastica"},
 	{Value: ScopeArxiu, LabelKey: "policies.grants.scope.arxiu"},
@@ -262,6 +283,7 @@ const (
 	ScopeProvincia ScopeType = "provincia"
 	ScopeComarca   ScopeType = "comarca"
 	ScopeMunicipi  ScopeType = "municipi"
+	ScopeNivell    ScopeType = "nivell"
 	ScopeEcles     ScopeType = "entitat_eclesiastica"
 	ScopeArxiu     ScopeType = "arxiu"
 	ScopeLlibre    ScopeType = "llibre"
@@ -272,6 +294,7 @@ type PermissionTarget struct {
 	ProvinciaID *int
 	ComarcaID   *int
 	MunicipiID  *int
+	NivellIDs   []int
 	EclesID     *int
 	ArxiuID     *int
 	LlibreID    *int
@@ -289,6 +312,59 @@ type permissionSnapshot struct {
 	grants  map[string][]compiledGrant
 }
 
+type permKeysContextKey string
+
+const permissionKeysKey permKeysContextKey = "permission_keys"
+
+func permissionKeysFromContext(r *http.Request) (map[string]bool, bool) {
+	if r == nil {
+		return nil, false
+	}
+	if val := r.Context().Value(permissionKeysKey); val != nil {
+		if keys, ok := val.(map[string]bool); ok {
+			return keys, true
+		}
+	}
+	return nil, false
+}
+
+func (a *App) withPermissionKeys(r *http.Request, keys map[string]bool) *http.Request {
+	if r == nil {
+		return r
+	}
+	if keys == nil {
+		keys = map[string]bool{}
+	}
+	return r.WithContext(context.WithValue(r.Context(), permissionKeysKey, keys))
+}
+
+func (a *App) permissionKeysForUser(userID int) map[string]bool {
+	keys := map[string]bool{}
+	if userID == 0 || a == nil {
+		return keys
+	}
+	snap, err := a.getPermissionSnapshot(userID)
+	if err != nil {
+		return keys
+	}
+	if snap.isAdmin {
+		for _, key := range permissionCatalogKeys {
+			keys[key] = true
+		}
+		return keys
+	}
+	for key, grants := range snap.grants {
+		if len(grants) == 0 {
+			continue
+		}
+		if !isKnownPermissionKey(key) {
+			continue
+		}
+		keys[key] = true
+	}
+	return keys
+}
+
 type listScopeFilter struct {
 	hasGlobal    bool
 	arxiuIDs     []int
@@ -296,13 +372,15 @@ type listScopeFilter struct {
 	municipiIDs  []int
 	provinciaIDs []int
 	comarcaIDs   []int
+	nivellIDs    []int
 	paisIDs      []int
 	eclesIDs     []int
 }
 
 func (f listScopeFilter) isEmpty() bool {
 	return len(f.arxiuIDs) == 0 && len(f.llibreIDs) == 0 && len(f.municipiIDs) == 0 &&
-		len(f.provinciaIDs) == 0 && len(f.comarcaIDs) == 0 && len(f.paisIDs) == 0 && len(f.eclesIDs) == 0
+		len(f.provinciaIDs) == 0 && len(f.comarcaIDs) == 0 && len(f.nivellIDs) == 0 &&
+		len(f.paisIDs) == 0 && len(f.eclesIDs) == 0
 }
 
 type permCacheKey struct {
@@ -529,6 +607,8 @@ func parseScopeType(raw string) (ScopeType, bool) {
 		return ScopeComarca, true
 	case "municipi":
 		return ScopeMunicipi, true
+	case "nivell":
+		return ScopeNivell, true
 	case "entitat_eclesiastica":
 		return ScopeEcles, true
 	case "arxiu":
@@ -548,6 +628,8 @@ func (t PermissionTarget) mostSpecificScope() ScopeType {
 		return ScopeArxiu
 	case t.MunicipiID != nil:
 		return ScopeMunicipi
+	case len(t.NivellIDs) > 0:
+		return ScopeNivell
 	case t.ComarcaID != nil:
 		return ScopeComarca
 	case t.ProvinciaID != nil:
@@ -561,6 +643,18 @@ func (t PermissionTarget) mostSpecificScope() ScopeType {
 	}
 }
 
+func (t PermissionTarget) mostSpecificNivellID() int {
+	if len(t.NivellIDs) == 0 {
+		return 0
+	}
+	for i := len(t.NivellIDs) - 1; i >= 0; i-- {
+		if t.NivellIDs[i] > 0 {
+			return t.NivellIDs[i]
+		}
+	}
+	return 0
+}
+
 func (t PermissionTarget) idForScope(scope ScopeType) *int {
 	switch scope {
 	case ScopePais:
@@ -571,6 +665,8 @@ func (t PermissionTarget) idForScope(scope ScopeType) *int {
 		return t.ComarcaID
 	case ScopeMunicipi:
 		return t.MunicipiID
+	case ScopeNivell:
+		return nil
 	case ScopeEcles:
 		return t.EclesID
 	case ScopeArxiu:
@@ -636,6 +732,20 @@ func grantMatchesTarget(grant compiledGrant, target PermissionTarget) bool {
 	if grant.scopeType == ScopeGlobal {
 		return true
 	}
+	if grant.scopeType == ScopeNivell {
+		if len(target.NivellIDs) == 0 {
+			return false
+		}
+		if !grant.includeChildren {
+			return target.mostSpecificNivellID() == grant.scopeID
+		}
+		for _, id := range target.NivellIDs {
+			if id == grant.scopeID {
+				return true
+			}
+		}
+		return false
+	}
 	if grant.scopeType == ScopeArxiu && len(target.ArxiuIDs) > 0 {
 		for _, id := range target.ArxiuIDs {
 			if id == grant.scopeID {
@@ -662,6 +772,17 @@ func grantAppliesToListScope(grant compiledGrant, listScope ScopeType) bool {
 	}
 	if grant.scopeType == listScope {
 		return true
+	}
+	if grant.scopeType == ScopeNivell {
+		if !grant.includeChildren {
+			return false
+		}
+		switch listScope {
+		case ScopeMunicipi, ScopeArxiu, ScopeLlibre:
+			return true
+		default:
+			return false
+		}
 	}
 	if !grant.includeChildren {
 		return false
@@ -767,6 +888,8 @@ func (a *App) buildListScopeFilter(userID int, permKey string, listScope ScopeTy
 			filter.provinciaIDs = append(filter.provinciaIDs, g.scopeID)
 		case ScopeComarca:
 			filter.comarcaIDs = append(filter.comarcaIDs, g.scopeID)
+		case ScopeNivell:
+			filter.nivellIDs = append(filter.nivellIDs, g.scopeID)
 		case ScopePais:
 			filter.paisIDs = append(filter.paisIDs, g.scopeID)
 		case ScopeEcles:
@@ -778,6 +901,7 @@ func (a *App) buildListScopeFilter(userID int, permKey string, listScope ScopeTy
 	filter.municipiIDs = dedupeInts(filter.municipiIDs)
 	filter.provinciaIDs = dedupeInts(filter.provinciaIDs)
 	filter.comarcaIDs = dedupeInts(filter.comarcaIDs)
+	filter.nivellIDs = dedupeInts(filter.nivellIDs)
 	filter.paisIDs = dedupeInts(filter.paisIDs)
 	filter.eclesIDs = dedupeInts(filter.eclesIDs)
 	return filter
@@ -794,6 +918,10 @@ func (a *App) requirePermissionKey(w http.ResponseWriter, r *http.Request, permK
 	if !found {
 		perms = a.getPermissionsForUser(user.ID)
 		*r = *a.withPermissions(r, perms)
+	}
+	*r = *a.ensureUnreadMessagesCount(r, user.ID)
+	if _, found := permissionKeysFromContext(r); !found {
+		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
 	}
 	if !a.HasPermission(user.ID, permKey, target) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -814,7 +942,33 @@ func (a *App) requireAnyPermissionKey(w http.ResponseWriter, r *http.Request, pe
 		perms = a.getPermissionsForUser(user.ID)
 		*r = *a.withPermissions(r, perms)
 	}
+	*r = *a.ensureUnreadMessagesCount(r, user.ID)
+	if _, found := permissionKeysFromContext(r); !found {
+		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
+	}
 	if len(permKeys) == 0 || !a.HasAnyPermission(user.ID, permKeys, target) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return user, false
+	}
+	return user, true
+}
+
+func (a *App) requirePermissionKeyIfLogged(w http.ResponseWriter, r *http.Request, permKey string) (*db.User, bool) {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		return nil, true
+	}
+	*r = *a.withUser(r, user)
+	perms, found := a.permissionsFromContext(r)
+	if !found {
+		perms = a.getPermissionsForUser(user.ID)
+		*r = *a.withPermissions(r, perms)
+	}
+	*r = *a.ensureUnreadMessagesCount(r, user.ID)
+	if _, found := permissionKeysFromContext(r); !found {
+		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
+	}
+	if permKey != "" && !a.hasAnyPermissionKey(user.ID, permKey) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return user, false
 	}
@@ -833,9 +987,18 @@ func (a *App) requirePermissionKeyAnyScope(w http.ResponseWriter, r *http.Reques
 		perms = a.getPermissionsForUser(user.ID)
 		*r = *a.withPermissions(r, perms)
 	}
+	*r = *a.ensureUnreadMessagesCount(r, user.ID)
+	if _, found := permissionKeysFromContext(r); !found {
+		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
+	}
 	if !a.hasAnyPermissionKey(user.ID, permKey) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return user, false
 	}
 	return user, true
+}
+
+// RequirePermissionKeyAnyScope és un wrapper públic per a middlewares externs.
+func (a *App) RequirePermissionKeyAnyScope(w http.ResponseWriter, r *http.Request, permKey string) (*db.User, bool) {
+	return a.requirePermissionKeyAnyScope(w, r, permKey)
 }

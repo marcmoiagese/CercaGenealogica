@@ -33,6 +33,9 @@ type nivellDemoTotals struct {
 var nivellYearRegex = regexp.MustCompile(`\d{4}`)
 
 func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriNivellsView); !ok {
+		return
+	}
 	id := extractID(r.URL.Path)
 	if id == 0 {
 		http.NotFound(w, r)

@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -18,6 +19,7 @@ const (
 	dmMessageRateLimit  = 0.05
 	dmMessageRateBurst  = 30
 	dmEmailSnippetMax   = 120
+	dmFolderInboxToken  = "__inbox__"
 )
 
 type dmThreadView struct {
@@ -28,49 +30,59 @@ type dmThreadView struct {
 	LastMessageAt string
 	Unread        bool
 	Archived      bool
+	Folder        string
 	ThreadURL     string
+	IsActive      bool
 }
 
 type dmMessageView struct {
 	Body      string
 	Sender    string
+	SenderID  int
 	CreatedAt string
 	IsOwn     bool
 }
 
-func (a *App) MessagesInbox(w http.ResponseWriter, r *http.Request) {
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
-	perms := a.getPermissionsForUser(user.ID)
-	*r = *a.withUser(r, user)
-	*r = *a.withPermissions(r, perms)
-	lang := resolveUserLang(r, user)
+func (a *App) requireMessagesView(w http.ResponseWriter, r *http.Request) (*db.User, bool) {
+	return a.requirePermissionKeyAnyScope(w, r, permKeyMessagesView)
+}
 
-	archived := parseFormBool(r.URL.Query().Get("archived"))
-	deleted := false
-	filter := db.DMThreadListFilter{
-		Archived: &archived,
-		Deleted:  &deleted,
-		Limit:    dmThreadListLimit,
+func parseDMFolderFilter(raw string) (string, *string) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", nil
 	}
-	threads, err := a.DB.ListDMThreadsForUser(user.ID, filter)
+	if trimmed == dmFolderInboxToken {
+		empty := ""
+		return trimmed, &empty
+	}
+	return trimmed, &trimmed
+}
+
+func buildFolderQuery(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return ""
+	}
+	return "?folder=" + url.QueryEscape(raw)
+}
+
+func (a *App) buildDMThreadViews(userID int, filter db.DMThreadListFilter, activeThreadID int, folderParam string) []dmThreadView {
+	threads, err := a.DB.ListDMThreadsForUser(userID, filter)
 	if err != nil {
 		Errorf("Error carregant inbox missatges: %v", err)
 		threads = []db.DMThreadListItem{}
 	}
+	folderQuery := buildFolderQuery(folderParam)
 	threadViews := make([]dmThreadView, 0, len(threads))
 	for _, thread := range threads {
-		if blocked, _ := a.DB.IsUserBlocked(user.ID, thread.OtherUserID); blocked {
-			if !archived || !thread.Archived {
+		if blocked, _ := a.DB.IsUserBlocked(userID, thread.OtherUserID); blocked {
+			if filter.Archived == nil || !*filter.Archived || !thread.Archived {
 				continue
 			}
 		}
 		otherUser, _ := a.DB.GetUserByID(thread.OtherUserID)
 		otherLabel := formatDMUserLabel(otherUser)
-		lastMessage := strings.TrimSpace(thread.LastMessageBody)
+		lastMessage := strings.TrimSpace(stripMessageMarkup(thread.LastMessageBody))
 		if lastMessage == "" {
 			lastMessage = "—"
 		}
@@ -91,8 +103,40 @@ func (a *App) MessagesInbox(w http.ResponseWriter, r *http.Request) {
 			LastMessageAt: lastAt,
 			Unread:        thread.Unread,
 			Archived:      thread.Archived,
-			ThreadURL:     fmt.Sprintf("/missatges/fil/%d", thread.ThreadID),
+			Folder:        thread.Folder,
+			ThreadURL:     fmt.Sprintf("/missatges/fil/%d%s", thread.ThreadID, folderQuery),
+			IsActive:      activeThreadID > 0 && thread.ThreadID == activeThreadID,
 		})
+	}
+	return threadViews
+}
+
+func (a *App) MessagesInbox(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireMessagesView(w, r)
+	if !ok || user == nil {
+		return
+	}
+	lang := resolveUserLang(r, user)
+
+	archived := parseFormBool(r.URL.Query().Get("archived"))
+	folderParam, folderFilter := parseDMFolderFilter(r.URL.Query().Get("folder"))
+	folderName := folderParam
+	if folderParam == dmFolderInboxToken {
+		folderName = ""
+	}
+	deleted := false
+	filter := db.DMThreadListFilter{
+		Archived: &archived,
+		Deleted:  &deleted,
+		Folder:   folderFilter,
+		Limit:    dmThreadListLimit,
+	}
+	threadViews := a.buildDMThreadViews(user.ID, filter, 0, folderParam)
+	folders := []string{}
+	if list, err := a.DB.ListDMThreadFolders(user.ID); err == nil {
+		folders = list
+	} else {
+		Errorf("Error carregant carpetes missatges: %v", err)
 	}
 
 	var newMessageUser *db.User
@@ -111,10 +155,22 @@ func (a *App) MessagesInbox(w http.ResponseWriter, r *http.Request) {
 	if toID == user.ID {
 		newMessageBlocked = T(lang, "messages.contact.disabled.self")
 	}
+	inboxBaseURL := "/missatges"
+	folderPrefix := "?"
+	if archived {
+		inboxBaseURL = "/missatges?archived=1"
+		folderPrefix = "&"
+	}
 
 	data := map[string]interface{}{
 		"Threads":             threadViews,
 		"ArchivedView":        archived,
+		"Folders":             folders,
+		"CurrentFolder":       folderParam,
+		"CurrentFolderName":   folderName,
+		"FolderInboxToken":    dmFolderInboxToken,
+		"InboxBaseURL":        inboxBaseURL,
+		"InboxFolderPrefix":   folderPrefix,
 		"NewMessageUser":      newMessageUser,
 		"NewMessageUserLabel": newMessageLabel,
 		"NewMessageBlocked":   newMessageBlocked,
@@ -124,14 +180,10 @@ func (a *App) MessagesInbox(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) MessagesThread(w http.ResponseWriter, r *http.Request) {
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	user, ok := a.requireMessagesView(w, r)
+	if !ok || user == nil {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	*r = *a.withUser(r, user)
-	*r = *a.withPermissions(r, perms)
 	lang := resolveUserLang(r, user)
 
 	threadID := extractID(r.URL.Path)
@@ -142,6 +194,24 @@ func (a *App) MessagesThread(w http.ResponseWriter, r *http.Request) {
 	}
 	otherUser, _ := a.DB.GetUserByID(otherID)
 	otherLabel := formatDMUserLabel(otherUser)
+	folderParam, folderFilter := parseDMFolderFilter(r.URL.Query().Get("folder"))
+	folderName := folderParam
+	if folderParam == dmFolderInboxToken {
+		folderName = ""
+	}
+	deleted := false
+	threadFilter := db.DMThreadListFilter{
+		Deleted: &deleted,
+		Folder:  folderFilter,
+		Limit:   dmThreadListLimit,
+	}
+	threadViews := a.buildDMThreadViews(user.ID, threadFilter, threadID, folderParam)
+	folders := []string{}
+	if list, err := a.DB.ListDMThreadFolders(user.ID); err == nil {
+		folders = list
+	} else {
+		Errorf("Error carregant carpetes missatges: %v", err)
+	}
 
 	msgs, err := a.DB.ListDMMessages(threadID, dmThreadMsgLimit, 0)
 	if err != nil {
@@ -149,17 +219,23 @@ func (a *App) MessagesThread(w http.ResponseWriter, r *http.Request) {
 		msgs = []db.DMMessage{}
 	}
 	messageViews := []dmMessageView{}
+	refreshUnread := false
 	if len(msgs) > 0 {
 		lastMsgID := msgs[0].ID
 		if lastMsgID > 0 {
 			_ = a.DB.MarkDMThreadRead(threadID, user.ID, lastMsgID)
+			if state != nil && state.Unread {
+				refreshUnread = true
+			}
 		}
 		for i := len(msgs) - 1; i >= 0; i-- {
 			msg := msgs[i]
 			isOwn := msg.SenderID == user.ID
 			senderLabel := otherLabel
+			senderID := msg.SenderID
 			if isOwn {
 				senderLabel = T(lang, "messages.you")
+				senderID = user.ID
 			}
 			createdAt := ""
 			if msg.CreatedAt.Valid {
@@ -168,6 +244,7 @@ func (a *App) MessagesThread(w http.ResponseWriter, r *http.Request) {
 			messageViews = append(messageViews, dmMessageView{
 				Body:      strings.TrimSpace(msg.Body),
 				Sender:    senderLabel,
+				SenderID:  senderID,
 				CreatedAt: createdAt,
 				IsOwn:     isOwn,
 			})
@@ -190,19 +267,74 @@ func (a *App) MessagesThread(w http.ResponseWriter, r *http.Request) {
 		"OtherUser":     otherUser,
 		"OtherLabel":    otherLabel,
 		"Messages":      messageViews,
+		"Threads":       threadViews,
+		"Folders":       folders,
+		"CurrentFolder": folderParam,
+		"CurrentFolderName": folderName,
+		"FolderInboxToken": dmFolderInboxToken,
 		"CanSend":       canSend,
 		"SendBlocked":   sendBlocked,
 		"ViewerBlocked": viewerBlocked,
 		"Archived":      state.Archived,
 		"MessageMaxLen": dmMessageMaxLen,
 	}
+	if refreshUnread {
+		if count, err := a.DB.CountDMUnread(user.ID); err == nil {
+			data["UnreadMessagesCount"] = count
+		} else {
+			Errorf("Error comptant missatges pendents per usuari %d: %v", user.ID, err)
+		}
+	}
 	RenderPrivateTemplateLang(w, r, "messages-thread.html", lang, data)
 }
 
+func (a *App) MessagesSetFolder(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireMessagesView(w, r)
+	if !ok || user == nil {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	threadID := extractID(r.URL.Path)
+	if threadID <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	folder := strings.TrimSpace(r.FormValue("folder"))
+	folder = strings.ReplaceAll(folder, "\n", " ")
+	folder = strings.ReplaceAll(folder, "\r", " ")
+	folder = strings.Join(strings.Fields(folder), " ")
+	if utf8.RuneCountInString(folder) > 60 {
+		folder = truncateRunes(folder, 60)
+	}
+	if folder == dmFolderInboxToken {
+		folder = ""
+	}
+	if err := a.DB.SetDMThreadFolder(threadID, user.ID, folder); err != nil {
+		Errorf("Error assignant carpeta thread %d: %v", threadID, err)
+		http.Error(w, "No s'ha pogut desar la carpeta", http.StatusInternalServerError)
+		return
+	}
+	redirect := strings.TrimSpace(r.FormValue("return"))
+	if redirect == "" {
+		redirect = fmt.Sprintf("/missatges/fil/%d", threadID)
+	}
+	http.Redirect(w, r, redirect, http.StatusSeeOther)
+}
+
 func (a *App) MessagesNew(w http.ResponseWriter, r *http.Request) {
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	user, ok := a.requireMessagesView(w, r)
+	if !ok || user == nil {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -257,9 +389,8 @@ func (a *App) MessagesNew(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) MessagesSend(w http.ResponseWriter, r *http.Request) {
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	user, ok := a.requireMessagesView(w, r)
+	if !ok || user == nil {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -306,9 +437,8 @@ func (a *App) MessagesSend(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) MessagesArchive(w http.ResponseWriter, r *http.Request) {
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	user, ok := a.requireMessagesView(w, r)
+	if !ok || user == nil {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -341,9 +471,8 @@ func (a *App) MessagesArchive(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) MessagesDelete(w http.ResponseWriter, r *http.Request) {
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	user, ok := a.requireMessagesView(w, r)
+	if !ok || user == nil {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -372,9 +501,8 @@ func (a *App) MessagesDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) MessagesBlock(w http.ResponseWriter, r *http.Request) {
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	user, ok := a.requireMessagesView(w, r)
+	if !ok || user == nil {
 		return
 	}
 	if r.Method != http.MethodPost {

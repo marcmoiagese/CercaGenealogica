@@ -197,6 +197,18 @@ func (d *SQLite) ListDMThreadsForUser(userID int, f DMThreadListFilter) ([]DMThr
 	return d.help.listDMThreadsForUser(userID, f)
 }
 
+func (d *SQLite) CountDMUnread(userID int) (int, error) {
+	return d.help.countDMUnread(userID)
+}
+
+func (d *SQLite) ListDMThreadFolders(userID int) ([]string, error) {
+	return d.help.listDMThreadFolders(userID)
+}
+
+func (d *SQLite) SetDMThreadFolder(threadID, userID int, folder string) error {
+	return d.help.setDMThreadFolder(threadID, userID, folder)
+}
+
 func (d *SQLite) ListDMMessages(threadID, limit, beforeID int) ([]DMMessage, error) {
 	return d.help.listDMMessages(threadID, limit, beforeID)
 }
@@ -239,6 +251,18 @@ func (d *SQLite) UpdateUserProfile(u *User) error {
 
 func (d *SQLite) UpdateUserEmail(userID int, newEmail string) error {
 	return d.help.updateUserEmail(userID, newEmail)
+}
+
+func (d *SQLite) ListDashboardWidgets(userID int) ([]DashboardWidgetConfig, error) {
+	return d.help.listDashboardWidgets(userID)
+}
+
+func (d *SQLite) SaveDashboardWidgets(userID int, widgets []DashboardWidgetConfig) error {
+	return d.help.saveDashboardWidgets(userID, widgets)
+}
+
+func (d *SQLite) ClearDashboardWidgets(userID int) error {
+	return d.help.clearDashboardWidgets(userID)
 }
 
 func (d *SQLite) ListUsersAdmin() ([]UserAdminRow, error) {
@@ -495,6 +519,9 @@ func (d *SQLite) ListArxius(f ArxiuFilter) ([]ArxiuWithCount, error) {
 func (d *SQLite) CountArxius(f ArxiuFilter) (int, error) {
 	return d.help.countArxius(f)
 }
+func (d *SQLite) CountPaisos() (int, error) {
+	return d.help.countPaisos()
+}
 func (d *SQLite) GetArxiu(id int) (*Arxiu, error) {
 	return d.help.getArxiu(id)
 }
@@ -552,6 +579,9 @@ func (d *SQLite) ListLlibres(f LlibreFilter) ([]LlibreRow, error) {
 
 func (d *SQLite) CountLlibres(f LlibreFilter) (int, error) {
 	return d.help.countLlibres(f)
+}
+func (d *SQLite) CountIndexedRegistres(status string) (int, error) {
+	return d.help.countIndexedRegistres(status)
 }
 func (d *SQLite) GetLlibre(id int) (*Llibre, error) {
 	return d.help.getLlibre(id)

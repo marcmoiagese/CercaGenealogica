@@ -29,7 +29,7 @@
                 <p><strong>{{ t .Lang "records.history.selected" }}</strong> <span id="history-selected-count">0</span></p>
                 <div class="accions-revisio">
                     <button type="button" class="boto-comparar" id="history-compare" disabled>{{ t .Lang "records.history.compare" }}</button>
-                    {{ if .Data.PublishedKey }}
+                    {{ if and .Data.CanRevert .Data.PublishedKey }}
                     <button type="button" class="boto-revertir history-revert" data-change-id="{{ .Data.PublishedKey }}">
                         {{ t .Lang "records.history.revert" }} {{ t .Lang "records.history.published" }}
                     </button>
@@ -49,9 +49,13 @@
                         <p><strong>{{ t $.Lang "records.history.version" }}:</strong> #{{ .Seq }}</p>
                         {{ end }}
                         <p><strong>{{ t $.Lang "records.history.date" }}:</strong> {{ .ChangedAt }}</p>
-                        <p><strong>{{ t $.Lang "records.history.user" }}:</strong> {{ .ChangedBy }}</p>
+                        <p><strong>{{ t $.Lang "records.history.user" }}:</strong>
+                            {{ if gt .ChangedByID 0 }}<a href="/u/{{ .ChangedByID }}">{{ .ChangedBy }}</a>{{ else }}{{ .ChangedBy }}{{ end }}
+                        </p>
                         {{ if .ModeratedBy }}
-                        <p><strong>{{ t $.Lang "records.history.moderated_by" }}:</strong> {{ .ModeratedBy }}</p>
+                        <p><strong>{{ t $.Lang "records.history.moderated_by" }}:</strong>
+                            {{ if gt .ModeratedByID 0 }}<a href="/u/{{ .ModeratedByID }}">{{ .ModeratedBy }}</a>{{ else }}{{ .ModeratedBy }}{{ end }}
+                        </p>
                         {{ end }}
                         {{ if .ModeratedAt }}
                         <p><strong>{{ t $.Lang "records.history.moderated_at" }}:</strong> {{ .ModeratedAt }}</p>
@@ -80,7 +84,7 @@
                         {{ if and .HasSnapshot (not .IsPublished) }}
                         <button type="button" class="boto-comparar history-compare-one" data-compare-id="{{ .Key }}">{{ t $.Lang "records.history.compare_published" }}</button>
                         {{ end }}
-                        {{ if and .HasSnapshot (not .IsPublished) }}
+                        {{ if and $.Data.CanRevert .HasSnapshot (not .IsPublished) }}
                         <button type="button" class="boto-revertir history-revert" data-change-id="{{ .Key }}">{{ t $.Lang "records.history.revert" }}</button>
                         {{ end }}
                     </div>
@@ -93,6 +97,7 @@
 
     </main>
 
+    {{ if .Data.CanRevert }}
     <div class="modal-overlay" id="revert-modal" role="dialog" aria-modal="true">
         <div class="modal-box">
             <header class="modal-header">
@@ -114,6 +119,7 @@
             </form>
         </div>
     </div>
+    {{ end }}
 
     <script>
         (function () {

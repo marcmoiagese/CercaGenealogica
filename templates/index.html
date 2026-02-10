@@ -8,11 +8,428 @@
 </head>
 <body>
     {{ template "header-public" . }}
+    <section class="home-splash" id="splash" aria-label="Benvinguda">
+        <div class="splash-inner">
+            <h1>Descobreix les teves arrels</h1>
+            <p class="hero-subline">Explora registres històrics, construeix el teu arbre i preserva la memòria familiar amb traçabilitat.</p>
+        </div>
+    </section>
 
-    <main class="contingut-principal">
-        <h1>{{ t .Lang "index.title" }}</h1>
-        <p>{{ t .Lang "index.subtitle" }}</p>
-        <a href="/login">{{ t .Lang "index.loginCta" }}</a>
+    <main class="contingut-principal home-landing">
+        <div class="container">
+            <section class="home-hero-pro" id="home-start">
+                <div class="hero-grid">
+                    <div>
+                        <div class="home-start-title">
+                            <div class="home-start-subtitle">Genealogia col·laborativa, feta per la comunitat</div>
+                            <h2>Què és Genealogia.cat?</h2>
+                        </div>
+
+                        <p class="home-hero-lead">Genealogia.cat és la xarxa social per a la investigació del nostre passat i per a aficionats a la genealogia. És un projecte col·laboratiu, sense ànim de lucre, que vol reunir —de forma lliure i per a tothom— dades que avui encara ens suposen massa desplaçaments i, amb sort, alguna consulta en webs disperses.</p>
+                        <p class="home-hero-lead" style="margin-top:10px">El projecte es basa en la col·laboració col·lectiva per garantir una traçabilitat cap als documents originals tan acurada com sigui possible.</p>
+                        <p class="home-hero-lead" style="margin-top:10px">L’accés és lliure i gratuït, però requereix un compte per intentar evitar l’extracció massiva i que altres solucions de pagament vinguin a aprofitar-se del treball col·laboratiu.</p>
+
+                        <div class="home-cta">
+                            <a href="#" class="cta-primary" id="ctaOpenRegister"><i class="fas fa-user-plus"></i> Crea un compte gratuït</a>
+                            <a href="#" class="cta-secondary" id="ctaOpenLogin"><i class="fas fa-user"></i> Inicia sessió</a>
+                            <a href="#features" class="cta-ghost"><i class="fas fa-compass"></i> Veure què pots fer</a>
+                        </div>
+                    </div>
+
+                    <div class="home-hero-illu" aria-hidden="true">
+                        <div class="illu-card">
+                            <div class="illu-row">
+                                <div class="illu-pill"><i class="fas fa-magnifying-glass"></i> Cerca global</div>
+                                <div class="illu-pill"><i class="fas fa-diagram-project"></i> Arbre i vincles</div>
+                            </div>
+
+                            <div class="illu-mini-grid">
+                                <div class="illu-card">
+                                    <div class="illu-mini-title">
+                                        <i class="fas fa-pen-to-square"></i> Contribueix
+                                    </div>
+                                    <div class="illu-mini-text">
+                                        Indexa, transcriu o valida registres per fer-los més cercables.
+                                    </div>
+                                </div>
+
+                                <div class="illu-card">
+                                    <div class="illu-mini-title">
+                                        <i class="fas fa-people-arrows"></i> Col·labora
+                                    </div>
+                                    <div class="illu-mini-text">
+                                        Crea grups de treball familiars i comparteix troballes.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <section class="home-section hero-stats">
+                <div class="stats-card" aria-label="Dades del projecte">
+                    <div class="stats-head">
+                        <h3>La comunitat en xifres</h3>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="metric">
+                            <div class="metric-val" data-metric="indexed_records">—</div>
+                            <div class="metric-lbl">registres indexats</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-val" data-metric="countries">—</div>
+                            <div class="metric-lbl">països</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-val" data-metric="regions">—</div>
+                            <div class="metric-lbl">regions / nivells</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-val" data-metric="ecclesiastical">—</div>
+                            <div class="metric-lbl">divisions eclesiàstiques</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="home-section" id="features">
+                <div class="section-title">
+                    <h2>Què hi pots fer</h2>
+                    <p>Una caixa d’eines per investigar, ordenar i preservar informació amb context i traçabilitat.</p>
+                </div>
+                <div class="cards-grid">
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-magnifying-glass"></i></div>
+                            <h3>Cerca i consulta</h3>
+                        </div>
+                        <p>Cerca persones, llocs i registres. L’accés a la informació indexada requereix un compte gratuït.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-book"></i></div>
+                            <h3>Indexació de llibres</h3>
+                        </div>
+                        <p>Indexa i estructura llibres (baptismes, matrimonis, defuncions…) perquè siguin cercables i reutilitzables.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-file-csv"></i></div>
+                            <h3>Importació CSV</h3>
+                        </div>
+                        <p>Puja CSV de llibres que ja hagis indexat fora de la web per no haver de repetir la feina.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-images"></i></div>
+                            <h3>Explorador de llibres i imatges</h3>
+                        </div>
+                        <p>Explora documents amb l’explorador de llibres i imatges. Aquesta secció pot estar subjecta a condicions d’accés.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-map-location-dot"></i></div>
+                            <h3>Mapes antics interactius</h3>
+                        </div>
+                        <p>Crea mapes històrics del municipi: cases, masos, topònims i vincles amb persones (molt habitual als pobles).</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-chart-area"></i></div>
+                            <h3>Cognoms i mapes de calor</h3>
+                        </div>
+                        <p>Visualitza mapes de calor de cognoms i normalitza variants que s’han distorsionat amb el temps, l’idioma o el país.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-feather"></i></div>
+                            <h3>Històries i anècdotes</h3>
+                        </div>
+                        <p>Recopila històries locals i anècdotes de pobles o persones per aportar context més enllà dels registres.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-cross"></i></div>
+                            <h3>Cementiris i tombes</h3>
+                        </div>
+                        <p>Indexa tombes i cementiris i relaciona’ls amb famílies, persones i documentació.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-link"></i></div>
+                            <h3>Relacionar contingut</h3>
+                        </div>
+                        <p>Relaciona fotografies amb persones, documents amb persones i notícies amb esdeveniments o famílies.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-bookmark"></i></div>
+                            <h3>Seguir persones i registres</h3>
+                        </div>
+                        <p>Marca’ls i afegeix categories (consanguini, polític, interès) perquè, quan t’hagis oblidat i estiguis cercant novament aquell nom per una altra persona, ja et quedin ressaltats i vegis clar que ja l’has revisat per algun altre motiu.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-clock-rotate-left"></i></div>
+                            <h3>Historial complet</h3>
+                        </div>
+                        <p>Cap canvi es perd: versions, traçabilitat i la possibilitat de revisar l’evolució d’un registre o d’una persona.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-users"></i></div>
+                            <h3>Grups de treball</h3>
+                        </div>
+                        <p>Crea grups amb familiars o investigadors per compartir troballes, dubtes i noves línies de recerca.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-plug"></i></div>
+                            <h3>Integracions amb genealogia</h3>
+                        </div>
+                        <p>Connecta aplicacions o arbres personals per fer cerques creuades i detectar coincidències (quan estigui disponible).</p>
+                    </article>
+                </div>
+            </section>
+
+            <section class="home-section home-showcase">
+                <div class="section-title center">
+                    <h2>Veure-ho és entendre-ho</h2>
+                    <p>Un tast visual de les eines: mapes, cognoms, visor de documents i seguiment de persones.</p>
+                </div>
+            </section>
+        </div>
+
+        <section class="home-showcase-bleed" aria-label="Carrusel de demostració">
+            <div class="showcase-slider" role="region" aria-label="Carrusel de demostració">
+                <input class="showcase-radio" type="radio" name="showcase" id="showcase1" checked>
+                <input class="showcase-radio" type="radio" name="showcase" id="showcase2">
+                <input class="showcase-radio" type="radio" name="showcase" id="showcase3">
+                <input class="showcase-radio" type="radio" name="showcase" id="showcase4">
+
+                <div class="showcase-track" aria-live="polite">
+                    <article class="showcase-slide">
+                        <div class="showcase-copy">
+                            <div class="showcase-kicker"><i class="fas fa-map-location-dot"></i> Mapes antics interactius</div>
+                            <h3>Cases, masos i topònims amb persones vinculades</h3>
+                            <p>
+                                Elabora mapes històrics del municipi, posa nom a cases (molt típic a Catalunya) i connecta-hi persones,
+                                famílies i esdeveniments. Ideal per reconstruir la vida quotidiana al territori.
+                            </p>
+                            <div class="showcase-tags">
+                                <span><i class="fas fa-link"></i> Vincles</span>
+                                <span><i class="fas fa-house"></i> Cases</span>
+                                <span><i class="fas fa-layer-group"></i> Capes</span>
+                            </div>
+                        </div>
+                        <div class="showcase-media">
+                            <div class="media-frame">
+                                <div class="media-topbar">
+                                    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                                    <span class="media-title">Exemple: mapa interactiu (GIF/Video)</span>
+                                </div>
+                                <div class="media-body media-placeholder">
+                                    <i class="fas fa-map"></i>
+                                    <div>
+                                        <div class="ph-title">Mapa antic + capes</div>
+                                        <div class="ph-sub">Aquí pots incrustar un GIF, un vídeo o una captura.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="showcase-slide">
+                        <div class="showcase-copy">
+                            <div class="showcase-kicker"><i class="fas fa-chart-area"></i> Cognoms i normalització</div>
+                            <h3>Mapes de calor i variants històriques</h3>
+                            <p>
+                                Detecta patrons i dispersió territorial, i normalitza cognoms que han canviat amb el temps, la llengua o el país.
+                                Tot pensat per reduir duplicats i trobar coincidències.
+                            </p>
+                            <div class="showcase-tags">
+                                <span><i class="fas fa-fire"></i> Heatmaps</span>
+                                <span><i class="fas fa-spell-check"></i> Normalitza</span>
+                                <span><i class="fas fa-filter"></i> Variants</span>
+                            </div>
+                        </div>
+                        <div class="showcase-media">
+                            <div class="media-frame">
+                                <div class="media-topbar">
+                                    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                                    <span class="media-title">Exemple: mapa de calor</span>
+                                </div>
+                                <div class="media-body media-placeholder">
+                                    <i class="fas fa-chart-simple"></i>
+                                    <div>
+                                        <div class="ph-title">Cognom: evolució i concentració</div>
+                                        <div class="ph-sub">Perfecte per una captura o vídeo curt.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="showcase-slide">
+                        <div class="showcase-copy">
+                            <div class="showcase-kicker"><i class="fas fa-images"></i> Explorador de documents</div>
+                            <h3>Imatges i llibres amb eines d’investigació</h3>
+                            <p>
+                                Explora llibres i imatges amb un visor pensat per investigar millor. Aquesta secció pot estar subjecta a condicions
+                                d’accés segons disponibilitat del sistema.
+                            </p>
+                            <div class="showcase-tags">
+                                <span><i class="fas fa-sliders"></i> Visor</span>
+                                <span><i class="fas fa-book-open"></i> Llibres</span>
+                                <span><i class="fas fa-image"></i> Imatges</span>
+                            </div>
+                        </div>
+                        <div class="showcase-media">
+                            <div class="media-frame">
+                                <div class="media-topbar">
+                                    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                                    <span class="media-title">Exemple: visor d’imatge</span>
+                                </div>
+                                <div class="media-body media-placeholder">
+                                    <i class="fas fa-file-image"></i>
+                                    <div>
+                                        <div class="ph-title">Controls (brillantor/contrast, etc.)</div>
+                                        <div class="ph-sub">Pots posar-hi un GIF mostrant la millora de lectura.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="showcase-slide">
+                        <div class="showcase-copy">
+                            <div class="showcase-kicker"><i class="fas fa-bookmark"></i> Segueix, recorda i revisa</div>
+                            <h3>Ressaltat i historial de canvis</h3>
+                            <p>
+                                Marca persones i registres amb categories (consanguini, polític, interès) perquè quan tornis a trobar aquell nom
+                                quedi ressaltat i recordis per què ja l’havies revisat. A més, cada canvi crea versions consultables amb moderació.
+                            </p>
+                            <div class="showcase-tags">
+                                <span><i class="fas fa-highlighter"></i> Ressaltat</span>
+                                <span><i class="fas fa-clock-rotate-left"></i> Versions</span>
+                                <span><i class="fas fa-user-check"></i> Moderació</span>
+                            </div>
+                        </div>
+                        <div class="showcase-media">
+                            <div class="media-frame">
+                                <div class="media-topbar">
+                                    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                                    <span class="media-title">Exemple: historial i versions</span>
+                                </div>
+                                <div class="media-body media-placeholder">
+                                    <i class="fas fa-layer-group"></i>
+                                    <div>
+                                        <div class="ph-title">Comparació de versions</div>
+                                        <div class="ph-sub">Ideal per una captura animada.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="showcase-nav" aria-label="Controls del carrusel">
+                    <button class="showcase-btn" type="button" data-showcase="prev" aria-label="Anterior">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <div class="showcase-dots" aria-label="Punts">
+                        <label class="dot" for="showcase1" aria-label="1"></label>
+                        <label class="dot" for="showcase2" aria-label="2"></label>
+                        <label class="dot" for="showcase3" aria-label="3"></label>
+                        <label class="dot" for="showcase4" aria-label="4"></label>
+                    </div>
+                    <button class="showcase-btn" type="button" data-showcase="next" aria-label="Següent">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+
+                    <div class="showcase-hint">Fes servir les fletxes del teclat o els botons · Pausa quan hi passes per sobre</div>
+                </div>
+            </div>
+        </section>
+
+        <div class="container">
+            <section class="home-section">
+                <div class="callout">
+                    <div class="callout-grid">
+                        <div>
+                            <h3>Accés gratuït amb compte</h3>
+                            <p>Demanem un compte gratuït per protegir el treball col·lectiu i reduir l’extracció massiva per tercers. Això ens permet mantenir el projecte sostenible i centrat en la comunitat.</p>
+                            <div class="mini-list" style="margin-top:12px">
+                                <span class="mini-item"><i class="fas fa-shield-halved"></i> Protecció comunitària</span>
+                                <span class="mini-item"><i class="fas fa-link"></i> Traçabilitat i versions</span>
+                                <span class="mini-item"><i class="fas fa-user-check"></i> Moderació col·laborativa</span>
+                            </div>
+                        </div>
+                        <div class="mini-actions">
+                            <a href="#" class="primary" id="ctaOpenRegister2"><i class="fas fa-user-plus"></i> Crea un compte</a>
+                            <a href="#" class="secondary" id="ctaOpenLogin2"><i class="fas fa-right-to-bracket"></i> Inicia sessió</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="home-section">
+                <div class="section-title">
+                    <h2>Com col·laborem</h2>
+                    <p>Un flux simple perquè tothom hi participi i la informació sigui més útil.</p>
+                </div>
+                <div class="cards-grid">
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-upload"></i></div>
+                            <h3>Aporta informació</h3>
+                        </div>
+                        <p>Documents, referències, anotacions o noves dades sobre persones i llocs.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-list-check"></i></div>
+                            <h3>Indexa i valida</h3>
+                        </div>
+                        <p>Afina noms, dates i localitzacions. La validació millora la qualitat i evita duplicats.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-head">
+                            <div class="card-ico"><i class="fas fa-share-nodes"></i></div>
+                            <h3>Comparteix i coopera</h3>
+                        </div>
+                        <p>Uneix esforços amb altres investigadors o familiars i posa en comú les troballes.</p>
+                    </article>
+                </div>
+            </section>
+
+            <section class="home-section">
+                <div class="section-title">
+                    <h2>Preguntes freqüents</h2>
+                    <p>Respostes ràpides per començar sense embolics.</p>
+                </div>
+                <div class="home-faq">
+                    <div class="faq">
+                        <h4><i class="fas fa-user-shield"></i> Necessito compte per consultar la informació indexada?</h4>
+                        <p>Sí. L’accés requereix un compte gratuït per protegir el treball col·lectiu i reduir l’extracció massiva per tercers. L’objectiu és que la comunitat pugui construir coneixement sense que altres solucions de pagament s’aprofitin del seu esforç.</p>
+                    </div>
+                    <div class="faq">
+                        <h4><i class="fas fa-clock-rotate-left"></i> Què significa Historial complet?</h4>
+                        <p>Els canvis realitzats sobre un registre indexat, un municipi o una persona no es perden. Cada canvi genera una versió que passa per un procés de moderació on col·laboradors validen que allò tingui rigor. Un cop aprovat, el registre es publica (i, si és una modificació, substitueix la versió anterior). Després, els usuaris poden consultar l’historial i veure com era el contingut en cadascuna de les seves versions.</p>
+                    </div>
+                    <div class="faq">
+                        <h4><i class="fas fa-handshake"></i> Puc contribuir encara que no sigui expert?</h4>
+                        <p>Sí. Pots aportar petites troballes, enllaçar documents, proposar normalitzacions o afegir context. Les revisions i la moderació ajuden a mantenir la qualitat.</p>
+                    </div>
+                    <div class="faq">
+                        <h4><i class="fas fa-screwdriver-wrench"></i> Hi ha funcions que poden tenir condicions d’accés?</h4>
+                        <p>Algunes eines avançades poden estar subjectes a condicions d’accés segons la disponibilitat del sistema. Sempre intentarem que la base del projecte continuï sent útil i sostenible per a la comunitat.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
     </main>
 
     {{ template "footer" . }}

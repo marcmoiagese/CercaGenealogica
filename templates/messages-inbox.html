@@ -41,7 +41,31 @@
                         <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                         <input type="hidden" name="recipient_id" value="{{ .Data.NewMessageUser.ID }}">
                         <label for="messageBody">{{ t .Lang "messages.form.body" }}</label>
-                        <textarea id="messageBody" name="body" rows="5" maxlength="{{ .Data.MessageMaxLen }}"></textarea>
+                        <div class="messages-toolbar" data-message-toolbar data-target="messageBody">
+                            <div class="messages-tool-group">
+                                <button type="button" class="messages-tool-btn" data-action="bold" title="Negreta"><i class="fas fa-bold"></i></button>
+                                <button type="button" class="messages-tool-btn" data-action="italic" title="Cursiva"><i class="fas fa-italic"></i></button>
+                                <button type="button" class="messages-tool-btn" data-action="indent" title="Identar"><i class="fas fa-indent"></i></button>
+                            </div>
+                            <div class="messages-tool-group">
+                                <label class="messages-tool-label" for="inboxFontSize">Mida</label>
+                                <select id="inboxFontSize" class="messages-tool-select" data-action="size">
+                                    <option value="">Normal</option>
+                                    <option value="small">Petita</option>
+                                    <option value="large">Gran</option>
+                                    <option value="xl">Molt gran</option>
+                                </select>
+                            </div>
+                            <div class="messages-tool-group">
+                                <button type="button" class="messages-tool-btn" data-action="table" title="Taula"><i class="fas fa-table"></i></button>
+                                <button type="button" class="messages-tool-btn" data-action="table-row" title="Afegir fila"><i class="fas fa-plus"></i></button>
+                                <button type="button" class="messages-tool-btn" data-action="table-col" title="Afegir columna"><i class="fas fa-columns"></i></button>
+                                <button type="button" class="messages-tool-btn" data-action="table-delete" title="Eliminar taula"><i class="fas fa-trash-alt"></i></button>
+                                <button type="button" class="messages-tool-btn" data-action="link" title="Enllac"><i class="fas fa-link"></i></button>
+                            </div>
+                        </div>
+                        <div class="messages-editor" contenteditable="true" data-editor="messageBody" data-placeholder="Escriu el missatge..."></div>
+                        <textarea id="messageBody" name="body" class="messages-editor-hidden" rows="5" maxlength="{{ .Data.MessageMaxLen }}"></textarea>
                         <div class="messages-form-actions">
                             <button class="boto-primari" type="submit">{{ t .Lang "messages.form.send" }}</button>
                         </div>
@@ -55,6 +79,17 @@
             <header class="card-header">
                 <h2>{{ t .Lang "messages.inbox.title" }}</h2>
             </header>
+            <div class="messages-folder-bar">
+                {{ $base := .Data.InboxBaseURL }}
+                {{ $prefix := .Data.InboxFolderPrefix }}
+                {{ $current := .Data.CurrentFolder }}
+                <a class="folder-chip {{ if eq $current "" }}is-active{{ end }}" href="{{ $base }}">Totes</a>
+                <a class="folder-chip {{ if eq $current .Data.FolderInboxToken }}is-active{{ end }}" href="{{ $base }}{{ $prefix }}folder={{ .Data.FolderInboxToken }}">Sense carpeta</a>
+                {{ range .Data.Folders }}
+                    <a class="folder-chip {{ if eq $current . }}is-active{{ end }}" href="{{ $base }}{{ $prefix }}folder={{ . | urlquery }}">{{ . }}</a>
+                {{ end }}
+                <span class="messages-folder-hint">Crea carpetes des d’un fil.</span>
+            </div>
             {{ if .Data.Threads }}
                 <div class="messages-list">
                     {{ range .Data.Threads }}
@@ -81,6 +116,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/messages.js?v=1"></script>
 </body>
 </html>
 {{ end }}

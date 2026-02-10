@@ -28,6 +28,8 @@ var allowedTemplateTransforms = map[string]bool{
 	"parse_person_from_nom":                      true,
 	"parse_person_from_cognoms_marcmoia_v2":      true,
 	"parse_person_from_nom_marcmoia_v2":          true,
+	"parse_person_from_cognoms_marcmoia_v2_maternal_first": true,
+	"parse_person_from_nom_marcmoia_v2_maternal_first":     true,
 	"parse_int_nullable":                         true,
 	"parse_marriage_order_int_nullable":          true,
 	"strip_marriage_order_text":                  true,
@@ -71,11 +73,14 @@ var templateTargetCatalog = map[string][]string{
 		"person.batejat",
 		"person.pare",
 		"person.mare",
+		"person.mare.cognom_soltera",
 		"person.pare.ofici",
 		"person.avi_patern",
 		"person.avia_paterna",
+		"person.avia_paterna.cognom_soltera",
 		"person.avi_matern",
 		"person.avia_materna",
+		"person.avia_materna.cognom_soltera",
 		"person.padri",
 		"person.padrina",
 		"attr.data_bateig.date",
@@ -89,6 +94,7 @@ var templateTargetCatalog = map[string][]string{
 		"person.difunt",
 		"person.pare",
 		"person.mare",
+		"person.mare.cognom_soltera",
 		"person.parella",
 		"person.difunt.estat_civil",
 		"attr.data_defuncio.date",
@@ -106,15 +112,36 @@ var templateTargetCatalog = map[string][]string{
 		"person.nuvi.edat",
 		"person.pare_nuvi",
 		"person.mare_nuvi",
+		"person.mare_nuvi.cognom_soltera",
 		"person.novia",
 		"person.novia.edat",
 		"person.novia.ofici",
 		"person.pare_novia",
 		"person.mare_novia",
+		"person.mare_novia.cognom_soltera",
 		"person.testimoni1",
 		"person.testimoni2",
 		"attr.data_matrimoni.date",
 		"attr.data_matrimoni.date_or_text_with_quality",
+	},
+	"padro": {
+		"person.cap_familia",
+		"person.cap_familia.sexe",
+		"person.cap_familia.edat",
+		"person.cap_familia.estat_civil",
+		"person.cap_familia.ofici",
+		"person.cap_familia.casa",
+		"attr.data_naixement.date",
+		"attr.data_naixement.date_or_text_with_quality",
+		"attr.carrer.text",
+		"attr.numero_casa.text",
+		"attr.adreca.text",
+		"attr.localitat.text",
+		"attr.procedencia.text",
+		"attr.alfabetitzat.bool",
+		"attr.sap_llegir.bool",
+		"attr.sap_escriure.bool",
+		"attr.condicio_padro.text",
 	},
 }
 
@@ -127,6 +154,8 @@ func normalizeTemplateRecordType(recordType string) string {
 		return "obit"
 	case "matrimonis", "matrimoni":
 		return "matrimoni"
+	case "padro", "padrons", "cens", "censos":
+		return "padro"
 	case "generic":
 		return "generic"
 	default:
@@ -144,7 +173,7 @@ func allowedTemplateTargetsForRecordType(recordType string) map[string]bool {
 		allow[target] = true
 	}
 	switch recordType {
-	case "baptisme", "obit", "matrimoni":
+	case "baptisme", "obit", "matrimoni", "padro":
 		for _, target := range templateTargetCatalog[recordType] {
 			allow[target] = true
 		}

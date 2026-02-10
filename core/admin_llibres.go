@@ -143,6 +143,7 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		filter.AllowedMunicipiIDs = scopeFilter.municipiIDs
 		filter.AllowedProvinciaIDs = scopeFilter.provinciaIDs
 		filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
+		filter.AllowedNivellIDs = scopeFilter.nivellIDs
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 		filter.AllowedEclesIDs = scopeFilter.eclesIDs
 	}
@@ -535,11 +536,34 @@ func (a *App) validateLlibre(l *db.Llibre, arxiuID int) string {
 	if l.MunicipiID == 0 {
 		return "Cal indicar el municipi."
 	}
+	if mun, err := a.DB.GetMunicipi(l.MunicipiID); err != nil {
+		Errorf("Error validant municipi del llibre: %v", err)
+		return "No s'ha pogut validar el municipi."
+	} else if mun == nil {
+		return "El municipi seleccionat no existeix."
+	}
+	if !isCivilBookType(l.TipusLlibre) {
+		if l.ArquebisbatID == 0 {
+			return "Cal indicar l'entitat eclesiastica."
+		}
+		if ent, err := a.DB.GetArquebisbat(l.ArquebisbatID); err != nil {
+			Errorf("Error validant entitat eclesiastica del llibre: %v", err)
+			return "No s'ha pogut validar l'entitat eclesiastica."
+		} else if ent == nil {
+			return "L'entitat eclesiastica seleccionada no existeix."
+		}
+	}
 	if strings.TrimSpace(l.Titol) == "" && strings.TrimSpace(l.NomEsglesia) == "" {
 		return "Cal un títol o nom d'església."
 	}
 	if arxiuID == 0 {
 		return "Cal indicar l'arxiu."
+	}
+	if arxiu, err := a.DB.GetArxiu(arxiuID); err != nil {
+		Errorf("Error validant arxiu del llibre: %v", err)
+		return "No s'ha pogut validar l'arxiu."
+	} else if arxiu == nil {
+		return "L'arxiu seleccionat no existeix."
 	}
 	if (strings.TrimSpace(l.CodiDigital) != "" || strings.TrimSpace(l.CodiFisic) != "") &&
 		strings.TrimSpace(l.TipusLlibre) != "" && strings.TrimSpace(l.Cronologia) != "" {
@@ -553,6 +577,15 @@ func (a *App) validateLlibre(l *db.Llibre, arxiuID int) string {
 		}
 	}
 	return ""
+}
+
+func isCivilBookType(tipus string) bool {
+	switch strings.ToLower(strings.TrimSpace(tipus)) {
+	case "padrons", "reclutaments":
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *App) renderLlibreForm(w http.ResponseWriter, r *http.Request, l *db.Llibre, isNew bool, errMsg string, returnURL string, selectedArxiu int) {
@@ -586,6 +619,9 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	llibre := parseLlibreForm(r)
+	if isCivilBookType(llibre.TipusLlibre) {
+		llibre.ArquebisbatID = 0
+	}
 	arxiuID := intFromForm(r.FormValue("arxiu_id"))
 	permKey := permKeyDocumentalsLlibresCreate
 	target := PermissionTarget{}

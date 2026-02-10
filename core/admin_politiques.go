@@ -2,7 +2,6 @@ package core
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -18,6 +17,7 @@ type politicaGrantView struct {
 	ScopeID         int
 	ScopeIDValid    bool
 	IncludeChildren bool
+	ScopeLabel      string
 }
 
 type politicaGrantForm struct {
@@ -26,9 +26,183 @@ type politicaGrantForm struct {
 	ScopeType       string
 	ScopeID         int
 	IncludeChildren bool
+	ScopeLabel      string
 }
 
-func buildGrantViews(grants []db.PoliticaGrant) []politicaGrantView {
+type policyGuiGrantGroup struct {
+	TitleKey string
+	Keys     []string
+}
+
+func guiGrantGroups() []policyGuiGrantGroup {
+	return []policyGuiGrantGroup{
+		{
+			TitleKey: "policies.gui.modular.group.general_view",
+			Keys: []string{
+				permKeyHomeView,
+				permKeyMessagesView,
+				permKeySearchAdvancedView,
+				permKeyRankingView,
+				permKeyPersonsView,
+				permKeyCognomsView,
+				permKeyMediaView,
+				permKeyImportTemplatesView,
+				permKeyEventsView,
+			},
+		},
+		{
+			TitleKey: "policies.gui.modular.group.wiki_actions",
+			Keys: []string{
+				permKeyWikiRevert,
+			},
+		},
+		{
+			TitleKey: "policies.gui.modular.group.documentals_view",
+			Keys: []string{
+				permKeyDocumentalsArxiusView,
+				permKeyDocumentalsLlibresView,
+				permKeyDocumentalsLlibresViewRegistres,
+			},
+		},
+		{
+			TitleKey: "policies.gui.modular.group.documentals_index",
+			Keys: []string{
+				permKeyDocumentalsRegistresEdit,
+				permKeyDocumentalsRegistresEditInline,
+				permKeyDocumentalsRegistresLinkPerson,
+				permKeyDocumentalsRegistresConvertToPerson,
+				permKeyDocumentalsLlibresImportCSV,
+				permKeyDocumentalsLlibresBulkIndex,
+			},
+		},
+		{
+			TitleKey: "policies.gui.modular.group.territori_view",
+			Keys: []string{
+				permKeyTerritoriNivellsView,
+				permKeyTerritoriMunicipisView,
+				permKeyTerritoriEclesView,
+			},
+		},
+	}
+}
+
+func guiGrantKeySet(groups []policyGuiGrantGroup) map[string]bool {
+	keys := map[string]bool{}
+	for _, group := range groups {
+		for _, key := range group.Keys {
+			if strings.TrimSpace(key) == "" {
+				continue
+			}
+			keys[key] = true
+		}
+	}
+	return keys
+}
+
+type grantScopeLabeler struct {
+	app      *App
+	lang     string
+	pais     map[int]string
+	nivell   map[int]string
+	municipi map[int]string
+	ecles    map[int]string
+	arxiu    map[int]string
+	llibre   map[int]string
+}
+
+func newGrantScopeLabeler(app *App, lang string) *grantScopeLabeler {
+	return &grantScopeLabeler{
+		app:      app,
+		lang:     lang,
+		pais:     map[int]string{},
+		nivell:   map[int]string{},
+		municipi: map[int]string{},
+		ecles:    map[int]string{},
+		arxiu:    map[int]string{},
+		llibre:   map[int]string{},
+	}
+}
+
+func (l *grantScopeLabeler) label(scopeType string, scopeID int) string {
+	if l == nil || l.app == nil || l.app.DB == nil || scopeID <= 0 {
+		return ""
+	}
+	scopeType = strings.TrimSpace(scopeType)
+	switch scopeType {
+	case string(ScopePais):
+		if cached, ok := l.pais[scopeID]; ok {
+			return cached
+		}
+		pais, err := l.app.DB.GetPais(scopeID)
+		if err == nil && pais != nil {
+			label := l.app.countryLabelFromISO(pais.CodiISO2, l.lang)
+			l.pais[scopeID] = label
+			return label
+		}
+	case string(ScopeNivell), string(ScopeProvincia), string(ScopeComarca):
+		if cached, ok := l.nivell[scopeID]; ok {
+			return cached
+		}
+		nivell, err := l.app.DB.GetNivell(scopeID)
+		if err == nil && nivell != nil {
+			label := strings.TrimSpace(nivell.NomNivell)
+			if label == "" {
+				label = strings.TrimSpace(nivell.TipusNivell)
+			}
+			l.nivell[scopeID] = label
+			return label
+		}
+	case string(ScopeMunicipi):
+		if cached, ok := l.municipi[scopeID]; ok {
+			return cached
+		}
+		mun, err := l.app.DB.GetMunicipi(scopeID)
+		if err == nil && mun != nil {
+			label := strings.TrimSpace(mun.Nom)
+			if label == "" {
+				label = strings.TrimSpace(mun.Tipus)
+			}
+			l.municipi[scopeID] = label
+			return label
+		}
+	case string(ScopeEcles):
+		if cached, ok := l.ecles[scopeID]; ok {
+			return cached
+		}
+		ent, err := l.app.DB.GetArquebisbat(scopeID)
+		if err == nil && ent != nil {
+			label := strings.TrimSpace(ent.Nom)
+			l.ecles[scopeID] = label
+			return label
+		}
+	case string(ScopeArxiu):
+		if cached, ok := l.arxiu[scopeID]; ok {
+			return cached
+		}
+		arxiu, err := l.app.DB.GetArxiu(scopeID)
+		if err == nil && arxiu != nil {
+			label := strings.TrimSpace(arxiu.Nom)
+			l.arxiu[scopeID] = label
+			return label
+		}
+	case string(ScopeLlibre):
+		if cached, ok := l.llibre[scopeID]; ok {
+			return cached
+		}
+		llibre, err := l.app.DB.GetLlibre(scopeID)
+		if err == nil && llibre != nil {
+			label := strings.TrimSpace(llibre.Titol)
+			if label == "" {
+				label = strings.TrimSpace(llibre.NomEsglesia)
+			}
+			l.llibre[scopeID] = label
+			return label
+		}
+	}
+	return ""
+}
+
+func buildGrantViews(grants []db.PoliticaGrant, labeler *grantScopeLabeler) []politicaGrantView {
 	res := make([]politicaGrantView, 0, len(grants))
 	for _, g := range grants {
 		view := politicaGrantView{
@@ -40,6 +214,9 @@ func buildGrantViews(grants []db.PoliticaGrant) []politicaGrantView {
 		if g.ScopeID.Valid {
 			view.ScopeID = int(g.ScopeID.Int64)
 			view.ScopeIDValid = true
+			if labeler != nil {
+				view.ScopeLabel = labeler.label(g.ScopeType, view.ScopeID)
+			}
 		}
 		res = append(res, view)
 	}
@@ -51,6 +228,9 @@ func scopeLabelKeyMap() map[string]string {
 	for _, opt := range scopeOptions() {
 		labels[string(opt.Value)] = opt.LabelKey
 	}
+	labels[string(ScopeProvincia)] = "policies.grants.scope.nivell"
+	labels[string(ScopeComarca)] = "policies.grants.scope.nivell"
+	labels[string(ScopeMunicipi)] = "policies.grants.scope.nivell"
 	return labels
 }
 
@@ -72,11 +252,32 @@ func (a *App) politicaFormData(r *http.Request, pol *db.Politica, isNew bool, ac
 		pol = &db.Politica{}
 	}
 	activeTab = normalizePolicyTab(activeTab)
+	lang := ResolveLang(r)
+	guiGroups := guiGrantGroups()
+	guiKeySet := guiGrantKeySet(guiGroups)
 	grants := []politicaGrantView{}
+	guiGrantState := map[string]bool{}
 	if !isNew && pol.ID > 0 && a.DB != nil {
 		if rows, err := a.DB.ListPoliticaGrants(pol.ID); err == nil {
-			grants = buildGrantViews(rows)
+			labeler := newGrantScopeLabeler(a, lang)
+			grants = buildGrantViews(rows, labeler)
+			for _, g := range rows {
+				if g.ScopeType != string(ScopeGlobal) {
+					continue
+				}
+				if guiKeySet[g.PermKey] {
+					guiGrantState[g.PermKey] = true
+				}
+			}
+			pol.Permisos = policyJSONForForm(pol.Permisos, rows)
 		}
+	}
+	if pol.Permisos == "" {
+		pol.Permisos = policyJSONForForm(pol.Permisos, nil)
+	}
+	if grantForm != nil && grantForm.ScopeID > 0 && strings.TrimSpace(grantForm.ScopeLabel) == "" {
+		labeler := newGrantScopeLabeler(a, lang)
+		grantForm.ScopeLabel = labeler.label(grantForm.ScopeType, grantForm.ScopeID)
 	}
 	data := map[string]interface{}{
 		"Politica":          pol,
@@ -86,6 +287,8 @@ func (a *App) politicaFormData(r *http.Request, pol *db.Politica, isNew bool, ac
 		"PermissionCatalog": permissionCatalog(),
 		"ScopeOptions":      scopeOptions(),
 		"ScopeLabels":       scopeLabelKeyMap(),
+		"GuiGrantGroups":    guiGroups,
+		"GuiGrantState":     guiGrantState,
 		"CanManageArxius":   true,
 		"CanManagePolicies": true,
 	}
@@ -158,6 +361,7 @@ func (a *App) AdminSavePolitica(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("nom"))
 	desc := strings.TrimSpace(r.FormValue("descripcio"))
 	permsRaw := strings.TrimSpace(r.FormValue("permisos"))
+	activeTab := normalizePolicyTab(r.FormValue("active_tab"))
 
 	if name == "" {
 		pol := &db.Politica{ID: id, Nom: name, Descripcio: desc, Permisos: permsRaw}
@@ -166,22 +370,29 @@ func (a *App) AdminSavePolitica(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validar JSON de permisos
-	var parsed db.PolicyPermissions
 	if permsRaw == "" {
 		permsRaw = "{}"
 	}
-	if err := json.Unmarshal([]byte(permsRaw), &parsed); err != nil {
+	doc, _, err := parsePolicyDocument(permsRaw)
+	if err != nil {
 		pol := &db.Politica{ID: id, Nom: name, Descripcio: desc, Permisos: permsRaw}
 		RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, id == 0, "json", "JSON de permisos invàlid", nil))
 		return
 	}
+	if activeTab == "json" {
+		if _, err := policyGrantsFromDocument(doc); err != nil {
+			pol := &db.Politica{ID: id, Nom: name, Descripcio: desc, Permisos: permsRaw}
+			RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, id == 0, "json", "JSON de permisos invàlid", nil))
+			return
+		}
+	}
 	// Re-marshal per guardar net
-	permsClean, _ := json.Marshal(parsed)
+	permsClean, _ := policyDocumentJSON(doc)
 	p := &db.Politica{
 		ID:         id,
 		Nom:        name,
 		Descripcio: desc,
-		Permisos:   string(permsClean),
+		Permisos:   permsClean,
 	}
 	savedID, err := a.DB.SavePolitica(p)
 	if err != nil {
@@ -191,11 +402,92 @@ func (a *App) AdminSavePolitica(w http.ResponseWriter, r *http.Request) {
 	if savedID > 0 {
 		p.ID = savedID
 	}
-	if err := a.ensurePolicyGrantsFromPerms(p.ID, parsed); err != nil {
+	if activeTab == "json" {
+		if err := a.replacePolicyGrantsFromDocument(p.ID, doc); err != nil {
+			pol := &db.Politica{ID: p.ID, Nom: name, Descripcio: desc, Permisos: permsRaw}
+			RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, false, "json", "JSON de permisos invàlid", nil))
+			return
+		}
+	} else if err := a.ensurePolicyGrantsFromDocument(p.ID, doc); err != nil {
 		Errorf("No s'han pogut crear grants per la politica %d: %v", p.ID, err)
+	}
+	if activeTab == "gui" {
+		guiKeys := guiGrantKeySet(guiGrantGroups())
+		selectedGuiKeys := extractGuiGrantSelection(r, guiKeys)
+		if err := a.syncPolicyGlobalGrants(p.ID, guiKeys, selectedGuiKeys); err != nil {
+			Errorf("No s'han pogut sincronitzar grants GUI per la politica %d: %v", p.ID, err)
+		}
+	}
+	if err := a.refreshPolicyPermsJSON(p.ID); err != nil {
+		Errorf("No s'ha pogut reconstruir el JSON de permisos per la politica %d: %v", p.ID, err)
 	}
 	_ = a.DB.BumpPolicyPermissionsVersion(p.ID)
 	http.Redirect(w, r, "/admin/politiques", http.StatusSeeOther)
+}
+
+func extractGuiGrantSelection(r *http.Request, keySet map[string]bool) map[string]bool {
+	selected := map[string]bool{}
+	if r == nil {
+		return selected
+	}
+	for _, raw := range r.Form["grant_global"] {
+		key := strings.TrimSpace(raw)
+		if key == "" {
+			continue
+		}
+		if !keySet[key] {
+			continue
+		}
+		selected[key] = true
+	}
+	return selected
+}
+
+func (a *App) syncPolicyGlobalGrants(politicaID int, keySet map[string]bool, selected map[string]bool) error {
+	if politicaID <= 0 || a == nil || a.DB == nil {
+		return nil
+	}
+	grants, err := a.DB.ListPoliticaGrants(politicaID)
+	if err != nil {
+		return err
+	}
+	existingGlobal := map[string]db.PoliticaGrant{}
+	for _, g := range grants {
+		if g.ScopeType != string(ScopeGlobal) {
+			continue
+		}
+		if !keySet[g.PermKey] {
+			continue
+		}
+		existingGlobal[g.PermKey] = g
+	}
+	for key, g := range existingGlobal {
+		if selected[key] {
+			continue
+		}
+		if err := a.DB.DeletePoliticaGrant(g.ID); err != nil {
+			return err
+		}
+	}
+	for key := range selected {
+		if !keySet[key] {
+			continue
+		}
+		if _, ok := existingGlobal[key]; ok {
+			continue
+		}
+		_, err := a.DB.SavePoliticaGrant(&db.PoliticaGrant{
+			PoliticaID:      politicaID,
+			PermKey:         key,
+			ScopeType:       string(ScopeGlobal),
+			ScopeID:         sql.NullInt64{},
+			IncludeChildren: false,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *App) AdminSavePoliticaGrant(w http.ResponseWriter, r *http.Request) {
@@ -285,6 +577,9 @@ func (a *App) AdminSavePoliticaGrant(w http.ResponseWriter, r *http.Request) {
 		RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, false, "grants", "No s'ha pogut desar el grant", grantForm))
 		return
 	}
+	if err := a.refreshPolicyPermsJSON(politicaID); err != nil {
+		Errorf("No s'ha pogut reconstruir el JSON de permisos per la politica %d: %v", politicaID, err)
+	}
 	_ = a.DB.BumpPolicyPermissionsVersion(politicaID)
 	http.Redirect(w, r, fmt.Sprintf("/admin/politiques/%d/edit?tab=grants", politicaID), http.StatusSeeOther)
 }
@@ -332,6 +627,9 @@ func (a *App) AdminDeletePoliticaGrant(w http.ResponseWriter, r *http.Request) {
 	if err := a.DB.DeletePoliticaGrant(grantID); err != nil {
 		RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, false, "grants", "No s'ha pogut eliminar el grant", nil))
 		return
+	}
+	if err := a.refreshPolicyPermsJSON(politicaID); err != nil {
+		Errorf("No s'ha pogut reconstruir el JSON de permisos per la politica %d: %v", politicaID, err)
 	}
 	_ = a.DB.BumpPolicyPermissionsVersion(politicaID)
 	http.Redirect(w, r, fmt.Sprintf("/admin/politiques/%d/edit?tab=grants", politicaID), http.StatusSeeOther)

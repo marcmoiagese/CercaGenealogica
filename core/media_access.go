@@ -17,6 +17,14 @@ func (a *App) mediaUserRoles(r *http.Request, user *db.User) (bool, bool) {
 	return a.hasPerm(perms, permAdmin), a.hasPerm(perms, permModerate)
 }
 
+func (a *App) requireMediaView(w http.ResponseWriter, r *http.Request) (*db.User, bool) {
+	return a.requirePermissionKeyAnyScope(w, r, permKeyMediaView)
+}
+
+func (a *App) requireMediaViewIfLogged(w http.ResponseWriter, r *http.Request) (*db.User, bool) {
+	return a.requirePermissionKeyIfLogged(w, r, permKeyMediaView)
+}
+
 func (a *App) mediaEnsureUser(r *http.Request) *db.User {
 	if r == nil {
 		return nil

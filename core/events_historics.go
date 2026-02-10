@@ -120,10 +120,16 @@ var eventHistoricPrecision = []string{
 }
 
 func (a *App) EventsListPage(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyEventsView); !ok {
+		return
+	}
 	a.renderEventsListPage(w, r, nil)
 }
 
 func (a *App) MunicipiEventsListPage(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyEventsView); !ok {
+		return
+	}
 	munID := extractID(r.URL.Path)
 	if munID <= 0 {
 		http.NotFound(w, r)
@@ -155,6 +161,10 @@ func (a *App) MunicipiEventsListPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) EventHistoricShow(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requirePermissionKeyIfLogged(w, r, permKeyEventsView)
+	if !ok {
+		return
+	}
 	id := extractID(r.URL.Path)
 	if id <= 0 {
 		http.NotFound(w, r)
@@ -165,7 +175,6 @@ func (a *App) EventHistoricShow(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	perms := db.PolicyPermissions{}
 	if user != nil {
 		perms = a.getPermissionsForUser(user.ID)
@@ -266,9 +275,7 @@ func (a *App) EventHistoricShowBySlug(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) EventHistoricNew(w http.ResponseWriter, r *http.Request) {
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.NotFound(w, r)
+	if _, ok := a.requirePermissionKeyAnyScope(w, r, permKeyEventsView); !ok {
 		return
 	}
 	lang := ResolveLang(r)
@@ -309,9 +316,8 @@ func (a *App) EventHistoricNew(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) EventHistoricCreate(w http.ResponseWriter, r *http.Request) {
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.NotFound(w, r)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyEventsView)
+	if !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -374,9 +380,8 @@ func (a *App) EventHistoricCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) EventHistoricEdit(w http.ResponseWriter, r *http.Request) {
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.NotFound(w, r)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyEventsView)
+	if !ok {
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -424,9 +429,8 @@ func (a *App) EventHistoricEdit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) EventHistoricUpdate(w http.ResponseWriter, r *http.Request) {
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.NotFound(w, r)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyEventsView)
+	if !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -563,6 +567,9 @@ func (a *App) EventHistoricUpdate(w http.ResponseWriter, r *http.Request) {
 func (a *App) EventsAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
+		return
+	}
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyEventsView); !ok {
 		return
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")

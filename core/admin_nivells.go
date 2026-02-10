@@ -3,6 +3,7 @@ package core
 import (
 	"database/sql"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -228,6 +229,291 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		"PageAnchor":        pagination.Anchor,
 		"User":              user,
 	})
+}
+
+func (a *App) AdminNivellsSuggest(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	allowAll := false
+	if !a.hasAnyPermissionKey(user.ID, permKeyTerritoriNivellsView) {
+		if !permPolicies(perms) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		allowAll = true
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(query) < 1 {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	limit := 10
+	if val := strings.TrimSpace(r.URL.Query().Get("limit")); val != "" {
+		if v, err := strconv.Atoi(val); err == nil && v > 0 && v <= 25 {
+			limit = v
+		}
+	}
+	filter := db.NivellAdminFilter{
+		Text:   query,
+		Status: "publicat",
+		Limit:  limit,
+	}
+	if nivelRaw := strings.TrimSpace(r.URL.Query().Get("nivel")); nivelRaw != "" {
+		if v, err := strconv.Atoi(nivelRaw); err == nil && v > 0 {
+			filter.Nivel = v
+		}
+	}
+	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
+		if v, err := strconv.Atoi(pid); err == nil && v > 0 {
+			filter.PaisID = v
+		}
+	}
+	scopeFilter := listScopeFilter{}
+	if !allowAll {
+		scopeFilter = a.buildListScopeFilter(user.ID, permKeyTerritoriNivellsView, ScopePais)
+		if !scopeFilter.hasGlobal && scopeFilter.isEmpty() {
+			writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+			return
+		}
+		if !scopeFilter.hasGlobal {
+			filter.AllowedPaisIDs = scopeFilter.paisIDs
+		}
+	}
+	rows, _ := a.DB.ListNivells(filter)
+	lang := ResolveLang(r)
+	items := make([]map[string]interface{}, 0, len(rows))
+	for _, row := range rows {
+		label := strings.TrimSpace(row.NomNivell)
+		if label == "" {
+			label = strings.TrimSpace(row.TipusNivell)
+		}
+		contextParts := []string{}
+		if row.TipusNivell != "" && row.TipusNivell != label {
+			contextParts = append(contextParts, row.TipusNivell)
+		}
+		if row.ParentNom.Valid {
+			contextParts = append(contextParts, strings.TrimSpace(row.ParentNom.String))
+		}
+		if row.PaisISO2.Valid {
+			country := strings.TrimSpace(a.countryLabelFromISO(row.PaisISO2.String, lang))
+			if country != "" {
+				contextParts = append(contextParts, country)
+			}
+		}
+		items = append(items, map[string]interface{}{
+			"id":      row.ID,
+			"nom":     label,
+			"context": strings.Join(contextParts, " · "),
+		})
+	}
+	writeJSON(w, map[string]interface{}{"items": items})
+}
+
+func (a *App) AdminNivellAdministratiuSuggest(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(query) < 1 {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	limit := 10
+	if val := strings.TrimSpace(r.URL.Query().Get("limit")); val != "" {
+		if v, err := strconv.Atoi(val); err == nil && v > 0 && v <= 25 {
+			limit = v
+		}
+	}
+	paisID := 0
+	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
+		if v, err := strconv.Atoi(pid); err == nil && v > 0 {
+			paisID = v
+		}
+	}
+	hasNivellPerm := a.hasAnyPermissionKey(user.ID, permKeyTerritoriNivellsView)
+	hasMunicipiPerm := a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisView)
+	allowAll := permPolicies(perms)
+	if !allowAll && !hasNivellPerm && !hasMunicipiPerm {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	type suggestion struct {
+		label string
+		score int
+		item  map[string]interface{}
+	}
+	suggestions := make([]suggestion, 0, limit*2)
+	queryLower := strings.ToLower(query)
+	matchScore := func(label string) int {
+		clean := strings.ToLower(strings.TrimSpace(label))
+		if clean == "" || queryLower == "" {
+			return 0
+		}
+		if clean == queryLower {
+			return 3
+		}
+		if strings.HasPrefix(clean, queryLower) {
+			return 2
+		}
+		if strings.Contains(clean, queryLower) {
+			return 1
+		}
+		return 0
+	}
+
+	if allowAll || hasNivellPerm {
+		filter := db.NivellAdminFilter{
+			Text:  query,
+			Limit: limit,
+		}
+		if paisID > 0 {
+			filter.PaisID = paisID
+		}
+		if !allowAll {
+			scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriNivellsView, ScopePais)
+			if !scopeFilter.hasGlobal && scopeFilter.isEmpty() {
+				filter.Limit = 0
+			} else if !scopeFilter.hasGlobal {
+				filter.AllowedPaisIDs = scopeFilter.paisIDs
+			}
+		}
+		if filter.Limit != 0 {
+			rows, _ := a.DB.ListNivells(filter)
+			for _, row := range rows {
+				label := strings.TrimSpace(row.NomNivell)
+				if label == "" {
+					label = strings.TrimSpace(row.TipusNivell)
+				}
+				if label == "" {
+					label = "Nivell " + strconv.Itoa(row.Nivel)
+				}
+				score := matchScore(label)
+				if score == 0 {
+					continue
+				}
+				contextParts := []string{}
+				tipus := strings.TrimSpace(row.TipusNivell)
+				if tipus != "" && strings.TrimSpace(row.NomNivell) != "" && strings.ToLower(tipus) != strings.ToLower(strings.TrimSpace(row.NomNivell)) {
+					contextParts = append(contextParts, tipus)
+				}
+				if row.ParentNom.Valid {
+					parent := strings.TrimSpace(row.ParentNom.String)
+					if parent != "" {
+						contextParts = append(contextParts, parent)
+					}
+				}
+				if row.PaisISO2.Valid {
+					iso := strings.ToUpper(strings.TrimSpace(row.PaisISO2.String))
+					if iso != "" {
+						contextParts = append(contextParts, iso)
+					}
+				}
+				suggestions = append(suggestions, suggestion{
+					label: label,
+					score: score,
+					item: map[string]interface{}{
+						"id":         row.ID,
+						"nom":        label,
+						"context":    strings.Join(contextParts, " · "),
+						"scope_type": "nivell",
+					},
+				})
+			}
+		}
+	}
+
+	if allowAll || hasMunicipiPerm {
+		filter := db.MunicipiBrowseFilter{
+			Text:  query,
+			Limit: limit,
+		}
+		if paisID > 0 {
+			filter.PaisID = paisID
+		}
+		if !allowAll {
+			scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriMunicipisView, ScopeMunicipi)
+			if !scopeFilter.hasGlobal && scopeFilter.isEmpty() {
+				filter.Limit = 0
+			} else if !scopeFilter.hasGlobal {
+				filter.AllowedMunicipiIDs = scopeFilter.municipiIDs
+				filter.AllowedProvinciaIDs = scopeFilter.provinciaIDs
+				filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
+				filter.AllowedNivellIDs = scopeFilter.nivellIDs
+				filter.AllowedPaisIDs = scopeFilter.paisIDs
+			}
+		}
+		if filter.Limit != 0 {
+			rows, _ := a.DB.SuggestMunicipis(filter)
+			for _, row := range rows {
+				score := matchScore(row.Nom)
+				if score == 0 {
+					continue
+				}
+				levelIDs := make([]interface{}, 7)
+				levelNames := make([]interface{}, 7)
+				levelTypes := make([]interface{}, 7)
+				for i := 0; i < 7; i++ {
+					if row.LevelIDs[i].Valid {
+						levelIDs[i] = int(row.LevelIDs[i].Int64)
+					}
+					if row.LevelNames[i].Valid {
+						levelNames[i] = strings.TrimSpace(row.LevelNames[i].String)
+					}
+					if row.LevelTypes[i].Valid {
+						levelTypes[i] = strings.TrimSpace(row.LevelTypes[i].String)
+					}
+				}
+				item := map[string]interface{}{
+					"id":            row.ID,
+					"nom":           row.Nom,
+					"tipus":         row.Tipus,
+					"pais_id":       row.PaisID,
+					"nivells":       levelIDs,
+					"nivells_nom":   levelNames,
+					"nivells_tipus": levelTypes,
+					"scope_type":    "municipi",
+				}
+				if row.Latitud.Valid {
+					item["lat"] = row.Latitud.Float64
+				} else {
+					item["lat"] = nil
+				}
+				if row.Longitud.Valid {
+					item["lon"] = row.Longitud.Float64
+				} else {
+					item["lon"] = nil
+				}
+				suggestions = append(suggestions, suggestion{
+					label: row.Nom,
+					score: score,
+					item:  item,
+				})
+			}
+		}
+	}
+
+	sort.Slice(suggestions, func(i, j int) bool {
+		if suggestions[i].score != suggestions[j].score {
+			return suggestions[i].score > suggestions[j].score
+		}
+		return strings.ToLower(suggestions[i].label) < strings.ToLower(suggestions[j].label)
+	})
+	items := make([]map[string]interface{}, 0, limit)
+	for _, s := range suggestions {
+		items = append(items, s.item)
+		if len(items) >= limit {
+			break
+		}
+	}
+	writeJSON(w, map[string]interface{}{"items": items})
 }
 
 func (a *App) AdminNivellsRebuildPage(w http.ResponseWriter, r *http.Request) {

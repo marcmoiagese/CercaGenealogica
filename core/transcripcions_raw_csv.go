@@ -344,6 +344,10 @@ func applyPersonField(p *db.TranscripcioPersonaRaw, field, val string) {
 		p.Cognom2 = val
 	case "cognom2_estat":
 		p.Cognom2Estat = val
+	case "cognom_soltera":
+		p.CognomSoltera = val
+	case "cognom_soltera_estat":
+		p.CognomSolteraEstat = val
 	case "sexe":
 		p.Sexe = val
 	case "sexe_estat":

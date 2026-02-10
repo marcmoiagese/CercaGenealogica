@@ -36,6 +36,11 @@ func (a *App) LlibreWikiHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	canModerate := a.hasPerm(perms, permModerate)
+	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 	canManageArxius := a.CanManageArxius(user)
 	if llibre.ModeracioEstat != "publicat" && !(canManageArxius || canModerate) {
 		http.NotFound(w, r)
@@ -114,7 +119,7 @@ func (a *App) LlibreWikiHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		hasSnapshot := len(before) > 0 || len(after) > 0
 		canRevert := false
-		if hasSnapshot {
+		if hasSnapshot && canRevertPerm {
 			if canModerate {
 				canRevert = true
 			} else if changedByID == user.ID {

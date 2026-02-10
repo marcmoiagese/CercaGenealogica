@@ -52,6 +52,9 @@ func (a *App) AdvancedSearchPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if _, ok := a.requirePermissionKeyAnyScope(w, r, permKeySearchAdvancedView); !ok {
+		return
+	}
 	filter, view := a.parseAdvancedSearchFilter(r)
 	if view.AncestorType == "municipi" && view.MunicipiID == 0 && view.AncestorID > 0 {
 		view.MunicipiID = view.AncestorID
@@ -191,6 +194,9 @@ func (a *App) AdvancedSearchPage(w http.ResponseWriter, r *http.Request) {
 func (a *App) SearchAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
+		return
+	}
+	if _, ok := a.requirePermissionKeyAnyScope(w, r, permKeySearchAdvancedView); !ok {
 		return
 	}
 	a.ensureSearchIndexReady()

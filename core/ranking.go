@@ -25,6 +25,10 @@ func (a *App) Ranking(w http.ResponseWriter, r *http.Request) {
 	var perms db.PolicyPermissions
 	if user != nil {
 		perms = a.getPermissionsForUser(user.ID)
+		if !a.hasAnyPermissionKey(user.ID, permKeyRankingView) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		*r = *a.withPermissions(r, perms)
 	}
 	pageSize := 20

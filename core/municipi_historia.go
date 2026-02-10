@@ -40,6 +40,9 @@ const (
 )
 
 func (a *App) MunicipiHistoriaPublic(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisView); !ok {
+		return
+	}
 	munID := municipiIDFromPath(r.URL.Path)
 	if munID <= 0 {
 		http.NotFound(w, r)

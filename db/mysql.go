@@ -181,6 +181,18 @@ func (d *MySQL) ListDMThreadsForUser(userID int, f DMThreadListFilter) ([]DMThre
 	return d.help.listDMThreadsForUser(userID, f)
 }
 
+func (d *MySQL) CountDMUnread(userID int) (int, error) {
+	return d.help.countDMUnread(userID)
+}
+
+func (d *MySQL) ListDMThreadFolders(userID int) ([]string, error) {
+	return d.help.listDMThreadFolders(userID)
+}
+
+func (d *MySQL) SetDMThreadFolder(threadID, userID int, folder string) error {
+	return d.help.setDMThreadFolder(threadID, userID, folder)
+}
+
 func (d *MySQL) ListDMMessages(threadID, limit, beforeID int) ([]DMMessage, error) {
 	return d.help.listDMMessages(threadID, limit, beforeID)
 }
@@ -223,6 +235,18 @@ func (d *MySQL) UpdateUserProfile(u *User) error {
 
 func (d *MySQL) UpdateUserEmail(userID int, newEmail string) error {
 	return d.help.updateUserEmail(userID, newEmail)
+}
+
+func (d *MySQL) ListDashboardWidgets(userID int) ([]DashboardWidgetConfig, error) {
+	return d.help.listDashboardWidgets(userID)
+}
+
+func (d *MySQL) SaveDashboardWidgets(userID int, widgets []DashboardWidgetConfig) error {
+	return d.help.saveDashboardWidgets(userID, widgets)
+}
+
+func (d *MySQL) ClearDashboardWidgets(userID int) error {
+	return d.help.clearDashboardWidgets(userID)
 }
 
 func (d *MySQL) ListUsersAdmin() ([]UserAdminRow, error) {
@@ -476,6 +500,9 @@ func (d *MySQL) ListArxius(f ArxiuFilter) ([]ArxiuWithCount, error) {
 func (d *MySQL) CountArxius(f ArxiuFilter) (int, error) {
 	return d.help.countArxius(f)
 }
+func (d *MySQL) CountPaisos() (int, error) {
+	return d.help.countPaisos()
+}
 func (d *MySQL) GetArxiu(id int) (*Arxiu, error) {
 	return d.help.getArxiu(id)
 }
@@ -533,6 +560,9 @@ func (d *MySQL) ListLlibres(f LlibreFilter) ([]LlibreRow, error) {
 
 func (d *MySQL) CountLlibres(f LlibreFilter) (int, error) {
 	return d.help.countLlibres(f)
+}
+func (d *MySQL) CountIndexedRegistres(status string) (int, error) {
+	return d.help.countIndexedRegistres(status)
 }
 func (d *MySQL) GetLlibre(id int) (*Llibre, error) {
 	return d.help.getLlibre(id)

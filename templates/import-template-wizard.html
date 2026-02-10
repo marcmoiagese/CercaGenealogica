@@ -85,6 +85,7 @@
                                 <option value="baptisme" {{ if eq $view.RecordType "baptisme" }}selected{{ end }}>{{ t .Lang "importer.editor.record_type.baptisme" }}</option>
                                 <option value="obit" {{ if eq $view.RecordType "obit" }}selected{{ end }}>{{ t .Lang "importer.editor.record_type.obit" }}</option>
                                 <option value="matrimoni" {{ if eq $view.RecordType "matrimoni" }}selected{{ end }}>{{ t .Lang "importer.editor.record_type.matrimoni" }}</option>
+                                <option value="padro" {{ if eq $view.RecordType "padro" }}selected{{ end }}>{{ t .Lang "importer.editor.record_type.padro" }}</option>
                                 <option value="generic" {{ if eq $view.RecordType "generic" }}selected{{ end }}>{{ t .Lang "importer.editor.record_type.generic" }}</option>
                             </select>
                         </div>
@@ -92,7 +93,10 @@
                             <label for="wizardNameOrder">{{ t .Lang "importer.wizard.field.name_order" }}</label>
                             <select id="wizardNameOrder" name="name_order">
                                 <option value="cognoms_first" {{ if eq $view.NameOrder "cognoms_first" }}selected{{ end }}>{{ t .Lang "importer.wizard.name_order.cognoms_first" }}</option>
+                                <option value="cognoms_first_maternal" {{ if eq $view.NameOrder "cognoms_first_maternal" }}selected{{ end }}>{{ t .Lang "importer.wizard.name_order.cognoms_first_maternal" }}</option>
                                 <option value="nom_first" {{ if eq $view.NameOrder "nom_first" }}selected{{ end }}>{{ t .Lang "importer.wizard.name_order.nom_first" }}</option>
+                                <option value="nom_first_paternal_only" {{ if eq $view.NameOrder "nom_first_paternal_only" }}selected{{ end }}>{{ t .Lang "importer.wizard.name_order.nom_first_paternal_only" }}</option>
+                                <option value="nom_first_maternal" {{ if eq $view.NameOrder "nom_first_maternal" }}selected{{ end }}>{{ t .Lang "importer.wizard.name_order.nom_first_maternal" }}</option>
                             </select>
                         </div>
                     </div>
@@ -129,11 +133,14 @@
                                             <option value="person.batejat" {{ if eq .Target "person.batejat" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.batejat" }}</option>
                                             <option value="person.pare" {{ if eq .Target "person.pare" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.pare" }}</option>
                                             <option value="person.mare" {{ if eq .Target "person.mare" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.mare" }}</option>
+                                            <option value="person.mare.cognom_soltera" {{ if eq .Target "person.mare.cognom_soltera" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.mare_cognom_soltera" }}</option>
                                             <option value="person.pare.ofici" {{ if eq .Target "person.pare.ofici" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.pare_ofici" }}</option>
                                             <option value="person.avi_patern" {{ if eq .Target "person.avi_patern" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.avi_patern" }}</option>
                                             <option value="person.avia_paterna" {{ if eq .Target "person.avia_paterna" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.avia_paterna" }}</option>
+                                            <option value="person.avia_paterna.cognom_soltera" {{ if eq .Target "person.avia_paterna.cognom_soltera" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.avia_paterna_cognom_soltera" }}</option>
                                             <option value="person.avi_matern" {{ if eq .Target "person.avi_matern" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.avi_matern" }}</option>
                                             <option value="person.avia_materna" {{ if eq .Target "person.avia_materna" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.avia_materna" }}</option>
+                                            <option value="person.avia_materna.cognom_soltera" {{ if eq .Target "person.avia_materna.cognom_soltera" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.avia_materna_cognom_soltera" }}</option>
                                             <option value="person.padri" {{ if eq .Target "person.padri" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.padri" }}</option>
                                             <option value="person.padrina" {{ if eq .Target "person.padrina" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.padrina" }}</option>
                                             <option value="attr.data_bateig.date_or_text_with_quality" {{ if eq .Target "attr.data_bateig.date_or_text_with_quality" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.baptisme.data_bateig" }}</option>
@@ -144,6 +151,7 @@
                                             <option value="person.difunt" {{ if eq .Target "person.difunt" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.difunt" }}</option>
                                             <option value="person.pare" {{ if eq .Target "person.pare" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.pare" }}</option>
                                             <option value="person.mare" {{ if eq .Target "person.mare" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.mare" }}</option>
+                                            <option value="person.mare.cognom_soltera" {{ if eq .Target "person.mare.cognom_soltera" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.mare_cognom_soltera" }}</option>
                                             <option value="person.parella" {{ if eq .Target "person.parella" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.parella" }}</option>
                                             <option value="person.difunt.estat_civil" {{ if eq .Target "person.difunt.estat_civil" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.estat_civil" }}</option>
                                             <option value="attr.data_defuncio.date_or_text_with_quality" {{ if eq .Target "attr.data_defuncio.date_or_text_with_quality" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.obit.data_defuncio" }}</option>
@@ -158,14 +166,44 @@
                                             <option value="person.nuvi.edat" {{ if eq .Target "person.nuvi.edat" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.nuvi_edat" }}</option>
                                             <option value="person.pare_nuvi" {{ if eq .Target "person.pare_nuvi" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.pare_nuvi" }}</option>
                                             <option value="person.mare_nuvi" {{ if eq .Target "person.mare_nuvi" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.mare_nuvi" }}</option>
+                                            <option value="person.mare_nuvi.cognom_soltera" {{ if eq .Target "person.mare_nuvi.cognom_soltera" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.mare_nuvi_cognom_soltera" }}</option>
                                             <option value="person.novia" {{ if eq .Target "person.novia" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.novia" }}</option>
                                             <option value="person.novia.edat" {{ if eq .Target "person.novia.edat" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.novia_edat" }}</option>
                                             <option value="person.pare_novia" {{ if eq .Target "person.pare_novia" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.pare_novia" }}</option>
                                             <option value="person.mare_novia" {{ if eq .Target "person.mare_novia" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.mare_novia" }}</option>
+                                            <option value="person.mare_novia.cognom_soltera" {{ if eq .Target "person.mare_novia.cognom_soltera" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.mare_novia_cognom_soltera" }}</option>
                                             <option value="person.testimoni1" {{ if eq .Target "person.testimoni1" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.testimoni1" }}</option>
                                             <option value="person.testimoni2" {{ if eq .Target "person.testimoni2" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.testimoni2" }}</option>
                                             <option value="attr.data_matrimoni.date_or_text_with_quality" {{ if eq .Target "attr.data_matrimoni.date_or_text_with_quality" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.matrimoni.data_matrimoni" }}</option>
                                         </optgroup>
+                                        <optgroup label="{{ t $.Lang "importer.editor.targets.group.padro" }}" data-group="padro">
+                                            <option value="person.cap_familia" {{ if eq .Target "person.cap_familia" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.cap_familia" }}</option>
+                                            <option value="person.cap_familia.sexe" {{ if eq .Target "person.cap_familia.sexe" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.sexe" }}</option>
+                                            <option value="person.cap_familia.edat" {{ if eq .Target "person.cap_familia.edat" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.edat" }}</option>
+                                            <option value="person.cap_familia.estat_civil" {{ if eq .Target "person.cap_familia.estat_civil" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.estat_civil" }}</option>
+                                            <option value="person.cap_familia.ofici" {{ if eq .Target "person.cap_familia.ofici" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.ofici" }}</option>
+                                            <option value="person.cap_familia.casa" {{ if eq .Target "person.cap_familia.casa" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.casa" }}</option>
+                                            <option value="attr.data_naixement.date_or_text_with_quality" {{ if eq .Target "attr.data_naixement.date_or_text_with_quality" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.data_naixement" }}</option>
+                                            <option value="attr.carrer.text" {{ if eq .Target "attr.carrer.text" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.carrer" }}</option>
+                                            <option value="attr.numero_casa.text" {{ if eq .Target "attr.numero_casa.text" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.numero_casa" }}</option>
+                                            <option value="attr.adreca.text" {{ if eq .Target "attr.adreca.text" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.adreca" }}</option>
+                                            <option value="attr.localitat.text" {{ if eq .Target "attr.localitat.text" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.localitat" }}</option>
+                                            <option value="attr.procedencia.text" {{ if eq .Target "attr.procedencia.text" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.procedencia" }}</option>
+                                            <option value="attr.alfabetitzat.bool" {{ if eq .Target "attr.alfabetitzat.bool" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.alfabetitzat" }}</option>
+                                            <option value="attr.sap_llegir.bool" {{ if eq .Target "attr.sap_llegir.bool" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.sap_llegir" }}</option>
+                                            <option value="attr.sap_escriure.bool" {{ if eq .Target "attr.sap_escriure.bool" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.sap_escriure" }}</option>
+                                            <option value="attr.condicio_padro.text" {{ if eq .Target "attr.condicio_padro.text" }}selected{{ end }}>{{ t $.Lang "importer.editor.target.padro.condicio_padro" }}</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div class="template-field wizard-name-order-field">
+                                    <label for="col_name_order_{{ .Index }}">{{ t $.Lang "importer.wizard.field.name_order" }}</label>
+                                    <select id="col_name_order_{{ .Index }}" name="col_name_order_{{ .Index }}">
+                                        <option value="cognoms_first" {{ if eq .NameOrder "cognoms_first" }}selected{{ end }}>{{ t $.Lang "importer.wizard.name_order.cognoms_first" }}</option>
+                                        <option value="cognoms_first_maternal" {{ if eq .NameOrder "cognoms_first_maternal" }}selected{{ end }}>{{ t $.Lang "importer.wizard.name_order.cognoms_first_maternal" }}</option>
+                                        <option value="nom_first" {{ if eq .NameOrder "nom_first" }}selected{{ end }}>{{ t $.Lang "importer.wizard.name_order.nom_first" }}</option>
+                                        <option value="nom_first_paternal_only" {{ if eq .NameOrder "nom_first_paternal_only" }}selected{{ end }}>{{ t $.Lang "importer.wizard.name_order.nom_first_paternal_only" }}</option>
+                                        <option value="nom_first_maternal" {{ if eq .NameOrder "nom_first_maternal" }}selected{{ end }}>{{ t $.Lang "importer.wizard.name_order.nom_first_maternal" }}</option>
                                     </select>
                                 </div>
                             </div>
@@ -174,7 +212,7 @@
                     </div>
                 </section>
                 <div class="import-wizard-actions">
-                    <button class="boto-secundari" type="submit" name="wizard_action" value="back">{{ t .Lang "common.back" }}</button>
+                    <button class="boto-secundari" type="submit" name="wizard_action" value="back" formnovalidate>{{ t .Lang "common.back" }}</button>
                     <button class="boto-primari" type="submit">{{ t .Lang "common.next" }}</button>
                 </div>
             </form>
@@ -187,6 +225,7 @@
                 {{ range $view.Columns }}
                 <input type="hidden" name="col_{{ .Index }}" value="{{ .Name }}">
                 <input type="hidden" name="col_target_{{ .Index }}" value="{{ .Target }}">
+                <input type="hidden" name="col_name_order_{{ .Index }}" value="{{ .NameOrder }}">
                 {{ end }}
                 <input type="hidden" name="record_type" value="{{ $view.RecordType }}">
                 <input type="hidden" name="name_order" value="{{ $view.NameOrder }}">
@@ -281,9 +320,17 @@
     <script>
     (function() {
         const recordSelect = document.getElementById('wizardRecordType');
-        if (!recordSelect) return;
         const groups = document.querySelectorAll('.wizard-mapping-panel optgroup[data-group]');
+        const targetSelects = document.querySelectorAll('select[name^="col_target_"]');
+
+        function isPersonRoleTarget(value) {
+            if (!value || value.indexOf("person.") !== 0) return false;
+            const rest = value.slice("person.".length);
+            return rest !== "" && rest.indexOf(".") === -1;
+        }
+
         function applyFilters() {
+            if (!recordSelect) return;
             const value = recordSelect.value || 'baptisme';
             groups.forEach(function(group) {
                 const key = group.getAttribute('data-group') || '';
@@ -291,8 +338,37 @@
                 group.disabled = !enable;
             });
         }
-        recordSelect.addEventListener('change', applyFilters);
-        applyFilters();
+
+        function updateNameOrderForSelect(select) {
+            const card = select.closest('.wizard-column-card');
+            if (!card) return;
+            const field = card.querySelector('.wizard-name-order-field');
+            if (!field) return;
+            const orderSelect = field.querySelector('select');
+            const show = isPersonRoleTarget(select.value);
+            field.style.display = show ? "" : "none";
+            if (orderSelect) {
+                orderSelect.disabled = !show;
+            }
+        }
+
+        function updateAllNameOrders() {
+            targetSelects.forEach(function(select) {
+                updateNameOrderForSelect(select);
+            });
+        }
+
+        if (recordSelect) {
+            recordSelect.addEventListener('change', applyFilters);
+            applyFilters();
+        }
+
+        targetSelects.forEach(function(select) {
+            select.addEventListener('change', function() {
+                updateNameOrderForSelect(select);
+            });
+        });
+        updateAllNameOrders();
     })();
     </script>
 </body>

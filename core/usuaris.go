@@ -1412,6 +1412,18 @@ func (a *App) VerificarSessio(r *http.Request) (*db.User, bool) {
 	}
 
 	Debugf("[VerificarSessio] Sessió vàlida per a usuari: %s (ID: %d)", user.Usuari, user.ID)
+	if r != nil {
+		if userFromContext(r) == nil {
+			*r = *a.withUser(r, user)
+		}
+		if _, found := a.permissionsFromContext(r); !found {
+			perms := a.getPermissionsForUser(user.ID)
+			*r = *a.withPermissions(r, perms)
+		}
+		if _, found := permissionKeysFromContext(r); !found {
+			*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
+		}
+	}
 	return user, true
 }
 

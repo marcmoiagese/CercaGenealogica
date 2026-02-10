@@ -80,6 +80,7 @@ func (a *App) EventHistoricWikiHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	lang := resolveUserLang(r, user)
 	canModerate := a.hasPerm(perms, permModerate)
+	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 	impacts, _ := a.DB.ListEventImpacts(event.ID)
 	currentSnapshot, _ := buildEventHistoricSnapshot(event, impacts)
 
@@ -155,7 +156,7 @@ func (a *App) EventHistoricWikiHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		hasSnapshot := len(before) > 0 || len(after) > 0
 		canRevert := false
-		if hasSnapshot {
+		if hasSnapshot && canRevertPerm {
 			if canModerate {
 				canRevert = true
 			} else if changedByID == user.ID {
@@ -351,6 +352,10 @@ func (a *App) EventHistoricWikiRevert(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	canModerate := a.hasPerm(perms, permModerate)
+	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	if !a.canViewEventHistoric(user, perms, event) {
 		http.NotFound(w, r)
 		return

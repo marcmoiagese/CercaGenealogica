@@ -182,6 +182,18 @@ func (d *PostgreSQL) ListDMThreadsForUser(userID int, f DMThreadListFilter) ([]D
 	return d.help.listDMThreadsForUser(userID, f)
 }
 
+func (d *PostgreSQL) CountDMUnread(userID int) (int, error) {
+	return d.help.countDMUnread(userID)
+}
+
+func (d *PostgreSQL) ListDMThreadFolders(userID int) ([]string, error) {
+	return d.help.listDMThreadFolders(userID)
+}
+
+func (d *PostgreSQL) SetDMThreadFolder(threadID, userID int, folder string) error {
+	return d.help.setDMThreadFolder(threadID, userID, folder)
+}
+
 func (d *PostgreSQL) ListDMMessages(threadID, limit, beforeID int) ([]DMMessage, error) {
 	return d.help.listDMMessages(threadID, limit, beforeID)
 }
@@ -224,6 +236,18 @@ func (d *PostgreSQL) UpdateUserProfile(u *User) error {
 
 func (d *PostgreSQL) UpdateUserEmail(userID int, newEmail string) error {
 	return d.help.updateUserEmail(userID, newEmail)
+}
+
+func (d *PostgreSQL) ListDashboardWidgets(userID int) ([]DashboardWidgetConfig, error) {
+	return d.help.listDashboardWidgets(userID)
+}
+
+func (d *PostgreSQL) SaveDashboardWidgets(userID int, widgets []DashboardWidgetConfig) error {
+	return d.help.saveDashboardWidgets(userID, widgets)
+}
+
+func (d *PostgreSQL) ClearDashboardWidgets(userID int) error {
+	return d.help.clearDashboardWidgets(userID)
 }
 
 func (d *PostgreSQL) ListUsersAdmin() ([]UserAdminRow, error) {
@@ -477,6 +501,9 @@ func (d *PostgreSQL) ListArxius(f ArxiuFilter) ([]ArxiuWithCount, error) {
 func (d *PostgreSQL) CountArxius(f ArxiuFilter) (int, error) {
 	return d.help.countArxius(f)
 }
+func (d *PostgreSQL) CountPaisos() (int, error) {
+	return d.help.countPaisos()
+}
 func (d *PostgreSQL) GetArxiu(id int) (*Arxiu, error) {
 	return d.help.getArxiu(id)
 }
@@ -534,6 +561,9 @@ func (d *PostgreSQL) ListLlibres(f LlibreFilter) ([]LlibreRow, error) {
 
 func (d *PostgreSQL) CountLlibres(f LlibreFilter) (int, error) {
 	return d.help.countLlibres(f)
+}
+func (d *PostgreSQL) CountIndexedRegistres(status string) (int, error) {
+	return d.help.countIndexedRegistres(status)
 }
 func (d *PostgreSQL) GetLlibre(id int) (*Llibre, error) {
 	return d.help.getLlibre(id)

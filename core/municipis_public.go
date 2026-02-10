@@ -20,6 +20,9 @@ type municipiCategoryView struct {
 }
 
 func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisView); !ok {
+		return
+	}
 	id := extractID(r.URL.Path)
 	if id == 0 {
 		http.NotFound(w, r)

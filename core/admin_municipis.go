@@ -110,6 +110,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		filter.AllowedMunicipiIDs = scopeFilter.municipiIDs
 		filter.AllowedProvinciaIDs = scopeFilter.provinciaIDs
 		filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
+		filter.AllowedNivellIDs = scopeFilter.nivellIDs
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 	}
 	if filter.PaisID == 0 {
@@ -472,9 +473,19 @@ func resolveNivellPaisID(levelID int, byID map[int]db.NivellAdministratiu) int {
 }
 
 func (a *App) AdminMunicipisSuggest(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriMunicipisView)
+	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	allowAll := false
+	if !a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisView) {
+		if !permPolicies(perms) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		allowAll = true
 	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if len(query) < 1 {
@@ -497,16 +508,20 @@ func (a *App) AdminMunicipisSuggest(w http.ResponseWriter, r *http.Request) {
 			filter.PaisID = v
 		}
 	}
-	scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriMunicipisView, ScopeMunicipi)
-	if !scopeFilter.hasGlobal && scopeFilter.isEmpty() {
-		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
-		return
-	}
-	if !scopeFilter.hasGlobal {
-		filter.AllowedMunicipiIDs = scopeFilter.municipiIDs
-		filter.AllowedProvinciaIDs = scopeFilter.provinciaIDs
-		filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
-		filter.AllowedPaisIDs = scopeFilter.paisIDs
+	scopeFilter := listScopeFilter{}
+	if !allowAll {
+		scopeFilter = a.buildListScopeFilter(user.ID, permKeyTerritoriMunicipisView, ScopeMunicipi)
+		if !scopeFilter.hasGlobal && scopeFilter.isEmpty() {
+			writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+			return
+		}
+		if !scopeFilter.hasGlobal {
+			filter.AllowedMunicipiIDs = scopeFilter.municipiIDs
+			filter.AllowedProvinciaIDs = scopeFilter.provinciaIDs
+			filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
+			filter.AllowedNivellIDs = scopeFilter.nivellIDs
+			filter.AllowedPaisIDs = scopeFilter.paisIDs
+		}
 	}
 	rows, _ := a.DB.SuggestMunicipis(filter)
 	items := make([]map[string]interface{}, 0, len(rows))

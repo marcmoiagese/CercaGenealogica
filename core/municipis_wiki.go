@@ -67,8 +67,13 @@ func (a *App) MunicipiWikiHistory(w http.ResponseWriter, r *http.Request) {
 	*r = *a.withUser(r, user)
 	perms := a.getPermissionsForUser(user.ID)
 	*r = *a.withPermissions(r, perms)
+	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	canManageTerritory := a.hasPerm(perms, permTerritory)
 	canModerate := a.hasPerm(perms, permModerate)
+	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 	target := a.resolveMunicipiTarget(mun.ID)
 	if !a.HasPermission(user.ID, permKeyTerritoriMunicipisView, target) && !(canManageTerritory || canModerate) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -151,7 +156,7 @@ func (a *App) MunicipiWikiHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		hasSnapshot := len(before) > 0 || len(after) > 0
 		canRevert := false
-		if hasSnapshot && user != nil {
+		if hasSnapshot && canRevertPerm {
 			if canModerate {
 				canRevert = true
 			} else if changedByID == user.ID {

@@ -27,6 +27,9 @@ const (
 )
 
 func (a *App) MunicipiDemografiaPage(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisView); !ok {
+		return
+	}
 	munID := municipiIDFromPath(r.URL.Path)
 	if munID <= 0 {
 		http.NotFound(w, r)
@@ -80,6 +83,9 @@ func (a *App) MunicipiDemografiaPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) municipiDemografiaMetaJSON(w http.ResponseWriter, r *http.Request, municipiID int) {
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisView); !ok {
+		return
+	}
 	meta, err := a.DB.GetMunicipiDemografiaMeta(municipiID)
 	if err != nil {
 		http.Error(w, "failed to load meta", http.StatusInternalServerError)
@@ -119,6 +125,9 @@ func (a *App) municipiDemografiaMetaJSON(w http.ResponseWriter, r *http.Request,
 }
 
 func (a *App) municipiDemografiaSeriesJSON(w http.ResponseWriter, r *http.Request, municipiID int) {
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisView); !ok {
+		return
+	}
 	bucket := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("bucket")))
 	if bucket != "decade" && bucket != "year" {
 		bucket = "year"

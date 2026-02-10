@@ -80,11 +80,8 @@ func main() {
 	})
 
 	http.HandleFunc("/inici", app.RequireLogin(func(w http.ResponseWriter, r *http.Request) {
-		// Verificar si l'usuari té una sessió vàlida
-		user, authenticated := app.VerificarSessio(r)
-		if !authenticated || user == nil {
-			// Redirigir a la pàgina principal si no té sessió
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+		user, ok := app.RequirePermissionKeyAnyScope(w, r, "home.view")
+		if !ok || user == nil {
 			return
 		}
 
@@ -94,9 +91,14 @@ func main() {
 			lang = pref
 		}
 		canManageArxius := app.CanManageArxius(user)
+		widgetStates, err := app.DashboardWidgetStates(user.ID)
+		if err != nil {
+			log.Printf("[dashboard] error carregant widgets: %v", err)
+		}
 		core.RenderPrivateTemplateLang(w, r, "index-logedin.html", lang, map[string]interface{}{
 			"User":            user,
 			"CanManageArxius": canManageArxius,
+			"WidgetStates":    widgetStates,
 		})
 	}))
 
@@ -143,6 +145,8 @@ func main() {
 	http.HandleFunc("/oc/", handleLang("oc"))
 
 	http.HandleFunc("/api/check-availability", applyMiddleware(app.CheckAvailability, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/public/metrics", applyMiddleware(app.PublicMetricsAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/dashboard/widgets", applyMiddleware(app.RequireLogin(app.DashboardWidgetsAPI), core.BlockIPs, core.RateLimit))
 
 	http.HandleFunc("/regenerar-token", func(w http.ResponseWriter, r *http.Request) {
 		handler := func(w http.ResponseWriter, r *http.Request) {
@@ -267,6 +271,9 @@ func main() {
 	})
 	http.HandleFunc("/api/cognoms/", applyMiddleware(app.RequireLogin(app.CognomHeatmapJSON), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/cognoms/variants/suggest", applyMiddleware(app.RequireLogin(app.CognomVariantsSuggestJSON), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/territori/paisos/suggest", applyMiddleware(app.RequireLogin(app.AdminPaisosSuggest), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/territori/nivell-admin/suggest", applyMiddleware(app.RequireLogin(app.AdminNivellAdministratiuSuggest), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/territori/nivells/suggest", applyMiddleware(app.RequireLogin(app.AdminNivellsSuggest), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/territori/municipis/suggest", applyMiddleware(app.RequireLogin(app.AdminMunicipisSuggest), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/territori/eclesiastic/suggest", applyMiddleware(app.RequireLogin(app.AdminEclesSuggest), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/territori/municipis/", applyMiddleware(app.MunicipiMapesAPI, core.BlockIPs, core.RateLimit))
@@ -383,6 +390,11 @@ func main() {
 		case strings.HasSuffix(r.URL.Path, "/bloc"):
 			if r.Method == http.MethodPost {
 				applyMiddleware(app.RequireLogin(app.MessagesBlock), core.BlockIPs, core.RateLimit)(w, r)
+				return
+			}
+		case strings.HasSuffix(r.URL.Path, "/carpeta"):
+			if r.Method == http.MethodPost {
+				applyMiddleware(app.RequireLogin(app.MessagesSetFolder), core.BlockIPs, core.RateLimit)(w, r)
 				return
 			}
 		default:

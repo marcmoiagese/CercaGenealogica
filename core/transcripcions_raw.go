@@ -349,6 +349,10 @@ func personFieldValue(p *db.TranscripcioPersonaRaw, field string) string {
 		return p.Cognom2
 	case "cognom2_estat":
 		return p.Cognom2Estat
+	case "cognom_soltera":
+		return p.CognomSoltera
+	case "cognom_soltera_estat":
+		return p.CognomSolteraEstat
 	case "sexe":
 		return p.Sexe
 	case "sexe_estat":
@@ -837,6 +841,8 @@ func parseTranscripcioPersones(r *http.Request) []db.TranscripcioPersonaRaw {
 	c1Estats := r.Form["person_cognom1_estat"]
 	c2 := r.Form["person_cognom2"]
 	c2Estats := r.Form["person_cognom2_estat"]
+	cSoltera := r.Form["person_cognom_soltera"]
+	cSolteraEstats := r.Form["person_cognom_soltera_estat"]
 	sexes := r.Form["person_sexe"]
 	sexesEstats := r.Form["person_sexe_estat"]
 	edats := r.Form["person_edat"]
@@ -851,7 +857,7 @@ func parseTranscripcioPersones(r *http.Request) []db.TranscripcioPersonaRaw {
 	casaEstats := r.Form["person_casa_estat"]
 	notes := r.Form["person_notes"]
 
-	max := maxLen(roles, noms, c1, c2, sexes, edats, civils, muns, oficis, cases, notes)
+	max := maxLen(roles, noms, c1, c2, cSoltera, sexes, edats, civils, muns, oficis, cases, notes)
 	var res []db.TranscripcioPersonaRaw
 	for i := 0; i < max; i++ {
 		p := db.TranscripcioPersonaRaw{
@@ -862,6 +868,8 @@ func parseTranscripcioPersones(r *http.Request) []db.TranscripcioPersonaRaw {
 			Cognom1Estat:    sliceValue(c1Estats, i),
 			Cognom2:         sliceValue(c2, i),
 			Cognom2Estat:    sliceValue(c2Estats, i),
+			CognomSoltera:   sliceValue(cSoltera, i),
+			CognomSolteraEstat: sliceValue(cSolteraEstats, i),
 			Sexe:            sliceValue(sexes, i),
 			SexeEstat:       sliceValue(sexesEstats, i),
 			EdatText:        sliceValue(edats, i),
@@ -876,7 +884,7 @@ func parseTranscripcioPersones(r *http.Request) []db.TranscripcioPersonaRaw {
 			CasaEstat:       sliceValue(casaEstats, i),
 			Notes:           sliceValue(notes, i),
 		}
-		if p.Rol == "" && p.Nom == "" && p.Cognom1 == "" && p.Cognom2 == "" && p.Sexe == "" && p.EdatText == "" && p.EstatCivilText == "" && p.MunicipiText == "" && p.OficiText == "" && p.CasaNom == "" && p.Notes == "" {
+		if p.Rol == "" && p.Nom == "" && p.Cognom1 == "" && p.Cognom2 == "" && p.CognomSoltera == "" && p.Sexe == "" && p.EdatText == "" && p.EstatCivilText == "" && p.MunicipiText == "" && p.OficiText == "" && p.CasaNom == "" && p.Notes == "" {
 			continue
 		}
 		res = append(res, p)
@@ -1191,7 +1199,7 @@ func (a *App) AdminListRegistresLlibre(w http.ResponseWriter, r *http.Request) {
 		if displayPerson == nil {
 			for i := range persones {
 				p := &persones[i]
-				if p.Nom == "" && p.Cognom1 == "" && p.Cognom2 == "" {
+				if p.Nom == "" && p.Cognom1 == "" && p.Cognom2 == "" && p.CognomSoltera == "" {
 					continue
 				}
 				displayPerson = p
@@ -1835,7 +1843,7 @@ func (a *App) AdminShowRegistre(w http.ResponseWriter, r *http.Request) {
 			if p.PersonaID.Valid {
 				continue
 			}
-			if p.Nom == "" && p.Cognom1 == "" && p.Cognom2 == "" {
+			if p.Nom == "" && p.Cognom1 == "" && p.Cognom2 == "" && p.CognomSoltera == "" {
 				continue
 			}
 			filter := db.PersonaSearchFilter{

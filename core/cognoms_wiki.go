@@ -15,6 +15,10 @@ func (a *App) CognomWikiHistory(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if !isValidWikiObjectType("cognom") {
 		http.NotFound(w, r)
 		return
@@ -37,15 +41,10 @@ func (a *App) CognomWikiHistory(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
-	*r = *a.withUser(r, user)
 	perms := a.getPermissionsForUser(user.ID)
 	*r = *a.withPermissions(r, perms)
 	canModerate := a.hasPerm(perms, permModerate)
+	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 
 	changes, _ := a.DB.ListWikiChanges("cognom", cognomID)
 	changes = filterVisibleWikiChanges(changes, user.ID, canModerate)
@@ -119,7 +118,7 @@ func (a *App) CognomWikiHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		hasSnapshot := len(before) > 0 || len(after) > 0
 		canRevert := false
-		if hasSnapshot {
+		if hasSnapshot && canRevertPerm {
 			if canModerate {
 				canRevert = true
 			} else if changedByID == user.ID {
@@ -253,6 +252,9 @@ func (a *App) CognomWikiStats(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if _, ok := a.requireCognomsView(w, r); !ok {
+		return
+	}
 	if !isValidWikiObjectType("cognom") {
 		http.NotFound(w, r)
 		return
@@ -273,11 +275,6 @@ func (a *App) CognomWikiStats(w http.ResponseWriter, r *http.Request) {
 	cognom, err := a.DB.GetCognom(cognomID)
 	if err != nil || cognom == nil {
 		http.NotFound(w, r)
-		return
-	}
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
@@ -306,6 +303,10 @@ func (a *App) CognomWikiStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) CognomWikiRevert(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -331,13 +332,12 @@ func (a *App) CognomWikiRevert(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
 	perms := a.getPermissionsForUser(user.ID)
 	canModerate := a.hasPerm(perms, permModerate)
+	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	changeID, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("change_id")))
 	if changeID == 0 {
 		http.Error(w, "Canvi invàlid", http.StatusBadRequest)
@@ -406,6 +406,10 @@ func (a *App) CognomWikiRevert(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) CognomWikiMark(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -428,11 +432,6 @@ func (a *App) CognomWikiMark(w http.ResponseWriter, r *http.Request) {
 	}
 	if cognom, err := a.DB.GetCognom(cognomID); err != nil || cognom == nil {
 		http.NotFound(w, r)
-		return
-	}
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	lang := resolveUserLang(r, user)
@@ -477,6 +476,10 @@ func (a *App) CognomWikiMark(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) CognomWikiUnmark(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -499,11 +502,6 @@ func (a *App) CognomWikiUnmark(w http.ResponseWriter, r *http.Request) {
 	}
 	if cognom, err := a.DB.GetCognom(cognomID); err != nil || cognom == nil {
 		http.NotFound(w, r)
-		return
-	}
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	lang := resolveUserLang(r, user)

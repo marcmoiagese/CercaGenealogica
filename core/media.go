@@ -155,6 +155,9 @@ func (a *App) MediaAlbums(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if _, ok := a.requireMediaView(w, r); !ok {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		a.mediaAlbumsList(w, r, cfg)
@@ -171,11 +174,14 @@ func (a *App) MediaAlbumNew(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	user, ok := a.requireMediaView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	user := userFromContext(r)
 	lang := resolveUserLang(r, user)
 	perms, _ := a.permissionsFromContext(r)
 	RenderPrivateTemplateLang(w, r, "media-albums-form.html", lang, map[string]interface{}{
@@ -196,6 +202,9 @@ func (a *App) MediaAlbumDetail(w http.ResponseWriter, r *http.Request) {
 	cfg := a.mediaConfig()
 	if !cfg.Enabled {
 		http.NotFound(w, r)
+		return
+	}
+	if _, ok := a.requireMediaViewIfLogged(w, r); !ok {
 		return
 	}
 	albumPublicID, tail := splitMediaAlbumPath(r.URL.Path)
@@ -226,6 +235,9 @@ func (a *App) MediaItemRoute(w http.ResponseWriter, r *http.Request) {
 	cfg := a.mediaConfig()
 	if !cfg.Enabled {
 		http.NotFound(w, r)
+		return
+	}
+	if _, ok := a.requireMediaViewIfLogged(w, r); !ok {
 		return
 	}
 	itemPublicID, tail := splitMediaItemPath(r.URL.Path)

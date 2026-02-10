@@ -8,17 +8,34 @@
         </div>
     </div>
     <div class="menu-contingut">
+        {{ if and .Data (or (index .Data "CanViewHome") (index .Data "CanViewMessages") (index .Data "CanViewSearch") (index .Data "IsAdmin")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-home"></i>
                 <h3>{{ t .Lang "menu.section.home" }}</h3>
             </div>
             <ul>
+                {{ if or (index .Data "CanViewHome") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/inici">{{ t .Lang "menu.item.home" }}</a></li>
-                <li class="menu-opcio"><a href="/missatges"><i class="fas fa-envelope"></i> {{ t .Lang "menu.item.messages" }}</a></li>
+                {{ end }}
+                {{ if or (index .Data "CanViewMessages") (index .Data "IsAdmin") }}
+                {{ $unread := index .Data "UnreadMessagesCount" }}
+                <li class="menu-opcio">
+                    <a class="menu-link" href="/missatges">
+                        <i class="fas fa-envelope"></i>
+                        <span class="menu-link-text">{{ t .Lang "menu.item.messages" }}</span>
+                        {{ if and $unread (gt $unread 0) }}
+                        <span class="menu-badge" title="{{ $unread }} missatges pendents">{{ $unread }}</span>
+                        {{ end }}
+                    </a>
+                </li>
+                {{ end }}
+                {{ if or (index .Data "CanViewSearch") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/cerca-avancada"><i class="fas fa-search-plus"></i> {{ t .Lang "search.advanced.title" }}</a></li>
+                {{ end }}
             </ul>
         </div>
+        {{ end }}
         {{ if and .Data (index .Data "IsAdmin") }}
         <div class="menu-seccio">
             <div class="menu-titol">
@@ -39,32 +56,45 @@
             </ul>
         </div>
         {{ end }}
-        {{ if and .Data (or (index .Data "CanManageTerritory") (index .Data "CanManageEclesia") (index .Data "IsAdmin")) }}
+        {{ if and .Data (or (index .Data "CanViewTerritory") (index .Data "CanManageTerritory") (index .Data "CanManageEclesia") (index .Data "IsAdmin")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-map"></i>
                 <h3>{{ t .Lang "menu.section.territory" }}</h3>
             </div>
             <ul>
+                {{ if or (index .Data "CanViewNivells") (index .Data "CanManageTerritory") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/territori/nivells"><i class="fas fa-sitemap"></i> {{ t .Lang "admin.menu.levels" }}</a></li>
+                {{ end }}
+                {{ if or (index .Data "CanViewMunicipis") (index .Data "CanManageTerritory") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/territori/municipis"><i class="fas fa-map-marker-alt"></i> {{ t .Lang "municipis.title" }}</a></li>
+                {{ end }}
+                {{ if or (index .Data "CanViewEcles") (index .Data "CanManageEclesia") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/territori/eclesiastic"><i class="fas fa-church"></i> {{ t .Lang "admin.menu.ecles" }}</a></li>
+                {{ end }}
             </ul>
         </div>
         {{ end }}
-        {{ if and .Data (or (index .Data "CanManageArxius") (index .Data "IsAdmin")) }}
+        {{ if and .Data (or (index .Data "CanViewDocumentals") (index .Data "CanManageArxius") (index .Data "IsAdmin")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-archive"></i>
                 <h3>{{ t .Lang "menu.section.funds" }}</h3>
             </div>
             <ul>
+                {{ if or (index .Data "CanViewArxius") (index .Data "CanManageArxius") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/documentals/arxius"><i class="fas fa-archive"></i> {{ t .Lang "admin.menu.archives" }}</a></li>
+                {{ end }}
+                {{ if or (index .Data "CanViewLlibres") (index .Data "CanManageArxius") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/documentals/llibres"><i class="fas fa-book"></i> {{ t .Lang "admin.menu.books" }}</a></li>
+                {{ end }}
+                {{ if or (index .Data "CanViewImportTemplates") (index .Data "CanManageArxius") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/importador/plantilles"><i class="fas fa-file-import"></i> {{ t .Lang "menu.item.import_templates" }}</a></li>
+                {{ end }}
             </ul>
         </div>
         {{ end }}
+        {{ if and .Data (or (index .Data "CanViewMedia") (index .Data "IsAdmin")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-photo-video"></i>
@@ -74,6 +104,7 @@
                 <li class="menu-opcio"><a href="/media/albums"><i class="fas fa-images"></i> {{ t .Lang "menu.media.albums" }}</a></li>
             </ul>
         </div>
+        {{ end }}
         {{ if and .Data (or (index .Data "CanModerate") (index .Data "IsAdmin")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
@@ -87,6 +118,7 @@
             </ul>
         </div>
         {{ end }}
+        {{ if and .Data (or (index .Data "CanViewRanking") (index .Data "IsAdmin")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-star"></i>
@@ -100,17 +132,26 @@
                 {{ end }}
             </ul>
         </div>
+        {{ end }}
+        {{ if and .Data (or (index .Data "CanViewPersones") (index .Data "CanViewCognoms") (index .Data "IsAdmin")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-users"></i>
                 <h3>{{ t .Lang "menu.section.persons" }}</h3>
             </div>
             <ul>
+                {{ if or (index .Data "CanViewPersones") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/persones"><i class="fas fa-users"></i> {{ t .Lang "persons.title" }}</a></li>
+                {{ end }}
+                {{ if or (index .Data "CanCreatePerson") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/persones/new"><i class="fas fa-user-plus"></i> {{ t .Lang "persons.new" }}</a></li>
+                {{ end }}
+                {{ if or (index .Data "CanViewCognoms") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/cognoms"><i class="fas fa-signature"></i> {{ t .Lang "menu.surnames" }}</a></li>
+                {{ end }}
             </ul>
         </div>
+        {{ end }}
     </div>
 </aside>
 <div class="overlay-menu" id="overlayMenu"></div>

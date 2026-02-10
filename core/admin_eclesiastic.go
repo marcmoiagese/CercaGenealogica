@@ -205,9 +205,19 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminEclesSuggest(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriEclesView)
+	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	allowAll := false
+	if !a.hasAnyPermissionKey(user.ID, permKeyTerritoriEclesView) {
+		if !permPolicies(perms) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		allowAll = true
 	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if len(query) < 1 {
@@ -225,14 +235,17 @@ func (a *App) AdminEclesSuggest(w http.ResponseWriter, r *http.Request) {
 		Status: "publicat",
 		Limit:  limit,
 	}
-	scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriEclesView, ScopeEcles)
-	if !scopeFilter.hasGlobal && scopeFilter.isEmpty() {
-		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
-		return
-	}
-	if !scopeFilter.hasGlobal {
-		filter.AllowedEclesIDs = scopeFilter.eclesIDs
-		filter.AllowedPaisIDs = scopeFilter.paisIDs
+	scopeFilter := listScopeFilter{}
+	if !allowAll {
+		scopeFilter = a.buildListScopeFilter(user.ID, permKeyTerritoriEclesView, ScopeEcles)
+		if !scopeFilter.hasGlobal && scopeFilter.isEmpty() {
+			writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+			return
+		}
+		if !scopeFilter.hasGlobal {
+			filter.AllowedEclesIDs = scopeFilter.eclesIDs
+			filter.AllowedPaisIDs = scopeFilter.paisIDs
+		}
 	}
 	rows, _ := a.DB.ListArquebisbats(filter)
 	cache := map[int]*db.Arquebisbat{}

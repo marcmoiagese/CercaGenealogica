@@ -15,13 +15,12 @@ func (a *App) MediaDeepZoom(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	user, ok := a.requireMediaView(w, r)
+	if !ok {
 		return
 	}
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	itemPublicID, tail := splitMediaDZPath(r.URL.Path)

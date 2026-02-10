@@ -22,6 +22,7 @@
                     </ul>
                 </div>
                 <div class="perfil-usuari">
+                    {{ $unread := index .Data "UnreadMessagesCount" }}
                     <button class="boto-perfil-usuari" id="botoPerfil">
                         <i class="fas fa-user-circle"></i>
                         {{ with .Data.User }}
@@ -33,11 +34,22 @@
                         {{ else }}
                             {{ t .Lang "nav.profile" }}
                         {{ end }}
+                        {{ if and $unread (gt $unread 0) }}
+                        <span class="menu-badge menu-badge--compact" title="{{ $unread }} missatges pendents">{{ $unread }}</span>
+                        {{ end }}
                         <i class="fas fa-chevron-down"></i>
                     </button>
                     <ul class="dropdown-perfil" id="dropdownPerfil">
                         <li><a href="/perfil"><i class="fas fa-user-cog"></i> {{ t .Lang "nav.profile" }}</a></li>
                         <li><a href="#"><i class="fas fa-folder-open"></i> {{ t .Lang "nav.space" }}</a></li>
+                        <li>
+                            <a href="/missatges">
+                                <i class="fas fa-envelope"></i> {{ t .Lang "menu.item.messages" }}
+                                {{ if and $unread (gt $unread 0) }}
+                                <span class="menu-badge menu-badge--compact menu-badge--right" title="{{ $unread }} missatges pendents">{{ $unread }}</span>
+                                {{ end }}
+                            </a>
+                        </li>
                         <li><a href="/logout"><i class="fas fa-sign-out-alt"></i> {{ t .Lang "nav.logout" }}</a></li>
                     </ul>
                 </div>

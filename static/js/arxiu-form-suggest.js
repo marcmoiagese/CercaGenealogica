@@ -31,13 +31,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function setupSuggest(input) {
-        const api = input.dataset.api || "";
         const hiddenId = input.dataset.hidden || "";
+        const hiddenTypeId = input.dataset.hiddenType || "";
         const suggestionsId = input.dataset.suggestions || "";
-        if (!api || !hiddenId || !suggestionsId) {
+        if (!hiddenId || !suggestionsId) {
             return;
         }
         const hidden = document.getElementById(hiddenId);
+        const hiddenType = hiddenTypeId ? document.getElementById(hiddenTypeId) : null;
         const suggestions = document.getElementById(suggestionsId);
         if (!hidden || !suggestions) {
             return;
@@ -104,14 +105,25 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             hidden.value = item.id ? String(item.id) : "";
             input.value = item.nom || "";
+            if (hiddenType && item.scope_type) {
+                hiddenType.value = String(item.scope_type);
+            }
             clearSuggestions();
         }
 
         function fetchSuggestions(query) {
+            const apiAttr = input.dataset.api;
+            const apiEndpoint = apiAttr !== undefined ? apiAttr : "";
+            if (!apiEndpoint) {
+                clearSuggestions();
+                return;
+            }
             const params = new URLSearchParams();
             params.set("q", query);
             params.set("limit", "10");
-            fetch(`${api}?${params.toString()}`, { credentials: "same-origin" })
+            const url = new URL(apiEndpoint, window.location.origin);
+            params.forEach((value, key) => url.searchParams.set(key, value));
+            fetch(url.toString(), { credentials: "same-origin" })
                 .then((resp) => resp.json())
                 .then((data) => {
                     renderSuggestions(data.items || []);
@@ -123,6 +135,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         function handleInput() {
             hidden.value = "";
+            if (hiddenType) {
+                hiddenType.value = "";
+            }
             const value = input.value.trim();
             if (value.length < 1) {
                 clearSuggestions();

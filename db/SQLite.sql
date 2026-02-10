@@ -30,6 +30,20 @@ CREATE TABLE IF NOT EXISTS usuaris (
     permissions_version INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS user_dashboard_widgets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    widget_id TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    is_hidden INTEGER NOT NULL DEFAULT 0,
+    settings_json TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, widget_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_dashboard_widgets_user ON user_dashboard_widgets(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_dashboard_widgets_order ON user_dashboard_widgets(user_id, position);
+
 CREATE TABLE IF NOT EXISTS grups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL UNIQUE,
@@ -532,7 +546,7 @@ CREATE TABLE IF NOT EXISTS codis_postals (
 
 CREATE TABLE IF NOT EXISTS llibres (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    arquevisbat_id INTEGER NOT NULL,
+    arquevisbat_id INTEGER,
     municipi_id INTEGER NOT NULL,
     nom_esglesia TEXT,                     -- ex: "Sant Jaume Apòstol"
     -- Codi identificador únic (de cada sistema)
@@ -562,7 +576,7 @@ CREATE TABLE IF NOT EXISTS llibres (
     moderation_notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(arquevisbat_id) REFERENCES arquebisbats(id) ON DELETE CASCADE,
+    FOREIGN KEY(arquevisbat_id) REFERENCES arquebisbats(id) ON DELETE SET NULL,
     FOREIGN KEY(municipi_id) REFERENCES municipis(id) ON DELETE RESTRICT
 );
 
@@ -656,6 +670,7 @@ CREATE TABLE IF NOT EXISTS media_albums (
   description TEXT,
   album_type TEXT NOT NULL DEFAULT 'other' CHECK (album_type IN ('book','memorial','photo','achievement_icon','other')),
   owner_user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+  llibre_id INTEGER REFERENCES llibres(id) ON DELETE SET NULL,
   moderation_status TEXT NOT NULL DEFAULT 'pending' CHECK (moderation_status IN ('pending','approved','rejected')),
   visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','registered','public','restricted_group','admins_only','custom_policy')),
   restricted_group_id INTEGER REFERENCES grups(id) ON DELETE SET NULL,
@@ -744,6 +759,7 @@ CREATE INDEX IF NOT EXISTS idx_media_items_album ON media_items(album_id);
 CREATE INDEX IF NOT EXISTS idx_media_items_moderation ON media_items(moderation_status);
 CREATE INDEX IF NOT EXISTS idx_media_albums_owner ON media_albums(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_media_albums_moderation ON media_albums(moderation_status);
+CREATE INDEX IF NOT EXISTS idx_media_albums_llibre ON media_albums(llibre_id);
 
 -- Transcripcions RAW de registres
 CREATE TABLE IF NOT EXISTS transcripcions_raw (
@@ -822,6 +838,8 @@ CREATE TABLE IF NOT EXISTS transcripcions_persones_raw (
   cognom1_estat TEXT,
   cognom2 TEXT,
   cognom2_estat TEXT,
+  cognom_soltera TEXT,
+  cognom_soltera_estat TEXT,
   sexe TEXT,
   sexe_estat TEXT,
   edat_text TEXT,
@@ -1515,6 +1533,7 @@ CREATE TABLE IF NOT EXISTS dm_thread_state (
   archived INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0,1)),
   muted INTEGER NOT NULL DEFAULT 0 CHECK (muted IN (0,1)),
   deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0,1)),
+  folder TEXT,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (thread_id, user_id)
 );
@@ -1522,6 +1541,8 @@ CREATE INDEX IF NOT EXISTS idx_dm_thread_state_user_archived
   ON dm_thread_state(user_id, archived, updated_at);
 CREATE INDEX IF NOT EXISTS idx_dm_thread_state_user_deleted
   ON dm_thread_state(user_id, deleted, updated_at);
+CREATE INDEX IF NOT EXISTS idx_dm_thread_state_user_folder
+  ON dm_thread_state(user_id, folder);
 
 CREATE TABLE IF NOT EXISTS dm_messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

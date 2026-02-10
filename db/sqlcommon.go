@@ -2213,6 +2213,34 @@ func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 			args = append(args, id)
 		}
 	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		where += " AND ("
+		for i, col := range parts {
+			if i > 0 {
+				where += " OR "
+			}
+			where += col + " IN (" + placeholders + ")"
+		}
+		where += ")"
+		for range parts {
+			for _, id := range ids {
+				args = append(args, id)
+			}
+		}
+	}
 	if strings.TrimSpace(f.Text) != "" {
 		where += " AND lower(m.nom) LIKE ?"
 		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
@@ -2238,6 +2266,7 @@ func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 	inClause("m.id", f.AllowedMunicipiIDs)
 	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
 	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClauseAnyLevel(f.AllowedNivellIDs)
 	inClause("na1.id", f.AllowedPaisIDs)
 	query := `
         SELECT m.id, m.nom, m.tipus, m.estat, m.codi_postal,
@@ -2299,6 +2328,34 @@ func (h sqlHelper) countMunicipis(f MunicipiFilter) (int, error) {
 			args = append(args, id)
 		}
 	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		where += " AND ("
+		for i, col := range parts {
+			if i > 0 {
+				where += " OR "
+			}
+			where += col + " IN (" + placeholders + ")"
+		}
+		where += ")"
+		for range parts {
+			for _, id := range ids {
+				args = append(args, id)
+			}
+		}
+	}
 	if strings.TrimSpace(f.Text) != "" {
 		where += " AND lower(m.nom) LIKE ?"
 		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
@@ -2324,6 +2381,7 @@ func (h sqlHelper) countMunicipis(f MunicipiFilter) (int, error) {
 	inClause("m.id", f.AllowedMunicipiIDs)
 	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
 	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClauseAnyLevel(f.AllowedNivellIDs)
 	inClause("na1.id", f.AllowedPaisIDs)
 	query := `
         SELECT COUNT(*)
@@ -2349,6 +2407,34 @@ func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowse
 		where += " AND " + column + " IN (" + placeholders + ")"
 		for _, id := range ids {
 			args = append(args, id)
+		}
+	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		where += " AND ("
+		for i, col := range parts {
+			if i > 0 {
+				where += " OR "
+			}
+			where += col + " IN (" + placeholders + ")"
+		}
+		where += ")"
+		for range parts {
+			for _, id := range ids {
+				args = append(args, id)
+			}
 		}
 	}
 	if strings.TrimSpace(f.Text) != "" {
@@ -2394,6 +2480,7 @@ func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowse
 	inClause("m.id", f.AllowedMunicipiIDs)
 	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
 	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClauseAnyLevel(f.AllowedNivellIDs)
 	inClause("na1.pais_id", f.AllowedPaisIDs)
 	orderBy := "m.nom"
 	switch strings.TrimSpace(f.Sort) {
@@ -2489,6 +2576,34 @@ func (h sqlHelper) countMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
 			args = append(args, id)
 		}
 	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		where += " AND ("
+		for i, col := range parts {
+			if i > 0 {
+				where += " OR "
+			}
+			where += col + " IN (" + placeholders + ")"
+		}
+		where += ")"
+		for range parts {
+			for _, id := range ids {
+				args = append(args, id)
+			}
+		}
+	}
 	if strings.TrimSpace(f.Text) != "" {
 		text := "%" + strings.ToLower(strings.TrimSpace(f.Text)) + "%"
 		where += " AND (lower(m.nom) LIKE ? OR lower(na1.nom_nivell) LIKE ? OR lower(na2.nom_nivell) LIKE ? OR lower(na3.nom_nivell) LIKE ? OR lower(na4.nom_nivell) LIKE ? OR lower(na5.nom_nivell) LIKE ? OR lower(na6.nom_nivell) LIKE ? OR lower(na7.nom_nivell) LIKE ?)"
@@ -2532,6 +2647,7 @@ func (h sqlHelper) countMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
 	inClause("m.id", f.AllowedMunicipiIDs)
 	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
 	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClauseAnyLevel(f.AllowedNivellIDs)
 	inClause("na1.pais_id", f.AllowedPaisIDs)
 	query := `
 		SELECT COUNT(*)
@@ -2565,6 +2681,34 @@ func (h sqlHelper) suggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRo
 			args = append(args, id)
 		}
 	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		where += " AND ("
+		for i, col := range parts {
+			if i > 0 {
+				where += " OR "
+			}
+			where += col + " IN (" + placeholders + ")"
+		}
+		where += ")"
+		for range parts {
+			for _, id := range ids {
+				args = append(args, id)
+			}
+		}
+	}
 	if strings.TrimSpace(f.Text) != "" {
 		text := "%" + strings.ToLower(strings.TrimSpace(f.Text)) + "%"
 		where += " AND (lower(m.nom) LIKE ? OR lower(na1.nom_nivell) LIKE ? OR lower(na2.nom_nivell) LIKE ? OR lower(na3.nom_nivell) LIKE ? OR lower(na4.nom_nivell) LIKE ? OR lower(na5.nom_nivell) LIKE ? OR lower(na6.nom_nivell) LIKE ? OR lower(na7.nom_nivell) LIKE ?)"
@@ -2608,6 +2752,7 @@ func (h sqlHelper) suggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRo
 	inClause("m.id", f.AllowedMunicipiIDs)
 	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
 	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClauseAnyLevel(f.AllowedNivellIDs)
 	inClause("na1.pais_id", f.AllowedPaisIDs)
 	query := `
 		SELECT m.id, m.nom, m.tipus,
@@ -3079,9 +3224,78 @@ func (h sqlHelper) ensurePermissionsSchema() {
 	h.ensureUserExtraColumns()
 	h.ensurePersonaExtraColumns()
 	h.ensurePersonaFieldLinksTable()
+	h.ensureDashboardWidgetsTable()
 	h.ensurePolicyGrantsTable()
 	h.ensureMediaModerationColumns()
 	h.ensureMediaCreditsTables()
+}
+
+func (h sqlHelper) ensureDashboardWidgetsTable() {
+	var stmt string
+	switch h.style {
+	case "mysql":
+		stmt = `CREATE TABLE IF NOT EXISTS user_dashboard_widgets (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            widget_id VARCHAR(120) NOT NULL,
+            position INT NOT NULL DEFAULT 0,
+            is_hidden BOOLEAN NOT NULL DEFAULT 0,
+            settings_json TEXT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_user_widget (user_id, widget_id),
+            FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE
+        )`
+	case "postgres":
+		stmt = `CREATE TABLE IF NOT EXISTS user_dashboard_widgets (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+            widget_id TEXT NOT NULL,
+            position INTEGER NOT NULL DEFAULT 0,
+            is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
+            settings_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (user_id, widget_id)
+        )`
+	default: // sqlite
+		stmt = `CREATE TABLE IF NOT EXISTS user_dashboard_widgets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+            widget_id TEXT NOT NULL,
+            position INTEGER NOT NULL DEFAULT 0,
+            is_hidden INTEGER NOT NULL DEFAULT 0,
+            settings_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (user_id, widget_id)
+        )`
+	}
+	if stmt != "" {
+		_, _ = h.db.Exec(stmt)
+	}
+
+	indexStmts := []string{}
+	switch h.style {
+	case "mysql":
+		indexStmts = []string{
+			"CREATE INDEX idx_user_dashboard_widgets_user ON user_dashboard_widgets(user_id)",
+			"CREATE INDEX idx_user_dashboard_widgets_order ON user_dashboard_widgets(user_id, position)",
+		}
+	case "postgres":
+		indexStmts = []string{
+			"CREATE INDEX IF NOT EXISTS idx_user_dashboard_widgets_user ON user_dashboard_widgets(user_id)",
+			"CREATE INDEX IF NOT EXISTS idx_user_dashboard_widgets_order ON user_dashboard_widgets(user_id, position)",
+		}
+	default: // sqlite
+		indexStmts = []string{
+			"CREATE INDEX IF NOT EXISTS idx_user_dashboard_widgets_user ON user_dashboard_widgets(user_id)",
+			"CREATE INDEX IF NOT EXISTS idx_user_dashboard_widgets_order ON user_dashboard_widgets(user_id, position)",
+		}
+	}
+	for _, idx := range indexStmts {
+		_, _ = h.db.Exec(idx)
+	}
 }
 
 func (h sqlHelper) ensurePolicyGrantsTable() {
@@ -3931,6 +4145,86 @@ func (h sqlHelper) updateUserEmail(userID int, newEmail string) error {
 	return err
 }
 
+func (h sqlHelper) listDashboardWidgets(userID int) ([]DashboardWidgetConfig, error) {
+	query := `
+        SELECT widget_id, position, is_hidden, settings_json
+        FROM user_dashboard_widgets
+        WHERE user_id = ?
+        ORDER BY position ASC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []DashboardWidgetConfig
+	for rows.Next() {
+		var row DashboardWidgetConfig
+		var hiddenVal int
+		var settings sql.NullString
+		if err := rows.Scan(&row.WidgetID, &row.Order, &hiddenVal, &settings); err != nil {
+			return nil, err
+		}
+		row.Hidden = hiddenVal != 0
+		if settings.Valid {
+			row.SettingsJSON = settings.String
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) saveDashboardWidgets(userID int, widgets []DashboardWidgetConfig) error {
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	rollback := true
+	defer func() {
+		if rollback {
+			_ = tx.Rollback()
+		}
+	}()
+
+	delStmt := formatPlaceholders(h.style, `DELETE FROM user_dashboard_widgets WHERE user_id = ?`)
+	if _, err = tx.Exec(delStmt, userID); err != nil {
+		return err
+	}
+	if len(widgets) == 0 {
+		return tx.Commit()
+	}
+
+	insertStmt := `
+        INSERT INTO user_dashboard_widgets (user_id, widget_id, position, is_hidden, settings_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	insertStmt = formatPlaceholders(h.style, insertStmt)
+
+	for _, w := range widgets {
+		hiddenVal := 0
+		if w.Hidden {
+			hiddenVal = 1
+		}
+		var settings interface{}
+		if strings.TrimSpace(w.SettingsJSON) != "" {
+			settings = w.SettingsJSON
+		}
+		if _, err = tx.Exec(insertStmt, userID, w.WidgetID, w.Order, hiddenVal, settings); err != nil {
+			return err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	rollback = false
+	return nil
+}
+
+func (h sqlHelper) clearDashboardWidgets(userID int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM user_dashboard_widgets WHERE user_id = ?`)
+	_, err := h.db.Exec(stmt, userID)
+	return err
+}
+
 func (h sqlHelper) listUsersAdmin() ([]UserAdminRow, error) {
 	h.ensureUserExtraColumns()
 	query := `
@@ -4429,11 +4723,35 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 			allowedArgs = append(allowedArgs, id)
 		}
 	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		orParts := make([]string, 0, len(parts))
+		for _, col := range parts {
+			orParts = append(orParts, col+" IN ("+placeholders+")")
+			for _, id := range ids {
+				allowedArgs = append(allowedArgs, id)
+			}
+		}
+		allowedClauses = append(allowedClauses, "("+strings.Join(orParts, " OR ")+")")
+	}
 	inClause("a.id", filter.AllowedArxiuIDs)
 	inClause("a.municipi_id", filter.AllowedMunicipiIDs)
 	inClause("a.entitat_eclesiastica_id", filter.AllowedEclesIDs)
 	inClause("m.nivell_administratiu_id_3", filter.AllowedProvinciaIDs)
 	inClause("m.nivell_administratiu_id_4", filter.AllowedComarcaIDs)
+	inClauseAnyLevel(filter.AllowedNivellIDs)
 	inClause("na1.pais_id", filter.AllowedPaisIDs)
 	if len(allowedClauses) > 0 {
 		clauses = append(clauses, "("+strings.Join(allowedClauses, " OR ")+")")
@@ -4527,11 +4845,35 @@ func (h sqlHelper) countArxius(filter ArxiuFilter) (int, error) {
 			allowedArgs = append(allowedArgs, id)
 		}
 	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		orParts := make([]string, 0, len(parts))
+		for _, col := range parts {
+			orParts = append(orParts, col+" IN ("+placeholders+")")
+			for _, id := range ids {
+				allowedArgs = append(allowedArgs, id)
+			}
+		}
+		allowedClauses = append(allowedClauses, "("+strings.Join(orParts, " OR ")+")")
+	}
 	inClause("a.id", filter.AllowedArxiuIDs)
 	inClause("a.municipi_id", filter.AllowedMunicipiIDs)
 	inClause("a.entitat_eclesiastica_id", filter.AllowedEclesIDs)
 	inClause("m.nivell_administratiu_id_3", filter.AllowedProvinciaIDs)
 	inClause("m.nivell_administratiu_id_4", filter.AllowedComarcaIDs)
+	inClauseAnyLevel(filter.AllowedNivellIDs)
 	inClause("na1.pais_id", filter.AllowedPaisIDs)
 	if len(allowedClauses) > 0 {
 		clauses = append(clauses, "("+strings.Join(allowedClauses, " OR ")+")")
@@ -4546,6 +4888,16 @@ func (h sqlHelper) countArxius(filter ArxiuFilter) (int, error) {
 	query = formatPlaceholders(h.style, query)
 	var total int
 	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) countPaisos() (int, error) {
+	query := `SELECT COUNT(*) FROM paisos`
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query).Scan(&total); err != nil {
 		return 0, err
 	}
 	return total, nil
@@ -4834,11 +5186,35 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 			allowedArgs = append(allowedArgs, id)
 		}
 	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		orParts := make([]string, 0, len(parts))
+		for _, col := range parts {
+			orParts = append(orParts, col+" IN ("+placeholders+")")
+			for _, id := range ids {
+				allowedArgs = append(allowedArgs, id)
+			}
+		}
+		allowedClauses = append(allowedClauses, "("+strings.Join(orParts, " OR ")+")")
+	}
 	inClause("l.id", filter.AllowedLlibreIDs)
 	inClause("l.municipi_id", filter.AllowedMunicipiIDs)
 	inClause("l.arquevisbat_id", filter.AllowedEclesIDs)
 	inClause("m.nivell_administratiu_id_3", filter.AllowedProvinciaIDs)
 	inClause("m.nivell_administratiu_id_4", filter.AllowedComarcaIDs)
+	inClauseAnyLevel(filter.AllowedNivellIDs)
 	inClause("na1.pais_id", filter.AllowedPaisIDs)
 	if len(filter.AllowedArxiuIDs) > 0 {
 		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.AllowedArxiuIDs)), ",")
@@ -4852,7 +5228,7 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 		args = append(args, allowedArgs...)
 	}
 	query := `
-        SELECT l.id, l.arquevisbat_id, l.municipi_id, l.nom_esglesia, l.codi_digital, l.codi_fisic,
+        SELECT l.id, COALESCE(l.arquevisbat_id, 0), l.municipi_id, l.nom_esglesia, l.codi_digital, l.codi_fisic,
                l.titol, l.tipus_llibre, l.cronologia, l.volum, l.abat, l.contingut, l.llengua,
                l.requeriments_tecnics, l.unitat_catalogacio, l.unitat_instalacio, l.pagines,
                l.url_base, l.url_imatge_prefix, l.pagina, l.indexacio_completa,
@@ -4940,11 +5316,35 @@ func (h sqlHelper) countLlibres(filter LlibreFilter) (int, error) {
 			allowedArgs = append(allowedArgs, id)
 		}
 	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		orParts := make([]string, 0, len(parts))
+		for _, col := range parts {
+			orParts = append(orParts, col+" IN ("+placeholders+")")
+			for _, id := range ids {
+				allowedArgs = append(allowedArgs, id)
+			}
+		}
+		allowedClauses = append(allowedClauses, "("+strings.Join(orParts, " OR ")+")")
+	}
 	inClause("l.id", filter.AllowedLlibreIDs)
 	inClause("l.municipi_id", filter.AllowedMunicipiIDs)
 	inClause("l.arquevisbat_id", filter.AllowedEclesIDs)
 	inClause("m.nivell_administratiu_id_3", filter.AllowedProvinciaIDs)
 	inClause("m.nivell_administratiu_id_4", filter.AllowedComarcaIDs)
+	inClauseAnyLevel(filter.AllowedNivellIDs)
 	inClause("na1.pais_id", filter.AllowedPaisIDs)
 	if len(filter.AllowedArxiuIDs) > 0 {
 		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.AllowedArxiuIDs)), ",")
@@ -4971,9 +5371,28 @@ func (h sqlHelper) countLlibres(filter LlibreFilter) (int, error) {
 	return total, nil
 }
 
+func (h sqlHelper) countIndexedRegistres(status string) (int, error) {
+	clauses := []string{"1=1"}
+	args := []interface{}{}
+	if strings.TrimSpace(status) != "" {
+		clauses = append(clauses, "l.moderation_status = ?")
+		args = append(args, strings.TrimSpace(status))
+	}
+	query := `SELECT COALESCE(SUM(s.total_registres), 0)
+        FROM llibres_indexacio_stats s
+        JOIN llibres l ON l.id = s.llibre_id
+        WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (h sqlHelper) getLlibre(id int) (*Llibre, error) {
 	query := `
-        SELECT id, arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic,
+        SELECT id, COALESCE(arquevisbat_id, 0), municipi_id, nom_esglesia, codi_digital, codi_fisic,
                titol, tipus_llibre, cronologia, volum, abat, contingut, llengua,
                requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines,
                url_base, url_imatge_prefix, pagina, indexacio_completa,
@@ -5005,8 +5424,12 @@ func (h sqlHelper) createLlibre(l *Llibre) (int, error) {
 		query += ` RETURNING id`
 	}
 	query = formatPlaceholders(h.style, query)
+	arquebisbatArg := interface{}(l.ArquebisbatID)
+	if l.ArquebisbatID == 0 {
+		arquebisbatArg = nil
+	}
 	args := []interface{}{
-		l.ArquebisbatID, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.TipusLlibre, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
+		arquebisbatArg, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.TipusLlibre, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
 		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina, l.IndexacioCompleta,
 		l.CreatedBy, l.ModeracioEstat, l.ModeratedBy, l.ModeratedAt, l.ModeracioMotiu,
 	}
@@ -5034,8 +5457,12 @@ func (h sqlHelper) updateLlibre(l *Llibre) error {
             moderation_status=?, moderated_by=?, moderated_at=?, moderation_notes=?, updated_at=` + h.nowFun + `
         WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
+	arquebisbatArg := interface{}(l.ArquebisbatID)
+	if l.ArquebisbatID == 0 {
+		arquebisbatArg = nil
+	}
 	_, err := h.db.Exec(query,
-		l.ArquebisbatID, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.TipusLlibre, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
+		arquebisbatArg, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.TipusLlibre, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
 		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina, l.IndexacioCompleta,
 		l.ModeracioEstat, l.ModeratedBy, l.ModeratedAt, l.ModeracioMotiu, l.ID)
 	return err
@@ -5774,7 +6201,7 @@ func (h sqlHelper) updateTranscripcioRawChangeModeracio(id int, estat, motiu str
 
 func (h sqlHelper) listTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	query := `
-        SELECT id, transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat, sexe, sexe_estat,
+        SELECT id, transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat, cognom_soltera, cognom_soltera_estat, sexe, sexe_estat,
                edat_text, edat_estat, estat_civil_text, estat_civil_estat, municipi_text, municipi_estat, ofici_text, ofici_estat,
                casa_nom, casa_estat, persona_id, linked_by, linked_at, notes
         FROM transcripcions_persones_raw
@@ -5783,14 +6210,30 @@ func (h sqlHelper) listTranscripcioPersones(transcripcioID int) ([]TranscripcioP
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, transcripcioID)
 	if err != nil {
-		return nil, err
+		if isMissingColumnError(err) {
+			fallback := `
+                SELECT id, transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat,
+                       NULL AS cognom_soltera, NULL AS cognom_soltera_estat, sexe, sexe_estat,
+                       edat_text, edat_estat, estat_civil_text, estat_civil_estat, municipi_text, municipi_estat, ofici_text, ofici_estat,
+                       casa_nom, casa_estat, persona_id, linked_by, linked_at, notes
+                FROM transcripcions_persones_raw
+                WHERE transcripcio_id = ?
+                ORDER BY id`
+			fallback = formatPlaceholders(h.style, fallback)
+			rows, err = h.db.Query(fallback, transcripcioID)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
 	defer rows.Close()
 	var res []TranscripcioPersonaRaw
 	for rows.Next() {
 		var p TranscripcioPersonaRaw
 		if err := rows.Scan(
-			&p.ID, &p.TranscripcioID, &p.Rol, &p.Nom, &p.NomEstat, &p.Cognom1, &p.Cognom1Estat, &p.Cognom2, &p.Cognom2Estat, &p.Sexe, &p.SexeEstat,
+			&p.ID, &p.TranscripcioID, &p.Rol, &p.Nom, &p.NomEstat, &p.Cognom1, &p.Cognom1Estat, &p.Cognom2, &p.Cognom2Estat, &p.CognomSoltera, &p.CognomSolteraEstat, &p.Sexe, &p.SexeEstat,
 			&p.EdatText, &p.EdatEstat, &p.EstatCivilText, &p.EstatCivilEstat, &p.MunicipiText, &p.MunicipiEstat, &p.OficiText, &p.OficiEstat,
 			&p.CasaNom, &p.CasaEstat, &p.PersonaID, &p.LinkedBy, &p.LinkedAt, &p.Notes,
 		); err != nil {
@@ -5799,6 +6242,16 @@ func (h sqlHelper) listTranscripcioPersones(transcripcioID int) ([]TranscripcioP
 		res = append(res, p)
 	}
 	return res, nil
+}
+
+func isMissingColumnError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such column") ||
+		strings.Contains(msg, "unknown column") ||
+		strings.Contains(msg, "does not exist")
 }
 
 type transcripcioPersonaCandidate struct {
@@ -6014,16 +6467,16 @@ func (h sqlHelper) findBestBaptismeTranscripcioForPersona(personaID int) (int, b
 func (h sqlHelper) createTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error) {
 	query := `
         INSERT INTO transcripcions_persones_raw (
-            transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat, sexe, sexe_estat,
+            transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat, cognom_soltera, cognom_soltera_estat, sexe, sexe_estat,
             edat_text, edat_estat, estat_civil_text, estat_civil_estat, municipi_text, municipi_estat, ofici_text, ofici_estat,
             casa_nom, casa_estat, persona_id, linked_by, linked_at, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	if h.style == "postgres" {
 		query += " RETURNING id"
 	}
 	query = formatPlaceholders(h.style, query)
 	args := []interface{}{
-		p.TranscripcioID, p.Rol, p.Nom, p.NomEstat, p.Cognom1, p.Cognom1Estat, p.Cognom2, p.Cognom2Estat, p.Sexe, p.SexeEstat,
+		p.TranscripcioID, p.Rol, p.Nom, p.NomEstat, p.Cognom1, p.Cognom1Estat, p.Cognom2, p.Cognom2Estat, p.CognomSoltera, p.CognomSolteraEstat, p.Sexe, p.SexeEstat,
 		p.EdatText, p.EdatEstat, p.EstatCivilText, p.EstatCivilEstat, p.MunicipiText, p.MunicipiEstat, p.OficiText, p.OficiEstat,
 		p.CasaNom, p.CasaEstat, p.PersonaID, p.LinkedBy, p.LinkedAt, p.Notes,
 	}
@@ -9569,7 +10022,7 @@ func (h sqlHelper) queryCognomHeatmap(cognomID int, anyStart, anyEnd int) ([]Cog
 func (h sqlHelper) listMediaAlbumsByOwner(userID int) ([]MediaAlbum, error) {
 	query := `
         SELECT a.id, a.public_id, a.title, COALESCE(a.description, ''), a.album_type, a.owner_user_id,
-               a.moderation_status, a.visibility, a.restricted_group_id, a.access_policy_id,
+               a.llibre_id, a.moderation_status, a.visibility, a.restricted_group_id, a.access_policy_id,
                a.credit_cost, a.difficulty_score, COALESCE(a.source_type, ''), a.moderated_by, a.moderated_at,
                COALESCE(a.moderation_notes, ''), COALESCE(cnt.total, 0) as items_count
         FROM media_albums a
@@ -9589,7 +10042,7 @@ func (h sqlHelper) listMediaAlbumsByOwner(userID int) ([]MediaAlbum, error) {
 		var a MediaAlbum
 		if err := rows.Scan(
 			&a.ID, &a.PublicID, &a.Title, &a.Description, &a.AlbumType, &a.OwnerUserID,
-			&a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
+			&a.LlibreID, &a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
 			&a.CreditCost, &a.DifficultyScore, &a.SourceType, &a.ModeratedBy, &a.ModeratedAt,
 			&a.ModerationNotes, &a.ItemsCount,
 		); err != nil {
@@ -9603,7 +10056,7 @@ func (h sqlHelper) listMediaAlbumsByOwner(userID int) ([]MediaAlbum, error) {
 func (h sqlHelper) getMediaAlbumByID(id int) (*MediaAlbum, error) {
 	query := `
         SELECT id, public_id, title, COALESCE(description, ''), album_type, owner_user_id,
-               moderation_status, visibility, restricted_group_id, access_policy_id,
+               llibre_id, moderation_status, visibility, restricted_group_id, access_policy_id,
                credit_cost, difficulty_score, COALESCE(source_type, ''), moderated_by, moderated_at,
                COALESCE(moderation_notes, '')
         FROM media_albums WHERE id = ?`
@@ -9612,7 +10065,7 @@ func (h sqlHelper) getMediaAlbumByID(id int) (*MediaAlbum, error) {
 	var a MediaAlbum
 	if err := row.Scan(
 		&a.ID, &a.PublicID, &a.Title, &a.Description, &a.AlbumType, &a.OwnerUserID,
-		&a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
+		&a.LlibreID, &a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
 		&a.CreditCost, &a.DifficultyScore, &a.SourceType, &a.ModeratedBy, &a.ModeratedAt,
 		&a.ModerationNotes,
 	); err != nil {
@@ -9624,7 +10077,7 @@ func (h sqlHelper) getMediaAlbumByID(id int) (*MediaAlbum, error) {
 func (h sqlHelper) getMediaAlbumByPublicID(publicID string) (*MediaAlbum, error) {
 	query := `
         SELECT id, public_id, title, COALESCE(description, ''), album_type, owner_user_id,
-               moderation_status, visibility, restricted_group_id, access_policy_id,
+               llibre_id, moderation_status, visibility, restricted_group_id, access_policy_id,
                credit_cost, difficulty_score, COALESCE(source_type, ''), moderated_by, moderated_at,
                COALESCE(moderation_notes, '')
         FROM media_albums WHERE public_id = ?`
@@ -9633,7 +10086,7 @@ func (h sqlHelper) getMediaAlbumByPublicID(publicID string) (*MediaAlbum, error)
 	var a MediaAlbum
 	if err := row.Scan(
 		&a.ID, &a.PublicID, &a.Title, &a.Description, &a.AlbumType, &a.OwnerUserID,
-		&a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
+		&a.LlibreID, &a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
 		&a.CreditCost, &a.DifficultyScore, &a.SourceType, &a.ModeratedBy, &a.ModeratedAt,
 		&a.ModerationNotes,
 	); err != nil {
@@ -9645,15 +10098,15 @@ func (h sqlHelper) getMediaAlbumByPublicID(publicID string) (*MediaAlbum, error)
 func (h sqlHelper) createMediaAlbum(a *MediaAlbum) (int, error) {
 	query := `
         INSERT INTO media_albums
-            (public_id, title, description, album_type, owner_user_id, moderation_status, visibility, restricted_group_id, access_policy_id,
+            (public_id, title, description, album_type, owner_user_id, llibre_id, moderation_status, visibility, restricted_group_id, access_policy_id,
              credit_cost, difficulty_score, source_type, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	if h.style == "postgres" {
 		query += " RETURNING id"
 	}
 	query = formatPlaceholders(h.style, query)
 	args := []interface{}{
-		a.PublicID, a.Title, a.Description, a.AlbumType, a.OwnerUserID, a.ModerationStatus, a.Visibility, a.RestrictedGroupID, a.AccessPolicyID,
+		a.PublicID, a.Title, a.Description, a.AlbumType, a.OwnerUserID, a.LlibreID, a.ModerationStatus, a.Visibility, a.RestrictedGroupID, a.AccessPolicyID,
 		a.CreditCost, a.DifficultyScore, a.SourceType, a.ModeratedBy, a.ModeratedAt, a.ModerationNotes,
 	}
 	if h.style == "postgres" {
@@ -9831,7 +10284,7 @@ func (h sqlHelper) updateMediaItemDerivativesStatus(itemID int, status string) e
 func (h sqlHelper) listMediaAlbumsByStatus(status string) ([]MediaAlbum, error) {
 	query := `
         SELECT a.id, a.public_id, a.title, COALESCE(a.description, ''), a.album_type, a.owner_user_id,
-               a.moderation_status, a.visibility, a.restricted_group_id, a.access_policy_id,
+               a.llibre_id, a.moderation_status, a.visibility, a.restricted_group_id, a.access_policy_id,
                a.credit_cost, a.difficulty_score, COALESCE(a.source_type, ''), a.moderated_by, a.moderated_at,
                COALESCE(a.moderation_notes, ''), COALESCE(cnt.total, 0) as items_count
         FROM media_albums a
@@ -9851,7 +10304,7 @@ func (h sqlHelper) listMediaAlbumsByStatus(status string) ([]MediaAlbum, error) 
 		var a MediaAlbum
 		if err := rows.Scan(
 			&a.ID, &a.PublicID, &a.Title, &a.Description, &a.AlbumType, &a.OwnerUserID,
-			&a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
+			&a.LlibreID, &a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
 			&a.CreditCost, &a.DifficultyScore, &a.SourceType, &a.ModeratedBy, &a.ModeratedAt,
 			&a.ModerationNotes, &a.ItemsCount,
 		); err != nil {

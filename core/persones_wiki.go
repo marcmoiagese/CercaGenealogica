@@ -15,6 +15,10 @@ func (a *App) PersonaWikiHistory(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	user, ok := a.requirePersonesView(w, r)
+	if !ok {
+		return
+	}
 	if !isValidWikiObjectType("persona") {
 		http.NotFound(w, r)
 		return
@@ -30,15 +34,10 @@ func (a *App) PersonaWikiHistory(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
-	*r = *a.withUser(r, user)
 	perms := a.getPermissionsForUser(user.ID)
 	*r = *a.withPermissions(r, perms)
 	canModerate := a.hasPerm(perms, permModerate)
+	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 	canEditPersona := false
 	if perms.Admin || perms.CanEditAnyPerson {
 		canEditPersona = true
@@ -122,7 +121,7 @@ func (a *App) PersonaWikiHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		hasSnapshot := len(before) > 0 || len(after) > 0
 		canRevert := false
-		if hasSnapshot {
+		if hasSnapshot && canRevertPerm {
 			if canModerate {
 				canRevert = true
 			} else if changedByID == user.ID {
@@ -249,6 +248,10 @@ func (a *App) PersonaWikiStats(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	user, ok := a.requirePersonesView(w, r)
+	if !ok {
+		return
+	}
 	if !isValidWikiObjectType("persona") {
 		http.NotFound(w, r)
 		return
@@ -264,13 +267,12 @@ func (a *App) PersonaWikiStats(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
 	perms := a.getPermissionsForUser(user.ID)
 	canModerate := a.hasPerm(perms, permModerate)
+	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	canEditPersona := false
 	if perms.Admin || perms.CanEditAnyPerson {
 		canEditPersona = true
@@ -310,6 +312,10 @@ func (a *App) PersonaWikiStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) PersonaWikiRevert(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requirePersonesView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -330,11 +336,6 @@ func (a *App) PersonaWikiRevert(w http.ResponseWriter, r *http.Request) {
 	persona, err := a.DB.GetPersona(personaID)
 	if err != nil || persona == nil {
 		http.NotFound(w, r)
-		return
-	}
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
@@ -417,6 +418,10 @@ func (a *App) PersonaWikiRevert(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) PersonaWikiMark(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requirePersonesView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -437,11 +442,6 @@ func (a *App) PersonaWikiMark(w http.ResponseWriter, r *http.Request) {
 	persona, err := a.DB.GetPersona(personaID)
 	if err != nil || persona == nil {
 		http.NotFound(w, r)
-		return
-	}
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	lang := resolveUserLang(r, user)
@@ -498,6 +498,10 @@ func (a *App) PersonaWikiMark(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) PersonaWikiUnmark(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requirePersonesView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -518,11 +522,6 @@ func (a *App) PersonaWikiUnmark(w http.ResponseWriter, r *http.Request) {
 	persona, err := a.DB.GetPersona(personaID)
 	if err != nil || persona == nil {
 		http.NotFound(w, r)
-		return
-	}
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	lang := resolveUserLang(r, user)

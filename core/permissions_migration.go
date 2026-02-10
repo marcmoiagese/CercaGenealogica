@@ -2,7 +2,6 @@ package core
 
 import (
 	"database/sql"
-	"encoding/json"
 	"strings"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
@@ -25,18 +24,18 @@ func (a *App) EnsurePolicyGrants() error {
 		if permsRaw == "" {
 			continue
 		}
-		var perms db.PolicyPermissions
-		if err := json.Unmarshal([]byte(permsRaw), &perms); err != nil {
+		doc, _, err := parsePolicyDocument(permsRaw)
+		if err != nil {
 			continue
 		}
-		if err := a.ensurePolicyGrantsFromPerms(policy.ID, perms); err != nil {
+		if err := a.ensurePolicyGrantsFromDocument(policy.ID, doc); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (a *App) ensurePolicyGrantsFromPerms(policyID int, perms db.PolicyPermissions) error {
+func (a *App) ensurePolicyGrantsFromDocument(policyID int, doc policyDocument) error {
 	if a == nil || a.DB == nil || policyID <= 0 {
 		return nil
 	}
@@ -47,7 +46,10 @@ func (a *App) ensurePolicyGrantsFromPerms(policyID int, perms db.PolicyPermissio
 	if len(grants) > 0 {
 		return nil
 	}
-	keys := legacyPermKeys(perms)
+	if len(doc.Statement) > 0 {
+		return a.replacePolicyGrantsFromDocument(policyID, doc)
+	}
+	keys := legacyPermKeys(doc.PolicyPermissions)
 	if len(keys) == 0 {
 		return nil
 	}

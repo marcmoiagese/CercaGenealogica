@@ -26,6 +26,8 @@
         .grant-actions{display:flex;gap:6px;flex-wrap:wrap}
         .grant-scope-row.is-hidden{display:none}
         .grant-list .taula code{background:#f3f4f8;border-radius:6px;padding:2px 6px;font-size:12px}
+        .grants-card .suggest-field{position:relative}
+        .grants-card .resultats-cerca{max-height:220px;overflow:auto}
         @media (min-width: 900px){.grants-grid{grid-template-columns:minmax(260px,320px) 1fr;align-items:start}}
     </style>
 </head>
@@ -43,6 +45,7 @@
             <form method="POST" action="/admin/politiques/save" class="formulari-admin" id="policy-form">
                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                 <input type="hidden" name="id" value="{{ .Data.Politica.ID }}">
+                <input type="hidden" name="active_tab" id="policy-active-tab" value="{{ .Data.ActiveTab }}">
                 <div class="grup-camp">
                     <label for="nom">{{ t .Lang "policies.name" }}</label>
                     <input type="text" id="nom" name="nom" value="{{ .Data.Politica.Nom }}" required>
@@ -77,6 +80,24 @@
                                 </label>
                                 {{ end }}
                             </div>
+                            <div style="margin-top:18px">
+                                <h3 style="margin:0 0 6px 0">{{ t .Lang "policies.gui.modular.title" }}</h3>
+                                <p class="camp-helper">{{ t .Lang "policies.gui.modular.helper" }}</p>
+                                {{ range .Data.GuiGrantGroups }}
+                                <div style="margin-top:14px">
+                                    <h4 style="margin:0 0 8px 0;font-size:13px;color:#1f2c4d">{{ t $.Lang .TitleKey }}</h4>
+                                    <div class="llista-permisos">
+                                        {{ range .Keys }}
+                                        <label class="checkbox-linia perm-grant-card {{ if index $.Data.GuiGrantState . }}actiu{{ end }}">
+                                            <input type="checkbox" name="grant_global" value="{{ . }}" {{ if index $.Data.GuiGrantState . }}checked{{ end }}>
+                                            <span>{{ t $.Lang (printf "policies.grants.perm.%s" .) }}</span>
+                                            <span class="perm-indicator" aria-hidden="true"></span>
+                                        </label>
+                                        {{ end }}
+                                    </div>
+                                </div>
+                                {{ end }}
+                            </div>
                         </section>
                         <section class="policy-tab tab-pane {{ if eq $active "json" }}actiu{{ end }}" id="tab-json">
                             <textarea id="permisos" name="permisos" rows="10" placeholder='{"admin":true,...}'>{{ .Data.Politica.Permisos }}</textarea>
@@ -102,16 +123,45 @@
                                         </select>
                                     </div>
                                     <div class="grup-camp">
-                                        <label for="grant-scope-type">{{ t .Lang "policies.grants.scope_type" }}</label>
-                                        <select id="grant-scope-type" name="scope_type" form="grant-form" required>
-                                            {{ range .Data.ScopeOptions }}
-                                            <option value="{{ .Value }}" {{ if and $grant (eq $grant.ScopeType .Value) }}selected{{ end }}>{{ t $.Lang .LabelKey }}</option>
-                                            {{ end }}
+                                        <label for="grant-scope-type-ui">{{ t .Lang "policies.grants.scope_type" }}</label>
+                                        <select id="grant-scope-type-ui" name="scope_type_ui" form="grant-form" required>
+                                            <option value="global" {{ if and $grant (eq $grant.ScopeType "global") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.global" }}</option>
+                                            <option value="pais" {{ if and $grant (eq $grant.ScopeType "pais") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.pais" }}</option>
+                                            <option value="nivell" {{ if and $grant (or (eq $grant.ScopeType "nivell") (eq $grant.ScopeType "provincia") (eq $grant.ScopeType "comarca") (eq $grant.ScopeType "municipi")) }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.nivell" }}</option>
+                                            <option value="entitat_eclesiastica" {{ if and $grant (eq $grant.ScopeType "entitat_eclesiastica") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.entitat_eclesiastica" }}</option>
+                                            <option value="arxiu" {{ if and $grant (eq $grant.ScopeType "arxiu") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.arxiu" }}</option>
+                                            <option value="llibre" {{ if and $grant (eq $grant.ScopeType "llibre") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.llibre" }}</option>
                                         </select>
+                                        <input type="hidden" id="grant-scope-type" name="scope_type" form="grant-form" value="{{ if $grant }}{{ $grant.ScopeType }}{{ else }}global{{ end }}">
                                     </div>
                                     <div class="grup-camp grant-scope-row" id="grant-scope-row">
-                                        <label for="grant-scope-id">{{ t .Lang "policies.grants.scope_id" }}</label>
-                                        <input type="number" id="grant-scope-id" name="scope_id" form="grant-form" min="1" value="{{ if and $grant (gt $grant.ScopeID 0) }}{{ $grant.ScopeID }}{{ end }}">
+                                        <label for="grant-scope-search" id="grant-scope-label">{{ t .Lang "policies.grants.scope_id" }}</label>
+                                        <div class="suggest-field">
+                                            <input
+                                                type="text"
+                                                id="grant-scope-search"
+                                                value="{{ if $grant }}{{ if $grant.ScopeLabel }}{{ $grant.ScopeLabel }}{{ else if gt $grant.ScopeID 0 }}{{ $grant.ScopeID }}{{ end }}{{ end }}"
+                                                placeholder="{{ t .Lang "policies.grants.search.placeholder.default" }}"
+                                                autocomplete="off"
+                                                data-api="/api/territori/paisos/suggest"
+                                                data-api-pais="/api/territori/paisos/suggest"
+                                                data-api-nivell="/api/territori/nivell-admin/suggest"
+                                                data-api-entitat-eclesiastica="/api/territori/eclesiastic/suggest"
+                                                data-api-arxiu="/api/documentals/arxius/suggest"
+                                                data-api-llibre="/api/documentals/llibres/suggest"
+                                                data-placeholder-pais="{{ t .Lang "policies.grants.search.placeholder.pais" }}"
+                                                data-placeholder-nivell="{{ t .Lang "policies.grants.search.placeholder.nivell" }}"
+                                                data-placeholder-entitat-eclesiastica="{{ t .Lang "policies.grants.search.placeholder.ecles" }}"
+                                                data-placeholder-arxiu="{{ t .Lang "policies.grants.search.placeholder.arxiu" }}"
+                                                data-placeholder-llibre="{{ t .Lang "policies.grants.search.placeholder.llibre" }}"
+                                                data-hidden="grant-scope-id"
+                                                data-hidden-type="grant-scope-type"
+                                                data-suggestions="grant-scope-suggestions"
+                                                data-empty-label="{{ t .Lang "common.empty" }}"
+                                                data-suggest="1">
+                                            <input type="hidden" id="grant-scope-id" name="scope_id" form="grant-form" value="{{ if and $grant (gt $grant.ScopeID 0) }}{{ $grant.ScopeID }}{{ end }}">
+                                            <ul id="grant-scope-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "common.suggestions" }}"></ul>
+                                        </div>
                                         <small class="camp-helper">{{ t .Lang "policies.grants.scope_id.helper" }}</small>
                                     </div>
                                     <div class="grup-camp">
@@ -152,11 +202,15 @@
                                                         {{ end }}
                                                     </td>
                                                     <td>{{ if $scopeLabel }}{{ t $.Lang $scopeLabel }}{{ else }}{{ .ScopeType }}{{ end }}</td>
-                                                    <td>{{ if .ScopeIDValid }}{{ .ScopeID }}{{ else }}—{{ end }}</td>
+                                                    <td>
+                                                        {{ if .ScopeIDValid }}
+                                                        {{ if .ScopeLabel }}{{ .ScopeLabel }} <small class="muted">#{{ .ScopeID }}</small>{{ else }}{{ .ScopeID }}{{ end }}
+                                                        {{ else }}—{{ end }}
+                                                    </td>
                                                     <td>{{ if .IncludeChildren }}{{ t $.Lang "common.yes" }}{{ else }}{{ t $.Lang "common.no" }}{{ end }}</td>
                                                     <td>
                                                         <div class="grant-actions">
-                                                            <button type="button" class="boto-secundari grant-edit" data-grant-id="{{ .ID }}" data-perm-key="{{ .PermKey }}" data-scope-type="{{ .ScopeType }}" data-scope-id="{{ if .ScopeIDValid }}{{ .ScopeID }}{{ end }}" data-include-children="{{ if .IncludeChildren }}1{{ else }}0{{ end }}">{{ t $.Lang "common.edit" }}</button>
+                                                            <button type="button" class="boto-secundari grant-edit" data-grant-id="{{ .ID }}" data-perm-key="{{ .PermKey }}" data-scope-type="{{ .ScopeType }}" data-scope-id="{{ if .ScopeIDValid }}{{ .ScopeID }}{{ end }}" data-scope-label="{{ .ScopeLabel }}" data-include-children="{{ if .IncludeChildren }}1{{ else }}0{{ end }}">{{ t $.Lang "common.edit" }}</button>
                                                             <button type="button" class="boto-secundari grant-delete" data-grant-id="{{ .ID }}">{{ t $.Lang "policies.grants.delete" }}</button>
                                                         </div>
                                                     </td>
@@ -194,10 +248,12 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/arxiu-form-suggest.js"></script>
     <script>
     (() => {
         const permKeys = ["admin","can_manage_users","can_manage_territory","can_manage_eclesiastic","can_manage_archives","can_create_person","can_edit_any_person","can_moderate","can_manage_policies"];
         const textarea = document.getElementById('permisos');
+        const activeTabInput = document.getElementById('policy-active-tab');
         const parsePerms = () => {
             try {
                 const parsed = JSON.parse(textarea.value || '{}');
@@ -216,11 +272,12 @@
             });
         };
         const syncJSON = () => {
-            const obj = {};
+            const obj = parsePerms();
             permKeys.forEach(k => {
                 const cb = document.getElementById(`perm-${k}`);
                 const card = document.querySelector(`.perm-card[data-perm="${k}"]`);
                 if(cb && cb.checked) obj[k] = true;
+                if(cb && !cb.checked && obj && Object.prototype.hasOwnProperty.call(obj, k)) delete obj[k];
                 if(card) card.classList.toggle('actiu', cb && cb.checked);
             });
             textarea.value = JSON.stringify(obj, null, 2);
@@ -231,6 +288,13 @@
             const cb = document.getElementById(`perm-${k}`);
             if(cb) cb.addEventListener('change', syncJSON);
         });
+        document.querySelectorAll('.perm-grant-card input[type="checkbox"]').forEach((cb) => {
+            const card = cb.closest('.perm-grant-card');
+            if(!card) return;
+            const toggle = () => card.classList.toggle('actiu', cb.checked);
+            cb.addEventListener('change', toggle);
+            toggle();
+        });
         // tabs
         document.querySelectorAll('.policy-tabs .tab-boto').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -239,6 +303,11 @@
                 btn.classList.add('actiu');
                 const target = document.getElementById(btn.dataset.target);
                 if(target) target.classList.add('actiu');
+                if(activeTabInput){
+                    if(btn.dataset.target === 'tab-json') activeTabInput.value = 'json';
+                    else if(btn.dataset.target === 'tab-grants') activeTabInput.value = 'grants';
+                    else activeTabInput.value = 'gui';
+                }
                 if(btn.dataset.target === 'tab-json') {
                     syncJSON();
                 } else if(btn.dataset.target === 'tab-gui') {
@@ -247,14 +316,19 @@
             });
         });
         const policyForm = document.getElementById('policy-form');
-        if(policyForm) policyForm.addEventListener('submit', syncJSON);
+        if(policyForm) policyForm.addEventListener('submit', () => {
+            if(activeTabInput && activeTabInput.value !== 'gui') return;
+            syncJSON();
+        });
 
         const grantForm = document.getElementById('grant-form');
         if(grantForm){
             const grantId = document.getElementById('grant-id');
             const grantPerm = document.getElementById('grant-perm-key');
+            const grantScopeTypeUI = document.getElementById('grant-scope-type-ui');
             const grantScopeType = document.getElementById('grant-scope-type');
             const grantScopeId = document.getElementById('grant-scope-id');
+            const grantScopeSearch = document.getElementById('grant-scope-search');
             const grantScopeRow = document.getElementById('grant-scope-row');
             const grantInclude = document.getElementById('grant-include-children');
             const grantSubmit = document.getElementById('grant-submit');
@@ -263,36 +337,83 @@
             const deleteId = document.getElementById('grant-delete-id');
             const labelAdd = grantSubmit ? (grantSubmit.dataset.labelAdd || grantSubmit.textContent) : '';
             const labelUpdate = grantSubmit ? (grantSubmit.dataset.labelUpdate || grantSubmit.textContent) : '';
+            let lastScopeType = grantScopeTypeUI ? grantScopeTypeUI.value : 'global';
+
+            const normalizeScopeTypeForUI = (value) => {
+                const raw = (value || '').toLowerCase();
+                if (raw === 'provincia' || raw === 'comarca' || raw === 'municipi' || raw === 'nivell') {
+                    return 'nivell';
+                }
+                return raw || 'global';
+            };
+
+            const scopeApis = grantScopeSearch ? {
+                global: '',
+                pais: grantScopeSearch.dataset.apiPais || '',
+                nivell: grantScopeSearch.dataset.apiNivell || '',
+                entitat_eclesiastica: grantScopeSearch.dataset.apiEntitatEclesiastica || '',
+                arxiu: grantScopeSearch.dataset.apiArxiu || '',
+                llibre: grantScopeSearch.dataset.apiLlibre || ''
+            } : {};
+            const scopePlaceholders = grantScopeSearch ? {
+                global: '',
+                pais: grantScopeSearch.dataset.placeholderPais || '',
+                nivell: grantScopeSearch.dataset.placeholderNivell || '',
+                entitat_eclesiastica: grantScopeSearch.dataset.placeholderEntitatEclesiastica || '',
+                arxiu: grantScopeSearch.dataset.placeholderArxiu || '',
+                llibre: grantScopeSearch.dataset.placeholderLlibre || ''
+            } : {};
 
             const updateScopeVisibility = () => {
-                if(!grantScopeType || !grantScopeRow || !grantScopeId) return;
-                const isGlobal = grantScopeType.value === 'global';
+                if(!grantScopeTypeUI || !grantScopeRow || !grantScopeId) return;
+                const isGlobal = grantScopeTypeUI.value === 'global';
                 grantScopeRow.classList.toggle('is-hidden', isGlobal);
                 grantScopeId.disabled = isGlobal;
                 if(grantInclude) grantInclude.disabled = isGlobal;
+                if(grantScopeSearch){
+                    grantScopeSearch.disabled = isGlobal;
+                    grantScopeSearch.dataset.api = scopeApis[grantScopeTypeUI.value] || '';
+                    grantScopeSearch.placeholder = scopePlaceholders[grantScopeTypeUI.value] || '';
+                }
             };
 
             const initialState = {
                 id: grantId ? grantId.value : '',
                 permKey: grantPerm ? grantPerm.value : '',
-                scopeType: grantScopeType ? grantScopeType.value : 'global',
+                scopeType: grantScopeType ? grantScopeType.value : (grantScopeTypeUI ? grantScopeTypeUI.value : 'global'),
                 scopeId: grantScopeId ? grantScopeId.value : '',
+                scopeLabel: grantScopeSearch ? grantScopeSearch.value : '',
                 includeChildren: grantInclude ? grantInclude.checked : false
             };
 
             const setGrantState = (state) => {
+                const scopeTypeActual = state.scopeType || 'global';
+                const scopeTypeUI = normalizeScopeTypeForUI(scopeTypeActual);
                 if(grantId) grantId.value = state.id || '';
                 if(grantPerm) grantPerm.value = state.permKey || '';
-                if(grantScopeType) grantScopeType.value = state.scopeType || 'global';
+                if(grantScopeTypeUI) grantScopeTypeUI.value = scopeTypeUI;
+                if(grantScopeType) grantScopeType.value = scopeTypeActual;
                 if(grantScopeId) grantScopeId.value = state.scopeId || '';
+                if(grantScopeSearch) grantScopeSearch.value = state.scopeLabel || state.scopeId || '';
                 if(grantInclude) grantInclude.checked = !!state.includeChildren;
                 updateScopeVisibility();
                 if(grantSubmit) grantSubmit.textContent = state.id ? labelUpdate : labelAdd;
                 if(grantCancel) grantCancel.style.display = state.id ? 'inline-flex' : 'none';
             };
 
-            updateScopeVisibility();
-            if(grantScopeType) grantScopeType.addEventListener('change', updateScopeVisibility);
+            setGrantState(initialState);
+            lastScopeType = grantScopeTypeUI ? grantScopeTypeUI.value : 'global';
+            if(grantScopeTypeUI) grantScopeTypeUI.addEventListener('change', () => {
+                if(lastScopeType !== grantScopeTypeUI.value){
+                    if(grantScopeId) grantScopeId.value = '';
+                    if(grantScopeSearch) grantScopeSearch.value = '';
+                }
+                if(grantScopeType) {
+                    grantScopeType.value = grantScopeTypeUI.value === 'nivell' ? 'nivell' : grantScopeTypeUI.value;
+                }
+                lastScopeType = grantScopeTypeUI.value;
+                updateScopeVisibility();
+            });
             if(grantCancel) grantCancel.addEventListener('click', () => setGrantState(initialState));
 
             document.querySelectorAll('.grant-edit').forEach(btn => {
@@ -302,6 +423,7 @@
                         permKey: btn.dataset.permKey || '',
                         scopeType: btn.dataset.scopeType || 'global',
                         scopeId: btn.dataset.scopeId || '',
+                        scopeLabel: btn.dataset.scopeLabel || '',
                         includeChildren: btn.dataset.includeChildren === '1'
                     });
                 });

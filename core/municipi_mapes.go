@@ -73,6 +73,15 @@ func (a *App) MunicipiMapesAPI(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if parts[1] == "mapes" {
+		if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisMapesView); !ok {
+			return
+		}
+	} else {
+		if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisView); !ok {
+			return
+		}
+	}
 	munID, err := strconv.Atoi(parts[0])
 	if err != nil || munID <= 0 {
 		http.NotFound(w, r)
@@ -163,6 +172,9 @@ func (a *App) MunicipiMapesAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) MapesAPI(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisMapesView); !ok {
+		return
+	}
 	base := strings.TrimPrefix(r.URL.Path, "/api/mapes/")
 	base = strings.Trim(base, "/")
 	parts := strings.Split(base, "/")
@@ -653,6 +665,9 @@ func (a *App) MunicipiMapesListPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisMapesView); !ok {
+		return
+	}
 	munID, _, action, ok := parseMunicipiMapesPath(r.URL.Path)
 	if !ok || action != "list" {
 		http.NotFound(w, r)
@@ -691,6 +706,9 @@ func (a *App) MunicipiMapesListPage(w http.ResponseWriter, r *http.Request) {
 func (a *App) MunicipiMapaViewPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
+		return
+	}
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisMapesView); !ok {
 		return
 	}
 	munID, mapID, action, ok := parseMunicipiMapesPath(r.URL.Path)

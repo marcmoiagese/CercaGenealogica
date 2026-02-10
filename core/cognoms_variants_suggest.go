@@ -21,7 +21,7 @@ func (a *App) CognomVariantsSuggestJSON(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requireCognomsView(w, r); !ok {
 		return
 	}
 	lang := ResolveLang(r)

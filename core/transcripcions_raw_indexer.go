@@ -282,7 +282,7 @@ func normalizeIndexerBookType(val string) string {
 		return "obits"
 	case "confirmacions", "confirmacio":
 		return "confirmacions"
-	case "padrons", "padro":
+	case "padrons", "padro", "censos", "cens":
 		return "padrons"
 	case "reclutaments", "reclutament":
 		return "reclutaments"
@@ -557,18 +557,30 @@ func indexerSchemaConfirmacions() []indexerField {
 
 func indexerSchemaPadrons() []indexerField {
 	fields := []indexerField{
+		attrField("carrer", "carrer", "text"),
+		attrField("numero_casa", "numero_casa", "text"),
+		attrField("adreca", "adreca", "text"),
+		attrField("localitat", "localitat", "text"),
 		personField("cap_familia", "cap_familia", "cognom1"),
 		personFieldQualitat("cap_familia", "cap_familia", "cognom1"),
 		personField("cap_familia", "cap_familia", "cognom2"),
 		personFieldQualitat("cap_familia", "cap_familia", "cognom2"),
 		personField("cap_familia", "cap_familia", "nom"),
 		personFieldQualitat("cap_familia", "cap_familia", "nom"),
+		personFieldInput("cap_familia", "cap_familia", "sexe", "select"),
+		personFieldQualitat("cap_familia", "cap_familia", "sexe"),
+		attrField("data_naixement", "data_naixement", "date"),
 		personField("cap_familia", "cap_familia", "edat"),
 		personFieldQualitat("cap_familia", "cap_familia", "edat"),
 		personField("cap_familia", "cap_familia", "estat_civil"),
 		personFieldQualitat("cap_familia", "cap_familia", "estat_civil"),
-		attrField("adreca", "adreca", "text"),
+		attrField("procedencia", "procedencia", "text"),
+		personField("cap_familia", "cap_familia", "ofici"),
+		personFieldQualitat("cap_familia", "cap_familia", "ofici"),
+		personField("cap_familia", "cap_familia", "casa"),
+		personFieldQualitat("cap_familia", "cap_familia", "casa"),
 		attrField("condicio_padro", "condicio_padro", "text"),
+		attrField("alfabetitzat", "alfabetitzat", "bool"),
 		attrField("sap_llegir", "sap_llegir", "bool"),
 		attrField("sap_escriure", "sap_escriure", "bool"),
 		rawField("posicio", "posicio_pagina", "number"),
@@ -806,6 +818,8 @@ func tipusActeFromBookType(bookType string) string {
 		return "confirmacio"
 	case "padrons":
 		return "padro"
+	case "censos":
+		return "padro"
 	case "reclutaments":
 		return "reclutament"
 	default:
@@ -900,6 +914,7 @@ func isEmptyPerson(p *db.TranscripcioPersonaRaw) bool {
 	return strings.TrimSpace(p.Nom) == "" &&
 		strings.TrimSpace(p.Cognom1) == "" &&
 		strings.TrimSpace(p.Cognom2) == "" &&
+		strings.TrimSpace(p.CognomSoltera) == "" &&
 		strings.TrimSpace(p.Notes) == ""
 }
 

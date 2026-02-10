@@ -90,6 +90,90 @@ func (a *App) AdminListPaisos(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (a *App) AdminPaisosSuggest(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	allowAll := false
+	if !a.hasAnyPermissionKey(user.ID, permKeyTerritoriPaisosView) {
+		if !permPolicies(perms) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		allowAll = true
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(query) < 1 {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	limit := 10
+	if val := strings.TrimSpace(r.URL.Query().Get("limit")); val != "" {
+		if v, err := strconv.Atoi(val); err == nil && v > 0 && v <= 25 {
+			limit = v
+		}
+	}
+	scopeFilter := listScopeFilter{}
+	if !allowAll {
+		scopeFilter = a.buildListScopeFilter(user.ID, permKeyTerritoriPaisosView, ScopePais)
+		if !scopeFilter.hasGlobal && scopeFilter.isEmpty() {
+			writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+			return
+		}
+	}
+	paisos, err := a.DB.ListPaisos()
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	if !allowAll && !scopeFilter.hasGlobal && len(scopeFilter.paisIDs) > 0 {
+		allowed := map[int]struct{}{}
+		for _, id := range scopeFilter.paisIDs {
+			allowed[id] = struct{}{}
+		}
+		filtered := make([]db.Pais, 0, len(paisos))
+		for _, pais := range paisos {
+			if _, ok := allowed[pais.ID]; ok {
+				filtered = append(filtered, pais)
+			}
+		}
+		paisos = filtered
+	}
+	lang := ResolveLang(r)
+	queryLower := strings.ToLower(query)
+	items := make([]map[string]interface{}, 0, limit)
+	for _, pais := range paisos {
+		label := strings.TrimSpace(a.countryLabelFromISO(pais.CodiISO2, lang))
+		iso2 := strings.TrimSpace(pais.CodiISO2)
+		iso3 := strings.TrimSpace(pais.CodiISO3)
+		match := strings.Contains(strings.ToLower(label), queryLower) ||
+			strings.Contains(strings.ToLower(iso2), queryLower) ||
+			strings.Contains(strings.ToLower(iso3), queryLower)
+		if !match {
+			continue
+		}
+		contextParts := []string{}
+		if iso2 != "" {
+			contextParts = append(contextParts, iso2)
+		}
+		if iso3 != "" {
+			contextParts = append(contextParts, iso3)
+		}
+		items = append(items, map[string]interface{}{
+			"id":      pais.ID,
+			"nom":     label,
+			"context": strings.Join(contextParts, " · "),
+		})
+		if len(items) >= limit {
+			break
+		}
+	}
+	writeJSON(w, map[string]interface{}{"items": items})
+}
+
 func (a *App) AdminNewPais(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriPaisosCreate, PermissionTarget{}); !ok {
 		return

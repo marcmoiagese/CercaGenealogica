@@ -1,0 +1,313 @@
+/* Dashboard (logat) - inici personalitzable */
+.dash-wrap{
+  padding: 22px 0 40px;
+}
+.dash-top{
+  display:flex;
+  align-items:flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.dash-title h1{
+  margin:0 0 6px;
+  color: var(--primary-color);
+  font-size: 1.9rem;
+}
+.dash-title p{
+  margin:0;
+  color:#3c4a57;
+  line-height:1.55;
+}
+.dash-actions{
+  display:flex;
+  flex-wrap: wrap;
+  gap:10px;
+  justify-content:flex-end;
+}
+.dash-actions button,
+.dash-actions a{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 800;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: white;
+  color: var(--primary-color);
+  cursor:pointer;
+  text-decoration:none;
+}
+.dash-actions .primary{
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+  border-color: transparent;
+}
+.dash-grid{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+}
+.widget{
+  grid-column: span 4;
+  background:white;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  padding: 16px;
+  min-height: 120px;
+}
+.widget.span-6{ grid-column: span 6; }
+.widget.span-8{ grid-column: span 8; }
+.widget.span-12{ grid-column: span 12; }
+.widget.is-hidden{ display:none; }
+
+@media (max-width: 980px){
+  .widget, .widget.span-6, .widget.span-8{ grid-column: span 12; }
+  .dash-actions{ justify-content:flex-start; }
+}
+
+.widget .widget-head{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.widget .widget-head h2{
+  margin:0;
+  color: var(--primary-color);
+  font-size: 1.05rem;
+}
+.widget .muted{
+  color:#637180;
+  font-size: 0.92rem;
+}
+.quick-actions{
+  display:flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+.quick-actions a{
+  display:inline-flex;
+  align-items:center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  text-decoration:none;
+  font-weight: 800;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: rgba(44,62,80,0.02);
+  color: var(--primary-color);
+}
+.quick-actions a:hover{
+  background: rgba(74,111,165,0.08);
+}
+.search-row{
+  display:flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+.search-row input{
+  flex:1;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.10);
+  outline: none;
+}
+.search-row button{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+  font-weight: 900;
+  cursor:pointer;
+}
+.list{
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding:0;
+  list-style:none;
+}
+.list li{
+  display:flex;
+  justify-content: space-between;
+  gap:12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.06);
+  background: rgba(44,62,80,0.02);
+}
+.list .label{
+  font-weight: 800;
+  color: var(--primary-color);
+}
+.list .meta{
+  color:#637180;
+  font-size:0.9rem;
+  white-space:nowrap;
+}
+.badges-row{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: white;
+  color: var(--primary-color);
+  font-weight: 900;
+  font-size: 0.9rem;
+}
+
+/* Modal personalitzacio */
+.modal-pro{
+  display:none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.modal-pro.open{ display:flex; }
+.modal-pro .modal-card{
+  width: min(760px, 100%);
+  background: white;
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.24);
+  overflow:hidden;
+}
+.modal-pro .modal-head{
+  display:flex;
+  justify-content: space-between;
+  align-items:center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+}
+.modal-pro .modal-head h3{ margin:0; font-size: 1.05rem; }
+.modal-pro .close{
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.22);
+  color: white;
+  border-radius: 12px;
+  padding: 8px 10px;
+  cursor:pointer;
+  font-weight: 900;
+}
+.modal-pro .modal-body{
+  padding: 16px;
+}
+.widget-list{
+  margin:0;
+  padding:0;
+  list-style:none;
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.widget-item{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.06);
+  background: rgba(44,62,80,0.02);
+}
+.widget-item.is-dragging{
+  opacity:0.6;
+}
+.widget-item .left{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+.drag-handle{
+  cursor: grab;
+  color: #6b7a8a;
+}
+.widget-item input[type="checkbox"]{
+  width: 18px;
+  height: 18px;
+}
+.modal-pro .modal-foot{
+  display:flex;
+  justify-content:flex-end;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  background: rgba(44,62,80,0.02);
+}
+.modal-pro .modal-foot button{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: white;
+  font-weight: 900;
+  cursor:pointer;
+}
+.modal-pro .modal-foot button.primary{
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+  border-color: transparent;
+}
+/* reutilitza graella de cards dins widgets */
+.cards-grid{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+}
+.card{
+  grid-column: span 4;
+  background: white;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  padding: 16px;
+}
+@media (max-width: 980px){ .card{ grid-column: span 12; } }
+
+.card .card-head{
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.card .card-ico{
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(74,111,165,0.10);
+  border: 1px solid rgba(74,111,165,0.18);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color: var(--secondary-color);
+}
+.card h3{
+  margin: 0;
+  color: var(--primary-color);
+  font-size: 1.06rem;
+}
+.card p{
+  margin: 0;
+  color: #3c4a57;
+  line-height: 1.5;
+}

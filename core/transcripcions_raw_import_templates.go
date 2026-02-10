@@ -656,8 +656,12 @@ func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRow
 			switch personMode {
 			case "nom_v2":
 				p = buildPersonFromNomV2WithConfig(value, role, parseCfg)
+			case "nom_v2_maternal_first":
+				p = swapPersonCognoms(buildPersonFromNomV2WithConfig(value, role, parseCfg))
 			case "cognoms_v2":
 				p = buildPersonFromCognomsV2WithConfig(value, role, parseCfg)
+			case "cognoms_v2_maternal_first":
+				p = swapPersonCognoms(buildPersonFromCognomsV2WithConfig(value, role, parseCfg))
 			case "nom":
 				p = buildPersonFromNom(value, role)
 			default:
@@ -673,6 +677,18 @@ func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRow
 			mappedValues[entry.Target] = value
 		}
 	}
+}
+
+func swapPersonCognoms(p *db.TranscripcioPersonaRaw) *db.TranscripcioPersonaRaw {
+	if p == nil {
+		return nil
+	}
+	if strings.TrimSpace(p.Cognom1) == "" || strings.TrimSpace(p.Cognom2) == "" {
+		return p
+	}
+	p.Cognom1, p.Cognom2 = p.Cognom2, p.Cognom1
+	p.Cognom1Estat, p.Cognom2Estat = p.Cognom2Estat, p.Cognom1Estat
+	return p
 }
 
 func applyTemplateTransforms(value string, transforms []templateTransform, parseCfg templateParseConfig) (string, map[string]string) {
@@ -769,16 +785,22 @@ func applyTemplateTransformsWithPerson(value string, transforms []templateTransf
 	for _, tr := range transforms {
 		name := strings.TrimSpace(strings.ToLower(tr.Name))
 		switch name {
-		case "parse_person_from_cognoms", "parse_person_from_cognoms_marcmoia_v2":
+		case "parse_person_from_cognoms", "parse_person_from_cognoms_marcmoia_v2", "parse_person_from_cognoms_marcmoia_v2_maternal_first":
 			mode := "cognoms"
 			if name == "parse_person_from_cognoms_marcmoia_v2" {
 				mode = "cognoms_v2"
 			}
+			if name == "parse_person_from_cognoms_marcmoia_v2_maternal_first" {
+				mode = "cognoms_v2_maternal_first"
+			}
 			return value, extras, mode, true
-		case "parse_person_from_nom", "parse_person_from_nom_marcmoia_v2":
+		case "parse_person_from_nom", "parse_person_from_nom_marcmoia_v2", "parse_person_from_nom_marcmoia_v2_maternal_first":
 			mode := "nom"
 			if name == "parse_person_from_nom_marcmoia_v2" {
 				mode = "nom_v2"
+			}
+			if name == "parse_person_from_nom_marcmoia_v2_maternal_first" {
+				mode = "nom_v2_maternal_first"
 			}
 			return value, extras, mode, true
 		default:
@@ -926,6 +948,12 @@ func applyPersonTarget(field string, value string, extras map[string]string, per
 		p.Cognom2 = value
 		if extras["quality"] != "" {
 			p.Cognom2Estat = extras["quality"]
+		}
+	case "cognom_soltera":
+		value, extras = applyTemplateQualityToPersonField(value, extras, parseCfg)
+		p.CognomSoltera = value
+		if extras["quality"] != "" {
+			p.CognomSolteraEstat = extras["quality"]
 		}
 	case "ofici_text_with_quality":
 		p.OficiText = value
@@ -1299,6 +1327,9 @@ func mergePerson(base *db.TranscripcioPersonaRaw, incoming *db.TranscripcioPerso
 	if base.Cognom2 == "" {
 		base.Cognom2 = incoming.Cognom2
 	}
+	if base.CognomSoltera == "" {
+		base.CognomSoltera = incoming.CognomSoltera
+	}
 	if base.NomEstat == "" {
 		base.NomEstat = incoming.NomEstat
 	}
@@ -1307,6 +1338,9 @@ func mergePerson(base *db.TranscripcioPersonaRaw, incoming *db.TranscripcioPerso
 	}
 	if base.Cognom2Estat == "" {
 		base.Cognom2Estat = incoming.Cognom2Estat
+	}
+	if base.CognomSolteraEstat == "" {
+		base.CognomSolteraEstat = incoming.CognomSolteraEstat
 	}
 	if base.Notes == "" {
 		base.Notes = incoming.Notes

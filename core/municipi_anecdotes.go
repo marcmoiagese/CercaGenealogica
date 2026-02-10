@@ -83,6 +83,9 @@ type anecdoteCommentPayload struct {
 }
 
 func (a *App) MunicipiAnecdotesListPage(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisView); !ok {
+		return
+	}
 	munID := municipiIDFromPath(r.URL.Path)
 	if munID <= 0 {
 		http.NotFound(w, r)
@@ -192,6 +195,9 @@ func (a *App) MunicipiAnecdotesListPage(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *App) MunicipiAnecdoteDetailPage(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisView); !ok {
+		return
+	}
 	munID := municipiIDFromPath(r.URL.Path)
 	itemID := anecdoteItemIDFromPath(r.URL.Path)
 	if munID <= 0 || itemID <= 0 {

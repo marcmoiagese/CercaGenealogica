@@ -339,6 +339,17 @@ func (a *App) fillTerritoryFromMunicipi(target *PermissionTarget, municipiID int
 	if target.MunicipiID == nil {
 		target.MunicipiID = intPtr(municipiID)
 	}
+	if len(target.NivellIDs) == 0 {
+		ids := make([]int, 0, len(mun.NivellAdministratiuID))
+		for _, val := range mun.NivellAdministratiuID {
+			if val.Valid && val.Int64 > 0 {
+				ids = append(ids, int(val.Int64))
+			}
+		}
+		if len(ids) > 0 {
+			target.NivellIDs = ids
+		}
+	}
 	if target.ProvinciaID == nil && mun.NivellAdministratiuID[2].Valid {
 		target.ProvinciaID = intPtr(int(mun.NivellAdministratiuID[2].Int64))
 	}

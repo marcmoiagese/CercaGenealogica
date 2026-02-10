@@ -512,6 +512,9 @@ func (a *App) buildPersonaArbreDataset(root *db.Persona, gens int) (treeDataset,
 }
 
 func (a *App) PersonaArbreAPI(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePersonesView(w, r); !ok {
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
@@ -549,6 +552,9 @@ type treeExpandResponse struct {
 }
 
 func (a *App) ArbreExpandAPI(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePersonesView(w, r); !ok {
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return

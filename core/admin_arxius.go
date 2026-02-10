@@ -67,9 +67,8 @@ func (a *App) CanManageArxius(user *db.User) bool {
 
 // Llistat públic (lectura) d'arxius per a usuaris logats
 func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
-	user, authenticated := a.VerificarSessio(r)
-	if !authenticated || user == nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyDocumentalsArxiusView)
+	if !ok {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
@@ -211,9 +210,8 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 
 // Detall en lectura d'un arxiu
 func (a *App) ShowArxiu(w http.ResponseWriter, r *http.Request) {
-	user, authenticated := a.VerificarSessio(r)
-	if !authenticated || user == nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyDocumentalsArxiusView)
+	if !ok {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
@@ -252,9 +250,8 @@ func (a *App) ShowArxiu(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) ArxiuDonacionsRedirect(w http.ResponseWriter, r *http.Request) {
-	user, authenticated := a.VerificarSessio(r)
-	if !authenticated || user == nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyDocumentalsArxiusView)
+	if !ok {
 		return
 	}
 	id := extractID(r.URL.Path)
@@ -387,6 +384,7 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		filter.AllowedMunicipiIDs = scopeFilter.municipiIDs
 		filter.AllowedProvinciaIDs = scopeFilter.provinciaIDs
 		filter.AllowedComarcaIDs = scopeFilter.comarcaIDs
+		filter.AllowedNivellIDs = scopeFilter.nivellIDs
 		filter.AllowedPaisIDs = scopeFilter.paisIDs
 		filter.AllowedEclesIDs = scopeFilter.eclesIDs
 	}

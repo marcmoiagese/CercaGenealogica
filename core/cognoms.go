@@ -134,7 +134,14 @@ func (a *App) buildCognomReferenciaViews(lang string, refs []db.CognomReferencia
 	return out
 }
 
+func (a *App) requireCognomsView(w http.ResponseWriter, r *http.Request) (*db.User, bool) {
+	return a.requirePermissionKeyAnyScope(w, r, permKeyCognomsView)
+}
+
 func (a *App) CognomsList(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireCognomsView(w, r); !ok {
+		return
+	}
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	page := 1
 	perPage := 25
@@ -192,6 +199,10 @@ func (a *App) CognomsList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) CognomDetall(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	id := extractID(r.URL.Path)
 	if id > 0 {
 		canonID, redirected, err := a.resolveCognomCanonicalID(id)
@@ -218,7 +229,6 @@ func (a *App) CognomDetall(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error carregant variants", http.StatusInternalServerError)
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	lang := ResolveLang(r)
 	if user != nil {
 		lang = resolveUserLang(r, user)
@@ -305,17 +315,16 @@ func buildCognomChangeMeta(cognom *db.Cognom, apply func(*db.Cognom)) (string, e
 }
 
 func (a *App) CognomProposeUpdate(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/cognoms", http.StatusSeeOther)
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
 		http.Redirect(w, r, "/cognoms?err=csrf", http.StatusSeeOther)
-		return
-	}
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	lang := resolveUserLang(r, user)
@@ -366,17 +375,16 @@ func (a *App) CognomProposeUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) CognomSubmitHistoria(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/cognoms", http.StatusSeeOther)
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
 		http.Redirect(w, r, "/cognoms?err=csrf", http.StatusSeeOther)
-		return
-	}
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	lang := resolveUserLang(r, user)
@@ -425,17 +433,16 @@ func (a *App) CognomSubmitHistoria(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) CognomSubmitNotes(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/cognoms", http.StatusSeeOther)
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
 		http.Redirect(w, r, "/cognoms?err=csrf", http.StatusSeeOther)
-		return
-	}
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	lang := resolveUserLang(r, user)
@@ -484,17 +491,16 @@ func (a *App) CognomSubmitNotes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) CognomSubmitReferencia(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/cognoms", http.StatusSeeOther)
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
 		http.Redirect(w, r, "/cognoms?err=csrf", http.StatusSeeOther)
-		return
-	}
-	user, _ := a.VerificarSessio(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	lang := resolveUserLang(r, user)
@@ -564,6 +570,10 @@ func (a *App) CognomSubmitReferencia(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) CognomSuggestVariant(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requireCognomsView(w, r)
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/cognoms", http.StatusSeeOther)
 		return
@@ -572,7 +582,6 @@ func (a *App) CognomSuggestVariant(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/cognoms?err=csrf", http.StatusSeeOther)
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	id := extractID(r.URL.Path)
 	if id > 0 {
 		if canonID, _, err := a.resolveCognomCanonicalID(id); err == nil && canonID > 0 {
@@ -632,6 +641,9 @@ func (a *App) CognomSuggestVariant(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) SearchCognomsJSON(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireCognomsView(w, r); !ok {
+		return
+	}
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	list, err := a.DB.ListCognoms(q, 20, 0)
 	if err != nil {
@@ -652,6 +664,9 @@ func (a *App) SearchCognomsJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) CognomHeatmapJSON(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireCognomsView(w, r); !ok {
+		return
+	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/cognoms/")
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) < 2 || parts[0] == "" {

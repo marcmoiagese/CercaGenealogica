@@ -40,6 +40,7 @@ type importTemplateWizardColumn struct {
 	Index int
 	Name  string
 	Target string
+	NameOrder string
 }
 
 type importTemplateWizardView struct {
@@ -73,9 +74,8 @@ type importTemplatePayload struct {
 }
 
 func (a *App) ImportTemplatesRoute(w http.ResponseWriter, r *http.Request) {
-	user := userFromContext(r)
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyImportTemplatesView)
+	if !ok || user == nil {
 		return
 	}
 	base := strings.TrimPrefix(r.URL.Path, "/importador/plantilles")
@@ -345,7 +345,7 @@ func (a *App) importTemplateWizardSubmit(w http.ResponseWriter, r *http.Request,
 			ColumnCount:    columnCount,
 			Separator:      sepRaw,
 			SeparatorLabel: wizardSeparatorLabel(sepRaw),
-			Columns:        buildWizardColumns(columnCount, nil, nil),
+			Columns:        buildWizardColumns(columnCount, nil, nil, nil, "cognoms_first"),
 			RecordType:     "baptisme",
 			NameOrder:      "cognoms_first",
 		}
@@ -382,18 +382,19 @@ func (a *App) importTemplateWizardSubmit(w http.ResponseWriter, r *http.Request,
 		}
 		names, nameErr := parseWizardColumnNames(r, columnCount)
 		targets, targetErr := parseWizardColumnTargets(r, columnCount, recordType)
+		orders, orderErr := parseWizardColumnNameOrders(r, columnCount)
 		view := importTemplateWizardView{
 			Step:           2,
 			ColumnCount:    columnCount,
 			Separator:      sepRaw,
 			SeparatorLabel: wizardSeparatorLabel(sepRaw),
-			Columns:        buildWizardColumns(columnCount, names, targets),
+			Columns:        buildWizardColumns(columnCount, names, targets, orders, normalizeWizardNameOrder(r.FormValue("name_order"))),
 			Name:           strings.TrimSpace(r.FormValue("template_name")),
 			Description:    strings.TrimSpace(r.FormValue("template_description")),
 			Visibility:     normalizeTemplateVisibility(r.FormValue("visibility")),
 			RecordType:     recordType,
 			MainRole:       strings.TrimSpace(r.FormValue("main_role")),
-			NameOrder:      strings.TrimSpace(r.FormValue("name_order")),
+			NameOrder:      normalizeWizardNameOrder(r.FormValue("name_order")),
 			DateFormat:     strings.TrimSpace(r.FormValue("date_format")),
 			QualityLabels:  strings.TrimSpace(r.FormValue("quality_labels")) == "1",
 			QualityDubtos:  strings.TrimSpace(r.FormValue("quality_dubtos")),
@@ -410,9 +411,7 @@ func (a *App) importTemplateWizardSubmit(w http.ResponseWriter, r *http.Request,
 		if view.MainRole == "" {
 			view.MainRole = defaultWizardRole(view.RecordType)
 		}
-		if view.NameOrder == "" {
-			view.NameOrder = "cognoms_first"
-		}
+		view.NameOrder = normalizeWizardNameOrder(view.NameOrder)
 		if view.DateFormat == "" {
 			view.DateFormat = "dd/mm"
 		}
@@ -432,6 +431,11 @@ func (a *App) importTemplateWizardSubmit(w http.ResponseWriter, r *http.Request,
 			a.renderImportTemplateWizard(w, r, view)
 			return
 		}
+		if orderErr != "" {
+			view.Error = orderErr
+			a.renderImportTemplateWizard(w, r, view)
+			return
+		}
 		view.Step = 3
 		a.renderImportTemplateWizard(w, r, view)
 		return
@@ -444,18 +448,19 @@ func (a *App) importTemplateWizardSubmit(w http.ResponseWriter, r *http.Request,
 		}
 		names, nameErr := parseWizardColumnNames(r, columnCount)
 		targets, targetErr := parseWizardColumnTargets(r, columnCount, recordType)
+		orders, orderErr := parseWizardColumnNameOrders(r, columnCount)
 		view := importTemplateWizardView{
 			Step:           3,
 			ColumnCount:    columnCount,
 			Separator:      sepRaw,
 			SeparatorLabel: wizardSeparatorLabel(sepRaw),
-			Columns:        buildWizardColumns(columnCount, names, targets),
+			Columns:        buildWizardColumns(columnCount, names, targets, orders, normalizeWizardNameOrder(r.FormValue("name_order"))),
 			Name:           strings.TrimSpace(r.FormValue("template_name")),
 			Description:    strings.TrimSpace(r.FormValue("template_description")),
 			Visibility:     normalizeTemplateVisibility(r.FormValue("visibility")),
 			RecordType:     recordType,
 			MainRole:       strings.TrimSpace(r.FormValue("main_role")),
-			NameOrder:      strings.TrimSpace(r.FormValue("name_order")),
+			NameOrder:      normalizeWizardNameOrder(r.FormValue("name_order")),
 			DateFormat:     strings.TrimSpace(r.FormValue("date_format")),
 			QualityLabels:  strings.TrimSpace(r.FormValue("quality_labels")) == "1",
 			QualityDubtos:  strings.TrimSpace(r.FormValue("quality_dubtos")),
@@ -472,9 +477,7 @@ func (a *App) importTemplateWizardSubmit(w http.ResponseWriter, r *http.Request,
 		if view.MainRole == "" {
 			view.MainRole = defaultWizardRole(view.RecordType)
 		}
-		if view.NameOrder == "" {
-			view.NameOrder = "cognoms_first"
-		}
+		view.NameOrder = normalizeWizardNameOrder(view.NameOrder)
 		if view.DateFormat == "" {
 			view.DateFormat = "dd/mm"
 		}
@@ -496,6 +499,11 @@ func (a *App) importTemplateWizardSubmit(w http.ResponseWriter, r *http.Request,
 		}
 		if targetErr != "" {
 			view.Error = targetErr
+			a.renderImportTemplateWizard(w, r, view)
+			return
+		}
+		if orderErr != "" {
+			view.Error = orderErr
 			a.renderImportTemplateWizard(w, r, view)
 			return
 		}
@@ -529,7 +537,11 @@ func (a *App) importTemplateWizardSubmit(w http.ResponseWriter, r *http.Request,
 			if i < len(targets) {
 				target = targets[i]
 			}
-			columns = append(columns, buildWizardColumnMapping(header, target, view))
+			order := ""
+			if i < len(orders) {
+				order = orders[i]
+			}
+			columns = append(columns, buildWizardColumnMapping(header, target, order, view))
 		}
 		model["mapping"] = map[string]interface{}{"columns": columns}
 		modelJSON := encodeTemplateModel(model)
@@ -560,7 +572,7 @@ func (a *App) renderImportTemplateWizard(w http.ResponseWriter, r *http.Request,
 	})
 }
 
-func buildWizardColumns(count int, names []string, kinds []string) []importTemplateWizardColumn {
+func buildWizardColumns(count int, names []string, kinds []string, orders []string, defaultOrder string) []importTemplateWizardColumn {
 	if count <= 0 {
 		return []importTemplateWizardColumn{}
 	}
@@ -574,10 +586,18 @@ func buildWizardColumns(count int, names []string, kinds []string) []importTempl
 		if i-1 < len(kinds) {
 			target = kinds[i-1]
 		}
+		order := ""
+		if i-1 < len(orders) {
+			order = orders[i-1]
+		}
+		if order == "" {
+			order = defaultOrder
+		}
 		cols = append(cols, importTemplateWizardColumn{
 			Index: i,
 			Name:  name,
 			Target: target,
+			NameOrder: order,
 		})
 	}
 	return cols
@@ -638,6 +658,38 @@ func parseWizardColumnTargets(r *http.Request, count int, recordType string) ([]
 	return targets, ""
 }
 
+func parseWizardColumnNameOrders(r *http.Request, count int) ([]string, string) {
+	if count <= 0 {
+		return nil, "Indica quantes columnes té el CSV."
+	}
+	allowed := map[string]bool{
+		"": true,
+		"cognoms_first": true,
+		"cognoms_first_maternal": true,
+		"nom_first": true,
+		"nom_first_paternal_only": true,
+		"nom_first_maternal": true,
+	}
+	orders := make([]string, count)
+	for i := 1; i <= count; i++ {
+		val := strings.TrimSpace(r.FormValue(fmt.Sprintf("col_name_order_%d", i)))
+		if !allowed[val] {
+			return orders, fmt.Sprintf("Ordre de nom invàlid a la columna %d.", i)
+		}
+		orders[i-1] = val
+	}
+	return orders, ""
+}
+
+func normalizeWizardNameOrder(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "cognoms_first", "cognoms_first_maternal", "nom_first", "nom_first_paternal_only", "nom_first_maternal":
+		return strings.TrimSpace(raw)
+	default:
+		return "cognoms_first"
+	}
+}
+
 func legacyWizardTypeToTarget(val string, recordType string) string {
 	switch strings.TrimSpace(val) {
 	case "base_llibre_id":
@@ -671,12 +723,14 @@ func defaultWizardRole(recordType string) string {
 		return "difunt"
 	case "matrimoni":
 		return "nuvi"
+	case "padro":
+		return "cap_familia"
 	default:
 		return "batejat"
 	}
 }
 
-func buildWizardColumnMapping(header string, target string, view importTemplateWizardView) map[string]interface{} {
+func buildWizardColumnMapping(header string, target string, order string, view importTemplateWizardView) map[string]interface{} {
 	header = strings.TrimSpace(header)
 	column := map[string]interface{}{
 		"header":   header,
@@ -687,9 +741,20 @@ func buildWizardColumnMapping(header string, target string, view importTemplateW
 	transforms := []interface{}{}
 	target = strings.TrimSpace(target)
 	if isWizardPersonRoleTarget(target) {
-		if view.NameOrder == "nom_first" {
-			transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_nom_marcmoia_v2"})
-		} else {
+		selected := strings.TrimSpace(order)
+		if selected == "" {
+			selected = view.NameOrder
+		}
+	switch selected {
+	case "nom_first":
+		transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_nom_marcmoia_v2"})
+	case "nom_first_paternal_only":
+		transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_nom_marcmoia_v2"})
+	case "nom_first_maternal":
+		transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_nom_marcmoia_v2_maternal_first"})
+	case "cognoms_first_maternal":
+		transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_cognoms_marcmoia_v2_maternal_first"})
+	default:
 			transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_cognoms_marcmoia_v2"})
 		}
 	}

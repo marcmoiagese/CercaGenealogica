@@ -36,6 +36,7 @@ func (a *App) ArxiuWikiHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	canModerate := a.hasPerm(perms, permModerate)
+	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 	canManageArxius := a.CanManageArxius(user)
 	if arxiu.ModeracioEstat != "" && arxiu.ModeracioEstat != "publicat" && !(canManageArxius || canModerate) {
 		http.NotFound(w, r)
@@ -114,7 +115,7 @@ func (a *App) ArxiuWikiHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		hasSnapshot := len(before) > 0 || len(after) > 0
 		canRevert := false
-		if hasSnapshot {
+		if hasSnapshot && canRevertPerm {
 			if canModerate {
 				canRevert = true
 			} else if changedByID == user.ID {
@@ -310,6 +311,10 @@ func (a *App) ArxiuWikiRevert(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	canModerate := a.hasPerm(perms, permModerate)
+	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	changeID, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("change_id")))
 	if changeID == 0 {
 		http.Error(w, "Canvi invàlid", http.StatusBadRequest)

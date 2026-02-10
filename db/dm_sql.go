@@ -144,7 +144,7 @@ func (h sqlHelper) listDMThreadsForUser(userID int, f DMThreadListFilter) ([]DMT
 	}
 	query := `
         SELECT t.id, t.user_low_id, t.user_high_id, t.created_at, t.last_message_at, t.last_message_id,
-               s.last_read_message_id, s.archived, s.muted, s.deleted, s.updated_at,
+               s.last_read_message_id, s.archived, s.muted, s.deleted, s.updated_at, s.folder,
                m.sender_id, m.body, m.created_at
         FROM dm_threads t
         JOIN dm_thread_state s ON s.thread_id = t.id AND s.user_id = ?
@@ -165,6 +165,14 @@ func (h sqlHelper) listDMThreadsForUser(userID int, f DMThreadListFilter) ([]DMT
 	} else {
 		clauses = append(clauses, "s.deleted = ?")
 		args = append(args, false)
+	}
+	if f.Folder != nil {
+		if *f.Folder == "" {
+			clauses = append(clauses, "(s.folder IS NULL OR s.folder = '')")
+		} else {
+			clauses = append(clauses, "s.folder = ?")
+			args = append(args, *f.Folder)
+		}
 	}
 	if len(clauses) > 0 {
 		query += " WHERE " + strings.Join(clauses, " AND ")
@@ -193,6 +201,7 @@ func (h sqlHelper) listDMThreadsForUser(userID int, f DMThreadListFilter) ([]DMT
 		var archivedRaw interface{}
 		var mutedRaw interface{}
 		var deletedRaw interface{}
+		var folderRaw sql.NullString
 		var lastMessageBody sql.NullString
 		var stateUpdatedAt sql.NullTime
 		if err := rows.Scan(
@@ -207,6 +216,7 @@ func (h sqlHelper) listDMThreadsForUser(userID int, f DMThreadListFilter) ([]DMT
 			&mutedRaw,
 			&deletedRaw,
 			&stateUpdatedAt,
+			&folderRaw,
 			&item.LastMessageSenderID,
 			&lastMessageBody,
 			&item.LastMessageCreatedAt,
@@ -221,6 +231,9 @@ func (h sqlHelper) listDMThreadsForUser(userID int, f DMThreadListFilter) ([]DMT
 		item.Archived = parseBoolValue(archivedRaw)
 		item.Muted = parseBoolValue(mutedRaw)
 		item.Deleted = parseBoolValue(deletedRaw)
+		if folderRaw.Valid {
+			item.Folder = strings.TrimSpace(folderRaw.String)
+		}
 		if lastMessageBody.Valid {
 			item.LastMessageBody = lastMessageBody.String
 		}
@@ -233,6 +246,73 @@ func (h sqlHelper) listDMThreadsForUser(userID int, f DMThreadListFilter) ([]DMT
 		res = append(res, item)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) countDMUnread(userID int) (int, error) {
+	if userID <= 0 {
+		return 0, fmt.Errorf("invalid user")
+	}
+	query := `
+        SELECT COUNT(1)
+        FROM dm_threads t
+        JOIN dm_thread_state s ON s.thread_id = t.id AND s.user_id = ?
+        LEFT JOIN dm_messages m ON m.id = t.last_message_id
+        WHERE s.deleted = ?
+          AND s.archived = ?
+          AND t.last_message_id IS NOT NULL
+          AND (s.last_read_message_id IS NULL OR s.last_read_message_id < t.last_message_id)
+          AND (m.sender_id IS NULL OR m.sender_id <> ?)`
+	query = formatPlaceholders(h.style, query)
+	var count int
+	if err := h.db.QueryRow(query, userID, false, false, userID).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (h sqlHelper) listDMThreadFolders(userID int) ([]string, error) {
+	if userID <= 0 {
+		return nil, fmt.Errorf("invalid user")
+	}
+	query := `
+        SELECT DISTINCT folder
+        FROM dm_thread_state
+        WHERE user_id = ?
+          AND deleted = ?
+          AND folder IS NOT NULL
+          AND folder <> ''
+        ORDER BY folder ASC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, userID, false)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	folders := []string{}
+	for rows.Next() {
+		var folder sql.NullString
+		if err := rows.Scan(&folder); err != nil {
+			return nil, err
+		}
+		if folder.Valid {
+			name := strings.TrimSpace(folder.String)
+			if name != "" {
+				folders = append(folders, name)
+			}
+		}
+	}
+	return folders, nil
+}
+
+func (h sqlHelper) setDMThreadFolder(threadID, userID int, folder string) error {
+	if threadID <= 0 || userID <= 0 {
+		return fmt.Errorf("invalid thread/user")
+	}
+	folder = strings.TrimSpace(folder)
+	stmt := `UPDATE dm_thread_state SET folder = ?, updated_at = ` + h.nowFun + ` WHERE thread_id = ? AND user_id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, folder, threadID, userID)
+	return err
 }
 
 func (h sqlHelper) listDMMessages(threadID, limit, beforeID int) ([]DMMessage, error) {

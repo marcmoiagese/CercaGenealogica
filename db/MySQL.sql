@@ -36,6 +36,21 @@ CREATE TABLE IF NOT EXISTS usuaris (
     INDEX idx_usuaris_data_creacio (data_creacio)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS user_dashboard_widgets (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    widget_id VARCHAR(120) NOT NULL,
+    position INT NOT NULL DEFAULT 0,
+    is_hidden BOOLEAN NOT NULL DEFAULT 0,
+    settings_json TEXT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_user_widget (user_id, widget_id),
+    FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+    INDEX idx_user_dashboard_widgets_user (user_id),
+    INDEX idx_user_dashboard_widgets_order (user_id, position)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS grups (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nom VARCHAR(255) NOT NULL UNIQUE,
@@ -582,7 +597,7 @@ CREATE TABLE IF NOT EXISTS codis_postals (
 
 CREATE TABLE IF NOT EXISTS llibres (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    arquevisbat_id INT UNSIGNED NOT NULL,
+    arquevisbat_id INT UNSIGNED NULL,
     municipi_id INT UNSIGNED NOT NULL,
     nom_esglesia VARCHAR(255),
     codi_digital VARCHAR(50),
@@ -609,7 +624,7 @@ CREATE TABLE IF NOT EXISTS llibres (
     moderation_notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(arquevisbat_id) REFERENCES arquebisbats(id) ON DELETE CASCADE,
+    FOREIGN KEY(arquevisbat_id) REFERENCES arquebisbats(id) ON DELETE SET NULL,
     FOREIGN KEY(municipi_id) REFERENCES municipis(id) ON DELETE RESTRICT,
     FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
@@ -913,6 +928,7 @@ CREATE TABLE IF NOT EXISTS media_albums (
   description TEXT,
   album_type VARCHAR(20) NOT NULL DEFAULT 'other',
   owner_user_id INT UNSIGNED NOT NULL,
+  llibre_id INT UNSIGNED NULL,
   moderation_status VARCHAR(20) NOT NULL DEFAULT 'pending',
   visibility VARCHAR(30) NOT NULL DEFAULT 'private',
   restricted_group_id INT UNSIGNED NULL,
@@ -928,11 +944,13 @@ CREATE TABLE IF NOT EXISTS media_albums (
   UNIQUE KEY idx_media_albums_public_id (public_id),
   INDEX idx_media_albums_owner (owner_user_id),
   INDEX idx_media_albums_moderation (moderation_status),
+  INDEX idx_media_albums_llibre (llibre_id),
   CONSTRAINT chk_media_album_type CHECK (album_type IN ('book','memorial','photo','achievement_icon','other')),
   CONSTRAINT chk_media_album_status CHECK (moderation_status IN ('pending','approved','rejected')),
   CONSTRAINT chk_media_album_visibility CHECK (visibility IN ('private','registered','public','restricted_group','admins_only','custom_policy')),
   CONSTRAINT chk_media_album_source CHECK (source_type IN ('online','offline_archive','family_private','other')),
   FOREIGN KEY (owner_user_id) REFERENCES usuaris(id) ON DELETE CASCADE,
+  FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE SET NULL,
   FOREIGN KEY (restricted_group_id) REFERENCES grups(id) ON DELETE SET NULL,
   FOREIGN KEY (access_policy_id) REFERENCES politiques(id) ON DELETE SET NULL,
   FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
@@ -1097,6 +1115,8 @@ CREATE TABLE IF NOT EXISTS transcripcions_persones_raw (
   cognom1_estat VARCHAR(20),
   cognom2 VARCHAR(255),
   cognom2_estat VARCHAR(20),
+  cognom_soltera VARCHAR(255),
+  cognom_soltera_estat VARCHAR(20),
   sexe VARCHAR(10),
   sexe_estat VARCHAR(20),
   edat_text VARCHAR(100),
@@ -1604,10 +1624,12 @@ CREATE TABLE IF NOT EXISTS dm_thread_state (
   archived TINYINT(1) NOT NULL DEFAULT 0,
   muted TINYINT(1) NOT NULL DEFAULT 0,
   deleted TINYINT(1) NOT NULL DEFAULT 0,
+  folder VARCHAR(120) NULL,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (thread_id, user_id),
   INDEX idx_dm_thread_state_user_archived (user_id, archived, updated_at),
   INDEX idx_dm_thread_state_user_deleted (user_id, deleted, updated_at),
+  INDEX idx_dm_thread_state_user_folder (user_id, folder),
   FOREIGN KEY (thread_id) REFERENCES dm_threads(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES usuaris(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
