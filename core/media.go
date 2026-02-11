@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -193,9 +194,171 @@ func (a *App) MediaAlbumNew(w http.ResponseWriter, r *http.Request) {
 		"FormSource":     "online",
 		"FormDesc":       "",
 		"FormError":      "",
+		"FormLlibreID":   0,
+		"FormLlibreLabel": "",
 		"MaxUploadMB":    cfg.MaxUploadMB,
 		"AllowedMimeCSV": cfg.AllowedCSV,
 	})
+}
+
+func (a *App) MediaLlibresSearchJSON(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	user := userFromContext(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	perms, _ := a.permissionsFromContext(r)
+	if !perms.Admin && !perms.CanManageArchives && !a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresView) {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	cronologia := strings.TrimSpace(r.URL.Query().Get("cronologia"))
+	arxiuID := parseIntDefault(r.URL.Query().Get("arxiu_id"), 0)
+	eclesID := parseIntDefault(r.URL.Query().Get("ecles_id"), 0)
+	municipiID := parseIntDefault(r.URL.Query().Get("municipi_id"), 0)
+	limit := parseIntDefault(r.URL.Query().Get("limit"), 20)
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	filter := db.LlibreFilter{
+		Text:          query,
+		Cronologia:    cronologia,
+		ArxiuID:       arxiuID,
+		ArquebisbatID: eclesID,
+		MunicipiID:    municipiID,
+		Limit:         limit,
+	}
+	if !perms.Admin && !perms.CanManageArchives {
+		filter.Status = "publicat"
+	}
+	scope := a.buildListScopeFilter(user.ID, permKeyDocumentalsLlibresView, ScopeLlibre)
+	if perms.Admin || perms.CanManageArchives {
+		scope.hasGlobal = true
+	}
+	if !scope.hasGlobal {
+		filter.AllowedLlibreIDs = scope.llibreIDs
+		filter.AllowedArxiuIDs = scope.arxiuIDs
+		filter.AllowedMunicipiIDs = scope.municipiIDs
+		filter.AllowedProvinciaIDs = scope.provinciaIDs
+		filter.AllowedComarcaIDs = scope.comarcaIDs
+		filter.AllowedNivellIDs = scope.nivellIDs
+		filter.AllowedPaisIDs = scope.paisIDs
+		filter.AllowedEclesIDs = scope.eclesIDs
+	}
+	if !scope.hasGlobal &&
+		len(filter.AllowedLlibreIDs) == 0 &&
+		len(filter.AllowedArxiuIDs) == 0 &&
+		len(filter.AllowedMunicipiIDs) == 0 &&
+		len(filter.AllowedProvinciaIDs) == 0 &&
+		len(filter.AllowedComarcaIDs) == 0 &&
+		len(filter.AllowedNivellIDs) == 0 &&
+		len(filter.AllowedPaisIDs) == 0 &&
+		len(filter.AllowedEclesIDs) == 0 {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	rows, err := a.DB.ListLlibres(filter)
+	if err != nil {
+		Errorf("MediaLlibresSearchJSON error: %v", err)
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	items := make([]map[string]interface{}, 0, len(rows))
+	for _, row := range rows {
+		label := strings.TrimSpace(row.Titol)
+		if label == "" {
+			label = strings.TrimSpace(row.NomEsglesia)
+		}
+		context := joinNonEmpty(strings.TrimSpace(row.Cronologia), strings.TrimSpace(row.NomEsglesia), " · ")
+		if row.MunicipiNom.Valid {
+			context = joinNonEmpty(context, strings.TrimSpace(row.MunicipiNom.String), " · ")
+		}
+		if row.ArquebisbatNom.Valid {
+			context = joinNonEmpty(context, strings.TrimSpace(row.ArquebisbatNom.String), " · ")
+		}
+		items = append(items, map[string]interface{}{
+			"id":         row.ID,
+			"nom":        label,
+			"context":    strings.TrimSpace(context),
+			"cronologia": strings.TrimSpace(row.Cronologia),
+		})
+	}
+	writeJSON(w, map[string]interface{}{"items": items})
+}
+
+func (a *App) MediaLlibrePaginesSuggestJSON(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	user := userFromContext(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	llibreID := parseIntDefault(r.URL.Query().Get("llibre_id"), 0)
+	if llibreID <= 0 {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	perms, _ := a.permissionsFromContext(r)
+	target := a.resolveLlibreTarget(llibreID)
+	if !perms.Admin && !perms.CanManageArchives && !a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	limit := parseIntDefault(r.URL.Query().Get("limit"), 10)
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	pages, err := a.DB.SearchLlibrePagines(llibreID, query, limit)
+	if err != nil {
+		Errorf("MediaLlibrePaginesSuggestJSON error: %v", err)
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	if len(pages) == 0 {
+		if err := a.DB.RecalcTranscripcionsRawPageStats(llibreID); err == nil {
+			pages, _ = a.DB.SearchLlibrePagines(llibreID, query, limit)
+		}
+	}
+	items := make([]map[string]interface{}, 0, len(pages))
+	for _, page := range pages {
+		label := strings.TrimSpace(page.Notes)
+		if label == "" && page.NumPagina > 0 {
+			label = strconv.Itoa(page.NumPagina)
+		}
+		if label == "" {
+			continue
+		}
+		items = append(items, map[string]interface{}{
+			"id":    page.ID,
+			"label": label,
+			"num":   page.NumPagina,
+		})
+	}
+	if len(items) == 0 && query != "" {
+		if n, err := strconv.Atoi(query); err == nil {
+			items = append(items, map[string]interface{}{
+				"id":    0,
+				"label": query,
+				"num":   n,
+			})
+		}
+	}
+	writeJSON(w, map[string]interface{}{"items": items})
 }
 
 func (a *App) MediaAlbumDetail(w http.ResponseWriter, r *http.Request) {
@@ -218,6 +381,22 @@ func (a *App) MediaAlbumDetail(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.mediaAlbumUpload(w, r, cfg, albumPublicID)
+		return
+	}
+	if tail == "pages/link" {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		a.mediaAlbumPageLink(w, r, albumPublicID)
+		return
+	}
+	if tail == "pages/unlink" {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		a.mediaAlbumPageUnlink(w, r, albumPublicID)
 		return
 	}
 	if tail != "" {
@@ -302,14 +481,23 @@ func (a *App) mediaAlbumCreate(w http.ResponseWriter, r *http.Request, cfg media
 	desc := strings.TrimSpace(r.FormValue("description"))
 	albumType := normalizeMediaAlbumType(r.FormValue("album_type"))
 	sourceType := normalizeMediaSourceType(r.FormValue("source_type"))
+	llibreID := parseIntDefault(r.FormValue("llibre_id"), 0)
+	llibreLabel := strings.TrimSpace(r.FormValue("llibre_label"))
 	if albumType == "achievement_icon" && !perms.Admin {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
 	if title == "" {
-		a.renderMediaAlbumForm(w, r, user, cfg, title, albumType, sourceType, desc, T(resolveUserLang(r, user), "media.error.title_required"))
+		a.renderMediaAlbumForm(w, r, user, cfg, title, albumType, sourceType, desc, llibreID, llibreLabel, T(resolveUserLang(r, user), "media.error.title_required"))
 		return
+	}
+	if llibreID > 0 {
+		target := a.resolveLlibreTarget(llibreID)
+		if !perms.Admin && !perms.CanManageArchives && !a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) {
+			a.renderMediaAlbumForm(w, r, user, cfg, title, albumType, sourceType, desc, llibreID, llibreLabel, T(resolveUserLang(r, user), "media.error.book_permission"))
+			return
+		}
 	}
 
 	album := &db.MediaAlbum{
@@ -318,6 +506,7 @@ func (a *App) mediaAlbumCreate(w http.ResponseWriter, r *http.Request, cfg media
 		Description:      desc,
 		AlbumType:        albumType,
 		OwnerUserID:      user.ID,
+		LlibreID:         sql.NullInt64{Int64: int64(llibreID), Valid: llibreID > 0},
 		ModerationStatus: "pending",
 		Visibility:       "private",
 		CreditCost:       0,
@@ -330,7 +519,7 @@ func (a *App) mediaAlbumCreate(w http.ResponseWriter, r *http.Request, cfg media
 	}
 	if _, err := a.DB.CreateMediaAlbum(album); err != nil {
 		Errorf("Error creant media album: %v", err)
-		a.renderMediaAlbumForm(w, r, user, cfg, title, albumType, sourceType, desc, T(resolveUserLang(r, user), "media.error.create_failed"))
+		a.renderMediaAlbumForm(w, r, user, cfg, title, albumType, sourceType, desc, llibreID, llibreLabel, T(resolveUserLang(r, user), "media.error.create_failed"))
 		return
 	}
 
@@ -368,10 +557,59 @@ func (a *App) mediaAlbumShow(w http.ResponseWriter, r *http.Request, cfg mediaCo
 		}
 		items = filtered
 	}
+	perms, _ := a.permissionsFromContext(r)
+	var linkedBook *db.Llibre
+	linkedBookLabel := ""
+	canViewBook := false
+	if album.LlibreID.Valid {
+		if book, err := a.DB.GetLlibre(int(album.LlibreID.Int64)); err == nil && book != nil {
+			linkedBook = book
+			linkedBookLabel = strings.TrimSpace(book.Titol)
+			if linkedBookLabel == "" {
+				linkedBookLabel = strings.TrimSpace(book.NomEsglesia)
+			}
+		}
+		if user != nil {
+			target := a.resolveLlibreTarget(int(album.LlibreID.Int64))
+			if perms.Admin || perms.CanManageArchives || a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) {
+				canViewBook = true
+			}
+		}
+	}
+	if !canViewBook {
+		linkedBook = nil
+		linkedBookLabel = ""
+	}
+	canLinkPages := canViewBook && a.mediaUserIsPrivileged(r, user, album)
 	linkCounts := map[int]int{}
 	if len(items) > 0 {
 		if counts, err := a.DB.CountMediaItemLinksByAlbum(album.ID); err == nil {
 			linkCounts = counts
+		}
+	}
+	itemLinks := map[int][]db.MediaItemPageLink{}
+	if linkedBook != nil && canViewBook {
+		if canLinkPages && linkedBook.Pagines.Valid && linkedBook.Pagines.Int64 > 0 {
+			if pages, err := a.DB.ListLlibrePagines(linkedBook.ID); err == nil && len(pages) == 0 {
+				if err := a.DB.RecalcLlibrePagines(linkedBook.ID, int(linkedBook.Pagines.Int64)); err != nil {
+					Errorf("Error recalculant pagines llibre %d: %v", linkedBook.ID, err)
+				}
+			}
+		}
+		if links, err := a.DB.ListMediaItemLinksByAlbum(album.ID); err == nil {
+			if !isPrivileged {
+				links = a.filterMediaItemLinks(r, user, links)
+			}
+			itemIDs := map[int]struct{}{}
+			for _, item := range items {
+				itemIDs[item.ID] = struct{}{}
+			}
+			for _, link := range links {
+				if _, ok := itemIDs[link.MediaItemID]; !ok {
+					continue
+				}
+				itemLinks[link.MediaItemID] = append(itemLinks[link.MediaItemID], link)
+			}
 		}
 	}
 	uploaded := 0
@@ -387,12 +625,23 @@ func (a *App) mediaAlbumShow(w http.ResponseWriter, r *http.Request, cfg mediaCo
 		"Album":          album,
 		"Items":          items,
 		"ItemLinkCounts": linkCounts,
+		"ItemLinks":      itemLinks,
 		"Uploaded":       uploaded,
 		"Failed":         failed,
 		"AllowedMimeCSV": cfg.AllowedCSV,
 		"MaxUploadMB":    cfg.MaxUploadMB,
 		"CanUpload":      isOwner,
 		"IsOwner":        isOwner,
+		"LinkedBook":     linkedBook,
+		"LinkedBookLabel": linkedBookLabel,
+		"CanViewBook":    canViewBook,
+		"CanLinkPages":   canLinkPages,
+		"BookURLBase":    "",
+		"BookURLPrefix":  "",
+	}
+	if linkedBook != nil {
+		payload["BookURLBase"] = strings.TrimSpace(linkedBook.URLBase)
+		payload["BookURLPrefix"] = strings.TrimSpace(linkedBook.URLImatgePrefix)
 	}
 	if user != nil {
 		RenderPrivateTemplateLang(w, r, "media-albums-show.html", lang, payload)
@@ -452,6 +701,151 @@ func (a *App) mediaAlbumUpload(w http.ResponseWriter, r *http.Request, cfg media
 
 	target := fmt.Sprintf("/media/albums/%s?uploaded=%d&failed=%d", album.PublicID, created, failed)
 	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+func (a *App) mediaAlbumPageLink(w http.ResponseWriter, r *http.Request, albumPublicID string) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	user := a.mediaEnsureUser(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	album, err := a.DB.GetMediaAlbumByPublicID(albumPublicID)
+	if err != nil || album == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !a.mediaUserIsPrivileged(r, user, album) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !album.LlibreID.Valid {
+		http.Redirect(w, r, "/media/albums/"+album.PublicID, http.StatusSeeOther)
+		return
+	}
+	perms, _ := a.permissionsFromContext(r)
+	target := a.resolveLlibreTarget(int(album.LlibreID.Int64))
+	if !perms.Admin && !perms.CanManageArchives && !a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	itemPublicID := strings.TrimSpace(r.FormValue("media_item_public_id"))
+	paginaIDText := strings.TrimSpace(r.FormValue("pagina_id"))
+	paginaNumText := strings.TrimSpace(r.FormValue("pagina_num"))
+	paginaID := parseIntDefault(paginaIDText, 0)
+	paginaNum := parseIntDefault(paginaNumText, 0)
+	if itemPublicID == "" || (paginaIDText == "" && paginaNumText == "") {
+		Errorf("mediaAlbumPageLink: dades incompletes item=%q pagina_id=%q pagina_num=%q", itemPublicID, paginaIDText, paginaNumText)
+		http.Redirect(w, r, "/media/albums/"+album.PublicID, http.StatusSeeOther)
+		return
+	}
+	item, err := a.DB.GetMediaItemByPublicID(itemPublicID)
+	if err != nil || item == nil || item.AlbumID != album.ID {
+		if err != nil {
+			Errorf("mediaAlbumPageLink: error item %q: %v", itemPublicID, err)
+		} else {
+			Errorf("mediaAlbumPageLink: item no valid %q album=%d", itemPublicID, album.ID)
+		}
+		http.Redirect(w, r, "/media/albums/"+album.PublicID, http.StatusSeeOther)
+		return
+	}
+	var page *db.LlibrePagina
+	if paginaID > 0 {
+		page, err = a.DB.GetLlibrePaginaByID(paginaID)
+		if err != nil || page == nil || page.LlibreID != int(album.LlibreID.Int64) {
+			if err != nil {
+				Errorf("mediaAlbumPageLink: error pagina id=%d: %v", paginaID, err)
+			} else {
+				Errorf("mediaAlbumPageLink: pagina id=%d no valida llibre=%d", paginaID, int(album.LlibreID.Int64))
+			}
+			http.Redirect(w, r, "/media/albums/"+album.PublicID, http.StatusSeeOther)
+			return
+		}
+	} else {
+		page, err = a.DB.GetLlibrePaginaByNum(int(album.LlibreID.Int64), paginaNum)
+		if err != nil && err != sql.ErrNoRows {
+			Errorf("Error cercant pagina llibre %d num %d: %v", int(album.LlibreID.Int64), paginaNum, err)
+		}
+		if page == nil {
+			page = &db.LlibrePagina{
+				LlibreID:  int(album.LlibreID.Int64),
+				NumPagina: paginaNum,
+				Estat:     "pendent",
+			}
+			pageID, saveErr := a.DB.SaveLlibrePagina(page)
+			if saveErr != nil {
+				Errorf("Error creant pagina llibre %d num %d: %v", int(album.LlibreID.Int64), paginaNum, saveErr)
+			}
+			if pageID == 0 {
+				if existing, err := a.DB.GetLlibrePaginaByNum(int(album.LlibreID.Int64), paginaNum); err == nil && existing != nil {
+					page = existing
+				} else {
+					if err != nil && err != sql.ErrNoRows {
+						Errorf("Error reintentant pagina llibre %d num %d: %v", int(album.LlibreID.Int64), paginaNum, err)
+					}
+					http.Redirect(w, r, "/media/albums/"+album.PublicID, http.StatusSeeOther)
+					return
+				}
+			} else {
+				page.ID = pageID
+			}
+		}
+	}
+	pageOrder := parseIntDefault(r.FormValue("page_order"), 0)
+	notes := strings.TrimSpace(r.FormValue("notes"))
+	if err := a.DB.UpsertMediaItemPageLink(item.ID, page.LlibreID, page.ID, pageOrder, notes); err != nil {
+		Errorf("Error vinculant media item %d a pagina %d: %v", item.ID, page.ID, err)
+	}
+	returnTo := safeReturnTo(r.FormValue("return_to"), "/media/albums/"+album.PublicID)
+	http.Redirect(w, r, returnTo, http.StatusSeeOther)
+}
+
+func (a *App) mediaAlbumPageUnlink(w http.ResponseWriter, r *http.Request, albumPublicID string) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	user := a.mediaEnsureUser(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	album, err := a.DB.GetMediaAlbumByPublicID(albumPublicID)
+	if err != nil || album == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !a.mediaUserIsPrivileged(r, user, album) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	itemPublicID := strings.TrimSpace(r.FormValue("media_item_public_id"))
+	paginaID := parseIntDefault(r.FormValue("pagina_id"), 0)
+	if itemPublicID == "" || paginaID == 0 {
+		http.Redirect(w, r, "/media/albums/"+album.PublicID, http.StatusSeeOther)
+		return
+	}
+	item, err := a.DB.GetMediaItemByPublicID(itemPublicID)
+	if err != nil || item == nil || item.AlbumID != album.ID {
+		http.Redirect(w, r, "/media/albums/"+album.PublicID, http.StatusSeeOther)
+		return
+	}
+	if err := a.DB.DeleteMediaItemPageLink(item.ID, paginaID); err != nil {
+		Errorf("Error desvinculant media item %d de pagina %d: %v", item.ID, paginaID, err)
+	}
+	returnTo := safeReturnTo(r.FormValue("return_to"), "/media/albums/"+album.PublicID)
+	http.Redirect(w, r, returnTo, http.StatusSeeOther)
 }
 
 func (a *App) mediaItemThumb(w http.ResponseWriter, r *http.Request, cfg mediaConfig, itemPublicID string) {
@@ -790,9 +1184,17 @@ func extensionForMime(mime string) string {
 	}
 }
 
-func (a *App) renderMediaAlbumForm(w http.ResponseWriter, r *http.Request, user *db.User, cfg mediaConfig, title, albumType, sourceType, desc, errMsg string) {
+func (a *App) renderMediaAlbumForm(w http.ResponseWriter, r *http.Request, user *db.User, cfg mediaConfig, title, albumType, sourceType, desc string, llibreID int, llibreLabel, errMsg string) {
 	lang := resolveUserLang(r, user)
 	perms, _ := a.permissionsFromContext(r)
+	if llibreID > 0 && strings.TrimSpace(llibreLabel) == "" {
+		if llibre, err := a.DB.GetLlibre(llibreID); err == nil && llibre != nil {
+			llibreLabel = strings.TrimSpace(llibre.Titol)
+			if llibreLabel == "" {
+				llibreLabel = strings.TrimSpace(llibre.NomEsglesia)
+			}
+		}
+	}
 	RenderPrivateTemplateLang(w, r, "media-albums-form.html", lang, map[string]interface{}{
 		"User":           user,
 		"AlbumTypes":     mediaAlbumTypeListForPerms(perms),
@@ -802,6 +1204,8 @@ func (a *App) renderMediaAlbumForm(w http.ResponseWriter, r *http.Request, user 
 		"FormSource":     sourceType,
 		"FormDesc":       desc,
 		"FormError":      errMsg,
+		"FormLlibreID":   llibreID,
+		"FormLlibreLabel": llibreLabel,
 		"MaxUploadMB":    cfg.MaxUploadMB,
 		"AllowedMimeCSV": cfg.AllowedCSV,
 	})

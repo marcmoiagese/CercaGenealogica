@@ -293,6 +293,8 @@ func main() {
 	http.HandleFunc("/api/search", applyMiddleware(app.RequireLogin(app.SearchAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/documentals/arxius/suggest", applyMiddleware(app.RequireLogin(app.SearchArxiusSuggestJSON), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/documentals/llibres/suggest", applyMiddleware(app.RequireLogin(app.SearchLlibresSuggestJSON), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/media/llibres/search", applyMiddleware(app.RequireLogin(app.MediaLlibresSearchJSON), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/media/llibres/pagines/suggest", applyMiddleware(app.RequireLogin(app.MediaLlibrePaginesSuggestJSON), core.BlockIPs, core.RateLimit))
 
 	// Importador templates
 	http.HandleFunc("/importador/plantilles", applyMiddleware(app.RequireLogin(app.ImportTemplatesRoute), core.BlockIPs, core.RateLimit))

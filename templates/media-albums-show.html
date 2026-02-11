@@ -14,8 +14,8 @@
     {{ else }}
         {{ template "header-public" . }}
     {{ end }}
-    <main class="contingut-principal media-layout">
-        <section class="card">
+    <main class="contingut-principal media-layout" {{ if and .Data.CanLinkPages .Data.LinkedBook }}data-media-page-link data-page-endpoint="/api/media/llibres/pagines/suggest" data-llibre-id="{{ .Data.LinkedBook.ID }}"{{ end }}>
+        <section class="card" id="media-items">
             <header class="card-header amb-accio">
                 <div>
                     <h1>{{ .Data.Album.Title }}</h1>
@@ -35,12 +35,38 @@
             {{ if .Data.Album.Description }}
             <p class="media-album-description">{{ .Data.Album.Description }}</p>
             {{ end }}
-            {{ if or (gt .Data.Uploaded 0) (gt .Data.Failed 0) }}
-            {{ $alertClass := "media-alert" }}
-            {{ if eq .Data.Failed 0 }}{{ $alertClass = "media-alert success" }}{{ end }}
-            <div class="{{ $alertClass }}">{{ t .Lang "media.upload.result" .Data.Uploaded .Data.Failed }}</div>
-            {{ end }}
+        {{ if or (gt .Data.Uploaded 0) (gt .Data.Failed 0) }}
+        {{ $alertClass := "media-alert" }}
+        {{ if eq .Data.Failed 0 }}{{ $alertClass = "media-alert success" }}{{ end }}
+        <div class="{{ $alertClass }}">{{ t .Lang "media.upload.result" .Data.Uploaded .Data.Failed }}</div>
+        {{ end }}
         </section>
+
+        {{ if .Data.LinkedBook }}
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <h2>{{ t .Lang "media.album.book.linked.title" }}</h2>
+                    {{ if .Data.LinkedBook.Cronologia }}
+                    <p class="media-help">{{ .Data.LinkedBook.Cronologia }}</p>
+                    {{ end }}
+                </div>
+                <div class="card-actions">
+                    {{ if .Data.CanViewBook }}
+                    <a class="boto-secundari" href="/documentals/llibres/{{ .Data.LinkedBook.ID }}" target="_blank" rel="noopener">
+                        <i class="fas fa-book-open"></i> {{ t .Lang "media.album.book.linked.view" }}
+                    </a>
+                    {{ end }}
+                </div>
+            </header>
+            <div class="media-book-linked">
+                <div class="media-book-linked-title">{{ .Data.LinkedBookLabel }}</div>
+                {{ if .Data.LinkedBook.NomEsglesia }}
+                <div class="media-book-linked-meta">{{ .Data.LinkedBook.NomEsglesia }}</div>
+                {{ end }}
+            </div>
+        </section>
+        {{ end }}
 
         {{ if .Data.CanUpload }}
         <section class="card">
@@ -84,6 +110,75 @@
                             {{ end }}
                         </div>
                     </div>
+                    {{ $links := index $.Data.ItemLinks .ID }}
+                    {{ $hasLinks := false }}
+                    {{ if $links }}
+                        {{ if gt (len $links) 0 }}{{ $hasLinks = true }}{{ end }}
+                    <div class="media-item-links">
+                        {{ range $links }}
+                        <div class="media-item-link-row">
+                            <span class="media-link-label">
+                                {{ t $.Lang "media.album.page.label" }}
+                                {{ if .NumPagina.Valid }}{{ .NumPagina.Int64 }}{{ else }}{{ .PaginaID.Int64 }}{{ end }}
+                            </span>
+                            {{ if and $.Data.CanViewBook $.Data.BookURLBase $.Data.BookURLPrefix .NumPagina.Valid }}
+                            <a class="media-link-official" href="{{ printf "%s%s%d" $.Data.BookURLBase $.Data.BookURLPrefix .NumPagina.Int64 }}" target="_blank" rel="noopener">
+                                {{ t $.Lang "media.album.page.official" }}
+                            </a>
+                            {{ end }}
+                            {{ if $.Data.CanLinkPages }}
+                            <form class="media-item-link-actions" method="post" action="/media/albums/{{ $.Data.Album.PublicID }}/pages/unlink">
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="media_item_public_id" value="{{ .MediaItemPublicID }}">
+                                <input type="hidden" name="pagina_id" value="{{ if .PaginaID.Valid }}{{ .PaginaID.Int64 }}{{ end }}">
+                                <input type="hidden" name="return_to" value="/media/albums/{{ $.Data.Album.PublicID }}#media-items">
+                                <button type="submit" class="boto-secundari btn-mini">{{ t $.Lang "media.album.page.unlink" }}</button>
+                            </form>
+                            {{ end }}
+                        </div>
+                        {{ end }}
+                    </div>
+                    {{ end }}
+                    {{ if $.Data.CanLinkPages }}
+                        {{ if $hasLinks }}
+                        <details class="media-link-editor">
+                            <summary class="media-link-editor-summary">
+                                <span>
+                                    {{ t $.Lang "media.album.page.linked" }}:
+                                    {{ range $i, $link := $links }}{{ if $i }}, {{ end }}{{ if $link.NumPagina.Valid }}{{ $link.NumPagina.Int64 }}{{ else }}{{ $link.PaginaID.Int64 }}{{ end }}{{ end }}
+                                </span>
+                                <span class="media-link-editor-action">{{ t $.Lang "media.album.page.change" }}</span>
+                            </summary>
+                            <form class="media-item-link-form" method="post" action="/media/albums/{{ $.Data.Album.PublicID }}/pages/link" data-page-link-form>
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="media_item_public_id" value="{{ .PublicID }}">
+                                <input type="hidden" name="pagina_id" data-page-id>
+                                <input type="hidden" name="pagina_num" data-page-num>
+                                <input type="hidden" name="return_to" value="/media/albums/{{ $.Data.Album.PublicID }}#media-items">
+                                <div class="media-page-input suggest-field">
+                                    <label class="sr-only" for="page-input-{{ .ID }}">{{ t $.Lang "media.album.page.input.label" }}</label>
+                                    <input id="page-input-{{ .ID }}" type="text" placeholder="{{ t $.Lang "media.album.page.input.placeholder" }}" data-page-input>
+                                    <ul class="resultats-cerca" data-page-suggestions data-empty-label="{{ t $.Lang "common.empty" }}"></ul>
+                                </div>
+                                <button type="submit" class="boto-secundari btn-mini">{{ t $.Lang "media.album.page.change" }}</button>
+                            </form>
+                        </details>
+                        {{ else }}
+                        <form class="media-item-link-form" method="post" action="/media/albums/{{ $.Data.Album.PublicID }}/pages/link" data-page-link-form>
+                            <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                            <input type="hidden" name="media_item_public_id" value="{{ .PublicID }}">
+                            <input type="hidden" name="pagina_id" data-page-id>
+                            <input type="hidden" name="pagina_num" data-page-num>
+                            <input type="hidden" name="return_to" value="/media/albums/{{ $.Data.Album.PublicID }}#media-items">
+                            <div class="media-page-input suggest-field">
+                                <label class="sr-only" for="page-input-{{ .ID }}">{{ t $.Lang "media.album.page.input.label" }}</label>
+                                <input id="page-input-{{ .ID }}" type="text" placeholder="{{ t $.Lang "media.album.page.input.placeholder" }}" data-page-input>
+                                <ul class="resultats-cerca" data-page-suggestions data-empty-label="{{ t $.Lang "common.empty" }}"></ul>
+                            </div>
+                            <button type="submit" class="boto-secundari btn-mini">{{ t $.Lang "media.album.page.link" }}</button>
+                        </form>
+                        {{ end }}
+                    {{ end }}
                 </article>
                 {{ end }}
             </div>
@@ -97,6 +192,9 @@
         {{ template "scripts-private" . }}
     {{ else }}
         {{ template "scripts-public" . }}
+    {{ end }}
+    {{ if .UserLoggedIn }}
+    <script src="/static/js/media-albums.js"></script>
     {{ end }}
 </body>
 </html>

@@ -588,8 +588,14 @@ func (d *MySQL) UpdateLlibreModeracio(id int, estat, motiu string, moderatorID i
 func (d *MySQL) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {
 	return d.help.listLlibrePagines(llibreID)
 }
+func (d *MySQL) SearchLlibrePagines(llibreID int, query string, limit int) ([]LlibrePagina, error) {
+	return d.help.searchLlibrePagines(llibreID, query, limit)
+}
 func (d *MySQL) GetLlibrePaginaByID(id int) (*LlibrePagina, error) {
 	return d.help.getLlibrePaginaByID(id)
+}
+func (d *MySQL) GetLlibrePaginaByNum(llibreID, num int) (*LlibrePagina, error) {
+	return d.help.getLlibrePaginaByNum(llibreID, num)
 }
 func (d *MySQL) SaveLlibrePagina(p *LlibrePagina) (int, error) {
 	return d.help.saveLlibrePagina(p)
@@ -601,6 +607,9 @@ func (d *MySQL) RecalcLlibrePagines(llibreID, total int) error {
 // Media
 func (d *MySQL) ListMediaAlbumsByOwner(userID int) ([]MediaAlbum, error) {
 	return d.help.listMediaAlbumsByOwner(userID)
+}
+func (d *MySQL) ListMediaAlbumsByLlibre(llibreID int) ([]MediaAlbum, error) {
+	return d.help.listMediaAlbumsByLlibre(llibreID)
 }
 func (d *MySQL) GetMediaAlbumByID(id int) (*MediaAlbum, error) {
 	return d.help.getMediaAlbumByID(id)
@@ -661,6 +670,9 @@ func (d *MySQL) InsertMediaAccessLog(entry *MediaAccessLog) (int, error) {
 }
 func (d *MySQL) ListMediaItemLinksByPagina(paginaID int) ([]MediaItemPageLink, error) {
 	return d.help.listMediaItemLinksByPagina(paginaID)
+}
+func (d *MySQL) ListMediaItemLinksByAlbum(albumID int) ([]MediaItemPageLink, error) {
+	return d.help.listMediaItemLinksByAlbum(albumID)
 }
 func (d *MySQL) UpsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder int, notes string) error {
 	return d.help.upsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder, notes)

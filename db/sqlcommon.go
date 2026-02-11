@@ -5150,6 +5150,11 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 		clauses = append(clauses, "(l.titol LIKE ? OR l.nom_esglesia LIKE ?)")
 		args = append(args, like, like)
 	}
+	if strings.TrimSpace(filter.Cronologia) != "" {
+		like := "%" + strings.TrimSpace(filter.Cronologia) + "%"
+		clauses = append(clauses, "l.cronologia LIKE ?")
+		args = append(args, like)
+	}
 	if filter.ArquebisbatID > 0 {
 		clauses = append(clauses, "l.arquevisbat_id = ?")
 		args = append(args, filter.ArquebisbatID)
@@ -5279,6 +5284,11 @@ func (h sqlHelper) countLlibres(filter LlibreFilter) (int, error) {
 		like := "%" + strings.TrimSpace(filter.Text) + "%"
 		clauses = append(clauses, "(l.titol LIKE ? OR l.nom_esglesia LIKE ?)")
 		args = append(args, like, like)
+	}
+	if strings.TrimSpace(filter.Cronologia) != "" {
+		like := "%" + strings.TrimSpace(filter.Cronologia) + "%"
+		clauses = append(clauses, "l.cronologia LIKE ?")
+		args = append(args, like)
 	}
 	if filter.ArquebisbatID > 0 {
 		clauses = append(clauses, "l.arquevisbat_id = ?")
@@ -5577,10 +5587,216 @@ func (h sqlHelper) listLlibrePagines(llibreID int) ([]LlibrePagina, error) {
 	var res []LlibrePagina
 	for rows.Next() {
 		var p LlibrePagina
-		if err := rows.Scan(&p.ID, &p.LlibreID, &p.NumPagina, &p.Estat, &p.IndexedAt, &p.IndexedBy, &p.Notes); err != nil {
+		var notes sql.NullString
+		if err := rows.Scan(&p.ID, &p.LlibreID, &p.NumPagina, &p.Estat, &p.IndexedAt, &p.IndexedBy, &notes); err != nil {
 			return nil, err
 		}
+		if notes.Valid {
+			p.Notes = notes.String
+		}
 		res = append(res, p)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) searchLlibrePagines(llibreID int, query string, limit int) ([]LlibrePagina, error) {
+	if llibreID <= 0 {
+		return []LlibrePagina{}, nil
+	}
+	query = strings.TrimSpace(query)
+	numericQuery := false
+	queryNum := 0
+	if query != "" {
+		if n, err := strconv.Atoi(query); err == nil {
+			numericQuery = true
+			queryNum = n
+		}
+	}
+	bookPages, err := h.searchLlibrePaginesFromBookPages(llibreID, query, limit, numericQuery, queryNum)
+	if err != nil {
+		return nil, err
+	}
+	if len(bookPages) > 0 {
+		return bookPages, nil
+	}
+	statsPages, err := h.searchLlibrePaginesFromStats(llibreID, query, limit, numericQuery, queryNum)
+	if err != nil {
+		return nil, err
+	}
+	if len(statsPages) == 0 && query != "" {
+		return h.searchLlibrePaginesFromRaw(llibreID, query, limit, numericQuery, queryNum)
+	}
+	return statsPages, nil
+}
+
+func (h sqlHelper) searchLlibrePaginesFromBookPages(llibreID int, query string, limit int, numericQuery bool, queryNum int) ([]LlibrePagina, error) {
+	clauses := []string{"llibre_id = ?"}
+	args := []interface{}{llibreID}
+	if query != "" {
+		if numericQuery {
+			clauses = append(clauses, "num_pagina = ?")
+			args = append(args, queryNum)
+		} else {
+			clauses = append(clauses, "CAST(num_pagina AS TEXT) LIKE ?")
+			args = append(args, query+"%")
+		}
+	}
+	stmt := `
+        SELECT id, num_pagina
+        FROM llibre_pagines
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        ORDER BY num_pagina`
+	if limit > 0 {
+		stmt += " LIMIT ?"
+		args = append(args, limit)
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	rows, err := h.db.Query(stmt, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []LlibrePagina
+	for rows.Next() {
+		var pageID int
+		var num int
+		if err := rows.Scan(&pageID, &num); err != nil {
+			return nil, err
+		}
+		res = append(res, LlibrePagina{
+			ID:        pageID,
+			LlibreID:  llibreID,
+			NumPagina: num,
+		})
+	}
+	return res, nil
+}
+
+func (h sqlHelper) searchLlibrePaginesFromStats(llibreID int, query string, limit int, numericQuery bool, queryNum int) ([]LlibrePagina, error) {
+	clauses := []string{"llibre_id = ?"}
+	args := []interface{}{llibreID}
+	if query != "" {
+		if numericQuery {
+			clauses = append(clauses, "num_pagina_text LIKE ?")
+			args = append(args, "%"+query+"%")
+		} else {
+			clauses = append(clauses, "num_pagina_text LIKE ?")
+			args = append(args, query+"%")
+		}
+	}
+	stmt := `
+        SELECT COALESCE(pagina_id, 0), num_pagina_text
+        FROM transcripcions_raw_page_stats
+        WHERE ` + strings.Join(clauses, " AND ") + `
+          AND num_pagina_text IS NOT NULL
+          AND TRIM(num_pagina_text) <> ''
+          AND num_pagina_text NOT LIKE '%-%'
+        GROUP BY num_pagina_text
+        ORDER BY num_pagina_text`
+	fetchLimit := limit
+	if numericQuery && fetchLimit > 0 && fetchLimit < 200 {
+		fetchLimit = 200
+	}
+	if fetchLimit > 0 {
+		stmt += " LIMIT ?"
+		args = append(args, fetchLimit)
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	rows, err := h.db.Query(stmt, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []LlibrePagina
+	for rows.Next() {
+		var pageID int
+		var numText string
+		if err := rows.Scan(&pageID, &numText); err != nil {
+			return nil, err
+		}
+		numText = strings.TrimSpace(numText)
+		num := 0
+		if numText != "" {
+			if parsed, err := strconv.Atoi(numText); err == nil {
+				num = parsed
+			}
+		}
+		if numericQuery && num > 0 && num != queryNum {
+			continue
+		}
+		res = append(res, LlibrePagina{
+			ID:       pageID,
+			LlibreID: llibreID,
+			NumPagina: num,
+			Notes:     numText,
+		})
+	}
+	if len(res) == 0 && query != "" {
+		return h.searchLlibrePaginesFromRaw(llibreID, query, limit, numericQuery, queryNum)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) searchLlibrePaginesFromRaw(llibreID int, query string, limit int, numericQuery bool, queryNum int) ([]LlibrePagina, error) {
+	numExpr := "COALESCE(NULLIF(TRIM(pd.valor_text), ''), NULLIF(TRIM(t.num_pagina_text), ''))"
+	clauses := []string{"t.llibre_id = ?"}
+	args := []interface{}{llibreID}
+	if query != "" {
+		if numericQuery {
+			clauses = append(clauses, numExpr+" LIKE ?")
+			args = append(args, "%"+query+"%")
+		} else {
+			clauses = append(clauses, numExpr+" LIKE ?")
+			args = append(args, query+"%")
+		}
+	}
+	clauses = append(clauses, numExpr+" IS NOT NULL")
+	stmt := `
+        SELECT COALESCE(MAX(t.pagina_id), 0), ` + numExpr + `
+        FROM transcripcions_raw t
+        LEFT JOIN transcripcions_atributs_raw pd
+            ON pd.transcripcio_id = t.id
+            AND pd.clau = 'pagina_digital'
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        GROUP BY ` + numExpr + `
+        ORDER BY ` + numExpr
+	fetchLimit := limit
+	if numericQuery && fetchLimit > 0 && fetchLimit < 200 {
+		fetchLimit = 200
+	}
+	if fetchLimit > 0 {
+		stmt += " LIMIT ?"
+		args = append(args, fetchLimit)
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	rows, err := h.db.Query(stmt, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []LlibrePagina
+	for rows.Next() {
+		var pageID int
+		var numText string
+		if err := rows.Scan(&pageID, &numText); err != nil {
+			return nil, err
+		}
+		numText = strings.TrimSpace(numText)
+		num := 0
+		if numText != "" {
+			if parsed, err := strconv.Atoi(numText); err == nil {
+				num = parsed
+			}
+		}
+		if numericQuery && num > 0 && num != queryNum {
+			continue
+		}
+		res = append(res, LlibrePagina{
+			ID:       pageID,
+			LlibreID: llibreID,
+			NumPagina: num,
+			Notes:     numText,
+		})
 	}
 	return res, nil
 }
@@ -5593,8 +5809,31 @@ func (h sqlHelper) getLlibrePaginaByID(id int) (*LlibrePagina, error) {
 	query = formatPlaceholders(h.style, query)
 	row := h.db.QueryRow(query, id)
 	var p LlibrePagina
-	if err := row.Scan(&p.ID, &p.LlibreID, &p.NumPagina, &p.Estat, &p.IndexedAt, &p.IndexedBy, &p.Notes); err != nil {
+	var notes sql.NullString
+	if err := row.Scan(&p.ID, &p.LlibreID, &p.NumPagina, &p.Estat, &p.IndexedAt, &p.IndexedBy, &notes); err != nil {
 		return nil, err
+	}
+	if notes.Valid {
+		p.Notes = notes.String
+	}
+	return &p, nil
+}
+
+func (h sqlHelper) getLlibrePaginaByNum(llibreID, num int) (*LlibrePagina, error) {
+	query := `
+        SELECT id, llibre_id, num_pagina, estat, indexed_at, indexed_by, notes
+        FROM llibre_pagines
+        WHERE llibre_id = ? AND num_pagina = ?
+        LIMIT 1`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, llibreID, num)
+	var p LlibrePagina
+	var notes sql.NullString
+	if err := row.Scan(&p.ID, &p.LlibreID, &p.NumPagina, &p.Estat, &p.IndexedAt, &p.IndexedBy, &notes); err != nil {
+		return nil, err
+	}
+	if notes.Valid {
+		p.Notes = notes.String
 	}
 	return &p, nil
 }
@@ -10053,6 +10292,40 @@ func (h sqlHelper) listMediaAlbumsByOwner(userID int) ([]MediaAlbum, error) {
 	return res, nil
 }
 
+func (h sqlHelper) listMediaAlbumsByLlibre(llibreID int) ([]MediaAlbum, error) {
+	query := `
+        SELECT a.id, a.public_id, a.title, COALESCE(a.description, ''), a.album_type, a.owner_user_id,
+               a.llibre_id, a.moderation_status, a.visibility, a.restricted_group_id, a.access_policy_id,
+               a.credit_cost, a.difficulty_score, COALESCE(a.source_type, ''), a.moderated_by, a.moderated_at,
+               COALESCE(a.moderation_notes, ''), COALESCE(cnt.total, 0) as items_count
+        FROM media_albums a
+        LEFT JOIN (
+            SELECT album_id, COUNT(*) as total FROM media_items GROUP BY album_id
+        ) cnt ON cnt.album_id = a.id
+        WHERE a.llibre_id = ?
+        ORDER BY a.created_at DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, llibreID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MediaAlbum
+	for rows.Next() {
+		var a MediaAlbum
+		if err := rows.Scan(
+			&a.ID, &a.PublicID, &a.Title, &a.Description, &a.AlbumType, &a.OwnerUserID,
+			&a.LlibreID, &a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
+			&a.CreditCost, &a.DifficultyScore, &a.SourceType, &a.ModeratedBy, &a.ModeratedAt,
+			&a.ModerationNotes, &a.ItemsCount,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, nil
+}
+
 func (h sqlHelper) getMediaAlbumByID(id int) (*MediaAlbum, error) {
 	query := `
         SELECT id, public_id, title, COALESCE(description, ''), album_type, owner_user_id,
@@ -10373,13 +10646,14 @@ func (h sqlHelper) updateMediaItemModeration(id int, status string, creditCost i
 
 func (h sqlHelper) listMediaItemLinksByPagina(paginaID int) ([]MediaItemPageLink, error) {
 	query := `
-        SELECT mp.id, mp.media_item_id, mp.page_order, COALESCE(mp.notes, ''),
+        SELECT mp.id, mp.media_item_id, mp.llibre_id, mp.pagina_id, lp.num_pagina, mp.page_order, COALESCE(mp.notes, ''),
                i.public_id, COALESCE(i.title, ''), COALESCE(i.thumb_path, ''), i.moderation_status,
                a.id, a.public_id, COALESCE(a.title, ''), a.owner_user_id, a.moderation_status,
                a.visibility, a.restricted_group_id, a.access_policy_id
         FROM media_item_pages mp
         JOIN media_items i ON i.id = mp.media_item_id
         JOIN media_albums a ON a.id = i.album_id
+        LEFT JOIN llibre_pagines lp ON lp.id = mp.pagina_id
         WHERE mp.pagina_id = ?
         ORDER BY mp.page_order ASC, mp.id ASC`
 	query = formatPlaceholders(h.style, query)
@@ -10392,7 +10666,41 @@ func (h sqlHelper) listMediaItemLinksByPagina(paginaID int) ([]MediaItemPageLink
 	for rows.Next() {
 		var row MediaItemPageLink
 		if err := rows.Scan(
-			&row.ID, &row.MediaItemID, &row.PageOrder, &row.Notes,
+			&row.ID, &row.MediaItemID, &row.LlibreID, &row.PaginaID, &row.NumPagina, &row.PageOrder, &row.Notes,
+			&row.MediaItemPublicID, &row.MediaItemTitle, &row.MediaItemThumbPath, &row.MediaItemStatus,
+			&row.AlbumID, &row.AlbumPublicID, &row.AlbumTitle, &row.AlbumOwnerUserID, &row.AlbumModerationStatus,
+			&row.AlbumVisibility, &row.AlbumRestrictedGroupID, &row.AlbumAccessPolicyID,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listMediaItemLinksByAlbum(albumID int) ([]MediaItemPageLink, error) {
+	query := `
+        SELECT mp.id, mp.media_item_id, mp.llibre_id, mp.pagina_id, lp.num_pagina, mp.page_order, COALESCE(mp.notes, ''),
+               i.public_id, COALESCE(i.title, ''), COALESCE(i.thumb_path, ''), i.moderation_status,
+               a.id, a.public_id, COALESCE(a.title, ''), a.owner_user_id, a.moderation_status,
+               a.visibility, a.restricted_group_id, a.access_policy_id
+        FROM media_item_pages mp
+        JOIN media_items i ON i.id = mp.media_item_id
+        JOIN media_albums a ON a.id = i.album_id
+        LEFT JOIN llibre_pagines lp ON lp.id = mp.pagina_id
+        WHERE i.album_id = ?
+        ORDER BY mp.media_item_id ASC, mp.page_order ASC, mp.id ASC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MediaItemPageLink
+	for rows.Next() {
+		var row MediaItemPageLink
+		if err := rows.Scan(
+			&row.ID, &row.MediaItemID, &row.LlibreID, &row.PaginaID, &row.NumPagina, &row.PageOrder, &row.Notes,
 			&row.MediaItemPublicID, &row.MediaItemTitle, &row.MediaItemThumbPath, &row.MediaItemStatus,
 			&row.AlbumID, &row.AlbumPublicID, &row.AlbumTitle, &row.AlbumOwnerUserID, &row.AlbumModerationStatus,
 			&row.AlbumVisibility, &row.AlbumRestrictedGroupID, &row.AlbumAccessPolicyID,

@@ -44,6 +44,54 @@
                     <label for="album-desc">{{ t .Lang "media.album.description.label" }}</label>
                     <textarea id="album-desc" name="description" rows="4" placeholder="{{ t .Lang "media.album.description.placeholder" }}">{{ .Data.FormDesc }}</textarea>
                 </div>
+                <fieldset class="media-book-selector" data-media-book-search data-book-endpoint="/api/media/llibres/search">
+                    <legend>{{ t .Lang "media.album.book.title" }}</legend>
+                    <p class="media-help">{{ t .Lang "media.album.book.help" }}</p>
+                    <div class="media-book-grid">
+                        <div class="grup-camp">
+                            <label for="media-book-query">{{ t .Lang "media.album.book.query.label" }}</label>
+                            <input id="media-book-query" type="text" placeholder="{{ t .Lang "media.album.book.query.placeholder" }}" data-book-input>
+                        </div>
+                        <div class="grup-camp">
+                            <label for="media-book-cronologia">{{ t .Lang "media.album.book.cronologia.label" }}</label>
+                            <input id="media-book-cronologia" type="text" placeholder="{{ t .Lang "media.album.book.cronologia.placeholder" }}" data-book-cronologia>
+                        </div>
+                        <div class="grup-camp suggest-field">
+                            <label for="media-book-arxiu">{{ t .Lang "media.album.book.arxiu.label" }}</label>
+                            <input id="media-book-arxiu" type="text" placeholder="{{ t .Lang "media.album.book.arxiu.placeholder" }}" data-book-filter="arxiu">
+                            <input type="hidden" id="media-book-arxiu-id" data-book-filter-id="arxiu">
+                            <ul id="media-book-arxiu-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "media.album.book.arxiu.label" }}" data-empty-label="{{ t .Lang "common.empty" }}"></ul>
+                        </div>
+                        <div class="grup-camp suggest-field">
+                            <label for="media-book-ecles">{{ t .Lang "media.album.book.ecles.label" }}</label>
+                            <input id="media-book-ecles" type="text" placeholder="{{ t .Lang "media.album.book.ecles.placeholder" }}" data-book-filter="ecles">
+                            <input type="hidden" id="media-book-ecles-id" data-book-filter-id="ecles">
+                            <ul id="media-book-ecles-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "media.album.book.ecles.label" }}" data-empty-label="{{ t .Lang "common.empty" }}"></ul>
+                        </div>
+                        <div class="grup-camp suggest-field">
+                            <label for="media-book-municipi">{{ t .Lang "media.album.book.municipi.label" }}</label>
+                            <input id="media-book-municipi" type="text" placeholder="{{ t .Lang "media.album.book.municipi.placeholder" }}" data-book-filter="municipi">
+                            <input type="hidden" id="media-book-municipi-id" data-book-filter-id="municipi">
+                            <ul id="media-book-municipi-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "media.album.book.municipi.label" }}" data-empty-label="{{ t .Lang "common.empty" }}"></ul>
+                        </div>
+                    </div>
+                    <div class="media-book-results">
+                        <div class="media-book-results-header">
+                            <span>{{ t .Lang "media.album.book.results.title" }}</span>
+                            <span class="media-book-results-count" data-book-results-count></span>
+                        </div>
+                        <ul class="media-book-results-list" data-book-results></ul>
+                        <p class="media-book-results-empty" data-book-empty>{{ t .Lang "media.album.book.results.empty" }}</p>
+                    </div>
+                    <div class="media-book-selected" data-book-selected data-empty-label="{{ t .Lang "media.album.book.selected.none" }}">
+                        <div class="media-book-selected-label" data-book-selected-label>
+                            {{ if gt .Data.FormLlibreID 0 }}{{ .Data.FormLlibreLabel }}{{ else }}{{ t .Lang "media.album.book.selected.none" }}{{ end }}
+                        </div>
+                        <button type="button" class="boto-secundari btn-mini" data-book-clear>{{ t .Lang "media.album.book.selected.clear" }}</button>
+                    </div>
+                    <input type="hidden" name="llibre_id" id="media-book-id" value="{{ .Data.FormLlibreID }}">
+                    <input type="hidden" name="llibre_label" id="media-book-label" value="{{ .Data.FormLlibreLabel }}">
+                </fieldset>
                 <div class="media-form-actions">
                     <button class="boto-primari" type="submit"><i class="fas fa-save"></i> {{ t .Lang "media.album.form.submit" }}</button>
                     <a class="boto-secundari" href="/media/albums">{{ t .Lang "common.back" }}</a>
@@ -53,6 +101,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/media-albums.js"></script>
 </body>
 </html>
 {{ end }}

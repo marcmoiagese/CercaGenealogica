@@ -589,8 +589,14 @@ func (d *PostgreSQL) UpdateLlibreModeracio(id int, estat, motiu string, moderato
 func (d *PostgreSQL) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {
 	return d.help.listLlibrePagines(llibreID)
 }
+func (d *PostgreSQL) SearchLlibrePagines(llibreID int, query string, limit int) ([]LlibrePagina, error) {
+	return d.help.searchLlibrePagines(llibreID, query, limit)
+}
 func (d *PostgreSQL) GetLlibrePaginaByID(id int) (*LlibrePagina, error) {
 	return d.help.getLlibrePaginaByID(id)
+}
+func (d *PostgreSQL) GetLlibrePaginaByNum(llibreID, num int) (*LlibrePagina, error) {
+	return d.help.getLlibrePaginaByNum(llibreID, num)
 }
 func (d *PostgreSQL) SaveLlibrePagina(p *LlibrePagina) (int, error) {
 	return d.help.saveLlibrePagina(p)
@@ -602,6 +608,9 @@ func (d *PostgreSQL) RecalcLlibrePagines(llibreID, total int) error {
 // Media
 func (d *PostgreSQL) ListMediaAlbumsByOwner(userID int) ([]MediaAlbum, error) {
 	return d.help.listMediaAlbumsByOwner(userID)
+}
+func (d *PostgreSQL) ListMediaAlbumsByLlibre(llibreID int) ([]MediaAlbum, error) {
+	return d.help.listMediaAlbumsByLlibre(llibreID)
 }
 func (d *PostgreSQL) GetMediaAlbumByID(id int) (*MediaAlbum, error) {
 	return d.help.getMediaAlbumByID(id)
@@ -662,6 +671,9 @@ func (d *PostgreSQL) InsertMediaAccessLog(entry *MediaAccessLog) (int, error) {
 }
 func (d *PostgreSQL) ListMediaItemLinksByPagina(paginaID int) ([]MediaItemPageLink, error) {
 	return d.help.listMediaItemLinksByPagina(paginaID)
+}
+func (d *PostgreSQL) ListMediaItemLinksByAlbum(albumID int) ([]MediaItemPageLink, error) {
+	return d.help.listMediaItemLinksByAlbum(albumID)
 }
 func (d *PostgreSQL) UpsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder int, notes string) error {
 	return d.help.upsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder, notes)

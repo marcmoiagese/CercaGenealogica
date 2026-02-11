@@ -1051,6 +1051,24 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 	for _, tipus := range transcripcioTipusActe {
 		stats = append(stats, registreStat{Tipus: tipus, Count: counts[tipus]})
 	}
+	pageMediaLinks := map[int64][]db.MediaItemPageLink{}
+	if len(pageStatsPage) > 0 {
+		for _, stat := range pageStatsPage {
+			if !stat.PaginaID.Valid {
+				continue
+			}
+			pageID := stat.PaginaID.Int64
+			if _, ok := pageMediaLinks[pageID]; ok {
+				continue
+			}
+			if links, err := a.DB.ListMediaItemLinksByPagina(int(pageID)); err == nil {
+				links = a.filterMediaItemLinks(r, user, links)
+				if len(links) > 0 {
+					pageMediaLinks[pageID] = links
+				}
+			}
+		}
+	}
 	arxius, _ := a.DB.ListLlibreArxius(id)
 	if len(arxius) > 1 {
 		uniq := make(map[int]db.ArxiuLlibreDetail, len(arxius))
@@ -1133,6 +1151,16 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		mediaSelectBase = mediaSelectBase + "?media_page_id="
 	}
 	mediaReturnTo := r.URL.RequestURI() + "#media-links"
+	internalAlbum := (*db.MediaAlbum)(nil)
+	if albums, err := a.DB.ListMediaAlbumsByLlibre(id); err == nil {
+		for i := range albums {
+			album := &albums[i]
+			if a.mediaUserCanAccess(r, user, album) {
+				internalAlbum = album
+				break
+			}
+		}
+	}
 	RenderPrivateTemplate(w, r, "admin-llibres-show.html", map[string]interface{}{
 		"Llibre":              llibre,
 		"LlibreEntityName":    entityName,
@@ -1149,6 +1177,7 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		"PageStatsPage":       psPage,
 		"PageStatsPerPage":    psPerPage,
 		"PageStatsPages":      psTotalPages,
+		"PageMediaLinks":      pageMediaLinks,
 		"PageStatsBase":       pageBase,
 		"PageStatsSelectBase": selectBase,
 		"PageStatsFilter":     psFilter,
@@ -1163,6 +1192,7 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		"MediaSearchResults":  mediaSearchResults,
 		"MediaModalOpen":      mediaModalOpen,
 		"MediaReturnTo":       mediaReturnTo,
+		"InternalAlbum":       internalAlbum,
 		"User":                user,
 		"CanManageArxius":     true,
 		"CanEditLlibre":       canEditLlibre,

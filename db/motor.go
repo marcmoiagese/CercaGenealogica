@@ -310,11 +310,14 @@ type DB interface {
 	GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error)
 	UpsertLlibreIndexacioStats(stats *LlibreIndexacioStats) error
 	ListLlibrePagines(llibreID int) ([]LlibrePagina, error)
+	SearchLlibrePagines(llibreID int, query string, limit int) ([]LlibrePagina, error)
 	GetLlibrePaginaByID(id int) (*LlibrePagina, error)
+	GetLlibrePaginaByNum(llibreID, num int) (*LlibrePagina, error)
 	SaveLlibrePagina(p *LlibrePagina) (int, error)
 	RecalcLlibrePagines(llibreID, total int) error
 	// Media
 	ListMediaAlbumsByOwner(userID int) ([]MediaAlbum, error)
+	ListMediaAlbumsByLlibre(llibreID int) ([]MediaAlbum, error)
 	GetMediaAlbumByID(id int) (*MediaAlbum, error)
 	GetMediaAlbumByPublicID(publicID string) (*MediaAlbum, error)
 	CreateMediaAlbum(a *MediaAlbum) (int, error)
@@ -337,6 +340,7 @@ type DB interface {
 	InsertMediaAccessLog(entry *MediaAccessLog) (int, error)
 	// Media links to pages
 	ListMediaItemLinksByPagina(paginaID int) ([]MediaItemPageLink, error)
+	ListMediaItemLinksByAlbum(albumID int) ([]MediaItemPageLink, error)
 	UpsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder int, notes string) error
 	DeleteMediaItemPageLink(mediaItemID, paginaID int) error
 	CountMediaItemLinksByAlbum(albumID int) (map[int]int, error)
@@ -1571,6 +1575,7 @@ type TranscripcioRawPageStat struct {
 
 type LlibreFilter struct {
 	Text                string
+	Cronologia          string
 	ArquebisbatID       int
 	MunicipiID          int
 	ArxiuID             int
@@ -1654,6 +1659,9 @@ type MediaItemPage struct {
 type MediaItemPageLink struct {
 	ID                     int
 	MediaItemID            int
+	LlibreID               sql.NullInt64
+	PaginaID               sql.NullInt64
+	NumPagina              sql.NullInt64
 	MediaItemPublicID      string
 	MediaItemTitle         string
 	MediaItemThumbPath     string

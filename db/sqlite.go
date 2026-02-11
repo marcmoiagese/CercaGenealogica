@@ -607,8 +607,14 @@ func (d *SQLite) UpdateLlibreModeracio(id int, estat, motiu string, moderatorID 
 func (d *SQLite) ListLlibrePagines(llibreID int) ([]LlibrePagina, error) {
 	return d.help.listLlibrePagines(llibreID)
 }
+func (d *SQLite) SearchLlibrePagines(llibreID int, query string, limit int) ([]LlibrePagina, error) {
+	return d.help.searchLlibrePagines(llibreID, query, limit)
+}
 func (d *SQLite) GetLlibrePaginaByID(id int) (*LlibrePagina, error) {
 	return d.help.getLlibrePaginaByID(id)
+}
+func (d *SQLite) GetLlibrePaginaByNum(llibreID, num int) (*LlibrePagina, error) {
+	return d.help.getLlibrePaginaByNum(llibreID, num)
 }
 func (d *SQLite) SaveLlibrePagina(p *LlibrePagina) (int, error) {
 	return d.help.saveLlibrePagina(p)
@@ -620,6 +626,9 @@ func (d *SQLite) RecalcLlibrePagines(llibreID, total int) error {
 // Media
 func (d *SQLite) ListMediaAlbumsByOwner(userID int) ([]MediaAlbum, error) {
 	return d.help.listMediaAlbumsByOwner(userID)
+}
+func (d *SQLite) ListMediaAlbumsByLlibre(llibreID int) ([]MediaAlbum, error) {
+	return d.help.listMediaAlbumsByLlibre(llibreID)
 }
 func (d *SQLite) GetMediaAlbumByID(id int) (*MediaAlbum, error) {
 	return d.help.getMediaAlbumByID(id)
@@ -680,6 +689,9 @@ func (d *SQLite) InsertMediaAccessLog(entry *MediaAccessLog) (int, error) {
 }
 func (d *SQLite) ListMediaItemLinksByPagina(paginaID int) ([]MediaItemPageLink, error) {
 	return d.help.listMediaItemLinksByPagina(paginaID)
+}
+func (d *SQLite) ListMediaItemLinksByAlbum(albumID int) ([]MediaItemPageLink, error) {
+	return d.help.listMediaItemLinksByAlbum(albumID)
 }
 func (d *SQLite) UpsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder int, notes string) error {
 	return d.help.upsertMediaItemPageLink(mediaItemID, llibreID, paginaID, pageOrder, notes)

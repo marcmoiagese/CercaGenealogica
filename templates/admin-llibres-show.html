@@ -226,6 +226,9 @@
                     <thead>
                         <tr>
                             <th>{{ t .Lang "books.pages.stats.col.page" }}</th>
+                            {{ if $.Data.InternalAlbum }}
+                            <th>{{ t .Lang "books.pages.stats.col.internal" }}</th>
+                            {{ end }}
                             <th>{{ t .Lang "books.pages.stats.col.page_id" }}</th>
                             <th>{{ t .Lang "books.pages.stats.col.total" }}</th>
                             <th>{{ t .Lang "books.pages.stats.col.updated" }}</th>
@@ -236,7 +239,7 @@
                     <tbody>
                         {{ if eq (len .Data.PageStats) 0 }}
                         <tr>
-                            <td colspan="6">{{ t .Lang "common.empty" }}</td>
+                            <td colspan="{{ if $.Data.InternalAlbum }}7{{ else }}6{{ end }}">{{ t .Lang "common.empty" }}</td>
                         </tr>
                         {{ else }}
                         {{ range .Data.PageStats }}
@@ -257,6 +260,21 @@
                                     {{ end }}
                                 </div>
                             </td>
+                            {{ if $.Data.InternalAlbum }}
+                            <td>
+                                {{ if .PaginaID.Valid }}
+                                {{ $mediaLinks := index $.Data.PageMediaLinks .PaginaID.Int64 }}
+                                {{ if $mediaLinks }}
+                                    {{ $firstLink := index $mediaLinks 0 }}
+                                    <a href="/media/items/{{ $firstLink.MediaItemPublicID }}" target="_blank" rel="noopener">{{ t $.Lang "common.view" }}</a>
+                                {{ else }}
+                                    —
+                                {{ end }}
+                                {{ else }}
+                                    —
+                                {{ end }}
+                            </td>
+                            {{ end }}
                             <td class="page-stat-cell" data-key="pagina_id" data-type="number">
                                 <div class="editable-cell">
                                     <span class="cell-text page-stat-value">{{ if .PaginaID.Valid }}{{ .PaginaID.Int64 }}{{ else }}—{{ end }}</span>
@@ -557,6 +575,15 @@
                         </tr>
                     </thead>
                     <tbody>
+                        {{ if .Data.InternalAlbum }}
+                        <tr>
+                            <td>{{ t $.Lang "books.links.source.internal" }}</td>
+                            <td><a href="/media/albums/{{ .Data.InternalAlbum.PublicID }}" target="_blank" rel="noopener">{{ if .Data.InternalAlbum.Title }}{{ .Data.InternalAlbum.Title }}{{ else }}{{ t $.Lang "books.links.source.internal" }}{{ end }}</a></td>
+                            <td>{{ t $.Lang "books.links.type.internal" }}</td>
+                            <td class="muted">—</td>
+                            {{ if $.Data.CanEditLlibre }}<td class="accions"></td>{{ end }}
+                        </tr>
+                        {{ end }}
                         {{ range .Data.LlibreLinks }}
                         <tr>
                             <td>{{ if .ArxiuNom.Valid }}{{ .ArxiuNom.String }}{{ else }}{{ t $.Lang "books.links.source.other" }}{{ end }}</td>
@@ -577,7 +604,7 @@
                             {{ end }}
                         </tr>
                         {{ end }}
-                        {{ if not .Data.LlibreLinks }}
+                        {{ if and (not .Data.LlibreLinks) (not .Data.InternalAlbum) }}
                         <tr>
                             <td colspan="{{ if $.Data.CanEditLlibre }}5{{ else }}4{{ end }}" class="muted">{{ t .Lang "common.empty" }}</td>
                         </tr>
