@@ -176,6 +176,110 @@ func (a *App) mediaItemView(w http.ResponseWriter, r *http.Request, cfg mediaCon
 	RenderTemplate(w, r, "media-viewer.html", payload)
 }
 
+func (a *App) mediaItemViewData(w http.ResponseWriter, r *http.Request, cfg mediaConfig, itemPublicID string) {
+	user := a.mediaEnsureUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	item, err := a.DB.GetMediaItemByPublicID(itemPublicID)
+	if err != nil || item == nil {
+		http.NotFound(w, r)
+		return
+	}
+	album, err := a.DB.GetMediaAlbumByID(item.AlbumID)
+	if err != nil || album == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !a.mediaUserCanAccessItem(r, user, album, item) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	items, err := a.DB.ListMediaItemsByAlbum(album.ID)
+	if err != nil {
+		Errorf("Error carregant media items per visor: %v", err)
+		items = []db.MediaItem{}
+	}
+	isPrivileged := a.mediaUserIsPrivileged(r, user, album)
+	if !isPrivileged {
+		filtered := make([]db.MediaItem, 0, len(items))
+		for _, it := range items {
+			if it.ModerationStatus == "approved" {
+				filtered = append(filtered, it)
+			}
+		}
+		items = filtered
+	}
+	currentIndex := 0
+	prevItemID := ""
+	nextItemID := ""
+	for i := range items {
+		if items[i].ID == item.ID {
+			currentIndex = i + 1
+			if i > 0 {
+				prevItemID = items[i-1].PublicID
+			}
+			if i < len(items)-1 {
+				nextItemID = items[i+1].PublicID
+			}
+			break
+		}
+	}
+	if len(items) == 0 {
+		items = []db.MediaItem{*item}
+		currentIndex = 1
+	} else if currentIndex == 0 {
+		currentIndex = 1
+	}
+
+	lang := resolveUserLang(r, user)
+	message := ""
+	if item.DerivativesStatus != "ready" {
+		if item.DerivativesStatus == "failed" {
+			message = T(lang, "media.viewer.failed")
+		} else {
+			message = T(lang, "media.viewer.processing")
+		}
+	}
+	grantToken := ""
+	if message == "" {
+		cost := mediaCreditCost(album, item)
+		if isPrivileged {
+			cost = 0
+		}
+		grant, err := a.mediaEnsureAccessGrant(user, item, cost)
+		if err != nil {
+			if err == errInsufficientCredits {
+				http.Error(w, T(lang, "media.viewer.insufficient_credits"), http.StatusPaymentRequired)
+				return
+			}
+			Errorf("Error generant grant media: %v", err)
+			http.Error(w, "Internal error", http.StatusInternalServerError)
+			return
+		}
+		grantToken = grant.GrantToken
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"item": map[string]interface{}{
+			"public_id": item.PublicID,
+			"title":     item.Title,
+		},
+		"album": map[string]interface{}{
+			"public_id": album.PublicID,
+		},
+		"prev_id":       prevItemID,
+		"next_id":       nextItemID,
+		"current_index": currentIndex,
+		"total_items":   len(items),
+		"dzi":           "/media/dz/" + item.PublicID + "/dz.dzi",
+		"grant_token":   grantToken,
+		"status":        message,
+	})
+}
+
 func splitMediaDZPath(pathValue string) (string, string) {
 	trimmed := strings.TrimPrefix(pathValue, "/media/dz/")
 	trimmed = strings.Trim(trimmed, "/")

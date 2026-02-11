@@ -428,6 +428,14 @@ func (a *App) MediaItemRoute(w http.ResponseWriter, r *http.Request) {
 		a.mediaItemThumb(w, r, cfg, itemPublicID)
 		return
 	}
+	if tail == "data" {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		a.mediaItemViewData(w, r, cfg, itemPublicID)
+		return
+	}
 	if tail != "" {
 		http.NotFound(w, r)
 		return

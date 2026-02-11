@@ -161,6 +161,34 @@ document.addEventListener("DOMContentLoaded", function () {
     var pageSelect = document.getElementById("mediaPageSelect");
     var prevBtn = document.getElementById("mediaPrevBtn");
     var nextBtn = document.getElementById("mediaNextBtn");
+    var fullKey = "mediaViewerMaximized";
+    var isNavigating = false;
+    var pageCount = document.querySelector(".media-tool-muted");
+
+    function setMaximized(active) {
+        if (!shell) {
+            return;
+        }
+        if (active) {
+            shell.classList.add("is-maximized");
+            document.body.classList.add("media-viewer-maximized");
+            try {
+                window.localStorage.setItem(fullKey, "1");
+            } catch (e) {}
+        } else {
+            shell.classList.remove("is-maximized");
+            document.body.classList.remove("media-viewer-maximized");
+            try {
+                window.localStorage.removeItem(fullKey);
+            } catch (e) {}
+        }
+    }
+
+    try {
+        if (window.localStorage.getItem(fullKey) === "1") {
+            setMaximized(true);
+        }
+    } catch (e) {}
 
     if (btnHome) {
         btnHome.addEventListener("click", function () {
@@ -179,13 +207,15 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     if (btnFull) {
         btnFull.addEventListener("click", function () {
-            if (!document.fullscreenElement) {
+            var isActive = shell && shell.classList.contains("is-maximized");
+            setMaximized(!isActive);
+            if (!document.fullscreenElement && !isActive) {
                 if (shell && shell.requestFullscreen) {
-                    shell.requestFullscreen();
-                } else {
-                    document.documentElement.requestFullscreen();
+                    shell.requestFullscreen().catch(function () {});
+                } else if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(function () {});
                 }
-            } else {
+            } else if (document.fullscreenElement) {
                 document.exitFullscreen();
             }
         });
@@ -205,11 +235,88 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    function navigateToItem(value) {
-        if (!value) {
+    function updateNavButtons(prevId, nextId) {
+        if (prevBtn) {
+            prevBtn.setAttribute("data-target", prevId || "");
+            prevBtn.disabled = !prevId;
+        }
+        if (nextBtn) {
+            nextBtn.setAttribute("data-target", nextId || "");
+            nextBtn.disabled = !nextId;
+        }
+    }
+
+    function updatePageSelect(id) {
+        if (!pageSelect) {
             return;
         }
-        window.location.href = "/media/items/" + value;
+        pageSelect.value = id;
+    }
+
+    function updatePageCount(current, total) {
+        if (!pageCount) {
+            return;
+        }
+        var text = pageCount.textContent || "";
+        if (text) {
+            var replaced = text.replace(/\d+/, String(current)).replace(/\d+/, String(total));
+            pageCount.textContent = replaced;
+            return;
+        }
+        pageCount.textContent = current + " / " + total;
+    }
+
+    function updateTitle(title) {
+        if (title) {
+            document.title = title;
+        }
+    }
+
+    function loadItemData(itemId, replaceHistory) {
+        if (!itemId || isNavigating) {
+            return;
+        }
+        isNavigating = true;
+        fetch("/media/items/" + itemId + "/data", { credentials: "same-origin" })
+            .then(function (resp) {
+                if (!resp.ok) {
+                    throw new Error("bad response");
+                }
+                return resp.json();
+            })
+            .then(function (data) {
+                if (data.status) {
+                    window.location.href = "/media/items/" + itemId;
+                    return;
+                }
+                token = data.grant_token || "";
+                dzi = data.dzi || "";
+                if (dzi) {
+                    viewerEl.setAttribute("data-dzi", dzi);
+                    viewerEl.setAttribute("data-token", token || "");
+                    viewer.open(token ? appendToken(dzi) : dzi);
+                }
+                updateNavButtons(data.prev_id || "", data.next_id || "");
+                updatePageSelect(itemId);
+                updatePageCount(data.current_index || 1, data.total_items || 1);
+                updateTitle(data.item && data.item.title ? data.item.title : document.title);
+                var url = "/media/items/" + itemId;
+                if (replaceHistory) {
+                    history.replaceState({ mediaItem: itemId }, "", url);
+                } else {
+                    history.pushState({ mediaItem: itemId }, "", url);
+                }
+            })
+            .catch(function () {
+                window.location.href = "/media/items/" + itemId;
+            })
+            .finally(function () {
+                isNavigating = false;
+            });
+    }
+
+    function navigateToItem(value) {
+        loadItemData(value, false);
     }
 
     if (pageSelect) {
@@ -227,6 +334,16 @@ document.addEventListener("DOMContentLoaded", function () {
             navigateToItem(nextBtn.getAttribute("data-target"));
         });
     }
+
+    window.addEventListener("popstate", function () {
+        var parts = window.location.pathname.split("/media/items/");
+        if (parts.length > 1) {
+            var id = parts[1].split("/")[0];
+            if (id) {
+                loadItemData(id, true);
+            }
+        }
+    });
 
     viewer.addHandler("open", function () {
         if (token) {
@@ -248,5 +365,10 @@ document.addEventListener("DOMContentLoaded", function () {
             resizeNavigatorToImage();
             viewer.viewport.applyConstraints(true);
         }, 120);
+        if (!document.fullscreenElement) {
+            // Keep CSS maximized state for persistence across pages.
+            return;
+        }
+        setMaximized(true);
     });
 });

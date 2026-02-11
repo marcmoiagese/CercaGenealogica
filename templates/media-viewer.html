@@ -15,26 +15,8 @@
     {{ else }}
         {{ template "header-public" . }}
     {{ end }}
-    <main class="contingut-principal media-viewer-layout">
-        <section class="card">
-            <header class="card-header amb-accio">
-                <div>
-                    <h1>{{ .Data.Item.Title }}</h1>
-                    <div class="media-chip-row">
-                        <span class="media-chip">{{ t $.Lang (printf "media.album.type.%s" .Data.Album.AlbumType) }}</span>
-                        <span class="media-chip media-chip-muted">{{ t $.Lang (printf "media.album.status.%s" .Data.Album.ModerationStatus) }}</span>
-                    </div>
-                </div>
-                <div class="card-actions">
-                    <a class="boto-secundari" href="/media/albums/{{ .Data.Album.PublicID }}"><i class="fas fa-arrow-left"></i> {{ t .Lang "media.viewer.back" }}</a>
-                </div>
-            </header>
-            {{ if .Data.StatusMessage }}
-            <div class="media-alert">{{ .Data.StatusMessage }}</div>
-            {{ end }}
-        </section>
-
-        <section class="card">
+    <main class="contingut-principal media-viewer-layout media-viewer-full">
+        <section class="card media-viewer-card">
             {{ if .Data.StatusMessage }}
             <div class="media-viewer-placeholder">
                 <i class="fas fa-hourglass-half"></i>
