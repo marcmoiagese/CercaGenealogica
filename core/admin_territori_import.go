@@ -81,34 +81,14 @@ type territoriexportMunicipiRow struct {
 }
 
 func (a *App) AdminTerritoriImport(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.requirePermissionKey(w, r, permKeyAdminTerritoriImport, PermissionTarget{}); !ok {
-		return
-	}
-	q := r.URL.Query()
-	importRun := q.Get("import") == "1"
-	msg := ""
-	if q.Get("err") != "" {
-		msg = T(ResolveLang(r), "common.error")
-	}
-	RenderPrivateTemplate(w, r, "admin-territori-import.html", map[string]interface{}{
-		"ImportRun":        importRun,
-		"CountriesCreated": parseIntQuery(q.Get("countries_created")),
-		"LevelsTotal":      parseIntQuery(q.Get("levels_total")),
-		"LevelsCreated":    parseIntQuery(q.Get("levels_created")),
-		"LevelsSkipped":    parseIntQuery(q.Get("levels_skipped")),
-		"LevelsErrors":     parseIntQuery(q.Get("levels_errors")),
-		"MunicipisTotal":   parseIntQuery(q.Get("municipis_total")),
-		"MunicipisCreated": parseIntQuery(q.Get("municipis_created")),
-		"MunicipisSkipped": parseIntQuery(q.Get("municipis_skipped")),
-		"MunicipisErrors":  parseIntQuery(q.Get("municipis_errors")),
-		"Msg":              msg,
-	})
+	http.NotFound(w, r)
 }
 
 func (a *App) AdminTerritoriExport(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.requirePermissionKey(w, r, permKeyAdminTerritoriExport, PermissionTarget{}); !ok {
 		return
 	}
+	nivellID := parseIntDefault(strings.TrimSpace(r.URL.Query().Get("nivell_id")), 0)
 	paisos, err := a.DB.ListPaisos()
 	if err != nil {
 		http.NotFound(w, r)
@@ -120,9 +100,40 @@ func (a *App) AdminTerritoriExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	levelISO := map[int]string{}
+	levelsByID := map[int]db.NivellAdministratiu{}
+	childrenByID := map[int][]int{}
 	for _, n := range nivells {
+		levelsByID[n.ID] = n
+		if n.ParentID.Valid {
+			pid := int(n.ParentID.Int64)
+			childrenByID[pid] = append(childrenByID[pid], n.ID)
+		}
 		if n.PaisISO2.Valid {
 			levelISO[n.ID] = strings.ToUpper(n.PaisISO2.String)
+		}
+	}
+	branchLevelIDs := map[int]struct{}{}
+	allowedLevelIDs := map[int]struct{}{}
+	if nivellID > 0 {
+		if _, ok := levelsByID[nivellID]; !ok {
+			http.NotFound(w, r)
+			return
+		}
+		queue := []int{nivellID}
+		for len(queue) > 0 {
+			id := queue[0]
+			queue = queue[1:]
+			if _, ok := branchLevelIDs[id]; ok {
+				continue
+			}
+			branchLevelIDs[id] = struct{}{}
+			if children := childrenByID[id]; len(children) > 0 {
+				queue = append(queue, children...)
+			}
+		}
+		for id := range branchLevelIDs {
+			allowedLevelIDs[id] = struct{}{}
+			addNivellAncestors(id, levelsByID, allowedLevelIDs)
 		}
 	}
 	municipiRows, err := a.DB.ListMunicipis(db.MunicipiFilter{})
@@ -134,47 +145,6 @@ func (a *App) AdminTerritoriExport(w http.ResponseWriter, r *http.Request) {
 		Version:    1,
 		ExportedAt: time.Now().Format(time.RFC3339),
 	}
-	for _, p := range paisos {
-		payload.Countries = append(payload.Countries, territoriExportCountry{
-			ISO2: strings.ToUpper(strings.TrimSpace(p.CodiISO2)),
-			ISO3: strings.ToUpper(strings.TrimSpace(p.CodiISO3)),
-			Num:  strings.TrimSpace(p.CodiPaisNum),
-		})
-	}
-	for _, n := range nivells {
-		var parent *int
-		if n.ParentID.Valid {
-			v := int(n.ParentID.Int64)
-			parent = &v
-		}
-		var anyInici *int
-		if n.AnyInici.Valid {
-			v := int(n.AnyInici.Int64)
-			anyInici = &v
-		}
-		var anyFi *int
-		if n.AnyFi.Valid {
-			v := int(n.AnyFi.Int64)
-			anyFi = &v
-		}
-		iso2 := ""
-		if n.PaisISO2.Valid {
-			iso2 = strings.ToUpper(strings.TrimSpace(n.PaisISO2.String))
-		}
-		payload.Levels = append(payload.Levels, territoriExportLevel{
-			ID:       n.ID,
-			PaisISO2: iso2,
-			Nivel:    n.Nivel,
-			Nom:      n.NomNivell,
-			Tipus:    n.TipusNivell,
-			Codi:     n.CodiOficial,
-			Altres:   n.Altres,
-			ParentID: parent,
-			AnyInici: anyInici,
-			AnyFi:    anyFi,
-			Estat:    n.Estat,
-		})
-	}
 	for _, row := range municipiRows {
 		m, err := a.DB.GetMunicipi(row.ID)
 		if err != nil {
@@ -184,6 +154,18 @@ func (a *App) AdminTerritoriExport(w http.ResponseWriter, r *http.Request) {
 		for i := 0; i < 7; i++ {
 			if m.NivellAdministratiuID[i].Valid {
 				nivells[i] = int(m.NivellAdministratiuID[i].Int64)
+			}
+		}
+		if len(branchLevelIDs) > 0 && !municipiMatchesBranch(nivells, branchLevelIDs) {
+			continue
+		}
+		if len(branchLevelIDs) > 0 {
+			for _, id := range nivells {
+				if id <= 0 {
+					continue
+				}
+				allowedLevelIDs[id] = struct{}{}
+				addNivellAncestors(id, levelsByID, allowedLevelIDs)
 			}
 		}
 		var parent *int
@@ -222,6 +204,75 @@ func (a *App) AdminTerritoriExport(w http.ResponseWriter, r *http.Request) {
 			Estat:      m.Estat,
 		})
 	}
+	allowedCountries := map[string]struct{}{}
+	if len(branchLevelIDs) > 0 {
+		for _, n := range nivells {
+			if _, ok := allowedLevelIDs[n.ID]; !ok {
+				continue
+			}
+			if n.PaisISO2.Valid {
+				iso := strings.ToUpper(strings.TrimSpace(n.PaisISO2.String))
+				if iso != "" {
+					allowedCountries[iso] = struct{}{}
+				}
+			}
+		}
+	}
+	for _, p := range paisos {
+		iso := strings.ToUpper(strings.TrimSpace(p.CodiISO2))
+		if len(branchLevelIDs) > 0 {
+			if iso == "" {
+				continue
+			}
+			if _, ok := allowedCountries[iso]; !ok {
+				continue
+			}
+		}
+		payload.Countries = append(payload.Countries, territoriExportCountry{
+			ISO2: iso,
+			ISO3: strings.ToUpper(strings.TrimSpace(p.CodiISO3)),
+			Num:  strings.TrimSpace(p.CodiPaisNum),
+		})
+	}
+	for _, n := range nivells {
+		if len(branchLevelIDs) > 0 {
+			if _, ok := allowedLevelIDs[n.ID]; !ok {
+				continue
+			}
+		}
+		var parent *int
+		if n.ParentID.Valid {
+			v := int(n.ParentID.Int64)
+			parent = &v
+		}
+		var anyInici *int
+		if n.AnyInici.Valid {
+			v := int(n.AnyInici.Int64)
+			anyInici = &v
+		}
+		var anyFi *int
+		if n.AnyFi.Valid {
+			v := int(n.AnyFi.Int64)
+			anyFi = &v
+		}
+		iso2 := ""
+		if n.PaisISO2.Valid {
+			iso2 = strings.ToUpper(strings.TrimSpace(n.PaisISO2.String))
+		}
+		payload.Levels = append(payload.Levels, territoriExportLevel{
+			ID:       n.ID,
+			PaisISO2: iso2,
+			Nivel:    n.Nivel,
+			Nom:      n.NomNivell,
+			Tipus:    n.TipusNivell,
+			Codi:     n.CodiOficial,
+			Altres:   n.Altres,
+			ParentID: parent,
+			AnyInici: anyInici,
+			AnyFi:    anyFi,
+			Estat:    n.Estat,
+		})
+	}
 	sort.Slice(payload.Levels, func(i, j int) bool {
 		if payload.Levels[i].Nivel == payload.Levels[j].Nivel {
 			return payload.Levels[i].ID < payload.Levels[j].ID
@@ -245,23 +296,24 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Redirect(w, r, "/admin/territori/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams("/admin/territori/import", map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
+	returnTo := safeReturnTo(r.FormValue("return_to"), "/admin/territori/import")
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Redirect(w, r, "/admin/territori/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	file, _, err := r.FormFile("import_file")
 	if err != nil {
-		http.Redirect(w, r, "/admin/territori/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	defer file.Close()
 	var payload territoriExportPayload
 	dec := json.NewDecoder(file)
 	if err := dec.Decode(&payload); err != nil {
-		http.Redirect(w, r, "/admin/territori/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	paisos, err := a.DB.ListPaisos()
@@ -464,16 +516,18 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	redirect := "/admin/territori/import?import=1" +
-		"&countries_created=" + strconv.Itoa(countriesCreated) +
-		"&levels_total=" + strconv.Itoa(levelsTotal) +
-		"&levels_created=" + strconv.Itoa(levelsCreated) +
-		"&levels_skipped=" + strconv.Itoa(levelsSkipped) +
-		"&levels_errors=" + strconv.Itoa(levelsErrors) +
-		"&municipis_total=" + strconv.Itoa(municipisTotal) +
-		"&municipis_created=" + strconv.Itoa(municipisCreated) +
-		"&municipis_skipped=" + strconv.Itoa(municipisSkipped) +
-		"&municipis_errors=" + strconv.Itoa(municipisErrors)
+	redirect := withQueryParams(returnTo, map[string]string{
+		"import":            "1",
+		"countries_created": strconv.Itoa(countriesCreated),
+		"levels_total":      strconv.Itoa(levelsTotal),
+		"levels_created":    strconv.Itoa(levelsCreated),
+		"levels_skipped":    strconv.Itoa(levelsSkipped),
+		"levels_errors":     strconv.Itoa(levelsErrors),
+		"municipis_total":   strconv.Itoa(municipisTotal),
+		"municipis_created": strconv.Itoa(municipisCreated),
+		"municipis_skipped": strconv.Itoa(municipisSkipped),
+		"municipis_errors":  strconv.Itoa(municipisErrors),
+	})
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
 
@@ -497,6 +551,33 @@ func nivellUniqueKey(paisID, nivel int, parentID sql.NullInt64, name string) str
 		parentKey = "parent:" + strconv.FormatInt(parentID.Int64, 10)
 	}
 	return normalizeKey("pais:"+strconv.Itoa(paisID), "nivel:"+strconv.Itoa(nivel), parentKey, name)
+}
+
+func municipiMatchesBranch(nivells []int, branch map[int]struct{}) bool {
+	if len(branch) == 0 {
+		return true
+	}
+	for _, id := range nivells {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := branch[id]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func addNivellAncestors(id int, levels map[int]db.NivellAdministratiu, dst map[int]struct{}) {
+	cur, ok := levels[id]
+	for ok && cur.ParentID.Valid && cur.ParentID.Int64 > 0 {
+		pid := int(cur.ParentID.Int64)
+		if _, exists := dst[pid]; exists {
+			break
+		}
+		dst[pid] = struct{}{}
+		cur, ok = levels[pid]
+	}
 }
 
 func normalizeNivellSlice(v []int) []int {

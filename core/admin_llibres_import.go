@@ -18,31 +18,31 @@ type llibresExportPayload struct {
 }
 
 type llibreExportRecord struct {
-	ID                 int                  `json:"id"`
-	Titol              string               `json:"titol,omitempty"`
-	NomEsglesia        string               `json:"nom_esglesia,omitempty"`
-	TipusLlibre        string               `json:"tipus_llibre,omitempty"`
-	Cronologia         string               `json:"cronologia,omitempty"`
-	Volum              string               `json:"volum,omitempty"`
-	Abat               string               `json:"abat,omitempty"`
-	Contingut          string               `json:"contingut,omitempty"`
-	Llengua            string               `json:"llengua,omitempty"`
-	Requeriments       string               `json:"requeriments_tecnics,omitempty"`
-	UnitatCatalogacio  string               `json:"unitat_catalogacio,omitempty"`
-	UnitatInstalacio   string               `json:"unitat_instalacio,omitempty"`
-	Pagines            *int                 `json:"pagines,omitempty"`
-	URLBase            string               `json:"url_base,omitempty"`
-	URLImatgePrefix    string               `json:"url_imatge_prefix,omitempty"`
-	Pagina             string               `json:"pagina,omitempty"`
-	IndexacioCompleta  bool                 `json:"indexacio_completa,omitempty"`
-	CodiDigital        string               `json:"codi_digital,omitempty"`
-	CodiFisic          string               `json:"codi_fisic,omitempty"`
-	MunicipiNom        string               `json:"municipi_nom"`
-	MunicipiPaisISO2   string               `json:"municipi_pais_iso2,omitempty"`
-	ArquebisbatNom     string               `json:"arquebisbat_nom,omitempty"`
-	ArquebisbatTipus   string               `json:"arquebisbat_tipus,omitempty"`
-	Arxius             []llibreExportArxiu  `json:"arxius,omitempty"`
-	URLs               []llibreExportURL    `json:"urls,omitempty"`
+	ID                int                 `json:"id"`
+	Titol             string              `json:"titol,omitempty"`
+	NomEsglesia       string              `json:"nom_esglesia,omitempty"`
+	TipusLlibre       string              `json:"tipus_llibre,omitempty"`
+	Cronologia        string              `json:"cronologia,omitempty"`
+	Volum             string              `json:"volum,omitempty"`
+	Abat              string              `json:"abat,omitempty"`
+	Contingut         string              `json:"contingut,omitempty"`
+	Llengua           string              `json:"llengua,omitempty"`
+	Requeriments      string              `json:"requeriments_tecnics,omitempty"`
+	UnitatCatalogacio string              `json:"unitat_catalogacio,omitempty"`
+	UnitatInstalacio  string              `json:"unitat_instalacio,omitempty"`
+	Pagines           *int                `json:"pagines,omitempty"`
+	URLBase           string              `json:"url_base,omitempty"`
+	URLImatgePrefix   string              `json:"url_imatge_prefix,omitempty"`
+	Pagina            string              `json:"pagina,omitempty"`
+	IndexacioCompleta bool                `json:"indexacio_completa,omitempty"`
+	CodiDigital       string              `json:"codi_digital,omitempty"`
+	CodiFisic         string              `json:"codi_fisic,omitempty"`
+	MunicipiNom       string              `json:"municipi_nom"`
+	MunicipiPaisISO2  string              `json:"municipi_pais_iso2,omitempty"`
+	ArquebisbatNom    string              `json:"arquebisbat_nom,omitempty"`
+	ArquebisbatTipus  string              `json:"arquebisbat_tipus,omitempty"`
+	Arxius            []llibreExportArxiu `json:"arxius,omitempty"`
+	URLs              []llibreExportURL   `json:"urls,omitempty"`
 }
 
 type llibreExportArxiu struct {
@@ -59,25 +59,7 @@ type llibreExportURL struct {
 }
 
 func (a *App) AdminLlibresImport(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresImport, PermissionTarget{}); !ok {
-		return
-	}
-	q := r.URL.Query()
-	importRun := q.Get("import") == "1"
-	msg := ""
-	if q.Get("err") != "" {
-		msg = T(ResolveLang(r), "common.error")
-	}
-	token, _ := ensureCSRF(w, r)
-	RenderPrivateTemplate(w, r, "admin-llibres-import.html", map[string]interface{}{
-		"ImportRun":      importRun,
-		"LlibresTotal":   parseIntQuery(q.Get("llibres_total")),
-		"LlibresCreated": parseIntQuery(q.Get("llibres_created")),
-		"LlibresSkipped": parseIntQuery(q.Get("llibres_skipped")),
-		"LlibresErrors":  parseIntQuery(q.Get("llibres_errors")),
-		"CSRFToken":      token,
-		"Msg":            msg,
-	})
+	http.NotFound(w, r)
 }
 
 func (a *App) AdminLlibresExport(w http.ResponseWriter, r *http.Request) {
@@ -182,23 +164,24 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Redirect(w, r, "/admin/llibres/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams("/admin/llibres/import", map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
+	returnTo := safeReturnTo(r.FormValue("return_to"), "/admin/llibres/import")
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Redirect(w, r, "/admin/llibres/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	file, _, err := r.FormFile("import_file")
 	if err != nil {
-		http.Redirect(w, r, "/admin/llibres/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	defer file.Close()
 
 	var payload llibresExportPayload
 	if err := json.NewDecoder(file).Decode(&payload); err != nil {
-		http.Redirect(w, r, "/admin/llibres/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 
@@ -273,31 +256,31 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 			pagines = sql.NullInt64{Int64: int64(*row.Pagines), Valid: true}
 		}
 		llibre := &db.Llibre{
-			ArquebisbatID:    entID,
-			MunicipiID:       munID,
-			NomEsglesia:      strings.TrimSpace(row.NomEsglesia),
-			CodiDigital:      strings.TrimSpace(row.CodiDigital),
-			CodiFisic:        strings.TrimSpace(row.CodiFisic),
-			Titol:            strings.TrimSpace(row.Titol),
-			TipusLlibre:      strings.TrimSpace(row.TipusLlibre),
-			Cronologia:       strings.TrimSpace(row.Cronologia),
-			Volum:            strings.TrimSpace(row.Volum),
-			Abat:             strings.TrimSpace(row.Abat),
-			Contingut:        strings.TrimSpace(row.Contingut),
-			Llengua:          strings.TrimSpace(row.Llengua),
-			Requeriments:     strings.TrimSpace(row.Requeriments),
+			ArquebisbatID:     entID,
+			MunicipiID:        munID,
+			NomEsglesia:       strings.TrimSpace(row.NomEsglesia),
+			CodiDigital:       strings.TrimSpace(row.CodiDigital),
+			CodiFisic:         strings.TrimSpace(row.CodiFisic),
+			Titol:             strings.TrimSpace(row.Titol),
+			TipusLlibre:       strings.TrimSpace(row.TipusLlibre),
+			Cronologia:        strings.TrimSpace(row.Cronologia),
+			Volum:             strings.TrimSpace(row.Volum),
+			Abat:              strings.TrimSpace(row.Abat),
+			Contingut:         strings.TrimSpace(row.Contingut),
+			Llengua:           strings.TrimSpace(row.Llengua),
+			Requeriments:      strings.TrimSpace(row.Requeriments),
 			UnitatCatalogacio: strings.TrimSpace(row.UnitatCatalogacio),
 			UnitatInstalacio:  strings.TrimSpace(row.UnitatInstalacio),
-			Pagines:          pagines,
-			URLBase:          strings.TrimSpace(row.URLBase),
-			URLImatgePrefix:  strings.TrimSpace(row.URLImatgePrefix),
-			Pagina:           strings.TrimSpace(row.Pagina),
+			Pagines:           pagines,
+			URLBase:           strings.TrimSpace(row.URLBase),
+			URLImatgePrefix:   strings.TrimSpace(row.URLImatgePrefix),
+			Pagina:            strings.TrimSpace(row.Pagina),
 			IndexacioCompleta: row.IndexacioCompleta,
-			CreatedBy:        sqlNullIntFromInt(user.ID),
-			ModeracioEstat:   "pendent",
-			ModeratedBy:      sql.NullInt64{},
-			ModeratedAt:      sql.NullTime{},
-			ModeracioMotiu:   "",
+			CreatedBy:         sqlNullIntFromInt(user.ID),
+			ModeracioEstat:    "pendent",
+			ModeratedBy:       sql.NullInt64{},
+			ModeratedAt:       sql.NullTime{},
+			ModeracioMotiu:    "",
 		}
 		newID, err := a.DB.CreateLlibre(llibre)
 		if err != nil {
@@ -339,11 +322,13 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 			_ = a.DB.AddLlibreURL(url)
 		}
 	}
-	redirect := "/admin/llibres/import?import=1" +
-		"&llibres_total=" + strconv.Itoa(total) +
-		"&llibres_created=" + strconv.Itoa(created) +
-		"&llibres_skipped=" + strconv.Itoa(skipped) +
-		"&llibres_errors=" + strconv.Itoa(errors)
+	redirect := withQueryParams(returnTo, map[string]string{
+		"import":          "1",
+		"llibres_total":   strconv.Itoa(total),
+		"llibres_created": strconv.Itoa(created),
+		"llibres_skipped": strconv.Itoa(skipped),
+		"llibres_errors":  strconv.Itoa(errors),
+	})
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
 

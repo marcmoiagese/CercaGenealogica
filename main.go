@@ -744,20 +744,18 @@ func main() {
 	http.HandleFunc("/admin/cognoms/stats/run", applyMiddleware(app.AdminCognomsStatsRun, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/cognoms/merge", applyMiddleware(app.AdminCognomsMerge, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/cognoms/merge/delete", applyMiddleware(app.AdminCognomsMergeDelete, core.BlockIPs, core.RateLimit))
+	// Import/export centralitzat
+	http.HandleFunc("/admin/import-export", applyMiddleware(app.AdminImportExport, core.BlockIPs, core.RateLimit))
 	// Territori import/export
-	http.HandleFunc("/admin/territori/import", applyMiddleware(app.AdminTerritoriImport, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/territori/import/run", applyMiddleware(app.AdminTerritoriImportRun, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/territori/export", applyMiddleware(app.AdminTerritoriExport, core.BlockIPs, core.RateLimit))
 	// Entitats eclesiàstiques import/export
-	http.HandleFunc("/admin/eclesiastic/import", applyMiddleware(app.AdminEclesiasticImport, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/eclesiastic/import/run", applyMiddleware(app.AdminEclesiasticImportRun, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/eclesiastic/export", applyMiddleware(app.AdminEclesiasticExport, core.BlockIPs, core.RateLimit))
 	// Arxius import/export
-	http.HandleFunc("/admin/arxius/import", applyMiddleware(app.AdminArxiusImport, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/arxius/import/run", applyMiddleware(app.AdminArxiusImportRun, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/arxius/export", applyMiddleware(app.AdminArxiusExport, core.BlockIPs, core.RateLimit))
 	// Llibres import/export (JSON)
-	http.HandleFunc("/admin/llibres/import", applyMiddleware(app.AdminLlibresImport, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/llibres/import/run", applyMiddleware(app.AdminLlibresImportRun, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/llibres/export", applyMiddleware(app.AdminLlibresExport, core.BlockIPs, core.RateLimit))
 

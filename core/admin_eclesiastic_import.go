@@ -35,48 +35,66 @@ type eclesiasticExportEntitat struct {
 }
 
 type eclesiasticExportRel struct {
-	EntitatID         int    `json:"entitat_id"`
-	EntitatNom        string `json:"entitat_nom"`
-	MunicipiNom       string `json:"municipi_nom"`
-	MunicipiPaisISO2  string `json:"municipi_pais_iso2,omitempty"`
-	AnyInici          *int   `json:"any_inici,omitempty"`
-	AnyFi             *int   `json:"any_fi,omitempty"`
-	Motiu             string `json:"motiu"`
-	Font              string `json:"font"`
+	EntitatID        int    `json:"entitat_id"`
+	EntitatNom       string `json:"entitat_nom"`
+	MunicipiNom      string `json:"municipi_nom"`
+	MunicipiPaisISO2 string `json:"municipi_pais_iso2,omitempty"`
+	AnyInici         *int   `json:"any_inici,omitempty"`
+	AnyFi            *int   `json:"any_fi,omitempty"`
+	Motiu            string `json:"motiu"`
+	Font             string `json:"font"`
 }
 
 func (a *App) AdminEclesiasticImport(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.requirePermissionKey(w, r, permKeyAdminEclesImport, PermissionTarget{}); !ok {
-		return
-	}
-	q := r.URL.Query()
-	importRun := q.Get("import") == "1"
-	msg := ""
-	if q.Get("err") != "" {
-		msg = T(ResolveLang(r), "common.error")
-	}
-	RenderPrivateTemplate(w, r, "admin-eclesiastic-import.html", map[string]interface{}{
-		"ImportRun":          importRun,
-		"EntitatsTotal":      parseIntQuery(q.Get("entitats_total")),
-		"EntitatsCreated":    parseIntQuery(q.Get("entitats_created")),
-		"EntitatsSkipped":    parseIntQuery(q.Get("entitats_skipped")),
-		"EntitatsErrors":     parseIntQuery(q.Get("entitats_errors")),
-		"RelacionsTotal":     parseIntQuery(q.Get("relacions_total")),
-		"RelacionsCreated":   parseIntQuery(q.Get("relacions_created")),
-		"RelacionsSkipped":   parseIntQuery(q.Get("relacions_skipped")),
-		"RelacionsErrors":    parseIntQuery(q.Get("relacions_errors")),
-		"Msg":                msg,
-	})
+	http.NotFound(w, r)
 }
 
 func (a *App) AdminEclesiasticExport(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.requirePermissionKey(w, r, permKeyAdminEclesExport, PermissionTarget{}); !ok {
 		return
 	}
+	entitatID := parseIntDefault(strings.TrimSpace(r.URL.Query().Get("entitat_id")), 0)
 	entRows, err := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	if err != nil {
 		http.NotFound(w, r)
 		return
+	}
+	entByID := map[int]db.Arquebisbat{}
+	childrenByID := map[int][]int{}
+	for _, row := range entRows {
+		ent, err := a.DB.GetArquebisbat(row.ID)
+		if err != nil || ent == nil {
+			continue
+		}
+		entByID[ent.ID] = *ent
+		if ent.ParentID.Valid {
+			pid := int(ent.ParentID.Int64)
+			childrenByID[pid] = append(childrenByID[pid], ent.ID)
+		}
+	}
+	branchIDs := map[int]struct{}{}
+	allowedIDs := map[int]struct{}{}
+	if entitatID > 0 {
+		if _, ok := entByID[entitatID]; !ok {
+			http.NotFound(w, r)
+			return
+		}
+		queue := []int{entitatID}
+		for len(queue) > 0 {
+			id := queue[0]
+			queue = queue[1:]
+			if _, ok := branchIDs[id]; ok {
+				continue
+			}
+			branchIDs[id] = struct{}{}
+			if children := childrenByID[id]; len(children) > 0 {
+				queue = append(queue, children...)
+			}
+		}
+		for id := range branchIDs {
+			allowedIDs[id] = struct{}{}
+			addEclesiasticAncestors(id, entByID, allowedIDs)
+		}
 	}
 	paisByID := map[int]string{}
 	paisos, _ := a.DB.ListPaisos()
@@ -93,8 +111,13 @@ func (a *App) AdminEclesiasticExport(w http.ResponseWriter, r *http.Request) {
 		ExportedAt: time.Now().Format(time.RFC3339),
 	}
 	for _, row := range entRows {
-		ent, err := a.DB.GetArquebisbat(row.ID)
-		if err != nil || ent == nil {
+		if len(branchIDs) > 0 {
+			if _, ok := allowedIDs[row.ID]; !ok {
+				continue
+			}
+		}
+		ent, ok := entByID[row.ID]
+		if !ok {
 			continue
 		}
 		var parent *int
@@ -148,6 +171,11 @@ func (a *App) AdminEclesiasticExport(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		for _, rel := range rels {
+			if len(branchIDs) > 0 {
+				if _, ok := branchIDs[rel.ArquebisbatID]; !ok {
+					continue
+				}
+			}
 			var anyInici *int
 			if rel.AnyInici.Valid {
 				v := int(rel.AnyInici.Int64)
@@ -177,6 +205,18 @@ func (a *App) AdminEclesiasticExport(w http.ResponseWriter, r *http.Request) {
 	_ = enc.Encode(payload)
 }
 
+func addEclesiasticAncestors(id int, entitats map[int]db.Arquebisbat, dst map[int]struct{}) {
+	cur, ok := entitats[id]
+	for ok && cur.ParentID.Valid && cur.ParentID.Int64 > 0 {
+		pid := int(cur.ParentID.Int64)
+		if _, exists := dst[pid]; exists {
+			break
+		}
+		dst[pid] = struct{}{}
+		cur, ok = entitats[pid]
+	}
+}
+
 func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.requirePermissionKey(w, r, permKeyAdminEclesImport, PermissionTarget{})
 	if !ok {
@@ -187,23 +227,24 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Redirect(w, r, "/admin/eclesiastic/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams("/admin/eclesiastic/import", map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
+	returnTo := safeReturnTo(r.FormValue("return_to"), "/admin/eclesiastic/import")
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Redirect(w, r, "/admin/eclesiastic/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	file, _, err := r.FormFile("import_file")
 	if err != nil {
-		http.Redirect(w, r, "/admin/eclesiastic/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	defer file.Close()
 
 	var payload eclesiasticExportPayload
 	if err := json.NewDecoder(file).Decode(&payload); err != nil {
-		http.Redirect(w, r, "/admin/eclesiastic/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 
@@ -354,15 +395,17 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 		relCreated++
 	}
 
-	redirect := "/admin/eclesiastic/import?import=1" +
-		"&entitats_total=" + strconv.Itoa(entTotal) +
-		"&entitats_created=" + strconv.Itoa(entCreated) +
-		"&entitats_skipped=" + strconv.Itoa(entSkipped) +
-		"&entitats_errors=" + strconv.Itoa(entErrors) +
-		"&relacions_total=" + strconv.Itoa(relTotal) +
-		"&relacions_created=" + strconv.Itoa(relCreated) +
-		"&relacions_skipped=" + strconv.Itoa(relSkipped) +
-		"&relacions_errors=" + strconv.Itoa(relErrors)
+	redirect := withQueryParams(returnTo, map[string]string{
+		"import":            "1",
+		"entitats_total":    strconv.Itoa(entTotal),
+		"entitats_created":  strconv.Itoa(entCreated),
+		"entitats_skipped":  strconv.Itoa(entSkipped),
+		"entitats_errors":   strconv.Itoa(entErrors),
+		"relacions_total":   strconv.Itoa(relTotal),
+		"relacions_created": strconv.Itoa(relCreated),
+		"relacions_skipped": strconv.Itoa(relSkipped),
+		"relacions_errors":  strconv.Itoa(relErrors),
+	})
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
 

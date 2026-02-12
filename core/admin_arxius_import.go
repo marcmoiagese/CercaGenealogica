@@ -35,23 +35,7 @@ type arxiuExportRecord struct {
 }
 
 func (a *App) AdminArxiusImport(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.requirePermissionKey(w, r, permKeyAdminArxiusImport, PermissionTarget{}); !ok {
-		return
-	}
-	q := r.URL.Query()
-	importRun := q.Get("import") == "1"
-	msg := ""
-	if q.Get("err") != "" {
-		msg = T(ResolveLang(r), "common.error")
-	}
-	RenderPrivateTemplate(w, r, "admin-arxius-import.html", map[string]interface{}{
-		"ImportRun":       importRun,
-		"ArxiusTotal":     parseIntQuery(q.Get("arxius_total")),
-		"ArxiusCreated":   parseIntQuery(q.Get("arxius_created")),
-		"ArxiusSkipped":   parseIntQuery(q.Get("arxius_skipped")),
-		"ArxiusErrors":    parseIntQuery(q.Get("arxius_errors")),
-		"Msg":             msg,
-	})
+	http.NotFound(w, r)
 }
 
 func (a *App) AdminArxiusExport(w http.ResponseWriter, r *http.Request) {
@@ -109,16 +93,17 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Redirect(w, r, "/admin/arxius/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams("/admin/arxius/import", map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
+	returnTo := safeReturnTo(r.FormValue("return_to"), "/admin/arxius/import")
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Redirect(w, r, "/admin/arxius/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	file, _, err := r.FormFile("import_file")
 	if err != nil {
-		http.Redirect(w, r, "/admin/arxius/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	defer file.Close()
@@ -183,21 +168,21 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		arxiu := &db.Arxiu{
-			Nom:            row.Nom,
-			Tipus:          row.Tipus,
-			Acces:          row.Acces,
-			Adreca:         row.Adreca,
-			Ubicacio:       row.Ubicacio,
-			What3Words:     row.What3Words,
-			Web:            row.Web,
-			Notes:          row.Notes,
+			Nom:              row.Nom,
+			Tipus:            row.Tipus,
+			Acces:            row.Acces,
+			Adreca:           row.Adreca,
+			Ubicacio:         row.Ubicacio,
+			What3Words:       row.What3Words,
+			Web:              row.Web,
+			Notes:            row.Notes,
 			AcceptaDonacions: row.AcceptaDonacions && strings.TrimSpace(row.DonacionsURL) != "",
 			DonacionsURL:     strings.TrimSpace(row.DonacionsURL),
-			CreatedBy:      sqlNullIntFromInt(user.ID),
-			ModeracioEstat: "pendent",
-			ModeratedBy:    sql.NullInt64{},
-			ModeratedAt:    sql.NullTime{},
-			ModeracioMotiu: "",
+			CreatedBy:        sqlNullIntFromInt(user.ID),
+			ModeracioEstat:   "pendent",
+			ModeratedBy:      sql.NullInt64{},
+			ModeratedAt:      sql.NullTime{},
+			ModeracioMotiu:   "",
 		}
 		if munID > 0 {
 			arxiu.MunicipiID = sql.NullInt64{Int64: int64(munID), Valid: true}
@@ -216,10 +201,12 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuCreate, "crear", "arxiu", &newID, "pendent", nil, "")
 		}
 	}
-	redirect := "/admin/arxius/import?import=1" +
-		"&arxius_total=" + strconv.Itoa(total) +
-		"&arxius_created=" + strconv.Itoa(created) +
-		"&arxius_skipped=" + strconv.Itoa(skipped) +
-		"&arxius_errors=" + strconv.Itoa(errors)
+	redirect := withQueryParams(returnTo, map[string]string{
+		"import":         "1",
+		"arxius_total":   strconv.Itoa(total),
+		"arxius_created": strconv.Itoa(created),
+		"arxius_skipped": strconv.Itoa(skipped),
+		"arxius_errors":  strconv.Itoa(errors),
+	})
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }

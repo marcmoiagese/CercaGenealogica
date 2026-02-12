@@ -29,6 +29,32 @@
             <div class="alert alert-error">{{ .Data.Msg }}</div>
             {{ end }}
 
+            <form class="form-vertical" method="get" action="/admin/territori/export">
+                <div class="grup-camp suggest-field">
+                    <label for="territori-export-nivell">{{ t .Lang "territory.io.export.scope.label" }}</label>
+                    <input id="territori-export-nivell"
+                           type="text"
+                           name="nivell_label"
+                           placeholder="{{ t .Lang "territory.io.export.scope.placeholder" }}"
+                           data-suggest="1"
+                           data-api="/api/territori/nivells/suggest"
+                           data-hidden="territori-export-nivell-id"
+                           data-suggestions="territori-export-nivell-suggestions"
+                           data-empty-label="{{ t .Lang "common.empty" }}">
+                    <input type="hidden" id="territori-export-nivell-id" name="nivell_id" value="">
+                    <ul id="territori-export-nivell-suggestions" class="resultats-cerca"></ul>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">
+                        <i class="fas fa-file-export"></i>
+                        <span>{{ t .Lang "territory.io.export.scope.submit" }}</span>
+                    </button>
+                    <a class="boto-secundari" href="/admin/territori/export">
+                        {{ t .Lang "territory.io.export.scope.all" }}
+                    </a>
+                </div>
+            </form>
+
             <form class="form-vertical" method="post" action="/admin/territori/import/run" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                 <div class="grup-camp">
@@ -92,6 +118,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/arxiu-form-suggest.js"></script>
 </body>
 </html>
 {{ end }}

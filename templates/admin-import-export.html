@@ -1,0 +1,513 @@
+{{ define "admin-import-export.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.io.title" }}</title>
+    {{ template "styles-private" . }}
+    <style>
+        .io-tabs .tabs-botons{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px 0}
+        .io-tabs .tab-boto{background:#f6f8fb;border:1px solid #dfe3ec;color:#1f2c4d;padding:8px 14px;border-radius:10px;font-weight:600;cursor:pointer;transition:all .15s ease}
+        .io-tabs .tab-boto.actiu{background:#e9edfb;border-color:#bcc8f4;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6),0 2px 6px rgba(0,0,0,0.05);color:#1f2c4d}
+        .io-tabs .tab-pane{display:none}
+        .io-tabs .tab-pane.actiu{display:block}
+        .io-subtabs{margin-top:8px}
+        .io-subtabs .tabs-botons{margin:0 0 10px 0}
+    </style>
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "admin.io.kicker" }}</p>
+                    <h1>{{ t .Lang "admin.io.title" }}</h1>
+                </div>
+            </header>
+            <p class="muted">{{ t .Lang "admin.io.description" }}</p>
+
+            <div class="io-tabs" data-tabs>
+                <div class="tabs-botons" role="tablist" aria-label="{{ t .Lang "admin.io.tabs.label" }}">
+                    {{ if or .Data.CanTerritoriImport .Data.CanTerritoriExport }}
+                    <button type="button" class="tab-boto {{ if eq .Data.ActiveTab "territori" }}actiu{{ end }}" data-tab="territori" role="tab" aria-selected="{{ if eq .Data.ActiveTab "territori" }}true{{ else }}false{{ end }}" aria-controls="tab-territori">
+                        {{ t .Lang "admin.io.tab.territori" }}
+                    </button>
+                    {{ end }}
+                    {{ if or .Data.CanEclesImport .Data.CanEclesExport }}
+                    <button type="button" class="tab-boto {{ if eq .Data.ActiveTab "eclesiastic" }}actiu{{ end }}" data-tab="eclesiastic" role="tab" aria-selected="{{ if eq .Data.ActiveTab "eclesiastic" }}true{{ else }}false{{ end }}" aria-controls="tab-eclesiastic">
+                        {{ t .Lang "admin.io.tab.eclesiastic" }}
+                    </button>
+                    {{ end }}
+                    {{ if or .Data.CanArxiusImport .Data.CanArxiusExport }}
+                    <button type="button" class="tab-boto {{ if eq .Data.ActiveTab "arxius" }}actiu{{ end }}" data-tab="arxius" role="tab" aria-selected="{{ if eq .Data.ActiveTab "arxius" }}true{{ else }}false{{ end }}" aria-controls="tab-arxius">
+                        {{ t .Lang "admin.io.tab.arxius" }}
+                    </button>
+                    {{ end }}
+                    {{ if or .Data.CanLlibresImport .Data.CanLlibresExport }}
+                    <button type="button" class="tab-boto {{ if eq .Data.ActiveTab "llibres" }}actiu{{ end }}" data-tab="llibres" role="tab" aria-selected="{{ if eq .Data.ActiveTab "llibres" }}true{{ else }}false{{ end }}" aria-controls="tab-llibres">
+                        {{ t .Lang "admin.io.tab.llibres" }}
+                    </button>
+                    {{ end }}
+                </div>
+
+                <div class="tabs-contingut">
+                    {{ if or .Data.CanTerritoriImport .Data.CanTerritoriExport }}
+                    <section id="tab-territori" class="tab-pane {{ if eq .Data.ActiveTab "territori" }}actiu{{ end }}" data-tab-panel="territori" role="tabpanel">
+                        <section class="card">
+                            <header class="card-header">
+                                <div>
+                                    <p class="card-kicker">{{ t .Lang "territory.io.kicker" }}</p>
+                                    <h2>{{ t .Lang "territory.io.title" }}</h2>
+                                </div>
+                            </header>
+                            <p class="muted">{{ t .Lang "territory.io.description" }}</p>
+
+                            <div class="io-subtabs" data-tabs>
+                                <div class="tabs-botons" role="tablist">
+                                    {{ if .Data.CanTerritoriImport }}
+                                    <button type="button" class="tab-boto {{ if eq .Data.TerritoriSubtab "territori-import" }}actiu{{ end }}" data-tab="territori-import" role="tab" aria-selected="{{ if eq .Data.TerritoriSubtab "territori-import" }}true{{ else }}false{{ end }}" aria-controls="tab-territori-import">
+                                        {{ t .Lang "admin.io.subtab.import" }}
+                                    </button>
+                                    {{ end }}
+                                    {{ if .Data.CanTerritoriExport }}
+                                    <button type="button" class="tab-boto {{ if eq .Data.TerritoriSubtab "territori-export" }}actiu{{ end }}" data-tab="territori-export" role="tab" aria-selected="{{ if eq .Data.TerritoriSubtab "territori-export" }}true{{ else }}false{{ end }}" aria-controls="tab-territori-export">
+                                        {{ t .Lang "admin.io.subtab.export" }}
+                                    </button>
+                                    {{ end }}
+                                </div>
+                                <div class="tabs-contingut">
+                                    {{ if .Data.CanTerritoriImport }}
+                                    <section id="tab-territori-import" class="tab-pane {{ if eq .Data.TerritoriSubtab "territori-import" }}actiu{{ end }}" data-tab-panel="territori-import" role="tabpanel">
+                                        {{ if .Data.TerritoriMsg }}
+                                        <div class="alert alert-error">{{ .Data.TerritoriMsg }}</div>
+                                        {{ end }}
+                                        <form class="form-vertical" method="post" action="/admin/territori/import/run" enctype="multipart/form-data">
+                                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                                            <input type="hidden" name="return_to" value="/admin/import-export?tab=territori&amp;subtab=territori-import">
+                                            <div class="grup-camp">
+                                                <label for="territori-file">{{ t .Lang "territory.io.import.file" }}</label>
+                                                <input id="territori-file" type="file" name="import_file" accept="application/json" required>
+                                            </div>
+                                            <div class="form-accio">
+                                                <button type="submit" class="boto-primari">
+                                                    <i class="fas fa-file-import"></i>
+                                                    <span>{{ t .Lang "territory.io.import.run" }}</span>
+                                                </button>
+                                            </div>
+                                        </form>
+
+                                        {{ if .Data.TerritoriImportRun }}
+                                        <h3>{{ t .Lang "territory.io.summary.title" }}</h3>
+                                        <div class="taula-wrapper">
+                                            <table class="taula">
+                                                <tbody>
+                                                    <tr>
+                                                        <th>{{ t .Lang "territory.io.summary.countries" }}</th>
+                                                        <td>{{ .Data.TerritoriCountriesCreated }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "territory.io.summary.levels_total" }}</th>
+                                                        <td>{{ .Data.TerritoriLevelsTotal }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "territory.io.summary.levels_created" }}</th>
+                                                        <td>{{ .Data.TerritoriLevelsCreated }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "territory.io.summary.levels_skipped" }}</th>
+                                                        <td>{{ .Data.TerritoriLevelsSkipped }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "territory.io.summary.levels_errors" }}</th>
+                                                        <td>{{ .Data.TerritoriLevelsErrors }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "territory.io.summary.municipis_total" }}</th>
+                                                        <td>{{ .Data.TerritoriMunicipisTotal }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "territory.io.summary.municipis_created" }}</th>
+                                                        <td>{{ .Data.TerritoriMunicipisCreated }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "territory.io.summary.municipis_skipped" }}</th>
+                                                        <td>{{ .Data.TerritoriMunicipisSkipped }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "territory.io.summary.municipis_errors" }}</th>
+                                                        <td>{{ .Data.TerritoriMunicipisErrors }}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {{ end }}
+                                    </section>
+                                    {{ end }}
+                                    {{ if .Data.CanTerritoriExport }}
+                                    <section id="tab-territori-export" class="tab-pane {{ if eq .Data.TerritoriSubtab "territori-export" }}actiu{{ end }}" data-tab-panel="territori-export" role="tabpanel">
+                                        <form class="form-vertical" method="get" action="/admin/territori/export">
+                                            <div class="grup-camp suggest-field">
+                                                <label for="territori-export-nivell">{{ t .Lang "territory.io.export.scope.label" }}</label>
+                                                <input id="territori-export-nivell"
+                                                       type="text"
+                                                       name="nivell_label"
+                                                       placeholder="{{ t .Lang "territory.io.export.scope.placeholder" }}"
+                                                       data-suggest="1"
+                                                       data-api="/api/territori/nivells/suggest"
+                                                       data-hidden="territori-export-nivell-id"
+                                                       data-suggestions="territori-export-nivell-suggestions"
+                                                       data-empty-label="{{ t .Lang "common.empty" }}">
+                                                <input type="hidden" id="territori-export-nivell-id" name="nivell_id" value="">
+                                                <ul id="territori-export-nivell-suggestions" class="resultats-cerca"></ul>
+                                            </div>
+                                            <div class="form-accio">
+                                                <button type="submit" class="boto-primari">
+                                                    <i class="fas fa-file-export"></i>
+                                                    <span>{{ t .Lang "territory.io.export.scope.submit" }}</span>
+                                                </button>
+                                                <a class="boto-secundari" href="/admin/territori/export">
+                                                    {{ t .Lang "territory.io.export.scope.all" }}
+                                                </a>
+                                            </div>
+                                        </form>
+                                    </section>
+                                    {{ end }}
+                                </div>
+                            </div>
+                        </section>
+                    </section>
+                    {{ end }}
+
+                    {{ if or .Data.CanEclesImport .Data.CanEclesExport }}
+                    <section id="tab-eclesiastic" class="tab-pane {{ if eq .Data.ActiveTab "eclesiastic" }}actiu{{ end }}" data-tab-panel="eclesiastic" role="tabpanel">
+                        <section class="card">
+                            <header class="card-header">
+                                <div>
+                                    <p class="card-kicker">{{ t .Lang "ecles.io.kicker" }}</p>
+                                    <h2>{{ t .Lang "ecles.io.title" }}</h2>
+                                </div>
+                            </header>
+                            <p class="muted">{{ t .Lang "ecles.io.description" }}</p>
+
+                            <div class="io-subtabs" data-tabs>
+                                <div class="tabs-botons" role="tablist">
+                                    {{ if .Data.CanEclesImport }}
+                                    <button type="button" class="tab-boto {{ if eq .Data.EclesSubtab "eclesiastic-import" }}actiu{{ end }}" data-tab="eclesiastic-import" role="tab" aria-selected="{{ if eq .Data.EclesSubtab "eclesiastic-import" }}true{{ else }}false{{ end }}" aria-controls="tab-eclesiastic-import">
+                                        {{ t .Lang "admin.io.subtab.import" }}
+                                    </button>
+                                    {{ end }}
+                                    {{ if .Data.CanEclesExport }}
+                                    <button type="button" class="tab-boto {{ if eq .Data.EclesSubtab "eclesiastic-export" }}actiu{{ end }}" data-tab="eclesiastic-export" role="tab" aria-selected="{{ if eq .Data.EclesSubtab "eclesiastic-export" }}true{{ else }}false{{ end }}" aria-controls="tab-eclesiastic-export">
+                                        {{ t .Lang "admin.io.subtab.export" }}
+                                    </button>
+                                    {{ end }}
+                                </div>
+                                <div class="tabs-contingut">
+                                    {{ if .Data.CanEclesImport }}
+                                    <section id="tab-eclesiastic-import" class="tab-pane {{ if eq .Data.EclesSubtab "eclesiastic-import" }}actiu{{ end }}" data-tab-panel="eclesiastic-import" role="tabpanel">
+                                        {{ if .Data.EclesMsg }}
+                                        <div class="alert alert-error">{{ .Data.EclesMsg }}</div>
+                                        {{ end }}
+                                        <form class="form-vertical" method="post" action="/admin/eclesiastic/import/run" enctype="multipart/form-data">
+                                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                                            <input type="hidden" name="return_to" value="/admin/import-export?tab=eclesiastic&amp;subtab=eclesiastic-import">
+                                            <div class="grup-camp">
+                                                <label for="ecles-file">{{ t .Lang "ecles.io.import.file" }}</label>
+                                                <input id="ecles-file" type="file" name="import_file" accept="application/json" required>
+                                            </div>
+                                            <div class="form-accio">
+                                                <button type="submit" class="boto-primari">
+                                                    <i class="fas fa-file-import"></i>
+                                                    <span>{{ t .Lang "ecles.io.import.run" }}</span>
+                                                </button>
+                                            </div>
+                                        </form>
+
+                                        {{ if .Data.EclesImportRun }}
+                                        <h3>{{ t .Lang "ecles.io.summary.title" }}</h3>
+                                        <div class="taula-wrapper">
+                                            <table class="taula">
+                                                <tbody>
+                                                    <tr>
+                                                        <th>{{ t .Lang "ecles.io.summary.entitats_total" }}</th>
+                                                        <td>{{ .Data.EclesEntitatsTotal }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "ecles.io.summary.entitats_created" }}</th>
+                                                        <td>{{ .Data.EclesEntitatsCreated }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "ecles.io.summary.entitats_skipped" }}</th>
+                                                        <td>{{ .Data.EclesEntitatsSkipped }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "ecles.io.summary.entitats_errors" }}</th>
+                                                        <td>{{ .Data.EclesEntitatsErrors }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "ecles.io.summary.rels_total" }}</th>
+                                                        <td>{{ .Data.EclesRelacionsTotal }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "ecles.io.summary.rels_created" }}</th>
+                                                        <td>{{ .Data.EclesRelacionsCreated }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "ecles.io.summary.rels_skipped" }}</th>
+                                                        <td>{{ .Data.EclesRelacionsSkipped }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "ecles.io.summary.rels_errors" }}</th>
+                                                        <td>{{ .Data.EclesRelacionsErrors }}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {{ end }}
+                                    </section>
+                                    {{ end }}
+                                    {{ if .Data.CanEclesExport }}
+                                    <section id="tab-eclesiastic-export" class="tab-pane {{ if eq .Data.EclesSubtab "eclesiastic-export" }}actiu{{ end }}" data-tab-panel="eclesiastic-export" role="tabpanel">
+                                        <form class="form-vertical" method="get" action="/admin/eclesiastic/export">
+                                            <div class="grup-camp suggest-field">
+                                                <label for="ecles-export-entitat">{{ t .Lang "ecles.io.export.scope.label" }}</label>
+                                                <input id="ecles-export-entitat"
+                                                       type="text"
+                                                       name="entitat_label"
+                                                       placeholder="{{ t .Lang "ecles.io.export.scope.placeholder" }}"
+                                                       data-suggest="1"
+                                                       data-api="/api/territori/eclesiastic/suggest"
+                                                       data-hidden="ecles-export-entitat-id"
+                                                       data-suggestions="ecles-export-entitat-suggestions"
+                                                       data-empty-label="{{ t .Lang "common.empty" }}">
+                                                <input type="hidden" id="ecles-export-entitat-id" name="entitat_id" value="">
+                                                <ul id="ecles-export-entitat-suggestions" class="resultats-cerca"></ul>
+                                            </div>
+                                            <div class="form-accio">
+                                                <button type="submit" class="boto-primari">
+                                                    <i class="fas fa-file-export"></i>
+                                                    <span>{{ t .Lang "ecles.io.export.scope.submit" }}</span>
+                                                </button>
+                                                <a class="boto-secundari" href="/admin/eclesiastic/export">
+                                                    {{ t .Lang "ecles.io.export.scope.all" }}
+                                                </a>
+                                            </div>
+                                        </form>
+                                    </section>
+                                    {{ end }}
+                                </div>
+                            </div>
+                        </section>
+                    </section>
+                    {{ end }}
+
+                    {{ if or .Data.CanArxiusImport .Data.CanArxiusExport }}
+                    <section id="tab-arxius" class="tab-pane {{ if eq .Data.ActiveTab "arxius" }}actiu{{ end }}" data-tab-panel="arxius" role="tabpanel">
+                        <section class="card">
+                            <header class="card-header">
+                                <div>
+                                    <p class="card-kicker">{{ t .Lang "archives.io.kicker" }}</p>
+                                    <h2>{{ t .Lang "archives.io.title" }}</h2>
+                                </div>
+                            </header>
+                            <p class="muted">{{ t .Lang "archives.io.description" }}</p>
+
+                            <div class="io-subtabs" data-tabs>
+                                <div class="tabs-botons" role="tablist">
+                                    {{ if .Data.CanArxiusImport }}
+                                    <button type="button" class="tab-boto {{ if eq .Data.ArxiusSubtab "arxius-import" }}actiu{{ end }}" data-tab="arxius-import" role="tab" aria-selected="{{ if eq .Data.ArxiusSubtab "arxius-import" }}true{{ else }}false{{ end }}" aria-controls="tab-arxius-import">
+                                        {{ t .Lang "admin.io.subtab.import" }}
+                                    </button>
+                                    {{ end }}
+                                    {{ if .Data.CanArxiusExport }}
+                                    <button type="button" class="tab-boto {{ if eq .Data.ArxiusSubtab "arxius-export" }}actiu{{ end }}" data-tab="arxius-export" role="tab" aria-selected="{{ if eq .Data.ArxiusSubtab "arxius-export" }}true{{ else }}false{{ end }}" aria-controls="tab-arxius-export">
+                                        {{ t .Lang "admin.io.subtab.export" }}
+                                    </button>
+                                    {{ end }}
+                                </div>
+                                <div class="tabs-contingut">
+                                    {{ if .Data.CanArxiusImport }}
+                                    <section id="tab-arxius-import" class="tab-pane {{ if eq .Data.ArxiusSubtab "arxius-import" }}actiu{{ end }}" data-tab-panel="arxius-import" role="tabpanel">
+                                        {{ if .Data.ArxiusMsg }}
+                                        <div class="alert alert-error">{{ .Data.ArxiusMsg }}</div>
+                                        {{ end }}
+                                        <form class="form-vertical" method="post" action="/admin/arxius/import/run" enctype="multipart/form-data">
+                                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                                            <input type="hidden" name="return_to" value="/admin/import-export?tab=arxius&amp;subtab=arxius-import">
+                                            <div class="grup-camp">
+                                                <label for="arxius-file">{{ t .Lang "archives.io.import.file" }}</label>
+                                                <input id="arxius-file" type="file" name="import_file" accept="application/json" required>
+                                            </div>
+                                            <div class="form-accio">
+                                                <button type="submit" class="boto-primari">
+                                                    <i class="fas fa-file-import"></i>
+                                                    <span>{{ t .Lang "archives.io.import.run" }}</span>
+                                                </button>
+                                            </div>
+                                        </form>
+
+                                        {{ if .Data.ArxiusImportRun }}
+                                        <h3>{{ t .Lang "archives.io.summary.title" }}</h3>
+                                        <div class="taula-wrapper">
+                                            <table class="taula">
+                                                <tbody>
+                                                    <tr>
+                                                        <th>{{ t .Lang "archives.io.summary.total" }}</th>
+                                                        <td>{{ .Data.ArxiusTotal }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "archives.io.summary.created" }}</th>
+                                                        <td>{{ .Data.ArxiusCreated }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "archives.io.summary.skipped" }}</th>
+                                                        <td>{{ .Data.ArxiusSkipped }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "archives.io.summary.errors" }}</th>
+                                                        <td>{{ .Data.ArxiusErrors }}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {{ end }}
+                                    </section>
+                                    {{ end }}
+                                    {{ if .Data.CanArxiusExport }}
+                                    <section id="tab-arxius-export" class="tab-pane {{ if eq .Data.ArxiusSubtab "arxius-export" }}actiu{{ end }}" data-tab-panel="arxius-export" role="tabpanel">
+                                        <div class="form-accio">
+                                            <a class="boto-primari" href="/admin/arxius/export">
+                                                <i class="fas fa-file-export"></i>
+                                                <span>{{ t .Lang "archives.io.export" }}</span>
+                                            </a>
+                                        </div>
+                                    </section>
+                                    {{ end }}
+                                </div>
+                            </div>
+                        </section>
+                    </section>
+                    {{ end }}
+
+                    {{ if or .Data.CanLlibresImport .Data.CanLlibresExport }}
+                    <section id="tab-llibres" class="tab-pane {{ if eq .Data.ActiveTab "llibres" }}actiu{{ end }}" data-tab-panel="llibres" role="tabpanel">
+                        <section class="card">
+                            <header class="card-header">
+                                <div>
+                                    <p class="card-kicker">{{ t .Lang "books.io.kicker" }}</p>
+                                    <h2>{{ t .Lang "books.io.title" }}</h2>
+                                </div>
+                            </header>
+                            <p class="muted">{{ t .Lang "books.io.description" }}</p>
+
+                            <div class="io-subtabs" data-tabs>
+                                <div class="tabs-botons" role="tablist">
+                                    {{ if .Data.CanLlibresImport }}
+                                    <button type="button" class="tab-boto {{ if eq .Data.LlibresSubtab "llibres-import" }}actiu{{ end }}" data-tab="llibres-import" role="tab" aria-selected="{{ if eq .Data.LlibresSubtab "llibres-import" }}true{{ else }}false{{ end }}" aria-controls="tab-llibres-import">
+                                        {{ t .Lang "admin.io.subtab.import" }}
+                                    </button>
+                                    {{ end }}
+                                    {{ if .Data.CanLlibresExport }}
+                                    <button type="button" class="tab-boto {{ if eq .Data.LlibresSubtab "llibres-export" }}actiu{{ end }}" data-tab="llibres-export" role="tab" aria-selected="{{ if eq .Data.LlibresSubtab "llibres-export" }}true{{ else }}false{{ end }}" aria-controls="tab-llibres-export">
+                                        {{ t .Lang "admin.io.subtab.export" }}
+                                    </button>
+                                    {{ end }}
+                                </div>
+                                <div class="tabs-contingut">
+                                    {{ if .Data.CanLlibresImport }}
+                                    <section id="tab-llibres-import" class="tab-pane {{ if eq .Data.LlibresSubtab "llibres-import" }}actiu{{ end }}" data-tab-panel="llibres-import" role="tabpanel">
+                                        {{ if .Data.LlibresMsg }}
+                                        <div class="alert alert-error">{{ .Data.LlibresMsg }}</div>
+                                        {{ end }}
+                                        <form class="form-vertical" method="post" action="/admin/llibres/import/run" enctype="multipart/form-data">
+                                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                                            <input type="hidden" name="return_to" value="/admin/import-export?tab=llibres&amp;subtab=llibres-import">
+                                            <div class="grup-camp">
+                                                <label for="llibres-file">{{ t .Lang "books.io.import.file" }}</label>
+                                                <input id="llibres-file" type="file" name="import_file" accept="application/json" required>
+                                            </div>
+                                            <div class="form-accio">
+                                                <button type="submit" class="boto-primari">
+                                                    <i class="fas fa-file-import"></i>
+                                                    <span>{{ t .Lang "books.io.import.run" }}</span>
+                                                </button>
+                                            </div>
+                                        </form>
+
+                                        {{ if .Data.LlibresImportRun }}
+                                        <h3>{{ t .Lang "books.io.summary.title" }}</h3>
+                                        <div class="taula-wrapper">
+                                            <table class="taula">
+                                                <tbody>
+                                                    <tr>
+                                                        <th>{{ t .Lang "books.io.summary.total" }}</th>
+                                                        <td>{{ .Data.LlibresTotal }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "books.io.summary.created" }}</th>
+                                                        <td>{{ .Data.LlibresCreated }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "books.io.summary.skipped" }}</th>
+                                                        <td>{{ .Data.LlibresSkipped }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>{{ t .Lang "books.io.summary.errors" }}</th>
+                                                        <td>{{ .Data.LlibresErrors }}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {{ end }}
+                                    </section>
+                                    {{ end }}
+                                    {{ if .Data.CanLlibresExport }}
+                                    <section id="tab-llibres-export" class="tab-pane {{ if eq .Data.LlibresSubtab "llibres-export" }}actiu{{ end }}" data-tab-panel="llibres-export" role="tabpanel">
+                                        <div class="form-accio">
+                                            <a class="boto-primari" href="/admin/llibres/export">
+                                                <i class="fas fa-file-export"></i>
+                                                <span>{{ t .Lang "books.io.export" }}</span>
+                                            </a>
+                                        </div>
+                                    </section>
+                                    {{ end }}
+                                </div>
+                            </div>
+                        </section>
+                    </section>
+                    {{ end }}
+                </div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script>
+        document.querySelectorAll('[data-tabs]').forEach(function (container) {
+            const buttons = Array.from(container.querySelectorAll('.tab-boto[data-tab]'))
+                .filter(function (btn) { return btn.closest('[data-tabs]') === container; });
+            const panes = Array.from(container.querySelectorAll('.tab-pane[data-tab-panel]'))
+                .filter(function (pane) { return pane.closest('[data-tabs]') === container; });
+            if (!buttons.length || !panes.length) return;
+            buttons.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    const target = btn.dataset.tab;
+                    if (!target) return;
+                    buttons.forEach(function (b) {
+                        const active = b === btn;
+                        b.classList.toggle('actiu', active);
+                        b.setAttribute('aria-selected', active ? 'true' : 'false');
+                    });
+                    panes.forEach(function (pane) {
+                        pane.classList.toggle('actiu', pane.dataset.tabPanel === target);
+                    });
+                });
+            });
+        });
+    </script>
+    <script src="/static/js/arxiu-form-suggest.js"></script>
+</body>
+</html>
+{{ end }}
