@@ -700,6 +700,13 @@ func (d *PostgreSQL) CountTranscripcionsRaw(llibreID int, f TranscripcioFilter) 
 func (d *PostgreSQL) CountTranscripcionsRawGlobal(f TranscripcioFilter) (int, error) {
 	return d.help.countTranscripcionsRawGlobal(f)
 }
+func (d *PostgreSQL) CountTranscripcionsRawByPageValue(llibreID int, pageValue string) (int, error) {
+	return d.help.countTranscripcionsRawByPageValue(llibreID, pageValue)
+}
+
+func (d *PostgreSQL) ListTranscripcionsRawByPageValue(llibreID int, pageValue string) ([]TranscripcioRaw, error) {
+	return d.help.listTranscripcionsRawByPageValue(llibreID, pageValue)
+}
 func (d *PostgreSQL) GetTranscripcioRaw(id int) (*TranscripcioRaw, error) {
 	return d.help.getTranscripcioRaw(id)
 }

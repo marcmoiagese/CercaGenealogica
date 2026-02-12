@@ -699,6 +699,13 @@ func (d *MySQL) CountTranscripcionsRaw(llibreID int, f TranscripcioFilter) (int,
 func (d *MySQL) CountTranscripcionsRawGlobal(f TranscripcioFilter) (int, error) {
 	return d.help.countTranscripcionsRawGlobal(f)
 }
+func (d *MySQL) CountTranscripcionsRawByPageValue(llibreID int, pageValue string) (int, error) {
+	return d.help.countTranscripcionsRawByPageValue(llibreID, pageValue)
+}
+
+func (d *MySQL) ListTranscripcionsRawByPageValue(llibreID int, pageValue string) ([]TranscripcioRaw, error) {
+	return d.help.listTranscripcionsRawByPageValue(llibreID, pageValue)
+}
 func (d *MySQL) GetTranscripcioRaw(id int) (*TranscripcioRaw, error) {
 	return d.help.getTranscripcioRaw(id)
 }

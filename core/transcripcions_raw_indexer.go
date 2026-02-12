@@ -176,6 +176,10 @@ func (a *App) AdminCommitIndexer(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/indexar?error=limit", http.StatusSeeOther)
 		return
 	}
+	if err := a.checkIndexerPageLimits(llibreID, cfg, payload.Rows); err != nil {
+		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/indexar?error=page_limit", http.StatusSeeOther)
+		return
+	}
 	created := 0
 	for _, row := range payload.Rows {
 		if isIndexerRowEmpty(row) {
@@ -191,7 +195,88 @@ func (a *App) AdminCommitIndexer(w http.ResponseWriter, r *http.Request) {
 		_ = a.DB.DeleteTranscripcioDraft(user.ID, llibreID)
 		_, _ = a.recalcLlibreIndexacioStats(llibreID)
 	}
-	http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/registres?imported="+strconv.Itoa(created)+"&failed=0", http.StatusSeeOther)
+	returnURL := "/documentals/llibres/" + strconv.Itoa(llibreID) + "/registres?imported=" + strconv.Itoa(created) + "&failed=0"
+	returnTo := safeReturnTo(r.FormValue("return_to"), returnURL)
+	http.Redirect(w, r, returnTo, http.StatusSeeOther)
+}
+
+func (a *App) checkIndexerPageLimits(llibreID int, cfg indexerConfig, rows []map[string]string) error {
+	pageKey, digitalKey := indexerPageKeys(cfg)
+	if pageKey == "" && digitalKey == "" {
+		return nil
+	}
+	stats, err := a.DB.ListTranscripcionsRawPageStats(llibreID)
+	if err != nil || len(stats) == 0 {
+		return nil
+	}
+	limits := map[string]int{}
+	for _, stat := range stats {
+		if stat.TotalRegistres <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(stat.NumPaginaText)
+		if key == "" {
+			continue
+		}
+		if _, ok := limits[key]; !ok {
+			limits[key] = stat.TotalRegistres
+		}
+	}
+	if len(limits) == 0 {
+		return nil
+	}
+	newCounts := map[string]int{}
+	for _, row := range rows {
+		if isIndexerRowEmpty(row) {
+			continue
+		}
+		key := indexerRowPageValue(row, pageKey, digitalKey)
+		if key == "" {
+			continue
+		}
+		newCounts[key]++
+	}
+	for key, newCount := range newCounts {
+		limit, ok := limits[key]
+		if !ok || limit <= 0 {
+			continue
+		}
+		existing, err := a.DB.CountTranscripcionsRawByPageValue(llibreID, key)
+		if err != nil {
+			Errorf("Error comptant registres per pagina %d (%s): %v", llibreID, key, err)
+			continue
+		}
+		if existing+newCount > limit {
+			return errors.New("page limit exceeded")
+		}
+	}
+	return nil
+}
+
+func indexerPageKeys(cfg indexerConfig) (string, string) {
+	pageKey := ""
+	digitalKey := ""
+	for _, field := range cfg.Fields {
+		if field.Target == "raw" && field.RawField == "num_pagina_text" {
+			pageKey = field.Key
+		}
+		if field.Target == "attr" && field.AttrKey == "pagina_digital" {
+			digitalKey = field.Key
+		}
+	}
+	return pageKey, digitalKey
+}
+
+func indexerRowPageValue(row map[string]string, pageKey, digitalKey string) string {
+	if digitalKey != "" {
+		if val := strings.TrimSpace(row[digitalKey]); val != "" {
+			return val
+		}
+	}
+	if pageKey != "" {
+		return strings.TrimSpace(row[pageKey])
+	}
+	return ""
 }
 
 func parseIndexerPayload(r *http.Request, maxRows int) (*indexerPayload, []byte, error) {

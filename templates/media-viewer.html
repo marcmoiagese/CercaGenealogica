@@ -3,10 +3,13 @@
 <html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ .Data.CSRFToken }}">
     <title>{{ .Data.Item.Title }}</title>
     {{ template "styles-private" . }}
     <link rel="stylesheet" href="/static/css/media.css">
     <link rel="stylesheet" href="/static/css/media-viewer.css">
+    <link rel="stylesheet" href="/static/css/taula.css">
+    <link rel="stylesheet" href="/static/css/indexer.css">
 </head>
 <body>
     {{ if .UserLoggedIn }}
@@ -56,6 +59,7 @@
                         <button class="media-btn" id="mediaBtnAdjust" title="{{ t .Lang "media.viewer.toolbar.adjust" }}"><i class="fas fa-adjust"></i></button>
                         <button class="media-btn" id="mediaBtnRotL" title="{{ t .Lang "media.viewer.toolbar.rotate_left" }}"><i class="fas fa-undo"></i></button>
                         <button class="media-btn" id="mediaBtnRotR" title="{{ t .Lang "media.viewer.toolbar.rotate_right" }}"><i class="fas fa-redo"></i></button>
+                        <button class="media-btn" id="mediaBtnDetails" title="{{ t .Lang "media.viewer.details.toggle" }}"><i class="fas fa-info-circle"></i></button>
                     </div>
                 </div>
 
@@ -87,6 +91,215 @@
                     </div>
                 </div>
             </div>
+            {{ $ctx := .Data.PageContext }}
+            <div class="media-details-panel media-hidden" id="mediaDetailsPanel" data-has-context="{{ if $ctx }}1{{ else }}0{{ end }}" data-has-link="{{ if and $ctx $ctx.HasLink }}1{{ else }}0{{ end }}" {{ if and $ctx $ctx.CanLinkPages }}data-media-page-link data-page-endpoint="/api/media/llibres/pagines/suggest" data-llibre-id="{{ $ctx.BookID }}"{{ end }}>
+                <div class="media-details-header">
+                    <div>
+                        <h3>{{ t .Lang "media.viewer.details.title" }}</h3>
+                        <p class="muted">{{ t .Lang "media.viewer.details.subtitle" }}</p>
+                    </div>
+                    <button type="button" class="media-btn media-btn-compact" id="mediaDetailsClose" aria-label="{{ t .Lang "media.viewer.details.close" }}"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="media-details-tabs" role="tablist">
+                    <button type="button" class="media-details-tab is-active" data-tab-target="book" role="tab" aria-selected="true">{{ t .Lang "media.viewer.details.tab.book" }}</button>
+                    <button type="button" class="media-details-tab" data-tab-target="page" role="tab" aria-selected="false">{{ t .Lang "media.viewer.details.tab.page" }}</button>
+                    <button type="button" class="media-details-tab" data-tab-target="index" role="tab" aria-selected="false">{{ t .Lang "media.viewer.details.tab.index" }}</button>
+                </div>
+                <div class="media-details-body">
+                    <section class="media-details-pane is-active" data-tab-panel="book" role="tabpanel">
+                        <div class="media-details-grid" data-section="book-grid" {{ if not $ctx }}style="display:none"{{ end }}>
+                            <div class="media-details-item">
+                                <span class="media-details-label">{{ t .Lang "records.index.book_label" }}</span>
+                                <span class="media-details-value" data-field="book_title">{{ if $ctx }}{{ $ctx.BookTitle }}{{ end }}</span>
+                            </div>
+                            <div class="media-details-item">
+                                <span class="media-details-label">{{ t .Lang "books.form.type" }}</span>
+                                <span class="media-details-value" data-field="book_type">{{ if $ctx }}{{ t .Lang (printf "books.type.%s" $ctx.BookType) }}{{ end }}</span>
+                            </div>
+                            <div class="media-details-item">
+                                <span class="media-details-label">{{ t .Lang "books.form.chrono" }}</span>
+                                <span class="media-details-value" data-field="book_cronologia">{{ if and $ctx $ctx.BookCronologia }}{{ $ctx.BookCronologia }}{{ else }}—{{ end }}</span>
+                            </div>
+                            <div class="media-details-item">
+                                <span class="media-details-label">{{ t .Lang "books.form.pages" }}</span>
+                                <span class="media-details-value" data-field="book_pagines">{{ if and $ctx (gt $ctx.BookPagines 0) }}{{ $ctx.BookPagines }}{{ else }}—{{ end }}</span>
+                            </div>
+                            <div class="media-details-item">
+                                <span class="media-details-label">{{ t .Lang "books.form.municipi" }}</span>
+                                <span class="media-details-value" data-field="book_municipi">{{ if and $ctx $ctx.BookMunicipi }}{{ $ctx.BookMunicipi }}{{ else }}—{{ end }}</span>
+                            </div>
+                            <div class="media-details-item">
+                                <span class="media-details-label">{{ t .Lang "media.viewer.details.book_link.label" }}</span>
+                                <a class="media-details-link" data-field="book_url" href="{{ if $ctx }}{{ $ctx.BookURL }}{{ end }}">{{ t .Lang "media.viewer.details.book_link" }}</a>
+                            </div>
+                        </div>
+                        <p class="muted" data-section="book-empty" {{ if $ctx }}style="display:none"{{ end }}>{{ t .Lang "media.viewer.details.no_book" }}</p>
+                    </section>
+                    <section class="media-details-pane" data-tab-panel="page" role="tabpanel">
+                        <form class="media-details-form" method="post" action="{{ if $ctx }}/documentals/llibres/{{ $ctx.BookID }}/pagines/stats/save{{ end }}" data-section="page-form" {{ if not (and $ctx $ctx.HasLink) }}style="display:none"{{ end }}>
+                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                            <input type="hidden" name="stat_id" value="{{ if $ctx }}{{ $ctx.StatID }}{{ end }}" data-field="stat_id">
+                            <input type="hidden" name="llibre_id" value="{{ if $ctx }}{{ $ctx.BookID }}{{ end }}">
+                            <input type="hidden" name="return_to" value="{{ .Data.CurrentURL }}">
+                            <div class="media-details-grid media-details-grid-form">
+                                <label class="media-details-item">
+                                    <span class="media-details-label">{{ t .Lang "books.pages.stats.col.page" }}</span>
+                                    <input type="text" name="num_pagina_text" value="{{ if $ctx }}{{ $ctx.PageNumText }}{{ end }}" data-field="page_num_text" {{ if not (and $ctx $ctx.CanEditPage) }}disabled{{ end }}>
+                                </label>
+                                <label class="media-details-item">
+                                    <span class="media-details-label">{{ t .Lang "books.pages.stats.col.page_id" }}</span>
+                                    <input type="number" name="pagina_id" value="{{ if and $ctx (gt $ctx.PageID 0) }}{{ $ctx.PageID }}{{ end }}" data-field="page_id" readonly {{ if not (and $ctx $ctx.CanEditPage) }}disabled{{ end }}>
+                                </label>
+                                <label class="media-details-item">
+                                    <span class="media-details-label">{{ t .Lang "books.pages.stats.col.total" }}</span>
+                                    <input type="number" min="0" name="total_registres" value="{{ if $ctx }}{{ $ctx.PageTotalRegistres }}{{ end }}" data-field="page_total" {{ if not (and $ctx $ctx.CanEditPage) }}disabled{{ end }}>
+                                </label>
+                                <label class="media-details-item">
+                                    <span class="media-details-label">{{ t .Lang "books.pages.stats.col.type" }}</span>
+                                    <select name="tipus_pagina" data-field="page_type" {{ if not (and $ctx $ctx.CanEditPage) }}disabled{{ end }}>
+                                        <option value="normal" {{ if and $ctx (eq $ctx.PageType "normal") }}selected{{ end }}>{{ t .Lang "books.pages.stats.type.normal" }}</option>
+                                        <option value="portada" {{ if and $ctx (eq $ctx.PageType "portada") }}selected{{ end }}>{{ t .Lang "books.pages.stats.type.portada" }}</option>
+                                        <option value="index" {{ if and $ctx (eq $ctx.PageType "index") }}selected{{ end }}>{{ t .Lang "books.pages.stats.type.index" }}</option>
+                                        <option value="visita" {{ if and $ctx (eq $ctx.PageType "visita") }}selected{{ end }}>{{ t .Lang "books.pages.stats.type.visita" }}</option>
+                                        <option value="altres" {{ if and $ctx (eq $ctx.PageType "altres") }}selected{{ end }}>{{ t .Lang "books.pages.stats.type.altres" }}</option>
+                                    </select>
+                                </label>
+                                <label class="media-details-item media-details-check">
+                                    <span class="media-details-label">{{ t .Lang "books.pages.stats.exclude.label" }}</span>
+                                    <input type="checkbox" name="exclosa" value="1" data-field="page_excluded" {{ if and $ctx (eq $ctx.PageExcluded 1) }}checked{{ end }} {{ if not (and $ctx $ctx.CanEditPage) }}disabled{{ end }}>
+                                </label>
+                                <label class="media-details-item media-details-check">
+                                    <span class="media-details-label">{{ t .Lang "books.pages.stats.indexed.label" }}</span>
+                                    <input type="checkbox" name="indexacio_completa" value="1" data-field="page_indexed" {{ if and $ctx (eq $ctx.PageIndexed 1) }}checked{{ end }} {{ if not (and $ctx $ctx.CanEditPage) }}disabled{{ end }}>
+                                </label>
+                                <label class="media-details-item">
+                                    <span class="media-details-label">{{ t .Lang "books.pages.stats.col.duplicate" }}</span>
+                                    <input type="text" name="duplicada_de" value="{{ if $ctx }}{{ $ctx.PageDuplicate }}{{ end }}" data-field="page_duplicate" {{ if not (and $ctx $ctx.CanEditPage) }}disabled{{ end }}>
+                                </label>
+                            </div>
+                            <div class="media-details-actions" data-section="page-save" {{ if not (and $ctx $ctx.CanEditPage) }}style="display:none"{{ end }}>
+                                <button type="submit" class="boto-primari">{{ t .Lang "common.save" }}</button>
+                            </div>
+                            <p class="muted" data-section="page-no-edit" {{ if and $ctx $ctx.CanEditPage }}style="display:none"{{ end }}>{{ t .Lang "media.viewer.details.no_edit" }}</p>
+                        </form>
+                        <div class="media-details-linker" data-section="page-linker" {{ if not (and $ctx $ctx.CanLinkPages) }}style="display:none"{{ end }}>
+                            <div class="media-details-label">{{ t .Lang "media.viewer.details.page_link.title" }}</div>
+                            <div class="media-details-value" data-field="page_link_label">{{ if and $ctx $ctx.PageNumText }}{{ $ctx.PageNumText }}{{ else }}—{{ end }}</div>
+                            <form class="media-item-link-form media-page-link-form" method="post" action="/media/albums/{{ $.Data.Album.PublicID }}/pages/link" data-page-link-form data-section="page-link-form" {{ if and $ctx $ctx.HasLink }}style="display:none"{{ end }}>
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="media_item_public_id" value="{{ $.Data.Item.PublicID }}">
+                                <input type="hidden" name="pagina_id" data-page-id>
+                                <input type="hidden" name="pagina_num" data-page-num>
+                                <input type="hidden" name="return_to" value="{{ $.Data.CurrentURL }}">
+                                <div class="media-page-link-fields">
+                                    <label class="media-details-label" for="page-input-viewer">{{ t $.Lang "media.album.page.input.label" }}</label>
+                                    <div class="media-page-link-row">
+                                        <div class="media-page-input suggest-field">
+                                            <input id="page-input-viewer" type="text" placeholder="{{ t $.Lang "media.album.page.input.placeholder" }}" data-page-input>
+                                            <ul class="resultats-cerca" data-page-suggestions data-empty-label="{{ t $.Lang "common.empty" }}"></ul>
+                                        </div>
+                                        <button type="submit" class="boto-secundari btn-mini">{{ t $.Lang "media.album.page.link" }}</button>
+                                    </div>
+                                </div>
+                            </form>
+                            {{ if and $ctx $ctx.HasLink }}
+                            <form class="media-item-link-actions" method="post" action="/media/albums/{{ $.Data.Album.PublicID }}/pages/unlink" data-section="page-link-unlink">
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="media_item_public_id" value="{{ $.Data.Item.PublicID }}">
+                                <input type="hidden" name="pagina_id" value="{{ if $ctx }}{{ $ctx.PageID }}{{ end }}" data-field="page_id">
+                                <input type="hidden" name="return_to" value="{{ $.Data.CurrentURL }}">
+                                <button type="submit" class="boto-secundari btn-mini">{{ t $.Lang "media.album.page.unlink" }}</button>
+                            </form>
+                            {{ end }}
+                        </div>
+                        <p class="muted" data-section="page-empty" {{ if and $ctx $ctx.HasLink }}style="display:none"{{ end }}>{{ t .Lang "media.viewer.details.no_page" }}</p>
+                    </section>
+                    <section class="media-details-pane" data-tab-panel="index" role="tabpanel">
+                        <div class="media-details-grid" data-section="index-content" {{ if not (and $ctx $ctx.HasLink) }}style="display:none"{{ end }}>
+                            <div class="media-details-item">
+                                <span class="media-details-label">{{ t .Lang "media.viewer.details.index.existing" }}</span>
+                                <span class="media-details-value" data-field="page_existing">{{ if $ctx }}{{ $ctx.ExistingRegistres }}{{ end }}</span>
+                            </div>
+                            <div class="media-details-item">
+                                <span class="media-details-label">{{ t .Lang "media.viewer.details.index.limit" }}</span>
+                                <span class="media-details-value" data-field="page_limit">{{ if and $ctx (gt $ctx.PageTotalRegistres 0) }}{{ $ctx.PageTotalRegistres }}{{ else }}—{{ end }}</span>
+                            </div>
+                            <div class="media-details-item">
+                                <span class="media-details-label">{{ t .Lang "media.viewer.details.index.remaining" }}</span>
+                                <span class="media-details-value" data-field="page_remaining">{{ if and $ctx (gt $ctx.PageTotalRegistres 0) }}{{ $ctx.RemainingRegistres }}{{ else }}—{{ end }}</span>
+                            </div>
+                        </div>
+                        <div class="media-details-actions" data-section="index-content" {{ if not (and $ctx $ctx.HasLink) }}style="display:none"{{ end }}>
+                            <a class="boto-secundari" data-field="records_url" data-section="records-link" href="{{ if $ctx }}{{ $ctx.RegistresURL }}{{ end }}" {{ if not (and $ctx $ctx.CanViewRegistres $ctx.RegistresURL) }}style="display:none"{{ end }}>{{ t .Lang "media.viewer.details.index.view" }}</a>
+                            <a class="boto-primari" data-field="indexer_url" data-section="indexer-link" href="{{ if $ctx }}{{ $ctx.IndexerURL }}{{ end }}" {{ if and $ctx (gt $ctx.PageTotalRegistres 0) (eq $ctx.RemainingRegistres 0) }}aria-disabled="true"{{ end }} {{ if or (not (and $ctx $ctx.CanIndexPage)) (and $ctx $ctx.CanIndexPage $ctx.HasLink) }}style="display:none"{{ end }}>{{ t .Lang "media.viewer.details.index.add" }}</a>
+                            <span class="muted" data-section="index-no-access" {{ if and $ctx $ctx.CanIndexPage }}style="display:none"{{ end }}>{{ t .Lang "media.viewer.details.index.no_access" }}</span>
+                        </div>
+                        <p class="muted" data-section="index-note" {{ if not (and $ctx (gt $ctx.PageTotalRegistres 0)) }}style="display:none"{{ end }}>{{ t .Lang "media.viewer.details.index.note" }}</p>
+                        <p class="muted" data-section="index-empty" {{ if and $ctx $ctx.HasLink }}style="display:none"{{ end }}>{{ t .Lang "media.viewer.details.no_page" }}</p>
+                        {{ if and $ctx $ctx.CanIndexPage $ctx.HasLink }}
+                        <div class="media-indexer" data-section="indexer-inline">
+                            <form id="indexer-form" method="post" action="/documentals/llibres/{{ $ctx.BookID }}/indexar/commit">
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="return_to" value="{{ $.Data.CurrentURL }}">
+                                <input type="hidden" name="payload" id="indexer-payload">
+                                <div id="indexer-root"
+                                     class="indexer-toolbar media-indexer-toolbar"
+                                     data-action-label="{{ t .Lang "records.index.action" }}"
+                                     data-remove-label="{{ t .Lang "records.index.remove_row" }}"
+                                     data-draft-saved="{{ t .Lang "records.index.draft_saved" }}"
+                                     data-draft-failed="{{ t .Lang "records.index.draft_failed" }}"
+                                     data-submit-failed="{{ t .Lang "records.index.submit_failed" }}"
+                                     data-empty="{{ t .Lang "records.index.empty" }}"
+                                     data-limit-reached="{{ t .Lang "records.index.limit_reached" }}"
+                                     data-limit-exceeded="{{ t .Lang "records.index.limit_exceeded" }}"
+                                     data-record-view="{{ t .Lang "records.action.view" }}"
+                                     data-record-edit="{{ t .Lang "records.action.edit" }}"
+                                     data-record-save="{{ t .Lang "records.form.save" }}"
+                                     data-record-cancel="{{ t .Lang "records.form.cancel" }}"
+                                     data-inline-url="/documentals/registres"
+                                     data-inline-edit="{{ if $ctx.CanEditRegistres }}1{{ else }}0{{ end }}"
+                                     data-page-value="{{ $ctx.PageNumText }}"
+                                     data-page-remaining="{{ if gt $ctx.PageTotalRegistres 0 }}{{ $ctx.RemainingRegistres }}{{ end }}"
+                                     data-page-total="{{ if gt $ctx.PageTotalRegistres 0 }}{{ $ctx.PageTotalRegistres }}{{ end }}"
+                                     data-draft-url="/documentals/llibres/{{ $ctx.BookID }}/indexar/draft"
+                                     data-clear-url="/documentals/llibres/{{ $ctx.BookID }}/indexar/clear">
+                                    <div class="indexer-controls">
+                                        <button type="button" class="boto-primari indexer-btn indexer-add-row">
+                                            <i class="fas fa-plus"></i>
+                                            <span>{{ t .Lang "records.index.add_row" }}</span>
+                                        </button>
+                                        <button type="button" class="boto-secundari indexer-btn indexer-save-draft">
+                                            <i class="fas fa-save"></i>
+                                            <span>{{ t .Lang "records.index.save_draft" }}</span>
+                                        </button>
+                                        <button type="button" class="boto-secundari indexer-btn indexer-clear-draft">
+                                            <i class="fas fa-eraser"></i>
+                                            <span>{{ t .Lang "records.index.clear_draft" }}</span>
+                                        </button>
+                                    </div>
+                                    <div class="indexer-status" id="indexer-status"></div>
+                                    <div>
+                                        <button type="submit" class="boto-primari indexer-btn indexer-submit">
+                                            <i class="fas fa-check"></i>
+                                            <span>{{ t .Lang "records.index.submit" }}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="taula-wrapper indexer-table">
+                                    <table class="taula" id="indexer-table">
+                                        <thead></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </form>
+                        </div>
+                        <script type="application/json" id="indexer-config">{{ toJsonJS $.Data.IndexerConfig }}</script>
+                        <script type="application/json" id="indexer-draft">{{ toJsonJS $.Data.IndexerDraft }}</script>
+                        <script type="application/json" id="indexer-existing">{{ toJsonJS $.Data.IndexerExisting }}</script>
+                        {{ end }}
+                    </section>
+                </div>
+            </div>
             <p class="media-viewer-hint">{{ t .Lang "media.viewer.hint" }}</p>
             {{ end }}
         </section>
@@ -99,6 +312,8 @@
     {{ end }}
     <script src="/static/vendor/openseadragon/openseadragon.min.js"></script>
     <script src="/static/js/media-viewer.js"></script>
+    <script src="/static/js/indexer.js"></script>
+    <script src="/static/js/media-albums.js"></script>
 </body>
 </html>
 {{ end }}

@@ -6018,6 +6018,78 @@ func (h sqlHelper) countTranscripcionsRawGlobal(f TranscripcioFilter) (int, erro
 	return h.countTranscripcionsRaw(0, f)
 }
 
+func (h sqlHelper) countTranscripcionsRawByPageValue(llibreID int, pageValue string) (int, error) {
+	pageValue = strings.TrimSpace(pageValue)
+	if llibreID == 0 || pageValue == "" {
+		return 0, nil
+	}
+	query := `
+        SELECT COUNT(*)
+        FROM transcripcions_raw t
+        LEFT JOIN (
+            SELECT pd.transcripcio_id,
+                   MAX(NULLIF(TRIM(pd.valor_text), '')) AS valor_text
+            FROM transcripcions_atributs_raw pd
+            WHERE pd.clau = 'pagina_digital'
+              AND pd.valor_text IS NOT NULL
+              AND TRIM(pd.valor_text) <> ''
+            GROUP BY pd.transcripcio_id
+        ) pd
+          ON pd.transcripcio_id = t.id
+        WHERE t.llibre_id = ?
+          AND COALESCE(pd.valor_text, NULLIF(TRIM(t.num_pagina_text), '')) = ?`
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, llibreID, pageValue).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) listTranscripcionsRawByPageValue(llibreID int, pageValue string) ([]TranscripcioRaw, error) {
+	pageValue = strings.TrimSpace(pageValue)
+	if llibreID == 0 || pageValue == "" {
+		return []TranscripcioRaw{}, nil
+	}
+	query := `
+        SELECT DISTINCT t.id, t.llibre_id, t.pagina_id, t.num_pagina_text, t.posicio_pagina, t.tipus_acte, t.any_doc,
+               t.data_acte_text, t.data_acte_iso, t.data_acte_estat, t.transcripcio_literal, t.notes_marginals, t.observacions_paleografiques,
+               t.moderation_status, t.moderated_by, t.moderated_at, t.moderation_notes, t.created_by, t.created_at, t.updated_at
+        FROM transcripcions_raw t
+        LEFT JOIN (
+            SELECT pd.transcripcio_id,
+                   MAX(NULLIF(TRIM(pd.valor_text), '')) AS valor_text
+            FROM transcripcions_atributs_raw pd
+            WHERE pd.clau = 'pagina_digital'
+              AND pd.valor_text IS NOT NULL
+              AND TRIM(pd.valor_text) <> ''
+            GROUP BY pd.transcripcio_id
+        ) pd
+          ON pd.transcripcio_id = t.id
+        WHERE t.llibre_id = ?
+          AND COALESCE(pd.valor_text, NULLIF(TRIM(t.num_pagina_text), '')) = ?
+        ORDER BY CASE WHEN t.posicio_pagina IS NULL THEN 1 ELSE 0 END, t.posicio_pagina, t.id`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, llibreID, pageValue)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []TranscripcioRaw
+	for rows.Next() {
+		var t TranscripcioRaw
+		if err := rows.Scan(
+			&t.ID, &t.LlibreID, &t.PaginaID, &t.NumPaginaText, &t.PosicioPagina, &t.TipusActe, &t.AnyDoc,
+			&t.DataActeText, &t.DataActeISO, &t.DataActeEstat, &t.TranscripcioLiteral, &t.NotesMarginals, &t.ObservacionsPaleografiques,
+			&t.ModeracioEstat, &t.ModeratedBy, &t.ModeratedAt, &t.ModeracioMotiu, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, t)
+	}
+	return res, nil
+}
+
 func (h sqlHelper) recalcTranscripcionsRawPageStats(llibreID int) error {
 	resetStmt := formatPlaceholders(h.style, `UPDATE transcripcions_raw_page_stats SET total_registres = 0, computed_at = `+h.nowFun+` WHERE llibre_id = ?`)
 	if _, err := h.db.Exec(resetStmt, llibreID); err != nil {
@@ -10400,12 +10472,24 @@ func (h sqlHelper) createMediaAlbum(a *MediaAlbum) (int, error) {
 
 func (h sqlHelper) listMediaItemsByAlbum(albumID int) ([]MediaItem, error) {
 	query := `
-        SELECT id, public_id, album_id, COALESCE(title, ''), COALESCE(original_filename, ''), COALESCE(mime_type, ''),
-               COALESCE(byte_size, 0), COALESCE(width, 0), COALESCE(height, 0), COALESCE(checksum_sha256, ''),
-               storage_key_original, COALESCE(thumb_path, ''), derivatives_status, moderation_status,
-               moderated_by, moderated_at, COALESCE(moderation_notes, ''), credit_cost
-        FROM media_items WHERE album_id = ?
-        ORDER BY id ASC`
+        SELECT mi.id, mi.public_id, mi.album_id, COALESCE(mi.title, ''), COALESCE(mi.original_filename, ''), COALESCE(mi.mime_type, ''),
+               COALESCE(mi.byte_size, 0), COALESCE(mi.width, 0), COALESCE(mi.height, 0), COALESCE(mi.checksum_sha256, ''),
+               mi.storage_key_original, COALESCE(mi.thumb_path, ''), mi.derivatives_status, mi.moderation_status,
+               mi.moderated_by, mi.moderated_at, COALESCE(mi.moderation_notes, ''), mi.credit_cost
+        FROM media_items mi
+        LEFT JOIN (
+            SELECT mp.media_item_id,
+                   MIN(CASE
+                       WHEN mp.page_order > 0 THEN mp.page_order
+                       WHEN lp.num_pagina IS NOT NULL AND lp.num_pagina > 0 THEN lp.num_pagina
+                       ELSE NULL
+                   END) AS order_val
+            FROM media_item_pages mp
+            LEFT JOIN llibre_pagines lp ON lp.id = mp.pagina_id
+            GROUP BY mp.media_item_id
+        ) ord ON ord.media_item_id = mi.id
+        WHERE mi.album_id = ?
+        ORDER BY CASE WHEN ord.order_val IS NULL THEN 1 ELSE 0 END, ord.order_val ASC, mi.id ASC`
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, albumID)
 	if err != nil {

@@ -807,6 +807,9 @@ func (a *App) mediaAlbumPageLink(w http.ResponseWriter, r *http.Request, albumPu
 		}
 	}
 	pageOrder := parseIntDefault(r.FormValue("page_order"), 0)
+	if pageOrder == 0 && page.NumPagina > 0 {
+		pageOrder = page.NumPagina
+	}
 	notes := strings.TrimSpace(r.FormValue("notes"))
 	if err := a.DB.UpsertMediaItemPageLink(item.ID, page.LlibreID, page.ID, pageOrder, notes); err != nil {
 		Errorf("Error vinculant media item %d a pagina %d: %v", item.ID, page.ID, err)

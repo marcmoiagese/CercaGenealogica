@@ -350,6 +350,8 @@ type DB interface {
 	ListTranscripcionsRawGlobal(f TranscripcioFilter) ([]TranscripcioRaw, error)
 	CountTranscripcionsRaw(llibreID int, f TranscripcioFilter) (int, error)
 	CountTranscripcionsRawGlobal(f TranscripcioFilter) (int, error)
+	CountTranscripcionsRawByPageValue(llibreID int, pageValue string) (int, error)
+	ListTranscripcionsRawByPageValue(llibreID int, pageValue string) ([]TranscripcioRaw, error)
 	GetTranscripcioRaw(id int) (*TranscripcioRaw, error)
 	CreateTranscripcioRaw(t *TranscripcioRaw) (int, error)
 	UpdateTranscripcioRaw(t *TranscripcioRaw) error

@@ -162,8 +162,13 @@ document.addEventListener("DOMContentLoaded", function () {
     var prevBtn = document.getElementById("mediaPrevBtn");
     var nextBtn = document.getElementById("mediaNextBtn");
     var fullKey = "mediaViewerMaximized";
+    var detailsKey = "mediaViewerDetailsOpen";
     var isNavigating = false;
     var pageCount = document.querySelector(".media-tool-muted");
+    var detailsPanel = document.getElementById("mediaDetailsPanel");
+    var detailsBtn = document.getElementById("mediaBtnDetails");
+    var detailsClose = document.getElementById("mediaDetailsClose");
+    var detailsTabs = detailsPanel ? detailsPanel.querySelectorAll(".media-details-tab") : [];
 
     function setMaximized(active) {
         if (!shell) {
@@ -184,9 +189,173 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
+    function setDetailsOpen(active) {
+        if (!detailsPanel) {
+            return;
+        }
+        detailsPanel.classList.toggle("media-hidden", !active);
+        if (detailsBtn) {
+            detailsBtn.setAttribute("aria-pressed", active ? "true" : "false");
+        }
+        try {
+            if (active) {
+                window.localStorage.setItem(detailsKey, "1");
+            } else {
+                window.localStorage.removeItem(detailsKey);
+            }
+        } catch (e) {}
+    }
+
+    function toggleDetailsSection(section, show) {
+        if (!detailsPanel) {
+            return;
+        }
+        detailsPanel.querySelectorAll("[data-section='" + section + "']").forEach(function (el) {
+            el.style.display = show ? "" : "none";
+        });
+    }
+
+    function setDetailsField(field, value, emptyFallback) {
+        if (!detailsPanel) {
+            return;
+        }
+        detailsPanel.querySelectorAll("[data-field='" + field + "']").forEach(function (el) {
+            if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT") {
+                if (el.type === "checkbox") {
+                    el.checked = !!value;
+                } else {
+                    el.value = value || "";
+                }
+                return;
+            }
+            if (!value && emptyFallback) {
+                el.textContent = emptyFallback;
+                return;
+            }
+            el.textContent = value || "";
+        });
+    }
+
+    function updateDetailsPanel(ctx) {
+        if (!detailsPanel) {
+            return;
+        }
+        var hasContext = !!(ctx && ctx.has_book);
+        var hasLink = !!(ctx && ctx.has_link);
+        detailsPanel.dataset.hasContext = hasContext ? "1" : "0";
+        detailsPanel.dataset.hasLink = hasLink ? "1" : "0";
+        toggleDetailsSection("book-grid", hasContext);
+        toggleDetailsSection("book-empty", !hasContext);
+        toggleDetailsSection("page-form", hasLink);
+        toggleDetailsSection("page-empty", !hasLink);
+        toggleDetailsSection("index-content", hasLink);
+        toggleDetailsSection("index-empty", !hasLink);
+
+        var book = ctx && ctx.book ? ctx.book : {};
+        var page = ctx && ctx.page ? ctx.page : {};
+        var counts = ctx && ctx.counts ? ctx.counts : {};
+        var perms = ctx && ctx.permissions ? ctx.permissions : {};
+        var links = ctx && ctx.links ? ctx.links : {};
+        var total = page.total_registres || 0;
+
+        var showInlineIndexer = hasLink && !!perms.can_index;
+        toggleDetailsSection("indexer-inline", showInlineIndexer);
+        toggleDetailsSection("page-linker", !!perms.can_link);
+        toggleDetailsSection("page-link-form", !hasLink && !!perms.can_link);
+        toggleDetailsSection("page-link-unlink", hasLink && !!perms.can_link);
+
+        setDetailsField("book_title", book.title || "", "—");
+        setDetailsField("book_type", book.type_label || book.type || "", "—");
+        setDetailsField("book_cronologia", book.cronologia || "", "—");
+        setDetailsField("book_pagines", book.pagines > 0 ? String(book.pagines) : "", "—");
+        setDetailsField("book_municipi", book.municipi || "", "—");
+        detailsPanel.querySelectorAll("[data-field='book_url']").forEach(function (el) {
+            el.setAttribute("href", book.url || "");
+        });
+
+        setDetailsField("stat_id", page.stat_id || "", "");
+        setDetailsField("page_num_text", page.num_text || "", "");
+        setDetailsField("page_id", page.id || "", "");
+        setDetailsField("page_total", total || "", "");
+        setDetailsField("page_type", page.type || "normal", "");
+        setDetailsField("page_excluded", page.excluded === 1, "");
+        setDetailsField("page_indexed", page.indexed === 1, "");
+        setDetailsField("page_duplicate", page.duplicate || "", "");
+        var linkLabel = page.num_text || (page.id ? String(page.id) : "");
+        setDetailsField("page_link_label", linkLabel, "—");
+
+        detailsPanel.querySelectorAll("[data-field='page_type']").forEach(function (el) {
+            if (el.tagName === "SELECT" && page.type) {
+                el.value = page.type;
+            }
+        });
+
+        detailsPanel.querySelectorAll("[data-field='page_num_text'],[data-field='page_id'],[data-field='page_total'],[data-field='page_type'],[data-field='page_excluded'],[data-field='page_indexed'],[data-field='page_duplicate']").forEach(function (el) {
+            el.disabled = !perms.can_edit;
+        });
+        toggleDetailsSection("page-save", !!perms.can_edit);
+        toggleDetailsSection("page-no-edit", !perms.can_edit);
+
+        setDetailsField("page_existing", typeof counts.existing === "number" ? String(counts.existing) : "0", "");
+        setDetailsField("page_limit", total > 0 ? String(total) : "", "—");
+        setDetailsField("page_remaining", total > 0 ? String(counts.remaining || 0) : "", "—");
+        toggleDetailsSection("index-note", hasLink && total > 0);
+
+        var recordsLink = detailsPanel.querySelector("[data-field='records_url']");
+        if (recordsLink) {
+            recordsLink.setAttribute("href", links.registres || "");
+        }
+        toggleDetailsSection("records-link", !!(perms.can_view_records && links.registres));
+
+        var indexerLink = detailsPanel.querySelector("[data-field='indexer_url']");
+        if (indexerLink) {
+            indexerLink.setAttribute("href", links.indexar || "");
+            if (total > 0 && (counts.remaining || 0) <= 0) {
+                indexerLink.setAttribute("aria-disabled", "true");
+            } else {
+                indexerLink.removeAttribute("aria-disabled");
+            }
+        }
+        toggleDetailsSection("indexer-link", !!(perms.can_index && links.indexar) && !showInlineIndexer);
+        toggleDetailsSection("index-no-access", !perms.can_index);
+
+        var form = detailsPanel.querySelector(".media-details-form");
+        if (form && book.id) {
+            form.setAttribute("action", "/documentals/llibres/" + book.id + "/pagines/stats/save");
+        }
+        detailsPanel.querySelectorAll("input[name='llibre_id']").forEach(function (el) {
+            el.value = book.id || "";
+        });
+
+        var indexerRoot = document.getElementById("indexer-root");
+        if (indexerRoot) {
+            var remaining = total > 0 ? Number(counts.remaining || 0) : null;
+            var existingRows = ctx && ctx.existing_rows ? ctx.existing_rows : [];
+            indexerRoot.dataset.pageValue = page.num_text || "";
+            indexerRoot.dataset.pageRemaining = remaining === null ? "" : String(remaining);
+            indexerRoot.dataset.pageTotal = total > 0 ? String(total) : "";
+            indexerRoot.dataset.inlineEdit = perms.can_inline_edit ? "1" : "0";
+            indexerRoot.dispatchEvent(new CustomEvent("indexer:context", {
+                detail: {
+                    pageValue: page.num_text || "",
+                    pageLimit: remaining,
+                    pageTotal: total > 0 ? total : null,
+                    existingRows: existingRows,
+                    canInlineEdit: !!perms.can_inline_edit
+                }
+            }));
+        }
+    }
+
     try {
         if (window.localStorage.getItem(fullKey) === "1") {
             setMaximized(true);
+        }
+    } catch (e) {}
+
+    try {
+        if (window.localStorage.getItem(detailsKey) === "1") {
+            setDetailsOpen(true);
         }
     } catch (e) {}
 
@@ -218,6 +387,39 @@ document.addEventListener("DOMContentLoaded", function () {
             } else if (document.fullscreenElement) {
                 document.exitFullscreen();
             }
+        });
+    }
+
+    if (detailsBtn && detailsPanel) {
+        detailsBtn.addEventListener("click", function () {
+            var isHidden = detailsPanel.classList.contains("media-hidden");
+            setDetailsOpen(isHidden);
+        });
+    }
+    if (detailsClose && detailsPanel) {
+        detailsClose.addEventListener("click", function () {
+            setDetailsOpen(false);
+        });
+    }
+
+    if (detailsTabs && detailsTabs.length) {
+        detailsTabs.forEach(function (tab) {
+            tab.addEventListener("click", function () {
+                var target = tab.getAttribute("data-tab-target");
+                if (!target) {
+                    return;
+                }
+                detailsTabs.forEach(function (btn) {
+                    btn.classList.toggle("is-active", btn === tab);
+                    btn.setAttribute("aria-selected", btn === tab ? "true" : "false");
+                });
+                if (!detailsPanel) {
+                    return;
+                }
+                detailsPanel.querySelectorAll(".media-details-pane").forEach(function (pane) {
+                    pane.classList.toggle("is-active", pane.getAttribute("data-tab-panel") === target);
+                });
+            });
         });
     }
 
@@ -272,6 +474,15 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
+    function updateReturnTo(url) {
+        if (!detailsPanel || !url) {
+            return;
+        }
+        detailsPanel.querySelectorAll("input[name='return_to']").forEach(function (el) {
+            el.value = url;
+        });
+    }
+
     function loadItemData(itemId, replaceHistory) {
         if (!itemId || isNavigating) {
             return;
@@ -300,7 +511,9 @@ document.addEventListener("DOMContentLoaded", function () {
                 updatePageSelect(itemId);
                 updatePageCount(data.current_index || 1, data.total_items || 1);
                 updateTitle(data.item && data.item.title ? data.item.title : document.title);
+                updateDetailsPanel(data.page_context || null);
                 var url = "/media/items/" + itemId;
+                updateReturnTo(url);
                 if (replaceHistory) {
                     history.replaceState({ mediaItem: itemId }, "", url);
                 } else {

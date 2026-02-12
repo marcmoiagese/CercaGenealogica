@@ -57,6 +57,9 @@ func (a *App) AdminLinkMediaToPagina(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pageOrder := parseIntDefault(r.FormValue("page_order"), 0)
+	if pageOrder == 0 && pagina.NumPagina > 0 {
+		pageOrder = pagina.NumPagina
+	}
 	notes := strings.TrimSpace(r.FormValue("notes"))
 	if err := a.DB.UpsertMediaItemPageLink(item.ID, pagina.LlibreID, pagina.ID, pageOrder, notes); err != nil {
 		Errorf("Error vinculant media item %d a pagina %d: %v", item.ID, pagina.ID, err)

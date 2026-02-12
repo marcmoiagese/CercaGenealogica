@@ -718,6 +718,13 @@ func (d *SQLite) CountTranscripcionsRaw(llibreID int, f TranscripcioFilter) (int
 func (d *SQLite) CountTranscripcionsRawGlobal(f TranscripcioFilter) (int, error) {
 	return d.help.countTranscripcionsRawGlobal(f)
 }
+func (d *SQLite) CountTranscripcionsRawByPageValue(llibreID int, pageValue string) (int, error) {
+	return d.help.countTranscripcionsRawByPageValue(llibreID, pageValue)
+}
+
+func (d *SQLite) ListTranscripcionsRawByPageValue(llibreID int, pageValue string) ([]TranscripcioRaw, error) {
+	return d.help.listTranscripcionsRawByPageValue(llibreID, pageValue)
+}
 func (d *SQLite) GetTranscripcioRaw(id int) (*TranscripcioRaw, error) {
 	return d.help.getTranscripcioRaw(id)
 }
