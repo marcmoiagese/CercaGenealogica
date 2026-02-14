@@ -61,10 +61,22 @@
 
                 <p class="persona-subtitol">
                     {{ if .Data.BirthLocation }}
-                    <span class="chip"><i class="fas fa-location-dot"></i> {{ .Data.BirthLocation }}</span>
+                    <span class="chip{{ if index .Data.FieldNeedsLink "municipi_naixement" }} chip--unlinked{{ end }}"><i class="fas fa-location-dot"></i> {{ .Data.BirthLocation }}
+                        {{ if and .Data.CanLinkPersonaFields (index .Data.FieldNeedsLink "municipi_naixement") }}
+                        <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="municipi_naixement" data-field-label="{{ t .Lang "persons.form.birth_place" }}" title="{{ t .Lang "persons.link.button" }}">
+                            <i class="fas fa-link"></i>
+                        </button>
+                        {{ end }}
+                    </span>
                     {{ end }}
                     {{ if .Data.DeathLocation }}
-                    <span class="chip"><i class="fas fa-skull-crossbones"></i> {{ .Data.DeathLocation }}</span>
+                    <span class="chip{{ if index .Data.FieldNeedsLink "municipi_defuncio" }} chip--unlinked{{ end }}"><i class="fas fa-skull-crossbones"></i> {{ .Data.DeathLocation }}
+                        {{ if and .Data.CanLinkPersonaFields (index .Data.FieldNeedsLink "municipi_defuncio") }}
+                        <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="municipi_defuncio" data-field-label="{{ t .Lang "persons.form.death_place" }}" title="{{ t .Lang "persons.link.button" }}">
+                            <i class="fas fa-link"></i>
+                        </button>
+                        {{ end }}
+                    </span>
                     {{ end }}
                     {{ if .Data.Persona.Ofici }}
                     <span class="chip"><i class="fas fa-briefcase"></i> {{ .Data.Persona.Ofici }}</span>
@@ -77,11 +89,33 @@
                 <div class="persona-dates">
                     <div class="kpi">
                         <span class="kpi__label">Naixement</span>
-                        <span class="kpi__value">{{ if .Data.BirthLabel }}{{ .Data.BirthLabel }}{{ else }}—{{ end }}</span>
+                        <span class="kpi__value">
+                            {{ if .Data.BirthLabel }}
+                            <span class="field-link-inline{{ if index .Data.FieldNeedsLink "data_naixement" }} field-unlinked{{ end }}">
+                                {{ .Data.BirthLabel }}
+                                {{ if and .Data.CanLinkPersonaFields (index .Data.FieldNeedsLink "data_naixement") }}
+                                <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="data_naixement" data-field-label="{{ t .Lang "persons.form.birth" }}" title="{{ t .Lang "persons.link.button" }}">
+                                    <i class="fas fa-link"></i>
+                                </button>
+                                {{ end }}
+                            </span>
+                            {{ else }}—{{ end }}
+                        </span>
                     </div>
                     <div class="kpi">
                         <span class="kpi__label">Defunció</span>
-                        <span class="kpi__value">{{ if .Data.DeathLabel }}{{ .Data.DeathLabel }}{{ else }}—{{ end }}</span>
+                        <span class="kpi__value">
+                            {{ if .Data.DeathLabel }}
+                            <span class="field-link-inline{{ if index .Data.FieldNeedsLink "data_defuncio" }} field-unlinked{{ end }}">
+                                {{ .Data.DeathLabel }}
+                                {{ if and .Data.CanLinkPersonaFields (index .Data.FieldNeedsLink "data_defuncio") }}
+                                <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="data_defuncio" data-field-label="{{ t .Lang "persons.form.death" }}" title="{{ t .Lang "persons.link.button" }}">
+                                    <i class="fas fa-link"></i>
+                                </button>
+                                {{ end }}
+                            </span>
+                            {{ else }}—{{ end }}
+                        </span>
                     </div>
                     <div class="kpi">
                         <span class="kpi__label">Registre</span>
@@ -103,11 +137,18 @@
                 <div class="sidecard">
                     <div class="sidecard__title"><i class="fas fa-chart-pie"></i> Qualitat de dades</div>
                     <div class="sidecard__row">
-                        <span class="muted">Completesa</span>
+                        <span class="muted">Dades bàsiques</span>
                         <span><strong>{{ .Data.Completesa }}%</strong></span>
                     </div>
                     <div class="progress">
                         <div class="progress__bar" style="width:{{ .Data.Completesa }}%"></div>
+                    </div>
+                    <div class="sidecard__row">
+                        <span class="muted">Fonts verificades</span>
+                        <span><strong>{{ .Data.QualitatFonts }}%</strong></span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress__bar" style="width:{{ .Data.QualitatFonts }}%"></div>
                     </div>
                     <div class="sidecard__row">
                         <span class="muted">Actualitzat</span>
@@ -162,29 +203,56 @@
                     {{ if $hasFacts }}
                     <ul class="factlist">
                         {{ if .Data.BirthDate }}
-                        <li class="fact">
+                        <li class="fact{{ if index .Data.FieldNeedsLink "data_naixement" }} fact--unlinked{{ end }}">
                             <span class="fact__icon"><i class="fas fa-baby"></i></span>
                             <div class="fact__body">
                                 <div class="fact__title">Naixement</div>
-                        <div class="fact__meta">{{ .Data.BirthDate }}{{ if .Data.BirthLocation }} · {{ .Data.BirthLocation }}{{ end }}</div>
+                                <div class="fact__meta">
+                                    <span class="field-link-inline{{ if index .Data.FieldNeedsLink "data_naixement" }} field-unlinked{{ end }}">
+                                        {{ .Data.BirthDate }}{{ if .Data.BirthLocation }} · {{ .Data.BirthLocation }}{{ end }}
+                                        {{ if and .Data.CanLinkPersonaFields (index .Data.FieldNeedsLink "data_naixement") }}
+                                        <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="data_naixement" data-field-label="{{ t .Lang "persons.form.birth" }}" title="{{ t .Lang "persons.link.button" }}">
+                                            <i class="fas fa-link"></i>
+                                        </button>
+                                        {{ end }}
+                                    </span>
+                                </div>
                             </div>
                         </li>
                         {{ end }}
                         {{ if .Data.BaptismDate }}
-                        <li class="fact">
+                        <li class="fact{{ if index .Data.FieldNeedsLink "data_bateig" }} fact--unlinked{{ end }}">
                             <span class="fact__icon"><i class="fas fa-water"></i></span>
                             <div class="fact__body">
                                 <div class="fact__title">Baptisme</div>
-                        <div class="fact__meta">{{ .Data.BaptismDate }}{{ if .Data.BirthLocation }} · {{ .Data.BirthLocation }}{{ end }}</div>
+                                <div class="fact__meta">
+                                    <span class="field-link-inline{{ if index .Data.FieldNeedsLink "data_bateig" }} field-unlinked{{ end }}">
+                                        {{ .Data.BaptismDate }}{{ if .Data.BirthLocation }} · {{ .Data.BirthLocation }}{{ end }}
+                                        {{ if and .Data.CanLinkPersonaFields (index .Data.FieldNeedsLink "data_bateig") }}
+                                        <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="data_bateig" data-field-label="{{ t .Lang "persons.form.baptism" }}" title="{{ t .Lang "persons.link.button" }}">
+                                            <i class="fas fa-link"></i>
+                                        </button>
+                                        {{ end }}
+                                    </span>
+                                </div>
                             </div>
                         </li>
                         {{ end }}
                         {{ if .Data.DeathDate }}
-                        <li class="fact">
+                        <li class="fact{{ if index .Data.FieldNeedsLink "data_defuncio" }} fact--unlinked{{ end }}">
                             <span class="fact__icon"><i class="fas fa-skull"></i></span>
                             <div class="fact__body">
                                 <div class="fact__title">Defunció</div>
-                        <div class="fact__meta">{{ .Data.DeathDate }}{{ if .Data.DeathLocation }} · {{ .Data.DeathLocation }}{{ end }}</div>
+                                <div class="fact__meta">
+                                    <span class="field-link-inline{{ if index .Data.FieldNeedsLink "data_defuncio" }} field-unlinked{{ end }}">
+                                        {{ .Data.DeathDate }}{{ if .Data.DeathLocation }} · {{ .Data.DeathLocation }}{{ end }}
+                                        {{ if and .Data.CanLinkPersonaFields (index .Data.FieldNeedsLink "data_defuncio") }}
+                                        <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="data_defuncio" data-field-label="{{ t .Lang "persons.form.death" }}" title="{{ t .Lang "persons.link.button" }}">
+                                            <i class="fas fa-link"></i>
+                                        </button>
+                                        {{ end }}
+                                    </span>
+                                </div>
                             </div>
                         </li>
                         {{ end }}
@@ -429,8 +497,36 @@
                     </div>
                     <div class="kv">
                         <div class="kv__row"><div class="kv__k">Nom complet</div><div class="kv__v">{{ .Data.NomComplet }}</div></div>
-                        <div class="kv__row"><div class="kv__k">Lloc de naixement</div><div class="kv__v">{{ if .Data.BirthLocation }}{{ .Data.BirthLocation }}{{ else if .Data.OriginMunicipi }}{{ .Data.OriginMunicipi }}{{ else }}—{{ end }}</div></div>
-                        <div class="kv__row"><div class="kv__k">Lloc de defunció</div><div class="kv__v">{{ if .Data.DeathLocation }}{{ .Data.DeathLocation }}{{ else if .Data.OriginDefuncio }}{{ .Data.OriginDefuncio }}{{ else }}—{{ end }}</div></div>
+                        <div class="kv__row">
+                            <div class="kv__k">Lloc de naixement</div>
+                            <div class="kv__v">
+                                {{ if or .Data.BirthLocation .Data.OriginMunicipi }}
+                                <span class="field-link-inline{{ if index .Data.FieldNeedsLink "municipi_naixement" }} field-unlinked{{ end }}">
+                                    {{ if .Data.BirthLocation }}{{ .Data.BirthLocation }}{{ else }}{{ .Data.OriginMunicipi }}{{ end }}
+                                    {{ if and .Data.CanLinkPersonaFields (index .Data.FieldNeedsLink "municipi_naixement") }}
+                                    <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="municipi_naixement" data-field-label="{{ t .Lang "persons.form.birth_place" }}" title="{{ t .Lang "persons.link.button" }}">
+                                        <i class="fas fa-link"></i>
+                                    </button>
+                                    {{ end }}
+                                </span>
+                                {{ else }}—{{ end }}
+                            </div>
+                        </div>
+                        <div class="kv__row">
+                            <div class="kv__k">Lloc de defunció</div>
+                            <div class="kv__v">
+                                {{ if or .Data.DeathLocation .Data.OriginDefuncio }}
+                                <span class="field-link-inline{{ if index .Data.FieldNeedsLink "municipi_defuncio" }} field-unlinked{{ end }}">
+                                    {{ if .Data.DeathLocation }}{{ .Data.DeathLocation }}{{ else }}{{ .Data.OriginDefuncio }}{{ end }}
+                                    {{ if and .Data.CanLinkPersonaFields (index .Data.FieldNeedsLink "municipi_defuncio") }}
+                                    <button type="button" class="icon-action field-link-btn" data-persona-link="1" data-field-key="municipi_defuncio" data-field-label="{{ t .Lang "persons.form.death_place" }}" title="{{ t .Lang "persons.link.button" }}">
+                                        <i class="fas fa-link"></i>
+                                    </button>
+                                    {{ end }}
+                                </span>
+                                {{ else }}—{{ end }}
+                            </div>
+                        </div>
                         <div class="kv__row"><div class="kv__k">Ocupació</div><div class="kv__v">{{ if .Data.Persona.Ofici }}{{ .Data.Persona.Ofici }}{{ else }}—{{ end }}</div></div>
                         <div class="kv__row"><div class="kv__k">Llibre</div><div class="kv__v">{{ if .Data.Persona.Llibre }}{{ .Data.Persona.Llibre }}{{ else if .Data.OriginLlibre }}{{ .Data.OriginLlibre }}{{ else }}—{{ end }}</div></div>
                         <div class="kv__row"><div class="kv__k">Pàgina</div><div class="kv__v">{{ if .Data.Persona.Pagina }}{{ .Data.Persona.Pagina }}{{ else if .Data.OriginPagina }}{{ .Data.OriginPagina }}{{ else }}—{{ end }}</div></div>
@@ -440,6 +536,86 @@
                 </article>
             </div>
         </section>
+        {{ if .Data.CanLinkPersonaFields }}
+        <div class="modal-overlay" id="persona-link-modal" role="dialog" aria-modal="true" aria-labelledby="persona-link-modal-title">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <div>
+                        <h2 id="persona-link-modal-title">{{ t .Lang "persons.link.modal.title" }}</h2>
+                        <p class="muted">{{ t .Lang "persons.link.modal.helper" }}</p>
+                    </div>
+                    <button type="button" class="modal-close" data-close-persona-link aria-label="{{ t .Lang "common.close" }}">×</button>
+                </div>
+                <form method="post" action="/persones/{{ .Data.Persona.ID }}/enllacar-dada" class="field-link-form" id="persona-link-form">
+                    <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                    <input type="hidden" name="field_key" id="persona-link-field">
+                    <input type="hidden" name="return_to" value="/persones/{{ .Data.Persona.ID }}">
+                    <div class="grup-camp">
+                        <label>{{ t .Lang "persons.link.modal.field" }}</label>
+                        <div class="field-link-target" id="persona-link-field-label">—</div>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="persona-link-archive-search">{{ t .Lang "books.links.add.archive" }}</label>
+                        <div class="suggest-field">
+                            <input
+                                id="persona-link-archive-search"
+                                type="text"
+                                name="arxiu_search"
+                                placeholder="{{ t .Lang "archives.filter.search.placeholder" }}"
+                                autocomplete="off"
+                                data-api="/api/documentals/arxius/suggest"
+                                data-empty-label="{{ t .Lang "archives.search.empty" }}"
+                                data-hidden="persona-link-archive-id"
+                                data-suggestions="persona-link-archive-suggestions"
+                                data-suggest="1">
+                            <input type="hidden" id="persona-link-archive-id" name="arxiu_id" value="">
+                            <ul id="persona-link-archive-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "books.links.add.archive" }}"></ul>
+                        </div>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="persona-link-book-search">{{ t .Lang "books.links.add.archive_book" }}</label>
+                        <div class="suggest-field">
+                            <input
+                                id="persona-link-book-search"
+                                type="text"
+                                name="llibre_search"
+                                placeholder="{{ t .Lang "search.filters.llibre_placeholder" }}"
+                                autocomplete="off"
+                                data-api="/api/documentals/llibres/suggest"
+                                data-empty-label="{{ t .Lang "books.links.add.archive_book.empty" }}"
+                                data-hidden="persona-link-book-id"
+                                data-suggestions="persona-link-book-suggestions"
+                                data-suggest="1">
+                            <input type="hidden" id="persona-link-book-id" name="llibre_id" value="">
+                            <ul id="persona-link-book-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "books.links.add.archive_book" }}"></ul>
+                        </div>
+                    </div>
+                    <div class="grup-camp" id="persona-link-registre-wrap" style="display:none;">
+                        <label for="persona-link-registre-search">Registre</label>
+                        <div class="suggest-field">
+                            <input
+                                id="persona-link-registre-search"
+                                type="text"
+                                name="registre_search"
+                                placeholder="{{ t .Lang "records.link.search.placeholder" }}"
+                                autocomplete="off"
+                                data-api=""
+                                data-empty-label="{{ t .Lang "common.empty" }}"
+                                data-hidden="persona-link-registre-id"
+                                data-suggestions="persona-link-registre-suggestions"
+                                data-suggest="1">
+                            <input type="hidden" id="persona-link-registre-id" name="registre_id" value="">
+                            <ul id="persona-link-registre-suggestions" class="resultats-cerca" role="listbox" aria-label="Registre"></ul>
+                        </div>
+                    </div>
+                    <div class="accions-formulari">
+                        <button type="submit" class="boto-primari" id="persona-link-submit">{{ t .Lang "persons.link.modal.submit" }}</button>
+                        <button type="button" class="boto-secundari" data-close-persona-link>{{ t .Lang "persons.link.modal.cancel" }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {{ end }}
         <div class="modal-overlay" id="modalMarcarPersona" role="dialog" aria-modal="true">
             <div class="modal-box">
                 <header class="modal-header">
@@ -470,6 +646,161 @@
     {{ template "scripts-private" . }}
     <script src="/static/js/persona.js"></script>
     <script src="/static/js/persona-pro.js"></script>
+    {{ if .Data.CanLinkPersonaFields }}
+    <script src="/static/js/arxiu-form-suggest.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const modal = document.getElementById("persona-link-modal");
+            if (!modal) {
+                return;
+            }
+            const form = document.getElementById("persona-link-form");
+            const fieldInput = document.getElementById("persona-link-field");
+            const fieldLabel = document.getElementById("persona-link-field-label");
+            const openButtons = document.querySelectorAll("[data-persona-link]");
+            const closeButtons = modal.querySelectorAll("[data-close-persona-link]");
+            const archiveInput = document.getElementById("persona-link-archive-search");
+            const archiveIdInput = document.getElementById("persona-link-archive-id");
+            const bookInput = document.getElementById("persona-link-book-search");
+            const bookIdInput = document.getElementById("persona-link-book-id");
+            const registreInput = document.getElementById("persona-link-registre-search");
+            const registreIdInput = document.getElementById("persona-link-registre-id");
+            const registreWrap = document.getElementById("persona-link-registre-wrap");
+            const submitBtn = document.getElementById("persona-link-submit");
+
+            const updateBookApi = () => {
+                if (!bookInput) {
+                    return;
+                }
+                let api = "/api/documentals/llibres/suggest";
+                if (archiveIdInput && archiveIdInput.value) {
+                    api = `/api/documentals/llibres/suggest?arxiu_id=${encodeURIComponent(archiveIdInput.value)}`;
+                }
+                bookInput.dataset.api = api;
+            };
+
+            const clearBook = () => {
+                if (bookInput) {
+                    bookInput.value = "";
+                }
+                if (bookIdInput) {
+                    bookIdInput.value = "";
+                }
+            };
+
+            const clearRegistre = () => {
+                if (registreInput) {
+                    registreInput.value = "";
+                    registreInput.dataset.api = "";
+                }
+                if (registreIdInput) {
+                    registreIdInput.value = "";
+                }
+                if (registreWrap) {
+                    registreWrap.style.display = "none";
+                }
+            };
+
+            const updateRegistreApi = () => {
+                if (!bookIdInput || !bookIdInput.value) {
+                    clearRegistre();
+                    return;
+                }
+                if (registreInput) {
+                    registreInput.dataset.api = `/api/documentals/registres/suggest?llibre_id=${encodeURIComponent(bookIdInput.value)}`;
+                }
+                if (registreWrap) {
+                    registreWrap.style.display = "";
+                }
+            };
+
+            const updateSubmitState = () => {
+                if (submitBtn) {
+                    submitBtn.disabled = !(registreIdInput && registreIdInput.value);
+                }
+            };
+
+            const resetForm = () => {
+                if (archiveInput) {
+                    archiveInput.value = "";
+                }
+                if (archiveIdInput) {
+                    archiveIdInput.value = "";
+                }
+                clearBook();
+                clearRegistre();
+                updateBookApi();
+                updateSubmitState();
+            };
+
+            const openModal = (btn) => {
+                if (fieldInput) {
+                    fieldInput.value = btn.dataset.fieldKey || "";
+                }
+                if (fieldLabel) {
+                    fieldLabel.textContent = btn.dataset.fieldLabel || "—";
+                }
+                resetForm();
+                modal.classList.add("is-open");
+                if (archiveInput) {
+                    archiveInput.focus();
+                }
+            };
+
+            const closeModal = () => {
+                modal.classList.remove("is-open");
+            };
+
+            openButtons.forEach((btn) => {
+                btn.addEventListener("click", () => openModal(btn));
+            });
+            closeButtons.forEach((btn) => {
+                btn.addEventListener("click", closeModal);
+            });
+            modal.addEventListener("click", (event) => {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    closeModal();
+                }
+            });
+
+            if (archiveIdInput) {
+                archiveIdInput.addEventListener("change", () => {
+                    updateBookApi();
+                    clearBook();
+                    clearRegistre();
+                    updateSubmitState();
+                });
+            }
+
+            if (bookIdInput) {
+                bookIdInput.addEventListener("change", () => {
+                    updateRegistreApi();
+                    updateSubmitState();
+                });
+            }
+
+            if (registreIdInput) {
+                registreIdInput.addEventListener("change", updateSubmitState);
+            }
+
+            if (form) {
+                form.addEventListener("submit", (event) => {
+                    if (!registreIdInput || !registreIdInput.value) {
+                        event.preventDefault();
+                        if (registreInput) {
+                            registreInput.focus();
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+    {{ end }}
     <script>
         (function () {
             const markState = document.getElementById("persona-mark-state");

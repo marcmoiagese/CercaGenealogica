@@ -204,17 +204,17 @@ func (a *App) AdminSaveAchievement(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ach := &db.Achievement{
-		ID:           id,
-		Code:         code,
-		Name:         name,
-		Description:  desc,
-		Rarity:       rarity,
-		Visibility:   visibility,
-		Domain:       domain,
-		IsEnabled:    isEnabled,
-		IsRepeatable: isRepeatable,
+		ID:              id,
+		Code:            code,
+		Name:            name,
+		Description:     desc,
+		Rarity:          rarity,
+		Visibility:      visibility,
+		Domain:          domain,
+		IsEnabled:       isEnabled,
+		IsRepeatable:    isRepeatable,
 		IconMediaItemID: icon,
-		RuleJSON:     ruleJSON,
+		RuleJSON:        ruleJSON,
 	}
 	if _, err := a.DB.SaveAchievement(ach); err != nil {
 		token, _ := ensureCSRF(w, r)
@@ -225,6 +225,78 @@ func (a *App) AdminSaveAchievement(w http.ResponseWriter, r *http.Request) {
 		a.achievementCache.invalidate()
 	}
 	http.Redirect(w, r, "/admin/achievements?ok=1", http.StatusSeeOther)
+}
+
+func (a *App) AdminAchievementIcons(w http.ResponseWriter, r *http.Request) {
+	cfg := a.mediaConfig()
+	if !cfg.Enabled {
+		http.NotFound(w, r)
+		return
+	}
+	user, _, ok := a.requirePermission(w, r, permAdmin)
+	if !ok {
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		if cfg.MaxUploadBytes > 0 {
+			r.Body = http.MaxBytesReader(w, r.Body, cfg.MaxUploadBytes)
+		}
+		if err := r.ParseMultipartForm(cfg.MaxUploadBytes); err != nil {
+			http.Error(w, "Upload massa gran o invàlid", http.StatusRequestEntityTooLarge)
+			return
+		}
+		if !validateCSRF(r, r.FormValue("csrf_token")) {
+			http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+			return
+		}
+		if r.MultipartForm == nil || r.MultipartForm.File == nil {
+			a.renderAchievementIconCatalog(w, r, user, T(ResolveLang(r), "common.required"), false, cfg)
+			return
+		}
+		files := r.MultipartForm.File["icon_files"]
+		if len(files) == 0 {
+			a.renderAchievementIconCatalog(w, r, user, T(ResolveLang(r), "common.required"), false, cfg)
+			return
+		}
+		album, err := a.ensureAchievementIconAlbum(user)
+		if err != nil {
+			Errorf("Error assegurant album icones achievements: %v", err)
+			a.renderAchievementIconCatalog(w, r, user, T(ResolveLang(r), "common.error"), false, cfg)
+			return
+		}
+		created := 0
+		failed := 0
+		for _, header := range files {
+			item, err := a.saveMediaItemFromUpload(cfg, album, header)
+			if err != nil {
+				Errorf("Error pujant icona: %v", err)
+				failed++
+				continue
+			}
+			created++
+			if item != nil && item.ID > 0 {
+				_ = a.DB.UpdateMediaItemModeration(item.ID, "approved", 0, "", user.ID)
+			}
+		}
+		target := fmt.Sprintf("/admin/achievements/icons?uploaded=%d&failed=%d", created, failed)
+		http.Redirect(w, r, target, http.StatusSeeOther)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	lang := ResolveLang(r)
+	msg := ""
+	okMsg := false
+	uploaded := parseIntDefault(r.URL.Query().Get("uploaded"), 0)
+	failed := parseIntDefault(r.URL.Query().Get("failed"), 0)
+	if uploaded > 0 || failed > 0 {
+		msg = fmt.Sprintf(T(lang, "media.upload.result"), uploaded, failed)
+		okMsg = failed == 0
+	}
+	a.renderAchievementIconCatalog(w, r, user, msg, okMsg, cfg)
 }
 
 func (a *App) AdminRecomputeAchievements(w http.ResponseWriter, r *http.Request) {
@@ -325,16 +397,29 @@ func (a *App) renderAchievementForm(w http.ResponseWriter, r *http.Request, user
 		selectedIconID = int(ach.IconMediaItemID.Int64)
 	}
 	RenderPrivateTemplate(w, r, "admin-achievements-form.html", map[string]interface{}{
-		"Achievement":      ach,
-		"IsNew":            isNew,
-		"Error":            errMsg,
-		"CSRFToken":        token,
-		"User":             user,
-		"IconItems":        iconItems,
-		"SelectedIconID":   selectedIconID,
-		"RarityOptions":    achievementRarityOptions,
+		"Achievement":       ach,
+		"IsNew":             isNew,
+		"Error":             errMsg,
+		"CSRFToken":         token,
+		"User":              user,
+		"IconItems":         iconItems,
+		"SelectedIconID":    selectedIconID,
+		"RarityOptions":     achievementRarityOptions,
 		"VisibilityOptions": achievementVisibilityOptions,
-		"DomainOptions":    achievementDomainOptions,
+		"DomainOptions":     achievementDomainOptions,
+	})
+}
+
+func (a *App) renderAchievementIconCatalog(w http.ResponseWriter, r *http.Request, user *db.User, msg string, okMsg bool, cfg mediaConfig) {
+	token, _ := ensureCSRF(w, r)
+	RenderPrivateTemplate(w, r, "admin-achievement-icons.html", map[string]interface{}{
+		"User":           user,
+		"CSRFToken":      token,
+		"IconItems":      a.achievementIconItems(),
+		"AllowedMimeCSV": cfg.AllowedCSV,
+		"MaxUploadMB":    cfg.MaxUploadMB,
+		"Msg":            msg,
+		"Ok":             okMsg,
 	})
 }
 
@@ -344,6 +429,36 @@ func (a *App) achievementIconItems() []db.MediaItem {
 		return []db.MediaItem{}
 	}
 	return items
+}
+
+func (a *App) ensureAchievementIconAlbum(user *db.User) (*db.MediaAlbum, error) {
+	if user == nil {
+		return nil, errors.New("missing user")
+	}
+	albums, err := a.DB.ListMediaAlbumsByOwner(user.ID)
+	if err == nil {
+		for _, album := range albums {
+			if album.AlbumType == "achievement_icon" {
+				return &album, nil
+			}
+		}
+	}
+	album := &db.MediaAlbum{
+		PublicID:         generateMediaPublicID(),
+		Title:            "Catàleg d'icones d'achievements",
+		Description:      "",
+		AlbumType:        "achievement_icon",
+		OwnerUserID:      user.ID,
+		ModerationStatus: "approved",
+		Visibility:       "admins_only",
+		CreditCost:       0,
+		DifficultyScore:  0,
+		SourceType:       "other",
+	}
+	if _, err := a.DB.CreateMediaAlbum(album); err != nil {
+		return nil, err
+	}
+	return album, nil
 }
 
 func buildAchievementFromForm(id int, code, name, desc, rarity, visibility, domain string, enabled, repeatable bool, ruleJSON string, iconID int) *db.Achievement {

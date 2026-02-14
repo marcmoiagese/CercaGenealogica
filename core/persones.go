@@ -443,6 +443,20 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 			completesa = 100
 		}
 	}
+	fieldValues := map[string]string{
+		"data_naixement":     strings.TrimSpace(p.DataNaixement.String),
+		"data_bateig":        strings.TrimSpace(p.DataBateig.String),
+		"data_defuncio":      strings.TrimSpace(p.DataDefuncio.String),
+		"municipi_naixement": birthMunicipiValue,
+		"municipi_defuncio":  strings.TrimSpace(p.MunicipiDefuncio),
+	}
+	fieldSources := map[string]bool{
+		"data_naixement":     false,
+		"data_bateig":        false,
+		"data_defuncio":      false,
+		"municipi_naixement": false,
+		"municipi_defuncio":  false,
+	}
 	canEditPersona := false
 	if user != nil {
 		if perms.Admin || perms.CanEditAnyPerson {
@@ -520,6 +534,9 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 	originAny := ""
 	var anecdotes []anecdoteView
 	totalDocs := 0
+	hasBirth := false
+	hasBaptism := false
+	hasDeath := false
 	if rows, err := a.DB.ListRegistresByPersona(id, ""); err == nil {
 		llibreCache := map[int]*db.Llibre{}
 		munCache := map[int]string{}
@@ -549,6 +566,16 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 			return name
 		}
 		totalDocs = len(rows)
+		for _, row := range rows {
+			switch normalizeRole(row.TipusActe) {
+			case "naixement":
+				hasBirth = true
+			case "baptisme":
+				hasBaptism = true
+			case "defuncio", "obit":
+				hasDeath = true
+			}
+		}
 		if len(rows) > 0 {
 			first := rows[0]
 			originRegistreID = first.RegistreID
@@ -804,6 +831,36 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if hasBirth || hasBaptism {
+		fieldSources["data_naixement"] = true
+		fieldSources["municipi_naixement"] = true
+	}
+	if hasBaptism {
+		fieldSources["data_bateig"] = true
+	}
+	if hasDeath {
+		fieldSources["data_defuncio"] = true
+		fieldSources["municipi_defuncio"] = true
+	}
+	if links, err := a.DB.ListPersonaFieldLinks(id); err == nil {
+		for _, link := range links {
+			if _, ok := fieldSources[link.FieldKey]; ok {
+				fieldSources[link.FieldKey] = true
+			}
+		}
+	}
+	fieldNeedsLink := map[string]bool{}
+	for key, val := range fieldValues {
+		if strings.TrimSpace(val) == "" {
+			fieldNeedsLink[key] = false
+			continue
+		}
+		fieldNeedsLink[key] = !fieldSources[key]
+	}
+	canLinkPersonaFields := false
+	if user != nil && canEditPersona && a.hasPerm(perms, permCreatePerson) && a.hasAnyPermissionKey(user.ID, permKeyDocumentalsRegistresLinkPerson) {
+		canLinkPersonaFields = true
+	}
 	userID := 0
 	if user != nil {
 		userID = user.ID
@@ -898,6 +955,31 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 			deathLabel = deathLocation
 		}
 	}
+	qualityTotal := 0
+	qualityLinked := 0
+	displayValues := map[string]string{
+		"data_naixement":     birthDate,
+		"data_bateig":        baptismDate,
+		"data_defuncio":      deathDate,
+		"municipi_naixement": birthLocation,
+		"municipi_defuncio":  deathLocation,
+	}
+	for key, val := range displayValues {
+		if strings.TrimSpace(val) == "" {
+			continue
+		}
+		qualityTotal++
+		if fieldSources[key] {
+			qualityLinked++
+		}
+	}
+	qualitatFonts := 0
+	if qualityTotal > 0 {
+		qualitatFonts = int(float64(qualityLinked) / float64(qualityTotal) * 100)
+		if qualitatFonts > 100 {
+			qualitatFonts = 100
+		}
+	}
 	RenderPrivateTemplate(w, r, "persona-detall.html", map[string]interface{}{
 		"Persona":           p,
 		"NomComplet":        fullName,
@@ -912,7 +994,10 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"DeathLocation":     deathLocation,
 		"LastUpdated":       lastUpdated,
 		"Completesa":        completesa,
+		"QualitatFonts":     qualitatFonts,
+		"FieldNeedsLink":    fieldNeedsLink,
 		"CanEditPersona":    canEditPersona,
+		"CanLinkPersonaFields": canLinkPersonaFields,
 		"DocRegistres":      docs,
 		"DocTotal":          totalDocs,
 		"OriginMunicipi":    originMunicipi,
@@ -1412,5 +1497,6 @@ func (a *App) PersonaLinkField(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No s'ha pogut enllaçar la dada", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/persones/"+strconv.Itoa(personaID)+"/edit", http.StatusSeeOther)
+	returnTo := safeReturnTo(r.FormValue("return_to"), "/persones/"+strconv.Itoa(personaID)+"/edit")
+	http.Redirect(w, r, returnTo, http.StatusSeeOther)
 }

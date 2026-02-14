@@ -652,6 +652,7 @@ CREATE TABLE IF NOT EXISTS llibres_urls (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,
   arxiu_id INTEGER REFERENCES arxius(id) ON DELETE SET NULL,
+  llibre_ref_id INTEGER REFERENCES llibres(id) ON DELETE SET NULL,
   url TEXT NOT NULL,
   tipus TEXT,
   descripcio TEXT,
@@ -660,6 +661,7 @@ CREATE TABLE IF NOT EXISTS llibres_urls (
 );
 CREATE INDEX IF NOT EXISTS idx_llibres_urls_llibre ON llibres_urls(llibre_id);
 CREATE INDEX IF NOT EXISTS idx_llibres_urls_arxiu ON llibres_urls(arxiu_id);
+CREATE INDEX IF NOT EXISTS idx_llibres_urls_llibre_ref ON llibres_urls(llibre_ref_id);
 CREATE INDEX IF NOT EXISTS idx_llibre_pagines_estat  ON llibre_pagines(llibre_id, estat);
 
 -- Media (àlbums + ítems)

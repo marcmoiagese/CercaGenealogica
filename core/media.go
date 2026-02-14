@@ -34,11 +34,11 @@ const (
 var defaultMediaMimes = []string{"image/jpeg", "image/png", "image/tiff"}
 
 var mediaAlbumTypes = map[string]bool{
-	"book":     true,
-	"memorial": true,
-	"photo":    true,
+	"book":             true,
+	"memorial":         true,
+	"photo":            true,
 	"achievement_icon": true,
-	"other":    true,
+	"other":            true,
 }
 
 var mediaSourceTypes = map[string]bool{
@@ -186,18 +186,18 @@ func (a *App) MediaAlbumNew(w http.ResponseWriter, r *http.Request) {
 	lang := resolveUserLang(r, user)
 	perms, _ := a.permissionsFromContext(r)
 	RenderPrivateTemplateLang(w, r, "media-albums-form.html", lang, map[string]interface{}{
-		"User":           user,
-		"AlbumTypes":     mediaAlbumTypeListForPerms(perms),
-		"SourceTypes":    mediaSourceTypeList(),
-		"FormTitle":      "",
-		"FormType":       "other",
-		"FormSource":     "online",
-		"FormDesc":       "",
-		"FormError":      "",
-		"FormLlibreID":   0,
+		"User":            user,
+		"AlbumTypes":      mediaAlbumTypeListForPerms(perms),
+		"SourceTypes":     mediaSourceTypeList(),
+		"FormTitle":       "",
+		"FormType":        "other",
+		"FormSource":      "online",
+		"FormDesc":        "",
+		"FormError":       "",
+		"FormLlibreID":    0,
 		"FormLlibreLabel": "",
-		"MaxUploadMB":    cfg.MaxUploadMB,
-		"AllowedMimeCSV": cfg.AllowedCSV,
+		"MaxUploadMB":     cfg.MaxUploadMB,
+		"AllowedMimeCSV":  cfg.AllowedCSV,
 	})
 }
 
@@ -459,6 +459,16 @@ func (a *App) mediaAlbumsList(w http.ResponseWriter, r *http.Request, cfg mediaC
 		Errorf("Error carregant media albums: %v", err)
 		albums = []db.MediaAlbum{}
 	}
+	if len(albums) > 0 {
+		filtered := make([]db.MediaAlbum, 0, len(albums))
+		for _, album := range albums {
+			if album.AlbumType == "achievement_icon" {
+				continue
+			}
+			filtered = append(filtered, album)
+		}
+		albums = filtered
+	}
 	RenderPrivateTemplateLang(w, r, "media-albums-list.html", lang, map[string]interface{}{
 		"User":   user,
 		"Albums": albums,
@@ -491,8 +501,8 @@ func (a *App) mediaAlbumCreate(w http.ResponseWriter, r *http.Request, cfg media
 	sourceType := normalizeMediaSourceType(r.FormValue("source_type"))
 	llibreID := parseIntDefault(r.FormValue("llibre_id"), 0)
 	llibreLabel := strings.TrimSpace(r.FormValue("llibre_label"))
-	if albumType == "achievement_icon" && !perms.Admin {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+	if albumType == "achievement_icon" {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -521,10 +531,6 @@ func (a *App) mediaAlbumCreate(w http.ResponseWriter, r *http.Request, cfg media
 		DifficultyScore:  0,
 		SourceType:       sourceType,
 	}
-	if albumType == "achievement_icon" {
-		album.Visibility = "admins_only"
-		album.ModerationStatus = "approved"
-	}
 	if _, err := a.DB.CreateMediaAlbum(album); err != nil {
 		Errorf("Error creant media album: %v", err)
 		a.renderMediaAlbumForm(w, r, user, cfg, title, albumType, sourceType, desc, llibreID, llibreLabel, T(resolveUserLang(r, user), "media.error.create_failed"))
@@ -538,6 +544,10 @@ func (a *App) mediaAlbumShow(w http.ResponseWriter, r *http.Request, cfg mediaCo
 	user := a.mediaEnsureUser(r)
 	album, err := a.DB.GetMediaAlbumByPublicID(albumPublicID)
 	if err != nil || album == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if album.AlbumType == "achievement_icon" {
 		http.NotFound(w, r)
 		return
 	}
@@ -629,23 +639,23 @@ func (a *App) mediaAlbumShow(w http.ResponseWriter, r *http.Request, cfg mediaCo
 
 	lang := resolveUserLang(r, user)
 	payload := map[string]interface{}{
-		"User":           user,
-		"Album":          album,
-		"Items":          items,
-		"ItemLinkCounts": linkCounts,
-		"ItemLinks":      itemLinks,
-		"Uploaded":       uploaded,
-		"Failed":         failed,
-		"AllowedMimeCSV": cfg.AllowedCSV,
-		"MaxUploadMB":    cfg.MaxUploadMB,
-		"CanUpload":      isOwner,
-		"IsOwner":        isOwner,
-		"LinkedBook":     linkedBook,
+		"User":            user,
+		"Album":           album,
+		"Items":           items,
+		"ItemLinkCounts":  linkCounts,
+		"ItemLinks":       itemLinks,
+		"Uploaded":        uploaded,
+		"Failed":          failed,
+		"AllowedMimeCSV":  cfg.AllowedCSV,
+		"MaxUploadMB":     cfg.MaxUploadMB,
+		"CanUpload":       isOwner,
+		"IsOwner":         isOwner,
+		"LinkedBook":      linkedBook,
 		"LinkedBookLabel": linkedBookLabel,
-		"CanViewBook":    canViewBook,
-		"CanLinkPages":   canLinkPages,
-		"BookURLBase":    "",
-		"BookURLPrefix":  "",
+		"CanViewBook":     canViewBook,
+		"CanLinkPages":    canLinkPages,
+		"BookURLBase":     "",
+		"BookURLPrefix":   "",
 	}
 	if linkedBook != nil {
 		payload["BookURLBase"] = strings.TrimSpace(linkedBook.URLBase)
@@ -670,6 +680,10 @@ func (a *App) mediaAlbumUpload(w http.ResponseWriter, r *http.Request, cfg media
 	}
 	album, err := a.DB.GetMediaAlbumByPublicID(albumPublicID)
 	if err != nil || album == nil || album.OwnerUserID != user.ID {
+		http.NotFound(w, r)
+		return
+	}
+	if album.AlbumType == "achievement_icon" {
 		http.NotFound(w, r)
 		return
 	}
@@ -699,7 +713,7 @@ func (a *App) mediaAlbumUpload(w http.ResponseWriter, r *http.Request, cfg media
 	created := 0
 	failed := 0
 	for _, header := range files {
-		if err := a.saveMediaItemFromUpload(cfg, album, header); err != nil {
+		if _, err := a.saveMediaItemFromUpload(cfg, album, header); err != nil {
 			Errorf("Error pujant media: %v", err)
 			failed++
 			continue
@@ -727,6 +741,10 @@ func (a *App) mediaAlbumPageLink(w http.ResponseWriter, r *http.Request, albumPu
 	}
 	album, err := a.DB.GetMediaAlbumByPublicID(albumPublicID)
 	if err != nil || album == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if album.AlbumType == "achievement_icon" {
 		http.NotFound(w, r)
 		return
 	}
@@ -837,6 +855,10 @@ func (a *App) mediaAlbumPageUnlink(w http.ResponseWriter, r *http.Request, album
 		http.NotFound(w, r)
 		return
 	}
+	if album.AlbumType == "achievement_icon" {
+		http.NotFound(w, r)
+		return
+	}
 	if !a.mediaUserIsPrivileged(r, user, album) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -887,27 +909,27 @@ func (a *App) mediaItemThumb(w http.ResponseWriter, r *http.Request, cfg mediaCo
 	http.ServeFile(w, r, thumbPath)
 }
 
-func (a *App) saveMediaItemFromUpload(cfg mediaConfig, album *db.MediaAlbum, header *multipart.FileHeader) error {
+func (a *App) saveMediaItemFromUpload(cfg mediaConfig, album *db.MediaAlbum, header *multipart.FileHeader) (*db.MediaItem, error) {
 	if header == nil {
-		return errors.New("empty file")
+		return nil, errors.New("empty file")
 	}
 	if header.Size <= 0 {
-		return errors.New("empty file")
+		return nil, errors.New("empty file")
 	}
 	if cfg.MaxUploadBytes > 0 && header.Size > cfg.MaxUploadBytes {
-		return fmt.Errorf("file too large: %d", header.Size)
+		return nil, fmt.Errorf("file too large: %d", header.Size)
 	}
 
 	file, err := header.Open()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer file.Close()
 
 	sniff := make([]byte, 512)
 	n, err := io.ReadFull(file, sniff)
 	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-		return err
+		return nil, err
 	}
 	sniff = sniff[:n]
 	detected := http.DetectContentType(sniff)
@@ -916,7 +938,7 @@ func (a *App) saveMediaItemFromUpload(cfg mediaConfig, album *db.MediaAlbum, hea
 	}
 	detected = strings.ToLower(strings.TrimSpace(detected))
 	if !cfg.AllowedMimes[detected] {
-		return fmt.Errorf("mime not allowed: %s", detected)
+		return nil, fmt.Errorf("mime not allowed: %s", detected)
 	}
 
 	safeName := sanitizeFilename(header.Filename)
@@ -931,12 +953,12 @@ func (a *App) saveMediaItemFromUpload(cfg mediaConfig, album *db.MediaAlbum, hea
 	relOriginal := path.Join(album.PublicID, itemPublicID, "original", safeName)
 	absOriginal := filepath.Join(cfg.Root, filepath.FromSlash(relOriginal))
 	if err := os.MkdirAll(filepath.Dir(absOriginal), 0o755); err != nil {
-		return err
+		return nil, err
 	}
 
 	dest, err := os.Create(absOriginal)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer dest.Close()
 
@@ -945,14 +967,14 @@ func (a *App) saveMediaItemFromUpload(cfg mediaConfig, album *db.MediaAlbum, hea
 	size, err := io.Copy(io.MultiWriter(dest, hash), reader)
 	if err != nil {
 		_ = os.Remove(absOriginal)
-		return err
+		return nil, err
 	}
 	checksum := hex.EncodeToString(hash.Sum(nil))
 
 	width, height, thumbRel, err := createMediaThumbnail(cfg, absOriginal, album.PublicID, itemPublicID)
 	if err != nil {
 		_ = os.Remove(absOriginal)
-		return err
+		return nil, err
 	}
 
 	title := strings.TrimSuffix(safeName, filepath.Ext(safeName))
@@ -973,17 +995,19 @@ func (a *App) saveMediaItemFromUpload(cfg mediaConfig, album *db.MediaAlbum, hea
 		CreditCost:         0,
 	}
 
-	if _, err := a.DB.CreateMediaItem(item); err != nil {
+	id, err := a.DB.CreateMediaItem(item)
+	if err != nil {
 		_ = os.Remove(absOriginal)
 		if thumbRel != "" {
 			_ = os.Remove(filepath.Join(cfg.Root, filepath.FromSlash(thumbRel)))
 		}
-		return err
+		return nil, err
 	}
+	item.ID = id
 
 	a.queueMediaDeepZoom(cfg, album.PublicID, *item)
 
-	return nil
+	return item, nil
 }
 
 func createMediaThumbnail(cfg mediaConfig, originalPath, albumPublicID, itemPublicID string) (int, int, string, error) {
@@ -1095,22 +1119,12 @@ func normalizeMediaVisibility(val string) string {
 }
 
 func mediaAlbumTypeList() []string {
-	return []string{"book", "memorial", "photo", "achievement_icon", "other"}
+	return []string{"book", "memorial", "photo", "other"}
 }
 
 func mediaAlbumTypeListForPerms(perms db.PolicyPermissions) []string {
-	list := mediaAlbumTypeList()
-	if perms.Admin {
-		return list
-	}
-	filtered := make([]string, 0, len(list))
-	for _, entry := range list {
-		if entry == "achievement_icon" {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	return filtered
+	_ = perms
+	return mediaAlbumTypeList()
 }
 
 func mediaSourceTypeList() []string {
@@ -1207,17 +1221,17 @@ func (a *App) renderMediaAlbumForm(w http.ResponseWriter, r *http.Request, user 
 		}
 	}
 	RenderPrivateTemplateLang(w, r, "media-albums-form.html", lang, map[string]interface{}{
-		"User":           user,
-		"AlbumTypes":     mediaAlbumTypeListForPerms(perms),
-		"SourceTypes":    mediaSourceTypeList(),
-		"FormTitle":      title,
-		"FormType":       albumType,
-		"FormSource":     sourceType,
-		"FormDesc":       desc,
-		"FormError":      errMsg,
-		"FormLlibreID":   llibreID,
+		"User":            user,
+		"AlbumTypes":      mediaAlbumTypeListForPerms(perms),
+		"SourceTypes":     mediaSourceTypeList(),
+		"FormTitle":       title,
+		"FormType":        albumType,
+		"FormSource":      sourceType,
+		"FormDesc":        desc,
+		"FormError":       errMsg,
+		"FormLlibreID":    llibreID,
 		"FormLlibreLabel": llibreLabel,
-		"MaxUploadMB":    cfg.MaxUploadMB,
-		"AllowedMimeCSV": cfg.AllowedCSV,
+		"MaxUploadMB":     cfg.MaxUploadMB,
+		"AllowedMimeCSV":  cfg.AllowedCSV,
 	})
 }

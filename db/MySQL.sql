@@ -907,6 +907,7 @@ CREATE TABLE IF NOT EXISTS llibres_urls (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   llibre_id INT UNSIGNED NOT NULL,
   arxiu_id INT UNSIGNED NULL,
+  llibre_ref_id INT UNSIGNED NULL,
   url TEXT NOT NULL,
   tipus VARCHAR(50),
   descripcio TEXT,
@@ -914,10 +915,12 @@ CREATE TABLE IF NOT EXISTS llibres_urls (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_llibres_urls_llibre FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE CASCADE,
   CONSTRAINT fk_llibres_urls_arxiu FOREIGN KEY (arxiu_id) REFERENCES arxius(id) ON DELETE SET NULL,
+  CONSTRAINT fk_llibres_urls_llibre_ref FOREIGN KEY (llibre_ref_id) REFERENCES llibres(id) ON DELETE SET NULL,
   CONSTRAINT fk_llibres_urls_created_by FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL
 );
 CREATE INDEX idx_llibres_urls_llibre ON llibres_urls(llibre_id);
 CREATE INDEX idx_llibres_urls_arxiu ON llibres_urls(arxiu_id);
+CREATE INDEX idx_llibres_urls_llibre_ref ON llibres_urls(llibre_ref_id);
 CREATE INDEX idx_llibre_pagines_estat  ON llibre_pagines(llibre_id, estat);
 
 -- Media (àlbums + ítems)

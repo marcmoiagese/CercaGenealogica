@@ -105,6 +105,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             hidden.value = item.id ? String(item.id) : "";
             input.value = item.nom || "";
+            hidden.dispatchEvent(new Event("change", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+            input.dispatchEvent(new CustomEvent("suggest:select", { detail: { item } }));
             if (hiddenType && item.scope_type) {
                 hiddenType.value = String(item.scope_type);
             }
@@ -138,6 +141,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (hiddenType) {
                 hiddenType.value = "";
             }
+            hidden.dispatchEvent(new Event("change", { bubbles: true }));
             const value = input.value.trim();
             if (value.length < 1) {
                 clearSuggestions();

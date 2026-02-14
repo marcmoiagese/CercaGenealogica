@@ -3228,6 +3228,7 @@ func (h sqlHelper) ensurePermissionsSchema() {
 	h.ensurePolicyGrantsTable()
 	h.ensureMediaModerationColumns()
 	h.ensureMediaCreditsTables()
+	h.ensureLlibreURLColumns()
 }
 
 func (h sqlHelper) ensureDashboardWidgetsTable() {
@@ -3767,6 +3768,37 @@ func (h sqlHelper) ensureArxiuExtraColumns() {
 		}
 	}
 	for _, stmt := range stmts {
+		_, _ = h.db.Exec(stmt)
+	}
+}
+
+func (h sqlHelper) ensureLlibreURLColumns() {
+	if !h.tableExists("llibres_urls") {
+		return
+	}
+	stmts := []string{}
+	indexStmts := []string{}
+	switch h.style {
+	case "mysql":
+		if !h.columnExists("llibres_urls", "llibre_ref_id") {
+			stmts = append(stmts, "ALTER TABLE llibres_urls ADD COLUMN llibre_ref_id INT UNSIGNED NULL")
+			indexStmts = append(indexStmts, "CREATE INDEX idx_llibres_urls_llibre_ref ON llibres_urls(llibre_ref_id)")
+		}
+	case "postgres":
+		if !h.columnExists("llibres_urls", "llibre_ref_id") {
+			stmts = append(stmts, "ALTER TABLE llibres_urls ADD COLUMN IF NOT EXISTS llibre_ref_id INTEGER REFERENCES llibres(id) ON DELETE SET NULL")
+			indexStmts = append(indexStmts, "CREATE INDEX IF NOT EXISTS idx_llibres_urls_llibre_ref ON llibres_urls(llibre_ref_id)")
+		}
+	default: // sqlite
+		if !h.columnExists("llibres_urls", "llibre_ref_id") {
+			stmts = append(stmts, "ALTER TABLE llibres_urls ADD COLUMN llibre_ref_id INTEGER REFERENCES llibres(id) ON DELETE SET NULL")
+			indexStmts = append(indexStmts, "CREATE INDEX IF NOT EXISTS idx_llibres_urls_llibre_ref ON llibres_urls(llibre_ref_id)")
+		}
+	}
+	for _, stmt := range stmts {
+		_, _ = h.db.Exec(stmt)
+	}
+	for _, stmt := range indexStmts {
 		_, _ = h.db.Exec(stmt)
 	}
 }
@@ -5062,11 +5094,14 @@ func (h sqlHelper) updateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverri
 }
 
 func (h sqlHelper) listLlibreURLs(llibreID int) ([]LlibreURL, error) {
+	h.ensureLlibreURLColumns()
 	query := `
-        SELECT lu.id, lu.llibre_id, lu.arxiu_id, lu.url, lu.tipus, lu.descripcio,
-               lu.created_by, lu.created_at, a.nom as arxiu_nom
+        SELECT lu.id, lu.llibre_id, lu.arxiu_id, lu.llibre_ref_id, lu.url, lu.tipus, lu.descripcio,
+               lu.created_by, lu.created_at, a.nom as arxiu_nom,
+               COALESCE(NULLIF(lr.titol, ''), lr.nom_esglesia) as llibre_ref_titol
         FROM llibres_urls lu
         LEFT JOIN arxius a ON a.id = lu.arxiu_id
+        LEFT JOIN llibres lr ON lr.id = lu.llibre_ref_id
         WHERE lu.llibre_id = ?
         ORDER BY lu.id DESC`
 	query = formatPlaceholders(h.style, query)
@@ -5078,7 +5113,7 @@ func (h sqlHelper) listLlibreURLs(llibreID int) ([]LlibreURL, error) {
 	var res []LlibreURL
 	for rows.Next() {
 		var d LlibreURL
-		if err := rows.Scan(&d.ID, &d.LlibreID, &d.ArxiuID, &d.URL, &d.Tipus, &d.Descripcio, &d.CreatedBy, &d.CreatedAt, &d.ArxiuNom); err != nil {
+		if err := rows.Scan(&d.ID, &d.LlibreID, &d.ArxiuID, &d.LlibreRefID, &d.URL, &d.Tipus, &d.Descripcio, &d.CreatedBy, &d.CreatedAt, &d.ArxiuNom, &d.LlibreRefTitol); err != nil {
 			return nil, err
 		}
 		res = append(res, d)
@@ -5087,10 +5122,11 @@ func (h sqlHelper) listLlibreURLs(llibreID int) ([]LlibreURL, error) {
 }
 
 func (h sqlHelper) addLlibreURL(link *LlibreURL) error {
+	h.ensureLlibreURLColumns()
 	stmt := formatPlaceholders(h.style, `
-        INSERT INTO llibres_urls (llibre_id, arxiu_id, url, tipus, descripcio, created_by, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, `+h.nowFun+`)`)
-	_, err := h.db.Exec(stmt, link.LlibreID, link.ArxiuID, link.URL, link.Tipus, link.Descripcio, link.CreatedBy)
+        INSERT INTO llibres_urls (llibre_id, arxiu_id, llibre_ref_id, url, tipus, descripcio, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, `+h.nowFun+`)`)
+	_, err := h.db.Exec(stmt, link.LlibreID, link.ArxiuID, link.LlibreRefID, link.URL, link.Tipus, link.Descripcio, link.CreatedBy)
 	return err
 }
 
@@ -5147,8 +5183,8 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 	clauses := []string{"1=1"}
 	if strings.TrimSpace(filter.Text) != "" {
 		like := "%" + strings.TrimSpace(filter.Text) + "%"
-		clauses = append(clauses, "(l.titol LIKE ? OR l.nom_esglesia LIKE ?)")
-		args = append(args, like, like)
+		clauses = append(clauses, "(l.titol LIKE ? OR l.nom_esglesia LIKE ? OR m.nom LIKE ?)")
+		args = append(args, like, like, like)
 	}
 	if strings.TrimSpace(filter.Cronologia) != "" {
 		like := "%" + strings.TrimSpace(filter.Cronologia) + "%"
@@ -5725,8 +5761,8 @@ func (h sqlHelper) searchLlibrePaginesFromStats(llibreID int, query string, limi
 			continue
 		}
 		res = append(res, LlibrePagina{
-			ID:       pageID,
-			LlibreID: llibreID,
+			ID:        pageID,
+			LlibreID:  llibreID,
 			NumPagina: num,
 			Notes:     numText,
 		})
@@ -5792,8 +5828,8 @@ func (h sqlHelper) searchLlibrePaginesFromRaw(llibreID int, query string, limit 
 			continue
 		}
 		res = append(res, LlibrePagina{
-			ID:       pageID,
-			LlibreID: llibreID,
+			ID:        pageID,
+			LlibreID:  llibreID,
 			NumPagina: num,
 			Notes:     numText,
 		})

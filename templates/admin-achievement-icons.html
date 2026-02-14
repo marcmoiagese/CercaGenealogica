@@ -1,0 +1,60 @@
+{{ define "admin-achievement-icons.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "achievements.icon.catalog.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/admin-achievements.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "achievements.icon.catalog.kicker" }}</p>
+                    <h1>{{ t .Lang "achievements.icon.catalog.title" }}</h1>
+                </div>
+                <div class="card-actions">
+                    <a class="boto-secundari" href="/admin/achievements">{{ t .Lang "common.back" }}</a>
+                </div>
+            </header>
+            {{ if .Data.Msg }}
+            <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
+            {{ end }}
+            <form class="formulari" method="post" action="/admin/achievements/icons" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="form-grid">
+                    <div class="form-control form-control-full">
+                        <label for="icon-files">{{ t .Lang "achievements.icon.catalog.upload.label" }}</label>
+                        <input id="icon-files" name="icon_files" type="file" accept="{{ .Data.AllowedMimeCSV }}" multiple required>
+                        <p class="camp-helper">{{ printf (t .Lang "media.album.upload.help") .Data.AllowedMimeCSV .Data.MaxUploadMB }}</p>
+                    </div>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">
+                        <i class="fas fa-upload"></i> <span>{{ t .Lang "media.album.upload.submit" }}</span>
+                    </button>
+                </div>
+            </form>
+            {{ if .Data.IconItems }}
+            <div class="achievement-icons">
+                {{ range .Data.IconItems }}
+                <div class="achievement-icon-option is-static">
+                    <img src="/media/items/{{ .PublicID }}/thumb" alt="">
+                    <span class="achievement-icon-title">{{ .Title }}</span>
+                </div>
+                {{ end }}
+            </div>
+            {{ else }}
+            <p class="muted">{{ t .Lang "common.empty" }}</p>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

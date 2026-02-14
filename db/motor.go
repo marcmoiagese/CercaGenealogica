@@ -1499,15 +1499,17 @@ type ArxiuLlibreDetail struct {
 }
 
 type LlibreURL struct {
-	ID         int
-	LlibreID   int
-	ArxiuID    sql.NullInt64
-	ArxiuNom   sql.NullString
-	URL        string
-	Tipus      sql.NullString
-	Descripcio sql.NullString
-	CreatedBy  sql.NullInt64
-	CreatedAt  sql.NullTime
+	ID             int
+	LlibreID       int
+	ArxiuID        sql.NullInt64
+	LlibreRefID    sql.NullInt64
+	ArxiuNom       sql.NullString
+	LlibreRefTitol sql.NullString
+	URL            string
+	Tipus          sql.NullString
+	Descripcio     sql.NullString
+	CreatedBy      sql.NullInt64
+	CreatedAt      sql.NullTime
 }
 
 type LlibreSimple struct {
@@ -1770,12 +1772,12 @@ type SearchDoc struct {
 }
 
 type SearchQueryFilter struct {
-	Query                  string
-	QueryNorm              string
-	QueryPhonetic          string
-	QueryTokens            []string
-	CanonTokens            []string
-	VariantTokens          []string
+	Query                 string
+	QueryNorm             string
+	QueryPhonetic         string
+	QueryTokens           []string
+	CanonTokens           []string
+	VariantTokens         []string
 	Name                  string
 	Surname1              string
 	Surname2              string
@@ -1793,21 +1795,21 @@ type SearchQueryFilter struct {
 	PartnerTokens         []string
 	Exact                 bool
 	OnlySurnameDirect     bool
-	Entity                 string
-	AncestorType           string
-	AncestorID             int
-	EntitatEclesiasticaID  int
-	ArxiuID                int
-	LlibreID               int
-	DateFrom               string
-	DateTo                 string
-	AnyFrom                int
-	AnyTo                  int
-	TipusActe              string
-	Page                   int
-	PageSize               int
-	Sort                   string
-	IncludeUnpublished     bool
+	Entity                string
+	AncestorType          string
+	AncestorID            int
+	EntitatEclesiasticaID int
+	ArxiuID               int
+	LlibreID              int
+	DateFrom              string
+	DateTo                string
+	AnyFrom               int
+	AnyTo                 int
+	TipusActe             string
+	Page                  int
+	PageSize              int
+	Sort                  string
+	IncludeUnpublished    bool
 }
 
 type SearchDocRow struct {
@@ -1828,33 +1830,33 @@ type AdminClosureEntry struct {
 }
 
 type TranscripcioPersonaRaw struct {
-	ID              int
-	TranscripcioID  int
-	Rol             string
-	Nom             string
-	NomEstat        string
-	Cognom1         string
-	Cognom1Estat    string
-	Cognom2         string
-	Cognom2Estat    string
-	CognomSoltera   string
+	ID                 int
+	TranscripcioID     int
+	Rol                string
+	Nom                string
+	NomEstat           string
+	Cognom1            string
+	Cognom1Estat       string
+	Cognom2            string
+	Cognom2Estat       string
+	CognomSoltera      string
 	CognomSolteraEstat string
-	Sexe            string
-	SexeEstat       string
-	EdatText        string
-	EdatEstat       string
-	EstatCivilText  string
-	EstatCivilEstat string
-	MunicipiText    string
-	MunicipiEstat   string
-	OficiText       string
-	OficiEstat      string
-	CasaNom         string
-	CasaEstat       string
-	PersonaID       sql.NullInt64
-	LinkedBy        sql.NullInt64
-	LinkedAt        sql.NullTime
-	Notes           string
+	Sexe               string
+	SexeEstat          string
+	EdatText           string
+	EdatEstat          string
+	EstatCivilText     string
+	EstatCivilEstat    string
+	MunicipiText       string
+	MunicipiEstat      string
+	OficiText          string
+	OficiEstat         string
+	CasaNom            string
+	CasaEstat          string
+	PersonaID          sql.NullInt64
+	LinkedBy           sql.NullInt64
+	LinkedAt           sql.NullTime
+	Notes              string
 }
 
 type TranscripcioAtributRaw struct {

@@ -156,11 +156,11 @@ func (a *App) AdvancedSearchPage(w http.ResponseWriter, r *http.Request) {
 	}
 	if hasTerritoryFilter {
 		filter := db.MunicipiBrowseFilter{
-			PaisID: view.PaisID,
-			Status: "publicat",
-			Sort:   "nom",
-			SortDir:"asc",
-			Limit:  200,
+			PaisID:  view.PaisID,
+			Status:  "publicat",
+			Sort:    "nom",
+			SortDir: "asc",
+			Limit:   200,
 		}
 		filter.LevelIDs = view.LevelIDs
 		rows, _ := a.DB.ListMunicipisBrowse(filter)
@@ -185,7 +185,7 @@ func (a *App) AdvancedSearchPage(w http.ResponseWriter, r *http.Request) {
 		"Paisos":           paisos,
 		"LevelSelects":     levelSelects,
 		"LevelTypeLabels":  levelTypeLabels,
-		"MunicipiOptions": municipiOptions,
+		"MunicipiOptions":  municipiOptions,
 		"TipusActeOptions": transcripcioTipusActe,
 		"Sort":             filter.Sort,
 	})
@@ -872,15 +872,46 @@ func (a *App) SearchLlibresSuggestJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	arxiuID := parseIntDefault(r.URL.Query().Get("arxiu_id"), 0)
+	maxLimit := 25
+	limit := 10
+	if arxiuID > 0 {
+		maxLimit = 200
+		limit = 200
+	}
+	if val := strings.TrimSpace(r.URL.Query().Get("limit")); val != "" {
+		if v, err := strconv.Atoi(val); err == nil && v > 0 && v <= maxLimit {
+			limit = v
+		}
+	}
+	if arxiuID > 0 {
+		rows, _ := a.DB.ListLlibres(db.LlibreFilter{
+			ArxiuID: arxiuID,
+			Text:    query,
+			Limit:   limit,
+		})
+		items := make([]map[string]interface{}, 0, len(rows))
+		for _, row := range rows {
+			label := strings.TrimSpace(row.Titol)
+			if label == "" {
+				label = strings.TrimSpace(row.NomEsglesia)
+			}
+			context := joinNonEmpty(strings.TrimSpace(row.NomEsglesia), strings.TrimSpace(row.Cronologia), " · ")
+			if row.MunicipiNom.Valid {
+				context = joinNonEmpty(context, strings.TrimSpace(row.MunicipiNom.String), " · ")
+			}
+			items = append(items, map[string]interface{}{
+				"id":      row.ID,
+				"nom":     label,
+				"context": strings.TrimSpace(context),
+			})
+		}
+		writeJSON(w, map[string]interface{}{"items": items})
+		return
+	}
 	if len(query) < 1 {
 		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
 		return
-	}
-	limit := 10
-	if val := strings.TrimSpace(r.URL.Query().Get("limit")); val != "" {
-		if v, err := strconv.Atoi(val); err == nil && v > 0 && v <= 25 {
-			limit = v
-		}
 	}
 	rows, _ := a.DB.SearchLlibresSimple(query, limit)
 	items := make([]map[string]interface{}, 0, len(rows))
@@ -897,6 +928,160 @@ func (a *App) SearchLlibresSuggestJSON(w http.ResponseWriter, r *http.Request) {
 			"id":      row.ID,
 			"nom":     label,
 			"context": strings.TrimSpace(context),
+		})
+	}
+	writeJSON(w, map[string]interface{}{"items": items})
+}
+
+func (a *App) SearchRegistresSuggestJSON(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	llibreID := parseIntDefault(r.URL.Query().Get("llibre_id"), 0)
+	if llibreID <= 0 {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	target := a.resolveLlibreTarget(llibreID)
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresViewRegistres, target); !ok {
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(query) < 1 {
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	limit := 10
+	if val := strings.TrimSpace(r.URL.Query().Get("limit")); val != "" {
+		if v, err := strconv.Atoi(val); err == nil && v > 0 && v <= 25 {
+			limit = v
+		}
+	}
+	rows, _ := a.DB.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{
+		Search: query,
+		Limit:  limit,
+	})
+	lang := ResolveLang(r)
+	items := make([]map[string]interface{}, 0, len(rows))
+	for _, row := range rows {
+		persones, _ := a.DB.ListTranscripcioPersones(row.ID)
+		atributs, _ := a.DB.ListTranscripcioAtributs(row.ID)
+		subjecte := strings.TrimSpace(subjectFromPersons(row.TipusActe, persones))
+		roleMap := personRoleMap(persones)
+		appendUnique := func(list []string, name string) []string {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				return list
+			}
+			for _, existing := range list {
+				if existing == name {
+					return list
+				}
+			}
+			return append(list, name)
+		}
+		father := firstNameByRoles(roleMap, []string{"pare", "paire", "parent", "pare_nuvi", "pare_novia", "parenuvi", "parenovia"})
+		mother := firstNameByRoles(roleMap, []string{"mare", "maire", "mare_nuvi", "mare_novia", "marenuvi", "marenovia"})
+		parentNames := []string{}
+		parentNames = appendUnique(parentNames, father)
+		parentNames = appendUnique(parentNames, mother)
+		grandparentNames := []string{}
+		grandparentSeen := map[string]bool{}
+		appendGrandparents := func(names []string) {
+			for _, name := range names {
+				name = strings.TrimSpace(name)
+				if name == "" || grandparentSeen[name] {
+					continue
+				}
+				grandparentSeen[name] = true
+				grandparentNames = append(grandparentNames, name)
+			}
+		}
+		appendGrandparents(namesByRoles(roleMap, []string{"avi_patern", "avia_paterna"}))
+		appendGrandparents(namesByRoles(roleMap, []string{"avi_matern", "avia_materna"}))
+		if len(grandparentNames) == 0 {
+			appendGrandparents(namesByRoles(roleMap, []string{"avi", "avia"}))
+		}
+		tipus := strings.TrimSpace(row.TipusActe)
+		tipusNorm := normalizeRole(tipus)
+		tipusLabel := ""
+		if tipus != "" {
+			tipusLabel = T(lang, "records.type."+tipus)
+			if tipusLabel == "records.type."+tipus {
+				tipusLabel = tipus
+			}
+		}
+		eventDate := ""
+		switch tipusNorm {
+		case "baptisme":
+			eventDate = attrValueByKeysRaw(atributs,
+				"data_bateig", "databateig",
+				"data_baptisme", "databaptisme",
+				"bateig", "baptisme", "databapt", "data_bapt",
+			)
+		case "naixement":
+			eventDate = attrValueByKeysRaw(atributs,
+				"data_naixement", "datanaixement", "naixement",
+				"data_naixament", "datanaixament", "naixament",
+				"nascut", "data_nascut", "datanascut",
+			)
+		case "defuncio", "obit":
+			eventDate = attrValueByKeysRaw(atributs,
+				"data_defuncio", "datadefuncio", "defuncio",
+				"data_obit", "obit",
+			)
+		}
+		if eventDate == "" && row.DataActeISO.Valid {
+			eventDate = formatDateDisplay(row.DataActeISO.String)
+		}
+		if eventDate == "" {
+			raw := strings.TrimSpace(row.DataActeText)
+			if formatted := formatDateDisplay(raw); formatted != "" {
+				eventDate = formatted
+			} else {
+				eventDate = raw
+			}
+		}
+		label := subjecte
+		if label == "" {
+			label = strings.TrimSpace(tipusLabel)
+		}
+		if label == "" {
+			label = T(lang, "records.detail.none")
+		}
+		contextParts := []string{}
+		parentLabel := T(lang, "records.detail.parents")
+		if parentLabel == "records.detail.parents" {
+			parentLabel = "Pares"
+		}
+		grandparentsLabel := T(lang, "records.detail.grandparents")
+		if grandparentsLabel == "records.detail.grandparents" {
+			grandparentsLabel = "Avis"
+		}
+		eventLabel := strings.TrimSpace(tipusLabel)
+		if eventLabel == "" {
+			eventLabel = T(lang, "records.field.data_acte")
+		}
+		if eventLabel == "records.field.data_acte" {
+			eventLabel = "Data"
+		}
+		if len(parentNames) > 0 {
+			contextParts = append(contextParts, fmt.Sprintf("%s: %s", parentLabel, strings.Join(parentNames, " / ")))
+		}
+		if len(grandparentNames) > 0 {
+			contextParts = append(contextParts, fmt.Sprintf("%s: %s", grandparentsLabel, strings.Join(grandparentNames, " / ")))
+		}
+		if eventDate != "" {
+			contextParts = append(contextParts, fmt.Sprintf("%s: %s", eventLabel, eventDate))
+		}
+		if len(contextParts) == 0 && eventLabel != "" {
+			contextParts = append(contextParts, eventLabel)
+		}
+		items = append(items, map[string]interface{}{
+			"id":      row.ID,
+			"nom":     label,
+			"context": strings.TrimSpace(strings.Join(contextParts, " · ")),
 		})
 	}
 	writeJSON(w, map[string]interface{}{"items": items})

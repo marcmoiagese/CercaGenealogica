@@ -563,6 +563,9 @@
                 <button type="button" class="boto-secundari" data-open-arxiu-links>{{ t .Lang "archives.books.links.add" }}</button>
                 {{ end }}
             </header>
+            {{ if .Data.LinksErrorKey }}
+            <div class="alert alert-error">{{ t .Lang .Data.LinksErrorKey }}</div>
+            {{ end }}
             <div class="taula-wrapper">
                 <table class="taula">
                     <thead>
@@ -586,7 +589,15 @@
                         {{ end }}
                         {{ range .Data.LlibreLinks }}
                         <tr>
-                            <td>{{ if .ArxiuNom.Valid }}{{ .ArxiuNom.String }}{{ else }}{{ t $.Lang "books.links.source.other" }}{{ end }}</td>
+                            <td>
+                                {{ if .ArxiuNom.Valid }}{{ .ArxiuNom.String }}{{ else }}{{ t $.Lang "books.links.source.other" }}{{ end }}
+                                {{ if .LlibreRefID.Valid }}
+                                <span class="muted">&middot;</span>
+                                <a href="/documentals/llibres/{{ .LlibreRefID.Int64 }}">
+                                    {{ if .LlibreRefTitol.Valid }}{{ .LlibreRefTitol.String }}{{ else }}#{{ .LlibreRefID.Int64 }}{{ end }}
+                                </a>
+                                {{ end }}
+                            </td>
                             <td><a href="{{ .URL }}" target="_blank">{{ .URL }}</a></td>
                             <td>{{ if .Tipus.Valid }}{{ t $.Lang (printf "books.links.type.%s" .Tipus.String) }}{{ end }}</td>
                             <td>{{ if .Descripcio.Valid }}{{ .Descripcio.String }}{{ end }}</td>
@@ -627,15 +638,42 @@
                     <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                     <input type="hidden" name="return_to" value="{{ .Data.CurrentURL }}">
                     <div class="grup-camp">
-                        <label for="arxiu-links-select">{{ t .Lang "books.links.add.archive" }}</label>
-                        <select id="arxiu-links-select" name="arxiu_id">
-                            <option value="">{{ t .Lang "common.select" }}</option>
-                            {{ range .Data.ArxiusOptions }}
-                            <option value="{{ .ID }}">{{ .Nom }}</option>
-                            {{ end }}
-                        </select>
+                        <label for="arxiu-links-search">{{ t .Lang "books.links.add.archive" }}</label>
+                        <div class="suggest-field">
+                            <input
+                                id="arxiu-links-search"
+                                type="text"
+                                name="arxiu_search"
+                                placeholder="{{ t .Lang "archives.filter.search.placeholder" }}"
+                                autocomplete="off"
+                                data-api="/api/documentals/arxius/suggest"
+                                data-empty-label="{{ t .Lang "archives.search.empty" }}"
+                                data-hidden="arxiu-links-id"
+                                data-suggestions="arxiu-links-suggestions"
+                                data-suggest="1">
+                            <input type="hidden" id="arxiu-links-id" name="arxiu_id" value="">
+                            <ul id="arxiu-links-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "books.links.add.archive" }}"></ul>
+                        </div>
                     </div>
-                    <div class="grup-camp">
+                    <div class="grup-camp" id="arxiu-link-book-wrap" style="display:none;">
+                        <label for="arxiu-link-book-search">{{ t .Lang "books.links.add.archive_book" }}</label>
+                        <div class="suggest-field">
+                            <input
+                                id="arxiu-link-book-search"
+                                type="text"
+                                name="llibre_ref_search"
+                                placeholder="{{ t .Lang "books.links.add.archive_book.placeholder" }}"
+                                autocomplete="off"
+                                data-api=""
+                                data-empty-label="{{ t .Lang "books.links.add.archive_book.empty" }}"
+                                data-hidden="arxiu-link-book-id"
+                                data-suggestions="arxiu-link-book-suggestions"
+                                data-suggest="1">
+                            <input type="hidden" id="arxiu-link-book-id" name="llibre_ref_id" value="">
+                            <ul id="arxiu-link-book-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "books.links.add.archive_book" }}"></ul>
+                        </div>
+                    </div>
+                    <div class="grup-camp" id="arxiu-link-url-wrap">
                         <label for="arxiu-link-url">{{ t .Lang "books.links.add.url" }}</label>
                         <input id="arxiu-link-url" type="text" name="url" required>
                     </div>
@@ -654,7 +692,7 @@
                         <input id="arxiu-link-desc" type="text" name="descripcio">
                     </div>
                     <div class="form-accio">
-                        <button type="submit" class="boto-primari">{{ t .Lang "archives.books.links.add" }}</button>
+                        <button type="submit" class="boto-primari" id="arxiu-links-submit">{{ t .Lang "archives.books.links.add" }}</button>
                         <button type="button" class="boto-secundari" data-close-arxiu-links>{{ t .Lang "records.form.cancel" }}</button>
                     </div>
                 </form>
@@ -715,6 +753,7 @@
     {{ template "scripts-private" . }}
     <script src="/static/js/scroll-restore.js?v=1"></script>
     <script src="/static/js/page-stats.js?v=3"></script>
+    <script src="/static/js/arxiu-form-suggest.js"></script>
     <script>
         (function () {
             const modal = document.getElementById('arxiu-links-modal');
@@ -722,11 +761,64 @@
             const openBtns = document.querySelectorAll('[data-open-arxiu-links]');
             const closeBtns = modal.querySelectorAll('[data-close-arxiu-links]');
             const form = document.getElementById('arxiu-links-form');
-            const select = document.getElementById('arxiu-links-select');
+            const arxiuSearch = document.getElementById('arxiu-links-search');
+            const arxiuHidden = document.getElementById('arxiu-links-id');
+            const bookWrap = document.getElementById('arxiu-link-book-wrap');
+            const bookSearch = document.getElementById('arxiu-link-book-search');
+            const bookHidden = document.getElementById('arxiu-link-book-id');
+            const bookSuggestions = document.getElementById('arxiu-link-book-suggestions');
+            const urlWrap = document.getElementById('arxiu-link-url-wrap');
+            const urlInput = document.getElementById('arxiu-link-url');
+            let currentArxiuID = '';
+
+            function clearBookSearch() {
+                if (bookSearch) {
+                    bookSearch.value = '';
+                    bookSearch.dataset.api = '';
+                }
+                if (bookHidden) {
+                    bookHidden.value = '';
+                }
+                if (bookSuggestions) {
+                    bookSuggestions.innerHTML = '';
+                    bookSuggestions.classList.remove('is-open');
+                }
+            }
+
+            function updateArxiuState() {
+                const arxiuValue = arxiuHidden ? arxiuHidden.value.trim() : '';
+                const hasArxiu = arxiuValue !== '';
+                if (arxiuValue !== currentArxiuID) {
+                    clearBookSearch();
+                    currentArxiuID = arxiuValue;
+                }
+                if (bookWrap) {
+                    bookWrap.style.display = hasArxiu ? 'flex' : 'none';
+                }
+                if (urlWrap) {
+                    urlWrap.style.display = hasArxiu ? 'none' : 'flex';
+                }
+                if (urlInput) {
+                    urlInput.required = !hasArxiu;
+                    if (hasArxiu) {
+                        urlInput.value = '';
+                    }
+                }
+                if (hasArxiu && bookSearch) {
+                    bookSearch.dataset.api = `/api/documentals/llibres/suggest?arxiu_id=${encodeURIComponent(arxiuValue)}`;
+                }
+                if (!hasArxiu) {
+                    clearBookSearch();
+                }
+            }
             if (openBtns.length > 0) {
                 openBtns.forEach((btn) => {
                     btn.addEventListener('click', () => {
-                        if (select) select.value = '';
+                        if (arxiuSearch) arxiuSearch.value = '';
+                        if (arxiuHidden) arxiuHidden.value = '';
+                        clearBookSearch();
+                        currentArxiuID = '';
+                        updateArxiuState();
                         modal.classList.add('is-open');
                     });
                 });
@@ -739,6 +831,19 @@
                     modal.classList.remove('is-open');
                 });
             });
+            if (arxiuSearch) {
+                arxiuSearch.addEventListener('input', () => {
+                    updateArxiuState();
+                });
+                arxiuSearch.addEventListener('suggest:select', () => {
+                    updateArxiuState();
+                });
+            }
+            if (arxiuHidden) {
+                arxiuHidden.addEventListener('change', () => {
+                    updateArxiuState();
+                });
+            }
             if (form) {
                 form.addEventListener('submit', () => {
                     modal.classList.remove('is-open');

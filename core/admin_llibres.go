@@ -1097,6 +1097,17 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 	arxiusOpts, _ := a.DB.ListArxius(db.ArxiuFilter{Limit: 200})
 	links, _ := a.DB.ListLlibreURLs(id)
 	purgeStatus := strings.TrimSpace(r.URL.Query().Get("purge"))
+	linksErrorKey := ""
+	switch strings.TrimSpace(r.URL.Query().Get("links")) {
+	case "error":
+		linksErrorKey = "books.links.error.url"
+	case "missing_book":
+		linksErrorKey = "books.links.error.missing_book"
+	case "no_books":
+		linksErrorKey = "books.links.error.no_books"
+	case "invalid_book":
+		linksErrorKey = "books.links.error.invalid_book"
+	}
 	entityName := ""
 	if llibre.ArquebisbatID > 0 {
 		if ae, err := a.DB.GetArquebisbat(llibre.ArquebisbatID); err == nil && ae != nil {
@@ -1206,6 +1217,7 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 		"IsAdmin":             isAdmin,
 		"CanModerate":         canModerate,
 		"PurgeStatus":         purgeStatus,
+		"LinksErrorKey":       linksErrorKey,
 		"MarkType":            markType,
 		"MarkPublic":          markPublic,
 		"MarkOwn":             markOwn,
@@ -1382,12 +1394,66 @@ func (a *App) AdminAddLlibreURL(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/documentals/llibres", http.StatusSeeOther)
 		return
 	}
-	url := strings.TrimSpace(r.FormValue("url"))
-	if url == "" {
-		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID)+"?links=error", http.StatusSeeOther)
-		return
+	returnTo := safeReturnTo(r.FormValue("return_to"), "/documentals/llibres/"+strconv.Itoa(llibreID))
+	redirectWithError := func(code string) {
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"links": code}), http.StatusSeeOther)
 	}
 	arxiuID := parseNullInt64(r.FormValue("arxiu_id"))
+	if arxiuID.Valid && arxiuID.Int64 <= 0 {
+		arxiuID = sql.NullInt64{}
+	}
+	llibreRefID := parseNullInt64(r.FormValue("llibre_ref_id"))
+	if llibreRefID.Valid && llibreRefID.Int64 <= 0 {
+		llibreRefID = sql.NullInt64{}
+	}
+	url := strings.TrimSpace(r.FormValue("url"))
+	if !arxiuID.Valid && url == "" {
+		redirectWithError("error")
+		return
+	}
+	if arxiuID.Valid {
+		if !llibreRefID.Valid {
+			redirectWithError("missing_book")
+			return
+		}
+		arxiuBooks, err := a.DB.ListArxiuLlibres(int(arxiuID.Int64))
+		if err != nil {
+			Errorf("Error carregant llibres d'arxiu %d: %v", arxiuID.Int64, err)
+			redirectWithError("error")
+			return
+		}
+		if len(arxiuBooks) == 0 {
+			redirectWithError("no_books")
+			return
+		}
+		found := false
+		var selectedBook *db.ArxiuLlibreDetail
+		for _, row := range arxiuBooks {
+			if row.LlibreID == int(llibreRefID.Int64) {
+				found = true
+				selectedBook = &row
+				break
+			}
+		}
+		if !found {
+			redirectWithError("invalid_book")
+			return
+		}
+		if url == "" && selectedBook != nil && selectedBook.URLOverride.Valid {
+			url = strings.TrimSpace(selectedBook.URLOverride.String)
+		}
+		if url == "" {
+			refBook, err := a.DB.GetLlibre(int(llibreRefID.Int64))
+			if err == nil && refBook != nil {
+				url = strings.TrimSpace(refBook.URLBase)
+			}
+		}
+		if url == "" {
+			url = "/documentals/llibres/" + strconv.Itoa(int(llibreRefID.Int64))
+		}
+	} else {
+		llibreRefID = sql.NullInt64{}
+	}
 	tipus := parseNullString(r.FormValue("tipus"))
 	descripcio := parseNullString(r.FormValue("descripcio"))
 	createdBy := sql.NullInt64{}
@@ -1395,18 +1461,15 @@ func (a *App) AdminAddLlibreURL(w http.ResponseWriter, r *http.Request) {
 		createdBy = sql.NullInt64{Int64: int64(user.ID), Valid: true}
 	}
 	link := &db.LlibreURL{
-		LlibreID:   llibreID,
-		ArxiuID:    arxiuID,
-		URL:        url,
-		Tipus:      tipus,
-		Descripcio: descripcio,
-		CreatedBy:  createdBy,
+		LlibreID:    llibreID,
+		ArxiuID:     arxiuID,
+		LlibreRefID: llibreRefID,
+		URL:         url,
+		Tipus:       tipus,
+		Descripcio:  descripcio,
+		CreatedBy:   createdBy,
 	}
 	_ = a.DB.AddLlibreURL(link)
-	returnTo := strings.TrimSpace(r.FormValue("return_to"))
-	if returnTo == "" {
-		returnTo = "/documentals/llibres/" + strconv.Itoa(llibreID)
-	}
 	http.Redirect(w, r, returnTo, http.StatusSeeOther)
 }
 

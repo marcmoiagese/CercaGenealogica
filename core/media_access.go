@@ -92,6 +92,9 @@ func (a *App) mediaUserCanAccessItem(r *http.Request, user *db.User, album *db.M
 	if album == nil || item == nil {
 		return false
 	}
+	if album.AlbumType == "achievement_icon" {
+		return true
+	}
 	if a.mediaUserIsPrivileged(r, user, album) {
 		return true
 	}
