@@ -4774,6 +4774,227 @@ func (h sqlHelper) countAdminJobs(filter AdminJobFilter) (int, error) {
 	return total, nil
 }
 
+func (h sqlHelper) insertAdminAudit(entry *AdminAuditEntry) (int, error) {
+	if entry == nil {
+		return 0, errors.New("auditoria buida")
+	}
+	action := strings.TrimSpace(entry.Action)
+	if action == "" {
+		return 0, errors.New("auditoria sense accio")
+	}
+	actorVal := sql.NullInt64{Valid: entry.ActorID.Valid}
+	if entry.ActorID.Valid {
+		actorVal.Int64 = entry.ActorID.Int64
+	}
+	objectVal := sql.NullInt64{Valid: entry.ObjectID.Valid}
+	if entry.ObjectID.Valid {
+		objectVal.Int64 = entry.ObjectID.Int64
+	}
+	stmt := `
+        INSERT INTO admin_audit (actor_id, action, object_type, object_id, metadata_json, ip, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ` + h.nowFun + `)`
+	stmt = formatPlaceholders(h.style, stmt)
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+		if err := h.db.QueryRow(stmt, actorVal, action, strings.TrimSpace(entry.ObjectType), objectVal, entry.MetadataJSON, strings.TrimSpace(entry.IP)).Scan(&entry.ID); err != nil {
+			return 0, err
+		}
+		return entry.ID, nil
+	}
+	res, err := h.db.Exec(stmt, actorVal, action, strings.TrimSpace(entry.ObjectType), objectVal, entry.MetadataJSON, strings.TrimSpace(entry.IP))
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		entry.ID = int(id)
+	}
+	return entry.ID, nil
+}
+
+func (h sqlHelper) listAdminAudit(filter AdminAuditFilter) ([]AdminAuditEntry, error) {
+	clauses := []string{"1=1"}
+	args := []interface{}{}
+	if action := strings.TrimSpace(filter.Action); action != "" {
+		clauses = append(clauses, "action = ?")
+		args = append(args, action)
+	}
+	if filter.ActorID > 0 {
+		clauses = append(clauses, "actor_id = ?")
+		args = append(args, filter.ActorID)
+	}
+	if objType := strings.TrimSpace(filter.ObjectType); objType != "" {
+		clauses = append(clauses, "object_type = ?")
+		args = append(args, objType)
+	}
+	limit := filter.Limit
+	offset := filter.Offset
+	if limit <= 0 {
+		limit = 25
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	args = append(args, limit, offset)
+	query := `
+        SELECT id, actor_id, action, object_type, object_id, metadata_json, ip, created_at
+        FROM admin_audit
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        ORDER BY created_at DESC, id DESC
+        LIMIT ? OFFSET ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []AdminAuditEntry
+	for rows.Next() {
+		var row AdminAuditEntry
+		var createdVal interface{}
+		if err := rows.Scan(&row.ID, &row.ActorID, &row.Action, &row.ObjectType, &row.ObjectID, &row.MetadataJSON, &row.IP, &createdVal); err != nil {
+			return nil, err
+		}
+		createdAt, err := scanNullTime(createdVal)
+		if err != nil {
+			return nil, err
+		}
+		row.CreatedAt = createdAt
+		res = append(res, row)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) countAdminAudit(filter AdminAuditFilter) (int, error) {
+	clauses := []string{"1=1"}
+	args := []interface{}{}
+	if action := strings.TrimSpace(filter.Action); action != "" {
+		clauses = append(clauses, "action = ?")
+		args = append(args, action)
+	}
+	if filter.ActorID > 0 {
+		clauses = append(clauses, "actor_id = ?")
+		args = append(args, filter.ActorID)
+	}
+	if objType := strings.TrimSpace(filter.ObjectType); objType != "" {
+		clauses = append(clauses, "object_type = ?")
+		args = append(args, objType)
+	}
+	query := `SELECT COUNT(*) FROM admin_audit WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	total := 0
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) listAdminSessions(filter AdminSessionFilter) ([]AdminSessionRow, error) {
+	clauses := []string{"1=1"}
+	args := []interface{}{}
+	if filter.UserID > 0 {
+		clauses = append(clauses, "s.usuari_id = ?")
+		args = append(args, filter.UserID)
+	}
+	if filter.ActiveOnly {
+		revokedExpr := "s.revocat = 0"
+		if h.style == "postgres" {
+			revokedExpr = "s.revocat = FALSE"
+		}
+		clauses = append(clauses, revokedExpr)
+		clauses = append(clauses, "(s.expira IS NULL OR s.expira > "+h.nowFun+")")
+	}
+	limit := filter.Limit
+	offset := filter.Offset
+	if limit <= 0 {
+		limit = 25
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	args = append(args, limit, offset)
+	query := `
+        SELECT s.id, s.usuari_id, u.usuari, u.nom, u.cognoms, s.creat, s.expira, s.revocat, MAX(sal.ts) AS last_access
+        FROM sessions s
+        JOIN usuaris u ON u.id = s.usuari_id
+        LEFT JOIN session_access_log sal ON sal.session_id = s.id
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        GROUP BY s.id, s.usuari_id, u.usuari, u.nom, u.cognoms, s.creat, s.expira, s.revocat
+        ORDER BY s.creat DESC, s.id DESC
+        LIMIT ? OFFSET ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []AdminSessionRow
+	for rows.Next() {
+		var row AdminSessionRow
+		var createdVal interface{}
+		var expiraVal interface{}
+		var lastAccessVal interface{}
+		var revokedVal interface{}
+		if err := rows.Scan(&row.ID, &row.UserID, &row.Username, &row.Nom, &row.Cognoms, &createdVal, &expiraVal, &revokedVal, &lastAccessVal); err != nil {
+			return nil, err
+		}
+		createdAt, err := scanNullTime(createdVal)
+		if err != nil {
+			return nil, err
+		}
+		expiraAt, err := scanNullTime(expiraVal)
+		if err != nil {
+			return nil, err
+		}
+		lastAccessAt, err := scanNullTime(lastAccessVal)
+		if err != nil {
+			return nil, err
+		}
+		row.CreatedAt = createdAt
+		row.ExpiresAt = expiraAt
+		row.LastAccessAt = lastAccessAt
+		row.Revoked = parseBoolValue(revokedVal)
+		res = append(res, row)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) countAdminSessions(filter AdminSessionFilter) (int, error) {
+	clauses := []string{"1=1"}
+	args := []interface{}{}
+	if filter.UserID > 0 {
+		clauses = append(clauses, "usuari_id = ?")
+		args = append(args, filter.UserID)
+	}
+	if filter.ActiveOnly {
+		revokedExpr := "revocat = 0"
+		if h.style == "postgres" {
+			revokedExpr = "revocat = FALSE"
+		}
+		clauses = append(clauses, revokedExpr)
+		clauses = append(clauses, "(expira IS NULL OR expira > "+h.nowFun+")")
+	}
+	query := `SELECT COUNT(*) FROM sessions WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	total := 0
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) revokeUserSessions(userID int) error {
+	if userID <= 0 {
+		return errors.New("usuari invalid")
+	}
+	stmt := `UPDATE sessions SET revocat = 1 WHERE usuari_id = ?`
+	if h.style == "postgres" {
+		stmt = `UPDATE sessions SET revocat = TRUE WHERE usuari_id = ?`
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, userID)
+	return err
+}
+
 func (h sqlHelper) listTransparencySettings() ([]TransparencySetting, error) {
 	query := `
         SELECT setting_key, setting_value, updated_by, updated_at

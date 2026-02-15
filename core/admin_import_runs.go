@@ -3,6 +3,7 @@ package core
 import (
 	"database/sql"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"time"
 
@@ -14,7 +15,7 @@ const (
 	adminImportStatusError = "error"
 )
 
-func (a *App) logAdminImportRun(importType, status string, userID int) {
+func (a *App) logAdminImportRun(r *http.Request, importType, status string, userID int) {
 	if a == nil || a.DB == nil {
 		return
 	}
@@ -29,6 +30,10 @@ func (a *App) logAdminImportRun(importType, status string, userID int) {
 	if err := a.DB.InsertAdminImportRun(cleanType, cleanStatus, userID); err != nil {
 		Errorf("Admin import run log failed: %v", err)
 	}
+	a.logAdminAudit(r, userID, auditActionAdminImport, "import", 0, map[string]interface{}{
+		"type":   cleanType,
+		"status": cleanStatus,
+	})
 	payloadJSON, _ := json.Marshal(map[string]interface{}{
 		"import_type": cleanType,
 	})

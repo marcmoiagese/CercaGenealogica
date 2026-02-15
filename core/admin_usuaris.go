@@ -155,7 +155,8 @@ func (a *App) AdminListUsuaris(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminSetUserActive(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permUsers); !ok {
+	user, _, ok := a.requirePermission(w, r, permUsers)
+	if !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -181,11 +182,17 @@ func (a *App) AdminSetUserActive(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), "/admin/usuaris?err=1"), http.StatusSeeOther)
 		return
 	}
+	action := auditActionUserDeactivate
+	if active {
+		action = auditActionUserActivate
+	}
+	a.logAdminAudit(r, user.ID, action, "user", userID, nil)
 	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), "/admin/usuaris?ok=1"), http.StatusSeeOther)
 }
 
 func (a *App) AdminSetUserBanned(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permUsers); !ok {
+	user, _, ok := a.requirePermission(w, r, permUsers)
+	if !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -211,6 +218,11 @@ func (a *App) AdminSetUserBanned(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), "/admin/usuaris?err=1"), http.StatusSeeOther)
 		return
 	}
+	action := auditActionUserUnban
+	if banned {
+		action = auditActionUserBan
+	}
+	a.logAdminAudit(r, user.ID, action, "user", userID, nil)
 	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), "/admin/usuaris?ok=1"), http.StatusSeeOther)
 }
 

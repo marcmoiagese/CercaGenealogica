@@ -32,11 +32,11 @@ type maintenanceFormState struct {
 
 type maintenanceListRow struct {
 	db.MaintenanceWindow
-	ShowFromLabel     string
-	StartsAtLabel     string
-	EndsAtLabel       string
-	StatusKey         string
-	StatusClass       string
+	ShowFromLabel      string
+	StartsAtLabel      string
+	EndsAtLabel        string
+	StatusKey          string
+	StatusClass        string
 	SeverityLabelKey   string
 	SeverityBadgeClass string
 }
@@ -109,14 +109,14 @@ func (a *App) AdminListMaintenance(w http.ResponseWriter, r *http.Request) {
 	for _, row := range rows {
 		statusKey, statusClass := maintenanceStatus(now, row.StartsAt, row.EndsAt)
 		list = append(list, maintenanceListRow{
-			MaintenanceWindow:   row,
-			ShowFromLabel:       maintenanceDisplayTime(row.ShowFrom),
-			StartsAtLabel:       maintenanceDisplayTime(row.StartsAt),
-			EndsAtLabel:         maintenanceDisplayTime(row.EndsAt),
-			StatusKey:           statusKey,
-			StatusClass:         statusClass,
-			SeverityLabelKey:    maintenanceSeverityLabelKey(row.Severity),
-			SeverityBadgeClass:  maintenanceSeverityBadgeClass(row.Severity),
+			MaintenanceWindow:  row,
+			ShowFromLabel:      maintenanceDisplayTime(row.ShowFrom),
+			StartsAtLabel:      maintenanceDisplayTime(row.StartsAt),
+			EndsAtLabel:        maintenanceDisplayTime(row.EndsAt),
+			StatusKey:          statusKey,
+			StatusClass:        statusClass,
+			SeverityLabelKey:   maintenanceSeverityLabelKey(row.Severity),
+			SeverityBadgeClass: maintenanceSeverityBadgeClass(row.Severity),
 		})
 	}
 	token, _ := ensureCSRF(w, r)
@@ -134,11 +134,11 @@ func (a *App) AdminListMaintenance(w http.ResponseWriter, r *http.Request) {
 		msg = T(lang, "common.error")
 	}
 	RenderPrivateTemplate(w, r, "admin-maintenance-list.html", map[string]interface{}{
-		"User":       user,
-		"Windows":    list,
-		"CSRFToken":  token,
-		"Msg":        msg,
-		"Ok":         okMsg,
+		"User":      user,
+		"Windows":   list,
+		"CSRFToken": token,
+		"Msg":       msg,
+		"Ok":        okMsg,
 	})
 }
 
@@ -291,6 +291,9 @@ func (a *App) AdminSaveMaintenance(w http.ResponseWriter, r *http.Request) {
 		a.renderMaintenanceForm(w, r, user, form, id == 0, T(lang, "common.error"))
 		return
 	}
+	a.logAdminAudit(r, user.ID, auditActionMaintenanceSave, "maintenance", window.ID, map[string]interface{}{
+		"enabled": form.IsEnabled,
+	})
 	InvalidateMaintenanceCache()
 	http.Redirect(w, r, "/admin/manteniments?ok=1", http.StatusSeeOther)
 }
@@ -305,7 +308,8 @@ func (a *App) AdminDeleteMaintenance(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Formulari invalid", http.StatusBadRequest)
 		return
 	}
-	if _, ok := a.requirePermissionKey(w, r, permKeyAdminMaintenanceManage, PermissionTarget{}); !ok {
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminMaintenanceManage, PermissionTarget{})
+	if !ok {
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
@@ -321,6 +325,7 @@ func (a *App) AdminDeleteMaintenance(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/manteniments?err=1", http.StatusSeeOther)
 		return
 	}
+	a.logAdminAudit(r, user.ID, auditActionMaintenanceDelete, "maintenance", id, nil)
 	InvalidateMaintenanceCache()
 	http.Redirect(w, r, "/admin/manteniments?deleted=1", http.StatusSeeOther)
 }

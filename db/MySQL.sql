@@ -133,6 +133,21 @@ CREATE TABLE IF NOT EXISTS admin_jobs (
     INDEX idx_admin_jobs_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS admin_audit (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    actor_id INT UNSIGNED NULL,
+    action VARCHAR(128) NOT NULL,
+    object_type VARCHAR(64) NULL,
+    object_id INT NULL,
+    metadata_json LONGTEXT,
+    ip VARCHAR(45),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_admin_audit_created (created_at),
+    INDEX idx_admin_audit_action (action),
+    INDEX idx_admin_audit_actor (actor_id),
+    INDEX idx_admin_audit_object (object_type, object_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS grups (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nom VARCHAR(255) NOT NULL UNIQUE,

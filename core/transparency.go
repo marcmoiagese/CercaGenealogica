@@ -144,6 +144,7 @@ func (a *App) AdminTransparencySaveSettings(w http.ResponseWriter, r *http.Reque
 		http.Redirect(w, r, "/admin/transparencia?err=1", http.StatusSeeOther)
 		return
 	}
+	a.logAdminAudit(r, user.ID, auditActionTransparencyUpdate, "transparency", 0, nil)
 	http.Redirect(w, r, "/admin/transparencia?ok=1", http.StatusSeeOther)
 }
 
@@ -221,6 +222,9 @@ func (a *App) AdminTransparencySaveContributor(w http.ResponseWriter, r *http.Re
 		a.renderTransparencyWithError(w, r, user, form, T(lang, "common.error"))
 		return
 	}
+	a.logAdminAudit(r, user.ID, auditActionTransparencyContributor, "transparency", contributor.ID, map[string]interface{}{
+		"public": contributor.IsPublic,
+	})
 	http.Redirect(w, r, "/admin/transparencia?ok=1", http.StatusSeeOther)
 }
 
@@ -233,7 +237,8 @@ func (a *App) AdminTransparencyDeleteContributor(w http.ResponseWriter, r *http.
 		http.Error(w, "Formulari invalid", http.StatusBadRequest)
 		return
 	}
-	if _, ok := a.requirePermissionKey(w, r, permKeyAdminTransparencyManage, PermissionTarget{}); !ok {
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminTransparencyManage, PermissionTarget{})
+	if !ok {
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
@@ -249,6 +254,9 @@ func (a *App) AdminTransparencyDeleteContributor(w http.ResponseWriter, r *http.
 		http.Redirect(w, r, "/admin/transparencia?err=1", http.StatusSeeOther)
 		return
 	}
+	a.logAdminAudit(r, user.ID, auditActionTransparencyContributor, "transparency", id, map[string]interface{}{
+		"deleted": true,
+	})
 	http.Redirect(w, r, "/admin/transparencia?deleted=1", http.StatusSeeOther)
 }
 

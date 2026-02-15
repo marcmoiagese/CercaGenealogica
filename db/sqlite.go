@@ -333,6 +333,24 @@ func (d *SQLite) ListAdminJobs(filter AdminJobFilter) ([]AdminJob, error) {
 func (d *SQLite) CountAdminJobs(filter AdminJobFilter) (int, error) {
 	return d.help.countAdminJobs(filter)
 }
+func (d *SQLite) InsertAdminAudit(entry *AdminAuditEntry) (int, error) {
+	return d.help.insertAdminAudit(entry)
+}
+func (d *SQLite) ListAdminAudit(filter AdminAuditFilter) ([]AdminAuditEntry, error) {
+	return d.help.listAdminAudit(filter)
+}
+func (d *SQLite) CountAdminAudit(filter AdminAuditFilter) (int, error) {
+	return d.help.countAdminAudit(filter)
+}
+func (d *SQLite) ListAdminSessions(filter AdminSessionFilter) ([]AdminSessionRow, error) {
+	return d.help.listAdminSessions(filter)
+}
+func (d *SQLite) CountAdminSessions(filter AdminSessionFilter) (int, error) {
+	return d.help.countAdminSessions(filter)
+}
+func (d *SQLite) RevokeUserSessions(userID int) error {
+	return d.help.revokeUserSessions(userID)
+}
 
 func (d *SQLite) ListUsersAdmin() ([]UserAdminRow, error) {
 	return d.help.listUsersAdmin()

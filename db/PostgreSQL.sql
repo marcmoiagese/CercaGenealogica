@@ -141,6 +141,21 @@ CREATE INDEX IF NOT EXISTS idx_admin_jobs_kind ON admin_jobs(kind);
 CREATE INDEX IF NOT EXISTS idx_admin_jobs_status ON admin_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_admin_jobs_created ON admin_jobs(created_at);
 
+CREATE TABLE IF NOT EXISTS admin_audit (
+    id SERIAL PRIMARY KEY,
+    actor_id INTEGER,
+    action TEXT NOT NULL,
+    object_type TEXT,
+    object_id INTEGER,
+    metadata_json TEXT,
+    ip TEXT,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit(created_at);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_action ON admin_audit(action);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_actor ON admin_audit(actor_id);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_object ON admin_audit(object_type, object_id);
+
 CREATE TABLE IF NOT EXISTS grups (
     id SERIAL PRIMARY KEY,
     nom TEXT NOT NULL UNIQUE,

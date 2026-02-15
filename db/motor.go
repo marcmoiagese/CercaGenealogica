@@ -60,6 +60,12 @@ type DB interface {
 	GetAdminJob(id int) (*AdminJob, error)
 	ListAdminJobs(filter AdminJobFilter) ([]AdminJob, error)
 	CountAdminJobs(filter AdminJobFilter) (int, error)
+	InsertAdminAudit(entry *AdminAuditEntry) (int, error)
+	ListAdminAudit(filter AdminAuditFilter) ([]AdminAuditEntry, error)
+	CountAdminAudit(filter AdminAuditFilter) (int, error)
+	ListAdminSessions(filter AdminSessionFilter) ([]AdminSessionRow, error)
+	CountAdminSessions(filter AdminSessionFilter) (int, error)
+	RevokeUserSessions(userID int) error
 	// Missatgeria interna
 	GetOrCreateDMThread(userA, userB int) (*DMThread, error)
 	GetDMThreadByUsers(userA, userB int) (*DMThread, error)
@@ -557,6 +563,44 @@ type AdminJobFilter struct {
 	CreatedBy int
 	Limit     int
 	Offset    int
+}
+
+type AdminAuditEntry struct {
+	ID           int
+	ActorID      sql.NullInt64
+	Action       string
+	ObjectType   string
+	ObjectID     sql.NullInt64
+	MetadataJSON string
+	IP           string
+	CreatedAt    sql.NullTime
+}
+
+type AdminAuditFilter struct {
+	Action     string
+	ActorID    int
+	ObjectType string
+	Limit      int
+	Offset     int
+}
+
+type AdminSessionRow struct {
+	ID           int
+	UserID       int
+	Username     string
+	Nom          string
+	Cognoms      string
+	CreatedAt    sql.NullTime
+	ExpiresAt    sql.NullTime
+	LastAccessAt sql.NullTime
+	Revoked      bool
+}
+
+type AdminSessionFilter struct {
+	UserID     int
+	ActiveOnly bool
+	Limit      int
+	Offset     int
 }
 
 type TransparencySetting struct {

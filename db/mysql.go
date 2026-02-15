@@ -317,6 +317,24 @@ func (d *MySQL) ListAdminJobs(filter AdminJobFilter) ([]AdminJob, error) {
 func (d *MySQL) CountAdminJobs(filter AdminJobFilter) (int, error) {
 	return d.help.countAdminJobs(filter)
 }
+func (d *MySQL) InsertAdminAudit(entry *AdminAuditEntry) (int, error) {
+	return d.help.insertAdminAudit(entry)
+}
+func (d *MySQL) ListAdminAudit(filter AdminAuditFilter) ([]AdminAuditEntry, error) {
+	return d.help.listAdminAudit(filter)
+}
+func (d *MySQL) CountAdminAudit(filter AdminAuditFilter) (int, error) {
+	return d.help.countAdminAudit(filter)
+}
+func (d *MySQL) ListAdminSessions(filter AdminSessionFilter) ([]AdminSessionRow, error) {
+	return d.help.listAdminSessions(filter)
+}
+func (d *MySQL) CountAdminSessions(filter AdminSessionFilter) (int, error) {
+	return d.help.countAdminSessions(filter)
+}
+func (d *MySQL) RevokeUserSessions(userID int) error {
+	return d.help.revokeUserSessions(userID)
+}
 
 func (d *MySQL) ListUsersAdmin() ([]UserAdminRow, error) {
 	return d.help.listUsersAdmin()

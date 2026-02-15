@@ -93,19 +93,19 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		a.logAdminImportRun("arxius", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "arxius", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams("/admin/arxius/import", map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	returnTo := safeReturnTo(r.FormValue("return_to"), "/admin/arxius/import")
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		a.logAdminImportRun("arxius", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "arxius", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	file, _, err := r.FormFile("import_file")
 	if err != nil {
-		a.logAdminImportRun("arxius", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "arxius", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
@@ -113,7 +113,7 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 
 	var payload arxiusExportPayload
 	if err := json.NewDecoder(file).Decode(&payload); err != nil {
-		a.logAdminImportRun("arxius", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "arxius", adminImportStatusError, user.ID)
 		http.Redirect(w, r, "/admin/arxius/import?err=1", http.StatusSeeOther)
 		return
 	}
@@ -216,6 +216,6 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 	if errors > 0 {
 		status = adminImportStatusError
 	}
-	a.logAdminImportRun("arxius", status, user.ID)
+	a.logAdminImportRun(r, "arxius", status, user.ID)
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }

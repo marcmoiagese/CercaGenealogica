@@ -296,19 +296,19 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		a.logAdminImportRun("territori", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "territori", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams("/admin/territori/import", map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	returnTo := safeReturnTo(r.FormValue("return_to"), "/admin/territori/import")
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		a.logAdminImportRun("territori", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "territori", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	file, _, err := r.FormFile("import_file")
 	if err != nil {
-		a.logAdminImportRun("territori", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "territori", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
@@ -316,13 +316,13 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 	var payload territoriExportPayload
 	dec := json.NewDecoder(file)
 	if err := dec.Decode(&payload); err != nil {
-		a.logAdminImportRun("territori", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "territori", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	paisos, err := a.DB.ListPaisos()
 	if err != nil {
-		a.logAdminImportRun("territori", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "territori", adminImportStatusError, user.ID)
 		http.Redirect(w, r, "/admin/territori/import?err=1", http.StatusSeeOther)
 		return
 	}
@@ -537,7 +537,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 	if levelsErrors > 0 || municipisErrors > 0 {
 		status = adminImportStatusError
 	}
-	a.logAdminImportRun("territori", status, user.ID)
+	a.logAdminImportRun(r, "territori", status, user.ID)
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
 

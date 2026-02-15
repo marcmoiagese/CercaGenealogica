@@ -1,0 +1,258 @@
+{{ define "admin-auditoria.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.audit.title" }}</title>
+    {{ template "styles-private" . }}
+    <style>
+        .audit-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: flex-end;
+            margin: 0 0 1rem;
+            padding: 0.75rem 0.9rem;
+            border-radius: 12px;
+            background: #f9fafb;
+            border: 1px solid rgba(0,0,0,0.06);
+        }
+        .audit-filters .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .audit-filters label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #3b4650;
+        }
+        .audit-filters select,
+        .audit-filters input[type="text"],
+        .audit-filters input[type="number"] {
+            padding: 0.45rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid #d5d5d5;
+            background: #fff;
+            min-width: 180px;
+        }
+        .audit-table td {
+            vertical-align: top;
+        }
+        .audit-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            color: #6b7280;
+            font-size: 0.85rem;
+        }
+        .audit-details {
+            max-width: 320px;
+            word-break: break-word;
+            font-size: 0.85rem;
+        }
+        .audit-details pre {
+            margin: 0.5rem 0 0;
+            padding: 0.6rem 0.75rem;
+            border-radius: 8px;
+            background: #0f172a;
+            color: #e2e8f0;
+            overflow-x: auto;
+            font-size: 0.8rem;
+        }
+        .audit-paginacio {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            margin-top: 1rem;
+        }
+        .sessions-header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: flex-end;
+            margin: 1.5rem 0 1rem;
+        }
+        .sessions-header .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .sessions-header input[type="number"],
+        .sessions-header select {
+            padding: 0.45rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid #d5d5d5;
+            background: #fff;
+            min-width: 160px;
+        }
+        .sessions-table td {
+            vertical-align: top;
+        }
+        @media (max-width: 900px) {
+            .audit-details {
+                max-width: 240px;
+            }
+        }
+    </style>
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <div>
+                    <h1>{{ t .Lang "admin.audit.title" }}</h1>
+                    <p class="muted">{{ t .Lang "admin.audit.subtitle" }}</p>
+                </div>
+            </header>
+
+            <form class="audit-filters" method="get" action="/admin/auditoria">
+                <div class="filter-group">
+                    <label for="filter-action">{{ t .Lang "admin.audit.filter.action" }}</label>
+                    <select id="filter-action" name="action">
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                        {{ range .Data.ActionOptions }}
+                        <option value="{{ .Value }}" {{ if eq $.Data.FilterAction .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-object">{{ t .Lang "admin.audit.filter.object" }}</label>
+                    <select id="filter-object" name="object">
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                        {{ range .Data.ObjectOptions }}
+                        <option value="{{ .Value }}" {{ if eq $.Data.FilterObject .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-actor">{{ t .Lang "admin.audit.filter.actor" }}</label>
+                    <input id="filter-actor" name="actor" type="number" min="1" value="{{ .Data.FilterActor }}" placeholder="{{ t .Lang "admin.audit.filter.actor.placeholder" }}">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-per-page">{{ t .Lang "admin.audit.filter.per_page" }}</label>
+                    <select id="filter-per-page" name="per_page">
+                        <option value="10" {{ if eq .Data.AuditPerPage 10 }}selected{{ end }}>10</option>
+                        <option value="25" {{ if eq .Data.AuditPerPage 25 }}selected{{ end }}>25</option>
+                        <option value="50" {{ if eq .Data.AuditPerPage 50 }}selected{{ end }}>50</option>
+                        <option value="100" {{ if eq .Data.AuditPerPage 100 }}selected{{ end }}>100</option>
+                    </select>
+                </div>
+                <button type="submit" class="boto-primari">{{ t .Lang "admin.audit.filter.apply" }}</button>
+            </form>
+
+            <div class="taula-wrapper">
+                <table class="taula audit-table">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "admin.audit.table.when" }}</th>
+                            <th>{{ t .Lang "admin.audit.table.actor" }}</th>
+                            <th>{{ t .Lang "admin.audit.table.action" }}</th>
+                            <th>{{ t .Lang "admin.audit.table.object" }}</th>
+                            <th>{{ t .Lang "admin.audit.table.ip" }}</th>
+                            <th>{{ t .Lang "admin.audit.table.metadata" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.AuditRows }}
+                        <tr>
+                            <td>{{ if .CreatedAt }}{{ .CreatedAt }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .Actor }}{{ .Actor }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .ActionLabel }}{{ .ActionLabel }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .ObjectLabel }}{{ .ObjectLabel }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .IP }}{{ .IP }}{{ else }}-{{ end }}</td>
+                            <td class="audit-details">
+                                {{ if .Metadata }}
+                                <details>
+                                    <summary>{{ t $.Lang "admin.audit.table.metadata.view" }}</summary>
+                                    <pre>{{ .Metadata }}</pre>
+                                </details>
+                                {{ else }}
+                                -
+                                {{ end }}
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="6">{{ t .Lang "admin.audit.table.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+            {{ if gt .Data.AuditTotalPages 1 }}
+            <div class="audit-paginacio">
+                {{ if .Data.AuditHasPrev }}
+                    <a class="boto-secundari" href="{{ .Data.AuditPageBase }}&page={{ .Data.AuditPrevPage }}">{{ t .Lang "common.prev" }}</a>
+                {{ end }}
+                <span>{{ t .Lang "common.page_info" (printf "%d" .Data.AuditPage) (printf "%d" .Data.AuditTotalPages) }}</span>
+                {{ if .Data.AuditHasNext }}
+                    <a class="boto-secundari" href="{{ .Data.AuditPageBase }}&page={{ .Data.AuditNextPage }}">{{ t .Lang "common.next" }}</a>
+                {{ end }}
+            </div>
+            {{ end }}
+
+            <div class="sessions-header">
+                <div class="filter-group">
+                    <label for="session-user">{{ t .Lang "admin.audit.sessions.filter.user" }}</label>
+                    <input id="session-user" name="session_user" type="number" min="1" value="{{ .Data.SessionsFilterUser }}" form="sessions-filter-form" placeholder="{{ t .Lang "admin.audit.sessions.filter.user.placeholder" }}">
+                </div>
+                <div class="filter-group">
+                    <label for="session-per-page">{{ t .Lang "admin.audit.sessions.filter.per_page" }}</label>
+                    <select id="session-per-page" name="session_per_page" form="sessions-filter-form">
+                        <option value="10" {{ if eq .Data.SessionsPerPage 10 }}selected{{ end }}>10</option>
+                        <option value="25" {{ if eq .Data.SessionsPerPage 25 }}selected{{ end }}>25</option>
+                        <option value="50" {{ if eq .Data.SessionsPerPage 50 }}selected{{ end }}>50</option>
+                    </select>
+                </div>
+                <form id="sessions-filter-form" method="get" action="/admin/auditoria">
+                    <input type="hidden" name="action" value="{{ .Data.FilterAction }}">
+                    <input type="hidden" name="object" value="{{ .Data.FilterObject }}">
+                    <input type="hidden" name="actor" value="{{ .Data.FilterActor }}">
+                    <input type="hidden" name="per_page" value="{{ .Data.AuditPerPage }}">
+                    <button type="submit" class="boto-secundari">{{ t .Lang "admin.audit.sessions.filter.apply" }}</button>
+                </form>
+            </div>
+
+            <div class="taula-wrapper">
+                <table class="taula sessions-table">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "admin.audit.sessions.table.session" }}</th>
+                            <th>{{ t .Lang "admin.audit.sessions.table.user" }}</th>
+                            <th>{{ t .Lang "admin.audit.sessions.table.created" }}</th>
+                            <th>{{ t .Lang "admin.audit.sessions.table.expires" }}</th>
+                            <th>{{ t .Lang "admin.audit.sessions.table.last_access" }}</th>
+                            <th>{{ t .Lang "admin.audit.sessions.table.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Sessions }}
+                        <tr>
+                            <td>#{{ .ID }}</td>
+                            <td>{{ if .UserLabel }}{{ .UserLabel }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .CreatedAt }}{{ .CreatedAt }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .ExpiresAt }}{{ .ExpiresAt }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .LastAccess }}{{ .LastAccess }}{{ else }}-{{ end }}</td>
+                            <td>
+                                <form method="post" action="/admin/usuaris/revocar-sessions">
+                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                    <input type="hidden" name="user_id" value="{{ .UserID }}">
+                                    <input type="hidden" name="return_to" value="/admin/auditoria">
+                                    <button type="submit" class="boto-perill">{{ t $.Lang "admin.audit.sessions.revoke" }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="6">{{ t .Lang "admin.audit.sessions.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

@@ -325,6 +325,11 @@ func (a *App) adminJobsCreateAPI(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "failed to start", http.StatusInternalServerError)
 			return
 		}
+		a.logAdminAudit(r, user.ID, auditActionNivellsRebuild, "nivell", payload.NivellID, map[string]interface{}{
+			"kind":   payload.Kind,
+			"all":    payload.All,
+			"source": "job_center",
+		})
 		writeJSON(w, map[string]interface{}{
 			"ok":             true,
 			"job_id":         job.AdminJobID,
@@ -375,6 +380,9 @@ func (a *App) adminJobsRetryAPI(w http.ResponseWriter, r *http.Request, jobID in
 			http.Error(w, "failed to retry", http.StatusInternalServerError)
 			return
 		}
+		a.logAdminAudit(r, user.ID, auditActionJobRetry, "job", jobID, map[string]interface{}{
+			"kind": payload.Kind,
+		})
 		writeJSON(w, map[string]interface{}{
 			"ok":             true,
 			"job_id":         newJob.AdminJobID,

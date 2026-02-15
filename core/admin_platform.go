@@ -48,6 +48,7 @@ func (a *App) adminPlatformConfigSave(w http.ResponseWriter, r *http.Request, us
 			return
 		}
 	}
+	a.logAdminAudit(r, user.ID, auditActionPlatformUpdate, "platform", 0, nil)
 	InvalidatePlatformSettingsCache()
 	http.Redirect(w, r, "/admin/plataforma/config?ok=1", http.StatusSeeOther)
 }

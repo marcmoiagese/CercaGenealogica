@@ -318,6 +318,24 @@ func (d *PostgreSQL) ListAdminJobs(filter AdminJobFilter) ([]AdminJob, error) {
 func (d *PostgreSQL) CountAdminJobs(filter AdminJobFilter) (int, error) {
 	return d.help.countAdminJobs(filter)
 }
+func (d *PostgreSQL) InsertAdminAudit(entry *AdminAuditEntry) (int, error) {
+	return d.help.insertAdminAudit(entry)
+}
+func (d *PostgreSQL) ListAdminAudit(filter AdminAuditFilter) ([]AdminAuditEntry, error) {
+	return d.help.listAdminAudit(filter)
+}
+func (d *PostgreSQL) CountAdminAudit(filter AdminAuditFilter) (int, error) {
+	return d.help.countAdminAudit(filter)
+}
+func (d *PostgreSQL) ListAdminSessions(filter AdminSessionFilter) ([]AdminSessionRow, error) {
+	return d.help.listAdminSessions(filter)
+}
+func (d *PostgreSQL) CountAdminSessions(filter AdminSessionFilter) (int, error) {
+	return d.help.countAdminSessions(filter)
+}
+func (d *PostgreSQL) RevokeUserSessions(userID int) error {
+	return d.help.revokeUserSessions(userID)
+}
 
 func (d *PostgreSQL) ListUsersAdmin() ([]UserAdminRow, error) {
 	return d.help.listUsersAdmin()

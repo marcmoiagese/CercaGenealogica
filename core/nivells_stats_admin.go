@@ -45,6 +45,11 @@ func (a *App) NivellStatsAdminAPI(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "failed to start", http.StatusInternalServerError)
 				return
 			}
+			a.logAdminAudit(r, user.ID, auditActionNivellsRebuild, "nivell", nivellID, map[string]interface{}{
+				"kind":   "demografia",
+				"all":    all,
+				"source": "nivells_admin",
+			})
 			writeJSON(w, map[string]interface{}{"ok": true, "job_id": job.ID, "admin_job_id": job.AdminJobID})
 			return
 		}
@@ -84,6 +89,11 @@ func (a *App) NivellStatsAdminAPI(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "failed to start", http.StatusInternalServerError)
 				return
 			}
+			a.logAdminAudit(r, user.ID, auditActionNivellsRebuild, "nivell", nivellID, map[string]interface{}{
+				"kind":   "stats",
+				"all":    all,
+				"source": "nivells_admin",
+			})
 			writeJSON(w, map[string]interface{}{"ok": true, "job_id": job.ID, "admin_job_id": job.AdminJobID})
 			return
 		}

@@ -227,19 +227,19 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		a.logAdminImportRun("eclesiastic", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "eclesiastic", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams("/admin/eclesiastic/import", map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	returnTo := safeReturnTo(r.FormValue("return_to"), "/admin/eclesiastic/import")
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		a.logAdminImportRun("eclesiastic", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "eclesiastic", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	file, _, err := r.FormFile("import_file")
 	if err != nil {
-		a.logAdminImportRun("eclesiastic", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "eclesiastic", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
@@ -247,7 +247,7 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 
 	var payload eclesiasticExportPayload
 	if err := json.NewDecoder(file).Decode(&payload); err != nil {
-		a.logAdminImportRun("eclesiastic", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "eclesiastic", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
@@ -414,7 +414,7 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 	if entErrors > 0 || relErrors > 0 {
 		status = adminImportStatusError
 	}
-	a.logAdminImportRun("eclesiastic", status, user.ID)
+	a.logAdminImportRun(r, "eclesiastic", status, user.ID)
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
 

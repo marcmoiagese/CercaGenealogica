@@ -164,19 +164,19 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		a.logAdminImportRun("llibres", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "llibres", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams("/admin/llibres/import", map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	returnTo := safeReturnTo(r.FormValue("return_to"), "/admin/llibres/import")
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		a.logAdminImportRun("llibres", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "llibres", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	file, _, err := r.FormFile("import_file")
 	if err != nil {
-		a.logAdminImportRun("llibres", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "llibres", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
@@ -184,7 +184,7 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 
 	var payload llibresExportPayload
 	if err := json.NewDecoder(file).Decode(&payload); err != nil {
-		a.logAdminImportRun("llibres", adminImportStatusError, user.ID)
+		a.logAdminImportRun(r, "llibres", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
@@ -337,7 +337,7 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 	if errors > 0 {
 		status = adminImportStatusError
 	}
-	a.logAdminImportRun("llibres", status, user.ID)
+	a.logAdminImportRun(r, "llibres", status, user.ID)
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
 

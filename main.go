@@ -291,6 +291,7 @@ func main() {
 	http.HandleFunc("/api/admin/control/moderacio/jobs/", applyMiddleware(app.AdminControlModeracioJobStatus, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/admin/jobs", applyMiddleware(app.AdminJobsAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/admin/jobs/", applyMiddleware(app.AdminJobsDetailAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/admin/auditoria", applyMiddleware(app.AdminAuditAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/arbre/expand", applyMiddleware(app.RequireLogin(app.ArbreExpandAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/persones/", applyMiddleware(app.RequireLogin(app.PersonaArbreAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/mapes/", applyMiddleware(app.MapesAPI, core.BlockIPs, core.RateLimit))
@@ -725,6 +726,7 @@ func main() {
 	http.HandleFunc("/admin/usuaris", applyMiddleware(app.AdminListUsuaris, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/usuaris/actiu", applyMiddleware(app.AdminSetUserActive, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/usuaris/ban", applyMiddleware(app.AdminSetUserBanned, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/usuaris/revocar-sessions", applyMiddleware(app.AdminRevokeUserSessions, core.BlockIPs, core.RateLimit))
 
 	// Regles de punts
 	http.HandleFunc("/admin/punts/regles", applyMiddleware(app.AdminListPuntsRegles, core.BlockIPs, core.RateLimit))
@@ -753,6 +755,7 @@ func main() {
 	})
 	// Control Center + marca pública
 	http.HandleFunc("/admin/control", applyMiddleware(app.AdminControlCenter, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/auditoria", applyMiddleware(app.AdminAuditPage, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/jobs", applyMiddleware(app.AdminJobsListPage, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/jobs/", applyMiddleware(app.AdminJobsShowPage, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/plataforma/config", applyMiddleware(app.AdminPlatformConfig, core.BlockIPs, core.RateLimit))
