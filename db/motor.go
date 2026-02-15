@@ -37,6 +37,29 @@ type DB interface {
 	ListDashboardWidgets(userID int) ([]DashboardWidgetConfig, error)
 	SaveDashboardWidgets(userID int, widgets []DashboardWidgetConfig) error
 	ClearDashboardWidgets(userID int) error
+	ListPlatformSettings() ([]PlatformSetting, error)
+	UpsertPlatformSetting(key, value string, updatedBy int) error
+	ListMaintenanceWindows() ([]MaintenanceWindow, error)
+	GetMaintenanceWindow(id int) (*MaintenanceWindow, error)
+	SaveMaintenanceWindow(w *MaintenanceWindow) (int, error)
+	DeleteMaintenanceWindow(id int) error
+	GetActiveMaintenanceWindow(now time.Time) (*MaintenanceWindow, error)
+	GetAdminKPIsGeneral() (*AdminKPIsGeneral, error)
+	CountUsersSince(since time.Time) (int, error)
+	ListTransparencySettings() ([]TransparencySetting, error)
+	UpsertTransparencySetting(key, value string, updatedBy int) error
+	ListTransparencyContributors(includePrivate bool) ([]TransparencyContributor, error)
+	GetTransparencyContributor(id int) (*TransparencyContributor, error)
+	SaveTransparencyContributor(c *TransparencyContributor) (int, error)
+	DeleteTransparencyContributor(id int) error
+	InsertAdminImportRun(importType, status string, createdBy int) error
+	CountAdminImportRunsSince(since time.Time) (AdminImportRunSummary, error)
+	CreateAdminJob(job *AdminJob) (int, error)
+	UpdateAdminJobProgress(id int, progressDone, progressTotal int) error
+	UpdateAdminJobStatus(id int, status, errorText, resultJSON string, finishedAt *time.Time) error
+	GetAdminJob(id int) (*AdminJob, error)
+	ListAdminJobs(filter AdminJobFilter) ([]AdminJob, error)
+	CountAdminJobs(filter AdminJobFilter) (int, error)
 	// Missatgeria interna
 	GetOrCreateDMThread(userA, userB int) (*DMThread, error)
 	GetDMThreadByUsers(userA, userB int) (*DMThread, error)
@@ -473,6 +496,90 @@ type DashboardWidgetConfig struct {
 	Order        int
 	Hidden       bool
 	SettingsJSON string
+}
+
+type PlatformSetting struct {
+	Key       string
+	Value     string
+	UpdatedBy sql.NullInt64
+	UpdatedAt sql.NullTime
+}
+
+type MaintenanceWindow struct {
+	ID          int
+	Title       string
+	Message     string
+	Severity    string
+	ShowFrom    string
+	StartsAt    string
+	EndsAt      string
+	CTALabel    string
+	CTAURL      string
+	IsEnabled   bool
+	Dismissible bool
+	CreatedBy   sql.NullInt64
+	UpdatedBy   sql.NullInt64
+	CreatedAt   string
+	UpdatedAt   string
+}
+
+type AdminKPIsGeneral struct {
+	TotalUsers             int
+	ActiveUsers            int
+	ContributorUsers       int
+	ValidatedContributions int
+}
+
+type AdminImportRunSummary struct {
+	Ok    int
+	Error int
+}
+
+type AdminJob struct {
+	ID            int
+	Kind          string
+	Status        string
+	ProgressTotal int
+	ProgressDone  int
+	PayloadJSON   string
+	ResultJSON    string
+	ErrorText     string
+	StartedAt     sql.NullTime
+	FinishedAt    sql.NullTime
+	CreatedAt     sql.NullTime
+	UpdatedAt     sql.NullTime
+	CreatedBy     sql.NullInt64
+}
+
+type AdminJobFilter struct {
+	Kind      string
+	Status    string
+	CreatedBy int
+	Limit     int
+	Offset    int
+}
+
+type TransparencySetting struct {
+	Key       string
+	Value     string
+	UpdatedBy sql.NullInt64
+	UpdatedAt sql.NullTime
+}
+
+type TransparencyContributor struct {
+	ID          int
+	Name        string
+	Type        string
+	Description string
+	Amount      sql.NullFloat64
+	Currency    string
+	URL         string
+	IsPublic    bool
+	SortOrder   int
+	CreatedBy   sql.NullInt64
+	UpdatedBy   sql.NullInt64
+	CreatedAt   string
+	UpdatedAt   string
 }
 
 type UserAdminRow struct {
@@ -1241,6 +1348,7 @@ type NivellAdministratiu struct {
 	AnyFi          sql.NullInt64
 	Estat          string
 	CreatedBy      sql.NullInt64
+	CreatedAt      sql.NullTime
 	ModeracioEstat string
 	ModeracioMotiu string
 	ModeratedBy    sql.NullInt64
@@ -1399,6 +1507,8 @@ type ArquebisbatRow struct {
 	AnyInici       sql.NullInt64
 	AnyFi          sql.NullInt64
 	ModeracioEstat string
+	CreatedBy      sql.NullInt64
+	CreatedAt      sql.NullTime
 }
 
 type ArquebisbatFilter struct {
@@ -1452,6 +1562,7 @@ type Arxiu struct {
 	AcceptaDonacions      bool
 	DonacionsURL          string
 	CreatedBy             sql.NullInt64
+	CreatedAt             sql.NullTime
 	ModeracioEstat        string
 	ModeracioMotiu        string
 	ModeratedBy           sql.NullInt64
@@ -1543,6 +1654,7 @@ type Llibre struct {
 	Pagina            string
 	IndexacioCompleta bool
 	CreatedBy         sql.NullInt64
+	CreatedAt         sql.NullTime
 	ModeracioEstat    string
 	ModeracioMotiu    string
 	ModeratedBy       sql.NullInt64

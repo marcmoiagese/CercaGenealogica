@@ -8,15 +8,16 @@ import (
 )
 
 type nivellRebuildJob struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"`
-	Total     int       `json:"total"`
-	Processed int       `json:"processed"`
-	Done      bool      `json:"done"`
-	Error     string    `json:"error,omitempty"`
-	Logs      []string  `json:"logs,omitempty"`
-	StartedAt time.Time `json:"started_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          string    `json:"id"`
+	AdminJobID  int       `json:"admin_job_id,omitempty"`
+	Kind        string    `json:"kind"`
+	Total       int       `json:"total"`
+	Processed   int       `json:"processed"`
+	Done        bool      `json:"done"`
+	Error       string    `json:"error,omitempty"`
+	Logs        []string  `json:"logs,omitempty"`
+	StartedAt   time.Time `json:"started_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type nivellRebuildStore struct {
@@ -47,16 +48,17 @@ func nextNivellRebuildID() string {
 	return fmt.Sprintf("nivell-rebuild-%d-%d", time.Now().UnixNano(), seq)
 }
 
-func (s *nivellRebuildStore) newJob(kind string, total int) *nivellRebuildJob {
+func (s *nivellRebuildStore) newJob(kind string, total int, adminJobID int) *nivellRebuildJob {
 	job := &nivellRebuildJob{
-		ID:        nextNivellRebuildID(),
-		Kind:      kind,
-		Total:     total,
-		Processed: 0,
-		Done:      false,
-		StartedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Logs:      []string{},
+		ID:         nextNivellRebuildID(),
+		AdminJobID: adminJobID,
+		Kind:       kind,
+		Total:      total,
+		Processed:  0,
+		Done:       false,
+		StartedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+		Logs:       []string{},
 	}
 	s.mu.Lock()
 	s.jobs[job.ID] = job
@@ -124,4 +126,21 @@ func (s *nivellRebuildStore) finish(id string, err error) {
 	}
 	job.Done = true
 	job.UpdatedAt = time.Now()
+}
+
+func (s *nivellRebuildStore) summary() (int, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	running := 0
+	failed := 0
+	for _, job := range s.jobs {
+		if job.Done {
+			if job.Error != "" {
+				failed++
+			}
+			continue
+		}
+		running++
+	}
+	return running, failed
 }

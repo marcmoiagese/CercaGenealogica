@@ -1,0 +1,90 @@
+{{ define "admin-maintenance-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.maintenance.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/admin-maintenance.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "admin.maintenance.kicker" }}</p>
+                    <h1>{{ t .Lang "admin.maintenance.title" }}</h1>
+                    <p class="card-helper">{{ t .Lang "admin.maintenance.subtitle" }}</p>
+                </div>
+                <div class="card-actions">
+                    <a href="/admin/manteniments/new" class="boto-primari">
+                        <i class="fas fa-plus"></i> <span>{{ t .Lang "common.add" }}</span>
+                    </a>
+                </div>
+            </header>
+            {{ if .Data.Msg }}
+            <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
+            {{ end }}
+            <div class="taula-wrapper">
+                <table class="taula maintenance-table">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "admin.maintenance.table.title" }}</th>
+                            <th>{{ t .Lang "admin.maintenance.table.window" }}</th>
+                            <th>{{ t .Lang "admin.maintenance.table.status" }}</th>
+                            <th>{{ t .Lang "admin.maintenance.table.enabled" }}</th>
+                            <th>{{ t .Lang "admin.maintenance.table.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Windows }}
+                        <tr>
+                            <td>
+                                <div class="maintenance-title">
+                                    <span class="badge {{ .SeverityBadgeClass }}">{{ t $.Lang .SeverityLabelKey }}</span>
+                                    <strong>{{ .Title }}</strong>
+                                </div>
+                                <p class="maintenance-message">{{ .Message }}</p>
+                            </td>
+                            <td class="maintenance-window">
+                                <div><span class="muted">{{ t $.Lang "admin.maintenance.table.show_from" }}</span> {{ .ShowFromLabel }}</div>
+                                <div><span class="muted">{{ t $.Lang "admin.maintenance.table.starts_at" }}</span> {{ .StartsAtLabel }}</div>
+                                <div><span class="muted">{{ t $.Lang "admin.maintenance.table.ends_at" }}</span> {{ .EndsAtLabel }}</div>
+                            </td>
+                            <td>
+                                <span class="badge {{ .StatusClass }}">{{ t $.Lang .StatusKey }}</span>
+                            </td>
+                            <td>
+                                {{ if .IsEnabled }}
+                                <span class="badge badge-success">{{ t $.Lang "common.active" }}</span>
+                                {{ else }}
+                                <span class="badge badge-muted">{{ t $.Lang "common.inactive" }}</span>
+                                {{ end }}
+                                {{ if not .Dismissible }}
+                                <span class="badge badge-muted">{{ t $.Lang "admin.maintenance.dismissible.off" }}</span>
+                                {{ end }}
+                            </td>
+                            <td class="maintenance-actions">
+                                <a class="boto-secundari btn-mini" href="/admin/manteniments/{{ .ID }}/edit">{{ t $.Lang "common.edit" }}</a>
+                                <form method="post" action="/admin/manteniments/delete" class="inline-form">
+                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                    <input type="hidden" name="id" value="{{ .ID }}">
+                                    <button type="submit" class="boto-secundari btn-mini">{{ t $.Lang "common.remove" }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="5">{{ t .Lang "common.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

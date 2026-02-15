@@ -51,6 +51,88 @@ CREATE TABLE IF NOT EXISTS user_dashboard_widgets (
     INDEX idx_user_dashboard_widgets_order (user_id, position)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS platform_settings (
+    setting_key VARCHAR(191) NOT NULL PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    updated_by INT UNSIGNED NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS maintenance_windows (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    severity VARCHAR(32) NOT NULL DEFAULT 'info',
+    show_from DATETIME NOT NULL,
+    starts_at DATETIME NOT NULL,
+    ends_at DATETIME NOT NULL,
+    cta_label VARCHAR(255),
+    cta_url VARCHAR(512),
+    is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+    dismissible TINYINT(1) NOT NULL DEFAULT 1,
+    created_by INT UNSIGNED NULL,
+    updated_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_maintenance_windows_enabled (is_enabled),
+    INDEX idx_maintenance_windows_show (show_from, ends_at),
+    INDEX idx_maintenance_windows_starts (starts_at, ends_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS transparency_settings (
+    setting_key VARCHAR(191) NOT NULL PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    updated_by INT UNSIGNED NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS transparency_contributors (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(32) NOT NULL DEFAULT 'other',
+    description TEXT,
+    amount DECIMAL(12,2) NULL,
+    currency VARCHAR(16),
+    url VARCHAR(512),
+    is_public TINYINT(1) NOT NULL DEFAULT 1,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_by INT UNSIGNED NULL,
+    updated_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_transparency_contributors_public (is_public),
+    INDEX idx_transparency_contributors_sort (sort_order, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS admin_import_runs (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    import_type VARCHAR(64) NOT NULL,
+    status VARCHAR(16) NOT NULL,
+    created_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_admin_import_runs_created (created_at),
+    INDEX idx_admin_import_runs_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS admin_jobs (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    kind VARCHAR(64) NOT NULL,
+    status VARCHAR(16) NOT NULL,
+    progress_total INT NOT NULL DEFAULT 0,
+    progress_done INT NOT NULL DEFAULT 0,
+    payload_json LONGTEXT,
+    result_json LONGTEXT,
+    error_text TEXT,
+    started_at DATETIME NULL,
+    finished_at DATETIME NULL,
+    created_by INT UNSIGNED NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_admin_jobs_kind (kind),
+    INDEX idx_admin_jobs_status (status),
+    INDEX idx_admin_jobs_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS grups (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nom VARCHAR(255) NOT NULL UNIQUE,

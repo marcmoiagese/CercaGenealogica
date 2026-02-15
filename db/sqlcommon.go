@@ -2065,7 +2065,7 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 	query := `
         SELECT n.id, n.pais_id, pi.codi_iso2, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
                n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat,
-               n.created_by, n.moderation_status, n.moderated_by, n.moderated_at, n.moderation_notes
+               n.created_by, n.created_at, n.moderation_status, n.moderated_by, n.moderated_at, n.moderation_notes
         FROM nivells_administratius n
         LEFT JOIN nivells_administratius p ON p.id = n.parent_id
         LEFT JOIN paisos pi ON pi.id = n.pais_id
@@ -2089,7 +2089,7 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 	for rows.Next() {
 		var n NivellAdministratiu
 		if err := rows.Scan(&n.ID, &n.PaisID, &n.PaisISO2, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat,
-			&n.CreatedBy, &n.ModeracioEstat, &n.ModeratedBy, &n.ModeratedAt, &n.ModeracioMotiu); err != nil {
+			&n.CreatedBy, &n.CreatedAt, &n.ModeracioEstat, &n.ModeratedBy, &n.ModeratedAt, &n.ModeracioMotiu); err != nil {
 			return nil, err
 		}
 		res = append(res, n)
@@ -3043,7 +3043,7 @@ func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, erro
 	inClause("a.pais_id", f.AllowedPaisIDs)
 	query := `
         SELECT a.id, a.nom, a.tipus_entitat, a.pais_id, p.codi_iso3, a.nivell, parent.nom as parent_nom, a.any_inici, a.any_fi,
-               a.moderation_status
+               a.moderation_status, a.created_by, a.created_at
         FROM arquebisbats a
         LEFT JOIN paisos p ON p.id = a.pais_id
         LEFT JOIN arquebisbats parent ON parent.id = a.parent_id
@@ -3066,7 +3066,7 @@ func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, erro
 	var res []ArquebisbatRow
 	for rows.Next() {
 		var r ArquebisbatRow
-		if err := rows.Scan(&r.ID, &r.Nom, &r.TipusEntitat, &r.PaisID, &r.PaisNom, &r.Nivell, &r.ParentNom, &r.AnyInici, &r.AnyFi, &r.ModeracioEstat); err != nil {
+		if err := rows.Scan(&r.ID, &r.Nom, &r.TipusEntitat, &r.PaisID, &r.PaisNom, &r.Nivell, &r.ParentNom, &r.AnyInici, &r.AnyFi, &r.ModeracioEstat, &r.CreatedBy, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		res = append(res, r)
@@ -4257,6 +4257,686 @@ func (h sqlHelper) clearDashboardWidgets(userID int) error {
 	return err
 }
 
+func (h sqlHelper) listPlatformSettings() ([]PlatformSetting, error) {
+	query := `
+        SELECT setting_key, setting_value, updated_by, updated_at
+        FROM platform_settings
+        ORDER BY setting_key ASC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []PlatformSetting
+	for rows.Next() {
+		var row PlatformSetting
+		var updatedBy sql.NullInt64
+		var updatedAt sql.NullTime
+		if err := rows.Scan(&row.Key, &row.Value, &updatedBy, &updatedAt); err != nil {
+			return nil, err
+		}
+		row.UpdatedBy = updatedBy
+		row.UpdatedAt = updatedAt
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) upsertPlatformSetting(key, value string, updatedBy int) error {
+	updatedByVal := sql.NullInt64{Int64: int64(updatedBy), Valid: updatedBy > 0}
+	stmt := `
+        INSERT INTO platform_settings (setting_key, setting_value, updated_by, updated_at)
+        VALUES (?, ?, ?, ` + h.nowFun + `)`
+	if strings.ToLower(h.style) == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_by=VALUES(updated_by), updated_at=" + h.nowFun
+	} else {
+		stmt += " ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_by = excluded.updated_by, updated_at = " + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, key, value, updatedByVal)
+	return err
+}
+
+func (h sqlHelper) listMaintenanceWindows() ([]MaintenanceWindow, error) {
+	query := `
+        SELECT id, title, message, severity, show_from, starts_at, ends_at,
+               COALESCE(cta_label, ''), COALESCE(cta_url, ''), is_enabled, dismissible,
+               created_by, updated_by, created_at, updated_at
+        FROM maintenance_windows
+        ORDER BY starts_at DESC, id DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MaintenanceWindow
+	for rows.Next() {
+		var row MaintenanceWindow
+		var showFromVal interface{}
+		var startsAtVal interface{}
+		var endsAtVal interface{}
+		var enabledVal interface{}
+		var dismissibleVal interface{}
+		var createdAtVal interface{}
+		var updatedAtVal interface{}
+		var createdBy sql.NullInt64
+		var updatedBy sql.NullInt64
+		if err := rows.Scan(
+			&row.ID, &row.Title, &row.Message, &row.Severity,
+			&showFromVal, &startsAtVal, &endsAtVal,
+			&row.CTALabel, &row.CTAURL, &enabledVal, &dismissibleVal,
+			&createdBy, &updatedBy, &createdAtVal, &updatedAtVal,
+		); err != nil {
+			return nil, err
+		}
+		row.ShowFrom = dbTimeString(showFromVal)
+		row.StartsAt = dbTimeString(startsAtVal)
+		row.EndsAt = dbTimeString(endsAtVal)
+		row.IsEnabled = parseBoolValue(enabledVal)
+		row.Dismissible = parseBoolValue(dismissibleVal)
+		row.CreatedBy = createdBy
+		row.UpdatedBy = updatedBy
+		row.CreatedAt = dbTimeString(createdAtVal)
+		row.UpdatedAt = dbTimeString(updatedAtVal)
+		res = append(res, row)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) getMaintenanceWindow(id int) (*MaintenanceWindow, error) {
+	query := `
+        SELECT id, title, message, severity, show_from, starts_at, ends_at,
+               COALESCE(cta_label, ''), COALESCE(cta_url, ''), is_enabled, dismissible,
+               created_by, updated_by, created_at, updated_at
+        FROM maintenance_windows
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var res MaintenanceWindow
+	var showFromVal interface{}
+	var startsAtVal interface{}
+	var endsAtVal interface{}
+	var enabledVal interface{}
+	var dismissibleVal interface{}
+	var createdAtVal interface{}
+	var updatedAtVal interface{}
+	var createdBy sql.NullInt64
+	var updatedBy sql.NullInt64
+	if err := row.Scan(
+		&res.ID, &res.Title, &res.Message, &res.Severity,
+		&showFromVal, &startsAtVal, &endsAtVal,
+		&res.CTALabel, &res.CTAURL, &enabledVal, &dismissibleVal,
+		&createdBy, &updatedBy, &createdAtVal, &updatedAtVal,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	res.ShowFrom = dbTimeString(showFromVal)
+	res.StartsAt = dbTimeString(startsAtVal)
+	res.EndsAt = dbTimeString(endsAtVal)
+	res.IsEnabled = parseBoolValue(enabledVal)
+	res.Dismissible = parseBoolValue(dismissibleVal)
+	res.CreatedBy = createdBy
+	res.UpdatedBy = updatedBy
+	res.CreatedAt = dbTimeString(createdAtVal)
+	res.UpdatedAt = dbTimeString(updatedAtVal)
+	return &res, nil
+}
+
+func (h sqlHelper) saveMaintenanceWindow(w *MaintenanceWindow) (int, error) {
+	if w == nil {
+		return 0, errors.New("manteniment invàlid")
+	}
+	severity := strings.TrimSpace(w.Severity)
+	if severity == "" {
+		severity = "info"
+	}
+	createdByVal := sql.NullInt64{Valid: w.CreatedBy.Valid}
+	if w.CreatedBy.Valid {
+		createdByVal.Int64 = w.CreatedBy.Int64
+	}
+	updatedByVal := sql.NullInt64{Valid: w.UpdatedBy.Valid}
+	if w.UpdatedBy.Valid {
+		updatedByVal.Int64 = w.UpdatedBy.Int64
+	}
+	if w.ID == 0 {
+		stmt := `
+            INSERT INTO maintenance_windows (title, message, severity, show_from, starts_at, ends_at, cta_label, cta_url,
+                                             is_enabled, dismissible, created_by, updated_by, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+		stmt = formatPlaceholders(h.style, stmt)
+		if h.style == "postgres" {
+			stmt += " RETURNING id"
+			if err := h.db.QueryRow(stmt, w.Title, w.Message, severity, w.ShowFrom, w.StartsAt, w.EndsAt, w.CTALabel, w.CTAURL, w.IsEnabled, w.Dismissible, createdByVal, updatedByVal).Scan(&w.ID); err != nil {
+				return 0, err
+			}
+			return w.ID, nil
+		}
+		res, err := h.db.Exec(stmt, w.Title, w.Message, severity, w.ShowFrom, w.StartsAt, w.EndsAt, w.CTALabel, w.CTAURL, w.IsEnabled, w.Dismissible, createdByVal, updatedByVal)
+		if err != nil {
+			return 0, err
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			w.ID = int(id)
+		}
+		return w.ID, nil
+	}
+	stmt := `
+        UPDATE maintenance_windows
+        SET title = ?, message = ?, severity = ?, show_from = ?, starts_at = ?, ends_at = ?, cta_label = ?, cta_url = ?,
+            is_enabled = ?, dismissible = ?, updated_by = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, w.Title, w.Message, severity, w.ShowFrom, w.StartsAt, w.EndsAt, w.CTALabel, w.CTAURL, w.IsEnabled, w.Dismissible, updatedByVal, w.ID)
+	return w.ID, err
+}
+
+func (h sqlHelper) deleteMaintenanceWindow(id int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM maintenance_windows WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
+	return err
+}
+
+func (h sqlHelper) getActiveMaintenanceWindow(now time.Time) (*MaintenanceWindow, error) {
+	nowStr := now.Format("2006-01-02 15:04:05")
+	query := `
+        SELECT id, title, message, severity, show_from, starts_at, ends_at,
+               COALESCE(cta_label, ''), COALESCE(cta_url, ''), is_enabled, dismissible,
+               created_by, updated_by, created_at, updated_at
+        FROM maintenance_windows
+        WHERE is_enabled = ? AND show_from <= ? AND ends_at >= ?
+        ORDER BY starts_at ASC, id DESC
+        LIMIT 1`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, true, nowStr, nowStr)
+	var res MaintenanceWindow
+	var showFromVal interface{}
+	var startsAtVal interface{}
+	var endsAtVal interface{}
+	var enabledVal interface{}
+	var dismissibleVal interface{}
+	var createdAtVal interface{}
+	var updatedAtVal interface{}
+	var createdBy sql.NullInt64
+	var updatedBy sql.NullInt64
+	if err := row.Scan(
+		&res.ID, &res.Title, &res.Message, &res.Severity,
+		&showFromVal, &startsAtVal, &endsAtVal,
+		&res.CTALabel, &res.CTAURL, &enabledVal, &dismissibleVal,
+		&createdBy, &updatedBy, &createdAtVal, &updatedAtVal,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	res.ShowFrom = dbTimeString(showFromVal)
+	res.StartsAt = dbTimeString(startsAtVal)
+	res.EndsAt = dbTimeString(endsAtVal)
+	res.IsEnabled = parseBoolValue(enabledVal)
+	res.Dismissible = parseBoolValue(dismissibleVal)
+	res.CreatedBy = createdBy
+	res.UpdatedBy = updatedBy
+	res.CreatedAt = dbTimeString(createdAtVal)
+	res.UpdatedAt = dbTimeString(updatedAtVal)
+	return &res, nil
+}
+
+func (h sqlHelper) getAdminKPIsGeneral() (*AdminKPIsGeneral, error) {
+	activeWhere := "actiu = 1 AND banned = 0"
+	if h.style == "postgres" {
+		activeWhere = "actiu = TRUE AND banned = FALSE"
+	}
+	query := `
+        SELECT
+            (SELECT COUNT(*) FROM usuaris) AS total_users,
+            (SELECT COUNT(*) FROM usuaris WHERE ` + activeWhere + `) AS active_users,
+            (SELECT COUNT(DISTINCT usuari_id) FROM usuaris_activitat WHERE estat = 'validat') AS contributor_users,
+            (SELECT COUNT(*) FROM usuaris_activitat WHERE estat = 'validat') AS validated_contributions`
+	row := h.db.QueryRow(query)
+	var res AdminKPIsGeneral
+	if err := row.Scan(&res.TotalUsers, &res.ActiveUsers, &res.ContributorUsers, &res.ValidatedContributions); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (h sqlHelper) countUsersSince(since time.Time) (int, error) {
+	query := formatPlaceholders(h.style, `SELECT COUNT(1) FROM usuaris WHERE data_creacio >= ?`)
+	total := 0
+	if err := h.db.QueryRow(query, since).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) insertAdminImportRun(importType, status string, createdBy int) error {
+	createdByVal := sql.NullInt64{Int64: int64(createdBy), Valid: createdBy > 0}
+	stmt := `
+        INSERT INTO admin_import_runs (import_type, status, created_by, created_at)
+        VALUES (?, ?, ?, ` + h.nowFun + `)`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, importType, status, createdByVal)
+	return err
+}
+
+func (h sqlHelper) countAdminImportRunsSince(since time.Time) (AdminImportRunSummary, error) {
+	query := formatPlaceholders(h.style, `SELECT status, COUNT(1) FROM admin_import_runs WHERE created_at >= ? GROUP BY status`)
+	rows, err := h.db.Query(query, since)
+	if err != nil {
+		return AdminImportRunSummary{}, err
+	}
+	defer rows.Close()
+	var res AdminImportRunSummary
+	for rows.Next() {
+		var status string
+		var total int
+		if err := rows.Scan(&status, &total); err != nil {
+			return AdminImportRunSummary{}, err
+		}
+		switch strings.ToLower(strings.TrimSpace(status)) {
+		case "ok":
+			res.Ok = total
+		case "error":
+			res.Error = total
+		}
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) createAdminJob(job *AdminJob) (int, error) {
+	if job == nil {
+		return 0, errors.New("admin job buit")
+	}
+	kind := strings.TrimSpace(job.Kind)
+	if kind == "" {
+		return 0, errors.New("admin job sense tipus")
+	}
+	status := strings.ToLower(strings.TrimSpace(job.Status))
+	if status == "" {
+		status = "queued"
+	}
+	progressTotal := job.ProgressTotal
+	progressDone := job.ProgressDone
+	if progressTotal < 0 {
+		progressTotal = 0
+	}
+	if progressDone < 0 {
+		progressDone = 0
+	}
+	startedAt := sql.NullTime{Valid: job.StartedAt.Valid}
+	if job.StartedAt.Valid {
+		startedAt.Time = job.StartedAt.Time
+	}
+	finishedAt := sql.NullTime{Valid: job.FinishedAt.Valid}
+	if job.FinishedAt.Valid {
+		finishedAt.Time = job.FinishedAt.Time
+	}
+	createdBy := sql.NullInt64{Valid: job.CreatedBy.Valid}
+	if job.CreatedBy.Valid {
+		createdBy.Int64 = job.CreatedBy.Int64
+	}
+	stmt := `
+        INSERT INTO admin_jobs (kind, status, progress_total, progress_done, payload_json, result_json, error_text,
+                                started_at, finished_at, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	stmt = formatPlaceholders(h.style, stmt)
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+		if err := h.db.QueryRow(stmt, kind, status, progressTotal, progressDone, job.PayloadJSON, job.ResultJSON, job.ErrorText, startedAt, finishedAt, createdBy).Scan(&job.ID); err != nil {
+			return 0, err
+		}
+		return job.ID, nil
+	}
+	res, err := h.db.Exec(stmt, kind, status, progressTotal, progressDone, job.PayloadJSON, job.ResultJSON, job.ErrorText, startedAt, finishedAt, createdBy)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		job.ID = int(id)
+	}
+	return job.ID, nil
+}
+
+func (h sqlHelper) updateAdminJobProgress(id int, progressDone, progressTotal int) error {
+	if id <= 0 {
+		return errors.New("admin job invàlid")
+	}
+	if progressDone < 0 {
+		progressDone = 0
+	}
+	if progressTotal < 0 {
+		progressTotal = 0
+	}
+	stmt := `UPDATE admin_jobs SET progress_done = ?, progress_total = ?, updated_at = ` + h.nowFun + ` WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, progressDone, progressTotal, id)
+	return err
+}
+
+func (h sqlHelper) updateAdminJobStatus(id int, status, errorText, resultJSON string, finishedAt *time.Time) error {
+	if id <= 0 {
+		return errors.New("admin job invàlid")
+	}
+	cleanStatus := strings.ToLower(strings.TrimSpace(status))
+	if cleanStatus == "" {
+		cleanStatus = "queued"
+	}
+	finishedVal := sql.NullTime{}
+	if finishedAt != nil && !finishedAt.IsZero() {
+		finishedVal = sql.NullTime{Time: *finishedAt, Valid: true}
+	}
+	stmt := `UPDATE admin_jobs SET status = ?, error_text = ?, result_json = ?, finished_at = ?, updated_at = ` + h.nowFun + ` WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, cleanStatus, errorText, resultJSON, finishedVal, id)
+	return err
+}
+
+func (h sqlHelper) getAdminJob(id int) (*AdminJob, error) {
+	query := `
+        SELECT id, kind, status, progress_total, progress_done, payload_json, result_json, error_text,
+               started_at, finished_at, created_at, updated_at, created_by
+        FROM admin_jobs
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var job AdminJob
+	var startedVal interface{}
+	var finishedVal interface{}
+	var createdVal interface{}
+	var updatedVal interface{}
+	if err := row.Scan(&job.ID, &job.Kind, &job.Status, &job.ProgressTotal, &job.ProgressDone, &job.PayloadJSON, &job.ResultJSON, &job.ErrorText, &startedVal, &finishedVal, &createdVal, &updatedVal, &job.CreatedBy); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	startedAt, err := scanNullTime(startedVal)
+	if err != nil {
+		return nil, err
+	}
+	finishedAt, err := scanNullTime(finishedVal)
+	if err != nil {
+		return nil, err
+	}
+	createdAt, err := scanNullTime(createdVal)
+	if err != nil {
+		return nil, err
+	}
+	updatedAt, err := scanNullTime(updatedVal)
+	if err != nil {
+		return nil, err
+	}
+	job.StartedAt = startedAt
+	job.FinishedAt = finishedAt
+	job.CreatedAt = createdAt
+	job.UpdatedAt = updatedAt
+	return &job, nil
+}
+
+func (h sqlHelper) listAdminJobs(filter AdminJobFilter) ([]AdminJob, error) {
+	clauses := []string{"1=1"}
+	args := []interface{}{}
+	if kind := strings.TrimSpace(filter.Kind); kind != "" {
+		clauses = append(clauses, "kind = ?")
+		args = append(args, kind)
+	}
+	if status := strings.TrimSpace(filter.Status); status != "" {
+		clauses = append(clauses, "status = ?")
+		args = append(args, status)
+	}
+	if filter.CreatedBy > 0 {
+		clauses = append(clauses, "created_by = ?")
+		args = append(args, filter.CreatedBy)
+	}
+	limit := filter.Limit
+	offset := filter.Offset
+	if limit <= 0 {
+		limit = 25
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	args = append(args, limit, offset)
+	query := `
+        SELECT id, kind, status, progress_total, progress_done, payload_json, result_json, error_text,
+               started_at, finished_at, created_at, updated_at, created_by
+        FROM admin_jobs
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        ORDER BY created_at DESC, id DESC
+        LIMIT ? OFFSET ?`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []AdminJob
+	for rows.Next() {
+		var job AdminJob
+		var startedVal interface{}
+		var finishedVal interface{}
+		var createdVal interface{}
+		var updatedVal interface{}
+		if err := rows.Scan(&job.ID, &job.Kind, &job.Status, &job.ProgressTotal, &job.ProgressDone, &job.PayloadJSON, &job.ResultJSON, &job.ErrorText, &startedVal, &finishedVal, &createdVal, &updatedVal, &job.CreatedBy); err != nil {
+			return nil, err
+		}
+		startedAt, err := scanNullTime(startedVal)
+		if err != nil {
+			return nil, err
+		}
+		finishedAt, err := scanNullTime(finishedVal)
+		if err != nil {
+			return nil, err
+		}
+		createdAt, err := scanNullTime(createdVal)
+		if err != nil {
+			return nil, err
+		}
+		updatedAt, err := scanNullTime(updatedVal)
+		if err != nil {
+			return nil, err
+		}
+		job.StartedAt = startedAt
+		job.FinishedAt = finishedAt
+		job.CreatedAt = createdAt
+		job.UpdatedAt = updatedAt
+		res = append(res, job)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) countAdminJobs(filter AdminJobFilter) (int, error) {
+	clauses := []string{"1=1"}
+	args := []interface{}{}
+	if kind := strings.TrimSpace(filter.Kind); kind != "" {
+		clauses = append(clauses, "kind = ?")
+		args = append(args, kind)
+	}
+	if status := strings.TrimSpace(filter.Status); status != "" {
+		clauses = append(clauses, "status = ?")
+		args = append(args, status)
+	}
+	if filter.CreatedBy > 0 {
+		clauses = append(clauses, "created_by = ?")
+		args = append(args, filter.CreatedBy)
+	}
+	query := `SELECT COUNT(*) FROM admin_jobs WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	total := 0
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) listTransparencySettings() ([]TransparencySetting, error) {
+	query := `
+        SELECT setting_key, setting_value, updated_by, updated_at
+        FROM transparency_settings
+        ORDER BY setting_key ASC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []TransparencySetting
+	for rows.Next() {
+		var row TransparencySetting
+		var updatedBy sql.NullInt64
+		var updatedAt sql.NullTime
+		if err := rows.Scan(&row.Key, &row.Value, &updatedBy, &updatedAt); err != nil {
+			return nil, err
+		}
+		row.UpdatedBy = updatedBy
+		row.UpdatedAt = updatedAt
+		res = append(res, row)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) upsertTransparencySetting(key, value string, updatedBy int) error {
+	updatedByVal := sql.NullInt64{Int64: int64(updatedBy), Valid: updatedBy > 0}
+	stmt := `
+        INSERT INTO transparency_settings (setting_key, setting_value, updated_by, updated_at)
+        VALUES (?, ?, ?, ` + h.nowFun + `)`
+	if strings.ToLower(h.style) == "mysql" {
+		stmt += " ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_by=VALUES(updated_by), updated_at=" + h.nowFun
+	} else {
+		stmt += " ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_by = excluded.updated_by, updated_at = " + h.nowFun
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, key, value, updatedByVal)
+	return err
+}
+
+func (h sqlHelper) listTransparencyContributors(includePrivate bool) ([]TransparencyContributor, error) {
+	where := "1=1"
+	if !includePrivate {
+		if h.style == "postgres" {
+			where = "is_public = TRUE"
+		} else {
+			where = "is_public = 1"
+		}
+	}
+	query := `
+        SELECT id, name, type, COALESCE(description, ''), amount, COALESCE(currency, ''),
+               COALESCE(url, ''), is_public, sort_order, created_by, updated_by, created_at, updated_at
+        FROM transparency_contributors
+        WHERE ` + where + `
+        ORDER BY sort_order ASC, id ASC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []TransparencyContributor
+	for rows.Next() {
+		var row TransparencyContributor
+		var amount sql.NullFloat64
+		var isPublicVal interface{}
+		var createdAtVal interface{}
+		var updatedAtVal interface{}
+		var createdBy sql.NullInt64
+		var updatedBy sql.NullInt64
+		if err := rows.Scan(
+			&row.ID, &row.Name, &row.Type, &row.Description, &amount, &row.Currency,
+			&row.URL, &isPublicVal, &row.SortOrder, &createdBy, &updatedBy, &createdAtVal, &updatedAtVal,
+		); err != nil {
+			return nil, err
+		}
+		row.Amount = amount
+		row.IsPublic = parseBoolValue(isPublicVal)
+		row.CreatedBy = createdBy
+		row.UpdatedBy = updatedBy
+		row.CreatedAt = dbTimeString(createdAtVal)
+		row.UpdatedAt = dbTimeString(updatedAtVal)
+		res = append(res, row)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) getTransparencyContributor(id int) (*TransparencyContributor, error) {
+	query := `
+        SELECT id, name, type, COALESCE(description, ''), amount, COALESCE(currency, ''),
+               COALESCE(url, ''), is_public, sort_order, created_by, updated_by, created_at, updated_at
+        FROM transparency_contributors
+        WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
+	var res TransparencyContributor
+	var amount sql.NullFloat64
+	var isPublicVal interface{}
+	var createdAtVal interface{}
+	var updatedAtVal interface{}
+	var createdBy sql.NullInt64
+	var updatedBy sql.NullInt64
+	if err := row.Scan(
+		&res.ID, &res.Name, &res.Type, &res.Description, &amount, &res.Currency,
+		&res.URL, &isPublicVal, &res.SortOrder, &createdBy, &updatedBy, &createdAtVal, &updatedAtVal,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	res.Amount = amount
+	res.IsPublic = parseBoolValue(isPublicVal)
+	res.CreatedBy = createdBy
+	res.UpdatedBy = updatedBy
+	res.CreatedAt = dbTimeString(createdAtVal)
+	res.UpdatedAt = dbTimeString(updatedAtVal)
+	return &res, nil
+}
+
+func (h sqlHelper) saveTransparencyContributor(c *TransparencyContributor) (int, error) {
+	if c == nil {
+		return 0, errors.New("contributor invalid")
+	}
+	if c.ID == 0 {
+		stmt := `
+            INSERT INTO transparency_contributors
+                (name, type, description, amount, currency, url, is_public, sort_order, created_by, updated_by, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+		stmt = formatPlaceholders(h.style, stmt)
+		if h.style == "postgres" {
+			stmt += " RETURNING id"
+			if err := h.db.QueryRow(stmt, c.Name, c.Type, c.Description, c.Amount, c.Currency, c.URL, c.IsPublic, c.SortOrder, c.CreatedBy, c.UpdatedBy).Scan(&c.ID); err != nil {
+				return 0, err
+			}
+			return c.ID, nil
+		}
+		res, err := h.db.Exec(stmt, c.Name, c.Type, c.Description, c.Amount, c.Currency, c.URL, c.IsPublic, c.SortOrder, c.CreatedBy, c.UpdatedBy)
+		if err != nil {
+			return 0, err
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			c.ID = int(id)
+		}
+		return c.ID, nil
+	}
+	stmt := `
+        UPDATE transparency_contributors
+        SET name = ?, type = ?, description = ?, amount = ?, currency = ?, url = ?,
+            is_public = ?, sort_order = ?, updated_by = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, c.Name, c.Type, c.Description, c.Amount, c.Currency, c.URL, c.IsPublic, c.SortOrder, c.UpdatedBy, c.ID)
+	return c.ID, err
+}
+
+func (h sqlHelper) deleteTransparencyContributor(id int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM transparency_contributors WHERE id = ?`)
+	_, err := h.db.Exec(stmt, id)
+	return err
+}
+
 func (h sqlHelper) listUsersAdmin() ([]UserAdminRow, error) {
 	h.ensureUserExtraColumns()
 	query := `
@@ -4802,7 +5482,7 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 	}
 	query := `
         SELECT a.id, a.nom, a.tipus, a.municipi_id, a.entitat_eclesiastica_id, a.adreca, a.ubicacio, COALESCE(a.what3words, ''), a.web, a.acces, a.notes, a.accepta_donacions, COALESCE(a.donacions_url, ''),
-               a.created_by, a.moderation_status, a.moderated_by, a.moderated_at, a.moderation_notes,
+               a.created_by, a.moderation_status, a.moderated_by, a.moderated_at, a.moderation_notes, a.created_at,
                m.nom as municipi_nom, ae.nom as entitat_nom,
                COALESCE(cnt.total, 0) AS llibres
         FROM arxius a
@@ -4828,7 +5508,7 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 	for rows.Next() {
 		var a ArxiuWithCount
 		if err := rows.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.What3Words, &a.Web, &a.Acces, &a.Notes, &a.AcceptaDonacions, &a.DonacionsURL,
-			&a.CreatedBy, &a.ModeracioEstat, &a.ModeratedBy, &a.ModeratedAt, &a.ModeracioMotiu,
+			&a.CreatedBy, &a.ModeracioEstat, &a.ModeratedBy, &a.ModeratedAt, &a.ModeracioMotiu, &a.CreatedAt,
 			&a.MunicipiNom, &a.EntitatNom, &a.Llibres); err != nil {
 			return nil, err
 		}
@@ -5273,7 +5953,7 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
                l.titol, l.tipus_llibre, l.cronologia, l.volum, l.abat, l.contingut, l.llengua,
                l.requeriments_tecnics, l.unitat_catalogacio, l.unitat_instalacio, l.pagines,
                l.url_base, l.url_imatge_prefix, l.pagina, l.indexacio_completa,
-               l.created_by, l.moderation_status, l.moderated_by, l.moderated_at, l.moderation_notes,
+               l.created_by, l.moderation_status, l.moderated_by, l.moderated_at, l.moderation_notes, l.created_at,
                ae.nom as arquebisbat_nom, m.nom as municipi_nom
         FROM llibres l
         LEFT JOIN arquebisbats ae ON ae.id = l.arquevisbat_id
@@ -5303,7 +5983,7 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 			&lr.Titol, &lr.TipusLlibre, &lr.Cronologia, &lr.Volum, &lr.Abat, &lr.Contingut, &lr.Llengua,
 			&lr.Requeriments, &lr.UnitatCatalogacio, &lr.UnitatInstalacio, &lr.Pagines,
 			&lr.URLBase, &lr.URLImatgePrefix, &lr.Pagina, &lr.IndexacioCompleta,
-			&lr.CreatedBy, &lr.ModeracioEstat, &lr.ModeratedBy, &lr.ModeratedAt, &lr.ModeracioMotiu,
+			&lr.CreatedBy, &lr.ModeracioEstat, &lr.ModeratedBy, &lr.ModeratedAt, &lr.ModeracioMotiu, &lr.CreatedAt,
 			&lr.ArquebisbatNom, &lr.MunicipiNom,
 		); err != nil {
 			return nil, err

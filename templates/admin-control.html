@@ -1,0 +1,200 @@
+{{ define "admin-control.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.control.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/admin-control.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal control-center">
+        <section class="card control-hero">
+            <header class="card-header">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "admin.control.kicker" }}</p>
+                    <h1>{{ t .Lang "admin.control.title" }}</h1>
+                </div>
+            </header>
+        </section>
+
+        <section class="card control-section">
+            <header class="control-section-header">
+                <h2>{{ t .Lang "admin.control.governance.title" }}</h2>
+                <p>{{ t .Lang "admin.control.governance.desc" }}</p>
+            </header>
+            <div class="control-grid">
+                <a class="control-card" href="/admin/plataforma/config">
+                    <div class="control-icon"><i class="fas fa-pen-nib"></i></div>
+                    <div>
+                        <h3>{{ t .Lang "admin.control.card.branding.title" }}</h3>
+                        <p>{{ t .Lang "admin.control.card.branding.desc" }}</p>
+                    </div>
+                </a>
+                <a class="control-card" href="/admin/manteniments">
+                    <div class="control-icon"><i class="fas fa-triangle-exclamation"></i></div>
+                    <div>
+                        <h3>{{ t .Lang "admin.control.card.maintenance.title" }}</h3>
+                        <p>{{ t .Lang "admin.control.card.maintenance.desc" }}</p>
+                    </div>
+                </a>
+                <a class="control-card" href="/admin/kpis">
+                    <div class="control-icon"><i class="fas fa-chart-pie"></i></div>
+                    <div>
+                        <h3>{{ t .Lang "admin.control.card.kpis.title" }}</h3>
+                        <p>{{ t .Lang "admin.control.card.kpis.desc" }}</p>
+                    </div>
+                </a>
+                <a class="control-card" href="/admin/transparencia">
+                    <div class="control-icon"><i class="fas fa-handshake"></i></div>
+                    <div>
+                        <h3>{{ t .Lang "admin.control.card.transparency.title" }}</h3>
+                        <p>{{ t .Lang "admin.control.card.transparency.desc" }}</p>
+                    </div>
+                </a>
+            </div>
+        </section>
+
+        <section class="card control-section control-ops"
+                 data-control-kpis-api="/api/admin/control/kpis"
+                 data-state-ok="{{ t .Lang "admin.control.ops.state.ok" }}"
+                 data-state-warn="{{ t .Lang "admin.control.ops.state.warn" }}"
+                 data-state-crit="{{ t .Lang "admin.control.ops.state.crit" }}"
+                 data-updated-label="{{ t .Lang "admin.control.ops.updated" }}"
+                 data-pending-empty="{{ t .Lang "admin.control.ops.card.pending.empty" }}">
+            <header class="control-section-header control-section-header--split">
+                <div>
+                    <h2>{{ t .Lang "admin.control.ops.title" }}</h2>
+                    <p>{{ t .Lang "admin.control.ops.desc" }}</p>
+                </div>
+                <div class="control-actions">
+                    <button type="button" class="boto-secundari pequeno" data-control-kpis-refresh>
+                        <i class="fas fa-rotate"></i> <span>{{ t .Lang "admin.control.ops.refresh" }}</span>
+                    </button>
+                    <span class="muted control-updated" data-control-kpis-updated>-</span>
+                </div>
+            </header>
+            <div class="alerta alerta-error" data-control-kpis-error hidden>{{ t .Lang "admin.control.ops.error" }}</div>
+            <div class="ops-grid">
+                <div class="ops-card" data-kpi-card="pending_moderation">
+                    <div class="ops-card__header">
+                        <span class="ops-label">{{ t .Lang "admin.control.ops.card.pending" }}</span>
+                        <span class="ops-status" data-kpi-status>-</span>
+                    </div>
+                    <strong class="ops-value" data-kpi="pending_moderation_total">-</strong>
+                    <p class="ops-helper">{{ t .Lang "admin.control.ops.card.pending.helper" }}</p>
+                    <div class="ops-list" data-kpi-list="pending_moderation_by_type"></div>
+                </div>
+                <div class="ops-card" data-kpi-card="new_users">
+                    <div class="ops-card__header">
+                        <span class="ops-label">{{ t .Lang "admin.control.ops.card.new_users" }}</span>
+                        <span class="ops-status" data-kpi-status>-</span>
+                    </div>
+                    <div class="ops-split">
+                        <div>
+                            <span class="ops-split__label">{{ t .Lang "admin.control.ops.card.new_users.7d" }}</span>
+                            <strong class="ops-split__value" data-kpi="new_users_7d">-</strong>
+                        </div>
+                        <div>
+                            <span class="ops-split__label">{{ t .Lang "admin.control.ops.card.new_users.30d" }}</span>
+                            <strong class="ops-split__value" data-kpi="new_users_30d">-</strong>
+                        </div>
+                    </div>
+                    <p class="ops-helper">{{ t .Lang "admin.control.ops.card.new_users.helper" }}</p>
+                </div>
+                <div class="ops-card" data-kpi-card="imports">
+                    <div class="ops-card__header">
+                        <span class="ops-label">{{ t .Lang "admin.control.ops.card.imports" }}</span>
+                        <span class="ops-status" data-kpi-status>-</span>
+                    </div>
+                    <div class="ops-split">
+                        <div>
+                            <span class="ops-split__label">{{ t .Lang "admin.control.ops.card.imports.ok" }}</span>
+                            <strong class="ops-split__value" data-kpi="imports_ok">-</strong>
+                        </div>
+                        <div>
+                            <span class="ops-split__label">{{ t .Lang "admin.control.ops.card.imports.error" }}</span>
+                            <strong class="ops-split__value" data-kpi="imports_error">-</strong>
+                        </div>
+                    </div>
+                    <p class="ops-helper">{{ t .Lang "admin.control.ops.card.imports.helper" }}</p>
+                </div>
+                <div class="ops-card" data-kpi-card="rebuild_jobs">
+                    <div class="ops-card__header">
+                        <span class="ops-label">{{ t .Lang "admin.control.ops.card.rebuild" }}</span>
+                        <span class="ops-status" data-kpi-status>-</span>
+                    </div>
+                    <div class="ops-split">
+                        <div>
+                            <span class="ops-split__label">{{ t .Lang "admin.control.ops.card.rebuild.running" }}</span>
+                            <strong class="ops-split__value" data-kpi="rebuild_jobs_running">-</strong>
+                        </div>
+                        <div>
+                            <span class="ops-split__label">{{ t .Lang "admin.control.ops.card.rebuild.failed" }}</span>
+                            <strong class="ops-split__value" data-kpi="rebuild_jobs_failed">-</strong>
+                        </div>
+                    </div>
+                    <p class="ops-helper">{{ t .Lang "admin.control.ops.card.rebuild.helper" }}</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="card control-section">
+            <header class="control-section-header">
+                <h2>{{ t .Lang "admin.control.operations.title" }}</h2>
+                <p>{{ t .Lang "admin.control.operations.desc" }}</p>
+            </header>
+            <div class="control-grid">
+                <div class="control-card is-disabled">
+                    <div class="control-icon"><i class="fas fa-clipboard-check"></i></div>
+                    <div>
+                        <h3>{{ t .Lang "admin.control.card.moderation.title" }}</h3>
+                        <p>{{ t .Lang "admin.control.card.moderation.desc" }}</p>
+                        <span class="control-status">{{ t .Lang "common.pending" }}</span>
+                    </div>
+                </div>
+                <a class="control-card" href="/admin/jobs">
+                    <div class="control-icon"><i class="fas fa-gear"></i></div>
+                    <div>
+                        <h3>{{ t .Lang "admin.control.card.jobs.title" }}</h3>
+                        <p>{{ t .Lang "admin.control.card.jobs.desc" }}</p>
+                    </div>
+                </a>
+                <div class="control-card is-disabled">
+                    <div class="control-icon"><i class="fas fa-shield-alt"></i></div>
+                    <div>
+                        <h3>{{ t .Lang "admin.control.card.audit.title" }}</h3>
+                        <p>{{ t .Lang "admin.control.card.audit.desc" }}</p>
+                        <span class="control-status">{{ t .Lang "common.pending" }}</span>
+                    </div>
+                </div>
+                <div class="control-card is-disabled">
+                    <div class="control-icon"><i class="fas fa-sliders-h"></i></div>
+                    <div>
+                        <h3>{{ t .Lang "admin.control.card.widgets.title" }}</h3>
+                        <p>{{ t .Lang "admin.control.card.widgets.desc" }}</p>
+                        <span class="control-status">{{ t .Lang "common.pending" }}</span>
+                    </div>
+                </div>
+                <div class="control-card is-disabled">
+                    <div class="control-icon"><i class="fas fa-heartbeat"></i></div>
+                    <div>
+                        <h3>{{ t .Lang "admin.control.card.health.title" }}</h3>
+                        <p>{{ t .Lang "admin.control.card.health.desc" }}</p>
+                        <span class="control-status">{{ t .Lang "common.pending" }}</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script>
+        window.controlModerationTypeLabels = {{ toJsonJS .Data.ModerationTypeLabels }};
+    </script>
+    <script src="/static/js/admin-control-kpis.js"></script>
+</body>
+</html>
+{{ end }}

@@ -1,0 +1,97 @@
+.maintenance-banner {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    max-width: 420px;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 1rem 1.2rem 1rem 1.1rem;
+    border: 1px solid #e3e8ee;
+    box-shadow: 0 18px 36px rgba(23, 32, 42, 0.18);
+    z-index: 1200;
+    display: flex;
+    gap: 0.9rem;
+}
+
+.maintenance-banner__content {
+    display: flex;
+    gap: 0.85rem;
+    flex: 1;
+}
+
+.maintenance-banner__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 700;
+    color: #5b5b5b;
+    white-space: nowrap;
+}
+
+.maintenance-banner__body strong {
+    display: block;
+    font-size: 1rem;
+    color: #1f2d3d;
+    margin-bottom: 0.2rem;
+}
+
+.maintenance-banner__body p {
+    margin: 0 0 0.35rem;
+    color: #4c5b67;
+    font-size: 0.92rem;
+}
+
+.maintenance-banner__meta {
+    font-size: 0.82rem;
+    color: #6f7c8a;
+    margin-bottom: 0.35rem;
+}
+
+.maintenance-banner__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 700;
+    color: #1e5ba8;
+    text-decoration: none;
+}
+
+.maintenance-banner__cta:hover {
+    text-decoration: underline;
+}
+
+.maintenance-banner__close {
+    border: none;
+    background: transparent;
+    color: #7b8896;
+    cursor: pointer;
+    padding: 0.2rem;
+    align-self: flex-start;
+}
+
+.maintenance-banner--warning {
+    border-color: #f0c969;
+    box-shadow: 0 18px 36px rgba(219, 154, 0, 0.18);
+}
+
+.maintenance-banner--critical {
+    border-color: #f2a0a0;
+    box-shadow: 0 18px 36px rgba(199, 60, 60, 0.2);
+}
+
+.maintenance-banner--info {
+    border-color: #a8c4e3;
+    box-shadow: 0 18px 36px rgba(60, 110, 199, 0.18);
+}
+
+@media (max-width: 720px) {
+    .maintenance-banner {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        max-width: none;
+    }
+    .maintenance-banner__status {
+        font-size: 0.85rem;
+    }
+}

@@ -1,0 +1,37 @@
+{{ define "maintenance-banner" }}
+{{ if .Maintenance }}
+<div class="maintenance-banner maintenance-banner--{{ .Maintenance.Severity }}" data-window-id="{{ .Maintenance.ID }}" data-dismissible="{{ if .Maintenance.Dismissible }}1{{ else }}0{{ end }}">
+    <div class="maintenance-banner__content">
+        <div class="maintenance-banner__status">
+            <i class="fas fa-triangle-exclamation"></i>
+            {{ if eq .Maintenance.State "scheduled" }}
+            <span>{{ t .Lang "maintenance.status.scheduled" }}</span>
+            {{ else }}
+            <span>{{ t .Lang "maintenance.status.active" }}</span>
+            {{ end }}
+        </div>
+        <div class="maintenance-banner__body">
+            {{ if .Maintenance.Title }}<strong>{{ .Maintenance.Title }}</strong>{{ end }}
+            {{ if .Maintenance.Message }}<p>{{ .Maintenance.Message }}</p>{{ end }}
+            <div class="maintenance-banner__meta">
+                {{ if eq .Maintenance.State "scheduled" }}
+                <span>{{ t .Lang "maintenance.starts_at" }} {{ .Maintenance.StartsAt }}</span>
+                {{ else }}
+                <span>{{ t .Lang "maintenance.ends_at" }} {{ .Maintenance.EndsAt }}</span>
+                {{ end }}
+            </div>
+            {{ if .Maintenance.CTALabel }}
+            <a class="maintenance-banner__cta" href="{{ .Maintenance.CTAURL }}" target="_blank" rel="noopener">
+                {{ .Maintenance.CTALabel }}
+            </a>
+            {{ end }}
+        </div>
+    </div>
+    {{ if .Maintenance.Dismissible }}
+    <button class="maintenance-banner__close" type="button" aria-label="{{ t .Lang "common.close" }}" data-maintenance-close>
+        <i class="fas fa-times"></i>
+    </button>
+    {{ end }}
+</div>
+{{ end }}
+{{ end }}

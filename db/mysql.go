@@ -248,6 +248,75 @@ func (d *MySQL) SaveDashboardWidgets(userID int, widgets []DashboardWidgetConfig
 func (d *MySQL) ClearDashboardWidgets(userID int) error {
 	return d.help.clearDashboardWidgets(userID)
 }
+func (d *MySQL) ListPlatformSettings() ([]PlatformSetting, error) {
+	return d.help.listPlatformSettings()
+}
+func (d *MySQL) UpsertPlatformSetting(key, value string, updatedBy int) error {
+	return d.help.upsertPlatformSetting(key, value, updatedBy)
+}
+func (d *MySQL) ListMaintenanceWindows() ([]MaintenanceWindow, error) {
+	return d.help.listMaintenanceWindows()
+}
+func (d *MySQL) GetMaintenanceWindow(id int) (*MaintenanceWindow, error) {
+	return d.help.getMaintenanceWindow(id)
+}
+func (d *MySQL) SaveMaintenanceWindow(w *MaintenanceWindow) (int, error) {
+	return d.help.saveMaintenanceWindow(w)
+}
+func (d *MySQL) DeleteMaintenanceWindow(id int) error {
+	return d.help.deleteMaintenanceWindow(id)
+}
+func (d *MySQL) GetActiveMaintenanceWindow(now time.Time) (*MaintenanceWindow, error) {
+	return d.help.getActiveMaintenanceWindow(now)
+}
+func (d *MySQL) GetAdminKPIsGeneral() (*AdminKPIsGeneral, error) {
+	return d.help.getAdminKPIsGeneral()
+}
+func (d *MySQL) CountUsersSince(since time.Time) (int, error) {
+	return d.help.countUsersSince(since)
+}
+func (d *MySQL) ListTransparencySettings() ([]TransparencySetting, error) {
+	return d.help.listTransparencySettings()
+}
+func (d *MySQL) UpsertTransparencySetting(key, value string, updatedBy int) error {
+	return d.help.upsertTransparencySetting(key, value, updatedBy)
+}
+func (d *MySQL) ListTransparencyContributors(includePrivate bool) ([]TransparencyContributor, error) {
+	return d.help.listTransparencyContributors(includePrivate)
+}
+func (d *MySQL) GetTransparencyContributor(id int) (*TransparencyContributor, error) {
+	return d.help.getTransparencyContributor(id)
+}
+func (d *MySQL) SaveTransparencyContributor(c *TransparencyContributor) (int, error) {
+	return d.help.saveTransparencyContributor(c)
+}
+func (d *MySQL) DeleteTransparencyContributor(id int) error {
+	return d.help.deleteTransparencyContributor(id)
+}
+func (d *MySQL) InsertAdminImportRun(importType, status string, createdBy int) error {
+	return d.help.insertAdminImportRun(importType, status, createdBy)
+}
+func (d *MySQL) CountAdminImportRunsSince(since time.Time) (AdminImportRunSummary, error) {
+	return d.help.countAdminImportRunsSince(since)
+}
+func (d *MySQL) CreateAdminJob(job *AdminJob) (int, error) {
+	return d.help.createAdminJob(job)
+}
+func (d *MySQL) UpdateAdminJobProgress(id int, progressDone, progressTotal int) error {
+	return d.help.updateAdminJobProgress(id, progressDone, progressTotal)
+}
+func (d *MySQL) UpdateAdminJobStatus(id int, status, errorText, resultJSON string, finishedAt *time.Time) error {
+	return d.help.updateAdminJobStatus(id, status, errorText, resultJSON, finishedAt)
+}
+func (d *MySQL) GetAdminJob(id int) (*AdminJob, error) {
+	return d.help.getAdminJob(id)
+}
+func (d *MySQL) ListAdminJobs(filter AdminJobFilter) ([]AdminJob, error) {
+	return d.help.listAdminJobs(filter)
+}
+func (d *MySQL) CountAdminJobs(filter AdminJobFilter) (int, error) {
+	return d.help.countAdminJobs(filter)
+}
 
 func (d *MySQL) ListUsersAdmin() ([]UserAdminRow, error) {
 	return d.help.listUsersAdmin()
@@ -1023,6 +1092,7 @@ func (d *MySQL) ListCognomReferencies(f CognomReferenciaFilter) ([]CognomReferen
 func (d *MySQL) UpdateCognomReferenciaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateCognomReferenciaModeracio(id, estat, motiu, moderatorID)
 }
+
 // Cercador avançat
 func (d *MySQL) UpsertSearchDoc(doc *SearchDoc) error { return d.help.upsertSearchDoc(doc) }
 func (d *MySQL) GetSearchDoc(entityType string, entityID int) (*SearchDoc, error) {

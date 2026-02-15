@@ -3,7 +3,7 @@
 <html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>{{ t .Lang "regenerate.title" }} - {{ t .Lang "app.brand" }}</title>
+    <title>{{ t .Lang "regenerate.title" }} - {{ .Platform.BrandName }}</title>
     {{ template "styles-public" . }}
     <link rel="stylesheet" href="/static/css/regenerar-token.css">
 </head>

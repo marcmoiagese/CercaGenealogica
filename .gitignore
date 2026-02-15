@@ -1,6 +1,7 @@
 /database.db
 /database.db-shm
 /database.db-wal
+/database.*
 /db/Index_llibres_Digitals.xlsx
 /db/Index_llibres_Digitals_arbeca.csv
 *.xlsx

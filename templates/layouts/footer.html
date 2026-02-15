@@ -4,7 +4,7 @@
     <div class="footer-contenidor">
         <div class="footer-seccio">
             <h3>{{ t .Lang "footer.title" }}</h3>
-            <p>{{ t .Lang "footer.tagline" }}</p>
+            <p>{{ .Platform.FooterTagline }}</p>
             <div class="xarxes-socials">
                 <a href="#"><i class="fab fa-facebook-f"></i></a>
                 <a href="#"><i class="fab fa-twitter"></i></a>
@@ -17,12 +17,13 @@
             <a href="#">{{ t .Lang "footer.links.archives" }}</a>
             <a href="#">{{ t .Lang "footer.links.cemeteries" }}</a>
             <a href="#">{{ t .Lang "footer.links.parish" }}</a>
+            <a href="/transparencia">{{ t .Lang "footer.links.transparency" }}</a>
         </div>
         
         <div class="footer-seccio">
             <h3>{{ t .Lang "footer.contact.title" }}</h3>
-            <p><i class="fas fa-envelope"></i> {{ t .Lang "footer.contact.email" }}</p>
-            <p><i class="fas fa-map-marker-alt"></i> {{ t .Lang "footer.contact.location" }}</p>
+            <p><i class="fas fa-envelope"></i> {{ .Platform.ContactEmail }}</p>
+            <p><i class="fas fa-map-marker-alt"></i> {{ .Platform.ContactLocation }}</p>
         </div>
         
         <div class="copyright">

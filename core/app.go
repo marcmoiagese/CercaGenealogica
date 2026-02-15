@@ -20,6 +20,7 @@ type App struct {
 	municipiTargetCache *targetCache
 	achievementCache    *achievementCache
 	nivellRebuildJobs   *nivellRebuildStore
+	moderacioBulkJobs   *moderacioBulkStore
 	searchIndexOnce     sync.Once
 }
 
@@ -34,6 +35,7 @@ func NewApp(cfg map[string]string, database db.DB) *App {
 		municipiTargetCache: newTargetCache(targetCacheTTL, municipiTargetCacheMax),
 		achievementCache:    newAchievementCache(),
 		nivellRebuildJobs:   newNivellRebuildStore(),
+		moderacioBulkJobs:   newModeracioBulkStore(),
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -20,6 +21,8 @@ var Templates *template.Template
 type DataContext struct {
 	UserLoggedIn bool
 	Lang         string
+	Platform     PlatformSettings
+	Maintenance  *MaintenanceBanner
 	Data         interface{}
 }
 
@@ -218,6 +221,8 @@ func RenderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 	err := Templates.ExecuteTemplate(w, templateName, &DataContext{
 		UserLoggedIn: false,
 		Lang:         lang,
+		Platform:     GetPlatformSettings(lang),
+		Maintenance:  GetMaintenanceBanner(time.Now()),
 		Data:         data,
 	})
 	if err != nil {
@@ -235,6 +240,8 @@ func RenderPrivateTemplate(w http.ResponseWriter, r *http.Request, tmpl string, 
 	err := Templates.ExecuteTemplate(w, tmpl, &DataContext{
 		UserLoggedIn: true,
 		Lang:         lang,
+		Platform:     GetPlatformSettings(lang),
+		Maintenance:  GetMaintenanceBanner(time.Now()),
 		Data:         data,
 	})
 	if err != nil {
@@ -252,6 +259,8 @@ func RenderPrivateTemplateLang(w http.ResponseWriter, r *http.Request, tmpl stri
 	err := Templates.ExecuteTemplate(w, tmpl, &DataContext{
 		UserLoggedIn: true,
 		Lang:         lang,
+		Platform:     GetPlatformSettings(lang),
+		Maintenance:  GetMaintenanceBanner(time.Now()),
 		Data:         data,
 	})
 	if err != nil {

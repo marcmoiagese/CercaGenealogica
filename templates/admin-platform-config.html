@@ -1,0 +1,59 @@
+{{ define "admin-platform-config.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.platform.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/admin-platform.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "admin.platform.kicker" }}</p>
+                    <h1>{{ t .Lang "admin.platform.title" }}</h1>
+                </div>
+            </header>
+            {{ if .Data.Msg }}
+            <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
+            {{ end }}
+            <form class="formulari" method="post" action="/admin/plataforma/config">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="form-grid">
+                    <div class="form-control">
+                        <label for="brand-name">{{ t .Lang "admin.platform.brand_name.label" }}</label>
+                        <input id="brand-name" name="brand_name" type="text" value="{{ index .Data.Values "site.brand_name" }}" placeholder="{{ .Platform.BrandName }}">
+                        <p class="camp-helper">{{ t .Lang "admin.platform.brand_name.help" }}</p>
+                    </div>
+                    <div class="form-control">
+                        <label for="footer-tagline">{{ t .Lang "admin.platform.footer_tagline.label" }}</label>
+                        <textarea id="footer-tagline" name="footer_tagline" rows="3" placeholder="{{ .Platform.FooterTagline }}">{{ index .Data.Values "site.footer_tagline" }}</textarea>
+                        <p class="camp-helper">{{ t .Lang "admin.platform.footer_tagline.help" }}</p>
+                    </div>
+                    <div class="form-control">
+                        <label for="contact-email">{{ t .Lang "admin.platform.contact_email.label" }}</label>
+                        <input id="contact-email" name="contact_email" type="email" value="{{ index .Data.Values "site.contact_email" }}" placeholder="{{ .Platform.ContactEmail }}">
+                    </div>
+                    <div class="form-control">
+                        <label for="contact-location">{{ t .Lang "admin.platform.contact_location.label" }}</label>
+                        <input id="contact-location" name="contact_location" type="text" value="{{ index .Data.Values "site.contact_location" }}" placeholder="{{ .Platform.ContactLocation }}">
+                    </div>
+                </div>
+                <div class="form-accio">
+                    <a class="boto-secundari" href="/admin/control">{{ t .Lang "common.back" }}</a>
+                    <button type="submit" class="boto-primari">
+                        <i class="fas fa-save"></i> <span>{{ t .Lang "common.save" }}</span>
+                    </button>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

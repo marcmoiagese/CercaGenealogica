@@ -1,0 +1,79 @@
+{{ define "transparency.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ t .Lang "transparency.meta_desc" }}">
+    <title>{{ t .Lang "transparency.title" }}</title>
+    {{ template "styles-public" . }}
+    <link rel="stylesheet" href="/static/css/transparency.css">
+</head>
+<body>
+    {{ template "header-public" . }}
+
+    <main class="container transparency-page">
+        <section class="transparency-hero">
+            <div class="card transparency-summary">
+                <div class="transparency-summary__text">
+                    <p class="transparency-kicker">{{ t .Lang "transparency.kicker" }}</p>
+                    <h1>{{ t .Lang "transparency.title" }}</h1>
+                    <p class="transparency-lead">{{ t .Lang "transparency.subtitle" }}</p>
+                </div>
+                <div class="transparency-metrics">
+                    <div class="metric-card">
+                        <span class="metric-label">{{ t .Lang "transparency.summary.total" }}</span>
+                        <strong class="metric-value">{{ if .Data.Settings.CurrentTotalCost }}{{ .Data.Settings.CurrentTotalCost }}{{ else }}—{{ end }}</strong>
+                        {{ if .Data.Settings.Currency }}<span class="metric-note">{{ .Data.Settings.Currency }}</span>{{ end }}
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">{{ t .Lang "transparency.summary.monthly" }}</span>
+                        <strong class="metric-value">{{ if .Data.Settings.MonthlyRunCost }}{{ .Data.Settings.MonthlyRunCost }}{{ else }}—{{ end }}</strong>
+                        {{ if .Data.Settings.Currency }}<span class="metric-note">{{ .Data.Settings.Currency }}</span>{{ end }}
+                    </div>
+                </div>
+                {{ if .Data.Settings.NotePublic }}
+                <div class="transparency-note">
+                    <h2>{{ t .Lang "transparency.note.title" }}</h2>
+                    <p>{{ .Data.Settings.NotePublic }}</p>
+                </div>
+                {{ end }}
+            </div>
+        </section>
+
+        <section class="transparency-section">
+            <header class="section-header">
+                <h2>{{ t .Lang "transparency.contributors.title" }}</h2>
+                <p>{{ t .Lang "transparency.contributors.subtitle" }}</p>
+            </header>
+
+            {{ if .Data.Contributors }}
+            <div class="contributors-grid">
+                {{ range .Data.Contributors }}
+                <article class="contributor-card">
+                    <div class="contributor-meta">
+                        <span class="contributor-type">{{ t $.Lang (printf "transparency.contributor.type.%s" .Type) }}</span>
+                        {{ if .Amount.Valid }}
+                        <span class="contributor-amount">{{ printf "%.2f" .Amount.Float64 }} {{ default .Currency $.Data.Settings.Currency }}</span>
+                        {{ end }}
+                    </div>
+                    <h3>{{ .Name }}</h3>
+                    {{ if .Description }}<p class="muted">{{ .Description }}</p>{{ end }}
+                    {{ if .URL }}
+                    <a class="contributor-link" href="{{ .URL }}" target="_blank" rel="noopener">{{ t $.Lang "transparency.contributor.link" }}</a>
+                    {{ end }}
+                </article>
+                {{ end }}
+            </div>
+            {{ else }}
+            <div class="empty-state">{{ t .Lang "transparency.contributors.empty" }}</div>
+            {{ end }}
+        </section>
+    </main>
+
+    {{ template "footer" . }}
+    {{ template "modals-public" . }}
+    {{ template "scripts-public" . }}
+</body>
+</html>
+{{ end }}

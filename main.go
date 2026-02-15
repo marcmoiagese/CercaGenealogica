@@ -55,6 +55,8 @@ func main() {
 	_ = dbInstance.EnsureDefaultPointsRules()
 	_ = dbInstance.EnsureDefaultAchievements()
 	app := core.NewApp(configMap, dbInstance)
+	core.SetPlatformSettingsStore(dbInstance)
+	core.SetMaintenanceStore(dbInstance)
 	if err := app.EnsurePolicyGrants(); err != nil {
 		log.Printf("[permissions] error assegurant grants per polítiques: %v", err)
 	}
@@ -111,6 +113,9 @@ func main() {
 		core.RenderTemplate(w, r, "condicions-us.html", map[string]interface{}{
 			"DataActualitzacio": "Gener 2024",
 		})
+	})
+	http.HandleFunc("/transparencia", func(w http.ResponseWriter, r *http.Request) {
+		app.TransparencyPublicPage(w, r)
 	})
 
 	// Canvi d'idioma via ruta /{lang}/ amb cookie + redirect
@@ -280,6 +285,12 @@ func main() {
 	http.HandleFunc("/api/municipis/", applyMiddleware(app.MunicipiMapesAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/admin/municipis/", applyMiddleware(app.MunicipiDemografiaAdminAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/admin/nivells/", applyMiddleware(app.NivellStatsAdminAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/admin/kpis/general", applyMiddleware(app.AdminKPIsGeneralAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/admin/control/kpis", applyMiddleware(app.AdminControlKPIsAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/admin/control/moderacio/summary", applyMiddleware(app.AdminControlModeracioSummaryAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/admin/control/moderacio/jobs/", applyMiddleware(app.AdminControlModeracioJobStatus, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/admin/jobs", applyMiddleware(app.AdminJobsAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/admin/jobs/", applyMiddleware(app.AdminJobsDetailAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/arbre/expand", applyMiddleware(app.RequireLogin(app.ArbreExpandAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/persones/", applyMiddleware(app.RequireLogin(app.PersonaArbreAPI), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/mapes/", applyMiddleware(app.MapesAPI, core.BlockIPs, core.RateLimit))
@@ -736,6 +747,27 @@ func main() {
 	http.HandleFunc("/admin/achievements/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/edit") {
 			applyMiddleware(app.AdminEditAchievement, core.BlockIPs, core.RateLimit)(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	// Control Center + marca pública
+	http.HandleFunc("/admin/control", applyMiddleware(app.AdminControlCenter, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/jobs", applyMiddleware(app.AdminJobsListPage, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/jobs/", applyMiddleware(app.AdminJobsShowPage, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/plataforma/config", applyMiddleware(app.AdminPlatformConfig, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/kpis", applyMiddleware(app.AdminKPIsPage, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/transparencia", applyMiddleware(app.AdminTransparencyPage, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/transparencia/settings", applyMiddleware(app.AdminTransparencySaveSettings, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/transparencia/contributors/save", applyMiddleware(app.AdminTransparencySaveContributor, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/transparencia/contributors/delete", applyMiddleware(app.AdminTransparencyDeleteContributor, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/manteniments", applyMiddleware(app.AdminListMaintenance, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/manteniments/new", applyMiddleware(app.AdminNewMaintenance, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/manteniments/save", applyMiddleware(app.AdminSaveMaintenance, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/manteniments/delete", applyMiddleware(app.AdminDeleteMaintenance, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/manteniments/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/edit") {
+			applyMiddleware(app.AdminEditMaintenance, core.BlockIPs, core.RateLimit)(w, r)
 			return
 		}
 		http.NotFound(w, r)

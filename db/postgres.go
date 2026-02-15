@@ -249,6 +249,75 @@ func (d *PostgreSQL) SaveDashboardWidgets(userID int, widgets []DashboardWidgetC
 func (d *PostgreSQL) ClearDashboardWidgets(userID int) error {
 	return d.help.clearDashboardWidgets(userID)
 }
+func (d *PostgreSQL) ListPlatformSettings() ([]PlatformSetting, error) {
+	return d.help.listPlatformSettings()
+}
+func (d *PostgreSQL) UpsertPlatformSetting(key, value string, updatedBy int) error {
+	return d.help.upsertPlatformSetting(key, value, updatedBy)
+}
+func (d *PostgreSQL) ListMaintenanceWindows() ([]MaintenanceWindow, error) {
+	return d.help.listMaintenanceWindows()
+}
+func (d *PostgreSQL) GetMaintenanceWindow(id int) (*MaintenanceWindow, error) {
+	return d.help.getMaintenanceWindow(id)
+}
+func (d *PostgreSQL) SaveMaintenanceWindow(w *MaintenanceWindow) (int, error) {
+	return d.help.saveMaintenanceWindow(w)
+}
+func (d *PostgreSQL) DeleteMaintenanceWindow(id int) error {
+	return d.help.deleteMaintenanceWindow(id)
+}
+func (d *PostgreSQL) GetActiveMaintenanceWindow(now time.Time) (*MaintenanceWindow, error) {
+	return d.help.getActiveMaintenanceWindow(now)
+}
+func (d *PostgreSQL) GetAdminKPIsGeneral() (*AdminKPIsGeneral, error) {
+	return d.help.getAdminKPIsGeneral()
+}
+func (d *PostgreSQL) CountUsersSince(since time.Time) (int, error) {
+	return d.help.countUsersSince(since)
+}
+func (d *PostgreSQL) ListTransparencySettings() ([]TransparencySetting, error) {
+	return d.help.listTransparencySettings()
+}
+func (d *PostgreSQL) UpsertTransparencySetting(key, value string, updatedBy int) error {
+	return d.help.upsertTransparencySetting(key, value, updatedBy)
+}
+func (d *PostgreSQL) ListTransparencyContributors(includePrivate bool) ([]TransparencyContributor, error) {
+	return d.help.listTransparencyContributors(includePrivate)
+}
+func (d *PostgreSQL) GetTransparencyContributor(id int) (*TransparencyContributor, error) {
+	return d.help.getTransparencyContributor(id)
+}
+func (d *PostgreSQL) SaveTransparencyContributor(c *TransparencyContributor) (int, error) {
+	return d.help.saveTransparencyContributor(c)
+}
+func (d *PostgreSQL) DeleteTransparencyContributor(id int) error {
+	return d.help.deleteTransparencyContributor(id)
+}
+func (d *PostgreSQL) InsertAdminImportRun(importType, status string, createdBy int) error {
+	return d.help.insertAdminImportRun(importType, status, createdBy)
+}
+func (d *PostgreSQL) CountAdminImportRunsSince(since time.Time) (AdminImportRunSummary, error) {
+	return d.help.countAdminImportRunsSince(since)
+}
+func (d *PostgreSQL) CreateAdminJob(job *AdminJob) (int, error) {
+	return d.help.createAdminJob(job)
+}
+func (d *PostgreSQL) UpdateAdminJobProgress(id int, progressDone, progressTotal int) error {
+	return d.help.updateAdminJobProgress(id, progressDone, progressTotal)
+}
+func (d *PostgreSQL) UpdateAdminJobStatus(id int, status, errorText, resultJSON string, finishedAt *time.Time) error {
+	return d.help.updateAdminJobStatus(id, status, errorText, resultJSON, finishedAt)
+}
+func (d *PostgreSQL) GetAdminJob(id int) (*AdminJob, error) {
+	return d.help.getAdminJob(id)
+}
+func (d *PostgreSQL) ListAdminJobs(filter AdminJobFilter) ([]AdminJob, error) {
+	return d.help.listAdminJobs(filter)
+}
+func (d *PostgreSQL) CountAdminJobs(filter AdminJobFilter) (int, error) {
+	return d.help.countAdminJobs(filter)
+}
 
 func (d *PostgreSQL) ListUsersAdmin() ([]UserAdminRow, error) {
 	return d.help.listUsersAdmin()
@@ -1034,6 +1103,7 @@ func (d *PostgreSQL) ListCognomReferencies(f CognomReferenciaFilter) ([]CognomRe
 func (d *PostgreSQL) UpdateCognomReferenciaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateCognomReferenciaModeracio(id, estat, motiu, moderatorID)
 }
+
 // Cercador avançat
 func (d *PostgreSQL) UpsertSearchDoc(doc *SearchDoc) error { return d.help.upsertSearchDoc(doc) }
 func (d *PostgreSQL) GetSearchDoc(entityType string, entityID int) (*SearchDoc, error) {

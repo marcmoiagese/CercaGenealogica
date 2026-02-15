@@ -1,0 +1,57 @@
+{{ define "admin-kpis.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.kpis.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/admin-kpis.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "admin.kpis.kicker" }}</p>
+                    <h1>{{ t .Lang "admin.kpis.title" }}</h1>
+                    <p class="card-helper">{{ t .Lang "admin.kpis.subtitle" }}</p>
+                </div>
+                <div class="card-actions">
+                    <a class="boto-secundari" href="/admin/control">
+                        <i class="fas fa-arrow-left"></i> <span>{{ t .Lang "common.back" }}</span>
+                    </a>
+                </div>
+            </header>
+            <div class="alerta alerta-error" data-kpis-error hidden>{{ t .Lang "admin.kpis.error" }}</div>
+            <div class="admin-kpis-grid" data-kpis-api="/api/admin/kpis/general">
+                <div class="kpi-card">
+                    <span class="kpi-label">{{ t .Lang "admin.kpis.card.total_users" }}</span>
+                    <strong class="kpi-value" data-kpi="total_users">—</strong>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">{{ t .Lang "admin.kpis.card.active_users" }}</span>
+                    <strong class="kpi-value" data-kpi="active_users">—</strong>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">{{ t .Lang "admin.kpis.card.contributor_users" }}</span>
+                    <strong class="kpi-value" data-kpi="contributors_users">—</strong>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">{{ t .Lang "admin.kpis.card.contributor_pct" }}</span>
+                    <strong class="kpi-value" data-kpi="contributors_pct">—</strong>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">{{ t .Lang "admin.kpis.card.validated_contributions" }}</span>
+                    <strong class="kpi-value" data-kpi="validated_contributions">—</strong>
+                </div>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script src="/static/js/admin-kpis.js?v=2"></script>
+</body>
+</html>
+{{ end }}

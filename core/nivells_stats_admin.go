@@ -1,10 +1,13 @@
 package core
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -23,7 +26,8 @@ func (a *App) NivellStatsAdminAPI(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
 	}
-	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriNivellsRebuild, PermissionTarget{}); !ok {
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriNivellsRebuild, PermissionTarget{})
+	if !ok {
 		return
 	}
 	nivellID, err := strconv.Atoi(parts[3])
@@ -36,12 +40,12 @@ func (a *App) NivellStatsAdminAPI(w http.ResponseWriter, r *http.Request) {
 	switch parts[4] {
 	case "demografia":
 		if async {
-			job, err := a.startNivellRebuildJob("demografia", nivellID, all)
+			job, err := a.startNivellRebuildJob("demografia", nivellID, all, user.ID)
 			if err != nil {
 				http.Error(w, "failed to start", http.StatusInternalServerError)
 				return
 			}
-			writeJSON(w, map[string]interface{}{"ok": true, "job_id": job.ID})
+			writeJSON(w, map[string]interface{}{"ok": true, "job_id": job.ID, "admin_job_id": job.AdminJobID})
 			return
 		}
 		if nivellID <= 0 && !all {
@@ -75,12 +79,12 @@ func (a *App) NivellStatsAdminAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{"ok": true, "processed": processed})
 	case "stats":
 		if async {
-			job, err := a.startNivellRebuildJob("stats", nivellID, all)
+			job, err := a.startNivellRebuildJob("stats", nivellID, all, user.ID)
 			if err != nil {
 				http.Error(w, "failed to start", http.StatusInternalServerError)
 				return
 			}
-			writeJSON(w, map[string]interface{}{"ok": true, "job_id": job.ID})
+			writeJSON(w, map[string]interface{}{"ok": true, "job_id": job.ID, "admin_job_id": job.AdminJobID})
 			return
 		}
 		if nivellID <= 0 && !all {
@@ -143,15 +147,39 @@ func (a *App) NivellStatsAdminJobStatusAPI(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, map[string]interface{}{"ok": true, "job": job})
 }
 
-func (a *App) startNivellRebuildJob(kind string, nivellID int, all bool) (*nivellRebuildJob, error) {
+func (a *App) startNivellRebuildJob(kind string, nivellID int, all bool, createdBy int) (*nivellRebuildJob, error) {
+	payload := map[string]interface{}{
+		"kind":       kind,
+		"nivell_id":  nivellID,
+		"all":        all,
+		"job_source": "admin",
+	}
+	payloadJSON, _ := json.Marshal(payload)
+	now := time.Now()
+	adminJob := db.AdminJob{
+		Kind:          adminJobKindNivellsRebuild,
+		Status:        adminJobStatusRunning,
+		ProgressTotal: 0,
+		ProgressDone:  0,
+		PayloadJSON:   string(payloadJSON),
+		StartedAt:     sql.NullTime{Time: now, Valid: true},
+	}
+	if createdBy > 0 {
+		adminJob.CreatedBy = sqlNullIntFromInt(createdBy)
+	}
+	adminJobID, err := a.DB.CreateAdminJob(&adminJob)
+	if err != nil {
+		return nil, err
+	}
 	store := a.nivellRebuildStore()
-	job := store.newJob(kind, 0)
+	job := store.newJob(kind, 0, adminJobID)
 	go func() {
 		store.appendLog(job.ID, "Preparant llista de nivells")
 		ids, err := a.collectNivellIDs(nivellID, all)
 		if err != nil {
 			store.appendLog(job.ID, err.Error())
 			store.finish(job.ID, err)
+			a.finishAdminJob(adminJobID, adminJobStatusError, err, "")
 			return
 		}
 		total := len(ids)
@@ -159,12 +187,18 @@ func (a *App) startNivellRebuildJob(kind string, nivellID int, all bool) (*nivel
 			total = total * 2
 		}
 		store.setTotal(job.ID, total)
+		a.updateAdminJobProgress(adminJobID, 0, total)
 		if len(ids) == 0 {
 			store.appendLog(job.ID, "Sense nivells per recalcular")
 			store.finish(job.ID, nil)
+			resultJSON, _ := json.Marshal(map[string]interface{}{
+				"processed": 0,
+				"kind":      kind,
+			})
+			a.finishAdminJob(adminJobID, adminJobStatusDone, nil, string(resultJSON))
 			return
 		}
-		a.runNivellRebuildJob(job.ID, kind, ids)
+		a.runNivellRebuildJob(job.ID, adminJobID, kind, ids)
 	}()
 	return job, nil
 }
@@ -189,13 +223,18 @@ func (a *App) collectNivellIDs(nivellID int, all bool) ([]int, error) {
 	return ids, nil
 }
 
-func (a *App) runNivellRebuildJob(jobID, kind string, ids []int) {
+func (a *App) runNivellRebuildJob(jobID string, adminJobID int, kind string, ids []int) {
 	store := a.nivellRebuildStore()
 	processed := 0
+	total := len(ids)
+	if kind == "all" {
+		total = total * 2
+	}
 	store.appendLog(jobID, "Actualitzant jerarquia administrativa")
 	if err := a.rebuildAdminClosureAll(); err != nil {
 		store.appendLog(jobID, fmt.Sprintf("Error jerarquia: %v", err))
 		store.finish(jobID, err)
+		a.finishAdminJob(adminJobID, adminJobStatusError, err, "")
 		return
 	}
 	store.appendLog(jobID, "Jerarquia actualitzada")
@@ -204,10 +243,12 @@ func (a *App) runNivellRebuildJob(jobID, kind string, ids []int) {
 			if err := fn(id); err != nil {
 				store.appendLog(jobID, fmt.Sprintf("%s %d: %v", step, id, err))
 				store.finish(jobID, err)
+				a.finishAdminJob(adminJobID, adminJobStatusError, err, "")
 				return false
 			}
 			processed++
 			store.setProcessed(jobID, processed)
+			a.updateAdminJobProgress(adminJobID, processed, total)
 			store.appendLog(jobID, fmt.Sprintf("%s %d", step, id))
 		}
 		return true
@@ -230,9 +271,16 @@ func (a *App) runNivellRebuildJob(jobID, kind string, ids []int) {
 			return
 		}
 	default:
-		store.finish(jobID, fmt.Errorf("unknown kind"))
+		err := fmt.Errorf("unknown kind")
+		store.finish(jobID, err)
+		a.finishAdminJob(adminJobID, adminJobStatusError, err, "")
 		return
 	}
 	store.appendLog(jobID, "Recalcul complet")
 	store.finish(jobID, nil)
+	resultJSON, _ := json.Marshal(map[string]interface{}{
+		"processed": processed,
+		"kind":      kind,
+	})
+	a.finishAdminJob(adminJobID, adminJobStatusDone, nil, string(resultJSON))
 }

@@ -4,8 +4,8 @@
     <div class="container">
         <div class="logo-idiomes">
             <a href="/" class="logo">
-                <img src="/static/img/logo.png" alt="{{ t .Lang "app.brand" }}">
-                <span>{{ t .Lang "app.brand" }}</span>
+                <img src="/static/img/logo.png" alt="{{ .Platform.BrandName }}">
+                <span>{{ .Platform.BrandName }}</span>
             </a>
             <div class="controls-dreta">
                 <div class="selector-idioma-dropdown">
@@ -24,4 +24,5 @@
         </div>
     </div>
 </header>
+{{ template "maintenance-banner" . }}
 {{ end }}

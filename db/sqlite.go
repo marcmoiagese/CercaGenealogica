@@ -264,6 +264,75 @@ func (d *SQLite) SaveDashboardWidgets(userID int, widgets []DashboardWidgetConfi
 func (d *SQLite) ClearDashboardWidgets(userID int) error {
 	return d.help.clearDashboardWidgets(userID)
 }
+func (d *SQLite) ListPlatformSettings() ([]PlatformSetting, error) {
+	return d.help.listPlatformSettings()
+}
+func (d *SQLite) UpsertPlatformSetting(key, value string, updatedBy int) error {
+	return d.help.upsertPlatformSetting(key, value, updatedBy)
+}
+func (d *SQLite) ListMaintenanceWindows() ([]MaintenanceWindow, error) {
+	return d.help.listMaintenanceWindows()
+}
+func (d *SQLite) GetMaintenanceWindow(id int) (*MaintenanceWindow, error) {
+	return d.help.getMaintenanceWindow(id)
+}
+func (d *SQLite) SaveMaintenanceWindow(w *MaintenanceWindow) (int, error) {
+	return d.help.saveMaintenanceWindow(w)
+}
+func (d *SQLite) DeleteMaintenanceWindow(id int) error {
+	return d.help.deleteMaintenanceWindow(id)
+}
+func (d *SQLite) GetActiveMaintenanceWindow(now time.Time) (*MaintenanceWindow, error) {
+	return d.help.getActiveMaintenanceWindow(now)
+}
+func (d *SQLite) GetAdminKPIsGeneral() (*AdminKPIsGeneral, error) {
+	return d.help.getAdminKPIsGeneral()
+}
+func (d *SQLite) CountUsersSince(since time.Time) (int, error) {
+	return d.help.countUsersSince(since)
+}
+func (d *SQLite) ListTransparencySettings() ([]TransparencySetting, error) {
+	return d.help.listTransparencySettings()
+}
+func (d *SQLite) UpsertTransparencySetting(key, value string, updatedBy int) error {
+	return d.help.upsertTransparencySetting(key, value, updatedBy)
+}
+func (d *SQLite) ListTransparencyContributors(includePrivate bool) ([]TransparencyContributor, error) {
+	return d.help.listTransparencyContributors(includePrivate)
+}
+func (d *SQLite) GetTransparencyContributor(id int) (*TransparencyContributor, error) {
+	return d.help.getTransparencyContributor(id)
+}
+func (d *SQLite) SaveTransparencyContributor(c *TransparencyContributor) (int, error) {
+	return d.help.saveTransparencyContributor(c)
+}
+func (d *SQLite) DeleteTransparencyContributor(id int) error {
+	return d.help.deleteTransparencyContributor(id)
+}
+func (d *SQLite) InsertAdminImportRun(importType, status string, createdBy int) error {
+	return d.help.insertAdminImportRun(importType, status, createdBy)
+}
+func (d *SQLite) CountAdminImportRunsSince(since time.Time) (AdminImportRunSummary, error) {
+	return d.help.countAdminImportRunsSince(since)
+}
+func (d *SQLite) CreateAdminJob(job *AdminJob) (int, error) {
+	return d.help.createAdminJob(job)
+}
+func (d *SQLite) UpdateAdminJobProgress(id int, progressDone, progressTotal int) error {
+	return d.help.updateAdminJobProgress(id, progressDone, progressTotal)
+}
+func (d *SQLite) UpdateAdminJobStatus(id int, status, errorText, resultJSON string, finishedAt *time.Time) error {
+	return d.help.updateAdminJobStatus(id, status, errorText, resultJSON, finishedAt)
+}
+func (d *SQLite) GetAdminJob(id int) (*AdminJob, error) {
+	return d.help.getAdminJob(id)
+}
+func (d *SQLite) ListAdminJobs(filter AdminJobFilter) ([]AdminJob, error) {
+	return d.help.listAdminJobs(filter)
+}
+func (d *SQLite) CountAdminJobs(filter AdminJobFilter) (int, error) {
+	return d.help.countAdminJobs(filter)
+}
 
 func (d *SQLite) ListUsersAdmin() ([]UserAdminRow, error) {
 	return d.help.listUsersAdmin()

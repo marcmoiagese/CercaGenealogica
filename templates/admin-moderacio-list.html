@@ -98,6 +98,79 @@
             border: 1px solid #d5d5d5;
             background: #fff;
         }
+        .moderacio-filtres {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: flex-end;
+            margin: 0 0 1rem;
+            padding: 0.75rem 0.9rem;
+            border-radius: 12px;
+            background: #f9fafb;
+            border: 1px solid rgba(0,0,0,0.06);
+        }
+        .moderacio-filtres .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .moderacio-filtres label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #3b4650;
+        }
+        .moderacio-filtres select,
+        .moderacio-filtres input[type="text"] {
+            padding: 0.45rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid #d5d5d5;
+            background: #fff;
+            min-width: 200px;
+        }
+        .moderacio-sla {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin: 0 0 1rem;
+        }
+        .moderacio-sla .sla-card {
+            padding: 0.75rem 0.9rem;
+            border-radius: 12px;
+            background: #f4f6f8;
+            border: 1px solid rgba(0,0,0,0.06);
+            min-width: 140px;
+        }
+        .moderacio-sla .sla-card .label {
+            display: block;
+            font-size: 0.82rem;
+            color: #6a7680;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.25rem;
+        }
+        .moderacio-types {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin: 0 0 1rem;
+        }
+        .moderacio-chip {
+            padding: 0.25rem 0.6rem;
+            border-radius: 999px;
+            background: #eef2f5;
+            border: 1px solid rgba(0,0,0,0.08);
+            font-size: 0.85rem;
+            color: #34424c;
+        }
+        .moderacio-bulk-status {
+            margin: 0 0 1rem;
+            padding: 0.6rem 0.9rem;
+            border-radius: 10px;
+            border: 1px solid rgba(0,0,0,0.08);
+            background: #fff7e6;
+            color: #7a5a16;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -111,13 +184,99 @@
             {{ if .Data.Msg }}
             <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
             {{ end }}
+            <div class="moderacio-sla">
+                <div class="sla-card">
+                    <span class="label">{{ t .Lang "moderation.sla.bucket.0_24h" }}</span>
+                    <strong>{{ .Data.Summary.SLA0_24h }}</strong>
+                </div>
+                <div class="sla-card">
+                    <span class="label">{{ t .Lang "moderation.sla.bucket.1_3d" }}</span>
+                    <strong>{{ .Data.Summary.SLA1_3d }}</strong>
+                </div>
+                <div class="sla-card">
+                    <span class="label">{{ t .Lang "moderation.sla.bucket.3d_plus" }}</span>
+                    <strong>{{ .Data.Summary.SLA3Plus }}</strong>
+                </div>
+                <div class="sla-card">
+                    <span class="label">{{ t .Lang "moderation.summary.top_type" }}</span>
+                    <strong>
+                        {{ if .Data.Summary.TopType }}
+                            {{ t .Lang (printf "moderation.type.%s" .Data.Summary.TopType) }} ({{ .Data.Summary.TopTypeTotal }})
+                        {{ else }}
+                            —
+                        {{ end }}
+                    </strong>
+                </div>
+            </div>
+            <div class="moderacio-types">
+                {{ range .Data.Summary.ByType }}
+                    <span class="moderacio-chip">{{ t $.Lang (printf "moderation.type.%s" .Type) }}: <strong>{{ .Total }}</strong></span>
+                {{ else }}
+                    <span class="moderacio-chip">—</span>
+                {{ end }}
+            </div>
+            <form class="moderacio-filtres" method="get" action="/moderacio">
+                <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
+                <div class="filter-group">
+                    <label for="filter-type">{{ t .Lang "moderation.filters.type" }}</label>
+                    <select id="filter-type" name="type">
+                        <option value="all" {{ if or (eq .Data.FilterType "") (eq .Data.FilterType "all") }}selected{{ end }}>{{ t .Lang "moderation.filters.type.all" }}</option>
+                        <option value="persona" {{ if eq .Data.FilterType "persona" }}selected{{ end }}>{{ t .Lang "moderation.type.persona" }}</option>
+                        <option value="arxiu" {{ if eq .Data.FilterType "arxiu" }}selected{{ end }}>{{ t .Lang "moderation.type.arxiu" }}</option>
+                        <option value="llibre" {{ if eq .Data.FilterType "llibre" }}selected{{ end }}>{{ t .Lang "moderation.type.llibre" }}</option>
+                        <option value="nivell" {{ if eq .Data.FilterType "nivell" }}selected{{ end }}>{{ t .Lang "moderation.type.nivell" }}</option>
+                        <option value="municipi" {{ if eq .Data.FilterType "municipi" }}selected{{ end }}>{{ t .Lang "moderation.type.municipi" }}</option>
+                        <option value="eclesiastic" {{ if eq .Data.FilterType "eclesiastic" }}selected{{ end }}>{{ t .Lang "moderation.type.eclesiastic" }}</option>
+                        <option value="municipi_historia_general" {{ if eq .Data.FilterType "municipi_historia_general" }}selected{{ end }}>{{ t .Lang "moderation.type.municipi_historia_general" }}</option>
+                        <option value="municipi_historia_fet" {{ if eq .Data.FilterType "municipi_historia_fet" }}selected{{ end }}>{{ t .Lang "moderation.type.municipi_historia_fet" }}</option>
+                        <option value="municipi_anecdota_version" {{ if eq .Data.FilterType "municipi_anecdota_version" }}selected{{ end }}>{{ t .Lang "moderation.type.municipi_anecdota_version" }}</option>
+                        <option value="event_historic" {{ if eq .Data.FilterType "event_historic" }}selected{{ end }}>{{ t .Lang "moderation.type.event_historic" }}</option>
+                        <option value="registre" {{ if eq .Data.FilterType "registre" }}selected{{ end }}>{{ t .Lang "moderation.type.registre" }}</option>
+                        <option value="registre_canvi" {{ if eq .Data.FilterType "registre_canvi" }}selected{{ end }}>{{ t .Lang "moderation.type.registre_canvi" }}</option>
+                        <option value="cognom_variant" {{ if eq .Data.FilterType "cognom_variant" }}selected{{ end }}>{{ t .Lang "moderation.type.cognom_variant" }}</option>
+                        <option value="cognom_referencia" {{ if eq .Data.FilterType "cognom_referencia" }}selected{{ end }}>{{ t .Lang "moderation.type.cognom_referencia" }}</option>
+                        <option value="cognom_merge" {{ if eq .Data.FilterType "cognom_merge" }}selected{{ end }}>{{ t .Lang "moderation.type.cognom_merge" }}</option>
+                        <option value="municipi_canvi" {{ if eq .Data.FilterType "municipi_canvi" }}selected{{ end }}>{{ t .Lang "moderation.type.municipi_canvi" }}</option>
+                        <option value="arxiu_canvi" {{ if eq .Data.FilterType "arxiu_canvi" }}selected{{ end }}>{{ t .Lang "moderation.type.arxiu_canvi" }}</option>
+                        <option value="llibre_canvi" {{ if eq .Data.FilterType "llibre_canvi" }}selected{{ end }}>{{ t .Lang "moderation.type.llibre_canvi" }}</option>
+                        <option value="persona_canvi" {{ if eq .Data.FilterType "persona_canvi" }}selected{{ end }}>{{ t .Lang "moderation.type.persona_canvi" }}</option>
+                        <option value="cognom_canvi" {{ if eq .Data.FilterType "cognom_canvi" }}selected{{ end }}>{{ t .Lang "moderation.type.cognom_canvi" }}</option>
+                        <option value="event_historic_canvi" {{ if eq .Data.FilterType "event_historic_canvi" }}selected{{ end }}>{{ t .Lang "moderation.type.event_historic_canvi" }}</option>
+                        <option value="wiki_canvi" {{ if eq .Data.FilterType "wiki_canvi" }}selected{{ end }}>{{ t .Lang "moderation.type.wiki_canvi" }}</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-status">{{ t .Lang "moderation.filters.status" }}</label>
+                    <select id="filter-status" name="status">
+                        <option value="pendent" {{ if eq .Data.FilterStatus "pendent" }}selected{{ end }}>{{ t .Lang "moderation.status.pending" }}</option>
+                        <option value="publicat" {{ if eq .Data.FilterStatus "publicat" }}selected{{ end }}>{{ t .Lang "moderation.status.published" }}</option>
+                        <option value="rebutjat" {{ if eq .Data.FilterStatus "rebutjat" }}selected{{ end }}>{{ t .Lang "moderation.status.rejected" }}</option>
+                        <option value="all" {{ if eq .Data.FilterStatus "all" }}selected{{ end }}>{{ t .Lang "moderation.status.all" }}</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-age">{{ t .Lang "moderation.filters.age" }}</label>
+                    <select id="filter-age" name="age">
+                        <option value="" {{ if eq .Data.FilterAge "" }}selected{{ end }}>{{ t .Lang "moderation.filters.age.any" }}</option>
+                        <option value="0_24h" {{ if eq .Data.FilterAge "0_24h" }}selected{{ end }}>{{ t .Lang "moderation.sla.bucket.0_24h" }}</option>
+                        <option value="1_3d" {{ if eq .Data.FilterAge "1_3d" }}selected{{ end }}>{{ t .Lang "moderation.sla.bucket.1_3d" }}</option>
+                        <option value="3d_plus" {{ if eq .Data.FilterAge "3d_plus" }}selected{{ end }}>{{ t .Lang "moderation.sla.bucket.3d_plus" }}</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-user">{{ t .Lang "moderation.filters.user" }}</label>
+                    <input type="text" id="filter-user" name="user" value="{{ .Data.FilterUser }}" placeholder="{{ t .Lang "moderation.filters.user.placeholder" }}">
+                </div>
+                <button type="submit" class="boto-primari">{{ t .Lang "moderation.filters.apply" }}</button>
+                <a class="boto-secundari" href="/moderacio">{{ t .Lang "moderation.filters.clear" }}</a>
+            </form>
             <div class="moderacio-resum">
                 <span>{{ t .Lang "moderation.pending.total" }}: <strong>{{ .Data.Total }}</strong></span>
                 {{ if gt .Data.Total 0 }}
                 <span>{{ t .Lang "moderation.pending.showing" }} {{ .Data.PageStart }}-{{ .Data.PageEnd }}</span>
                 {{ end }}
                 <label for="per-page">{{ t .Lang "records.columns.per_page" }}</label>
-                <select id="per-page" name="per_page" onchange="location.href='/moderacio?per_page=' + this.value">
+                <select id="per-page" name="per_page" data-base="{{ .Data.PageBase }}">
                     {{ $current := .Data.PerPage }}
                     <option value="10" {{ if eq $current 10 }}selected{{ end }}>10</option>
                     <option value="25" {{ if eq $current 25 }}selected{{ end }}>25</option>
@@ -126,8 +285,10 @@
                 </select>
             </div>
             {{ if .Data.CanBulk }}
+            <div id="bulk-status" class="moderacio-bulk-status" data-running="{{ t .Lang "moderation.bulk.async.running" }}" data-done="{{ t .Lang "moderation.bulk.async.done" }}" data-error="{{ t .Lang "moderation.bulk.async.error" }}" data-job-base="/api/admin/control/moderacio/jobs/"></div>
             <form id="bulk-form" class="moderacio-bulk" method="post" action="/moderacio/bulk">
                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="return_to" value="{{ .Data.ReturnTo }}">
                 <div class="bulk-group">
                     <label for="bulk-action">{{ t .Lang "moderation.bulk.action" }}</label>
                     <select id="bulk-action" name="bulk_action">
@@ -190,6 +351,7 @@
                             <th></th>
                             <th>{{ t .Lang "moderation.table.id" }}</th>
                             <th>{{ t .Lang "moderation.table.type" }}</th>
+                            <th>{{ t .Lang "moderation.status" }}</th>
                             <th>{{ t .Lang "moderation.table.name" }}</th>
                             <th>{{ t .Lang "moderation.table.context" }}</th>
                             <th>{{ t .Lang "moderation.table.author" }}</th>
@@ -208,6 +370,7 @@
                             </td>
                             <td>{{ .ID }}</td>
                             <td>{{ t $.Lang (printf "moderation.type.%s" .Type) }}</td>
+                            <td>{{ if .Status }}{{ t $.Lang (printf "moderation.status.%s" .Status) }}{{ else }}—{{ end }}</td>
                             <td>{{ .Nom }}</td>
                             <td>
                                 {{ if .Context }}
@@ -242,7 +405,7 @@
                             </td>
                         </tr>
                         {{ else }}
-                        <tr><td colspan="9">{{ t $.Lang "moderation.table.empty" }}</td></tr>
+                        <tr><td colspan="10">{{ t $.Lang "moderation.table.empty" }}</td></tr>
                         {{ end }}
                     </tbody>
                 </table>
@@ -297,6 +460,110 @@
                 };
                 toggleReason();
                 actionSelect.addEventListener('change', toggleReason);
+            }
+            var perPage = document.getElementById('per-page');
+            if (perPage) {
+                perPage.addEventListener('change', function () {
+                    var base = perPage.dataset.base || '/moderacio';
+                    try {
+                        var url = new URL(base, window.location.origin);
+                        url.searchParams.set('per_page', perPage.value);
+                        url.searchParams.delete('page');
+                        window.location.href = url.pathname + '?' + url.searchParams.toString();
+                    } catch (err) {
+                        window.location.href = '/moderacio?per_page=' + perPage.value;
+                    }
+                });
+            }
+            var bulkForm = document.getElementById('bulk-form');
+            var bulkStatus = document.getElementById('bulk-status');
+            if (bulkForm && bulkStatus && scopeSelect) {
+                var runningLabel = bulkStatus.dataset.running || '';
+                var doneLabel = bulkStatus.dataset.done || '';
+                var errorLabel = bulkStatus.dataset.error || '';
+                var jobBase = bulkStatus.dataset.jobBase || '';
+                var setBulkStatus = function (message, show) {
+                    if (!bulkStatus) {
+                        return;
+                    }
+                    bulkStatus.textContent = message;
+                    bulkStatus.style.display = show ? 'block' : 'none';
+                };
+                var setBulkDisabled = function (disabled) {
+                    var inputs = bulkForm.querySelectorAll('input, select, button');
+                    inputs.forEach(function (input) {
+                        input.disabled = disabled;
+                    });
+                };
+                var pollJob = function (jobID) {
+                    var poll = function () {
+                        fetch(jobBase + jobID, { credentials: 'same-origin' })
+                            .then(function (resp) {
+                                if (!resp.ok) {
+                                    throw new Error('status');
+                                }
+                                return resp.json();
+                            })
+                            .then(function (data) {
+                                var job = data && data.job ? data.job : null;
+                                if (!job) {
+                                    throw new Error('missing');
+                                }
+                                if (!job.done) {
+                                    var label = runningLabel || '';
+                                    if (job.total && job.total > 0) {
+                                        label = label + ' (' + (job.processed || 0) + '/' + job.total + ')';
+                                    }
+                                    setBulkStatus(label, true);
+                                    window.setTimeout(poll, 1000);
+                                    return;
+                                }
+                                if (job.error) {
+                                    setBulkStatus(errorLabel || job.error, true);
+                                } else {
+                                    setBulkStatus(doneLabel, true);
+                                }
+                                setBulkDisabled(false);
+                            })
+                            .catch(function () {
+                                setBulkStatus(errorLabel, true);
+                                setBulkDisabled(false);
+                            });
+                    };
+                    poll();
+                };
+                bulkForm.addEventListener('submit', function (event) {
+                    if (scopeSelect.value !== 'all') {
+                        return;
+                    }
+                    event.preventDefault();
+                    setBulkDisabled(true);
+                    setBulkStatus(runningLabel, true);
+                    var formData = new FormData(bulkForm);
+                    formData.set('async', '1');
+                    fetch(bulkForm.action, {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'same-origin',
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    }).then(function (resp) {
+                        if (!resp.ok) {
+                            throw new Error('request');
+                        }
+                        return resp.json();
+                    }).then(function (data) {
+                        if (data && data.job_id) {
+                            pollJob(data.job_id);
+                            return;
+                        }
+                        throw new Error('job');
+                    }).catch(function () {
+                        setBulkStatus(errorLabel, true);
+                        setBulkDisabled(false);
+                    });
+                });
             }
         })();
     </script>

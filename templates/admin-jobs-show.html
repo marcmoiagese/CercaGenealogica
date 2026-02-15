@@ -1,0 +1,210 @@
+{{ define "admin-jobs-show.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.jobs.detail.title" }}</title>
+    {{ template "styles-private" . }}
+    <style>
+        .job-detail {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin: 0 0 1.5rem;
+        }
+        .job-detail-card {
+            padding: 0.9rem 1rem;
+            border-radius: 12px;
+            border: 1px solid rgba(0,0,0,0.08);
+            background: #f9fafb;
+        }
+        .job-detail-card .label {
+            display: block;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #6b7280;
+            margin-bottom: 0.3rem;
+        }
+        .job-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border: 1px solid rgba(0,0,0,0.08);
+        }
+        .job-status--running {
+            background: #eef6ff;
+            color: #1d4ed8;
+        }
+        .job-status--done {
+            background: #ecfdf3;
+            color: #157f3b;
+        }
+        .job-status--error {
+            background: #fff1f2;
+            color: #be123c;
+        }
+        .job-status--queued {
+            background: #f4f6f8;
+            color: #5b6670;
+        }
+        .job-status--neutral {
+            background: #f4f6f8;
+            color: #5b6670;
+        }
+        .job-progress-bar {
+            position: relative;
+            width: 200px;
+            height: 6px;
+            border-radius: 999px;
+            background: #e4e7eb;
+            overflow: hidden;
+        }
+        .job-progress-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            background: #111827;
+        }
+        .job-pre {
+            padding: 0.8rem 1rem;
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            overflow-x: auto;
+        }
+        .job-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .job-error-text {
+            color: #b91c1c;
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal" data-admin-jobs data-csrf="{{ .Data.CSRFToken }}" data-retry-error="{{ t .Lang "admin.jobs.retry.error" }}">
+        <section class="card">
+            <header class="card-header">
+                <div>
+                    <h1>{{ t .Lang "admin.jobs.detail.title" }} #{{ .Data.Job.ID }}</h1>
+                    <p class="muted">{{ t .Lang (printf "admin.jobs.kind.%s" .Data.Job.Kind) }}</p>
+                </div>
+            </header>
+            <div class="job-actions">
+                <a class="boto-secundari" href="/admin/jobs">{{ t .Lang "admin.jobs.back" }}</a>
+                {{ if .Data.Job.CanRetry }}
+                <button type="button" class="boto-primari" data-job-retry="{{ .Data.Job.RetryURL }}">{{ t .Lang "admin.jobs.retry" }}</button>
+                {{ end }}
+            </div>
+            <div class="job-detail">
+                <div class="job-detail-card">
+                    <span class="label">{{ t .Lang "admin.jobs.table.status" }}</span>
+                    <span class="job-status {{ .Data.Job.StatusClass }}">{{ t .Lang (printf "admin.jobs.status.%s" .Data.Job.Status) }}</span>
+                </div>
+                <div class="job-detail-card">
+                    <span class="label">{{ t .Lang "admin.jobs.table.progress" }}</span>
+                    <div class="job-progress-bar">
+                        <div class="job-progress-fill" style="width: {{ .Data.Job.ProgressPercent }}%"></div>
+                    </div>
+                    <div class="muted">{{ if .Data.Job.ProgressLabel }}{{ .Data.Job.ProgressLabel }}{{ else }}-{{ end }}</div>
+                </div>
+                <div class="job-detail-card">
+                    <span class="label">{{ t .Lang "admin.jobs.table.created" }}</span>
+                    <div>{{ if .Data.Job.CreatedAt }}{{ .Data.Job.CreatedAt }}{{ else }}-{{ end }}</div>
+                </div>
+                <div class="job-detail-card">
+                    <span class="label">{{ t .Lang "admin.jobs.table.started" }}</span>
+                    <div>{{ if .Data.Job.StartedAt }}{{ .Data.Job.StartedAt }}{{ else }}-{{ end }}</div>
+                </div>
+                <div class="job-detail-card">
+                    <span class="label">{{ t .Lang "admin.jobs.table.finished" }}</span>
+                    <div>{{ if .Data.Job.FinishedAt }}{{ .Data.Job.FinishedAt }}{{ else }}-{{ end }}</div>
+                </div>
+                <div class="job-detail-card">
+                    <span class="label">{{ t .Lang "admin.jobs.table.user" }}</span>
+                    <div>{{ if .Data.Job.CreatedBy }}{{ .Data.Job.CreatedBy }}{{ else }}-{{ end }}</div>
+                </div>
+            </div>
+            {{ if .Data.Job.ErrorText }}
+            <div class="job-error-text">{{ .Data.Job.ErrorText }}</div>
+            {{ end }}
+            <h2>{{ t .Lang "admin.jobs.payload" }}</h2>
+            {{ if .Data.Payload }}
+            <pre class="job-pre">{{ .Data.Payload }}</pre>
+            {{ else }}
+            <p class="muted">-</p>
+            {{ end }}
+            <h2>{{ t .Lang "admin.jobs.result" }}</h2>
+            {{ if .Data.Result }}
+            <pre class="job-pre">{{ .Data.Result }}</pre>
+            {{ else }}
+            <p class="muted">-</p>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script>
+        (function () {
+            var root = document.querySelector('[data-admin-jobs]');
+            if (!root) {
+                return;
+            }
+            var csrf = root.getAttribute('data-csrf') || '';
+            var errorMsg = root.getAttribute('data-retry-error') || 'Error';
+            var buttons = document.querySelectorAll('[data-job-retry]');
+            buttons.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var url = btn.getAttribute('data-job-retry');
+                    if (!url) {
+                        return;
+                    }
+                    btn.disabled = true;
+                    fetch(url, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-CSRF-Token': csrf
+                        }
+                    }).then(function (resp) {
+                        if (!resp.ok) {
+                            throw new Error('failed');
+                        }
+                        return resp.json();
+                    }).then(function (payload) {
+                        if (payload && payload.ok) {
+                            if (payload.job_id) {
+                                window.location.href = '/admin/jobs/' + payload.job_id;
+                                return;
+                            }
+                            window.location.reload();
+                            return;
+                        }
+                        throw new Error('failed');
+                    }).catch(function () {
+                        alert(errorMsg);
+                    }).finally(function () {
+                        btn.disabled = false;
+                    });
+                });
+            });
+        })();
+    </script>
+</body>
+</html>
+{{ end }}

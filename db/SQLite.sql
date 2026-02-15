@@ -44,6 +44,88 @@ CREATE TABLE IF NOT EXISTS user_dashboard_widgets (
 CREATE INDEX IF NOT EXISTS idx_user_dashboard_widgets_user ON user_dashboard_widgets(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_dashboard_widgets_order ON user_dashboard_widgets(user_id, position);
 
+CREATE TABLE IF NOT EXISTS platform_settings (
+    setting_key TEXT PRIMARY KEY,
+    setting_value TEXT NOT NULL DEFAULT '',
+    updated_by INTEGER,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS maintenance_windows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'info',
+    show_from DATETIME NOT NULL,
+    starts_at DATETIME NOT NULL,
+    ends_at DATETIME NOT NULL,
+    cta_label TEXT,
+    cta_url TEXT,
+    is_enabled INTEGER NOT NULL DEFAULT 1 CHECK (is_enabled IN (0,1)),
+    dismissible INTEGER NOT NULL DEFAULT 1 CHECK (dismissible IN (0,1)),
+    created_by INTEGER,
+    updated_by INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_maintenance_windows_enabled ON maintenance_windows(is_enabled);
+CREATE INDEX IF NOT EXISTS idx_maintenance_windows_show ON maintenance_windows(show_from, ends_at);
+CREATE INDEX IF NOT EXISTS idx_maintenance_windows_starts ON maintenance_windows(starts_at, ends_at);
+
+CREATE TABLE IF NOT EXISTS transparency_settings (
+    setting_key TEXT PRIMARY KEY,
+    setting_value TEXT NOT NULL DEFAULT '',
+    updated_by INTEGER,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS transparency_contributors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'other',
+    description TEXT,
+    amount REAL,
+    currency TEXT,
+    url TEXT,
+    is_public INTEGER NOT NULL DEFAULT 1 CHECK (is_public IN (0,1)),
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    updated_by INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_transparency_contributors_public ON transparency_contributors(is_public);
+CREATE INDEX IF NOT EXISTS idx_transparency_contributors_sort ON transparency_contributors(sort_order, id);
+
+CREATE TABLE IF NOT EXISTS admin_import_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    import_type TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('ok','error')),
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_admin_import_runs_created ON admin_import_runs(created_at);
+CREATE INDEX IF NOT EXISTS idx_admin_import_runs_status ON admin_import_runs(status);
+
+CREATE TABLE IF NOT EXISTS admin_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('queued','running','done','error')),
+    progress_total INTEGER NOT NULL DEFAULT 0,
+    progress_done INTEGER NOT NULL DEFAULT 0,
+    payload_json TEXT,
+    result_json TEXT,
+    error_text TEXT,
+    started_at TIMESTAMP,
+    finished_at TIMESTAMP,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_admin_jobs_kind ON admin_jobs(kind);
+CREATE INDEX IF NOT EXISTS idx_admin_jobs_status ON admin_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_admin_jobs_created ON admin_jobs(created_at);
+
 CREATE TABLE IF NOT EXISTS grups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL UNIQUE,

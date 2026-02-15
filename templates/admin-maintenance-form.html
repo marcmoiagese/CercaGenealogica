@@ -1,0 +1,94 @@
+{{ define "admin-maintenance-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "admin.maintenance.form.new" }}{{ else }}{{ t .Lang "admin.maintenance.form.edit" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/admin-maintenance.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "admin.maintenance.kicker" }}</p>
+                    <h1>{{ if .Data.IsNew }}{{ t .Lang "admin.maintenance.form.new" }}{{ else }}{{ t .Lang "admin.maintenance.form.edit" }}{{ end }}</h1>
+                    <p class="card-helper">{{ t .Lang "admin.maintenance.form.helper" }}</p>
+                </div>
+            </header>
+            {{ if .Data.Error }}
+            <div class="alerta alerta-error">{{ .Data.Error }}</div>
+            {{ end }}
+            <form class="formulari" method="post" action="/admin/manteniments/save">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="id" value="{{ .Data.Form.ID }}">
+                <div class="form-grid">
+                    <div class="form-control">
+                        <label for="maintenance-title">{{ t .Lang "admin.maintenance.field.title" }}</label>
+                        <input id="maintenance-title" name="title" type="text" value="{{ .Data.Form.Title }}" required>
+                    </div>
+                    <div class="form-control">
+                        <label for="maintenance-severity">{{ t .Lang "admin.maintenance.field.severity" }}</label>
+                        <select id="maintenance-severity" name="severity">
+                            {{ range .Data.Severities }}
+                            <option value="{{ .Value }}" {{ if eq $.Data.Form.Severity .Value }}selected{{ end }}>{{ t $.Lang .LabelKey }}</option>
+                            {{ end }}
+                        </select>
+                    </div>
+                    <div class="form-control form-control--wide">
+                        <label for="maintenance-message">{{ t .Lang "admin.maintenance.field.message" }}</label>
+                        <textarea id="maintenance-message" name="message" rows="4" required>{{ .Data.Form.Message }}</textarea>
+                        <p class="camp-helper">{{ t .Lang "admin.maintenance.help.message" }}</p>
+                    </div>
+                    <div class="form-control">
+                        <label for="maintenance-show">{{ t .Lang "admin.maintenance.field.show_from" }}</label>
+                        <input id="maintenance-show" name="show_from" type="datetime-local" value="{{ .Data.Form.ShowFrom }}" required>
+                    </div>
+                    <div class="form-control">
+                        <label for="maintenance-start">{{ t .Lang "admin.maintenance.field.starts_at" }}</label>
+                        <input id="maintenance-start" name="starts_at" type="datetime-local" value="{{ .Data.Form.StartsAt }}" required>
+                    </div>
+                    <div class="form-control">
+                        <label for="maintenance-end">{{ t .Lang "admin.maintenance.field.ends_at" }}</label>
+                        <input id="maintenance-end" name="ends_at" type="datetime-local" value="{{ .Data.Form.EndsAt }}" required>
+                    </div>
+                    <div class="form-control">
+                        <label for="maintenance-cta-label">{{ t .Lang "admin.maintenance.field.cta_label" }}</label>
+                        <input id="maintenance-cta-label" name="cta_label" type="text" value="{{ .Data.Form.CTALabel }}">
+                    </div>
+                    <div class="form-control">
+                        <label for="maintenance-cta-url">{{ t .Lang "admin.maintenance.field.cta_url" }}</label>
+                        <input id="maintenance-cta-url" name="cta_url" type="url" value="{{ .Data.Form.CTAURL }}">
+                    </div>
+                    <div class="form-control form-control--inline">
+                        <label>
+                            <input type="checkbox" name="is_enabled" value="1" {{ if .Data.Form.IsEnabled }}checked{{ end }}>
+                            {{ t .Lang "admin.maintenance.field.enabled" }}
+                        </label>
+                        <p class="camp-helper">{{ t .Lang "admin.maintenance.help.enabled" }}</p>
+                    </div>
+                    <div class="form-control form-control--inline">
+                        <label>
+                            <input type="checkbox" name="dismissible" value="1" {{ if .Data.Form.Dismissible }}checked{{ end }}>
+                            {{ t .Lang "admin.maintenance.field.dismissible" }}
+                        </label>
+                        <p class="camp-helper">{{ t .Lang "admin.maintenance.help.dismissible" }}</p>
+                    </div>
+                </div>
+                <div class="form-accio">
+                    <a class="boto-secundari" href="/admin/manteniments">{{ t .Lang "common.back" }}</a>
+                    <button type="submit" class="boto-primari">
+                        <i class="fas fa-save"></i> <span>{{ t .Lang "common.save" }}</span>
+                    </button>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

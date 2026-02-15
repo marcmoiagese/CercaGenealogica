@@ -1,0 +1,210 @@
+{{ define "admin-transparency.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.transparency.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/admin-transparency.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "admin.transparency.kicker" }}</p>
+                    <h1>{{ t .Lang "admin.transparency.title" }}</h1>
+                    <p class="card-helper">{{ t .Lang "admin.transparency.subtitle" }}</p>
+                </div>
+                <div class="card-actions">
+                    <a class="boto-secundari" href="/admin/control">
+                        <i class="fas fa-arrow-left"></i> <span>{{ t .Lang "common.back" }}</span>
+                    </a>
+                </div>
+            </header>
+
+            {{ if .Data.Error }}
+            <div class="alerta alerta-error">{{ .Data.Error }}</div>
+            {{ else if .Data.Msg }}
+            <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
+            {{ end }}
+
+            <section class="transparency-panel">
+                <header class="transparency-panel__header">
+                    <div>
+                        <h2>{{ t .Lang "admin.transparency.settings.title" }}</h2>
+                        <p class="muted">{{ t .Lang "admin.transparency.settings.subtitle" }}</p>
+                    </div>
+                </header>
+                <form class="form-grid" method="post" action="/admin/transparencia/settings">
+                    <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                    <div class="form-control">
+                        <label for="transparency-current-total">{{ t .Lang "admin.transparency.settings.current_total_cost.label" }}</label>
+                        <input id="transparency-current-total" name="current_total_cost" type="text" value="{{ .Data.Settings.CurrentTotalCost }}" placeholder="{{ t .Lang "admin.transparency.settings.current_total_cost.placeholder" }}">
+                    </div>
+                    <div class="form-control">
+                        <label for="transparency-monthly">{{ t .Lang "admin.transparency.settings.monthly_run_cost.label" }}</label>
+                        <input id="transparency-monthly" name="monthly_run_cost" type="text" value="{{ .Data.Settings.MonthlyRunCost }}" placeholder="{{ t .Lang "admin.transparency.settings.monthly_run_cost.placeholder" }}">
+                    </div>
+                    <div class="form-control">
+                        <label for="transparency-currency">{{ t .Lang "admin.transparency.settings.currency.label" }}</label>
+                        <input id="transparency-currency" name="currency" type="text" value="{{ .Data.Settings.Currency }}" placeholder="{{ t .Lang "admin.transparency.settings.currency.placeholder" }}">
+                    </div>
+                    <div class="form-control form-control--wide">
+                        <label for="transparency-note">{{ t .Lang "admin.transparency.settings.note.label" }}</label>
+                        <textarea id="transparency-note" name="note_public" rows="3">{{ .Data.Settings.NotePublic }}</textarea>
+                        <p class="camp-helper">{{ t .Lang "admin.transparency.settings.note.helper" }}</p>
+                    </div>
+                    <div class="form-accio form-accio--wide">
+                        <button type="submit" class="boto-primari">
+                            <i class="fas fa-save"></i> <span>{{ t .Lang "common.save" }}</span>
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <div class="transparency-admin-grid">
+                <section class="transparency-panel">
+                    <header class="transparency-panel__header">
+                        <div>
+                            <h2>{{ t .Lang "admin.transparency.contributors.title" }}</h2>
+                            <p class="muted">{{ t .Lang "admin.transparency.contributors.subtitle" }}</p>
+                        </div>
+                        <span class="transparency-count">{{ len .Data.Contributors }}</span>
+                    </header>
+
+                    {{ if .Data.Contributors }}
+                    <div class="taula-wrapper transparency-table">
+                        <table class="taula">
+                            <thead>
+                                <tr>
+                                    <th>{{ t .Lang "admin.transparency.contributors.table.name" }}</th>
+                                    <th>{{ t .Lang "admin.transparency.contributors.table.type" }}</th>
+                                    <th>{{ t .Lang "admin.transparency.contributors.table.amount" }}</th>
+                                    <th>{{ t .Lang "admin.transparency.contributors.table.visibility" }}</th>
+                                    <th>{{ t .Lang "admin.transparency.contributors.table.actions" }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{ range .Data.Contributors }}
+                                <tr>
+                                    <td>
+                                        <div class="transparency-name">{{ .Name }}</div>
+                                        {{ if .Description }}<div class="muted">{{ .Description }}</div>{{ end }}
+                                    </td>
+                                    <td>
+                                        <span class="transparency-pill">{{ t $.Lang (printf "transparency.contributor.type.%s" .Type) }}</span>
+                                    </td>
+                                    <td>
+                                        {{ if .Amount.Valid }}
+                                            {{ printf "%.2f" .Amount.Float64 }} {{ default .Currency $.Data.Settings.Currency }}
+                                        {{ else }}
+                                            —
+                                        {{ end }}
+                                    </td>
+                                    <td>
+                                        {{ if .IsPublic }}
+                                            <span class="status-pill status-pill--public">{{ t $.Lang "admin.transparency.contributors.public" }}</span>
+                                        {{ else }}
+                                            <span class="status-pill status-pill--private">{{ t $.Lang "admin.transparency.contributors.private" }}</span>
+                                        {{ end }}
+                                    </td>
+                                    <td>
+                                        <div class="transparency-actions">
+                                            <a class="boto-secundari pequeno" href="/admin/transparencia?edit={{ .ID }}">{{ t $.Lang "common.edit" }}</a>
+                                            <form class="inline-form" method="post" action="/admin/transparencia/contributors/delete" onsubmit="return confirm('{{ t $.Lang "admin.transparency.contributor.delete_confirm" }}')">
+                                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                <input type="hidden" name="id" value="{{ .ID }}">
+                                                <button type="submit" class="boto-perill pequeno">{{ t $.Lang "common.remove" }}</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+                    {{ else }}
+                    <p class="muted">{{ t .Lang "admin.transparency.contributors.empty" }}</p>
+                    {{ end }}
+                </section>
+
+                <section class="transparency-panel">
+                    <header class="transparency-panel__header">
+                        <div>
+                            <h2>
+                                {{ if .Data.IsEdit }}
+                                    {{ t .Lang "admin.transparency.contributor.form.title.edit" }}
+                                {{ else }}
+                                    {{ t .Lang "admin.transparency.contributor.form.title.new" }}
+                                {{ end }}
+                            </h2>
+                            <p class="muted">{{ t .Lang "admin.transparency.contributor.form.helper" }}</p>
+                        </div>
+                    </header>
+
+                    <form class="form-grid" method="post" action="/admin/transparencia/contributors/save">
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                        <input type="hidden" name="id" value="{{ .Data.Form.ID }}">
+                        <div class="form-control">
+                            <label for="contributor-name">{{ t .Lang "admin.transparency.contributor.field.name" }}</label>
+                            <input id="contributor-name" name="name" type="text" value="{{ .Data.Form.Name }}" required>
+                        </div>
+                        <div class="form-control">
+                            <label for="contributor-type">{{ t .Lang "admin.transparency.contributor.field.type" }}</label>
+                            <select id="contributor-type" name="type">
+                                {{ range .Data.Types }}
+                                <option value="{{ .Value }}" {{ if eq $.Data.Form.Type .Value }}selected{{ end }}>{{ t $.Lang .LabelKey }}</option>
+                                {{ end }}
+                            </select>
+                        </div>
+                        <div class="form-control form-control--wide">
+                            <label for="contributor-description">{{ t .Lang "admin.transparency.contributor.field.description" }}</label>
+                            <textarea id="contributor-description" name="description" rows="3">{{ .Data.Form.Description }}</textarea>
+                        </div>
+                        <div class="form-control">
+                            <label for="contributor-amount">{{ t .Lang "admin.transparency.contributor.field.amount" }}</label>
+                            <input id="contributor-amount" name="amount" type="text" value="{{ .Data.Form.Amount }}" placeholder="{{ t .Lang "admin.transparency.contributor.field.amount.placeholder" }}">
+                        </div>
+                        <div class="form-control">
+                            <label for="contributor-currency">{{ t .Lang "admin.transparency.contributor.field.currency" }}</label>
+                            <input id="contributor-currency" name="currency" type="text" value="{{ .Data.Form.Currency }}" placeholder="{{ t .Lang "admin.transparency.contributor.field.currency.placeholder" }}">
+                        </div>
+                        <div class="form-control form-control--wide">
+                            <label for="contributor-url">{{ t .Lang "admin.transparency.contributor.field.url" }}</label>
+                            <input id="contributor-url" name="url" type="url" value="{{ .Data.Form.URL }}" placeholder="{{ t .Lang "admin.transparency.contributor.field.url.placeholder" }}">
+                        </div>
+                        <div class="form-control">
+                            <label for="contributor-sort">{{ t .Lang "admin.transparency.contributor.field.sort_order" }}</label>
+                            <input id="contributor-sort" name="sort_order" type="number" value="{{ .Data.Form.SortOrder }}">
+                        </div>
+                        <div class="form-control form-control--inline">
+                            <label>
+                                <input type="checkbox" name="is_public" value="1" {{ if .Data.Form.IsPublic }}checked{{ end }}>
+                                {{ t .Lang "admin.transparency.contributor.field.public" }}
+                            </label>
+                        </div>
+                        <div class="form-accio form-accio--wide">
+                            {{ if .Data.IsEdit }}
+                            <a class="boto-secundari" href="/admin/transparencia">{{ t .Lang "admin.transparency.contributor.actions.cancel" }}</a>
+                            {{ end }}
+                            <button type="submit" class="boto-primari">
+                                {{ if .Data.IsEdit }}
+                                    <i class="fas fa-save"></i> <span>{{ t .Lang "admin.transparency.contributor.actions.save_edit" }}</span>
+                                {{ else }}
+                                    <i class="fas fa-plus"></i> <span>{{ t .Lang "admin.transparency.contributor.actions.save_new" }}</span>
+                                {{ end }}
+                            </button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

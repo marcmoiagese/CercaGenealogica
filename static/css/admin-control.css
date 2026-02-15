@@ -1,0 +1,218 @@
+.control-center {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+}
+
+.control-section-header {
+    margin-bottom: 0.9rem;
+}
+
+.control-section-header h2 {
+    margin: 0 0 0.35rem;
+}
+
+.control-section-header p {
+    margin: 0;
+    color: #5a6d80;
+}
+
+.control-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.9rem;
+}
+
+.control-card {
+    display: flex;
+    gap: 0.85rem;
+    padding: 0.95rem;
+    border-radius: 14px;
+    border: 1px solid #e6edf3;
+    background: #fafbfc;
+    color: inherit;
+    text-decoration: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.control-card h3 {
+    margin: 0 0 0.35rem;
+    font-size: 1rem;
+    color: #1f2d3d;
+}
+
+.control-card p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #5a6d80;
+}
+
+.control-card:hover {
+    border-color: #7da3c5;
+    box-shadow: 0 12px 26px rgba(31, 45, 61, 0.08);
+    transform: translateY(-1px);
+}
+
+.control-card.is-disabled {
+    opacity: 0.6;
+    pointer-events: none;
+    background: #f6f7f9;
+}
+
+.control-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: #eef2f7;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #1f2d3d;
+    font-size: 1.1rem;
+}
+
+.control-status {
+    display: inline-block;
+    margin-top: 0.45rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: #fff3d7;
+    color: #9a5c00;
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+
+.control-section-header--split {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.control-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.control-updated {
+    font-size: 0.85rem;
+}
+
+.ops-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-top: 0.9rem;
+}
+
+.ops-card {
+    border: 1px solid #e6edf3;
+    border-radius: 16px;
+    padding: 1rem 1.1rem;
+    background: #fbfcfe;
+    box-shadow: 0 10px 24px rgba(31, 45, 61, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.ops-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.ops-label {
+    font-weight: 700;
+    color: #1f2d3d;
+}
+
+.ops-status {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: #eef2f7;
+    color: #1f2d3d;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.ops-card[data-state="ok"] .ops-status {
+    background: #dff3e2;
+    color: #1f6b3a;
+}
+
+.ops-card[data-state="warn"] .ops-status {
+    background: #fff3d7;
+    color: #9a5c00;
+}
+
+.ops-card[data-state="crit"] .ops-status {
+    background: #f4c7c7;
+    color: #7b1e1e;
+}
+
+.ops-value {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #1f2d3d;
+}
+
+.ops-helper {
+    margin: 0;
+    color: #6f7c8a;
+    font-size: 0.85rem;
+}
+
+.ops-split {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+}
+
+.ops-split__label {
+    display: block;
+    font-size: 0.75rem;
+    color: #6f7c8a;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+}
+
+.ops-split__value {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #1f2d3d;
+    margin-top: 0.3rem;
+}
+
+.ops-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.2rem;
+}
+
+.ops-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: #eef2f7;
+    color: #1f2d3d;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.ops-pill__count {
+    background: #dfe7f1;
+    color: #1f2d3d;
+    padding: 0.05rem 0.35rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+}

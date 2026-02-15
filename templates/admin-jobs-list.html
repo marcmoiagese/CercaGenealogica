@@ -1,0 +1,288 @@
+{{ define "admin-jobs-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.jobs.title" }}</title>
+    {{ template "styles-private" . }}
+    <style>
+        .jobs-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: flex-end;
+            margin: 0 0 1rem;
+            padding: 0.75rem 0.9rem;
+            border-radius: 12px;
+            background: #f9fafb;
+            border: 1px solid rgba(0,0,0,0.06);
+        }
+        .jobs-filters .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .jobs-filters label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #3b4650;
+        }
+        .jobs-filters select {
+            padding: 0.45rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid #d5d5d5;
+            background: #fff;
+            min-width: 200px;
+        }
+        .jobs-meta {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0 0 1rem;
+        }
+        .jobs-table td {
+            vertical-align: top;
+        }
+        .job-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border: 1px solid rgba(0,0,0,0.08);
+        }
+        .job-status--running {
+            background: #eef6ff;
+            color: #1d4ed8;
+        }
+        .job-status--done {
+            background: #ecfdf3;
+            color: #157f3b;
+        }
+        .job-status--error {
+            background: #fff1f2;
+            color: #be123c;
+        }
+        .job-status--queued {
+            background: #f4f6f8;
+            color: #5b6670;
+        }
+        .job-status--neutral {
+            background: #f4f6f8;
+            color: #5b6670;
+        }
+        .job-progress {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+        .job-progress-bar {
+            position: relative;
+            width: 140px;
+            height: 6px;
+            border-radius: 999px;
+            background: #e4e7eb;
+            overflow: hidden;
+        }
+        .job-progress-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            background: #111827;
+        }
+        .job-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+        .job-error {
+            max-width: 220px;
+            color: #b91c1c;
+            font-size: 0.85rem;
+            word-break: break-word;
+        }
+        .jobs-paginacio {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            margin-top: 1rem;
+        }
+        @media (max-width: 900px) {
+            .jobs-filters select {
+                min-width: 160px;
+            }
+            .job-progress-bar {
+                width: 110px;
+            }
+        }
+    </style>
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal" data-admin-jobs data-csrf="{{ .Data.CSRFToken }}" data-retry-error="{{ t .Lang "admin.jobs.retry.error" }}">
+        <section class="card">
+            <header class="card-header">
+                <div>
+                    <h1>{{ t .Lang "admin.jobs.title" }}</h1>
+                    <p class="muted">{{ t .Lang "admin.jobs.subtitle" }}</p>
+                </div>
+            </header>
+            <form class="jobs-filters" method="get" action="/admin/jobs">
+                <div class="filter-group">
+                    <label for="filter-kind">{{ t .Lang "admin.jobs.filter.kind" }}</label>
+                    <select id="filter-kind" name="kind">
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                        {{ range .Data.KindOptions }}
+                        <option value="{{ .Value }}" {{ if eq $.Data.FilterKind .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-status">{{ t .Lang "admin.jobs.filter.status" }}</label>
+                    <select id="filter-status" name="status">
+                        <option value="">{{ t .Lang "common.all" }}</option>
+                        {{ range .Data.StatusOptions }}
+                        <option value="{{ .Value }}" {{ if eq $.Data.FilterStatus .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-per-page">{{ t .Lang "admin.jobs.filter.per_page" }}</label>
+                    <select id="filter-per-page" name="per_page">
+                        <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
+                        <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
+                        <option value="50" {{ if eq .Data.PerPage 50 }}selected{{ end }}>50</option>
+                        <option value="100" {{ if eq .Data.PerPage 100 }}selected{{ end }}>100</option>
+                    </select>
+                </div>
+                <button type="submit" class="boto-primari">{{ t .Lang "admin.jobs.filter.apply" }}</button>
+            </form>
+            <div class="jobs-meta">
+                {{ if gt .Data.Total 0 }}
+                    <span class="muted">{{ t .Lang "admin.jobs.range" (printf "%d" .Data.PageStart) (printf "%d" .Data.PageEnd) (printf "%d" .Data.Total) }}</span>
+                {{ else }}
+                    <span class="muted">{{ t .Lang "common.empty" }}</span>
+                {{ end }}
+            </div>
+            <div class="taula-wrapper">
+                <table class="taula jobs-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>{{ t .Lang "admin.jobs.table.kind" }}</th>
+                            <th>{{ t .Lang "admin.jobs.table.status" }}</th>
+                            <th>{{ t .Lang "admin.jobs.table.progress" }}</th>
+                            <th>{{ t .Lang "admin.jobs.table.created" }}</th>
+                            <th>{{ t .Lang "admin.jobs.table.started" }}</th>
+                            <th>{{ t .Lang "admin.jobs.table.finished" }}</th>
+                            <th>{{ t .Lang "admin.jobs.table.user" }}</th>
+                            <th>{{ t .Lang "admin.jobs.table.error" }}</th>
+                            <th>{{ t .Lang "common.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Jobs }}
+                        <tr>
+                            <td>{{ .ID }}</td>
+                            <td>{{ t $.Lang (printf "admin.jobs.kind.%s" .Kind) }}</td>
+                            <td><span class="job-status {{ .StatusClass }}">{{ t $.Lang (printf "admin.jobs.status.%s" .Status) }}</span></td>
+                            <td>
+                                <div class="job-progress">
+                                    <div class="job-progress-bar">
+                                        <div class="job-progress-fill" style="width: {{ .ProgressPercent }}%"></div>
+                                    </div>
+                                    <span class="muted">{{ if .ProgressLabel }}{{ .ProgressLabel }}{{ else }}-{{ end }}</span>
+                                </div>
+                            </td>
+                            <td>{{ if .CreatedAt }}{{ .CreatedAt }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .StartedAt }}{{ .StartedAt }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .FinishedAt }}{{ .FinishedAt }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .CreatedBy }}{{ .CreatedBy }}{{ else }}-{{ end }}</td>
+                            <td class="job-error">{{ if .ErrorText }}{{ .ErrorText }}{{ else }}-{{ end }}</td>
+                            <td>
+                                <div class="job-actions">
+                                    <a class="boto-secundari" href="{{ .DetailURL }}">{{ t $.Lang "common.view" }}</a>
+                                    {{ if .CanRetry }}
+                                    <button type="button" class="boto-primari" data-job-retry="{{ .RetryURL }}">{{ t $.Lang "admin.jobs.retry" }}</button>
+                                    {{ end }}
+                                </div>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="10">{{ t .Lang "admin.jobs.table.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+            {{ if gt .Data.TotalPages 1 }}
+            <div class="jobs-paginacio">
+                {{ if .Data.HasPrev }}
+                    <a class="boto-secundari" href="{{ .Data.PageBase }}&page={{ .Data.PrevPage }}">{{ t .Lang "common.prev" }}</a>
+                {{ end }}
+                <span>{{ t .Lang "common.page_info" (printf "%d" .Data.Page) (printf "%d" .Data.TotalPages) }}</span>
+                {{ if .Data.HasNext }}
+                    <a class="boto-secundari" href="{{ .Data.PageBase }}&page={{ .Data.NextPage }}">{{ t .Lang "common.next" }}</a>
+                {{ end }}
+            </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script>
+        (function () {
+            var root = document.querySelector('[data-admin-jobs]');
+            if (!root) {
+                return;
+            }
+            var csrf = root.getAttribute('data-csrf') || '';
+            var errorMsg = root.getAttribute('data-retry-error') || 'Error';
+            var buttons = document.querySelectorAll('[data-job-retry]');
+            buttons.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var url = btn.getAttribute('data-job-retry');
+                    if (!url) {
+                        return;
+                    }
+                    btn.disabled = true;
+                    fetch(url, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-CSRF-Token': csrf
+                        }
+                    }).then(function (resp) {
+                        if (!resp.ok) {
+                            throw new Error('failed');
+                        }
+                        return resp.json();
+                    }).then(function (payload) {
+                        if (payload && payload.ok) {
+                            if (payload.job_id) {
+                                window.location.href = '/admin/jobs/' + payload.job_id;
+                                return;
+                            }
+                            window.location.reload();
+                            return;
+                        }
+                        throw new Error('failed');
+                    }).catch(function () {
+                        alert(errorMsg);
+                    }).finally(function () {
+                        btn.disabled = false;
+                    });
+                });
+            });
+        })();
+    </script>
+</body>
+</html>
+{{ end }}
