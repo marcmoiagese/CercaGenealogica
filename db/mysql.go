@@ -20,7 +20,7 @@ type MySQL struct {
 }
 
 func (d *MySQL) Connect() error {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", d.User, d.Pass, d.Host, d.Port, d.DBName)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=UTC", d.User, d.Pass, d.Host, d.Port, d.DBName)
 	conn, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return fmt.Errorf("error connectant a MySQL: %w", err)

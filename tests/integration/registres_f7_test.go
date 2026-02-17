@@ -31,6 +31,39 @@ func createF7UserWithSession(t *testing.T, database db.DB) (*db.User, string) {
 	if err := database.InsertUser(user); err != nil {
 		t.Fatalf("InsertUser ha fallat: %v", err)
 	}
+	if err := database.EnsureDefaultPolicies(); err != nil {
+		t.Fatalf("EnsureDefaultPolicies ha fallat: %v", err)
+	}
+	if err := database.EnsureDefaultPointsRules(); err != nil {
+		t.Fatalf("EnsureDefaultPointsRules ha fallat: %v", err)
+	}
+	sessionID := fmt.Sprintf("sess_f7_%d", time.Now().UnixNano())
+	expiry := time.Now().Add(2 * time.Hour).Format(time.RFC3339)
+	if err := database.SaveSession(sessionID, user.ID, expiry); err != nil {
+		t.Fatalf("SaveSession ha fallat: %v", err)
+	}
+	return user, sessionID
+}
+
+func createF7UserWithSessionNoAdmin(t *testing.T, database db.DB) (*db.User, string) {
+	t.Helper()
+
+	user := &db.User{
+		Usuari:        fmt.Sprintf("f7_user_%d", time.Now().UnixNano()),
+		Name:          "F7",
+		Surname:       "Tester",
+		Email:         fmt.Sprintf("f7_%d@example.com", time.Now().UnixNano()),
+		Password:      []byte("hash"),
+		DataNaixament: "1990-01-01",
+		Active:        true,
+		CreatedAt:     time.Now().Format(time.RFC3339),
+	}
+	if err := database.InsertUser(user); err != nil {
+		t.Fatalf("InsertUser ha fallat: %v", err)
+	}
+	if err := database.EnsureDefaultPointsRules(); err != nil {
+		t.Fatalf("EnsureDefaultPointsRules ha fallat: %v", err)
+	}
 	sessionID := fmt.Sprintf("sess_f7_%d", time.Now().UnixNano())
 	expiry := time.Now().Add(2 * time.Hour).Format(time.RFC3339)
 	if err := database.SaveSession(sessionID, user.ID, expiry); err != nil {

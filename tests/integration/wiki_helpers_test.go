@@ -20,6 +20,12 @@ func createTestUser(t *testing.T, database db.DB, username string) *db.User {
 	if err := database.InsertUser(user); err != nil {
 		t.Fatalf("InsertUser ha fallat: %v", err)
 	}
+	if err := database.EnsureDefaultPolicies(); err != nil {
+		t.Fatalf("EnsureDefaultPolicies ha fallat: %v", err)
+	}
+	if err := database.EnsureDefaultPointsRules(); err != nil {
+		t.Fatalf("EnsureDefaultPointsRules ha fallat: %v", err)
+	}
 	return user
 }
 

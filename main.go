@@ -93,14 +93,18 @@ func main() {
 			lang = pref
 		}
 		canManageArxius := app.CanManageArxius(user)
-		widgetStates, err := app.DashboardWidgetStates(user.ID)
+		widgetStates, err := app.DashboardWidgetStates(user.ID, lang)
 		if err != nil {
 			log.Printf("[dashboard] error carregant widgets: %v", err)
 		}
+		activityWidget := app.DashboardActivityWidget(user.ID, lang, widgetStates["activity"].Settings)
+		pointsWidget := app.DashboardPointsWidget(user.ID, lang, widgetStates["points"].Settings)
 		core.RenderPrivateTemplateLang(w, r, "index-logedin.html", lang, map[string]interface{}{
 			"User":            user,
 			"CanManageArxius": canManageArxius,
 			"WidgetStates":    widgetStates,
+			"ActivityWidget":  activityWidget,
+			"PointsWidget":    pointsWidget,
 		})
 	}))
 
@@ -287,6 +291,8 @@ func main() {
 	http.HandleFunc("/api/admin/nivells/", applyMiddleware(app.NivellStatsAdminAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/admin/kpis/general", applyMiddleware(app.AdminKPIsGeneralAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/admin/control/kpis", applyMiddleware(app.AdminControlKPIsAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/admin/control/health", applyMiddleware(app.AdminControlHealthAPI, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/admin/control/metrics", applyMiddleware(app.AdminControlMetricsAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/admin/control/moderacio/summary", applyMiddleware(app.AdminControlModeracioSummaryAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/admin/control/moderacio/jobs/", applyMiddleware(app.AdminControlModeracioJobStatus, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/admin/jobs", applyMiddleware(app.AdminJobsAPI, core.BlockIPs, core.RateLimit))
@@ -755,6 +761,7 @@ func main() {
 	})
 	// Control Center + marca pública
 	http.HandleFunc("/admin/control", applyMiddleware(app.AdminControlCenter, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/control/widgets", applyMiddleware(app.AdminDashboardWidgetsPage, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/auditoria", applyMiddleware(app.AdminAuditPage, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/jobs", applyMiddleware(app.AdminJobsListPage, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/jobs/", applyMiddleware(app.AdminJobsShowPage, core.BlockIPs, core.RateLimit))

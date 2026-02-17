@@ -141,6 +141,81 @@
             </div>
         </section>
 
+        <section class="card control-section control-health"
+                 id="control-observability"
+                 data-control-health-api="/api/admin/control/health"
+                 data-control-metrics-api="/api/admin/control/metrics"
+                 data-state-ok="{{ t .Lang "admin.control.ops.state.ok" }}"
+                 data-state-warn="{{ t .Lang "admin.control.ops.state.warn" }}"
+                 data-state-crit="{{ t .Lang "admin.control.ops.state.crit" }}"
+                 data-updated-label="{{ t .Lang "admin.control.health.updated" }}">
+            <header class="control-section-header control-section-header--split">
+                <div>
+                    <h2>{{ t .Lang "admin.control.health.title" }}</h2>
+                    <p>{{ t .Lang "admin.control.health.desc" }}</p>
+                </div>
+                <div class="control-actions">
+                    <button type="button" class="boto-secundari pequeno" data-control-health-refresh>
+                        <i class="fas fa-rotate"></i> <span>{{ t .Lang "admin.control.health.refresh" }}</span>
+                    </button>
+                    <span class="muted control-updated" data-control-health-updated>-</span>
+                </div>
+            </header>
+            <div class="alerta alerta-error" data-control-health-error hidden>{{ t .Lang "admin.control.health.error" }}</div>
+            <div class="health-grid">
+                <div class="health-card" data-health-card="db">
+                    <div class="health-card__header">
+                        <span class="health-label">{{ t .Lang "admin.control.health.card.db.title" }}</span>
+                        <span class="health-status" data-health-status>-</span>
+                    </div>
+                    <div class="health-value" data-health="db_latency">-</div>
+                    <div class="health-meta">{{ t .Lang "admin.control.health.card.db.helper" }}</div>
+                </div>
+                <div class="health-card" data-health-card="jobs">
+                    <div class="health-card__header">
+                        <span class="health-label">{{ t .Lang "admin.control.health.card.jobs.title" }}</span>
+                        <span class="health-status" data-health-status>-</span>
+                    </div>
+                    <div class="health-split">
+                        <div>
+                            <span class="health-split__label">{{ t .Lang "admin.control.health.label.queued" }}</span>
+                            <strong class="health-split__value" data-health="jobs_queued">-</strong>
+                        </div>
+                        <div>
+                            <span class="health-split__label">{{ t .Lang "admin.control.health.label.running" }}</span>
+                            <strong class="health-split__value" data-health="jobs_running">-</strong>
+                        </div>
+                        <div>
+                            <span class="health-split__label">{{ t .Lang "admin.control.health.label.failed" }}</span>
+                            <strong class="health-split__value" data-health="jobs_failed">-</strong>
+                        </div>
+                    </div>
+                    <div class="health-meta">{{ t .Lang "admin.control.health.card.jobs.helper" }}</div>
+                </div>
+                <div class="health-card" data-health-card="metrics">
+                    <div class="health-card__header">
+                        <span class="health-label">{{ t .Lang "admin.control.health.card.metrics.title" }}</span>
+                        <span class="health-status" data-health-status>-</span>
+                    </div>
+                    <div class="health-split">
+                        <div>
+                            <span class="health-split__label">{{ t .Lang "admin.control.health.label.users_7d" }}</span>
+                            <strong class="health-split__value" data-metric="users_7d">-</strong>
+                        </div>
+                        <div>
+                            <span class="health-split__label">{{ t .Lang "admin.control.health.label.imports_ok" }}</span>
+                            <strong class="health-split__value" data-metric="imports_ok">-</strong>
+                        </div>
+                        <div>
+                            <span class="health-split__label">{{ t .Lang "admin.control.health.label.imports_error" }}</span>
+                            <strong class="health-split__value" data-metric="imports_error">-</strong>
+                        </div>
+                    </div>
+                    <div class="health-meta">{{ t .Lang "admin.control.health.card.metrics.helper" }}</div>
+                </div>
+            </div>
+        </section>
+
         <section class="card control-section">
             <header class="control-section-header">
                 <h2>{{ t .Lang "admin.control.operations.title" }}</h2>
@@ -169,22 +244,20 @@
                         <p>{{ t .Lang "admin.control.card.audit.desc" }}</p>
                     </div>
                 </a>
-                <div class="control-card is-disabled">
+                <a class="control-card" href="/admin/control/widgets">
                     <div class="control-icon"><i class="fas fa-sliders-h"></i></div>
                     <div>
                         <h3>{{ t .Lang "admin.control.card.widgets.title" }}</h3>
                         <p>{{ t .Lang "admin.control.card.widgets.desc" }}</p>
-                        <span class="control-status">{{ t .Lang "common.pending" }}</span>
                     </div>
-                </div>
-                <div class="control-card is-disabled">
+                </a>
+                <a class="control-card" href="#control-observability">
                     <div class="control-icon"><i class="fas fa-heartbeat"></i></div>
                     <div>
                         <h3>{{ t .Lang "admin.control.card.health.title" }}</h3>
                         <p>{{ t .Lang "admin.control.card.health.desc" }}</p>
-                        <span class="control-status">{{ t .Lang "common.pending" }}</span>
                     </div>
-                </div>
+                </a>
             </div>
         </section>
 
@@ -218,6 +291,7 @@
         window.controlModerationTypeLabels = {{ toJsonJS .Data.ModerationTypeLabels }};
     </script>
     <script src="/static/js/admin-control-kpis.js"></script>
+    <script src="/static/js/admin-control-health.js"></script>
 </body>
 </html>
 {{ end }}

@@ -28,6 +28,8 @@ type Pagination struct {
 
 func parseListPerPage(val string) int {
 	switch strings.TrimSpace(val) {
+	case "1":
+		return 1
 	case "5":
 		return 5
 	case "10":

@@ -26,7 +26,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const defaultOrder = parseInt(defaultOrderVal, 10) || order;
     const defaultHidden = el.getAttribute('data-default-hidden') === '1';
     const hidden = el.classList.contains('is-hidden');
-    return { id, title: title || id, order, defaultOrder, defaultHidden, hidden, el };
+    const settingsJSON = el.getAttribute('data-settings-json') || '';
+    return { id, title: title || id, order, defaultOrder, defaultHidden, hidden, settingsJSON, el };
   };
 
   const widgetMap = () => {
@@ -94,11 +95,13 @@ document.addEventListener('DOMContentLoaded', function () {
   };
 
   const collectLayout = () => {
+    const map = widgetMap();
     return Array.from(list.children).map((li, index) => {
       const id = li.getAttribute('data-widget-id') || '';
       const checkbox = li.querySelector('input[type="checkbox"]');
       const hidden = checkbox ? !checkbox.checked : false;
-      return { id, order: index + 1, hidden };
+      const meta = map.get(id);
+      return { id, order: index + 1, hidden, settings_json: meta ? meta.settingsJSON : '' };
     });
   };
 

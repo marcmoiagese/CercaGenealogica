@@ -1031,7 +1031,7 @@ CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_canvis_changed_by
 
 CREATE TABLE IF NOT EXISTS wiki_marques (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic')),
   object_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
   tipus TEXT NOT NULL CHECK(tipus IN ('consanguini','politic','interes')),
@@ -1046,7 +1046,7 @@ CREATE INDEX IF NOT EXISTS idx_wiki_marques_user
   ON wiki_marques(user_id);
 
 CREATE TABLE IF NOT EXISTS wiki_marks_stats (
-  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic')),
   object_id INTEGER NOT NULL,
   tipus TEXT NOT NULL CHECK(tipus IN ('consanguini','politic','interes')),
   public_count INTEGER NOT NULL DEFAULT 0,
@@ -1058,7 +1058,7 @@ CREATE INDEX IF NOT EXISTS idx_wiki_marks_stats_object
 
 CREATE TABLE IF NOT EXISTS wiki_canvis (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic')),
   object_id INTEGER NOT NULL,
   change_type TEXT NOT NULL,
   field_key TEXT NOT NULL,
@@ -1080,7 +1080,7 @@ CREATE INDEX IF NOT EXISTS idx_wiki_canvis_status_changed
 CREATE TABLE IF NOT EXISTS wiki_pending_queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   change_id INTEGER NOT NULL UNIQUE REFERENCES wiki_canvis(id) ON DELETE CASCADE,
-  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic')),
   object_id INTEGER NOT NULL,
   changed_at TIMESTAMP NOT NULL,
   changed_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,

@@ -692,6 +692,7 @@ func (h sqlHelper) savePoliticaGrant(g *PoliticaGrant) (int, error) {
 			if err := h.db.QueryRow(stmt, g.PoliticaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren).Scan(&g.ID); err != nil {
 				return 0, err
 			}
+			_ = h.bumpPolicyPermissionsVersion(g.PoliticaID)
 			return g.ID, nil
 		}
 		res, err := h.db.Exec(stmt, g.PoliticaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren)
@@ -701,6 +702,7 @@ func (h sqlHelper) savePoliticaGrant(g *PoliticaGrant) (int, error) {
 		if id, err := res.LastInsertId(); err == nil {
 			g.ID = int(id)
 		}
+		_ = h.bumpPolicyPermissionsVersion(g.PoliticaID)
 		return g.ID, nil
 	}
 	stmt := `UPDATE politica_grants
@@ -708,12 +710,21 @@ func (h sqlHelper) savePoliticaGrant(g *PoliticaGrant) (int, error) {
              WHERE id = ?`
 	stmt = formatPlaceholders(h.style, stmt)
 	_, err := h.db.Exec(stmt, g.PoliticaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren, g.ID)
+	if err == nil {
+		_ = h.bumpPolicyPermissionsVersion(g.PoliticaID)
+	}
 	return g.ID, err
 }
 
 func (h sqlHelper) deletePoliticaGrant(id int) error {
+	policyID := 0
+	lookup := formatPlaceholders(h.style, `SELECT politica_id FROM politica_grants WHERE id = ?`)
+	_ = h.db.QueryRow(lookup, id).Scan(&policyID)
 	stmt := formatPlaceholders(h.style, `DELETE FROM politica_grants WHERE id = ?`)
 	_, err := h.db.Exec(stmt, id)
+	if err == nil && policyID > 0 {
+		_ = h.bumpPolicyPermissionsVersion(policyID)
+	}
 	return err
 }
 
@@ -747,12 +758,18 @@ func (h sqlHelper) addUserPolitica(userID, politicaID int) error {
 		stmt = formatPlaceholders(h.style, `INSERT INTO usuaris_politiques (usuari_id, politica_id, data_assignacio) VALUES (?, ?, `+h.nowFun+`) ON DUPLICATE KEY UPDATE usuari_id=VALUES(usuari_id)`)
 	}
 	_, err := h.db.Exec(stmt, userID, politicaID)
+	if err == nil {
+		_ = h.bumpUserPermissionsVersion(userID)
+	}
 	return err
 }
 
 func (h sqlHelper) removeUserPolitica(userID, politicaID int) error {
 	stmt := formatPlaceholders(h.style, `DELETE FROM usuaris_politiques WHERE usuari_id = ? AND politica_id = ?`)
 	_, err := h.db.Exec(stmt, userID, politicaID)
+	if err == nil {
+		_ = h.bumpUserPermissionsVersion(userID)
+	}
 	return err
 }
 
@@ -963,8 +980,10 @@ func (h sqlHelper) listPersones(f PersonaFilter) ([]Persona, error) {
 }
 
 func (h sqlHelper) getPersona(id int) (*Persona, error) {
-	row := h.db.QueryRow(`SELECT id, nom, cognom1, cognom2, municipi, COALESCE(municipi_naixement, ''), COALESCE(municipi_defuncio, ''), arquevisbat, nom_complet, pagina, llibre, quinta,
-        data_naixement, data_bateig, data_defuncio, ofici, estat_civil, created_by, created_at, updated_at, updated_by, moderated_by, moderated_at FROM persona WHERE id = ?`, id)
+	query := `SELECT id, nom, cognom1, cognom2, municipi, COALESCE(municipi_naixement, ''), COALESCE(municipi_defuncio, ''), arquevisbat, nom_complet, pagina, llibre, quinta,
+        data_naixement, data_bateig, data_defuncio, ofici, estat_civil, created_by, created_at, updated_at, updated_by, moderated_by, moderated_at FROM persona WHERE id = ?`
+	query = formatPlaceholders(h.style, query)
+	row := h.db.QueryRow(query, id)
 	var p Persona
 	if err := row.Scan(&p.ID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.Municipi, &p.MunicipiNaixement, &p.MunicipiDefuncio, &p.Arquebisbat, &p.NomComplet, &p.Pagina, &p.Llibre, &p.Quinta, &p.DataNaixement, &p.DataBateig, &p.DataDefuncio, &p.Ofici, &p.ModeracioEstat, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt, &p.UpdatedBy, &p.ModeratedBy, &p.ModeratedAt); err != nil {
 		return nil, err
@@ -3877,6 +3896,33 @@ func (h sqlHelper) insertUser(user *User) error {
 
 	stmt = formatPlaceholders(h.style, stmt)
 
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+		if err := h.db.QueryRow(stmt,
+			user.Usuari,
+			user.Name,
+			user.Surname,
+			user.Email,
+			user.Password,
+			user.DataNaixament,
+			user.Pais,
+			user.Estat,
+			user.Provincia,
+			user.Poblacio,
+			user.CodiPostal,
+			user.Address,
+			user.Employment,
+			user.Profession,
+			user.Phone,
+			user.PreferredLang,
+			user.SpokenLangs,
+			user.Active,
+		).Scan(&user.ID); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	res, err := h.db.Exec(stmt,
 		user.Usuari,
 		user.Name,
@@ -4021,10 +4067,17 @@ func (h sqlHelper) activateUser(token string) error {
 
 func (h sqlHelper) authenticateUser(usernameOrEmail, password string) (*User, error) {
 	h.ensureUserExtraColumns()
-	query := formatPlaceholders(h.style, `
+	actiuExpr := "1"
+	bannedExpr := "0"
+	if h.style == "postgres" {
+		actiuExpr = "TRUE"
+		bannedExpr = "FALSE"
+	}
+	query := `
         SELECT id, usuari, nom, cognoms, correu, contrasenya, data_naixement, pais, estat, provincia, poblacio, codi_postal, address, employment_status, profession, phone, preferred_lang, spoken_langs, actiu 
         FROM usuaris 
-        WHERE (usuari = ? OR correu = ?) AND actiu = 1 AND (banned = 0 OR banned IS NULL)`)
+        WHERE (usuari = ? OR correu = ?) AND actiu = ` + actiuExpr + ` AND (banned = ` + bannedExpr + ` OR banned IS NULL)`
+	query = formatPlaceholders(h.style, query)
 
 	row := h.db.QueryRow(query, usernameOrEmail, usernameOrEmail)
 
@@ -4039,18 +4092,31 @@ func (h sqlHelper) authenticateUser(usernameOrEmail, password string) (*User, er
 }
 
 func (h sqlHelper) saveSession(sessionID string, userID int, expiry string) error {
-	stmt := formatPlaceholders(h.style, `INSERT INTO sessions (token_hash, usuari_id, expira, revocat) VALUES (?, ?, ?, 0)`)
+	revokedExpr := "0"
+	if h.style == "postgres" {
+		revokedExpr = "FALSE"
+	}
+	stmt := formatPlaceholders(h.style, `INSERT INTO sessions (token_hash, usuari_id, expira, revocat) VALUES (?, ?, ?, `+revokedExpr+`)`)
 	_, err := h.db.Exec(stmt, sessionID, userID, expiry)
 	return err
 }
 
 func (h sqlHelper) getSessionUser(sessionID string) (*User, error) {
 	h.ensureUserExtraColumns()
-	query := formatPlaceholders(h.style, `
+	revokedExpr := "s.revocat = 0"
+	actiuExpr := "1"
+	bannedExpr := "0"
+	if h.style == "postgres" {
+		revokedExpr = "s.revocat = FALSE"
+		actiuExpr = "TRUE"
+		bannedExpr = "FALSE"
+	}
+	query := `
         SELECT u.id, u.usuari, u.nom, u.cognoms, u.correu, u.contrasenya, u.data_naixement, u.pais, u.estat, u.provincia, u.poblacio, u.codi_postal, u.address, u.employment_status, u.profession, u.phone, u.preferred_lang, u.spoken_langs, u.data_creacio, u.actiu
         FROM usuaris u
         INNER JOIN sessions s ON u.id = s.usuari_id
-        WHERE s.token_hash = ? AND s.revocat = 0 AND u.actiu = 1 AND (u.banned = 0 OR u.banned IS NULL)`)
+        WHERE s.token_hash = ? AND ` + revokedExpr + ` AND u.actiu = ` + actiuExpr + ` AND (u.banned = ` + bannedExpr + ` OR u.banned IS NULL)`
+	query = formatPlaceholders(h.style, query)
 
 	row := h.db.QueryRow(query, sessionID)
 
@@ -4084,7 +4150,11 @@ func (h sqlHelper) getSessionUser(sessionID string) (*User, error) {
 }
 
 func (h sqlHelper) deleteSession(sessionID string) error {
-	stmt := formatPlaceholders(h.style, `UPDATE sessions SET revocat = 1 WHERE token_hash = ?`)
+	revokedExpr := "1"
+	if h.style == "postgres" {
+		revokedExpr = "TRUE"
+	}
+	stmt := formatPlaceholders(h.style, `UPDATE sessions SET revocat = `+revokedExpr+` WHERE token_hash = ?`)
 	_, err := h.db.Exec(stmt, sessionID)
 	return err
 }
@@ -4101,9 +4171,13 @@ func (h sqlHelper) createPasswordReset(email, token, expiry, lang string) (bool,
 		return false, err
 	}
 
+	usedExpr := "0"
+	if h.style == "postgres" {
+		usedExpr = "FALSE"
+	}
 	stmt := formatPlaceholders(h.style, `
         INSERT INTO password_resets (usuari_id, token, expira, lang, used)
-        VALUES (?, ?, ?, ?, 0)`)
+        VALUES (?, ?, ?, ?, `+usedExpr+`)`)
 	_, err = h.db.Exec(stmt, userID, token, expiry, lang)
 	if err != nil {
 		return false, err
@@ -4117,11 +4191,16 @@ func (h sqlHelper) getPasswordReset(token string) (*PasswordReset, error) {
 		nowExpr = "NOW()"
 	}
 
-	stmt := formatPlaceholders(h.style, `
+	usedExpr := "0"
+	if h.style == "postgres" {
+		usedExpr = "FALSE"
+	}
+	stmt := `
         SELECT pr.id, pr.usuari_id, pr.lang, u.correu
         FROM password_resets pr
         INNER JOIN usuaris u ON u.id = pr.usuari_id
-        WHERE pr.token = ? AND pr.used = 0 AND pr.expira > `+nowExpr+``)
+        WHERE pr.token = ? AND pr.used = ` + usedExpr + ` AND pr.expira > ` + nowExpr
+	stmt = formatPlaceholders(h.style, stmt)
 
 	row := h.db.QueryRow(stmt, token)
 	var pr PasswordReset
@@ -4133,7 +4212,11 @@ func (h sqlHelper) getPasswordReset(token string) (*PasswordReset, error) {
 }
 
 func (h sqlHelper) markPasswordResetUsed(id int) error {
-	stmt := formatPlaceholders(h.style, `UPDATE password_resets SET used = 1 WHERE id = ?`)
+	usedExpr := "1"
+	if h.style == "postgres" {
+		usedExpr = "TRUE"
+	}
+	stmt := formatPlaceholders(h.style, `UPDATE password_resets SET used = `+usedExpr+` WHERE id = ?`)
 	_, err := h.db.Exec(stmt, id)
 	return err
 }
@@ -7212,6 +7295,9 @@ func (h sqlHelper) createTranscripcioRaw(t *TranscripcioRaw) (int, error) {
 	status := strings.TrimSpace(t.ModeracioEstat)
 	if status == "" {
 		status = "pendent"
+	}
+	if strings.TrimSpace(t.DataActeEstat) == "" {
+		t.DataActeEstat = "clar"
 	}
 	query := `
         INSERT INTO transcripcions_raw (
@@ -12573,6 +12659,9 @@ func (h sqlHelper) createMunicipiHistoriaFetDraft(fetID int, createdBy int, base
 	createdByVal := sql.NullInt64{}
 	if createdBy > 0 {
 		createdByVal = sql.NullInt64{Int64: int64(createdBy), Valid: true}
+	}
+	if !titol.Valid {
+		titol = sql.NullString{String: "", Valid: true}
 	}
 	if !cosText.Valid {
 		cosText = sql.NullString{String: "", Valid: true}

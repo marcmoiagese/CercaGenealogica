@@ -65,6 +65,19 @@ var treeMotherRoles = map[string]struct{}{
 	"genitora": {},
 }
 
+var treeSubjectRoles = map[string]struct{}{
+	"batejat":         {},
+	"baptizat":        {},
+	"infant":          {},
+	"infante":         {},
+	"baptism":         {},
+	"nascut":          {},
+	"nascuda":         {},
+	"nacido":          {},
+	"nacida":          {},
+	"personaprincipal": {},
+}
+
 func normalizeTreeToken(val string) string {
 	val = strings.ToLower(strings.TrimSpace(val))
 	val = strings.ReplaceAll(val, "_", "")
@@ -155,6 +168,9 @@ func (a *App) fillTreePersonFromRegistres(personaID int, base treePerson) treePe
 		transID = bestID
 	} else if registres, err := a.DB.ListRegistresByPersona(personaID, ""); err == nil {
 		for _, row := range registres {
+			if !roleMatchesTree(row.Rol, treeSubjectRoles) {
+				continue
+			}
 			tipus := normalizeRole(row.TipusActe)
 			switch tipus {
 			case "baptisme", "bateig", "bautismo", "baptism", "naixement", "naixament", "nacimiento":
@@ -290,6 +306,9 @@ func (a *App) loadParentsForPersona(personaID int, cache map[int]parentPair, pse
 		transID = bestID
 	} else if registres, err := a.DB.ListRegistresByPersona(personaID, ""); err == nil {
 		for _, row := range registres {
+			if !roleMatchesTree(row.Rol, treeSubjectRoles) {
+				continue
+			}
 			tipus := normalizeRole(row.TipusActe)
 			switch tipus {
 			case "baptisme", "bateig", "bautismo", "baptism", "naixement", "naixament", "nacimiento":
@@ -529,7 +548,11 @@ func (a *App) PersonaArbreAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	root, err := a.DB.GetPersona(id)
-	if err != nil || root == nil || root.ModeracioEstat != "publicat" {
+	status := ""
+	if root != nil {
+		status = strings.TrimSpace(root.ModeracioEstat)
+	}
+	if err != nil || root == nil || (status != "" && status != "publicat") {
 		http.NotFound(w, r)
 		return
 	}
@@ -573,7 +596,11 @@ func (a *App) ArbreExpandAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	root, err := a.DB.GetPersona(personID)
-	if err != nil || root == nil || root.ModeracioEstat != "publicat" {
+	status := ""
+	if root != nil {
+		status = strings.TrimSpace(root.ModeracioEstat)
+	}
+	if err != nil || root == nil || (status != "" && status != "publicat") {
 		http.NotFound(w, r)
 		return
 	}

@@ -245,6 +245,10 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			}
 		}
 
+		t.DataActeEstat = normalizeDataActeEstat(t.DataActeEstat)
+		if t.DataActeEstat == "" {
+			t.DataActeEstat = "clar"
+		}
 		id, err := a.DB.CreateTranscripcioRaw(&t)
 		if err != nil || id == 0 {
 			result.Failed++
@@ -904,6 +908,16 @@ func applyBaseTarget(field string, value string, extras map[string]string, t *db
 	}
 }
 
+func normalizeDataActeEstat(value string) string {
+	value = normalizeQualityStatus(value)
+	switch value {
+	case "clar", "dubtos", "incomplet", "illegible", "no_consta":
+		return value
+	default:
+		return ""
+	}
+}
+
 func applyPersonTarget(field string, value string, extras map[string]string, persones map[string]*db.TranscripcioPersonaRaw, parseCfg templateParseConfig) {
 	parts := strings.Split(field, ".")
 	if len(parts) < 1 {
@@ -1216,6 +1230,7 @@ func updateExistingTranscripcio(existing *db.TranscripcioRaw, incoming *db.Trans
 	if existing == nil || incoming == nil {
 		return false
 	}
+	incoming.DataActeEstat = normalizeDataActeEstat(incoming.DataActeEstat)
 	updated := false
 	if (!missingOnly) || existing.NumPaginaText == "" {
 		if incoming.NumPaginaText != "" {

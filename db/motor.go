@@ -2194,6 +2194,14 @@ func NewDB(config map[string]string) (DB, error) {
 
 	switch engine {
 	case "sqlite":
+		if config["RECREADB"] == "true" {
+			path := strings.TrimSpace(config["DB_PATH"])
+			if path != "" {
+				if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+					logInfof("No s'ha pogut eliminar el fitxer SQLite %s: %v", path, err)
+				}
+			}
+		}
 		dbInstance = &SQLite{Path: config["DB_PATH"]}
 	case "postgres":
 		dbInstance = &PostgreSQL{
@@ -2264,6 +2272,9 @@ func CreateDatabaseFromSQL(sqlFile, engine string, db DB) error {
 	if err != nil {
 		return fmt.Errorf("no s'ha pogut llegir el fitxer SQL: %w", err)
 	}
+	if err := resetDatabase(engine, db); err != nil {
+		return fmt.Errorf("error netejant BD (%s): %w", engine, err)
+	}
 
 	raw := string(data)
 
@@ -2281,7 +2292,12 @@ func CreateDatabaseFromSQL(sqlFile, engine string, db DB) error {
 	cleanSQL := b.String()
 
 	// 2) Separa per ';' i neteja espais. (Semicolons al final del statement)
-	parts := strings.Split(cleanSQL, ";")
+	var parts []string
+	if engine == "postgres" {
+		parts = splitSQLStatements(cleanSQL)
+	} else {
+		parts = strings.Split(cleanSQL, ";")
+	}
 
 	// 3) Escollir com començar la transacció segons el motor
 	beginStmt := "BEGIN"
@@ -2322,6 +2338,18 @@ func CreateDatabaseFromSQL(sqlFile, engine string, db DB) error {
 		}
 
 		if _, err := db.Exec(q); err != nil {
+			if engine == "mysql" {
+				handled, fixErr := handleMySQLMissingIndexColumn(db, q, err)
+				if handled {
+					if fixErr != nil {
+						return fmt.Errorf("error arreglant index MySQL: %w", fixErr)
+					}
+					continue
+				}
+			}
+			if shouldIgnoreSQLError(engine, q, err) {
+				continue
+			}
 			// Mostra un tros de l’SQL per facilitar el debug
 			snip := q
 			if len(snip) > 120 {
@@ -2337,6 +2365,233 @@ func CreateDatabaseFromSQL(sqlFile, engine string, db DB) error {
 	}
 
 	logInfof("BD recreada correctament")
+	return nil
+}
+
+func resetDatabase(engine string, db DB) error {
+	if db == nil {
+		return nil
+	}
+	switch engine {
+	case "postgres":
+		rows, err := db.Query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			name := strings.TrimSpace(stringFromRowValue(rowValueByKey(row, "tablename")))
+			if name == "" {
+				continue
+			}
+			stmt := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", quoteIdent(engine, name))
+			if _, err := db.Exec(stmt); err != nil {
+				return err
+			}
+		}
+		typeRows, err := db.Query("SELECT t.typname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'public' AND t.typtype = 'c'")
+		if err != nil {
+			return err
+		}
+		for _, row := range typeRows {
+			name := strings.TrimSpace(stringFromRowValue(rowValueByKey(row, "typname")))
+			if name == "" {
+				continue
+			}
+			typeStmt := fmt.Sprintf("DROP TYPE IF EXISTS %s CASCADE", quoteIdent(engine, name))
+			if _, err := db.Exec(typeStmt); err != nil {
+				return err
+			}
+		}
+	case "mysql":
+		_, _ = db.Exec("SET FOREIGN_KEY_CHECKS=0")
+		rows, err := db.Query("SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()")
+		if err != nil {
+			_, _ = db.Exec("SET FOREIGN_KEY_CHECKS=1")
+			return err
+		}
+		for _, row := range rows {
+			name := strings.TrimSpace(stringFromRowValue(rowValueByKey(row, "table_name")))
+			if name == "" {
+				continue
+			}
+			stmt := fmt.Sprintf("DROP TABLE IF EXISTS %s", quoteIdent(engine, name))
+			if _, err := db.Exec(stmt); err != nil {
+				_, _ = db.Exec("SET FOREIGN_KEY_CHECKS=1")
+				return err
+			}
+		}
+		_, _ = db.Exec("SET FOREIGN_KEY_CHECKS=1")
+	}
+	return nil
+}
+
+func splitSQLStatements(sql string) []string {
+	var stmts []string
+	var b strings.Builder
+	inSingle := false
+	inDouble := false
+	inDollar := false
+	for i := 0; i < len(sql); i++ {
+		ch := sql[i]
+		if inDollar {
+			if ch == '$' && i+1 < len(sql) && sql[i+1] == '$' {
+				inDollar = false
+				b.WriteByte(ch)
+				b.WriteByte('$')
+				i++
+				continue
+			}
+			b.WriteByte(ch)
+			continue
+		}
+		if inSingle {
+			if ch == '\'' {
+				if i+1 < len(sql) && sql[i+1] == '\'' {
+					b.WriteByte(ch)
+					b.WriteByte('\'')
+					i++
+					continue
+				}
+				inSingle = false
+			}
+			b.WriteByte(ch)
+			continue
+		}
+		if inDouble {
+			if ch == '"' {
+				if i+1 < len(sql) && sql[i+1] == '"' {
+					b.WriteByte(ch)
+					b.WriteByte('"')
+					i++
+					continue
+				}
+				inDouble = false
+			}
+			b.WriteByte(ch)
+			continue
+		}
+		if ch == '$' && i+1 < len(sql) && sql[i+1] == '$' {
+			inDollar = true
+			b.WriteByte(ch)
+			b.WriteByte('$')
+			i++
+			continue
+		}
+		if ch == '\'' {
+			inSingle = true
+			b.WriteByte(ch)
+			continue
+		}
+		if ch == '"' {
+			inDouble = true
+			b.WriteByte(ch)
+			continue
+		}
+		if ch == ';' {
+			stmt := strings.TrimSpace(b.String())
+			if stmt != "" {
+				stmts = append(stmts, stmt)
+			}
+			b.Reset()
+			continue
+		}
+		b.WriteByte(ch)
+	}
+	last := strings.TrimSpace(b.String())
+	if last != "" {
+		stmts = append(stmts, last)
+	}
+	return stmts
+}
+
+func handleMySQLMissingIndexColumn(db DB, stmt string, err error) (bool, error) {
+	if err == nil || db == nil {
+		return false, nil
+	}
+	if !strings.Contains(err.Error(), "Key column 'llibre_ref_id' doesn't exist") {
+		return false, nil
+	}
+	low := strings.ToLower(strings.TrimSpace(stmt))
+	if !strings.HasPrefix(low, "create index") || !strings.Contains(low, "idx_llibres_urls_llibre_ref") {
+		return false, nil
+	}
+	if _, addErr := db.Exec("ALTER TABLE llibres_urls ADD COLUMN llibre_ref_id INT UNSIGNED NULL"); addErr != nil {
+		if !strings.Contains(addErr.Error(), "Duplicate column name") {
+			return true, addErr
+		}
+	}
+	if _, idxErr := db.Exec("CREATE INDEX idx_llibres_urls_llibre_ref ON llibres_urls(llibre_ref_id)"); idxErr != nil {
+		if shouldIgnoreSQLError("mysql", "CREATE INDEX idx_llibres_urls_llibre_ref ON llibres_urls(llibre_ref_id)", idxErr) {
+			return true, nil
+		}
+		return true, idxErr
+	}
+	return true, nil
+}
+
+func shouldIgnoreSQLError(engine, stmt string, err error) bool {
+	if err == nil {
+		return false
+	}
+	low := strings.ToLower(strings.TrimSpace(stmt))
+	switch engine {
+	case "mysql":
+		if !strings.Contains(err.Error(), "Duplicate key name") {
+			return false
+		}
+		if strings.HasPrefix(low, "create index") {
+			return true
+		}
+		if strings.HasPrefix(low, "alter table") && strings.Contains(low, " add index") {
+			return true
+		}
+	case "postgres":
+		if strings.Contains(low, "create extension") && strings.Contains(err.Error(), "pg_extension_name_index") {
+			return true
+		}
+		if strings.Contains(low, "create extension") && strings.Contains(strings.ToLower(err.Error()), "already exists") {
+			return true
+		}
+	}
+	return false
+}
+
+func quoteIdent(engine, ident string) string {
+	switch engine {
+	case "mysql":
+		return "`" + strings.ReplaceAll(ident, "`", "``") + "`"
+	default:
+		return `"` + strings.ReplaceAll(ident, `"`, `""`) + `"`
+	}
+}
+
+func stringFromRowValue(val interface{}) string {
+	if val == nil {
+		return ""
+	}
+	switch v := val.(type) {
+	case string:
+		return v
+	case []byte:
+		return string(v)
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+func rowValueByKey(row map[string]interface{}, key string) interface{} {
+	if row == nil {
+		return nil
+	}
+	if val, ok := row[key]; ok {
+		return val
+	}
+	keyLower := strings.ToLower(key)
+	for k, v := range row {
+		if strings.ToLower(k) == keyLower {
+			return v
+		}
+	}
 	return nil
 }
 

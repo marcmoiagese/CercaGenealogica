@@ -38,7 +38,7 @@
 
             <div class="dash-grid" id="dashGrid">
                 {{ $ws := index .Data.WidgetStates "quick-search" }}
-                <section class="widget span-6{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="quick-search" data-widget-title="Cerca rapida" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                <section class="widget span-6{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="quick-search" data-widget-title="Cerca rapida" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" data-settings-json="{{ $ws.SettingsJSON }}" style="order: {{ $ws.Order }};">
                     <div class="widget-head">
                         <h2 data-widget-title><i class="fas fa-magnifying-glass"></i> Cerca rapida</h2>
                         <div class="muted">Anar directe a la cerca global</div>
@@ -57,7 +57,7 @@
                 </section>
 
                 {{ $ws = index .Data.WidgetStates "shortcuts" }}
-                <section class="widget span-6{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="shortcuts" data-widget-title="Acces rapid" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                <section class="widget span-6{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="shortcuts" data-widget-title="Acces rapid" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" data-settings-json="{{ $ws.SettingsJSON }}" style="order: {{ $ws.Order }};">
                     <div class="widget-head">
                         <h2 data-widget-title><i class="fas fa-bolt"></i> Acces rapid</h2>
                         <div class="muted">Dreceres a les pantalles mes usades</div>
@@ -86,49 +86,60 @@
                 </section>
 
                 {{ $ws = index .Data.WidgetStates "activity" }}
-                <section class="widget span-8{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="activity" data-widget-title="La meva activitat" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                <section class="widget span-8{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="activity" data-widget-title="La meva activitat" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" data-settings-json="{{ $ws.SettingsJSON }}" style="order: {{ $ws.Order }};">
                     <div class="widget-head">
                         <h2 data-widget-title><i class="fas fa-chart-line"></i> La meva activitat</h2>
-                        <div class="muted">Ultimes contribucions i seguiment</div>
+                        <div class="muted">
+                            {{ if $ws.RangeLabel }}{{ $ws.RangeLabel }}{{ else }}Ultimes contribucions i seguiment{{ end }}
+                        </div>
                     </div>
 
-                    <ul class="list">
-                        <li>
-                            <div>
-                                <div class="label"><i class="fas fa-keyboard"></i> Indexacio</div>
-                                <div class="muted">3 registres transcrits</div>
-                            </div>
-                            <div class="meta">Avui</div>
-                        </li>
-                        <li>
-                            <div>
-                                <div class="label"><i class="fas fa-link"></i> Vincles</div>
-                                <div class="muted">1 relacio creada</div>
-                            </div>
-                            <div class="meta">Ahir</div>
-                        </li>
-                        <li>
-                            <div>
-                                <div class="label"><i class="fas fa-check-circle"></i> Validacio</div>
-                                <div class="muted">2 elements revisats</div>
-                            </div>
-                            <div class="meta">Aquesta setmana</div>
-                        </li>
-                    </ul>
+                    {{ with .Data.ActivityWidget.Alert }}
+                    <div class="widget-alert {{ .Level }}">
+                        <i class="fas fa-triangle-exclamation"></i>
+                        <span>{{ .Message }} ({{ .Value }})</span>
+                    </div>
+                    {{ end }}
 
-                    <p class="muted" style="margin-top:12px;line-height:1.55">
-                        Punt d'integracio: substituir aquests items per dades reals (API/DB) i afegir historial complet.
-                    </p>
+                    <ul class="list">
+                        {{ range .Data.ActivityWidget.Items }}
+                        <li>
+                            <div>
+                                <div class="label">{{ .Label }}</div>
+                                {{ if .Detail }}<div class="muted">{{ .Detail }}</div>{{ end }}
+                            </div>
+                            <div class="meta">{{ .Meta }}</div>
+                        </li>
+                        {{ else }}
+                        <li class="list-empty">
+                            <div class="muted">{{ t .Lang "dashboard.widget.activity.empty" }}</div>
+                        </li>
+                        {{ end }}
+                    </ul>
                 </section>
 
                 {{ $ws = index .Data.WidgetStates "points" }}
-                <section class="widget span-4{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="points" data-widget-title="Punts i bescanvi" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                <section class="widget span-4{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="points" data-widget-title="Punts i bescanvi" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" data-settings-json="{{ $ws.SettingsJSON }}" style="order: {{ $ws.Order }};">
                     <div class="widget-head">
                         <h2 data-widget-title><i class="fas fa-coins"></i> Punts i bescanvi</h2>
-                        <div class="muted">Acces a documentacio</div>
+                        <div class="muted">
+                            {{ if $ws.RangeLabel }}{{ $ws.RangeLabel }}{{ else }}Acces a documentacio{{ end }}
+                        </div>
                     </div>
 
-                    <p style="margin:0;color:#3c4a57;line-height:1.55">
+                    {{ with .Data.PointsWidget.Alert }}
+                    <div class="widget-alert {{ .Level }}">
+                        <i class="fas fa-triangle-exclamation"></i>
+                        <span>{{ .Message }} ({{ .Value }})</span>
+                    </div>
+                    {{ end }}
+
+                    <div class="widget-kpi">
+                        <div class="widget-kpi-value">{{ .Data.PointsWidget.Total }}</div>
+                        <div class="widget-kpi-label">{{ t .Lang "dashboard.widget.points.label" }}</div>
+                    </div>
+
+                    <p class="muted" style="margin:0;line-height:1.55">
                         Els punts s'acumulen amb contribucions (indexacio, validacio, aportacions) i es poden bescanviar per accedir
                         a documentacio o col.leccions especifiques.
                     </p>
@@ -142,7 +153,7 @@
                 </section>
 
                 {{ $ws = index .Data.WidgetStates "groups" }}
-                <section class="widget span-6{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="groups" data-widget-title="Grups de treball" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                <section class="widget span-6{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="groups" data-widget-title="Grups de treball" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" data-settings-json="{{ $ws.SettingsJSON }}" style="order: {{ $ws.Order }};">
                     <div class="widget-head">
                         <h2 data-widget-title><i class="fas fa-people-group"></i> Grups de treball</h2>
                         <div class="muted">Familia i col.laboradors</div>
@@ -174,7 +185,7 @@
                 </section>
 
                 {{ $ws = index .Data.WidgetStates "blog" }}
-                <section class="widget span-6{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="blog" data-widget-title="Novetats del blog" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                <section class="widget span-6{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="blog" data-widget-title="Novetats del blog" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" data-settings-json="{{ $ws.SettingsJSON }}" style="order: {{ $ws.Order }};">
                     <div class="widget-head">
                         <h2 data-widget-title><i class="fas fa-newspaper"></i> Novetats del blog</h2>
                         <div class="muted">Eines i canvis recents</div>
@@ -206,7 +217,7 @@
                 </section>
 
                 {{ $ws = index .Data.WidgetStates "getting-started" }}
-                <section class="widget span-12{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="getting-started" data-widget-title="Comenca en 3 passos" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" style="order: {{ $ws.Order }};">
+                <section class="widget span-12{{ if $ws.Hidden }} is-hidden{{ end }}" data-widget-id="getting-started" data-widget-title="Comenca en 3 passos" data-order="{{ $ws.Order }}" data-default-order="{{ $ws.DefaultOrder }}" data-default-hidden="{{ if $ws.DefaultHidden }}1{{ else }}0{{ end }}" data-settings-json="{{ $ws.SettingsJSON }}" style="order: {{ $ws.Order }};">
                     <div class="widget-head">
                         <h2 data-widget-title><i class="fas fa-flag"></i> Comenca en 3 passos</h2>
                         <div class="muted">Configuracio rapida</div>

@@ -21,7 +21,7 @@ func TestAdvancedSearchFiltersAndFuzzy(t *testing.T) {
 			app := appDB.App
 			database := appDB.DB
 
-			user, _ := createF7UserWithSession(t, database)
+			user, sessionID := createF7UserWithSession(t, database)
 
 			paisID, err := database.CreatePais(&db.Pais{CodiISO2: "TS", CodiISO3: "TST"})
 			if err != nil {
@@ -198,7 +198,7 @@ func TestAdvancedSearchFiltersAndFuzzy(t *testing.T) {
 			upsertPersonaDoc(t, database, personFilter2ID, mun2ID, "pere soler", "pere", "soler", "pere soler")
 			upsertRegistreDoc(t, database, registreID, mun1ID, llibreID, arxiuID, eclesID, "joan moia")
 
-			resp := callSearchAPI(t, app, "/api/search?q=pere+soler&entity=persona&ancestor_type=municipi&ancestor_id="+strconv.Itoa(mun1ID))
+			resp := callSearchAPI(t, app, sessionID, "/api/search?q=pere+soler&entity=persona&ancestor_type=municipi&ancestor_id="+strconv.Itoa(mun1ID))
 			items := readItems(resp)
 			if len(items) != 1 {
 				t.Fatalf("esperava 1 resultat filtrat per municipi, got %d", len(items))
@@ -207,19 +207,19 @@ func TestAdvancedSearchFiltersAndFuzzy(t *testing.T) {
 				t.Fatalf("resultat filtrat incorrecte, got %d", id)
 			}
 
-			resp = callSearchAPI(t, app, "/api/search?q=joan&entity=registre_raw&entitat_eclesiastica_id="+strconv.Itoa(eclesID))
+			resp = callSearchAPI(t, app, sessionID, "/api/search?q=joan&entity=registre_raw&entitat_eclesiastica_id="+strconv.Itoa(eclesID))
 			items = readItems(resp)
 			if len(items) != 1 {
 				t.Fatalf("esperava 1 registre per entitat, got %d", len(items))
 			}
 
-			resp = callSearchAPI(t, app, "/api/search?q=Moya&entity=persona")
+			resp = callSearchAPI(t, app, sessionID, "/api/search?q=Moya&entity=persona")
 			items = readItems(resp)
 			if !containsID(items, personExactID) {
 				t.Fatalf("variant cognom no retorna persona canònica")
 			}
 
-			resp = callSearchAPI(t, app, "/api/search?q=joan+moia&entity=persona")
+			resp = callSearchAPI(t, app, sessionID, "/api/search?q=joan+moia&entity=persona")
 			items = readItems(resp)
 			if len(items) < 2 {
 				t.Fatalf("esperava mínim 2 resultats (exacte + fonètic)")
@@ -228,7 +228,7 @@ func TestAdvancedSearchFiltersAndFuzzy(t *testing.T) {
 				t.Fatalf("esperava exacte primer, got %d", first)
 			}
 
-			resp = callSearchAPI(t, app, "/api/search?q=pere+soler&entity=persona&page_size=1")
+			resp = callSearchAPI(t, app, sessionID, "/api/search?q=pere+soler&entity=persona&page_size=1")
 			items = readItems(resp)
 			if len(items) != 1 {
 				t.Fatalf("esperava 1 resultat a la primera pàgina, got %d", len(items))
@@ -237,7 +237,7 @@ func TestAdvancedSearchFiltersAndFuzzy(t *testing.T) {
 				t.Fatalf("esperava 2 pàgines, got %d", pages)
 			}
 
-			resp = callSearchAPI(t, app, "/api/search?q=joan&from=not-a-date")
+			resp = callSearchAPI(t, app, sessionID, "/api/search?q=joan&from=not-a-date")
 			if total := int(resp["total"].(float64)); total == 0 {
 				t.Fatalf("esperava resultats amb data invàlida")
 			}
@@ -298,9 +298,12 @@ func upsertRegistreDoc(t *testing.T, database db.DB, registreID, munID, llibreID
 	}
 }
 
-func callSearchAPI(t *testing.T, app *core.App, path string) map[string]interface{} {
+func callSearchAPI(t *testing.T, app *core.App, sessionID string, path string) map[string]interface{} {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
+	if sessionID != "" {
+		req.AddCookie(&http.Cookie{Name: "cg_session", Value: sessionID})
+	}
 	rr := httptest.NewRecorder()
 	app.SearchAPI(rr, req)
 	if rr.Code != http.StatusOK {

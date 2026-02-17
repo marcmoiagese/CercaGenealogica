@@ -1,0 +1,105 @@
+.widget-settings-form{
+  display:flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.widget-settings-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+.widget-settings-card{
+  border: 1px solid #e6edf3;
+  border-radius: 14px;
+  background: #fbfcfe;
+  padding: 1rem;
+  display:flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.widget-settings-head{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.widget-settings-head h3{
+  margin:0;
+  font-size: 1rem;
+  color: #1f2d3d;
+}
+.widget-settings-id{
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6f7c8a;
+  font-weight: 700;
+}
+.widget-settings-group{
+  display:flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.widget-settings-group label,
+.widget-settings-label{
+  font-weight: 700;
+  color: #1f2d3d;
+  font-size: 0.85rem;
+}
+.widget-settings-group select,
+.widget-settings-group input[type="number"]{
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #d7e0ea;
+}
+.widget-settings-alerts{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.widget-settings-roles{
+  display:flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.widget-settings-role{
+  display:flex;
+  align-items:center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  color: #394958;
+}
+.widget-settings-empty{
+  color: #6f7c8a;
+  font-size: 0.88rem;
+  padding: 0.4rem 0;
+}
+.widget-settings-actions{
+  display:flex;
+  justify-content:flex-end;
+}
+.widget-settings-actions .primary{
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+.widget-settings-note{
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  margin-bottom: 0.8rem;
+  font-weight: 700;
+}
+.widget-settings-note.is-success{
+  background: #dff3e2;
+  color: #1f6b3a;
+  border: 1px solid #bfe2c6;
+}
+.widget-settings-note.is-error{
+  background: #f6d2d2;
+  color: #7b1e1e;
+  border: 1px solid #f1b6ba;
+}

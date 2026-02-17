@@ -19,7 +19,11 @@ func (a *App) PersonaPublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := a.DB.GetPersona(id)
-	if err != nil || p == nil || p.ModeracioEstat != "publicat" {
+	status := ""
+	if p != nil {
+		status = strings.TrimSpace(p.ModeracioEstat)
+	}
+	if err != nil || p == nil || (status != "" && status != "publicat") {
 		http.Error(w, T(lang, "public.person.not_found"), http.StatusNotFound)
 		return
 	}
@@ -52,7 +56,11 @@ func (a *App) PersonaPublicArbre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := a.DB.GetPersona(id)
-	if err != nil || p == nil || p.ModeracioEstat != "publicat" {
+	status := ""
+	if p != nil {
+		status = strings.TrimSpace(p.ModeracioEstat)
+	}
+	if err != nil || p == nil || (status != "" && status != "publicat") {
 		http.Error(w, T(lang, "public.person.not_found"), http.StatusNotFound)
 		return
 	}
@@ -87,7 +95,7 @@ func (a *App) PersonaPublicArbre(w http.ResponseWriter, r *http.Request) {
 	if len(ids) > 0 {
 		if personsByID, err := a.DB.GetPersonesByIDs(ids); err == nil {
 			for _, id := range ids {
-				if p := personsByID[id]; p != nil && p.ModeracioEstat == "publicat" {
+				if p := personsByID[id]; p != nil && (strings.TrimSpace(p.ModeracioEstat) == "" || p.ModeracioEstat == "publicat") {
 					valid[id] = true
 				}
 			}

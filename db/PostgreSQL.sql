@@ -241,18 +241,6 @@ CREATE TABLE IF NOT EXISTS persona (
     moderated_at TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS persona_field_links (
-    id SERIAL PRIMARY KEY,
-    persona_id INTEGER NOT NULL REFERENCES persona(id) ON DELETE CASCADE,
-    field_key TEXT NOT NULL,
-    registre_id INTEGER NOT NULL REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
-    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(persona_id, field_key)
-);
-CREATE INDEX IF NOT EXISTS idx_persona_field_links_persona ON persona_field_links(persona_id);
-CREATE INDEX IF NOT EXISTS idx_persona_field_links_registre ON persona_field_links(registre_id);
-
 CREATE TABLE IF NOT EXISTS relacions (
     id SERIAL PRIMARY KEY,
     persona_id INTEGER NOT NULL,
@@ -762,6 +750,18 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw (
   updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS persona_field_links (
+    id SERIAL PRIMARY KEY,
+    persona_id INTEGER NOT NULL REFERENCES persona(id) ON DELETE CASCADE,
+    field_key TEXT NOT NULL,
+    registre_id INTEGER NOT NULL REFERENCES transcripcions_raw(id) ON DELETE CASCADE,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(persona_id, field_key)
+);
+CREATE INDEX IF NOT EXISTS idx_persona_field_links_persona ON persona_field_links(persona_id);
+CREATE INDEX IF NOT EXISTS idx_persona_field_links_registre ON persona_field_links(registre_id);
+
 CREATE TABLE IF NOT EXISTS search_docs (
   id SERIAL PRIMARY KEY,
   entity_type TEXT NOT NULL CHECK (entity_type IN ('persona','registre_raw')),
@@ -897,7 +897,7 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw_canvis (
 
 CREATE TABLE IF NOT EXISTS wiki_marques (
   id SERIAL PRIMARY KEY,
-  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic')),
   object_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
   tipus TEXT NOT NULL CHECK(tipus IN ('consanguini','politic','interes')),
@@ -910,7 +910,7 @@ CREATE INDEX IF NOT EXISTS idx_wiki_marques_object ON wiki_marques(object_type, 
 CREATE INDEX IF NOT EXISTS idx_wiki_marques_user ON wiki_marques(user_id);
 
 CREATE TABLE IF NOT EXISTS wiki_marks_stats (
-  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic')),
   object_id INTEGER NOT NULL,
   tipus TEXT NOT NULL CHECK(tipus IN ('consanguini','politic','interes')),
   public_count INTEGER NOT NULL DEFAULT 0,
@@ -921,7 +921,7 @@ CREATE INDEX IF NOT EXISTS idx_wiki_marks_stats_object ON wiki_marks_stats(objec
 
 CREATE TABLE IF NOT EXISTS wiki_canvis (
   id SERIAL PRIMARY KEY,
-  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom')),
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic')),
   object_id INTEGER NOT NULL,
   change_type TEXT NOT NULL,
   field_key TEXT NOT NULL,
@@ -1345,61 +1345,6 @@ CREATE TABLE IF NOT EXISTS usuaris_punts (
     ultima_actualitzacio TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Achievements
-CREATE TABLE IF NOT EXISTS achievements (
-    id SERIAL PRIMARY KEY,
-    code TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    description TEXT NOT NULL,
-    rarity TEXT NOT NULL CHECK (rarity IN ('common','rare','epic','legendary')),
-    visibility TEXT NOT NULL CHECK (visibility IN ('visible','hidden','seasonal')),
-    domain TEXT NOT NULL,
-    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    is_repeatable BOOLEAN NOT NULL DEFAULT FALSE,
-    icon_media_item_id INTEGER REFERENCES media_items(id) ON DELETE SET NULL,
-    rule_json TEXT NOT NULL,
-    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS achievement_events (
-    id SERIAL PRIMARY KEY,
-    code TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    start_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    end_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    scope TEXT NOT NULL DEFAULT 'global',
-    scope_id INTEGER,
-    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS achievements_user (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
-    achievement_id INTEGER NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
-    awarded_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','revoked','hidden_by_user')),
-    meta_json TEXT,
-    UNIQUE (user_id, achievement_id)
-);
-
-CREATE TABLE IF NOT EXISTS achievements_showcase (
-    user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
-    achievement_id INTEGER NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
-    slot INTEGER NOT NULL,
-    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, slot),
-    UNIQUE (user_id, achievement_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_achievements_domain_enabled ON achievements(domain, is_enabled);
-CREATE INDEX IF NOT EXISTS idx_achievements_icon ON achievements(icon_media_item_id);
-CREATE INDEX IF NOT EXISTS idx_achievements_user_user ON achievements_user(user_id, awarded_at DESC);
-CREATE INDEX IF NOT EXISTS idx_achievements_user_achievement ON achievements_user(achievement_id);
-CREATE INDEX IF NOT EXISTS idx_achievement_events_code_window ON achievement_events(code, is_enabled, start_at, end_at);
-
 -- Índexs
 ------------------------------------------------------------------------------------------------------------------------
 
@@ -1578,6 +1523,61 @@ CREATE INDEX IF NOT EXISTS idx_media_albums_moderation
   ON media_albums(moderation_status);
 CREATE INDEX IF NOT EXISTS idx_media_albums_llibre
   ON media_albums(llibre_id);
+
+-- Achievements
+CREATE TABLE IF NOT EXISTS achievements (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    rarity TEXT NOT NULL CHECK (rarity IN ('common','rare','epic','legendary')),
+    visibility TEXT NOT NULL CHECK (visibility IN ('visible','hidden','seasonal')),
+    domain TEXT NOT NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    is_repeatable BOOLEAN NOT NULL DEFAULT FALSE,
+    icon_media_item_id INTEGER REFERENCES media_items(id) ON DELETE SET NULL,
+    rule_json TEXT NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS achievement_events (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    start_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    end_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    scope TEXT NOT NULL DEFAULT 'global',
+    scope_id INTEGER,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS achievements_user (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    achievement_id INTEGER NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
+    awarded_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','revoked','hidden_by_user')),
+    meta_json TEXT,
+    UNIQUE (user_id, achievement_id)
+);
+
+CREATE TABLE IF NOT EXISTS achievements_showcase (
+    user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
+    achievement_id INTEGER NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
+    slot INTEGER NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, slot),
+    UNIQUE (user_id, achievement_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_achievements_domain_enabled ON achievements(domain, is_enabled);
+CREATE INDEX IF NOT EXISTS idx_achievements_icon ON achievements(icon_media_item_id);
+CREATE INDEX IF NOT EXISTS idx_achievements_user_user ON achievements_user(user_id, awarded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_achievements_user_achievement ON achievements_user(achievement_id);
+CREATE INDEX IF NOT EXISTS idx_achievement_events_code_window ON achievement_events(code, is_enabled, start_at, end_at);
 
 -- =====================================================================
 -- Esdeveniments historics

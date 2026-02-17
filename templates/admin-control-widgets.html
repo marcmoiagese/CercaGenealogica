@@ -1,0 +1,102 @@
+{{ define "admin-control-widgets.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.widgets.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/admin-control.css">
+    <link rel="stylesheet" href="/static/css/admin-widgets.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+
+    <main class="contingut-principal">
+        <div class="container control-center">
+            <section class="card control-section">
+                <header class="control-section-header">
+                    <h2>{{ t .Lang "admin.widgets.title" }}</h2>
+                    <p>{{ t .Lang "admin.widgets.desc" }}</p>
+                </header>
+
+                {{ if .Data.Success }}
+                <div class="widget-settings-note is-success">{{ t .Lang "admin.widgets.saved" }}</div>
+                {{ end }}
+                {{ if .Data.SaveError }}
+                <div class="widget-settings-note is-error">{{ .Data.SaveError }}</div>
+                {{ end }}
+
+                <form class="widget-settings-form" method="post" action="/admin/control/widgets">
+                    <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+
+                    <div class="widget-settings-grid">
+                        {{ range $cfg := .Data.WidgetConfigs }}
+                        <div class="widget-settings-card">
+                            <div class="widget-settings-head">
+                                <h3>{{ $cfg.Title }}</h3>
+                                <span class="widget-settings-id">{{ $cfg.ID }}</span>
+                            </div>
+
+                            {{ $schema := $cfg.Schema }}
+                            {{ if or (gt (len $schema.Ranges) 0) $schema.AllowAlerts $schema.AllowRoles }}
+                                {{ if gt (len $schema.Ranges) 0 }}
+                                <div class="widget-settings-group">
+                                    <label for="range_{{ $cfg.ID }}">{{ t $.Lang "admin.widgets.field.range" }}</label>
+                                    <select id="range_{{ $cfg.ID }}" name="range_{{ $cfg.ID }}">
+                                        {{ range $cfg.RangeOptions }}
+                                        <option value="{{ .ID }}" {{ if eq .ID $cfg.Settings.Range }}selected{{ end }}>{{ .Label }}</option>
+                                        {{ end }}
+                                    </select>
+                                </div>
+                                {{ end }}
+
+                                {{ if $schema.AllowAlerts }}
+                                <div class="widget-settings-group">
+                                    <span class="widget-settings-label">{{ t $.Lang "admin.widgets.field.alerts" }}</span>
+                                    <div class="widget-settings-alerts">
+                                        <div>
+                                            <label for="alert_warning_{{ $cfg.ID }}">{{ t $.Lang "admin.widgets.field.alert_warning" }}</label>
+                                            <input type="number" min="0" id="alert_warning_{{ $cfg.ID }}" name="alert_warning_{{ $cfg.ID }}" value="{{ $cfg.AlertWarning }}">
+                                        </div>
+                                        <div>
+                                            <label for="alert_critical_{{ $cfg.ID }}">{{ t $.Lang "admin.widgets.field.alert_critical" }}</label>
+                                            <input type="number" min="0" id="alert_critical_{{ $cfg.ID }}" name="alert_critical_{{ $cfg.ID }}" value="{{ $cfg.AlertCritical }}">
+                                        </div>
+                                    </div>
+                                </div>
+                                {{ end }}
+
+                                {{ if $schema.AllowRoles }}
+                                <div class="widget-settings-group">
+                                    <span class="widget-settings-label">{{ t $.Lang "admin.widgets.field.roles" }}</span>
+                                    <div class="widget-settings-roles">
+                                        {{ range $.Data.RoleOptions }}
+                                        <label class="widget-settings-role">
+                                            <input type="checkbox" name="roles_{{ $cfg.ID }}" value="{{ .ID }}" {{ if index $cfg.RoleSet .ID }}checked{{ end }}>
+                                            <span>{{ .Label }}</span>
+                                        </label>
+                                        {{ end }}
+                                    </div>
+                                </div>
+                                {{ end }}
+                            {{ else }}
+                                <div class="widget-settings-empty">{{ t $.Lang "admin.widgets.empty" }}</div>
+                            {{ end }}
+                        </div>
+                        {{ end }}
+                    </div>
+
+                    <div class="widget-settings-actions">
+                        <button type="submit" class="primary">{{ t .Lang "common.save" }}</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </main>
+
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

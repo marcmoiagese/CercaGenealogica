@@ -42,7 +42,7 @@ func TestPersonaPublicTreePlaceholder(t *testing.T) {
 		rr := httptest.NewRecorder()
 		app.PersonaPublicArbre(rr, req)
 
-		if rr.Code != http.StatusNotImplemented {
+		if rr.Code != http.StatusOK {
 			t.Fatalf("status inesperat (%s) arbre public: %d", label, rr.Code)
 		}
 	})

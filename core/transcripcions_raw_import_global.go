@@ -259,6 +259,10 @@ func (a *App) importGenericTranscripcionsCSV(reader io.Reader, sep rune, userID 
 			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "tipus_acte invàlid"})
 			continue
 		}
+		t.DataActeEstat = normalizeDataActeEstat(t.DataActeEstat)
+		if t.DataActeEstat == "" {
+			t.DataActeEstat = "clar"
+		}
 		id, err := a.DB.CreateTranscripcioRaw(&t)
 		if err != nil || id == 0 {
 			result.Failed++

@@ -13,9 +13,9 @@ import (
 func TestMunicipiHistoriaPermissions(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f13_historia_perm.sqlite3")
 
-	creator, creatorSession := createF7UserWithSession(t, database)
-	other, otherSession := createF7UserWithSession(t, database)
-	_, noPermSession := createF7UserWithSession(t, database)
+	creator, creatorSession := createF7UserWithSessionNoAdmin(t, database)
+	other, otherSession := createF7UserWithSessionNoAdmin(t, database)
+	_, noPermSession := createF7UserWithSessionNoAdmin(t, database)
 
 	createPolicyID := createPolicyWithGrant(t, database, "historia_create", "municipis.historia.create")
 	assignPolicyToUser(t, database, creator.ID, createPolicyID)

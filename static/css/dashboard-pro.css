@@ -143,6 +143,11 @@
   border: 1px solid rgba(0,0,0,0.06);
   background: rgba(44,62,80,0.02);
 }
+.list li.list-empty{
+  justify-content: center;
+  background: rgba(44,62,80,0.03);
+  border-style: dashed;
+}
 .list .label{
   font-weight: 800;
   color: var(--primary-color);
@@ -151,6 +156,43 @@
   color:#637180;
   font-size:0.9rem;
   white-space:nowrap;
+}
+.widget-alert{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+.widget-alert.warning{
+  background: #fff3d7;
+  border: 1px solid #f3d3a0;
+  color: #9a5c00;
+}
+.widget-alert.critical{
+  background: #f6d2d2;
+  border: 1px solid #f1b6ba;
+  color: #7b1e1e;
+}
+.widget-kpi{
+  display:flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.widget-kpi-value{
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--primary-color);
+}
+.widget-kpi-label{
+  font-size: 0.78rem;
+  color:#637180;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
 }
 .badges-row{
   display:flex;

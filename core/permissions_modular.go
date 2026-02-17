@@ -171,6 +171,17 @@ var permissionCatalogKeys = []string{
 	permKeyDocumentalsRegistresConvertToPerson,
 }
 
+var defaultUserPermissionKeys = []string{
+	permKeyHomeView,
+	permKeyMessagesView,
+	permKeySearchAdvancedView,
+	permKeyRankingView,
+	permKeyPersonsView,
+	permKeyCognomsView,
+	permKeyMediaView,
+	permKeyEventsView,
+}
+
 type scopeOption struct {
 	Value    ScopeType
 	LabelKey string
@@ -190,6 +201,17 @@ func permissionCatalog() []string {
 	keys := make([]string, len(permissionCatalogKeys))
 	copy(keys, permissionCatalogKeys)
 	return keys
+}
+
+func defaultPermKeysForPolicy(name string) []string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "usuari", "confianca", "confiança", "moderador":
+		keys := make([]string, len(defaultUserPermissionKeys))
+		copy(keys, defaultUserPermissionKeys)
+		return keys
+	default:
+		return nil
+	}
 }
 
 func scopeOptions() []scopeOption {
@@ -530,6 +552,12 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 		if len(grants) > 0 {
 			for _, g := range grants {
 				addGrantFromDB(snap.grants, g)
+			}
+			continue
+		}
+		if keys := defaultPermKeysForPolicy(policy.Nom); len(keys) > 0 {
+			for _, key := range keys {
+				addGlobalGrant(snap.grants, key)
 			}
 			continue
 		}
