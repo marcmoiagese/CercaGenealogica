@@ -1563,6 +1563,7 @@ type MunicipiBrowseFilter struct {
 	Status              string
 	PaisID              int
 	MunicipiID          int
+	FocusID             int
 	NivellID            int
 	Tipus               string
 	LevelIDs            [7]int

@@ -63,6 +63,11 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 			filter.MunicipiID = v
 		}
 	}
+	if val := strings.TrimSpace(r.URL.Query().Get("focus_id")); val != "" {
+		if v, err := strconv.Atoi(val); err == nil {
+			filter.FocusID = v
+		}
+	}
 	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
 	page := parseListPage(r.URL.Query().Get("page"))
 	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriMunicipisView)

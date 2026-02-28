@@ -2609,6 +2609,20 @@ func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowse
 	if strings.EqualFold(strings.TrimSpace(f.SortDir), "desc") {
 		dir = "DESC"
 	}
+	orderPrefix := ""
+	if f.FocusID > 0 {
+		orderPrefix += "CASE WHEN m.id = ? THEN 0 ELSE 1 END, "
+		args = append(args, f.FocusID)
+	}
+	if strings.TrimSpace(f.Text) != "" {
+		queryText := strings.ToLower(strings.TrimSpace(f.Text))
+		orderPrefix += "CASE WHEN lower(trim(m.nom)) = ? THEN 0 ELSE 1 END, "
+		args = append(args, queryText)
+		orderPrefix += "CASE WHEN lower(trim(m.nom)) LIKE ? THEN 0 ELSE 1 END, "
+		args = append(args, queryText+"%")
+		orderPrefix += "CASE WHEN lower(trim(m.nom)) LIKE ? THEN 0 ELSE 1 END, "
+		args = append(args, "%"+queryText+"%")
+	}
 	query := `
 		SELECT m.id, m.nom, m.tipus, m.estat, m.codi_postal, m.moderation_status,
 		       m.nivell_administratiu_id_1, m.nivell_administratiu_id_2, m.nivell_administratiu_id_3,
@@ -2633,7 +2647,7 @@ func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowse
 		         m.nivell_administratiu_id_4, m.nivell_administratiu_id_5, m.nivell_administratiu_id_6, m.nivell_administratiu_id_7,
 		         na1.nom_nivell, na2.nom_nivell, na3.nom_nivell, na4.nom_nivell, na5.nom_nivell, na6.nom_nivell, na7.nom_nivell,
 		         m.latitud, m.longitud
-		ORDER BY ` + orderBy + ` ` + dir + `, m.nom`
+		ORDER BY ` + orderPrefix + orderBy + ` ` + dir + `, m.nom`
 	if f.Limit > 0 {
 		query += " LIMIT ?"
 		args = append(args, f.Limit)
@@ -2856,6 +2870,16 @@ func (h sqlHelper) suggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRo
 	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
 	inClauseAnyLevel(f.AllowedNivellIDs)
 	inClause("na1.pais_id", f.AllowedPaisIDs)
+	orderPrefix := ""
+	if strings.TrimSpace(f.Text) != "" {
+		queryText := strings.ToLower(strings.TrimSpace(f.Text))
+		orderPrefix += "CASE WHEN lower(trim(m.nom)) = ? THEN 0 ELSE 1 END, "
+		args = append(args, queryText)
+		orderPrefix += "CASE WHEN lower(trim(m.nom)) LIKE ? THEN 0 ELSE 1 END, "
+		args = append(args, queryText+"%")
+		orderPrefix += "CASE WHEN lower(trim(m.nom)) LIKE ? THEN 0 ELSE 1 END, "
+		args = append(args, "%"+queryText+"%")
+	}
 	query := `
 		SELECT m.id, m.nom, m.tipus,
 		       COALESCE(na1.pais_id, na2.pais_id, na3.pais_id, na4.pais_id, na5.pais_id, na6.pais_id, na7.pais_id, 0) AS pais_id,
@@ -2873,7 +2897,7 @@ func (h sqlHelper) suggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRo
 		LEFT JOIN nivells_administratius na6 ON na6.id = m.nivell_administratiu_id_6
 		LEFT JOIN nivells_administratius na7 ON na7.id = m.nivell_administratiu_id_7
 		WHERE ` + where + `
-		ORDER BY m.nom`
+		ORDER BY ` + orderPrefix + ` m.nom`
 	limit := f.Limit
 	if limit <= 0 {
 		limit = 10

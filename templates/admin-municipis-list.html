@@ -63,6 +63,7 @@
                 <input type="hidden" name="per_page" value="{{ .Data.PerPage }}">
                 <input type="hidden" name="sort" value="{{ .Data.SortKey }}">
                 <input type="hidden" name="dir" value="{{ .Data.SortDir }}">
+                {{ if gt .Data.Filter.FocusID 0 }}<input type="hidden" name="focus_id" value="{{ .Data.Filter.FocusID }}">{{ end }}
             </form>
 
             <div class="taula-wrapper">

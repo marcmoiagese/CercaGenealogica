@@ -96,6 +96,11 @@
         if (searchInput && searchInput.dataset.perPage) {
             params.set('per_page', searchInput.dataset.perPage);
         }
+        if (item.id) {
+            params.set('focus_id', String(item.id));
+        } else {
+            params.delete('focus_id');
+        }
         params.delete('q');
         params.delete('municipi_id');
         if (item.pais_id) {
