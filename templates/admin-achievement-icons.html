@@ -29,7 +29,17 @@
                 <div class="form-grid">
                     <div class="form-control form-control-full">
                         <label for="icon-files">{{ t .Lang "achievements.icon.catalog.upload.label" }}</label>
-                        <input id="icon-files" name="icon_files" type="file" accept="{{ .Data.AllowedMimeCSV }}" multiple required>
+                        <div class="file-uploader">
+                            <input id="icon-files" name="icon_files" type="file" accept="{{ .Data.AllowedMimeCSV }}" multiple required>
+                            <label class="file-uploader__drop" for="icon-files">
+                                <span class="file-uploader__icon"><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i></span>
+                                <span class="file-uploader__text">
+                                    <span class="file-uploader__title">{{ t .Lang "common.file_uploader.title" }}</span>
+                                    <span class="file-uploader__meta">{{ t .Lang "common.file_uploader.meta" }}</span>
+                                </span>
+                            </label>
+                            <div class="file-uploader__selected" data-empty="{{ t .Lang "common.file_uploader.empty" }}" data-multiple="{{ t .Lang "common.file_uploader.multiple" }}">{{ t .Lang "common.file_uploader.empty" }}</div>
+                        </div>
                         <p class="camp-helper">{{ printf (t .Lang "media.album.upload.help") .Data.AllowedMimeCSV .Data.MaxUploadMB }}</p>
                     </div>
                 </div>

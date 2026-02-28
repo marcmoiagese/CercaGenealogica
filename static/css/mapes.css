@@ -163,13 +163,6 @@
     font-size: 0.92rem;
 }
 
-.map-editor-code-upload input[type="file"] {
-    padding: 0.35rem 0.2rem;
-    border-radius: 8px;
-    border: 1px solid #d8dfe6;
-    background: #fff;
-}
-
 .map-editor-code textarea:focus {
     outline: none;
     border-color: var(--secondary-color, #0f3d5a);

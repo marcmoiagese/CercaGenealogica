@@ -2,9 +2,10 @@ package core
 
 import (
 	"database/sql"
+	"io"
 	"net/http"
 	"os"
-	"sort"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -78,7 +79,7 @@ func (a *App) AdminExternalSiteNew(w http.ResponseWriter, r *http.Request) {
 		AccessMode: "mixed",
 		IsActive:   true,
 	}
-	a.renderExternalSiteForm(w, r, site, true, "", "", "")
+	a.renderExternalSiteForm(w, r, site, true, "", "")
 }
 
 func (a *App) AdminExternalSiteEdit(w http.ResponseWriter, r *http.Request) {
@@ -100,11 +101,7 @@ func (a *App) AdminExternalSiteEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	domainsInput := externalSiteDomainsInput(site.Domains)
-	iconInput := ""
-	if site.IconPath.Valid {
-		iconInput = strings.TrimSpace(site.IconPath.String)
-	}
-	a.renderExternalSiteForm(w, r, site, false, domainsInput, iconInput, "")
+	a.renderExternalSiteForm(w, r, site, false, domainsInput, "")
 }
 
 func (a *App) AdminExternalSiteCreate(w http.ResponseWriter, r *http.Request) {
@@ -119,13 +116,13 @@ func (a *App) AdminExternalSiteCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "CSRF invalid", http.StatusBadRequest)
 		return
 	}
-	site, domainsInput, iconInput, errMsg := a.parseExternalSiteForm(r, 0)
+	site, domainsInput, errMsg := a.parseExternalSiteForm(r, 0)
 	if errMsg != "" {
-		a.renderExternalSiteForm(w, r, site, true, domainsInput, iconInput, errMsg)
+		a.renderExternalSiteForm(w, r, site, true, domainsInput, errMsg)
 		return
 	}
 	if _, err := a.DB.ExternalSiteUpsert(site); err != nil {
-		a.renderExternalSiteForm(w, r, site, true, domainsInput, iconInput, T(ResolveLang(r), "admin.external_sites.error.save"))
+		a.renderExternalSiteForm(w, r, site, true, domainsInput, T(ResolveLang(r), "admin.external_sites.error.save"))
 		return
 	}
 	http.Redirect(w, r, "/admin/external-sites?ok=1", http.StatusSeeOther)
@@ -148,13 +145,17 @@ func (a *App) AdminExternalSiteUpdate(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	site, domainsInput, iconInput, errMsg := a.parseExternalSiteForm(r, id)
+	existing, _ := a.findExternalSiteByID(id)
+	site, domainsInput, errMsg := a.parseExternalSiteForm(r, id)
 	if errMsg != "" {
-		a.renderExternalSiteForm(w, r, site, false, domainsInput, iconInput, errMsg)
+		a.renderExternalSiteForm(w, r, site, false, domainsInput, errMsg)
 		return
 	}
+	if !site.IconPath.Valid && existing != nil && existing.IconPath.Valid {
+		site.IconPath = existing.IconPath
+	}
 	if _, err := a.DB.ExternalSiteUpsert(site); err != nil {
-		a.renderExternalSiteForm(w, r, site, false, domainsInput, iconInput, T(ResolveLang(r), "admin.external_sites.error.save"))
+		a.renderExternalSiteForm(w, r, site, false, domainsInput, T(ResolveLang(r), "admin.external_sites.error.save"))
 		return
 	}
 	http.Redirect(w, r, "/admin/external-sites?ok=1", http.StatusSeeOther)
@@ -277,19 +278,22 @@ func (a *App) AdminExternalLinkReject(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/external-links?ok=1", http.StatusSeeOther)
 }
 
-func (a *App) renderExternalSiteForm(w http.ResponseWriter, r *http.Request, site *db.ExternalSite, isNew bool, domainsInput string, iconInput string, errMsg string) {
+func (a *App) renderExternalSiteForm(w http.ResponseWriter, r *http.Request, site *db.ExternalSite, isNew bool, domainsInput string, errMsg string) {
 	accessMode := strings.TrimSpace(site.AccessMode)
 	if accessMode == "" {
 		site.AccessMode = "mixed"
 	}
+	iconCurrent := ""
+	if site.IconPath.Valid {
+		iconCurrent = strings.TrimSpace(site.IconPath.String)
+	}
 	data := map[string]interface{}{
-		"Site":          site,
-		"IsNew":         isNew,
-		"DomainsInput":  domainsInput,
-		"IconInput":     iconInput,
-		"AccessModes":   externalSiteAccessModes,
-		"IconOptions":   listExternalSiteIcons(),
-		"IconPreview":   externalSiteIconURLFromInput(site.Slug, iconInput),
+		"Site":            site,
+		"IsNew":           isNew,
+		"DomainsInput":    domainsInput,
+		"AccessModes":     externalSiteAccessModes,
+		"IconCurrent":     iconCurrent,
+		"IconPreview":     externalSiteIconURL(site),
 		"CanManageArxius": true,
 	}
 	if errMsg != "" {
@@ -298,22 +302,26 @@ func (a *App) renderExternalSiteForm(w http.ResponseWriter, r *http.Request, sit
 	RenderPrivateTemplate(w, r, "admin-external-sites-form.html", data)
 }
 
-func (a *App) parseExternalSiteForm(r *http.Request, id int) (*db.ExternalSite, string, string, string) {
+func (a *App) parseExternalSiteForm(r *http.Request, id int) (*db.ExternalSite, string, string) {
 	lang := ResolveLang(r)
-	if err := r.ParseForm(); err != nil {
-		return &db.ExternalSite{ID: id}, "", "", T(lang, "common.error")
+	if err := r.ParseMultipartForm(2 << 20); err != nil {
+		if err != http.ErrNotMultipart {
+			return &db.ExternalSite{ID: id}, "", T(lang, "common.error")
+		}
+		if err := r.ParseForm(); err != nil {
+			return &db.ExternalSite{ID: id}, "", T(lang, "common.error")
+		}
 	}
 	name := strings.TrimSpace(r.FormValue("name"))
 	slug := strings.TrimSpace(r.FormValue("slug"))
 	domainsInput := strings.TrimSpace(r.FormValue("domains"))
 	accessMode := strings.TrimSpace(r.FormValue("access_mode"))
-	iconInput := strings.TrimSpace(r.FormValue("icon_path"))
 	isActive := r.FormValue("is_active") == "1"
 
 	if slug == "" {
 		slug = slugifyExternalSite(name)
 		if slug == "" {
-			slug = slugifyExternalSite(externalSiteFirstDomain(domainsInput))
+		slug = slugifyExternalSite(externalSiteFirstDomain(domainsInput))
 		}
 	}
 	if name == "" || slug == "" {
@@ -323,7 +331,7 @@ func (a *App) parseExternalSiteForm(r *http.Request, id int) (*db.ExternalSite, 
 			Slug:       slug,
 			AccessMode: accessMode,
 			IsActive:   isActive,
-		}, domainsInput, iconInput, T(lang, "admin.external_sites.error.required")
+		}, domainsInput, T(lang, "admin.external_sites.error.required")
 	}
 	domains := db.ParseExternalDomains(domainsInput)
 	if len(domains) == 0 || !externalDomainsValid(domains) {
@@ -333,7 +341,7 @@ func (a *App) parseExternalSiteForm(r *http.Request, id int) (*db.ExternalSite, 
 			Slug:       slug,
 			AccessMode: accessMode,
 			IsActive:   isActive,
-		}, domainsInput, iconInput, T(lang, "admin.external_sites.error.invalid")
+		}, domainsInput, T(lang, "admin.external_sites.error.invalid")
 	}
 	if !externalAccessModeValid(accessMode) {
 		return &db.ExternalSite{
@@ -342,10 +350,9 @@ func (a *App) parseExternalSiteForm(r *http.Request, id int) (*db.ExternalSite, 
 			Slug:       slug,
 			AccessMode: accessMode,
 			IsActive:   isActive,
-		}, domainsInput, iconInput, T(lang, "admin.external_sites.error.invalid")
+		}, domainsInput, T(lang, "admin.external_sites.error.invalid")
 	}
 	domainsValue := strings.Join(domains, "\n")
-	iconValue := normalizeExternalSiteIcon(iconInput)
 	site := &db.ExternalSite{
 		ID:         id,
 		Name:       name,
@@ -354,10 +361,14 @@ func (a *App) parseExternalSiteForm(r *http.Request, id int) (*db.ExternalSite, 
 		AccessMode: accessMode,
 		IsActive:   isActive,
 	}
-	if iconValue != "" {
-		site.IconPath = sql.NullString{String: iconValue, Valid: true}
+	uploadedIconPath, uploadErr := saveExternalSiteIcon(r, slug)
+	if uploadErr != "" {
+		return site, domainsValue, uploadErr
 	}
-	return site, domainsValue, iconInput, ""
+	if uploadedIconPath != "" {
+		site.IconPath = sql.NullString{String: uploadedIconPath, Valid: true}
+	}
+	return site, domainsValue, ""
 }
 
 func (a *App) findExternalSiteByID(id int) (*db.ExternalSite, error) {
@@ -396,21 +407,6 @@ func externalSiteIconURL(site *db.ExternalSite) string {
 		icon = "/" + icon
 	}
 	return icon
-}
-
-func externalSiteIconURLFromInput(slug, input string) string {
-	input = strings.TrimSpace(input)
-	if input != "" {
-		icon := normalizeExternalSiteIcon(input)
-		if icon != "" && !strings.HasPrefix(icon, "/") && !strings.HasPrefix(icon, "http://") && !strings.HasPrefix(icon, "https://") {
-			icon = "/" + icon
-		}
-		if icon != "" {
-			return icon
-		}
-	}
-	site := &db.ExternalSite{Slug: slug}
-	return externalSiteIconURL(site)
 }
 
 func externalSiteDomainsDisplay(raw string) string {
@@ -491,41 +487,59 @@ func slugifyExternalSite(raw string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-func normalizeExternalSiteIcon(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
+func saveExternalSiteIcon(r *http.Request, slug string) (string, string) {
+	if r == nil {
+		return "", ""
 	}
-	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") || strings.HasPrefix(raw, "/") {
-		return raw
-	}
-	if !strings.Contains(raw, "/") {
-		if !strings.HasSuffix(raw, ".svg") {
-			raw += ".svg"
-		}
-		return "static/img/ext-sites/" + raw
-	}
-	return raw
-}
-
-func listExternalSiteIcons() []string {
-	entries, err := os.ReadDir("static/img/ext-sites")
+	file, header, err := r.FormFile("icon_file")
 	if err != nil {
-		return nil
-	}
-	icons := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+		if err == http.ErrMissingFile {
+			return "", ""
 		}
-		name := entry.Name()
-		if !strings.HasSuffix(strings.ToLower(name), ".svg") {
-			continue
-		}
-		icons = append(icons, name)
+		return "", T(ResolveLang(r), "admin.external_sites.error.icon")
 	}
-	sort.Strings(icons)
-	return icons
+	defer file.Close()
+	const maxSize = 2 << 20
+	data, err := io.ReadAll(io.LimitReader(file, maxSize+1))
+	if err != nil {
+		return "", T(ResolveLang(r), "admin.external_sites.error.icon")
+	}
+	if int64(len(data)) > maxSize {
+		return "", T(ResolveLang(r), "admin.external_sites.error.icon")
+	}
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	contentType := http.DetectContentType(data)
+	if ext == "" {
+		switch {
+		case strings.Contains(contentType, "svg"):
+			ext = ".svg"
+		case strings.Contains(contentType, "png"):
+			ext = ".png"
+		case strings.Contains(contentType, "jpeg"):
+			ext = ".jpg"
+		case strings.Contains(contentType, "webp"):
+			ext = ".webp"
+		}
+	}
+	switch ext {
+	case ".svg", ".png", ".jpg", ".jpeg", ".webp":
+	default:
+		return "", T(ResolveLang(r), "admin.external_sites.error.icon")
+	}
+	safeSlug := slugifyExternalSite(slug)
+	if safeSlug == "" {
+		safeSlug = "site"
+	}
+	filename := safeSlug + ext
+	dir := filepath.Join("static", "img", "ext-sites")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", T(ResolveLang(r), "admin.external_sites.error.icon")
+	}
+	path := filepath.Join(dir, filename)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return "", T(ResolveLang(r), "admin.external_sites.error.icon")
+	}
+	return filepath.ToSlash(filepath.Join("static", "img", "ext-sites", filename)), ""
 }
 
 func externalLinkPersonaName(row db.ExternalLinkAdminRow) string {

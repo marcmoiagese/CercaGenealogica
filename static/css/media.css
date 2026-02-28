@@ -215,13 +215,6 @@
     align-items: center;
 }
 
-.media-file-input {
-    padding: 0.4rem;
-    border: 1px dashed #c8d2dd;
-    border-radius: 10px;
-    background: #f8fafc;
-}
-
 .media-items-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -372,10 +365,6 @@
     .media-upload-form {
         flex-direction: column;
         align-items: stretch;
-    }
-
-    .media-file-input {
-        width: 100%;
     }
 
     .media-book-selected {

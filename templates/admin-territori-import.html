@@ -59,7 +59,17 @@
                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                 <div class="grup-camp">
                     <label for="territori-file">{{ t .Lang "territory.io.import.file" }}</label>
-                    <input id="territori-file" type="file" name="import_file" accept="application/json" required>
+                    <div class="file-uploader">
+                        <input id="territori-file" type="file" name="import_file" accept="application/json" required>
+                        <label class="file-uploader__drop" for="territori-file">
+                            <span class="file-uploader__icon"><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i></span>
+                            <span class="file-uploader__text">
+                                <span class="file-uploader__title">{{ t .Lang "common.file_uploader.title" }}</span>
+                                <span class="file-uploader__meta">{{ t .Lang "common.file_uploader.meta" }}</span>
+                            </span>
+                        </label>
+                        <div class="file-uploader__selected" data-empty="{{ t .Lang "common.file_uploader.empty" }}" data-multiple="{{ t .Lang "common.file_uploader.multiple" }}">{{ t .Lang "common.file_uploader.empty" }}</div>
+                    </div>
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">

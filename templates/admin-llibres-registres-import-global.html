@@ -77,7 +77,17 @@
                 </div>
                 <div class="grup-camp">
                     <label for="import-file">{{ t .Lang "records.import.file" }}</label>
-                    <input id="import-file" type="file" name="csv_file" accept=".csv" required>
+                    <div class="file-uploader">
+                        <input id="import-file" type="file" name="csv_file" accept=".csv" required>
+                        <label class="file-uploader__drop" for="import-file">
+                            <span class="file-uploader__icon"><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i></span>
+                            <span class="file-uploader__text">
+                                <span class="file-uploader__title">{{ t .Lang "common.file_uploader.title" }}</span>
+                                <span class="file-uploader__meta">{{ t .Lang "common.file_uploader.meta" }}</span>
+                            </span>
+                        </label>
+                        <div class="file-uploader__selected" data-empty="{{ t .Lang "common.file_uploader.empty" }}" data-multiple="{{ t .Lang "common.file_uploader.multiple" }}">{{ t .Lang "common.file_uploader.empty" }}</div>
+                    </div>
                 </div>
                 <div class="grup-camp">
                     <label for="import-sep">{{ t .Lang "records.import.separator" }}</label>

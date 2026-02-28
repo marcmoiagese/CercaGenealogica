@@ -139,7 +139,17 @@
                             <div class="espai-form__grid">
                                 <div class="espai-field espai-field--full">
                                     <label for="gedcom-file">{{ t .Lang "space.gedcom.upload.file" }}</label>
-                                    <input id="gedcom-file" type="file" name="file" accept=".ged,.gedcom" required>
+                                    <div class="file-uploader">
+                                        <input id="gedcom-file" type="file" name="file" accept=".ged,.gedcom" required>
+                                        <label class="file-uploader__drop" for="gedcom-file">
+                                            <span class="file-uploader__icon"><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i></span>
+                                            <span class="file-uploader__text">
+                                                <span class="file-uploader__title">{{ t .Lang "common.file_uploader.title" }}</span>
+                                                <span class="file-uploader__meta">{{ t .Lang "common.file_uploader.meta" }}</span>
+                                            </span>
+                                        </label>
+                                        <div class="file-uploader__selected" data-empty="{{ t .Lang "common.file_uploader.empty" }}" data-multiple="{{ t .Lang "common.file_uploader.multiple" }}">{{ t .Lang "common.file_uploader.empty" }}</div>
+                                    </div>
                                     <span class="espai-help">{{ t .Lang "space.gedcom.upload.file_help" }}</span>
                                 </div>
                                 <div class="espai-field">
@@ -1001,11 +1011,21 @@
                                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                                 <input type="hidden" name="tree_id" value="{{ .Data.EspaiTreeEdit.ID }}">
                                 <div class="espai-form__grid">
-                                    <div class="espai-field espai-field--full">
-                                        <label for="gedcom-update-file">{{ t .Lang "space.gedcom.upload.file" }}</label>
+                                <div class="espai-field espai-field--full">
+                                    <label for="gedcom-update-file">{{ t .Lang "space.gedcom.upload.file" }}</label>
+                                    <div class="file-uploader">
                                         <input id="gedcom-update-file" type="file" name="file" accept=".ged,.gedcom" required>
-                                        <span class="espai-help">{{ t .Lang "space.gedcom.update.help" }}</span>
+                                        <label class="file-uploader__drop" for="gedcom-update-file">
+                                            <span class="file-uploader__icon"><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i></span>
+                                            <span class="file-uploader__text">
+                                                <span class="file-uploader__title">{{ t .Lang "common.file_uploader.title" }}</span>
+                                                <span class="file-uploader__meta">{{ t .Lang "common.file_uploader.meta" }}</span>
+                                            </span>
+                                        </label>
+                                        <div class="file-uploader__selected" data-empty="{{ t .Lang "common.file_uploader.empty" }}" data-multiple="{{ t .Lang "common.file_uploader.multiple" }}">{{ t .Lang "common.file_uploader.empty" }}</div>
                                     </div>
+                                    <span class="espai-help">{{ t .Lang "space.gedcom.update.help" }}</span>
+                                </div>
                                 </div>
                                 <div class="espai-form__actions">
                                     <button class="boto-primari" type="submit"><i class="fas fa-file-upload"></i> {{ t .Lang "space.gedcom.update.action" }}</button>

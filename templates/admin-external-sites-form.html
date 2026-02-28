@@ -5,6 +5,17 @@
     <meta charset="UTF-8">
     <title>{{ if .Data.IsNew }}{{ t .Lang "admin.external_sites.form.new" }}{{ else }}{{ t .Lang "admin.external_sites.form.edit" }}{{ end }}</title>
     {{ template "styles-private" . }}
+    <style>
+        .icon-preview{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #e6e8ef;border-radius:12px;background:#fff}
+        .icon-preview img{width:36px;height:36px;object-fit:contain}
+        .icon-preview .muted{color:#6b7280;font-size:13px}
+        .icon-uploader{position:relative;border:1px dashed #cfd3de;border-radius:14px;background:#f8fafc;padding:16px}
+        .icon-uploader.is-dragover{border-color:#2563eb;background:#eef2ff}
+        .icon-uploader input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+        .icon-uploader__drop{display:flex;flex-direction:column;gap:6px;cursor:pointer}
+        .icon-uploader__title{font-weight:600;color:#111827}
+        .icon-uploader__meta{color:#6b7280;font-size:13px}
+    </style>
 </head>
 <body>
     {{ template "header-private" . }}
@@ -15,7 +26,7 @@
                 <h1>{{ if .Data.IsNew }}{{ t .Lang "admin.external_sites.form.new" }}{{ else }}{{ t .Lang "admin.external_sites.form.edit" }}{{ end }}</h1>
             </header>
             {{ if .Data.Error }}<div class="alerta alerta-error">{{ .Data.Error }}</div>{{ end }}
-            <form method="post" action="{{ if .Data.IsNew }}/admin/external-sites{{ else }}/admin/external-sites/{{ .Data.Site.ID }}{{ end }}">
+            <form method="post" enctype="multipart/form-data" action="{{ if .Data.IsNew }}/admin/external-sites{{ else }}/admin/external-sites/{{ .Data.Site.ID }}{{ end }}">
                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                 <div class="grup-camp">
                     <label for="ext-name">{{ t .Lang "admin.external_sites.form.name" }}</label>
@@ -40,16 +51,20 @@
                     </select>
                 </div>
                 <div class="grup-camp">
-                    <label for="ext-icon">{{ t .Lang "admin.external_sites.form.icon" }}</label>
-                    <input type="text" id="ext-icon" name="icon_path" list="external-icons" value="{{ .Data.IconInput }}" placeholder="geneanet.svg">
-                    <datalist id="external-icons">
-                        {{ range .Data.IconOptions }}
-                        <option value="{{ . }}"></option>
-                        {{ end }}
-                    </datalist>
-                    <small class="camp-helper">{{ t .Lang "admin.external_sites.form.icon_helper" }}</small>
-                    <div style="margin-top:8px">
-                        <img src="{{ .Data.IconPreview }}" alt="" style="width:36px;height:36px;object-fit:contain;">
+                    <label for="ext-icon-file">{{ t .Lang "admin.external_sites.form.icon_upload" }}</label>
+                    <div class="icon-uploader">
+                        <input type="file" id="ext-icon-file" name="icon_file" accept="image/svg+xml,image/png,image/jpeg,image/webp">
+                        <label class="icon-uploader__drop" for="ext-icon-file">
+                            <span class="icon-uploader__title">{{ t .Lang "admin.external_sites.form.icon_upload_helper" }}</span>
+                            <span class="icon-uploader__meta">{{ t .Lang "admin.external_sites.form.icon_upload_hint" }}</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="grup-camp">
+                    <label>{{ t .Lang "admin.external_sites.form.icon_current" }}</label>
+                    <div class="icon-preview">
+                        <img src="{{ .Data.IconPreview }}" alt="">
+                        <span class="muted">{{ if .Data.IconCurrent }}{{ .Data.IconCurrent }}{{ else }}—{{ end }}</span>
                     </div>
                 </div>
                 <div class="grup-camp">
@@ -67,6 +82,56 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script>
+    (() => {
+        const uploader = document.querySelector('.icon-uploader');
+        if (!uploader) return;
+        const input = uploader.querySelector('input[type="file"]');
+        const title = uploader.querySelector('.icon-uploader__title');
+        const meta = uploader.querySelector('.icon-uploader__meta');
+        const initialTitle = title ? title.textContent : '';
+        const initialMeta = meta ? meta.textContent : '';
+        const updateLabel = () => {
+            if (!input || !title) return;
+            if (input.files && input.files.length > 0) {
+                const file = input.files[0];
+                title.textContent = file.name;
+                if (meta) {
+                    const kb = Math.max(1, Math.round(file.size / 1024));
+                    meta.textContent = `${kb} KB`;
+                }
+                return;
+            }
+            title.textContent = initialTitle;
+            if (meta) meta.textContent = initialMeta;
+        };
+        const stop = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+        };
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((evt) => {
+            uploader.addEventListener(evt, stop);
+        });
+        ['dragenter', 'dragover'].forEach((evt) => {
+            uploader.addEventListener(evt, () => uploader.classList.add('is-dragover'));
+        });
+        ['dragleave', 'drop'].forEach((evt) => {
+            uploader.addEventListener(evt, () => uploader.classList.remove('is-dragover'));
+        });
+        uploader.addEventListener('drop', (event) => {
+            if (!input) return;
+            const files = event.dataTransfer && event.dataTransfer.files ? event.dataTransfer.files : null;
+            if (!files || files.length === 0) return;
+            const dt = new DataTransfer();
+            dt.items.add(files[0]);
+            input.files = dt.files;
+            updateLabel();
+        });
+        if (input) {
+            input.addEventListener('change', updateLabel);
+        }
+    })();
+    </script>
 </body>
 </html>
 {{ end }}
