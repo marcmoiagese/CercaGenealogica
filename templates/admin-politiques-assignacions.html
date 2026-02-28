@@ -149,6 +149,40 @@
                             <li>{{ t .Lang "policies.assign.none" }}</li>
                             {{ end }}
                         </ul>
+                        <h4>{{ t .Lang "policies.assign.users.groups.title" }}</h4>
+                        <form class="form-filtres" method="post" action="/admin/politiques/grups/assignar-usuari">
+                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                            <input type="hidden" name="user_id" value="{{ .Data.SelectedUser.ID }}">
+                            <input type="hidden" name="return_to" value="{{ .Data.ReturnTo }}">
+                            <div class="fila-camp">
+                                <label for="user-group">{{ t .Lang "policies.assign.users.groups.add" }}</label>
+                                <select id="user-group" name="group_id">
+                                    {{ range .Data.Groups }}
+                                    <option value="{{ .ID }}">{{ .Nom }}</option>
+                                    {{ end }}
+                                </select>
+                            </div>
+                            <div class="fila-camp">
+                                <label>&nbsp;</label>
+                                <button type="submit" class="boto-primari pequeno"><i class="fas fa-plus"></i> <span>{{ t .Lang "common.add" }}</span></button>
+                            </div>
+                        </form>
+                        <ul class="llista-simple">
+                            {{ range .Data.UserGroups }}
+                            <li class="assign-inline">
+                                <span>{{ .Nom }}</span>
+                                <form method="post" action="/admin/politiques/grups/treure-usuari">
+                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                    <input type="hidden" name="user_id" value="{{ $.Data.SelectedUser.ID }}">
+                                    <input type="hidden" name="group_id" value="{{ .ID }}">
+                                    <input type="hidden" name="return_to" value="{{ $.Data.ReturnTo }}">
+                                    <button type="submit" class="boto-secundari">{{ t $.Lang "common.remove" }}</button>
+                                </form>
+                            </li>
+                            {{ else }}
+                            <li>{{ t .Lang "policies.assign.users.groups.none" }}</li>
+                            {{ end }}
+                        </ul>
                         {{ else }}
                         <p class="muted">{{ t .Lang "policies.assign.users.none" }}</p>
                         {{ end }}
@@ -156,6 +190,22 @@
                 </div>
                 <div class="assign-panel">
                     <h2>{{ t .Lang "policies.assign.groups.title" }}</h2>
+                    <form class="form-filtres" method="post" action="/admin/politiques/grups/create">
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                        <input type="hidden" name="return_to" value="{{ .Data.ReturnTo }}">
+                        <div class="fila-camp">
+                            <label for="group-name">{{ t .Lang "policies.assign.groups.create.name" }}</label>
+                            <input id="group-name" type="text" name="name" placeholder="{{ t .Lang "policies.assign.groups.create.name_placeholder" }}">
+                        </div>
+                        <div class="fila-camp">
+                            <label for="group-desc">{{ t .Lang "policies.assign.groups.create.desc" }}</label>
+                            <input id="group-desc" type="text" name="description" placeholder="{{ t .Lang "policies.assign.groups.create.desc_placeholder" }}">
+                        </div>
+                        <div class="fila-camp">
+                            <label>&nbsp;</label>
+                            <button type="submit" class="boto-secundari pequeno"><i class="fas fa-plus"></i> <span>{{ t .Lang "policies.assign.groups.create.action" }}</span></button>
+                        </div>
+                    </form>
                     <form class="form-filtres" method="get" action="/admin/politiques/assignacions">
                         <div class="fila-camp">
                             <label for="group_id">{{ t .Lang "policies.assign.groups.select" }}</label>
@@ -208,6 +258,23 @@
                         </li>
                         {{ else }}
                         <li>{{ t .Lang "policies.assign.none" }}</li>
+                        {{ end }}
+                    </ul>
+                    <h4>{{ t .Lang "policies.assign.groups.members.title" }}</h4>
+                    <ul class="llista-simple">
+                        {{ range .Data.GroupMembers }}
+                        <li class="assign-inline">
+                            <span>@{{ .Usuari }}</span>
+                            <form method="post" action="/admin/politiques/grups/treure-usuari">
+                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                <input type="hidden" name="user_id" value="{{ .ID }}">
+                                <input type="hidden" name="group_id" value="{{ $.Data.GroupID }}">
+                                <input type="hidden" name="return_to" value="{{ $.Data.ReturnTo }}">
+                                <button type="submit" class="boto-secundari">{{ t $.Lang "common.remove" }}</button>
+                            </form>
+                        </li>
+                        {{ else }}
+                        <li>{{ t .Lang "policies.assign.groups.members.empty" }}</li>
                         {{ end }}
                     </ul>
                     {{ else }}

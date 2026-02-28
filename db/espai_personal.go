@@ -32,6 +32,7 @@ type EspaiImport struct {
 	ArbreID       int
 	FontID        sql.NullInt64
 	ImportType    string
+	ImportMode    string
 	Status        string
 	ProgressTotal int
 	ProgressDone  int
@@ -58,10 +59,36 @@ type EspaiPersona struct {
 	LlocNaixement sql.NullString
 	LlocDefuncio  sql.NullString
 	Notes         sql.NullString
+	HasMedia      bool
 	Visibility    string
 	Status        string
 	CreatedAt     sql.NullTime
 	UpdatedAt     sql.NullTime
+}
+
+type EspaiPersonaTreeRow struct {
+	EspaiPersona
+	TreeName string
+}
+
+type EspaiPersonaDataFilter struct {
+	Name       string
+	Surname1   string
+	Surname2   string
+	FullName   string
+	Sex        string
+	BirthDate  string
+	DeathDate  string
+	BirthPlace string
+	DeathPlace string
+	Notes      string
+	Tree       string
+	Visibility string
+	HasMedia   *bool
+	Linked     *bool
+	ExternalID string
+	Sort       string
+	SortDir    string
 }
 
 type EspaiPrivacyAudit struct {
@@ -85,6 +112,21 @@ type EspaiRelacio struct {
 	Notes           sql.NullString
 	CreatedAt       sql.NullTime
 	UpdatedAt       sql.NullTime
+}
+
+type EspaiEvent struct {
+	ID            int
+	ArbreID       int
+	PersonaID     int
+	ExternalID    sql.NullString
+	EventType     string
+	EventRole     sql.NullString
+	EventDate     sql.NullString
+	EventPlace    sql.NullString
+	Description   sql.NullString
+	Source        sql.NullString
+	CreatedAt     sql.NullTime
+	UpdatedAt     sql.NullTime
 }
 
 type EspaiCoincidencia struct {

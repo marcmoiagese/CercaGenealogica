@@ -32,6 +32,7 @@
                       data-label-entity-persona="{{ t .Lang "search.entity.persona" }}"
                       data-label-entity-registre="{{ t .Lang "search.entity.registre_raw" }}"
                       data-label-entity-espai="{{ t .Lang "search.entity.espai_arbre" }}"
+                      data-label-entity-espai-persona="{{ t .Lang "search.entity.espai_persona" }}"
                       data-label-facet-entity="{{ t .Lang "search.facets.entity" }}"
                       data-label-facet-tipus="{{ t .Lang "search.facets.tipus" }}">
                     <input type="hidden" name="page" value="{{ .Data.Filter.Page }}">
@@ -98,6 +99,7 @@
                                         <option value="persona" {{ if eq .Data.Filter.Entity "persona" }}selected{{ end }}>{{ t .Lang "search.entity.persona" }}</option>
                                         <option value="registre_raw" {{ if eq .Data.Filter.Entity "registre_raw" }}selected{{ end }}>{{ t .Lang "search.entity.registre_raw" }}</option>
                                         <option value="espai_arbre" {{ if eq .Data.Filter.Entity "espai_arbre" }}selected{{ end }}>{{ t .Lang "search.entity.espai_arbre" }}</option>
+                                        <option value="espai_persona" {{ if eq .Data.Filter.Entity "espai_persona" }}selected{{ end }}>{{ t .Lang "search.entity.espai_persona" }}</option>
                                     </select>
                                 </div>
                                 <div class="grup-camp field field--span">

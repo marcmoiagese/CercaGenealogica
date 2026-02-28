@@ -27,6 +27,8 @@ const (
 	permKeyAdminMaintenanceManage    = "admin.maintenance.manage"
 	permKeyAdminAnalyticsView        = "admin.analytics.view"
 	permKeyAdminTransparencyManage   = "admin.transparency.manage"
+	permKeyAdminExternalSitesManage  = "admin.external_sites.manage"
+	permKeyAdminExternalLinksModerate = "admin.external_links.moderate"
 
 	permKeyHomeView            = "home.view"
 	permKeyMessagesView        = "messages.view"
@@ -109,6 +111,8 @@ var permissionCatalogKeys = []string{
 	permKeyAdminMaintenanceManage,
 	permKeyAdminAnalyticsView,
 	permKeyAdminTransparencyManage,
+	permKeyAdminExternalSitesManage,
+	permKeyAdminExternalLinksModerate,
 	permKeyHomeView,
 	permKeyMessagesView,
 	permKeySearchAdvancedView,
@@ -338,8 +342,9 @@ type compiledGrant struct {
 }
 
 type permissionSnapshot struct {
-	isAdmin bool
-	grants  map[string][]compiledGrant
+	isAdmin           bool
+	importWorkerLimit int
+	grants            map[string][]compiledGrant
 }
 
 type permKeysContextKey string
@@ -393,6 +398,24 @@ func (a *App) permissionKeysForUser(userID int) map[string]bool {
 		keys[key] = true
 	}
 	return keys
+}
+
+func (a *App) importWorkerLimitForUser(userID int) int {
+	defaultLimit := parseIntDefault(a.Config["ESP_IMPORT_WORKER_DEFAULT"], 1)
+	if defaultLimit <= 0 {
+		defaultLimit = 1
+	}
+	if userID == 0 || a == nil {
+		return defaultLimit
+	}
+	snap, err := a.getPermissionSnapshot(userID)
+	if err != nil {
+		return defaultLimit
+	}
+	if snap.importWorkerLimit > 0 {
+		return snap.importWorkerLimit
+	}
+	return defaultLimit
 }
 
 type listScopeFilter struct {
@@ -509,6 +532,7 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 	snap := permissionSnapshot{
 		grants: make(map[string][]compiledGrant),
 	}
+	workerLimit := 0
 	policies, err := a.DB.ListUserPolitiques(userID)
 	if err != nil {
 		return snap, err
@@ -543,6 +567,9 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 				if perms.Admin {
 					snap.isAdmin = true
 				}
+				if perms.ImportWorkerLimit > workerLimit {
+					workerLimit = perms.ImportWorkerLimit
+				}
 			}
 		}
 		grants, err := a.DB.ListPoliticaGrants(policy.ID)
@@ -568,6 +595,7 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 			addGlobalGrant(snap.grants, key)
 		}
 	}
+	snap.importWorkerLimit = workerLimit
 	return snap, nil
 }
 

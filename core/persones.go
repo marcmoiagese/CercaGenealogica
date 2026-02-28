@@ -363,6 +363,7 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	lang := ResolveLang(r)
+	externalLinksNotice, externalLinksError := externalLinksFeedback(r, lang)
 	p, err := a.DB.GetPersona(id)
 	if err != nil || p == nil || p.ModeracioEstat != "publicat" {
 		http.NotFound(w, r)
@@ -988,6 +989,8 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"BaptismDate":       baptismDate,
 		"DeathDate":         deathDate,
 		"LifeRange":         lifeRange,
+		"SexLabel":          "",
+		"SexIcon":           "",
 		"BirthLabel":        birthLabel,
 		"DeathLabel":        deathLabel,
 		"BirthLocation":     birthLocation,
@@ -1018,6 +1021,9 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"MarkPublic":        markPublic,
 		"MarkOwn":           markOwn,
 		"WikiPending":       wikiPending,
+		"ExternalLinksPersonaID": p.ID,
+		"ExternalLinksNotice":    externalLinksNotice,
+		"ExternalLinksError":     externalLinksError,
 		"Tab":               "detall",
 	})
 }
@@ -1054,7 +1060,12 @@ func (a *App) PersonaArbre(w http.ResponseWriter, r *http.Request) {
 		fullName = "?"
 	}
 
-	dataset, err := a.buildPersonaArbreDataset(p, gens)
+	var dataset treeDataset
+	if view == "familiar" {
+		dataset, err = a.buildFamiliarArbreDataset(p, gens)
+	} else {
+		dataset, err = a.buildPersonaArbreDataset(p, gens)
+	}
 	if err != nil {
 		http.Error(w, "Error carregant arbre", http.StatusInternalServerError)
 		return

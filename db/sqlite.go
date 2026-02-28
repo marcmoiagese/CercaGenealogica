@@ -408,6 +408,18 @@ func (d *SQLite) EnsureDefaultAchievements() error {
 func (d *SQLite) ListGroups() ([]Group, error) {
 	return d.help.listGroups()
 }
+func (d *SQLite) CreateGroup(name, desc string) (int, error) {
+	return d.help.createGroup(name, desc)
+}
+func (d *SQLite) ListGroupMembers(groupID int) ([]UserAdminRow, error) {
+	return d.help.listGroupMembers(groupID)
+}
+func (d *SQLite) AddUserGroup(userID, groupID int) error {
+	return d.help.addUserGroup(userID, groupID)
+}
+func (d *SQLite) RemoveUserGroup(userID, groupID int) error {
+	return d.help.removeUserGroup(userID, groupID)
+}
 func (d *SQLite) ListPolitiques() ([]Politica, error) {
 	return d.help.listPolitiques()
 }
@@ -492,6 +504,32 @@ func (d *SQLite) CreatePersonaAnecdote(a *PersonaAnecdote) (int, error) {
 }
 func (d *SQLite) UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updatePersonaModeracio(id, estat, motiu, moderatorID)
+}
+func (d *SQLite) ExternalSitesListActive() ([]ExternalSite, error) {
+	return d.help.listExternalSitesActive()
+}
+
+func (d *SQLite) ExternalSitesListAll() ([]ExternalSite, error) {
+	return d.help.listExternalSitesAll()
+}
+func (d *SQLite) ExternalSiteUpsert(site *ExternalSite) (int, error) {
+	return d.help.upsertExternalSite(site)
+}
+func (d *SQLite) ExternalSiteToggleActive(id int) error {
+	return d.help.toggleExternalSiteActive(id)
+}
+func (d *SQLite) ExternalLinksListByPersona(personaID int, statusFilter string) ([]ExternalLinkRow, error) {
+	return d.help.listExternalLinksByPersona(personaID, statusFilter)
+}
+
+func (d *SQLite) ExternalLinksListByStatus(status string) ([]ExternalLinkAdminRow, error) {
+	return d.help.listExternalLinksByStatus(status)
+}
+func (d *SQLite) ExternalLinkInsertPending(personaID int, userID int, url, title string) (int, error) {
+	return d.help.createExternalLinkPending(personaID, userID, url, title)
+}
+func (d *SQLite) ExternalLinkModerate(id int, status string) error {
+	return d.help.updateExternalLinkStatus(id, status)
 }
 
 // Paisos
@@ -948,6 +986,7 @@ func (d *SQLite) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 // Espai personal
 func (d *SQLite) CreateEspaiArbre(a *EspaiArbre) (int, error) { return d.help.createEspaiArbre(a) }
 func (d *SQLite) UpdateEspaiArbre(a *EspaiArbre) error { return d.help.updateEspaiArbre(a) }
+func (d *SQLite) DeleteEspaiArbre(ownerID, treeID int) error { return d.help.deleteEspaiArbre(ownerID, treeID) }
 func (d *SQLite) GetEspaiArbre(id int) (*EspaiArbre, error) { return d.help.getEspaiArbre(id) }
 func (d *SQLite) ListEspaiArbresByOwner(ownerID int) ([]EspaiArbre, error) {
 	return d.help.listEspaiArbresByOwner(ownerID)
@@ -958,9 +997,13 @@ func (d *SQLite) ListEspaiArbresPublic() ([]EspaiArbre, error) {
 func (d *SQLite) CreateEspaiFontImportacio(f *EspaiFontImportacio) (int, error) {
 	return d.help.createEspaiFontImportacio(f)
 }
+func (d *SQLite) UpdateEspaiFontImportacio(f *EspaiFontImportacio) error {
+	return d.help.updateEspaiFontImportacio(f)
+}
 func (d *SQLite) GetEspaiFontImportacio(id int) (*EspaiFontImportacio, error) {
 	return d.help.getEspaiFontImportacio(id)
 }
+func (d *SQLite) DeleteEspaiFontImportacio(id int) error { return d.help.deleteEspaiFontImportacio(id) }
 func (d *SQLite) GetEspaiFontImportacioByChecksum(ownerID int, checksum string) (*EspaiFontImportacio, error) {
 	return d.help.getEspaiFontImportacioByChecksum(ownerID, checksum)
 }
@@ -984,7 +1027,20 @@ func (d *SQLite) ListEspaiImportsByOwner(ownerID int) ([]EspaiImport, error) {
 func (d *SQLite) ListEspaiImportsByArbre(arbreID int) ([]EspaiImport, error) {
 	return d.help.listEspaiImportsByArbre(arbreID)
 }
+func (d *SQLite) ListEspaiImportsByStatus(status string, limit int) ([]EspaiImport, error) {
+	return d.help.listEspaiImportsByStatus(status, limit)
+}
+func (d *SQLite) DeleteEspaiImportsByArbre(arbreID int) error {
+	return d.help.deleteEspaiImportsByArbre(arbreID)
+}
+func (d *SQLite) CountEspaiImportsByFont(fontID int) (int, error) {
+	return d.help.countEspaiImportsByFont(fontID)
+}
+func (d *SQLite) ClearEspaiTreeData(arbreID int) error {
+	return d.help.clearEspaiTreeData(arbreID)
+}
 func (d *SQLite) CreateEspaiPersona(p *EspaiPersona) (int, error) { return d.help.createEspaiPersona(p) }
+func (d *SQLite) UpdateEspaiPersona(p *EspaiPersona) error { return d.help.updateEspaiPersona(p) }
 func (d *SQLite) UpdateEspaiPersonaVisibility(id int, visibility string) error {
 	return d.help.updateEspaiPersonaVisibility(id, visibility)
 }
@@ -1001,9 +1057,34 @@ func (d *SQLite) CountEspaiPersonesByArbre(arbreID int) (int, int, error) {
 func (d *SQLite) CountEspaiPersonesByArbreQuery(arbreID int, query string) (int, error) {
 	return d.help.countEspaiPersonesByArbreQuery(arbreID, query)
 }
+func (d *SQLite) ListEspaiPersonesByOwnerFilters(ownerID int, name, tree, visibility string, limit, offset int) ([]EspaiPersonaTreeRow, error) {
+	return d.help.listEspaiPersonesByOwnerFilters(ownerID, name, tree, visibility, limit, offset)
+}
+func (d *SQLite) CountEspaiPersonesByOwnerFilters(ownerID int, name, tree, visibility string) (int, error) {
+	return d.help.countEspaiPersonesByOwnerFilters(ownerID, name, tree, visibility)
+}
+func (d *SQLite) ListEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPersonaDataFilter, limit, offset int) ([]EspaiPersonaTreeRow, error) {
+	return d.help.listEspaiPersonesByOwnerDataFilters(ownerID, filter, limit, offset)
+}
+func (d *SQLite) CountEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPersonaDataFilter) (int, error) {
+	return d.help.countEspaiPersonesByOwnerDataFilters(ownerID, filter)
+}
 func (d *SQLite) CreateEspaiRelacio(r *EspaiRelacio) (int, error) { return d.help.createEspaiRelacio(r) }
 func (d *SQLite) ListEspaiRelacionsByArbre(arbreID int) ([]EspaiRelacio, error) {
 	return d.help.listEspaiRelacionsByArbre(arbreID)
+}
+func (d *SQLite) CountEspaiRelacionsByArbre(arbreID int) (int, error) {
+	return d.help.countEspaiRelacionsByArbre(arbreID)
+}
+func (d *SQLite) CountEspaiRelacionsByArbreType(arbreID int, relationType string) (int, error) {
+	return d.help.countEspaiRelacionsByArbreType(arbreID, relationType)
+}
+func (d *SQLite) CreateEspaiEvent(ev *EspaiEvent) (int, error) { return d.help.createEspaiEvent(ev) }
+func (d *SQLite) ListEspaiEventsByPersona(personaID int) ([]EspaiEvent, error) {
+	return d.help.listEspaiEventsByPersona(personaID)
+}
+func (d *SQLite) DeleteEspaiEventsByArbreSource(arbreID int, source string) error {
+	return d.help.deleteEspaiEventsByArbreSource(arbreID, source)
 }
 func (d *SQLite) CreateEspaiCoincidencia(c *EspaiCoincidencia) (int, error) {
 	return d.help.createEspaiCoincidencia(c)

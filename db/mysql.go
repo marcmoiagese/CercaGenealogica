@@ -392,6 +392,18 @@ func (d *MySQL) EnsureDefaultAchievements() error {
 func (d *MySQL) ListGroups() ([]Group, error) {
 	return d.help.listGroups()
 }
+func (d *MySQL) CreateGroup(name, desc string) (int, error) {
+	return d.help.createGroup(name, desc)
+}
+func (d *MySQL) ListGroupMembers(groupID int) ([]UserAdminRow, error) {
+	return d.help.listGroupMembers(groupID)
+}
+func (d *MySQL) AddUserGroup(userID, groupID int) error {
+	return d.help.addUserGroup(userID, groupID)
+}
+func (d *MySQL) RemoveUserGroup(userID, groupID int) error {
+	return d.help.removeUserGroup(userID, groupID)
+}
 func (d *MySQL) ListPolitiques() ([]Politica, error) {
 	return d.help.listPolitiques()
 }
@@ -473,6 +485,32 @@ func (d *MySQL) CreatePersonaAnecdote(a *PersonaAnecdote) (int, error) {
 }
 func (d *MySQL) UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updatePersonaModeracio(id, estat, motiu, moderatorID)
+}
+func (d *MySQL) ExternalSitesListActive() ([]ExternalSite, error) {
+	return d.help.listExternalSitesActive()
+}
+
+func (d *MySQL) ExternalSitesListAll() ([]ExternalSite, error) {
+	return d.help.listExternalSitesAll()
+}
+func (d *MySQL) ExternalSiteUpsert(site *ExternalSite) (int, error) {
+	return d.help.upsertExternalSite(site)
+}
+func (d *MySQL) ExternalSiteToggleActive(id int) error {
+	return d.help.toggleExternalSiteActive(id)
+}
+func (d *MySQL) ExternalLinksListByPersona(personaID int, statusFilter string) ([]ExternalLinkRow, error) {
+	return d.help.listExternalLinksByPersona(personaID, statusFilter)
+}
+
+func (d *MySQL) ExternalLinksListByStatus(status string) ([]ExternalLinkAdminRow, error) {
+	return d.help.listExternalLinksByStatus(status)
+}
+func (d *MySQL) ExternalLinkInsertPending(personaID int, userID int, url, title string) (int, error) {
+	return d.help.createExternalLinkPending(personaID, userID, url, title)
+}
+func (d *MySQL) ExternalLinkModerate(id int, status string) error {
+	return d.help.updateExternalLinkStatus(id, status)
 }
 
 // Paisos
@@ -929,6 +967,7 @@ func (d *MySQL) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 // Espai personal
 func (d *MySQL) CreateEspaiArbre(a *EspaiArbre) (int, error) { return d.help.createEspaiArbre(a) }
 func (d *MySQL) UpdateEspaiArbre(a *EspaiArbre) error { return d.help.updateEspaiArbre(a) }
+func (d *MySQL) DeleteEspaiArbre(ownerID, treeID int) error { return d.help.deleteEspaiArbre(ownerID, treeID) }
 func (d *MySQL) GetEspaiArbre(id int) (*EspaiArbre, error) { return d.help.getEspaiArbre(id) }
 func (d *MySQL) ListEspaiArbresByOwner(ownerID int) ([]EspaiArbre, error) {
 	return d.help.listEspaiArbresByOwner(ownerID)
@@ -939,9 +978,13 @@ func (d *MySQL) ListEspaiArbresPublic() ([]EspaiArbre, error) {
 func (d *MySQL) CreateEspaiFontImportacio(f *EspaiFontImportacio) (int, error) {
 	return d.help.createEspaiFontImportacio(f)
 }
+func (d *MySQL) UpdateEspaiFontImportacio(f *EspaiFontImportacio) error {
+	return d.help.updateEspaiFontImportacio(f)
+}
 func (d *MySQL) GetEspaiFontImportacio(id int) (*EspaiFontImportacio, error) {
 	return d.help.getEspaiFontImportacio(id)
 }
+func (d *MySQL) DeleteEspaiFontImportacio(id int) error { return d.help.deleteEspaiFontImportacio(id) }
 func (d *MySQL) GetEspaiFontImportacioByChecksum(ownerID int, checksum string) (*EspaiFontImportacio, error) {
 	return d.help.getEspaiFontImportacioByChecksum(ownerID, checksum)
 }
@@ -965,7 +1008,20 @@ func (d *MySQL) ListEspaiImportsByOwner(ownerID int) ([]EspaiImport, error) {
 func (d *MySQL) ListEspaiImportsByArbre(arbreID int) ([]EspaiImport, error) {
 	return d.help.listEspaiImportsByArbre(arbreID)
 }
+func (d *MySQL) ListEspaiImportsByStatus(status string, limit int) ([]EspaiImport, error) {
+	return d.help.listEspaiImportsByStatus(status, limit)
+}
+func (d *MySQL) DeleteEspaiImportsByArbre(arbreID int) error {
+	return d.help.deleteEspaiImportsByArbre(arbreID)
+}
+func (d *MySQL) CountEspaiImportsByFont(fontID int) (int, error) {
+	return d.help.countEspaiImportsByFont(fontID)
+}
+func (d *MySQL) ClearEspaiTreeData(arbreID int) error {
+	return d.help.clearEspaiTreeData(arbreID)
+}
 func (d *MySQL) CreateEspaiPersona(p *EspaiPersona) (int, error) { return d.help.createEspaiPersona(p) }
+func (d *MySQL) UpdateEspaiPersona(p *EspaiPersona) error { return d.help.updateEspaiPersona(p) }
 func (d *MySQL) UpdateEspaiPersonaVisibility(id int, visibility string) error {
 	return d.help.updateEspaiPersonaVisibility(id, visibility)
 }
@@ -982,9 +1038,34 @@ func (d *MySQL) CountEspaiPersonesByArbre(arbreID int) (int, int, error) {
 func (d *MySQL) CountEspaiPersonesByArbreQuery(arbreID int, query string) (int, error) {
 	return d.help.countEspaiPersonesByArbreQuery(arbreID, query)
 }
+func (d *MySQL) ListEspaiPersonesByOwnerFilters(ownerID int, name, tree, visibility string, limit, offset int) ([]EspaiPersonaTreeRow, error) {
+	return d.help.listEspaiPersonesByOwnerFilters(ownerID, name, tree, visibility, limit, offset)
+}
+func (d *MySQL) CountEspaiPersonesByOwnerFilters(ownerID int, name, tree, visibility string) (int, error) {
+	return d.help.countEspaiPersonesByOwnerFilters(ownerID, name, tree, visibility)
+}
+func (d *MySQL) ListEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPersonaDataFilter, limit, offset int) ([]EspaiPersonaTreeRow, error) {
+	return d.help.listEspaiPersonesByOwnerDataFilters(ownerID, filter, limit, offset)
+}
+func (d *MySQL) CountEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPersonaDataFilter) (int, error) {
+	return d.help.countEspaiPersonesByOwnerDataFilters(ownerID, filter)
+}
 func (d *MySQL) CreateEspaiRelacio(r *EspaiRelacio) (int, error) { return d.help.createEspaiRelacio(r) }
 func (d *MySQL) ListEspaiRelacionsByArbre(arbreID int) ([]EspaiRelacio, error) {
 	return d.help.listEspaiRelacionsByArbre(arbreID)
+}
+func (d *MySQL) CountEspaiRelacionsByArbre(arbreID int) (int, error) {
+	return d.help.countEspaiRelacionsByArbre(arbreID)
+}
+func (d *MySQL) CountEspaiRelacionsByArbreType(arbreID int, relationType string) (int, error) {
+	return d.help.countEspaiRelacionsByArbreType(arbreID, relationType)
+}
+func (d *MySQL) CreateEspaiEvent(ev *EspaiEvent) (int, error) { return d.help.createEspaiEvent(ev) }
+func (d *MySQL) ListEspaiEventsByPersona(personaID int) ([]EspaiEvent, error) {
+	return d.help.listEspaiEventsByPersona(personaID)
+}
+func (d *MySQL) DeleteEspaiEventsByArbreSource(arbreID int, source string) error {
+	return d.help.deleteEspaiEventsByArbreSource(arbreID, source)
 }
 func (d *MySQL) CreateEspaiCoincidencia(c *EspaiCoincidencia) (int, error) {
 	return d.help.createEspaiCoincidencia(c)

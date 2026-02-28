@@ -80,6 +80,11 @@
                                 </label>
                                 {{ end }}
                             </div>
+                            <div class="grup-camp" style="margin-top:16px">
+                                <label for="perm-import-worker-limit">{{ t .Lang "policies.import_workers.label" }}</label>
+                                <input type="number" id="perm-import-worker-limit" min="1" step="1" placeholder="1">
+                                <small class="camp-helper">{{ t .Lang "policies.import_workers.help" }}</small>
+                            </div>
                             <div style="margin-top:18px">
                                 <h3 style="margin:0 0 6px 0">{{ t .Lang "policies.gui.modular.title" }}</h3>
                                 <p class="camp-helper">{{ t .Lang "policies.gui.modular.helper" }}</p>
@@ -253,6 +258,8 @@
     (() => {
         const permKeys = ["admin","can_manage_users","can_manage_territory","can_manage_eclesiastic","can_manage_archives","can_create_person","can_edit_any_person","can_moderate","can_manage_policies"];
         const textarea = document.getElementById('permisos');
+        const workerInput = document.getElementById('perm-import-worker-limit');
+        const workerKey = "import_worker_limit";
         const activeTabInput = document.getElementById('policy-active-tab');
         const parsePerms = () => {
             try {
@@ -270,6 +277,10 @@
                     if(card){ card.classList.toggle('actiu', val); }
                 }
             });
+            if(workerInput){
+                const val = Number(perms[workerKey] || 0);
+                workerInput.value = val > 0 ? String(val) : '';
+            }
         };
         const syncJSON = () => {
             const obj = parsePerms();
@@ -280,6 +291,14 @@
                 if(cb && !cb.checked && obj && Object.prototype.hasOwnProperty.call(obj, k)) delete obj[k];
                 if(card) card.classList.toggle('actiu', cb && cb.checked);
             });
+            if(workerInput){
+                const val = parseInt(workerInput.value, 10);
+                if(Number.isFinite(val) && val > 0) {
+                    obj[workerKey] = val;
+                } else if (obj && Object.prototype.hasOwnProperty.call(obj, workerKey)) {
+                    delete obj[workerKey];
+                }
+            }
             textarea.value = JSON.stringify(obj, null, 2);
         };
         // init
@@ -288,6 +307,9 @@
             const cb = document.getElementById(`perm-${k}`);
             if(cb) cb.addEventListener('change', syncJSON);
         });
+        if(workerInput){
+            workerInput.addEventListener('input', syncJSON);
+        }
         document.querySelectorAll('.perm-grant-card input[type="checkbox"]').forEach((cb) => {
             const card = cb.closest('.perm-grant-card');
             if(!card) return;

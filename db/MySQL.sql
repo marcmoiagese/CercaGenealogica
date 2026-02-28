@@ -1173,7 +1173,7 @@ CREATE TABLE IF NOT EXISTS transcripcions_raw (
 
 CREATE TABLE IF NOT EXISTS search_docs (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  entity_type ENUM('persona','registre_raw') NOT NULL,
+  entity_type ENUM('persona','registre_raw','espai_arbre','espai_persona') NOT NULL,
   entity_id INT UNSIGNED NOT NULL,
   published TINYINT(1) NOT NULL DEFAULT 1,
   municipi_id INT UNSIGNED NULL,
@@ -1799,6 +1799,7 @@ CREATE TABLE IF NOT EXISTS espai_imports (
   arbre_id INT UNSIGNED NOT NULL,
   font_id INT UNSIGNED NULL,
   import_type VARCHAR(20) NOT NULL,
+  import_mode VARCHAR(20) NOT NULL DEFAULT 'full',
   status VARCHAR(20) NOT NULL,
   progress_total INT NOT NULL DEFAULT 0,
   progress_done INT NOT NULL DEFAULT 0,
@@ -1835,6 +1836,7 @@ CREATE TABLE IF NOT EXISTS espai_persones (
   lloc_naixement VARCHAR(255),
   lloc_defuncio VARCHAR(255),
   notes TEXT,
+  has_media TINYINT(1) NOT NULL DEFAULT 0,
   visibility VARCHAR(12) NOT NULL DEFAULT 'visible',
   status VARCHAR(20) NOT NULL DEFAULT 'active',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1868,6 +1870,27 @@ CREATE TABLE IF NOT EXISTS espai_relacions (
 CREATE INDEX idx_espai_relacions_arbre ON espai_relacions(arbre_id);
 CREATE INDEX idx_espai_relacions_persona ON espai_relacions(persona_id);
 CREATE INDEX idx_espai_relacions_related ON espai_relacions(related_persona_id);
+
+CREATE TABLE IF NOT EXISTS espai_events (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  arbre_id INT UNSIGNED NOT NULL,
+  persona_id INT UNSIGNED NOT NULL,
+  external_id VARCHAR(255),
+  event_type VARCHAR(64) NOT NULL,
+  event_role VARCHAR(64),
+  event_date VARCHAR(255),
+  event_place VARCHAR(255),
+  description TEXT,
+  source VARCHAR(64),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_espai_events_arbre FOREIGN KEY (arbre_id) REFERENCES espai_arbres(id) ON DELETE CASCADE,
+  CONSTRAINT fk_espai_events_persona FOREIGN KEY (persona_id) REFERENCES espai_persones(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_espai_events_arbre ON espai_events(arbre_id);
+CREATE INDEX idx_espai_events_persona ON espai_events(persona_id);
+CREATE INDEX idx_espai_events_type ON espai_events(event_type);
+CREATE INDEX idx_espai_events_source ON espai_events(source);
 
 CREATE TABLE IF NOT EXISTS espai_coincidencies (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -2031,6 +2054,38 @@ CREATE INDEX idx_espai_grups_conflictes_grup ON espai_grups_conflictes(grup_id);
 CREATE INDEX idx_espai_grups_conflictes_status ON espai_grups_conflictes(status);
 CREATE INDEX idx_espai_grups_conflictes_updated ON espai_grups_conflictes(updated_at);
 CREATE INDEX idx_espai_grups_conflictes_type ON espai_grups_conflictes(conflict_type);
+
+CREATE TABLE IF NOT EXISTS external_sites (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  slug VARCHAR(120) NOT NULL UNIQUE,
+  name VARCHAR(255) NOT NULL,
+  domains TEXT NOT NULL,
+  icon_path TEXT,
+  access_mode VARCHAR(20) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS external_links (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  persona_id INT UNSIGNED NOT NULL,
+  site_id INT UNSIGNED NULL,
+  url TEXT NOT NULL,
+  url_norm TEXT NOT NULL,
+  title TEXT,
+  meta TEXT,
+  status VARCHAR(20) NOT NULL,
+  created_by_user_id INT UNSIGNED NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY idx_external_links_persona_url (persona_id, url_norm),
+  KEY idx_external_links_persona_status (persona_id, status),
+  KEY idx_external_links_site (site_id),
+  CONSTRAINT fk_external_links_persona FOREIGN KEY (persona_id) REFERENCES persona(id) ON DELETE CASCADE,
+  CONSTRAINT fk_external_links_site FOREIGN KEY (site_id) REFERENCES external_sites(id) ON DELETE SET NULL,
+  CONSTRAINT fk_external_links_user FOREIGN KEY (created_by_user_id) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS espai_notifications (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,

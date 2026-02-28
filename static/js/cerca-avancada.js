@@ -38,6 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
         entityPersona: form.dataset.labelEntityPersona || "Persona",
         entityRegistre: form.dataset.labelEntityRegistre || "Registre",
         entityEspai: form.dataset.labelEntityEspai || "Arbre",
+        entityEspaiPersona: form.dataset.labelEntityEspaiPersona || "Persona d'arbre",
         facetEntity: form.dataset.labelFacetEntity || "Entity",
         facetTipus: form.dataset.labelFacetTipus || "Tipus",
     };
@@ -325,6 +326,13 @@ document.addEventListener("DOMContentLoaded", () => {
             icon: "fa-tree",
             onClick: () => applyEntityFilter("espai_arbre"),
         });
+        entityItems.push({
+            label: labels.entityEspaiPersona,
+            count: entityCounts.espai_persona || 0,
+            active: activeEntity === "espai_persona",
+            icon: "fa-user",
+            onClick: () => applyEntityFilter("espai_persona"),
+        });
 
         const tipusItems = [];
         const tipusKeys = Object.keys(tipusCounts || {});
@@ -389,6 +397,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 persona: [],
                 registre_raw: [],
                 espai_arbre: [],
+                espai_persona: [],
             };
             items.forEach((item) => {
                 if (item.entity_type === "persona") {
@@ -397,6 +406,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     grouped.registre_raw.push(item);
                 } else if (item.entity_type === "espai_arbre") {
                     grouped.espai_arbre.push(item);
+                } else if (item.entity_type === "espai_persona") {
+                    grouped.espai_persona.push(item);
                 }
             });
             if (grouped.persona.length > 0) {
@@ -407,6 +418,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (grouped.espai_arbre.length > 0) {
                 resultsEl.appendChild(renderSection(labels.entityEspai, grouped.espai_arbre));
+            }
+            if (grouped.espai_persona.length > 0) {
+                resultsEl.appendChild(renderSection(labels.entityEspaiPersona, grouped.espai_persona));
             }
         } else {
             resultsEl.appendChild(renderSection("", items));

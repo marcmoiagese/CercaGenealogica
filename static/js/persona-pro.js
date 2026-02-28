@@ -1,4 +1,4 @@
-/* Persona Pro — tabs + timeline filters + carousel + documents quick filter */
+/* Persona Pro - tabs + timeline filters + carousel + documents quick filter */
 document.addEventListener('DOMContentLoaded', () => {
   // --- Tabs (panells) ---
   const tabs = Array.from(document.querySelectorAll('.persona-tabs .tab'));
@@ -124,4 +124,5 @@ document.addEventListener('DOMContentLoaded', () => {
     update();
     startAuto();
   }
+
 });

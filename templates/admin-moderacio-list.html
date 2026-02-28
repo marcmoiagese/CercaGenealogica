@@ -537,10 +537,10 @@
                         return;
                     }
                     event.preventDefault();
-                    setBulkDisabled(true);
-                    setBulkStatus(runningLabel, true);
                     var formData = new FormData(bulkForm);
                     formData.set('async', '1');
+                    setBulkDisabled(true);
+                    setBulkStatus(runningLabel, true);
                     fetch(bulkForm.action, {
                         method: 'POST',
                         body: formData,

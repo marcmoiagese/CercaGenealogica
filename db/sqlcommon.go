@@ -872,6 +872,29 @@ func (h sqlHelper) listGroups() ([]Group, error) {
 	return res, nil
 }
 
+func (h sqlHelper) createGroup(name, desc string) (int, error) {
+	stmt := `INSERT INTO grups (nom, descripcio, data_creacio) VALUES (?, ?, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	if h.style == "postgres" {
+		var id int
+		if err := h.db.QueryRow(stmt, name, desc).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	res, err := h.db.Exec(stmt, name, desc)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		return int(id), nil
+	}
+	return 0, nil
+}
+
 func (h sqlHelper) listUserGroups(userID int) ([]Group, error) {
 	query := `
         SELECT g.id, g.nom, g.descripcio
@@ -893,6 +916,66 @@ func (h sqlHelper) listUserGroups(userID int) ([]Group, error) {
 		res = append(res, g)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) listGroupMembers(groupID int) ([]UserAdminRow, error) {
+	h.ensureUserExtraColumns()
+	query := `
+        SELECT u.id, u.usuari, u.nom, u.cognoms, u.correu, u.data_creacio,
+               CASE WHEN u.actiu THEN 1 ELSE 0 END AS actiu_val,
+               CASE WHEN u.banned THEN 1 ELSE 0 END AS banned_val,
+               MAX(COALESCE(sal.ts, s.creat)) AS last_login
+        FROM usuaris_grups ug
+        INNER JOIN usuaris u ON u.id = ug.usuari_id
+        LEFT JOIN sessions s ON s.usuari_id = u.id
+        LEFT JOIN session_access_log sal ON sal.session_id = s.id
+        WHERE ug.grup_id = ?
+        GROUP BY u.id, u.usuari, u.nom, u.cognoms, u.correu, u.data_creacio, u.actiu, u.banned
+        ORDER BY u.usuari`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []UserAdminRow
+	for rows.Next() {
+		var row UserAdminRow
+		var createdRaw interface{}
+		var lastRaw interface{}
+		var actiuVal int
+		var bannedVal int
+		if err := rows.Scan(&row.ID, &row.Usuari, &row.Nom, &row.Cognoms, &row.Email, &createdRaw, &actiuVal, &bannedVal, &lastRaw); err != nil {
+			return nil, err
+		}
+		row.CreatedAt = dbTimeString(createdRaw)
+		row.LastLogin = dbTimeString(lastRaw)
+		row.Active = actiuVal == 1
+		row.Banned = bannedVal == 1
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) addUserGroup(userID, groupID int) error {
+	stmt := formatPlaceholders(h.style, `INSERT INTO usuaris_grups (usuari_id, grup_id, data_afegit) VALUES (?, ?, `+h.nowFun+`) ON CONFLICT DO NOTHING`)
+	if h.style == "mysql" {
+		stmt = formatPlaceholders(h.style, `INSERT INTO usuaris_grups (usuari_id, grup_id, data_afegit) VALUES (?, ?, `+h.nowFun+`) ON DUPLICATE KEY UPDATE usuari_id=VALUES(usuari_id)`)
+	}
+	_, err := h.db.Exec(stmt, userID, groupID)
+	if err == nil {
+		_ = h.bumpUserPermissionsVersion(userID)
+	}
+	return err
+}
+
+func (h sqlHelper) removeUserGroup(userID, groupID int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM usuaris_grups WHERE usuari_id = ? AND grup_id = ?`)
+	_, err := h.db.Exec(stmt, userID, groupID)
+	if err == nil {
+		_ = h.bumpUserPermissionsVersion(userID)
+	}
+	return err
 }
 
 func (h sqlHelper) getEffectivePoliticaPerms(userID int) (PolicyPermissions, error) {
@@ -9828,6 +9911,8 @@ func (h sqlHelper) searchDocs(f SearchQueryFilter) ([]SearchDocRow, int, SearchF
 
 	joins := []string{
 		"LEFT JOIN transcripcions_raw r ON s.entity_type = 'registre_raw' AND s.entity_id = r.id",
+		"LEFT JOIN espai_persones ep ON s.entity_type = 'espai_persona' AND s.entity_id = ep.id",
+		"LEFT JOIN espai_arbres ea ON ep.arbre_id = ea.id",
 	}
 	ancestorType := strings.TrimSpace(f.AncestorType)
 	if ancestorType == "nivell_admin" {
@@ -9843,9 +9928,15 @@ func (h sqlHelper) searchDocs(f SearchQueryFilter) ([]SearchDocRow, int, SearchF
 		clauses = append(clauses, "s.published = 1")
 	}
 	entity := strings.TrimSpace(f.Entity)
-	if entity == "persona" || entity == "registre_raw" || entity == "espai_arbre" {
+	if entity == "persona" || entity == "registre_raw" || entity == "espai_arbre" || entity == "espai_persona" {
 		clauses = append(clauses, "s.entity_type = ?")
 		args = append(args, entity)
+	}
+	if f.EspaiOwnerID > 0 {
+		clauses = append(clauses, "(s.entity_type <> 'espai_persona' OR (ep.id IS NOT NULL AND ep.status = 'active' AND ep.visibility = 'visible' AND ea.id IS NOT NULL AND ea.status = 'active' AND (ea.visibility = 'public' OR ea.owner_user_id = ?)))")
+		args = append(args, f.EspaiOwnerID)
+	} else {
+		clauses = append(clauses, "(s.entity_type <> 'espai_persona' OR (ep.id IS NOT NULL AND ep.status = 'active' AND ep.visibility = 'visible' AND ea.id IS NOT NULL AND ea.status = 'active' AND ea.visibility = 'public'))")
 	}
 	if ancestorType != "" && f.AncestorID > 0 {
 		if ancestorType == "municipi" {

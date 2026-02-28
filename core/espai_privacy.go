@@ -2,9 +2,12 @@ package core
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,19 +15,14 @@ import (
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
-type espaiTreeStats struct {
-	Total  int
-	Hidden int
-}
-
-type espaiPersonaView struct {
+type espaiPersonaTableRow struct {
 	ID         int
 	Name       string
+	TreeName   string
 	Visibility string
 }
 
-type espaiTreePeoplePager struct {
-	Query      string
+type espaiPeoplePager struct {
 	Page       int
 	PerPage    int
 	Total      int
@@ -34,16 +32,43 @@ type espaiTreePeoplePager struct {
 	PrevPage   int
 	NextPage   int
 	PageBase   string
+	PageSep    string
 }
 
-const espaiTreePeoplePerPage = 25
+type espaiTreeRowView struct {
+	ID             int
+	Name           string
+	Description    string
+	Visibility     string
+	PeopleCount    int
+	RelationsCount int
+	FamiliesCount  int
+	GrampsIntegrationID int
+	SourceType     string
+	ImportStatus   string
+	ImportType     string
+}
 
-func buildEspaiTreePeoplePageBase(treeID int, query string) string {
-	base := "/espai?tree_id=" + strconv.Itoa(treeID)
-	if strings.TrimSpace(query) != "" {
-		base += "&q=" + url.QueryEscape(query)
+type espaiTreeEditView struct {
+	ID                  int
+	Name                string
+	SourceType          string
+	GrampsIntegrationID int
+	GrampsBaseURL       string
+	GrampsUsername      string
+	CloseURL            string
+}
+
+const espaiPeoplePerPage = 25
+
+func buildEspaiPeoplePageBase(values url.Values) (string, string) {
+	query := cloneValues(values)
+	query.Del("page")
+	base := "/espai"
+	if len(query) == 0 {
+		return base, "?"
 	}
-	return base
+	return base + "?" + query.Encode(), "&"
 }
 
 func (a *App) EspaiPersonalOverviewPage(w http.ResponseWriter, r *http.Request) {
@@ -59,79 +84,99 @@ func (a *App) EspaiPersonalOverviewPage(w http.ResponseWriter, r *http.Request) 
 	lang := ResolveLang(r)
 
 	trees, _ := a.DB.ListEspaiArbresByOwner(user.ID)
-	treeStats := map[int]espaiTreeStats{}
-	treePeople := map[int][]espaiPersonaView{}
-	treePeoplePager := map[int]espaiTreePeoplePager{}
-
-	selectedTreeID := parseFormInt(r.URL.Query().Get("tree_id"))
-	selectedPage := parseFormInt(r.URL.Query().Get("page"))
-	if selectedPage < 1 {
-		selectedPage = 1
+	filterKeys := []string{"name", "tree", "visibility"}
+	filterValues := map[string]string{}
+	filterMatch := map[string]string{}
+	for _, key := range filterKeys {
+		paramKey := "f_" + key
+		if val := strings.TrimSpace(r.URL.Query().Get(paramKey)); val != "" {
+			filterValues[key] = val
+			filterMatch[key] = strings.ToLower(val)
+		}
 	}
-	selectedQuery := strings.TrimSpace(r.URL.Query().Get("q"))
-
-	for _, tree := range trees {
-		stats := espaiTreeStats{}
-		if total, hidden, err := a.DB.CountEspaiPersonesByArbre(tree.ID); err == nil {
-			stats.Total = total
-			stats.Hidden = hidden
-		}
-
-		query := ""
-		page := 1
-		if selectedTreeID == tree.ID {
-			query = selectedQuery
-			page = selectedPage
-		}
-		totalFiltered := stats.Total
-		if query != "" {
-			if count, err := a.DB.CountEspaiPersonesByArbreQuery(tree.ID, query); err == nil {
-				totalFiltered = count
-			} else {
-				totalFiltered = 0
+	filterOrder := []string{}
+	if orderParam := strings.TrimSpace(r.URL.Query().Get("order")); orderParam != "" {
+		for _, key := range strings.Split(orderParam, ",") {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
 			}
 		}
-
-		totalPages := 1
-		if totalFiltered > 0 {
-			totalPages = (totalFiltered + espaiTreePeoplePerPage - 1) / espaiTreePeoplePerPage
-		}
-		if page > totalPages {
-			page = totalPages
-		}
-		if page < 1 {
-			page = 1
-		}
-		offset := (page - 1) * espaiTreePeoplePerPage
-		persones, _ := a.DB.ListEspaiPersonesByArbreQuery(tree.ID, query, espaiTreePeoplePerPage, offset)
-
-		views := make([]espaiPersonaView, 0, len(persones))
-		for _, p := range persones {
-			visibility := strings.TrimSpace(p.Visibility)
-			if visibility == "" {
-				visibility = "visible"
+	}
+	if len(filterOrder) == 0 {
+		for _, key := range filterKeys {
+			if _, ok := filterMatch[key]; ok {
+				filterOrder = append(filterOrder, key)
 			}
-			views = append(views, espaiPersonaView{
-				ID:         p.ID,
-				Name:       espaiPersonaDisplayNameWithFallback(p, T(lang, "tree.unknown.name")),
-				Visibility: visibility,
-			})
 		}
+	} else {
+		seen := map[string]bool{}
+		for _, key := range filterOrder {
+			seen[key] = true
+		}
+		for _, key := range filterKeys {
+			if _, ok := filterMatch[key]; ok && !seen[key] {
+				filterOrder = append(filterOrder, key)
+			}
+		}
+	}
 
-		treeStats[tree.ID] = stats
-		treePeople[tree.ID] = views
-		treePeoplePager[tree.ID] = espaiTreePeoplePager{
-			Query:      query,
-			Page:       page,
-			PerPage:    espaiTreePeoplePerPage,
-			Total:      totalFiltered,
-			TotalPages: totalPages,
-			HasPrev:    page > 1,
-			HasNext:    page < totalPages,
-			PrevPage:   page - 1,
-			NextPage:   page + 1,
-			PageBase:   buildEspaiTreePeoplePageBase(tree.ID, query),
+	nameFilter := strings.TrimSpace(filterValues["name"])
+	treeFilter := strings.TrimSpace(filterValues["tree"])
+	visibilityFilter := strings.ToLower(strings.TrimSpace(filterValues["visibility"]))
+	if !isValidPersonaVisibility(visibilityFilter) {
+		visibilityFilter = ""
+	}
+
+	page := parseListPage(r.URL.Query().Get("page"))
+	perPage := espaiPeoplePerPage
+
+	total := 0
+	if count, err := a.DB.CountEspaiPersonesByOwnerFilters(user.ID, nameFilter, treeFilter, visibilityFilter); err == nil {
+		total = count
+	}
+	totalPages := 1
+	if total > 0 {
+		totalPages = (total + perPage - 1) / perPage
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	if page < 1 {
+		page = 1
+	}
+	offset := (page - 1) * perPage
+
+	rows, _ := a.DB.ListEspaiPersonesByOwnerFilters(user.ID, nameFilter, treeFilter, visibilityFilter, perPage, offset)
+	people := make([]espaiPersonaTableRow, 0, len(rows))
+	for _, row := range rows {
+		visibility := strings.TrimSpace(row.Visibility)
+		if visibility == "" {
+			visibility = "visible"
 		}
+		people = append(people, espaiPersonaTableRow{
+			ID:         row.ID,
+			Name:       espaiPersonaDisplayNameWithFallback(row.EspaiPersona, T(lang, "tree.unknown.name")),
+			TreeName:   strings.TrimSpace(row.TreeName),
+			Visibility: visibility,
+		})
+	}
+
+	pageBase, pageSep := buildEspaiPeoplePageBase(r.URL.Query())
+	peoplePager := espaiPeoplePager{
+		Page:       page,
+		PerPage:    perPage,
+		Total:      total,
+		TotalPages: totalPages,
+		HasPrev:    page > 1,
+		HasNext:    page < totalPages,
+		PrevPage:   page - 1,
+		NextPage:   page + 1,
+		PageBase:   pageBase,
+		PageSep:    pageSep,
 	}
 
 	spaceState := "ready"
@@ -175,10 +220,11 @@ func (a *App) EspaiPersonalOverviewPage(w http.ResponseWriter, r *http.Request) 
 	RenderPrivateTemplate(w, r, "espai.html", map[string]interface{}{
 		"SpaceSection":      "overview",
 		"SpaceState":        spaceState,
-		"EspaiTrees":        trees,
-		"EspaiTreeStats":    treeStats,
-		"EspaiTreePersons":  treePeople,
-		"EspaiTreePeoplePager": treePeoplePager,
+		"EspaiPeople":       people,
+		"EspaiPeoplePager":  peoplePager,
+		"EspaiPeopleFilterValues": filterValues,
+		"EspaiPeopleFilterOrder":  strings.Join(filterOrder, ","),
+		"EspaiReturnTo":     r.URL.RequestURI(),
 		"EspaiNotifications": notifications,
 		"EspaiNotificationUnread": unread,
 		"EspaiNotificationPrefs": prefs,
@@ -190,6 +236,169 @@ func (a *App) EspaiPersonalOverviewPage(w http.ResponseWriter, r *http.Request) 
 		},
 		"UploadError":       strings.TrimSpace(r.URL.Query().Get("error")),
 		"UploadNotice":      strings.TrimSpace(r.URL.Query().Get("notice")),
+	})
+}
+
+func (a *App) EspaiPersonalTreesPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	user := userFromContext(r)
+	if user == nil {
+		http.NotFound(w, r)
+		return
+	}
+	lang := ResolveLang(r)
+
+	trees, _ := a.DB.ListEspaiArbresByOwner(user.ID)
+	grampsByTree := map[int]db.EspaiIntegracioGramps{}
+	if integrations, err := a.DB.ListEspaiIntegracionsGrampsByOwner(user.ID); err == nil {
+		for _, integ := range integrations {
+			if integ.ArbreID > 0 {
+				grampsByTree[integ.ArbreID] = integ
+			}
+		}
+	}
+	latestGedcomByTree := map[int]db.EspaiImport{}
+	latestAnyImportByTree := map[int]db.EspaiImport{}
+	if imports, err := a.DB.ListEspaiImportsByOwner(user.ID); err == nil {
+		for _, imp := range imports {
+			if imp.ArbreID == 0 {
+				continue
+			}
+			if _, ok := latestAnyImportByTree[imp.ArbreID]; !ok {
+				latestAnyImportByTree[imp.ArbreID] = imp
+			}
+			if strings.TrimSpace(imp.ImportType) != "gedcom" {
+				continue
+			}
+			prev, ok := latestGedcomByTree[imp.ArbreID]
+			if !ok {
+				latestGedcomByTree[imp.ArbreID] = imp
+				continue
+			}
+			if imp.CreatedAt.Valid && (!prev.CreatedAt.Valid || imp.CreatedAt.Time.After(prev.CreatedAt.Time)) {
+				latestGedcomByTree[imp.ArbreID] = imp
+			}
+		}
+	}
+	rows := make([]espaiTreeRowView, 0, len(trees))
+	editTreeID := parseIntDefault(r.URL.Query().Get("edit_tree"), 0)
+	closeURL := "/espai/arbres"
+	if editTreeID > 0 {
+		closeQuery := cloneValues(r.URL.Query())
+		closeQuery.Del("edit_tree")
+		if len(closeQuery) > 0 {
+			closeURL = closeURL + "?" + closeQuery.Encode()
+		}
+	}
+	var editView *espaiTreeEditView
+	for _, tree := range trees {
+		peopleCount := 0
+		if total, _, err := a.DB.CountEspaiPersonesByArbre(tree.ID); err == nil {
+			peopleCount = total
+		}
+		relationsCount := 0
+		if total, err := a.DB.CountEspaiRelacionsByArbre(tree.ID); err == nil {
+			relationsCount = total
+		}
+		visibility := strings.TrimSpace(tree.Visibility)
+		if visibility == "" {
+			visibility = "private"
+		}
+		desc := ""
+		if tree.Descripcio.Valid {
+			desc = tree.Descripcio.String
+		}
+		familiesCount := 0
+		if imp, ok := latestGedcomByTree[tree.ID]; ok && imp.SummaryJSON.Valid {
+			var summary gedcomImportSummary
+			if err := json.Unmarshal([]byte(imp.SummaryJSON.String), &summary); err == nil {
+				familiesCount = summary.Families
+			}
+		}
+		if familiesCount == 0 {
+			if spouseCount, err := a.DB.CountEspaiRelacionsByArbreType(tree.ID, "spouse"); err == nil && spouseCount > 0 {
+				familiesCount = spouseCount / 2
+			}
+		}
+		grampsIntegrationID := 0
+		sourceType := ""
+		if integ, ok := grampsByTree[tree.ID]; ok {
+			grampsIntegrationID = integ.ID
+			sourceType = "gramps"
+			if editTreeID == tree.ID {
+				editView = &espaiTreeEditView{
+					ID:                  tree.ID,
+					Name:                tree.Nom,
+					SourceType:          sourceType,
+					GrampsIntegrationID: integ.ID,
+					GrampsBaseURL:       integ.BaseURL,
+					GrampsUsername:      integ.Username.String,
+					CloseURL:            closeURL,
+				}
+			}
+		} else if _, ok := latestGedcomByTree[tree.ID]; ok {
+			sourceType = "gedcom"
+			if editTreeID == tree.ID {
+				editView = &espaiTreeEditView{
+					ID:         tree.ID,
+					Name:       tree.Nom,
+					SourceType: sourceType,
+					CloseURL:   closeURL,
+				}
+			}
+		} else if editTreeID == tree.ID {
+			editView = &espaiTreeEditView{
+				ID:   tree.ID,
+				Name: tree.Nom,
+				CloseURL: closeURL,
+			}
+		}
+		importStatus := ""
+		importType := ""
+		if imp, ok := latestAnyImportByTree[tree.ID]; ok {
+			importStatus = strings.ToLower(strings.TrimSpace(imp.Status))
+			importType = strings.ToLower(strings.TrimSpace(imp.ImportType))
+		}
+		rows = append(rows, espaiTreeRowView{
+			ID:             tree.ID,
+			Name:           tree.Nom,
+			Description:    desc,
+			Visibility:     visibility,
+			PeopleCount:    peopleCount,
+			RelationsCount: relationsCount,
+			FamiliesCount:  familiesCount,
+			GrampsIntegrationID: grampsIntegrationID,
+			SourceType:     sourceType,
+			ImportStatus:   importStatus,
+			ImportType:     importType,
+		})
+	}
+
+	treeLimit := parseIntDefault(a.Config["ESP_TREE_LIMIT"], 0)
+	limitLabel := T(lang, "space.trees.limit.unlimited")
+	if treeLimit > 0 {
+		limitLabel = strconv.Itoa(treeLimit)
+	}
+
+	spaceState := "ready"
+	if len(trees) == 0 {
+		spaceState = "empty"
+	}
+
+	RenderPrivateTemplate(w, r, "espai.html", map[string]interface{}{
+		"SpaceSection":       "trees",
+		"SpaceState":         spaceState,
+		"EspaiTreeRows":      rows,
+		"EspaiTreeEdit":      editView,
+		"EspaiTreeCount":     len(trees),
+		"EspaiTreeLimit":     treeLimit,
+		"EspaiTreeLimitLabel": limitLabel,
+		"EspaiReturnTo":      r.URL.RequestURI(),
+		"UploadError":        strings.TrimSpace(r.URL.Query().Get("error")),
+		"UploadNotice":       strings.TrimSpace(r.URL.Query().Get("notice")),
 	})
 }
 
@@ -207,25 +416,26 @@ func (a *App) EspaiPrivacyUpdateTree(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, T(ResolveLang(r), "error.csrf"), http.StatusBadRequest)
 		return
 	}
+	redirectBase := espaiRedirectTarget(r, "/espai")
 	treeID := parseFormInt(r.FormValue("tree_id"))
 	visibility := strings.TrimSpace(r.FormValue("visibility"))
 	if treeID == 0 {
-		http.Redirect(w, r, "/espai?error="+urlQueryEscape(T(ResolveLang(r), "space.privacy.error.tree_not_found")), http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": T(ResolveLang(r), "space.privacy.error.tree_not_found")}), http.StatusSeeOther)
 		return
 	}
 	if !isValidTreeVisibility(visibility) {
-		http.Redirect(w, r, "/espai?error="+urlQueryEscape(T(ResolveLang(r), "space.privacy.error.invalid_visibility")), http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": T(ResolveLang(r), "space.privacy.error.invalid_visibility")}), http.StatusSeeOther)
 		return
 	}
 	tree, err := a.DB.GetEspaiArbre(treeID)
 	if err != nil || tree == nil || tree.OwnerUserID != user.ID {
-		http.Redirect(w, r, "/espai?error="+urlQueryEscape(T(ResolveLang(r), "space.privacy.error.tree_not_found")), http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": T(ResolveLang(r), "space.privacy.error.tree_not_found")}), http.StatusSeeOther)
 		return
 	}
 	prev := strings.TrimSpace(tree.Visibility)
 	tree.Visibility = visibility
 	if err := a.DB.UpdateEspaiArbre(tree); err != nil {
-		http.Redirect(w, r, "/espai?error="+urlQueryEscape(err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": err.Error()}), http.StatusSeeOther)
 		return
 	}
 	if err := a.upsertSearchDocForEspaiArbreID(tree.ID); err != nil {
@@ -240,7 +450,89 @@ func (a *App) EspaiPrivacyUpdateTree(w http.ResponseWriter, r *http.Request) {
 		ToVisibility:   sqlNullString(visibility),
 		IP:             sqlNullString(getIP(r)),
 	})
-	http.Redirect(w, r, "/espai?notice="+urlQueryEscape(T(ResolveLang(r), "space.privacy.notice.tree_updated")), http.StatusSeeOther)
+	http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"notice": T(ResolveLang(r), "space.privacy.notice.tree_updated")}), http.StatusSeeOther)
+}
+
+func (a *App) EspaiPrivacyDeleteTree(w http.ResponseWriter, r *http.Request) {
+	user := userFromContext(r)
+	if user == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, T(ResolveLang(r), "error.csrf"), http.StatusBadRequest)
+		return
+	}
+	redirectBase := espaiRedirectTarget(r, "/espai")
+	treeID := parseFormInt(r.FormValue("tree_id"))
+	if treeID == 0 {
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": T(ResolveLang(r), "space.privacy.error.tree_not_found")}), http.StatusSeeOther)
+		return
+	}
+	tree, err := a.DB.GetEspaiArbre(treeID)
+	if err != nil || tree == nil || tree.OwnerUserID != user.ID {
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": T(ResolveLang(r), "space.privacy.error.tree_not_found")}), http.StatusSeeOther)
+		return
+	}
+
+	fontsToDelete := map[int]*db.EspaiFontImportacio{}
+	if imports, err := a.DB.ListEspaiImportsByArbre(treeID); err == nil {
+		for _, imp := range imports {
+			if !imp.FontID.Valid {
+				continue
+			}
+			fontID := int(imp.FontID.Int64)
+			if _, ok := fontsToDelete[fontID]; ok {
+				continue
+			}
+			font, err := a.DB.GetEspaiFontImportacio(fontID)
+			if err != nil || font == nil || font.OwnerUserID != user.ID {
+				continue
+			}
+			fontsToDelete[fontID] = font
+		}
+	}
+
+	if err := a.DB.DeleteEspaiArbre(user.ID, treeID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": T(ResolveLang(r), "space.privacy.error.tree_not_found")}), http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": err.Error()}), http.StatusSeeOther)
+		return
+	}
+	if err := a.DB.DeleteSearchDoc("espai_arbre", treeID); err != nil {
+		Errorf("SearchIndex espai arbre delete %d: %v", treeID, err)
+	}
+	cfg := a.gedcomConfig()
+	for _, font := range fontsToDelete {
+		if font.StoragePath.Valid {
+			if err := os.Remove(font.StoragePath.String); err != nil && !errors.Is(err, os.ErrNotExist) {
+				Errorf("GEDCOM delete file %s: %v", font.StoragePath.String, err)
+			}
+		}
+		if err := a.DB.DeleteEspaiFontImportacio(font.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			Errorf("GEDCOM delete font %d: %v", font.ID, err)
+		}
+	}
+	userDir := filepath.Join(cfg.Root, strconv.Itoa(user.ID))
+	if err := os.Remove(userDir); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if !strings.Contains(strings.ToLower(err.Error()), "directory not empty") {
+			Errorf("GEDCOM delete dir %s: %v", userDir, err)
+		}
+	}
+	_, _ = a.DB.CreateEspaiPrivacyAudit(&db.EspaiPrivacyAudit{
+		OwnerUserID: user.ID,
+		ArbreID:     treeID,
+		PersonaID:   sql.NullInt64{},
+		Action:      "tree_deleted",
+		IP:          sqlNullString(getIP(r)),
+	})
+	http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"notice": T(ResolveLang(r), "space.privacy.notice.tree_deleted")}), http.StatusSeeOther)
 }
 
 func (a *App) EspaiPrivacyUpdatePersona(w http.ResponseWriter, r *http.Request) {
@@ -257,19 +549,20 @@ func (a *App) EspaiPrivacyUpdatePersona(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, T(ResolveLang(r), "error.csrf"), http.StatusBadRequest)
 		return
 	}
+	redirectBase := espaiRedirectTarget(r, "/espai")
 	personaID := parseFormInt(r.FormValue("persona_id"))
 	visibility := strings.TrimSpace(r.FormValue("visibility"))
 	if personaID == 0 {
-		http.Redirect(w, r, "/espai?error="+urlQueryEscape(T(ResolveLang(r), "space.privacy.error.person_not_found")), http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": T(ResolveLang(r), "space.privacy.error.person_not_found")}), http.StatusSeeOther)
 		return
 	}
 	if !isValidPersonaVisibility(visibility) {
-		http.Redirect(w, r, "/espai?error="+urlQueryEscape(T(ResolveLang(r), "space.privacy.error.invalid_visibility")), http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": T(ResolveLang(r), "space.privacy.error.invalid_visibility")}), http.StatusSeeOther)
 		return
 	}
 	persona, err := a.DB.GetEspaiPersona(personaID)
 	if err != nil || persona == nil || persona.OwnerUserID != user.ID {
-		http.Redirect(w, r, "/espai?error="+urlQueryEscape(T(ResolveLang(r), "space.privacy.error.person_not_found")), http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": T(ResolveLang(r), "space.privacy.error.person_not_found")}), http.StatusSeeOther)
 		return
 	}
 	prev := strings.TrimSpace(persona.Visibility)
@@ -277,9 +570,10 @@ func (a *App) EspaiPrivacyUpdatePersona(w http.ResponseWriter, r *http.Request) 
 		prev = "visible"
 	}
 	if err := a.DB.UpdateEspaiPersonaVisibility(persona.ID, visibility); err != nil {
-		http.Redirect(w, r, "/espai?error="+urlQueryEscape(err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": err.Error()}), http.StatusSeeOther)
 		return
 	}
+	_ = a.upsertSearchDocForEspaiPersonaID(persona.ID)
 	_, _ = a.DB.CreateEspaiPrivacyAudit(&db.EspaiPrivacyAudit{
 		OwnerUserID:    user.ID,
 		ArbreID:        persona.ArbreID,
@@ -289,7 +583,7 @@ func (a *App) EspaiPrivacyUpdatePersona(w http.ResponseWriter, r *http.Request) 
 		ToVisibility:   sqlNullString(visibility),
 		IP:             sqlNullString(getIP(r)),
 	})
-	http.Redirect(w, r, "/espai?notice="+urlQueryEscape(T(ResolveLang(r), "space.privacy.notice.person_updated")), http.StatusSeeOther)
+	http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"notice": T(ResolveLang(r), "space.privacy.notice.person_updated")}), http.StatusSeeOther)
 }
 
 func (a *App) EspaiPublicArbrePage(w http.ResponseWriter, r *http.Request) {
@@ -527,6 +821,17 @@ func isValidTreeVisibility(val string) bool {
 	default:
 		return false
 	}
+}
+
+func espaiRedirectTarget(r *http.Request, fallback string) string {
+	next := strings.TrimSpace(r.FormValue("next"))
+	if next == "" {
+		return fallback
+	}
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		return fallback
+	}
+	return next
 }
 
 func isValidPersonaVisibility(val string) bool {

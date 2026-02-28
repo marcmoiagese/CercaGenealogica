@@ -61,6 +61,10 @@ func (a *App) hasSearchableData() (bool, error) {
 	if err == nil && len(rows) > 0 {
 		return true, nil
 	}
+	rows, err = a.DB.Query("SELECT 1 AS one FROM espai_persones WHERE status = 'active' AND visibility = 'visible' LIMIT 1")
+	if err == nil && len(rows) > 0 {
+		return true, nil
+	}
 	if err != nil {
 		return false, err
 	}
@@ -76,6 +80,9 @@ func (a *App) RebuildSearchIndex(scope SearchIndexScope) error {
 		return err
 	}
 	if err := a.rebuildSearchIndexForPersones(); err != nil {
+		return err
+	}
+	if err := a.rebuildSearchIndexForEspaiPersones(); err != nil {
 		return err
 	}
 	return a.rebuildSearchIndexForEspaiArbres()
@@ -120,6 +127,23 @@ func (a *App) rebuildSearchIndexForEspaiArbres() error {
 	return nil
 }
 
+func (a *App) rebuildSearchIndexForEspaiPersones() error {
+	rows, err := a.DB.Query("SELECT id FROM espai_persones")
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		id := rowInt(row, "id")
+		if id <= 0 {
+			continue
+		}
+		if err := a.upsertSearchDocForEspaiPersonaID(id); err != nil {
+			Errorf("SearchIndex espai persona %d: %v", id, err)
+		}
+	}
+	return nil
+}
+
 func (a *App) upsertSearchDocForPersonaID(personaID int) error {
 	if personaID <= 0 {
 		return nil
@@ -132,6 +156,37 @@ func (a *App) upsertSearchDocForPersonaID(personaID int) error {
 		return a.DB.DeleteSearchDoc("persona", personaID)
 	}
 	doc := a.buildSearchDocFromPersona(persona)
+	return a.DB.UpsertSearchDoc(doc)
+}
+
+func (a *App) upsertSearchDocForEspaiPersonaID(personaID int) error {
+	if personaID <= 0 {
+		return nil
+	}
+	persona, err := a.DB.GetEspaiPersona(personaID)
+	if err != nil || persona == nil {
+		return err
+	}
+	status := strings.TrimSpace(persona.Status)
+	if status != "" && status != "active" {
+		return a.DB.DeleteSearchDoc("espai_persona", personaID)
+	}
+	visibility := strings.TrimSpace(persona.Visibility)
+	if visibility == "" {
+		visibility = "visible"
+	}
+	if visibility != "visible" {
+		return a.DB.DeleteSearchDoc("espai_persona", personaID)
+	}
+	tree, err := a.DB.GetEspaiArbre(persona.ArbreID)
+	if err != nil || tree == nil {
+		return a.DB.DeleteSearchDoc("espai_persona", personaID)
+	}
+	treeStatus := strings.TrimSpace(tree.Status)
+	if treeStatus != "" && treeStatus != "active" {
+		return a.DB.DeleteSearchDoc("espai_persona", personaID)
+	}
+	doc := a.buildSearchDocFromEspaiPersona(persona)
 	return a.DB.UpsertSearchDoc(doc)
 }
 
@@ -183,6 +238,35 @@ func (a *App) buildSearchDocFromPersona(p *db.Persona) *db.SearchDoc {
 	cognomTokens := normalizeTokens(cognoms...)
 	return &db.SearchDoc{
 		EntityType:        "persona",
+		EntityID:          p.ID,
+		Published:         true,
+		PersonNomNorm:     nomNorm,
+		PersonCognomsNorm: cognomsNorm,
+		PersonFullNorm:    fullNorm,
+		PersonTokensNorm:  strings.Join(personTokens, " "),
+		CognomsTokensNorm: strings.Join(cognomTokens, " "),
+		PersonPhonetic:    strings.Join(phoneticTokens(personTokens), " "),
+		CognomsPhonetic:   strings.Join(phoneticTokens(cognomTokens), " "),
+		CognomsCanon:      strings.Join(a.canonicalizeCognoms(cognoms), " "),
+	}
+}
+
+func (a *App) buildSearchDocFromEspaiPersona(p *db.EspaiPersona) *db.SearchDoc {
+	nom := strings.TrimSpace(p.Nom.String)
+	cognoms := compactStrings([]string{p.Cognom1.String, p.Cognom2.String})
+	if nom == "" && len(cognoms) == 0 {
+		nom = strings.TrimSpace(p.NomComplet.String)
+	}
+	nomNorm := normalizeSearchText(nom)
+	cognomsNorm := normalizeSearchText(strings.Join(cognoms, " "))
+	fullNorm := strings.TrimSpace(strings.Join([]string{nomNorm, cognomsNorm}, " "))
+	if fullNorm == "" {
+		fullNorm = nomNorm
+	}
+	personTokens := normalizeTokens(append([]string{nom}, cognoms...)...)
+	cognomTokens := normalizeTokens(cognoms...)
+	return &db.SearchDoc{
+		EntityType:        "espai_persona",
 		EntityID:          p.ID,
 		Published:         true,
 		PersonNomNorm:     nomNorm,

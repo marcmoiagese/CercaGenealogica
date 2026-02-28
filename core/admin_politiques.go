@@ -83,6 +83,13 @@ func guiGrantGroups() []policyGuiGrantGroup {
 				permKeyTerritoriEclesView,
 			},
 		},
+		{
+			TitleKey: "policies.gui.modular.group.admin_external",
+			Keys: []string{
+				permKeyAdminExternalSitesManage,
+				permKeyAdminExternalLinksModerate,
+			},
+		},
 	}
 }
 

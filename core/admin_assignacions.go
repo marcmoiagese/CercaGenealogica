@@ -61,6 +61,14 @@ func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request
 	if groupID > 0 {
 		groupPols, _ = a.DB.ListGroupPolitiques(groupID)
 	}
+	var userGroups []db.Group
+	if userID > 0 {
+		userGroups, _ = a.DB.ListUserGroups(userID)
+	}
+	var groupMembers []db.UserAdminRow
+	if groupID > 0 {
+		groupMembers, _ = a.DB.ListGroupMembers(groupID)
+	}
 	var selectedUser *adminUserRowView
 	if userID > 0 {
 		for _, row := range users {
@@ -130,6 +138,8 @@ func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request
 		"GroupID":           groupID,
 		"UserPols":          userPols,
 		"GroupPols":         groupPols,
+		"UserGroups":        userGroups,
+		"GroupMembers":      groupMembers,
 		"SelectedUser":      selectedUser,
 		"UserQuery":         userQuery,
 		"UserPage":          userPage,
@@ -149,6 +159,75 @@ func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request
 		"CanManagePolicies": true,
 		"User":              user,
 	})
+}
+
+func (a *App) AdminCreateGroup(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	_ = r.ParseForm()
+	name := strings.TrimSpace(r.FormValue("name"))
+	desc := strings.TrimSpace(r.FormValue("description"))
+	if name == "" {
+		http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), "/admin/politiques/assignacions"), http.StatusSeeOther)
+		return
+	}
+	groupID, err := a.DB.CreateGroup(name, desc)
+	if err != nil {
+		http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), "/admin/politiques/assignacions"), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?group_id=%d", groupID)), http.StatusSeeOther)
+}
+
+func (a *App) AdminAssignarUsuariGrup(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	_ = r.ParseForm()
+	userID, _ := strconv.Atoi(r.FormValue("user_id"))
+	groupID, _ := strconv.Atoi(r.FormValue("group_id"))
+	if userID > 0 && groupID > 0 {
+		_ = a.DB.AddUserGroup(userID, groupID)
+	}
+	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?user_id=%d", userID)), http.StatusSeeOther)
+}
+
+func (a *App) AdminTreureUsuariGrup(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
+	_ = r.ParseForm()
+	userID, _ := strconv.Atoi(r.FormValue("user_id"))
+	groupID, _ := strconv.Atoi(r.FormValue("group_id"))
+	if userID > 0 && groupID > 0 {
+		_ = a.DB.RemoveUserGroup(userID, groupID)
+	}
+	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?user_id=%d", userID)), http.StatusSeeOther)
 }
 
 func (a *App) AdminAssignarPoliticaUsuari(w http.ResponseWriter, r *http.Request) {

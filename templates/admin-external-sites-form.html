@@ -1,0 +1,72 @@
+{{ define "admin-external-sites-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ if .Data.IsNew }}{{ t .Lang "admin.external_sites.form.new" }}{{ else }}{{ t .Lang "admin.external_sites.form.edit" }}{{ end }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ if .Data.IsNew }}{{ t .Lang "admin.external_sites.form.new" }}{{ else }}{{ t .Lang "admin.external_sites.form.edit" }}{{ end }}</h1>
+            </header>
+            {{ if .Data.Error }}<div class="alerta alerta-error">{{ .Data.Error }}</div>{{ end }}
+            <form method="post" action="{{ if .Data.IsNew }}/admin/external-sites{{ else }}/admin/external-sites/{{ .Data.Site.ID }}{{ end }}">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <div class="grup-camp">
+                    <label for="ext-name">{{ t .Lang "admin.external_sites.form.name" }}</label>
+                    <input type="text" id="ext-name" name="name" value="{{ .Data.Site.Name }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="ext-slug">{{ t .Lang "admin.external_sites.form.slug" }}</label>
+                    <input type="text" id="ext-slug" name="slug" value="{{ .Data.Site.Slug }}" placeholder="geneanet">
+                    <small class="camp-helper">{{ t .Lang "admin.external_sites.form.slug_helper" }}</small>
+                </div>
+                <div class="grup-camp">
+                    <label for="ext-domains">{{ t .Lang "admin.external_sites.form.domains" }}</label>
+                    <textarea id="ext-domains" name="domains" rows="4" placeholder="geneanet.org">{{ .Data.DomainsInput }}</textarea>
+                    <small class="camp-helper">{{ t .Lang "admin.external_sites.form.domains_helper" }}</small>
+                </div>
+                <div class="grup-camp">
+                    <label for="ext-access">{{ t .Lang "admin.external_sites.form.access" }}</label>
+                    <select id="ext-access" name="access_mode" required>
+                        {{ range .Data.AccessModes }}
+                        <option value="{{ . }}" {{ if eq $.Data.Site.AccessMode . }}selected{{ end }}>{{ t $.Lang (printf "persons.external.access.%s" .) }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="ext-icon">{{ t .Lang "admin.external_sites.form.icon" }}</label>
+                    <input type="text" id="ext-icon" name="icon_path" list="external-icons" value="{{ .Data.IconInput }}" placeholder="geneanet.svg">
+                    <datalist id="external-icons">
+                        {{ range .Data.IconOptions }}
+                        <option value="{{ . }}"></option>
+                        {{ end }}
+                    </datalist>
+                    <small class="camp-helper">{{ t .Lang "admin.external_sites.form.icon_helper" }}</small>
+                    <div style="margin-top:8px">
+                        <img src="{{ .Data.IconPreview }}" alt="" style="width:36px;height:36px;object-fit:contain;">
+                    </div>
+                </div>
+                <div class="grup-camp">
+                    <label class="checkbox-linia">
+                        <input type="checkbox" name="is_active" value="1" {{ if .Data.Site.IsActive }}checked{{ end }}>
+                        <span>{{ t .Lang "admin.external_sites.form.active" }}</span>
+                    </label>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">{{ t .Lang "common.save" }}</button>
+                    <a class="boto-secundari" href="/admin/external-sites">{{ t .Lang "common.back" }}</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

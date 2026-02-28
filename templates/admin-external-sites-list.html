@@ -1,0 +1,75 @@
+{{ define "admin-external-sites-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.external_sites.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "admin.external_sites.kicker" }}</p>
+                    <h1>{{ t .Lang "admin.external_sites.title" }}</h1>
+                    <p class="card-subtitle">{{ t .Lang "admin.external_sites.desc" }}</p>
+                </div>
+                <div class="card-actions">
+                    <a href="/admin/external-sites/new" class="boto-primari">
+                        <i class="fas fa-plus"></i> <span>{{ t .Lang "admin.external_sites.new" }}</span>
+                    </a>
+                </div>
+            </header>
+            {{ if .Data.Msg }}
+            <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
+            {{ end }}
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "admin.external_sites.col.icon" }}</th>
+                            <th>{{ t .Lang "admin.external_sites.col.name" }}</th>
+                            <th>{{ t .Lang "admin.external_sites.col.slug" }}</th>
+                            <th>{{ t .Lang "admin.external_sites.col.domains" }}</th>
+                            <th>{{ t .Lang "admin.external_sites.col.access" }}</th>
+                            <th>{{ t .Lang "admin.external_sites.col.status" }}</th>
+                            <th>{{ t .Lang "common.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Sites }}
+                        <tr>
+                            <td>
+                                <img src="{{ .IconURL }}" alt="" style="width:28px;height:28px;object-fit:contain;">
+                            </td>
+                            <td>{{ .Site.Name }}</td>
+                            <td>{{ .Site.Slug }}</td>
+                            <td>{{ .DomainsDisplay }}</td>
+                            <td>{{ t $.Lang (printf "persons.external.access.%s" .Site.AccessMode) }}</td>
+                            <td>{{ if .Site.IsActive }}{{ t $.Lang "common.active" }}{{ else }}{{ t $.Lang "common.inactive" }}{{ end }}</td>
+                            <td>
+                                <a href="/admin/external-sites/{{ .Site.ID }}/edit">{{ t $.Lang "common.edit" }}</a>
+                                <form method="post" action="/admin/external-sites/{{ .Site.ID }}/toggle" style="display:inline-block;margin-left:12px">
+                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                    <button type="submit" class="boto-secundari pequeno">{{ if .Site.IsActive }}{{ t $.Lang "admin.external_sites.action.deactivate" }}{{ else }}{{ t $.Lang "admin.external_sites.action.activate" }}{{ end }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr>
+                            <td colspan="7">{{ t .Lang "common.empty" }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

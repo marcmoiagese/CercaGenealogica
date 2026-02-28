@@ -175,9 +175,10 @@ func (a *App) EspaiGedcomUpload(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, target, http.StatusSeeOther)
 		return
 	}
+	lang := ResolveLang(r)
 	target := "/espai/gedcom"
 	if importRec != nil {
-		target = fmt.Sprintf("/espai/gedcom?import_id=%d", importRec.ID)
+		target = fmt.Sprintf("/espai/gedcom?import_id=%d&notice=%s", importRec.ID, urlQueryEscape(T(lang, "space.gedcom.notice.queued")))
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }
@@ -206,7 +207,85 @@ func (a *App) EspaiGedcomReimport(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/espai/gedcom?error="+urlQueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/espai/gedcom?import_id=%d", importRec.ID), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/espai/gedcom?import_id=%d&notice=%s", importRec.ID, urlQueryEscape(T(ResolveLang(r), "space.gedcom.notice.queued"))), http.StatusSeeOther)
+}
+
+func (a *App) EspaiGedcomTreeReimport(w http.ResponseWriter, r *http.Request) {
+	user := userFromContext(r)
+	if user == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, T(ResolveLang(r), "error.csrf"), http.StatusBadRequest)
+		return
+	}
+	lang := ResolveLang(r)
+	redirectBase := espaiRedirectTarget(r, "/espai/arbres")
+	treeID := parseFormInt(r.FormValue("tree_id"))
+	if treeID == 0 {
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": T(lang, "space.privacy.error.tree_not_found")}), http.StatusSeeOther)
+		return
+	}
+	tree, err := a.DB.GetEspaiArbre(treeID)
+	if err != nil || tree == nil || tree.OwnerUserID != user.ID {
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": T(lang, "space.privacy.error.tree_not_found")}), http.StatusSeeOther)
+		return
+	}
+	imports, err := a.DB.ListEspaiImportsByArbre(treeID)
+	if err != nil {
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": err.Error()}), http.StatusSeeOther)
+		return
+	}
+	var latestImport *db.EspaiImport
+	for i := range imports {
+		if strings.TrimSpace(imports[i].ImportType) != "gedcom" {
+			continue
+		}
+		if !imports[i].FontID.Valid {
+			continue
+		}
+		latestImport = &imports[i]
+		break
+	}
+	if latestImport == nil {
+		if err := a.cleanupEspaiTreeGEDCOM(user.ID, treeID, imports); err != nil {
+			http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": err.Error()}), http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"notice": T(lang, "space.trees.notice.file_missing")}), http.StatusSeeOther)
+		return
+	}
+	font, err := a.DB.GetEspaiFontImportacio(int(latestImport.FontID.Int64))
+	if err != nil || font == nil || font.OwnerUserID != user.ID || !font.StoragePath.Valid {
+		if err := a.cleanupEspaiTreeGEDCOM(user.ID, treeID, imports); err != nil {
+			http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": err.Error()}), http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"notice": T(lang, "space.trees.notice.file_missing")}), http.StatusSeeOther)
+		return
+	}
+	if _, err := os.Stat(font.StoragePath.String); err != nil {
+		if err := a.cleanupEspaiTreeGEDCOM(user.ID, treeID, imports); err != nil {
+			http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": err.Error()}), http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"notice": T(lang, "space.trees.notice.file_missing")}), http.StatusSeeOther)
+		return
+	}
+	if err := a.DB.ClearEspaiTreeData(treeID); err != nil {
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": err.Error()}), http.StatusSeeOther)
+		return
+	}
+	if _, err := a.reimportGedcomFont(user.ID, latestImport.ID, lang); err != nil {
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": err.Error()}), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"notice": T(lang, "space.trees.notice.reimport_queued")}), http.StatusSeeOther)
 }
 
 func (a *App) EspaiGedcomImportsAPI(w http.ResponseWriter, r *http.Request) {
@@ -245,6 +324,9 @@ func (a *App) EspaiGedcomImportsAPI(w http.ResponseWriter, r *http.Request) {
 		if importRec != nil {
 			payload["id"] = importRec.ID
 			payload["status"] = importRec.Status
+			if notice == "" {
+				payload["notice"] = T(ResolveLang(r), "space.gedcom.notice.queued")
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(payload)
@@ -308,6 +390,35 @@ func (a *App) EspaiGedcomImportDetailAPI(w http.ResponseWriter, r *http.Request)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func (a *App) EspaiGedcomTreeUpdate(w http.ResponseWriter, r *http.Request) {
+	user := userFromContext(r)
+	if user == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, T(ResolveLang(r), "error.csrf"), http.StatusBadRequest)
+		return
+	}
+	redirectBase := espaiRedirectTarget(r, "/espai/arbres")
+	importRec, notice, err := a.handleGedcomUpdate(w, r, user.ID)
+	if err != nil {
+		http.Redirect(w, r, withQueryParams(redirectBase, map[string]string{"error": err.Error()}), http.StatusSeeOther)
+		return
+	}
+	params := map[string]string{}
+	if notice != "" {
+		params["notice"] = notice
+	} else if importRec != nil {
+		params["notice"] = T(ResolveLang(r), "space.gedcom.notice.queued")
+	}
+	http.Redirect(w, r, withQueryParams(redirectBase, params), http.StatusSeeOther)
 }
 
 func (a *App) handleGedcomUpload(w http.ResponseWriter, r *http.Request, ownerID int) (*db.EspaiImport, string, error) {
@@ -378,11 +489,24 @@ func (a *App) handleGedcomUpload(w http.ResponseWriter, r *http.Request, ownerID
 	checksum := hex.EncodeToString(hasher.Sum(nil))
 
 	if existing, err := a.DB.GetEspaiFontImportacioByChecksum(ownerID, checksum); err == nil && existing != nil {
-		_ = os.Remove(targetPath)
-		if imp, err := a.DB.GetLatestEspaiImportByFont(ownerID, existing.ID); err == nil && imp != nil {
-			return imp, T(ResolveLang(r), "space.gedcom.notice.duplicate"), nil
+		stale := false
+		if !existing.StoragePath.Valid || strings.TrimSpace(existing.StoragePath.String) == "" {
+			stale = true
+		} else if _, err := os.Stat(existing.StoragePath.String); err != nil {
+			stale = true
 		}
-		return nil, T(ResolveLang(r), "space.gedcom.notice.duplicate"), nil
+		if stale {
+			if err := a.DB.DeleteEspaiFontImportacio(existing.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+				_ = os.Remove(targetPath)
+				return nil, "", err
+			}
+		} else {
+			_ = os.Remove(targetPath)
+			if imp, err := a.DB.GetLatestEspaiImportByFont(ownerID, existing.ID); err == nil && imp != nil {
+				return imp, T(ResolveLang(r), "space.gedcom.notice.duplicate"), nil
+			}
+			return nil, T(ResolveLang(r), "space.gedcom.notice.duplicate"), nil
+		}
 	}
 
 	font := &db.EspaiFontImportacio{
@@ -403,15 +527,152 @@ func (a *App) handleGedcomUpload(w http.ResponseWriter, r *http.Request, ownerID
 		ArbreID:     tree.ID,
 		FontID:      sql.NullInt64{Int64: int64(font.ID), Valid: true},
 		ImportType:  "gedcom",
+		ImportMode:  "full",
 		Status:      "queued",
 	}
 	if _, err := a.DB.CreateEspaiImport(importRec); err != nil {
 		return nil, "", err
 	}
 
-	if err := a.processGedcomImport(importRec, targetPath); err != nil {
-		_ = a.DB.UpdateEspaiImportStatus(importRec.ID, "error", err.Error(), "")
-		return importRec, "", err
+	return importRec, "", nil
+}
+
+func (a *App) handleGedcomUpdate(w http.ResponseWriter, r *http.Request, ownerID int) (*db.EspaiImport, string, error) {
+	cfg := a.gedcomConfig()
+	r.Body = http.MaxBytesReader(w, r.Body, cfg.MaxUploadBytes)
+	if err := r.ParseMultipartForm(cfg.MaxUploadBytes); err != nil {
+		return nil, "", errors.New(T(ResolveLang(r), "space.gedcom.error.too_large"))
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		return nil, "", errors.New(T(ResolveLang(r), "space.gedcom.error.missing_file"))
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if ext != ".ged" && ext != ".gedcom" {
+		return nil, "", errors.New(T(ResolveLang(r), "space.gedcom.error.invalid_ext"))
+	}
+
+	treeID := parseFormInt(r.FormValue("tree_id"))
+	if treeID == 0 {
+		return nil, "", errors.New(T(ResolveLang(r), "space.privacy.error.tree_not_found"))
+	}
+	tree, err := a.DB.GetEspaiArbre(treeID)
+	if err != nil || tree == nil || tree.OwnerUserID != ownerID {
+		return nil, "", errors.New(T(ResolveLang(r), "space.privacy.error.tree_not_found"))
+	}
+
+	imports, err := a.DB.ListEspaiImportsByArbre(treeID)
+	if err != nil {
+		return nil, "", err
+	}
+	var latestImport *db.EspaiImport
+	for i := range imports {
+		if strings.TrimSpace(imports[i].ImportType) != "gedcom" {
+			continue
+		}
+		if !imports[i].FontID.Valid {
+			continue
+		}
+		if latestImport == nil {
+			latestImport = &imports[i]
+			continue
+		}
+		if imports[i].CreatedAt.Valid && (!latestImport.CreatedAt.Valid || imports[i].CreatedAt.Time.After(latestImport.CreatedAt.Time)) {
+			latestImport = &imports[i]
+		}
+	}
+
+	safeName := sanitizeFilename(header.Filename)
+	if safeName == "" {
+		safeName = "gedcom.ged"
+	}
+	userDir := filepath.Join(cfg.Root, fmt.Sprintf("%d", ownerID))
+	if err := os.MkdirAll(userDir, 0o755); err != nil {
+		return nil, "", err
+	}
+	targetPath := filepath.Join(userDir, fmt.Sprintf("%d_%s", time.Now().UnixNano(), safeName))
+	out, err := os.Create(targetPath)
+	if err != nil {
+		return nil, "", err
+	}
+	defer out.Close()
+
+	hasher := sha256.New()
+	writer := io.MultiWriter(out, hasher)
+	size, err := io.Copy(writer, file)
+	if err != nil {
+		_ = os.Remove(targetPath)
+		return nil, "", err
+	}
+	checksum := hex.EncodeToString(hasher.Sum(nil))
+
+	var font *db.EspaiFontImportacio
+	if latestImport != nil && latestImport.FontID.Valid {
+		font, _ = a.DB.GetEspaiFontImportacio(int(latestImport.FontID.Int64))
+		if font != nil && font.OwnerUserID != ownerID {
+			font = nil
+		}
+	}
+
+	fontMissing := false
+	if font != nil {
+		if !font.StoragePath.Valid || strings.TrimSpace(font.StoragePath.String) == "" {
+			fontMissing = true
+		} else if _, err := os.Stat(font.StoragePath.String); err != nil {
+			fontMissing = true
+		}
+	}
+	if font != nil && !fontMissing && font.ChecksumSHA256.Valid && strings.TrimSpace(font.ChecksumSHA256.String) == checksum {
+		_ = os.Remove(targetPath)
+		targetPath = ""
+	}
+
+	if font != nil {
+		oldPath := ""
+		if font.StoragePath.Valid {
+			oldPath = font.StoragePath.String
+		}
+		if targetPath != "" {
+			font.OriginalFilename = sqlNullString(header.Filename)
+			font.StoragePath = sqlNullString(targetPath)
+			font.ChecksumSHA256 = sqlNullString(checksum)
+			font.SizeBytes = sql.NullInt64{Int64: size, Valid: size > 0}
+			if err := a.DB.UpdateEspaiFontImportacio(font); err != nil {
+				_ = os.Remove(targetPath)
+				return nil, "", err
+			}
+			if oldPath != "" && oldPath != targetPath {
+				_ = os.Remove(oldPath)
+			}
+		}
+	} else {
+		font = &db.EspaiFontImportacio{
+			OwnerUserID:      ownerID,
+			SourceType:       "gedcom",
+			OriginalFilename: sqlNullString(header.Filename),
+			StoragePath:      sqlNullString(targetPath),
+			ChecksumSHA256:   sqlNullString(checksum),
+			SizeBytes:        sql.NullInt64{Int64: size, Valid: size > 0},
+		}
+		if _, err := a.DB.CreateEspaiFontImportacio(font); err != nil {
+			_ = os.Remove(targetPath)
+			return nil, "", err
+		}
+	}
+
+	importRec := &db.EspaiImport{
+		OwnerUserID: ownerID,
+		ArbreID:     tree.ID,
+		FontID:      sql.NullInt64{Int64: int64(font.ID), Valid: true},
+		ImportType:  "gedcom",
+		ImportMode:  "merge",
+		Status:      "queued",
+	}
+	if _, err := a.DB.CreateEspaiImport(importRec); err != nil {
+		return nil, "", err
 	}
 
 	return importRec, "", nil
@@ -437,14 +698,11 @@ func (a *App) reimportGedcomFont(ownerID, importID int, lang string) (*db.EspaiI
 		ArbreID:     imp.ArbreID,
 		FontID:      imp.FontID,
 		ImportType:  "gedcom",
+		ImportMode:  "full",
 		Status:      "queued",
 	}
 	if _, err := a.DB.CreateEspaiImport(importRec); err != nil {
 		return nil, err
-	}
-	if err := a.processGedcomImport(importRec, font.StoragePath.String); err != nil {
-		_ = a.DB.UpdateEspaiImportStatus(importRec.ID, "error", err.Error(), "")
-		return importRec, err
 	}
 	return importRec, nil
 }
@@ -482,6 +740,7 @@ func (a *App) processGedcomImport(importRec *db.EspaiImport, path string) error 
 			continue
 		}
 		personIDs[p.ID] = person.ID
+		_ = a.upsertSearchDocForEspaiPersonaID(person.ID)
 	}
 
 	_ = a.DB.UpdateEspaiImportStatus(importRec.ID, "persisted", "", "")
@@ -558,6 +817,187 @@ func (a *App) processGedcomImport(importRec *db.EspaiImport, path string) error 
 	return nil
 }
 
+func (a *App) processGedcomImportMerge(importRec *db.EspaiImport, path string) error {
+	if importRec == nil {
+		return fmt.Errorf("import record missing")
+	}
+	_ = a.DB.UpdateEspaiImportStatus(importRec.ID, "parsing", "", "")
+	parseResult, err := parseGEDCOMFile(path)
+	if err != nil {
+		return err
+	}
+	_ = a.DB.UpdateEspaiImportStatus(importRec.ID, "normalizing", "", "")
+
+	existing, _ := a.DB.ListEspaiPersonesByArbre(importRec.ArbreID)
+	byExternal := map[string]*db.EspaiPersona{}
+	for i := range existing {
+		ext := strings.TrimSpace(existing[i].ExternalID.String)
+		if ext != "" {
+			byExternal[ext] = &existing[i]
+		}
+	}
+	personIDs := map[string]int{}
+	warnings := append([]string{}, parseResult.Warnings...)
+
+	mergeNull := func(dst *sql.NullString, val string) bool {
+		val = strings.TrimSpace(val)
+		if val == "" {
+			return false
+		}
+		if !dst.Valid || strings.TrimSpace(dst.String) != val {
+			*dst = sql.NullString{String: val, Valid: true}
+			return true
+		}
+		return false
+	}
+
+	for _, p := range parseResult.Persons {
+		extID := strings.TrimSpace(p.ID)
+		if extID == "" {
+			continue
+		}
+		if existing := byExternal[extID]; existing != nil {
+			changed := false
+			if mergeNull(&existing.Nom, p.GivenName) {
+				changed = true
+			}
+			if mergeNull(&existing.Cognom1, p.Surname) {
+				changed = true
+			}
+			if mergeNull(&existing.NomComplet, p.FullName) {
+				changed = true
+			}
+			if mergeNull(&existing.Sexe, p.Sex) {
+				changed = true
+			}
+			if mergeNull(&existing.DataNaixement, p.BirthDate) {
+				changed = true
+			}
+			if mergeNull(&existing.DataDefuncio, p.DeathDate) {
+				changed = true
+			}
+			if changed {
+				_ = a.DB.UpdateEspaiPersona(existing)
+			}
+			personIDs[extID] = existing.ID
+			_ = a.upsertSearchDocForEspaiPersonaID(existing.ID)
+			continue
+		}
+		person := &db.EspaiPersona{
+			OwnerUserID:   importRec.OwnerUserID,
+			ArbreID:       importRec.ArbreID,
+			ExternalID:    sqlNullString(extID),
+			Nom:           sqlNullString(p.GivenName),
+			Cognom1:       sqlNullString(p.Surname),
+			NomComplet:    sqlNullString(p.FullName),
+			Sexe:          sqlNullString(p.Sex),
+			DataNaixement: sqlNullString(p.BirthDate),
+			DataDefuncio:  sqlNullString(p.DeathDate),
+			Status:        "active",
+		}
+		if _, err := a.DB.CreateEspaiPersona(person); err != nil {
+			warnings = appendWarning(warnings, fmt.Sprintf("No s'ha pogut crear persona %s", extID))
+			continue
+		}
+		personIDs[extID] = person.ID
+		_ = a.upsertSearchDocForEspaiPersonaID(person.ID)
+	}
+
+	relationsCount := 0
+	relations, _ := a.DB.ListEspaiRelacionsByArbre(importRec.ArbreID)
+	relSet := map[string]struct{}{}
+	for _, rel := range relations {
+		key := fmt.Sprintf("%d:%d:%s", rel.PersonaID, rel.RelatedPersonaID, rel.RelationType)
+		relSet[key] = struct{}{}
+	}
+	for _, fam := range parseResult.Families {
+		husbID := personIDs[fam.Husband]
+		wifeID := personIDs[fam.Wife]
+		if husbID > 0 && wifeID > 0 {
+			relationsCount += a.createEspaiRelationIfMissing(relSet, importRec.ArbreID, husbID, wifeID, "spouse")
+			relationsCount += a.createEspaiRelationIfMissing(relSet, importRec.ArbreID, wifeID, husbID, "spouse")
+		}
+		for _, child := range fam.Children {
+			childID := personIDs[child]
+			if childID == 0 {
+				continue
+			}
+			if husbID > 0 {
+				relationsCount += a.createEspaiRelationIfMissing(relSet, importRec.ArbreID, childID, husbID, "father")
+			}
+			if wifeID > 0 {
+				relationsCount += a.createEspaiRelationIfMissing(relSet, importRec.ArbreID, childID, wifeID, "mother")
+			}
+		}
+	}
+
+	summary := gedcomImportSummary{
+		Persons:       len(parseResult.Persons),
+		Families:      len(parseResult.Families),
+		Relations:     relationsCount,
+		Warnings:      warnings,
+		WarningsTotal: len(warnings),
+		Errors:        parseResult.Errors,
+		ErrorsTotal:   len(parseResult.Errors),
+	}
+	summaryJSON := ""
+	if b, err := json.Marshal(summary); err == nil {
+		summaryJSON = string(b)
+	}
+	_ = a.DB.UpdateEspaiImportProgress(importRec.ID, summary.Persons+summary.Relations, summary.Persons+summary.Relations)
+	if err := a.DB.UpdateEspaiImportStatus(importRec.ID, "done", "", summaryJSON); err != nil {
+		return err
+	}
+	if _, err := a.rebuildEspaiCoincidenciesForArbre(importRec.OwnerUserID, importRec.ArbreID); err != nil {
+		Errorf("Espai coincidencies rebuild arbre %d: %v", importRec.ArbreID, err)
+	}
+	return nil
+}
+
+func (a *App) cleanupEspaiTreeGEDCOM(ownerID, treeID int, imports []db.EspaiImport) error {
+	if err := a.DB.ClearEspaiTreeData(treeID); err != nil {
+		return err
+	}
+	fontIDs := map[int]struct{}{}
+	for _, imp := range imports {
+		if strings.TrimSpace(imp.ImportType) != "gedcom" {
+			continue
+		}
+		if !imp.FontID.Valid {
+			continue
+		}
+		fontIDs[int(imp.FontID.Int64)] = struct{}{}
+	}
+	if err := a.DB.DeleteEspaiImportsByArbre(treeID); err != nil {
+		return err
+	}
+	for fontID := range fontIDs {
+		count, err := a.DB.CountEspaiImportsByFont(fontID)
+		if err != nil {
+			return err
+		}
+		if count > 0 {
+			continue
+		}
+		font, err := a.DB.GetEspaiFontImportacio(fontID)
+		if err != nil || font == nil {
+			continue
+		}
+		if font.OwnerUserID != ownerID {
+			continue
+		}
+		if font.StoragePath.Valid {
+			if err := os.Remove(font.StoragePath.String); err != nil && !errors.Is(err, os.ErrNotExist) {
+				Errorf("GEDCOM delete file %s: %v", font.StoragePath.String, err)
+			}
+		}
+		if err := a.DB.DeleteEspaiFontImportacio(font.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+	}
+	return nil
+}
+
 func parseGEDCOMFile(path string) (*gedcomParseResult, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -580,9 +1020,12 @@ func parseGEDCOMFile(path string) (*gedcomParseResult, error) {
 		if line == "" {
 			continue
 		}
-		if lineNum == 1 && !strings.HasPrefix(line, "0 HEAD") {
-			result.Errors = append(result.Errors, "Missing GEDCOM header")
-			return result, fmt.Errorf("invalid GEDCOM header")
+		if lineNum == 1 {
+			line = strings.TrimPrefix(line, "\uFEFF")
+			if !strings.HasPrefix(line, "0 HEAD") {
+				result.Errors = append(result.Errors, "Missing GEDCOM header")
+				return result, fmt.Errorf("invalid GEDCOM header")
+			}
 		}
 		if strings.HasPrefix(line, "0 ") {
 			if currentPerson != nil {

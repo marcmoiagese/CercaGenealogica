@@ -6,17 +6,19 @@
     <title>{{ t .Lang "space.title" }} - {{ t .Lang "app.title" }}</title>
     {{ template "styles-private" . }}
     <link rel="stylesheet" href="/static/css/espai-personal.css">
+    <link rel="stylesheet" href="/static/css/registres-taula.css">
 </head>
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
 
-    <main class="contingut-principal">
-        {{ $section := default (index .Data "SpaceSection") "overview" }}
-        {{ $state := default (index .Data "SpaceState") "empty" }}
-        {{ $sectionLabel := t .Lang (printf "space.nav.%s" $section) }}
+    {{ $section := default (index .Data "SpaceSection") "overview" }}
+    {{ $state := default (index .Data "SpaceState") "empty" }}
+    {{ $sectionLabel := t .Lang (printf "space.nav.%s" $section) }}
 
-        <section class="espai-shell">
+    <main class="contingut-principal {{ if eq $section "persones_importades" }}indexer-wide{{ end }}">
+
+        <section class="espai-shell {{ if eq $section "persones_importades" }}espai-shell--full{{ end }}">
             <aside class="espai-sidebar">
                 <div class="espai-sidebar__header">
                     <div>
@@ -29,6 +31,14 @@
                     <a href="/espai" class="espai-nav__link {{ if eq $section "overview" }}is-active{{ end }}">
                         <i class="fas fa-compass"></i>
                         <span>{{ t .Lang "space.nav.overview" }}</span>
+                    </a>
+                    <a href="/espai/arbres" class="espai-nav__link {{ if eq $section "trees" }}is-active{{ end }}">
+                        <i class="fas fa-sitemap"></i>
+                        <span>{{ t .Lang "space.nav.trees" }}</span>
+                    </a>
+                    <a href="/espai/persones-importades" class="espai-nav__link {{ if eq $section "persones_importades" }}is-active{{ end }}">
+                        <i class="fas fa-table"></i>
+                        <span>{{ t .Lang "space.nav.people_data" }}</span>
                     </a>
                     <a href="/espai/gedcom" class="espai-nav__link {{ if eq $section "gedcom" }}is-active{{ end }}">
                         <i class="fas fa-file-upload"></i>
@@ -49,7 +59,7 @@
                 </nav>
             </aside>
 
-            <div class="espai-content">
+            <div class="espai-content {{ if eq $section "persones_importades" }}espai-content--full{{ end }}">
                 <div class="espai-breadcrumbs" aria-label="{{ t .Lang "space.breadcrumb" }}">
                     <a href="/">{{ t .Lang "menu.section.home" }}</a>
                     <span>/</span>
@@ -426,133 +436,681 @@
                     <section class="espai-card">
                         <div class="espai-card__header">
                             <div>
-                                <h2>{{ t .Lang "space.privacy.overview.title" }}</h2>
-                                <p>{{ t .Lang "space.privacy.overview.desc" }}</p>
+                                <h2>{{ t .Lang "space.overview.people.title" }}</h2>
+                                <p>{{ t .Lang "space.overview.people.desc" }}</p>
+                            </div>
+                            <a class="boto-secundari btn-mini" href="/espai/persones-importades">
+                                <i class="fas fa-table"></i> {{ t .Lang "space.overview.people.data_button" }}
+                            </a>
+                        </div>
+
+                        <div class="taula-wrapper">
+                            <table class="taula espai-persones-table" id="espaiPersonesTable" data-filter-order="{{ .Data.EspaiPeopleFilterOrder }}">
+                                <thead>
+                                    <tr id="filtraFila">
+                                        <th data-key="name">
+                                            <input type="text" placeholder="{{ t .Lang "space.overview.people.col.name" }}" data-key="name" value="{{ index $.Data.EspaiPeopleFilterValues "name" }}">
+                                        </th>
+                                        <th data-key="tree">
+                                            <input type="text" placeholder="{{ t .Lang "space.overview.people.col.tree" }}" data-key="tree" value="{{ index $.Data.EspaiPeopleFilterValues "tree" }}">
+                                        </th>
+                                        <th data-key="visibility">
+                                            <select data-key="visibility">
+                                                <option value="">{{ t .Lang "common.all" }}</option>
+                                                <option value="visible" {{ if eq (index $.Data.EspaiPeopleFilterValues "visibility") "visible" }}selected{{ end }}>{{ t $.Lang "space.privacy.person_visibility.visible" }}</option>
+                                                <option value="hidden" {{ if eq (index $.Data.EspaiPeopleFilterValues "visibility") "hidden" }}selected{{ end }}>{{ t $.Lang "space.privacy.person_visibility.hidden" }}</option>
+                                            </select>
+                                        </th>
+                                        <th data-key="actions"></th>
+                                    </tr>
+                                    <tr>
+                                        <th data-key="name">{{ t .Lang "space.overview.people.col.name" }}</th>
+                                        <th data-key="tree">{{ t .Lang "space.overview.people.col.tree" }}</th>
+                                        <th data-key="visibility">{{ t .Lang "space.overview.people.col.visibility" }}</th>
+                                        <th data-key="actions">{{ t .Lang "space.overview.people.col.actions" }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {{ range .Data.EspaiPeople }}
+                                    <tr>
+                                        <td><a href="/espai/persones/{{ .ID }}">{{ .Name }}</a></td>
+                                        <td>{{ if .TreeName }}{{ .TreeName }}{{ else }}-{{ end }}</td>
+                                        <td><span class="espai-status espai-status--{{ .Visibility }}">{{ t $.Lang (printf "space.privacy.person_visibility.%s" .Visibility) }}</span></td>
+                                        <td>
+                                            <form class="espai-inline" action="/espai/privacitat/persona" method="post">
+                                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                <input type="hidden" name="persona_id" value="{{ .ID }}">
+                                                <input type="hidden" name="visibility" value="{{ if eq .Visibility "visible" }}hidden{{ else }}visible{{ end }}">
+                                                <input type="hidden" name="next" value="{{ $.Data.EspaiReturnTo }}">
+                                                <button class="icon-action {{ if eq .Visibility "visible" }}is-on{{ else }}is-off{{ end }}" type="submit" title="{{ if eq .Visibility "visible" }}{{ t $.Lang "space.privacy.persons.hide" }}{{ else }}{{ t $.Lang "space.privacy.persons.show" }}{{ end }}" aria-label="{{ if eq .Visibility "visible" }}{{ t $.Lang "space.privacy.persons.hide" }}{{ else }}{{ t $.Lang "space.privacy.persons.show" }}{{ end }}">
+                                                    <i class="fas {{ if eq .Visibility "visible" }}fa-eye{{ else }}fa-eye-slash{{ end }}"></i>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {{ else }}
+                                    <tr>
+                                        <td colspan="4" class="muted">{{ t .Lang "space.overview.people.empty" }}</td>
+                                    </tr>
+                                    {{ end }}
+                                </tbody>
+                            </table>
+                        </div>
+                        {{ if gt .Data.EspaiPeoplePager.TotalPages 1 }}
+                        <div class="espai-tree-pagination">
+                            {{ if .Data.EspaiPeoplePager.HasPrev }}
+                            <a class="boto-secundari btn-mini" href="{{ .Data.EspaiPeoplePager.PageBase }}{{ .Data.EspaiPeoplePager.PageSep }}page={{ .Data.EspaiPeoplePager.PrevPage }}">{{ t .Lang "common.prev" }}</a>
+                            {{ end }}
+                            <span class="muted">{{ printf (t .Lang "common.page_info") .Data.EspaiPeoplePager.Page .Data.EspaiPeoplePager.TotalPages }}</span>
+                            {{ if .Data.EspaiPeoplePager.HasNext }}
+                            <a class="boto-secundari btn-mini" href="{{ .Data.EspaiPeoplePager.PageBase }}{{ .Data.EspaiPeoplePager.PageSep }}page={{ .Data.EspaiPeoplePager.NextPage }}">{{ t .Lang "common.next" }}</a>
+                            {{ end }}
+                        </div>
+                        {{ end }}
+                    </section>
+                </div>
+                {{ end }}
+
+                {{ if eq $section "persones_importades" }}
+                <div class="espai-persones-importades">
+                    {{ if .Data.UploadError }}
+                    <div class="espai-alert espai-alert--error"><i class="fas fa-triangle-exclamation"></i> {{ .Data.UploadError }}</div>
+                    {{ end }}
+                    {{ if .Data.UploadNotice }}
+                    <div class="espai-alert espai-alert--success"><i class="fas fa-circle-check"></i> {{ .Data.UploadNotice }}</div>
+                    {{ end }}
+                    <section class="espai-card">
+                        {{ $sort := .Data.EspaiPeopleDataSort }}
+                        {{ $dir := .Data.EspaiPeopleDataSortDir }}
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ t .Lang "space.people_data.title" }}</h2>
+                                <p>{{ t .Lang "space.people_data.desc" }}</p>
+                            </div>
+                            <div class="arxiu-header-actions">
+                                <span class="espai-tree-counter">{{ printf (t .Lang "common.page_info") .Data.EspaiPeopleDataPager.Page .Data.EspaiPeopleDataPager.TotalPages }}</span>
+                                <a class="boto-secundari" href="/espai">
+                                    <i class="fas fa-arrow-left"></i>
+                                    {{ t .Lang "space.cta.back" }}
+                                </a>
+                            </div>
+                        </div>
+                        <div class="taula-resultats">
+                            <div class="barra-superior">
+                                <button type="button" id="configColumnes" class="boto-engranatge" title="{{ t .Lang "records.columns.title" }}" aria-label="{{ t .Lang "records.columns.title" }}">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                            </div>
+                            <div class="taula-container">
+                                <table class="taula taula-registres espai-persones-data-table" id="espaiPersonesDataTable" data-filter-order="{{ .Data.EspaiPeopleDataFilterOrder }}" data-sort="{{ .Data.EspaiPeopleDataSort }}" data-sort-dir="{{ .Data.EspaiPeopleDataSortDir }}">
+                                    <thead>
+                                        <tr id="filtraFila">
+                                            <th data-key="tree">
+                                                <input type="text" placeholder="{{ t .Lang "space.overview.people.col.tree" }}" data-key="tree" value="{{ index $.Data.EspaiPeopleDataFilterValues "tree" }}">
+                                            </th>
+                                            <th data-key="external_id">
+                                                <input type="text" placeholder="{{ t .Lang "space.people_data.col.external_id" }}" data-key="external_id" value="{{ index $.Data.EspaiPeopleDataFilterValues "external_id" }}">
+                                            </th>
+                                            <th data-key="name">
+                                                <input type="text" placeholder="{{ t .Lang "persons.form.name" }}" data-key="name" value="{{ index $.Data.EspaiPeopleDataFilterValues "name" }}">
+                                            </th>
+                                            <th data-key="surname1">
+                                                <input type="text" placeholder="{{ t .Lang "persons.form.surname1" }}" data-key="surname1" value="{{ index $.Data.EspaiPeopleDataFilterValues "surname1" }}">
+                                            </th>
+                                            <th data-key="surname2">
+                                                <input type="text" placeholder="{{ t .Lang "persons.form.surname2" }}" data-key="surname2" value="{{ index $.Data.EspaiPeopleDataFilterValues "surname2" }}">
+                                            </th>
+                                            <th data-key="full_name">
+                                                <input type="text" placeholder="{{ t .Lang "space.people_data.col.full_name" }}" data-key="full_name" value="{{ index $.Data.EspaiPeopleDataFilterValues "full_name" }}">
+                                            </th>
+                                            <th data-key="sex">
+                                                <select data-key="sex">
+                                                    <option value="">{{ t .Lang "common.all" }}</option>
+                                                    <option value="male" {{ if eq (index $.Data.EspaiPeopleDataFilterValues "sex") "male" }}selected{{ end }}>{{ t $.Lang "tree.sex.male" }}</option>
+                                                    <option value="female" {{ if eq (index $.Data.EspaiPeopleDataFilterValues "sex") "female" }}selected{{ end }}>{{ t $.Lang "tree.sex.female" }}</option>
+                                                    <option value="unknown" {{ if eq (index $.Data.EspaiPeopleDataFilterValues "sex") "unknown" }}selected{{ end }}>{{ t $.Lang "tree.sex.unknown" }}</option>
+                                                </select>
+                                            </th>
+                                            <th data-key="birth_date">
+                                                <input type="text" placeholder="{{ t .Lang "records.field.data_naixement" }}" data-key="birth_date" value="{{ index $.Data.EspaiPeopleDataFilterValues "birth_date" }}">
+                                            </th>
+                                            <th data-key="death_date">
+                                                <input type="text" placeholder="{{ t .Lang "records.field.data_defuncio" }}" data-key="death_date" value="{{ index $.Data.EspaiPeopleDataFilterValues "death_date" }}">
+                                            </th>
+                                            <th data-key="birth_place">
+                                                <input type="text" placeholder="{{ t .Lang "persons.form.birth_place" }}" data-key="birth_place" value="{{ index $.Data.EspaiPeopleDataFilterValues "birth_place" }}">
+                                            </th>
+                                            <th data-key="death_place">
+                                                <input type="text" placeholder="{{ t .Lang "persons.form.death_place" }}" data-key="death_place" value="{{ index $.Data.EspaiPeopleDataFilterValues "death_place" }}">
+                                            </th>
+                                            <th data-key="notes">
+                                                <input type="text" placeholder="{{ t .Lang "persons.form.notes" }}" data-key="notes" value="{{ index $.Data.EspaiPeopleDataFilterValues "notes" }}">
+                                            </th>
+                                            <th data-key="has_media">
+                                                <select data-key="has_media">
+                                                    <option value="">{{ t .Lang "common.all" }}</option>
+                                                    <option value="1" {{ if eq (index $.Data.EspaiPeopleDataFilterValues "has_media") "1" }}selected{{ end }}>{{ t $.Lang "common.yes" }}</option>
+                                                    <option value="0" {{ if eq (index $.Data.EspaiPeopleDataFilterValues "has_media") "0" }}selected{{ end }}>{{ t $.Lang "common.no" }}</option>
+                                                </select>
+                                            </th>
+                                            <th data-key="visibility">
+                                                <select data-key="visibility">
+                                                    <option value="">{{ t .Lang "common.all" }}</option>
+                                                    <option value="visible" {{ if eq (index $.Data.EspaiPeopleDataFilterValues "visibility") "visible" }}selected{{ end }}>{{ t $.Lang "space.privacy.person_visibility.visible" }}</option>
+                                                    <option value="hidden" {{ if eq (index $.Data.EspaiPeopleDataFilterValues "visibility") "hidden" }}selected{{ end }}>{{ t $.Lang "space.privacy.person_visibility.hidden" }}</option>
+                                                </select>
+                                            </th>
+                                            <th data-key="linked">
+                                                <select data-key="linked">
+                                                    <option value="">{{ t .Lang "common.all" }}</option>
+                                                    <option value="1" {{ if eq (index $.Data.EspaiPeopleDataFilterValues "linked") "1" }}selected{{ end }}>{{ t $.Lang "space.people_data.linked" }}</option>
+                                                    <option value="0" {{ if eq (index $.Data.EspaiPeopleDataFilterValues "linked") "0" }}selected{{ end }}>{{ t $.Lang "space.people_data.unlinked" }}</option>
+                                                </select>
+                                            </th>
+                                            <th data-key="actions"></th>
+                                        </tr>
+                                        <tr>
+                                            <th data-key="tree">
+                                                <button type="button" class="espai-sort-btn" data-sort="tree">
+                                                    {{ t .Lang "space.overview.people.col.tree" }}
+                                                    <i class="fas {{ if eq $sort "tree" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="external_id">
+                                                <button type="button" class="espai-sort-btn" data-sort="external_id">
+                                                    {{ t .Lang "space.people_data.col.external_id" }}
+                                                    <i class="fas {{ if eq $sort "external_id" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="name">
+                                                <button type="button" class="espai-sort-btn" data-sort="name">
+                                                    {{ t .Lang "persons.form.name" }}
+                                                    <i class="fas {{ if eq $sort "name" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="surname1">
+                                                <button type="button" class="espai-sort-btn" data-sort="surname1">
+                                                    {{ t .Lang "persons.form.surname1" }}
+                                                    <i class="fas {{ if eq $sort "surname1" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="surname2">
+                                                <button type="button" class="espai-sort-btn" data-sort="surname2">
+                                                    {{ t .Lang "persons.form.surname2" }}
+                                                    <i class="fas {{ if eq $sort "surname2" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="full_name">
+                                                <button type="button" class="espai-sort-btn" data-sort="full_name">
+                                                    {{ t .Lang "space.people_data.col.full_name" }}
+                                                    <i class="fas {{ if eq $sort "full_name" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="sex">
+                                                <button type="button" class="espai-sort-btn" data-sort="sex">
+                                                    {{ t .Lang "records.field.sexe" }}
+                                                    <i class="fas {{ if eq $sort "sex" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="birth_date">
+                                                <button type="button" class="espai-sort-btn" data-sort="birth_date">
+                                                    {{ t .Lang "records.field.data_naixement" }}
+                                                    <i class="fas {{ if eq $sort "birth_date" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="death_date">
+                                                <button type="button" class="espai-sort-btn" data-sort="death_date">
+                                                    {{ t .Lang "records.field.data_defuncio" }}
+                                                    <i class="fas {{ if eq $sort "death_date" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="birth_place">
+                                                <button type="button" class="espai-sort-btn" data-sort="birth_place">
+                                                    {{ t .Lang "persons.form.birth_place" }}
+                                                    <i class="fas {{ if eq $sort "birth_place" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="death_place">
+                                                <button type="button" class="espai-sort-btn" data-sort="death_place">
+                                                    {{ t .Lang "persons.form.death_place" }}
+                                                    <i class="fas {{ if eq $sort "death_place" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="notes">{{ t .Lang "persons.form.notes" }}</th>
+                                            <th data-key="has_media">
+                                                <button type="button" class="espai-sort-btn" data-sort="has_media">
+                                                    {{ t .Lang "space.people_data.col.media" }}
+                                                    <i class="fas {{ if eq $sort "has_media" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="visibility">
+                                                <button type="button" class="espai-sort-btn" data-sort="visibility">
+                                                    {{ t .Lang "space.overview.people.col.visibility" }}
+                                                    <i class="fas {{ if eq $sort "visibility" }}{{ if eq $dir "asc" }}fa-arrow-up{{ else }}fa-arrow-down{{ end }}{{ else }}fa-sort{{ end }}"></i>
+                                                </button>
+                                            </th>
+                                            <th data-key="linked">{{ t .Lang "space.people_data.col.linked" }}</th>
+                                            <th data-key="actions">{{ t .Lang "space.overview.people.col.actions" }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="taulaDades">
+                                        {{ range .Data.EspaiPeopleData }}
+                                        <tr>
+                                            <td data-key="tree">{{ if .TreeName }}{{ .TreeName }}{{ else }}-{{ end }}</td>
+                                            <td data-key="external_id">{{ if .ExternalID }}{{ .ExternalID }}{{ else }}-{{ end }}</td>
+                                            <td data-key="name"><a href="/espai/persones/{{ .ID }}">{{ if .Name }}{{ .Name }}{{ else }}-{{ end }}</a></td>
+                                            <td data-key="surname1">{{ if .Surname1 }}{{ .Surname1 }}{{ else }}-{{ end }}</td>
+                                            <td data-key="surname2">{{ if .Surname2 }}{{ .Surname2 }}{{ else }}-{{ end }}</td>
+                                            <td data-key="full_name">{{ if .FullName }}{{ .FullName }}{{ else }}-{{ end }}</td>
+                                            <td data-key="sex">{{ .SexLabel }}</td>
+                                            <td data-key="birth_date">{{ if .BirthDate }}{{ .BirthDate }}{{ else }}-{{ end }}</td>
+                                            <td data-key="death_date">{{ if .DeathDate }}{{ .DeathDate }}{{ else }}-{{ end }}</td>
+                                            <td data-key="birth_place">{{ if .BirthPlace }}{{ .BirthPlace }}{{ else }}-{{ end }}</td>
+                                            <td data-key="death_place">{{ if .DeathPlace }}{{ .DeathPlace }}{{ else }}-{{ end }}</td>
+                                            <td data-key="notes">{{ if .Notes }}{{ .Notes }}{{ else }}-{{ end }}</td>
+                                            <td data-key="has_media">
+                                                {{ if .HasMedia }}
+                                                <span class="badge"><i class="fas fa-image"></i> {{ t $.Lang "common.yes" }}</span>
+                                                {{ else }}
+                                                <span class="muted">{{ t $.Lang "common.no" }}</span>
+                                                {{ end }}
+                                            </td>
+                                            <td data-key="visibility"><span class="espai-status espai-status--{{ .Visibility }}">{{ t $.Lang (printf "space.privacy.person_visibility.%s" .Visibility) }}</span></td>
+                                            <td data-key="linked">
+                                                {{ if .LinkedPersonaID }}
+                                                <span class="badge badge--info"><i class="fas fa-link"></i> {{ t $.Lang "space.people_data.linked" }}</span>
+                                                {{ else }}
+                                                <span class="badge"><i class="fas fa-link-slash"></i> {{ t $.Lang "space.people_data.unlinked" }}</span>
+                                                {{ end }}
+                                            </td>
+                                            <td data-key="actions">
+                                                <span class="cell-actions">
+                                                    <a class="icon-action" href="/espai/persones/{{ .ID }}" title="{{ t $.Lang "common.view" }}" aria-label="{{ t $.Lang "common.view" }}">
+                                                        <i class="fas fa-user"></i>
+                                                    </a>
+                                                    {{ if .LinkedPersonaID }}
+                                                    <a class="icon-action" href="/persones/{{ .LinkedPersonaID }}" title="{{ t $.Lang "space.people_data.linked_view" }}" aria-label="{{ t $.Lang "space.people_data.linked_view" }}">
+                                                        <i class="fas fa-arrow-up-right-from-square"></i>
+                                                    </a>
+                                                    {{ end }}
+                                                    <button type="button" class="icon-action" data-link-persona="1" data-persona-id="{{ .ID }}" data-persona-name="{{ .DisplayName }}" title="{{ t $.Lang "space.people_data.link.action" }}" aria-label="{{ t $.Lang "space.people_data.link.action" }}">
+                                                        <i class="fas {{ if .LinkedPersonaID }}fa-link{{ else }}fa-link-slash{{ end }}"></i>
+                                                    </button>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        {{ else }}
+                                        <tr>
+                                            <td colspan="16" class="muted">{{ t .Lang "space.people_data.empty" }}</td>
+                                        </tr>
+                                        {{ end }}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {{ if gt .Data.EspaiPeopleDataPager.TotalPages 1 }}
+                            <div class="paginador">
+                                {{ if .Data.EspaiPeopleDataPager.HasPrev }}
+                                <button type="button" onclick="window.location.href='{{ .Data.EspaiPeopleDataPager.PageBase }}{{ .Data.EspaiPeopleDataPager.PageSep }}page={{ .Data.EspaiPeopleDataPager.PrevPage }}'" title="{{ t .Lang "common.prev" }}" aria-label="{{ t .Lang "common.prev" }}">&laquo;</button>
+                                {{ end }}
+                                <button type="button" class="actiu">{{ .Data.EspaiPeopleDataPager.Page }}</button>
+                                {{ if .Data.EspaiPeopleDataPager.HasNext }}
+                                <button type="button" onclick="window.location.href='{{ .Data.EspaiPeopleDataPager.PageBase }}{{ .Data.EspaiPeopleDataPager.PageSep }}page={{ .Data.EspaiPeopleDataPager.NextPage }}'" title="{{ t .Lang "common.next" }}" aria-label="{{ t .Lang "common.next" }}">&raquo;</button>
+                                {{ end }}
+                            </div>
+                            {{ end }}
+                            <div class="espai-back-actions">
+                                <a class="boto-secundari" href="/espai">
+                                    <i class="fas fa-arrow-left"></i>
+                                    {{ t .Lang "space.cta.back" }}
+                                </a>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="modal-config" id="modalConfigColumnes">
+                    <div class="modal-content-config">
+                        <button type="button" class="tanca-modal-config" aria-label="{{ t .Lang "common.close" }}">×</button>
+                        <h2>{{ t .Lang "records.columns.title" }}</h2>
+                        <div class="form-group">
+                            <label for="filesPerPagina">{{ t .Lang "records.columns.per_page" }}</label>
+                            <select id="filesPerPagina">
+                                <option value="10" {{ if eq .Data.EspaiPeopleDataPerPage 10 }}selected{{ end }}>10</option>
+                                <option value="25" {{ if eq .Data.EspaiPeopleDataPerPage 25 }}selected{{ end }}>25</option>
+                                <option value="50" {{ if eq .Data.EspaiPeopleDataPerPage 50 }}selected{{ end }}>50</option>
+                                <option value="100" {{ if eq .Data.EspaiPeopleDataPerPage 100 }}selected{{ end }}>100</option>
+                            </select>
+                        </div>
+                        <div class="columns-config">
+                            <div class="columns-list">
+                                <label for="cols-actives">{{ t .Lang "records.columns.visible" }}</label>
+                                <select id="cols-actives" size="10" multiple></select>
+                                <div class="columns-actions">
+                                    <button type="button" id="cols-up" class="columns-icon" aria-label="{{ t .Lang "records.columns.up" }}" title="{{ t .Lang "records.columns.up" }}">
+                                        <i class="fas fa-arrow-up"></i>
+                                    </button>
+                                    <button type="button" id="cols-down" class="columns-icon" aria-label="{{ t .Lang "records.columns.down" }}" title="{{ t .Lang "records.columns.down" }}">
+                                        <i class="fas fa-arrow-down"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="columns-controls">
+                                <button type="button" id="cols-hide" class="columns-icon" aria-label="{{ t .Lang "records.columns.hide" }}" title="{{ t .Lang "records.columns.hide" }}">
+                                    <i class="fas fa-arrow-right"></i>
+                                </button>
+                                <button type="button" id="cols-show" class="columns-icon" aria-label="{{ t .Lang "records.columns.show" }}" title="{{ t .Lang "records.columns.show" }}">
+                                    <i class="fas fa-arrow-left"></i>
+                                </button>
+                            </div>
+                            <div class="columns-list">
+                                <label for="cols-hidden">{{ t .Lang "records.columns.hidden" }}</label>
+                                <select id="cols-hidden" size="10" multiple></select>
+                            </div>
+                        </div>
+                        <div class="columns-save">
+                            <span id="cols-save-status" class="muted" aria-live="polite"></span>
+                            <button type="button" id="cols-save" class="boto-primari" data-saved-label="{{ t .Lang "common.saved" }}">
+                                {{ t .Lang "records.columns.save" }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-overlay" id="espai-persona-link-modal" data-search-endpoint="/api/espai/persones/cerca" data-empty-label="{{ t .Lang "common.empty" }}" role="dialog" aria-modal="true" aria-labelledby="espai-persona-link-title">
+                    <div class="modal-box">
+                        <div class="modal-header">
+                            <div>
+                                <h2 id="espai-persona-link-title">{{ t .Lang "space.people_data.link.title" }}</h2>
+                                <p class="muted">{{ t .Lang "space.people_data.link.helper" }}</p>
+                            </div>
+                            <button type="button" class="modal-close" data-espai-link-close aria-label="{{ t .Lang "common.close" }}">×</button>
+                        </div>
+                        <form method="post" action="/espai/persones/enllacar" class="espai-link-form">
+                            <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                            <input type="hidden" name="persona_id" id="espai-link-persona-id">
+                            <input type="hidden" name="target_id" id="espai-link-target-id">
+                            <input type="hidden" name="next" value="{{ .Data.EspaiReturnTo }}">
+                            <div class="grup-camp">
+                                <label>{{ t .Lang "space.people_data.link.person" }}</label>
+                                <div class="espai-link-target" id="espai-link-persona-label">—</div>
+                            </div>
+                            <div class="grup-camp">
+                                <label for="espai-link-search">{{ t .Lang "records.link.search" }}</label>
+                                <input type="search" id="espai-link-search" placeholder="{{ t .Lang "records.link.search.placeholder" }}" autocomplete="off">
+                            </div>
+                            <div class="espai-link-results" id="espai-link-results"></div>
+                            <div class="espai-link-selected muted" id="espai-link-selected">{{ t .Lang "space.people_data.link.empty" }}</div>
+                            <div class="accions-formulari">
+                                <button type="submit" class="boto-primari" id="espai-link-submit" disabled>{{ t .Lang "space.people_data.link.submit" }}</button>
+                                <button type="button" class="boto-secundari" data-espai-link-close>{{ t .Lang "common.cancel" }}</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                {{ end }}
+
+                {{ if eq $section "trees" }}
+                <div class="espai-trees">
+                    {{ if .Data.UploadError }}
+                    <div class="espai-alert espai-alert--error"><i class="fas fa-triangle-exclamation"></i> {{ .Data.UploadError }}</div>
+                    {{ end }}
+                    {{ if .Data.UploadNotice }}
+                    <div class="espai-alert espai-alert--success"><i class="fas fa-circle-check"></i> {{ .Data.UploadNotice }}</div>
+                    {{ end }}
+
+                    <section class="espai-card">
+                        <div class="espai-card__header">
+                            <div>
+                                <h2>{{ t .Lang "space.trees.title" }}</h2>
+                                <p>{{ t .Lang "space.trees.desc" }}</p>
+                            </div>
+                            <div class="espai-tree-counter">
+                                {{ t .Lang "space.trees.count.label" .Data.EspaiTreeCount .Data.EspaiTreeLimitLabel }}
                             </div>
                         </div>
 
-                        <div class="espai-tree-list">
-                            {{ range .Data.EspaiTrees }}
-                            {{ $stats := index $.Data.EspaiTreeStats .ID }}
-                            {{ $people := index $.Data.EspaiTreePersons .ID }}
-                            {{ $pager := index $.Data.EspaiTreePeoplePager .ID }}
-                            <article class="espai-tree-card">
-                                <div class="espai-tree-card__header">
-                                    <div>
-                                        <h3>{{ .Nom }}</h3>
-                                        {{ if .Descripcio.Valid }}
-                                        <p>{{ .Descripcio.String }}</p>
-                                        {{ end }}
-                                    </div>
-                                    <span class="espai-status espai-status--{{ .Visibility }}">{{ t $.Lang (printf "space.privacy.visibility.%s" .Visibility) }}</span>
-                                </div>
-
-                                <div class="espai-summary-grid">
-                                    <div class="espai-summary-card">
-                                        <span>{{ t $.Lang "space.privacy.stats.people" }}</span>
-                                        <strong>{{ $stats.Total }}</strong>
-                                    </div>
-                                    <div class="espai-summary-card">
-                                        <span>{{ t $.Lang "space.privacy.stats.hidden" }}</span>
-                                        <strong>{{ $stats.Hidden }}</strong>
-                                    </div>
-                                </div>
-
-                                <div class="espai-tree-actions">
-                                    <form class="espai-inline" action="/espai/privacitat/arbre" method="post">
-                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
-                                        <input type="hidden" name="tree_id" value="{{ .ID }}">
-                                        <label class="sr-only" for="tree-visibility-{{ .ID }}">{{ t $.Lang "space.privacy.tree.visibility" }}</label>
-                                        <select id="tree-visibility-{{ .ID }}" name="visibility">
-                                            <option value="private" {{ if eq .Visibility "private" }}selected{{ end }}>{{ t $.Lang "space.privacy.visibility.private" }}</option>
-                                            <option value="public" {{ if eq .Visibility "public" }}selected{{ end }}>{{ t $.Lang "space.privacy.visibility.public" }}</option>
-                                        </select>
-                                        <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.privacy.tree.save" }}</button>
-                                    </form>
-
-                                    {{ if eq .Visibility "public" }}
-                                    <a class="boto-secundari btn-mini" href="/public/espai/arbres/{{ .ID }}"><i class="fas fa-globe"></i> {{ t $.Lang "space.privacy.tree.preview" }}</a>
-                                    {{ else }}
-                                    <span class="espai-disabled-hint">{{ t $.Lang "space.privacy.tree.preview.disabled" }}</span>
-                                    {{ end }}
-
-                                    {{ if $people }}
-                                    {{ $root := index $people 0 }}
-                                    <a class="boto-secundari btn-mini" href="/espai/persones/{{ $root.ID }}/arbre?view=pedigree&gens=3"><i class="fas fa-tree"></i> {{ t $.Lang "tree.action.open" }}</a>
-                                    {{ end }}
-                                </div>
-
-                                <div class="espai-tree-persons">
-                                    <h4>{{ t $.Lang "space.privacy.persons.title" }}</h4>
-                                    <div class="espai-tree-controls">
-                                        <form class="espai-tree-search" method="get" action="/espai">
-                                            <input type="hidden" name="tree_id" value="{{ .ID }}">
-                                            <input type="hidden" name="page" value="1">
-                                            <label class="sr-only" for="tree-search-{{ .ID }}">{{ t $.Lang "space.privacy.persons.search.label" }}</label>
-                                            <input id="tree-search-{{ .ID }}" type="text" name="q" value="{{ $pager.Query }}" placeholder="{{ t $.Lang "space.privacy.persons.search.placeholder" }}">
-                                            <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.privacy.persons.search.submit" }}</button>
-                                        </form>
-                                        <div class="espai-tree-results">
-                                            {{ t $.Lang "space.privacy.persons.results" $pager.Total }}
-                                        </div>
-                                    </div>
-                                    {{ if $people }}
-                                    <div class="taula-wrapper">
-                                        <table class="taula">
-                                            <thead>
-                                                <tr>
-                                                    <th>{{ t $.Lang "space.privacy.persons.name" }}</th>
-                                                    <th>{{ t $.Lang "space.privacy.persons.visibility" }}</th>
-                                                    <th>{{ t $.Lang "space.privacy.persons.action" }}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {{ range $people }}
-                                                <tr>
-                                                    <td><a href="/espai/persones/{{ .ID }}">{{ .Name }}</a></td>
-                                                    <td><span class="espai-status espai-status--{{ .Visibility }}">{{ t $.Lang (printf "space.privacy.person_visibility.%s" .Visibility) }}</span></td>
-                                                    <td>
-                                                        <form class="espai-inline" action="/espai/privacitat/persona" method="post">
-                                                            <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
-                                                            <input type="hidden" name="persona_id" value="{{ .ID }}">
-                                                            <label class="sr-only" for="persona-visibility-{{ .ID }}">{{ t $.Lang "space.privacy.persons.visibility" }}</label>
-                                                            <select id="persona-visibility-{{ .ID }}" name="visibility">
-                                                                <option value="visible" {{ if eq .Visibility "visible" }}selected{{ end }}>{{ t $.Lang "space.privacy.person_visibility.visible" }}</option>
-                                                                <option value="hidden" {{ if eq .Visibility "hidden" }}selected{{ end }}>{{ t $.Lang "space.privacy.person_visibility.hidden" }}</option>
-                                                            </select>
-                                                            <button class="boto-secundari btn-mini" type="submit">{{ t $.Lang "space.privacy.persons.save" }}</button>
-                                                        </form>
-                                                    </td>
-                                                </tr>
+                        <div class="taula-wrapper">
+                            <table class="taula espai-trees-table">
+                                <thead>
+                                    <tr>
+                                        <th>{{ t .Lang "space.trees.table.name" }}</th>
+                                        <th>{{ t .Lang "space.trees.table.visibility" }}</th>
+                                        <th>{{ t .Lang "space.trees.table.people" }}</th>
+                                        <th>{{ t .Lang "space.trees.table.relations" }}</th>
+                                        <th>{{ t .Lang "space.trees.table.families" }}</th>
+                                        <th>{{ t .Lang "space.trees.table.actions" }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {{ range .Data.EspaiTreeRows }}
+                                    <tr data-tree-id="{{ .ID }}" data-import-status="{{ .ImportStatus }}" data-import-type="{{ .ImportType }}">
+                                        <td>
+                                            <strong>
+                                                {{ if eq .SourceType "gedcom" }}
+                                                <i class="fas fa-file-upload" title="GEDCOM"></i>
+                                                {{ else if eq .SourceType "gramps" }}
+                                                <i class="fas fa-plug" title="Gramps"></i>
                                                 {{ end }}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    {{ if gt $pager.TotalPages 1 }}
-                                    <div class="espai-tree-pagination">
-                                        {{ if $pager.HasPrev }}
-                                        <a class="boto-secundari btn-mini" href="{{ $pager.PageBase }}&page={{ $pager.PrevPage }}">{{ t $.Lang "common.prev" }}</a>
-                                        {{ end }}
-                                        <span class="muted">{{ printf (t $.Lang "common.page_info") $pager.Page $pager.TotalPages }}</span>
-                                        {{ if $pager.HasNext }}
-                                        <a class="boto-secundari btn-mini" href="{{ $pager.PageBase }}&page={{ $pager.NextPage }}">{{ t $.Lang "common.next" }}</a>
-                                        {{ end }}
-                                    </div>
-                                    {{ end }}
+                                                {{ .Name }}
+                                            </strong>
+                                            {{ if and .ImportStatus (or (eq .ImportStatus "queued") (eq .ImportStatus "parsing") (eq .ImportStatus "normalizing") (eq .ImportStatus "persisted")) }}
+                                            <span class="espai-status espai-status--{{ .ImportStatus }} espai-import-state">{{ t $.Lang (printf "space.gedcom.status.%s" .ImportStatus) }}</span>
+                                            {{ else }}
+                                            <span class="espai-status espai-status--queued espai-import-state" style="display:none"></span>
+                                            {{ end }}
+                                            {{ if .Description }}
+                                            <div class="muted">{{ .Description }}</div>
+                                            {{ end }}
+                                        </td>
+                                        <td>
+                                            <form class="espai-inline" action="/espai/privacitat/arbre" method="post">
+                                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                <input type="hidden" name="tree_id" value="{{ .ID }}">
+                                                <input type="hidden" name="visibility" value="{{ if eq .Visibility "public" }}private{{ else }}public{{ end }}">
+                                                <input type="hidden" name="next" value="{{ $.Data.EspaiReturnTo }}">
+                                                <button class="icon-action {{ if eq .Visibility "public" }}is-on{{ else }}is-off{{ end }}" type="submit" title="{{ if eq .Visibility "public" }}{{ t $.Lang "space.privacy.tree.make_private" }}{{ else }}{{ t $.Lang "space.privacy.tree.make_public" }}{{ end }}" aria-label="{{ if eq .Visibility "public" }}{{ t $.Lang "space.privacy.tree.make_private" }}{{ else }}{{ t $.Lang "space.privacy.tree.make_public" }}{{ end }}">
+                                                    <i class="fas {{ if eq .Visibility "public" }}fa-eye{{ else }}fa-eye-slash{{ end }}"></i>
+                                                </button>
+                                            </form>
+                                        </td>
+                                        <td>{{ .PeopleCount }}</td>
+                                        <td>{{ .RelationsCount }}</td>
+                                        <td>{{ .FamiliesCount }}</td>
+                                        <td>
+                                            {{ if gt .GrampsIntegrationID 0 }}
+                                            <form class="espai-inline" action="/espai/integracions/gramps/sync" method="post">
+                                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                <input type="hidden" name="integration_id" value="{{ .GrampsIntegrationID }}">
+                                                <input type="hidden" name="next" value="{{ $.Data.EspaiReturnTo }}">
+                                                <button class="icon-action" type="submit" title="{{ t $.Lang "space.gramps.list.sync_now" }}" aria-label="{{ t $.Lang "space.gramps.list.sync_now" }}">
+                                                    <i class="fas fa-rotate espai-tree-sync-icon"></i>
+                                                </button>
+                                            </form>
+                                            {{ else }}
+                                            <form class="espai-inline" action="/espai/arbres/reimport" method="post">
+                                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                <input type="hidden" name="tree_id" value="{{ .ID }}">
+                                                <input type="hidden" name="next" value="{{ $.Data.EspaiReturnTo }}">
+                                                <button class="icon-action" type="submit" title="{{ t $.Lang "space.trees.action.reimport" }}" aria-label="{{ t $.Lang "space.trees.action.reimport" }}">
+                                                    <i class="fas fa-sync-alt espai-tree-sync-icon"></i>
+                                                </button>
+                                            </form>
+                                            {{ end }}
+                                            {{ if ne .SourceType "" }}
+                                            <a class="icon-action" href="/espai/arbres?edit_tree={{ .ID }}" title="{{ t $.Lang "common.edit" }}" aria-label="{{ t $.Lang "common.edit" }}">
+                                                <i class="fas fa-pen"></i>
+                                            </a>
+                                            {{ end }}
+                                            <form class="espai-inline" action="/espai/privacitat/arbre/delete" method="post" onsubmit="return confirm('{{ t $.Lang "space.privacy.tree.delete_confirm" }}');">
+                                                <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                                <input type="hidden" name="tree_id" value="{{ .ID }}">
+                                                <input type="hidden" name="next" value="{{ $.Data.EspaiReturnTo }}">
+                                                <button class="icon-action danger" type="submit" title="{{ t $.Lang "space.privacy.tree.delete" }}" aria-label="{{ t $.Lang "space.privacy.tree.delete" }}">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
                                     {{ else }}
-                                    {{ if $pager.Query }}
-                                    <p class="muted">{{ t $.Lang "space.privacy.persons.search.empty" }}</p>
-                                    {{ else }}
-                                    <p class="muted">{{ t $.Lang "space.privacy.persons.empty" }}</p>
+                                    <tr>
+                                        <td colspan="6" class="muted">{{ t .Lang "space.trees.empty" }}</td>
+                                    </tr>
                                     {{ end }}
-                                    {{ end }}
-                                </div>
-                            </article>
-                            {{ else }}
-                            <div class="muted">{{ t .Lang "space.privacy.trees.empty" }}</div>
-                            {{ end }}
+                                </tbody>
+                            </table>
                         </div>
                     </section>
+                    {{ if .Data.EspaiTreeEdit }}
+                    <div class="modal-overlay is-open" id="espai-tree-edit-modal" data-close-url="{{ .Data.EspaiTreeEdit.CloseURL }}" role="dialog" aria-modal="true" aria-labelledby="espai-tree-edit-title">
+                        <div class="modal-box">
+                            <header class="modal-header">
+                                <div>
+                                    <h2 id="espai-tree-edit-title">{{ t .Lang "space.trees.edit.title" .Data.EspaiTreeEdit.Name }}</h2>
+                                    <p class="muted">{{ t .Lang "space.trees.edit.desc" }}</p>
+                                </div>
+                                <button type="button" class="modal-close" data-modal-close="espai-tree-edit-modal" aria-label="{{ t .Lang "common.close" }}">×</button>
+                            </header>
+                            {{ if eq .Data.EspaiTreeEdit.SourceType "gramps" }}
+                            <form class="espai-form" action="/espai/integracions/gramps/connect" method="post">
+                                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                                <input type="hidden" name="integration_id" value="{{ .Data.EspaiTreeEdit.GrampsIntegrationID }}">
+                                <input type="hidden" name="arbre_id" value="{{ .Data.EspaiTreeEdit.ID }}">
+                                <div class="espai-form__grid">
+                                    <div class="espai-field espai-field--full">
+                                        <label for="gramps-edit-base-url">{{ t .Lang "space.gramps.form.base_url" }}</label>
+                                        <input id="gramps-edit-base-url" type="url" name="base_url" value="{{ .Data.EspaiTreeEdit.GrampsBaseURL }}" required>
+                                        <span class="espai-help">{{ t .Lang "space.gramps.form.base_url_help" }}</span>
+                                    </div>
+                                    <div class="espai-field">
+                                        <label for="gramps-edit-username">{{ t .Lang "space.gramps.form.username" }}</label>
+                                        <input id="gramps-edit-username" type="text" name="username" value="{{ .Data.EspaiTreeEdit.GrampsUsername }}">
+                                        <span class="espai-help">{{ t .Lang "space.gramps.form.username_help" }}</span>
+                                    </div>
+                                    <div class="espai-field">
+                                        <label for="gramps-edit-token">{{ t .Lang "space.gramps.form.token" }}</label>
+                                        <input id="gramps-edit-token" type="password" name="token" placeholder="{{ t .Lang "space.gramps.form.token_help" }}">
+                                        <span class="espai-help">{{ t .Lang "space.gramps.form.token_keep" }}</span>
+                                    </div>
+                                </div>
+                                <div class="espai-form__actions">
+                                    <button class="boto-primari" type="submit"><i class="fas fa-plug"></i> {{ t .Lang "space.gramps.form.action" }}</button>
+                                </div>
+                            </form>
+                            {{ else if eq .Data.EspaiTreeEdit.SourceType "gedcom" }}
+                            <form class="espai-form" action="/espai/gedcom/update" method="post" enctype="multipart/form-data">
+                                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                                <input type="hidden" name="tree_id" value="{{ .Data.EspaiTreeEdit.ID }}">
+                                <div class="espai-form__grid">
+                                    <div class="espai-field espai-field--full">
+                                        <label for="gedcom-update-file">{{ t .Lang "space.gedcom.upload.file" }}</label>
+                                        <input id="gedcom-update-file" type="file" name="file" accept=".ged,.gedcom" required>
+                                        <span class="espai-help">{{ t .Lang "space.gedcom.update.help" }}</span>
+                                    </div>
+                                </div>
+                                <div class="espai-form__actions">
+                                    <button class="boto-primari" type="submit"><i class="fas fa-file-upload"></i> {{ t .Lang "space.gedcom.update.action" }}</button>
+                                </div>
+                            </form>
+                            {{ end }}
+                        </div>
+                    </div>
+                    <script>
+                        (function () {
+                            const modal = document.getElementById('espai-tree-edit-modal');
+                            if (!modal) return;
+                            const closeUrl = modal.getAttribute('data-close-url') || '/espai/arbres';
+                            const closeButtons = modal.querySelectorAll('[data-modal-close="espai-tree-edit-modal"]');
+                            const closeModal = () => {
+                                window.location.href = closeUrl;
+                            };
+                            closeButtons.forEach((btn) => {
+                                btn.addEventListener('click', closeModal);
+                            });
+                            modal.addEventListener('click', (event) => {
+                                if (event.target === modal) {
+                                    closeModal();
+                                }
+                            });
+                        })();
+                    </script>
+                    {{ end }}
+                    <script>
+                        (function () {
+                            const table = document.querySelector('.espai-trees-table');
+                            if (!table) return;
+                            const statusLabels = {
+                                queued: {{ printf "%q" (t .Lang "space.gedcom.status.queued") }},
+                                parsing: {{ printf "%q" (t .Lang "space.gedcom.status.parsing") }},
+                                normalizing: {{ printf "%q" (t .Lang "space.gedcom.status.normalizing") }},
+                                persisted: {{ printf "%q" (t .Lang "space.gedcom.status.persisted") }}
+                            };
+                            const activeStatuses = new Set(["queued", "parsing", "normalizing", "persisted"]);
+                            const rows = new Map();
+                            table.querySelectorAll('tbody tr[data-tree-id]').forEach((row) => {
+                                rows.set(row.getAttribute('data-tree-id'), row);
+                            });
+
+                            const updateRow = (row, status) => {
+                                const badge = row.querySelector('.espai-import-state');
+                                const icon = row.querySelector('.espai-tree-sync-icon');
+                                const normalized = (status || '').toLowerCase();
+                                if (badge) {
+                                    if (activeStatuses.has(normalized)) {
+                                        badge.textContent = statusLabels[normalized] || normalized;
+                                        badge.className = `espai-status espai-status--${normalized} espai-import-state`;
+                                        badge.style.display = 'inline-flex';
+                                    } else {
+                                        badge.textContent = '';
+                                        badge.style.display = 'none';
+                                    }
+                                }
+                                if (icon) {
+                                    icon.classList.toggle('is-spinning', activeStatuses.has(normalized));
+                                }
+                                row.setAttribute('data-import-status', normalized);
+                            };
+
+                            rows.forEach((row) => {
+                                updateRow(row, row.getAttribute('data-import-status'));
+                            });
+
+                            const poll = async () => {
+                                const hasActive = Array.from(rows.values()).some((row) => {
+                                    return activeStatuses.has((row.getAttribute('data-import-status') || '').toLowerCase());
+                                });
+                                if (!hasActive) return;
+                                try {
+                                    const resp = await fetch('/api/espai/gedcom/imports', { credentials: 'same-origin' });
+                                    if (!resp.ok) {
+                                        setTimeout(poll, 5000);
+                                        return;
+                                    }
+                                    const data = await resp.json();
+                                    if (!data || !Array.isArray(data.items)) {
+                                        setTimeout(poll, 5000);
+                                        return;
+                                    }
+                                    const latest = new Map();
+                                    data.items.forEach((item) => {
+                                        if (!item || !item.arbre_id) return;
+                                        const key = String(item.arbre_id);
+                                        if (!latest.has(key)) {
+                                            latest.set(key, item);
+                                        }
+                                    });
+                                    latest.forEach((item, key) => {
+                                        const row = rows.get(key);
+                                        if (row) {
+                                            updateRow(row, item.status);
+                                        }
+                                    });
+                                } catch (e) {
+                                }
+                                setTimeout(poll, 5000);
+                            };
+                            poll();
+                        })();
+                    </script>
                 </div>
                 {{ end }}
 
@@ -654,7 +1212,7 @@
                                     <form class="espai-inline" action="/espai/integracions/gramps/sync" method="post">
                                         <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                         <input type="hidden" name="integration_id" value="{{ .ID }}">
-                                        <button class="boto-secundari btn-mini" type="submit"><i class="fas fa-rotate"></i> {{ t $.Lang "space.gramps.list.sync_now" }}</button>
+                                        <button class="boto-secundari btn-mini" type="submit"><i class="fas fa-rotate"></i> {{ if eq .Status "error" }}{{ t $.Lang "space.gramps.list.retry" }}{{ else }}{{ t $.Lang "space.gramps.list.sync_now" }}{{ end }}</button>
                                     </form>
                                 </div>
 
@@ -1164,6 +1722,13 @@
             </div>
         </section>
     </main>
+
+    {{ if eq $section "overview" }}
+    <script src="/static/js/espai-persones-taula.js"></script>
+    {{ end }}
+    {{ if eq $section "persones_importades" }}
+    <script src="/static/js/espai-persones-importades.js"></script>
+    {{ end }}
 
     {{ template "scripts-private" . }}
 </body>

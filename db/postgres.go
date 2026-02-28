@@ -393,6 +393,18 @@ func (d *PostgreSQL) EnsureDefaultAchievements() error {
 func (d *PostgreSQL) ListGroups() ([]Group, error) {
 	return d.help.listGroups()
 }
+func (d *PostgreSQL) CreateGroup(name, desc string) (int, error) {
+	return d.help.createGroup(name, desc)
+}
+func (d *PostgreSQL) ListGroupMembers(groupID int) ([]UserAdminRow, error) {
+	return d.help.listGroupMembers(groupID)
+}
+func (d *PostgreSQL) AddUserGroup(userID, groupID int) error {
+	return d.help.addUserGroup(userID, groupID)
+}
+func (d *PostgreSQL) RemoveUserGroup(userID, groupID int) error {
+	return d.help.removeUserGroup(userID, groupID)
+}
 func (d *PostgreSQL) ListPolitiques() ([]Politica, error) {
 	return d.help.listPolitiques()
 }
@@ -474,6 +486,32 @@ func (d *PostgreSQL) CreatePersonaAnecdote(a *PersonaAnecdote) (int, error) {
 }
 func (d *PostgreSQL) UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updatePersonaModeracio(id, estat, motiu, moderatorID)
+}
+func (d *PostgreSQL) ExternalSitesListActive() ([]ExternalSite, error) {
+	return d.help.listExternalSitesActive()
+}
+
+func (d *PostgreSQL) ExternalSitesListAll() ([]ExternalSite, error) {
+	return d.help.listExternalSitesAll()
+}
+func (d *PostgreSQL) ExternalSiteUpsert(site *ExternalSite) (int, error) {
+	return d.help.upsertExternalSite(site)
+}
+func (d *PostgreSQL) ExternalSiteToggleActive(id int) error {
+	return d.help.toggleExternalSiteActive(id)
+}
+func (d *PostgreSQL) ExternalLinksListByPersona(personaID int, statusFilter string) ([]ExternalLinkRow, error) {
+	return d.help.listExternalLinksByPersona(personaID, statusFilter)
+}
+
+func (d *PostgreSQL) ExternalLinksListByStatus(status string) ([]ExternalLinkAdminRow, error) {
+	return d.help.listExternalLinksByStatus(status)
+}
+func (d *PostgreSQL) ExternalLinkInsertPending(personaID int, userID int, url, title string) (int, error) {
+	return d.help.createExternalLinkPending(personaID, userID, url, title)
+}
+func (d *PostgreSQL) ExternalLinkModerate(id int, status string) error {
+	return d.help.updateExternalLinkStatus(id, status)
 }
 
 // Paisos
@@ -930,6 +968,7 @@ func (d *PostgreSQL) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 // Espai personal
 func (d *PostgreSQL) CreateEspaiArbre(a *EspaiArbre) (int, error) { return d.help.createEspaiArbre(a) }
 func (d *PostgreSQL) UpdateEspaiArbre(a *EspaiArbre) error { return d.help.updateEspaiArbre(a) }
+func (d *PostgreSQL) DeleteEspaiArbre(ownerID, treeID int) error { return d.help.deleteEspaiArbre(ownerID, treeID) }
 func (d *PostgreSQL) GetEspaiArbre(id int) (*EspaiArbre, error) { return d.help.getEspaiArbre(id) }
 func (d *PostgreSQL) ListEspaiArbresByOwner(ownerID int) ([]EspaiArbre, error) {
 	return d.help.listEspaiArbresByOwner(ownerID)
@@ -940,9 +979,13 @@ func (d *PostgreSQL) ListEspaiArbresPublic() ([]EspaiArbre, error) {
 func (d *PostgreSQL) CreateEspaiFontImportacio(f *EspaiFontImportacio) (int, error) {
 	return d.help.createEspaiFontImportacio(f)
 }
+func (d *PostgreSQL) UpdateEspaiFontImportacio(f *EspaiFontImportacio) error {
+	return d.help.updateEspaiFontImportacio(f)
+}
 func (d *PostgreSQL) GetEspaiFontImportacio(id int) (*EspaiFontImportacio, error) {
 	return d.help.getEspaiFontImportacio(id)
 }
+func (d *PostgreSQL) DeleteEspaiFontImportacio(id int) error { return d.help.deleteEspaiFontImportacio(id) }
 func (d *PostgreSQL) GetEspaiFontImportacioByChecksum(ownerID int, checksum string) (*EspaiFontImportacio, error) {
 	return d.help.getEspaiFontImportacioByChecksum(ownerID, checksum)
 }
@@ -966,7 +1009,20 @@ func (d *PostgreSQL) ListEspaiImportsByOwner(ownerID int) ([]EspaiImport, error)
 func (d *PostgreSQL) ListEspaiImportsByArbre(arbreID int) ([]EspaiImport, error) {
 	return d.help.listEspaiImportsByArbre(arbreID)
 }
+func (d *PostgreSQL) ListEspaiImportsByStatus(status string, limit int) ([]EspaiImport, error) {
+	return d.help.listEspaiImportsByStatus(status, limit)
+}
+func (d *PostgreSQL) DeleteEspaiImportsByArbre(arbreID int) error {
+	return d.help.deleteEspaiImportsByArbre(arbreID)
+}
+func (d *PostgreSQL) CountEspaiImportsByFont(fontID int) (int, error) {
+	return d.help.countEspaiImportsByFont(fontID)
+}
+func (d *PostgreSQL) ClearEspaiTreeData(arbreID int) error {
+	return d.help.clearEspaiTreeData(arbreID)
+}
 func (d *PostgreSQL) CreateEspaiPersona(p *EspaiPersona) (int, error) { return d.help.createEspaiPersona(p) }
+func (d *PostgreSQL) UpdateEspaiPersona(p *EspaiPersona) error { return d.help.updateEspaiPersona(p) }
 func (d *PostgreSQL) UpdateEspaiPersonaVisibility(id int, visibility string) error {
 	return d.help.updateEspaiPersonaVisibility(id, visibility)
 }
@@ -983,9 +1039,34 @@ func (d *PostgreSQL) CountEspaiPersonesByArbre(arbreID int) (int, int, error) {
 func (d *PostgreSQL) CountEspaiPersonesByArbreQuery(arbreID int, query string) (int, error) {
 	return d.help.countEspaiPersonesByArbreQuery(arbreID, query)
 }
+func (d *PostgreSQL) ListEspaiPersonesByOwnerFilters(ownerID int, name, tree, visibility string, limit, offset int) ([]EspaiPersonaTreeRow, error) {
+	return d.help.listEspaiPersonesByOwnerFilters(ownerID, name, tree, visibility, limit, offset)
+}
+func (d *PostgreSQL) CountEspaiPersonesByOwnerFilters(ownerID int, name, tree, visibility string) (int, error) {
+	return d.help.countEspaiPersonesByOwnerFilters(ownerID, name, tree, visibility)
+}
+func (d *PostgreSQL) ListEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPersonaDataFilter, limit, offset int) ([]EspaiPersonaTreeRow, error) {
+	return d.help.listEspaiPersonesByOwnerDataFilters(ownerID, filter, limit, offset)
+}
+func (d *PostgreSQL) CountEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPersonaDataFilter) (int, error) {
+	return d.help.countEspaiPersonesByOwnerDataFilters(ownerID, filter)
+}
 func (d *PostgreSQL) CreateEspaiRelacio(r *EspaiRelacio) (int, error) { return d.help.createEspaiRelacio(r) }
 func (d *PostgreSQL) ListEspaiRelacionsByArbre(arbreID int) ([]EspaiRelacio, error) {
 	return d.help.listEspaiRelacionsByArbre(arbreID)
+}
+func (d *PostgreSQL) CountEspaiRelacionsByArbre(arbreID int) (int, error) {
+	return d.help.countEspaiRelacionsByArbre(arbreID)
+}
+func (d *PostgreSQL) CountEspaiRelacionsByArbreType(arbreID int, relationType string) (int, error) {
+	return d.help.countEspaiRelacionsByArbreType(arbreID, relationType)
+}
+func (d *PostgreSQL) CreateEspaiEvent(ev *EspaiEvent) (int, error) { return d.help.createEspaiEvent(ev) }
+func (d *PostgreSQL) ListEspaiEventsByPersona(personaID int) ([]EspaiEvent, error) {
+	return d.help.listEspaiEventsByPersona(personaID)
+}
+func (d *PostgreSQL) DeleteEspaiEventsByArbreSource(arbreID int, source string) error {
+	return d.help.deleteEspaiEventsByArbreSource(arbreID, source)
 }
 func (d *PostgreSQL) CreateEspaiCoincidencia(c *EspaiCoincidencia) (int, error) {
 	return d.help.createEspaiCoincidencia(c)

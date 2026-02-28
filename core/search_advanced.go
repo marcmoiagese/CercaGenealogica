@@ -200,7 +200,11 @@ func (a *App) SearchAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.ensureSearchIndexReady()
+	user := userFromContext(r)
 	filter, _ := a.parseAdvancedSearchFilter(r)
+	if user != nil {
+		filter.EspaiOwnerID = user.ID
+	}
 	results, total, facets, err := a.DB.SearchDocs(filter)
 	if err != nil {
 		Errorf("SearchAPI error: %v", err)
@@ -226,6 +230,7 @@ func (a *App) SearchAPI(w http.ResponseWriter, r *http.Request) {
 	llibreCache := map[int]*db.Llibre{}
 	municipiCache := map[int]*db.Municipi{}
 	treeCache := map[int]*db.EspaiArbre{}
+	espaiPersonaCache := map[int]*db.EspaiPersona{}
 
 	getPersona := func(id int) *db.Persona {
 		if v, ok := personaCache[id]; ok {
@@ -295,6 +300,21 @@ func (a *App) SearchAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		treeCache[id] = tree
 		return tree
+	}
+	getEspaiPersona := func(id int) *db.EspaiPersona {
+		if id <= 0 {
+			return nil
+		}
+		if v, ok := espaiPersonaCache[id]; ok {
+			return v
+		}
+		p, err := a.DB.GetEspaiPersona(id)
+		if err != nil || p == nil {
+			espaiPersonaCache[id] = nil
+			return nil
+		}
+		espaiPersonaCache[id] = p
+		return p
 	}
 
 	items := make([]map[string]interface{}, 0, len(results))
@@ -409,6 +429,59 @@ func (a *App) SearchAPI(w http.ResponseWriter, r *http.Request) {
 				"title":             title,
 				"subtitle":          subtitle,
 				"url":               "/public/espai/arbres/" + strconv.Itoa(row.EntityID),
+				"reasons":           reasons,
+				"score":             row.Score,
+			})
+		case "espai_persona":
+			persona := getEspaiPersona(row.EntityID)
+			if persona == nil {
+				continue
+			}
+			tree := getTree(persona.ArbreID)
+			if tree == nil || strings.TrimSpace(tree.Status) != "active" {
+				continue
+			}
+			visibility := strings.TrimSpace(persona.Visibility)
+			if visibility == "" {
+				visibility = "visible"
+			}
+			if visibility != "visible" {
+				continue
+			}
+			allowed := strings.TrimSpace(tree.Visibility) == "public"
+			if !allowed && user != nil && tree.OwnerUserID == user.ID {
+				allowed = true
+			}
+			if !allowed {
+				continue
+			}
+			title := espaiPersonaDisplayNameWithFallback(*persona, T(lang, "tree.unknown.name"))
+			if title == "" {
+				title = "#" + strconv.Itoa(persona.ID)
+			}
+			metaParts := []string{}
+			if persona.DataNaixement.Valid {
+				metaParts = append(metaParts, "n. "+strings.TrimSpace(formatDateDisplay(persona.DataNaixement.String)))
+			}
+			if persona.DataDefuncio.Valid {
+				metaParts = append(metaParts, "† "+strings.TrimSpace(formatDateDisplay(persona.DataDefuncio.String)))
+			}
+			if strings.TrimSpace(tree.Nom) != "" {
+				metaParts = append(metaParts, strings.TrimSpace(tree.Nom))
+			}
+			url := ""
+			if strings.TrimSpace(tree.Visibility) == "public" {
+				url = "/public/espai/arbres/" + strconv.Itoa(tree.ID) + "?persona_id=" + strconv.Itoa(persona.ID)
+			} else {
+				url = "/espai/persones/" + strconv.Itoa(persona.ID)
+			}
+			items = append(items, map[string]interface{}{
+				"entity_type":       row.EntityType,
+				"entity_type_label": T(lang, "search.entity.espai_persona"),
+				"entity_id":         row.EntityID,
+				"title":             title,
+				"subtitle":          strings.Join(metaParts, " · "),
+				"url":               url,
 				"reasons":           reasons,
 				"score":             row.Score,
 			})

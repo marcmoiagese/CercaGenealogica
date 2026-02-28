@@ -79,7 +79,12 @@ func (a *App) PersonaPublicArbre(w http.ResponseWriter, r *http.Request) {
 		fullName = T(lang, "tree.unknown.name")
 	}
 
-	dataset, err := a.buildPersonaArbreDataset(p, gens)
+	var dataset treeDataset
+	if view == "familiar" {
+		dataset, err = a.buildFamiliarArbreDataset(p, gens)
+	} else {
+		dataset, err = a.buildPersonaArbreDataset(p, gens)
+	}
 	if err != nil {
 		http.Error(w, "Error carregant arbre", http.StatusInternalServerError)
 		return

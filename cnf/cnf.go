@@ -50,6 +50,17 @@ func LoadConfig(path string) (map[string]string, error) {
 			parts := strings.SplitN(line, "=", 2)
 			key := strings.TrimSpace(parts[0])
 			value := strings.TrimSpace(parts[1])
+			if value != "" {
+				commentIdx := -1
+				for _, marker := range []string{" #", "\t#", " ;", "\t;"} {
+					if idx := strings.Index(value, marker); idx >= 0 && (commentIdx == -1 || idx < commentIdx) {
+						commentIdx = idx
+					}
+				}
+				if commentIdx >= 0 {
+					value = strings.TrimSpace(value[:commentIdx])
+				}
+			}
 			config[key] = value
 		}
 	}

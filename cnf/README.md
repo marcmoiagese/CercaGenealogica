@@ -40,6 +40,9 @@ MAIL_SMTP_HOST=localhost
 MAIL_SMTP_PORT=25
 
 LOG_LEVEL=debug         # silent/error | info | debug
+
+# Espai personal
+ESP_TREE_LIMIT=0        # 0 = sense limit d'arbres per usuari
 ```
 
 L’enviament de correus intenta primer el binari `sendmail` del sistema i, si no està disponible, prova via SMTP a `MAIL_SMTP_HOST:MAIL_SMTP_PORT` (per defecte `localhost:25`).

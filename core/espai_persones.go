@@ -85,6 +85,108 @@ func espaiRelationLabel(lang string, relType string) string {
 	}
 }
 
+func espaiSexIcon(sex string) string {
+	switch strings.ToLower(strings.TrimSpace(sex)) {
+	case "male":
+		return "fa-mars"
+	case "female":
+		return "fa-venus"
+	default:
+		return "fa-genderless"
+	}
+}
+
+func buildEspaiTimelineEvents(events []db.EspaiEvent, lang string) []espaiTimelineEvent {
+	labelFor := func(key, fallback string) string {
+		val := T(lang, key)
+		if val == "" || val == key {
+			return fallback
+		}
+		return val
+	}
+	eventLabel := map[string]string{
+		"naixement":   labelFor("records.field.data_naixement", "Naixement"),
+		"baptisme":    labelFor("records.field.data_bateig", "Baptisme"),
+		"defuncio":    labelFor("records.field.data_defuncio", "Defunció"),
+		"enterrament": labelFor("records.field.data_enterrament", "Enterrament"),
+		"matrimoni":   labelFor("records.field.data_matrimoni", "Matrimoni"),
+		"confirmacio": labelFor("records.field.data_confirmacio", "Confirmació"),
+		"residencia":  labelFor("records.field.residencia", "Residència"),
+		"feina":       labelFor("records.field.ofici", "Feina"),
+		"altre":       labelFor("records.field.event", "Esdeveniment"),
+	}
+	eventIcon := map[string]string{
+		"naixement":   "fa-baby",
+		"baptisme":    "fa-water",
+		"defuncio":    "fa-skull-crossbones",
+		"enterrament": "fa-cross",
+		"matrimoni":   "fa-ring",
+		"confirmacio": "fa-star",
+		"residencia":  "fa-house",
+		"feina":       "fa-briefcase",
+		"altre":       "fa-calendar",
+	}
+	out := []espaiTimelineEvent{}
+	for _, ev := range events {
+		evType := strings.TrimSpace(ev.EventType)
+		if evType == "" {
+			evType = "altre"
+		}
+		dateRaw := strings.TrimSpace(ev.EventDate.String)
+		date := ""
+		if dateRaw != "" {
+			date = formatDateDisplay(dateRaw)
+			if date == "" {
+				date = dateRaw
+			}
+		}
+		if date == "" {
+			date = "?"
+		}
+		title := strings.TrimSpace(ev.EventPlace.String)
+		if title == "" {
+			title = strings.TrimSpace(ev.Description.String)
+		}
+		label := eventLabel[evType]
+		if label == "" {
+			label = eventLabel["altre"]
+		}
+		icon := eventIcon[evType]
+		if icon == "" {
+			icon = eventIcon["altre"]
+		}
+		filterType := evType
+		switch evType {
+		case "baptisme", "confirmacio":
+			filterType = "sagrament"
+		case "enterrament":
+			filterType = "defuncio"
+		}
+		source := strings.TrimSpace(ev.Source.String)
+		if source == "" {
+			source = "Gramps"
+		}
+		out = append(out, espaiTimelineEvent{
+			Type:       evType,
+			FilterType: filterType,
+			Label:      label,
+			Icon:       icon,
+			Date:       date,
+			Title:      title,
+			Source:     source,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		yi := extractYear(out[i].Date)
+		yj := extractYear(out[j].Date)
+		if yi != 0 && yj != 0 && yi != yj {
+			return yi < yj
+		}
+		return out[i].Date < out[j].Date
+	})
+	return out
+}
+
 func (a *App) EspaiPersonaHandler(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.URL.Path, "/arbre") {
 		a.EspaiPersonaArbre(w, r)
@@ -114,6 +216,7 @@ func (a *App) EspaiPersonaDetall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lang := ResolveLang(r)
+	externalLinksNotice, externalLinksError := externalLinksFeedback(r, lang)
 
 	persona := db.Persona{
 		ID:                p.ID,
@@ -158,6 +261,7 @@ func (a *App) EspaiPersonaDetall(w http.ResponseWriter, r *http.Request) {
 	if persona.DataNaixement.Valid {
 		birthDate = formatDateDisplay(persona.DataNaixement.String)
 	}
+	baptismDate := ""
 	deathDate := ""
 	if persona.DataDefuncio.Valid {
 		deathDate = formatDateDisplay(persona.DataDefuncio.String)
@@ -233,6 +337,24 @@ func (a *App) EspaiPersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"data_defuncio":      false,
 		"municipi_naixement": false,
 		"municipi_defuncio":  false,
+	}
+	linkedPersonaID := 0
+	if rows, err := a.DB.Query(`SELECT target_id FROM espai_coincidencies WHERE owner_user_id = ? AND persona_id = ? AND target_type = 'persona' AND status = 'accepted' LIMIT 1`, user.ID, p.ID); err == nil && len(rows) > 0 {
+		linkedPersonaID = rowInt(rows[0], "target_id")
+	}
+	if linkedPersonaID == 0 {
+		if birthDate != "" {
+			fieldNeedsLink["data_naixement"] = true
+		}
+		if deathDate != "" {
+			fieldNeedsLink["data_defuncio"] = true
+		}
+		if birthLocation != "" {
+			fieldNeedsLink["municipi_naixement"] = true
+		}
+		if deathLocation != "" {
+			fieldNeedsLink["municipi_defuncio"] = true
+		}
 	}
 
 	relacions := []espaiRelationView{}
@@ -404,14 +526,46 @@ func (a *App) EspaiPersonaDetall(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	timelineEvents := []espaiTimelineEvent{}
+	if events, err := a.DB.ListEspaiEventsByPersona(p.ID); err == nil {
+		timelineEvents = buildEspaiTimelineEvents(events, lang)
+		if baptismDate == "" {
+			for _, ev := range events {
+				if strings.EqualFold(strings.TrimSpace(ev.EventType), "baptisme") {
+					raw := strings.TrimSpace(ev.EventDate.String)
+					if raw != "" {
+						baptismDate = formatDateDisplay(raw)
+						if baptismDate == "" {
+							baptismDate = raw
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+	if linkedPersonaID == 0 && baptismDate != "" {
+		fieldNeedsLink["data_bateig"] = true
+	}
+
+	sexRaw := strings.TrimSpace(p.Sexe.String)
+	sexLabel := ""
+	sexIcon := ""
+	if sexRaw != "" {
+		sexLabel = espaiSexLabel(lang, sexRaw)
+		sexIcon = espaiSexIcon(sexRaw)
+	}
+
 	RenderPrivateTemplate(w, r, "persona-detall.html", map[string]interface{}{
 		"Persona":              persona,
 		"NomComplet":           fullName,
 		"Initials":             initials,
 		"BirthDate":            birthDate,
-		"BaptismDate":          "",
+		"BaptismDate":          baptismDate,
 		"DeathDate":            deathDate,
 		"LifeRange":            lifeRange,
+		"SexLabel":             sexLabel,
+		"SexIcon":              sexIcon,
 		"BirthLabel":           birthLabel,
 		"DeathLabel":           deathLabel,
 		"BirthLocation":        birthLocation,
@@ -431,7 +585,7 @@ func (a *App) EspaiPersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"OriginRegistreID":     0,
 		"OriginAny":            "",
 		"Relacions":            relacions,
-		"TimelineEvents":       []espaiTimelineEvent{},
+		"TimelineEvents":       timelineEvents,
 		"Anecdotes":            []espaiAnecdoteView{},
 		"TipusOptions":         transcripcioTipusActe,
 		"User":                 user,
@@ -439,6 +593,9 @@ func (a *App) EspaiPersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"MarkPublic":           false,
 		"MarkOwn":              false,
 		"WikiPending":          false,
+		"ExternalLinksPersonaID": linkedPersonaID,
+		"ExternalLinksNotice":    externalLinksNotice,
+		"ExternalLinksError":     externalLinksError,
 		"Tab":                  "detall",
 		"PersonaBasePath":      "/espai/persones",
 		"IsEspaiProfile":       true,

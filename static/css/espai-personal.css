@@ -13,6 +13,21 @@
     align-items: start;
 }
 
+.espai-shell--full {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.espai-shell--full .espai-sidebar {
+    display: none;
+}
+
+.espai-shell--full .espai-content--full {
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
 .espai-sidebar {
     background: linear-gradient(180deg, #f9fbff 0%, #eef5fb 100%);
     border: 1px solid var(--space-border);
@@ -183,6 +198,16 @@
 .espai-overview {
     display: grid;
     gap: 20px;
+}
+
+.espai-persones-table #filtraFila input,
+.espai-persones-table #filtraFila select {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    border: 1px solid #d7e0ea;
+    background: #fff;
 }
 
 .espai-card--overview .espai-summary-grid {
@@ -367,6 +392,254 @@
     justify-content: flex-end;
     gap: 10px;
     margin-top: 10px;
+}
+
+.taula-resultats {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.espai-persones-importades .taula-resultats {
+    display: block;
+    gap: 0;
+}
+
+.barra-superior {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.boto-engranatge {
+    border: 1px solid var(--space-border);
+    background: #fff;
+    color: var(--space-muted);
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.boto-engranatge:hover {
+    background: #f8fafc;
+    color: var(--space-accent);
+}
+
+.espai-persones-data-table thead th {
+    white-space: nowrap;
+}
+
+.espai-sort-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    padding: 0;
+}
+
+.espai-sort-btn i {
+    font-size: 0.8rem;
+    opacity: 0.65;
+}
+
+.cell-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.espai-back-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+
+.modal-config {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(3px);
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content-config {
+    background: #fff;
+    padding: 1.5rem;
+    border-radius: 1rem;
+    width: 90%;
+    max-width: 520px;
+    position: relative;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+}
+
+.modal-content-config h2 {
+    margin: 0 0 1rem;
+    font-size: 1.15rem;
+    text-align: center;
+}
+
+.tanca-modal-config {
+    position: absolute;
+    top: 0.8rem;
+    right: 1rem;
+    border: none;
+    background: none;
+    font-size: 1.4rem;
+    color: #888;
+    cursor: pointer;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.form-group select {
+    padding: 0.5rem 0.6rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--space-border);
+}
+
+.columns-config {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.columns-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-height: 260px;
+}
+
+.columns-list select {
+    width: 100%;
+    min-height: 220px;
+    padding: 0.4rem;
+    border-radius: 0.6rem;
+    border: 1px solid var(--space-border);
+    background: #fff;
+}
+
+.columns-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+    align-items: center;
+}
+
+.columns-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    align-items: center;
+    justify-content: center;
+    min-height: 220px;
+}
+
+.columns-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--space-border);
+    background: #fff;
+    color: var(--space-accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.columns-icon:hover {
+    background: rgba(22, 96, 136, 0.12);
+    border-color: rgba(22, 96, 136, 0.4);
+}
+
+.columns-save {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.columns-save .boto-primari {
+    white-space: nowrap;
+}
+
+.espai-link-form {
+    display: grid;
+    gap: 16px;
+}
+
+.espai-link-target {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid var(--space-border);
+    font-weight: 600;
+}
+
+.espai-link-results {
+    display: grid;
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    border: 1px solid var(--space-border);
+    border-radius: 12px;
+    padding: 10px;
+    background: #fff;
+}
+
+.espai-link-item {
+    border: 1px solid var(--space-border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    text-align: left;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.espai-link-item__name {
+    font-weight: 600;
+}
+
+.espai-link-item__meta {
+    font-size: 0.85rem;
+    color: var(--space-muted);
+    margin-top: 4px;
+}
+
+.espai-link-item.is-selected {
+    border-color: var(--space-accent);
+    box-shadow: 0 0 0 2px rgba(22, 96, 136, 0.15);
+}
+
+.espai-trees {
+    display: grid;
+    gap: 20px;
+}
+
+.espai-tree-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--space-muted);
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 
 .espai-disabled-hint {
@@ -631,6 +904,19 @@
     background: #e0f2fe;
     color: #0369a1;
     border-color: #bae6fd;
+}
+
+.espai-import-state {
+    margin-left: 0.5rem;
+}
+
+.espai-tree-sync-icon.is-spinning {
+    animation: espai-tree-spin 1s linear infinite;
+}
+
+@keyframes espai-tree-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 .espai-status--pending {
@@ -992,6 +1278,17 @@
 
     .espai-nav__link {
         flex: 1 1 160px;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 720px) {
+    .columns-config {
+        grid-template-columns: 1fr;
+    }
+
+    .columns-controls {
+        flex-direction: row;
         justify-content: center;
     }
 }

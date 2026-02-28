@@ -1,0 +1,76 @@
+{{ define "admin-external-links-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "admin.external_links.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <div>
+                    <p class="card-kicker">{{ t .Lang "admin.external_links.kicker" }}</p>
+                    <h1>{{ t .Lang "admin.external_links.title" }}</h1>
+                </div>
+            </header>
+            {{ if .Data.Msg }}
+            <div class="alerta {{ if .Data.Ok }}alerta-exit{{ else }}alerta-error{{ end }}">{{ .Data.Msg }}</div>
+            {{ end }}
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "admin.external_links.col.persona" }}</th>
+                            <th>{{ t .Lang "admin.external_links.col.site" }}</th>
+                            <th>{{ t .Lang "admin.external_links.col.title" }}</th>
+                            <th>{{ t .Lang "admin.external_links.col.meta" }}</th>
+                            <th>{{ t .Lang "admin.external_links.col.url" }}</th>
+                            <th>{{ t .Lang "admin.external_links.col.created" }}</th>
+                            <th>{{ t .Lang "common.actions" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Links }}
+                        <tr>
+                            <td>
+                                {{ if .PersonaURL }}
+                                <a href="{{ .PersonaURL }}">{{ .PersonaName }}</a>
+                                {{ else }}
+                                {{ .PersonaName }}
+                                {{ end }}
+                            </td>
+                            <td>{{ .SiteLabel }}</td>
+                            <td>{{ .Title }}</td>
+                            <td>{{ .Meta }}</td>
+                            <td>{{ .URL }}</td>
+                            <td>{{ .CreatedAt }}</td>
+                            <td>
+                                <form method="post" action="/admin/external-links/{{ .ID }}/approve" style="display:inline-block">
+                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                    <button type="submit" class="boto-primari pequeno">{{ t $.Lang "admin.external_links.action.approve" }}</button>
+                                </form>
+                                <form method="post" action="/admin/external-links/{{ .ID }}/reject" style="display:inline-block;margin-left:8px">
+                                    <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
+                                    <button type="submit" class="boto-secundari pequeno">{{ t $.Lang "admin.external_links.action.reject" }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr>
+                            <td colspan="7">{{ t .Lang "common.empty" }}</td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

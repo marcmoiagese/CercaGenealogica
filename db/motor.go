@@ -94,6 +94,10 @@ type DB interface {
 	UserHasAnyPolicy(userID int, policies []string) (bool, error)
 	EnsureDefaultPolicies() error
 	ListGroups() ([]Group, error)
+	CreateGroup(name, desc string) (int, error)
+	ListGroupMembers(groupID int) ([]UserAdminRow, error)
+	AddUserGroup(userID, groupID int) error
+	RemoveUserGroup(userID, groupID int) error
 	ListPolitiques() ([]Politica, error)
 	GetPolitica(id int) (*Politica, error)
 	SavePolitica(p *Politica) (int, error)
@@ -303,6 +307,15 @@ type DB interface {
 	ListPersonaAnecdotes(personaID int, userID int) ([]PersonaAnecdote, error)
 	CreatePersonaAnecdote(a *PersonaAnecdote) (int, error)
 	UpdatePersonaModeracio(id int, estat, motiu string, moderatorID int) error
+	// Persones: arbres externs
+	ExternalSitesListActive() ([]ExternalSite, error)
+	ExternalSitesListAll() ([]ExternalSite, error)
+	ExternalSiteUpsert(site *ExternalSite) (int, error)
+	ExternalSiteToggleActive(id int) error
+	ExternalLinksListByPersona(personaID int, statusFilter string) ([]ExternalLinkRow, error)
+	ExternalLinksListByStatus(status string) ([]ExternalLinkAdminRow, error)
+	ExternalLinkInsertPending(personaID int, userID int, url, title string) (int, error)
+	ExternalLinkModerate(id int, status string) error
 	UpdateArxiuModeracio(id int, estat, motiu string, moderatorID int) error
 	UpdateLlibreModeracio(id int, estat, motiu string, moderatorID int) error
 	UpdateNivellModeracio(id int, estat, motiu string, moderatorID int) error
@@ -433,11 +446,14 @@ type DB interface {
 	// Espai personal
 	CreateEspaiArbre(a *EspaiArbre) (int, error)
 	UpdateEspaiArbre(a *EspaiArbre) error
+	DeleteEspaiArbre(ownerID, treeID int) error
 	GetEspaiArbre(id int) (*EspaiArbre, error)
 	ListEspaiArbresByOwner(ownerID int) ([]EspaiArbre, error)
 	ListEspaiArbresPublic() ([]EspaiArbre, error)
 	CreateEspaiFontImportacio(f *EspaiFontImportacio) (int, error)
+	UpdateEspaiFontImportacio(f *EspaiFontImportacio) error
 	GetEspaiFontImportacio(id int) (*EspaiFontImportacio, error)
+	DeleteEspaiFontImportacio(id int) error
 	GetEspaiFontImportacioByChecksum(ownerID int, checksum string) (*EspaiFontImportacio, error)
 	ListEspaiFontsImportacioByOwner(ownerID int) ([]EspaiFontImportacio, error)
 	CreateEspaiImport(i *EspaiImport) (int, error)
@@ -447,15 +463,29 @@ type DB interface {
 	GetLatestEspaiImportByFont(ownerID, fontID int) (*EspaiImport, error)
 	ListEspaiImportsByOwner(ownerID int) ([]EspaiImport, error)
 	ListEspaiImportsByArbre(arbreID int) ([]EspaiImport, error)
+	ListEspaiImportsByStatus(status string, limit int) ([]EspaiImport, error)
+	DeleteEspaiImportsByArbre(arbreID int) error
+	CountEspaiImportsByFont(fontID int) (int, error)
+	ClearEspaiTreeData(arbreID int) error
 	CreateEspaiPersona(p *EspaiPersona) (int, error)
+	UpdateEspaiPersona(p *EspaiPersona) error
 	UpdateEspaiPersonaVisibility(id int, visibility string) error
 	GetEspaiPersona(id int) (*EspaiPersona, error)
 	ListEspaiPersonesByArbre(arbreID int) ([]EspaiPersona, error)
 	ListEspaiPersonesByArbreQuery(arbreID int, query string, limit, offset int) ([]EspaiPersona, error)
 	CountEspaiPersonesByArbre(arbreID int) (int, int, error)
 	CountEspaiPersonesByArbreQuery(arbreID int, query string) (int, error)
+	ListEspaiPersonesByOwnerFilters(ownerID int, name, tree, visibility string, limit, offset int) ([]EspaiPersonaTreeRow, error)
+	CountEspaiPersonesByOwnerFilters(ownerID int, name, tree, visibility string) (int, error)
+	ListEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPersonaDataFilter, limit, offset int) ([]EspaiPersonaTreeRow, error)
+	CountEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPersonaDataFilter) (int, error)
 	CreateEspaiRelacio(r *EspaiRelacio) (int, error)
 	ListEspaiRelacionsByArbre(arbreID int) ([]EspaiRelacio, error)
+	CountEspaiRelacionsByArbre(arbreID int) (int, error)
+	CountEspaiRelacionsByArbreType(arbreID int, relationType string) (int, error)
+	CreateEspaiEvent(ev *EspaiEvent) (int, error)
+	ListEspaiEventsByPersona(personaID int) ([]EspaiEvent, error)
+	DeleteEspaiEventsByArbreSource(arbreID int, source string) error
 	CreateEspaiCoincidencia(c *EspaiCoincidencia) (int, error)
 	UpdateEspaiCoincidenciaStatus(id int, status string) error
 	GetEspaiCoincidencia(id int) (*EspaiCoincidencia, error)
@@ -1376,6 +1406,7 @@ type PolicyPermissions struct {
 	CanEditAnyPerson   bool `json:"can_edit_any_person"`
 	CanModerate        bool `json:"can_moderate"`
 	CanManagePolicies  bool `json:"can_manage_policies"`
+	ImportWorkerLimit  int  `json:"import_worker_limit,omitempty"`
 }
 
 type Group struct {
@@ -2029,6 +2060,7 @@ type SearchQueryFilter struct {
 	PageSize              int
 	Sort                  string
 	IncludeUnpublished    bool
+	EspaiOwnerID          int
 }
 
 type SearchDocRow struct {

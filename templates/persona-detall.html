@@ -7,6 +7,7 @@
     {{ template "styles-private" . }}
     <link rel="stylesheet" href="/static/css/persona.css">
     <link rel="stylesheet" href="/static/css/persona-pro.css">
+    <link rel="stylesheet" href="/static/css/persona-external-links.css">
 </head>
 <body>
     {{ template "header-private" . }}
@@ -87,6 +88,9 @@
                     {{ end }}
                     {{ if .Data.LifeRange }}
                     <span class="chip"><i class="fas fa-calendar"></i> {{ .Data.LifeRange }}</span>
+                    {{ end }}
+                    {{ if .Data.SexLabel }}
+                    <span class="chip"><i class="fas {{ .Data.SexIcon }}"></i> {{ .Data.SexLabel }}</span>
                     {{ end }}
                 </p>
 
@@ -193,6 +197,7 @@
             <button class="tab" data-target="familia"><i class="fas fa-people-group"></i> Família</button>
             <button class="tab" data-target="vida"><i class="fas fa-timeline"></i> Vida</button>
             <button class="tab" data-target="documents"><i class="fas fa-folder-open"></i> Documents</button>
+            <button class="tab" data-target="arbres-externs"><i class="fas fa-globe"></i> {{ t .Lang "persons.external.tab" }}</button>
             <button class="tab" data-target="anecdotes"><i class="fas fa-comment-dots"></i> Anecdotari</button>
             <button class="tab" data-target="historia"><i class="fas fa-book"></i> Fitxa històrica</button>
         </nav>
@@ -447,6 +452,86 @@
             </article>
         </section>
 
+        <section id="arbres-externs" class="persona-panel">
+            <article class="card">
+                <div class="card__header">
+                    <h3><i class="fas fa-globe"></i> {{ t .Lang "persons.external.title" }}</h3>
+                    <div class="ext-toolbar">
+                        <input class="ext-search" type="search" placeholder="{{ t .Lang "persons.external.search.placeholder" }}" aria-label="{{ t .Lang "persons.external.search.aria" }}">
+                        <select class="ext-select" aria-label="{{ t .Lang "persons.external.filter.aria" }}">
+                            <option value="all">{{ t .Lang "persons.external.filter.all" }}</option>
+                            <option value="public">{{ t .Lang "persons.external.access.public" }}</option>
+                            <option value="account">{{ t .Lang "persons.external.access.account" }}</option>
+                            <option value="private">{{ t .Lang "persons.external.access.private" }}</option>
+                            <option value="premium">{{ t .Lang "persons.external.access.premium" }}</option>
+                            <option value="mixed">{{ t .Lang "persons.external.access.mixed" }}</option>
+                        </select>
+                        {{ if and .Data.User (not $isEspai) }}
+                        <button type="button" class="btn btn--primary" data-open-external-link>
+                            <i class="fas fa-plus"></i> {{ t .Lang "persons.external.add.button" }}
+                        </button>
+                        {{ end }}
+                    </div>
+                </div>
+
+                <div class="ext-legend" aria-label="{{ t .Lang "persons.external.legend.aria" }}">
+                    <span class="ext-badge"><i class="fas fa-unlock"></i> {{ t .Lang "persons.external.access.public" }}</span>
+                    <span class="ext-badge"><i class="fas fa-user"></i> {{ t .Lang "persons.external.access.account" }}</span>
+                    <span class="ext-badge ext-badge--warn"><i class="fas fa-user-lock"></i> {{ t .Lang "persons.external.access.private" }}</span>
+                    <span class="ext-badge ext-badge--pay"><i class="fas fa-crown"></i> {{ t .Lang "persons.external.access.premium" }}</span>
+                    <span class="ext-badge ext-badge--muted"><i class="fas fa-circle-half-stroke"></i> {{ t .Lang "persons.external.access.mixed" }}</span>
+                </div>
+
+                {{ if .Data.ExternalLinksNotice }}
+                <div class="callout callout--soft ext-feedback">
+                    <div class="callout__title"><i class="fas fa-circle-check"></i> {{ .Data.ExternalLinksNotice }}</div>
+                </div>
+                {{ end }}
+                {{ if .Data.ExternalLinksError }}
+                <div class="callout callout--soft ext-feedback ext-feedback--error">
+                    <div class="callout__title"><i class="fas fa-triangle-exclamation"></i> {{ .Data.ExternalLinksError }}</div>
+                </div>
+                {{ end }}
+
+                <div class="callout callout--soft ext-feedback" id="externalTreesFeedback" style="display:none;">
+                    <div class="callout__title"><i class="fas fa-circle-check"></i> <span data-feedback-text></span></div>
+                </div>
+
+                <div class="ext-summary muted" id="externalTreesSummary">{{ t .Lang "common.loading" }}</div>
+
+                <div class="ext-sites" id="externalTreesList"
+                     data-api="{{ if gt .Data.Persona.ID 0 }}{{ if $isEspai }}/api/espai/persones/{{ .Data.Persona.ID }}/external-links{{ else }}/api/persones/{{ .Data.Persona.ID }}/external-links{{ end }}{{ end }}"
+                     data-post="{{ if and (not $isEspai) (gt .Data.Persona.ID 0) }}/api/persones/{{ .Data.Persona.ID }}/external-links{{ end }}"
+                     data-csrf="{{ .Data.CSRFToken }}"
+                     data-icon-base="/static/img/ext-sites"
+                     data-summary-template="{{ t .Lang "persons.external.summary.template" }}"
+                     data-label-open="{{ t .Lang "persons.external.open" }}"
+                     data-label-public="{{ t .Lang "persons.external.access.public" }}"
+                     data-label-account="{{ t .Lang "persons.external.access.account" }}"
+                     data-label-private="{{ t .Lang "persons.external.access.private" }}"
+                     data-label-premium="{{ t .Lang "persons.external.access.premium" }}"
+                     data-label-mixed="{{ t .Lang "persons.external.access.mixed" }}"
+                     data-label-link-one="{{ t .Lang "persons.external.link.one" }}"
+                     data-label-link-many="{{ t .Lang "persons.external.link.other" }}"
+                     data-label-appearance-one="{{ t .Lang "persons.external.appearance.one" }}"
+                     data-label-appearance-many="{{ t .Lang "persons.external.appearance.other" }}"
+                     data-label-unique-one="{{ t .Lang "persons.external.unique.one" }}"
+                     data-label-unique-many="{{ t .Lang "persons.external.unique.other" }}"
+                     data-label-site-one="{{ t .Lang "persons.external.site.one" }}"
+                     data-label-site-many="{{ t .Lang "persons.external.site.other" }}"
+                     data-msg-pending="{{ t .Lang "persons.external.notice.pending" }}"
+                     data-msg-dup="{{ t .Lang "persons.external.error.dup" }}"
+                     data-msg-invalid="{{ t .Lang "persons.external.error.invalid" }}"
+                     data-msg-error="{{ t .Lang "persons.external.error.save" }}"
+                     data-msg-login="{{ t .Lang "persons.external.error.login" }}"></div>
+
+                <div class="callout callout--soft ext-empty" id="externalTreesEmpty" style="display:none;">
+                    <div class="callout__title"><i class="fas fa-circle-info"></i> {{ t .Lang "persons.external.empty.title" }}</div>
+                    <p class="muted">{{ t .Lang "persons.external.empty.body" }}</p>
+                </div>
+            </article>
+        </section>
+
         <section id="anecdotes" class="persona-panel">
             <article class="card">
                 <div class="card__header">
@@ -561,6 +646,35 @@
                 </article>
             </div>
         </section>
+        {{ if and .Data.User (not $isEspai) }}
+        <div class="modal-overlay" id="external-link-modal" role="dialog" aria-modal="true" aria-labelledby="external-link-modal-title">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <div>
+                        <h2 id="external-link-modal-title">{{ t .Lang "persons.external.modal.title" }}</h2>
+                        <p class="muted">{{ t .Lang "persons.external.modal.helper" }}</p>
+                    </div>
+                    <button type="button" class="modal-close" data-close-external-link aria-label="{{ t .Lang "common.close" }}">×</button>
+                </div>
+                <form class="ext-form" id="external-link-form">
+                    <div class="grup-camp">
+                        <label for="external-link-url">{{ t .Lang "persons.external.form.url.label" }}</label>
+                        <input id="external-link-url" class="input-text" type="url" required placeholder="{{ t .Lang "persons.external.form.url.placeholder" }}">
+                    </div>
+                    <div class="grup-camp">
+                        <label for="external-link-title">{{ t .Lang "persons.external.form.title.label" }}</label>
+                        <input id="external-link-title" class="input-text" type="text" placeholder="{{ t .Lang "persons.external.form.title.placeholder" }}">
+                    </div>
+                    <div class="form-accio">
+                        <button type="submit" class="boto-primari" data-external-link-submit><i class="fas fa-paper-plane"></i> {{ t .Lang "persons.external.modal.submit" }}</button>
+                        <button type="button" class="boto-secundari" data-close-external-link>{{ t .Lang "persons.external.modal.cancel" }}</button>
+                    </div>
+                    <p class="muted">{{ t .Lang "persons.external.form.note" }}</p>
+                    <div class="callout callout--soft ext-feedback ext-feedback--error ext-modal-error" data-external-link-error style="display:none;"></div>
+                </form>
+            </div>
+        </div>
+        {{ end }}
         {{ if .Data.CanLinkPersonaFields }}
         <div class="modal-overlay" id="persona-link-modal" role="dialog" aria-modal="true" aria-labelledby="persona-link-modal-title">
             <div class="modal-box">
@@ -673,6 +787,7 @@
     {{ template "scripts-private" . }}
     <script src="/static/js/persona.js"></script>
     <script src="/static/js/persona-pro.js"></script>
+    <script src="/static/js/persona-external-links.js"></script>
     {{ if .Data.CanLinkPersonaFields }}
     <script src="/static/js/arxiu-form-suggest.js"></script>
     <script>

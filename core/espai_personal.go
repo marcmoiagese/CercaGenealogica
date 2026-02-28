@@ -18,6 +18,10 @@ func (a *App) EspaiPersonalCoincidencies(w http.ResponseWriter, r *http.Request)
 	a.EspaiPersonalCoincidenciesPage(w, r)
 }
 
+func (a *App) EspaiPersonalArbres(w http.ResponseWriter, r *http.Request) {
+	a.EspaiPersonalTreesPage(w, r)
+}
+
 func (a *App) EspaiPersonalGrups(w http.ResponseWriter, r *http.Request) {
 	a.EspaiPersonalGrupsPage(w, r)
 }

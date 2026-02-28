@@ -102,6 +102,20 @@ func (h sqlHelper) listEspaiArbresPublic() ([]EspaiArbre, error) {
 	return res, nil
 }
 
+func (h sqlHelper) deleteEspaiArbre(ownerID, treeID int) error {
+	stmt := `DELETE FROM espai_arbres WHERE id = ? AND owner_user_id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	res, err := h.db.Exec(stmt, treeID, ownerID)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err == nil && affected == 0 {
+		return sql.ErrNoRows
+	}
+	return err
+}
+
 func (h sqlHelper) createEspaiFontImportacio(f *EspaiFontImportacio) (int, error) {
 	if f == nil {
 		return 0, nil
@@ -133,6 +147,18 @@ func (h sqlHelper) createEspaiFontImportacio(f *EspaiFontImportacio) (int, error
 	return f.ID, nil
 }
 
+func (h sqlHelper) updateEspaiFontImportacio(f *EspaiFontImportacio) error {
+	if f == nil || f.ID == 0 {
+		return nil
+	}
+	stmt := `UPDATE espai_fonts_importacio
+        SET original_filename = ?, storage_path = ?, checksum_sha256 = ?, size_bytes = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, f.OriginalFilename, f.StoragePath, f.ChecksumSHA256, f.SizeBytes, f.ID)
+	return err
+}
+
 func (h sqlHelper) getEspaiFontImportacio(id int) (*EspaiFontImportacio, error) {
 	query := `SELECT id, owner_user_id, source_type, nom, original_filename, storage_path, checksum_sha256, size_bytes, created_at, updated_at
         FROM espai_fonts_importacio WHERE id = ?`
@@ -142,6 +168,19 @@ func (h sqlHelper) getEspaiFontImportacio(id int) (*EspaiFontImportacio, error) 
 		return nil, err
 	}
 	return &f, nil
+}
+
+func (h sqlHelper) deleteEspaiFontImportacio(id int) error {
+	stmt := `DELETE FROM espai_fonts_importacio WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	res, err := h.db.Exec(stmt, id)
+	if err != nil {
+		return err
+	}
+	if rows, err := res.RowsAffected(); err == nil && rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (h sqlHelper) getEspaiFontImportacioByChecksum(ownerID int, checksum string) (*EspaiFontImportacio, error) {
@@ -183,17 +222,21 @@ func (h sqlHelper) createEspaiImport(i *EspaiImport) (int, error) {
 	if importType == "" {
 		importType = "gedcom"
 	}
+	importMode := strings.TrimSpace(i.ImportMode)
+	if importMode == "" {
+		importMode = "full"
+	}
 	status := strings.TrimSpace(i.Status)
 	if status == "" {
 		status = "queued"
 	}
-	stmt := `INSERT INTO espai_imports (owner_user_id, arbre_id, font_id, import_type, status, progress_total, progress_done, summary_json, error_text, started_at, finished_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	stmt := `INSERT INTO espai_imports (owner_user_id, arbre_id, font_id, import_type, import_mode, status, progress_total, progress_done, summary_json, error_text, started_at, finished_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	if h.style == "postgres" {
 		stmt += " RETURNING id"
 	}
 	stmt = formatPlaceholders(h.style, stmt)
-	args := []interface{}{i.OwnerUserID, i.ArbreID, i.FontID, importType, status, i.ProgressTotal, i.ProgressDone, i.SummaryJSON, i.ErrorText, i.StartedAt, i.FinishedAt}
+	args := []interface{}{i.OwnerUserID, i.ArbreID, i.FontID, importType, importMode, status, i.ProgressTotal, i.ProgressDone, i.SummaryJSON, i.ErrorText, i.StartedAt, i.FinishedAt}
 	if h.style == "postgres" {
 		if err := h.db.QueryRow(stmt, args...).Scan(&i.ID); err != nil {
 			return 0, err
@@ -225,29 +268,29 @@ func (h sqlHelper) updateEspaiImportProgress(id int, done, total int) error {
 }
 
 func (h sqlHelper) getEspaiImport(id int) (*EspaiImport, error) {
-	query := `SELECT id, owner_user_id, arbre_id, font_id, import_type, status, progress_total, progress_done, summary_json, error_text, started_at, finished_at, created_at, updated_at
+	query := `SELECT id, owner_user_id, arbre_id, font_id, import_type, import_mode, status, progress_total, progress_done, summary_json, error_text, started_at, finished_at, created_at, updated_at
         FROM espai_imports WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
 	var i EspaiImport
-	if err := h.db.QueryRow(query, id).Scan(&i.ID, &i.OwnerUserID, &i.ArbreID, &i.FontID, &i.ImportType, &i.Status, &i.ProgressTotal, &i.ProgressDone, &i.SummaryJSON, &i.ErrorText, &i.StartedAt, &i.FinishedAt, &i.CreatedAt, &i.UpdatedAt); err != nil {
+	if err := h.db.QueryRow(query, id).Scan(&i.ID, &i.OwnerUserID, &i.ArbreID, &i.FontID, &i.ImportType, &i.ImportMode, &i.Status, &i.ProgressTotal, &i.ProgressDone, &i.SummaryJSON, &i.ErrorText, &i.StartedAt, &i.FinishedAt, &i.CreatedAt, &i.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &i, nil
 }
 
 func (h sqlHelper) getLatestEspaiImportByFont(ownerID, fontID int) (*EspaiImport, error) {
-	query := `SELECT id, owner_user_id, arbre_id, font_id, import_type, status, progress_total, progress_done, summary_json, error_text, started_at, finished_at, created_at, updated_at
+	query := `SELECT id, owner_user_id, arbre_id, font_id, import_type, import_mode, status, progress_total, progress_done, summary_json, error_text, started_at, finished_at, created_at, updated_at
         FROM espai_imports WHERE owner_user_id = ? AND font_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`
 	query = formatPlaceholders(h.style, query)
 	var i EspaiImport
-	if err := h.db.QueryRow(query, ownerID, fontID).Scan(&i.ID, &i.OwnerUserID, &i.ArbreID, &i.FontID, &i.ImportType, &i.Status, &i.ProgressTotal, &i.ProgressDone, &i.SummaryJSON, &i.ErrorText, &i.StartedAt, &i.FinishedAt, &i.CreatedAt, &i.UpdatedAt); err != nil {
+	if err := h.db.QueryRow(query, ownerID, fontID).Scan(&i.ID, &i.OwnerUserID, &i.ArbreID, &i.FontID, &i.ImportType, &i.ImportMode, &i.Status, &i.ProgressTotal, &i.ProgressDone, &i.SummaryJSON, &i.ErrorText, &i.StartedAt, &i.FinishedAt, &i.CreatedAt, &i.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &i, nil
 }
 
 func (h sqlHelper) listEspaiImportsByOwner(ownerID int) ([]EspaiImport, error) {
-	query := `SELECT id, owner_user_id, arbre_id, font_id, import_type, status, progress_total, progress_done, summary_json, error_text, started_at, finished_at, created_at, updated_at
+	query := `SELECT id, owner_user_id, arbre_id, font_id, import_type, import_mode, status, progress_total, progress_done, summary_json, error_text, started_at, finished_at, created_at, updated_at
         FROM espai_imports WHERE owner_user_id = ? ORDER BY created_at DESC, id DESC`
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, ownerID)
@@ -258,7 +301,7 @@ func (h sqlHelper) listEspaiImportsByOwner(ownerID int) ([]EspaiImport, error) {
 	var res []EspaiImport
 	for rows.Next() {
 		var i EspaiImport
-		if err := rows.Scan(&i.ID, &i.OwnerUserID, &i.ArbreID, &i.FontID, &i.ImportType, &i.Status, &i.ProgressTotal, &i.ProgressDone, &i.SummaryJSON, &i.ErrorText, &i.StartedAt, &i.FinishedAt, &i.CreatedAt, &i.UpdatedAt); err != nil {
+		if err := rows.Scan(&i.ID, &i.OwnerUserID, &i.ArbreID, &i.FontID, &i.ImportType, &i.ImportMode, &i.Status, &i.ProgressTotal, &i.ProgressDone, &i.SummaryJSON, &i.ErrorText, &i.StartedAt, &i.FinishedAt, &i.CreatedAt, &i.UpdatedAt); err != nil {
 			return nil, err
 		}
 		res = append(res, i)
@@ -267,7 +310,7 @@ func (h sqlHelper) listEspaiImportsByOwner(ownerID int) ([]EspaiImport, error) {
 }
 
 func (h sqlHelper) listEspaiImportsByArbre(arbreID int) ([]EspaiImport, error) {
-	query := `SELECT id, owner_user_id, arbre_id, font_id, import_type, status, progress_total, progress_done, summary_json, error_text, started_at, finished_at, created_at, updated_at
+	query := `SELECT id, owner_user_id, arbre_id, font_id, import_type, import_mode, status, progress_total, progress_done, summary_json, error_text, started_at, finished_at, created_at, updated_at
         FROM espai_imports WHERE arbre_id = ? ORDER BY created_at DESC, id DESC`
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, arbreID)
@@ -278,12 +321,74 @@ func (h sqlHelper) listEspaiImportsByArbre(arbreID int) ([]EspaiImport, error) {
 	var res []EspaiImport
 	for rows.Next() {
 		var i EspaiImport
-		if err := rows.Scan(&i.ID, &i.OwnerUserID, &i.ArbreID, &i.FontID, &i.ImportType, &i.Status, &i.ProgressTotal, &i.ProgressDone, &i.SummaryJSON, &i.ErrorText, &i.StartedAt, &i.FinishedAt, &i.CreatedAt, &i.UpdatedAt); err != nil {
+		if err := rows.Scan(&i.ID, &i.OwnerUserID, &i.ArbreID, &i.FontID, &i.ImportType, &i.ImportMode, &i.Status, &i.ProgressTotal, &i.ProgressDone, &i.SummaryJSON, &i.ErrorText, &i.StartedAt, &i.FinishedAt, &i.CreatedAt, &i.UpdatedAt); err != nil {
 			return nil, err
 		}
 		res = append(res, i)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) listEspaiImportsByStatus(status string, limit int) ([]EspaiImport, error) {
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return nil, nil
+	}
+	query := `SELECT id, owner_user_id, arbre_id, font_id, import_type, import_mode, status, progress_total, progress_done, summary_json, error_text, started_at, finished_at, created_at, updated_at
+        FROM espai_imports WHERE status = ? ORDER BY created_at ASC, id ASC`
+	args := []interface{}{status}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []EspaiImport
+	for rows.Next() {
+		var i EspaiImport
+		if err := rows.Scan(&i.ID, &i.OwnerUserID, &i.ArbreID, &i.FontID, &i.ImportType, &i.ImportMode, &i.Status, &i.ProgressTotal, &i.ProgressDone, &i.SummaryJSON, &i.ErrorText, &i.StartedAt, &i.FinishedAt, &i.CreatedAt, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, i)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) deleteEspaiImportsByArbre(arbreID int) error {
+	stmt := `DELETE FROM espai_imports WHERE arbre_id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, arbreID)
+	return err
+}
+
+func (h sqlHelper) countEspaiImportsByFont(fontID int) (int, error) {
+	query := `SELECT COUNT(*) FROM espai_imports WHERE font_id = ?`
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, fontID).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) clearEspaiTreeData(arbreID int) error {
+	stmts := []string{
+		`DELETE FROM espai_events WHERE arbre_id = ?`,
+		`DELETE FROM espai_relacions WHERE arbre_id = ?`,
+		`DELETE FROM espai_coincidencies WHERE arbre_id = ?`,
+		`DELETE FROM espai_persones WHERE arbre_id = ?`,
+	}
+	for _, stmt := range stmts {
+		stmt = formatPlaceholders(h.style, stmt)
+		if _, err := h.db.Exec(stmt, arbreID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (h sqlHelper) createEspaiPersona(p *EspaiPersona) (int, error) {
@@ -304,13 +409,13 @@ func (h sqlHelper) createEspaiPersona(p *EspaiPersona) (int, error) {
 			p.NomComplet = sql.NullString{String: full, Valid: true}
 		}
 	}
-	stmt := `INSERT INTO espai_persones (owner_user_id, arbre_id, external_id, nom, cognom1, cognom2, nom_complet, sexe, data_naixement, data_defuncio, lloc_naixement, lloc_defuncio, notes, visibility, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	stmt := `INSERT INTO espai_persones (owner_user_id, arbre_id, external_id, nom, cognom1, cognom2, nom_complet, sexe, data_naixement, data_defuncio, lloc_naixement, lloc_defuncio, notes, has_media, visibility, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	if h.style == "postgres" {
 		stmt += " RETURNING id"
 	}
 	stmt = formatPlaceholders(h.style, stmt)
-	args := []interface{}{p.OwnerUserID, p.ArbreID, p.ExternalID, p.Nom, p.Cognom1, p.Cognom2, p.NomComplet, p.Sexe, p.DataNaixement, p.DataDefuncio, p.LlocNaixement, p.LlocDefuncio, p.Notes, visibility, status}
+	args := []interface{}{p.OwnerUserID, p.ArbreID, p.ExternalID, p.Nom, p.Cognom1, p.Cognom2, p.NomComplet, p.Sexe, p.DataNaixement, p.DataDefuncio, p.LlocNaixement, p.LlocDefuncio, p.Notes, p.HasMedia, visibility, status}
 	if h.style == "postgres" {
 		if err := h.db.QueryRow(stmt, args...).Scan(&p.ID); err != nil {
 			return 0, err
@@ -327,19 +432,37 @@ func (h sqlHelper) createEspaiPersona(p *EspaiPersona) (int, error) {
 	return p.ID, nil
 }
 
+func (h sqlHelper) updateEspaiPersona(p *EspaiPersona) error {
+	if p == nil || p.ID == 0 {
+		return nil
+	}
+	if !p.NomComplet.Valid {
+		full := strings.TrimSpace(strings.Join([]string{p.Nom.String, p.Cognom1.String, p.Cognom2.String}, " "))
+		if full != "" {
+			p.NomComplet = sql.NullString{String: full, Valid: true}
+		}
+	}
+	stmt := `UPDATE espai_persones
+        SET nom = ?, cognom1 = ?, cognom2 = ?, nom_complet = ?, sexe = ?, data_naixement = ?, data_defuncio = ?, lloc_naixement = ?, lloc_defuncio = ?, notes = ?, has_media = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, p.Nom, p.Cognom1, p.Cognom2, p.NomComplet, p.Sexe, p.DataNaixement, p.DataDefuncio, p.LlocNaixement, p.LlocDefuncio, p.Notes, p.HasMedia, p.ID)
+	return err
+}
+
 func (h sqlHelper) getEspaiPersona(id int) (*EspaiPersona, error) {
-	query := `SELECT id, owner_user_id, arbre_id, external_id, nom, cognom1, cognom2, nom_complet, sexe, data_naixement, data_defuncio, lloc_naixement, lloc_defuncio, notes, visibility, status, created_at, updated_at
+	query := `SELECT id, owner_user_id, arbre_id, external_id, nom, cognom1, cognom2, nom_complet, sexe, data_naixement, data_defuncio, lloc_naixement, lloc_defuncio, notes, has_media, visibility, status, created_at, updated_at
         FROM espai_persones WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
 	var p EspaiPersona
-	if err := h.db.QueryRow(query, id).Scan(&p.ID, &p.OwnerUserID, &p.ArbreID, &p.ExternalID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.NomComplet, &p.Sexe, &p.DataNaixement, &p.DataDefuncio, &p.LlocNaixement, &p.LlocDefuncio, &p.Notes, &p.Visibility, &p.Status, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := h.db.QueryRow(query, id).Scan(&p.ID, &p.OwnerUserID, &p.ArbreID, &p.ExternalID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.NomComplet, &p.Sexe, &p.DataNaixement, &p.DataDefuncio, &p.LlocNaixement, &p.LlocDefuncio, &p.Notes, &p.HasMedia, &p.Visibility, &p.Status, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &p, nil
 }
 
 func (h sqlHelper) listEspaiPersonesByArbre(arbreID int) ([]EspaiPersona, error) {
-	query := `SELECT id, owner_user_id, arbre_id, external_id, nom, cognom1, cognom2, nom_complet, sexe, data_naixement, data_defuncio, lloc_naixement, lloc_defuncio, notes, visibility, status, created_at, updated_at
+	query := `SELECT id, owner_user_id, arbre_id, external_id, nom, cognom1, cognom2, nom_complet, sexe, data_naixement, data_defuncio, lloc_naixement, lloc_defuncio, notes, has_media, visibility, status, created_at, updated_at
         FROM espai_persones WHERE arbre_id = ? ORDER BY id DESC`
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, arbreID)
@@ -350,7 +473,7 @@ func (h sqlHelper) listEspaiPersonesByArbre(arbreID int) ([]EspaiPersona, error)
 	var res []EspaiPersona
 	for rows.Next() {
 		var p EspaiPersona
-		if err := rows.Scan(&p.ID, &p.OwnerUserID, &p.ArbreID, &p.ExternalID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.NomComplet, &p.Sexe, &p.DataNaixement, &p.DataDefuncio, &p.LlocNaixement, &p.LlocDefuncio, &p.Notes, &p.Visibility, &p.Status, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.OwnerUserID, &p.ArbreID, &p.ExternalID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.NomComplet, &p.Sexe, &p.DataNaixement, &p.DataDefuncio, &p.LlocNaixement, &p.LlocDefuncio, &p.Notes, &p.HasMedia, &p.Visibility, &p.Status, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		res = append(res, p)
@@ -387,7 +510,7 @@ func (h sqlHelper) countEspaiPersonesByArbreQuery(arbreID int, queryText string)
 }
 
 func (h sqlHelper) listEspaiPersonesByArbreQuery(arbreID int, queryText string, limit, offset int) ([]EspaiPersona, error) {
-	query := `SELECT id, owner_user_id, arbre_id, external_id, nom, cognom1, cognom2, nom_complet, sexe, data_naixement, data_defuncio, lloc_naixement, lloc_defuncio, notes, visibility, status, created_at, updated_at
+	query := `SELECT id, owner_user_id, arbre_id, external_id, nom, cognom1, cognom2, nom_complet, sexe, data_naixement, data_defuncio, lloc_naixement, lloc_defuncio, notes, has_media, visibility, status, created_at, updated_at
         FROM espai_persones WHERE arbre_id = ?`
 	args := []interface{}{arbreID}
 	queryText = strings.TrimSpace(queryText)
@@ -414,10 +537,240 @@ func (h sqlHelper) listEspaiPersonesByArbreQuery(arbreID int, queryText string, 
 	var res []EspaiPersona
 	for rows.Next() {
 		var p EspaiPersona
-		if err := rows.Scan(&p.ID, &p.OwnerUserID, &p.ArbreID, &p.ExternalID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.NomComplet, &p.Sexe, &p.DataNaixement, &p.DataDefuncio, &p.LlocNaixement, &p.LlocDefuncio, &p.Notes, &p.Visibility, &p.Status, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.OwnerUserID, &p.ArbreID, &p.ExternalID, &p.Nom, &p.Cognom1, &p.Cognom2, &p.NomComplet, &p.Sexe, &p.DataNaixement, &p.DataDefuncio, &p.LlocNaixement, &p.LlocDefuncio, &p.Notes, &p.HasMedia, &p.Visibility, &p.Status, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		res = append(res, p)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) countEspaiPersonesByOwnerFilters(ownerID int, nameFilter, treeFilter, visibility string) (int, error) {
+	query := `SELECT COUNT(*)
+        FROM espai_persones p
+        JOIN espai_arbres a ON a.id = p.arbre_id
+        WHERE p.owner_user_id = ? AND a.owner_user_id = ?`
+	args := []interface{}{ownerID, ownerID}
+	nameFilter = strings.TrimSpace(nameFilter)
+	if nameFilter != "" {
+		like := "%" + strings.ToLower(nameFilter) + "%"
+		query += " AND (LOWER(p.nom_complet) LIKE ? OR LOWER(p.nom) LIKE ? OR LOWER(p.cognom1) LIKE ? OR LOWER(p.cognom2) LIKE ?)"
+		args = append(args, like, like, like, like)
+	}
+	treeFilter = strings.TrimSpace(treeFilter)
+	if treeFilter != "" {
+		like := "%" + strings.ToLower(treeFilter) + "%"
+		query += " AND LOWER(a.nom) LIKE ?"
+		args = append(args, like)
+	}
+	visibility = strings.TrimSpace(visibility)
+	if visibility != "" {
+		query += " AND p.visibility = ?"
+		args = append(args, visibility)
+	}
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) listEspaiPersonesByOwnerFilters(ownerID int, nameFilter, treeFilter, visibility string, limit, offset int) ([]EspaiPersonaTreeRow, error) {
+	query := `SELECT p.id, p.owner_user_id, p.arbre_id, p.external_id, p.nom, p.cognom1, p.cognom2, p.nom_complet, p.sexe, p.data_naixement, p.data_defuncio, p.lloc_naixement, p.lloc_defuncio, p.notes, p.has_media, p.visibility, p.status, p.created_at, p.updated_at, a.nom
+        FROM espai_persones p
+        JOIN espai_arbres a ON a.id = p.arbre_id
+        WHERE p.owner_user_id = ? AND a.owner_user_id = ?`
+	args := []interface{}{ownerID, ownerID}
+	nameFilter = strings.TrimSpace(nameFilter)
+	if nameFilter != "" {
+		like := "%" + strings.ToLower(nameFilter) + "%"
+		query += " AND (LOWER(p.nom_complet) LIKE ? OR LOWER(p.nom) LIKE ? OR LOWER(p.cognom1) LIKE ? OR LOWER(p.cognom2) LIKE ?)"
+		args = append(args, like, like, like, like)
+	}
+	treeFilter = strings.TrimSpace(treeFilter)
+	if treeFilter != "" {
+		like := "%" + strings.ToLower(treeFilter) + "%"
+		query += " AND LOWER(a.nom) LIKE ?"
+		args = append(args, like)
+	}
+	visibility = strings.TrimSpace(visibility)
+	if visibility != "" {
+		query += " AND p.visibility = ?"
+		args = append(args, visibility)
+	}
+	query += " ORDER BY p.id DESC"
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+		if offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, offset)
+		}
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []EspaiPersonaTreeRow
+	for rows.Next() {
+		var row EspaiPersonaTreeRow
+		if err := rows.Scan(&row.ID, &row.OwnerUserID, &row.ArbreID, &row.ExternalID, &row.Nom, &row.Cognom1, &row.Cognom2, &row.NomComplet, &row.Sexe, &row.DataNaixement, &row.DataDefuncio, &row.LlocNaixement, &row.LlocDefuncio, &row.Notes, &row.HasMedia, &row.Visibility, &row.Status, &row.CreatedAt, &row.UpdatedAt, &row.TreeName); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) buildEspaiPersonaDataFilters(f EspaiPersonaDataFilter) ([]string, []interface{}) {
+	clauses := []string{}
+	args := []interface{}{}
+	addLike := func(val string, clause string) {
+		val = strings.TrimSpace(val)
+		if val == "" {
+			return
+		}
+		clauses = append(clauses, clause)
+		args = append(args, "%"+strings.ToLower(val)+"%")
+	}
+	addExact := func(val string, clause string) {
+		val = strings.TrimSpace(val)
+		if val == "" {
+			return
+		}
+		clauses = append(clauses, clause)
+		args = append(args, val)
+	}
+	addLike(f.Name, "LOWER(p.nom) LIKE ?")
+	addLike(f.Surname1, "LOWER(p.cognom1) LIKE ?")
+	addLike(f.Surname2, "LOWER(p.cognom2) LIKE ?")
+	addLike(f.FullName, "LOWER(p.nom_complet) LIKE ?")
+	addLike(f.BirthDate, "LOWER(p.data_naixement) LIKE ?")
+	addLike(f.DeathDate, "LOWER(p.data_defuncio) LIKE ?")
+	addLike(f.BirthPlace, "LOWER(p.lloc_naixement) LIKE ?")
+	addLike(f.DeathPlace, "LOWER(p.lloc_defuncio) LIKE ?")
+	addLike(f.Notes, "LOWER(p.notes) LIKE ?")
+	addLike(f.Tree, "LOWER(a.nom) LIKE ?")
+	addLike(f.ExternalID, "LOWER(p.external_id) LIKE ?")
+	sex := strings.TrimSpace(strings.ToLower(f.Sex))
+	if sex != "" {
+		if sex == "unknown" {
+			clauses = append(clauses, "(p.sexe IS NULL OR TRIM(p.sexe) = '')")
+		} else {
+			clauses = append(clauses, "LOWER(p.sexe) = ?")
+			args = append(args, sex)
+		}
+	}
+	addExact(f.Visibility, "p.visibility = ?")
+	if f.HasMedia != nil {
+		clauses = append(clauses, "p.has_media = ?")
+		args = append(args, *f.HasMedia)
+	}
+	if f.Linked != nil {
+		if *f.Linked {
+			clauses = append(clauses, "EXISTS (SELECT 1 FROM espai_coincidencies c WHERE c.owner_user_id = p.owner_user_id AND c.persona_id = p.id AND c.target_type = 'persona' AND c.status = 'accepted')")
+		} else {
+			clauses = append(clauses, "NOT EXISTS (SELECT 1 FROM espai_coincidencies c WHERE c.owner_user_id = p.owner_user_id AND c.persona_id = p.id AND c.target_type = 'persona' AND c.status = 'accepted')")
+		}
+	}
+	return clauses, args
+}
+
+func (h sqlHelper) countEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPersonaDataFilter) (int, error) {
+	query := `SELECT COUNT(*) FROM espai_persones p
+        JOIN espai_arbres a ON a.id = p.arbre_id
+        WHERE p.owner_user_id = ? AND a.owner_user_id = ?`
+	args := []interface{}{ownerID, ownerID}
+	clauses, moreArgs := h.buildEspaiPersonaDataFilters(filter)
+	if len(clauses) > 0 {
+		query += " AND " + strings.Join(clauses, " AND ")
+		args = append(args, moreArgs...)
+	}
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) listEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPersonaDataFilter, limit, offset int) ([]EspaiPersonaTreeRow, error) {
+	query := `SELECT p.id, p.owner_user_id, p.arbre_id, p.external_id, p.nom, p.cognom1, p.cognom2, p.nom_complet, p.sexe, p.data_naixement, p.data_defuncio, p.lloc_naixement, p.lloc_defuncio, p.notes, p.has_media, p.visibility, p.status, p.created_at, p.updated_at, a.nom
+        FROM espai_persones p
+        JOIN espai_arbres a ON a.id = p.arbre_id
+        WHERE p.owner_user_id = ? AND a.owner_user_id = ?`
+	args := []interface{}{ownerID, ownerID}
+	clauses, moreArgs := h.buildEspaiPersonaDataFilters(filter)
+	if len(clauses) > 0 {
+		query += " AND " + strings.Join(clauses, " AND ")
+		args = append(args, moreArgs...)
+	}
+	sortKey := strings.TrimSpace(filter.Sort)
+	sortDir := strings.ToLower(strings.TrimSpace(filter.SortDir))
+	if sortDir != "asc" && sortDir != "desc" {
+		sortDir = "asc"
+	}
+	order := ""
+	switch sortKey {
+	case "name":
+		order = "p.nom " + sortDir
+	case "surname1":
+		order = "p.cognom1 " + sortDir
+	case "surname2":
+		order = "p.cognom2 " + sortDir
+	case "full_name":
+		order = "p.nom_complet " + sortDir
+	case "sex":
+		order = "p.sexe " + sortDir
+	case "birth_date":
+		order = "p.data_naixement " + sortDir
+	case "death_date":
+		order = "p.data_defuncio " + sortDir
+	case "birth_place":
+		order = "p.lloc_naixement " + sortDir
+	case "death_place":
+		order = "p.lloc_defuncio " + sortDir
+	case "tree":
+		order = "a.nom " + sortDir
+	case "visibility":
+		order = "p.visibility " + sortDir
+	case "has_media":
+		order = "p.has_media " + sortDir
+	case "external_id":
+		order = "p.external_id " + sortDir
+	case "updated":
+		order = "p.updated_at " + sortDir
+	}
+	if order == "" {
+		order = "p.id DESC"
+	} else {
+		order = order + ", p.id DESC"
+	}
+	query += " ORDER BY " + order
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+		if offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, offset)
+		}
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []EspaiPersonaTreeRow
+	for rows.Next() {
+		var row EspaiPersonaTreeRow
+		if err := rows.Scan(&row.ID, &row.OwnerUserID, &row.ArbreID, &row.ExternalID, &row.Nom, &row.Cognom1, &row.Cognom2, &row.NomComplet, &row.Sexe, &row.DataNaixement, &row.DataDefuncio, &row.LlocNaixement, &row.LlocDefuncio, &row.Notes, &row.HasMedia, &row.Visibility, &row.Status, &row.CreatedAt, &row.UpdatedAt, &row.TreeName); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
 	}
 	return res, nil
 }
@@ -508,6 +861,87 @@ func (h sqlHelper) listEspaiRelacionsByArbre(arbreID int) ([]EspaiRelacio, error
 		res = append(res, r)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) countEspaiRelacionsByArbre(arbreID int) (int, error) {
+	query := `SELECT COUNT(*) FROM espai_relacions WHERE arbre_id = ?`
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, arbreID).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) countEspaiRelacionsByArbreType(arbreID int, relationType string) (int, error) {
+	relationType = strings.TrimSpace(relationType)
+	query := `SELECT COUNT(*) FROM espai_relacions WHERE arbre_id = ? AND relation_type = ?`
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, arbreID, relationType).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) createEspaiEvent(ev *EspaiEvent) (int, error) {
+	if ev == nil {
+		return 0, nil
+	}
+	stmt := `INSERT INTO espai_events (arbre_id, persona_id, external_id, event_type, event_role, event_date, event_place, description, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	args := []interface{}{ev.ArbreID, ev.PersonaID, ev.ExternalID, ev.EventType, ev.EventRole, ev.EventDate, ev.EventPlace, ev.Description, ev.Source}
+	if h.style == "postgres" {
+		if err := h.db.QueryRow(stmt, args...).Scan(&ev.ID); err != nil {
+			return 0, err
+		}
+		return ev.ID, nil
+	}
+	res, err := h.db.Exec(stmt, args...)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		ev.ID = int(id)
+	}
+	return ev.ID, nil
+}
+
+func (h sqlHelper) listEspaiEventsByPersona(personaID int) ([]EspaiEvent, error) {
+	query := `SELECT id, arbre_id, persona_id, external_id, event_type, event_role, event_date, event_place, description, source, created_at, updated_at
+        FROM espai_events WHERE persona_id = ? ORDER BY id DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, personaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []EspaiEvent
+	for rows.Next() {
+		var ev EspaiEvent
+		if err := rows.Scan(&ev.ID, &ev.ArbreID, &ev.PersonaID, &ev.ExternalID, &ev.EventType, &ev.EventRole, &ev.EventDate, &ev.EventPlace, &ev.Description, &ev.Source, &ev.CreatedAt, &ev.UpdatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, ev)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) deleteEspaiEventsByArbreSource(arbreID int, source string) error {
+	source = strings.TrimSpace(source)
+	stmt := `DELETE FROM espai_events WHERE arbre_id = ?`
+	args := []interface{}{arbreID}
+	if source != "" {
+		stmt += " AND source = ?"
+		args = append(args, source)
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, args...)
+	return err
 }
 
 func (h sqlHelper) createEspaiCoincidencia(c *EspaiCoincidencia) (int, error) {
@@ -672,10 +1106,10 @@ func (h sqlHelper) updateEspaiIntegracioGramps(i *EspaiIntegracioGramps) error {
 		return nil
 	}
 	stmt := `UPDATE espai_integracions_gramps
-        SET base_url = ?, username = ?, token = ?, status = ?, last_sync_at = ?, last_error = ?, updated_at = ` + h.nowFun + `
+        SET arbre_id = ?, base_url = ?, username = ?, token = ?, status = ?, last_sync_at = ?, last_error = ?, updated_at = ` + h.nowFun + `
         WHERE id = ?`
 	stmt = formatPlaceholders(h.style, stmt)
-	_, err := h.db.Exec(stmt, i.BaseURL, i.Username, i.Token, i.Status, i.LastSyncAt, i.LastError, i.ID)
+	_, err := h.db.Exec(stmt, i.ArbreID, i.BaseURL, i.Username, i.Token, i.Status, i.LastSyncAt, i.LastError, i.ID)
 	return err
 }
 

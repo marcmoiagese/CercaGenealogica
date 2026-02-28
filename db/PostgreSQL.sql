@@ -764,7 +764,7 @@ CREATE INDEX IF NOT EXISTS idx_persona_field_links_registre ON persona_field_lin
 
 CREATE TABLE IF NOT EXISTS search_docs (
   id SERIAL PRIMARY KEY,
-  entity_type TEXT NOT NULL CHECK (entity_type IN ('persona','registre_raw')),
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('persona','registre_raw','espai_arbre','espai_persona')),
   entity_id INTEGER NOT NULL,
   published INTEGER NOT NULL DEFAULT 1 CHECK (published IN (0,1)),
   municipi_id INTEGER REFERENCES municipis(id) ON DELETE SET NULL,
@@ -1723,6 +1723,7 @@ CREATE TABLE IF NOT EXISTS espai_imports (
   arbre_id INTEGER NOT NULL REFERENCES espai_arbres(id) ON DELETE CASCADE,
   font_id INTEGER REFERENCES espai_fonts_importacio(id) ON DELETE SET NULL,
   import_type TEXT NOT NULL CHECK (import_type IN ('gedcom','gramps')),
+  import_mode TEXT NOT NULL DEFAULT 'full',
   status TEXT NOT NULL CHECK (status IN ('queued','parsing','normalizing','persisted','done','error','cancelled')),
   progress_total INTEGER NOT NULL DEFAULT 0,
   progress_done INTEGER NOT NULL DEFAULT 0,
@@ -1754,6 +1755,7 @@ CREATE TABLE IF NOT EXISTS espai_persones (
   lloc_naixement TEXT,
   lloc_defuncio TEXT,
   notes TEXT,
+  has_media BOOLEAN NOT NULL DEFAULT FALSE,
   visibility TEXT NOT NULL DEFAULT 'visible' CHECK (visibility IN ('visible','hidden')),
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1778,6 +1780,25 @@ CREATE TABLE IF NOT EXISTS espai_relacions (
 CREATE INDEX IF NOT EXISTS idx_espai_relacions_arbre ON espai_relacions(arbre_id);
 CREATE INDEX IF NOT EXISTS idx_espai_relacions_persona ON espai_relacions(persona_id);
 CREATE INDEX IF NOT EXISTS idx_espai_relacions_related ON espai_relacions(related_persona_id);
+
+CREATE TABLE IF NOT EXISTS espai_events (
+  id SERIAL PRIMARY KEY,
+  arbre_id INTEGER NOT NULL REFERENCES espai_arbres(id) ON DELETE CASCADE,
+  persona_id INTEGER NOT NULL REFERENCES espai_persones(id) ON DELETE CASCADE,
+  external_id TEXT,
+  event_type TEXT NOT NULL,
+  event_role TEXT,
+  event_date TEXT,
+  event_place TEXT,
+  description TEXT,
+  source TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_espai_events_arbre ON espai_events(arbre_id);
+CREATE INDEX IF NOT EXISTS idx_espai_events_persona ON espai_events(persona_id);
+CREATE INDEX IF NOT EXISTS idx_espai_events_type ON espai_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_espai_events_source ON espai_events(source);
 
 CREATE TABLE IF NOT EXISTS espai_coincidencies (
   id SERIAL PRIMARY KEY,
@@ -1910,6 +1931,35 @@ CREATE INDEX IF NOT EXISTS idx_espai_grups_conflictes_grup ON espai_grups_confli
 CREATE INDEX IF NOT EXISTS idx_espai_grups_conflictes_status ON espai_grups_conflictes(status);
 CREATE INDEX IF NOT EXISTS idx_espai_grups_conflictes_updated ON espai_grups_conflictes(updated_at);
 CREATE INDEX IF NOT EXISTS idx_espai_grups_conflictes_type ON espai_grups_conflictes(conflict_type);
+
+CREATE TABLE IF NOT EXISTS external_sites (
+  id SERIAL PRIMARY KEY,
+  slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  domains TEXT NOT NULL,
+  icon_path TEXT,
+  access_mode TEXT NOT NULL CHECK (access_mode IN ('public','account','private','premium','mixed')),
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS external_links (
+  id SERIAL PRIMARY KEY,
+  persona_id INTEGER NOT NULL REFERENCES persona(id) ON DELETE CASCADE,
+  site_id INTEGER REFERENCES external_sites(id) ON DELETE SET NULL,
+  url TEXT NOT NULL,
+  url_norm TEXT NOT NULL,
+  title TEXT,
+  meta TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  created_by_user_id INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_external_links_persona_url ON external_links(persona_id, url_norm);
+CREATE INDEX IF NOT EXISTS idx_external_links_persona_status ON external_links(persona_id, status);
+CREATE INDEX IF NOT EXISTS idx_external_links_site ON external_links(site_id);
 
 CREATE TABLE IF NOT EXISTS espai_notifications (
   id SERIAL PRIMARY KEY,
