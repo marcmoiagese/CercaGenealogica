@@ -987,6 +987,8 @@
   "moderation.bulk.scope": "Encastre",
   "moderation.bulk.scope.all": "Tot çò que demora",
   "moderation.bulk.scope.page": "Solament aquesta pagina",
+  "moderation.bulk.user": "ID d'usatge (registres)",
+  "moderation.bulk.user.placeholder": "Limita los registres d'aqueste usatge",
   "moderation.bulk.select_all": "Seleccionar totes",
   "moderation.bulk.type": "Tipe",
   "moderation.bulk.type.all": "Totes los tipes",

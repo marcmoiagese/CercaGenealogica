@@ -1297,7 +1297,7 @@ func (a *App) applyModeracioAction(ctx context.Context, action string, objType s
 	return nil
 }
 
-func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, motiu string, userID int, update func(processed int, total int)) error {
+func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, motiu string, userID int, bulkUserID int, update func(processed int, total int)) error {
 	if update == nil {
 		update = func(int, int) {}
 	}
@@ -1490,33 +1490,26 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, id)
 			}
 		case "registre":
-			if totalCount, err := a.DB.CountTranscripcionsRawGlobal(db.TranscripcioFilter{Status: "pendent"}); err == nil {
-				updateTotal(totalCount)
-				const chunk = 200
-				offset := 0
-				for {
-					rows, err := a.DB.ListTranscripcionsRawGlobal(db.TranscripcioFilter{
-						Status: "pendent",
-						Limit:  chunk,
-						Offset: offset,
-					})
-					if err != nil {
-						errCount++
-						break
-					}
-					if len(rows) == 0 {
-						break
-					}
-					for _, row := range rows {
-						apply(objType, row.ID)
-					}
-					if len(rows) < chunk {
-						break
-					}
-					offset += chunk
-				}
-			} else {
+			rows, err := a.DB.ListTranscripcionsRawGlobal(db.TranscripcioFilter{
+				Status: "pendent",
+				Limit:  -1,
+			})
+			if err != nil {
 				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				if bulkUserID > 0 {
+					if !row.CreatedBy.Valid || int(row.CreatedBy.Int64) != bulkUserID {
+						continue
+					}
+				}
+				ids = append(ids, row.ID)
+			}
+			updateTotal(len(ids))
+			for _, id := range ids {
+				apply(objType, id)
 			}
 		}
 	}
@@ -1556,6 +1549,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	if bulkType == "" {
 		bulkType = "all"
 	}
+	bulkUserID := parseIntValue(r.FormValue("bulk_user_id"))
 	selected := r.Form["selected"]
 	motiu := strings.TrimSpace(r.FormValue("bulk_reason"))
 	perms := a.getPermissionsForUser(user.ID)
@@ -1574,7 +1568,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 			job := a.moderacioBulkStore().newJob(action, scope, bulkType)
 			store := a.moderacioBulkStore()
 			go func() {
-				err := a.processModeracioBulkAll(context.Background(), action, bulkType, motiu, user.ID, func(processed int, total int) {
+				err := a.processModeracioBulkAll(context.Background(), action, bulkType, motiu, user.ID, bulkUserID, func(processed int, total int) {
 					store.setTotal(job.ID, total)
 					store.setProcessed(job.ID, processed)
 				})
@@ -1583,7 +1577,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, map[string]interface{}{"ok": true, "job_id": job.ID})
 			return
 		}
-		if err := a.processModeracioBulkAll(r.Context(), action, bulkType, motiu, user.ID, nil); err != nil {
+		if err := a.processModeracioBulkAll(r.Context(), action, bulkType, motiu, user.ID, bulkUserID, nil); err != nil {
 			http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "err"), http.StatusSeeOther)
 			return
 		}
@@ -1639,13 +1633,17 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 		objType = "persona"
 	}
 	_ = r.ParseForm()
+	returnTo := strings.TrimSpace(r.FormValue("return_to"))
+	if returnTo == "" {
+		returnTo = "/moderacio"
+	}
 	if !canModerateAll && !a.canModerateTerritoriObject(user, perms, objType, id) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	if err := a.updateModeracioObject(objType, id, "publicat", "", user.ID); err != nil {
 		Errorf("Moderacio aprovar %s:%d ha fallat: %v", objType, id, err)
-		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "err"), http.StatusSeeOther)
 		return
 	}
 	if acts, err := a.DB.ListActivityByObject(objType, id, "pendent"); err == nil {
@@ -1657,7 +1655,7 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 	if objType == "event_historic" {
 		a.registerEventHistoricModerationActivity(r.Context(), id, "publicat", user.ID, "")
 	}
-	http.Redirect(w, r, "/moderacio?ok=1", http.StatusSeeOther)
+	http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "ok"), http.StatusSeeOther)
 }
 
 // Rebutjar persona amb motiu
@@ -1683,6 +1681,10 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
 		return
 	}
+	returnTo := strings.TrimSpace(r.FormValue("return_to"))
+	if returnTo == "" {
+		returnTo = "/moderacio"
+	}
 	if !canModerateAll && !a.canModerateTerritoriObject(user, perms, objType, id) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -1690,7 +1692,7 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 	motiu := r.FormValue("motiu")
 	if err := a.updateModeracioObject(objType, id, "rebutjat", motiu, user.ID); err != nil {
 		Errorf("Moderacio rebutjar %s:%d ha fallat: %v", objType, id, err)
-		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "err"), http.StatusSeeOther)
 		return
 	}
 	if acts, err := a.DB.ListActivityByObject(objType, id, "pendent"); err == nil {
@@ -1702,7 +1704,7 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 	if objType == "event_historic" {
 		a.registerEventHistoricModerationActivity(r.Context(), id, "rebutjat", user.ID, motiu)
 	}
-	http.Redirect(w, r, "/moderacio?ok=1", http.StatusSeeOther)
+	http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "ok"), http.StatusSeeOther)
 }
 
 func (a *App) updateModeracioObject(objectType string, id int, estat, motiu string, moderatorID int) error {

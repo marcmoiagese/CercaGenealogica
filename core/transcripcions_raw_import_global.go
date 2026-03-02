@@ -22,7 +22,6 @@ func (a *App) AdminImportRegistresGlobalView(w http.ResponseWriter, r *http.Requ
 	updated, _ := strconv.Atoi(r.URL.Query().Get("updated"))
 	failed, _ := strconv.Atoi(r.URL.Query().Get("failed"))
 	errorsToken := strings.TrimSpace(r.URL.Query().Get("errors_token"))
-	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	arxius, _ := a.DB.ListArxius(db.ArxiuFilter{})
 	templates, _ := a.DB.ListCSVImportTemplates(db.CSVImportTemplateFilter{
 		OwnerUserID:   user.ID,
@@ -34,7 +33,6 @@ func (a *App) AdminImportRegistresGlobalView(w http.ResponseWriter, r *http.Requ
 		"Updated":           updated,
 		"Failed":            failed,
 		"ErrorsToken":       errorsToken,
-		"Municipis":         municipis,
 		"Arxius":            arxius,
 		"ImportTemplates":   templates,
 		"User":              user,

@@ -58,13 +58,22 @@
                     </select>
                 </div>
                 <div class="grup-camp">
-                    <label for="import-municipi">{{ t .Lang "records.import.filter.municipi" }}</label>
-                    <select id="import-municipi" name="municipi_id">
-                        <option value="">{{ t .Lang "records.import.filter.any" }}</option>
-                        {{ range .Data.Municipis }}
-                        <option value="{{ .ID }}">{{ .Nom }}</option>
-                        {{ end }}
-                    </select>
+                    <label for="import-municipi-search">{{ t .Lang "records.import.filter.municipi" }}</label>
+                    <div class="suggest-field">
+                        <input
+                            type="text"
+                            id="import-municipi-search"
+                            name="municipi_search"
+                            placeholder="{{ t .Lang "municipis.search.placeholder" }}"
+                            autocomplete="off"
+                            data-api="/api/territori/municipis/suggest"
+                            data-empty-label="{{ t .Lang "municipis.search.empty" }}"
+                            data-hidden="import-municipi-id"
+                            data-suggestions="import-municipi-suggestions"
+                            data-suggest="1">
+                        <input type="hidden" id="import-municipi-id" name="municipi_id" value="">
+                        <ul id="import-municipi-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
+                    </div>
                 </div>
                 <div class="grup-camp">
                     <label for="import-arxiu">{{ t .Lang "records.import.filter.arxiu" }}</label>
@@ -135,6 +144,7 @@
     </div>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/arxiu-form-suggest.js"></script>
     <script>
         (function () {
             const form = document.querySelector('.import-form');

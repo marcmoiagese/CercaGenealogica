@@ -987,6 +987,8 @@
   "moderation.bulk.scope": "Àmbit",
   "moderation.bulk.scope.all": "Tots els pendents",
   "moderation.bulk.scope.page": "Només aquesta pàgina",
+  "moderation.bulk.user": "ID d'usuari (registres)",
+  "moderation.bulk.user.placeholder": "Limita els registres d'aquest usuari",
   "moderation.bulk.select_all": "Seleccionar tots",
   "moderation.bulk.type": "Tipus",
   "moderation.bulk.type.all": "Tots els tipus",

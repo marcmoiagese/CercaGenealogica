@@ -332,6 +332,10 @@
                         <option value="event_historic_canvi">{{ t .Lang "moderation.type.event_historic_canvi" }}</option>
                     </select>
                 </div>
+                <div class="bulk-group" id="bulk-user-group">
+                    <label for="bulk-user-id">{{ t .Lang "moderation.bulk.user" }}</label>
+                    <input type="number" id="bulk-user-id" name="bulk_user_id" min="0" placeholder="{{ t .Lang "moderation.bulk.user.placeholder" }}">
+                </div>
                 {{ end }}
                 <div class="bulk-group">
                     <label for="bulk-reason">{{ t .Lang "moderation.table.reason" }}</label>
@@ -390,11 +394,13 @@
                                     <form style="display:inline" method="post" action="/moderacio/{{ .ID }}/aprovar">
                                         <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                         <input type="hidden" name="object_type" value="{{ .Type }}">
+                                        <input type="hidden" name="return_to" value="{{ $.Data.ReturnTo }}">
                                         <button type="submit" class="boto-primari">{{ t $.Lang "moderation.table.approve" }}</button>
                                     </form>
                                     <form style="display:inline" id="rej-{{ .ID }}" method="post" action="/moderacio/{{ .ID }}/rebutjar">
                                         <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                         <input type="hidden" name="object_type" value="{{ .Type }}">
+                                        <input type="hidden" name="return_to" value="{{ $.Data.ReturnTo }}">
                                         <button type="submit" class="boto-secundari">{{ t $.Lang "moderation.table.reject" }}</button>
                                     </form>
                                 </div>
@@ -444,10 +450,14 @@
             var reasonField = document.getElementById('bulk-reason');
             var scopeSelect = document.getElementById('bulk-scope');
             var typeGroup = document.getElementById('bulk-type-group');
+            var userGroup = document.getElementById('bulk-user-group');
             if (scopeSelect && typeGroup) {
                 var toggleType = function () {
                     var show = scopeSelect.value === 'all';
                     typeGroup.style.display = show ? 'flex' : 'none';
+                    if (userGroup) {
+                        userGroup.style.display = show ? 'flex' : 'none';
+                    }
                 };
                 toggleType();
                 scopeSelect.addEventListener('change', toggleType);

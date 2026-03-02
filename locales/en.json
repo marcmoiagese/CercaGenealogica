@@ -987,6 +987,8 @@
   "moderation.bulk.scope": "Scope",
   "moderation.bulk.scope.all": "All pending",
   "moderation.bulk.scope.page": "This page only",
+  "moderation.bulk.user": "User ID (records only)",
+  "moderation.bulk.user.placeholder": "Limit bulk records to this user",
   "moderation.bulk.select_all": "Select all",
   "moderation.bulk.type": "Type",
   "moderation.bulk.type.all": "All types",
