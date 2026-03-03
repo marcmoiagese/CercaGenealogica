@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "records.import.title" }}</title>
     {{ template "styles-private" . }}
+    {{ template "styles-file-uploader" . }}
     <link rel="stylesheet" href="/static/css/taula.css">
 </head>
 <body>
@@ -144,6 +145,7 @@
     </div>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    {{ template "scripts-file-uploader" . }}
     <script src="/static/js/arxiu-form-suggest.js"></script>
     <script>
         (function () {

@@ -12,7 +12,8 @@ import (
 func TestBlockIPs_UsesForwardedIP(t *testing.T) {
 	old := cnf.Config
 	cnf.Config = map[string]string{
-		"BLOCKED_IPS": "1.2.3.4",
+		"BLOCKED_IPS":         "1.2.3.4",
+		"TRUSTED_PROXY_CIDRS": "127.0.0.1/32",
 	}
 	defer func() { cnf.Config = old }()
 
@@ -21,6 +22,7 @@ func TestBlockIPs_UsesForwardedIP(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Forwarded-For", "1.2.3.4, 5.6.7.8")
 	rr := httptest.NewRecorder()
 
@@ -56,7 +58,8 @@ func TestBlockIPs_UsesRemoteAddr(t *testing.T) {
 func TestBlockIPs_UsesXRealIP(t *testing.T) {
 	old := cnf.Config
 	cnf.Config = map[string]string{
-		"BLOCKED_IPS": "2.3.4.5",
+		"BLOCKED_IPS":         "2.3.4.5",
+		"TRUSTED_PROXY_CIDRS": "127.0.0.1/32",
 	}
 	defer func() { cnf.Config = old }()
 
@@ -65,6 +68,7 @@ func TestBlockIPs_UsesXRealIP(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Real-IP", "2.3.4.5")
 
 	rr := httptest.NewRecorder()

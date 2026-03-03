@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ .Data.Album.Title }}</title>
     {{ template "styles-private" . }}
+    {{ template "styles-file-uploader" . }}
     <link rel="stylesheet" href="/static/css/media.css">
 </head>
 <body>
@@ -200,6 +201,7 @@
     {{ template "footer" . }}
     {{ if .UserLoggedIn }}
         {{ template "scripts-private" . }}
+        {{ template "scripts-file-uploader" . }}
     {{ else }}
         {{ template "scripts-public" . }}
     {{ end }}

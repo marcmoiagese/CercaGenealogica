@@ -12,6 +12,14 @@ import (
 )
 
 func TestSecureHeadersAddsSecurityHeaders(t *testing.T) {
+	old := cnf.Config
+	cnf.Config = map[string]string{
+		"TRUSTED_ORIGINS": "http://example.com",
+	}
+	t.Cleanup(func() {
+		cnf.Config = old
+	})
+
 	base := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -19,6 +27,7 @@ func TestSecureHeadersAddsSecurityHeaders(t *testing.T) {
 	handler := core.SecureHeaders(base)
 
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req.Header.Set("Origin", "http://example.com")
 	rr := httptest.NewRecorder()
 
 	handler(rr, req)

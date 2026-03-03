@@ -2,7 +2,9 @@
 package core
 
 import (
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,6 +31,32 @@ var allowedFiles = map[string]bool{
 	"js/idioma.js":            true,
 	"img/logo.png":            true,
 	"js/menu.js":              true,
+}
+
+type trustedOriginsCache struct {
+	mu      sync.Mutex
+	raw     string
+	origins map[string]struct{}
+}
+
+type trustedProxyCache struct {
+	mu   sync.Mutex
+	raw  string
+	cidr []*net.IPNet
+}
+
+var cachedTrustedOrigins trustedOriginsCache
+var cachedTrustedProxies trustedProxyCache
+
+func environmentName() string {
+	env := strings.TrimSpace(cnf.Config["ENVIRONMENT"])
+	if env == "" {
+		env = strings.TrimSpace(os.Getenv("ENVIRONMENT"))
+	}
+	if env == "" {
+		env = "development"
+	}
+	return strings.ToLower(env)
 }
 
 // rateLimiter – Usarem sync.Map per compartir entre goroutines
@@ -120,6 +148,305 @@ func getSessionID(r *http.Request) string {
 	return ""
 }
 
+type clientIPInfo struct {
+	ClientIP        string
+	ConnectionIP    string
+	UsedForwarded   bool
+	ForwardedHeader string
+}
+
+func parseRemoteAddr(addr string) string {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return ""
+	}
+	if strings.HasPrefix(addr, "[") {
+		if host, _, err := net.SplitHostPort(addr); err == nil {
+			return host
+		}
+		return strings.Trim(addr, "[]")
+	}
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
+	}
+	if ip := net.ParseIP(addr); ip != nil {
+		return ip.String()
+	}
+	return ""
+}
+
+func parseIPToken(raw string) string {
+	raw = strings.TrimSpace(strings.Trim(raw, "\""))
+	if raw == "" {
+		return ""
+	}
+	if strings.HasPrefix(raw, "[") {
+		raw = strings.TrimPrefix(raw, "[")
+		raw = strings.TrimSuffix(raw, "]")
+	}
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		raw = host
+	}
+	if ip := net.ParseIP(raw); ip != nil {
+		return ip.String()
+	}
+	return ""
+}
+
+func normalizeOrigin(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host)
+}
+
+func getTrustedOrigins() map[string]struct{} {
+	if cnf.Config == nil {
+		return map[string]struct{}{}
+	}
+	raw := strings.TrimSpace(cnf.Config["TRUSTED_ORIGINS"])
+	publicOrigin := PublicBaseOrigin(cnf.Config)
+	if publicOrigin != "" {
+		if raw == "" {
+			raw = publicOrigin
+		} else {
+			raw = raw + "," + publicOrigin
+		}
+	}
+
+	cachedTrustedOrigins.mu.Lock()
+	defer cachedTrustedOrigins.mu.Unlock()
+	if cachedTrustedOrigins.origins != nil && cachedTrustedOrigins.raw == raw {
+		return cachedTrustedOrigins.origins
+	}
+
+	origins := make(map[string]struct{})
+	for _, item := range strings.Split(raw, ",") {
+		if norm := normalizeOrigin(item); norm != "" {
+			origins[norm] = struct{}{}
+		}
+	}
+	cachedTrustedOrigins.raw = raw
+	cachedTrustedOrigins.origins = origins
+	return origins
+}
+
+func isTrustedOrigin(r *http.Request, origin string) bool {
+	norm := normalizeOrigin(origin)
+	if norm == "" {
+		return false
+	}
+	origins := getTrustedOrigins()
+	if len(origins) == 0 {
+		fallback := normalizeOrigin(requestScheme(r) + "://" + requestHost(r))
+		return fallback != "" && fallback == norm
+	}
+	_, ok := origins[norm]
+	return ok
+}
+
+func getTrustedProxyCIDRs() []*net.IPNet {
+	if cnf.Config == nil {
+		return nil
+	}
+	raw := strings.TrimSpace(cnf.Config["TRUSTED_PROXY_CIDRS"])
+	cachedTrustedProxies.mu.Lock()
+	defer cachedTrustedProxies.mu.Unlock()
+	if cachedTrustedProxies.cidr != nil && cachedTrustedProxies.raw == raw {
+		return cachedTrustedProxies.cidr
+	}
+
+	var cidrs []*net.IPNet
+	for _, item := range strings.Split(raw, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if strings.Contains(item, "/") {
+			if _, netw, err := net.ParseCIDR(item); err == nil && netw != nil {
+				cidrs = append(cidrs, netw)
+			}
+			continue
+		}
+		if ip := net.ParseIP(item); ip != nil {
+			bits := 32
+			if ip.To4() == nil {
+				bits = 128
+			}
+			netw := &net.IPNet{
+				IP:   ip,
+				Mask: net.CIDRMask(bits, bits),
+			}
+			cidrs = append(cidrs, netw)
+		}
+	}
+
+	cachedTrustedProxies.raw = raw
+	cachedTrustedProxies.cidr = cidrs
+	return cidrs
+}
+
+func isTrustedProxy(ip string) bool {
+	parsed := net.ParseIP(strings.TrimSpace(ip))
+	if parsed == nil {
+		return false
+	}
+	for _, netw := range getTrustedProxyCIDRs() {
+		if netw.Contains(parsed) {
+			return true
+		}
+	}
+	return false
+}
+
+func parseForwardedFor(header string) string {
+	if header == "" {
+		return ""
+	}
+	parts := strings.Split(header, ",")
+	for _, part := range parts {
+		seg := strings.TrimSpace(part)
+		for _, token := range strings.Split(seg, ";") {
+			token = strings.TrimSpace(token)
+			if strings.HasPrefix(strings.ToLower(token), "for=") {
+				val := strings.TrimSpace(token[4:])
+				if ip := parseIPToken(val); ip != "" {
+					return ip
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func parseForwardedProto(header string) string {
+	if header == "" {
+		return ""
+	}
+	parts := strings.Split(header, ",")
+	for _, part := range parts {
+		seg := strings.TrimSpace(part)
+		for _, token := range strings.Split(seg, ";") {
+			token = strings.TrimSpace(token)
+			if strings.HasPrefix(strings.ToLower(token), "proto=") {
+				val := strings.Trim(strings.TrimSpace(token[6:]), "\"")
+				if val != "" {
+					return strings.ToLower(val)
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func parseForwardedHost(header string) string {
+	if header == "" {
+		return ""
+	}
+	parts := strings.Split(header, ",")
+	for _, part := range parts {
+		seg := strings.TrimSpace(part)
+		for _, token := range strings.Split(seg, ";") {
+			token = strings.TrimSpace(token)
+			if strings.HasPrefix(strings.ToLower(token), "host=") {
+				val := strings.Trim(strings.TrimSpace(token[5:]), "\"")
+				if val != "" {
+					return val
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func resolveClientIP(r *http.Request) clientIPInfo {
+	connIP := parseRemoteAddr(r.RemoteAddr)
+	info := clientIPInfo{
+		ClientIP:     connIP,
+		ConnectionIP: connIP,
+	}
+	if connIP == "" || !isTrustedProxy(connIP) {
+		return info
+	}
+
+	if ip := parseForwardedFor(r.Header.Get("Forwarded")); ip != "" {
+		info.ClientIP = ip
+		info.UsedForwarded = true
+		info.ForwardedHeader = "Forwarded"
+		return info
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if ip := parseIPToken(strings.Split(xff, ",")[0]); ip != "" {
+			info.ClientIP = ip
+			info.UsedForwarded = true
+			info.ForwardedHeader = "X-Forwarded-For"
+			return info
+		}
+	}
+	if xr := parseIPToken(r.Header.Get("X-Real-IP")); xr != "" {
+		info.ClientIP = xr
+		info.UsedForwarded = true
+		info.ForwardedHeader = "X-Real-IP"
+		return info
+	}
+
+	return info
+}
+
+func requestHost(r *http.Request) string {
+	connIP := parseRemoteAddr(r.RemoteAddr)
+	if connIP != "" && isTrustedProxy(connIP) {
+		if xfHost := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); xfHost != "" {
+			return strings.TrimSpace(strings.Split(xfHost, ",")[0])
+		}
+		if fwdHost := parseForwardedHost(r.Header.Get("Forwarded")); fwdHost != "" {
+			return fwdHost
+		}
+	}
+	return strings.TrimSpace(r.Host)
+}
+
+func requestScheme(r *http.Request) string {
+	if r.TLS != nil {
+		return "https"
+	}
+	connIP := parseRemoteAddr(r.RemoteAddr)
+	if connIP != "" && isTrustedProxy(connIP) {
+		if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto != "" {
+			return strings.ToLower(strings.Split(proto, ",")[0])
+		}
+		if proto := parseForwardedProto(r.Header.Get("Forwarded")); proto != "" {
+			return proto
+		}
+	}
+	return "http"
+}
+
+func isRequestHTTPS(r *http.Request) bool {
+	return requestScheme(r) == "https"
+}
+
+func logSecurityBlock(r *http.Request, reason string, info clientIPInfo) {
+	Errorf("[security] %s method=%s path=%s host=%s origin=%s referer=%s ua=%s ip=%s conn_ip=%s forwarded=%t forwarded_header=%s",
+		reason,
+		r.Method,
+		r.URL.Path,
+		requestHost(r),
+		r.Header.Get("Origin"),
+		r.Header.Get("Referer"),
+		r.UserAgent(),
+		info.ClientIP,
+		info.ConnectionIP,
+		info.UsedForwarded,
+		info.ForwardedHeader,
+	)
+}
+
 /*func applyMiddleware(fn http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
 	for _, mw := range middlewares {
 		fn = mw(fn)
@@ -130,12 +457,20 @@ func getSessionID(r *http.Request) string {
 // blockIPs – Bloqueja accés per IP o rang d'IPs
 func BlockIPs(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ipStr := getIP(r)
+		if cnf.Config == nil {
+			cnf.Config = map[string]string{}
+		}
+		info := resolveClientIP(r)
+		ipStr := info.ClientIP
 
 		blockedIps := strings.Split(cnf.Config["BLOCKED_IPS"], ",")
 		for _, b := range blockedIps {
+			b = strings.TrimSpace(b)
+			if b == "" {
+				continue
+			}
 			if ipStr == b {
-				Errorf("Accés denegat per IP bloquejada: %s", ipStr)
+				logSecurityBlock(r, "blocked_ip", info)
 				http.Error(w, "Accés denegat", http.StatusForbidden)
 				return
 			}
@@ -161,8 +496,8 @@ func RateLimit(next http.HandlerFunc) http.HandlerFunc {
 		bucketRegistry.mu.Unlock()
 
 		if !b.allow(1) {
-			ipStr := getIP(r)
-			Errorf("Massa peticions (path=%s, key=%s, ip=%s)", path, key, ipStr)
+			info := resolveClientIP(r)
+			logSecurityBlock(r, "rate_limited", info)
 			http.Error(w, "Massa peticions", http.StatusTooManyRequests)
 			return
 		}
@@ -223,9 +558,6 @@ func ServeStatic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Obtenir IP netament
-	ipStr := getIP(r)
-
 	// Aplica Content-Type manualment
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
@@ -252,18 +584,6 @@ func ServeStatic(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Aplica referer check només per JS/CSS
-	if strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".css") {
-		referer := r.Header.Get("Referer")
-		if referer != "" {
-			if !strings.HasPrefix(referer, "http://localhost") && !strings.HasPrefix(referer, "https://genealogia.cat") {
-				Errorf("Accés amb referer invàlid: %s - IP: %s", referer, ipStr)
-				http.Error(w, "Accés denegat", http.StatusForbidden)
-				return
-			}
-		}
-	}
-
 	// Serveix el fitxer
 	http.ServeFile(w, r, realPath)
 }
@@ -272,11 +592,11 @@ func ServeStatic(w http.ResponseWriter, r *http.Request) {
 func SecureHeaders(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Content Security Policy
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com ; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self';")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com ; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src-elem 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self'; font-src 'self' https://cdnjs.cloudflare.com; connect-src 'self';")
 		//w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
 
 		// HSTS - Força HTTPS
-		if os.Getenv("ENVIRONMENT") != "development" {
+		if environmentName() != "development" {
 			w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
 		}
 
@@ -284,17 +604,22 @@ func SecureHeaders(next http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 
 		// MIME Sniffing - Només en producció per evitar problemes en desenvolupament
-		if os.Getenv("ENVIRONMENT") != "development" {
+		if environmentName() != "development" {
 			w.Header().Set("X-Content-Type-Options", "nosniff")
 		}
 
 		// Evita que la web s'incrusti en altres webs
 		w.Header().Set("X-Frame-Options", "DENY")
 
-		// CORS
-		w.Header().Set("Access-Control-Allow-Origin", "https://genealogia.cat ")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Authorization")
+		// CORS (només per orígens de confiança)
+		if origin := r.Header.Get("Origin"); origin != "" && isTrustedOrigin(r, origin) {
+			if norm := normalizeOrigin(origin); norm != "" {
+				w.Header().Set("Access-Control-Allow-Origin", norm)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Authorization, X-CSRF-Token")
+				w.Header().Set("Vary", "Origin")
+			}
+		}
 
 		// Restringeix el Referer per seguretat: envia l'origen (domini) en peticions cross-origin, evitant filtrar URLs completes.
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -302,31 +627,93 @@ func SecureHeaders(next http.HandlerFunc) http.HandlerFunc {
 		// Només quan volem que els cercadors no ens indexin
 		w.Header().Set("X-Robots-Tag", "noindex, nofollow, nosnippet, noarchive")
 
-		ipStr := strings.Split(r.RemoteAddr, ":")[0]
+		info := resolveClientIP(r)
 
 		// Bloqueja User-Agent sospitosos
 		userAgent := r.UserAgent()
 		for _, agent := range blockedUserAgents {
 			if strings.Contains(userAgent, agent) {
-				Errorf("Scraper bloquejat: %s - IP: %s", userAgent, ipStr)
+				logSecurityBlock(r, "blocked_user_agent", info)
 				http.Error(w, "Accés denegat", http.StatusForbidden)
 				return
 			}
 		}
 
-		// Referer check només per JS/CSS
-		referer := r.Header.Get("Referer")
-		if referer != "" && !strings.HasPrefix(referer, "http://localhost") && !strings.HasPrefix(referer, "https://genealogia.cat ") {
-			Errorf("Accés amb referer invàlid: %s - IP: %s", referer, ipStr)
+		// Força HTTPS en producció
+		if requestScheme(r) != "https" && environmentName() != "development" {
+			host := requestHost(r)
+			target := r.URL.Path
+			if r.URL.RawQuery != "" {
+				target += "?" + r.URL.RawQuery
+			}
+			Infof("Redirigint a HTTPS: %s%s", host, target)
+			http.Redirect(w, r, "https://"+host+target, http.StatusMovedPermanently)
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+func isStateChangingMethod(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
+}
+
+func isFetchMetadataAllowed(r *http.Request) (bool, string) {
+	val := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
+	if val == "" {
+		return true, ""
+	}
+	switch val {
+	case "same-origin", "same-site", "none":
+		return true, ""
+	default:
+		return false, val
+	}
+}
+
+// OriginGuard – valida Origin/Referer per peticions que canvien estat
+func OriginGuard(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isStateChangingMethod(r.Method) {
+			next(w, r)
+			return
+		}
+
+		if ok, meta := isFetchMetadataAllowed(r); !ok {
+			info := resolveClientIP(r)
+			logSecurityBlock(r, "fetch_metadata_block_"+meta, info)
 			http.Error(w, "Accés denegat", http.StatusForbidden)
 			return
 		}
 
-		// Força HTTPS en producció
-		if r.URL.Scheme != "https" && os.Getenv("ENVIRONMENT") != "development" {
-			Infof("Redirigint a HTTPS: %s", r.Host+r.URL.Path)
-			http.Redirect(w, r, "https://"+r.Host+r.URL.Path, http.StatusMovedPermanently)
-			return
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		if origin != "" {
+			if !isTrustedOrigin(r, origin) {
+				info := resolveClientIP(r)
+				logSecurityBlock(r, "origin_untrusted", info)
+				http.Error(w, "Accés denegat", http.StatusForbidden)
+				return
+			}
+		} else {
+			referer := strings.TrimSpace(r.Header.Get("Referer"))
+			if referer == "" {
+				info := resolveClientIP(r)
+				logSecurityBlock(r, "origin_missing", info)
+				http.Error(w, "Accés denegat", http.StatusForbidden)
+				return
+			}
+			if !isTrustedOrigin(r, referer) {
+				info := resolveClientIP(r)
+				logSecurityBlock(r, "referer_untrusted", info)
+				http.Error(w, "Accés denegat", http.StatusForbidden)
+				return
+			}
 		}
 
 		next(w, r)
@@ -385,36 +772,6 @@ func allowRouteLimit(r *http.Request, route string, rate, burst float64) bool {
 }
 
 func getIP(r *http.Request) string {
-	Debugf("[getIP] RemoteAddr rebut: %v", r.RemoteAddr)
-	forwarded := r.Header.Get("X-Forwarded-For")
-	if forwarded != "" {
-		Debugf("[getIP] X-Forwarded-For: %v", forwarded)
-		ip := strings.Split(forwarded, ",")[0]
-		Debugf("[getIP] IP parsejada de X-Forwarded-For: %v", ip)
-		return ip
-	}
-	realIP := r.Header.Get("X-Real-IP")
-	if realIP != "" {
-		Debugf("[getIP] X-Real-IP: %v", realIP)
-		return realIP
-	}
-
-	// Manejar IPv6 correctament
-	ipPort := r.RemoteAddr
-	var ip string
-	if strings.Contains(ipPort, "[") {
-		// IPv6 format: [::1]:port
-		start := strings.Index(ipPort, "[")
-		end := strings.Index(ipPort, "]")
-		if start != -1 && end != -1 {
-			ip = ipPort[start+1 : end]
-		} else {
-			ip = ipPort
-		}
-	} else {
-		// IPv4 format: 127.0.0.1:port
-		ip = strings.Split(ipPort, ":")[0]
-	}
-	Debugf("[getIP] IP parsejada de RemoteAddr: %v", ip)
-	return ip
+	info := resolveClientIP(r)
+	return info.ClientIP
 }

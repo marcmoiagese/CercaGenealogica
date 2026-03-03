@@ -1,0 +1,67 @@
+# Exemple Nginx per Cercagenealogica (reverse proxy)
+# Copia aquest fitxer a /etc/nginx/conf.d/cercagenealogica.conf i ajusta valors.
+#
+# NOTA: les directives limit_req_zone s'han de definir al bloc http { } del Nginx principal.
+#
+# http {
+#   limit_req_zone $binary_remote_addr zone=default_rate:10m rate=10r/s;
+#   limit_req_zone $binary_remote_addr zone=static_rate:10m rate=30r/s;
+#   limit_req_zone $binary_remote_addr zone=sensitive_rate:10m rate=2r/s;
+# }
+
+server {
+    listen 80;
+    server_name example.com;
+
+    # Desactiva autoindex per seguretat
+    autoindex off;
+
+    # Ajusta el límit de pujada si hi ha uploads
+    client_max_body_size 200m;
+
+    # Headers de seguretat mínims
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header X-Frame-Options "DENY" always;
+
+    # CSP baseline (ajusta si cal)
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self';" always;
+
+    # HSTS només quan hi hagi HTTPS real (ex: en el server SSL)
+    # add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+
+    # Si Nginx rep trànsit d'un altre proxy, activa real_ip
+    # set_real_ip_from 10.0.0.0/8;
+    # set_real_ip_from 192.168.0.0/16;
+    # real_ip_header X-Forwarded-For;
+
+    location /static/ {
+        limit_req zone=static_rate burst=60 nodelay;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+
+    location ~ ^/(login|registre|recuperar|admin/.*|espai/gedcom|espai/integracions/gramps)/ {
+        limit_req zone=sensitive_rate burst=10 nodelay;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+
+    location / {
+        limit_req zone=default_rate burst=20 nodelay;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+}

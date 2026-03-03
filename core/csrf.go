@@ -29,7 +29,7 @@ func ensureCSRF(w http.ResponseWriter, r *http.Request) (string, error) {
 	secure := true
 	sameSite := http.SameSiteStrictMode
 	if env == "development" || isLocalHost {
-		secure = r.TLS != nil
+		secure = isRequestHTTPS(r)
 		sameSite = http.SameSiteLaxMode
 	}
 

@@ -41,9 +41,19 @@ MAIL_SMTP_PORT=25
 
 LOG_LEVEL=debug         # silent/error | info | debug
 
+# Seguretat / proxy
+PUBLIC_BASE_URL=http://localhost:8080
+TRUSTED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080,https://genealogia.cat
+TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128
+
 # Espai personal
 ESP_TREE_LIMIT=0        # 0 = sense limit d'arbres per usuari
 ```
+
+Notes de seguretat:
+- `PUBLIC_BASE_URL` és l’URL canònic per generar enllaços absoluts (emails, notificacions).
+- `TRUSTED_ORIGINS` defineix els orígens vàlids per a `Origin/Referer` en rutes sensibles.
+- `TRUSTED_PROXY_CIDRS` indica quins proxies poden enviar `X-Forwarded-*` (IP real, esquema HTTPS).
 
 L’enviament de correus intenta primer el binari `sendmail` del sistema i, si no està disponible, prova via SMTP a `MAIL_SMTP_HOST:MAIL_SMTP_PORT` (per defecte `localhost:25`).
 

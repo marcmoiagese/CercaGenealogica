@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "admin.io.title" }}</title>
     {{ template "styles-private" . }}
+    {{ template "styles-file-uploader" . }}
     <style>
         .io-tabs .tabs-botons{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px 0}
         .io-tabs .tab-boto{background:#f6f8fb;border:1px solid #dfe3ec;color:#1f2c4d;padding:8px 14px;border-radius:10px;font-weight:600;cursor:pointer;transition:all .15s ease}
@@ -524,6 +525,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    {{ template "scripts-file-uploader" . }}
     <script>
         document.querySelectorAll('[data-tabs]').forEach(function (container) {
             const buttons = Array.from(container.querySelectorAll('.tab-boto[data-tab]'))

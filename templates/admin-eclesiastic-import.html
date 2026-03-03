@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "ecles.io.title" }}</title>
     {{ template "styles-private" . }}
+    {{ template "styles-file-uploader" . }}
 </head>
 <body>
     {{ template "header-private" . }}
@@ -98,6 +99,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    {{ template "scripts-file-uploader" . }}
 </body>
 </html>
 {{ end }}

@@ -650,7 +650,11 @@ func (a *App) maybeSendDMNotification(recipient *db.User, sender *db.User, threa
 	}
 	lang := resolveUserLang(nil, recipient)
 	senderLabel := formatDMUserLabel(sender)
-	threadURL := fmt.Sprintf("http://localhost:8080/missatges/fil/%d", threadID)
+	threadURL := BuildPublicURL(a.Config, nil, fmt.Sprintf("/missatges/fil/%d", threadID))
+	if threadURL == "" {
+		Errorf("PUBLIC_BASE_URL no definit; no puc generar URL de missatges per %s", recipient.Email)
+		return
+	}
 	snippet := buildDMEmailSnippet(body)
 	subject := fmt.Sprintf(T(lang, "email.dm.subject"), senderLabel)
 	bodyText := ""

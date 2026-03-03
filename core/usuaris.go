@@ -244,10 +244,11 @@ func (a *App) RegistrarUsuari(w http.ResponseWriter, r *http.Request) {
 	}
 
 	Debugf("Token d'activació per a %s: %s", email, token)
-	Debugf("URL d'activació: http://localhost:8080/activar?token=%s", token)
+	activationURL := BuildPublicURL(a.Config, r, "/activar?token="+token)
+	Debugf("URL d'activació: %s", activationURL)
 
 	// Opcional: envia correu d'activació
-	a.sendActivationEmail(email, token, lang, "email.activation")
+	a.sendActivationEmail(email, activationURL, lang, "email.activation")
 
 	// Renderitza la pantalla de confirmació
 	RenderTemplate(w, r, "registre-correcte.html", RegistrePageData{
@@ -279,13 +280,16 @@ func generateToken(length int) string {
 	return bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
 }*/
 
-func (a *App) sendActivationEmail(email, token, lang, keyPrefix string) {
+func (a *App) sendActivationEmail(email, activationURL, lang, keyPrefix string) {
 	if !a.Mail.Enabled {
 		Infof("MAIL_ENABLED està desactivat; no s'enviarà correu d'activació a %s", email)
 		return
 	}
 
-	activationURL := fmt.Sprintf("http://localhost:8080/activar?token=%s", token)
+	if activationURL == "" {
+		Errorf("PUBLIC_BASE_URL no definit; no puc generar URL d'activació per %s", email)
+		return
+	}
 	subject := T(lang, keyPrefix+".subject")
 	body := fmt.Sprintf(T(lang, keyPrefix+".body"), activationURL)
 
@@ -300,6 +304,10 @@ func (a *App) sendActivationEmail(email, token, lang, keyPrefix string) {
 func (a *App) sendPasswordResetEmail(email, url, lang string) {
 	if !a.Mail.Enabled {
 		Infof("MAIL_ENABLED està desactivat; no s'enviarà correu de recuperació a %s", email)
+		return
+	}
+	if url == "" {
+		Errorf("PUBLIC_BASE_URL no definit; no puc generar URL de recuperació per %s", email)
 		return
 	}
 	subject := T(lang, "email.reset.subject")
@@ -325,25 +333,31 @@ func (a *App) sendPasswordResetCompletedEmail(email, password, lang string) {
 	Infof("Correu amb nova contrasenya enviat a %s", email)
 }
 
-func (a *App) sendEmailChangeConfirm(email, token, lang string) {
+func (a *App) sendEmailChangeConfirm(email, confirmURL, lang string) {
 	if !a.Mail.Enabled {
 		return
 	}
-	url := fmt.Sprintf("http://localhost:8080/perfil/email-confirm?token=%s", token)
 	subject := T(lang, "email.change.confirm.subject")
-	body := fmt.Sprintf(T(lang, "email.change.confirm.body"), url)
+	if confirmURL == "" {
+		Errorf("PUBLIC_BASE_URL no definit; no puc generar URL de confirmació per %s", email)
+		return
+	}
+	body := fmt.Sprintf(T(lang, "email.change.confirm.body"), confirmURL)
 	if err := a.Mail.Send(email, subject, body); err != nil {
 		Errorf("No s'ha pogut enviar correu de confirmació de canvi d'email a %s: %v", email, err)
 	}
 }
 
-func (a *App) sendEmailChangeRevert(oldEmail, newEmail, token, lang string) {
+func (a *App) sendEmailChangeRevert(oldEmail, newEmail, revertURL, lang string) {
 	if !a.Mail.Enabled {
 		return
 	}
-	url := fmt.Sprintf("http://localhost:8080/perfil/email-revert?token=%s", token)
 	subject := T(lang, "email.change.revert.subject")
-	body := fmt.Sprintf(T(lang, "email.change.revert.body"), newEmail, url)
+	if revertURL == "" {
+		Errorf("PUBLIC_BASE_URL no definit; no puc generar URL de revert per %s", oldEmail)
+		return
+	}
+	body := fmt.Sprintf(T(lang, "email.change.revert.body"), newEmail, revertURL)
 	if err := a.Mail.Send(oldEmail, subject, body); err != nil {
 		Errorf("No s'ha pogut enviar correu de revert de canvi d'email a %s: %v", oldEmail, err)
 	}
@@ -522,10 +536,11 @@ func (a *App) RegenerarTokenActivacio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	Infof("Token d'activació regenerat per a %s: %s", email, token)
-	Debugf("URL d'activació: http://localhost:8080/activar?token=%s", token)
+	activationURL := BuildPublicURL(a.Config, r, "/activar?token="+token)
+	Debugf("URL d'activació: %s", activationURL)
 
 	// Envia nou correu d'activació amb la mateixa lògica de localització
-	a.sendActivationEmail(email, token, lang, "email.activation.regen")
+	a.sendActivationEmail(email, activationURL, lang, "email.activation.regen")
 
 	RenderTemplate(w, r, "regenerar-token.html", RegenerarTokenPageData{
 		Success: T(lang, "regenerate.success"),
@@ -832,7 +847,7 @@ func setLangCookie(w http.ResponseWriter, r *http.Request, lang string) {
 	secure := true
 	sameSite := http.SameSiteStrictMode
 	if env == "development" {
-		secure = r.TLS != nil
+		secure = isRequestHTTPS(r)
 		sameSite = http.SameSiteLaxMode
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -928,7 +943,8 @@ func (a *App) ActualitzarPerfilDades(w http.ResponseWriter, r *http.Request) {
 			expConfirm := time.Now().Add(24 * time.Hour).Format("2006-01-02 15:04:05")
 			expRevert := time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02 15:04:05")
 			if err := a.DB.CreateEmailChange(user.ID, newEmail, confirmToken, expConfirm, revertToken, expRevert, lang); err == nil {
-				a.sendEmailChangeConfirm(newEmail, confirmToken, lang)
+				confirmURL := BuildPublicURL(a.Config, r, "/perfil/email-confirm?token="+confirmToken)
+				a.sendEmailChangeConfirm(newEmail, confirmURL, lang)
 				http.Redirect(w, r, "/perfil?tab=generals&success="+url.QueryEscape(T(lang, "profile.email.change.pending")), http.StatusSeeOther)
 				return
 			}
@@ -1067,7 +1083,8 @@ func (a *App) ConfirmarCanviEmail(w http.ResponseWriter, r *http.Request) {
 	if helper, ok := a.DB.(interface{ markEmailChangeConfirmed(id int) error }); ok {
 		_ = helper.markEmailChangeConfirmed(change.ID)
 	}
-	a.sendEmailChangeRevert(change.OldEmail, change.NewEmail, change.TokenRevert, change.Lang)
+	revertURL := BuildPublicURL(a.Config, r, "/perfil/email-revert?token="+change.TokenRevert)
+	a.sendEmailChangeRevert(change.OldEmail, change.NewEmail, revertURL, change.Lang)
 	http.Redirect(w, r, "/perfil?success="+url.QueryEscape(T(change.Lang, "profile.email.change.confirmed")), http.StatusSeeOther)
 }
 
@@ -1153,7 +1170,7 @@ func (a *App) SolicitarRecuperarContrasenya(w http.ResponseWriter, r *http.Reque
 	}
 
 	if created {
-		resetURL := fmt.Sprintf("http://localhost:8080/recuperar?token=%s", token)
+		resetURL := BuildPublicURL(a.Config, r, "/recuperar?token="+token)
 		a.sendPasswordResetEmail(email, resetURL, lang)
 	}
 
@@ -1367,7 +1384,7 @@ func (a *App) IniciarSessio(w http.ResponseWriter, r *http.Request) {
 	secure := true
 	sameSite := http.SameSiteStrictMode
 	if env == "development" {
-		secure = r.TLS != nil
+		secure = isRequestHTTPS(r)
 		sameSite = http.SameSiteLaxMode
 	}
 
@@ -1448,7 +1465,7 @@ func (a *App) TancarSessio(w http.ResponseWriter, r *http.Request) {
 	secure := true
 	sameSite := http.SameSiteStrictMode
 	if env == "development" {
-		secure = r.TLS != nil
+		secure = isRequestHTTPS(r)
 		sameSite = http.SameSiteLaxMode
 	}
 	http.SetCookie(w, &http.Cookie{

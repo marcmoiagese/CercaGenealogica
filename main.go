@@ -1164,5 +1164,6 @@ func main() {
 	})
 
 	log.Println("Servidor iniciat a http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	handler := core.SecureHeaders(core.OriginGuard(http.DefaultServeMux.ServeHTTP))
+	log.Fatal(http.ListenAndServe(":8080", handler))
 }

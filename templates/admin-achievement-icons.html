@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "achievements.icon.catalog.title" }}</title>
     {{ template "styles-private" . }}
+    {{ template "styles-file-uploader" . }}
     <link rel="stylesheet" href="/static/css/admin-achievements.css">
 </head>
 <body>
@@ -65,6 +66,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    {{ template "scripts-file-uploader" . }}
 </body>
 </html>
 {{ end }}

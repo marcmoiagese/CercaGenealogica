@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "space.title" }} - {{ t .Lang "app.title" }}</title>
     {{ template "styles-private" . }}
+    {{ template "styles-file-uploader" . }}
     <link rel="stylesheet" href="/static/css/espai-personal.css">
     <link rel="stylesheet" href="/static/css/registres-taula.css">
 </head>
@@ -1750,6 +1751,7 @@
     <script src="/static/js/espai-persones-importades.js"></script>
     {{ end }}
 
+    {{ template "scripts-file-uploader" . }}
     {{ template "scripts-private" . }}
 </body>
 </html>

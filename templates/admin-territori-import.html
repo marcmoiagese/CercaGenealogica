@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "territory.io.title" }}</title>
     {{ template "styles-private" . }}
+    {{ template "styles-file-uploader" . }}
 </head>
 <body>
     {{ template "header-private" . }}
@@ -128,6 +129,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    {{ template "scripts-file-uploader" . }}
     <script src="/static/js/arxiu-form-suggest.js"></script>
 </body>
 </html>

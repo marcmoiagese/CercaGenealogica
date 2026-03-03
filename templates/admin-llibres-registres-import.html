@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "records.import.file" }}</title>
     {{ template "styles-private" . }}
+    {{ template "styles-file-uploader" . }}
     <link rel="stylesheet" href="/static/css/taula.css">
 </head>
 <body>
@@ -107,6 +108,7 @@
     </div>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    {{ template "scripts-file-uploader" . }}
     <script>
         (function () {
             const form = document.querySelector('.import-form');

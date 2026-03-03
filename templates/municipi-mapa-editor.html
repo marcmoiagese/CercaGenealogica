@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "maps.editor.title" }} · {{ .Data.Municipi.Nom }}</title>
     {{ template "styles-private" . }}
+    {{ template "styles-file-uploader" . }}
     <link rel="stylesheet" href="/static/css/mapes.css">
 </head>
 <body>
@@ -214,6 +215,7 @@
     </div>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    {{ template "scripts-file-uploader" . }}
     <script src="/static/js/cgmap.js"></script>
     <script src="/static/js/municipi-mapa-editor.js"></script>
 </body>
