@@ -205,6 +205,30 @@ func normalizeOrigin(raw string) string {
 	return strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host)
 }
 
+func isLoopbackOrigin(norm string) bool {
+	if norm == "" {
+		return false
+	}
+	u, err := url.Parse(norm)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := u.Host
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = strings.Trim(host, "[]")
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
+
 func getTrustedOrigins() map[string]struct{} {
 	if cnf.Config == nil {
 		return map[string]struct{}{}
@@ -246,8 +270,16 @@ func isTrustedOrigin(r *http.Request, origin string) bool {
 		fallback := normalizeOrigin(requestScheme(r) + "://" + requestHost(r))
 		return fallback != "" && fallback == norm
 	}
-	_, ok := origins[norm]
-	return ok
+	if _, ok := origins[norm]; ok {
+		return true
+	}
+	if environmentName() == "development" {
+		fallback := normalizeOrigin(requestScheme(r) + "://" + requestHost(r))
+		if isLoopbackOrigin(norm) && isLoopbackOrigin(fallback) {
+			return true
+		}
+	}
+	return false
 }
 
 func getTrustedProxyCIDRs() []*net.IPNet {
@@ -680,6 +712,10 @@ func isFetchMetadataAllowed(r *http.Request) (bool, string) {
 // OriginGuard – valida Origin/Referer per peticions que canvien estat
 func OriginGuard(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/static/") && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+			next(w, r)
+			return
+		}
 		if !isStateChangingMethod(r.Method) {
 			next(w, r)
 			return

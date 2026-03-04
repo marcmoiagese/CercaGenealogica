@@ -92,6 +92,39 @@ func TestF28_StaticDoesNotRequireSession(t *testing.T) {
 	}
 }
 
+func TestF28_1_StaticAllowsLoopbackRefererOnNAT(t *testing.T) {
+	projectRoot := findProjectRoot(t)
+	if err := os.Chdir(projectRoot); err != nil {
+		t.Fatalf("no puc fer chdir a l'arrel del projecte (%s): %v", projectRoot, err)
+	}
+
+	mustHaveStaticFile(t, "js/idioma.js")
+
+	cases := []struct {
+		name    string
+		referer string
+	}{
+		{name: "referer-127", referer: "http://127.0.0.1:8080/"},
+		{name: "referer-localhost", referer: "http://localhost:8080/"},
+		{name: "referer-empty", referer: ""},
+	}
+
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/static/js/idioma.js", nil)
+		req.RemoteAddr = "10.0.2.2:12345"
+		if tc.referer != "" {
+			req.Header.Set("Referer", tc.referer)
+		}
+		rr := httptest.NewRecorder()
+
+		core.ServeStatic(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("esperava 200 per static (%s) amb NAT, tinc %d", tc.name, rr.Code)
+		}
+	}
+}
+
 func TestF28_OriginGuardBlocksUntrustedOrigin(t *testing.T) {
 	old := cnf.Config
 	cnf.Config = map[string]string{
@@ -113,6 +146,32 @@ func TestF28_OriginGuardBlocksUntrustedOrigin(t *testing.T) {
 
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("esperava 403 per Origin no confiat, tinc %d", rr.Code)
+	}
+}
+
+func TestF28_1_OriginGuardAllowsLoopbackVariantsInDev(t *testing.T) {
+	old := cnf.Config
+	cnf.Config = map[string]string{
+		"TRUSTED_ORIGINS": "http://localhost:8080",
+	}
+	t.Cleanup(func() {
+		cnf.Config = old
+	})
+	t.Setenv("ENVIRONMENT", "development")
+
+	handler := core.OriginGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8080/prova", nil)
+	req.Host = "127.0.0.1:8080"
+	req.Header.Set("Origin", "http://127.0.0.1:8080")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("esperava 200 per Origin loopback en development, tinc %d", rr.Code)
 	}
 }
 
@@ -186,6 +245,59 @@ func TestF28_ForwardedHeadersRequireTrustedProxy(t *testing.T) {
 
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("esperava 403 amb proxy confiat i X-Forwarded-For, tinc %d", rr.Code)
+	}
+}
+
+func TestF28_1_OriginGuardUsesForwardedHostProtoWhenTrustedProxy(t *testing.T) {
+	old := cnf.Config
+	cnf.Config = map[string]string{
+		"TRUSTED_PROXY_CIDRS": "127.0.0.1/32",
+	}
+	t.Cleanup(func() {
+		cnf.Config = old
+	})
+
+	handler := core.OriginGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "http://internal.local/prova", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("X-Forwarded-Host", "example.test:8443")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("Origin", "https://example.test:8443")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("esperava 200 per Origin amb proxy confiat, tinc %d", rr.Code)
+	}
+}
+
+func TestF28_1_OriginGuardIgnoresForwardedHostWhenUntrustedProxy(t *testing.T) {
+	old := cnf.Config
+	cnf.Config = map[string]string{}
+	t.Cleanup(func() {
+		cnf.Config = old
+	})
+
+	handler := core.OriginGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "http://internal.local/prova", nil)
+	req.RemoteAddr = "10.0.0.5:5555"
+	req.Host = "internal.local"
+	req.Header.Set("X-Forwarded-Host", "example.test:8443")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("Origin", "https://example.test:8443")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("esperava 403 per forwarded host no confiat, tinc %d", rr.Code)
 	}
 }
 
