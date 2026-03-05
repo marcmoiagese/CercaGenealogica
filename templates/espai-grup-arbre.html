@@ -79,18 +79,11 @@
     {{ template "scripts-private" . }}
 
     <script id="tree-i18n" type="application/json">{{ toJsonJS .Data.TreeI18n }}</script>
-    <script>
-        window.familyData = {{ toJsonJS .Data.FamilyData }};
-        window.familyLinks = {{ toJsonJS .Data.FamilyLinks }};
-        window.rootPersonId = {{ .Data.RootPersonId }};
-        window.__DATASET_STATS = {{ toJsonJS .Data.DatasetStats }};
-        document.getElementById("rootSelect")?.addEventListener("change", (e) => {
-            const root = e.target.value;
-            const params = new URLSearchParams(window.location.search);
-            params.set("root_id", root);
-            window.location.search = params.toString();
-        });
-    </script>
+    <script id="tree-family-data" type="application/json">{{ toJsonJS .Data.FamilyData }}</script>
+    <script id="tree-family-links" type="application/json">{{ toJsonJS .Data.FamilyLinks }}</script>
+    <script id="tree-root-person-id" type="application/json">{{ toJsonJS .Data.RootPersonId }}</script>
+    <script id="tree-dataset-stats" type="application/json">{{ toJsonJS .Data.DatasetStats }}</script>
+    <script src="/static/js/arbre/tree-data.js"></script>
     <script src="/static/vendor/d3.v7.min.js"></script>
     {{ if eq .Data.View "ventall" }}
     <script src="/static/js/arbre/arbre_ventall.js"></script>

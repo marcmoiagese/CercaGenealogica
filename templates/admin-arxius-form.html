@@ -116,18 +116,7 @@
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
     <script src="/static/js/arxiu-form-suggest.js"></script>
-    <script>
-        (function () {
-            var cb = document.getElementById("accepta_donacions");
-            var wrap = document.getElementById("donacionsUrlWrap");
-            if (!cb || !wrap) return;
-            var toggle = function () {
-                wrap.style.display = cb.checked ? "" : "none";
-            };
-            cb.addEventListener("change", toggle);
-            toggle();
-        })();
-    </script>
+    <script src="/static/js/admin-arxius-form.js"></script>
 </body>
 </html>
 {{ end }}

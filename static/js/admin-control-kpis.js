@@ -10,6 +10,14 @@ document.addEventListener("DOMContentLoaded", function () {
     var pendingList = panel.querySelector("[data-kpi-list='pending_moderation_by_type']");
     var pendingEmpty = panel.getAttribute("data-pending-empty") || "-";
     var typeLabels = window.controlModerationTypeLabels || {};
+    var labelsEl = document.getElementById("control-moderation-type-labels");
+    if (labelsEl && labelsEl.textContent) {
+        try {
+            typeLabels = JSON.parse(labelsEl.textContent);
+        } catch (err) {
+            typeLabels = typeLabels || {};
+        }
+    }
     var stateLabels = {
         ok: panel.getAttribute("data-state-ok") || "OK",
         warn: panel.getAttribute("data-state-warn") || "WARN",

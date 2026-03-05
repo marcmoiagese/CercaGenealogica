@@ -317,60 +317,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
-    <script>
-    (function() {
-        const recordSelect = document.getElementById('wizardRecordType');
-        const groups = document.querySelectorAll('.wizard-mapping-panel optgroup[data-group]');
-        const targetSelects = document.querySelectorAll('select[name^="col_target_"]');
-
-        function isPersonRoleTarget(value) {
-            if (!value || value.indexOf("person.") !== 0) return false;
-            const rest = value.slice("person.".length);
-            return rest !== "" && rest.indexOf(".") === -1;
-        }
-
-        function applyFilters() {
-            if (!recordSelect) return;
-            const value = recordSelect.value || 'baptisme';
-            groups.forEach(function(group) {
-                const key = group.getAttribute('data-group') || '';
-                const enable = value === 'generic' || key === 'common' || key === value;
-                group.disabled = !enable;
-            });
-        }
-
-        function updateNameOrderForSelect(select) {
-            const card = select.closest('.wizard-column-card');
-            if (!card) return;
-            const field = card.querySelector('.wizard-name-order-field');
-            if (!field) return;
-            const orderSelect = field.querySelector('select');
-            const show = isPersonRoleTarget(select.value);
-            field.style.display = show ? "" : "none";
-            if (orderSelect) {
-                orderSelect.disabled = !show;
-            }
-        }
-
-        function updateAllNameOrders() {
-            targetSelects.forEach(function(select) {
-                updateNameOrderForSelect(select);
-            });
-        }
-
-        if (recordSelect) {
-            recordSelect.addEventListener('change', applyFilters);
-            applyFilters();
-        }
-
-        targetSelects.forEach(function(select) {
-            select.addEventListener('change', function() {
-                updateNameOrderForSelect(select);
-            });
-        });
-        updateAllNameOrders();
-    })();
-    </script>
+    <script src="/static/js/import-template-wizard.js"></script>
 </body>
 </html>
 {{ end }}

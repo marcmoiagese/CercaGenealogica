@@ -39,7 +39,7 @@
                 <div class="filtres-arxius">
                     <div class="grup-camp">
                         <label for="f-pais">{{ t .Lang "levels.country" }}</label>
-                        <select id="f-pais" name="pais_id">
+                        <select id="f-pais" name="pais_id" data-submit-form="true">
                             <option value="0">{{ t .Lang "levels.select.country" }}</option>
                             {{ range .Data.Paisos }}
                             <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaisID .ID }}selected{{ end }}>{{ .CodiISO3 }} - {{ .CodiISO2 }}</option>
@@ -160,7 +160,7 @@
             {{ if gt .Data.TotalPages 1 }}
             <div class="paginador" id="paginador">
                 {{ range .Data.PageLinks }}
-                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
+                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}data-nav-href="{{ .URL }}"{{ end }}>
                     {{ .Label }}
                 </button>
                 {{ end }}
@@ -218,15 +218,6 @@
 
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
-    <script>
-    (function(){
-        const form = document.getElementById('nivellsFilterForm');
-        const pais = document.getElementById('f-pais');
-        if (pais && form) {
-            pais.addEventListener('change', () => form.submit());
-        }
-    })();
-    </script>
     <script src="/static/js/nivells-taula.js"></script>
 </body>
 </html>

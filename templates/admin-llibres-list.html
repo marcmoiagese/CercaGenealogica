@@ -232,7 +232,7 @@
             {{ if gt .Data.TotalPages 1 }}
             <div class="paginador" id="paginador">
                 {{ range .Data.PageLinks }}
-                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
+                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}data-nav-href="{{ .URL }}"{{ end }}>
                     {{ .Label }}
                 </button>
                 {{ end }}
@@ -311,44 +311,7 @@
             </form>
         </div>
     </div>
-    <script>
-        (function () {
-            const modal = document.getElementById('purge-modal');
-            if (!modal) return;
-            const form = document.getElementById('purge-form');
-            const title = document.getElementById('purge-modal-book');
-            const closeButtons = modal.querySelectorAll('[data-close-purge]');
-            const openButtons = document.querySelectorAll('.purge-trigger');
-            const actionTemplate = '/documentals/llibres/__ID__/registres/purge';
-
-            openButtons.forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    const id = btn.getAttribute('data-llibre-id');
-                    const label = btn.getAttribute('data-llibre-title') || '';
-                    form.action = actionTemplate.replace('__ID__', id || '');
-                    title.textContent = label;
-                    modal.classList.add('is-open');
-                    const input = modal.querySelector('#purge-password');
-                    if (input) {
-                        input.value = '';
-                        input.focus();
-                    }
-                });
-            });
-
-            closeButtons.forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    modal.classList.remove('is-open');
-                });
-            });
-
-            modal.addEventListener('click', (event) => {
-                if (event.target === modal) {
-                    modal.classList.remove('is-open');
-                }
-            });
-        })();
-    </script>
+    <script src="/static/js/admin-llibres-list.js"></script>
     {{ end }}
     <script src="/static/js/scroll-restore.js?v=1"></script>
     <script src="/static/js/municipi-suggest.js"></script>

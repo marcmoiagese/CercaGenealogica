@@ -452,1253 +452,169 @@
             <button type="button" class="boto-primari tancar-ajuda">{{ t .Lang "importer.editor.help.close" }}</button>
         </div>
     </div>
-    <script>
-    (function() {
-        const editor = document.getElementById('templateEditor');
-        if (!editor) return;
-        const csrfToken = editor.dataset.csrf || '';
-        const labels = {
-            addColumn: editor.dataset.labelAddColumn || 'Afegir columna',
-            removeColumn: editor.dataset.labelRemoveColumn || 'Eliminar',
-            addMapping: editor.dataset.labelAddMapping || 'Afegir mapping',
-            removeMapping: editor.dataset.labelRemoveMapping || 'Eliminar mapping',
-            addTransform: editor.dataset.labelAddTransform || 'Afegir transform',
-            removeTransform: editor.dataset.labelRemoveTransform || 'Eliminar transform',
-            condition: editor.dataset.labelCondition || 'Condicio',
-            conditionElse: editor.dataset.labelConditionElse || 'Else',
-            header: {{ printf "%q" (t .Lang "importer.editor.columns.header") }},
-            aliases: {{ printf "%q" (t .Lang "importer.editor.columns.aliases") }},
-            required: {{ printf "%q" (t .Lang "importer.editor.columns.required") }},
-            mapping: {{ printf "%q" (t .Lang "importer.editor.columns.mapping") }},
-            transforms: {{ printf "%q" (t .Lang "importer.editor.columns.transforms") }},
-            conditionExpr: {{ printf "%q" (t .Lang "importer.editor.columns.condition_expr") }},
-            target: {{ printf "%q" (t .Lang "importer.editor.columns.target") }},
-            targetPlaceholder: {{ printf "%q" (t .Lang "importer.editor.columns.target_placeholder") }},
-            targetCustom: {{ printf "%q" (t .Lang "importer.editor.columns.target_custom") }},
-            transformHelpEmpty: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.empty") }},
-            transformContextColumn: {{ printf "%q" (t .Lang "importer.editor.transforms.context.column") }},
-            transformContextTarget: {{ printf "%q" (t .Lang "importer.editor.transforms.context.target") }},
-            transformContextSeparator: {{ printf "%q" (t .Lang "importer.editor.transforms.context.separator") }},
-            transformContextUnknown: {{ printf "%q" (t .Lang "importer.editor.transforms.context.unknown_target") }},
-            transformContextExample: {{ printf "%q" (t .Lang "importer.editor.transforms.context.example") }},
-            transformExampleSetDefault: {{ printf "%q" (t .Lang "importer.editor.transforms.example.set_default") }},
-            transformExampleMapValues: {{ printf "%q" (t .Lang "importer.editor.transforms.example.map_values") }},
-            transformExampleRegexExtract: {{ printf "%q" (t .Lang "importer.editor.transforms.example.regex_extract") }},
-            transformParamHintNone: {{ printf "%q" (t .Lang "importer.editor.transforms.param.hint.none") }},
-            transformParamHintSetDefault: {{ printf "%q" (t .Lang "importer.editor.transforms.param.hint.set_default") }},
-            transformParamHintMapValues: {{ printf "%q" (t .Lang "importer.editor.transforms.param.hint.map_values") }},
-            transformParamHintRegexExtract: {{ printf "%q" (t .Lang "importer.editor.transforms.param.hint.regex_extract") }}
-        };
-        const helpLabels = {
-            header: {{ printf "%q" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.header")) }},
-            aliases: {{ printf "%q" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.aliases")) }},
-            required: {{ printf "%q" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.required")) }},
-            target: {{ printf "%q" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.target")) }},
-            transforms: {{ printf "%q" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.transforms")) }},
-            condition: {{ printf "%q" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.condition")) }},
-            conditionExpr: {{ printf "%q" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.condition_expr")) }},
-            conditionElse: {{ printf "%q" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.condition_else")) }}
-        };
-
-        function applyHelpLabels(root) {
-            if (!root) return;
-            root.querySelectorAll("[data-help-key]").forEach(function(button) {
-                const key = button.dataset.helpKey;
-                if (helpLabels[key]) {
-                    button.setAttribute("aria-label", helpLabels[key]);
-                }
-            });
-        }
-        const targetCatalog = {
-            common: {
-                label: {{ printf "%q" (t .Lang "importer.editor.targets.group.common") }},
-                fields: [
-                    { value: "base.tipus_acte", label: {{ printf "%q" (t .Lang "importer.editor.target.common.act_type") }} },
-                    { value: "base.num_pagina_text", label: {{ printf "%q" (t .Lang "importer.editor.target.common.page_book") }} },
-                    { value: "attr.pagina_digital.text", label: {{ printf "%q" (t .Lang "importer.editor.target.common.page_digital") }} },
-                    { value: "base.any_doc", label: {{ printf "%q" (t .Lang "importer.editor.target.common.year_doc") }} },
-                    { value: "base.data_acte_iso_text_estat", label: {{ printf "%q" (t .Lang "importer.editor.target.common.event_date") }} },
-                    { value: "base.transcripcio_literal", label: {{ printf "%q" (t .Lang "importer.editor.target.common.literal") }} },
-                    { value: "base.notes_marginals", label: {{ printf "%q" (t .Lang "importer.editor.target.common.notes_marginals") }} },
-                    { value: "base.observacions_paleografiques", label: {{ printf "%q" (t .Lang "importer.editor.target.common.notes_paleo") }} }
-                ]
-            },
-            baptisme: {
-                label: {{ printf "%q" (t .Lang "importer.editor.targets.group.baptisme") }},
-                fields: [
-                    { value: "person.batejat", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.batejat") }} },
-                    { value: "person.pare", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.pare") }} },
-                    { value: "person.mare", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.mare") }} },
-                    { value: "person.mare.cognom_soltera", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.mare_cognom_soltera") }} },
-                    { value: "person.pare.ofici", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.pare_ofici") }} },
-                    { value: "person.avi_patern", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.avi_patern") }} },
-                    { value: "person.avia_paterna", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.avia_paterna") }} },
-                    { value: "person.avia_paterna.cognom_soltera", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.avia_paterna_cognom_soltera") }} },
-                    { value: "person.avi_matern", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.avi_matern") }} },
-                    { value: "person.avia_materna", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.avia_materna") }} },
-                    { value: "person.avia_materna.cognom_soltera", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.avia_materna_cognom_soltera") }} },
-                    { value: "person.padri", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.padri") }} },
-                    { value: "person.padrina", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.padrina") }} },
-                    { value: "attr.data_bateig.date_or_text_with_quality", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.data_bateig") }} },
-                    { value: "attr.data_naixement.date_or_text_with_quality", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.data_naixement") }} },
-                    { value: "attr.data_defuncio.date_or_text_with_quality", label: {{ printf "%q" (t .Lang "importer.editor.target.baptisme.data_defuncio") }} }
-                ]
-            },
-            obit: {
-                label: {{ printf "%q" (t .Lang "importer.editor.targets.group.obit") }},
-                fields: [
-                    { value: "person.difunt", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.difunt") }} },
-                    { value: "person.pare", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.pare") }} },
-                    { value: "person.mare", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.mare") }} },
-                    { value: "person.mare.cognom_soltera", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.mare_cognom_soltera") }} },
-                    { value: "person.parella", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.parella") }} },
-                    { value: "person.difunt.estat_civil", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.estat_civil") }} },
-                    { value: "attr.data_defuncio.date_or_text_with_quality", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.data_defuncio") }} },
-                    { value: "attr.data_enterrament.date_or_text_with_quality", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.data_enterrament") }} },
-                    { value: "attr.edat.int_nullable", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.edat") }} },
-                    { value: "attr.causa.text", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.causa") }} },
-                    { value: "attr.classe_enterrament.text", label: {{ printf "%q" (t .Lang "importer.editor.target.obit.classe_enterrament") }} }
-                ]
-            },
-            matrimoni: {
-                label: {{ printf "%q" (t .Lang "importer.editor.targets.group.matrimoni") }},
-                fields: [
-                    { value: "person.nuvi", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.nuvi") }} },
-                    { value: "person.nuvi.ofici", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.nuvi_ofici") }} },
-                    { value: "person.nuvi.edat", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.nuvi_edat") }} },
-                    { value: "person.pare_nuvi", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.pare_nuvi") }} },
-                    { value: "person.mare_nuvi", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.mare_nuvi") }} },
-                    { value: "person.mare_nuvi.cognom_soltera", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.mare_nuvi_cognom_soltera") }} },
-                    { value: "person.novia", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.novia") }} },
-                    { value: "person.novia.ofici", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.novia_ofici") }} },
-                    { value: "person.novia.edat", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.novia_edat") }} },
-                    { value: "person.pare_novia", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.pare_novia") }} },
-                    { value: "person.mare_novia", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.mare_novia") }} },
-                    { value: "person.mare_novia.cognom_soltera", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.mare_novia_cognom_soltera") }} },
-                    { value: "person.testimoni1", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.testimoni1") }} },
-                    { value: "person.testimoni2", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.testimoni2") }} },
-                    { value: "attr.data_matrimoni.date_or_text_with_quality", label: {{ printf "%q" (t .Lang "importer.editor.target.matrimoni.data_matrimoni") }} }
-                ]
-            },
-            padro: {
-                label: {{ printf "%q" (t .Lang "importer.editor.targets.group.padro") }},
-                fields: [
-                    { value: "person.cap_familia", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.cap_familia") }} },
-                    { value: "person.cap_familia.sexe", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.sexe") }} },
-                    { value: "person.cap_familia.edat", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.edat") }} },
-                    { value: "person.cap_familia.estat_civil", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.estat_civil") }} },
-                    { value: "person.cap_familia.ofici", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.ofici") }} },
-                    { value: "person.cap_familia.casa", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.casa") }} },
-                    { value: "attr.data_naixement.date_or_text_with_quality", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.data_naixement") }} },
-                    { value: "attr.carrer.text", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.carrer") }} },
-                    { value: "attr.numero_casa.text", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.numero_casa") }} },
-                    { value: "attr.adreca.text", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.adreca") }} },
-                    { value: "attr.localitat.text", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.localitat") }} },
-                    { value: "attr.procedencia.text", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.procedencia") }} },
-                    { value: "attr.alfabetitzat.bool", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.alfabetitzat") }} },
-                    { value: "attr.sap_llegir.bool", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.sap_llegir") }} },
-                    { value: "attr.sap_escriure.bool", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.sap_escriure") }} },
-                    { value: "attr.condicio_padro.text", label: {{ printf "%q" (t .Lang "importer.editor.target.padro.condicio_padro") }} }
-                ]
-            }
-        };
-        const similarityLabels = {
-            loading: {{ printf "%q" (t .Lang "common.loading") }},
-            empty: {{ printf "%q" (t .Lang "importer.editor.similar.empty") }},
-            clone: {{ printf "%q" (t .Lang "importer.templates.action.clone") }},
-            open: {{ printf "%q" (t .Lang "importer.editor.similar.open") }}
-        };
-        const initialModel = {{ toJsonJS $view.Model }};
-
-        const transformOptions = [
-            { value: "trim", label: "trim" },
-            { value: "lower", label: "lower" },
-            { value: "strip_diacritics", label: "strip_diacritics" },
-            { value: "normalize_cronologia", label: "normalize_cronologia" },
-            { value: "parse_ddmmyyyy_to_iso", label: "parse_ddmmyyyy_to_iso" },
-            { value: "parse_date_flexible_to_base_data_acte", label: "parse_date_flexible_to_base_data_acte" },
-            { value: "parse_date_flexible_to_date_or_text_with_quality", label: "parse_date_flexible_to_date_or_text_with_quality" },
-            { value: "parse_person_from_cognoms", label: "parse_person_from_cognoms" },
-            { value: "parse_person_from_nom", label: "parse_person_from_nom" },
-            { value: "parse_person_from_cognoms_marcmoia_v2", label: "parse_person_from_cognoms_marcmoia_v2" },
-            { value: "parse_person_from_nom_marcmoia_v2", label: "parse_person_from_nom_marcmoia_v2" },
-            { value: "parse_person_from_cognoms_marcmoia_v2_maternal_first", label: "parse_person_from_cognoms_marcmoia_v2_maternal_first" },
-            { value: "parse_person_from_nom_marcmoia_v2_maternal_first", label: "parse_person_from_nom_marcmoia_v2_maternal_first" },
-            { value: "split_couple_i", label: "split_couple_i" },
-            { value: "set_default", label: "set_default" },
-            { value: "map_values", label: "map_values" },
-            { value: "regex_extract", label: "regex_extract" },
-            { value: "parse_marriage_order_int_nullable", label: "parse_marriage_order_int_nullable" },
-            { value: "strip_marriage_order_text", label: "strip_marriage_order_text" },
-            { value: "extract_parenthetical_last", label: "extract_parenthetical_last" },
-            { value: "extract_parenthetical_all", label: "extract_parenthetical_all" },
-            { value: "strip_parentheticals", label: "strip_parentheticals" }
-        ];
-        const transformHelp = {
-            trim: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.trim") }},
-            lower: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.lower") }},
-            strip_diacritics: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.strip_diacritics") }},
-            normalize_cronologia: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.normalize_cronologia") }},
-            parse_ddmmyyyy_to_iso: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_ddmmyyyy_to_iso") }},
-            parse_date_flexible_to_base_data_acte: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_date_flexible_to_base_data_acte") }},
-            parse_date_flexible_to_date_or_text_with_quality: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_date_flexible_to_date_or_text_with_quality") }},
-            parse_person_from_cognoms: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_person_from_cognoms") }},
-            parse_person_from_nom: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_person_from_nom") }},
-            parse_person_from_cognoms_marcmoia_v2: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_person_from_cognoms_marcmoia_v2") }},
-            parse_person_from_cognoms_marcmoia_v2_maternal_first: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_person_from_cognoms_marcmoia_v2_maternal_first") }},
-            parse_person_from_nom_marcmoia_v2: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_person_from_nom_marcmoia_v2") }},
-            parse_person_from_nom_marcmoia_v2_maternal_first: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_person_from_nom_marcmoia_v2_maternal_first") }},
-            split_couple_i: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.split_couple_i") }},
-            set_default: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.set_default") }},
-            map_values: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.map_values") }},
-            regex_extract: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.regex_extract") }},
-            parse_marriage_order_int_nullable: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.parse_marriage_order_int_nullable") }},
-            strip_marriage_order_text: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.strip_marriage_order_text") }},
-            extract_parenthetical_last: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.extract_parenthetical_last") }},
-            extract_parenthetical_all: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.extract_parenthetical_all") }},
-            strip_parentheticals: {{ printf "%q" (t .Lang "importer.editor.transforms.desc.strip_parentheticals") }}
-        };
-
-        function defaultModel() {
-            return {
-                metadata: { version: 1, kind: "transcripcions_raw", locale: "{{ .Lang }}", record_type: "baptisme" },
-                book_resolution: {
-                    mode: "llibre_id",
-                    column: "llibre_id",
-                    cronologia_normalize: false,
-                    ambiguity_policy: "fail",
-                    scope_filters: true
-                },
-                mapping: { columns: [] },
-                policies: {
-                    moderation_status: "pendent",
-                    dedup: { within_file: true, key_fields: [] },
-                    merge_existing: {
-                        mode: "none",
-                        principal_roles: ["batejat"],
-                        update_missing_only: true,
-                        add_missing_people: true,
-                        add_missing_attrs: true
-                    }
-                }
-            };
-        }
-
-        function normalizeModel(model) {
-            const base = model && typeof model === "object" ? model : defaultModel();
-            if (!base.metadata) base.metadata = { version: 1, kind: "transcripcions_raw", locale: "{{ .Lang }}" };
-            if (!base.metadata.version) base.metadata.version = 1;
-            if (!base.metadata.kind) base.metadata.kind = "transcripcions_raw";
-            if (!base.metadata.locale) base.metadata.locale = "{{ .Lang }}";
-            if (!base.metadata.record_type) base.metadata.record_type = "generic";
-            if (!base.book_resolution) base.book_resolution = defaultModel().book_resolution;
-            if (!base.mapping) base.mapping = { columns: [] };
-            if (!Array.isArray(base.mapping.columns)) base.mapping.columns = [];
-            if (!base.policies) base.policies = defaultModel().policies;
-            base.mapping.columns = base.mapping.columns.map(normalizeColumn);
-            return base;
-        }
-
-        function resolveTargetLabel(value) {
-            if (!value) return "";
-            const groups = Object.keys(targetCatalog);
-            for (let i = 0; i < groups.length; i++) {
-                const group = targetCatalog[groups[i]];
-                const fields = group && Array.isArray(group.fields) ? group.fields : [];
-                for (let j = 0; j < fields.length; j++) {
-                    if (fields[j].value === value) return fields[j].label;
-                }
-            }
-            return value;
-        }
-
-        function buildTransformContext(colIndex, targetValue) {
-            const col = state.mapping.columns[colIndex];
-            const columnName = (col && col.header) ? col.header : (labels.header + " " + (colIndex + 1));
-            const targetLabel = resolveTargetLabel(targetValue);
-            if (targetLabel) {
-                return labels.transformContextColumn + ": " + columnName + " " +
-                    labels.transformContextSeparator + " " +
-                    labels.transformContextTarget + ": " + targetLabel;
-            }
-            return labels.transformContextColumn + ": " + columnName + " " +
-                labels.transformContextSeparator + " " +
-                labels.transformContextTarget + ": " + labels.transformContextUnknown;
-        }
-
-        function buildTransformHelpText(name, colIndex, targetValue) {
-            if (!name) return labels.transformHelpEmpty;
-            const help = transformHelp[name] || name;
-            const context = buildTransformContext(colIndex, targetValue);
-            return help + " " + context;
-        }
-
-        function buildTransformExampleText(name, paramText) {
-            if (!paramText) return "";
-            if (name === "set_default") {
-                return formatLabel(labels.transformExampleSetDefault, [paramText]);
-            }
-            if (name === "map_values") {
-                const pair = parseMapValuesParam(paramText);
-                if (pair) {
-                    return formatLabel(labels.transformExampleMapValues, [pair.from, pair.to]);
-                }
-                return formatLabel(labels.transformExampleMapValues, [paramText, paramText]);
-            }
-            if (name === "regex_extract") {
-                return formatLabel(labels.transformExampleRegexExtract, [paramText]);
-            }
-            return "";
-        }
-
-        function buildTransformParamHint(name) {
-            if (name === "set_default") return labels.transformParamHintSetDefault;
-            if (name === "map_values") return labels.transformParamHintMapValues;
-            if (name === "regex_extract") return labels.transformParamHintRegexExtract;
-            return labels.transformParamHintNone;
-        }
-
-        function transformNeedsParam(name) {
-            return name === "set_default" || name === "map_values" || name === "regex_extract";
-        }
-
-        function parseMapValuesParam(paramText) {
-            const parts = paramText.split(";").map(function(part) { return part.trim(); }).filter(Boolean);
-            for (let i = 0; i < parts.length; i++) {
-                const part = parts[i];
-                let sep = null;
-                if (part.includes("=>")) sep = "=>";
-                else if (part.includes("=")) sep = "=";
-                else if (part.includes(":")) sep = ":";
-                if (!sep) continue;
-                const pieces = part.split(sep).map(function(p) { return p.trim(); });
-                if (pieces.length >= 2 && pieces[0] && pieces[1]) {
-                    return { from: pieces[0], to: pieces.slice(1).join(sep).trim() };
-                }
-            }
-            return null;
-        }
-
-        function formatLabel(template, args) {
-            let result = template;
-            (args || []).forEach(function(value) {
-                result = result.replace("%s", value);
-            });
-            return result;
-        }
-
-        function updateTransformDescriptionsForMap(mapRow, colIndex, targetValue) {
-            if (!mapRow) return;
-            const rows = mapRow.querySelectorAll(".transform-row");
-            rows.forEach(function(trRow) {
-                const select = trRow.querySelector('select[data-field="transform-name"]');
-                const input = trRow.querySelector('input[data-field="transform-value"]');
-                const desc = trRow.querySelector(".transform-desc");
-                const hint = trRow.querySelector(".transform-param-hint");
-                const example = trRow.querySelector(".transform-example");
-                const paramWrap = trRow.querySelector(".transform-param");
-                const name = select ? select.value : "";
-                const param = input ? input.value : "";
-                const needsParam = transformNeedsParam(name);
-                if (paramWrap) {
-                    if (needsParam) {
-                        paramWrap.removeAttribute("hidden");
-                    } else {
-                        paramWrap.setAttribute("hidden", "");
-                    }
-                }
-                if (input) {
-                    if (needsParam) {
-                        input.removeAttribute("disabled");
-                    } else {
-                        input.value = "";
-                        input.setAttribute("disabled", "");
-                    }
-                }
-                if (hint) {
-                    if (needsParam) {
-                        hint.textContent = buildTransformParamHint(name);
-                        hint.removeAttribute("hidden");
-                    } else {
-                        hint.textContent = "";
-                        hint.setAttribute("hidden", "");
-                    }
-                }
-                if (desc) {
-                    desc.textContent = buildTransformHelpText(name, colIndex, targetValue);
-                }
-                if (example) {
-                    const exampleText = buildTransformExampleText(name, param);
-                    example.textContent = exampleText;
-                    if (exampleText) {
-                        example.removeAttribute("hidden");
-                    } else {
-                        example.setAttribute("hidden", "");
-                    }
-                }
-            });
-        }
-
-        function normalizeColumn(col) {
-            const item = col && typeof col === "object" ? col : {};
-            const aliases = Array.isArray(item.aliases) ? item.aliases : [];
-            const mapTo = Array.isArray(item.map_to) ? item.map_to : [];
-            const condition = item.condition && typeof item.condition === "object" ? item.condition : null;
-            return {
-                header: item.header || "",
-                aliases: aliases,
-                required: !!item.required,
-                map_to: mapTo.map(normalizeMapTo),
-                condition: normalizeCondition(condition),
-                condition_enabled: !!condition
-            };
-        }
-
-        function normalizeCondition(condition) {
-            if (!condition) return null;
-            const thenBlock = condition.then && typeof condition.then === "object" ? condition.then : {};
-            const elseBlock = condition.else && typeof condition.else === "object" ? condition.else : null;
-            return {
-                expr: condition.expr || "",
-                then: {
-                    map_to: Array.isArray(thenBlock.map_to) ? thenBlock.map_to.map(normalizeMapTo) : [normalizeMapTo({})],
-                    transforms: Array.isArray(thenBlock.transforms) ? thenBlock.transforms.map(normalizeTransform) : []
-                },
-                else: elseBlock ? {
-                    map_to: Array.isArray(elseBlock.map_to) ? elseBlock.map_to.map(normalizeMapTo) : [normalizeMapTo({})],
-                    transforms: Array.isArray(elseBlock.transforms) ? elseBlock.transforms.map(normalizeTransform) : []
-                } : null
-            };
-        }
-
-        function normalizeMapTo(item) {
-            const m = item && typeof item === "object" ? item : {};
-            return {
-                target: m.target || "",
-                transforms: Array.isArray(m.transforms) ? m.transforms.map(normalizeTransform) : []
-            };
-        }
-
-        function normalizeTransform(t) {
-            if (!t) return { name: "", value: "" };
-            if (typeof t === "string") return { name: t, value: "" };
-            return { name: t.name || "", value: t.value || t.arg || "" };
-        }
-
-        function currentRecordType() {
-            const val = state && state.metadata ? state.metadata.record_type : "";
-            return (val || "generic").toLowerCase();
-        }
-
-        function buildTargetOptions(currentValue) {
-            const recordType = currentRecordType();
-            const groups = [targetCatalog.common];
-            if (recordType === "generic") {
-                groups.push(targetCatalog.baptisme, targetCatalog.obit, targetCatalog.matrimoni);
-            } else if (targetCatalog[recordType]) {
-                groups.push(targetCatalog[recordType]);
-            }
-            const known = new Set();
-            let options = `<option value="">${escapeHTML(labels.targetPlaceholder)}</option>`;
-            groups.forEach(function(group) {
-                if (!group || !group.fields || !group.fields.length) return;
-                options += `<optgroup label="${escapeHTML(group.label || '')}">`;
-                group.fields.forEach(function(field) {
-                    const value = field.value || "";
-                    known.add(value);
-                    options += `<option value="${escapeHTML(value)}">${escapeHTML(field.label || value)}</option>`;
-                });
-                options += `</optgroup>`;
-            });
-            if (currentValue && !known.has(currentValue)) {
-                const customLabel = labels.targetCustom ? (labels.targetCustom + " " + currentValue) : currentValue;
-                options = `<option value="${escapeHTML(currentValue)}">${escapeHTML(customLabel)}</option>` + options;
-            }
-            return options;
-        }
-
-        const state = normalizeModel(initialModel);
-
-        const columnsList = document.getElementById("columnsList");
-        const addColumnButton = document.getElementById("addColumnButton");
-        const modelInput = document.getElementById("templateModelJSON");
-        const previewTable = document.getElementById("previewTable");
-        const previewSamples = document.getElementById("previewSamples");
-        const similarBox = document.getElementById("similarTemplates");
-        const similarHint = document.getElementById("similarHint");
-        let similarTimer = null;
-
-        function createEmptyColumn() {
-            return {
-                header: "",
-                aliases: [],
-                required: false,
-                map_to: [normalizeMapTo({})],
-                condition: null,
-                condition_enabled: false
-            };
-        }
-
-        function renderColumns() {
-            columnsList.innerHTML = "";
-            state.mapping.columns.forEach(function(col, idx) {
-                const card = document.createElement("div");
-                card.className = "column-card";
-                card.dataset.col = String(idx);
-                card.innerHTML = `
-                    <div class="column-header">
-                        <h3>${labels.header} #${idx + 1}</h3>
-                        <button type="button" class="boto-secundari btn-mini" data-action="remove-column">${labels.removeColumn}</button>
-                    </div>
-                    <div class="column-grid">
-                        <div class="template-field">
-                            <label>${labels.header} <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-col-header" data-help-key="header">?</button></label>
-                            <input type="text" data-field="header">
-                        </div>
-                        <div class="template-field">
-                            <label>${labels.aliases} <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-col-aliases" data-help-key="aliases">?</button></label>
-                            <input type="text" data-field="aliases" placeholder="alias1, alias2">
-                        </div>
-                        <div class="template-field inline-field">
-                            <label>
-                                <input type="checkbox" data-field="required">
-                                ${labels.required}
-                            </label>
-                            <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-col-required" data-help-key="required">?</button>
-                        </div>
-                    </div>
-                    <div class="map-to-block">
-                        <div class="map-to-header">
-                            <h4>${labels.mapping}</h4>
-                            <button type="button" class="boto-secundari btn-mini" data-action="add-map">${labels.addMapping}</button>
-                        </div>
-                        <div class="map-to-list"></div>
-                    </div>
-                    <div class="condition-block">
-                        <div class="condition-header">
-                            <label class="inline-field">
-                                <input type="checkbox" data-field="condition_enabled">
-                                ${labels.condition}
-                            </label>
-                            <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-col-condition" data-help-key="condition">?</button>
-                        </div>
-                        <div class="condition-body" ${col.condition_enabled ? "" : "hidden"}>
-                            <div class="template-field">
-                                <label>${labels.conditionExpr} <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-col-condition-expr" data-help-key="conditionExpr">?</button></label>
-                                <input type="text" data-field="condition.expr" placeholder="ex: value == 'X'">
-                            </div>
-                            <div class="condition-section">
-                                <h5>IF</h5>
-                                <div class="condition-map-list" data-branch="then"></div>
-                                <button type="button" class="boto-secundari btn-mini" data-action="add-cond-map" data-branch="then">${labels.addMapping}</button>
-                            </div>
-                            <div class="condition-section">
-                                <div class="condition-header">
-                                    <label class="inline-field">
-                                        <input type="checkbox" data-field="condition_else_enabled">
-                                        ${labels.conditionElse}
-                                    </label>
-                                    <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-col-condition-else" data-help-key="conditionElse">?</button>
-                                </div>
-                                <div class="condition-else" ${col.condition && col.condition.else ? "" : "hidden"}>
-                                    <div class="condition-map-list" data-branch="else"></div>
-                                    <button type="button" class="boto-secundari btn-mini" data-action="add-cond-map" data-branch="else">${labels.addMapping}</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                applyHelpLabels(card);
-                const headerInput = card.querySelector('input[data-field="header"]');
-                const aliasInput = card.querySelector('input[data-field="aliases"]');
-                const requiredInput = card.querySelector('input[data-field="required"]');
-                const conditionToggle = card.querySelector('input[data-field="condition_enabled"]');
-                headerInput.value = col.header || "";
-                aliasInput.value = (col.aliases || []).join(", ");
-                requiredInput.checked = !!col.required;
-                conditionToggle.checked = !!col.condition_enabled;
-                const mapList = card.querySelector(".map-to-list");
-                renderMapList(mapList, col.map_to, idx, null);
-                const mapBlock = card.querySelector(".map-to-block");
-                if (mapBlock) {
-                    if (col.condition_enabled) {
-                        mapBlock.setAttribute("hidden", "");
-                    } else {
-                        mapBlock.removeAttribute("hidden");
-                    }
-                }
-                if (col.condition_enabled && col.condition) {
-                    const thenList = card.querySelector('.condition-map-list[data-branch="then"]');
-                    renderMapList(thenList, col.condition.then.map_to, idx, "then");
-                    const elseList = card.querySelector('.condition-map-list[data-branch="else"]');
-                    if (col.condition.else) {
-                        renderMapList(elseList, col.condition.else.map_to, idx, "else");
-                    }
-                    const exprInput = card.querySelector('input[data-field="condition.expr"]');
-                    exprInput.value = col.condition.expr || "";
-                    const elseToggle = card.querySelector('input[data-field="condition_else_enabled"]');
-                    elseToggle.checked = !!col.condition.else;
-                }
-                columnsList.appendChild(card);
-            });
-        }
-
-        function renderMapList(container, maps, colIndex, branch) {
-            if (!container) return;
-            container.innerHTML = "";
-            (maps || []).forEach(function(mapItem, mapIndex) {
-                const row = document.createElement("div");
-                row.className = "map-row";
-                row.dataset.map = String(mapIndex);
-                row.innerHTML = `
-                    <div class="map-row-main">
-                        <div class="template-field">
-                            <label>${labels.target} <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-col-target" data-help-key="target">?</button></label>
-                            <select data-field="target">
-                                ${buildTargetOptions(mapItem.target)}
-                            </select>
-                        </div>
-                        <div class="transforms-block">
-                            <div class="transforms-header">
-                                <div class="transforms-title">
-                                    <span>${labels.transforms}</span>
-                                    <button type="button" class="boto-icona ajuda-boto" aria-haspopup="dialog" aria-controls="ajuda-col-transforms" data-help-key="transforms">?</button>
-                                </div>
-                            </div>
-                            <div class="transforms-actions">
-                                <button type="button" class="boto-secundari btn-mini" data-action="add-transform" data-map="${mapIndex}">${labels.addTransform}</button>
-                            </div>
-                            <div class="transforms-list"></div>
-                        </div>
-                    </div>
-                    <div class="map-row-actions">
-                        <button type="button" class="boto-secundari btn-mini" data-action="remove-map" data-map="${mapIndex}">${labels.removeMapping}</button>
-                    </div>
-                `;
-                applyHelpLabels(row);
-                const targetSelect = row.querySelector('select[data-field="target"]');
-                targetSelect.value = mapItem.target || "";
-                targetSelect.dataset.col = String(colIndex);
-                targetSelect.dataset.map = String(mapIndex);
-                if (branch) targetSelect.dataset.branch = branch;
-                const tList = row.querySelector(".transforms-list");
-                renderTransformList(tList, mapItem.transforms, colIndex, mapIndex, branch, mapItem.target);
-                const removeBtn = row.querySelector('[data-action="remove-map"]');
-                removeBtn.dataset.col = String(colIndex);
-                if (branch) removeBtn.dataset.branch = branch;
-                const addBtn = row.querySelector('[data-action="add-transform"]');
-                addBtn.dataset.col = String(colIndex);
-                if (branch) addBtn.dataset.branch = branch;
-                container.appendChild(row);
-            });
-        }
-
-        function renderTransformList(container, transforms, colIndex, mapIndex, branch, targetValue) {
-            if (!container) return;
-            container.innerHTML = "";
-            (transforms || []).forEach(function(tr, idx) {
-                const row = document.createElement("div");
-                row.className = "transform-row";
-                row.dataset.transform = String(idx);
-                const options = transformOptions.map(function(opt) {
-                    return `<option value="${opt.value}">${opt.label}</option>`;
-                }).join("");
-                const helpText = buildTransformHelpText(tr.name || "", colIndex, targetValue);
-                const needsParam = transformNeedsParam(tr.name || "");
-                const hintText = needsParam ? buildTransformParamHint(tr.name || "") : "";
-                const exampleText = buildTransformExampleText(tr.name || "", tr.value || "");
-                row.innerHTML = `
-                    <div class="transform-row-fields">
-                        <select data-field="transform-name">${options}</select>
-                        <div class="transform-param" ${needsParam ? "" : "hidden"}>
-                            <input type="text" data-field="transform-value" placeholder="parametre (opcional)" ${needsParam ? "" : "disabled"}>
-                        </div>
-                        <button type="button" class="boto-secundari btn-mini" data-action="remove-transform">${labels.removeTransform}</button>
-                    </div>
-                    <div class="transform-meta">
-                        <div class="transform-param-hint muted" ${needsParam ? "" : "hidden"}>${escapeHTML(hintText)}</div>
-                        <div class="transform-desc muted">${escapeHTML(helpText)}</div>
-                        <div class="transform-example muted" ${exampleText ? "" : "hidden"}>${escapeHTML(exampleText)}</div>
-                    </div>
-                `;
-                const select = row.querySelector('select[data-field="transform-name"]');
-                const input = row.querySelector('input[data-field="transform-value"]');
-                select.value = tr.name || "";
-                input.value = tr.value || "";
-                select.dataset.col = String(colIndex);
-                select.dataset.map = String(mapIndex);
-                select.dataset.transform = String(idx);
-                input.dataset.col = String(colIndex);
-                input.dataset.map = String(mapIndex);
-                input.dataset.transform = String(idx);
-                if (branch) {
-                    select.dataset.branch = branch;
-                    input.dataset.branch = branch;
-                }
-                const removeBtn = row.querySelector('[data-action="remove-transform"]');
-                removeBtn.dataset.col = String(colIndex);
-                removeBtn.dataset.map = String(mapIndex);
-                removeBtn.dataset.transform = String(idx);
-                if (branch) removeBtn.dataset.branch = branch;
-                container.appendChild(row);
-            });
-        }
-
-        function updateConfigFromInputs() {
-            const fields = document.querySelectorAll('[data-field^="metadata"], [data-field^="book_resolution"], [data-field^="policies"]');
-            fields.forEach(function(field) {
-                const path = field.dataset.field || "";
-                if (!path) return;
-                const parts = path.split(".");
-                let target = state;
-                for (let i = 0; i < parts.length - 1; i++) {
-                    if (!target[parts[i]]) target[parts[i]] = {};
-                    target = target[parts[i]];
-                }
-                const key = parts[parts.length - 1];
-                if (field.type === "checkbox") {
-                    target[key] = field.checked;
-                } else if (key === "key_fields" || key === "principal_roles") {
-                    target[key] = field.value.split(",").map(function(v) { return v.trim(); }).filter(Boolean);
-                } else {
-                    target[key] = field.value;
-                }
-            });
-        }
-
-        function applyStateToInputs() {
-            setFieldValue("metadata.locale", state.metadata.locale || "");
-            setFieldValue("metadata.record_type", state.metadata.record_type || "generic");
-            setFieldValue("book_resolution.mode", state.book_resolution.mode || "llibre_id");
-            setFieldValue("book_resolution.column", state.book_resolution.column || "llibre_id");
-            setCheckbox("book_resolution.cronologia_normalize", !!state.book_resolution.cronologia_normalize);
-            setFieldValue("book_resolution.ambiguity_policy", state.book_resolution.ambiguity_policy || "fail");
-            setCheckbox("book_resolution.scope_filters", !!state.book_resolution.scope_filters);
-            setCheckbox("policies.dedup.within_file", !!(state.policies.dedup && state.policies.dedup.within_file));
-            setFieldValue("policies.dedup.key_fields", (state.policies.dedup && state.policies.dedup.key_fields || []).join(", "));
-            setFieldValue("policies.merge_existing.mode", state.policies.merge_existing && state.policies.merge_existing.mode || "none");
-            setFieldValue("policies.merge_existing.principal_roles", (state.policies.merge_existing && state.policies.merge_existing.principal_roles || []).join(", "));
-            setCheckbox("policies.merge_existing.update_missing_only", !!(state.policies.merge_existing && state.policies.merge_existing.update_missing_only));
-            setCheckbox("policies.merge_existing.add_missing_people", !!(state.policies.merge_existing && state.policies.merge_existing.add_missing_people));
-            setCheckbox("policies.merge_existing.add_missing_attrs", !!(state.policies.merge_existing && state.policies.merge_existing.add_missing_attrs));
-        }
-
-        function setFieldValue(fieldName, value) {
-            const field = document.querySelector('[data-field="' + fieldName + '"]');
-            if (field) field.value = value || "";
-        }
-
-        function setCheckbox(fieldName, value) {
-            const field = document.querySelector('[data-field="' + fieldName + '"]');
-            if (field) field.checked = !!value;
-        }
-
-        function buildOutputModel() {
-            updateConfigFromInputs();
-            const model = JSON.parse(JSON.stringify(state));
-            const columns = state.mapping.columns.map(function(col) {
-                const output = {
-                    header: col.header || "",
-                    aliases: (col.aliases || []).filter(Boolean),
-                    required: !!col.required
-                };
-                if (col.condition_enabled && col.condition) {
-                    output.condition = {
-                        expr: col.condition.expr || "",
-                        then: {
-                            map_to: cleanMapTo(col.condition.then.map_to),
-                            transforms: cleanTransforms(col.condition.then.transforms)
-                        }
-                    };
-                    if (col.condition.else) {
-                        output.condition.else = {
-                            map_to: cleanMapTo(col.condition.else.map_to),
-                            transforms: cleanTransforms(col.condition.else.transforms)
-                        };
-                    }
-                } else {
-                    output.map_to = cleanMapTo(col.map_to);
-                }
-                return output;
-            });
-            model.mapping.columns = columns;
-            return model;
-        }
-
-        function cleanMapTo(list) {
-            return (list || []).map(function(item) {
-                return {
-                    target: item.target || "",
-                    transforms: cleanTransforms(item.transforms)
-                };
-            }).filter(function(item) { return item.target || (item.transforms && item.transforms.length); });
-        }
-
-        function cleanTransforms(list) {
-            return (list || []).map(function(t) {
-                if (!t || !t.name) return null;
-                if (t.value) return { name: t.name, value: t.value };
-                return { name: t.name };
-            }).filter(Boolean);
-        }
-
-        function updateModelJSON() {
-            const model = buildOutputModel();
-            const json = JSON.stringify(model, null, 2);
-            modelInput.value = json;
-            scheduleSimilarTemplates(json);
-        }
-
-        function buildSampleRows() {
-            const hasCondition = state.mapping.columns.some(function(c) { return c.condition_enabled && c.condition; });
-            const rowsCount = hasCondition ? 3 : 2;
-            const rows = [];
-            for (let i = 0; i < rowsCount; i++) {
-                rows.push([]);
-            }
-            state.mapping.columns.forEach(function(col) {
-                const baseSample = sampleForColumn(col, 0);
-                if (col.condition_enabled && col.condition) {
-                    rows[0].push(sampleForConditionBranch(col.condition.then, 0));
-                    rows[1].push(col.condition.else ? sampleForConditionBranch(col.condition.else, 1) : baseSample);
-                    if (rowsCount > 2) rows[2].push(baseSample);
-                } else {
-                    for (let i = 0; i < rowsCount; i++) {
-                        rows[i].push(sampleForColumn(col, i));
-                    }
-                }
-            });
-            return rows;
-        }
-
-        function sampleForConditionBranch(branch, idx) {
-            if (!branch) return "Exemple";
-            const maps = branch.map_to || [];
-            const transforms = maps.length ? (maps[0].transforms || []) : (branch.transforms || []);
-            return sampleFromTransforms(transforms, idx);
-        }
-
-        function sampleForColumn(col, idx) {
-            const maps = col.map_to || [];
-            const transforms = maps.length ? (maps[0].transforms || []) : [];
-            const target = maps.length ? maps[0].target : "";
-            return sampleFromTransforms(transforms, idx, target, col.header);
-        }
-
-        function sampleFromTransforms(transforms, idx, target, header) {
-            const names = (transforms || []).map(function(t) { return t.name || t; });
-            if (names.indexOf("parse_ddmmyyyy_to_iso") !== -1 || names.indexOf("parse_date_flexible_to_base_data_acte") !== -1 || names.indexOf("parse_date_flexible_to_date_or_text_with_quality") !== -1) {
-                if (idx % 3 === 1) return "??/??/1890";
-                if (idx % 3 === 2) return "¿12/03/1890";
-                return "12/03/1890";
-            }
-            if (names.indexOf("parse_person_from_cognoms") !== -1 || names.indexOf("parse_person_from_nom") !== -1 || names.indexOf("parse_person_from_cognoms_marcmoia_v2") !== -1 || names.indexOf("parse_person_from_nom_marcmoia_v2") !== -1 || names.indexOf("parse_person_from_cognoms_marcmoia_v2_maternal_first") !== -1 || names.indexOf("parse_person_from_nom_marcmoia_v2_maternal_first") !== -1) {
-                if (idx % 2 === 1) return "¿Maria Puig (Valls)";
-                return "Puig i Ferrer (Valls)";
-            }
-            if (names.indexOf("split_couple_i") !== -1) {
-                return "Joan X i Maria Y";
-            }
-            if (names.indexOf("normalize_cronologia") !== -1) {
-                return "1890-1891";
-            }
-            if (target && target.indexOf("llibre_id") !== -1) {
-                return String(120 + idx);
-            }
-            if (target && target.indexOf("tipus_acte") !== -1) {
-                return "baptisme";
-            }
-            if (target && target.indexOf("data") !== -1) {
-                return "01/01/1890";
-            }
-            if (target && target.indexOf("cognom") !== -1) {
-                return "Puig";
-            }
-            if (target && target.indexOf("nom") !== -1) {
-                return "Joan";
-            }
-            if (header && header.toLowerCase().indexOf("data") !== -1) {
-                return "01/01/1890";
-            }
-            return "Exemple " + (idx + 1);
-        }
-
-        function updatePreview() {
-            const headers = state.mapping.columns.map(function(c) { return c.header || ""; });
-            previewTable.innerHTML = buildTable(headers, []);
-            const rows = buildSampleRows();
-            previewSamples.innerHTML = buildTable(headers, rows);
-        }
-
-        function scheduleSimilarTemplates(modelJSON) {
-            if (!similarBox) return;
-            if (similarTimer) clearTimeout(similarTimer);
-            similarTimer = setTimeout(function() {
-                fetchSimilarTemplates(modelJSON);
-            }, 450);
-        }
-
-        function fetchSimilarTemplates(modelJSON) {
-            if (!similarBox) return;
-            if (similarHint) {
-                similarHint.textContent = similarityLabels.loading;
-            }
-            fetch('/api/import-templates/similar', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': csrfToken
-                },
-                body: JSON.stringify({ model_json: modelJSON, limit: 8 })
-            }).then(function(res) {
-                if (!res.ok) throw new Error('failed');
-                return res.json();
-            }).then(function(payload) {
-                renderSimilarTemplates(payload.items || []);
-            }).catch(function() {
-                if (similarHint) {
-                    similarHint.textContent = similarityLabels.empty;
-                }
-                similarBox.innerHTML = '';
-            });
-        }
-
-        function renderSimilarTemplates(items) {
-            if (!similarBox) return;
-            similarBox.innerHTML = '';
-            if (!items.length) {
-                if (similarHint) similarHint.textContent = similarityLabels.empty;
-                return;
-            }
-            if (similarHint) similarHint.textContent = '';
-            items.forEach(function(item) {
-                const row = document.createElement('div');
-                row.className = 'similar-item';
-                const score = (item.score * 100).toFixed(0) + '%';
-                row.innerHTML = `
-                    <div class="similar-main">
-                        <div class="similar-title">${escapeHTML(item.name || '')}</div>
-                    </div>
-                    <div class="similar-meta">${score}</div>
-                    <div class="similar-actions"></div>
-                `;
-                const actions = row.querySelector('.similar-actions');
-                if (item.can_edit) {
-                    const link = document.createElement('a');
-                    link.href = '/importador/plantilles/' + item.id + '/editar';
-                    link.className = 'boto-secundari btn-mini';
-                    link.textContent = similarityLabels.open;
-                    actions.appendChild(link);
-                }
-                if (item.can_clone) {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'boto-secundari btn-mini';
-                    btn.textContent = similarityLabels.clone;
-                    btn.addEventListener('click', function() {
-                        cloneSimilarTemplate(item.id, btn);
-                    });
-                    actions.appendChild(btn);
-                }
-                similarBox.appendChild(row);
-            });
-        }
-
-        function cloneSimilarTemplate(id, button) {
-            if (!id) return;
-            if (button) button.disabled = true;
-            fetch('/api/import-templates/' + id + '/clone', {
-                method: 'POST',
-                headers: { 'X-CSRF-Token': csrfToken }
-            }).then(function(res) {
-                if (!res.ok) throw new Error('failed');
-                return res.json();
-            }).then(function(payload) {
-                if (payload && payload.id) {
-                    window.location.assign('/importador/plantilles/' + payload.id + '/editar');
-                }
-            }).catch(function() {
-                if (button) button.disabled = false;
-            });
-        }
-
-        function buildTable(headers, rows) {
-            if (!headers.length) {
-                return '<div class="muted">{{ t .Lang "importer.editor.preview.empty" }}</div>';
-            }
-            let html = '<table class="taula preview-table"><thead><tr>';
-            headers.forEach(function(h) {
-                html += '<th>' + escapeHTML(h || "-") + '</th>';
-            });
-            html += '</tr></thead>';
-            if (rows.length) {
-                html += '<tbody>';
-                rows.forEach(function(row) {
-                    html += '<tr>';
-                    row.forEach(function(cell) {
-                        html += '<td>' + escapeHTML(cell || "") + '</td>';
-                    });
-                    html += '</tr>';
-                });
-                html += '</tbody>';
-            }
-            html += '</table>';
-            return html;
-        }
-
-        function escapeHTML(value) {
-            return String(value || "")
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/\"/g, "&quot;")
-                .replace(/'/g, "&#39;");
-        }
-
-        columnsList.addEventListener("input", function(e) {
-            const target = e.target;
-            const card = target.closest(".column-card");
-            const colIndex = card ? parseInt(card.dataset.col, 10) : NaN;
-            if (isNaN(colIndex)) return;
-            const col = state.mapping.columns[colIndex];
-            if (!col) return;
-            if (target.dataset.field === "header") {
-                col.header = target.value;
-            } else if (target.dataset.field === "aliases") {
-                col.aliases = target.value.split(",").map(function(v) { return v.trim(); }).filter(Boolean);
-            } else if (target.dataset.field === "required") {
-                col.required = target.checked;
-            } else if (target.dataset.field === "condition.expr" && col.condition) {
-                col.condition.expr = target.value;
-            } else if (target.dataset.field === "target") {
-                const mapIndex = parseInt(target.dataset.map, 10);
-                const branch = target.dataset.branch || "";
-                const mapList = resolveMapList(col, branch);
-                if (mapList && mapList[mapIndex]) {
-                    mapList[mapIndex].target = target.value;
-                    const mapRow = target.closest(".map-row");
-                    updateTransformDescriptionsForMap(mapRow, colIndex, target.value);
-                }
-            } else if (target.dataset.field === "transform-name" || target.dataset.field === "transform-value") {
-                const mapIndex = parseInt(target.dataset.map, 10);
-                const trIndex = parseInt(target.dataset.transform, 10);
-                const branch = target.dataset.branch || "";
-                const mapList = resolveMapList(col, branch);
-                if (mapList && mapList[mapIndex]) {
-                    const transforms = mapList[mapIndex].transforms || [];
-                    const tr = transforms[trIndex];
-                    if (tr) {
-                        if (target.dataset.field === "transform-name") {
-                            tr.name = target.value;
-                            const row = target.closest(".map-row");
-                            updateTransformDescriptionsForMap(row, colIndex, mapList[mapIndex].target);
-                        } else {
-                            tr.value = target.value;
-                            const row = target.closest(".map-row");
-                            updateTransformDescriptionsForMap(row, colIndex, mapList[mapIndex].target);
-                        }
-                    }
-                }
-            }
-            updateModelJSON();
-            updatePreview();
-        });
-
-        columnsList.addEventListener("change", function(e) {
-            const target = e.target;
-            const card = target.closest(".column-card");
-            const colIndex = card ? parseInt(card.dataset.col, 10) : NaN;
-            if (isNaN(colIndex)) return;
-            const col = state.mapping.columns[colIndex];
-            if (!col) return;
-            if (target.dataset.field === "target") {
-                const mapIndex = parseInt(target.dataset.map, 10);
-                const branch = target.dataset.branch || "";
-                const mapList = resolveMapList(col, branch);
-                if (mapList && mapList[mapIndex]) {
-                    mapList[mapIndex].target = target.value;
-                    const mapRow = target.closest(".map-row");
-                    updateTransformDescriptionsForMap(mapRow, colIndex, target.value);
-                }
-                updateModelJSON();
-                updatePreview();
-                return;
-            }
-            if (target.dataset.field === "condition_enabled") {
-                col.condition_enabled = target.checked;
-                if (col.condition_enabled && !col.condition) {
-                    col.condition = normalizeCondition({
-                        expr: "",
-                        then: { map_to: [normalizeMapTo({})], transforms: [] }
-                    });
-                }
-                renderColumns();
-            }
-            if (target.dataset.field === "condition_else_enabled" && col.condition) {
-                if (target.checked) {
-                    col.condition.else = { map_to: [normalizeMapTo({})], transforms: [] };
-                } else {
-                    col.condition.else = null;
-                }
-                renderColumns();
-            }
-            updateModelJSON();
-            updatePreview();
-        });
-
-        columnsList.addEventListener("click", function(e) {
-            const button = e.target.closest("button");
-            if (!button) return;
-            const action = button.dataset.action;
-            const card = button.closest(".column-card");
-            const colIndex = card ? parseInt(card.dataset.col, 10) : NaN;
-            if (action === "remove-column") {
-                if (!isNaN(colIndex)) {
-                    state.mapping.columns.splice(colIndex, 1);
-                    renderColumns();
-                    updateModelJSON();
-                    updatePreview();
-                }
-                return;
-            }
-            if (action === "add-map") {
-                if (!isNaN(colIndex)) {
-                    const col = state.mapping.columns[colIndex];
-                    col.map_to.push(normalizeMapTo({}));
-                    renderColumns();
-                    updateModelJSON();
-                    updatePreview();
-                }
-                return;
-            }
-            if (action === "remove-map") {
-                if (!isNaN(colIndex)) {
-                    const mapIndex = parseInt(button.dataset.map, 10);
-                    const branch = button.dataset.branch || "";
-                    const col = state.mapping.columns[colIndex];
-                    const mapList = resolveMapList(col, branch);
-                    if (mapList && mapIndex >= 0) {
-                        mapList.splice(mapIndex, 1);
-                        renderColumns();
-                        updateModelJSON();
-                        updatePreview();
-                    }
-                }
-                return;
-            }
-            if (action === "add-transform") {
-                if (!isNaN(colIndex)) {
-                    const mapIndex = parseInt(button.dataset.map, 10);
-                    const branch = button.dataset.branch || "";
-                    const col = state.mapping.columns[colIndex];
-                    const mapList = resolveMapList(col, branch);
-                    if (mapList && mapList[mapIndex]) {
-                        mapList[mapIndex].transforms.push({ name: "", value: "" });
-                        renderColumns();
-                        updateModelJSON();
-                        updatePreview();
-                    }
-                }
-                return;
-            }
-            if (action === "remove-transform") {
-                if (!isNaN(colIndex)) {
-                    const mapIndex = parseInt(button.dataset.map, 10);
-                    const trIndex = parseInt(button.dataset.transform, 10);
-                    const branch = button.dataset.branch || "";
-                    const col = state.mapping.columns[colIndex];
-                    const mapList = resolveMapList(col, branch);
-                    if (mapList && mapList[mapIndex] && trIndex >= 0) {
-                        mapList[mapIndex].transforms.splice(trIndex, 1);
-                        renderColumns();
-                        updateModelJSON();
-                        updatePreview();
-                    }
-                }
-                return;
-            }
-            if (action === "add-cond-map") {
-                if (!isNaN(colIndex)) {
-                    const branch = button.dataset.branch || "then";
-                    const col = state.mapping.columns[colIndex];
-                    if (!col.condition) {
-                        col.condition = normalizeCondition({ expr: "", then: { map_to: [normalizeMapTo({})], transforms: [] } });
-                    }
-                    const mapList = resolveMapList(col, branch);
-                    if (mapList) {
-                        mapList.push(normalizeMapTo({}));
-                        renderColumns();
-                        updateModelJSON();
-                        updatePreview();
-                    }
-                }
-            }
-        });
-
-        function resolveMapList(col, branch) {
-            if (!branch) return col.map_to;
-            if (!col.condition) return null;
-            if (branch === "then") return col.condition.then.map_to;
-            if (branch === "else" && col.condition.else) return col.condition.else.map_to;
-            return null;
-        }
-
-        addColumnButton.addEventListener("click", function() {
-            state.mapping.columns.push(createEmptyColumn());
-            renderColumns();
-            updateModelJSON();
-            updatePreview();
-        });
-
-        document.querySelectorAll('[data-field^="metadata"], [data-field^="book_resolution"], [data-field^="policies"]').forEach(function(field) {
-            field.addEventListener("input", function() {
-                updateModelJSON();
-                updatePreview();
-                if (field.dataset.field === "metadata.record_type") {
-                    renderColumns();
-                }
-            });
-            field.addEventListener("change", function() {
-                updateModelJSON();
-                updatePreview();
-                if (field.dataset.field === "metadata.record_type") {
-                    renderColumns();
-                }
-            });
-        });
-
-        function initHelpModals() {
-            const modals = document.querySelectorAll('.modal-ajuda');
-            document.addEventListener('click', function(e) {
-                const helpButton = e.target.closest('.ajuda-boto');
-                if (helpButton) {
-                    const targetId = helpButton.getAttribute('aria-controls');
-                    const modal = targetId ? document.getElementById(targetId) : null;
-                    if (modal) {
-                        modal.hidden = false;
-                        modal.focus();
-                    }
-                }
-                const closeButton = e.target.closest('.tancar-ajuda');
-                if (closeButton) {
-                    const modal = closeButton.closest('.modal-ajuda');
-                    if (modal) modal.hidden = true;
-                }
-            });
-            modals.forEach(function(modal) {
-                modal.addEventListener('click', function(e) {
-                    if (e.target === modal) modal.hidden = true;
-                });
-            });
-        }
-
-        applyStateToInputs();
-        renderColumns();
-        updateModelJSON();
-        updatePreview();
-        initHelpModals();
-    })();
-    </script>
+    <script type="application/json" id="import-template-editor-data">{{ toJsonJS (dict
+        "locale" .Lang
+        "previewEmpty" (t .Lang "importer.editor.preview.empty")
+        "labels" (dict
+            "header" (t .Lang "importer.editor.columns.header")
+            "aliases" (t .Lang "importer.editor.columns.aliases")
+            "required" (t .Lang "importer.editor.columns.required")
+            "mapping" (t .Lang "importer.editor.columns.mapping")
+            "transforms" (t .Lang "importer.editor.columns.transforms")
+            "conditionExpr" (t .Lang "importer.editor.columns.condition_expr")
+            "target" (t .Lang "importer.editor.columns.target")
+            "targetPlaceholder" (t .Lang "importer.editor.columns.target_placeholder")
+            "targetCustom" (t .Lang "importer.editor.columns.target_custom")
+            "transformHelpEmpty" (t .Lang "importer.editor.transforms.desc.empty")
+            "transformContextColumn" (t .Lang "importer.editor.transforms.context.column")
+            "transformContextTarget" (t .Lang "importer.editor.transforms.context.target")
+            "transformContextSeparator" (t .Lang "importer.editor.transforms.context.separator")
+            "transformContextUnknown" (t .Lang "importer.editor.transforms.context.unknown_target")
+            "transformContextExample" (t .Lang "importer.editor.transforms.context.example")
+            "transformExampleSetDefault" (t .Lang "importer.editor.transforms.example.set_default")
+            "transformExampleMapValues" (t .Lang "importer.editor.transforms.example.map_values")
+            "transformExampleRegexExtract" (t .Lang "importer.editor.transforms.example.regex_extract")
+            "transformParamHintNone" (t .Lang "importer.editor.transforms.param.hint.none")
+            "transformParamHintSetDefault" (t .Lang "importer.editor.transforms.param.hint.set_default")
+            "transformParamHintMapValues" (t .Lang "importer.editor.transforms.param.hint.map_values")
+            "transformParamHintRegexExtract" (t .Lang "importer.editor.transforms.param.hint.regex_extract")
+        )
+        "helpLabels" (dict
+            "header" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.header"))
+            "aliases" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.aliases"))
+            "required" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.required"))
+            "target" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.target"))
+            "transforms" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.transforms"))
+            "condition" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.condition"))
+            "conditionExpr" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.condition_expr"))
+            "conditionElse" (t .Lang "importer.editor.help.button" (t .Lang "importer.editor.columns.condition_else"))
+        )
+        "targetCatalog" (dict
+            "common" (dict
+                "label" (t .Lang "importer.editor.targets.group.common")
+                "fields" (slice
+                    (dict "value" "base.tipus_acte" "label" (t .Lang "importer.editor.target.common.act_type"))
+                    (dict "value" "base.num_pagina_text" "label" (t .Lang "importer.editor.target.common.page_book"))
+                    (dict "value" "attr.pagina_digital.text" "label" (t .Lang "importer.editor.target.common.page_digital"))
+                    (dict "value" "base.any_doc" "label" (t .Lang "importer.editor.target.common.year_doc"))
+                    (dict "value" "base.data_acte_iso_text_estat" "label" (t .Lang "importer.editor.target.common.event_date"))
+                    (dict "value" "base.transcripcio_literal" "label" (t .Lang "importer.editor.target.common.literal"))
+                    (dict "value" "base.notes_marginals" "label" (t .Lang "importer.editor.target.common.notes_marginals"))
+                    (dict "value" "base.observacions_paleografiques" "label" (t .Lang "importer.editor.target.common.notes_paleo"))
+                )
+            )
+            "baptisme" (dict
+                "label" (t .Lang "importer.editor.targets.group.baptisme")
+                "fields" (slice
+                    (dict "value" "person.batejat" "label" (t .Lang "importer.editor.target.baptisme.batejat"))
+                    (dict "value" "person.pare" "label" (t .Lang "importer.editor.target.baptisme.pare"))
+                    (dict "value" "person.mare" "label" (t .Lang "importer.editor.target.baptisme.mare"))
+                    (dict "value" "person.mare.cognom_soltera" "label" (t .Lang "importer.editor.target.baptisme.mare_cognom_soltera"))
+                    (dict "value" "person.pare.ofici" "label" (t .Lang "importer.editor.target.baptisme.pare_ofici"))
+                    (dict "value" "person.avi_patern" "label" (t .Lang "importer.editor.target.baptisme.avi_patern"))
+                    (dict "value" "person.avia_paterna" "label" (t .Lang "importer.editor.target.baptisme.avia_paterna"))
+                    (dict "value" "person.avia_paterna.cognom_soltera" "label" (t .Lang "importer.editor.target.baptisme.avia_paterna_cognom_soltera"))
+                    (dict "value" "person.avi_matern" "label" (t .Lang "importer.editor.target.baptisme.avi_matern"))
+                    (dict "value" "person.avia_materna" "label" (t .Lang "importer.editor.target.baptisme.avia_materna"))
+                    (dict "value" "person.avia_materna.cognom_soltera" "label" (t .Lang "importer.editor.target.baptisme.avia_materna_cognom_soltera"))
+                    (dict "value" "person.padri" "label" (t .Lang "importer.editor.target.baptisme.padri"))
+                    (dict "value" "person.padrina" "label" (t .Lang "importer.editor.target.baptisme.padrina"))
+                    (dict "value" "attr.data_bateig.date_or_text_with_quality" "label" (t .Lang "importer.editor.target.baptisme.data_bateig"))
+                    (dict "value" "attr.data_naixement.date_or_text_with_quality" "label" (t .Lang "importer.editor.target.baptisme.data_naixement"))
+                    (dict "value" "attr.data_defuncio.date_or_text_with_quality" "label" (t .Lang "importer.editor.target.baptisme.data_defuncio"))
+                )
+            )
+            "obit" (dict
+                "label" (t .Lang "importer.editor.targets.group.obit")
+                "fields" (slice
+                    (dict "value" "person.difunt" "label" (t .Lang "importer.editor.target.obit.difunt"))
+                    (dict "value" "person.pare" "label" (t .Lang "importer.editor.target.obit.pare"))
+                    (dict "value" "person.mare" "label" (t .Lang "importer.editor.target.obit.mare"))
+                    (dict "value" "person.mare.cognom_soltera" "label" (t .Lang "importer.editor.target.obit.mare_cognom_soltera"))
+                    (dict "value" "person.parella" "label" (t .Lang "importer.editor.target.obit.parella"))
+                    (dict "value" "person.difunt.estat_civil" "label" (t .Lang "importer.editor.target.obit.estat_civil"))
+                    (dict "value" "attr.data_defuncio.date_or_text_with_quality" "label" (t .Lang "importer.editor.target.obit.data_defuncio"))
+                    (dict "value" "attr.data_enterrament.date_or_text_with_quality" "label" (t .Lang "importer.editor.target.obit.data_enterrament"))
+                    (dict "value" "attr.edat.int_nullable" "label" (t .Lang "importer.editor.target.obit.edat"))
+                    (dict "value" "attr.causa.text" "label" (t .Lang "importer.editor.target.obit.causa"))
+                    (dict "value" "attr.classe_enterrament.text" "label" (t .Lang "importer.editor.target.obit.classe_enterrament"))
+                )
+            )
+            "matrimoni" (dict
+                "label" (t .Lang "importer.editor.targets.group.matrimoni")
+                "fields" (slice
+                    (dict "value" "person.nuvi" "label" (t .Lang "importer.editor.target.matrimoni.nuvi"))
+                    (dict "value" "person.nuvi.ofici" "label" (t .Lang "importer.editor.target.matrimoni.nuvi_ofici"))
+                    (dict "value" "person.nuvi.edat" "label" (t .Lang "importer.editor.target.matrimoni.nuvi_edat"))
+                    (dict "value" "person.pare_nuvi" "label" (t .Lang "importer.editor.target.matrimoni.pare_nuvi"))
+                    (dict "value" "person.mare_nuvi" "label" (t .Lang "importer.editor.target.matrimoni.mare_nuvi"))
+                    (dict "value" "person.mare_nuvi.cognom_soltera" "label" (t .Lang "importer.editor.target.matrimoni.mare_nuvi_cognom_soltera"))
+                    (dict "value" "person.novia" "label" (t .Lang "importer.editor.target.matrimoni.novia"))
+                    (dict "value" "person.novia.ofici" "label" (t .Lang "importer.editor.target.matrimoni.novia_ofici"))
+                    (dict "value" "person.novia.edat" "label" (t .Lang "importer.editor.target.matrimoni.novia_edat"))
+                    (dict "value" "person.pare_novia" "label" (t .Lang "importer.editor.target.matrimoni.pare_novia"))
+                    (dict "value" "person.mare_novia" "label" (t .Lang "importer.editor.target.matrimoni.mare_novia"))
+                    (dict "value" "person.mare_novia.cognom_soltera" "label" (t .Lang "importer.editor.target.matrimoni.mare_novia_cognom_soltera"))
+                    (dict "value" "person.testimoni1" "label" (t .Lang "importer.editor.target.matrimoni.testimoni1"))
+                    (dict "value" "person.testimoni2" "label" (t .Lang "importer.editor.target.matrimoni.testimoni2"))
+                    (dict "value" "attr.data_matrimoni.date_or_text_with_quality" "label" (t .Lang "importer.editor.target.matrimoni.data_matrimoni"))
+                )
+            )
+            "padro" (dict
+                "label" (t .Lang "importer.editor.targets.group.padro")
+                "fields" (slice
+                    (dict "value" "person.cap_familia" "label" (t .Lang "importer.editor.target.padro.cap_familia"))
+                    (dict "value" "person.cap_familia.sexe" "label" (t .Lang "importer.editor.target.padro.sexe"))
+                    (dict "value" "person.cap_familia.edat" "label" (t .Lang "importer.editor.target.padro.edat"))
+                    (dict "value" "person.cap_familia.estat_civil" "label" (t .Lang "importer.editor.target.padro.estat_civil"))
+                    (dict "value" "person.cap_familia.ofici" "label" (t .Lang "importer.editor.target.padro.ofici"))
+                    (dict "value" "person.cap_familia.casa" "label" (t .Lang "importer.editor.target.padro.casa"))
+                    (dict "value" "attr.data_naixement.date_or_text_with_quality" "label" (t .Lang "importer.editor.target.padro.data_naixement"))
+                    (dict "value" "attr.carrer.text" "label" (t .Lang "importer.editor.target.padro.carrer"))
+                    (dict "value" "attr.numero_casa.text" "label" (t .Lang "importer.editor.target.padro.numero_casa"))
+                    (dict "value" "attr.adreca.text" "label" (t .Lang "importer.editor.target.padro.adreca"))
+                    (dict "value" "attr.localitat.text" "label" (t .Lang "importer.editor.target.padro.localitat"))
+                    (dict "value" "attr.procedencia.text" "label" (t .Lang "importer.editor.target.padro.procedencia"))
+                    (dict "value" "attr.alfabetitzat.bool" "label" (t .Lang "importer.editor.target.padro.alfabetitzat"))
+                    (dict "value" "attr.sap_llegir.bool" "label" (t .Lang "importer.editor.target.padro.sap_llegir"))
+                    (dict "value" "attr.sap_escriure.bool" "label" (t .Lang "importer.editor.target.padro.sap_escriure"))
+                    (dict "value" "attr.condicio_padro.text" "label" (t .Lang "importer.editor.target.padro.condicio_padro"))
+                )
+            )
+        )
+        "similarityLabels" (dict
+            "loading" (t .Lang "common.loading")
+            "empty" (t .Lang "importer.editor.similar.empty")
+            "clone" (t .Lang "importer.templates.action.clone")
+            "open" (t .Lang "importer.editor.similar.open")
+        )
+        "initialModel" $view.Model
+        "transformHelp" (dict
+            "trim" (t .Lang "importer.editor.transforms.desc.trim")
+            "lower" (t .Lang "importer.editor.transforms.desc.lower")
+            "strip_diacritics" (t .Lang "importer.editor.transforms.desc.strip_diacritics")
+            "normalize_cronologia" (t .Lang "importer.editor.transforms.desc.normalize_cronologia")
+            "parse_ddmmyyyy_to_iso" (t .Lang "importer.editor.transforms.desc.parse_ddmmyyyy_to_iso")
+            "parse_date_flexible_to_base_data_acte" (t .Lang "importer.editor.transforms.desc.parse_date_flexible_to_base_data_acte")
+            "parse_date_flexible_to_date_or_text_with_quality" (t .Lang "importer.editor.transforms.desc.parse_date_flexible_to_date_or_text_with_quality")
+            "parse_person_from_cognoms" (t .Lang "importer.editor.transforms.desc.parse_person_from_cognoms")
+            "parse_person_from_nom" (t .Lang "importer.editor.transforms.desc.parse_person_from_nom")
+            "parse_person_from_cognoms_marcmoia_v2" (t .Lang "importer.editor.transforms.desc.parse_person_from_cognoms_marcmoia_v2")
+            "parse_person_from_cognoms_marcmoia_v2_maternal_first" (t .Lang "importer.editor.transforms.desc.parse_person_from_cognoms_marcmoia_v2_maternal_first")
+            "parse_person_from_nom_marcmoia_v2" (t .Lang "importer.editor.transforms.desc.parse_person_from_nom_marcmoia_v2")
+            "parse_person_from_nom_marcmoia_v2_maternal_first" (t .Lang "importer.editor.transforms.desc.parse_person_from_nom_marcmoia_v2_maternal_first")
+            "split_couple_i" (t .Lang "importer.editor.transforms.desc.split_couple_i")
+            "set_default" (t .Lang "importer.editor.transforms.desc.set_default")
+            "map_values" (t .Lang "importer.editor.transforms.desc.map_values")
+            "regex_extract" (t .Lang "importer.editor.transforms.desc.regex_extract")
+            "parse_marriage_order_int_nullable" (t .Lang "importer.editor.transforms.desc.parse_marriage_order_int_nullable")
+            "strip_marriage_order_text" (t .Lang "importer.editor.transforms.desc.strip_marriage_order_text")
+            "extract_parenthetical_last" (t .Lang "importer.editor.transforms.desc.extract_parenthetical_last")
+            "extract_parenthetical_all" (t .Lang "importer.editor.transforms.desc.extract_parenthetical_all")
+            "strip_parentheticals" (t .Lang "importer.editor.transforms.desc.strip_parentheticals")
+        )
+    ) }}</script>
+    <script src="/static/js/import-template-editor.js"></script>
 </body>
 </html>
 {{ end }}

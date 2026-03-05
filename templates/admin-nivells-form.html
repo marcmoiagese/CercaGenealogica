@@ -238,48 +238,7 @@
         .ajuda-boto{margin-left:0.35rem;font-size:0.8rem;line-height:1;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;border:1px solid #166088;background:#166088;color:#fff;cursor:pointer;}
         .ajuda-boto:hover{background:#114b6e;border-color:#114b6e;}
     </style>
-    <script>
-    (function(){
-        const ajudaButtons = document.querySelectorAll('.ajuda-boto');
-        const modals = document.querySelectorAll('.modal-ajuda');
-        const tipusSearch = document.getElementById('tipus_search');
-        const tipusSelect = document.getElementById('tipus_nivell');
-        const parentSearch = document.getElementById('parent_search');
-        const parentSelect = document.getElementById('parent_id');
-        ajudaButtons.forEach(btn => {
-            btn.addEventListener('click', ()=>{
-                const target = btn.getAttribute('aria-controls');
-                const modal = document.getElementById(target);
-                if(modal){ modal.hidden=false; modal.focus(); }
-            });
-        });
-        modals.forEach(modal => {
-            modal.addEventListener('click',(e)=>{ if(e.target===modal) modal.hidden=true; });
-            const close = modal.querySelector('.tancar-ajuda');
-            if (close) close.addEventListener('click', ()=> modal.hidden=true);
-        });
-        if (tipusSearch && tipusSelect) {
-            tipusSearch.addEventListener('input', ()=>{
-                const q = tipusSearch.value.toLowerCase();
-                for(let i=0;i<tipusSelect.options.length;i++){
-                    const opt = tipusSelect.options[i];
-                    if (!opt.value) { opt.style.display=''; continue; }
-                    opt.style.display = opt.textContent.toLowerCase().includes(q) ? '' : 'none';
-                }
-            });
-        }
-        if (parentSearch && parentSelect) {
-            parentSearch.addEventListener('input', ()=>{
-                const q = parentSearch.value.toLowerCase();
-                for(let i=0;i<parentSelect.options.length;i++){
-                    const opt = parentSelect.options[i];
-                    if (!opt.value) { opt.style.display=''; continue; }
-                    opt.style.display = opt.textContent.toLowerCase().includes(q) ? '' : 'none';
-                }
-            });
-        }
-    })();
-    </script>
+    <script src="/static/js/admin-nivells-form.js"></script>
 </body>
 </html>
 {{ end }}

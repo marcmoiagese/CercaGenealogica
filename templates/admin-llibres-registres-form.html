@@ -17,7 +17,7 @@
                 <p class="muted">{{ if .Data.Llibre.Titol }}{{ .Data.Llibre.Titol }}{{ else }}{{ .Data.Llibre.NomEsglesia }}{{ end }}</p>
             </header>
             {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
-            <form method="post" action="{{ if .Data.IsNew }}/documentals/llibres/{{ .Data.Llibre.ID }}/registres{{ else }}/documentals/registres/{{ .Data.Registre.ID }}/editar{{ end }}">
+            <form method="post" action="{{ if .Data.IsNew }}/documentals/llibres/{{ .Data.Llibre.ID }}/registres{{ else }}/documentals/registres/{{ .Data.Registre.ID }}/editar{{ end }}" data-select-label="{{ t .Lang "common.select" }}" data-sex-male-label="{{ t .Lang "records.value.sex.masculi" }}" data-sex-female-label="{{ t .Lang "records.value.sex.femeni" }}">
                 <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
 
                 <div class="grup-camp">
@@ -282,125 +282,11 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
-    <script>
-        (function() {
-            const personContainer = document.getElementById('persones-container');
-            const attrContainer = document.getElementById('atributs-container');
-            const addPerson = document.getElementById('add-person');
-            const addAttr = document.getElementById('add-attr');
-
-            const qualityOptions = {{ toJsonJS .Data.QualitatOptions }};
-            const qualityLabels = {{ toJsonJS .Data.QualitatLabels }};
-            const typeOptions = {{ toJsonJS .Data.ValorTipus }};
-            const roleOptions = {{ toJsonJS .Data.RoleOptions }};
-
-            function qualitySelect(name) {
-                const select = document.createElement('select');
-                select.name = name;
-                qualityOptions.forEach(opt => {
-                    const o = document.createElement('option');
-                    o.value = opt;
-                    o.textContent = qualityLabels[opt] || opt;
-                    select.appendChild(o);
-                });
-                return select;
-            }
-
-            function roleSelect(name) {
-                const select = document.createElement('select');
-                select.name = name;
-                const emptyOpt = document.createElement('option');
-                emptyOpt.value = '';
-                emptyOpt.textContent = '{{ t .Lang "common.select" }}';
-                select.appendChild(emptyOpt);
-                roleOptions.forEach(opt => {
-                    const o = document.createElement('option');
-                    o.value = opt.Value;
-                    o.textContent = opt.Label || opt.Value;
-                    select.appendChild(o);
-                });
-                return select;
-            }
-
-            function sexSelect(name) {
-                const select = document.createElement('select');
-                select.name = name;
-                const emptyOpt = document.createElement('option');
-                emptyOpt.value = '';
-                emptyOpt.textContent = '{{ t .Lang "common.select" }}';
-                select.appendChild(emptyOpt);
-                const optM = document.createElement('option');
-                optM.value = 'masculi';
-                optM.textContent = '{{ t .Lang "records.value.sex.masculi" }}';
-                select.appendChild(optM);
-                const optF = document.createElement('option');
-                optF.value = 'femeni';
-                optF.textContent = '{{ t .Lang "records.value.sex.femeni" }}';
-                select.appendChild(optF);
-                return select;
-            }
-
-            addPerson.addEventListener('click', () => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td></td>
-                    <td><input type="text" name="person_nom"></td>
-                    <td></td>
-                    <td><input type="text" name="person_cognom1"></td>
-                    <td></td>
-                    <td><input type="text" name="person_cognom2"></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td><input type="text" name="person_edat"></td>
-                    <td></td>
-                    <td><input type="text" name="person_estat_civil"></td>
-                    <td></td>
-                    <td><input type="text" name="person_municipi"></td>
-                    <td></td>
-                    <td><input type="text" name="person_ofici"></td>
-                    <td></td>
-                    <td><input type="text" name="person_casa"></td>
-                    <td></td>
-                    <td><input type="text" name="person_notes"></td>
-                `;
-                row.children[0].appendChild(roleSelect('person_rol'));
-                row.children[2].appendChild(qualitySelect('person_nom_estat'));
-                row.children[4].appendChild(qualitySelect('person_cognom1_estat'));
-                row.children[6].appendChild(qualitySelect('person_cognom2_estat'));
-                row.children[7].appendChild(sexSelect('person_sexe'));
-                row.children[8].appendChild(qualitySelect('person_sexe_estat'));
-                row.children[10].appendChild(qualitySelect('person_edat_estat'));
-                row.children[12].appendChild(qualitySelect('person_estat_civil_estat'));
-                row.children[14].appendChild(qualitySelect('person_municipi_estat'));
-                row.children[16].appendChild(qualitySelect('person_ofici_estat'));
-                row.children[18].appendChild(qualitySelect('person_casa_estat'));
-                personContainer.appendChild(row);
-            });
-
-            addAttr.addEventListener('click', () => {
-                const row = document.createElement('tr');
-                const typeSelect = document.createElement('select');
-                typeSelect.name = 'attr_type';
-                typeOptions.forEach(opt => {
-                    const o = document.createElement('option');
-                    o.value = opt;
-                    o.textContent = opt;
-                    typeSelect.appendChild(o);
-                });
-                row.innerHTML = `
-                    <td><input type="text" name="attr_key"></td>
-                    <td></td>
-                    <td><input type="text" name="attr_value"></td>
-                    <td></td>
-                    <td><input type="text" name="attr_notes"></td>
-                `;
-                row.children[1].appendChild(typeSelect);
-                row.children[3].appendChild(qualitySelect('attr_state'));
-                attrContainer.appendChild(row);
-            });
-        })();
-    </script>
+    <script id="registres-quality-options" type="application/json">{{ toJsonJS .Data.QualitatOptions }}</script>
+    <script id="registres-quality-labels" type="application/json">{{ toJsonJS .Data.QualitatLabels }}</script>
+    <script id="registres-type-options" type="application/json">{{ toJsonJS .Data.ValorTipus }}</script>
+    <script id="registres-role-options" type="application/json">{{ toJsonJS .Data.RoleOptions }}</script>
+    <script src="/static/js/admin-registres-form.js"></script>
 </body>
 </html>
 {{ end }}

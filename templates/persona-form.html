@@ -161,45 +161,7 @@
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
     {{ if not .Data.IsNew }}
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const modal = document.getElementById("persona-link-modal");
-            if (!modal) {
-                return;
-            }
-            const fieldInput = document.getElementById("persona-link-field");
-            const fieldLabel = document.getElementById("persona-link-field-label");
-            const registreInput = document.getElementById("persona-link-registre");
-            const openButtons = document.querySelectorAll("[data-persona-link]");
-            const closeButtons = modal.querySelectorAll("[data-close-persona-link]");
-            const openModal = (btn) => {
-                fieldInput.value = btn.dataset.fieldKey || "";
-                fieldLabel.textContent = btn.dataset.fieldLabel || "—";
-                registreInput.value = "";
-                modal.classList.add("is-open");
-                registreInput.focus();
-            };
-            const closeModal = () => {
-                modal.classList.remove("is-open");
-            };
-            openButtons.forEach((btn) => {
-                btn.addEventListener("click", () => openModal(btn));
-            });
-            closeButtons.forEach((btn) => {
-                btn.addEventListener("click", closeModal);
-            });
-            modal.addEventListener("click", (event) => {
-                if (event.target === modal) {
-                    closeModal();
-                }
-            });
-            document.addEventListener("keydown", (event) => {
-                if (event.key === "Escape") {
-                    closeModal();
-                }
-            });
-        });
-    </script>
+    <script src="/static/js/persona-form.js"></script>
     {{ end }}
 </body>
 </html>

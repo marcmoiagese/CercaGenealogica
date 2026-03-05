@@ -114,7 +114,7 @@
                         <ul class="dropdown-opcions" id="dropdownOpcions">
                             <li><a href="/documentals/llibres/{{ .Data.Llibre.ID }}/historial"><i class="fas fa-clock-rotate-left"></i> {{ t .Lang "wiki.options.history" }}</a></li>
                             <li><a href="/documentals/llibres/{{ .Data.Llibre.ID }}/estadistiques"><i class="fas fa-chart-line"></i> {{ t .Lang "wiki.options.stats" }}</a></li>
-                            <li><a href="#" class="btn-marcar" data-llibre-id="{{ .Data.Llibre.ID }}" onclick="event.preventDefault()"><i class="fas fa-eye"></i> {{ t .Lang "wiki.options.follow" }}</a></li>
+                            <li><a href="#" class="btn-marcar" data-llibre-id="{{ .Data.Llibre.ID }}"><i class="fas fa-eye"></i> {{ t .Lang "wiki.options.follow" }}</a></li>
                         </ul>
                     </div>
                     {{ if $.Data.CanEditLlibre }}
@@ -192,7 +192,7 @@
             <div class="page-stats-controls" id="page-stats-controls">
                 <div class="page-stats-filters">
                     <label for="page-stats-per-page">{{ t .Lang "records.columns.per_page" }}</label>
-                    <select id="page-stats-per-page" onchange="location.href='{{ .Data.PageStatsSelectBase }}' + this.value + '{{ .Data.PageStatsAnchor }}'">
+                    <select id="page-stats-per-page" data-nav-base="{{ .Data.PageStatsSelectBase }}" data-nav-anchor="{{ .Data.PageStatsAnchor }}">
                         <option value="5" {{ if eq .Data.PageStatsPerPage 5 }}selected{{ end }}>5</option>
                         <option value="10" {{ if eq .Data.PageStatsPerPage 10 }}selected{{ end }}>10</option>
                         <option value="25" {{ if eq .Data.PageStatsPerPage 25 }}selected{{ end }}>25</option>
@@ -347,7 +347,7 @@
             {{ if gt .Data.PageStatsPages 1 }}
             <div class="paginador">
                 {{ range .Data.PageStatsLinks }}
-                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
+                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}data-nav-href="{{ .URL }}"{{ end }}>
                     {{ .Label }}
                 </button>
                 {{ end }}
@@ -403,7 +403,7 @@
             </header>
             <div class="media-links-controls">
                 <label for="media-page-select">{{ t .Lang "books.pages.stats.col.page" }}</label>
-                <select id="media-page-select" onchange="location.href='{{ .Data.MediaPageSelectBase }}' + this.value + '#media-links'">
+                <select id="media-page-select" data-nav-base="{{ .Data.MediaPageSelectBase }}" data-nav-anchor="#media-links">
                     <option value="">{{ t .Lang "common.select" }}</option>
                     {{ range .Data.MediaPageOptions }}
                     <option value="{{ .ID }}" {{ if eq $.Data.MediaPageID .ID }}selected{{ end }}>{{ .NumPagina }}</option>
@@ -603,7 +603,7 @@
                             <td>{{ if .Descripcio.Valid }}{{ .Descripcio.String }}{{ end }}</td>
                             {{ if $.Data.CanEditLlibre }}
                             <td class="accions">
-                                <form method="post" action="/documentals/llibres/{{ .LlibreID }}/urls/{{ .ID }}/delete" onsubmit="return confirm('{{ t $.Lang "books.links.delete.confirm" }}');">
+                                <form method="post" action="/documentals/llibres/{{ .LlibreID }}/urls/{{ .ID }}/delete" data-confirm-message="{{ t $.Lang "books.links.delete.confirm" }}">
                                     <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                     <input type="hidden" name="return_to" value="{{ $.Data.CurrentURL }}">
                                     <button type="submit" class="boto-perill icon-only" aria-label="{{ t $.Lang "archives.action.delete" }}" title="{{ t $.Lang "archives.action.delete" }}">
@@ -754,308 +754,7 @@
     <script src="/static/js/scroll-restore.js?v=1"></script>
     <script src="/static/js/page-stats.js?v=3"></script>
     <script src="/static/js/arxiu-form-suggest.js"></script>
-    <script>
-        (function () {
-            const modal = document.getElementById('arxiu-links-modal');
-            if (!modal) return;
-            const openBtns = document.querySelectorAll('[data-open-arxiu-links]');
-            const closeBtns = modal.querySelectorAll('[data-close-arxiu-links]');
-            const form = document.getElementById('arxiu-links-form');
-            const arxiuSearch = document.getElementById('arxiu-links-search');
-            const arxiuHidden = document.getElementById('arxiu-links-id');
-            const bookWrap = document.getElementById('arxiu-link-book-wrap');
-            const bookSearch = document.getElementById('arxiu-link-book-search');
-            const bookHidden = document.getElementById('arxiu-link-book-id');
-            const bookSuggestions = document.getElementById('arxiu-link-book-suggestions');
-            const urlWrap = document.getElementById('arxiu-link-url-wrap');
-            const urlInput = document.getElementById('arxiu-link-url');
-            let currentArxiuID = '';
-
-            function clearBookSearch() {
-                if (bookSearch) {
-                    bookSearch.value = '';
-                    bookSearch.dataset.api = '';
-                }
-                if (bookHidden) {
-                    bookHidden.value = '';
-                }
-                if (bookSuggestions) {
-                    bookSuggestions.innerHTML = '';
-                    bookSuggestions.classList.remove('is-open');
-                }
-            }
-
-            function updateArxiuState() {
-                const arxiuValue = arxiuHidden ? arxiuHidden.value.trim() : '';
-                const hasArxiu = arxiuValue !== '';
-                if (arxiuValue !== currentArxiuID) {
-                    clearBookSearch();
-                    currentArxiuID = arxiuValue;
-                }
-                if (bookWrap) {
-                    bookWrap.style.display = hasArxiu ? 'flex' : 'none';
-                }
-                if (urlWrap) {
-                    urlWrap.style.display = hasArxiu ? 'none' : 'flex';
-                }
-                if (urlInput) {
-                    urlInput.required = !hasArxiu;
-                    if (hasArxiu) {
-                        urlInput.value = '';
-                    }
-                }
-                if (hasArxiu && bookSearch) {
-                    bookSearch.dataset.api = `/api/documentals/llibres/suggest?arxiu_id=${encodeURIComponent(arxiuValue)}`;
-                }
-                if (!hasArxiu) {
-                    clearBookSearch();
-                }
-            }
-            if (openBtns.length > 0) {
-                openBtns.forEach((btn) => {
-                    btn.addEventListener('click', () => {
-                        if (arxiuSearch) arxiuSearch.value = '';
-                        if (arxiuHidden) arxiuHidden.value = '';
-                        clearBookSearch();
-                        currentArxiuID = '';
-                        updateArxiuState();
-                        modal.classList.add('is-open');
-                    });
-                });
-            }
-            if (openBtns.length === 0) {
-                return;
-            }
-            closeBtns.forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    modal.classList.remove('is-open');
-                });
-            });
-            if (arxiuSearch) {
-                arxiuSearch.addEventListener('input', () => {
-                    updateArxiuState();
-                });
-                arxiuSearch.addEventListener('suggest:select', () => {
-                    updateArxiuState();
-                });
-            }
-            if (arxiuHidden) {
-                arxiuHidden.addEventListener('change', () => {
-                    updateArxiuState();
-                });
-            }
-            if (form) {
-                form.addEventListener('submit', () => {
-                    modal.classList.remove('is-open');
-                });
-            }
-        })();
-    </script>
-    <script>
-        (function () {
-            const modal = document.getElementById('media-links-modal');
-            if (!modal) return;
-            const openBtns = document.querySelectorAll('[data-open-media-links]');
-            const closeBtns = modal.querySelectorAll('[data-close-media-links]');
-            const searchInput = modal.querySelector('#media-search');
-
-            openBtns.forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    modal.classList.add('is-open');
-                    if (searchInput) {
-                        searchInput.focus();
-                    }
-                });
-            });
-
-            closeBtns.forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    modal.classList.remove('is-open');
-                });
-            });
-
-            modal.addEventListener('click', (event) => {
-                if (event.target === modal) {
-                    modal.classList.remove('is-open');
-                }
-            });
-        })();
-    </script>
-    <script>
-        (function () {
-            const optionsBtn = document.getElementById("botoOpcions");
-            const dropdown = document.getElementById("dropdownOpcions");
-            if (optionsBtn && dropdown) {
-                optionsBtn.addEventListener("click", function (event) {
-                    event.preventDefault();
-                    dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
-                });
-                document.addEventListener("click", function (event) {
-                    if (!event.target.closest(".opcions-dropdown")) {
-                        dropdown.style.display = "none";
-                    }
-                });
-            }
-
-            const markState = document.getElementById("llibre-mark-state");
-            const modal = document.getElementById("modalMarcarLlibre");
-            const openBtn = document.querySelector(".btn-marcar");
-            const closeBtns = document.querySelectorAll('[data-modal-close="modalMarcarLlibre"]');
-            if (!markState || !modal) {
-                return;
-            }
-            const markType = modal.querySelector("#llibre-mark-type");
-            const markPublic = modal.querySelector("#llibre-mark-public");
-            const markSave = modal.querySelector("#llibre-mark-save");
-            const markClear = modal.querySelector("#llibre-mark-clear");
-            const llibreID = parseInt(markState.dataset.llibreId || "0", 10);
-            const csrfToken = markState.dataset.csrf || "";
-
-            function openModal() {
-                const existingType = markState.dataset.markType || "";
-                const existingPublic = markState.dataset.markPublic !== "0";
-                const own = markState.dataset.markOwn === "1";
-                if (markType) {
-                    markType.value = existingType;
-                }
-                if (markPublic) {
-                    markPublic.checked = existingType ? existingPublic : true;
-                }
-                if (markClear) {
-                    markClear.disabled = !own;
-                }
-                modal.classList.add("is-open");
-            }
-
-            function closeModal() {
-                modal.classList.remove("is-open");
-            }
-
-            if (openBtn) {
-                openBtn.addEventListener("click", function () {
-                    if (!llibreID) {
-                        return;
-                    }
-                    openModal();
-                });
-            }
-            closeBtns.forEach((btn) => {
-                btn.addEventListener("click", closeModal);
-            });
-
-            if (markSave) {
-                markSave.addEventListener("click", function () {
-                    if (!llibreID) {
-                        return;
-                    }
-                    const typeValue = markType ? markType.value : "";
-                    if (!typeValue) {
-                        return;
-                    }
-                    const body = new URLSearchParams();
-                    body.set("csrf_token", csrfToken);
-                    body.set("type", typeValue);
-                    body.set("public", markPublic && markPublic.checked ? "1" : "0");
-                    fetch(`/documentals/llibres/${llibreID}/marcar`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                        body: body.toString(),
-                        credentials: "same-origin",
-                    })
-                        .then((response) => {
-                            if (!response.ok) {
-                                throw new Error("mark_failed");
-                            }
-                            return response.json();
-                        })
-                        .then((data) => {
-                            if (data && data.ok) {
-                                markState.dataset.markType = data.type || "";
-                                markState.dataset.markPublic = data.is_public ? "1" : "0";
-                                markState.dataset.markOwn = "1";
-                                closeModal();
-                            }
-                        })
-                        .catch(() => {});
-                });
-            }
-
-            if (markClear) {
-                markClear.addEventListener("click", function () {
-                    if (!llibreID) {
-                        return;
-                    }
-                    if (markState.dataset.markOwn !== "1") {
-                        closeModal();
-                        return;
-                    }
-                    const body = new URLSearchParams();
-                    body.set("csrf_token", csrfToken);
-                    fetch(`/documentals/llibres/${llibreID}/desmarcar`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                        body: body.toString(),
-                        credentials: "same-origin",
-                    })
-                        .then((response) => {
-                            if (!response.ok) {
-                                throw new Error("mark_clear_failed");
-                            }
-                            return response.json();
-                        })
-                        .then((data) => {
-                            if (data && data.ok) {
-                                markState.dataset.markType = "";
-                                markState.dataset.markPublic = "0";
-                                markState.dataset.markOwn = "0";
-                                closeModal();
-                            }
-                        })
-                        .catch(() => {});
-                });
-            }
-        })();
-    </script>
-    {{ if .Data.CanDeleteLlibre }}
-    <script>
-        (function () {
-            const modal = document.getElementById('purge-modal');
-            if (!modal) return;
-            const form = document.getElementById('purge-form');
-            const title = document.getElementById('purge-modal-book');
-            const closeButtons = modal.querySelectorAll('[data-close-purge]');
-            const openButtons = document.querySelectorAll('.purge-trigger');
-            const actionTemplate = '/documentals/llibres/__ID__/registres/purge';
-
-            openButtons.forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    const id = btn.getAttribute('data-llibre-id');
-                    const label = btn.getAttribute('data-llibre-title') || '';
-                    form.action = actionTemplate.replace('__ID__', id || '');
-                    title.textContent = label;
-                    modal.classList.add('is-open');
-                    const input = modal.querySelector('#purge-password');
-                    if (input) {
-                        input.value = '';
-                        input.focus();
-                    }
-                });
-            });
-
-            closeButtons.forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    modal.classList.remove('is-open');
-                });
-            });
-
-            modal.addEventListener('click', (event) => {
-                if (event.target === modal) {
-                    modal.classList.remove('is-open');
-                }
-            });
-        })();
-    </script>
-    {{ end }}
+    <script src="/static/js/admin-llibres-show.js"></script>
 </body>
 </html>
 {{ end }}

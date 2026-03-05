@@ -145,7 +145,7 @@
                                     {{ end }}
                                     {{ if and $canEdit $canDelete }} | {{ end }}
                                     {{ if $canDelete }}
-                                    <form method="post" action="{{ $manageBase }}/{{ .ID }}/delete" style="display:inline;" onsubmit="return confirm('{{ t $.Lang "archives.confirm.delete" }}');">
+                                    <form method="post" action="{{ $manageBase }}/{{ .ID }}/delete" style="display:inline;" data-confirm-message="{{ t $.Lang "archives.confirm.delete" }}">
                                         <button type="submit" class="enllaç">{{ t $.Lang "archives.action.delete" }}</button>
                                     </form>
                                     {{ end }}
@@ -160,7 +160,7 @@
             {{ if gt .Data.TotalPages 1 }}
             <div class="paginador" id="paginador">
                 {{ range .Data.PageLinks }}
-                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
+                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}data-nav-href="{{ .URL }}"{{ end }}>
                     {{ .Label }}
                 </button>
                 {{ end }}

@@ -469,23 +469,6 @@
     <script src="/static/js/municipi-demografia.js"></script>
     <script src="/static/js/municipi-stats-noms-cognoms.js"></script>
     <script src="/static/js/municipi-anecdotes-slider.js"></script>
-    <script>
-        (function () {
-            const optionsBtn = document.getElementById("botoOpcions");
-            const dropdown = document.getElementById("dropdownOpcions");
-            if (optionsBtn && dropdown) {
-                optionsBtn.addEventListener("click", function (event) {
-                    event.preventDefault();
-                    dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
-                });
-                document.addEventListener("click", function (event) {
-                    if (!event.target.closest(".opcions-dropdown")) {
-                        dropdown.style.display = "none";
-                    }
-                });
-            }
-        })();
-    </script>
 </body>
 </html>
 {{ end }}

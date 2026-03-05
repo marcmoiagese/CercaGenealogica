@@ -29,7 +29,7 @@
             <form class="filtres-localitzacio" method="get" id="municipi-filters">
                 <div class="filtre-grup">
                     <label for="pais-select">{{ t .Lang "municipis.filter.country" }}</label>
-                    <select id="pais-select" name="pais_id" onchange="this.form.submit()">
+                    <select id="pais-select" name="pais_id" data-submit-form="true">
                         <option value="">{{ t .Lang "municipis.filter.country.placeholder" }}</option>
                         {{ range .Data.Paisos }}
                         <option value="{{ .ID }}" {{ if eq $.Data.Filter.PaisID .ID }}selected{{ end }}>{{ .CodiISO3 }}</option>
@@ -39,7 +39,7 @@
                 {{ range .Data.LevelSelects }}
                 <div class="filtre-grup">
                     <label for="nivell_id_{{ .Level }}">{{ .Label }}</label>
-                    <select id="nivell_id_{{ .Level }}" name="nivell_id_{{ .Level }}" onchange="this.form.submit()">
+                    <select id="nivell_id_{{ .Level }}" name="nivell_id_{{ .Level }}" data-submit-form="true">
                         <option value="">{{ t $.Lang "municipis.filter.level.placeholder" }}</option>
                         {{ $selected := .SelectedID }}
                         {{ range .Options }}
@@ -51,7 +51,7 @@
                 {{ if .Data.ShowTipus }}
                 <div class="filtre-grup">
                     <label for="tipus-select">{{ t .Lang "municipis.filter.type" }}</label>
-                    <select id="tipus-select" name="tipus" onchange="this.form.submit()">
+                    <select id="tipus-select" name="tipus" data-submit-form="true">
                         <option value="">{{ t .Lang "common.all" }}</option>
                         {{ range .Data.TipusOptions }}
                         <option value="{{ .Value }}" {{ if eq $.Data.Filter.Tipus .Value }}selected{{ end }}>{{ .Label }}</option>
@@ -71,7 +71,7 @@
                     <div class="paginacio-controls">
                         <span class="pagina-info">{{ .Data.Page }}/{{ .Data.TotalPages }}</span>
                         <span class="custom-select">
-                            <select id="page-stats-per-page" class="registres-per-pagina" onchange="location.href='{{ .Data.PageSelectBase }}' + this.value + '{{ .Data.PageAnchor }}'">
+                            <select id="page-stats-per-page" class="registres-per-pagina" data-nav-base="{{ .Data.PageSelectBase }}" data-nav-anchor="{{ .Data.PageAnchor }}">
                                 <option value="5" {{ if eq .Data.PerPage 5 }}selected{{ end }}>5</option>
                                 <option value="10" {{ if eq .Data.PerPage 10 }}selected{{ end }}>10</option>
                                 <option value="25" {{ if eq .Data.PerPage 25 }}selected{{ end }}>25</option>
@@ -188,7 +188,7 @@
                 {{ if gt .Data.TotalPages 1 }}
                 <div class="paginador">
                     {{ range .Data.PageLinks }}
-                    <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}onclick="window.location.href='{{ .URL }}'"{{ end }}>
+                    <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}data-nav-href="{{ .URL }}"{{ end }}>
                         {{ .Label }}
                     </button>
                     {{ end }}

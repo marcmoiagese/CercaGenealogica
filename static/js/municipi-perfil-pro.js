@@ -215,4 +215,18 @@
         .catch(() => {
             showMessage(emptyLabel || "Empty");
         });
+
+    const optionsBtn = document.getElementById("botoOpcions");
+    const dropdown = document.getElementById("dropdownOpcions");
+    if (optionsBtn && dropdown) {
+        optionsBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
+        });
+        document.addEventListener("click", (event) => {
+            if (!event.target.closest(".opcions-dropdown")) {
+                dropdown.style.display = "none";
+            }
+        });
+    }
 })();

@@ -114,7 +114,7 @@
                                     <td>
                                         <div class="transparency-actions">
                                             <a class="boto-secundari pequeno" href="/admin/transparencia?edit={{ .ID }}">{{ t $.Lang "common.edit" }}</a>
-                                            <form class="inline-form" method="post" action="/admin/transparencia/contributors/delete" onsubmit="return confirm('{{ t $.Lang "admin.transparency.contributor.delete_confirm" }}')">
+                                            <form class="inline-form" method="post" action="/admin/transparencia/contributors/delete" data-confirm-message="{{ t $.Lang "admin.transparency.contributor.delete_confirm" }}">
                                                 <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                                 <input type="hidden" name="id" value="{{ .ID }}">
                                                 <button type="submit" class="boto-perill pequeno">{{ t $.Lang "common.remove" }}</button>

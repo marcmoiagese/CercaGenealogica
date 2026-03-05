@@ -46,7 +46,7 @@
                     <ul class="dropdown-opcions" id="dropdownOpcions">
                         <li><a href="/documentals/registres/{{ .Data.Registre.ID }}/historial"><i class="fas fa-clock-rotate-left"></i> {{ t .Lang "records.options.history" }}</a></li>
                         <li><a href="/documentals/registres/{{ .Data.Registre.ID }}/estadistiques"><i class="fas fa-chart-line"></i> {{ t .Lang "records.options.stats" }}</a></li>
-                        <li><a href="#" class="btn-marcar" data-registre-id="{{ .Data.Registre.ID }}" onclick="event.preventDefault()"><i class="fas fa-eye"></i> {{ t .Lang "records.options.follow" }}</a></li>
+                        <li><a href="#" class="btn-marcar" data-registre-id="{{ .Data.Registre.ID }}"><i class="fas fa-eye"></i> {{ t .Lang "records.options.follow" }}</a></li>
                     </ul>
                 </div>
                 {{ end }}
@@ -374,37 +374,7 @@
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
     <script src="/static/js/registres-taula.js"></script>
-    <script>
-        document.querySelectorAll('[data-modal-open]').forEach(function(button) {
-            button.addEventListener('click', function() {
-                var target = document.getElementById(button.getAttribute('data-modal-open'));
-                if (target) {
-                    target.classList.add('is-open');
-                }
-            });
-        });
-        document.querySelectorAll('[data-modal-close]').forEach(function(button) {
-            button.addEventListener('click', function() {
-                var target = document.getElementById(button.getAttribute('data-modal-close'));
-                if (target) {
-                    target.classList.remove('is-open');
-                }
-            });
-        });
-        const botoOpcions = document.getElementById("botoOpcions");
-        const dropdownOpcions = document.getElementById("dropdownOpcions");
-        if (botoOpcions && dropdownOpcions) {
-            botoOpcions.addEventListener("click", function(event) {
-                event.preventDefault();
-                dropdownOpcions.style.display = dropdownOpcions.style.display === "block" ? "none" : "block";
-            });
-            document.addEventListener("click", function(event) {
-                if (!event.target.closest(".opcions-dropdown")) {
-                    dropdownOpcions.style.display = "none";
-                }
-            });
-        }
-    </script>
+    <script src="/static/js/admin-llibres-registres-show.js"></script>
 </body>
 </html>
 {{ end }}

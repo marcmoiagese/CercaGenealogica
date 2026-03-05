@@ -526,29 +526,7 @@
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
     {{ template "scripts-file-uploader" . }}
-    <script>
-        document.querySelectorAll('[data-tabs]').forEach(function (container) {
-            const buttons = Array.from(container.querySelectorAll('.tab-boto[data-tab]'))
-                .filter(function (btn) { return btn.closest('[data-tabs]') === container; });
-            const panes = Array.from(container.querySelectorAll('.tab-pane[data-tab-panel]'))
-                .filter(function (pane) { return pane.closest('[data-tabs]') === container; });
-            if (!buttons.length || !panes.length) return;
-            buttons.forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    const target = btn.dataset.tab;
-                    if (!target) return;
-                    buttons.forEach(function (b) {
-                        const active = b === btn;
-                        b.classList.toggle('actiu', active);
-                        b.setAttribute('aria-selected', active ? 'true' : 'false');
-                    });
-                    panes.forEach(function (pane) {
-                        pane.classList.toggle('actiu', pane.dataset.tabPanel === target);
-                    });
-                });
-            });
-        });
-    </script>
+    <script src="/static/js/admin-import-export.js"></script>
     <script src="/static/js/arxiu-form-suggest.js"></script>
 </body>
 </html>

@@ -83,7 +83,7 @@
                                     </form>
                                     {{ end }}
                                     {{ if .CanDelete }}
-                                    <form method="post" action="/importador/plantilles/{{ .ID }}/delete" onsubmit="return confirm('{{ t $.Lang "importer.templates.action.delete_confirm" }}');">
+                                    <form method="post" action="/importador/plantilles/{{ .ID }}/delete" data-confirm-message="{{ t $.Lang "importer.templates.action.delete_confirm" }}">
                                         <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                         <button type="submit" class="boto-secundari btn-mini">{{ t $.Lang "common.remove" }}</button>
                                     </form>

@@ -46,6 +46,20 @@ var templateFuncs = template.FuncMap{
 	"list": func(values ...string) []string {
 		return values
 	},
+	"dict": func(values ...interface{}) map[string]interface{} {
+		result := make(map[string]interface{})
+		for i := 0; i+1 < len(values); i += 2 {
+			key, ok := values[i].(string)
+			if !ok {
+				continue
+			}
+			result[key] = values[i+1]
+		}
+		return result
+	},
+	"slice": func(values ...interface{}) []interface{} {
+		return values
+	},
 	"add": func(a, b int) int {
 		return a + b
 	},
