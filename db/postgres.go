@@ -1,11 +1,12 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq"
+	pq "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -571,6 +572,294 @@ func (d *PostgreSQL) GetMunicipi(id int) (*Municipi, error) {
 }
 func (d *PostgreSQL) CreateMunicipi(m *Municipi) (int, error) {
 	return d.help.createMunicipi(m)
+}
+func (d *PostgreSQL) BulkInsertNivells(ctx context.Context, rows []NivellAdministratiu) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "postgres-copy", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
+        CREATE TEMP TABLE tmp_nivells_import (
+            import_seq INTEGER,
+            pais_id INTEGER,
+            nivel INTEGER,
+            nom_nivell TEXT,
+            tipus_nivell TEXT,
+            codi_oficial TEXT,
+            altres TEXT,
+            parent_id INTEGER,
+            any_inici INTEGER,
+            any_fi INTEGER,
+            estat TEXT,
+            created_by INTEGER,
+            moderation_status TEXT,
+            moderated_by INTEGER,
+            moderated_at TIMESTAMP,
+            moderation_notes TEXT
+        ) ON COMMIT DROP`)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("tmp_nivells_import",
+		"import_seq",
+		"pais_id",
+		"nivel",
+		"nom_nivell",
+		"tipus_nivell",
+		"codi_oficial",
+		"altres",
+		"parent_id",
+		"any_inici",
+		"any_fi",
+		"estat",
+		"created_by",
+		"moderation_status",
+		"moderated_by",
+		"moderated_at",
+		"moderation_notes",
+	))
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	for i, n := range rows {
+		if _, err := stmt.Exec(
+			i,
+			n.PaisID,
+			n.Nivel,
+			n.NomNivell,
+			n.TipusNivell,
+			n.CodiOficial,
+			n.Altres,
+			n.ParentID,
+			n.AnyInici,
+			n.AnyFi,
+			n.Estat,
+			n.CreatedBy,
+			n.ModeracioEstat,
+			n.ModeratedBy,
+			n.ModeratedAt,
+			n.ModeracioMotiu,
+		); err != nil {
+			_ = stmt.Close()
+			return nil, "postgres-copy", err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		_ = stmt.Close()
+		return nil, "postgres-copy", err
+	}
+	if err := stmt.Close(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	rowsRes, err := tx.QueryContext(ctx, `
+        INSERT INTO nivells_administratius (
+            pais_id, nivel, nom_nivell, tipus_nivell, codi_oficial, altres, parent_id,
+            any_inici, any_fi, estat, created_by, moderation_status, moderated_by, moderated_at, moderation_notes,
+            created_at, updated_at
+        )
+        SELECT
+            pais_id, nivel, nom_nivell, tipus_nivell, codi_oficial, altres, parent_id,
+            any_inici, any_fi, estat, created_by, moderation_status, moderated_by, moderated_at, moderation_notes,
+            NOW(), NOW()
+        FROM tmp_nivells_import
+        ORDER BY import_seq
+        RETURNING id`)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	defer rowsRes.Close()
+	ids := make([]int, 0, len(rows))
+	for rowsRes.Next() {
+		var id int
+		if err := rowsRes.Scan(&id); err != nil {
+			return nil, "postgres-copy", err
+		}
+		ids = append(ids, id)
+	}
+	if err := rowsRes.Err(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	return ids, "postgres-copy", nil
+}
+func (d *PostgreSQL) BulkInsertMunicipis(ctx context.Context, rows []Municipi) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "postgres-copy", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
+        CREATE TEMP TABLE tmp_municipis_import (
+            import_seq INTEGER,
+            nom TEXT,
+            municipi_id INTEGER,
+            tipus TEXT,
+            nivell_administratiu_id_1 INTEGER,
+            nivell_administratiu_id_2 INTEGER,
+            nivell_administratiu_id_3 INTEGER,
+            nivell_administratiu_id_4 INTEGER,
+            nivell_administratiu_id_5 INTEGER,
+            nivell_administratiu_id_6 INTEGER,
+            nivell_administratiu_id_7 INTEGER,
+            codi_postal TEXT,
+            latitud DOUBLE PRECISION,
+            longitud DOUBLE PRECISION,
+            what3words TEXT,
+            web TEXT,
+            wikipedia TEXT,
+            altres TEXT,
+            estat TEXT,
+            created_by INTEGER,
+            moderation_status TEXT,
+            moderated_by INTEGER,
+            moderated_at TIMESTAMP,
+            moderation_notes TEXT
+        ) ON COMMIT DROP`)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("tmp_municipis_import",
+		"import_seq",
+		"nom",
+		"municipi_id",
+		"tipus",
+		"nivell_administratiu_id_1",
+		"nivell_administratiu_id_2",
+		"nivell_administratiu_id_3",
+		"nivell_administratiu_id_4",
+		"nivell_administratiu_id_5",
+		"nivell_administratiu_id_6",
+		"nivell_administratiu_id_7",
+		"codi_postal",
+		"latitud",
+		"longitud",
+		"what3words",
+		"web",
+		"wikipedia",
+		"altres",
+		"estat",
+		"created_by",
+		"moderation_status",
+		"moderated_by",
+		"moderated_at",
+		"moderation_notes",
+	))
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	for i, m := range rows {
+		if _, err := stmt.Exec(
+			i,
+			m.Nom,
+			m.MunicipiID,
+			m.Tipus,
+			m.NivellAdministratiuID[0],
+			m.NivellAdministratiuID[1],
+			m.NivellAdministratiuID[2],
+			m.NivellAdministratiuID[3],
+			m.NivellAdministratiuID[4],
+			m.NivellAdministratiuID[5],
+			m.NivellAdministratiuID[6],
+			m.CodiPostal,
+			m.Latitud,
+			m.Longitud,
+			m.What3Words,
+			m.Web,
+			m.Wikipedia,
+			m.Altres,
+			m.Estat,
+			m.CreatedBy,
+			m.ModeracioEstat,
+			m.ModeratedBy,
+			m.ModeratedAt,
+			m.ModeracioMotiu,
+		); err != nil {
+			_ = stmt.Close()
+			return nil, "postgres-copy", err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		_ = stmt.Close()
+		return nil, "postgres-copy", err
+	}
+	if err := stmt.Close(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	rowsRes, err := tx.QueryContext(ctx, `
+        INSERT INTO municipis (
+            nom, municipi_id, tipus,
+            nivell_administratiu_id_1, nivell_administratiu_id_2, nivell_administratiu_id_3,
+            nivell_administratiu_id_4, nivell_administratiu_id_5, nivell_administratiu_id_6, nivell_administratiu_id_7,
+            codi_postal, latitud, longitud, what3words, web, wikipedia, altres, estat,
+            created_by, moderation_status, moderated_by, moderated_at, moderation_notes,
+            data_creacio, ultima_modificacio
+        )
+        SELECT
+            nom, municipi_id, tipus,
+            nivell_administratiu_id_1, nivell_administratiu_id_2, nivell_administratiu_id_3,
+            nivell_administratiu_id_4, nivell_administratiu_id_5, nivell_administratiu_id_6, nivell_administratiu_id_7,
+            codi_postal, latitud, longitud, what3words, web, wikipedia, altres, estat,
+            created_by, moderation_status, moderated_by, moderated_at, moderation_notes,
+            NOW(), NOW()
+        FROM tmp_municipis_import
+        ORDER BY import_seq
+        RETURNING id`)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	defer rowsRes.Close()
+	ids := make([]int, 0, len(rows))
+	for rowsRes.Next() {
+		var id int
+		if err := rowsRes.Scan(&id); err != nil {
+			return nil, "postgres-copy", err
+		}
+		ids = append(ids, id)
+	}
+	if err := rowsRes.Err(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	return ids, "postgres-copy", nil
+}
+func (d *PostgreSQL) BulkUpdateMunicipiParents(ctx context.Context, updates []MunicipiParentUpdate) (string, error) {
+	if len(updates) == 0 {
+		return "postgres-copy", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "postgres-copy", err
+	}
+	defer tx.Rollback()
+	for i := 0; i < len(updates); i += bulkTerritoriBatchSize {
+		end := i + bulkTerritoriBatchSize
+		if end > len(updates) {
+			end = len(updates)
+		}
+		batch := updates[i:end]
+		query, args := buildBulkUpdateMunicipiParents(d.help.style, batch)
+		if query == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return "postgres-copy", err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return "postgres-copy", err
+	}
+	return "postgres-copy", nil
 }
 func (d *PostgreSQL) UpdateMunicipi(m *Municipi) error {
 	return d.help.updateMunicipi(m)

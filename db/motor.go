@@ -1525,6 +1525,11 @@ type Municipi struct {
 	ModeratedAt           sql.NullTime
 }
 
+type MunicipiParentUpdate struct {
+	ID       int
+	ParentID int
+}
+
 type MunicipiRow struct {
 	ID             int
 	Nom            string

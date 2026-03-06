@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -570,6 +571,108 @@ func (d *MySQL) GetMunicipi(id int) (*Municipi, error) {
 }
 func (d *MySQL) CreateMunicipi(m *Municipi) (int, error) {
 	return d.help.createMunicipi(m)
+}
+func (d *MySQL) BulkInsertNivells(ctx context.Context, rows []NivellAdministratiu) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "mysql-batch", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "mysql-batch", err
+	}
+	defer tx.Rollback()
+	ids := make([]int, 0, len(rows))
+	for i := 0; i < len(rows); i += bulkTerritoriBatchSize {
+		end := i + bulkTerritoriBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertNivells(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return nil, "mysql-batch", err
+		}
+		firstID, err := res.LastInsertId()
+		if err != nil || firstID <= 0 {
+			return nil, "mysql-batch", fmt.Errorf("mysql bulk insert nivell: no last insert id")
+		}
+		for j := 0; j < len(batch); j++ {
+			ids = append(ids, int(firstID)+j)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "mysql-batch", err
+	}
+	return ids, "mysql-batch", nil
+}
+func (d *MySQL) BulkInsertMunicipis(ctx context.Context, rows []Municipi) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "mysql-batch", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "mysql-batch", err
+	}
+	defer tx.Rollback()
+	ids := make([]int, 0, len(rows))
+	for i := 0; i < len(rows); i += bulkTerritoriBatchSize {
+		end := i + bulkTerritoriBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertMunicipis(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return nil, "mysql-batch", err
+		}
+		firstID, err := res.LastInsertId()
+		if err != nil || firstID <= 0 {
+			return nil, "mysql-batch", fmt.Errorf("mysql bulk insert municipi: no last insert id")
+		}
+		for j := 0; j < len(batch); j++ {
+			ids = append(ids, int(firstID)+j)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "mysql-batch", err
+	}
+	return ids, "mysql-batch", nil
+}
+func (d *MySQL) BulkUpdateMunicipiParents(ctx context.Context, updates []MunicipiParentUpdate) (string, error) {
+	if len(updates) == 0 {
+		return "mysql-batch", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "mysql-batch", err
+	}
+	defer tx.Rollback()
+	for i := 0; i < len(updates); i += bulkTerritoriBatchSize {
+		end := i + bulkTerritoriBatchSize
+		if end > len(updates) {
+			end = len(updates)
+		}
+		batch := updates[i:end]
+		query, args := buildBulkUpdateMunicipiParents(d.help.style, batch)
+		if query == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return "mysql-batch", err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return "mysql-batch", err
+	}
+	return "mysql-batch", nil
 }
 func (d *MySQL) UpdateMunicipi(m *Municipi) error {
 	return d.help.updateMunicipi(m)

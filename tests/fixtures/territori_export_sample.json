@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "exported_at": "2026-02-20T10:00:00Z",
+  "countries": [
+    {
+      "iso2": "TS",
+      "iso3": "TST",
+      "num": "999"
+    }
+  ],
+  "levels": [
+    {
+      "id": 1,
+      "pais_iso2": "TS",
+      "nivel": 1,
+      "nom": "Testland",
+      "tipus": "pais",
+      "codi": "TS",
+      "altres": "",
+      "estat": "actiu"
+    },
+    {
+      "id": 2,
+      "pais_iso2": "TS",
+      "nivel": 2,
+      "nom": "Comarca Test",
+      "tipus": "comarca",
+      "codi": "TS-C",
+      "altres": "",
+      "parent_id": 1,
+      "estat": "actiu"
+    }
+  ],
+  "municipis": [
+    {
+      "id": 10,
+      "pais_iso2": "TS",
+      "nom": "Municipi Pare",
+      "tipus": "municipi",
+      "parent_id": null,
+      "nivells": [1, 2, 0, 0, 0, 0, 0],
+      "codi_postal": "00000",
+      "what3words": "",
+      "web": "",
+      "wikipedia": "",
+      "altres": "",
+      "estat": "actiu"
+    },
+    {
+      "id": 11,
+      "pais_iso2": "TS",
+      "nom": "Municipi Fill",
+      "tipus": "municipi",
+      "parent_id": 10,
+      "nivells": [1, 2, 0, 0, 0, 0, 0],
+      "codi_postal": "00001",
+      "what3words": "",
+      "web": "",
+      "wikipedia": "",
+      "altres": "",
+      "estat": "actiu"
+    }
+  ]
+}

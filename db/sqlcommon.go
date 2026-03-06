@@ -198,6 +198,13 @@ func newSQLHelper(db *sql.DB, style, nowFun string) sqlHelper {
 	return helper
 }
 
+func (h sqlHelper) boolTrueExpr(column string) string {
+	if h.style == "postgres" {
+		return column + " = TRUE"
+	}
+	return column + " = 1"
+}
+
 func (h sqlHelper) postgresExtensionExists(name string) bool {
 	if h.db == nil || h.style != "postgres" {
 		return false
@@ -1524,8 +1531,9 @@ func (h sqlHelper) getRanking(f RankingFilter) ([]UserPoints, error) {
 }
 
 func (h sqlHelper) listEnabledAchievements() ([]Achievement, error) {
+	activeExpr := h.boolTrueExpr("is_enabled")
 	query := `SELECT id, code, name, description, rarity, visibility, domain, is_enabled, is_repeatable, icon_media_item_id, rule_json, created_at, updated_at
-	          FROM achievements WHERE is_enabled = 1 ORDER BY id`
+	          FROM achievements WHERE ` + activeExpr + ` ORDER BY id`
 	rows, err := h.db.Query(query)
 	if err != nil {
 		return nil, err
@@ -1550,10 +1558,7 @@ func (h sqlHelper) isAchievementEventActive(code string, at time.Time) (bool, er
 	if at.IsZero() {
 		at = time.Now()
 	}
-	activeExpr := "is_enabled = 1"
-	if h.style == "postgres" {
-		activeExpr = "is_enabled = TRUE"
-	}
+	activeExpr := h.boolTrueExpr("is_enabled")
 	query := `SELECT COUNT(*) FROM achievement_events WHERE code = ? AND ` + activeExpr + ` AND start_at <= ? AND end_at >= ?`
 	query = formatPlaceholders(h.style, query)
 	var total int

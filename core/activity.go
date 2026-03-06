@@ -43,6 +43,28 @@ const (
 	antiAbuseRejectThreshold = 10
 )
 
+type activityBulkContextKey struct{}
+
+type ActivityBulkMode struct {
+	SkipAchievements bool
+	SkipAntiAbuse    bool
+}
+
+func withActivityBulkMode(ctx context.Context, mode ActivityBulkMode) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, activityBulkContextKey{}, mode)
+}
+
+func activityBulkModeFromContext(ctx context.Context) (ActivityBulkMode, bool) {
+	if ctx == nil {
+		return ActivityBulkMode{}, false
+	}
+	mode, ok := ctx.Value(activityBulkContextKey{}).(ActivityBulkMode)
+	return mode, ok
+}
+
 // RegisterUserActivity crea una entrada d'activitat i, si està validada, suma punts.
 func (a *App) RegisterUserActivity(ctx context.Context, userID int, ruleCode, action, objectType string, objectID *int, status string, moderatedBy *int, details string) (int, error) {
 	var (
@@ -97,6 +119,15 @@ func (a *App) RegisterUserActivity(ctx context.Context, userID int, ruleCode, ac
 	}
 	if objectID != nil {
 		trigger.ObjectID = *objectID
+	}
+	if mode, ok := activityBulkModeFromContext(ctx); ok {
+		if !mode.SkipAchievements {
+			a.EvaluateAchievementsForUser(ctx, userID, trigger)
+		}
+		if !mode.SkipAntiAbuse {
+			a.logAntiAbuseSignals(userID, act.CreatedAt)
+		}
+		return id, nil
 	}
 	a.EvaluateAchievementsForUser(ctx, userID, trigger)
 	a.logAntiAbuseSignals(userID, act.CreatedAt)

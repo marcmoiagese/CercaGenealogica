@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -589,6 +590,113 @@ func (d *SQLite) GetMunicipi(id int) (*Municipi, error) {
 }
 func (d *SQLite) CreateMunicipi(m *Municipi) (int, error) {
 	return d.help.createMunicipi(m)
+}
+
+func (d *SQLite) BulkInsertNivells(ctx context.Context, rows []NivellAdministratiu) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "sqlite-tx", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "sqlite-tx", err
+	}
+	defer tx.Rollback()
+	ids := make([]int, 0, len(rows))
+	for i := 0; i < len(rows); i += bulkTerritoriBatchSize {
+		end := i + bulkTerritoriBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertNivells(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return nil, "sqlite-tx", err
+		}
+		lastID, err := res.LastInsertId()
+		if err != nil || lastID <= 0 {
+			return nil, "sqlite-tx", fmt.Errorf("sqlite bulk insert nivell: no last insert id")
+		}
+		firstID := lastID - int64(len(batch)-1)
+		for j := 0; j < len(batch); j++ {
+			ids = append(ids, int(firstID)+j)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "sqlite-tx", err
+	}
+	return ids, "sqlite-tx", nil
+}
+
+func (d *SQLite) BulkInsertMunicipis(ctx context.Context, rows []Municipi) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "sqlite-tx", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "sqlite-tx", err
+	}
+	defer tx.Rollback()
+	ids := make([]int, 0, len(rows))
+	for i := 0; i < len(rows); i += bulkTerritoriBatchSize {
+		end := i + bulkTerritoriBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertMunicipis(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return nil, "sqlite-tx", err
+		}
+		lastID, err := res.LastInsertId()
+		if err != nil || lastID <= 0 {
+			return nil, "sqlite-tx", fmt.Errorf("sqlite bulk insert municipi: no last insert id")
+		}
+		firstID := lastID - int64(len(batch)-1)
+		for j := 0; j < len(batch); j++ {
+			ids = append(ids, int(firstID)+j)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "sqlite-tx", err
+	}
+	return ids, "sqlite-tx", nil
+}
+
+func (d *SQLite) BulkUpdateMunicipiParents(ctx context.Context, updates []MunicipiParentUpdate) (string, error) {
+	if len(updates) == 0 {
+		return "sqlite-tx", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "sqlite-tx", err
+	}
+	defer tx.Rollback()
+	for i := 0; i < len(updates); i += bulkTerritoriBatchSize {
+		end := i + bulkTerritoriBatchSize
+		if end > len(updates) {
+			end = len(updates)
+		}
+		batch := updates[i:end]
+		query, args := buildBulkUpdateMunicipiParents(d.help.style, batch)
+		if query == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return "sqlite-tx", err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return "sqlite-tx", err
+	}
+	return "sqlite-tx", nil
 }
 func (d *SQLite) UpdateMunicipi(m *Municipi) error {
 	return d.help.updateMunicipi(m)
