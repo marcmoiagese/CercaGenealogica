@@ -16,12 +16,12 @@ import (
 )
 
 // findProjectRoot busca l'arrel del projecte pujant directoris fins trobar `cnf/config.cfg`.
-func findProjectRoot(t *testing.T) string {
-	t.Helper()
+func findProjectRoot(tb testing.TB) string {
+	tb.Helper()
 
 	wd, err := os.Getwd()
 	if err != nil {
-		t.Fatalf("no puc obtenir working dir: %v", err)
+		tb.Fatalf("no puc obtenir working dir: %v", err)
 	}
 
 	dir := wd
@@ -31,7 +31,7 @@ func findProjectRoot(t *testing.T) string {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			t.Fatalf("no he pogut trobar l'arrel del projecte a partir de %s", wd)
+			tb.Fatalf("no he pogut trobar l'arrel del projecte a partir de %s", wd)
 		}
 		dir = parent
 	}

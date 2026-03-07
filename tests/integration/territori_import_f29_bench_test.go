@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -22,6 +23,10 @@ func BenchmarkTerritoriMunicipisGenericSQLite(b *testing.B) {
 
 func benchmarkTerritoriMunicipisSQLite(b *testing.B, bulk bool) {
 	tmpDir := b.TempDir()
+	projectRoot := findProjectRoot(b)
+	if err := os.Chdir(projectRoot); err != nil {
+		b.Fatalf("no puc fer chdir a l'arrel del projecte (%s): %v", projectRoot, err)
+	}
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
