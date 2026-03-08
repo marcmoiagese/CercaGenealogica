@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -500,6 +501,53 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 	}
 	levelsDuration := time.Since(levelsStart)
 
+	existingMunicipiKey := map[string]int{}
+	existingMunicipiParent := map[int]int{}
+	duplicateMunicipiKeys := map[string]struct{}{}
+	if len(payload.Municipis) > 0 {
+		levelIDSet := map[int]struct{}{}
+		for _, mu := range payload.Municipis {
+			for _, lvl := range normalizeNivellSlice(mu.Nivells) {
+				if lvl <= 0 {
+					continue
+				}
+				if id, ok := levelIDMap[lvl]; ok && id > 0 {
+					levelIDSet[id] = struct{}{}
+				}
+			}
+		}
+		allowedLevels := make([]int, 0, len(levelIDSet))
+		for id := range levelIDSet {
+			allowedLevels = append(allowedLevels, id)
+		}
+		existingRows, err := a.DB.ListMunicipis(db.MunicipiFilter{
+			AllowedNivellIDs: allowedLevels,
+		})
+		if err == nil {
+			for _, row := range existingRows {
+				m, err := a.DB.GetMunicipi(row.ID)
+				if err != nil || m == nil {
+					continue
+				}
+				key := municipiUniqueKey(m)
+				if key == "" {
+					continue
+				}
+				if existingID, ok := existingMunicipiKey[key]; ok {
+					if existingID != m.ID {
+						existingMunicipiKey[key] = 0
+						duplicateMunicipiKeys[key] = struct{}{}
+					}
+					continue
+				}
+				existingMunicipiKey[key] = m.ID
+				if m.MunicipiID.Valid {
+					existingMunicipiParent[m.ID] = int(m.MunicipiID.Int64)
+				}
+			}
+		}
+	}
+
 	municipisTotal := len(payload.Municipis)
 	municipisCreated := 0
 	municipisSkipped := 0
@@ -514,6 +562,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		childID   int
 		oldParent int
 	}
+	seenMunicipiKeys := map[string]struct{}{}
 	toInsertMunicipis := make([]db.Municipi, 0, len(payload.Municipis))
 	insertMeta := make([]municipiInsertMeta, 0, len(payload.Municipis))
 	parentCandidates := make([]municipiParentCandidate, 0, len(payload.Municipis))
@@ -549,6 +598,26 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		oldParent := 0
 		if mu.ParentID != nil && *mu.ParentID > 0 {
 			oldParent = *mu.ParentID
+		}
+		key := municipiUniqueKey(&m)
+		if key != "" {
+			if existingID, ok := existingMunicipiKey[key]; ok && existingID > 0 {
+				munIDMap[mu.ID] = existingID
+				municipisSkipped++
+				if oldParent > 0 {
+					parentCandidates = append(parentCandidates, municipiParentCandidate{childID: existingID, oldParent: oldParent})
+				}
+				continue
+			}
+			if _, dup := duplicateMunicipiKeys[key]; dup {
+				municipisSkipped++
+				continue
+			}
+			if _, seen := seenMunicipiKeys[key]; seen {
+				municipisSkipped++
+				continue
+			}
+			seenMunicipiKeys[key] = struct{}{}
 		}
 		toInsertMunicipis = append(toInsertMunicipis, m)
 		insertMeta = append(insertMeta, municipiInsertMeta{exportID: mu.ID, oldParent: oldParent})
@@ -609,6 +678,9 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if newParent, ok := munIDMap[cand.oldParent]; ok {
+			if currentParent, ok := existingMunicipiParent[cand.childID]; ok && currentParent == newParent {
+				continue
+			}
 			parentUpdates = append(parentUpdates, db.MunicipiParentUpdate{ID: cand.childID, ParentID: newParent})
 		}
 	}
@@ -707,6 +779,25 @@ func nivellUniqueKey(paisID, nivel int, parentID sql.NullInt64, name string) str
 		parentKey = "parent:" + strconv.FormatInt(parentID.Int64, 10)
 	}
 	return normalizeKey("pais:"+strconv.Itoa(paisID), "nivel:"+strconv.Itoa(nivel), parentKey, name)
+}
+
+func municipiUniqueKey(m *db.Municipi) string {
+	if m == nil {
+		return ""
+	}
+	parts := []string{
+		"nom:" + strings.TrimSpace(m.Nom),
+		"tipus:" + strings.TrimSpace(m.Tipus),
+	}
+	if cp := strings.TrimSpace(m.CodiPostal); cp != "" {
+		parts = append(parts, "cp:"+cp)
+	}
+	for i := 0; i < 7; i++ {
+		if m.NivellAdministratiuID[i].Valid {
+			parts = append(parts, fmt.Sprintf("nivell%d:%d", i+1, m.NivellAdministratiuID[i].Int64))
+		}
+	}
+	return normalizeKey(parts...)
 }
 
 func municipiMatchesBranch(nivells []int, branch map[int]struct{}) bool {

@@ -116,4 +116,47 @@ func TestTerritoriImportBulkMode(t *testing.T) {
 	if _, ok := meta["activity_id"]; ok {
 		t.Fatalf("no esperava activity_id en bulk mode")
 	}
+
+	csrfToken = "csrf_f29_import_2"
+	body = &bytes.Buffer{}
+	writer = multipart.NewWriter(body)
+	_ = writer.WriteField("csrf_token", csrfToken)
+	part, err = writer.CreateFormFile("import_file", "territori.json")
+	if err != nil {
+		t.Fatalf("CreateFormFile (2) ha fallat: %v", err)
+	}
+	if _, err := io.Copy(part, bytes.NewReader(payload)); err != nil {
+		t.Fatalf("escriure payload (2) ha fallat: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("Close multipart (2) ha fallat: %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/admin/territori/import/run", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.AddCookie(session)
+	req.AddCookie(csrfCookie(csrfToken))
+	rr = httptest.NewRecorder()
+	app.AdminTerritoriImportRun(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("import (2): esperava 303, rebut %d", rr.Code)
+	}
+
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM paisos"); got != 1 {
+		t.Fatalf("paisos totals (2) esperats 1, got %d", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM nivells_administratius"); got != 2 {
+		t.Fatalf("nivells totals (2) esperats 2, got %d", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM municipis"); got != 2 {
+		t.Fatalf("municipis totals (2) esperats 2, got %d", got)
+	}
+
+	achievements, err = database.ListUserAchievements(admin.ID)
+	if err != nil {
+		t.Fatalf("ListUserAchievements (2) ha fallat: %v", err)
+	}
+	if len(achievements) != 1 {
+		t.Fatalf("esperava 1 achievement després del segon import, got %d", len(achievements))
+	}
 }
