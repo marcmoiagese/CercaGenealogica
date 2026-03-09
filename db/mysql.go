@@ -1318,6 +1318,34 @@ func (d *MySQL) ListUserIDs(limit, offset int) ([]int, error) {
 }
 func (d *MySQL) GetUserActivity(id int) (*UserActivity, error)   { return d.help.getUserActivity(id) }
 func (d *MySQL) InsertUserActivity(a *UserActivity) (int, error) { return d.help.insertUserActivity(a) }
+func (d *MySQL) BulkInsertUserActivities(ctx context.Context, rows []UserActivity) (string, error) {
+	if len(rows) == 0 {
+		return "mysql-batch", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "mysql-batch", err
+	}
+	defer tx.Rollback()
+	for i := 0; i < len(rows); i += bulkActivityBatchSize {
+		end := i + bulkActivityBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertUserActivities(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return "mysql-batch", err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return "mysql-batch", err
+	}
+	return "mysql-batch", nil
+}
 func (d *MySQL) UpdateUserActivityStatus(id int, status string, moderatedBy *int) error {
 	return d.help.updateUserActivityStatus(id, status, moderatedBy)
 }

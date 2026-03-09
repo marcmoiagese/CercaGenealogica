@@ -324,9 +324,43 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	engine := territoriImportEngineName(a.DB)
-	bulkCtx := withActivityBulkMode(r.Context(), ActivityBulkMode{SkipAchievements: true, SkipAntiAbuse: true})
 	bulkInserter, hasBulkInserter := a.DB.(territoriBulkInserter)
 	activityCount := 0
+	type activityRule struct {
+		ruleID sql.NullInt64
+		points int
+	}
+	resolveActivityRule := func(code string) activityRule {
+		if code == "" {
+			return activityRule{}
+		}
+		rule, err := a.DB.GetPointsRuleByCode(code)
+		if err != nil || rule == nil || !rule.Active {
+			return activityRule{}
+		}
+		return activityRule{
+			ruleID: sql.NullInt64{Int64: int64(rule.ID), Valid: true},
+			points: rule.Points,
+		}
+	}
+	activityRuleNivell := resolveActivityRule(ruleNivellCreate)
+	activityRuleMunicipi := resolveActivityRule(ruleMunicipiCreate)
+	pendingActivities := make([]db.UserActivity, 0, len(payload.Levels)+len(payload.Municipis))
+	addActivity := func(rule activityRule, objectType string, objectID int) {
+		if objectID <= 0 {
+			return
+		}
+		pendingActivities = append(pendingActivities, db.UserActivity{
+			UserID:     user.ID,
+			RuleID:     rule.ruleID,
+			Action:     "crear",
+			ObjectType: objectType,
+			ObjectID:   sql.NullInt64{Int64: int64(objectID), Valid: true},
+			Points:     rule.points,
+			Status:     "pendent",
+			Details:    "import",
+		})
+	}
 	bulkModeLevels := "generic"
 	bulkModeMunicipis := "generic"
 	bulkModeParents := "generic"
@@ -454,7 +488,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 					levelsCreated++
 					progressed = true
 					activityCount++
-					_, _ = a.RegisterUserActivity(bulkCtx, user.ID, ruleNivellCreate, "crear", "nivell", &id, "pendent", nil, "import")
+					addActivity(activityRuleNivell, "nivell", id)
 				}
 			}
 			var ids []int
@@ -489,7 +523,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 					levelsCreated++
 					progressed = true
 					activityCount++
-					_, _ = a.RegisterUserActivity(bulkCtx, user.ID, ruleNivellCreate, "crear", "nivell", &id, "pendent", nil, "import")
+					addActivity(activityRuleNivell, "nivell", id)
 				}
 			}
 		}
@@ -629,7 +663,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 				munIDMap[meta.exportID] = id
 				municipisCreated++
 				activityCount++
-				_, _ = a.RegisterUserActivity(bulkCtx, user.ID, ruleMunicipiCreate, "crear", "municipi", &id, "pendent", nil, "import")
+				addActivity(activityRuleMunicipi, "municipi", id)
 				if meta.oldParent > 0 {
 					parentCandidates = append(parentCandidates, municipiParentCandidate{childID: id, oldParent: meta.oldParent})
 				}
@@ -663,7 +697,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 				munIDMap[insertMeta[i].exportID] = newID
 				municipisCreated++
 				activityCount++
-				_, _ = a.RegisterUserActivity(bulkCtx, user.ID, ruleMunicipiCreate, "crear", "municipi", &newID, "pendent", nil, "import")
+				addActivity(activityRuleMunicipi, "municipi", newID)
 				if insertMeta[i].oldParent > 0 {
 					parentCandidates = append(parentCandidates, municipiParentCandidate{childID: newID, oldParent: insertMeta[i].oldParent})
 				}
@@ -716,17 +750,35 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 	parentDuration := time.Since(parentStart)
 	municipisDuration := time.Since(municipisStart)
 
+	activityMode := "bulk"
+	if len(pendingActivities) > 0 {
+		mode, err := a.DB.BulkInsertUserActivities(r.Context(), pendingActivities)
+		if err != nil {
+			Errorf("Territori import: bulk insert activitats fallit (%s): %v", mode, err)
+			activityMode = "generic"
+			for i := range pendingActivities {
+				act := pendingActivities[i]
+				if _, err := a.DB.InsertUserActivity(&act); err != nil {
+					Errorf("Territori import: insert activitat fallit: %v", err)
+				}
+			}
+		} else if mode != "" {
+			activityMode = mode
+		}
+	}
+
 	if activityCount > 0 {
 		now := time.Now()
 		a.EvaluateAchievementsForUser(context.Background(), user.ID, AchievementTrigger{CreatedAt: now})
 		a.logAntiAbuseSignals(user.ID, now)
 	}
 	totalDuration := time.Since(start)
-	Infof("Territori import: engine=%s modes=%s/%s/%s prep=%s levels=%s municipis=%s parents=%s totals=%d created=%d skipped=%d errors=%d parentErrors=%d duration=%s",
+	Infof("Territori import: engine=%s modes=%s/%s/%s activity=%s prep=%s levels=%s municipis=%s parents=%s totals=%d created=%d skipped=%d errors=%d parentErrors=%d duration=%s",
 		engine,
 		bulkModeLevels,
 		bulkModeMunicipis,
 		bulkModeParents,
+		activityMode,
 		prepDuration.String(),
 		levelsDuration.String(),
 		municipisDuration.String(),

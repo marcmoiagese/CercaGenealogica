@@ -1344,6 +1344,34 @@ func (d *SQLite) GetUserActivity(id int) (*UserActivity, error) { return d.help.
 func (d *SQLite) InsertUserActivity(a *UserActivity) (int, error) {
 	return d.help.insertUserActivity(a)
 }
+func (d *SQLite) BulkInsertUserActivities(ctx context.Context, rows []UserActivity) (string, error) {
+	if len(rows) == 0 {
+		return "sqlite-tx", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "sqlite-tx", err
+	}
+	defer tx.Rollback()
+	for i := 0; i < len(rows); i += bulkActivityBatchSize {
+		end := i + bulkActivityBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertUserActivities(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return "sqlite-tx", err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return "sqlite-tx", err
+	}
+	return "sqlite-tx", nil
+}
 func (d *SQLite) UpdateUserActivityStatus(id int, status string, moderatedBy *int) error {
 	return d.help.updateUserActivityStatus(id, status, moderatedBy)
 }

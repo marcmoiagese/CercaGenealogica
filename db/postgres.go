@@ -1513,6 +1513,34 @@ func (d *PostgreSQL) GetUserActivity(id int) (*UserActivity, error) {
 func (d *PostgreSQL) InsertUserActivity(a *UserActivity) (int, error) {
 	return d.help.insertUserActivity(a)
 }
+func (d *PostgreSQL) BulkInsertUserActivities(ctx context.Context, rows []UserActivity) (string, error) {
+	if len(rows) == 0 {
+		return "postgres-batch", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "postgres-batch", err
+	}
+	defer tx.Rollback()
+	for i := 0; i < len(rows); i += bulkActivityBatchSize {
+		end := i + bulkActivityBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertUserActivities(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return "postgres-batch", err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return "postgres-batch", err
+	}
+	return "postgres-batch", nil
+}
 func (d *PostgreSQL) UpdateUserActivityStatus(id int, status string, moderatedBy *int) error {
 	return d.help.updateUserActivityStatus(id, status, moderatedBy)
 }

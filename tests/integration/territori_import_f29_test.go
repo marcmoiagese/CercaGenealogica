@@ -98,6 +98,9 @@ func TestTerritoriImportBulkMode(t *testing.T) {
 	if childParentID != parentID {
 		t.Fatalf("parent_id esperat %d, got %d", parentID, childParentID)
 	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM usuaris_activitat WHERE usuari_id = ? AND estat = 'pendent' AND detalls = 'import' AND objecte_tipus IN ('nivell','municipi')", admin.ID); got != 4 {
+		t.Fatalf("activitats import esperades 4, got %d", got)
+	}
 
 	achievements, err := database.ListUserAchievements(admin.ID)
 	if err != nil {
@@ -150,6 +153,9 @@ func TestTerritoriImportBulkMode(t *testing.T) {
 	}
 	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM municipis"); got != 2 {
 		t.Fatalf("municipis totals (2) esperats 2, got %d", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM usuaris_activitat WHERE usuari_id = ? AND estat = 'pendent' AND detalls = 'import' AND objecte_tipus IN ('nivell','municipi')", admin.ID); got != 4 {
+		t.Fatalf("activitats import (2) esperades 4, got %d", got)
 	}
 
 	achievements, err = database.ListUserAchievements(admin.ID)

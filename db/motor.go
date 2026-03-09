@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -125,6 +126,7 @@ type DB interface {
 	ListUserIDs(limit, offset int) ([]int, error)
 	GetUserActivity(id int) (*UserActivity, error)
 	InsertUserActivity(a *UserActivity) (int, error)
+	BulkInsertUserActivities(ctx context.Context, rows []UserActivity) (string, error)
 	UpdateUserActivityStatus(id int, status string, moderatedBy *int) error
 	ListUserActivityByUser(userID int, f ActivityFilter) ([]UserActivity, error)
 	ListActivityByObject(objectType string, objectID int, status string) ([]UserActivity, error)
