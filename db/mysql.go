@@ -707,6 +707,44 @@ func (d *MySQL) GetArquebisbat(id int) (*Arquebisbat, error) {
 func (d *MySQL) CreateArquebisbat(ae *Arquebisbat) (int, error) {
 	return d.help.createArquebisbat(ae)
 }
+func (d *MySQL) BulkInsertArquebisbats(ctx context.Context, rows []Arquebisbat) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "mysql-batch", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "mysql-batch", err
+	}
+	defer tx.Rollback()
+	ids := make([]int, 0, len(rows))
+	for i := 0; i < len(rows); i += bulkEclesiasticBatchSize {
+		end := i + bulkEclesiasticBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertArquebisbats(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return nil, "mysql-batch", err
+		}
+		lastID, err := res.LastInsertId()
+		if err != nil || lastID <= 0 {
+			return nil, "mysql-batch", fmt.Errorf("mysql bulk insert arquebisbats: no last insert id")
+		}
+		firstID := lastID - int64(len(batch)-1)
+		for j := 0; j < len(batch); j++ {
+			ids = append(ids, int(firstID)+j)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "mysql-batch", err
+	}
+	return ids, "mysql-batch", nil
+}
 func (d *MySQL) UpdateArquebisbat(ae *Arquebisbat) error {
 	return d.help.updateArquebisbat(ae)
 }
@@ -718,6 +756,34 @@ func (d *MySQL) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, erro
 }
 func (d *MySQL) SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {
 	return d.help.saveArquebisbatMunicipi(am)
+}
+func (d *MySQL) BulkInsertArquebisbatMunicipis(ctx context.Context, rows []ArquebisbatMunicipi) (string, error) {
+	if len(rows) == 0 {
+		return "mysql-batch", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "mysql-batch", err
+	}
+	defer tx.Rollback()
+	for i := 0; i < len(rows); i += bulkEclesiasticBatchSize {
+		end := i + bulkEclesiasticBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertArquebisbatMunicipis(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return "mysql-batch", err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return "mysql-batch", err
+	}
+	return "mysql-batch", nil
 }
 
 // Arxius

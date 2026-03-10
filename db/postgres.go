@@ -894,6 +894,127 @@ func (d *PostgreSQL) GetArquebisbat(id int) (*Arquebisbat, error) {
 func (d *PostgreSQL) CreateArquebisbat(ae *Arquebisbat) (int, error) {
 	return d.help.createArquebisbat(ae)
 }
+func (d *PostgreSQL) BulkInsertArquebisbats(ctx context.Context, rows []Arquebisbat) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "postgres-copy", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
+        CREATE TEMP TABLE tmp_arquebisbats_import (
+            import_seq INTEGER,
+            nom TEXT,
+            tipus_entitat TEXT,
+            pais_id INTEGER,
+            nivell INTEGER,
+            parent_id INTEGER,
+            any_inici INTEGER,
+            any_fi INTEGER,
+            web TEXT,
+            web_arxiu TEXT,
+            web_wikipedia TEXT,
+            territori TEXT,
+            observacions TEXT,
+            created_by INTEGER,
+            moderation_status TEXT,
+            moderated_by INTEGER,
+            moderated_at TIMESTAMP,
+            moderation_notes TEXT
+        ) ON COMMIT DROP`)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("tmp_arquebisbats_import",
+		"import_seq",
+		"nom",
+		"tipus_entitat",
+		"pais_id",
+		"nivell",
+		"parent_id",
+		"any_inici",
+		"any_fi",
+		"web",
+		"web_arxiu",
+		"web_wikipedia",
+		"territori",
+		"observacions",
+		"created_by",
+		"moderation_status",
+		"moderated_by",
+		"moderated_at",
+		"moderation_notes",
+	))
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	for i, a := range rows {
+		if _, err := stmt.Exec(
+			i,
+			a.Nom,
+			a.TipusEntitat,
+			a.PaisID,
+			a.Nivell,
+			a.ParentID,
+			a.AnyInici,
+			a.AnyFi,
+			a.Web,
+			a.WebArxiu,
+			a.WebWikipedia,
+			a.Territori,
+			a.Observacions,
+			a.CreatedBy,
+			a.ModeracioEstat,
+			a.ModeratedBy,
+			a.ModeratedAt,
+			a.ModeracioMotiu,
+		); err != nil {
+			_ = stmt.Close()
+			return nil, "postgres-copy", err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		_ = stmt.Close()
+		return nil, "postgres-copy", err
+	}
+	if err := stmt.Close(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	rowsRes, err := tx.QueryContext(ctx, `
+        INSERT INTO arquebisbats (
+            nom, tipus_entitat, pais_id, nivell, parent_id, any_inici, any_fi, web, web_arxiu, web_wikipedia,
+            territori, observacions, created_by, moderation_status, moderated_by, moderated_at, moderation_notes,
+            created_at, updated_at
+        )
+        SELECT
+            nom, tipus_entitat, pais_id, nivell, parent_id, any_inici, any_fi, web, web_arxiu, web_wikipedia,
+            territori, observacions, created_by, moderation_status, moderated_by, moderated_at, moderation_notes,
+            NOW(), NOW()
+        FROM tmp_arquebisbats_import
+        ORDER BY import_seq
+        RETURNING id`)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	defer rowsRes.Close()
+	ids := make([]int, 0, len(rows))
+	for rowsRes.Next() {
+		var id int
+		if err := rowsRes.Scan(&id); err != nil {
+			return nil, "postgres-copy", err
+		}
+		ids = append(ids, id)
+	}
+	if err := rowsRes.Err(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	return ids, "postgres-copy", nil
+}
 func (d *PostgreSQL) UpdateArquebisbat(ae *Arquebisbat) error {
 	return d.help.updateArquebisbat(ae)
 }
@@ -905,6 +1026,76 @@ func (d *PostgreSQL) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi,
 }
 func (d *PostgreSQL) SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {
 	return d.help.saveArquebisbatMunicipi(am)
+}
+func (d *PostgreSQL) BulkInsertArquebisbatMunicipis(ctx context.Context, rows []ArquebisbatMunicipi) (string, error) {
+	if len(rows) == 0 {
+		return "postgres-copy", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "postgres-copy", err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
+        CREATE TEMP TABLE tmp_arquebisbats_municipi_import (
+            import_seq INTEGER,
+            id_municipi INTEGER,
+            id_arquevisbat INTEGER,
+            any_inici INTEGER,
+            any_fi INTEGER,
+            motiu TEXT,
+            font TEXT
+        ) ON COMMIT DROP`)
+	if err != nil {
+		return "postgres-copy", err
+	}
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("tmp_arquebisbats_municipi_import",
+		"import_seq",
+		"id_municipi",
+		"id_arquevisbat",
+		"any_inici",
+		"any_fi",
+		"motiu",
+		"font",
+	))
+	if err != nil {
+		return "postgres-copy", err
+	}
+	for i, r := range rows {
+		if _, err := stmt.Exec(
+			i,
+			r.MunicipiID,
+			r.ArquebisbatID,
+			r.AnyInici,
+			r.AnyFi,
+			r.Motiu,
+			r.Font,
+		); err != nil {
+			_ = stmt.Close()
+			return "postgres-copy", err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		_ = stmt.Close()
+		return "postgres-copy", err
+	}
+	if err := stmt.Close(); err != nil {
+		return "postgres-copy", err
+	}
+	if _, err := tx.ExecContext(ctx, `
+        INSERT INTO arquebisbats_municipi (
+            id_municipi, id_arquevisbat, any_inici, any_fi, motiu, font, created_at
+        )
+        SELECT
+            id_municipi, id_arquevisbat, any_inici, any_fi, motiu, font, NOW()
+        FROM tmp_arquebisbats_municipi_import
+        ORDER BY import_seq`); err != nil {
+		return "postgres-copy", err
+	}
+	if err := tx.Commit(); err != nil {
+		return "postgres-copy", err
+	}
+	return "postgres-copy", nil
 }
 
 // Arxius

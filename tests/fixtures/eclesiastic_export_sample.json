@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "exported_at": "2026-01-01T00:00:00Z",
+  "entitats": [
+    {
+      "id": 1,
+      "nom": "Arquebisbat Pare",
+      "tipus_entitat": "arquebisbat",
+      "pais_iso2": "ES",
+      "nivell": 1
+    },
+    {
+      "id": 2,
+      "nom": "Bisbat Fill",
+      "tipus_entitat": "bisbat",
+      "pais_iso2": "ES",
+      "nivell": 2,
+      "parent_id": 1
+    }
+  ],
+  "municipis": [
+    {
+      "entitat_id": 2,
+      "entitat_nom": "Bisbat Fill",
+      "municipi_nom": "Municipi Test",
+      "municipi_pais_iso2": "ES",
+      "any_inici": 1900,
+      "motiu": "test import",
+      "font": "fixture"
+    }
+  ]
+}

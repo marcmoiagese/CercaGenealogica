@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -226,6 +227,7 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
+	start := time.Now()
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		a.logAdminImportRun(r, "eclesiastic", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams("/admin/eclesiastic/import", map[string]string{"err": "1"}), http.StatusSeeOther)
@@ -252,11 +254,50 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	engine := territoriImportEngineName(a.DB)
+	bulkInserter, hasBulkInserter := a.DB.(eclesiasticBulkInserter)
+	type activityRule struct {
+		ruleID sql.NullInt64
+		points int
+	}
+	resolveActivityRule := func(code string) activityRule {
+		if code == "" {
+			return activityRule{}
+		}
+		rule, err := a.DB.GetPointsRuleByCode(code)
+		if err != nil || rule == nil || !rule.Active {
+			return activityRule{}
+		}
+		return activityRule{
+			ruleID: sql.NullInt64{Int64: int64(rule.ID), Valid: true},
+			points: rule.Points,
+		}
+	}
+	activityRuleEcles := resolveActivityRule(ruleEclesiasticCreate)
+	pendingActivities := make([]db.UserActivity, 0, len(payload.Entitats))
+	addActivity := func(rule activityRule, objectType string, objectID int) {
+		if objectID <= 0 {
+			return
+		}
+		pendingActivities = append(pendingActivities, db.UserActivity{
+			UserID:     user.ID,
+			RuleID:     rule.ruleID,
+			Action:     "crear",
+			ObjectType: objectType,
+			ObjectID:   sql.NullInt64{Int64: int64(objectID), Valid: true},
+			Points:     rule.points,
+			Status:     "pendent",
+			Details:    "import",
+		})
+	}
+	activityCount := 0
+
 	entTotal := len(payload.Entitats)
 	entCreated, entSkipped, entErrors := 0, 0, 0
 	relTotal := len(payload.Municipis)
 	relCreated, relSkipped, relErrors := 0, 0, 0
 
+	prepStart := time.Now()
 	existingRows, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	existingMap := map[string]int{}
 	existingNameMap := map[string]int{}
@@ -271,13 +312,25 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	paisByISO := a.paisIDByISO()
+	prepDuration := time.Since(prepStart)
 	idMap := map[int]int{}
 	pending := make([]eclesiasticExportEntitat, 0, len(payload.Entitats))
 	pending = append(pending, payload.Entitats...)
+	bulkModeEntitats := "generic"
+	entitatsStart := time.Now()
+	seenKeys := map[string]struct{}{}
+	seenNames := map[string]struct{}{}
 
 	for len(pending) > 0 {
 		progress := false
 		next := []eclesiasticExportEntitat{}
+		type entInsertMeta struct {
+			exportID int
+			key      string
+			nameKey  string
+		}
+		toInsert := make([]db.Arquebisbat, 0, len(pending))
+		insertMeta := make([]entInsertMeta, 0, len(pending))
 		for _, ent := range pending {
 			if ent.ParentID != nil {
 				if _, ok := idMap[*ent.ParentID]; !ok {
@@ -285,13 +338,37 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 					continue
 				}
 			}
+			nameKey := normalizeKey(ent.Nom)
 			key := normalizeKey(ent.Nom, ent.TipusEntitat)
+			if nameKey == "" {
+				entSkipped++
+				progress = true
+				continue
+			}
 			if existingID, ok := existingMap[key]; ok {
 				idMap[ent.ID] = existingID
 				entSkipped++
 				progress = true
 				continue
 			}
+			if existingID, ok := existingNameMap[nameKey]; ok {
+				idMap[ent.ID] = existingID
+				entSkipped++
+				progress = true
+				continue
+			}
+			if _, ok := seenKeys[key]; ok {
+				entSkipped++
+				progress = true
+				continue
+			}
+			if _, ok := seenNames[nameKey]; ok {
+				entSkipped++
+				progress = true
+				continue
+			}
+			seenKeys[key] = struct{}{}
+			seenNames[nameKey] = struct{}{}
 			var parent sql.NullInt64
 			if ent.ParentID != nil {
 				if pid, ok := idMap[*ent.ParentID]; ok {
@@ -316,7 +393,7 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 					paisID = sql.NullInt64{Int64: int64(pid), Valid: true}
 				}
 			}
-			entitat := &db.Arquebisbat{
+			entitat := db.Arquebisbat{
 				Nom:            ent.Nom,
 				TipusEntitat:   ent.TipusEntitat,
 				PaisID:         paisID,
@@ -335,17 +412,64 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 				ModeratedAt:    sql.NullTime{},
 				ModeracioMotiu: "",
 			}
-			newID, err := a.DB.CreateArquebisbat(entitat)
-			if err != nil {
-				entErrors++
-				continue
+			toInsert = append(toInsert, entitat)
+			insertMeta = append(insertMeta, entInsertMeta{exportID: ent.ID, key: key, nameKey: nameKey})
+		}
+		if len(toInsert) > 0 {
+			applyInserted := func(ids []int) {
+				for i, id := range ids {
+					meta := insertMeta[i]
+					idMap[meta.exportID] = id
+					if meta.key != "" {
+						existingMap[meta.key] = id
+					}
+					if meta.nameKey != "" {
+						existingNameMap[meta.nameKey] = id
+					}
+					entCreated++
+					progress = true
+					activityCount++
+					addActivity(activityRuleEcles, "eclesiastic", id)
+				}
 			}
-			idMap[ent.ID] = newID
-			existingMap[key] = newID
-			entCreated++
-			progress = true
-			if user != nil {
-				_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleEclesiasticCreate, "crear", "eclesiastic", &newID, "pendent", nil, "")
+			var ids []int
+			var mode string
+			var err error
+			bulkAttempted := false
+			if hasBulkInserter {
+				bulkAttempted = true
+				ids, mode, err = bulkInserter.BulkInsertArquebisbats(r.Context(), toInsert)
+				if mode != "" {
+					bulkModeEntitats = mode
+				}
+			}
+			if err == nil && len(ids) == len(toInsert) {
+				applyInserted(ids)
+			} else {
+				if err != nil && bulkAttempted {
+					Errorf("Eclesiastic import: bulk insert entitats fallit (%s): %v", bulkModeEntitats, err)
+				}
+				bulkModeEntitats = "generic"
+				for i := range toInsert {
+					entitat := toInsert[i]
+					newID, err := a.DB.CreateArquebisbat(&entitat)
+					if err != nil {
+						entErrors++
+						continue
+					}
+					meta := insertMeta[i]
+					idMap[meta.exportID] = newID
+					if meta.key != "" {
+						existingMap[meta.key] = newID
+					}
+					if meta.nameKey != "" {
+						existingNameMap[meta.nameKey] = newID
+					}
+					entCreated++
+					progress = true
+					activityCount++
+					addActivity(activityRuleEcles, "eclesiastic", newID)
+				}
 			}
 		}
 		if !progress {
@@ -353,8 +477,34 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 		}
 		pending = next
 	}
+	entitatsDuration := time.Since(entitatsStart)
 
+	relStart := time.Now()
 	munMap := a.municipiNameMap()
+	existingRelKeys := map[string]struct{}{}
+	if rows, err := a.DB.Query("SELECT id_municipi, id_arquevisbat, any_inici, any_fi FROM arquebisbats_municipi"); err == nil {
+		for _, row := range rows {
+			munID, err := parseCountValue(row["id_municipi"])
+			if err != nil {
+				continue
+			}
+			entID, err := parseCountValue(row["id_arquevisbat"])
+			if err != nil {
+				continue
+			}
+			anyInici, err := parseNullIntValue(row["any_inici"])
+			if err != nil {
+				continue
+			}
+			anyFi, err := parseNullIntValue(row["any_fi"])
+			if err != nil {
+				continue
+			}
+			existingRelKeys[eclesiasticRelKey(entID, munID, anyInici, anyFi)] = struct{}{}
+		}
+	}
+	seenRelKeys := map[string]struct{}{}
+	toInsertRel := make([]db.ArquebisbatMunicipi, 0, len(payload.Municipis))
 	for _, rel := range payload.Municipis {
 		entID := 0
 		if rel.EntitatID != 0 {
@@ -384,7 +534,17 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 		if rel.AnyFi != nil {
 			anyFi = sql.NullInt64{Int64: int64(*rel.AnyFi), Valid: true}
 		}
-		_, err := a.DB.SaveArquebisbatMunicipi(&db.ArquebisbatMunicipi{
+		relKey := eclesiasticRelKey(entID, munID, anyInici, anyFi)
+		if _, ok := existingRelKeys[relKey]; ok {
+			relSkipped++
+			continue
+		}
+		if _, ok := seenRelKeys[relKey]; ok {
+			relSkipped++
+			continue
+		}
+		seenRelKeys[relKey] = struct{}{}
+		toInsertRel = append(toInsertRel, db.ArquebisbatMunicipi{
 			MunicipiID:    munID,
 			ArquebisbatID: entID,
 			AnyInici:      anyInici,
@@ -392,12 +552,75 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 			Motiu:         rel.Motiu,
 			Font:          rel.Font,
 		})
-		if err != nil {
-			relErrors++
-			continue
-		}
-		relCreated++
 	}
+	bulkModeRelacions := "generic"
+	if len(toInsertRel) > 0 {
+		var mode string
+		var err error
+		bulkAttempted := false
+		if hasBulkInserter {
+			bulkAttempted = true
+			mode, err = bulkInserter.BulkInsertArquebisbatMunicipis(r.Context(), toInsertRel)
+			if mode != "" {
+				bulkModeRelacions = mode
+			}
+		}
+		if !hasBulkInserter || err != nil {
+			if err != nil && bulkAttempted {
+				Errorf("Eclesiastic import: bulk insert relacions fallit (%s): %v", bulkModeRelacions, err)
+			}
+			bulkModeRelacions = "generic"
+			for i := range toInsertRel {
+				item := toInsertRel[i]
+				if _, err := a.DB.SaveArquebisbatMunicipi(&item); err != nil {
+					relErrors++
+					continue
+				}
+				relCreated++
+			}
+		} else {
+			relCreated = len(toInsertRel)
+		}
+	}
+	relDuration := time.Since(relStart)
+
+	activityMode := "none"
+	if len(pendingActivities) > 0 {
+		activityMode = "bulk"
+		mode, err := a.DB.BulkInsertUserActivities(r.Context(), pendingActivities)
+		if err != nil {
+			Errorf("Eclesiastic import: bulk insert activitats fallit (%s): %v", mode, err)
+			activityMode = "generic"
+			for i := range pendingActivities {
+				act := pendingActivities[i]
+				if _, err := a.DB.InsertUserActivity(&act); err != nil {
+					Errorf("Eclesiastic import: insert activitat fallit: %v", err)
+				}
+			}
+		} else if mode != "" {
+			activityMode = mode
+		}
+	}
+	if activityCount > 0 {
+		now := time.Now()
+		a.EvaluateAchievementsForUser(context.Background(), user.ID, AchievementTrigger{CreatedAt: now})
+		a.logAntiAbuseSignals(user.ID, now)
+	}
+	totalDuration := time.Since(start)
+	Infof("Eclesiastic import: engine=%s entitats=%s relacions=%s activity=%s prep=%s entitats_dur=%s relacions_dur=%s totals=%d created=%d skipped=%d errors=%d duration=%s",
+		engine,
+		bulkModeEntitats,
+		bulkModeRelacions,
+		activityMode,
+		prepDuration.String(),
+		entitatsDuration.String(),
+		relDuration.String(),
+		entTotal+relTotal,
+		entCreated+relCreated,
+		entSkipped+relSkipped,
+		entErrors+relErrors,
+		totalDuration.String(),
+	)
 
 	redirect := withQueryParams(returnTo, map[string]string{
 		"import":            "1",
@@ -462,6 +685,34 @@ func municipiISO2(m *db.Municipi, levelISO map[int]string) string {
 		}
 	}
 	return ""
+}
+
+type eclesiasticBulkInserter interface {
+	BulkInsertArquebisbats(ctx context.Context, rows []db.Arquebisbat) ([]int, string, error)
+	BulkInsertArquebisbatMunicipis(ctx context.Context, rows []db.ArquebisbatMunicipi) (string, error)
+}
+
+func eclesiasticRelKey(entID, munID int, anyInici, anyFi sql.NullInt64) string {
+	ini := "nil"
+	fi := "nil"
+	if anyInici.Valid {
+		ini = strconv.FormatInt(anyInici.Int64, 10)
+	}
+	if anyFi.Valid {
+		fi = strconv.FormatInt(anyFi.Int64, 10)
+	}
+	return strconv.Itoa(entID) + "|" + strconv.Itoa(munID) + "|" + ini + "|" + fi
+}
+
+func parseNullIntValue(raw interface{}) (sql.NullInt64, error) {
+	if raw == nil {
+		return sql.NullInt64{}, nil
+	}
+	n, err := parseCountValue(raw)
+	if err != nil {
+		return sql.NullInt64{}, err
+	}
+	return sql.NullInt64{Int64: int64(n), Valid: true}, nil
 }
 
 func (a *App) municipiNameMap() map[string]int {

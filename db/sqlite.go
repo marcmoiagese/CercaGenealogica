@@ -731,6 +731,44 @@ func (d *SQLite) GetArquebisbat(id int) (*Arquebisbat, error) {
 func (d *SQLite) CreateArquebisbat(ae *Arquebisbat) (int, error) {
 	return d.help.createArquebisbat(ae)
 }
+func (d *SQLite) BulkInsertArquebisbats(ctx context.Context, rows []Arquebisbat) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "sqlite-tx", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "sqlite-tx", err
+	}
+	defer tx.Rollback()
+	ids := make([]int, 0, len(rows))
+	for i := 0; i < len(rows); i += bulkEclesiasticBatchSize {
+		end := i + bulkEclesiasticBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertArquebisbats(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return nil, "sqlite-tx", err
+		}
+		lastID, err := res.LastInsertId()
+		if err != nil || lastID <= 0 {
+			return nil, "sqlite-tx", fmt.Errorf("sqlite bulk insert arquebisbats: no last insert id")
+		}
+		firstID := lastID - int64(len(batch)-1)
+		for j := 0; j < len(batch); j++ {
+			ids = append(ids, int(firstID)+j)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "sqlite-tx", err
+	}
+	return ids, "sqlite-tx", nil
+}
 func (d *SQLite) UpdateArquebisbat(ae *Arquebisbat) error {
 	return d.help.updateArquebisbat(ae)
 }
@@ -742,6 +780,34 @@ func (d *SQLite) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, err
 }
 func (d *SQLite) SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error) {
 	return d.help.saveArquebisbatMunicipi(am)
+}
+func (d *SQLite) BulkInsertArquebisbatMunicipis(ctx context.Context, rows []ArquebisbatMunicipi) (string, error) {
+	if len(rows) == 0 {
+		return "sqlite-tx", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "sqlite-tx", err
+	}
+	defer tx.Rollback()
+	for i := 0; i < len(rows); i += bulkEclesiasticBatchSize {
+		end := i + bulkEclesiasticBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertArquebisbatMunicipis(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return "sqlite-tx", err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return "sqlite-tx", err
+	}
+	return "sqlite-tx", nil
 }
 
 // Arxius
