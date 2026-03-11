@@ -573,6 +573,9 @@ func (d *PostgreSQL) GetMunicipi(id int) (*Municipi, error) {
 func (d *PostgreSQL) CreateMunicipi(m *Municipi) (int, error) {
 	return d.help.createMunicipi(m)
 }
+func (d *PostgreSQL) ResolveMunicipisByNames(names []string) ([]MunicipiResolveRow, error) {
+	return d.help.resolveMunicipisByNames(names)
+}
 func (d *PostgreSQL) BulkInsertNivells(ctx context.Context, rows []NivellAdministratiu) ([]int, string, error) {
 	if len(rows) == 0 {
 		return nil, "postgres-copy", nil

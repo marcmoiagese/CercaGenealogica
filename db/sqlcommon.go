@@ -2684,6 +2684,56 @@ func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowse
 	return res, nil
 }
 
+func (h sqlHelper) resolveMunicipisByNames(names []string) ([]MunicipiResolveRow, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	args := make([]interface{}, 0, len(names))
+	for _, name := range names {
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name == "" {
+			continue
+		}
+		args = append(args, name)
+	}
+	if len(args) == 0 {
+		return nil, nil
+	}
+	placeholders := buildInPlaceholders(h.style, len(args))
+	query := `
+        SELECT m.id, m.nom, p.codi_iso2
+        FROM municipis m
+        LEFT JOIN nivells_administratius n1 ON n1.id = m.nivell_administratiu_id_1
+        LEFT JOIN nivells_administratius n2 ON n2.id = m.nivell_administratiu_id_2
+        LEFT JOIN nivells_administratius n3 ON n3.id = m.nivell_administratiu_id_3
+        LEFT JOIN nivells_administratius n4 ON n4.id = m.nivell_administratiu_id_4
+        LEFT JOIN nivells_administratius n5 ON n5.id = m.nivell_administratiu_id_5
+        LEFT JOIN nivells_administratius n6 ON n6.id = m.nivell_administratiu_id_6
+        LEFT JOIN nivells_administratius n7 ON n7.id = m.nivell_administratiu_id_7
+        LEFT JOIN paisos p ON p.id = COALESCE(
+            n1.pais_id, n2.pais_id, n3.pais_id, n4.pais_id, n5.pais_id, n6.pais_id, n7.pais_id
+        )
+        WHERE LOWER(m.nom) IN (` + placeholders + `)`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MunicipiResolveRow
+	for rows.Next() {
+		var row MunicipiResolveRow
+		if err := rows.Scan(&row.ID, &row.Nom, &row.ISO2); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func (h sqlHelper) countMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
 	where := "1=1"
 	args := []interface{}{}

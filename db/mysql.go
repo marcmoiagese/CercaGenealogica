@@ -572,6 +572,9 @@ func (d *MySQL) GetMunicipi(id int) (*Municipi, error) {
 func (d *MySQL) CreateMunicipi(m *Municipi) (int, error) {
 	return d.help.createMunicipi(m)
 }
+func (d *MySQL) ResolveMunicipisByNames(names []string) ([]MunicipiResolveRow, error) {
+	return d.help.resolveMunicipisByNames(names)
+}
 func (d *MySQL) BulkInsertNivells(ctx context.Context, rows []NivellAdministratiu) ([]int, string, error) {
 	if len(rows) == 0 {
 		return nil, "mysql-batch", nil

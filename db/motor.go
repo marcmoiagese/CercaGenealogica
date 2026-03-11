@@ -552,6 +552,7 @@ type DB interface {
 	SuggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRow, error)
 	GetMunicipi(id int) (*Municipi, error)
 	CreateMunicipi(m *Municipi) (int, error)
+	ResolveMunicipisByNames(names []string) ([]MunicipiResolveRow, error)
 	UpdateMunicipi(m *Municipi) error
 	ListCodisPostals(municipiID int) ([]CodiPostal, error)
 	SaveCodiPostal(cp *CodiPostal) (int, error)
@@ -1547,6 +1548,12 @@ type MunicipiRow struct {
 	ModeracioEstat string
 	CreatedBy      sql.NullInt64
 	CreatedAt      sql.NullTime
+}
+
+type MunicipiResolveRow struct {
+	ID   int
+	Nom  string
+	ISO2 sql.NullString
 }
 
 type MunicipiFilter struct {

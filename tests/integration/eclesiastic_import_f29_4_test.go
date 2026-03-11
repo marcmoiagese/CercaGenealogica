@@ -32,6 +32,15 @@ func TestEclesiasticImportBulkMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreatePais ha fallat: %v", err)
 	}
+	paisFR := &db.Pais{
+		CodiISO2:    "FR",
+		CodiISO3:    "FRA",
+		CodiPaisNum: "250",
+	}
+	paisFRID, err := database.CreatePais(paisFR)
+	if err != nil {
+		t.Fatalf("CreatePais FR ha fallat: %v", err)
+	}
 	nivell := &db.NivellAdministratiu{
 		PaisID:         paisID,
 		Nivel:          1,
@@ -44,6 +53,18 @@ func TestEclesiasticImportBulkMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateNivell ha fallat: %v", err)
 	}
+	nivellFR := &db.NivellAdministratiu{
+		PaisID:         paisFRID,
+		Nivel:          1,
+		NomNivell:      "Test nivell FR",
+		TipusNivell:    "pais",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	}
+	nivellFRID, err := database.CreateNivell(nivellFR)
+	if err != nil {
+		t.Fatalf("CreateNivell FR ha fallat: %v", err)
+	}
 	mun := &db.Municipi{
 		Nom:            "Municipi Test",
 		Tipus:          "municipi",
@@ -51,8 +72,19 @@ func TestEclesiasticImportBulkMode(t *testing.T) {
 		ModeracioEstat: "pendent",
 	}
 	mun.NivellAdministratiuID[0] = sql.NullInt64{Int64: int64(nivellID), Valid: true}
-	if _, err := database.CreateMunicipi(mun); err != nil {
+	munID, err := database.CreateMunicipi(mun)
+	if err != nil {
 		t.Fatalf("CreateMunicipi ha fallat: %v", err)
+	}
+	munFR := &db.Municipi{
+		Nom:            "Municipi Test",
+		Tipus:          "municipi",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	}
+	munFR.NivellAdministratiuID[0] = sql.NullInt64{Int64: int64(nivellFRID), Valid: true}
+	if _, err := database.CreateMunicipi(munFR); err != nil {
+		t.Fatalf("CreateMunicipi FR ha fallat: %v", err)
 	}
 
 	projectRoot := findProjectRoot(t)
@@ -109,6 +141,14 @@ func TestEclesiasticImportBulkMode(t *testing.T) {
 	parentExpected := parseCountValue(t, parentRows[0]["id"])
 	if parentID != parentExpected {
 		t.Fatalf("parent_id esperat %d, got %d", parentExpected, parentID)
+	}
+	relRows, err := database.Query("SELECT id_municipi FROM arquebisbats_municipi")
+	if err != nil || len(relRows) != 1 {
+		t.Fatalf("no he trobat relacio municipi: %v len=%d", err, len(relRows))
+	}
+	relMunID := parseCountValue(t, relRows[0]["id_municipi"])
+	if relMunID != munID {
+		t.Fatalf("municipi relacio esperat %d, got %d", munID, relMunID)
 	}
 
 	csrfToken = "csrf_f29_4_import_2"

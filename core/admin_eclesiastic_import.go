@@ -479,8 +479,10 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 	}
 	entitatsDuration := time.Since(entitatsStart)
 
+	resolveStart := time.Now()
+	munMap, munResolveMode, munKeys := a.municipiNameMapForPayload(payload.Municipis)
+	resolveDuration := time.Since(resolveStart)
 	relStart := time.Now()
-	munMap := a.municipiNameMap()
 	existingRelKeys := map[string]struct{}{}
 	if rows, err := a.DB.Query("SELECT id_municipi, id_arquevisbat, any_inici, any_fi FROM arquebisbats_municipi"); err == nil {
 		for _, row := range rows {
@@ -607,10 +609,13 @@ func (a *App) AdminEclesiasticImportRun(w http.ResponseWriter, r *http.Request) 
 		a.logAntiAbuseSignals(user.ID, now)
 	}
 	totalDuration := time.Since(start)
-	Infof("Eclesiastic import: engine=%s entitats=%s relacions=%s activity=%s prep=%s entitats_dur=%s relacions_dur=%s totals=%d created=%d skipped=%d errors=%d duration=%s",
+	Infof("Eclesiastic import: engine=%s entitats=%s relacions=%s mun_resolve=%s mun_keys=%d mun_resolve_dur=%s activity=%s prep=%s entitats_dur=%s relacions_dur=%s totals=%d created=%d skipped=%d errors=%d duration=%s",
 		engine,
 		bulkModeEntitats,
 		bulkModeRelacions,
+		munResolveMode,
+		munKeys,
+		resolveDuration.String(),
 		activityMode,
 		prepDuration.String(),
 		entitatsDuration.String(),
@@ -731,4 +736,48 @@ func (a *App) municipiNameMap() map[string]int {
 		}
 	}
 	return res
+}
+
+func (a *App) municipiNameMapForPayload(rels []eclesiasticExportRel) (map[string]int, string, int) {
+	namesSet := map[string]struct{}{}
+	for _, rel := range rels {
+		name := strings.TrimSpace(rel.MunicipiNom)
+		if name == "" {
+			continue
+		}
+		namesSet[strings.ToLower(name)] = struct{}{}
+	}
+	keysCount := len(namesSet)
+	if keysCount == 0 {
+		return map[string]int{}, "empty", 0
+	}
+	names := make([]string, 0, keysCount)
+	for name := range namesSet {
+		names = append(names, name)
+	}
+	const batchSize = 500
+	res := map[string]int{}
+	for i := 0; i < len(names); i += batchSize {
+		end := i + batchSize
+		if end > len(names) {
+			end = len(names)
+		}
+		batch := names[i:end]
+		rows, err := a.DB.ResolveMunicipisByNames(batch)
+		if err != nil {
+			Errorf("Eclesiastic import: resolucio municipis fallida: %v", err)
+			return a.municipiNameMap(), "fallback", keysCount
+		}
+		for _, row := range rows {
+			iso := ""
+			if row.ISO2.Valid {
+				iso = strings.ToUpper(strings.TrimSpace(row.ISO2.String))
+			}
+			key := normalizeKey(row.Nom, iso)
+			if key != "" {
+				res[key] = row.ID
+			}
+		}
+	}
+	return res, "payload", keysCount
 }

@@ -591,6 +591,9 @@ func (d *SQLite) GetMunicipi(id int) (*Municipi, error) {
 func (d *SQLite) CreateMunicipi(m *Municipi) (int, error) {
 	return d.help.createMunicipi(m)
 }
+func (d *SQLite) ResolveMunicipisByNames(names []string) ([]MunicipiResolveRow, error) {
+	return d.help.resolveMunicipisByNames(names)
+}
 
 func (d *SQLite) BulkInsertNivells(ctx context.Context, rows []NivellAdministratiu) ([]int, string, error) {
 	if len(rows) == 0 {
