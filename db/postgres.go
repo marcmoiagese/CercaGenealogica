@@ -576,6 +576,12 @@ func (d *PostgreSQL) CreateMunicipi(m *Municipi) (int, error) {
 func (d *PostgreSQL) ResolveMunicipisByNames(names []string) ([]MunicipiResolveRow, error) {
 	return d.help.resolveMunicipisByNames(names)
 }
+func (d *PostgreSQL) ResolveArquebisbatsByNames(names []string) ([]ArquebisbatResolveRow, error) {
+	return d.help.resolveArquebisbatsByNames(names)
+}
+func (d *PostgreSQL) ResolveArxiusByNames(names []string) ([]ArxiuResolveRow, error) {
+	return d.help.resolveArxiusByNames(names)
+}
 func (d *PostgreSQL) BulkInsertNivells(ctx context.Context, rows []NivellAdministratiu) ([]int, string, error) {
 	if len(rows) == 0 {
 		return nil, "postgres-copy", nil
@@ -1117,6 +1123,128 @@ func (d *PostgreSQL) GetArxiu(id int) (*Arxiu, error) {
 }
 func (d *PostgreSQL) CreateArxiu(a *Arxiu) (int, error) {
 	return d.help.createArxiu(a)
+}
+func (d *PostgreSQL) BulkInsertArxius(ctx context.Context, rows []Arxiu) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "postgres-copy", nil
+	}
+	d.help.ensureArxiuExtraColumns()
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
+        CREATE TEMP TABLE tmp_arxius_import (
+            import_seq INTEGER,
+            nom TEXT,
+            tipus TEXT,
+            municipi_id INTEGER,
+            entitat_eclesiastica_id INTEGER,
+            adreca TEXT,
+            ubicacio TEXT,
+            what3words TEXT,
+            web TEXT,
+            acces TEXT,
+            notes TEXT,
+            accepta_donacions BOOLEAN,
+            donacions_url TEXT,
+            created_by INTEGER,
+            moderation_status TEXT,
+            moderated_by INTEGER,
+            moderated_at TIMESTAMP,
+            moderation_notes TEXT
+        ) ON COMMIT DROP`)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("tmp_arxius_import",
+		"import_seq",
+		"nom",
+		"tipus",
+		"municipi_id",
+		"entitat_eclesiastica_id",
+		"adreca",
+		"ubicacio",
+		"what3words",
+		"web",
+		"acces",
+		"notes",
+		"accepta_donacions",
+		"donacions_url",
+		"created_by",
+		"moderation_status",
+		"moderated_by",
+		"moderated_at",
+		"moderation_notes",
+	))
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	for i, a := range rows {
+		if _, err := stmt.Exec(
+			i,
+			a.Nom,
+			a.Tipus,
+			a.MunicipiID,
+			a.EntitatEclesiasticaID,
+			a.Adreca,
+			a.Ubicacio,
+			a.What3Words,
+			a.Web,
+			a.Acces,
+			a.Notes,
+			a.AcceptaDonacions,
+			a.DonacionsURL,
+			a.CreatedBy,
+			a.ModeracioEstat,
+			a.ModeratedBy,
+			a.ModeratedAt,
+			a.ModeracioMotiu,
+		); err != nil {
+			_ = stmt.Close()
+			return nil, "postgres-copy", err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		_ = stmt.Close()
+		return nil, "postgres-copy", err
+	}
+	if err := stmt.Close(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	rowsRes, err := tx.QueryContext(ctx, `
+        INSERT INTO arxius (
+            nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, what3words, web, acces,
+            notes, accepta_donacions, donacions_url, created_by, moderation_status, moderated_by, moderated_at,
+            moderation_notes, created_at, updated_at
+        )
+        SELECT
+            nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, what3words, web, acces,
+            notes, accepta_donacions, donacions_url, created_by, moderation_status, moderated_by, moderated_at,
+            moderation_notes, NOW(), NOW()
+        FROM tmp_arxius_import
+        ORDER BY import_seq
+        RETURNING id`)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	defer rowsRes.Close()
+	ids := make([]int, 0, len(rows))
+	for rowsRes.Next() {
+		var id int
+		if err := rowsRes.Scan(&id); err != nil {
+			return nil, "postgres-copy", err
+		}
+		ids = append(ids, id)
+	}
+	if err := rowsRes.Err(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	return ids, "postgres-copy", nil
 }
 func (d *PostgreSQL) UpdateArxiu(a *Arxiu) error {
 	return d.help.updateArxiu(a)

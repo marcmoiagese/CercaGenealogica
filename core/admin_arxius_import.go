@@ -1,8 +1,10 @@
 package core
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -92,6 +94,7 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	start := time.Now()
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		a.logAdminImportRun(r, "arxius", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams("/admin/arxius/import", map[string]string{"err": "1"}), http.StatusSeeOther)
@@ -117,38 +120,72 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/arxius/import?err=1", http.StatusSeeOther)
 		return
 	}
-	total := len(payload.Arxius)
-	created, skipped, errors := 0, 0, 0
+	engine := territoriImportEngineName(a.DB)
+	bulkInserter, hasBulkInserter := a.DB.(arxiusBulkInserter)
 
-	entitats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
-	entMap := map[string]int{}
-	entNameMap := map[string]int{}
-	for _, ent := range entitats {
-		key := normalizeKey(ent.Nom, ent.TipusEntitat)
-		if key != "" {
-			entMap[key] = ent.ID
+	type activityRule struct {
+		ruleID sql.NullInt64
+		points int
+	}
+	resolveActivityRule := func(code string) activityRule {
+		if code == "" {
+			return activityRule{}
 		}
-		nameKey := normalizeKey(ent.Nom)
-		if nameKey != "" {
-			entNameMap[nameKey] = ent.ID
+		rule, err := a.DB.GetPointsRuleByCode(code)
+		if err != nil || rule == nil || !rule.Active {
+			return activityRule{}
+		}
+		return activityRule{
+			ruleID: sql.NullInt64{Int64: int64(rule.ID), Valid: true},
+			points: rule.Points,
 		}
 	}
-	munMap := a.municipiNameMap()
-	munNameMap := map[string]int{}
-	if rows, err := a.DB.ListMunicipis(db.MunicipiFilter{}); err == nil {
-		for _, row := range rows {
-			nameKey := normalizeKey(row.Nom)
-			if nameKey != "" {
-				munNameMap[nameKey] = row.ID
-			}
+	activityRuleArxiu := resolveActivityRule(ruleArxiuCreate)
+	pendingActivities := make([]db.UserActivity, 0, len(payload.Arxius))
+	addActivity := func(rule activityRule, objectID int) {
+		if objectID <= 0 {
+			return
 		}
+		pendingActivities = append(pendingActivities, db.UserActivity{
+			UserID:     user.ID,
+			RuleID:     rule.ruleID,
+			Action:     "crear",
+			ObjectType: "arxiu",
+			ObjectID:   sql.NullInt64{Int64: int64(objectID), Valid: true},
+			Points:     rule.points,
+			Status:     "pendent",
+			Details:    "import",
+		})
 	}
+	activityCount := 0
+
+	total := len(payload.Arxius)
+	created, skipped, errors, duplicates := 0, 0, 0, 0
+
+	prepStart := time.Now()
+	entMap, entNameMap, entMode, entKeys := a.arxiuEntitatNameMapsForPayload(payload.Arxius)
+	munMap, munNameMap, munMode, munKeys := a.arxiuMunicipiNameMapsForPayload(payload.Arxius)
+	existingByName, _, existingMode, existingKeys := a.arxiuExistingMapsForPayload(payload.Arxius)
+	prepDuration := time.Since(prepStart)
+
+	resolveStart := time.Now()
+	seenPayload := map[string]struct{}{}
+	toInsert := make([]db.Arxiu, 0, len(payload.Arxius))
 	for _, row := range payload.Arxius {
+		nameKey := normalizeKey(row.Nom)
+		if nameKey == "" {
+			skipped++
+			duplicates++
+			continue
+		}
 		hasMunicipi := strings.TrimSpace(row.MunicipiNom) != ""
 		munID := 0
 		if hasMunicipi {
-			key := normalizeKey(row.MunicipiNom, strings.ToUpper(row.MunicipiPaisISO2))
-			munID = munMap[key]
+			iso2 := strings.ToUpper(strings.TrimSpace(row.MunicipiPaisISO2))
+			key := normalizeKey(row.MunicipiNom, iso2)
+			if key != "" {
+				munID = munMap[key]
+			}
 			if munID == 0 {
 				munID = munNameMap[normalizeKey(row.MunicipiNom)]
 			}
@@ -159,19 +196,24 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		entID := 0
-		if row.EntitatNom != "" {
+		if strings.TrimSpace(row.EntitatNom) != "" {
 			entID = entNameMap[normalizeKey(row.EntitatNom)]
 			if entID == 0 {
 				entID = entMap[normalizeKey(row.EntitatNom, row.Tipus)]
 			}
 		}
-		filter := db.ArxiuFilter{Text: row.Nom, MunicipiID: munID}
-		exists, _ := a.DB.ListArxius(filter)
-		if len(exists) > 0 {
+		key := arxiuImportKey(nameKey, munID)
+		if _, ok := seenPayload[key]; ok {
+			skipped++
+			duplicates++
+			continue
+		}
+		seenPayload[key] = struct{}{}
+		if _, ok := existingByName[nameKey]; ok {
 			skipped++
 			continue
 		}
-		arxiu := &db.Arxiu{
+		arxiu := db.Arxiu{
 			Nom:              row.Nom,
 			Tipus:            row.Tipus,
 			Acces:            row.Acces,
@@ -194,17 +236,97 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 		if entID > 0 {
 			arxiu.EntitatEclesiasticaID = sql.NullInt64{Int64: int64(entID), Valid: true}
 		}
-		newID, err := a.DB.CreateArxiu(arxiu)
-		if err != nil {
-			errors++
-			Errorf("Arxius import: error creant arxiu %s: %v", row.Nom, err)
-			continue
+		toInsert = append(toInsert, arxiu)
+	}
+	resolveDuration := time.Since(resolveStart)
+
+	insertStart := time.Now()
+	bulkMode := "generic"
+	if len(toInsert) > 0 {
+		applyInserted := func(ids []int) {
+			for _, id := range ids {
+				created++
+				activityCount++
+				addActivity(activityRuleArxiu, id)
+			}
 		}
-		created++
-		if user != nil {
-			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuCreate, "crear", "arxiu", &newID, "pendent", nil, "")
+		var ids []int
+		var err error
+		bulkAttempted := false
+		if hasBulkInserter {
+			bulkAttempted = true
+			ids, bulkMode, err = bulkInserter.BulkInsertArxius(r.Context(), toInsert)
+			if bulkMode == "" {
+				bulkMode = "bulk"
+			}
+		}
+		if err == nil && len(ids) == len(toInsert) {
+			applyInserted(ids)
+		} else {
+			if err != nil && bulkAttempted {
+				Errorf("Arxius import: bulk insert fallit (%s): %v", bulkMode, err)
+			}
+			bulkMode = "generic"
+			for i := range toInsert {
+				arxiu := toInsert[i]
+				newID, err := a.DB.CreateArxiu(&arxiu)
+				if err != nil {
+					errors++
+					Errorf("Arxius import: error creant arxiu %s: %v", arxiu.Nom, err)
+					continue
+				}
+				created++
+				activityCount++
+				addActivity(activityRuleArxiu, newID)
+			}
 		}
 	}
+	insertDuration := time.Since(insertStart)
+
+	activityStart := time.Now()
+	activityMode := "bulk"
+	if len(pendingActivities) > 0 {
+		mode, err := a.DB.BulkInsertUserActivities(r.Context(), pendingActivities)
+		if err != nil {
+			Errorf("Arxius import: bulk insert activitats fallit (%s): %v", mode, err)
+			activityMode = "generic"
+			for i := range pendingActivities {
+				act := pendingActivities[i]
+				if _, err := a.DB.InsertUserActivity(&act); err != nil {
+					Errorf("Arxius import: insert activitat fallit: %v", err)
+				}
+			}
+		} else if mode != "" {
+			activityMode = mode
+		}
+	}
+	activityDuration := time.Since(activityStart)
+
+	if activityCount > 0 {
+		now := time.Now()
+		a.EvaluateAchievementsForUser(context.Background(), user.ID, AchievementTrigger{CreatedAt: now})
+		a.logAntiAbuseSignals(user.ID, now)
+	}
+	totalDuration := time.Since(start)
+	resolveSummary := fmt.Sprintf("mun=%s:%d ent=%s:%d arxius=%s:%d", munMode, munKeys, entMode, entKeys, existingMode, existingKeys)
+	Infof("Arxius import: engine=%s mode=%s arxius=%d resolve=%s activity=%s prep=%s resolve_dur=%s insert_dur=%s activity_dur=%s totals=%d created=%d skipped=%d duplicates=%d errors=%d duration=%s",
+		engine,
+		bulkMode,
+		total,
+		resolveSummary,
+		activityMode,
+		prepDuration.String(),
+		resolveDuration.String(),
+		insertDuration.String(),
+		activityDuration.String(),
+		total,
+		created,
+		skipped,
+		duplicates,
+		errors,
+		totalDuration.String(),
+	)
+
 	redirect := withQueryParams(returnTo, map[string]string{
 		"import":         "1",
 		"arxius_total":   strconv.Itoa(total),
@@ -218,4 +340,204 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 	}
 	a.logAdminImportRun(r, "arxius", status, user.ID)
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
+}
+
+type arxiusBulkInserter interface {
+	BulkInsertArxius(ctx context.Context, rows []db.Arxiu) ([]int, string, error)
+}
+
+func arxiuImportKey(nameKey string, municipiID int) string {
+	_ = municipiID
+	return nameKey
+}
+
+func (a *App) arxiuEntitatNameMapsForPayload(records []arxiuExportRecord) (map[string]int, map[string]int, string, int) {
+	namesSet := map[string]struct{}{}
+	for _, row := range records {
+		name := strings.TrimSpace(row.EntitatNom)
+		if name == "" {
+			continue
+		}
+		namesSet[strings.ToLower(name)] = struct{}{}
+	}
+	keysCount := len(namesSet)
+	if keysCount == 0 {
+		return map[string]int{}, map[string]int{}, "empty", 0
+	}
+	names := make([]string, 0, keysCount)
+	for name := range namesSet {
+		names = append(names, name)
+	}
+	const batchSize = 500
+	entMap := map[string]int{}
+	nameMap := map[string]int{}
+	for i := 0; i < len(names); i += batchSize {
+		end := i + batchSize
+		if end > len(names) {
+			end = len(names)
+		}
+		batch := names[i:end]
+		rows, err := a.DB.ResolveArquebisbatsByNames(batch)
+		if err != nil {
+			Errorf("Arxius import: resolucio entitats fallida: %v", err)
+			entMap, nameMap := a.arxiuEntitatNameMapsFallback()
+			return entMap, nameMap, "fallback", keysCount
+		}
+		for _, row := range rows {
+			key := normalizeKey(row.Nom, row.TipusEntitat)
+			if key != "" {
+				entMap[key] = row.ID
+			}
+			nameKey := normalizeKey(row.Nom)
+			if nameKey != "" {
+				nameMap[nameKey] = row.ID
+			}
+		}
+	}
+	return entMap, nameMap, "payload", keysCount
+}
+
+func (a *App) arxiuEntitatNameMapsFallback() (map[string]int, map[string]int) {
+	entitats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
+	entMap := map[string]int{}
+	nameMap := map[string]int{}
+	for _, ent := range entitats {
+		key := normalizeKey(ent.Nom, ent.TipusEntitat)
+		if key != "" {
+			entMap[key] = ent.ID
+		}
+		nameKey := normalizeKey(ent.Nom)
+		if nameKey != "" {
+			nameMap[nameKey] = ent.ID
+		}
+	}
+	return entMap, nameMap
+}
+
+func (a *App) arxiuMunicipiNameMapsForPayload(records []arxiuExportRecord) (map[string]int, map[string]int, string, int) {
+	namesSet := map[string]struct{}{}
+	for _, row := range records {
+		name := strings.TrimSpace(row.MunicipiNom)
+		if name == "" {
+			continue
+		}
+		namesSet[strings.ToLower(name)] = struct{}{}
+	}
+	keysCount := len(namesSet)
+	if keysCount == 0 {
+		return map[string]int{}, map[string]int{}, "empty", 0
+	}
+	names := make([]string, 0, keysCount)
+	for name := range namesSet {
+		names = append(names, name)
+	}
+	const batchSize = 500
+	res := map[string]int{}
+	nameMap := map[string]int{}
+	for i := 0; i < len(names); i += batchSize {
+		end := i + batchSize
+		if end > len(names) {
+			end = len(names)
+		}
+		batch := names[i:end]
+		rows, err := a.DB.ResolveMunicipisByNames(batch)
+		if err != nil {
+			Errorf("Arxius import: resolucio municipis fallida: %v", err)
+			fallbackMap := a.municipiNameMap()
+			fallbackNameMap := a.municipiNameOnlyMap()
+			return fallbackMap, fallbackNameMap, "fallback", keysCount
+		}
+		for _, row := range rows {
+			iso := ""
+			if row.ISO2.Valid {
+				iso = strings.ToUpper(strings.TrimSpace(row.ISO2.String))
+			}
+			key := normalizeKey(row.Nom, iso)
+			if key != "" {
+				res[key] = row.ID
+			}
+			nameKey := normalizeKey(row.Nom)
+			if nameKey != "" {
+				nameMap[nameKey] = row.ID
+			}
+		}
+	}
+	return res, nameMap, "payload", keysCount
+}
+
+func (a *App) municipiNameOnlyMap() map[string]int {
+	rows, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
+	res := map[string]int{}
+	for _, row := range rows {
+		key := normalizeKey(row.Nom)
+		if key != "" {
+			res[key] = row.ID
+		}
+	}
+	return res
+}
+
+func (a *App) arxiuExistingMapsForPayload(records []arxiuExportRecord) (map[string]struct{}, map[string]struct{}, string, int) {
+	namesSet := map[string]struct{}{}
+	for _, row := range records {
+		name := strings.TrimSpace(row.Nom)
+		if name == "" {
+			continue
+		}
+		namesSet[strings.ToLower(name)] = struct{}{}
+	}
+	keysCount := len(namesSet)
+	if keysCount == 0 {
+		return map[string]struct{}{}, map[string]struct{}{}, "empty", 0
+	}
+	names := make([]string, 0, keysCount)
+	for name := range namesSet {
+		names = append(names, name)
+	}
+	const batchSize = 500
+	byName := map[string]struct{}{}
+	byKey := map[string]struct{}{}
+	for i := 0; i < len(names); i += batchSize {
+		end := i + batchSize
+		if end > len(names) {
+			end = len(names)
+		}
+		batch := names[i:end]
+		rows, err := a.DB.ResolveArxiusByNames(batch)
+		if err != nil {
+			Errorf("Arxius import: resolucio arxius fallida: %v", err)
+			byName, byKey := a.arxiuExistingMapsFallback()
+			return byName, byKey, "fallback", keysCount
+		}
+		for _, row := range rows {
+			nameKey := normalizeKey(row.Nom)
+			if nameKey == "" {
+				continue
+			}
+			byName[nameKey] = struct{}{}
+			if row.MunicipiID.Valid {
+				key := arxiuImportKey(nameKey, int(row.MunicipiID.Int64))
+				byKey[key] = struct{}{}
+			}
+		}
+	}
+	return byName, byKey, "payload", keysCount
+}
+
+func (a *App) arxiuExistingMapsFallback() (map[string]struct{}, map[string]struct{}) {
+	byName := map[string]struct{}{}
+	byKey := map[string]struct{}{}
+	rows, _ := a.DB.ListArxius(db.ArxiuFilter{})
+	for _, row := range rows {
+		nameKey := normalizeKey(row.Nom)
+		if nameKey == "" {
+			continue
+		}
+		byName[nameKey] = struct{}{}
+		if row.MunicipiID.Valid {
+			key := arxiuImportKey(nameKey, int(row.MunicipiID.Int64))
+			byKey[key] = struct{}{}
+		}
+	}
+	return byName, byKey
 }

@@ -575,6 +575,12 @@ func (d *MySQL) CreateMunicipi(m *Municipi) (int, error) {
 func (d *MySQL) ResolveMunicipisByNames(names []string) ([]MunicipiResolveRow, error) {
 	return d.help.resolveMunicipisByNames(names)
 }
+func (d *MySQL) ResolveArquebisbatsByNames(names []string) ([]ArquebisbatResolveRow, error) {
+	return d.help.resolveArquebisbatsByNames(names)
+}
+func (d *MySQL) ResolveArxiusByNames(names []string) ([]ArxiuResolveRow, error) {
+	return d.help.resolveArxiusByNames(names)
+}
 func (d *MySQL) BulkInsertNivells(ctx context.Context, rows []NivellAdministratiu) ([]int, string, error) {
 	if len(rows) == 0 {
 		return nil, "mysql-batch", nil
@@ -805,6 +811,44 @@ func (d *MySQL) GetArxiu(id int) (*Arxiu, error) {
 }
 func (d *MySQL) CreateArxiu(a *Arxiu) (int, error) {
 	return d.help.createArxiu(a)
+}
+func (d *MySQL) BulkInsertArxius(ctx context.Context, rows []Arxiu) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "mysql-batch", nil
+	}
+	d.help.ensureArxiuExtraColumns()
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "mysql-batch", err
+	}
+	defer tx.Rollback()
+	ids := make([]int, 0, len(rows))
+	for i := 0; i < len(rows); i += bulkArxiusBatchSize {
+		end := i + bulkArxiusBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertArxius(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return nil, "mysql-batch", err
+		}
+		firstID, err := res.LastInsertId()
+		if err != nil || firstID <= 0 {
+			return nil, "mysql-batch", fmt.Errorf("mysql bulk insert arxius: no last insert id")
+		}
+		for j := 0; j < len(batch); j++ {
+			ids = append(ids, int(firstID)+j)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "mysql-batch", err
+	}
+	return ids, "mysql-batch", nil
 }
 func (d *MySQL) UpdateArxiu(a *Arxiu) error {
 	return d.help.updateArxiu(a)

@@ -1,0 +1,38 @@
+{
+  "version": 3,
+  "exported_at": "2026-01-01T00:00:00Z",
+  "arxius": [
+    {
+      "id": 1,
+      "nom": "Arxiu Test A",
+      "tipus": "municipal",
+      "acces": "public",
+      "adreca": "Carrer Major 1",
+      "ubicacio": "Sala 1",
+      "what3words": "",
+      "web": "https://example.test/arxiu-a",
+      "notes": "Notes d'import",
+      "accepta_donacions": true,
+      "donacions_url": "https://example.test/donacions",
+      "municipi_nom": "Municipi Test",
+      "municipi_pais_iso2": "ES",
+      "entitat_nom": "Bisbat Test"
+    },
+    {
+      "id": 2,
+      "nom": "Arxiu Test A",
+      "tipus": "municipal",
+      "acces": "public",
+      "adreca": "Carrer Major 1",
+      "ubicacio": "Sala 1",
+      "what3words": "",
+      "web": "https://example.test/arxiu-a",
+      "notes": "Notes d'import",
+      "accepta_donacions": true,
+      "donacions_url": "https://example.test/donacions",
+      "municipi_nom": "Municipi Test",
+      "municipi_pais_iso2": "ES",
+      "entitat_nom": "Bisbat Test"
+    }
+  ]
+}

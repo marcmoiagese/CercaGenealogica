@@ -594,6 +594,12 @@ func (d *SQLite) CreateMunicipi(m *Municipi) (int, error) {
 func (d *SQLite) ResolveMunicipisByNames(names []string) ([]MunicipiResolveRow, error) {
 	return d.help.resolveMunicipisByNames(names)
 }
+func (d *SQLite) ResolveArquebisbatsByNames(names []string) ([]ArquebisbatResolveRow, error) {
+	return d.help.resolveArquebisbatsByNames(names)
+}
+func (d *SQLite) ResolveArxiusByNames(names []string) ([]ArxiuResolveRow, error) {
+	return d.help.resolveArxiusByNames(names)
+}
 
 func (d *SQLite) BulkInsertNivells(ctx context.Context, rows []NivellAdministratiu) ([]int, string, error) {
 	if len(rows) == 0 {
@@ -829,6 +835,45 @@ func (d *SQLite) GetArxiu(id int) (*Arxiu, error) {
 }
 func (d *SQLite) CreateArxiu(a *Arxiu) (int, error) {
 	return d.help.createArxiu(a)
+}
+func (d *SQLite) BulkInsertArxius(ctx context.Context, rows []Arxiu) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "sqlite-tx", nil
+	}
+	d.help.ensureArxiuExtraColumns()
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "sqlite-tx", err
+	}
+	defer tx.Rollback()
+	ids := make([]int, 0, len(rows))
+	for i := 0; i < len(rows); i += bulkArxiusBatchSize {
+		end := i + bulkArxiusBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertArxius(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return nil, "sqlite-tx", err
+		}
+		lastID, err := res.LastInsertId()
+		if err != nil || lastID <= 0 {
+			return nil, "sqlite-tx", fmt.Errorf("sqlite bulk insert arxius: no last insert id")
+		}
+		firstID := lastID - int64(len(batch)-1)
+		for j := 0; j < len(batch); j++ {
+			ids = append(ids, int(firstID)+j)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "sqlite-tx", err
+	}
+	return ids, "sqlite-tx", nil
 }
 func (d *SQLite) UpdateArxiu(a *Arxiu) error {
 	return d.help.updateArxiu(a)

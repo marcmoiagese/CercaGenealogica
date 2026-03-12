@@ -2734,6 +2734,87 @@ func (h sqlHelper) resolveMunicipisByNames(names []string) ([]MunicipiResolveRow
 	return res, nil
 }
 
+func (h sqlHelper) resolveArquebisbatsByNames(names []string) ([]ArquebisbatResolveRow, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	args := make([]interface{}, 0, len(names))
+	for _, name := range names {
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name == "" {
+			continue
+		}
+		args = append(args, name)
+	}
+	if len(args) == 0 {
+		return nil, nil
+	}
+	placeholders := buildInPlaceholders(h.style, len(args))
+	query := `
+        SELECT id, nom, tipus_entitat
+        FROM arquebisbats
+        WHERE LOWER(nom) IN (` + placeholders + `)`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []ArquebisbatResolveRow
+	for rows.Next() {
+		var row ArquebisbatResolveRow
+		if err := rows.Scan(&row.ID, &row.Nom, &row.TipusEntitat); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (h sqlHelper) resolveArxiusByNames(names []string) ([]ArxiuResolveRow, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	h.ensureArxiuExtraColumns()
+	args := make([]interface{}, 0, len(names))
+	for _, name := range names {
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name == "" {
+			continue
+		}
+		args = append(args, name)
+	}
+	if len(args) == 0 {
+		return nil, nil
+	}
+	placeholders := buildInPlaceholders(h.style, len(args))
+	query := `
+        SELECT id, nom, municipi_id
+        FROM arxius
+        WHERE LOWER(nom) IN (` + placeholders + `)`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []ArxiuResolveRow
+	for rows.Next() {
+		var row ArxiuResolveRow
+		if err := rows.Scan(&row.ID, &row.Nom, &row.MunicipiID); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func (h sqlHelper) countMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
 	where := "1=1"
 	args := []interface{}{}

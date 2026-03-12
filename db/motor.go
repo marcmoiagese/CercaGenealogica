@@ -553,6 +553,8 @@ type DB interface {
 	GetMunicipi(id int) (*Municipi, error)
 	CreateMunicipi(m *Municipi) (int, error)
 	ResolveMunicipisByNames(names []string) ([]MunicipiResolveRow, error)
+	ResolveArquebisbatsByNames(names []string) ([]ArquebisbatResolveRow, error)
+	ResolveArxiusByNames(names []string) ([]ArxiuResolveRow, error)
 	UpdateMunicipi(m *Municipi) error
 	ListCodisPostals(municipiID int) ([]CodiPostal, error)
 	SaveCodiPostal(cp *CodiPostal) (int, error)
@@ -1554,6 +1556,18 @@ type MunicipiResolveRow struct {
 	ID   int
 	Nom  string
 	ISO2 sql.NullString
+}
+
+type ArquebisbatResolveRow struct {
+	ID          int
+	Nom         string
+	TipusEntitat string
+}
+
+type ArxiuResolveRow struct {
+	ID         int
+	Nom        string
+	MunicipiID sql.NullInt64
 }
 
 type MunicipiFilter struct {
