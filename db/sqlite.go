@@ -936,11 +936,109 @@ func (d *SQLite) GetLlibre(id int) (*Llibre, error) {
 func (d *SQLite) CreateLlibre(l *Llibre) (int, error) {
 	return d.help.createLlibre(l)
 }
+func (d *SQLite) BulkInsertLlibres(ctx context.Context, rows []Llibre) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "sqlite-tx", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "sqlite-tx", err
+	}
+	defer tx.Rollback()
+	ids := make([]int, 0, len(rows))
+	for i := 0; i < len(rows); i += bulkLlibresBatchSize {
+		end := i + bulkLlibresBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertLlibres(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return nil, "sqlite-tx", err
+		}
+		lastID, err := res.LastInsertId()
+		if err != nil || lastID <= 0 {
+			return nil, "sqlite-tx", fmt.Errorf("sqlite bulk insert llibres: no last insert id")
+		}
+		firstID := lastID - int64(len(batch)-1)
+		for j := 0; j < len(batch); j++ {
+			ids = append(ids, int(firstID)+j)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "sqlite-tx", err
+	}
+	return ids, "sqlite-tx", nil
+}
+func (d *SQLite) BulkInsertArxiuLlibres(ctx context.Context, rows []ArxiuLlibreLink) (string, error) {
+	if len(rows) == 0 {
+		return "sqlite-tx", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "sqlite-tx", err
+	}
+	defer tx.Rollback()
+	for i := 0; i < len(rows); i += bulkLlibresBatchSize {
+		end := i + bulkLlibresBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertArxiuLlibres(d.help.style, batch)
+		if query == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return "sqlite-tx", err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return "sqlite-tx", err
+	}
+	return "sqlite-tx", nil
+}
+func (d *SQLite) BulkInsertLlibreURLs(ctx context.Context, rows []LlibreURL) (string, error) {
+	if len(rows) == 0 {
+		return "sqlite-tx", nil
+	}
+	d.help.ensureLlibreURLColumns()
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "sqlite-tx", err
+	}
+	defer tx.Rollback()
+	for i := 0; i < len(rows); i += bulkLlibresBatchSize {
+		end := i + bulkLlibresBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[i:end]
+		query, args := buildBulkInsertLlibreURLs(d.help.style, d.help.nowFun, batch)
+		if query == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return "sqlite-tx", err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return "sqlite-tx", err
+	}
+	return "sqlite-tx", nil
+}
 func (d *SQLite) UpdateLlibre(l *Llibre) error {
 	return d.help.updateLlibre(l)
 }
 func (d *SQLite) HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error) {
 	return d.help.hasLlibreDuplicate(municipiID, tipus, cronologia, codiDigital, codiFisic, excludeID)
+}
+func (d *SQLite) ResolveLlibresByCodes(municipiID int, tipus, cronologia string, codiDigitals, codiFisics []string) ([]LlibreResolveRow, error) {
+	return d.help.resolveLlibresByCodes(municipiID, tipus, cronologia, codiDigitals, codiFisics)
 }
 func (d *SQLite) GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error) {
 	return d.help.getLlibresIndexacioStats(ids)

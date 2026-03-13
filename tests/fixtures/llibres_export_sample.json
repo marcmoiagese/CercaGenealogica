@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "exported_at": "2026-01-01T00:00:00Z",
+  "llibres": [
+    {
+      "id": 1,
+      "titol": "Llibre Test A",
+      "tipus_llibre": "baptismes",
+      "cronologia": "1900-1910",
+      "codi_digital": "CD-1",
+      "codi_fisic": "CF-1",
+      "municipi_nom": "Municipi Test",
+      "municipi_pais_iso2": "ES",
+      "arquebisbat_nom": "Bisbat Test",
+      "arquebisbat_tipus": "bisbat",
+      "arxius": [
+        {
+          "nom": "Arxiu Test",
+          "signatura": "SIG-1",
+          "url_override": "https://example.test/arxiu/override"
+        }
+      ],
+      "urls": [
+        {
+          "url": "https://example.test/llibre-a",
+          "tipus": "portal",
+          "descripcio": "Descripcio import",
+          "arxiu_nom": "Arxiu Test"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "titol": "Llibre Test A",
+      "tipus_llibre": "baptismes",
+      "cronologia": "1900-1910",
+      "codi_digital": "CD-1",
+      "codi_fisic": "CF-1",
+      "municipi_nom": "Municipi Test",
+      "municipi_pais_iso2": "ES",
+      "arquebisbat_nom": "Bisbat Test",
+      "arquebisbat_tipus": "bisbat",
+      "arxius": [
+        {
+          "nom": "Arxiu Test",
+          "signatura": "SIG-1",
+          "url_override": "https://example.test/arxiu/override"
+        }
+      ],
+      "urls": [
+        {
+          "url": "https://example.test/llibre-a",
+          "tipus": "portal",
+          "descripcio": "Descripcio import",
+          "arxiu_nom": "Arxiu Test"
+        }
+      ]
+    }
+  ]
+}

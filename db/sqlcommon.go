@@ -6835,6 +6835,58 @@ func (h sqlHelper) hasLlibreDuplicate(municipiID int, tipus, cronologia, codiDig
 	return count > 0, nil
 }
 
+func (h sqlHelper) resolveLlibresByCodes(municipiID int, tipus, cronologia string, codiDigitals, codiFisics []string) ([]LlibreResolveRow, error) {
+	if municipiID <= 0 {
+		return nil, nil
+	}
+	tipus = strings.TrimSpace(tipus)
+	cronologia = strings.TrimSpace(cronologia)
+	if tipus == "" || cronologia == "" {
+		return nil, nil
+	}
+	codesClauses := []string{}
+	args := []interface{}{municipiID, tipus, cronologia}
+	if len(codiDigitals) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(codiDigitals))
+		codesClauses = append(codesClauses, "codi_digital IN ("+placeholders+")")
+		for _, code := range codiDigitals {
+			args = append(args, strings.TrimSpace(code))
+		}
+	}
+	if len(codiFisics) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(codiFisics))
+		codesClauses = append(codesClauses, "codi_fisic IN ("+placeholders+")")
+		for _, code := range codiFisics {
+			args = append(args, strings.TrimSpace(code))
+		}
+	}
+	if len(codesClauses) == 0 {
+		return nil, nil
+	}
+	query := `
+        SELECT id, COALESCE(codi_digital, ''), COALESCE(codi_fisic, '')
+        FROM llibres
+        WHERE municipi_id = ? AND tipus_llibre = ? AND cronologia = ? AND (` + strings.Join(codesClauses, " OR ") + `)`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []LlibreResolveRow
+	for rows.Next() {
+		var row LlibreResolveRow
+		if err := rows.Scan(&row.ID, &row.CodiDigital, &row.CodiFisic); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func (h sqlHelper) listLlibrePagines(llibreID int) ([]LlibrePagina, error) {
 	query := `
         SELECT id, llibre_id, num_pagina, estat, indexed_at, indexed_by, notes

@@ -351,6 +351,7 @@ type DB interface {
 	CreateLlibre(l *Llibre) (int, error)
 	UpdateLlibre(l *Llibre) error
 	HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error)
+	ResolveLlibresByCodes(municipiID int, tipus, cronologia string, codiDigitals, codiFisics []string) ([]LlibreResolveRow, error)
 	GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error)
 	UpsertLlibreIndexacioStats(stats *LlibreIndexacioStats) error
 	ListLlibrePagines(llibreID int) ([]LlibrePagina, error)
@@ -1776,6 +1777,13 @@ type ArxiuLlibreDetail struct {
 	Pagines     sql.NullInt64
 }
 
+type ArxiuLlibreLink struct {
+	ArxiuID     int
+	LlibreID    int
+	Signatura   string
+	URLOverride string
+}
+
 type LlibreURL struct {
 	ID             int
 	LlibreID       int
@@ -1826,6 +1834,12 @@ type Llibre struct {
 	ModeracioMotiu    string
 	ModeratedBy       sql.NullInt64
 	ModeratedAt       sql.NullTime
+}
+
+type LlibreResolveRow struct {
+	ID          int
+	CodiDigital sql.NullString
+	CodiFisic   sql.NullString
 }
 
 type LlibreRow struct {

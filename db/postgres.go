@@ -1307,11 +1307,291 @@ func (d *PostgreSQL) GetLlibre(id int) (*Llibre, error) {
 func (d *PostgreSQL) CreateLlibre(l *Llibre) (int, error) {
 	return d.help.createLlibre(l)
 }
+func (d *PostgreSQL) BulkInsertLlibres(ctx context.Context, rows []Llibre) ([]int, string, error) {
+	if len(rows) == 0 {
+		return nil, "postgres-copy", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
+        CREATE TEMP TABLE tmp_llibres_import (
+            import_seq INTEGER,
+            arquevisbat_id INTEGER,
+            municipi_id INTEGER,
+            nom_esglesia TEXT,
+            codi_digital TEXT,
+            codi_fisic TEXT,
+            titol TEXT,
+            tipus_llibre TEXT,
+            cronologia TEXT,
+            volum TEXT,
+            abat TEXT,
+            contingut TEXT,
+            llengua TEXT,
+            requeriments_tecnics TEXT,
+            unitat_catalogacio TEXT,
+            unitat_instalacio TEXT,
+            pagines INTEGER,
+            url_base TEXT,
+            url_imatge_prefix TEXT,
+            pagina TEXT,
+            indexacio_completa BOOLEAN,
+            created_by INTEGER,
+            moderation_status TEXT,
+            moderated_by INTEGER,
+            moderated_at TIMESTAMP,
+            moderation_notes TEXT
+        ) ON COMMIT DROP`)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("tmp_llibres_import",
+		"import_seq",
+		"arquevisbat_id",
+		"municipi_id",
+		"nom_esglesia",
+		"codi_digital",
+		"codi_fisic",
+		"titol",
+		"tipus_llibre",
+		"cronologia",
+		"volum",
+		"abat",
+		"contingut",
+		"llengua",
+		"requeriments_tecnics",
+		"unitat_catalogacio",
+		"unitat_instalacio",
+		"pagines",
+		"url_base",
+		"url_imatge_prefix",
+		"pagina",
+		"indexacio_completa",
+		"created_by",
+		"moderation_status",
+		"moderated_by",
+		"moderated_at",
+		"moderation_notes",
+	))
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	for i, l := range rows {
+		var arquebisbat interface{}
+		if l.ArquebisbatID > 0 {
+			arquebisbat = l.ArquebisbatID
+		}
+		if _, err := stmt.Exec(
+			i,
+			arquebisbat,
+			l.MunicipiID,
+			l.NomEsglesia,
+			l.CodiDigital,
+			l.CodiFisic,
+			l.Titol,
+			l.TipusLlibre,
+			l.Cronologia,
+			l.Volum,
+			l.Abat,
+			l.Contingut,
+			l.Llengua,
+			l.Requeriments,
+			l.UnitatCatalogacio,
+			l.UnitatInstalacio,
+			l.Pagines,
+			l.URLBase,
+			l.URLImatgePrefix,
+			l.Pagina,
+			l.IndexacioCompleta,
+			l.CreatedBy,
+			l.ModeracioEstat,
+			l.ModeratedBy,
+			l.ModeratedAt,
+			l.ModeracioMotiu,
+		); err != nil {
+			_ = stmt.Close()
+			return nil, "postgres-copy", err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		_ = stmt.Close()
+		return nil, "postgres-copy", err
+	}
+	if err := stmt.Close(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	rowsRes, err := tx.QueryContext(ctx, `
+        INSERT INTO llibres (
+            arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic, titol, tipus_llibre, cronologia,
+            volum, abat, contingut, llengua, requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines,
+            url_base, url_imatge_prefix, pagina, indexacio_completa, created_by, moderation_status, moderated_by,
+            moderated_at, moderation_notes, created_at, updated_at
+        )
+        SELECT
+            arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic, titol, tipus_llibre, cronologia,
+            volum, abat, contingut, llengua, requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines,
+            url_base, url_imatge_prefix, pagina, indexacio_completa, created_by, moderation_status, moderated_by,
+            moderated_at, moderation_notes, NOW(), NOW()
+        FROM tmp_llibres_import
+        ORDER BY import_seq
+        RETURNING id`)
+	if err != nil {
+		return nil, "postgres-copy", err
+	}
+	defer rowsRes.Close()
+	ids := make([]int, 0, len(rows))
+	for rowsRes.Next() {
+		var id int
+		if err := rowsRes.Scan(&id); err != nil {
+			return nil, "postgres-copy", err
+		}
+		ids = append(ids, id)
+	}
+	if err := rowsRes.Err(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, "postgres-copy", err
+	}
+	return ids, "postgres-copy", nil
+}
+func (d *PostgreSQL) BulkInsertArxiuLlibres(ctx context.Context, rows []ArxiuLlibreLink) (string, error) {
+	if len(rows) == 0 {
+		return "postgres-copy", nil
+	}
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "postgres-copy", err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
+        CREATE TEMP TABLE tmp_arxius_llibres_import (
+            import_seq INTEGER,
+            arxiu_id INTEGER,
+            llibre_id INTEGER,
+            signatura TEXT,
+            url_override TEXT
+        ) ON COMMIT DROP`)
+	if err != nil {
+		return "postgres-copy", err
+	}
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("tmp_arxius_llibres_import",
+		"import_seq",
+		"arxiu_id",
+		"llibre_id",
+		"signatura",
+		"url_override",
+	))
+	if err != nil {
+		return "postgres-copy", err
+	}
+	for i, link := range rows {
+		if _, err := stmt.Exec(i, link.ArxiuID, link.LlibreID, link.Signatura, link.URLOverride); err != nil {
+			_ = stmt.Close()
+			return "postgres-copy", err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		_ = stmt.Close()
+		return "postgres-copy", err
+	}
+	if err := stmt.Close(); err != nil {
+		return "postgres-copy", err
+	}
+	if _, err := tx.ExecContext(ctx, `
+        INSERT INTO arxius_llibres (arxiu_id, llibre_id, signatura, url_override)
+        SELECT arxiu_id, llibre_id, signatura, url_override
+        FROM tmp_arxius_llibres_import
+        ORDER BY import_seq`); err != nil {
+		return "postgres-copy", err
+	}
+	if err := tx.Commit(); err != nil {
+		return "postgres-copy", err
+	}
+	return "postgres-copy", nil
+}
+func (d *PostgreSQL) BulkInsertLlibreURLs(ctx context.Context, rows []LlibreURL) (string, error) {
+	if len(rows) == 0 {
+		return "postgres-copy", nil
+	}
+	d.help.ensureLlibreURLColumns()
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return "postgres-copy", err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
+        CREATE TEMP TABLE tmp_llibres_urls_import (
+            import_seq INTEGER,
+            llibre_id INTEGER,
+            arxiu_id INTEGER,
+            llibre_ref_id INTEGER,
+            url TEXT,
+            tipus TEXT,
+            descripcio TEXT,
+            created_by INTEGER
+        ) ON COMMIT DROP`)
+	if err != nil {
+		return "postgres-copy", err
+	}
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("tmp_llibres_urls_import",
+		"import_seq",
+		"llibre_id",
+		"arxiu_id",
+		"llibre_ref_id",
+		"url",
+		"tipus",
+		"descripcio",
+		"created_by",
+	))
+	if err != nil {
+		return "postgres-copy", err
+	}
+	for i, link := range rows {
+		if _, err := stmt.Exec(
+			i,
+			link.LlibreID,
+			link.ArxiuID,
+			link.LlibreRefID,
+			link.URL,
+			link.Tipus,
+			link.Descripcio,
+			link.CreatedBy,
+		); err != nil {
+			_ = stmt.Close()
+			return "postgres-copy", err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		_ = stmt.Close()
+		return "postgres-copy", err
+	}
+	if err := stmt.Close(); err != nil {
+		return "postgres-copy", err
+	}
+	if _, err := tx.ExecContext(ctx, `
+        INSERT INTO llibres_urls (llibre_id, arxiu_id, llibre_ref_id, url, tipus, descripcio, created_by, created_at)
+        SELECT llibre_id, arxiu_id, llibre_ref_id, url, tipus, descripcio, created_by, NOW()
+        FROM tmp_llibres_urls_import
+        ORDER BY import_seq`); err != nil {
+		return "postgres-copy", err
+	}
+	if err := tx.Commit(); err != nil {
+		return "postgres-copy", err
+	}
+	return "postgres-copy", nil
+}
 func (d *PostgreSQL) UpdateLlibre(l *Llibre) error {
 	return d.help.updateLlibre(l)
 }
 func (d *PostgreSQL) HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error) {
 	return d.help.hasLlibreDuplicate(municipiID, tipus, cronologia, codiDigital, codiFisic, excludeID)
+}
+func (d *PostgreSQL) ResolveLlibresByCodes(municipiID int, tipus, cronologia string, codiDigitals, codiFisics []string) ([]LlibreResolveRow, error) {
+	return d.help.resolveLlibresByCodes(municipiID, tipus, cronologia, codiDigitals, codiFisics)
 }
 func (d *PostgreSQL) GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error) {
 	return d.help.getLlibresIndexacioStats(ids)

@@ -1,8 +1,10 @@
 package core
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -163,6 +165,7 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	start := time.Now()
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		a.logAdminImportRun(r, "llibres", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams("/admin/llibres/import", map[string]string{"err": "1"}), http.StatusSeeOther)
@@ -188,41 +191,76 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
+	engine := territoriImportEngineName(a.DB)
+	bulkInserter, hasBulkInserter := a.DB.(llibreBulkInserter)
 
-	entitats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
-	entMap := map[string]int{}
-	entNameMap := map[string]int{}
-	for _, ent := range entitats {
-		key := normalizeKey(ent.Nom, ent.TipusEntitat)
-		if key != "" {
-			entMap[key] = ent.ID
+	type activityRule struct {
+		ruleID sql.NullInt64
+		points int
+	}
+	resolveActivityRule := func(code string) activityRule {
+		if code == "" {
+			return activityRule{}
 		}
-		nameKey := normalizeKey(ent.Nom)
-		if nameKey != "" {
-			entNameMap[nameKey] = ent.ID
+		rule, err := a.DB.GetPointsRuleByCode(code)
+		if err != nil || rule == nil || !rule.Active {
+			return activityRule{}
+		}
+		return activityRule{
+			ruleID: sql.NullInt64{Int64: int64(rule.ID), Valid: true},
+			points: rule.Points,
 		}
 	}
-	munMap := a.municipiNameMap()
-	munNameMap := map[string]int{}
-	if rows, err := a.DB.ListMunicipis(db.MunicipiFilter{}); err == nil {
-		for _, row := range rows {
-			nameKey := normalizeKey(row.Nom)
-			if nameKey != "" {
-				munNameMap[nameKey] = row.ID
-			}
+	activityRuleLlibre := resolveActivityRule(ruleLlibreCreate)
+	pendingActivities := make([]db.UserActivity, 0, len(payload.Llibres))
+	addActivity := func(rule activityRule, objectID int) {
+		if objectID <= 0 {
+			return
 		}
+		pendingActivities = append(pendingActivities, db.UserActivity{
+			UserID:     user.ID,
+			RuleID:     rule.ruleID,
+			Action:     "crear",
+			ObjectType: "llibre",
+			ObjectID:   sql.NullInt64{Int64: int64(objectID), Valid: true},
+			Points:     rule.points,
+			Status:     "pendent",
+			Details:    "import",
+		})
 	}
-	arxius, _ := a.DB.ListArxius(db.ArxiuFilter{})
-	arxiuMap := map[string]int{}
-	for _, arxiu := range arxius {
-		key := normalizeKey(arxiu.Nom)
-		if key != "" {
-			arxiuMap[key] = arxiu.ID
-		}
-	}
+	activityCount := 0
 
 	total := len(payload.Llibres)
-	created, skipped, errors := 0, 0, 0
+	created, skipped, errors, duplicates := 0, 0, 0, 0
+
+	prepStart := time.Now()
+	entMap, entNameMap, entMode, entKeys := a.llibreEntitatNameMapsForPayload(payload.Llibres)
+	munMap, munNameMap, munMode, munKeys := a.llibreMunicipiNameMapsForPayload(payload.Llibres)
+	arxiuMap, arxiuMode, arxiuKeys := a.llibreArxiuNameMapForPayload(payload.Llibres)
+	prepDuration := time.Since(prepStart)
+
+	type comboInfo struct {
+		munID      int
+		tipus      string
+		cronologia string
+		digital    map[string]struct{}
+		fisic      map[string]struct{}
+	}
+	comboByKey := map[string]*comboInfo{}
+	seenDigital := map[string]map[string]struct{}{}
+	seenFisic := map[string]map[string]struct{}{}
+
+	type llibreImportEntry struct {
+		llibre     db.Llibre
+		codiDigital string
+		codiFisic   string
+		comboKey    string
+		arxius      []db.ArxiuLlibreLink
+		urls        []db.LlibreURL
+	}
+	entries := make([]llibreImportEntry, 0, len(payload.Llibres))
+
+	resolveStart := time.Now()
 	for _, row := range payload.Llibres {
 		munID := 0
 		if strings.TrimSpace(row.MunicipiNom) != "" {
@@ -246,28 +284,66 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 			errors++
 			continue
 		}
-		dup, err := a.DB.HasLlibreDuplicate(munID, row.TipusLlibre, row.Cronologia, row.CodiDigital, row.CodiFisic, 0)
-		if err != nil {
-			errors++
-			continue
-		}
-		if dup {
-			skipped++
-			continue
+		tipus := strings.TrimSpace(row.TipusLlibre)
+		cronologia := strings.TrimSpace(row.Cronologia)
+		codiDigital := strings.TrimSpace(row.CodiDigital)
+		codiFisic := strings.TrimSpace(row.CodiFisic)
+		comboKey := llibreComboKey(munID, tipus, cronologia)
+		hasCodes := (codiDigital != "" || codiFisic != "")
+		if hasCodes && tipus != "" && cronologia != "" {
+			if codiDigital != "" {
+				if seenDigital[comboKey] == nil {
+					seenDigital[comboKey] = map[string]struct{}{}
+				}
+				if _, ok := seenDigital[comboKey][codiDigital]; ok {
+					duplicates++
+					skipped++
+					continue
+				}
+				seenDigital[comboKey][codiDigital] = struct{}{}
+			}
+			if codiFisic != "" {
+				if seenFisic[comboKey] == nil {
+					seenFisic[comboKey] = map[string]struct{}{}
+				}
+				if _, ok := seenFisic[comboKey][codiFisic]; ok {
+					duplicates++
+					skipped++
+					continue
+				}
+				seenFisic[comboKey][codiFisic] = struct{}{}
+			}
+			info, ok := comboByKey[comboKey]
+			if !ok {
+				info = &comboInfo{
+					munID:      munID,
+					tipus:      tipus,
+					cronologia: cronologia,
+					digital:    map[string]struct{}{},
+					fisic:      map[string]struct{}{},
+				}
+				comboByKey[comboKey] = info
+			}
+			if codiDigital != "" {
+				info.digital[codiDigital] = struct{}{}
+			}
+			if codiFisic != "" {
+				info.fisic[codiFisic] = struct{}{}
+			}
 		}
 		var pagines sql.NullInt64
 		if row.Pagines != nil && *row.Pagines > 0 {
 			pagines = sql.NullInt64{Int64: int64(*row.Pagines), Valid: true}
 		}
-		llibre := &db.Llibre{
+		llibre := db.Llibre{
 			ArquebisbatID:     entID,
 			MunicipiID:        munID,
 			NomEsglesia:       strings.TrimSpace(row.NomEsglesia),
-			CodiDigital:       strings.TrimSpace(row.CodiDigital),
-			CodiFisic:         strings.TrimSpace(row.CodiFisic),
+			CodiDigital:       codiDigital,
+			CodiFisic:         codiFisic,
 			Titol:             strings.TrimSpace(row.Titol),
-			TipusLlibre:       strings.TrimSpace(row.TipusLlibre),
-			Cronologia:        strings.TrimSpace(row.Cronologia),
+			TipusLlibre:       tipus,
+			Cronologia:        cronologia,
 			Volum:             strings.TrimSpace(row.Volum),
 			Abat:              strings.TrimSpace(row.Abat),
 			Contingut:         strings.TrimSpace(row.Contingut),
@@ -286,15 +362,13 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 			ModeratedAt:       sql.NullTime{},
 			ModeracioMotiu:    "",
 		}
-		newID, err := a.DB.CreateLlibre(llibre)
-		if err != nil {
-			errors++
-			continue
+		entry := llibreImportEntry{
+			llibre:     llibre,
+			codiDigital: codiDigital,
+			codiFisic:   codiFisic,
+			comboKey:    comboKey,
 		}
-		created++
-		if user != nil {
-			_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleLlibreCreate, "crear", "llibre", &newID, "pendent", nil, "import")
-		}
+		seenArxiu := map[int]struct{}{}
 		for _, link := range row.Arxius {
 			if strings.TrimSpace(link.Nom) == "" {
 				continue
@@ -303,7 +377,15 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 			if arxiuID <= 0 {
 				continue
 			}
-			_ = a.DB.AddArxiuLlibre(arxiuID, newID, strings.TrimSpace(link.Signatura), strings.TrimSpace(link.URLOverride))
+			if _, ok := seenArxiu[arxiuID]; ok {
+				continue
+			}
+			seenArxiu[arxiuID] = struct{}{}
+			entry.arxius = append(entry.arxius, db.ArxiuLlibreLink{
+				ArxiuID:     arxiuID,
+				Signatura:   strings.TrimSpace(link.Signatura),
+				URLOverride: strings.TrimSpace(link.URLOverride),
+			})
 		}
 		for _, link := range row.URLs {
 			if strings.TrimSpace(link.URL) == "" {
@@ -315,17 +397,265 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 					arxiuID = sql.NullInt64{Int64: int64(id), Valid: true}
 				}
 			}
-			url := &db.LlibreURL{
-				LlibreID:   newID,
-				ArxiuID:    arxiuID,
-				URL:        strings.TrimSpace(link.URL),
-				Tipus:      sqlNullString(link.Tipus),
-				Descripcio: sqlNullString(link.Descripcio),
-				CreatedBy:  sqlNullIntFromInt(user.ID),
+			entry.urls = append(entry.urls, db.LlibreURL{
+				ArxiuID:     arxiuID,
+				LlibreRefID: sql.NullInt64{},
+				URL:         strings.TrimSpace(link.URL),
+				Tipus:       sqlNullString(link.Tipus),
+				Descripcio:  sqlNullString(link.Descripcio),
+				CreatedBy:   sqlNullIntFromInt(user.ID),
+			})
+		}
+		entries = append(entries, entry)
+	}
+
+	existingDigital := map[string]map[string]struct{}{}
+	existingFisic := map[string]map[string]struct{}{}
+	resolveMode := "payload"
+	resolveKeys := 0
+	for key, info := range comboByKey {
+		if info == nil {
+			continue
+		}
+		digital := make([]string, 0, len(info.digital))
+		for code := range info.digital {
+			digital = append(digital, code)
+		}
+		fisic := make([]string, 0, len(info.fisic))
+		for code := range info.fisic {
+			fisic = append(fisic, code)
+		}
+		if len(digital) == 0 && len(fisic) == 0 {
+			continue
+		}
+		resolveKeys += len(digital) + len(fisic)
+		rows, err := a.DB.ResolveLlibresByCodes(info.munID, info.tipus, info.cronologia, digital, fisic)
+		if err != nil {
+			Errorf("Llibres import: resolucio duplicats fallida: %v", err)
+			resolveMode = "fallback"
+			existingDigital = map[string]map[string]struct{}{}
+			existingFisic = map[string]map[string]struct{}{}
+			break
+		}
+		for _, row := range rows {
+			if row.CodiDigital.Valid {
+				if existingDigital[key] == nil {
+					existingDigital[key] = map[string]struct{}{}
+				}
+				existingDigital[key][strings.TrimSpace(row.CodiDigital.String)] = struct{}{}
 			}
-			_ = a.DB.AddLlibreURL(url)
+			if row.CodiFisic.Valid {
+				if existingFisic[key] == nil {
+					existingFisic[key] = map[string]struct{}{}
+				}
+				existingFisic[key][strings.TrimSpace(row.CodiFisic.String)] = struct{}{}
+			}
 		}
 	}
+	if resolveMode == "fallback" {
+		for key, info := range comboByKey {
+			if info == nil {
+				continue
+			}
+			for code := range info.digital {
+				dup, err := a.DB.HasLlibreDuplicate(info.munID, info.tipus, info.cronologia, code, "", 0)
+				if err != nil {
+					continue
+				}
+				if dup {
+					if existingDigital[key] == nil {
+						existingDigital[key] = map[string]struct{}{}
+					}
+					existingDigital[key][code] = struct{}{}
+				}
+			}
+			for code := range info.fisic {
+				dup, err := a.DB.HasLlibreDuplicate(info.munID, info.tipus, info.cronologia, "", code, 0)
+				if err != nil {
+					continue
+				}
+				if dup {
+					if existingFisic[key] == nil {
+						existingFisic[key] = map[string]struct{}{}
+					}
+					existingFisic[key][code] = struct{}{}
+				}
+			}
+		}
+	}
+
+	toInsert := make([]db.Llibre, 0, len(entries))
+	insertMeta := make([]llibreImportEntry, 0, len(entries))
+	for _, entry := range entries {
+		if entry.comboKey != "" {
+			if entry.codiDigital != "" {
+				if existingDigital[entry.comboKey] != nil {
+					if _, ok := existingDigital[entry.comboKey][entry.codiDigital]; ok {
+						duplicates++
+						skipped++
+						continue
+					}
+				}
+			}
+			if entry.codiFisic != "" {
+				if existingFisic[entry.comboKey] != nil {
+					if _, ok := existingFisic[entry.comboKey][entry.codiFisic]; ok {
+						duplicates++
+						skipped++
+						continue
+					}
+				}
+			}
+		}
+		toInsert = append(toInsert, entry.llibre)
+		insertMeta = append(insertMeta, entry)
+	}
+	resolveDuration := time.Since(resolveStart)
+
+	insertStart := time.Now()
+	bulkMode := "generic"
+	var insertedIDs []int
+	insertedMeta := make([]llibreImportEntry, 0)
+	if len(toInsert) > 0 {
+		bulkAttempted := false
+		var err error
+		if hasBulkInserter {
+			bulkAttempted = true
+			insertedIDs, bulkMode, err = bulkInserter.BulkInsertLlibres(r.Context(), toInsert)
+			if bulkMode == "" {
+				bulkMode = "bulk"
+			}
+		}
+		if err != nil || len(insertedIDs) != len(toInsert) {
+			if err != nil && bulkAttempted {
+				Errorf("Llibres import: bulk insert fallit (%s): %v", bulkMode, err)
+			}
+			bulkMode = "generic"
+			insertedIDs = make([]int, 0, len(toInsert))
+			insertedMeta = make([]llibreImportEntry, 0, len(toInsert))
+			for i := range toInsert {
+				llibre := toInsert[i]
+				newID, err := a.DB.CreateLlibre(&llibre)
+				if err != nil {
+					errors++
+					continue
+				}
+				insertedIDs = append(insertedIDs, newID)
+				insertedMeta = append(insertedMeta, insertMeta[i])
+			}
+		} else {
+			insertedMeta = insertMeta
+		}
+	}
+	insertDuration := time.Since(insertStart)
+
+	relationsStart := time.Now()
+	arxiuLinks := make([]db.ArxiuLlibreLink, 0)
+	urlLinks := make([]db.LlibreURL, 0)
+	for i, id := range insertedIDs {
+		meta := insertedMeta[i]
+		created++
+		activityCount++
+		addActivity(activityRuleLlibre, id)
+		for _, link := range meta.arxius {
+			link.LlibreID = id
+			arxiuLinks = append(arxiuLinks, link)
+		}
+		for _, link := range meta.urls {
+			link.LlibreID = id
+			urlLinks = append(urlLinks, link)
+		}
+	}
+	relationsMode := "bulk"
+	if len(arxiuLinks) > 0 {
+		var mode string
+		var err error
+		if hasBulkInserter {
+			mode, err = bulkInserter.BulkInsertArxiuLlibres(r.Context(), arxiuLinks)
+		} else {
+			err = fmt.Errorf("bulk inserter unavailable")
+		}
+		if !hasBulkInserter || err != nil {
+			if err != nil && hasBulkInserter {
+				Errorf("Llibres import: bulk insert arxiu-llibre fallit (%s): %v", mode, err)
+			}
+			relationsMode = "generic"
+			for _, link := range arxiuLinks {
+				if err := a.DB.AddArxiuLlibre(link.ArxiuID, link.LlibreID, link.Signatura, link.URLOverride); err != nil {
+					Errorf("Llibres import: error afegint arxiu-llibre: %v", err)
+				}
+			}
+		} else if mode != "" {
+			relationsMode = mode
+		}
+	}
+	if len(urlLinks) > 0 {
+		var mode string
+		var err error
+		if hasBulkInserter {
+			mode, err = bulkInserter.BulkInsertLlibreURLs(r.Context(), urlLinks)
+		} else {
+			err = fmt.Errorf("bulk inserter unavailable")
+		}
+		if !hasBulkInserter || err != nil {
+			if err != nil && hasBulkInserter {
+				Errorf("Llibres import: bulk insert URLs fallit (%s): %v", mode, err)
+			}
+			relationsMode = "generic"
+			for i := range urlLinks {
+				link := urlLinks[i]
+				_ = a.DB.AddLlibreURL(&link)
+			}
+		} else if mode != "" {
+			relationsMode = mode
+		}
+	}
+	relationsDuration := time.Since(relationsStart)
+
+	activityStart := time.Now()
+	activityMode := "bulk"
+	if len(pendingActivities) > 0 {
+		mode, err := a.DB.BulkInsertUserActivities(r.Context(), pendingActivities)
+		if err != nil {
+			Errorf("Llibres import: bulk insert activitats fallit (%s): %v", mode, err)
+			activityMode = "generic"
+			for i := range pendingActivities {
+				act := pendingActivities[i]
+				if _, err := a.DB.InsertUserActivity(&act); err != nil {
+					Errorf("Llibres import: insert activitat fallit: %v", err)
+				}
+			}
+		} else if mode != "" {
+			activityMode = mode
+		}
+	}
+	activityDuration := time.Since(activityStart)
+
+	if activityCount > 0 {
+		now := time.Now()
+		a.EvaluateAchievementsForUser(context.Background(), user.ID, AchievementTrigger{CreatedAt: now})
+		a.logAntiAbuseSignals(user.ID, now)
+	}
+	totalDuration := time.Since(start)
+	resolveSummary := fmt.Sprintf("mun=%s:%d ent=%s:%d arxius=%s:%d llibres=%s:%d", munMode, munKeys, entMode, entKeys, arxiuMode, arxiuKeys, resolveMode, resolveKeys)
+	Infof("Llibres import: engine=%s mode=%s resolve=%s relations=%s activity=%s prep=%s resolve_dur=%s insert_dur=%s relations_dur=%s activity_dur=%s totals=%d created=%d skipped=%d duplicates=%d errors=%d duration=%s",
+		engine,
+		bulkMode,
+		resolveSummary,
+		relationsMode,
+		activityMode,
+		prepDuration.String(),
+		resolveDuration.String(),
+		insertDuration.String(),
+		relationsDuration.String(),
+		activityDuration.String(),
+		total,
+		created,
+		skipped,
+		duplicates,
+		errors,
+		totalDuration.String(),
+	)
 	redirect := withQueryParams(returnTo, map[string]string{
 		"import":          "1",
 		"llibres_total":   strconv.Itoa(total),
@@ -339,6 +669,177 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 	}
 	a.logAdminImportRun(r, "llibres", status, user.ID)
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
+}
+
+type llibreBulkInserter interface {
+	BulkInsertLlibres(ctx context.Context, rows []db.Llibre) ([]int, string, error)
+	BulkInsertArxiuLlibres(ctx context.Context, rows []db.ArxiuLlibreLink) (string, error)
+	BulkInsertLlibreURLs(ctx context.Context, rows []db.LlibreURL) (string, error)
+}
+
+func llibreComboKey(munID int, tipus, cronologia string) string {
+	if munID <= 0 {
+		return ""
+	}
+	tipus = strings.TrimSpace(tipus)
+	cronologia = strings.TrimSpace(cronologia)
+	if tipus == "" || cronologia == "" {
+		return ""
+	}
+	return strconv.Itoa(munID) + "|" + tipus + "|" + cronologia
+}
+
+func (a *App) llibreEntitatNameMapsForPayload(records []llibreExportRecord) (map[string]int, map[string]int, string, int) {
+	namesSet := map[string]struct{}{}
+	for _, row := range records {
+		name := strings.TrimSpace(row.ArquebisbatNom)
+		if name == "" {
+			continue
+		}
+		namesSet[strings.ToLower(name)] = struct{}{}
+	}
+	keysCount := len(namesSet)
+	if keysCount == 0 {
+		return map[string]int{}, map[string]int{}, "empty", 0
+	}
+	names := make([]string, 0, keysCount)
+	for name := range namesSet {
+		names = append(names, name)
+	}
+	const batchSize = 500
+	entMap := map[string]int{}
+	nameMap := map[string]int{}
+	for i := 0; i < len(names); i += batchSize {
+		end := i + batchSize
+		if end > len(names) {
+			end = len(names)
+		}
+		batch := names[i:end]
+		rows, err := a.DB.ResolveArquebisbatsByNames(batch)
+		if err != nil {
+			Errorf("Llibres import: resolucio entitats fallida: %v", err)
+			entMap, nameMap = a.arxiuEntitatNameMapsFallback()
+			return entMap, nameMap, "fallback", keysCount
+		}
+		for _, row := range rows {
+			key := normalizeKey(row.Nom, row.TipusEntitat)
+			if key != "" {
+				entMap[key] = row.ID
+			}
+			nameKey := normalizeKey(row.Nom)
+			if nameKey != "" {
+				nameMap[nameKey] = row.ID
+			}
+		}
+	}
+	return entMap, nameMap, "payload", keysCount
+}
+
+func (a *App) llibreMunicipiNameMapsForPayload(records []llibreExportRecord) (map[string]int, map[string]int, string, int) {
+	namesSet := map[string]struct{}{}
+	for _, row := range records {
+		name := strings.TrimSpace(row.MunicipiNom)
+		if name == "" {
+			continue
+		}
+		namesSet[strings.ToLower(name)] = struct{}{}
+	}
+	keysCount := len(namesSet)
+	if keysCount == 0 {
+		return map[string]int{}, map[string]int{}, "empty", 0
+	}
+	names := make([]string, 0, keysCount)
+	for name := range namesSet {
+		names = append(names, name)
+	}
+	const batchSize = 500
+	res := map[string]int{}
+	nameMap := map[string]int{}
+	for i := 0; i < len(names); i += batchSize {
+		end := i + batchSize
+		if end > len(names) {
+			end = len(names)
+		}
+		batch := names[i:end]
+		rows, err := a.DB.ResolveMunicipisByNames(batch)
+		if err != nil {
+			Errorf("Llibres import: resolucio municipis fallida: %v", err)
+			fallbackMap := a.municipiNameMap()
+			fallbackNameMap := a.municipiNameOnlyMap()
+			return fallbackMap, fallbackNameMap, "fallback", keysCount
+		}
+		for _, row := range rows {
+			iso := ""
+			if row.ISO2.Valid {
+				iso = strings.ToUpper(strings.TrimSpace(row.ISO2.String))
+			}
+			key := normalizeKey(row.Nom, iso)
+			if key != "" {
+				res[key] = row.ID
+			}
+			nameKey := normalizeKey(row.Nom)
+			if nameKey != "" {
+				nameMap[nameKey] = row.ID
+			}
+		}
+	}
+	return res, nameMap, "payload", keysCount
+}
+
+func (a *App) llibreArxiuNameMapForPayload(records []llibreExportRecord) (map[string]int, string, int) {
+	namesSet := map[string]struct{}{}
+	for _, row := range records {
+		for _, link := range row.Arxius {
+			name := strings.TrimSpace(link.Nom)
+			if name == "" {
+				continue
+			}
+			namesSet[strings.ToLower(name)] = struct{}{}
+		}
+		for _, link := range row.URLs {
+			name := strings.TrimSpace(link.ArxiuNom)
+			if name == "" {
+				continue
+			}
+			namesSet[strings.ToLower(name)] = struct{}{}
+		}
+	}
+	keysCount := len(namesSet)
+	if keysCount == 0 {
+		return map[string]int{}, "empty", 0
+	}
+	names := make([]string, 0, keysCount)
+	for name := range namesSet {
+		names = append(names, name)
+	}
+	const batchSize = 500
+	arxiuMap := map[string]int{}
+	for i := 0; i < len(names); i += batchSize {
+		end := i + batchSize
+		if end > len(names) {
+			end = len(names)
+		}
+		batch := names[i:end]
+		rows, err := a.DB.ResolveArxiusByNames(batch)
+		if err != nil {
+			Errorf("Llibres import: resolucio arxius fallida: %v", err)
+			arxius, _ := a.DB.ListArxius(db.ArxiuFilter{})
+			for _, arxiu := range arxius {
+				key := normalizeKey(arxiu.Nom)
+				if key != "" {
+					arxiuMap[key] = arxiu.ID
+				}
+			}
+			return arxiuMap, "fallback", keysCount
+		}
+		for _, row := range rows {
+			key := normalizeKey(row.Nom)
+			if key != "" {
+				arxiuMap[key] = row.ID
+			}
+		}
+	}
+	return arxiuMap, "payload", keysCount
 }
 
 func (a *App) municipiISOMapByID() map[int]string {
