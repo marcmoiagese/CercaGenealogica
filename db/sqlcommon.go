@@ -6846,15 +6846,21 @@ func (h sqlHelper) resolveLlibresByCodes(municipiID int, tipus, cronologia strin
 	}
 	codesClauses := []string{}
 	args := []interface{}{municipiID, tipus, cronologia}
+	buildQMarks := func(count int) string {
+		if count <= 0 {
+			return ""
+		}
+		return strings.TrimRight(strings.Repeat("?,", count), ",")
+	}
 	if len(codiDigitals) > 0 {
-		placeholders := buildInPlaceholders(h.style, len(codiDigitals))
+		placeholders := buildQMarks(len(codiDigitals))
 		codesClauses = append(codesClauses, "codi_digital IN ("+placeholders+")")
 		for _, code := range codiDigitals {
 			args = append(args, strings.TrimSpace(code))
 		}
 	}
 	if len(codiFisics) > 0 {
-		placeholders := buildInPlaceholders(h.style, len(codiFisics))
+		placeholders := buildQMarks(len(codiFisics))
 		codesClauses = append(codesClauses, "codi_fisic IN ("+placeholders+")")
 		for _, code := range codiFisics {
 			args = append(args, strings.TrimSpace(code))
