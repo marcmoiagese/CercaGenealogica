@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	pq "github.com/lib/pq"
@@ -1591,7 +1592,70 @@ func (d *PostgreSQL) HasLlibreDuplicate(municipiID int, tipus, cronologia, codiD
 	return d.help.hasLlibreDuplicate(municipiID, tipus, cronologia, codiDigital, codiFisic, excludeID)
 }
 func (d *PostgreSQL) ResolveLlibresByCodes(municipiID int, tipus, cronologia string, codiDigitals, codiFisics []string) ([]LlibreResolveRow, error) {
-	return d.help.resolveLlibresByCodes(municipiID, tipus, cronologia, codiDigitals, codiFisics)
+	if municipiID <= 0 {
+		return nil, nil
+	}
+	tipus = strings.TrimSpace(tipus)
+	cronologia = strings.TrimSpace(cronologia)
+	if tipus == "" || cronologia == "" {
+		return nil, nil
+	}
+	digital := make([]string, 0, len(codiDigitals))
+	for _, code := range codiDigitals {
+		code = strings.TrimSpace(code)
+		if code == "" {
+			continue
+		}
+		digital = append(digital, code)
+	}
+	fisic := make([]string, 0, len(codiFisics))
+	for _, code := range codiFisics {
+		code = strings.TrimSpace(code)
+		if code == "" {
+			continue
+		}
+		fisic = append(fisic, code)
+	}
+	if len(digital) == 0 && len(fisic) == 0 {
+		return nil, nil
+	}
+	conds := make([]string, 0, 2)
+	args := []interface{}{municipiID, tipus, cronologia}
+	argIdx := 4
+	if len(digital) > 0 {
+		conds = append(conds, fmt.Sprintf("codi_digital = ANY($%d)", argIdx))
+		args = append(args, pq.Array(digital))
+		argIdx++
+	}
+	if len(fisic) > 0 {
+		conds = append(conds, fmt.Sprintf("codi_fisic = ANY($%d)", argIdx))
+		args = append(args, pq.Array(fisic))
+		argIdx++
+	}
+	if len(conds) == 0 {
+		return nil, nil
+	}
+	query := `
+        SELECT id, COALESCE(codi_digital, ''), COALESCE(codi_fisic, '')
+        FROM llibres
+        WHERE municipi_id = $1 AND tipus_llibre = $2 AND cronologia = $3 AND (` + strings.Join(conds, " OR ") + `)`
+	rows, err := d.Conn.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []LlibreResolveRow
+	for rows.Next() {
+		var row LlibreResolveRow
+		if err := rows.Scan(&row.ID, &row.CodiDigital, &row.CodiFisic); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 func (d *PostgreSQL) GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error) {
 	return d.help.getLlibresIndexacioStats(ids)

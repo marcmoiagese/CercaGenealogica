@@ -412,6 +412,9 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 	existingDigital := map[string]map[string]struct{}{}
 	existingFisic := map[string]map[string]struct{}{}
 	resolveMode := "payload"
+	if engine == "postgres" {
+		resolveMode = "payload-pg-array"
+	}
 	resolveKeys := 0
 	for key, info := range comboByKey {
 		if info == nil {
