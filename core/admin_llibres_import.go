@@ -412,46 +412,99 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 	existingDigital := map[string]map[string]struct{}{}
 	existingFisic := map[string]map[string]struct{}{}
 	resolveMode := "payload"
-	if engine == "postgres" {
-		resolveMode = "payload-pg-array"
-	}
 	resolveKeys := 0
-	for key, info := range comboByKey {
-		if info == nil {
-			continue
+	type llibreBulkResolver interface {
+		ResolveLlibresByPayload(rows []db.LlibreResolveCandidate) ([]db.LlibreResolveMatch, error)
+	}
+	if resolver, ok := a.DB.(llibreBulkResolver); ok {
+		resolveMode = "payload-pg-staging"
+		candidates := make([]db.LlibreResolveCandidate, 0, len(comboByKey))
+		for _, info := range comboByKey {
+			if info == nil {
+				continue
+			}
+			for code := range info.digital {
+				candidates = append(candidates, db.LlibreResolveCandidate{
+					MunicipiID:  info.munID,
+					TipusLlibre: info.tipus,
+					Cronologia:  info.cronologia,
+					CodiDigital: code,
+				})
+			}
+			for code := range info.fisic {
+				candidates = append(candidates, db.LlibreResolveCandidate{
+					MunicipiID:  info.munID,
+					TipusLlibre: info.tipus,
+					Cronologia:  info.cronologia,
+					CodiFisic:   code,
+				})
+			}
 		}
-		digital := make([]string, 0, len(info.digital))
-		for code := range info.digital {
-			digital = append(digital, code)
-		}
-		fisic := make([]string, 0, len(info.fisic))
-		for code := range info.fisic {
-			fisic = append(fisic, code)
-		}
-		if len(digital) == 0 && len(fisic) == 0 {
-			continue
-		}
-		resolveKeys += len(digital) + len(fisic)
-		rows, err := a.DB.ResolveLlibresByCodes(info.munID, info.tipus, info.cronologia, digital, fisic)
+		resolveKeys = len(candidates)
+		rows, err := resolver.ResolveLlibresByPayload(candidates)
 		if err != nil {
 			Errorf("Llibres import: resolucio duplicats fallida: %v", err)
 			resolveMode = "fallback"
 			existingDigital = map[string]map[string]struct{}{}
 			existingFisic = map[string]map[string]struct{}{}
-			break
-		}
-		for _, row := range rows {
-			if row.CodiDigital.Valid {
-				if existingDigital[key] == nil {
-					existingDigital[key] = map[string]struct{}{}
+		} else {
+			for _, row := range rows {
+				key := llibreComboKey(row.MunicipiID, row.TipusLlibre, row.Cronologia)
+				if key == "" {
+					continue
 				}
-				existingDigital[key][strings.TrimSpace(row.CodiDigital.String)] = struct{}{}
+				if row.CodiDigital.Valid {
+					if existingDigital[key] == nil {
+						existingDigital[key] = map[string]struct{}{}
+					}
+					existingDigital[key][strings.TrimSpace(row.CodiDigital.String)] = struct{}{}
+				}
+				if row.CodiFisic.Valid {
+					if existingFisic[key] == nil {
+						existingFisic[key] = map[string]struct{}{}
+					}
+					existingFisic[key][strings.TrimSpace(row.CodiFisic.String)] = struct{}{}
+				}
 			}
-			if row.CodiFisic.Valid {
-				if existingFisic[key] == nil {
-					existingFisic[key] = map[string]struct{}{}
+		}
+	} else {
+		for key, info := range comboByKey {
+			if info == nil {
+				continue
+			}
+			digital := make([]string, 0, len(info.digital))
+			for code := range info.digital {
+				digital = append(digital, code)
+			}
+			fisic := make([]string, 0, len(info.fisic))
+			for code := range info.fisic {
+				fisic = append(fisic, code)
+			}
+			if len(digital) == 0 && len(fisic) == 0 {
+				continue
+			}
+			resolveKeys += len(digital) + len(fisic)
+			rows, err := a.DB.ResolveLlibresByCodes(info.munID, info.tipus, info.cronologia, digital, fisic)
+			if err != nil {
+				Errorf("Llibres import: resolucio duplicats fallida: %v", err)
+				resolveMode = "fallback"
+				existingDigital = map[string]map[string]struct{}{}
+				existingFisic = map[string]map[string]struct{}{}
+				break
+			}
+			for _, row := range rows {
+				if row.CodiDigital.Valid {
+					if existingDigital[key] == nil {
+						existingDigital[key] = map[string]struct{}{}
+					}
+					existingDigital[key][strings.TrimSpace(row.CodiDigital.String)] = struct{}{}
 				}
-				existingFisic[key][strings.TrimSpace(row.CodiFisic.String)] = struct{}{}
+				if row.CodiFisic.Valid {
+					if existingFisic[key] == nil {
+						existingFisic[key] = map[string]struct{}{}
+					}
+					existingFisic[key][strings.TrimSpace(row.CodiFisic.String)] = struct{}{}
+				}
 			}
 		}
 	}

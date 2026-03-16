@@ -1657,6 +1657,103 @@ func (d *PostgreSQL) ResolveLlibresByCodes(municipiID int, tipus, cronologia str
 	}
 	return res, nil
 }
+
+func (d *PostgreSQL) ResolveLlibresByPayload(rows []LlibreResolveCandidate) ([]LlibreResolveMatch, error) {
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	ctx := context.Background()
+	tx, err := d.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `
+        CREATE TEMP TABLE tmp_llibres_resolve (
+            municipi_id INT NOT NULL,
+            tipus_llibre TEXT NOT NULL,
+            cronologia TEXT NOT NULL,
+            codi_digital TEXT,
+            codi_fisic TEXT
+        ) ON COMMIT DROP`); err != nil {
+		return nil, err
+	}
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn(
+		"tmp_llibres_resolve",
+		"municipi_id",
+		"tipus_llibre",
+		"cronologia",
+		"codi_digital",
+		"codi_fisic",
+	))
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		if row.MunicipiID <= 0 {
+			continue
+		}
+		tipus := strings.TrimSpace(row.TipusLlibre)
+		cronologia := strings.TrimSpace(row.Cronologia)
+		if tipus == "" || cronologia == "" {
+			continue
+		}
+		var digital interface{}
+		if code := strings.TrimSpace(row.CodiDigital); code != "" {
+			digital = code
+		}
+		var fisic interface{}
+		if code := strings.TrimSpace(row.CodiFisic); code != "" {
+			fisic = code
+		}
+		if digital == nil && fisic == nil {
+			continue
+		}
+		if _, err := stmt.Exec(row.MunicipiID, tipus, cronologia, digital, fisic); err != nil {
+			_ = stmt.Close()
+			return nil, err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		_ = stmt.Close()
+		return nil, err
+	}
+	if err := stmt.Close(); err != nil {
+		return nil, err
+	}
+	query := `
+        SELECT DISTINCT l.id, l.municipi_id, l.tipus_llibre, l.cronologia,
+               COALESCE(l.codi_digital, ''), COALESCE(l.codi_fisic, '')
+        FROM llibres l
+        JOIN tmp_llibres_resolve t
+          ON l.municipi_id = t.municipi_id
+         AND l.tipus_llibre = t.tipus_llibre
+         AND l.cronologia = t.cronologia
+         AND (
+              (t.codi_digital IS NOT NULL AND t.codi_digital <> '' AND l.codi_digital = t.codi_digital)
+           OR (t.codi_fisic IS NOT NULL AND t.codi_fisic <> '' AND l.codi_fisic = t.codi_fisic)
+         )`
+	rowsResult, err := tx.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rowsResult.Close()
+	var res []LlibreResolveMatch
+	for rowsResult.Next() {
+		var row LlibreResolveMatch
+		if err := rowsResult.Scan(&row.ID, &row.MunicipiID, &row.TipusLlibre, &row.Cronologia, &row.CodiDigital, &row.CodiFisic); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	if err := rowsResult.Err(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
 func (d *PostgreSQL) GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error) {
 	return d.help.getLlibresIndexacioStats(ids)
 }

@@ -1842,6 +1842,23 @@ type LlibreResolveRow struct {
 	CodiFisic   sql.NullString
 }
 
+type LlibreResolveCandidate struct {
+	MunicipiID  int
+	TipusLlibre string
+	Cronologia  string
+	CodiDigital string
+	CodiFisic   string
+}
+
+type LlibreResolveMatch struct {
+	ID          int
+	MunicipiID  int
+	TipusLlibre string
+	Cronologia  string
+	CodiDigital sql.NullString
+	CodiFisic   sql.NullString
+}
+
 type LlibreRow struct {
 	Llibre
 	ArquebisbatNom sql.NullString
