@@ -54,11 +54,108 @@ type moderacioFilters struct {
 	UserQuery string
 }
 
+type moderacioBulkResult struct {
+	Total     int
+	Processed int
+	Errors    int
+	Skipped   int
+}
+
 const (
 	moderacioAge0_24h = "0_24h"
 	moderacioAge1_3d  = "1_3d"
 	moderacioAge3Plus = "3d_plus"
 )
+
+var moderacioBulkAllowedTypes = []string{
+	"persona",
+	"arxiu",
+	"llibre",
+	"nivell",
+	"municipi",
+	"eclesiastic",
+	"municipi_historia_general",
+	"municipi_historia_fet",
+	"municipi_anecdota_version",
+	"event_historic",
+	"registre",
+	"cognom_variant",
+	"cognom_referencia",
+	"cognom_merge",
+	"municipi_canvi",
+	"arxiu_canvi",
+	"llibre_canvi",
+	"persona_canvi",
+	"cognom_canvi",
+	"event_historic_canvi",
+}
+
+func isValidModeracioBulkAction(action string) bool {
+	switch action {
+	case "approve", "reject":
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidModeracioBulkScope(scope string) bool {
+	switch scope {
+	case "page", "all":
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidModeracioBulkType(bulkType string) bool {
+	if bulkType == "" || bulkType == "all" {
+		return true
+	}
+	for _, allowed := range moderacioBulkAllowedTypes {
+		if bulkType == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func parseModeracioPagination(values url.Values) (int, int) {
+	page := 1
+	perPage := 25
+	if val := strings.TrimSpace(values.Get("page")); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n > 0 {
+			page = n
+		}
+	}
+	if val := strings.TrimSpace(values.Get("per_page")); val != "" {
+		if n, err := strconv.Atoi(val); err == nil {
+			switch n {
+			case 10, 25, 50, 100:
+				perPage = n
+			}
+		}
+	}
+	return page, perPage
+}
+
+func parseModeracioReturnTo(returnTo string) (moderacioFilters, int, int) {
+	if strings.TrimSpace(returnTo) == "" {
+		req := &http.Request{URL: &url.URL{}}
+		filters, _ := parseModeracioFilters(req)
+		return filters, 1, 25
+	}
+	parsed, err := url.Parse(returnTo)
+	if err != nil {
+		req := &http.Request{URL: &url.URL{}}
+		filters, _ := parseModeracioFilters(req)
+		return filters, 1, 25
+	}
+	req := &http.Request{URL: &url.URL{RawQuery: parsed.RawQuery}}
+	filters, _ := parseModeracioFilters(req)
+	page, perPage := parseModeracioPagination(parsed.Query())
+	return filters, page, perPage
+}
 
 func moderacioAgeBucket(createdAt time.Time, now time.Time) string {
 	if createdAt.IsZero() {
@@ -1123,6 +1220,29 @@ func (a *App) requireModeracioUser(w http.ResponseWriter, r *http.Request) (*db.
 	return user, perms, false, false
 }
 
+func (a *App) canModeracioMassiva(user *db.User, perms db.PolicyPermissions) bool {
+	if user == nil {
+		return false
+	}
+	if a.hasPerm(perms, permAdmin) {
+		return true
+	}
+	return a.hasAnyPermissionKey(user.ID, permKeyModeracioMassiva)
+}
+
+func (a *App) requireModeracioMassivaUser(w http.ResponseWriter, r *http.Request) (*db.User, db.PolicyPermissions, bool, bool) {
+	user, perms, _, ok := a.requireModeracioUser(w, r)
+	if !ok {
+		return nil, db.PolicyPermissions{}, false, false
+	}
+	isAdmin := a.hasPerm(perms, permAdmin)
+	if isAdmin || a.hasAnyPermissionKey(user.ID, permKeyModeracioMassiva) {
+		return user, perms, isAdmin, true
+	}
+	http.Error(w, "Forbidden", http.StatusForbidden)
+	return user, perms, isAdmin, false
+}
+
 func (a *App) canModerateTerritoriObject(user *db.User, perms db.PolicyPermissions, objectType string, versionID int) bool {
 	if user == nil {
 		return false
@@ -1226,6 +1346,7 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 	}
 	canManageArxius := a.hasPerm(perms, permArxius)
 	isAdmin := a.hasPerm(perms, permAdmin)
+	canBulk := a.canModeracioMassiva(user, perms)
 	msg := ""
 	okFlag := false
 	if r.URL.Query().Get("ok") != "" {
@@ -1241,7 +1362,7 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 		"IsAdmin":         isAdmin,
 		"Msg":             msg,
 		"Ok":              okFlag,
-		"CanBulk":         canModerateAll,
+		"CanBulk":         canBulk,
 		"User":            user,
 		"Total":           total,
 		"Page":            page,
@@ -1297,7 +1418,7 @@ func (a *App) applyModeracioAction(ctx context.Context, action string, objType s
 	return nil
 }
 
-func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, motiu string, userID int, bulkUserID int, update func(processed int, total int)) error {
+func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, motiu string, userID int, bulkUserID int, update func(processed int, total int)) (moderacioBulkResult, error) {
 	if update == nil {
 		update = func(int, int) {}
 	}
@@ -1330,7 +1451,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 		}
 	}
 
-	types := []string{"persona", "arxiu", "llibre", "nivell", "municipi", "eclesiastic", "municipi_historia_general", "municipi_historia_fet", "municipi_anecdota_version", "event_historic", "registre", "cognom_variant", "cognom_referencia", "cognom_merge", "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi"}
+	types := append([]string{}, moderacioBulkAllowedTypes...)
 	if bulkType != "" && bulkType != "all" {
 		types = []string{bulkType}
 	}
@@ -1514,14 +1635,15 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 		}
 	}
 	if errCount > 0 {
-		return fmt.Errorf("errors: %d", errCount)
+		return moderacioBulkResult{Total: total, Processed: processed, Errors: errCount}, fmt.Errorf("errors: %d", errCount)
 	}
-	return nil
+	return moderacioBulkResult{Total: total, Processed: processed, Errors: errCount}, nil
 }
 
 // Accions massives de moderació
 func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permModerate); !ok {
+	user, perms, isAdmin, ok := a.requireModeracioMassivaUser(w, r)
+	if !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -1532,7 +1654,6 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
 		return
 	}
-	user, _ := a.VerificarSessio(r)
 	if err := r.ParseForm(); err != nil {
 		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
 		return
@@ -1541,19 +1662,33 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	if action == "" {
 		action = strings.TrimSpace(r.FormValue("action"))
 	}
+	if !isValidModeracioBulkAction(action) {
+		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
+		return
+	}
 	scope := strings.TrimSpace(r.FormValue("bulk_scope"))
 	if scope == "" {
 		scope = "page"
+	}
+	if !isValidModeracioBulkScope(scope) {
+		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
+		return
 	}
 	bulkType := strings.TrimSpace(r.FormValue("bulk_type"))
 	if bulkType == "" {
 		bulkType = "all"
 	}
-	bulkUserID := parseIntValue(r.FormValue("bulk_user_id"))
+	if !isValidModeracioBulkType(bulkType) {
+		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
+		return
+	}
+	bulkUserID := 0
+	if scope == "all" {
+		bulkUserID = parseIntValue(r.FormValue("bulk_user_id"))
+	}
 	selected := r.Form["selected"]
 	motiu := strings.TrimSpace(r.FormValue("bulk_reason"))
-	perms := a.getPermissionsForUser(user.ID)
-	isAdmin := a.hasPerm(perms, permAdmin)
+	canModerateAll := a.hasPerm(perms, permModerate)
 	if scope == "all" && !isAdmin {
 		http.Redirect(w, r, "/moderacio?err=1", http.StatusSeeOther)
 		return
@@ -1565,19 +1700,43 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	}
 	if scope == "all" {
 		if async {
-			job := a.moderacioBulkStore().newJob(action, scope, bulkType)
+			job := a.moderacioBulkStore().newJob(action, scope, bulkType, user.ID, bulkUserID)
 			store := a.moderacioBulkStore()
 			go func() {
-				err := a.processModeracioBulkAll(context.Background(), action, bulkType, motiu, user.ID, bulkUserID, func(processed int, total int) {
+				result, err := a.processModeracioBulkAll(context.Background(), action, bulkType, motiu, user.ID, bulkUserID, func(processed int, total int) {
 					store.setTotal(job.ID, total)
 					store.setProcessed(job.ID, processed)
 				})
 				store.finish(job.ID, err)
+				a.logAdminAudit(nil, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
+					"action":        action,
+					"scope":         scope,
+					"bulk_type":     bulkType,
+					"bulk_user_id":  bulkUserID,
+					"total":         result.Total,
+					"processed":     result.Processed,
+					"errors":        result.Errors,
+					"skipped":       result.Skipped,
+					"job_id":        job.ID,
+					"async":         true,
+				})
 			}()
 			writeJSON(w, map[string]interface{}{"ok": true, "job_id": job.ID})
 			return
 		}
-		if err := a.processModeracioBulkAll(r.Context(), action, bulkType, motiu, user.ID, bulkUserID, nil); err != nil {
+		result, err := a.processModeracioBulkAll(r.Context(), action, bulkType, motiu, user.ID, bulkUserID, nil)
+		a.logAdminAudit(r, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
+			"action":        action,
+			"scope":         scope,
+			"bulk_type":     bulkType,
+			"bulk_user_id":  bulkUserID,
+			"total":         result.Total,
+			"processed":     result.Processed,
+			"errors":        result.Errors,
+			"skipped":       result.Skipped,
+			"async":         false,
+		})
+		if err != nil {
 			http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "err"), http.StatusSeeOther)
 			return
 		}
@@ -1588,24 +1747,59 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "err"), http.StatusSeeOther)
 		return
 	}
+	filters, page, perPage := parseModeracioReturnTo(returnTo)
+	pageItems, _, _ := a.buildModeracioItems(ResolveLang(r), page, perPage, user, canModerateAll, filters)
+	allowed := map[string]moderacioItem{}
+	for _, item := range pageItems {
+		key := fmt.Sprintf("%s:%d", item.Type, item.ID)
+		allowed[key] = item
+	}
 	errCount := 0
+	processed := 0
+	skipped := 0
+	total := 0
+	seen := map[string]struct{}{}
 	for _, entry := range selected {
 		parts := strings.SplitN(entry, ":", 2)
 		if len(parts) != 2 {
 			errCount++
+			skipped++
 			continue
 		}
 		objType := strings.TrimSpace(parts[0])
 		id, err := strconv.Atoi(parts[1])
 		if err != nil {
 			errCount++
+			skipped++
 			continue
 		}
+		key := fmt.Sprintf("%s:%d", objType, id)
+		if _, ok := allowed[key]; !ok {
+			errCount++
+			skipped++
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		total++
 		if err := a.applyModeracioAction(r.Context(), action, objType, id, motiu, user.ID); err != nil {
 			Errorf("Moderacio massiva %s %s:%d ha fallat: %v", action, objType, id, err)
 			errCount++
 		}
+		processed++
 	}
+	a.logAdminAudit(r, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
+		"action":    action,
+		"scope":     scope,
+		"bulk_type": bulkType,
+		"total":     total,
+		"processed": processed,
+		"errors":    errCount,
+		"skipped":   skipped,
+		"async":     false,
+	})
 	if errCount > 0 {
 		http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "err"), http.StatusSeeOther)
 		return

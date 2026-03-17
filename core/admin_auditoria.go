@@ -26,6 +26,7 @@ const (
 	auditActionPlatformUpdate          = "platform_update"
 	auditActionTransparencyUpdate      = "transparency_update"
 	auditActionTransparencyContributor = "transparency_contributor"
+	auditActionModeracioBulk           = "moderacio_bulk"
 )
 
 type adminAuditView struct {
@@ -469,6 +470,7 @@ func adminAuditActionOptions(lang string) []auditOption {
 		{Value: auditActionPlatformUpdate, Label: T(lang, "admin.audit.action.platform_update")},
 		{Value: auditActionTransparencyUpdate, Label: T(lang, "admin.audit.action.transparency_update")},
 		{Value: auditActionTransparencyContributor, Label: T(lang, "admin.audit.action.transparency_contributor")},
+		{Value: auditActionModeracioBulk, Label: T(lang, "admin.audit.action.moderacio_bulk")},
 	}
 }
 

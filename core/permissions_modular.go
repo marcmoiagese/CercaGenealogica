@@ -29,6 +29,7 @@ const (
 	permKeyAdminTransparencyManage   = "admin.transparency.manage"
 	permKeyAdminExternalSitesManage  = "admin.external_sites.manage"
 	permKeyAdminExternalLinksModerate = "admin.external_links.moderate"
+	permKeyModeracioMassiva          = "moderacio.bulk"
 
 	permKeyHomeView            = "home.view"
 	permKeyMessagesView        = "messages.view"
@@ -113,6 +114,7 @@ var permissionCatalogKeys = []string{
 	permKeyAdminTransparencyManage,
 	permKeyAdminExternalSitesManage,
 	permKeyAdminExternalLinksModerate,
+	permKeyModeracioMassiva,
 	permKeyHomeView,
 	permKeyMessagesView,
 	permKeySearchAdvancedView,

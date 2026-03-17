@@ -34,7 +34,8 @@ func (a *App) AdminControlModeracioJobStatus(w http.ResponseWriter, r *http.Requ
 		http.NotFound(w, r)
 		return
 	}
-	if _, _, _, ok := a.requireModeracioUser(w, r); !ok {
+	user, perms, isAdmin, ok := a.requireModeracioMassivaUser(w, r)
+	if !ok {
 		return
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
@@ -49,6 +50,14 @@ func (a *App) AdminControlModeracioJobStatus(w http.ResponseWriter, r *http.Requ
 	}
 	job, ok := a.moderacioBulkStore().snapshot(jobID)
 	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if !isAdmin && !a.canModeracioMassiva(user, perms) {
+		http.NotFound(w, r)
+		return
+	}
+	if !isAdmin && job.OwnerID != user.ID {
 		http.NotFound(w, r)
 		return
 	}

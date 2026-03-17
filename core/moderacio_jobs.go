@@ -8,16 +8,18 @@ import (
 )
 
 type moderacioBulkJob struct {
-	ID        string    `json:"id"`
-	Action    string    `json:"action"`
-	Scope     string    `json:"scope"`
-	Type      string    `json:"type"`
-	Total     int       `json:"total"`
-	Processed int       `json:"processed"`
-	Done      bool      `json:"done"`
-	Error     string    `json:"error,omitempty"`
-	StartedAt time.Time `json:"started_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         string    `json:"id"`
+	Action     string    `json:"action"`
+	Scope      string    `json:"scope"`
+	Type       string    `json:"type"`
+	OwnerID    int       `json:"owner_id"`
+	BulkUserID int       `json:"bulk_user_id,omitempty"`
+	Total      int       `json:"total"`
+	Processed  int       `json:"processed"`
+	Done       bool      `json:"done"`
+	Error      string    `json:"error,omitempty"`
+	StartedAt  time.Time `json:"started_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type moderacioBulkStore struct {
@@ -46,17 +48,19 @@ func nextModeracioBulkID() string {
 	return fmt.Sprintf("moderacio-bulk-%d-%d", time.Now().UnixNano(), seq)
 }
 
-func (s *moderacioBulkStore) newJob(action, scope, objType string) *moderacioBulkJob {
+func (s *moderacioBulkStore) newJob(action, scope, objType string, ownerID int, bulkUserID int) *moderacioBulkJob {
 	job := &moderacioBulkJob{
-		ID:        nextModeracioBulkID(),
-		Action:    action,
-		Scope:     scope,
-		Type:      objType,
-		Total:     0,
-		Processed: 0,
-		Done:      false,
-		StartedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:         nextModeracioBulkID(),
+		Action:     action,
+		Scope:      scope,
+		Type:       objType,
+		OwnerID:    ownerID,
+		BulkUserID: bulkUserID,
+		Total:      0,
+		Processed:  0,
+		Done:       false,
+		StartedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
 	}
 	s.mu.Lock()
 	s.jobs[job.ID] = job
