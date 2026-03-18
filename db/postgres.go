@@ -465,6 +465,9 @@ func (d *PostgreSQL) BumpPolicyPermissionsVersion(politicaID int) error {
 func (d *PostgreSQL) ListPersones(f PersonaFilter) ([]Persona, error) {
 	return d.help.listPersones(f)
 }
+func (d *PostgreSQL) CountPersones(f PersonaFilter) (int, error) {
+	return d.help.countPersones(f)
+}
 func (d *PostgreSQL) GetPersona(id int) (*Persona, error) {
 	return d.help.getPersona(id)
 }
@@ -1030,6 +1033,9 @@ func (d *PostgreSQL) UpdateArquebisbat(ae *Arquebisbat) error {
 }
 func (d *PostgreSQL) UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateArquebisbatModeracio(id, estat, motiu, moderatorID)
+}
+func (d *PostgreSQL) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
+	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
 }
 func (d *PostgreSQL) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {
 	return d.help.listArquebisbatMunicipis(munID)
@@ -1930,6 +1936,9 @@ func (d *PostgreSQL) GetTranscripcioRawChange(id int) (*TranscripcioRawChange, e
 func (d *PostgreSQL) ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, error) {
 	return d.help.listTranscripcioRawChangesPending()
 }
+func (d *PostgreSQL) CountTranscripcioRawChangesPending() (int, error) {
+	return d.help.countTranscripcioRawChangesPending()
+}
 func (d *PostgreSQL) UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateTranscripcioRawChangeModeracio(id, estat, motiu, moderatorID)
 }
@@ -2016,6 +2025,9 @@ func (d *PostgreSQL) DequeueWikiPending(changeID int) error {
 }
 func (d *PostgreSQL) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 	return d.help.listWikiPending(limit)
+}
+func (d *PostgreSQL) ListWikiPendingChanges(limit int) ([]WikiChange, []int, error) {
+	return d.help.listWikiPendingChanges(limit)
 }
 // Espai personal
 func (d *PostgreSQL) CreateEspaiArbre(a *EspaiArbre) (int, error) { return d.help.createEspaiArbre(a) }
@@ -2389,6 +2401,9 @@ func (d *PostgreSQL) UpdateCognom(c *Cognom) error {
 func (d *PostgreSQL) ListCognomVariants(f CognomVariantFilter) ([]CognomVariant, error) {
 	return d.help.listCognomVariants(f)
 }
+func (d *PostgreSQL) CountCognomVariants(f CognomVariantFilter) (int, error) {
+	return d.help.countCognomVariants(f)
+}
 func (d *PostgreSQL) ResolveCognomPublicatByForma(forma string) (int, string, bool, error) {
 	return d.help.resolveCognomPublicatByForma(forma)
 }
@@ -2433,6 +2448,9 @@ func (d *PostgreSQL) GetCognomRedirectSuggestion(id int) (*CognomRedirectSuggest
 func (d *PostgreSQL) ListCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) ([]CognomRedirectSuggestion, error) {
 	return d.help.listCognomRedirectSuggestions(f)
 }
+func (d *PostgreSQL) CountCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) (int, error) {
+	return d.help.countCognomRedirectSuggestions(f)
+}
 
 func (d *PostgreSQL) UpdateCognomRedirectSuggestionModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateCognomRedirectSuggestionModeracio(id, estat, motiu, moderatorID)
@@ -2444,6 +2462,9 @@ func (d *PostgreSQL) CreateCognomReferencia(ref *CognomReferencia) (int, error) 
 
 func (d *PostgreSQL) ListCognomReferencies(f CognomReferenciaFilter) ([]CognomReferencia, error) {
 	return d.help.listCognomReferencies(f)
+}
+func (d *PostgreSQL) CountCognomReferencies(f CognomReferenciaFilter) (int, error) {
+	return d.help.countCognomReferencies(f)
 }
 
 func (d *PostgreSQL) UpdateCognomReferenciaModeracio(id int, estat, motiu string, moderatorID int) error {
@@ -2781,6 +2802,9 @@ func (d *PostgreSQL) UpdateEventHistoric(e *EventHistoric) error {
 
 func (d *PostgreSQL) ListEventsHistoric(filter EventHistoricFilter) ([]EventHistoric, error) {
 	return d.help.listEventsHistoric(filter)
+}
+func (d *PostgreSQL) CountEventsHistoric(filter EventHistoricFilter) (int, error) {
+	return d.help.countEventsHistoric(filter)
 }
 
 func (d *PostgreSQL) UpdateEventHistoricModeracio(id int, estat, notes string, moderatorID int) error {

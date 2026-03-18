@@ -1069,6 +1069,26 @@ func (h sqlHelper) listPersones(f PersonaFilter) ([]Persona, error) {
 	return res, nil
 }
 
+func (h sqlHelper) countPersones(f PersonaFilter) (int, error) {
+	h.ensurePersonaExtraColumns()
+	query := `SELECT COUNT(*) FROM persona`
+	var args []interface{}
+	where := []string{}
+	if f.Estat != "" {
+		where = append(where, "estat_civil = ?")
+		args = append(args, f.Estat)
+	}
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (h sqlHelper) getPersona(id int) (*Persona, error) {
 	query := `SELECT id, nom, cognom1, cognom2, municipi, COALESCE(municipi_naixement, ''), COALESCE(municipi_defuncio, ''), arquevisbat, nom_complet, pagina, llibre, quinta,
         data_naixement, data_bateig, data_defuncio, ofici, estat_civil, created_by, created_at, updated_at, updated_by, moderated_by, moderated_at FROM persona WHERE id = ?`
@@ -2039,6 +2059,68 @@ func (h sqlHelper) updateArquebisbatModeracio(id int, estat, motiu string, moder
 	now := time.Now()
 	_, err := h.db.Exec(stmt, estat, motiu, moderatorID, now, now, id)
 	return err
+}
+
+func (h sqlHelper) bulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
+	objectType = strings.TrimSpace(objectType)
+	estat = strings.TrimSpace(estat)
+	if objectType == "" || estat == "" {
+		return 0, fmt.Errorf("bulk moderacio invàlida")
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	now := time.Now()
+	args := []interface{}{estat, strings.TrimSpace(motiu), moderatorID, now, now}
+	var stmt string
+	switch objectType {
+	case "arxiu":
+		stmt = `UPDATE arxius SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE moderation_status = 'pendent'`
+	case "llibre":
+		stmt = `UPDATE llibres SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE moderation_status = 'pendent'`
+	case "nivell":
+		stmt = `UPDATE nivells_administratius SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE moderation_status = 'pendent'`
+	case "municipi":
+		stmt = `UPDATE municipis SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, ultima_modificacio = ? WHERE moderation_status = 'pendent'`
+	case "eclesiastic":
+		stmt = `UPDATE arquebisbats SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE moderation_status = 'pendent'`
+	case "cognom_variant":
+		stmt = `UPDATE cognom_variants SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE moderation_status = 'pendent'`
+	case "cognom_referencia":
+		stmt = `UPDATE cognom_referencies SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE moderation_status = 'pendent'`
+	case "event_historic":
+		stmt = `UPDATE events_historics SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE moderation_status = 'pendent'`
+	default:
+		return 0, fmt.Errorf("bulk moderacio no suportat: %s", objectType)
+	}
+	const maxIDsPerChunk = 900
+	total := 0
+	for start := 0; start < len(ids); start += maxIDsPerChunk {
+		end := start + maxIDsPerChunk
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunk := ids[start:end]
+		if len(chunk) == 0 {
+			continue
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(chunk)), ",")
+		stmtChunk := stmt + " AND id IN (" + placeholders + ")"
+		argsChunk := append([]interface{}{}, args...)
+		for _, id := range chunk {
+			argsChunk = append(argsChunk, id)
+		}
+		stmtChunk = formatPlaceholders(h.style, stmtChunk)
+		res, err := h.db.Exec(stmtChunk, argsChunk...)
+		if err != nil {
+			return total, err
+		}
+		rows, err := res.RowsAffected()
+		if err == nil {
+			total += int(rows)
+		}
+	}
+	return total, nil
 }
 
 func (h sqlHelper) updateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error {
@@ -7826,6 +7908,16 @@ func (h sqlHelper) listTranscripcioRawChangesPending() ([]TranscripcioRawChange,
 	return res, rows.Err()
 }
 
+func (h sqlHelper) countTranscripcioRawChangesPending() (int, error) {
+	query := `SELECT COUNT(*) FROM transcripcions_raw_canvis WHERE moderation_status = 'pendent'`
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (h sqlHelper) updateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error {
 	stmt := `UPDATE transcripcions_raw_canvis SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ? WHERE id = ?`
 	stmt = formatPlaceholders(h.style, stmt)
@@ -8856,6 +8948,120 @@ func (h sqlHelper) listWikiPending(limit int) ([]WikiPendingItem, error) {
 	return res, rows.Err()
 }
 
+func (h sqlHelper) listWikiPendingChanges(limit int) ([]WikiChange, []int, error) {
+	query := `
+        SELECT q.change_id, q.object_type, q.object_id, q.changed_at, q.changed_by, q.created_at,
+               c.id, c.object_type, c.object_id, c.change_type, c.field_key, c.old_value, c.new_value, c.metadata,
+               c.moderation_status, c.moderated_by, c.moderated_at, c.moderation_notes,
+               c.changed_by, c.changed_at
+        FROM wiki_pending_queue q
+        LEFT JOIN wiki_canvis c ON c.id = q.change_id
+        ORDER BY q.changed_at DESC, q.change_id DESC`
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", limit)
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	var res []WikiChange
+	var stale []int
+	for rows.Next() {
+		var (
+			qChangeID   int
+			qObjectType string
+			qObjectID   int
+			qChangedAt  time.Time
+			qChangedBy  sql.NullInt64
+			qCreatedAt  time.Time
+			cID         sql.NullInt64
+			cObjectType sql.NullString
+			cObjectID   sql.NullInt64
+			cChangeType sql.NullString
+			cFieldKey   sql.NullString
+			cOldValue   sql.NullString
+			cNewValue   sql.NullString
+			cMetadata   sql.NullString
+			cStatus     sql.NullString
+			cModerated  sql.NullInt64
+			cModeratedAt sql.NullTime
+			cNotes      sql.NullString
+			cChangedBy  sql.NullInt64
+			cChangedAt  sql.NullTime
+		)
+		if err := rows.Scan(
+			&qChangeID,
+			&qObjectType,
+			&qObjectID,
+			&qChangedAt,
+			&qChangedBy,
+			&qCreatedAt,
+			&cID,
+			&cObjectType,
+			&cObjectID,
+			&cChangeType,
+			&cFieldKey,
+			&cOldValue,
+			&cNewValue,
+			&cMetadata,
+			&cStatus,
+			&cModerated,
+			&cModeratedAt,
+			&cNotes,
+			&cChangedBy,
+			&cChangedAt,
+		); err != nil {
+			return nil, nil, err
+		}
+		if !cID.Valid {
+			stale = append(stale, qChangeID)
+			continue
+		}
+		status := strings.TrimSpace(cStatus.String)
+		if status != "pendent" {
+			stale = append(stale, qChangeID)
+			continue
+		}
+		objType := strings.TrimSpace(cObjectType.String)
+		if objType == "" {
+			objType = qObjectType
+		}
+		objID := 0
+		if cObjectID.Valid {
+			objID = int(cObjectID.Int64)
+		} else {
+			objID = qObjectID
+		}
+		if !cChangedBy.Valid {
+			cChangedBy = qChangedBy
+		}
+		changedAt := qChangedAt
+		if cChangedAt.Valid {
+			changedAt = cChangedAt.Time
+		}
+		change := WikiChange{
+			ID:             int(cID.Int64),
+			ObjectType:     objType,
+			ObjectID:       objID,
+			ChangeType:     cChangeType.String,
+			FieldKey:       cFieldKey.String,
+			OldValue:       cOldValue.String,
+			NewValue:       cNewValue.String,
+			Metadata:       cMetadata.String,
+			ModeracioEstat: status,
+			ModeratedBy:    cModerated,
+			ModeratedAt:    cModeratedAt,
+			ModeracioMotiu: cNotes.String,
+			ChangedBy:      cChangedBy,
+			ChangedAt:      changedAt,
+		}
+		res = append(res, change)
+	}
+	return res, stale, rows.Err()
+}
+
 func (h sqlHelper) searchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
 	where := []string{"1=1"}
 	args := []interface{}{}
@@ -9371,6 +9577,42 @@ func (h sqlHelper) listCognomVariants(f CognomVariantFilter) ([]CognomVariant, e
 	return res, nil
 }
 
+func (h sqlHelper) countCognomVariants(f CognomVariantFilter) (int, error) {
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	query := `SELECT COUNT(*) FROM cognom_variants`
+	var where []string
+	var args []interface{}
+	if f.CognomID > 0 {
+		where = append(where, "cognom_id = ?")
+		args = append(args, f.CognomID)
+	}
+	if strings.TrimSpace(f.Status) != "" {
+		where = append(where, "moderation_status = ?")
+		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if strings.TrimSpace(f.Q) != "" {
+		likeOp := "LIKE"
+		if h.style == "postgres" {
+			likeOp = "ILIKE"
+		}
+		where = append(where, "(variant "+likeOp+" ? OR "+keyCol+" "+likeOp+" ?)")
+		qLike := "%" + strings.TrimSpace(f.Q) + "%"
+		args = append(args, qLike, qLike)
+	}
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (h sqlHelper) resolveCognomPublicatByForma(forma string) (int, string, bool, error) {
 	key := normalizeCognomKey(forma)
 	if key == "" {
@@ -9767,6 +10009,33 @@ func (h sqlHelper) listCognomRedirectSuggestions(f CognomRedirectSuggestionFilte
 	return res, nil
 }
 
+func (h sqlHelper) countCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) (int, error) {
+	query := `SELECT COUNT(*) FROM cognoms_redirects_suggestions`
+	var where []string
+	var args []interface{}
+	if strings.TrimSpace(f.Status) != "" {
+		where = append(where, "moderation_status = ?")
+		args = append(args, f.Status)
+	}
+	if f.FromCognomID > 0 {
+		where = append(where, "from_cognom_id = ?")
+		args = append(args, f.FromCognomID)
+	}
+	if f.ToCognomID > 0 {
+		where = append(where, "to_cognom_id = ?")
+		args = append(args, f.ToCognomID)
+	}
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (h sqlHelper) updateCognomRedirectSuggestionModeracio(id int, estat, motiu string, moderatorID int) error {
 	stmt := `UPDATE cognoms_redirects_suggestions SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ? WHERE id = ?`
 	stmt = formatPlaceholders(h.style, stmt)
@@ -9857,6 +10126,29 @@ func (h sqlHelper) listCognomReferencies(f CognomReferenciaFilter) ([]CognomRefe
 		res = append(res, r)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) countCognomReferencies(f CognomReferenciaFilter) (int, error) {
+	query := `SELECT COUNT(*) FROM cognoms_referencies`
+	var where []string
+	var args []interface{}
+	if f.CognomID > 0 {
+		where = append(where, "cognom_id = ?")
+		args = append(args, f.CognomID)
+	}
+	if strings.TrimSpace(f.Status) != "" {
+		where = append(where, "moderation_status = ?")
+		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (h sqlHelper) updateCognomReferenciaModeracio(id int, estat, motiu string, moderatorID int) error {

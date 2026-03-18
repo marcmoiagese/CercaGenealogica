@@ -297,6 +297,42 @@ func (h sqlHelper) listEventsHistoric(filter EventHistoricFilter) ([]EventHistor
 	return res, nil
 }
 
+func (h sqlHelper) countEventsHistoric(filter EventHistoricFilter) (int, error) {
+	query := `SELECT COUNT(*) FROM events_historics e`
+	clauses := []string{}
+	args := []interface{}{}
+	useImpact := strings.TrimSpace(filter.ImpacteTipus) != "" || filter.IntensitatMin > 0 || strings.TrimSpace(filter.OrderBy) == "intensitat_desc"
+	if useImpact {
+		subClauses := []string{}
+		subArgs := []interface{}{}
+		if strings.TrimSpace(filter.ImpacteTipus) != "" {
+			subClauses = append(subClauses, "impacte_tipus = ?")
+			subArgs = append(subArgs, strings.TrimSpace(filter.ImpacteTipus))
+		}
+		if filter.IntensitatMin > 0 {
+			subClauses = append(subClauses, "intensitat >= ?")
+			subArgs = append(subArgs, filter.IntensitatMin)
+		}
+		subQuery := "SELECT event_id, MAX(intensitat) AS max_intensitat FROM events_historics_impactes"
+		if len(subClauses) > 0 {
+			subQuery += " WHERE " + strings.Join(subClauses, " AND ")
+		}
+		subQuery += " GROUP BY event_id"
+		query += " JOIN (" + subQuery + ") i ON i.event_id = e.id"
+		args = append(args, subArgs...)
+	}
+	clauses, args = appendEventHistoricFilterClauses(h.style, clauses, args, filter)
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (h sqlHelper) updateEventHistoricModeracio(id int, estat, notes string, moderatorID int) error {
 	estat = strings.TrimSpace(estat)
 	if estat == "" {

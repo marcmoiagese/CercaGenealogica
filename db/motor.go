@@ -158,6 +158,7 @@ type DB interface {
 	UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error)
 	UpdateCognom(c *Cognom) error
 	ListCognomVariants(f CognomVariantFilter) ([]CognomVariant, error)
+	CountCognomVariants(f CognomVariantFilter) (int, error)
 	CreateCognomVariant(v *CognomVariant) (int, error)
 	UpdateCognomVariantModeracio(id int, estat, motiu string, moderatorID int) error
 	// Cognoms redirects (alias -> canònic)
@@ -170,10 +171,12 @@ type DB interface {
 	CreateCognomRedirectSuggestion(s *CognomRedirectSuggestion) (int, error)
 	GetCognomRedirectSuggestion(id int) (*CognomRedirectSuggestion, error)
 	ListCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) ([]CognomRedirectSuggestion, error)
+	CountCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) (int, error)
 	UpdateCognomRedirectSuggestionModeracio(id int, estat, motiu string, moderatorID int) error
 	// Cognoms referències (moderables)
 	CreateCognomReferencia(ref *CognomReferencia) (int, error)
 	ListCognomReferencies(f CognomReferenciaFilter) ([]CognomReferencia, error)
+	CountCognomReferencies(f CognomReferenciaFilter) (int, error)
 	UpdateCognomReferenciaModeracio(id int, estat, motiu string, moderatorID int) error
 	// Cerca avançada
 	UpsertSearchDoc(doc *SearchDoc) error
@@ -293,6 +296,7 @@ type DB interface {
 	GetEventHistoricBySlug(slug string) (*EventHistoric, error)
 	UpdateEventHistoric(e *EventHistoric) error
 	ListEventsHistoric(filter EventHistoricFilter) ([]EventHistoric, error)
+	CountEventsHistoric(filter EventHistoricFilter) (int, error)
 	UpdateEventHistoricModeracio(id int, estat, notes string, moderatorID int) error
 	ListEventImpacts(eventID int) ([]EventHistoricImpact, error)
 	ReplaceEventImpacts(eventID int, impacts []EventHistoricImpact) error
@@ -300,6 +304,7 @@ type DB interface {
 
 	// Persones (moderació)
 	ListPersones(filter PersonaFilter) ([]Persona, error)
+	CountPersones(filter PersonaFilter) (int, error)
 	GetPersona(id int) (*Persona, error)
 	CreatePersona(p *Persona) (int, error)
 	UpdatePersona(p *Persona) error
@@ -323,6 +328,7 @@ type DB interface {
 	UpdateNivellModeracio(id int, estat, motiu string, moderatorID int) error
 	UpdateMunicipiModeracio(id int, estat, motiu string, moderatorID int) error
 	UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error
+	BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error)
 	UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error
 	UpdateTranscripcioModeracioWithDemografia(id int, estat, motiu string, moderatorID int, municipiID, year int, tipus string, delta int) error
 	// Arxius CRUD
@@ -410,6 +416,7 @@ type DB interface {
 	GetTranscripcioRawChange(id int) (*TranscripcioRawChange, error)
 	ListTranscripcioRawChanges(transcripcioID int) ([]TranscripcioRawChange, error)
 	ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, error)
+	CountTranscripcioRawChangesPending() (int, error)
 	UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error
 	ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error)
 	CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error)
@@ -440,6 +447,7 @@ type DB interface {
 	EnqueueWikiPending(change *WikiChange) error
 	DequeueWikiPending(changeID int) error
 	ListWikiPending(limit int) ([]WikiPendingItem, error)
+	ListWikiPendingChanges(limit int) ([]WikiChange, []int, error)
 	// CSV import templates
 	CreateCSVImportTemplate(t *CSVImportTemplate) (int, error)
 	UpdateCSVImportTemplate(t *CSVImportTemplate) error

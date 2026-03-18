@@ -124,55 +124,55 @@ func (a *App) adminControlKPIs() (adminControlKPIsResponse, error) {
 
 func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, error) {
 	counts := map[string]int{}
-	if rows, err := a.DB.ListPersones(db.PersonaFilter{Estat: "pendent"}); err != nil {
+	if total, err := a.DB.CountPersones(db.PersonaFilter{Estat: "pendent"}); err != nil {
 		return 0, nil, err
 	} else {
-		counts["persona"] = len(rows)
+		counts["persona"] = total
 	}
-	if rows, err := a.DB.ListArxius(db.ArxiuFilter{Status: "pendent"}); err != nil {
+	if total, err := a.DB.CountArxius(db.ArxiuFilter{Status: "pendent"}); err != nil {
 		return 0, nil, err
 	} else {
-		counts["arxiu"] = len(rows)
+		counts["arxiu"] = total
 	}
-	if rows, err := a.DB.ListLlibres(db.LlibreFilter{Status: "pendent"}); err != nil {
+	if total, err := a.DB.CountLlibres(db.LlibreFilter{Status: "pendent"}); err != nil {
 		return 0, nil, err
 	} else {
-		counts["llibre"] = len(rows)
+		counts["llibre"] = total
 	}
-	if rows, err := a.DB.ListNivells(db.NivellAdminFilter{Status: "pendent"}); err != nil {
+	if total, err := a.DB.CountNivells(db.NivellAdminFilter{Status: "pendent"}); err != nil {
 		return 0, nil, err
 	} else {
-		counts["nivell"] = len(rows)
+		counts["nivell"] = total
 	}
-	if rows, err := a.DB.ListMunicipis(db.MunicipiFilter{Status: "pendent"}); err != nil {
+	if total, err := a.DB.CountMunicipis(db.MunicipiFilter{Status: "pendent"}); err != nil {
 		return 0, nil, err
 	} else {
-		counts["municipi"] = len(rows)
+		counts["municipi"] = total
 	}
-	if rows, err := a.DB.ListArquebisbats(db.ArquebisbatFilter{Status: "pendent"}); err != nil {
+	if total, err := a.DB.CountArquebisbats(db.ArquebisbatFilter{Status: "pendent"}); err != nil {
 		return 0, nil, err
 	} else {
-		counts["eclesiastic"] = len(rows)
+		counts["eclesiastic"] = total
 	}
-	if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err != nil {
+	if total, err := a.DB.CountCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err != nil {
 		return 0, nil, err
 	} else {
-		counts["cognom_variant"] = len(rows)
+		counts["cognom_variant"] = total
 	}
-	if rows, err := a.DB.ListCognomReferencies(db.CognomReferenciaFilter{Status: "pendent"}); err != nil {
+	if total, err := a.DB.CountCognomReferencies(db.CognomReferenciaFilter{Status: "pendent"}); err != nil {
 		return 0, nil, err
 	} else {
-		counts["cognom_referencia"] = len(rows)
+		counts["cognom_referencia"] = total
 	}
-	if rows, err := a.DB.ListCognomRedirectSuggestions(db.CognomRedirectSuggestionFilter{Status: "pendent"}); err != nil {
+	if total, err := a.DB.CountCognomRedirectSuggestions(db.CognomRedirectSuggestionFilter{Status: "pendent"}); err != nil {
 		return 0, nil, err
 	} else {
-		counts["cognom_merge"] = len(rows)
+		counts["cognom_merge"] = total
 	}
-	if rows, err := a.DB.ListEventsHistoric(db.EventHistoricFilter{Status: "pendent"}); err != nil {
+	if total, err := a.DB.CountEventsHistoric(db.EventHistoricFilter{Status: "pendent"}); err != nil {
 		return 0, nil, err
 	} else {
-		counts["event_historic"] = len(rows)
+		counts["event_historic"] = total
 	}
 	if _, total, err := a.DB.ListPendingMunicipiHistoriaGeneralVersions(1, 0); err != nil {
 		return 0, nil, err
@@ -194,15 +194,15 @@ func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, er
 	} else {
 		counts["registre"] = total
 	}
-	if rows, err := a.DB.ListTranscripcioRawChangesPending(); err != nil {
+	if total, err := a.DB.CountTranscripcioRawChangesPending(); err != nil {
 		return 0, nil, err
 	} else {
-		counts["registre_canvi"] = len(rows)
+		counts["registre_canvi"] = total
 	}
 
-	if items, err := a.DB.ListWikiPending(0); err != nil {
+	if changes, stale, err := a.DB.ListWikiPendingChanges(0); err != nil {
 		return 0, nil, err
-	} else if len(items) > 0 {
+	} else if len(changes) > 0 || len(stale) > 0 {
 		typeMap := map[string]string{
 			"municipi":       "municipi_canvi",
 			"arxiu":          "arxiu_canvi",
@@ -211,15 +211,10 @@ func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, er
 			"cognom":         "cognom_canvi",
 			"event_historic": "event_historic_canvi",
 		}
-		for _, item := range items {
-			change, err := a.DB.GetWikiChange(item.ChangeID)
-			if err != nil || change == nil {
-				continue
-			}
-			if change.ModeracioEstat != "pendent" {
-				_ = a.DB.DequeueWikiPending(change.ID)
-				continue
-			}
+		for _, changeID := range stale {
+			_ = a.DB.DequeueWikiPending(changeID)
+		}
+		for _, change := range changes {
 			objType := typeMap[change.ObjectType]
 			if objType == "" {
 				objType = "wiki_canvi"

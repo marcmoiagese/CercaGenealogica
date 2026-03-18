@@ -463,6 +463,9 @@ func (d *MySQL) BumpPolicyPermissionsVersion(politicaID int) error {
 func (d *MySQL) ListPersones(f PersonaFilter) ([]Persona, error) {
 	return d.help.listPersones(f)
 }
+func (d *MySQL) CountPersones(f PersonaFilter) (int, error) {
+	return d.help.countPersones(f)
+}
 func (d *MySQL) GetPersona(id int) (*Persona, error) {
 	return d.help.getPersona(id)
 }
@@ -759,6 +762,9 @@ func (d *MySQL) UpdateArquebisbat(ae *Arquebisbat) error {
 }
 func (d *MySQL) UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateArquebisbatModeracio(id, estat, motiu, moderatorID)
+}
+func (d *MySQL) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
+	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
 }
 func (d *MySQL) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {
 	return d.help.listArquebisbatMunicipis(munID)
@@ -1190,6 +1196,9 @@ func (d *MySQL) GetTranscripcioRawChange(id int) (*TranscripcioRawChange, error)
 func (d *MySQL) ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, error) {
 	return d.help.listTranscripcioRawChangesPending()
 }
+func (d *MySQL) CountTranscripcioRawChangesPending() (int, error) {
+	return d.help.countTranscripcioRawChangesPending()
+}
 func (d *MySQL) UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateTranscripcioRawChangeModeracio(id, estat, motiu, moderatorID)
 }
@@ -1276,6 +1285,9 @@ func (d *MySQL) DequeueWikiPending(changeID int) error {
 }
 func (d *MySQL) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 	return d.help.listWikiPending(limit)
+}
+func (d *MySQL) ListWikiPendingChanges(limit int) ([]WikiChange, []int, error) {
+	return d.help.listWikiPendingChanges(limit)
 }
 // Espai personal
 func (d *MySQL) CreateEspaiArbre(a *EspaiArbre) (int, error) { return d.help.createEspaiArbre(a) }
@@ -1635,6 +1647,9 @@ func (d *MySQL) UpdateCognom(c *Cognom) error {
 func (d *MySQL) ListCognomVariants(f CognomVariantFilter) ([]CognomVariant, error) {
 	return d.help.listCognomVariants(f)
 }
+func (d *MySQL) CountCognomVariants(f CognomVariantFilter) (int, error) {
+	return d.help.countCognomVariants(f)
+}
 func (d *MySQL) ResolveCognomPublicatByForma(forma string) (int, string, bool, error) {
 	return d.help.resolveCognomPublicatByForma(forma)
 }
@@ -1679,6 +1694,9 @@ func (d *MySQL) GetCognomRedirectSuggestion(id int) (*CognomRedirectSuggestion, 
 func (d *MySQL) ListCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) ([]CognomRedirectSuggestion, error) {
 	return d.help.listCognomRedirectSuggestions(f)
 }
+func (d *MySQL) CountCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) (int, error) {
+	return d.help.countCognomRedirectSuggestions(f)
+}
 
 func (d *MySQL) UpdateCognomRedirectSuggestionModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateCognomRedirectSuggestionModeracio(id, estat, motiu, moderatorID)
@@ -1690,6 +1708,9 @@ func (d *MySQL) CreateCognomReferencia(ref *CognomReferencia) (int, error) {
 
 func (d *MySQL) ListCognomReferencies(f CognomReferenciaFilter) ([]CognomReferencia, error) {
 	return d.help.listCognomReferencies(f)
+}
+func (d *MySQL) CountCognomReferencies(f CognomReferenciaFilter) (int, error) {
+	return d.help.countCognomReferencies(f)
 }
 
 func (d *MySQL) UpdateCognomReferenciaModeracio(id int, estat, motiu string, moderatorID int) error {
@@ -2027,6 +2048,9 @@ func (d *MySQL) UpdateEventHistoric(e *EventHistoric) error {
 
 func (d *MySQL) ListEventsHistoric(filter EventHistoricFilter) ([]EventHistoric, error) {
 	return d.help.listEventsHistoric(filter)
+}
+func (d *MySQL) CountEventsHistoric(filter EventHistoricFilter) (int, error) {
+	return d.help.countEventsHistoric(filter)
 }
 
 func (d *MySQL) UpdateEventHistoricModeracio(id int, estat, notes string, moderatorID int) error {

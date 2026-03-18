@@ -61,6 +61,19 @@ type moderacioBulkResult struct {
 	Skipped   int
 }
 
+type moderacioApplyMetrics struct {
+	UpdateDur   time.Duration
+	ActivityDur time.Duration
+}
+
+type moderacioBulkMetrics struct {
+	ResolveDur  time.Duration
+	UpdateDur   time.Duration
+	ActivityDur time.Duration
+	TotalDur    time.Duration
+	Mode        string
+}
+
 const (
 	moderacioAge0_24h = "0_24h"
 	moderacioAge1_3d  = "1_3d"
@@ -395,20 +408,15 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 			}
 		}
 		if (typeAllowed("municipi_canvi") || typeAllowed("arxiu_canvi") || typeAllowed("llibre_canvi") || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi") || typeAllowed("wiki_canvi")) && (statusAll || statusFilter == "pendent") {
-			if items, err := a.DB.ListWikiPending(0); err == nil {
-				for _, item := range items {
-					if !isValidWikiObjectType(item.ObjectType) {
+			if changes, stale, err := a.DB.ListWikiPendingChanges(0); err == nil {
+				for _, changeID := range stale {
+					_ = a.DB.DequeueWikiPending(changeID)
+				}
+				for _, change := range changes {
+					if !isValidWikiObjectType(change.ObjectType) {
 						continue
 					}
-					change, err := a.DB.GetWikiChange(item.ChangeID)
-					if err != nil || change == nil {
-						continue
-					}
-					if change.ModeracioEstat != "pendent" {
-						_ = a.DB.DequeueWikiPending(change.ID)
-						continue
-					}
-					wikiChanges = append(wikiChanges, *change)
+					wikiChanges = append(wikiChanges, change)
 				}
 			}
 		}
@@ -1384,12 +1392,34 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *App) applyModeracioAction(ctx context.Context, action string, objType string, id int, motiu string, userID int) error {
+func (a *App) applyModeracioAction(ctx context.Context, action string, objType string, id int, motiu string, userID int, metrics *moderacioApplyMetrics) error {
+	if err := a.applyModeracioUpdate(action, objType, id, motiu, userID, metrics); err != nil {
+		return err
+	}
+	return a.applyModeracioActivity(ctx, action, objType, id, motiu, userID, metrics)
+}
+
+func (a *App) applyModeracioUpdate(action string, objType string, id int, motiu string, userID int, metrics *moderacioApplyMetrics) error {
+	start := time.Now()
+	var err error
 	switch action {
 	case "approve":
-		if err := a.updateModeracioObject(objType, id, "publicat", "", userID); err != nil {
-			return err
-		}
+		err = a.updateModeracioObject(objType, id, "publicat", "", userID)
+	case "reject":
+		err = a.updateModeracioObject(objType, id, "rebutjat", motiu, userID)
+	default:
+		err = fmt.Errorf("acció no vàlida")
+	}
+	if metrics != nil {
+		metrics.UpdateDur += time.Since(start)
+	}
+	return err
+}
+
+func (a *App) applyModeracioActivity(ctx context.Context, action string, objType string, id int, motiu string, userID int, metrics *moderacioApplyMetrics) error {
+	start := time.Now()
+	switch action {
+	case "approve":
 		if acts, err := a.DB.ListActivityByObject(objType, id, "pendent"); err == nil {
 			for _, act := range acts {
 				_ = a.ValidateActivity(act.ID, userID)
@@ -1400,9 +1430,6 @@ func (a *App) applyModeracioAction(ctx context.Context, action string, objType s
 			a.registerEventHistoricModerationActivity(ctx, id, "publicat", userID, "")
 		}
 	case "reject":
-		if err := a.updateModeracioObject(objType, id, "rebutjat", motiu, userID); err != nil {
-			return err
-		}
 		if acts, err := a.DB.ListActivityByObject(objType, id, "pendent"); err == nil {
 			for _, act := range acts {
 				_ = a.DB.UpdateUserActivityStatus(act.ID, "anulat", &userID)
@@ -1413,18 +1440,32 @@ func (a *App) applyModeracioAction(ctx context.Context, action string, objType s
 			a.registerEventHistoricModerationActivity(ctx, id, "rebutjat", userID, motiu)
 		}
 	default:
+		if metrics != nil {
+			metrics.ActivityDur += time.Since(start)
+		}
 		return fmt.Errorf("acció no vàlida")
+	}
+	if metrics != nil {
+		metrics.ActivityDur += time.Since(start)
 	}
 	return nil
 }
 
-func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, motiu string, userID int, bulkUserID int, update func(processed int, total int)) (moderacioBulkResult, error) {
+func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, motiu string, userID int, bulkUserID int, update func(processed int, total int)) (moderacioBulkResult, moderacioBulkMetrics, error) {
 	if update == nil {
 		update = func(int, int) {}
 	}
+	start := time.Now()
 	processed := 0
 	total := 0
 	errCount := 0
+	skipped := 0
+	resolveDur := time.Duration(0)
+	updateDur := time.Duration(0)
+	applyMetrics := &moderacioApplyMetrics{}
+	perItemUsed := false
+	bulkUsed := false
+
 	updateTotal := func(add int) {
 		if add <= 0 {
 			return
@@ -1433,23 +1474,52 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 		update(processed, total)
 	}
 	apply := func(objType string, id int) {
-		if err := a.applyModeracioAction(ctx, action, objType, id, motiu, userID); err != nil {
+		perItemUsed = true
+		if err := a.applyModeracioAction(ctx, action, objType, id, motiu, userID, applyMetrics); err != nil {
 			Errorf("Moderacio massiva %s %s:%d ha fallat: %v", action, objType, id, err)
 			errCount++
 		}
 		processed++
 		update(processed, total)
 	}
+	applyActivity := func(objType string, id int) {
+		perItemUsed = true
+		if err := a.applyModeracioActivity(ctx, action, objType, id, motiu, userID, applyMetrics); err != nil {
+			Errorf("Moderacio massiva %s activitats %s:%d ha fallat: %v", action, objType, id, err)
+			errCount++
+		}
+		processed++
+		update(processed, total)
+	}
+
+	bulkStatus := ""
+	bulkNotes := ""
+	switch action {
+	case "approve":
+		bulkStatus = "publicat"
+	case "reject":
+		bulkStatus = "rebutjat"
+		bulkNotes = motiu
+	default:
+		return moderacioBulkResult{}, moderacioBulkMetrics{}, fmt.Errorf("acció no vàlida")
+	}
 
 	wikiPendingByType := map[string][]int{}
-	if items, err := a.DB.ListWikiPending(0); err == nil {
-		for _, item := range items {
-			if !isValidWikiObjectType(item.ObjectType) {
+	resolveStart := time.Now()
+	if changes, stale, err := a.DB.ListWikiPendingChanges(0); err == nil {
+		for _, changeID := range stale {
+			_ = a.DB.DequeueWikiPending(changeID)
+		}
+		for _, change := range changes {
+			if !isValidWikiObjectType(change.ObjectType) {
 				continue
 			}
-			wikiPendingByType[item.ObjectType] = append(wikiPendingByType[item.ObjectType], item.ChangeID)
+			wikiPendingByType[change.ObjectType] = append(wikiPendingByType[change.ObjectType], change.ID)
 		}
+	} else {
+		errCount++
 	}
+	resolveDur += time.Since(resolveStart)
 
 	types := append([]string{}, moderacioBulkAllowedTypes...)
 	if bulkType != "" && bulkType != "all" {
@@ -1458,121 +1528,304 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 	for _, objType := range types {
 		switch objType {
 		case "persona":
-			if rows, err := a.DB.ListPersones(db.PersonaFilter{Estat: "pendent"}); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, err := a.DB.ListPersones(db.PersonaFilter{Estat: "pendent"})
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			updateTotal(len(rows))
+			for _, row := range rows {
+				apply(objType, row.ID)
 			}
 		case "arxiu":
-			if rows, err := a.DB.ListArxius(db.ArxiuFilter{Status: "pendent"}); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, err := a.DB.ListArxius(db.ArxiuFilter{Status: "pendent", Limit: -1})
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				ids = append(ids, row.ID)
+			}
+			updateTotal(len(ids))
+			if len(ids) == 0 {
+				break
+			}
+			bulkUsed = true
+			updateStart := time.Now()
+			updated, err := a.DB.BulkUpdateModeracioSimple(objType, bulkStatus, bulkNotes, userID, ids)
+			updateDur += time.Since(updateStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			if updated < len(ids) {
+				skipped += len(ids) - updated
+			}
+			for _, id := range ids {
+				applyActivity(objType, id)
 			}
 		case "llibre":
-			if rows, err := a.DB.ListLlibres(db.LlibreFilter{Status: "pendent"}); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, err := a.DB.ListLlibres(db.LlibreFilter{Status: "pendent"})
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				ids = append(ids, row.ID)
+			}
+			updateTotal(len(ids))
+			if len(ids) == 0 {
+				break
+			}
+			bulkUsed = true
+			updateStart := time.Now()
+			updated, err := a.DB.BulkUpdateModeracioSimple(objType, bulkStatus, bulkNotes, userID, ids)
+			updateDur += time.Since(updateStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			if updated < len(ids) {
+				skipped += len(ids) - updated
+			}
+			for _, id := range ids {
+				applyActivity(objType, id)
 			}
 		case "nivell":
-			if rows, err := a.DB.ListNivells(db.NivellAdminFilter{Status: "pendent"}); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, err := a.DB.ListNivells(db.NivellAdminFilter{Status: "pendent"})
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				ids = append(ids, row.ID)
+			}
+			updateTotal(len(ids))
+			if len(ids) == 0 {
+				break
+			}
+			bulkUsed = true
+			updateStart := time.Now()
+			updated, err := a.DB.BulkUpdateModeracioSimple(objType, bulkStatus, bulkNotes, userID, ids)
+			updateDur += time.Since(updateStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			if updated < len(ids) {
+				skipped += len(ids) - updated
+			}
+			for _, id := range ids {
+				applyActivity(objType, id)
 			}
 		case "municipi":
-			if rows, err := a.DB.ListMunicipis(db.MunicipiFilter{Status: "pendent"}); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, err := a.DB.ListMunicipis(db.MunicipiFilter{Status: "pendent"})
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				ids = append(ids, row.ID)
+			}
+			updateTotal(len(ids))
+			if len(ids) == 0 {
+				break
+			}
+			bulkUsed = true
+			updateStart := time.Now()
+			updated, err := a.DB.BulkUpdateModeracioSimple(objType, bulkStatus, bulkNotes, userID, ids)
+			updateDur += time.Since(updateStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			if updated < len(ids) {
+				skipped += len(ids) - updated
+			}
+			for _, id := range ids {
+				applyActivity(objType, id)
 			}
 		case "eclesiastic":
-			if rows, err := a.DB.ListArquebisbats(db.ArquebisbatFilter{Status: "pendent"}); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, err := a.DB.ListArquebisbats(db.ArquebisbatFilter{Status: "pendent"})
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				ids = append(ids, row.ID)
+			}
+			updateTotal(len(ids))
+			if len(ids) == 0 {
+				break
+			}
+			bulkUsed = true
+			updateStart := time.Now()
+			updated, err := a.DB.BulkUpdateModeracioSimple(objType, bulkStatus, bulkNotes, userID, ids)
+			updateDur += time.Since(updateStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			if updated < len(ids) {
+				skipped += len(ids) - updated
+			}
+			for _, id := range ids {
+				applyActivity(objType, id)
 			}
 		case "cognom_variant":
-			if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: "pendent"})
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				ids = append(ids, row.ID)
+			}
+			updateTotal(len(ids))
+			if len(ids) == 0 {
+				break
+			}
+			bulkUsed = true
+			updateStart := time.Now()
+			updated, err := a.DB.BulkUpdateModeracioSimple(objType, bulkStatus, bulkNotes, userID, ids)
+			updateDur += time.Since(updateStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			if updated < len(ids) {
+				skipped += len(ids) - updated
+			}
+			for _, id := range ids {
+				applyActivity(objType, id)
 			}
 		case "cognom_referencia":
-			if rows, err := a.DB.ListCognomReferencies(db.CognomReferenciaFilter{Status: "pendent"}); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, err := a.DB.ListCognomReferencies(db.CognomReferenciaFilter{Status: "pendent"})
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				ids = append(ids, row.ID)
+			}
+			updateTotal(len(ids))
+			if len(ids) == 0 {
+				break
+			}
+			bulkUsed = true
+			updateStart := time.Now()
+			updated, err := a.DB.BulkUpdateModeracioSimple(objType, bulkStatus, bulkNotes, userID, ids)
+			updateDur += time.Since(updateStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			if updated < len(ids) {
+				skipped += len(ids) - updated
+			}
+			for _, id := range ids {
+				applyActivity(objType, id)
 			}
 		case "cognom_merge":
-			if rows, err := a.DB.ListCognomRedirectSuggestions(db.CognomRedirectSuggestionFilter{Status: "pendent"}); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, err := a.DB.ListCognomRedirectSuggestions(db.CognomRedirectSuggestionFilter{Status: "pendent"})
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			updateTotal(len(rows))
+			for _, row := range rows {
+				apply(objType, row.ID)
 			}
 		case "municipi_historia_general":
-			if rows, _, err := a.DB.ListPendingMunicipiHistoriaGeneralVersions(0, 0); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, _, err := a.DB.ListPendingMunicipiHistoriaGeneralVersions(0, 0)
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			updateTotal(len(rows))
+			for _, row := range rows {
+				apply(objType, row.ID)
 			}
 		case "municipi_historia_fet":
-			if rows, _, err := a.DB.ListPendingMunicipiHistoriaFetVersions(0, 0); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, _, err := a.DB.ListPendingMunicipiHistoriaFetVersions(0, 0)
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			updateTotal(len(rows))
+			for _, row := range rows {
+				apply(objType, row.ID)
 			}
 		case "municipi_anecdota_version":
-			if rows, _, err := a.DB.ListPendingMunicipiAnecdotariVersions(0, 0); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, _, err := a.DB.ListPendingMunicipiAnecdotariVersions(0, 0)
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			updateTotal(len(rows))
+			for _, row := range rows {
+				apply(objType, row.ID)
 			}
 		case "event_historic":
-			if rows, err := a.DB.ListEventsHistoric(db.EventHistoricFilter{Status: "pendent"}); err == nil {
-				updateTotal(len(rows))
-				for _, row := range rows {
-					apply(objType, row.ID)
-				}
-			} else {
+			resolveStart = time.Now()
+			rows, err := a.DB.ListEventsHistoric(db.EventHistoricFilter{Status: "pendent"})
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
 				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				ids = append(ids, row.ID)
+			}
+			updateTotal(len(ids))
+			if len(ids) == 0 {
+				break
+			}
+			bulkUsed = true
+			updateStart := time.Now()
+			updated, err := a.DB.BulkUpdateModeracioSimple(objType, bulkStatus, bulkNotes, userID, ids)
+			updateDur += time.Since(updateStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			if updated < len(ids) {
+				skipped += len(ids) - updated
+			}
+			for _, id := range ids {
+				applyActivity(objType, id)
 			}
 		case "municipi_canvi":
 			ids := wikiPendingByType["municipi"]
@@ -1611,10 +1864,12 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, id)
 			}
 		case "registre":
+			resolveStart = time.Now()
 			rows, err := a.DB.ListTranscripcionsRawGlobal(db.TranscripcioFilter{
 				Status: "pendent",
 				Limit:  -1,
 			})
+			resolveDur += time.Since(resolveStart)
 			if err != nil {
 				errCount++
 				break
@@ -1634,10 +1889,53 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			}
 		}
 	}
-	if errCount > 0 {
-		return moderacioBulkResult{Total: total, Processed: processed, Errors: errCount}, fmt.Errorf("errors: %d", errCount)
+	updateDur += applyMetrics.UpdateDur
+	metrics := moderacioBulkMetrics{
+		ResolveDur:  resolveDur,
+		UpdateDur:   updateDur,
+		ActivityDur: applyMetrics.ActivityDur,
+		TotalDur:    time.Since(start),
+		Mode:        "per-item",
 	}
-	return moderacioBulkResult{Total: total, Processed: processed, Errors: errCount}, nil
+	if bulkUsed {
+		metrics.Mode = "bulk-simple"
+		if perItemUsed {
+			metrics.Mode = "hybrid"
+		}
+	}
+	result := moderacioBulkResult{Total: total, Processed: processed, Errors: errCount, Skipped: skipped}
+	if errCount > 0 {
+		return result, metrics, fmt.Errorf("errors: %d", errCount)
+	}
+	return result, metrics, nil
+}
+
+func (a *App) logModeracioBulkExecution(action, scope, bulkType string, userID int, bulkUserID int, async bool, result moderacioBulkResult, metrics moderacioBulkMetrics, auditDur time.Duration) {
+	engine := strings.TrimSpace(a.Config["DB_ENGINE"])
+	updated := result.Processed
+	if result.Skipped > 0 && updated >= result.Skipped {
+		updated = result.Processed - result.Skipped
+	}
+	Infof(
+		"Moderacio bulk exec engine=%s mode=%s actor=%d action=%s scope=%s type=%s bulk_user_id=%d targets=%d updated=%d skipped=%d errors=%d resolve_dur=%s update_dur=%s activity_dur=%s audit_dur=%s total_dur=%s async=%t",
+		engine,
+		metrics.Mode,
+		userID,
+		action,
+		scope,
+		bulkType,
+		bulkUserID,
+		result.Total,
+		updated,
+		result.Skipped,
+		result.Errors,
+		metrics.ResolveDur,
+		metrics.UpdateDur,
+		metrics.ActivityDur,
+		auditDur,
+		metrics.TotalDur,
+		async,
+	)
 }
 
 // Accions massives de moderació
@@ -1703,11 +2001,12 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 			job := a.moderacioBulkStore().newJob(action, scope, bulkType, user.ID, bulkUserID)
 			store := a.moderacioBulkStore()
 			go func() {
-				result, err := a.processModeracioBulkAll(context.Background(), action, bulkType, motiu, user.ID, bulkUserID, func(processed int, total int) {
+				result, metrics, err := a.processModeracioBulkAll(context.Background(), action, bulkType, motiu, user.ID, bulkUserID, func(processed int, total int) {
 					store.setTotal(job.ID, total)
 					store.setProcessed(job.ID, processed)
 				})
 				store.finish(job.ID, err)
+				auditStart := time.Now()
 				a.logAdminAudit(nil, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
 					"action":        action,
 					"scope":         scope,
@@ -1720,11 +2019,13 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 					"job_id":        job.ID,
 					"async":         true,
 				})
+				a.logModeracioBulkExecution(action, scope, bulkType, user.ID, bulkUserID, true, result, metrics, time.Since(auditStart))
 			}()
 			writeJSON(w, map[string]interface{}{"ok": true, "job_id": job.ID})
 			return
 		}
-		result, err := a.processModeracioBulkAll(r.Context(), action, bulkType, motiu, user.ID, bulkUserID, nil)
+		result, metrics, err := a.processModeracioBulkAll(r.Context(), action, bulkType, motiu, user.ID, bulkUserID, nil)
+		auditStart := time.Now()
 		a.logAdminAudit(r, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
 			"action":        action,
 			"scope":         scope,
@@ -1736,6 +2037,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 			"skipped":       result.Skipped,
 			"async":         false,
 		})
+		a.logModeracioBulkExecution(action, scope, bulkType, user.ID, bulkUserID, false, result, metrics, time.Since(auditStart))
 		if err != nil {
 			http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "err"), http.StatusSeeOther)
 			return
@@ -1784,7 +2086,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 		}
 		seen[key] = struct{}{}
 		total++
-		if err := a.applyModeracioAction(r.Context(), action, objType, id, motiu, user.ID); err != nil {
+		if err := a.applyModeracioAction(r.Context(), action, objType, id, motiu, user.ID, nil); err != nil {
 			Errorf("Moderacio massiva %s %s:%d ha fallat: %v", action, objType, id, err)
 			errCount++
 		}

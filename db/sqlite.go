@@ -482,6 +482,9 @@ func (d *SQLite) BumpPolicyPermissionsVersion(politicaID int) error {
 func (d *SQLite) ListPersones(f PersonaFilter) ([]Persona, error) {
 	return d.help.listPersones(f)
 }
+func (d *SQLite) CountPersones(f PersonaFilter) (int, error) {
+	return d.help.countPersones(f)
+}
 func (d *SQLite) GetPersona(id int) (*Persona, error) {
 	return d.help.getPersona(id)
 }
@@ -783,6 +786,9 @@ func (d *SQLite) UpdateArquebisbat(ae *Arquebisbat) error {
 }
 func (d *SQLite) UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateArquebisbatModeracio(id, estat, motiu, moderatorID)
+}
+func (d *SQLite) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
+	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
 }
 func (d *SQLite) ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error) {
 	return d.help.listArquebisbatMunicipis(munID)
@@ -1216,6 +1222,9 @@ func (d *SQLite) GetTranscripcioRawChange(id int) (*TranscripcioRawChange, error
 func (d *SQLite) ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, error) {
 	return d.help.listTranscripcioRawChangesPending()
 }
+func (d *SQLite) CountTranscripcioRawChangesPending() (int, error) {
+	return d.help.countTranscripcioRawChangesPending()
+}
 func (d *SQLite) UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateTranscripcioRawChangeModeracio(id, estat, motiu, moderatorID)
 }
@@ -1302,6 +1311,9 @@ func (d *SQLite) DequeueWikiPending(changeID int) error {
 }
 func (d *SQLite) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 	return d.help.listWikiPending(limit)
+}
+func (d *SQLite) ListWikiPendingChanges(limit int) ([]WikiChange, []int, error) {
+	return d.help.listWikiPendingChanges(limit)
 }
 // Espai personal
 func (d *SQLite) CreateEspaiArbre(a *EspaiArbre) (int, error) { return d.help.createEspaiArbre(a) }
@@ -1665,6 +1677,9 @@ func (d *SQLite) UpdateCognom(c *Cognom) error {
 func (d *SQLite) ListCognomVariants(f CognomVariantFilter) ([]CognomVariant, error) {
 	return d.help.listCognomVariants(f)
 }
+func (d *SQLite) CountCognomVariants(f CognomVariantFilter) (int, error) {
+	return d.help.countCognomVariants(f)
+}
 func (d *SQLite) ResolveCognomPublicatByForma(forma string) (int, string, bool, error) {
 	return d.help.resolveCognomPublicatByForma(forma)
 }
@@ -1709,6 +1724,9 @@ func (d *SQLite) GetCognomRedirectSuggestion(id int) (*CognomRedirectSuggestion,
 func (d *SQLite) ListCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) ([]CognomRedirectSuggestion, error) {
 	return d.help.listCognomRedirectSuggestions(f)
 }
+func (d *SQLite) CountCognomRedirectSuggestions(f CognomRedirectSuggestionFilter) (int, error) {
+	return d.help.countCognomRedirectSuggestions(f)
+}
 
 func (d *SQLite) UpdateCognomRedirectSuggestionModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateCognomRedirectSuggestionModeracio(id, estat, motiu, moderatorID)
@@ -1720,6 +1738,9 @@ func (d *SQLite) CreateCognomReferencia(ref *CognomReferencia) (int, error) {
 
 func (d *SQLite) ListCognomReferencies(f CognomReferenciaFilter) ([]CognomReferencia, error) {
 	return d.help.listCognomReferencies(f)
+}
+func (d *SQLite) CountCognomReferencies(f CognomReferenciaFilter) (int, error) {
+	return d.help.countCognomReferencies(f)
 }
 
 func (d *SQLite) UpdateCognomReferenciaModeracio(id int, estat, motiu string, moderatorID int) error {
@@ -2059,6 +2080,9 @@ func (d *SQLite) UpdateEventHistoric(e *EventHistoric) error {
 
 func (d *SQLite) ListEventsHistoric(filter EventHistoricFilter) ([]EventHistoric, error) {
 	return d.help.listEventsHistoric(filter)
+}
+func (d *SQLite) CountEventsHistoric(filter EventHistoricFilter) (int, error) {
+	return d.help.countEventsHistoric(filter)
 }
 
 func (d *SQLite) UpdateEventHistoricModeracio(id int, estat, notes string, moderatorID int) error {
