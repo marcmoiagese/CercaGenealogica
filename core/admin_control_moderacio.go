@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
 const adminControlModeracioSummaryCacheTTL = 10 * time.Second
@@ -26,61 +28,66 @@ func (a *App) AdminControlModeracioSummaryAPI(w http.ResponseWriter, r *http.Req
 		http.NotFound(w, r)
 		return
 	}
-	user, _, _, ok := a.requireModeracioUser(w, r)
+	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
 	if !ok {
 		return
 	}
 	filters, _ := parseModeracioFilters(r)
 	start := time.Now()
-	summary, mode, err := a.adminControlModeracioSummaryCached(filters)
+	summary, mode, scopeMode, err := a.adminControlModeracioSummaryCached(filters, user, perms, canModerateAll)
 	if err != nil {
 		http.Error(w, "No s'ha pogut carregar el resum", http.StatusInternalServerError)
 		return
 	}
-	Infof("Moderacio summary mode=%s user=%d status=%s type=%s age=%s dur=%s", mode, user.ID, strings.TrimSpace(filters.Status), strings.TrimSpace(filters.Type), strings.TrimSpace(filters.AgeBucket), time.Since(start))
+	Infof("Moderacio summary mode=%s scope=%s user=%d status=%s type=%s age=%s dur=%s", mode, scopeMode, user.ID, strings.TrimSpace(filters.Status), strings.TrimSpace(filters.Type), strings.TrimSpace(filters.AgeBucket), time.Since(start))
 	payload := map[string]interface{}{
 		"ok":           true,
 		"summary":      summary,
 		"summary_mode": mode,
+		"summary_scope": scopeMode,
 		"generated_at": time.Now().Format(time.RFC3339),
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func (a *App) adminControlModeracioSummaryCached(filters moderacioFilters) (moderacioSummary, string, error) {
-	total, byType, err := a.adminControlModeracioPendingCountsCached()
+func (a *App) adminControlModeracioSummaryCached(filters moderacioFilters, user *db.User, perms db.PolicyPermissions, canModerateAll bool) (moderacioSummary, string, string, error) {
+	total, byType, scopeMode, err := a.adminControlModeracioPendingCountsCached(user, perms, canModerateAll)
 	if err != nil {
-		return moderacioSummary{}, "", err
+		return moderacioSummary{}, "", "", err
 	}
-	return buildModeracioSummaryFromCounts(filters, total, byType), moderacioSummaryMode(filters), nil
+	return buildModeracioSummaryFromCounts(filters, total, byType), moderacioSummaryMode(filters), scopeMode, nil
 }
 
-func (a *App) adminControlModeracioPendingCountsCached() (int, []adminControlPendingType, error) {
+func (a *App) adminControlModeracioPendingCountsCached(user *db.User, perms db.PolicyPermissions, canModerateAll bool) (int, []adminControlPendingType, string, error) {
+	if !canModerateAll {
+		total, byType, err := a.adminPendingModerationCountsForUser(user, perms, canModerateAll)
+		return total, byType, "scoped", err
+	}
 	now := time.Now()
 	adminControlModeracioSummaryCache.mu.RLock()
 	if adminControlModeracioSummaryCache.loaded && now.Sub(adminControlModeracioSummaryCache.cachedAt) < adminControlModeracioSummaryCacheTTL {
 		total := adminControlModeracioSummaryCache.total
 		byType := adminControlModeracioSummaryCache.byType
 		adminControlModeracioSummaryCache.mu.RUnlock()
-		return total, byType, nil
+		return total, byType, "global", nil
 	}
 	adminControlModeracioSummaryCache.mu.RUnlock()
 
 	adminControlModeracioSummaryCache.mu.Lock()
 	defer adminControlModeracioSummaryCache.mu.Unlock()
 	if adminControlModeracioSummaryCache.loaded && now.Sub(adminControlModeracioSummaryCache.cachedAt) < adminControlModeracioSummaryCacheTTL {
-		return adminControlModeracioSummaryCache.total, adminControlModeracioSummaryCache.byType, nil
+		return adminControlModeracioSummaryCache.total, adminControlModeracioSummaryCache.byType, "global", nil
 	}
 	total, byType, err := a.adminPendingModerationCounts()
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, "", err
 	}
 	adminControlModeracioSummaryCache.loaded = true
 	adminControlModeracioSummaryCache.cachedAt = now
 	adminControlModeracioSummaryCache.total = total
 	adminControlModeracioSummaryCache.byType = byType
-	return total, byType, nil
+	return total, byType, "global", nil
 }
 
 func buildModeracioSummaryFromCounts(filters moderacioFilters, total int, byType []adminControlPendingType) moderacioSummary {
@@ -130,6 +137,61 @@ func moderacioSummaryMode(filters moderacioFilters) string {
 		return "light_filters_ignored"
 	}
 	return "light"
+}
+
+func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.PolicyPermissions, canModerateAll bool) (int, []adminControlPendingType, error) {
+	if canModerateAll {
+		return a.adminPendingModerationCounts()
+	}
+	scope := a.moderacioScopeForUser(user, canModerateAll)
+	counts := map[string]int{}
+	if scope.CanModerateHistoria {
+		if rows, _, err := a.DB.ListPendingMunicipiHistoriaGeneralVersions(0, 0); err != nil {
+			return 0, nil, err
+		} else {
+			for _, row := range rows {
+				if scope.CanModerateHistoriaItem(row.MunicipiID) {
+					counts["municipi_historia_general"]++
+				}
+			}
+		}
+		if rows, _, err := a.DB.ListPendingMunicipiHistoriaFetVersions(0, 0); err != nil {
+			return 0, nil, err
+		} else {
+			for _, row := range rows {
+				if scope.CanModerateHistoriaItem(row.MunicipiID) {
+					counts["municipi_historia_fet"]++
+				}
+			}
+		}
+	}
+	if scope.CanModerateAnecdotes {
+		if rows, _, err := a.DB.ListPendingMunicipiAnecdotariVersions(0, 0); err != nil {
+			return 0, nil, err
+		} else {
+			for _, row := range rows {
+				if scope.CanModerateAnecdoteItem(row.MunicipiID) {
+					counts["municipi_anecdota_version"]++
+				}
+			}
+		}
+	}
+	order := []string{
+		"municipi_historia_general",
+		"municipi_historia_fet",
+		"municipi_anecdota_version",
+	}
+	byType := make([]adminControlPendingType, 0, len(order))
+	total := 0
+	for _, key := range order {
+		count := counts[key]
+		if count <= 0 {
+			continue
+		}
+		byType = append(byType, adminControlPendingType{Type: key, Total: count})
+		total += count
+	}
+	return total, byType, nil
 }
 
 // AdminControlModeracioJobStatus retorna l'estat d'un job de bulk moderació.
