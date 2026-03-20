@@ -258,6 +258,8 @@ type DB interface {
 	ListMunicipiHistoriaTimeline(municipiID int, status string, limit, offset int, q string, anyFrom, anyTo *int) ([]MunicipiHistoriaFetVersion, int, error)
 	ListPendingMunicipiHistoriaGeneralVersions(limit, offset int) ([]MunicipiHistoriaGeneralVersion, int, error)
 	ListPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error)
+	CountPendingMunicipiHistoriaGeneralVersionsScoped(filter MunicipiScopeFilter) (int, error)
+	CountPendingMunicipiHistoriaFetVersionsScoped(filter MunicipiScopeFilter) (int, error)
 
 	// Demografia municipi
 	GetMunicipiDemografiaMeta(municipiID int) (*MunicipiDemografiaMeta, error)
@@ -283,6 +285,7 @@ type DB interface {
 	UpdateMunicipiAnecdotariDraft(v *MunicipiAnecdotariVersion) error
 	SubmitMunicipiAnecdotariVersion(versionID int) error
 	ListPendingMunicipiAnecdotariVersions(limit, offset int) ([]MunicipiAnecdotariVersion, int, error)
+	CountPendingMunicipiAnecdotariVersionsScoped(filter MunicipiScopeFilter) (int, error)
 	ApproveMunicipiAnecdotariVersion(versionID int, moderatorID int) error
 	RejectMunicipiAnecdotariVersion(versionID int, moderatorID int, notes string) error
 	CreateMunicipiAnecdotariComment(itemID int, userID int, body string) (int, error)
@@ -1587,6 +1590,14 @@ type MunicipiFilter struct {
 	Status              string
 	Limit               int
 	Offset              int
+	AllowedMunicipiIDs  []int
+	AllowedProvinciaIDs []int
+	AllowedComarcaIDs   []int
+	AllowedNivellIDs    []int
+	AllowedPaisIDs      []int
+}
+
+type MunicipiScopeFilter struct {
 	AllowedMunicipiIDs  []int
 	AllowedProvinciaIDs []int
 	AllowedComarcaIDs   []int

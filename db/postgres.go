@@ -2699,6 +2699,12 @@ func (d *PostgreSQL) ListPendingMunicipiHistoriaGeneralVersions(limit, offset in
 func (d *PostgreSQL) ListPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error) {
 	return d.help.listPendingMunicipiHistoriaFetVersions(limit, offset)
 }
+func (d *PostgreSQL) CountPendingMunicipiHistoriaGeneralVersionsScoped(filter MunicipiScopeFilter) (int, error) {
+	return d.help.countPendingMunicipiHistoriaGeneralVersionsScoped(filter)
+}
+func (d *PostgreSQL) CountPendingMunicipiHistoriaFetVersionsScoped(filter MunicipiScopeFilter) (int, error) {
+	return d.help.countPendingMunicipiHistoriaFetVersionsScoped(filter)
+}
 
 func (d *PostgreSQL) GetMunicipiDemografiaMeta(municipiID int) (*MunicipiDemografiaMeta, error) {
 	return d.help.getMunicipiDemografiaMeta(municipiID)
@@ -2763,6 +2769,9 @@ func (d *PostgreSQL) SubmitMunicipiAnecdotariVersion(versionID int) error {
 }
 func (d *PostgreSQL) ListPendingMunicipiAnecdotariVersions(limit, offset int) ([]MunicipiAnecdotariVersion, int, error) {
 	return d.help.listPendingMunicipiAnecdotariVersions(limit, offset)
+}
+func (d *PostgreSQL) CountPendingMunicipiAnecdotariVersionsScoped(filter MunicipiScopeFilter) (int, error) {
+	return d.help.countPendingMunicipiAnecdotariVersionsScoped(filter)
 }
 func (d *PostgreSQL) ApproveMunicipiAnecdotariVersion(versionID int, moderatorID int) error {
 	return d.help.approveMunicipiAnecdotariVersion(versionID, moderatorID)

@@ -1977,6 +1977,12 @@ func (d *SQLite) ListPendingMunicipiHistoriaGeneralVersions(limit, offset int) (
 func (d *SQLite) ListPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error) {
 	return d.help.listPendingMunicipiHistoriaFetVersions(limit, offset)
 }
+func (d *SQLite) CountPendingMunicipiHistoriaGeneralVersionsScoped(filter MunicipiScopeFilter) (int, error) {
+	return d.help.countPendingMunicipiHistoriaGeneralVersionsScoped(filter)
+}
+func (d *SQLite) CountPendingMunicipiHistoriaFetVersionsScoped(filter MunicipiScopeFilter) (int, error) {
+	return d.help.countPendingMunicipiHistoriaFetVersionsScoped(filter)
+}
 
 func (d *SQLite) GetMunicipiDemografiaMeta(municipiID int) (*MunicipiDemografiaMeta, error) {
 	return d.help.getMunicipiDemografiaMeta(municipiID)
@@ -2041,6 +2047,9 @@ func (d *SQLite) SubmitMunicipiAnecdotariVersion(versionID int) error {
 }
 func (d *SQLite) ListPendingMunicipiAnecdotariVersions(limit, offset int) ([]MunicipiAnecdotariVersion, int, error) {
 	return d.help.listPendingMunicipiAnecdotariVersions(limit, offset)
+}
+func (d *SQLite) CountPendingMunicipiAnecdotariVersionsScoped(filter MunicipiScopeFilter) (int, error) {
+	return d.help.countPendingMunicipiAnecdotariVersionsScoped(filter)
 }
 func (d *SQLite) ApproveMunicipiAnecdotariVersion(versionID int, moderatorID int) error {
 	return d.help.approveMunicipiAnecdotariVersion(versionID, moderatorID)

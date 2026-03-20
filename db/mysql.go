@@ -1945,6 +1945,12 @@ func (d *MySQL) ListPendingMunicipiHistoriaGeneralVersions(limit, offset int) ([
 func (d *MySQL) ListPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error) {
 	return d.help.listPendingMunicipiHistoriaFetVersions(limit, offset)
 }
+func (d *MySQL) CountPendingMunicipiHistoriaGeneralVersionsScoped(filter MunicipiScopeFilter) (int, error) {
+	return d.help.countPendingMunicipiHistoriaGeneralVersionsScoped(filter)
+}
+func (d *MySQL) CountPendingMunicipiHistoriaFetVersionsScoped(filter MunicipiScopeFilter) (int, error) {
+	return d.help.countPendingMunicipiHistoriaFetVersionsScoped(filter)
+}
 
 func (d *MySQL) GetMunicipiDemografiaMeta(municipiID int) (*MunicipiDemografiaMeta, error) {
 	return d.help.getMunicipiDemografiaMeta(municipiID)
@@ -2009,6 +2015,9 @@ func (d *MySQL) SubmitMunicipiAnecdotariVersion(versionID int) error {
 }
 func (d *MySQL) ListPendingMunicipiAnecdotariVersions(limit, offset int) ([]MunicipiAnecdotariVersion, int, error) {
 	return d.help.listPendingMunicipiAnecdotariVersions(limit, offset)
+}
+func (d *MySQL) CountPendingMunicipiAnecdotariVersionsScoped(filter MunicipiScopeFilter) (int, error) {
+	return d.help.countPendingMunicipiAnecdotariVersionsScoped(filter)
 }
 func (d *MySQL) ApproveMunicipiAnecdotariVersion(versionID int, moderatorID int) error {
 	return d.help.approveMunicipiAnecdotariVersion(versionID, moderatorID)

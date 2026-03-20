@@ -13605,6 +13605,75 @@ func (h sqlHelper) listPendingMunicipiHistoriaGeneralVersions(limit, offset int)
 	return res, total, nil
 }
 
+func buildMunicipiScopeFilterClause(filter MunicipiScopeFilter) (string, []interface{}) {
+	allowedClauses := []string{}
+	allowedArgs := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		allowedClauses = append(allowedClauses, column+" IN ("+placeholders+")")
+		for _, id := range ids {
+			allowedArgs = append(allowedArgs, id)
+		}
+	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		orParts := make([]string, 0, len(parts))
+		for _, col := range parts {
+			orParts = append(orParts, col+" IN ("+placeholders+")")
+			for _, id := range ids {
+				allowedArgs = append(allowedArgs, id)
+			}
+		}
+		allowedClauses = append(allowedClauses, "("+strings.Join(orParts, " OR ")+")")
+	}
+	inClause("m.id", filter.AllowedMunicipiIDs)
+	inClause("m.nivell_administratiu_id_3", filter.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", filter.AllowedComarcaIDs)
+	inClauseAnyLevel(filter.AllowedNivellIDs)
+	inClause("na1.pais_id", filter.AllowedPaisIDs)
+	if len(allowedClauses) == 0 {
+		return "", nil
+	}
+	return "(" + strings.Join(allowedClauses, " OR ") + ")", allowedArgs
+}
+
+func (h sqlHelper) countPendingMunicipiHistoriaGeneralVersionsScoped(filter MunicipiScopeFilter) (int, error) {
+	clauses := []string{"v.status = 'pendent'"}
+	args := []interface{}{}
+	if scopeClause, scopeArgs := buildMunicipiScopeFilterClause(filter); scopeClause != "" {
+		clauses = append(clauses, scopeClause)
+		args = append(args, scopeArgs...)
+	}
+	query := `
+        SELECT COUNT(1)
+        FROM municipi_historia_general_versions v
+        JOIN municipi_historia h ON h.id = v.historia_id
+        JOIN municipis m ON m.id = h.municipi_id
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+        WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	total := 0
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (h sqlHelper) listPendingMunicipiHistoriaFetVersions(limit, offset int) ([]MunicipiHistoriaFetVersion, int, error) {
 	countQuery := formatPlaceholders(h.style, `SELECT COUNT(1) FROM municipi_historia_fet_versions WHERE status = 'pendent'`)
 	total := 0
@@ -13661,6 +13730,28 @@ func (h sqlHelper) listPendingMunicipiHistoriaFetVersions(limit, offset int) ([]
 		res = append(res, item)
 	}
 	return res, total, nil
+}
+
+func (h sqlHelper) countPendingMunicipiHistoriaFetVersionsScoped(filter MunicipiScopeFilter) (int, error) {
+	clauses := []string{"v.status = 'pendent'"}
+	args := []interface{}{}
+	if scopeClause, scopeArgs := buildMunicipiScopeFilterClause(filter); scopeClause != "" {
+		clauses = append(clauses, scopeClause)
+		args = append(args, scopeArgs...)
+	}
+	query := `
+        SELECT COUNT(1)
+        FROM municipi_historia_fet_versions v
+        JOIN municipi_historia_fets f ON f.id = v.fet_id
+        JOIN municipis m ON m.id = f.municipi_id
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+        WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	total := 0
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 // Demografia municipi
@@ -14720,6 +14811,28 @@ func (h sqlHelper) listPendingMunicipiAnecdotariVersions(limit, offset int) ([]M
 		res = append(res, item)
 	}
 	return res, total, nil
+}
+
+func (h sqlHelper) countPendingMunicipiAnecdotariVersionsScoped(filter MunicipiScopeFilter) (int, error) {
+	clauses := []string{"v.status = 'pendent'"}
+	args := []interface{}{}
+	if scopeClause, scopeArgs := buildMunicipiScopeFilterClause(filter); scopeClause != "" {
+		clauses = append(clauses, scopeClause)
+		args = append(args, scopeArgs...)
+	}
+	query := `
+        SELECT COUNT(1)
+        FROM municipi_anecdotari_versions v
+        JOIN municipi_anecdotari_items i ON i.id = v.item_id
+        JOIN municipis m ON m.id = i.municipi_id
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+        WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	total := 0
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (h sqlHelper) approveMunicipiAnecdotariVersion(versionID int, moderatorID int) error {

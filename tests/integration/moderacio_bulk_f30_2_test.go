@@ -34,9 +34,10 @@ func TestModeracioSummaryLight(t *testing.T) {
 		t.Fatalf("summary esperava 200, got %d", rr.Code)
 	}
 	var payload struct {
-		Ok          bool `json:"ok"`
-		SummaryMode string `json:"summary_mode"`
-		Summary     struct {
+		Ok           bool   `json:"ok"`
+		SummaryMode  string `json:"summary_mode"`
+		SummaryScope string `json:"summary_scope"`
+		Summary      struct {
 			Total int `json:"total"`
 		} `json:"summary"`
 	}
@@ -48,6 +49,9 @@ func TestModeracioSummaryLight(t *testing.T) {
 	}
 	if payload.SummaryMode != "light" {
 		t.Fatalf("summary_mode esperat light, got %s", payload.SummaryMode)
+	}
+	if payload.SummaryScope != "global" {
+		t.Fatalf("summary_scope esperat global, got %s", payload.SummaryScope)
 	}
 	if payload.Summary.Total == 0 {
 		t.Fatalf("summary total esperat > 0")

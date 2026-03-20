@@ -39,7 +39,11 @@ func (a *App) AdminControlModeracioSummaryAPI(w http.ResponseWriter, r *http.Req
 		http.Error(w, "No s'ha pogut carregar el resum", http.StatusInternalServerError)
 		return
 	}
-	Infof("Moderacio summary mode=%s scope=%s user=%d status=%s type=%s age=%s dur=%s", mode, scopeMode, user.ID, strings.TrimSpace(filters.Status), strings.TrimSpace(filters.Type), strings.TrimSpace(filters.AgeBucket), time.Since(start))
+	summaryTypes := "all"
+	if scopeMode == "scoped" {
+		summaryTypes = "municipi_historia_general,municipi_historia_fet,municipi_anecdota_version"
+	}
+	Infof("Moderacio summary mode=%s scope=%s types=%s user=%d status=%s type=%s age=%s dur=%s", mode, scopeMode, summaryTypes, user.ID, strings.TrimSpace(filters.Status), strings.TrimSpace(filters.Type), strings.TrimSpace(filters.AgeBucket), time.Since(start))
 	payload := map[string]interface{}{
 		"ok":           true,
 		"summary":      summary,
@@ -145,34 +149,49 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 	}
 	scope := a.moderacioScopeForUser(user, canModerateAll)
 	counts := map[string]int{}
+	// El resum scoped només és segur per historial/anecdotari de municipis.
 	if scope.CanModerateHistoria {
-		if rows, _, err := a.DB.ListPendingMunicipiHistoriaGeneralVersions(0, 0); err != nil {
-			return 0, nil, err
-		} else {
-			for _, row := range rows {
-				if scope.CanModerateHistoriaItem(row.MunicipiID) {
-					counts["municipi_historia_general"]++
-				}
+		scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriMunicipisHistoriaModerate, ScopeMunicipi)
+		if scopeFilter.hasGlobal || !scopeFilter.isEmpty() {
+			filter := db.MunicipiScopeFilter{
+				AllowedMunicipiIDs:  scopeFilter.municipiIDs,
+				AllowedProvinciaIDs: scopeFilter.provinciaIDs,
+				AllowedComarcaIDs:   scopeFilter.comarcaIDs,
+				AllowedNivellIDs:    scopeFilter.nivellIDs,
+				AllowedPaisIDs:      scopeFilter.paisIDs,
 			}
-		}
-		if rows, _, err := a.DB.ListPendingMunicipiHistoriaFetVersions(0, 0); err != nil {
-			return 0, nil, err
-		} else {
-			for _, row := range rows {
-				if scope.CanModerateHistoriaItem(row.MunicipiID) {
-					counts["municipi_historia_fet"]++
-				}
+			total, err := a.DB.CountPendingMunicipiHistoriaGeneralVersionsScoped(filter)
+			if err != nil {
+				return 0, nil, err
+			}
+			if total > 0 {
+				counts["municipi_historia_general"] = total
+			}
+			total, err = a.DB.CountPendingMunicipiHistoriaFetVersionsScoped(filter)
+			if err != nil {
+				return 0, nil, err
+			}
+			if total > 0 {
+				counts["municipi_historia_fet"] = total
 			}
 		}
 	}
 	if scope.CanModerateAnecdotes {
-		if rows, _, err := a.DB.ListPendingMunicipiAnecdotariVersions(0, 0); err != nil {
-			return 0, nil, err
-		} else {
-			for _, row := range rows {
-				if scope.CanModerateAnecdoteItem(row.MunicipiID) {
-					counts["municipi_anecdota_version"]++
-				}
+		scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriMunicipisAnecdotesModerate, ScopeMunicipi)
+		if scopeFilter.hasGlobal || !scopeFilter.isEmpty() {
+			filter := db.MunicipiScopeFilter{
+				AllowedMunicipiIDs:  scopeFilter.municipiIDs,
+				AllowedProvinciaIDs: scopeFilter.provinciaIDs,
+				AllowedComarcaIDs:   scopeFilter.comarcaIDs,
+				AllowedNivellIDs:    scopeFilter.nivellIDs,
+				AllowedPaisIDs:      scopeFilter.paisIDs,
+			}
+			total, err := a.DB.CountPendingMunicipiAnecdotariVersionsScoped(filter)
+			if err != nil {
+				return 0, nil, err
+			}
+			if total > 0 {
+				counts["municipi_anecdota_version"] = total
 			}
 		}
 	}

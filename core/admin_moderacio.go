@@ -74,6 +74,7 @@ type moderacioBulkMetrics struct {
 	TotalDur    time.Duration
 	Mode        string
 	ScopeMode   string
+	Revalidated bool
 }
 
 type moderacioScope struct {
@@ -2112,10 +2113,11 @@ func (a *App) logModeracioBulkExecution(action, scope, bulkType string, userID i
 		updated = result.Processed - result.Skipped
 	}
 	Infof(
-		"Moderacio bulk exec engine=%s mode=%s scope_mode=%s actor=%d action=%s scope=%s type=%s bulk_user_id=%d candidates=%d targets=%d updated=%d skipped=%d errors=%d resolve_dur=%s update_dur=%s activity_dur=%s audit_dur=%s total_dur=%s async=%t",
+		"Moderacio bulk exec engine=%s mode=%s scope_mode=%s revalidated=%t actor=%d action=%s scope=%s type=%s bulk_user_id=%d candidates=%d targets=%d updated=%d skipped=%d errors=%d resolve_dur=%s update_dur=%s activity_dur=%s audit_dur=%s total_dur=%s async=%t",
 		engine,
 		metrics.Mode,
 		metrics.ScopeMode,
+		metrics.Revalidated,
 		userID,
 		action,
 		scope,
@@ -2245,17 +2247,22 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filters, page, perPage := parseModeracioReturnTo(returnTo)
+	start := time.Now()
+	resolveStart := time.Now()
 	pageItems, _, _ := a.buildModeracioItems(ResolveLang(r), page, perPage, user, canModerateAll, filters)
+	resolveDur := time.Since(resolveStart)
 	allowed := map[string]moderacioItem{}
 	for _, item := range pageItems {
 		key := fmt.Sprintf("%s:%d", item.Type, item.ID)
 		allowed[key] = item
 	}
+	candidates := len(selected)
 	errCount := 0
 	processed := 0
 	skipped := 0
 	total := 0
 	seen := map[string]struct{}{}
+	updateStart := time.Now()
 	for _, entry := range selected {
 		parts := strings.SplitN(entry, ":", 2)
 		if len(parts) != 2 {
@@ -2271,7 +2278,17 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		key := fmt.Sprintf("%s:%d", objType, id)
+		if bulkType != "" && bulkType != "all" && objType != bulkType {
+			errCount++
+			skipped++
+			continue
+		}
 		if _, ok := allowed[key]; !ok {
+			errCount++
+			skipped++
+			continue
+		}
+		if !canModerateAll && !a.canModerateTerritoriObject(user, perms, objType, id) {
 			errCount++
 			skipped++
 			continue
@@ -2287,16 +2304,33 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 		}
 		processed++
 	}
+	updateDur := time.Since(updateStart)
+	scopeMode := "scoped"
+	if canModerateAll {
+		scopeMode = "global"
+	}
+	result := moderacioBulkResult{Candidates: candidates, Total: total, Processed: processed, Errors: errCount, Skipped: skipped}
+	metrics := moderacioBulkMetrics{
+		ResolveDur:  resolveDur,
+		UpdateDur:   updateDur,
+		TotalDur:    time.Since(start),
+		Mode:        "per-item",
+		ScopeMode:   scopeMode,
+		Revalidated: true,
+	}
+	auditStart := time.Now()
 	a.logAdminAudit(r, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
 		"action":    action,
 		"scope":     scope,
 		"bulk_type": bulkType,
+		"candidates": candidates,
 		"total":     total,
 		"processed": processed,
 		"errors":    errCount,
 		"skipped":   skipped,
 		"async":     false,
 	})
+	a.logModeracioBulkExecution(action, scope, bulkType, user.ID, bulkUserID, false, result, metrics, time.Since(auditStart))
 	if errCount > 0 {
 		http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "err"), http.StatusSeeOther)
 		return
