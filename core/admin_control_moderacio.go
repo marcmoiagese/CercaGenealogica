@@ -41,7 +41,7 @@ func (a *App) AdminControlModeracioSummaryAPI(w http.ResponseWriter, r *http.Req
 	}
 	summaryTypes := "all"
 	if scopeMode == "scoped" {
-		summaryTypes = "municipi_historia_general,municipi_historia_fet,municipi_anecdota_version"
+		summaryTypes = moderacioSummaryTypesLabel(summary.ByType)
 	}
 	Infof("Moderacio summary mode=%s scope=%s types=%s user=%d status=%s type=%s age=%s dur=%s", mode, scopeMode, summaryTypes, user.ID, strings.TrimSpace(filters.Status), strings.TrimSpace(filters.Type), strings.TrimSpace(filters.AgeBucket), time.Since(start))
 	payload := map[string]interface{}{
@@ -132,6 +132,23 @@ func buildModeracioSummaryFromCounts(filters moderacioFilters, total int, byType
 	return summary
 }
 
+func moderacioSummaryTypesLabel(byType []moderacioTypeCount) string {
+	if len(byType) == 0 {
+		return "none"
+	}
+	types := make([]string, 0, len(byType))
+	for _, item := range byType {
+		if strings.TrimSpace(item.Type) == "" {
+			continue
+		}
+		types = append(types, item.Type)
+	}
+	if len(types) == 0 {
+		return "none"
+	}
+	return strings.Join(types, ",")
+}
+
 func moderacioSummaryMode(filters moderacioFilters) string {
 	status := strings.TrimSpace(filters.Status)
 	if status != "" && status != "pendent" {
@@ -147,18 +164,72 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 	if canModerateAll {
 		return a.adminPendingModerationCounts()
 	}
-	scope := a.moderacioScopeForUser(user, canModerateAll)
+	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
 	counts := map[string]int{}
-	// El resum scoped només és segur per historial/anecdotari de municipis.
-	if scope.CanModerateHistoria {
-		scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriMunicipisHistoriaModerate, ScopeMunicipi)
-		if scopeFilter.hasGlobal || !scopeFilter.isEmpty() {
+	if scopeModel.canModerateType("arxiu") {
+		filter := db.ArxiuFilter{Status: "pendent"}
+		if scope, ok := scopeModel.scopeFilterForType("arxiu"); ok && !scope.hasGlobal {
+			applyScopeFilterToArxiu(&filter, scope)
+		}
+		if total, err := a.DB.CountArxius(filter); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["arxiu"] = total
+		}
+	}
+	if scopeModel.canModerateType("llibre") {
+		filter := db.LlibreFilter{Status: "pendent"}
+		if scope, ok := scopeModel.scopeFilterForType("llibre"); ok && !scope.hasGlobal {
+			applyScopeFilterToLlibre(&filter, scope)
+		}
+		if total, err := a.DB.CountLlibres(filter); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["llibre"] = total
+		}
+	}
+	if scopeModel.canModerateType("nivell") {
+		filter := db.NivellAdminFilter{Status: "pendent"}
+		if scope, ok := scopeModel.scopeFilterForType("nivell"); ok && !scope.hasGlobal {
+			applyScopeFilterToNivell(&filter, scope)
+		}
+		if total, err := a.DB.CountNivells(filter); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["nivell"] = total
+		}
+	}
+	if scopeModel.canModerateType("municipi") {
+		filter := db.MunicipiFilter{Status: "pendent"}
+		if scope, ok := scopeModel.scopeFilterForType("municipi"); ok && !scope.hasGlobal {
+			applyScopeFilterToMunicipi(&filter, scope)
+		}
+		if total, err := a.DB.CountMunicipis(filter); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["municipi"] = total
+		}
+	}
+	if scopeModel.canModerateType("eclesiastic") {
+		filter := db.ArquebisbatFilter{Status: "pendent"}
+		if scope, ok := scopeModel.scopeFilterForType("eclesiastic"); ok && !scope.hasGlobal {
+			applyScopeFilterToEcles(&filter, scope)
+		}
+		if total, err := a.DB.CountArquebisbats(filter); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["eclesiastic"] = total
+		}
+	}
+	if scopeModel.canModerateType("municipi_historia_general") {
+		scope, ok := scopeModel.scopeFilterForType("municipi_historia_general")
+		if ok && (scope.hasGlobal || !scope.isEmpty()) {
 			filter := db.MunicipiScopeFilter{
-				AllowedMunicipiIDs:  scopeFilter.municipiIDs,
-				AllowedProvinciaIDs: scopeFilter.provinciaIDs,
-				AllowedComarcaIDs:   scopeFilter.comarcaIDs,
-				AllowedNivellIDs:    scopeFilter.nivellIDs,
-				AllowedPaisIDs:      scopeFilter.paisIDs,
+				AllowedMunicipiIDs:  scope.municipiIDs,
+				AllowedProvinciaIDs: scope.provinciaIDs,
+				AllowedComarcaIDs:   scope.comarcaIDs,
+				AllowedNivellIDs:    scope.nivellIDs,
+				AllowedPaisIDs:      scope.paisIDs,
 			}
 			total, err := a.DB.CountPendingMunicipiHistoriaGeneralVersionsScoped(filter)
 			if err != nil {
@@ -176,15 +247,15 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 			}
 		}
 	}
-	if scope.CanModerateAnecdotes {
-		scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriMunicipisAnecdotesModerate, ScopeMunicipi)
-		if scopeFilter.hasGlobal || !scopeFilter.isEmpty() {
+	if scopeModel.canModerateType("municipi_anecdota_version") {
+		scope, ok := scopeModel.scopeFilterForType("municipi_anecdota_version")
+		if ok && (scope.hasGlobal || !scope.isEmpty()) {
 			filter := db.MunicipiScopeFilter{
-				AllowedMunicipiIDs:  scopeFilter.municipiIDs,
-				AllowedProvinciaIDs: scopeFilter.provinciaIDs,
-				AllowedComarcaIDs:   scopeFilter.comarcaIDs,
-				AllowedNivellIDs:    scopeFilter.nivellIDs,
-				AllowedPaisIDs:      scopeFilter.paisIDs,
+				AllowedMunicipiIDs:  scope.municipiIDs,
+				AllowedProvinciaIDs: scope.provinciaIDs,
+				AllowedComarcaIDs:   scope.comarcaIDs,
+				AllowedNivellIDs:    scope.nivellIDs,
+				AllowedPaisIDs:      scope.paisIDs,
 			}
 			total, err := a.DB.CountPendingMunicipiAnecdotariVersionsScoped(filter)
 			if err != nil {
@@ -195,10 +266,100 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 			}
 		}
 	}
+	if scopeModel.canModerateType("registre") {
+		filter := db.TranscripcioFilter{Status: "pendent"}
+		if scope, ok := scopeModel.scopeFilterForType("registre"); ok && !scope.hasGlobal {
+			applyScopeFilterToRegistre(&filter, scope)
+		}
+		if total, err := a.DB.CountTranscripcionsRawGlobal(filter); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["registre"] = total
+		}
+	}
+	if scopeModel.canModerateType("registre_canvi") {
+		rows, err := a.DB.ListTranscripcioRawChangesPending()
+		if err != nil {
+			return 0, nil, err
+		}
+		total := 0
+		for _, row := range rows {
+			if scopeModel.canModerateAll || scopeModel.canModerateItem("registre_canvi", row.ID) {
+				total++
+			}
+		}
+		if total > 0 {
+			counts["registre_canvi"] = total
+		}
+	}
+	needsWiki := scopeModel.canModerateType("municipi_canvi") ||
+		scopeModel.canModerateType("arxiu_canvi") ||
+		scopeModel.canModerateType("llibre_canvi") ||
+		scopeModel.canModerateType("persona_canvi") ||
+		scopeModel.canModerateType("cognom_canvi") ||
+		scopeModel.canModerateType("event_historic_canvi") ||
+		scopeModel.canModerateType("wiki_canvi")
+	if needsWiki {
+		if changes, stale, err := a.DB.ListWikiPendingChanges(0); err == nil {
+			typeMap := map[string]string{
+				"municipi":       "municipi_canvi",
+				"arxiu":          "arxiu_canvi",
+				"llibre":         "llibre_canvi",
+				"persona":        "persona_canvi",
+				"cognom":         "cognom_canvi",
+				"event_historic": "event_historic_canvi",
+			}
+			for _, changeID := range stale {
+				_ = a.DB.DequeueWikiPending(changeID)
+			}
+			for _, change := range changes {
+				if !isValidWikiObjectType(change.ObjectType) {
+					continue
+				}
+				objType := typeMap[change.ObjectType]
+				if objType == "" {
+					objType = "wiki_canvi"
+				}
+				if !scopeModel.canModerateType(objType) {
+					continue
+				}
+				if !scopeModel.canModerateAll {
+					if objType == "wiki_canvi" {
+						continue
+					}
+					if !scopeModel.canModerateWikiChange(change, objType) {
+						continue
+					}
+				}
+				counts[objType]++
+			}
+		} else {
+			return 0, nil, err
+		}
+	}
 	order := []string{
+		"persona",
+		"arxiu",
+		"llibre",
+		"nivell",
+		"municipi",
+		"eclesiastic",
+		"cognom_variant",
+		"cognom_referencia",
+		"cognom_merge",
+		"event_historic",
 		"municipi_historia_general",
 		"municipi_historia_fet",
 		"municipi_anecdota_version",
+		"registre",
+		"registre_canvi",
+		"municipi_canvi",
+		"arxiu_canvi",
+		"llibre_canvi",
+		"persona_canvi",
+		"cognom_canvi",
+		"event_historic_canvi",
+		"wiki_canvi",
 	}
 	byType := make([]adminControlPendingType, 0, len(order))
 	total := 0

@@ -2347,6 +2347,14 @@ type TranscripcioFilter struct {
 	UseFullText bool
 	Limit       int
 	Offset      int
+	AllowedLlibreIDs    []int
+	AllowedArxiuIDs     []int
+	AllowedMunicipiIDs  []int
+	AllowedProvinciaIDs []int
+	AllowedComarcaIDs   []int
+	AllowedNivellIDs    []int
+	AllowedPaisIDs      []int
+	AllowedEclesIDs     []int
 }
 
 type NomHistoric struct {

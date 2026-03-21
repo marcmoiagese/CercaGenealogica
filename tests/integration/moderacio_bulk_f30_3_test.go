@@ -68,7 +68,7 @@ func createPendingHistoriaGeneralVersion(t *testing.T, database db.DB, userID, m
 func TestModeracioSummaryRespectsScope(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f30_3_summary_scoped.sqlite3")
 
-	user := createTestUser(t, database, "moderator_scope_summary")
+	user := createNonAdminTestUser(t, database, "moderator_scope_summary")
 	munAllowed := createHistoriaMunicipi(t, database, user.ID)
 	munOther := createHistoriaMunicipi(t, database, user.ID)
 
@@ -118,7 +118,7 @@ func TestModeracioSummaryRespectsScope(t *testing.T) {
 func TestModeracioBulkScopedHistoria(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f30_3_bulk_scoped.sqlite3")
 
-	user := createTestUser(t, database, "moderator_scope_bulk")
+	user := createNonAdminTestUser(t, database, "moderator_scope_bulk")
 	munAllowed := createHistoriaMunicipi(t, database, user.ID)
 	munOther := createHistoriaMunicipi(t, database, user.ID)
 
@@ -168,7 +168,7 @@ func TestModeracioBulkScopedHistoria(t *testing.T) {
 func TestModeracioBulkRejectsOutOfScopeType(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f30_3_bulk_reject.sqlite3")
 
-	user := createTestUser(t, database, "moderator_scope_reject")
+	user := createNonAdminTestUser(t, database, "moderator_scope_reject")
 	munAllowed := createHistoriaMunicipi(t, database, user.ID)
 	createPendingHistoriaGeneralVersion(t, database, user.ID, munAllowed)
 

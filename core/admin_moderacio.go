@@ -77,71 +77,330 @@ type moderacioBulkMetrics struct {
 	Revalidated bool
 }
 
-type moderacioScope struct {
-	CanModerateAll        bool
-	CanModerateHistoria   bool
-	CanModerateAnecdotes  bool
-	CanModerateHistoriaItem func(municipiID int) bool
-	CanModerateAnecdoteItem func(municipiID int) bool
+type moderacioTypeSpec struct {
+	Key       string
+	PermKey   string
+	ListScope ScopeType
 }
 
-func (a *App) moderacioScopeForUser(user *db.User, canModerateAll bool) moderacioScope {
-	scope := moderacioScope{
-		CanModerateAll:       canModerateAll,
-		CanModerateHistoria:  canModerateAll,
-		CanModerateAnecdotes: canModerateAll,
-	}
-	if !canModerateAll && user != nil {
-		scope.CanModerateHistoria = a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisHistoriaModerate)
-		scope.CanModerateAnecdotes = a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisAnecdotesModerate)
-	}
-	historiaCache := map[int]bool{}
-	anecdoteCache := map[int]bool{}
-	scope.CanModerateHistoriaItem = func(municipiID int) bool {
-		if scope.CanModerateAll {
-			return true
-		}
-		if !scope.CanModerateHistoria || user == nil || municipiID <= 0 {
-			return false
-		}
-		if allowed, ok := historiaCache[municipiID]; ok {
-			return allowed
-		}
-		target := a.resolveMunicipiTarget(municipiID)
-		allowed := a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaModerate, target)
-		historiaCache[municipiID] = allowed
-		return allowed
-	}
-	scope.CanModerateAnecdoteItem = func(municipiID int) bool {
-		if scope.CanModerateAll {
-			return true
-		}
-		if !scope.CanModerateAnecdotes || user == nil || municipiID <= 0 {
-			return false
-		}
-		if allowed, ok := anecdoteCache[municipiID]; ok {
-			return allowed
-		}
-		target := a.resolveMunicipiTarget(municipiID)
-		allowed := a.HasPermission(user.ID, permKeyTerritoriMunicipisAnecdotesModerate, target)
-		anecdoteCache[municipiID] = allowed
-		return allowed
-	}
-	return scope
+var moderacioTypeSpecs = map[string]moderacioTypeSpec{
+	"persona":                    {Key: "persona"},
+	"arxiu":                      {Key: "arxiu", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
+	"llibre":                     {Key: "llibre", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
+	"nivell":                     {Key: "nivell", PermKey: permKeyTerritoriNivellsEdit, ListScope: ScopePais},
+	"municipi":                   {Key: "municipi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
+	"eclesiastic":                {Key: "eclesiastic", PermKey: permKeyTerritoriEclesEdit, ListScope: ScopeEcles},
+	"municipi_historia_general":  {Key: "municipi_historia_general", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
+	"municipi_historia_fet":      {Key: "municipi_historia_fet", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
+	"municipi_anecdota_version":  {Key: "municipi_anecdota_version", PermKey: permKeyTerritoriMunicipisAnecdotesModerate, ListScope: ScopeMunicipi},
+	"event_historic":             {Key: "event_historic"},
+	"registre":                   {Key: "registre", PermKey: permKeyDocumentalsRegistresEdit, ListScope: ScopeLlibre},
+	"registre_canvi":             {Key: "registre_canvi", PermKey: permKeyDocumentalsRegistresEdit, ListScope: ScopeLlibre},
+	"cognom_variant":             {Key: "cognom_variant"},
+	"cognom_referencia":          {Key: "cognom_referencia"},
+	"cognom_merge":               {Key: "cognom_merge"},
+	"municipi_canvi":             {Key: "municipi_canvi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
+	"arxiu_canvi":                {Key: "arxiu_canvi", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
+	"llibre_canvi":               {Key: "llibre_canvi", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
+	"persona_canvi":              {Key: "persona_canvi"},
+	"cognom_canvi":               {Key: "cognom_canvi"},
+	"event_historic_canvi":       {Key: "event_historic_canvi"},
+	"wiki_canvi":                 {Key: "wiki_canvi"},
 }
 
-func moderacioBulkTypesForScope(scope moderacioScope) []string {
-	if scope.CanModerateAll {
+type moderacioScopeModel struct {
+	app            *App
+	user           *db.User
+	perms          db.PolicyPermissions
+	canModerateAll bool
+	permScopes     map[string]listScopeFilter
+}
+
+func (a *App) newModeracioScopeModel(user *db.User, perms db.PolicyPermissions, canModerateAll bool) *moderacioScopeModel {
+	model := &moderacioScopeModel{
+		app:            a,
+		user:           user,
+		perms:          perms,
+		canModerateAll: canModerateAll,
+		permScopes:     map[string]listScopeFilter{},
+	}
+	if user == nil || canModerateAll {
+		return model
+	}
+	seen := map[string]ScopeType{}
+	for _, spec := range moderacioTypeSpecs {
+		permKey := strings.TrimSpace(spec.PermKey)
+		if permKey == "" {
+			continue
+		}
+		if _, ok := seen[permKey]; ok {
+			continue
+		}
+		seen[permKey] = spec.ListScope
+		if !a.hasAnyPermissionKey(user.ID, permKey) {
+			continue
+		}
+		model.permScopes[permKey] = a.buildListScopeFilter(user.ID, permKey, spec.ListScope)
+	}
+	return model
+}
+
+func (m *moderacioScopeModel) canModerateType(objType string) bool {
+	if m == nil {
+		return false
+	}
+	if m.canModerateAll {
+		return true
+	}
+	spec, ok := moderacioTypeSpecs[objType]
+	if !ok || strings.TrimSpace(spec.PermKey) == "" {
+		return false
+	}
+	filter, ok := m.permScopes[spec.PermKey]
+	if !ok {
+		return false
+	}
+	return filter.hasGlobal || !filter.isEmpty()
+}
+
+func (m *moderacioScopeModel) scopeFilterForType(objType string) (listScopeFilter, bool) {
+	if m == nil {
+		return listScopeFilter{}, false
+	}
+	if m.canModerateAll {
+		return listScopeFilter{hasGlobal: true}, true
+	}
+	spec, ok := moderacioTypeSpecs[objType]
+	if !ok || strings.TrimSpace(spec.PermKey) == "" {
+		return listScopeFilter{}, false
+	}
+	filter, ok := m.permScopes[spec.PermKey]
+	if !ok {
+		return listScopeFilter{}, false
+	}
+	if filter.hasGlobal || !filter.isEmpty() {
+		return filter, true
+	}
+	return listScopeFilter{}, false
+}
+
+func (m *moderacioScopeModel) canModerateWikiChange(change db.WikiChange, objType string) bool {
+	if m == nil || m.user == nil {
+		return false
+	}
+	if m.canModerateAll {
+		return true
+	}
+	switch objType {
+	case "municipi_canvi":
+		if change.ObjectType != "municipi" {
+			return false
+		}
+		if !m.canModerateType("municipi_canvi") {
+			return false
+		}
+		target := m.app.resolveMunicipiTarget(change.ObjectID)
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriMunicipisEdit, target)
+	case "arxiu_canvi":
+		if change.ObjectType != "arxiu" {
+			return false
+		}
+		if !m.canModerateType("arxiu_canvi") {
+			return false
+		}
+		target := m.app.resolveArxiuTarget(change.ObjectID)
+		return m.app.HasPermission(m.user.ID, permKeyDocumentalsArxiusEdit, target)
+	case "llibre_canvi":
+		if change.ObjectType != "llibre" {
+			return false
+		}
+		if !m.canModerateType("llibre_canvi") {
+			return false
+		}
+		target := m.app.resolveLlibreTarget(change.ObjectID)
+		return m.app.HasPermission(m.user.ID, permKeyDocumentalsLlibresEdit, target)
+	default:
+		return false
+	}
+}
+
+func (m *moderacioScopeModel) canModerateItem(objType string, id int) bool {
+	if m == nil || m.user == nil {
+		return false
+	}
+	if m.canModerateAll {
+		return true
+	}
+	if !m.canModerateType(objType) {
+		return false
+	}
+	switch objType {
+	case "arxiu":
+		target := m.app.resolveArxiuTarget(id)
+		return m.app.HasPermission(m.user.ID, permKeyDocumentalsArxiusEdit, target)
+	case "llibre":
+		target := m.app.resolveLlibreTarget(id)
+		return m.app.HasPermission(m.user.ID, permKeyDocumentalsLlibresEdit, target)
+	case "nivell":
+		lvl, err := m.app.DB.GetNivell(id)
+		if err != nil || lvl == nil || lvl.PaisID <= 0 {
+			return false
+		}
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriNivellsEdit, PermissionTarget{PaisID: intPtr(lvl.PaisID)})
+	case "municipi":
+		target := m.app.resolveMunicipiTarget(id)
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriMunicipisEdit, target)
+	case "eclesiastic":
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriEclesEdit, PermissionTarget{EclesID: intPtr(id)})
+	case "municipi_historia_general":
+		munID, err := m.app.DB.ResolveMunicipiIDByHistoriaGeneralVersionID(id)
+		if err != nil || munID <= 0 {
+			return false
+		}
+		target := m.app.resolveMunicipiTarget(munID)
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriMunicipisHistoriaModerate, target)
+	case "municipi_historia_fet":
+		munID, err := m.app.DB.ResolveMunicipiIDByHistoriaFetVersionID(id)
+		if err != nil || munID <= 0 {
+			return false
+		}
+		target := m.app.resolveMunicipiTarget(munID)
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriMunicipisHistoriaModerate, target)
+	case "municipi_anecdota_version":
+		munID, err := m.app.DB.ResolveMunicipiIDByAnecdotariVersionID(id)
+		if err != nil || munID <= 0 {
+			return false
+		}
+		target := m.app.resolveMunicipiTarget(munID)
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriMunicipisAnecdotesModerate, target)
+	case "registre":
+		reg, err := m.app.DB.GetTranscripcioRaw(id)
+		if err != nil || reg == nil {
+			return false
+		}
+		target := m.app.resolveLlibreTarget(reg.LlibreID)
+		return m.app.HasPermission(m.user.ID, permKeyDocumentalsRegistresEdit, target)
+	case "registre_canvi":
+		change, err := m.app.DB.GetTranscripcioRawChange(id)
+		if err != nil || change == nil {
+			return false
+		}
+		reg, err := m.app.DB.GetTranscripcioRaw(change.TranscripcioID)
+		if err != nil || reg == nil {
+			return false
+		}
+		target := m.app.resolveLlibreTarget(reg.LlibreID)
+		return m.app.HasPermission(m.user.ID, permKeyDocumentalsRegistresEdit, target)
+	case "municipi_canvi", "arxiu_canvi", "llibre_canvi":
+		change, err := m.app.DB.GetWikiChange(id)
+		if err != nil || change == nil {
+			return false
+		}
+		return m.canModerateWikiChange(*change, objType)
+	default:
+		return false
+	}
+}
+
+func (m *moderacioScopeModel) allowedTypes() []string {
+	if m == nil {
+		return nil
+	}
+	if m.canModerateAll {
 		return append([]string{}, moderacioBulkAllowedTypes...)
 	}
-	types := []string{}
-	if scope.CanModerateHistoria {
-		types = append(types, "municipi_historia_general", "municipi_historia_fet")
-	}
-	if scope.CanModerateAnecdotes {
-		types = append(types, "municipi_anecdota_version")
+	types := make([]string, 0, len(moderacioBulkAllowedTypes))
+	for _, objType := range moderacioBulkAllowedTypes {
+		if m.canModerateType(objType) {
+			types = append(types, objType)
+		}
 	}
 	return types
+}
+
+func (m *moderacioScopeModel) canModerateAnything() bool {
+	if m == nil {
+		return false
+	}
+	if m.canModerateAll {
+		return true
+	}
+	for objType, spec := range moderacioTypeSpecs {
+		if strings.TrimSpace(spec.PermKey) == "" {
+			continue
+		}
+		if m.canModerateType(objType) {
+			return true
+		}
+	}
+	return false
+}
+
+func applyScopeFilterToArxiu(filter *db.ArxiuFilter, scope listScopeFilter) {
+	if filter == nil {
+		return
+	}
+	filter.AllowedArxiuIDs = scope.arxiuIDs
+	filter.AllowedMunicipiIDs = scope.municipiIDs
+	filter.AllowedProvinciaIDs = scope.provinciaIDs
+	filter.AllowedComarcaIDs = scope.comarcaIDs
+	filter.AllowedNivellIDs = scope.nivellIDs
+	filter.AllowedPaisIDs = scope.paisIDs
+	filter.AllowedEclesIDs = scope.eclesIDs
+}
+
+func applyScopeFilterToLlibre(filter *db.LlibreFilter, scope listScopeFilter) {
+	if filter == nil {
+		return
+	}
+	filter.AllowedLlibreIDs = scope.llibreIDs
+	filter.AllowedArxiuIDs = scope.arxiuIDs
+	filter.AllowedMunicipiIDs = scope.municipiIDs
+	filter.AllowedProvinciaIDs = scope.provinciaIDs
+	filter.AllowedComarcaIDs = scope.comarcaIDs
+	filter.AllowedNivellIDs = scope.nivellIDs
+	filter.AllowedPaisIDs = scope.paisIDs
+	filter.AllowedEclesIDs = scope.eclesIDs
+}
+
+func applyScopeFilterToMunicipi(filter *db.MunicipiFilter, scope listScopeFilter) {
+	if filter == nil {
+		return
+	}
+	filter.AllowedMunicipiIDs = scope.municipiIDs
+	filter.AllowedProvinciaIDs = scope.provinciaIDs
+	filter.AllowedComarcaIDs = scope.comarcaIDs
+	filter.AllowedNivellIDs = scope.nivellIDs
+	filter.AllowedPaisIDs = scope.paisIDs
+}
+
+func applyScopeFilterToNivell(filter *db.NivellAdminFilter, scope listScopeFilter) {
+	if filter == nil {
+		return
+	}
+	filter.AllowedPaisIDs = scope.paisIDs
+}
+
+func applyScopeFilterToEcles(filter *db.ArquebisbatFilter, scope listScopeFilter) {
+	if filter == nil {
+		return
+	}
+	filter.AllowedEclesIDs = scope.eclesIDs
+	filter.AllowedPaisIDs = scope.paisIDs
+}
+
+func applyScopeFilterToRegistre(filter *db.TranscripcioFilter, scope listScopeFilter) {
+	if filter == nil {
+		return
+	}
+	filter.AllowedLlibreIDs = scope.llibreIDs
+	filter.AllowedArxiuIDs = scope.arxiuIDs
+	filter.AllowedMunicipiIDs = scope.municipiIDs
+	filter.AllowedProvinciaIDs = scope.provinciaIDs
+	filter.AllowedComarcaIDs = scope.comarcaIDs
+	filter.AllowedNivellIDs = scope.nivellIDs
+	filter.AllowedPaisIDs = scope.paisIDs
+	filter.AllowedEclesIDs = scope.eclesIDs
 }
 
 const (
@@ -162,6 +421,7 @@ var moderacioBulkAllowedTypes = []string{
 	"municipi_anecdota_version",
 	"event_historic",
 	"registre",
+	"registre_canvi",
 	"cognom_variant",
 	"cognom_referencia",
 	"cognom_merge",
@@ -254,7 +514,7 @@ func moderacioAgeBucket(createdAt time.Time, now time.Time) string {
 	return moderacioAge3Plus
 }
 
-func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User, canModerateAll bool, filters moderacioFilters) ([]moderacioItem, int, moderacioSummary) {
+func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User, perms db.PolicyPermissions, canModerateAll bool, filters moderacioFilters) ([]moderacioItem, int, moderacioSummary) {
 	var items []moderacioItem
 	userCache := map[int]*db.User{}
 	autorFromID := func(id sql.NullInt64) (string, string, int) {
@@ -300,8 +560,12 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 	userQuery := strings.TrimSpace(filters.UserQuery)
 	userID := filters.UserID
 	now := time.Now()
+	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
 	typeAllowed := func(objType string) bool {
-		return typeFilter == "" || typeFilter == "all" || typeFilter == objType
+		if typeFilter != "" && typeFilter != "all" && typeFilter != objType {
+			return false
+		}
+		return scopeModel.canModerateType(objType)
 	}
 	statusAllowed := func(status string) bool {
 		if statusAll {
@@ -340,35 +604,6 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		return true
 	}
 
-	canModerateHistoriaAny := canModerateAll
-	if !canModerateAll && user != nil {
-		canModerateHistoriaAny = a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisHistoriaModerate)
-	}
-	canModerateHistoriaItem := func(municipiID int) bool {
-		if canModerateAll {
-			return true
-		}
-		if user == nil || municipiID <= 0 {
-			return false
-		}
-		target := a.resolveMunicipiTarget(municipiID)
-		return a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaModerate, target)
-	}
-	canModerateAnecdotesAny := canModerateAll
-	if !canModerateAll && user != nil {
-		canModerateAnecdotesAny = a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisAnecdotesModerate)
-	}
-	canModerateAnecdoteItem := func(municipiID int) bool {
-		if canModerateAll {
-			return true
-		}
-		if user == nil || municipiID <= 0 {
-			return false
-		}
-		target := a.resolveMunicipiTarget(municipiID)
-		return a.HasPermission(user.ID, permKeyTerritoriMunicipisAnecdotesModerate, target)
-	}
-
 	persones := []db.Persona{}
 	arxius := []db.ArxiuWithCount{}
 	llibres := []db.LlibreRow{}
@@ -381,141 +616,187 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 	events := []db.EventHistoric{}
 	pendingChanges := []db.TranscripcioRawChange{}
 	wikiChanges := []db.WikiChange{}
-	if canModerateAll {
-		if typeAllowed("persona") {
-			status := ""
-			if !statusAll {
-				status = statusFilter
-			}
-			if pendents, err := a.DB.ListPersones(db.PersonaFilter{Estat: status}); err == nil {
-				persones = pendents
-			}
+	if typeAllowed("persona") {
+		status := ""
+		if !statusAll {
+			status = statusFilter
 		}
-		if typeAllowed("arxiu") {
-			status := ""
-			if !statusAll {
-				status = statusFilter
-			}
-			if rows, err := a.DB.ListArxius(db.ArxiuFilter{Status: status}); err == nil {
-				arxius = rows
-			}
+		if pendents, err := a.DB.ListPersones(db.PersonaFilter{Estat: status}); err == nil {
+			persones = pendents
 		}
-		if typeAllowed("llibre") {
-			status := ""
-			if !statusAll {
-				status = statusFilter
-			}
-			if rows, err := a.DB.ListLlibres(db.LlibreFilter{Status: status}); err == nil {
-				llibres = rows
-			}
+	}
+	if typeAllowed("arxiu") {
+		status := ""
+		if !statusAll {
+			status = statusFilter
 		}
-		if typeAllowed("nivell") {
-			status := ""
-			if !statusAll {
-				status = statusFilter
-			}
-			if rows, err := a.DB.ListNivells(db.NivellAdminFilter{Status: status}); err == nil {
-				nivells = rows
-			}
+		filter := db.ArxiuFilter{Status: status}
+		if scope, ok := scopeModel.scopeFilterForType("arxiu"); ok && !scope.hasGlobal {
+			applyScopeFilterToArxiu(&filter, scope)
 		}
-		if typeAllowed("municipi") {
-			status := ""
-			if !statusAll {
-				status = statusFilter
-			}
-			if rows, err := a.DB.ListMunicipis(db.MunicipiFilter{Status: status}); err == nil {
-				municipis = rows
-			}
+		if rows, err := a.DB.ListArxius(filter); err == nil {
+			arxius = rows
 		}
-		if typeAllowed("eclesiastic") {
-			status := ""
-			if !statusAll {
-				status = statusFilter
-			}
-			if rows, err := a.DB.ListArquebisbats(db.ArquebisbatFilter{Status: status}); err == nil {
-				ents = rows
-			}
+	}
+	if typeAllowed("llibre") {
+		status := ""
+		if !statusAll {
+			status = statusFilter
 		}
-		if typeAllowed("cognom_variant") {
-			status := ""
-			if !statusAll {
-				status = statusFilter
-			}
-			if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: status}); err == nil {
-				variants = rows
-			}
+		filter := db.LlibreFilter{Status: status}
+		if scope, ok := scopeModel.scopeFilterForType("llibre"); ok && !scope.hasGlobal {
+			applyScopeFilterToLlibre(&filter, scope)
 		}
-		if typeAllowed("cognom_referencia") {
-			status := ""
-			if !statusAll {
-				status = statusFilter
-			}
-			if rows, err := a.DB.ListCognomReferencies(db.CognomReferenciaFilter{Status: status}); err == nil {
-				referencies = rows
-			}
+		if rows, err := a.DB.ListLlibres(filter); err == nil {
+			llibres = rows
 		}
-		if typeAllowed("cognom_merge") {
-			status := ""
-			if !statusAll {
-				status = statusFilter
-			}
-			if rows, err := a.DB.ListCognomRedirectSuggestions(db.CognomRedirectSuggestionFilter{Status: status}); err == nil {
-				mergeSuggestions = rows
-			}
+	}
+	if typeAllowed("nivell") {
+		status := ""
+		if !statusAll {
+			status = statusFilter
 		}
-		if typeAllowed("event_historic") {
-			status := ""
-			if !statusAll {
-				status = statusFilter
-			}
-			if rows, err := a.DB.ListEventsHistoric(db.EventHistoricFilter{Status: status}); err == nil {
-				events = rows
-			}
+		filter := db.NivellAdminFilter{Status: status}
+		if scope, ok := scopeModel.scopeFilterForType("nivell"); ok && !scope.hasGlobal {
+			applyScopeFilterToNivell(&filter, scope)
 		}
-		if typeAllowed("registre_canvi") && (statusAll || statusFilter == "pendent") {
-			if rows, err := a.DB.ListTranscripcioRawChangesPending(); err == nil {
-				pendingChanges = rows
-			}
+		if rows, err := a.DB.ListNivells(filter); err == nil {
+			nivells = rows
 		}
-		if (typeAllowed("municipi_canvi") || typeAllowed("arxiu_canvi") || typeAllowed("llibre_canvi") || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi") || typeAllowed("wiki_canvi")) && (statusAll || statusFilter == "pendent") {
-			if changes, stale, err := a.DB.ListWikiPendingChanges(0); err == nil {
-				for _, changeID := range stale {
-					_ = a.DB.DequeueWikiPending(changeID)
+	}
+	if typeAllowed("municipi") {
+		status := ""
+		if !statusAll {
+			status = statusFilter
+		}
+		filter := db.MunicipiFilter{Status: status}
+		if scope, ok := scopeModel.scopeFilterForType("municipi"); ok && !scope.hasGlobal {
+			applyScopeFilterToMunicipi(&filter, scope)
+		}
+		if rows, err := a.DB.ListMunicipis(filter); err == nil {
+			municipis = rows
+		}
+	}
+	if typeAllowed("eclesiastic") {
+		status := ""
+		if !statusAll {
+			status = statusFilter
+		}
+		filter := db.ArquebisbatFilter{Status: status}
+		if scope, ok := scopeModel.scopeFilterForType("eclesiastic"); ok && !scope.hasGlobal {
+			applyScopeFilterToEcles(&filter, scope)
+		}
+		if rows, err := a.DB.ListArquebisbats(filter); err == nil {
+			ents = rows
+		}
+	}
+	if typeAllowed("cognom_variant") {
+		status := ""
+		if !statusAll {
+			status = statusFilter
+		}
+		if rows, err := a.DB.ListCognomVariants(db.CognomVariantFilter{Status: status}); err == nil {
+			variants = rows
+		}
+	}
+	if typeAllowed("cognom_referencia") {
+		status := ""
+		if !statusAll {
+			status = statusFilter
+		}
+		if rows, err := a.DB.ListCognomReferencies(db.CognomReferenciaFilter{Status: status}); err == nil {
+			referencies = rows
+		}
+	}
+	if typeAllowed("cognom_merge") {
+		status := ""
+		if !statusAll {
+			status = statusFilter
+		}
+		if rows, err := a.DB.ListCognomRedirectSuggestions(db.CognomRedirectSuggestionFilter{Status: status}); err == nil {
+			mergeSuggestions = rows
+		}
+	}
+	if typeAllowed("event_historic") {
+		status := ""
+		if !statusAll {
+			status = statusFilter
+		}
+		if rows, err := a.DB.ListEventsHistoric(db.EventHistoricFilter{Status: status}); err == nil {
+			events = rows
+		}
+	}
+	if typeAllowed("registre_canvi") && (statusAll || statusFilter == "pendent") {
+		if rows, err := a.DB.ListTranscripcioRawChangesPending(); err == nil {
+			for _, row := range rows {
+				if canModerateAll || scopeModel.canModerateItem("registre_canvi", row.ID) {
+					pendingChanges = append(pendingChanges, row)
 				}
-				for _, change := range changes {
-					if !isValidWikiObjectType(change.ObjectType) {
+			}
+		}
+	}
+	needsWikiChanges := typeAllowed("municipi_canvi") || typeAllowed("arxiu_canvi") || typeAllowed("llibre_canvi") || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi") || typeAllowed("wiki_canvi")
+	if needsWikiChanges && (statusAll || statusFilter == "pendent") {
+		if changes, stale, err := a.DB.ListWikiPendingChanges(0); err == nil {
+			typeMap := map[string]string{
+				"municipi":       "municipi_canvi",
+				"arxiu":          "arxiu_canvi",
+				"llibre":         "llibre_canvi",
+				"persona":        "persona_canvi",
+				"cognom":         "cognom_canvi",
+				"event_historic": "event_historic_canvi",
+			}
+			for _, changeID := range stale {
+				_ = a.DB.DequeueWikiPending(changeID)
+			}
+			for _, change := range changes {
+				if !isValidWikiObjectType(change.ObjectType) {
+					continue
+				}
+				objType := typeMap[change.ObjectType]
+				if objType == "" {
+					objType = "wiki_canvi"
+				}
+				if !typeAllowed(objType) {
+					continue
+				}
+				if !canModerateAll {
+					if objType == "wiki_canvi" {
 						continue
 					}
-					wikiChanges = append(wikiChanges, change)
+					if !scopeModel.canModerateWikiChange(change, objType) {
+						continue
+					}
 				}
+				wikiChanges = append(wikiChanges, change)
 			}
 		}
 	}
 	historiaGeneral := []db.MunicipiHistoriaGeneralVersion{}
 	historiaFets := []db.MunicipiHistoriaFetVersion{}
-	if canModerateHistoriaAny && (statusAll || statusFilter == "pendent") && typeAllowed("municipi_historia_general") {
+	if typeAllowed("municipi_historia_general") && (statusAll || statusFilter == "pendent") {
 		if rows, _, err := a.DB.ListPendingMunicipiHistoriaGeneralVersions(0, 0); err == nil {
 			for _, row := range rows {
-				if canModerateHistoriaItem(row.MunicipiID) {
+				if canModerateAll || scopeModel.canModerateItem("municipi_historia_general", row.ID) {
 					historiaGeneral = append(historiaGeneral, row)
 				}
 			}
 		}
 	}
-	if canModerateHistoriaAny && (statusAll || statusFilter == "pendent") && typeAllowed("municipi_historia_fet") {
+	if typeAllowed("municipi_historia_fet") && (statusAll || statusFilter == "pendent") {
 		if rows, _, err := a.DB.ListPendingMunicipiHistoriaFetVersions(0, 0); err == nil {
 			for _, row := range rows {
-				if canModerateHistoriaItem(row.MunicipiID) {
+				if canModerateAll || scopeModel.canModerateItem("municipi_historia_fet", row.ID) {
 					historiaFets = append(historiaFets, row)
 				}
 			}
 		}
 	}
 	anecdotes := []db.MunicipiAnecdotariVersion{}
-	if canModerateAnecdotesAny && (statusAll || statusFilter == "pendent") && typeAllowed("municipi_anecdota_version") {
+	if typeAllowed("municipi_anecdota_version") && (statusAll || statusFilter == "pendent") {
 		if rows, _, err := a.DB.ListPendingMunicipiAnecdotariVersions(0, 0); err == nil {
 			for _, row := range rows {
-				if canModerateAnecdoteItem(row.MunicipiID) {
+				if canModerateAll || scopeModel.canModerateItem("municipi_anecdota_version", row.ID) {
 					anecdotes = append(anecdotes, row)
 				}
 			}
@@ -550,15 +831,14 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		index++
 	}
 
-	if canModerateAll {
-		if typeAllowed("persona") {
-			for _, p := range persones {
-				created := ""
-				var createdAt time.Time
-				if p.CreatedAt.Valid {
-					created = p.CreatedAt.Time.Format("2006-01-02 15:04")
-					createdAt = p.CreatedAt.Time
-				}
+	if typeAllowed("persona") {
+		for _, p := range persones {
+			created := ""
+			var createdAt time.Time
+			if p.CreatedAt.Valid {
+				created = p.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = p.CreatedAt.Time
+			}
 			context := strings.TrimSpace(fmt.Sprintf("%s %s", p.Llibre, p.Pagina))
 			if context == "" {
 				context = p.Municipi
@@ -578,140 +858,139 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 				EditURL:   fmt.Sprintf("/persones/%d?return_to=/moderacio", p.ID),
 				Status:    p.ModeracioEstat,
 			})
-			}
 		}
+	}
 
-		if typeAllowed("arxiu") {
-			for _, arow := range arxius {
-				created := ""
-				var createdAt time.Time
-				if arow.CreatedAt.Valid {
-					created = arow.CreatedAt.Time.Format("2006-01-02 15:04")
-					createdAt = arow.CreatedAt.Time
-				}
-				autorNom, autorURL, autorID := autorFromID(arow.CreatedBy)
-				appendIfVisible(moderacioItem{
-					ID:        arow.ID,
-					Type:      "arxiu",
-					Nom:       arow.Nom,
-					Context:   arow.Tipus,
-					Autor:     autorNom,
-					AutorURL:  autorURL,
-					AutorID:   autorID,
-					Created:   created,
-					CreatedAt: createdAt,
-					Motiu:     arow.ModeracioMotiu,
-					EditURL:   fmt.Sprintf("/documentals/arxius/%d/edit?return_to=/moderacio", arow.ID),
-					Status:    arow.ModeracioEstat,
-				})
+	if typeAllowed("arxiu") {
+		for _, arow := range arxius {
+			created := ""
+			var createdAt time.Time
+			if arow.CreatedAt.Valid {
+				created = arow.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = arow.CreatedAt.Time
 			}
+			autorNom, autorURL, autorID := autorFromID(arow.CreatedBy)
+			appendIfVisible(moderacioItem{
+				ID:        arow.ID,
+				Type:      "arxiu",
+				Nom:       arow.Nom,
+				Context:   arow.Tipus,
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				AutorID:   autorID,
+				Created:   created,
+				CreatedAt: createdAt,
+				Motiu:     arow.ModeracioMotiu,
+				EditURL:   fmt.Sprintf("/documentals/arxius/%d/edit?return_to=/moderacio", arow.ID),
+				Status:    arow.ModeracioEstat,
+			})
 		}
+	}
 
-		if typeAllowed("llibre") {
-			for _, l := range llibres {
-				created := ""
-				var createdAt time.Time
-				if l.CreatedAt.Valid {
-					created = l.CreatedAt.Time.Format("2006-01-02 15:04")
-					createdAt = l.CreatedAt.Time
-				}
-				autorNom, autorURL, autorID := autorFromID(l.CreatedBy)
-				appendIfVisible(moderacioItem{
-					ID:        l.ID,
-					Type:      "llibre",
-					Nom:       l.Titol,
-					Context:   l.NomEsglesia,
-					Autor:     autorNom,
-					AutorURL:  autorURL,
-					AutorID:   autorID,
-					Created:   created,
-					CreatedAt: createdAt,
-					Motiu:     l.ModeracioMotiu,
-					EditURL:   fmt.Sprintf("/documentals/llibres/%d/edit?return_to=/moderacio", l.ID),
-					Status:    l.ModeracioEstat,
-				})
+	if typeAllowed("llibre") {
+		for _, l := range llibres {
+			created := ""
+			var createdAt time.Time
+			if l.CreatedAt.Valid {
+				created = l.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = l.CreatedAt.Time
 			}
+			autorNom, autorURL, autorID := autorFromID(l.CreatedBy)
+			appendIfVisible(moderacioItem{
+				ID:        l.ID,
+				Type:      "llibre",
+				Nom:       l.Titol,
+				Context:   l.NomEsglesia,
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				AutorID:   autorID,
+				Created:   created,
+				CreatedAt: createdAt,
+				Motiu:     l.ModeracioMotiu,
+				EditURL:   fmt.Sprintf("/documentals/llibres/%d/edit?return_to=/moderacio", l.ID),
+				Status:    l.ModeracioEstat,
+			})
 		}
+	}
 
-		if typeAllowed("nivell") {
-			for _, n := range nivells {
-				created := ""
-				var createdAt time.Time
-				if n.CreatedAt.Valid {
-					created = n.CreatedAt.Time.Format("2006-01-02 15:04")
-					createdAt = n.CreatedAt.Time
-				}
-				autorNom, autorURL, autorID := autorFromID(n.CreatedBy)
-				appendIfVisible(moderacioItem{
-					ID:        n.ID,
-					Type:      "nivell",
-					Nom:       n.NomNivell,
-					Context:   fmt.Sprintf("Nivell %d", n.Nivel),
-					Autor:     autorNom,
-					AutorURL:  autorURL,
-					AutorID:   autorID,
-					Created:   created,
-					CreatedAt: createdAt,
-					Motiu:     n.ModeracioMotiu,
-					EditURL:   fmt.Sprintf("/territori/nivells/%d/edit?return_to=/moderacio", n.ID),
-					Status:    n.ModeracioEstat,
-				})
+	if typeAllowed("nivell") {
+		for _, n := range nivells {
+			created := ""
+			var createdAt time.Time
+			if n.CreatedAt.Valid {
+				created = n.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = n.CreatedAt.Time
 			}
+			autorNom, autorURL, autorID := autorFromID(n.CreatedBy)
+			appendIfVisible(moderacioItem{
+				ID:        n.ID,
+				Type:      "nivell",
+				Nom:       n.NomNivell,
+				Context:   fmt.Sprintf("Nivell %d", n.Nivel),
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				AutorID:   autorID,
+				Created:   created,
+				CreatedAt: createdAt,
+				Motiu:     n.ModeracioMotiu,
+				EditURL:   fmt.Sprintf("/territori/nivells/%d/edit?return_to=/moderacio", n.ID),
+				Status:    n.ModeracioEstat,
+			})
 		}
+	}
 
-		if typeAllowed("municipi") {
-			for _, mrow := range municipis {
-				created := ""
-				var createdAt time.Time
-				if mrow.CreatedAt.Valid {
-					created = mrow.CreatedAt.Time.Format("2006-01-02 15:04")
-					createdAt = mrow.CreatedAt.Time
-				}
-				autorNom, autorURL, autorID := autorFromID(mrow.CreatedBy)
-				motiu := ""
-				ctx := strings.TrimSpace(strings.Join([]string{mrow.PaisNom.String, mrow.ProvNom.String, mrow.Comarca.String}, " / "))
-				appendIfVisible(moderacioItem{
-					ID:        mrow.ID,
-					Type:      "municipi",
-					Nom:       mrow.Nom,
-					Context:   ctx,
-					Autor:     autorNom,
-					AutorURL:  autorURL,
-					AutorID:   autorID,
-					Created:   created,
-					CreatedAt: createdAt,
-					Motiu:     motiu,
-					EditURL:   fmt.Sprintf("/territori/municipis/%d/edit?return_to=/moderacio", mrow.ID),
-					Status:    mrow.ModeracioEstat,
-				})
+	if typeAllowed("municipi") {
+		for _, mrow := range municipis {
+			created := ""
+			var createdAt time.Time
+			if mrow.CreatedAt.Valid {
+				created = mrow.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = mrow.CreatedAt.Time
 			}
+			autorNom, autorURL, autorID := autorFromID(mrow.CreatedBy)
+			motiu := ""
+			ctx := strings.TrimSpace(strings.Join([]string{mrow.PaisNom.String, mrow.ProvNom.String, mrow.Comarca.String}, " / "))
+			appendIfVisible(moderacioItem{
+				ID:        mrow.ID,
+				Type:      "municipi",
+				Nom:       mrow.Nom,
+				Context:   ctx,
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				AutorID:   autorID,
+				Created:   created,
+				CreatedAt: createdAt,
+				Motiu:     motiu,
+				EditURL:   fmt.Sprintf("/territori/municipis/%d/edit?return_to=/moderacio", mrow.ID),
+				Status:    mrow.ModeracioEstat,
+			})
 		}
+	}
 
-		if typeAllowed("eclesiastic") {
-			for _, row := range ents {
-				created := ""
-				var createdAt time.Time
-				if row.CreatedAt.Valid {
-					created = row.CreatedAt.Time.Format("2006-01-02 15:04")
-					createdAt = row.CreatedAt.Time
-				}
-				autorNom, autorURL, autorID := autorFromID(row.CreatedBy)
-				motiu := ""
-				appendIfVisible(moderacioItem{
-					ID:        row.ID,
-					Type:      "eclesiastic",
-					Nom:       row.Nom,
-					Context:   row.TipusEntitat,
-					Autor:     autorNom,
-					AutorURL:  autorURL,
-					AutorID:   autorID,
-					Created:   created,
-					CreatedAt: createdAt,
-					Motiu:     motiu,
-					EditURL:   fmt.Sprintf("/territori/eclesiastic/%d/edit?return_to=/moderacio", row.ID),
-					Status:    row.ModeracioEstat,
-				})
+	if typeAllowed("eclesiastic") {
+		for _, row := range ents {
+			created := ""
+			var createdAt time.Time
+			if row.CreatedAt.Valid {
+				created = row.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = row.CreatedAt.Time
 			}
+			autorNom, autorURL, autorID := autorFromID(row.CreatedBy)
+			motiu := ""
+			appendIfVisible(moderacioItem{
+				ID:        row.ID,
+				Type:      "eclesiastic",
+				Nom:       row.Nom,
+				Context:   row.TipusEntitat,
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				AutorID:   autorID,
+				Created:   created,
+				CreatedAt: createdAt,
+				Motiu:     motiu,
+				EditURL:   fmt.Sprintf("/territori/eclesiastic/%d/edit?return_to=/moderacio", row.ID),
+				Status:    row.ModeracioEstat,
+			})
 		}
 	}
 
@@ -980,19 +1259,24 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 	}
 
-	if canModerateAll && typeAllowed("registre") {
+	if typeAllowed("registre") {
 		status := ""
 		if !statusAll {
 			status = statusFilter
 		}
 		const regChunk = 200
 		offset := 0
+		scope, hasScope := scopeModel.scopeFilterForType("registre")
 		for {
-			registres, err := a.DB.ListTranscripcionsRawGlobal(db.TranscripcioFilter{
+			filter := db.TranscripcioFilter{
 				Status: status,
 				Limit:  regChunk,
 				Offset: offset,
-			})
+			}
+			if hasScope && !scope.hasGlobal {
+				applyScopeFilterToRegistre(&filter, scope)
+			}
+			registres, err := a.DB.ListTranscripcionsRawGlobal(filter)
 			if err != nil || len(registres) == 0 {
 				break
 			}
@@ -1038,7 +1322,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 	}
 
-	if canModerateAll && typeAllowed("registre_canvi") {
+	if typeAllowed("registre_canvi") {
 		for _, change := range pendingChanges {
 			autorNom, autorURL, autorID := autorFromID(change.ChangedBy)
 			created := ""
@@ -1075,7 +1359,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 	}
 
-	if canModerateAll && len(wikiChanges) > 0 {
+	if len(wikiChanges) > 0 {
 		typeMap := map[string]string{
 			"municipi":       "municipi_canvi",
 			"arxiu":          "arxiu_canvi",
@@ -1291,7 +1575,8 @@ func (a *App) requireModeracioUser(w http.ResponseWriter, r *http.Request) (*db.
 		*r = *a.withPermissions(r, perms)
 	}
 	canModerateAll := a.hasPerm(perms, permModerate)
-	if canModerateAll || a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisHistoriaModerate) || a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisAnecdotesModerate) {
+	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
+	if canModerateAll || scopeModel.canModerateAnything() {
 		return user, perms, canModerateAll, true
 	}
 	http.Error(w, "Forbidden", http.StatusForbidden)
@@ -1321,42 +1606,6 @@ func (a *App) requireModeracioMassivaUser(w http.ResponseWriter, r *http.Request
 	return user, perms, isAdmin, false
 }
 
-func (a *App) canModerateTerritoriObject(user *db.User, perms db.PolicyPermissions, objectType string, versionID int) bool {
-	if user == nil {
-		return false
-	}
-	if a.hasPerm(perms, permModerate) {
-		return true
-	}
-	munID := 0
-	switch objectType {
-	case "municipi_historia_general":
-		if id, err := a.DB.ResolveMunicipiIDByHistoriaGeneralVersionID(versionID); err == nil {
-			munID = id
-		}
-	case "municipi_historia_fet":
-		if id, err := a.DB.ResolveMunicipiIDByHistoriaFetVersionID(versionID); err == nil {
-			munID = id
-		}
-	case "municipi_anecdota_version":
-		if id, err := a.DB.ResolveMunicipiIDByAnecdotariVersionID(versionID); err == nil {
-			munID = id
-		}
-	default:
-		return false
-	}
-	if munID <= 0 {
-		return false
-	}
-	target := a.resolveMunicipiTarget(munID)
-	switch objectType {
-	case "municipi_anecdota_version":
-		return a.HasPermission(user.ID, permKeyTerritoriMunicipisAnecdotesModerate, target)
-	default:
-		return a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaModerate, target)
-	}
-}
-
 // Llista de persones pendents de moderació
 func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
@@ -1382,7 +1631,7 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 	filterType := filters.Type
 	filterStatus := filters.Status
 	filterAge := filters.AgeBucket
-	pageItems, total, summary := a.buildModeracioItems(ResolveLang(r), page, perPage, user, canModerateAll, filters)
+	pageItems, total, summary := a.buildModeracioItems(ResolveLang(r), page, perPage, user, perms, canModerateAll, filters)
 	totalPages := 1
 	if total > 0 {
 		totalPages = (total + perPage - 1) / perPage
@@ -1536,12 +1785,12 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 	applyMetrics := &moderacioApplyMetrics{}
 	perItemUsed := false
 	bulkUsed := false
-	scope := a.moderacioScopeForUser(user, canModerateAll)
+	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
 	scopeMode := "scoped"
-	if scope.CanModerateAll {
+	if scopeModel.canModerateAll {
 		scopeMode = "global"
 	}
-	allowedTypes := moderacioBulkTypesForScope(scope)
+	allowedTypes := scopeModel.allowedTypes()
 	allowedMap := map[string]bool{}
 	for _, t := range allowedTypes {
 		allowedMap[t] = true
@@ -1606,8 +1855,26 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 	}
 
 	resolveStart := time.Now()
-	if scope.CanModerateAll {
+	needsWikiChanges := false
+	for _, t := range types {
+		switch t {
+		case "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi", "wiki_canvi":
+			needsWikiChanges = true
+		}
+		if needsWikiChanges {
+			break
+		}
+	}
+	if needsWikiChanges {
 		if changes, stale, err := a.DB.ListWikiPendingChanges(0); err == nil {
+			typeMap := map[string]string{
+				"municipi":       "municipi_canvi",
+				"arxiu":          "arxiu_canvi",
+				"llibre":         "llibre_canvi",
+				"persona":        "persona_canvi",
+				"cognom":         "cognom_canvi",
+				"event_historic": "event_historic_canvi",
+			}
 			for _, changeID := range stale {
 				_ = a.DB.DequeueWikiPending(changeID)
 			}
@@ -1615,7 +1882,22 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				if !isValidWikiObjectType(change.ObjectType) {
 					continue
 				}
-				wikiPendingByType[change.ObjectType] = append(wikiPendingByType[change.ObjectType], change.ID)
+				objType := typeMap[change.ObjectType]
+				if objType == "" {
+					objType = "wiki_canvi"
+				}
+				if !allowedMap[objType] {
+					continue
+				}
+				if !scopeModel.canModerateAll {
+					if objType == "wiki_canvi" {
+						continue
+					}
+					if !scopeModel.canModerateWikiChange(change, objType) {
+						continue
+					}
+				}
+				wikiPendingByType[objType] = append(wikiPendingByType[objType], change.ID)
 			}
 		} else {
 			errCount++
@@ -1625,7 +1907,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 	for _, objType := range types {
 		switch objType {
 		case "persona":
-			if !scope.CanModerateAll {
+			if !scopeModel.canModerateAll {
 				break
 			}
 			resolveStart = time.Now()
@@ -1641,11 +1923,12 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, row.ID)
 			}
 		case "arxiu":
-			if !scope.CanModerateAll {
-				break
-			}
 			resolveStart = time.Now()
-			rows, err := a.DB.ListArxius(db.ArxiuFilter{Status: "pendent", Limit: -1})
+			filter := db.ArxiuFilter{Status: "pendent", Limit: -1}
+			if scope, ok := scopeModel.scopeFilterForType("arxiu"); ok && !scope.hasGlobal {
+				applyScopeFilterToArxiu(&filter, scope)
+			}
+			rows, err := a.DB.ListArxius(filter)
 			resolveDur += time.Since(resolveStart)
 			if err != nil {
 				errCount++
@@ -1675,11 +1958,12 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				applyActivity(objType, id)
 			}
 		case "llibre":
-			if !scope.CanModerateAll {
-				break
-			}
 			resolveStart = time.Now()
-			rows, err := a.DB.ListLlibres(db.LlibreFilter{Status: "pendent"})
+			filter := db.LlibreFilter{Status: "pendent"}
+			if scope, ok := scopeModel.scopeFilterForType("llibre"); ok && !scope.hasGlobal {
+				applyScopeFilterToLlibre(&filter, scope)
+			}
+			rows, err := a.DB.ListLlibres(filter)
 			resolveDur += time.Since(resolveStart)
 			if err != nil {
 				errCount++
@@ -1709,11 +1993,12 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				applyActivity(objType, id)
 			}
 		case "nivell":
-			if !scope.CanModerateAll {
-				break
-			}
 			resolveStart = time.Now()
-			rows, err := a.DB.ListNivells(db.NivellAdminFilter{Status: "pendent"})
+			filter := db.NivellAdminFilter{Status: "pendent"}
+			if scope, ok := scopeModel.scopeFilterForType("nivell"); ok && !scope.hasGlobal {
+				applyScopeFilterToNivell(&filter, scope)
+			}
+			rows, err := a.DB.ListNivells(filter)
 			resolveDur += time.Since(resolveStart)
 			if err != nil {
 				errCount++
@@ -1743,11 +2028,12 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				applyActivity(objType, id)
 			}
 		case "municipi":
-			if !scope.CanModerateAll {
-				break
-			}
 			resolveStart = time.Now()
-			rows, err := a.DB.ListMunicipis(db.MunicipiFilter{Status: "pendent"})
+			filter := db.MunicipiFilter{Status: "pendent"}
+			if scope, ok := scopeModel.scopeFilterForType("municipi"); ok && !scope.hasGlobal {
+				applyScopeFilterToMunicipi(&filter, scope)
+			}
+			rows, err := a.DB.ListMunicipis(filter)
 			resolveDur += time.Since(resolveStart)
 			if err != nil {
 				errCount++
@@ -1777,11 +2063,12 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				applyActivity(objType, id)
 			}
 		case "eclesiastic":
-			if !scope.CanModerateAll {
-				break
-			}
 			resolveStart = time.Now()
-			rows, err := a.DB.ListArquebisbats(db.ArquebisbatFilter{Status: "pendent"})
+			filter := db.ArquebisbatFilter{Status: "pendent"}
+			if scope, ok := scopeModel.scopeFilterForType("eclesiastic"); ok && !scope.hasGlobal {
+				applyScopeFilterToEcles(&filter, scope)
+			}
+			rows, err := a.DB.ListArquebisbats(filter)
 			resolveDur += time.Since(resolveStart)
 			if err != nil {
 				errCount++
@@ -1811,7 +2098,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				applyActivity(objType, id)
 			}
 		case "cognom_variant":
-			if !scope.CanModerateAll {
+			if !scopeModel.canModerateAll {
 				break
 			}
 			resolveStart = time.Now()
@@ -1845,7 +2132,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				applyActivity(objType, id)
 			}
 		case "cognom_referencia":
-			if !scope.CanModerateAll {
+			if !scopeModel.canModerateAll {
 				break
 			}
 			resolveStart = time.Now()
@@ -1879,7 +2166,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				applyActivity(objType, id)
 			}
 		case "cognom_merge":
-			if !scope.CanModerateAll {
+			if !scopeModel.canModerateAll {
 				break
 			}
 			resolveStart = time.Now()
@@ -1895,9 +2182,6 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, row.ID)
 			}
 		case "municipi_historia_general":
-			if !scope.CanModerateHistoria {
-				break
-			}
 			resolveStart = time.Now()
 			rows, _, err := a.DB.ListPendingMunicipiHistoriaGeneralVersions(0, 0)
 			resolveDur += time.Since(resolveStart)
@@ -1908,7 +2192,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			updateCandidates(len(rows))
 			ids := make([]int, 0, len(rows))
 			for _, row := range rows {
-				if scope.CanModerateHistoriaItem(row.MunicipiID) {
+				if scopeModel.canModerateAll || scopeModel.canModerateItem("municipi_historia_general", row.ID) {
 					ids = append(ids, row.ID)
 				}
 			}
@@ -1917,9 +2201,6 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, id)
 			}
 		case "municipi_historia_fet":
-			if !scope.CanModerateHistoria {
-				break
-			}
 			resolveStart = time.Now()
 			rows, _, err := a.DB.ListPendingMunicipiHistoriaFetVersions(0, 0)
 			resolveDur += time.Since(resolveStart)
@@ -1930,7 +2211,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			updateCandidates(len(rows))
 			ids := make([]int, 0, len(rows))
 			for _, row := range rows {
-				if scope.CanModerateHistoriaItem(row.MunicipiID) {
+				if scopeModel.canModerateAll || scopeModel.canModerateItem("municipi_historia_fet", row.ID) {
 					ids = append(ids, row.ID)
 				}
 			}
@@ -1939,9 +2220,6 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, id)
 			}
 		case "municipi_anecdota_version":
-			if !scope.CanModerateAnecdotes {
-				break
-			}
 			resolveStart = time.Now()
 			rows, _, err := a.DB.ListPendingMunicipiAnecdotariVersions(0, 0)
 			resolveDur += time.Since(resolveStart)
@@ -1952,7 +2230,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			updateCandidates(len(rows))
 			ids := make([]int, 0, len(rows))
 			for _, row := range rows {
-				if scope.CanModerateAnecdoteItem(row.MunicipiID) {
+				if scopeModel.canModerateAll || scopeModel.canModerateItem("municipi_anecdota_version", row.ID) {
 					ids = append(ids, row.ID)
 				}
 			}
@@ -1961,7 +2239,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, id)
 			}
 		case "event_historic":
-			if !scope.CanModerateAll {
+			if !scopeModel.canModerateAll {
 				break
 			}
 			resolveStart = time.Now()
@@ -1995,74 +2273,85 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				applyActivity(objType, id)
 			}
 		case "municipi_canvi":
-			if !scope.CanModerateAll {
-				break
-			}
-			ids := wikiPendingByType["municipi"]
+			ids := wikiPendingByType["municipi_canvi"]
 			updateCandidates(len(ids))
 			updateTotal(len(ids))
 			for _, id := range ids {
 				apply(objType, id)
 			}
 		case "arxiu_canvi":
-			if !scope.CanModerateAll {
-				break
-			}
-			ids := wikiPendingByType["arxiu"]
+			ids := wikiPendingByType["arxiu_canvi"]
 			updateCandidates(len(ids))
 			updateTotal(len(ids))
 			for _, id := range ids {
 				apply(objType, id)
 			}
 		case "llibre_canvi":
-			if !scope.CanModerateAll {
-				break
-			}
-			ids := wikiPendingByType["llibre"]
+			ids := wikiPendingByType["llibre_canvi"]
 			updateCandidates(len(ids))
 			updateTotal(len(ids))
 			for _, id := range ids {
 				apply(objType, id)
 			}
 		case "persona_canvi":
-			if !scope.CanModerateAll {
+			if !scopeModel.canModerateAll {
 				break
 			}
-			ids := wikiPendingByType["persona"]
+			ids := wikiPendingByType["persona_canvi"]
 			updateCandidates(len(ids))
 			updateTotal(len(ids))
 			for _, id := range ids {
 				apply(objType, id)
 			}
 		case "cognom_canvi":
-			if !scope.CanModerateAll {
+			if !scopeModel.canModerateAll {
 				break
 			}
-			ids := wikiPendingByType["cognom"]
+			ids := wikiPendingByType["cognom_canvi"]
 			updateCandidates(len(ids))
 			updateTotal(len(ids))
 			for _, id := range ids {
 				apply(objType, id)
 			}
 		case "event_historic_canvi":
-			if !scope.CanModerateAll {
+			if !scopeModel.canModerateAll {
 				break
 			}
-			ids := wikiPendingByType["event_historic"]
+			ids := wikiPendingByType["event_historic_canvi"]
 			updateCandidates(len(ids))
 			updateTotal(len(ids))
 			for _, id := range ids {
 				apply(objType, id)
 			}
-		case "registre":
-			if !scope.CanModerateAll {
+		case "registre_canvi":
+			resolveStart = time.Now()
+			rows, err := a.DB.ListTranscripcioRawChangesPending()
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
+				errCount++
 				break
 			}
+			updateCandidates(len(rows))
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				if scopeModel.canModerateAll || scopeModel.canModerateItem("registre_canvi", row.ID) {
+					ids = append(ids, row.ID)
+				}
+			}
+			updateTotal(len(ids))
+			for _, id := range ids {
+				apply(objType, id)
+			}
+		case "registre":
 			resolveStart = time.Now()
-			rows, err := a.DB.ListTranscripcionsRawGlobal(db.TranscripcioFilter{
+			filter := db.TranscripcioFilter{
 				Status: "pendent",
 				Limit:  -1,
-			})
+			}
+			if scope, ok := scopeModel.scopeFilterForType("registre"); ok && !scope.hasGlobal {
+				applyScopeFilterToRegistre(&filter, scope)
+			}
+			rows, err := a.DB.ListTranscripcionsRawGlobal(filter)
 			resolveDur += time.Since(resolveStart)
 			if err != nil {
 				errCount++
@@ -2077,7 +2366,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				}
 				ids = append(ids, row.ID)
 			}
-			updateCandidates(len(ids))
+			updateCandidates(len(rows))
 			updateTotal(len(ids))
 			for _, id := range ids {
 				apply(objType, id)
@@ -2186,6 +2475,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	selected := r.Form["selected"]
 	motiu := strings.TrimSpace(r.FormValue("bulk_reason"))
 	canModerateAll := a.hasPerm(perms, permModerate)
+	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
 	async := strings.TrimSpace(r.FormValue("async")) == "1" || strings.Contains(r.Header.Get("Accept"), "application/json")
 	returnTo := strings.TrimSpace(r.FormValue("return_to"))
 	if returnTo == "" {
@@ -2249,7 +2539,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	filters, page, perPage := parseModeracioReturnTo(returnTo)
 	start := time.Now()
 	resolveStart := time.Now()
-	pageItems, _, _ := a.buildModeracioItems(ResolveLang(r), page, perPage, user, canModerateAll, filters)
+	pageItems, _, _ := a.buildModeracioItems(ResolveLang(r), page, perPage, user, perms, canModerateAll, filters)
 	resolveDur := time.Since(resolveStart)
 	allowed := map[string]moderacioItem{}
 	for _, item := range pageItems {
@@ -2288,7 +2578,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 			skipped++
 			continue
 		}
-		if !canModerateAll && !a.canModerateTerritoriObject(user, perms, objType, id) {
+		if !canModerateAll && !scopeModel.canModerateItem(objType, id) {
 			errCount++
 			skipped++
 			continue
@@ -2362,7 +2652,7 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 	if returnTo == "" {
 		returnTo = "/moderacio"
 	}
-	if !canModerateAll && !a.canModerateTerritoriObject(user, perms, objType, id) {
+	if !canModerateAll && !a.newModeracioScopeModel(user, perms, canModerateAll).canModerateItem(objType, id) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -2410,7 +2700,7 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 	if returnTo == "" {
 		returnTo = "/moderacio"
 	}
-	if !canModerateAll && !a.canModerateTerritoriObject(user, perms, objType, id) {
+	if !canModerateAll && !a.newModeracioScopeModel(user, perms, canModerateAll).canModerateItem(objType, id) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

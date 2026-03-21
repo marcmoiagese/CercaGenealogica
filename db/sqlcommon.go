@@ -7276,7 +7276,7 @@ func (h sqlHelper) saveLlibrePagina(p *LlibrePagina) (int, error) {
 func (h sqlHelper) transcripcionsRawFilters(llibreID int, f TranscripcioFilter) (string, []interface{}, string) {
 	clauses := []string{}
 	args := []interface{}{}
-	join := ""
+	joinParts := []string{}
 	if llibreID > 0 {
 		clauses = append(clauses, "t.llibre_id = ?")
 		args = append(args, llibreID)
@@ -7309,14 +7309,14 @@ func (h sqlHelper) transcripcionsRawFilters(llibreID int, f TranscripcioFilter) 
 		if f.UseFullText {
 			joinClause, searchClause, searchArgs := h.fullTextSearchClause(search)
 			if joinClause != "" {
-				join = joinClause
+				joinParts = append(joinParts, joinClause)
 			}
 			if searchClause != "" {
 				clauses = append(clauses, searchClause)
 				args = append(args, searchArgs...)
 			}
 		} else {
-			join = "LEFT JOIN transcripcions_persones_raw p ON p.transcripcio_id = t.id"
+			joinParts = append(joinParts, "LEFT JOIN transcripcions_persones_raw p ON p.transcripcio_id = t.id")
 			search = "%" + search + "%"
 			likeOp := "LIKE"
 			if h.style == "postgres" {
@@ -7326,10 +7326,64 @@ func (h sqlHelper) transcripcionsRawFilters(llibreID int, f TranscripcioFilter) 
 			args = append(args, search, search, search, search, search, search)
 		}
 	}
+	allowedClauses := []string{}
+	allowedArgs := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		allowedClauses = append(allowedClauses, column+" IN ("+placeholders+")")
+		for _, id := range ids {
+			allowedArgs = append(allowedArgs, id)
+		}
+	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		orParts := make([]string, 0, len(parts))
+		for _, col := range parts {
+			orParts = append(orParts, col+" IN ("+placeholders+")")
+			for _, id := range ids {
+				allowedArgs = append(allowedArgs, id)
+			}
+		}
+		allowedClauses = append(allowedClauses, "("+strings.Join(orParts, " OR ")+")")
+	}
+	inClause("t.llibre_id", f.AllowedLlibreIDs)
+	inClause("l.municipi_id", f.AllowedMunicipiIDs)
+	inClause("l.arquevisbat_id", f.AllowedEclesIDs)
+	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClauseAnyLevel(f.AllowedNivellIDs)
+	inClause("na1.pais_id", f.AllowedPaisIDs)
+	if len(f.AllowedArxiuIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(f.AllowedArxiuIDs)), ",")
+		allowedClauses = append(allowedClauses, "EXISTS (SELECT 1 FROM arxius_llibres al WHERE al.llibre_id = t.llibre_id AND al.arxiu_id IN ("+placeholders+"))")
+		for _, id := range f.AllowedArxiuIDs {
+			allowedArgs = append(allowedArgs, id)
+		}
+	}
+	if len(allowedClauses) > 0 {
+		joinParts = append(joinParts, "LEFT JOIN llibres l ON l.id = t.llibre_id", "LEFT JOIN municipis m ON m.id = l.municipi_id", "LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1")
+		clauses = append(clauses, "("+strings.Join(allowedClauses, " OR ")+")")
+		args = append(args, allowedArgs...)
+	}
 	if len(clauses) == 0 {
 		clauses = append(clauses, "1=1")
 	}
-	return strings.Join(clauses, " AND "), args, join
+	return strings.Join(clauses, " AND "), args, strings.Join(joinParts, " ")
 }
 
 func (h sqlHelper) fullTextSearchClause(search string) (string, string, []interface{}) {

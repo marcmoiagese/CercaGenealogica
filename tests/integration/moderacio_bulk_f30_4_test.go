@@ -14,7 +14,7 @@ import (
 func TestModeracioBulkPageMixedSelectionScoped(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f30_4_bulk_page_mixed.sqlite3")
 
-	user := createTestUser(t, database, "moderator_scope_page")
+	user := createNonAdminTestUser(t, database, "moderator_scope_page")
 	munAllowed := createHistoriaMunicipi(t, database, user.ID)
 	munOther := createHistoriaMunicipi(t, database, user.ID)
 
