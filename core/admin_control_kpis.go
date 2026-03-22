@@ -23,14 +23,14 @@ type adminControlImportsSummary struct {
 }
 
 type adminControlKPIsResponse struct {
-	PendingModerationTotal  int                       `json:"pending_moderation_total"`
-	PendingModerationByType []adminControlPendingType `json:"pending_moderation_by_type"`
-	NewUsers7d              int                       `json:"new_users_7d"`
-	NewUsers30d             int                       `json:"new_users_30d"`
+	PendingModerationTotal  int                        `json:"pending_moderation_total"`
+	PendingModerationByType []adminControlPendingType  `json:"pending_moderation_by_type"`
+	NewUsers7d              int                        `json:"new_users_7d"`
+	NewUsers30d             int                        `json:"new_users_30d"`
 	ImportsLast24h          adminControlImportsSummary `json:"imports_last_24h"`
-	RebuildJobsRunning      int                       `json:"rebuild_jobs_running"`
-	RebuildJobsFailed       int                       `json:"rebuild_jobs_failed"`
-	GeneratedAt             string                    `json:"generated_at"`
+	RebuildJobsRunning      int                        `json:"rebuild_jobs_running"`
+	RebuildJobsFailed       int                        `json:"rebuild_jobs_failed"`
+	GeneratedAt             string                     `json:"generated_at"`
 }
 
 type adminControlKPIsCacheState struct {
@@ -124,6 +124,7 @@ func (a *App) adminControlKPIs() (adminControlKPIsResponse, error) {
 
 func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, error) {
 	counts := map[string]int{}
+	unknownWikiChanges := 0
 	if total, err := a.DB.CountPersones(db.PersonaFilter{Estat: "pendent"}); err != nil {
 		return 0, nil, err
 	} else {
@@ -203,24 +204,20 @@ func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, er
 	if changes, stale, err := a.DB.ListWikiPendingChanges(0); err != nil {
 		return 0, nil, err
 	} else if len(changes) > 0 || len(stale) > 0 {
-		typeMap := map[string]string{
-			"municipi":       "municipi_canvi",
-			"arxiu":          "arxiu_canvi",
-			"llibre":         "llibre_canvi",
-			"persona":        "persona_canvi",
-			"cognom":         "cognom_canvi",
-			"event_historic": "event_historic_canvi",
-		}
 		for _, changeID := range stale {
 			_ = a.DB.DequeueWikiPending(changeID)
 		}
 		for _, change := range changes {
-			objType := typeMap[change.ObjectType]
-			if objType == "" {
-				objType = "wiki_canvi"
+			objType, ok := resolveWikiChangeModeracioType(change)
+			if !ok {
+				unknownWikiChanges++
+				continue
 			}
 			counts[objType]++
 		}
+	}
+	if unknownWikiChanges > 0 {
+		Infof("Moderacio summary global: wiki canvis desconeguts exclosos=%d", unknownWikiChanges)
 	}
 
 	order := []string{
@@ -245,7 +242,6 @@ func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, er
 		"persona_canvi",
 		"cognom_canvi",
 		"event_historic_canvi",
-		"wiki_canvi",
 	}
 	byType := make([]adminControlPendingType, 0, len(order))
 	total := 0

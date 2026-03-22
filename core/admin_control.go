@@ -45,7 +45,6 @@ func (a *App) AdminControlCenter(w http.ResponseWriter, r *http.Request) {
 			"persona_canvi":             T(lang, "moderation.type.persona_canvi"),
 			"cognom_canvi":              T(lang, "moderation.type.cognom_canvi"),
 			"event_historic_canvi":      T(lang, "moderation.type.event_historic_canvi"),
-			"wiki_canvi":                T(lang, "moderation.type.wiki_canvi"),
 		},
 		"RecentAudit": recentAudit,
 	})

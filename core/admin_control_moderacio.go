@@ -43,13 +43,13 @@ func (a *App) AdminControlModeracioSummaryAPI(w http.ResponseWriter, r *http.Req
 	if scopeMode == "scoped" {
 		summaryTypes = moderacioSummaryTypesLabel(summary.ByType)
 	}
-	Infof("Moderacio summary mode=%s scope=%s types=%s user=%d status=%s type=%s age=%s dur=%s", mode, scopeMode, summaryTypes, user.ID, strings.TrimSpace(filters.Status), strings.TrimSpace(filters.Type), strings.TrimSpace(filters.AgeBucket), time.Since(start))
+	Infof("Moderacio summary mode=%s scope=%s types=%s excluded=%s user=%d status=%s type=%s age=%s dur=%s", mode, scopeMode, summaryTypes, formatModeracioOutOfBandTypes(), user.ID, strings.TrimSpace(filters.Status), strings.TrimSpace(filters.Type), strings.TrimSpace(filters.AgeBucket), time.Since(start))
 	payload := map[string]interface{}{
-		"ok":           true,
-		"summary":      summary,
-		"summary_mode": mode,
+		"ok":            true,
+		"summary":       summary,
+		"summary_mode":  mode,
 		"summary_scope": scopeMode,
-		"generated_at": time.Now().Format(time.RFC3339),
+		"generated_at":  time.Now().Format(time.RFC3339),
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(payload)
@@ -166,6 +166,7 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 	}
 	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
 	counts := map[string]int{}
+	unknownWikiChanges := 0
 	if scopeModel.canModerateType("arxiu") {
 		filter := db.ArxiuFilter{Status: "pendent"}
 		if scope, ok := scopeModel.scopeFilterForType("arxiu"); ok && !scope.hasGlobal {
@@ -297,36 +298,22 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 		scopeModel.canModerateType("llibre_canvi") ||
 		scopeModel.canModerateType("persona_canvi") ||
 		scopeModel.canModerateType("cognom_canvi") ||
-		scopeModel.canModerateType("event_historic_canvi") ||
-		scopeModel.canModerateType("wiki_canvi")
+		scopeModel.canModerateType("event_historic_canvi")
 	if needsWiki {
 		if changes, stale, err := a.DB.ListWikiPendingChanges(0); err == nil {
-			typeMap := map[string]string{
-				"municipi":       "municipi_canvi",
-				"arxiu":          "arxiu_canvi",
-				"llibre":         "llibre_canvi",
-				"persona":        "persona_canvi",
-				"cognom":         "cognom_canvi",
-				"event_historic": "event_historic_canvi",
-			}
 			for _, changeID := range stale {
 				_ = a.DB.DequeueWikiPending(changeID)
 			}
 			for _, change := range changes {
-				if !isValidWikiObjectType(change.ObjectType) {
+				objType, ok := resolveWikiChangeModeracioType(change)
+				if !ok {
+					unknownWikiChanges++
 					continue
-				}
-				objType := typeMap[change.ObjectType]
-				if objType == "" {
-					objType = "wiki_canvi"
 				}
 				if !scopeModel.canModerateType(objType) {
 					continue
 				}
 				if !scopeModel.canModerateAll {
-					if objType == "wiki_canvi" {
-						continue
-					}
 					if !scopeModel.canModerateWikiChange(change, objType) {
 						continue
 					}
@@ -336,6 +323,9 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 		} else {
 			return 0, nil, err
 		}
+	}
+	if unknownWikiChanges > 0 {
+		Infof("Moderacio summary scoped: wiki canvis desconeguts exclosos=%d user=%d", unknownWikiChanges, user.ID)
 	}
 	order := []string{
 		"persona",
@@ -359,7 +349,6 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 		"persona_canvi",
 		"cognom_canvi",
 		"event_historic_canvi",
-		"wiki_canvi",
 	}
 	byType := make([]adminControlPendingType, 0, len(order))
 	total := 0

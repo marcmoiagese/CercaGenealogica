@@ -56,10 +56,10 @@ type moderacioFilters struct {
 
 type moderacioBulkResult struct {
 	Candidates int
-	Total     int
-	Processed int
-	Errors    int
-	Skipped   int
+	Total      int
+	Processed  int
+	Errors     int
+	Skipped    int
 }
 
 type moderacioApplyMetrics struct {
@@ -84,28 +84,27 @@ type moderacioTypeSpec struct {
 }
 
 var moderacioTypeSpecs = map[string]moderacioTypeSpec{
-	"persona":                    {Key: "persona"},
-	"arxiu":                      {Key: "arxiu", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
-	"llibre":                     {Key: "llibre", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
-	"nivell":                     {Key: "nivell", PermKey: permKeyTerritoriNivellsEdit, ListScope: ScopePais},
-	"municipi":                   {Key: "municipi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
-	"eclesiastic":                {Key: "eclesiastic", PermKey: permKeyTerritoriEclesEdit, ListScope: ScopeEcles},
-	"municipi_historia_general":  {Key: "municipi_historia_general", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
-	"municipi_historia_fet":      {Key: "municipi_historia_fet", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
-	"municipi_anecdota_version":  {Key: "municipi_anecdota_version", PermKey: permKeyTerritoriMunicipisAnecdotesModerate, ListScope: ScopeMunicipi},
-	"event_historic":             {Key: "event_historic"},
-	"registre":                   {Key: "registre", PermKey: permKeyDocumentalsRegistresEdit, ListScope: ScopeLlibre},
-	"registre_canvi":             {Key: "registre_canvi", PermKey: permKeyDocumentalsRegistresEdit, ListScope: ScopeLlibre},
-	"cognom_variant":             {Key: "cognom_variant"},
-	"cognom_referencia":          {Key: "cognom_referencia"},
-	"cognom_merge":               {Key: "cognom_merge"},
-	"municipi_canvi":             {Key: "municipi_canvi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
-	"arxiu_canvi":                {Key: "arxiu_canvi", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
-	"llibre_canvi":               {Key: "llibre_canvi", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
-	"persona_canvi":              {Key: "persona_canvi"},
-	"cognom_canvi":               {Key: "cognom_canvi"},
-	"event_historic_canvi":       {Key: "event_historic_canvi"},
-	"wiki_canvi":                 {Key: "wiki_canvi"},
+	"persona":                   {Key: "persona"},
+	"arxiu":                     {Key: "arxiu", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
+	"llibre":                    {Key: "llibre", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
+	"nivell":                    {Key: "nivell", PermKey: permKeyTerritoriNivellsEdit, ListScope: ScopePais},
+	"municipi":                  {Key: "municipi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
+	"eclesiastic":               {Key: "eclesiastic", PermKey: permKeyTerritoriEclesEdit, ListScope: ScopeEcles},
+	"municipi_historia_general": {Key: "municipi_historia_general", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
+	"municipi_historia_fet":     {Key: "municipi_historia_fet", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
+	"municipi_anecdota_version": {Key: "municipi_anecdota_version", PermKey: permKeyTerritoriMunicipisAnecdotesModerate, ListScope: ScopeMunicipi},
+	"event_historic":            {Key: "event_historic"},
+	"registre":                  {Key: "registre", PermKey: permKeyDocumentalsRegistresEdit, ListScope: ScopeLlibre},
+	"registre_canvi":            {Key: "registre_canvi", PermKey: permKeyDocumentalsRegistresEdit, ListScope: ScopeLlibre},
+	"cognom_variant":            {Key: "cognom_variant"},
+	"cognom_referencia":         {Key: "cognom_referencia"},
+	"cognom_merge":              {Key: "cognom_merge"},
+	"municipi_canvi":            {Key: "municipi_canvi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
+	"arxiu_canvi":               {Key: "arxiu_canvi", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
+	"llibre_canvi":              {Key: "llibre_canvi", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
+	"persona_canvi":             {Key: "persona_canvi"},
+	"cognom_canvi":              {Key: "cognom_canvi"},
+	"event_historic_canvi":      {Key: "event_historic_canvi"},
 }
 
 type moderacioScopeModel struct {
@@ -616,6 +615,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 	events := []db.EventHistoric{}
 	pendingChanges := []db.TranscripcioRawChange{}
 	wikiChanges := []db.WikiChange{}
+	unknownWikiChanges := 0
 	if typeAllowed("persona") {
 		status := ""
 		if !statusAll {
@@ -735,35 +735,22 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 			}
 		}
 	}
-	needsWikiChanges := typeAllowed("municipi_canvi") || typeAllowed("arxiu_canvi") || typeAllowed("llibre_canvi") || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi") || typeAllowed("wiki_canvi")
+	needsWikiChanges := typeAllowed("municipi_canvi") || typeAllowed("arxiu_canvi") || typeAllowed("llibre_canvi") || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi")
 	if needsWikiChanges && (statusAll || statusFilter == "pendent") {
 		if changes, stale, err := a.DB.ListWikiPendingChanges(0); err == nil {
-			typeMap := map[string]string{
-				"municipi":       "municipi_canvi",
-				"arxiu":          "arxiu_canvi",
-				"llibre":         "llibre_canvi",
-				"persona":        "persona_canvi",
-				"cognom":         "cognom_canvi",
-				"event_historic": "event_historic_canvi",
-			}
 			for _, changeID := range stale {
 				_ = a.DB.DequeueWikiPending(changeID)
 			}
 			for _, change := range changes {
-				if !isValidWikiObjectType(change.ObjectType) {
+				objType, ok := resolveWikiChangeModeracioType(change)
+				if !ok {
+					unknownWikiChanges++
 					continue
-				}
-				objType := typeMap[change.ObjectType]
-				if objType == "" {
-					objType = "wiki_canvi"
 				}
 				if !typeAllowed(objType) {
 					continue
 				}
 				if !canModerateAll {
-					if objType == "wiki_canvi" {
-						continue
-					}
 					if !scopeModel.canModerateWikiChange(change, objType) {
 						continue
 					}
@@ -771,6 +758,9 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 				wikiChanges = append(wikiChanges, change)
 			}
 		}
+	}
+	if unknownWikiChanges > 0 {
+		Infof("Moderacio: wiki canvis desconeguts exclosos=%d", unknownWikiChanges)
 	}
 	historiaGeneral := []db.MunicipiHistoriaGeneralVersion{}
 	historiaFets := []db.MunicipiHistoriaFetVersion{}
@@ -1360,14 +1350,6 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 	}
 
 	if len(wikiChanges) > 0 {
-		typeMap := map[string]string{
-			"municipi":       "municipi_canvi",
-			"arxiu":          "arxiu_canvi",
-			"llibre":         "llibre_canvi",
-			"persona":        "persona_canvi",
-			"cognom":         "cognom_canvi",
-			"event_historic": "event_historic_canvi",
-		}
 		municipiCache := map[int]string{}
 		arxiuCache := map[int]string{}
 		llibreCache := map[int]string{}
@@ -1375,9 +1357,9 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		cognomCache := map[int]string{}
 		eventCache := map[int]string{}
 		for _, change := range wikiChanges {
-			objType := typeMap[change.ObjectType]
-			if objType == "" {
-				objType = "wiki_canvi"
+			objType, ok := resolveWikiChangeModeracioType(change)
+			if !ok {
+				continue
 			}
 			if !typeAllowed(objType) {
 				continue
@@ -1856,9 +1838,10 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 
 	resolveStart := time.Now()
 	needsWikiChanges := false
+	unknownWikiChanges := 0
 	for _, t := range types {
 		switch t {
-		case "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi", "wiki_canvi":
+		case "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi":
 			needsWikiChanges = true
 		}
 		if needsWikiChanges {
@@ -1867,32 +1850,19 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 	}
 	if needsWikiChanges {
 		if changes, stale, err := a.DB.ListWikiPendingChanges(0); err == nil {
-			typeMap := map[string]string{
-				"municipi":       "municipi_canvi",
-				"arxiu":          "arxiu_canvi",
-				"llibre":         "llibre_canvi",
-				"persona":        "persona_canvi",
-				"cognom":         "cognom_canvi",
-				"event_historic": "event_historic_canvi",
-			}
 			for _, changeID := range stale {
 				_ = a.DB.DequeueWikiPending(changeID)
 			}
 			for _, change := range changes {
-				if !isValidWikiObjectType(change.ObjectType) {
+				objType, ok := resolveWikiChangeModeracioType(change)
+				if !ok {
+					unknownWikiChanges++
 					continue
-				}
-				objType := typeMap[change.ObjectType]
-				if objType == "" {
-					objType = "wiki_canvi"
 				}
 				if !allowedMap[objType] {
 					continue
 				}
 				if !scopeModel.canModerateAll {
-					if objType == "wiki_canvi" {
-						continue
-					}
 					if !scopeModel.canModerateWikiChange(change, objType) {
 						continue
 					}
@@ -1902,6 +1872,9 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 		} else {
 			errCount++
 		}
+	}
+	if unknownWikiChanges > 0 {
+		Infof("Moderacio bulk: wiki canvis desconeguts exclosos=%d", unknownWikiChanges)
 	}
 	resolveDur += time.Since(resolveStart)
 	for _, objType := range types {
@@ -2493,17 +2466,17 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 				store.finish(job.ID, err)
 				auditStart := time.Now()
 				a.logAdminAudit(nil, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
-					"action":        action,
-					"scope":         scope,
-					"bulk_type":     bulkType,
-					"bulk_user_id":  bulkUserID,
-					"candidates":    result.Candidates,
-					"total":         result.Total,
-					"processed":     result.Processed,
-					"errors":        result.Errors,
-					"skipped":       result.Skipped,
-					"job_id":        job.ID,
-					"async":         true,
+					"action":       action,
+					"scope":        scope,
+					"bulk_type":    bulkType,
+					"bulk_user_id": bulkUserID,
+					"candidates":   result.Candidates,
+					"total":        result.Total,
+					"processed":    result.Processed,
+					"errors":       result.Errors,
+					"skipped":      result.Skipped,
+					"job_id":       job.ID,
+					"async":        true,
 				})
 				a.logModeracioBulkExecution(action, scope, bulkType, user.ID, bulkUserID, true, result, metrics, time.Since(auditStart))
 			}()
@@ -2513,16 +2486,16 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 		result, metrics, err := a.processModeracioBulkAll(r.Context(), action, bulkType, motiu, user, perms, canModerateAll, bulkUserID, nil)
 		auditStart := time.Now()
 		a.logAdminAudit(r, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
-			"action":        action,
-			"scope":         scope,
-			"bulk_type":     bulkType,
-			"bulk_user_id":  bulkUserID,
-			"candidates":    result.Candidates,
-			"total":         result.Total,
-			"processed":     result.Processed,
-			"errors":        result.Errors,
-			"skipped":       result.Skipped,
-			"async":         false,
+			"action":       action,
+			"scope":        scope,
+			"bulk_type":    bulkType,
+			"bulk_user_id": bulkUserID,
+			"candidates":   result.Candidates,
+			"total":        result.Total,
+			"processed":    result.Processed,
+			"errors":       result.Errors,
+			"skipped":      result.Skipped,
+			"async":        false,
 		})
 		a.logModeracioBulkExecution(action, scope, bulkType, user.ID, bulkUserID, false, result, metrics, time.Since(auditStart))
 		if err != nil {
@@ -2610,15 +2583,15 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	}
 	auditStart := time.Now()
 	a.logAdminAudit(r, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
-		"action":    action,
-		"scope":     scope,
-		"bulk_type": bulkType,
+		"action":     action,
+		"scope":      scope,
+		"bulk_type":  bulkType,
 		"candidates": candidates,
-		"total":     total,
-		"processed": processed,
-		"errors":    errCount,
-		"skipped":   skipped,
-		"async":     false,
+		"total":      total,
+		"processed":  processed,
+		"errors":     errCount,
+		"skipped":    skipped,
+		"async":      false,
 	})
 	a.logModeracioBulkExecution(action, scope, bulkType, user.ID, bulkUserID, false, result, metrics, time.Since(auditStart))
 	if errCount > 0 {
