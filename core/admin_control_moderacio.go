@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -43,7 +44,7 @@ func (a *App) AdminControlModeracioSummaryAPI(w http.ResponseWriter, r *http.Req
 	if scopeMode == "scoped" {
 		summaryTypes = moderacioSummaryTypesLabel(summary.ByType)
 	}
-	Infof("Moderacio summary mode=%s scope=%s types=%s excluded=%s user=%d status=%s type=%s age=%s dur=%s", mode, scopeMode, summaryTypes, formatModeracioOutOfBandTypes(), user.ID, strings.TrimSpace(filters.Status), strings.TrimSpace(filters.Type), strings.TrimSpace(filters.AgeBucket), time.Since(start))
+	Infof("Moderacio summary mode=%s scope=%s types=%s user=%d status=%s type=%s age=%s dur=%s", mode, scopeMode, summaryTypes, user.ID, strings.TrimSpace(filters.Status), strings.TrimSpace(filters.Type), strings.TrimSpace(filters.AgeBucket), time.Since(start))
 	payload := map[string]interface{}{
 		"ok":            true,
 		"summary":       summary,
@@ -166,7 +167,6 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 	}
 	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
 	counts := map[string]int{}
-	unknownWikiChanges := 0
 	if scopeModel.canModerateType("arxiu") {
 		filter := db.ArxiuFilter{Status: "pendent"}
 		if scope, ok := scopeModel.scopeFilterForType("arxiu"); ok && !scope.hasGlobal {
@@ -220,6 +220,21 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 			return 0, nil, err
 		} else if total > 0 {
 			counts["eclesiastic"] = total
+		}
+	}
+	if scopeModel.canModerateType("municipi_mapa_version") {
+		rows, err := a.DB.ListMunicipiMapaVersions(db.MunicipiMapaVersionFilter{Status: "pendent"})
+		if err != nil {
+			return 0, nil, err
+		}
+		total := 0
+		for _, row := range rows {
+			if scopeModel.canModerateAll || scopeModel.canModerateItem("municipi_mapa_version", row.ID) {
+				total++
+			}
+		}
+		if total > 0 {
+			counts["municipi_mapa_version"] = total
 		}
 	}
 	if scopeModel.canModerateType("municipi_historia_general") {
@@ -293,6 +308,15 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 			counts["registre_canvi"] = total
 		}
 	}
+	if scopeModel.canModerateType("external_link") {
+		rows, err := a.DB.ExternalLinksListByStatus("pending")
+		if err != nil {
+			return 0, nil, err
+		}
+		if len(rows) > 0 {
+			counts["external_link"] = len(rows)
+		}
+	}
 	needsWiki := scopeModel.canModerateType("municipi_canvi") ||
 		scopeModel.canModerateType("arxiu_canvi") ||
 		scopeModel.canModerateType("llibre_canvi") ||
@@ -305,10 +329,9 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 				_ = a.DB.DequeueWikiPending(changeID)
 			}
 			for _, change := range changes {
-				objType, ok := resolveWikiChangeModeracioType(change)
-				if !ok {
-					unknownWikiChanges++
-					continue
+				objType := resolveWikiChangeModeracioType(change)
+				if objType == "" {
+					return 0, nil, fmt.Errorf("wiki change sense tipus moderable: %d", change.ID)
 				}
 				if !scopeModel.canModerateType(objType) {
 					continue
@@ -324,9 +347,6 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 			return 0, nil, err
 		}
 	}
-	if unknownWikiChanges > 0 {
-		Infof("Moderacio summary scoped: wiki canvis desconeguts exclosos=%d user=%d", unknownWikiChanges, user.ID)
-	}
 	order := []string{
 		"persona",
 		"arxiu",
@@ -334,6 +354,7 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 		"nivell",
 		"municipi",
 		"eclesiastic",
+		"municipi_mapa_version",
 		"cognom_variant",
 		"cognom_referencia",
 		"cognom_merge",
@@ -343,6 +364,9 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 		"municipi_anecdota_version",
 		"registre",
 		"registre_canvi",
+		"media_album",
+		"media_item",
+		"external_link",
 		"municipi_canvi",
 		"arxiu_canvi",
 		"llibre_canvi",

@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -124,7 +125,6 @@ func (a *App) adminControlKPIs() (adminControlKPIsResponse, error) {
 
 func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, error) {
 	counts := map[string]int{}
-	unknownWikiChanges := 0
 	if total, err := a.DB.CountPersones(db.PersonaFilter{Estat: "pendent"}); err != nil {
 		return 0, nil, err
 	} else {
@@ -154,6 +154,11 @@ func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, er
 		return 0, nil, err
 	} else {
 		counts["eclesiastic"] = total
+	}
+	if rows, err := a.DB.ListMunicipiMapaVersions(db.MunicipiMapaVersionFilter{Status: "pendent"}); err != nil {
+		return 0, nil, err
+	} else {
+		counts["municipi_mapa_version"] = len(rows)
 	}
 	if total, err := a.DB.CountCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err != nil {
 		return 0, nil, err
@@ -200,6 +205,21 @@ func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, er
 	} else {
 		counts["registre_canvi"] = total
 	}
+	if rows, err := a.DB.ListMediaAlbumsByStatus("pending"); err != nil {
+		return 0, nil, err
+	} else {
+		counts["media_album"] = len(rows)
+	}
+	if rows, err := a.DB.ListMediaItemsByStatus("pending"); err != nil {
+		return 0, nil, err
+	} else {
+		counts["media_item"] = len(rows)
+	}
+	if rows, err := a.DB.ExternalLinksListByStatus("pending"); err != nil {
+		return 0, nil, err
+	} else {
+		counts["external_link"] = len(rows)
+	}
 
 	if changes, stale, err := a.DB.ListWikiPendingChanges(0); err != nil {
 		return 0, nil, err
@@ -208,16 +228,12 @@ func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, er
 			_ = a.DB.DequeueWikiPending(changeID)
 		}
 		for _, change := range changes {
-			objType, ok := resolveWikiChangeModeracioType(change)
-			if !ok {
-				unknownWikiChanges++
-				continue
+			objType := resolveWikiChangeModeracioType(change)
+			if objType == "" {
+				return 0, nil, fmt.Errorf("wiki change sense tipus moderable: %d", change.ID)
 			}
 			counts[objType]++
 		}
-	}
-	if unknownWikiChanges > 0 {
-		Infof("Moderacio summary global: wiki canvis desconeguts exclosos=%d", unknownWikiChanges)
 	}
 
 	order := []string{
@@ -227,6 +243,7 @@ func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, er
 		"nivell",
 		"municipi",
 		"eclesiastic",
+		"municipi_mapa_version",
 		"cognom_variant",
 		"cognom_referencia",
 		"cognom_merge",
@@ -236,6 +253,9 @@ func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, er
 		"municipi_anecdota_version",
 		"registre",
 		"registre_canvi",
+		"media_album",
+		"media_item",
+		"external_link",
 		"municipi_canvi",
 		"arxiu_canvi",
 		"llibre_canvi",

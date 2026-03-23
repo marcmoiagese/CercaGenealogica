@@ -90,6 +90,7 @@ var moderacioTypeSpecs = map[string]moderacioTypeSpec{
 	"nivell":                    {Key: "nivell", PermKey: permKeyTerritoriNivellsEdit, ListScope: ScopePais},
 	"municipi":                  {Key: "municipi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
 	"eclesiastic":               {Key: "eclesiastic", PermKey: permKeyTerritoriEclesEdit, ListScope: ScopeEcles},
+	"municipi_mapa_version":     {Key: "municipi_mapa_version", PermKey: permKeyTerritoriMunicipisMapesModerate, ListScope: ScopeMunicipi},
 	"municipi_historia_general": {Key: "municipi_historia_general", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
 	"municipi_historia_fet":     {Key: "municipi_historia_fet", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
 	"municipi_anecdota_version": {Key: "municipi_anecdota_version", PermKey: permKeyTerritoriMunicipisAnecdotesModerate, ListScope: ScopeMunicipi},
@@ -99,6 +100,9 @@ var moderacioTypeSpecs = map[string]moderacioTypeSpec{
 	"cognom_variant":            {Key: "cognom_variant"},
 	"cognom_referencia":         {Key: "cognom_referencia"},
 	"cognom_merge":              {Key: "cognom_merge"},
+	"media_album":               {Key: "media_album"},
+	"media_item":                {Key: "media_item"},
+	"external_link":             {Key: "external_link", PermKey: permKeyAdminExternalLinksModerate, ListScope: ScopeGlobal},
 	"municipi_canvi":            {Key: "municipi_canvi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
 	"arxiu_canvi":               {Key: "arxiu_canvi", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
 	"llibre_canvi":              {Key: "llibre_canvi", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
@@ -272,6 +276,13 @@ func (m *moderacioScopeModel) canModerateItem(objType string, id int) bool {
 		}
 		target := m.app.resolveMunicipiTarget(munID)
 		return m.app.HasPermission(m.user.ID, permKeyTerritoriMunicipisAnecdotesModerate, target)
+	case "municipi_mapa_version":
+		munID, err := m.app.DB.ResolveMunicipiIDByMapaVersionID(id)
+		if err != nil || munID <= 0 {
+			return false
+		}
+		target := m.app.resolveMunicipiTarget(munID)
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriMunicipisMapesModerate, target)
 	case "registre":
 		reg, err := m.app.DB.GetTranscripcioRaw(id)
 		if err != nil || reg == nil {
@@ -296,6 +307,10 @@ func (m *moderacioScopeModel) canModerateItem(objType string, id int) bool {
 			return false
 		}
 		return m.canModerateWikiChange(*change, objType)
+	case "external_link":
+		return m.canModerateType("external_link")
+	case "media_album", "media_item":
+		return m.canModerateAll
 	default:
 		return false
 	}
@@ -415,6 +430,7 @@ var moderacioBulkAllowedTypes = []string{
 	"nivell",
 	"municipi",
 	"eclesiastic",
+	"municipi_mapa_version",
 	"municipi_historia_general",
 	"municipi_historia_fet",
 	"municipi_anecdota_version",
@@ -424,6 +440,9 @@ var moderacioBulkAllowedTypes = []string{
 	"cognom_variant",
 	"cognom_referencia",
 	"cognom_merge",
+	"media_album",
+	"media_item",
+	"external_link",
 	"municipi_canvi",
 	"arxiu_canvi",
 	"llibre_canvi",
@@ -513,7 +532,59 @@ func moderacioAgeBucket(createdAt time.Time, now time.Time) string {
 	return moderacioAge3Plus
 }
 
-func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User, perms db.PolicyPermissions, canModerateAll bool, filters moderacioFilters) ([]moderacioItem, int, moderacioSummary) {
+func moderacioStatusFromMedia(status string) string {
+	switch strings.TrimSpace(status) {
+	case "pending":
+		return "pendent"
+	case "approved":
+		return "publicat"
+	case "rejected":
+		return "rebutjat"
+	default:
+		return status
+	}
+}
+
+func mediaStatusFromModeracio(status string) string {
+	switch strings.TrimSpace(status) {
+	case "pendent":
+		return "pending"
+	case "publicat":
+		return "approved"
+	case "rebutjat":
+		return "rejected"
+	default:
+		return status
+	}
+}
+
+func moderacioStatusFromExternalLink(status string) string {
+	switch strings.TrimSpace(status) {
+	case "pending":
+		return "pendent"
+	case "approved":
+		return "publicat"
+	case "rejected":
+		return "rebutjat"
+	default:
+		return status
+	}
+}
+
+func externalLinkStatusFromModeracio(status string) string {
+	switch strings.TrimSpace(status) {
+	case "pendent":
+		return "pending"
+	case "publicat":
+		return "approved"
+	case "rebutjat":
+		return "rejected"
+	default:
+		return status
+	}
+}
+
+func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User, perms db.PolicyPermissions, canModerateAll bool, filters moderacioFilters) ([]moderacioItem, int, moderacioSummary, error) {
 	var items []moderacioItem
 	userCache := map[int]*db.User{}
 	autorFromID := func(id sql.NullInt64) (string, string, int) {
@@ -615,7 +686,6 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 	events := []db.EventHistoric{}
 	pendingChanges := []db.TranscripcioRawChange{}
 	wikiChanges := []db.WikiChange{}
-	unknownWikiChanges := 0
 	if typeAllowed("persona") {
 		status := ""
 		if !statusAll {
@@ -690,6 +760,66 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 			ents = rows
 		}
 	}
+	mediaAlbums := []db.MediaAlbum{}
+	mediaItems := []db.MediaItem{}
+	if typeAllowed("media_album") {
+		statuses := []string{}
+		if statusAll {
+			statuses = []string{"pending", "approved", "rejected"}
+		} else {
+			statuses = []string{mediaStatusFromModeracio(statusFilter)}
+		}
+		for _, status := range statuses {
+			if rows, err := a.DB.ListMediaAlbumsByStatus(status); err == nil {
+				mediaAlbums = append(mediaAlbums, rows...)
+			}
+		}
+	}
+	if typeAllowed("media_item") {
+		statuses := []string{}
+		if statusAll {
+			statuses = []string{"pending", "approved", "rejected"}
+		} else {
+			statuses = []string{mediaStatusFromModeracio(statusFilter)}
+		}
+		for _, status := range statuses {
+			if rows, err := a.DB.ListMediaItemsByStatus(status); err == nil {
+				mediaItems = append(mediaItems, rows...)
+			}
+		}
+	}
+	mapVersions := []db.MunicipiMapaVersion{}
+	if typeAllowed("municipi_mapa_version") {
+		statuses := []string{}
+		if statusAll {
+			statuses = []string{"pendent", "publicat", "rebutjat"}
+		} else {
+			statuses = []string{statusFilter}
+		}
+		for _, status := range statuses {
+			if rows, err := a.DB.ListMunicipiMapaVersions(db.MunicipiMapaVersionFilter{Status: status}); err == nil {
+				for _, row := range rows {
+					if canModerateAll || scopeModel.canModerateItem("municipi_mapa_version", row.ID) {
+						mapVersions = append(mapVersions, row)
+					}
+				}
+			}
+		}
+	}
+	externalLinks := []db.ExternalLinkAdminRow{}
+	if typeAllowed("external_link") {
+		statuses := []string{}
+		if statusAll {
+			statuses = []string{"pending", "approved", "rejected"}
+		} else {
+			statuses = []string{externalLinkStatusFromModeracio(statusFilter)}
+		}
+		for _, status := range statuses {
+			if rows, err := a.DB.ExternalLinksListByStatus(status); err == nil {
+				externalLinks = append(externalLinks, rows...)
+			}
+		}
+	}
 	if typeAllowed("cognom_variant") {
 		status := ""
 		if !statusAll {
@@ -742,10 +872,9 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 				_ = a.DB.DequeueWikiPending(changeID)
 			}
 			for _, change := range changes {
-				objType, ok := resolveWikiChangeModeracioType(change)
-				if !ok {
-					unknownWikiChanges++
-					continue
+				objType := resolveWikiChangeModeracioType(change)
+				if objType == "" {
+					return nil, 0, moderacioSummary{}, fmt.Errorf("wiki change sense tipus moderable: %d", change.ID)
 				}
 				if !typeAllowed(objType) {
 					continue
@@ -758,9 +887,6 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 				wikiChanges = append(wikiChanges, change)
 			}
 		}
-	}
-	if unknownWikiChanges > 0 {
-		Infof("Moderacio: wiki canvis desconeguts exclosos=%d", unknownWikiChanges)
 	}
 	historiaGeneral := []db.MunicipiHistoriaGeneralVersion{}
 	historiaFets := []db.MunicipiHistoriaFetVersion{}
@@ -980,6 +1106,168 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 				Motiu:     motiu,
 				EditURL:   fmt.Sprintf("/territori/eclesiastic/%d/edit?return_to=/moderacio", row.ID),
 				Status:    row.ModeracioEstat,
+			})
+		}
+	}
+
+	if typeAllowed("media_album") {
+		for _, album := range mediaAlbums {
+			created := ""
+			var createdAt time.Time
+			autorNom, autorURL, autorID := autorFromID(sql.NullInt64{Int64: int64(album.OwnerUserID), Valid: album.OwnerUserID > 0})
+			contextParts := []string{}
+			if album.AlbumType != "" {
+				contextParts = append(contextParts, album.AlbumType)
+			}
+			if album.Visibility != "" {
+				contextParts = append(contextParts, album.Visibility)
+			}
+			appendIfVisible(moderacioItem{
+				ID:        album.ID,
+				Type:      "media_album",
+				Nom:       strings.TrimSpace(album.Title),
+				Context:   strings.Join(contextParts, " · "),
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				AutorID:   autorID,
+				Created:   created,
+				CreatedAt: createdAt,
+				Motiu:     strings.TrimSpace(album.ModerationNotes),
+				EditURL:   fmt.Sprintf("/media/albums/%s", album.PublicID),
+				Status:    moderacioStatusFromMedia(album.ModerationStatus),
+			})
+		}
+	}
+
+	if typeAllowed("media_item") {
+		albumCache := map[int]*db.MediaAlbum{}
+		for _, item := range mediaItems {
+			created := ""
+			var createdAt time.Time
+			contextParts := []string{}
+			autorNom := "-"
+			autorURL := ""
+			autorID := 0
+			if album, ok := albumCache[item.AlbumID]; ok {
+				if album != nil && album.Title != "" {
+					contextParts = append(contextParts, album.Title)
+					autorNom, autorURL, autorID = autorFromID(sql.NullInt64{Int64: int64(album.OwnerUserID), Valid: album.OwnerUserID > 0})
+				}
+			} else {
+				album, err := a.DB.GetMediaAlbumByID(item.AlbumID)
+				if err == nil && album != nil {
+					albumCache[item.AlbumID] = album
+					if album.Title != "" {
+						contextParts = append(contextParts, album.Title)
+						autorNom, autorURL, autorID = autorFromID(sql.NullInt64{Int64: int64(album.OwnerUserID), Valid: album.OwnerUserID > 0})
+					}
+				} else {
+					albumCache[item.AlbumID] = nil
+				}
+			}
+			name := strings.TrimSpace(item.Title)
+			if name == "" {
+				name = strings.TrimSpace(item.OriginalFilename)
+			}
+			appendIfVisible(moderacioItem{
+				ID:        item.ID,
+				Type:      "media_item",
+				Nom:       name,
+				Context:   strings.Join(contextParts, " · "),
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				AutorID:   autorID,
+				Created:   created,
+				CreatedAt: createdAt,
+				Motiu:     strings.TrimSpace(item.ModerationNotes),
+				EditURL:   fmt.Sprintf("/media/items/%s", item.PublicID),
+				Status:    moderacioStatusFromMedia(item.ModerationStatus),
+			})
+		}
+	}
+
+	if typeAllowed("municipi_mapa_version") {
+		mapCache := map[int]*db.MunicipiMapa{}
+		munCache := map[int]*db.Municipi{}
+		for _, version := range mapVersions {
+			mapa, ok := mapCache[version.MapaID]
+			if !ok {
+				row, err := a.DB.GetMunicipiMapa(version.MapaID)
+				if err != nil || row == nil {
+					mapCache[version.MapaID] = nil
+					mapa = nil
+				} else {
+					mapCache[version.MapaID] = row
+					mapa = row
+				}
+			}
+			if mapa == nil {
+				continue
+			}
+			mun, ok := munCache[mapa.MunicipiID]
+			if !ok {
+				row, err := a.DB.GetMunicipi(mapa.MunicipiID)
+				if err != nil || row == nil {
+					munCache[mapa.MunicipiID] = nil
+					mun = nil
+				} else {
+					munCache[mapa.MunicipiID] = row
+					mun = row
+				}
+			}
+			if mun == nil {
+				continue
+			}
+			created := ""
+			var createdAt time.Time
+			if version.CreatedAt.Valid {
+				created = version.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = version.CreatedAt.Time
+			}
+			autorNom, autorURL, autorID := autorFromID(version.CreatedBy)
+			name := fmt.Sprintf("%s · v%d", mun.Nom, version.Version)
+			appendIfVisible(moderacioItem{
+				ID:         version.ID,
+				Type:       "municipi_mapa_version",
+				Nom:        name,
+				Context:    strings.TrimSpace(mun.Nom),
+				ContextURL: fmt.Sprintf("/territori/municipis/%d", mun.ID),
+				Autor:      autorNom,
+				AutorURL:   autorURL,
+				AutorID:    autorID,
+				Created:    created,
+				CreatedAt:  createdAt,
+				Motiu:      strings.TrimSpace(version.ModerationNotes),
+				EditURL:    fmt.Sprintf("/territori/municipis/%d/mapes/%d?version=%d", mun.ID, mapa.ID, version.ID),
+				Status:     version.Status,
+			})
+		}
+	}
+
+	if typeAllowed("external_link") {
+		for _, link := range externalLinks {
+			created := ""
+			var createdAt time.Time
+			if link.CreatedAt.Valid {
+				created = link.CreatedAt.Time.Format("2006-01-02 15:04")
+				createdAt = link.CreatedAt.Time
+			}
+			autorNom, autorURL, autorID := autorFromID(link.CreatedByUserID)
+			personaName := externalLinkPersonaName(link)
+			context := externalLinkSiteLabel(lang, link)
+			appendIfVisible(moderacioItem{
+				ID:        link.ID,
+				Type:      "external_link",
+				Nom:       strings.TrimSpace(personaName),
+				Context:   strings.TrimSpace(context),
+				Autor:     autorNom,
+				AutorURL:  autorURL,
+				AutorID:   autorID,
+				Created:   created,
+				CreatedAt: createdAt,
+				Motiu:     strings.TrimSpace(link.Meta.String),
+				EditURL:   fmt.Sprintf("/persones/%d", link.PersonaID),
+				Status:    moderacioStatusFromExternalLink(link.Status),
 			})
 		}
 	}
@@ -1357,9 +1645,9 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		cognomCache := map[int]string{}
 		eventCache := map[int]string{}
 		for _, change := range wikiChanges {
-			objType, ok := resolveWikiChangeModeracioType(change)
-			if !ok {
-				continue
+			objType := resolveWikiChangeModeracioType(change)
+			if objType == "" {
+				return nil, 0, moderacioSummary{}, fmt.Errorf("wiki change sense tipus moderable: %d", change.ID)
 			}
 			if !typeAllowed(objType) {
 				continue
@@ -1475,7 +1763,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		summary.TopTypeTotal = byType[0].Total
 	}
 
-	return items, summary.Total, summary
+	return items, summary.Total, summary, nil
 }
 
 func (a *App) firstPendingActivityTime(objectType string, objectID int) string {
@@ -1613,7 +1901,11 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 	filterType := filters.Type
 	filterStatus := filters.Status
 	filterAge := filters.AgeBucket
-	pageItems, total, summary := a.buildModeracioItems(ResolveLang(r), page, perPage, user, perms, canModerateAll, filters)
+	pageItems, total, summary, err := a.buildModeracioItems(ResolveLang(r), page, perPage, user, perms, canModerateAll, filters)
+	if err != nil {
+		http.Error(w, "No s'ha pogut carregar la moderació", http.StatusInternalServerError)
+		return
+	}
 	totalPages := 1
 	if total > 0 {
 		totalPages = (total + perPage - 1) / perPage
@@ -1726,7 +2018,11 @@ func (a *App) applyModeracioActivity(ctx context.Context, action string, objType
 				_ = a.ValidateActivity(act.ID, userID)
 			}
 		}
-		_, _ = a.RegisterUserActivity(ctx, userID, ruleModeracioApprove, "moderar_aprovar", objType, &id, "validat", nil, "")
+		if objType == "municipi_mapa_version" {
+			_, _ = a.RegisterUserActivity(ctx, userID, ruleMunicipiMapaApprove, "moderar_aprovar", objType, &id, "validat", nil, "")
+		} else {
+			_, _ = a.RegisterUserActivity(ctx, userID, ruleModeracioApprove, "moderar_aprovar", objType, &id, "validat", nil, "")
+		}
 		if objType == "event_historic" {
 			a.registerEventHistoricModerationActivity(ctx, id, "publicat", userID, "")
 		}
@@ -1736,7 +2032,11 @@ func (a *App) applyModeracioActivity(ctx context.Context, action string, objType
 				_ = a.DB.UpdateUserActivityStatus(act.ID, "anulat", &userID)
 			}
 		}
-		_, _ = a.RegisterUserActivity(ctx, userID, ruleModeracioReject, "moderar_rebutjar", objType, &id, "validat", nil, motiu)
+		if objType == "municipi_mapa_version" {
+			_, _ = a.RegisterUserActivity(ctx, userID, ruleMunicipiMapaReject, "moderar_rebutjar", objType, &id, "validat", nil, motiu)
+		} else {
+			_, _ = a.RegisterUserActivity(ctx, userID, ruleModeracioReject, "moderar_rebutjar", objType, &id, "validat", nil, motiu)
+		}
 		if objType == "event_historic" {
 			a.registerEventHistoricModerationActivity(ctx, id, "rebutjat", userID, motiu)
 		}
@@ -1838,7 +2138,6 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 
 	resolveStart := time.Now()
 	needsWikiChanges := false
-	unknownWikiChanges := 0
 	for _, t := range types {
 		switch t {
 		case "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi":
@@ -1854,10 +2153,10 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				_ = a.DB.DequeueWikiPending(changeID)
 			}
 			for _, change := range changes {
-				objType, ok := resolveWikiChangeModeracioType(change)
-				if !ok {
-					unknownWikiChanges++
-					continue
+				objType := resolveWikiChangeModeracioType(change)
+				if objType == "" {
+					metrics := moderacioBulkMetrics{TotalDur: time.Since(start), Mode: "per-item", ScopeMode: scopeMode}
+					return moderacioBulkResult{Candidates: candidates, Total: total, Processed: processed, Errors: 1, Skipped: skipped}, metrics, fmt.Errorf("wiki change sense tipus moderable: %d", change.ID)
 				}
 				if !allowedMap[objType] {
 					continue
@@ -1872,9 +2171,6 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 		} else {
 			errCount++
 		}
-	}
-	if unknownWikiChanges > 0 {
-		Infof("Moderacio bulk: wiki canvis desconeguts exclosos=%d", unknownWikiChanges)
 	}
 	resolveDur += time.Since(resolveStart)
 	for _, objType := range types {
@@ -2070,6 +2366,25 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			for _, id := range ids {
 				applyActivity(objType, id)
 			}
+		case "municipi_mapa_version":
+			resolveStart = time.Now()
+			rows, err := a.DB.ListMunicipiMapaVersions(db.MunicipiMapaVersionFilter{Status: "pendent"})
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				if scopeModel.canModerateAll || scopeModel.canModerateItem("municipi_mapa_version", row.ID) {
+					ids = append(ids, row.ID)
+				}
+			}
+			updateCandidates(len(rows))
+			updateTotal(len(ids))
+			for _, id := range ids {
+				apply(objType, id)
+			}
 		case "cognom_variant":
 			if !scopeModel.canModerateAll {
 				break
@@ -2244,6 +2559,54 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			}
 			for _, id := range ids {
 				applyActivity(objType, id)
+			}
+		case "media_album":
+			if !scopeModel.canModerateAll {
+				break
+			}
+			resolveStart = time.Now()
+			rows, err := a.DB.ListMediaAlbumsByStatus("pending")
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			updateCandidates(len(rows))
+			updateTotal(len(rows))
+			for _, row := range rows {
+				apply(objType, row.ID)
+			}
+		case "media_item":
+			if !scopeModel.canModerateAll {
+				break
+			}
+			resolveStart = time.Now()
+			rows, err := a.DB.ListMediaItemsByStatus("pending")
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			updateCandidates(len(rows))
+			updateTotal(len(rows))
+			for _, row := range rows {
+				apply(objType, row.ID)
+			}
+		case "external_link":
+			if !scopeModel.canModerateType("external_link") {
+				break
+			}
+			resolveStart = time.Now()
+			rows, err := a.DB.ExternalLinksListByStatus("pending")
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			updateCandidates(len(rows))
+			updateTotal(len(rows))
+			for _, row := range rows {
+				apply(objType, row.ID)
 			}
 		case "municipi_canvi":
 			ids := wikiPendingByType["municipi_canvi"]
@@ -2512,7 +2875,11 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	filters, page, perPage := parseModeracioReturnTo(returnTo)
 	start := time.Now()
 	resolveStart := time.Now()
-	pageItems, _, _ := a.buildModeracioItems(ResolveLang(r), page, perPage, user, perms, canModerateAll, filters)
+	pageItems, _, _, err := a.buildModeracioItems(ResolveLang(r), page, perPage, user, perms, canModerateAll, filters)
+	if err != nil {
+		http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "err"), http.StatusSeeOther)
+		return
+	}
 	resolveDur := time.Since(resolveStart)
 	allowed := map[string]moderacioItem{}
 	for _, item := range pageItems {
@@ -2822,9 +3189,99 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 			return nil
 		}
 		return fmt.Errorf("estat desconegut")
+	case "municipi_mapa_version":
+		return a.moderateMapaVersion(id, estat, motiu, moderatorID)
+	case "media_album":
+		return a.moderateMediaAlbum(id, estat, motiu, moderatorID)
+	case "media_item":
+		return a.moderateMediaItem(id, estat, motiu, moderatorID)
+	case "external_link":
+		status := externalLinkStatusFromModeracio(estat)
+		if status == "" {
+			return fmt.Errorf("estat desconegut")
+		}
+		return a.DB.ExternalLinkModerate(id, status)
 	default:
 		return fmt.Errorf("tipus desconegut")
 	}
+}
+
+func (a *App) moderateMapaVersion(id int, estat, notes string, moderatorID int) error {
+	version, err := a.DB.GetMunicipiMapaVersion(id)
+	if err != nil {
+		return err
+	}
+	if version == nil {
+		return fmt.Errorf("mapa version no trobat")
+	}
+	if err := a.DB.UpdateMunicipiMapaVersionStatus(id, estat, notes, moderatorID); err != nil {
+		return err
+	}
+	if estat == "publicat" {
+		if err := a.DB.UpdateMunicipiMapaCurrentVersion(version.MapaID, id); err != nil {
+			return err
+		}
+		if acts, err := a.DB.ListActivityByObject(mapModerationObjectType, id, "pendent"); err == nil {
+			for _, act := range acts {
+				_ = a.ValidateActivity(act.ID, moderatorID)
+			}
+		}
+	}
+	return nil
+}
+
+func (a *App) moderateMediaAlbum(id int, estat, notes string, moderatorID int) error {
+	album, err := a.DB.GetMediaAlbumByID(id)
+	if err != nil {
+		return err
+	}
+	if album == nil {
+		return fmt.Errorf("media album no trobat")
+	}
+	status := mediaStatusFromModeracio(estat)
+	if status == "" {
+		return fmt.Errorf("estat desconegut")
+	}
+	wasApproved := album.ModerationStatus == "approved"
+	restrictedGroupID := 0
+	if album.RestrictedGroupID.Valid {
+		restrictedGroupID = int(album.RestrictedGroupID.Int64)
+	}
+	accessPolicyID := 0
+	if album.AccessPolicyID.Valid {
+		accessPolicyID = int(album.AccessPolicyID.Int64)
+	}
+	if err := a.DB.UpdateMediaAlbumModeration(id, status, album.Visibility, restrictedGroupID, accessPolicyID, album.CreditCost, album.DifficultyScore, album.SourceType, notes, moderatorID); err != nil {
+		return err
+	}
+	if status == "approved" && !wasApproved && album.OwnerUserID > 0 {
+		points := a.mediaPointsForDifficulty(album.DifficultyScore)
+		if points > 0 {
+			details := fmt.Sprintf("source=%s difficulty=%d", album.SourceType, album.DifficultyScore)
+			if err := a.recordUserPoints(album.OwnerUserID, points, "media_approve", "media_album", album.ID, &moderatorID, details); err != nil {
+				Errorf("Error afegint punts album media %d: %v", album.ID, err)
+			}
+		}
+	}
+	return nil
+}
+
+func (a *App) moderateMediaItem(id int, estat, notes string, moderatorID int) error {
+	item, err := a.DB.GetMediaItemByID(id)
+	if err != nil {
+		return err
+	}
+	if item == nil {
+		return fmt.Errorf("media item no trobat")
+	}
+	status := mediaStatusFromModeracio(estat)
+	if status == "" {
+		return fmt.Errorf("estat desconegut")
+	}
+	if err := a.DB.UpdateMediaItemModeration(id, status, item.CreditCost, notes, moderatorID); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *App) moderateCognomMergeSuggestion(id int, estat, motiu string, moderatorID int) error {
