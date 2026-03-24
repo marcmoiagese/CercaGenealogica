@@ -84,7 +84,7 @@ type moderacioTypeSpec struct {
 }
 
 var moderacioTypeSpecs = map[string]moderacioTypeSpec{
-	"persona":                   {Key: "persona"},
+	"persona":                   {Key: "persona", PermKey: permKeyPersonesModerate, ListScope: ScopeGlobal},
 	"arxiu":                     {Key: "arxiu", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
 	"llibre":                    {Key: "llibre", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
 	"nivell":                    {Key: "nivell", PermKey: permKeyTerritoriNivellsEdit, ListScope: ScopePais},
@@ -94,21 +94,21 @@ var moderacioTypeSpecs = map[string]moderacioTypeSpec{
 	"municipi_historia_general": {Key: "municipi_historia_general", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
 	"municipi_historia_fet":     {Key: "municipi_historia_fet", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
 	"municipi_anecdota_version": {Key: "municipi_anecdota_version", PermKey: permKeyTerritoriMunicipisAnecdotesModerate, ListScope: ScopeMunicipi},
-	"event_historic":            {Key: "event_historic"},
+	"event_historic":            {Key: "event_historic", PermKey: permKeyEventsModerate, ListScope: ScopeGlobal},
 	"registre":                  {Key: "registre", PermKey: permKeyDocumentalsRegistresEdit, ListScope: ScopeLlibre},
 	"registre_canvi":            {Key: "registre_canvi", PermKey: permKeyDocumentalsRegistresEdit, ListScope: ScopeLlibre},
-	"cognom_variant":            {Key: "cognom_variant"},
-	"cognom_referencia":         {Key: "cognom_referencia"},
-	"cognom_merge":              {Key: "cognom_merge"},
-	"media_album":               {Key: "media_album"},
-	"media_item":                {Key: "media_item"},
+	"cognom_variant":            {Key: "cognom_variant", PermKey: permKeyCognomsModerate, ListScope: ScopeGlobal},
+	"cognom_referencia":         {Key: "cognom_referencia", PermKey: permKeyCognomsModerate, ListScope: ScopeGlobal},
+	"cognom_merge":              {Key: "cognom_merge", PermKey: permKeyCognomsModerate, ListScope: ScopeGlobal},
+	"media_album":               {Key: "media_album", PermKey: permKeyMediaModerate, ListScope: ScopeGlobal},
+	"media_item":                {Key: "media_item", PermKey: permKeyMediaModerate, ListScope: ScopeGlobal},
 	"external_link":             {Key: "external_link", PermKey: permKeyAdminExternalLinksModerate, ListScope: ScopeGlobal},
 	"municipi_canvi":            {Key: "municipi_canvi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
 	"arxiu_canvi":               {Key: "arxiu_canvi", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
 	"llibre_canvi":              {Key: "llibre_canvi", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
-	"persona_canvi":             {Key: "persona_canvi"},
-	"cognom_canvi":              {Key: "cognom_canvi"},
-	"event_historic_canvi":      {Key: "event_historic_canvi"},
+	"persona_canvi":             {Key: "persona_canvi", PermKey: permKeyPersonesModerate, ListScope: ScopeGlobal},
+	"cognom_canvi":              {Key: "cognom_canvi", PermKey: permKeyCognomsModerate, ListScope: ScopeGlobal},
+	"event_historic_canvi":      {Key: "event_historic_canvi", PermKey: permKeyEventsModerate, ListScope: ScopeGlobal},
 }
 
 type moderacioScopeModel struct {
@@ -222,6 +222,21 @@ func (m *moderacioScopeModel) canModerateWikiChange(change db.WikiChange, objTyp
 		}
 		target := m.app.resolveLlibreTarget(change.ObjectID)
 		return m.app.HasPermission(m.user.ID, permKeyDocumentalsLlibresEdit, target)
+	case "persona_canvi":
+		if change.ObjectType != "persona" {
+			return false
+		}
+		return m.canModerateType("persona_canvi")
+	case "cognom_canvi":
+		if change.ObjectType != "cognom" {
+			return false
+		}
+		return m.canModerateType("cognom_canvi")
+	case "event_historic_canvi":
+		if change.ObjectType != "event_historic" {
+			return false
+		}
+		return m.canModerateType("event_historic_canvi")
 	default:
 		return false
 	}
@@ -307,10 +322,16 @@ func (m *moderacioScopeModel) canModerateItem(objType string, id int) bool {
 			return false
 		}
 		return m.canModerateWikiChange(*change, objType)
+	case "persona_canvi", "cognom_canvi", "event_historic_canvi":
+		change, err := m.app.DB.GetWikiChange(id)
+		if err != nil || change == nil {
+			return false
+		}
+		return m.canModerateWikiChange(*change, objType)
 	case "external_link":
 		return m.canModerateType("external_link")
-	case "media_album", "media_item":
-		return m.canModerateAll
+	case "persona", "event_historic", "cognom_variant", "cognom_referencia", "cognom_merge", "media_album", "media_item":
+		return m.canModerateType(objType)
 	default:
 		return false
 	}
@@ -2176,7 +2197,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 	for _, objType := range types {
 		switch objType {
 		case "persona":
-			if !scopeModel.canModerateAll {
+			if !scopeModel.canModerateType("persona") {
 				break
 			}
 			resolveStart = time.Now()
@@ -2386,7 +2407,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, id)
 			}
 		case "cognom_variant":
-			if !scopeModel.canModerateAll {
+			if !scopeModel.canModerateType("cognom_variant") {
 				break
 			}
 			resolveStart = time.Now()
@@ -2420,7 +2441,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				applyActivity(objType, id)
 			}
 		case "cognom_referencia":
-			if !scopeModel.canModerateAll {
+			if !scopeModel.canModerateType("cognom_referencia") {
 				break
 			}
 			resolveStart = time.Now()
@@ -2454,7 +2475,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				applyActivity(objType, id)
 			}
 		case "cognom_merge":
-			if !scopeModel.canModerateAll {
+			if !scopeModel.canModerateType("cognom_merge") {
 				break
 			}
 			resolveStart = time.Now()
@@ -2527,7 +2548,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, id)
 			}
 		case "event_historic":
-			if !scopeModel.canModerateAll {
+			if !scopeModel.canModerateType("event_historic") {
 				break
 			}
 			resolveStart = time.Now()
@@ -2561,7 +2582,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				applyActivity(objType, id)
 			}
 		case "media_album":
-			if !scopeModel.canModerateAll {
+			if !scopeModel.canModerateType("media_album") {
 				break
 			}
 			resolveStart = time.Now()
@@ -2577,7 +2598,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, row.ID)
 			}
 		case "media_item":
-			if !scopeModel.canModerateAll {
+			if !scopeModel.canModerateType("media_item") {
 				break
 			}
 			resolveStart = time.Now()
@@ -2630,9 +2651,6 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, id)
 			}
 		case "persona_canvi":
-			if !scopeModel.canModerateAll {
-				break
-			}
 			ids := wikiPendingByType["persona_canvi"]
 			updateCandidates(len(ids))
 			updateTotal(len(ids))
@@ -2640,9 +2658,6 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, id)
 			}
 		case "cognom_canvi":
-			if !scopeModel.canModerateAll {
-				break
-			}
 			ids := wikiPendingByType["cognom_canvi"]
 			updateCandidates(len(ids))
 			updateTotal(len(ids))
@@ -2650,9 +2665,6 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				apply(objType, id)
 			}
 		case "event_historic_canvi":
-			if !scopeModel.canModerateAll {
-				break
-			}
 			ids := wikiPendingByType["event_historic_canvi"]
 			updateCandidates(len(ids))
 			updateTotal(len(ids))

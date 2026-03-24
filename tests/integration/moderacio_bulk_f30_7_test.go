@@ -100,6 +100,73 @@ func createPendingMapaVersion(t *testing.T, database db.DB, userID, mapID int) i
 	return id
 }
 
+func createPendingPersona(t *testing.T, database db.DB, userID int, name string) int {
+	t.Helper()
+	persona := &db.Persona{
+		Nom:            name,
+		Cognom1:        "Test",
+		ModeracioEstat: "pendent",
+		CreatedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
+	}
+	id, err := database.CreatePersona(persona)
+	if err != nil {
+		t.Fatalf("CreatePersona ha fallat: %v", err)
+	}
+	return id
+}
+
+func createPendingCognomVariant(t *testing.T, database db.DB, cognomID, userID int, variant string) int {
+	t.Helper()
+	row := &db.CognomVariant{
+		CognomID:       cognomID,
+		Variant:        variant,
+		Key:            strings.ToLower(variant),
+		ModeracioEstat: "pendent",
+		CreatedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
+	}
+	id, err := database.CreateCognomVariant(row)
+	if err != nil {
+		t.Fatalf("CreateCognomVariant ha fallat: %v", err)
+	}
+	return id
+}
+
+func createPendingCognomMergeSuggestion(t *testing.T, database db.DB, fromID, toID, userID int) int {
+	t.Helper()
+	row := &db.CognomRedirectSuggestion{
+		FromCognomID:   fromID,
+		ToCognomID:     toID,
+		Reason:         "merge test",
+		ModeracioEstat: "pendent",
+		CreatedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
+	}
+	id, err := database.CreateCognomRedirectSuggestion(row)
+	if err != nil {
+		t.Fatalf("CreateCognomRedirectSuggestion ha fallat: %v", err)
+	}
+	return id
+}
+
+func createPendingWikiChange(t *testing.T, database db.DB, userID int, objectType string, objectID int, fieldKey string) int {
+	t.Helper()
+	change := &db.WikiChange{
+		ObjectType:     objectType,
+		ObjectID:       objectID,
+		ChangeType:     "edit",
+		FieldKey:       fieldKey,
+		OldValue:       "",
+		NewValue:       "test",
+		Metadata:       "",
+		ModeracioEstat: "pendent",
+		ChangedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
+	}
+	id, err := database.CreateWikiChange(change)
+	if err != nil {
+		t.Fatalf("CreateWikiChange ha fallat: %v", err)
+	}
+	return id
+}
+
 func TestModeracioSummaryGlobalIncludesMediaExternalMap(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f30_7_summary_global.sqlite3")
 
@@ -161,6 +228,193 @@ func TestModeracioSummaryGlobalIncludesMediaExternalMap(t *testing.T) {
 	}
 	if got["municipi_mapa_version"] != 1 {
 		t.Fatalf("summary municipi_mapa_version esperat 1, got %d", got["municipi_mapa_version"])
+	}
+}
+
+func TestModeracioBulkAllProcessesPersonaAndCognoms(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f30_7_bulk_persona_cognoms.sqlite3")
+
+	admin := createTestUser(t, database, "admin_bulk_persona_cognoms")
+	assignPolicyByName(t, database, admin.ID, "admin")
+	session := createSessionCookie(t, database, admin.ID, "sess_bulk_persona_cognoms")
+
+	personaID := createPendingPersona(t, database, admin.ID, "Persona Bulk")
+	cognomID, err := database.UpsertCognom("Roca", "roca", "", "", &admin.ID)
+	if err != nil {
+		t.Fatalf("UpsertCognom ha fallat: %v", err)
+	}
+	aliasID, err := database.UpsertCognom("Roca Alias", "roca-alias", "", "", &admin.ID)
+	if err != nil {
+		t.Fatalf("UpsertCognom alias ha fallat: %v", err)
+	}
+	variantID := createPendingCognomVariant(t, database, cognomID, admin.ID, "RocaVariant")
+	mergeID := createPendingCognomMergeSuggestion(t, database, aliasID, cognomID, admin.ID)
+
+	csrf := "csrf_bulk_persona"
+	form := newFormValues(map[string]string{
+		"bulk_action": "approve",
+		"bulk_scope":  "all",
+		"bulk_type":   "persona",
+		"csrf_token":  csrf,
+		"return_to":   "/moderacio",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/moderacio/bulk", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	req.AddCookie(csrfCookie(csrf))
+	rr := httptest.NewRecorder()
+	app.AdminModeracioBulk(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("bulk persona esperava 303, got %d", rr.Code)
+	}
+
+	persona, err := database.GetPersona(personaID)
+	if err != nil || persona == nil {
+		t.Fatalf("GetPersona ha fallat: %v", err)
+	}
+	if persona.ModeracioEstat != "publicat" {
+		t.Fatalf("persona status esperat publicat, got %s", persona.ModeracioEstat)
+	}
+
+	csrf = "csrf_bulk_variant"
+	form = newFormValues(map[string]string{
+		"bulk_action": "approve",
+		"bulk_scope":  "all",
+		"bulk_type":   "cognom_variant",
+		"csrf_token":  csrf,
+		"return_to":   "/moderacio",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/moderacio/bulk", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	req.AddCookie(csrfCookie(csrf))
+	rr = httptest.NewRecorder()
+	app.AdminModeracioBulk(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("bulk cognom_variant esperava 303, got %d", rr.Code)
+	}
+	variants, err := database.ListCognomVariants(db.CognomVariantFilter{Status: "publicat"})
+	if err != nil {
+		t.Fatalf("ListCognomVariants ha fallat: %v", err)
+	}
+	foundVariant := false
+	for _, row := range variants {
+		if row.ID == variantID {
+			foundVariant = true
+			break
+		}
+	}
+	if !foundVariant {
+		t.Fatalf("cognom_variant aprovat no trobat")
+	}
+
+	csrf = "csrf_bulk_merge"
+	form = newFormValues(map[string]string{
+		"bulk_action": "approve",
+		"bulk_scope":  "all",
+		"bulk_type":   "cognom_merge",
+		"csrf_token":  csrf,
+		"return_to":   "/moderacio",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/moderacio/bulk", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	req.AddCookie(csrfCookie(csrf))
+	rr = httptest.NewRecorder()
+	app.AdminModeracioBulk(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("bulk cognom_merge esperava 303, got %d", rr.Code)
+	}
+	merge, err := database.GetCognomRedirectSuggestion(mergeID)
+	if err != nil || merge == nil {
+		t.Fatalf("GetCognomRedirectSuggestion ha fallat: %v", err)
+	}
+	if merge.ModeracioEstat != "publicat" {
+		t.Fatalf("cognom_merge status esperat publicat, got %s", merge.ModeracioEstat)
+	}
+}
+
+func TestModeracioBulkRejectsWikiChangesArxiuLlibre(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f30_7_bulk_wiki_changes.sqlite3")
+
+	admin := createTestUser(t, database, "admin_bulk_wiki_changes")
+	assignPolicyByName(t, database, admin.ID, "admin")
+	session := createSessionCookie(t, database, admin.ID, "sess_bulk_wiki_changes")
+
+	arxiu := &db.Arxiu{
+		Nom:            "Arxiu Wiki",
+		Tipus:          "parroquia",
+		ModeracioEstat: "publicat",
+		CreatedBy:      sql.NullInt64{Int64: int64(admin.ID), Valid: true},
+	}
+	arxiuID, err := database.CreateArxiu(arxiu)
+	if err != nil {
+		t.Fatalf("CreateArxiu ha fallat: %v", err)
+	}
+	munID := createHistoriaMunicipi(t, database, admin.ID)
+	archID := createTestArquebisbat(t, database, admin.ID)
+	llibre := &db.Llibre{
+		ArquebisbatID:  archID,
+		MunicipiID:     munID,
+		Titol:          "Llibre Wiki",
+		ModeracioEstat: "publicat",
+		CreatedBy:      sql.NullInt64{Int64: int64(admin.ID), Valid: true},
+	}
+	llibreID, err := database.CreateLlibre(llibre)
+	if err != nil {
+		t.Fatalf("CreateLlibre ha fallat: %v", err)
+	}
+	arxiuChangeID := createPendingWikiChange(t, database, admin.ID, "arxiu", arxiuID, "nom")
+	llibreChangeID := createPendingWikiChange(t, database, admin.ID, "llibre", llibreID, "titol")
+
+	csrf := "csrf_bulk_arxiu_canvi"
+	form := newFormValues(map[string]string{
+		"bulk_action": "reject",
+		"bulk_scope":  "all",
+		"bulk_type":   "arxiu_canvi",
+		"csrf_token":  csrf,
+		"return_to":   "/moderacio",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/moderacio/bulk", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	req.AddCookie(csrfCookie(csrf))
+	rr := httptest.NewRecorder()
+	app.AdminModeracioBulk(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("bulk arxiu_canvi esperava 303, got %d", rr.Code)
+	}
+	change, err := database.GetWikiChange(arxiuChangeID)
+	if err != nil || change == nil {
+		t.Fatalf("GetWikiChange arxiu ha fallat: %v", err)
+	}
+	if change.ModeracioEstat != "rebutjat" {
+		t.Fatalf("arxiu_canvi status esperat rebutjat, got %s", change.ModeracioEstat)
+	}
+
+	csrf = "csrf_bulk_llibre_canvi"
+	form = newFormValues(map[string]string{
+		"bulk_action": "reject",
+		"bulk_scope":  "all",
+		"bulk_type":   "llibre_canvi",
+		"csrf_token":  csrf,
+		"return_to":   "/moderacio",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/moderacio/bulk", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	req.AddCookie(csrfCookie(csrf))
+	rr = httptest.NewRecorder()
+	app.AdminModeracioBulk(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("bulk llibre_canvi esperava 303, got %d", rr.Code)
+	}
+	change, err = database.GetWikiChange(llibreChangeID)
+	if err != nil || change == nil {
+		t.Fatalf("GetWikiChange llibre ha fallat: %v", err)
+	}
+	if change.ModeracioEstat != "rebutjat" {
+		t.Fatalf("llibre_canvi status esperat rebutjat, got %s", change.ModeracioEstat)
 	}
 }
 

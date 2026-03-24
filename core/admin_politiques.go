@@ -57,6 +57,15 @@ func guiGrantGroups() []policyGuiGrantGroup {
 			},
 		},
 		{
+			TitleKey: "policies.gui.modular.group.moderation",
+			Keys: []string{
+				permKeyPersonesModerate,
+				permKeyCognomsModerate,
+				permKeyEventsModerate,
+				permKeyMediaModerate,
+			},
+		},
+		{
 			TitleKey: "policies.gui.modular.group.documentals_view",
 			Keys: []string{
 				permKeyDocumentalsArxiusView,

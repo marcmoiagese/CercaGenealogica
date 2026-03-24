@@ -13,33 +13,37 @@ import (
 
 // Catalog of permission keys for modular scopes.
 const (
-	permKeyAdminTerritoriImport      = "admin.territori.import"
-	permKeyAdminTerritoriExport      = "admin.territori.export"
-	permKeyAdminEclesImport          = "admin.eclesiastic.import"
-	permKeyAdminEclesExport          = "admin.eclesiastic.export"
-	permKeyAdminArxiusImport         = "admin.arxius.import"
-	permKeyAdminArxiusExport         = "admin.arxius.export"
-	permKeyAdminPuntsAdd             = "admin.punts.regles.add"
-	permKeyAdminPuntsEdit            = "admin.punts.regles.edit"
-	permKeyAdminAchievementsAdd      = "admin.achievements.add"
-	permKeyAdminAchievementsEdit     = "admin.achievements.edit"
-	permKeyAdminPlatformSettingsEdit = "admin.platform.settings.edit"
-	permKeyAdminMaintenanceManage    = "admin.maintenance.manage"
-	permKeyAdminAnalyticsView        = "admin.analytics.view"
-	permKeyAdminTransparencyManage   = "admin.transparency.manage"
-	permKeyAdminExternalSitesManage  = "admin.external_sites.manage"
+	permKeyAdminTerritoriImport       = "admin.territori.import"
+	permKeyAdminTerritoriExport       = "admin.territori.export"
+	permKeyAdminEclesImport           = "admin.eclesiastic.import"
+	permKeyAdminEclesExport           = "admin.eclesiastic.export"
+	permKeyAdminArxiusImport          = "admin.arxius.import"
+	permKeyAdminArxiusExport          = "admin.arxius.export"
+	permKeyAdminPuntsAdd              = "admin.punts.regles.add"
+	permKeyAdminPuntsEdit             = "admin.punts.regles.edit"
+	permKeyAdminAchievementsAdd       = "admin.achievements.add"
+	permKeyAdminAchievementsEdit      = "admin.achievements.edit"
+	permKeyAdminPlatformSettingsEdit  = "admin.platform.settings.edit"
+	permKeyAdminMaintenanceManage     = "admin.maintenance.manage"
+	permKeyAdminAnalyticsView         = "admin.analytics.view"
+	permKeyAdminTransparencyManage    = "admin.transparency.manage"
+	permKeyAdminExternalSitesManage   = "admin.external_sites.manage"
 	permKeyAdminExternalLinksModerate = "admin.external_links.moderate"
-	permKeyModeracioMassiva          = "moderacio.bulk"
+	permKeyModeracioMassiva           = "moderacio.bulk"
 
 	permKeyHomeView            = "home.view"
 	permKeyMessagesView        = "messages.view"
 	permKeySearchAdvancedView  = "search.advanced.view"
 	permKeyRankingView         = "ranking.view"
 	permKeyPersonsView         = "persons.view"
+	permKeyPersonesModerate    = "persones.moderate"
 	permKeyCognomsView         = "cognoms.view"
+	permKeyCognomsModerate     = "cognoms.moderate"
 	permKeyMediaView           = "media.view"
+	permKeyMediaModerate       = "media.moderate"
 	permKeyImportTemplatesView = "import.templates.view"
 	permKeyEventsView          = "events.view"
+	permKeyEventsModerate      = "events.moderate"
 	permKeyWikiRevert          = "wiki.revert"
 
 	permKeyTerritoriPaisosView                 = "territori.paisos.view"
@@ -120,10 +124,14 @@ var permissionCatalogKeys = []string{
 	permKeySearchAdvancedView,
 	permKeyRankingView,
 	permKeyPersonsView,
+	permKeyPersonesModerate,
 	permKeyCognomsView,
+	permKeyCognomsModerate,
 	permKeyMediaView,
+	permKeyMediaModerate,
 	permKeyImportTemplatesView,
 	permKeyEventsView,
+	permKeyEventsModerate,
 	permKeyWikiRevert,
 	permKeyTerritoriPaisosView,
 	permKeyTerritoriPaisosCreate,

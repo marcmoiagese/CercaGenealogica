@@ -167,6 +167,13 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 	}
 	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
 	counts := map[string]int{}
+	if scopeModel.canModerateType("persona") {
+		if total, err := a.DB.CountPersones(db.PersonaFilter{Estat: "pendent"}); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["persona"] = total
+		}
+	}
 	if scopeModel.canModerateType("arxiu") {
 		filter := db.ArxiuFilter{Status: "pendent"}
 		if scope, ok := scopeModel.scopeFilterForType("arxiu"); ok && !scope.hasGlobal {
@@ -235,6 +242,34 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 		}
 		if total > 0 {
 			counts["municipi_mapa_version"] = total
+		}
+	}
+	if scopeModel.canModerateType("cognom_variant") {
+		if total, err := a.DB.CountCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["cognom_variant"] = total
+		}
+	}
+	if scopeModel.canModerateType("cognom_referencia") {
+		if total, err := a.DB.CountCognomReferencies(db.CognomReferenciaFilter{Status: "pendent"}); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["cognom_referencia"] = total
+		}
+	}
+	if scopeModel.canModerateType("cognom_merge") {
+		if total, err := a.DB.CountCognomRedirectSuggestions(db.CognomRedirectSuggestionFilter{Status: "pendent"}); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["cognom_merge"] = total
+		}
+	}
+	if scopeModel.canModerateType("event_historic") {
+		if total, err := a.DB.CountEventsHistoric(db.EventHistoricFilter{Status: "pendent"}); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["event_historic"] = total
 		}
 	}
 	if scopeModel.canModerateType("municipi_historia_general") {
@@ -315,6 +350,24 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 		}
 		if len(rows) > 0 {
 			counts["external_link"] = len(rows)
+		}
+	}
+	if scopeModel.canModerateType("media_album") {
+		rows, err := a.DB.ListMediaAlbumsByStatus("pending")
+		if err != nil {
+			return 0, nil, err
+		}
+		if len(rows) > 0 {
+			counts["media_album"] = len(rows)
+		}
+	}
+	if scopeModel.canModerateType("media_item") {
+		rows, err := a.DB.ListMediaItemsByStatus("pending")
+		if err != nil {
+			return 0, nil, err
+		}
+		if len(rows) > 0 {
+			counts["media_item"] = len(rows)
 		}
 	}
 	needsWiki := scopeModel.canModerateType("municipi_canvi") ||
