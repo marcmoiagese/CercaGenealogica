@@ -2087,7 +2087,8 @@ func (h sqlHelper) bulkUpdateModeracioSimple(objectType, estat, motiu string, mo
 	case "cognom_variant":
 		stmt = `UPDATE cognom_variants SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE moderation_status = 'pendent'`
 	case "cognom_referencia":
-		stmt = `UPDATE cognom_referencies SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE moderation_status = 'pendent'`
+		stmt = `UPDATE cognoms_referencies SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ? WHERE moderation_status = 'pendent'`
+		args = []interface{}{estat, strings.TrimSpace(motiu), moderatorID, now}
 	case "event_historic":
 		stmt = `UPDATE events_historics SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE moderation_status = 'pendent'`
 	default:
@@ -7972,6 +7973,22 @@ func (h sqlHelper) countTranscripcioRawChangesPending() (int, error) {
 	return total, nil
 }
 
+func (h sqlHelper) countTranscripcioRawChangesPendingScoped(filter TranscripcioFilter) (int, error) {
+	where, args, join := h.transcripcionsRawFilters(0, filter)
+	query := `
+        SELECT COUNT(DISTINCT c.id)
+        FROM transcripcions_raw_canvis c
+        JOIN transcripcions_raw t ON t.id = c.transcripcio_id
+        ` + join + `
+        WHERE c.moderation_status = 'pendent' AND ` + where
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (h sqlHelper) updateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error {
 	stmt := `UPDATE transcripcions_raw_canvis SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ? WHERE id = ?`
 	stmt = formatPlaceholders(h.style, stmt)
@@ -9024,26 +9041,26 @@ func (h sqlHelper) listWikiPendingChanges(limit int) ([]WikiChange, []int, error
 	var stale []int
 	for rows.Next() {
 		var (
-			qChangeID   int
-			qObjectType string
-			qObjectID   int
-			qChangedAt  time.Time
-			qChangedBy  sql.NullInt64
-			qCreatedAt  time.Time
-			cID         sql.NullInt64
-			cObjectType sql.NullString
-			cObjectID   sql.NullInt64
-			cChangeType sql.NullString
-			cFieldKey   sql.NullString
-			cOldValue   sql.NullString
-			cNewValue   sql.NullString
-			cMetadata   sql.NullString
-			cStatus     sql.NullString
-			cModerated  sql.NullInt64
+			qChangeID    int
+			qObjectType  string
+			qObjectID    int
+			qChangedAt   time.Time
+			qChangedBy   sql.NullInt64
+			qCreatedAt   time.Time
+			cID          sql.NullInt64
+			cObjectType  sql.NullString
+			cObjectID    sql.NullInt64
+			cChangeType  sql.NullString
+			cFieldKey    sql.NullString
+			cOldValue    sql.NullString
+			cNewValue    sql.NullString
+			cMetadata    sql.NullString
+			cStatus      sql.NullString
+			cModerated   sql.NullInt64
 			cModeratedAt sql.NullTime
-			cNotes      sql.NullString
-			cChangedBy  sql.NullInt64
-			cChangedAt  sql.NullTime
+			cNotes       sql.NullString
+			cChangedBy   sql.NullInt64
+			cChangedAt   sql.NullTime
 		)
 		if err := rows.Scan(
 			&qChangeID,
@@ -9114,6 +9131,203 @@ func (h sqlHelper) listWikiPendingChanges(limit int) ([]WikiChange, []int, error
 		res = append(res, change)
 	}
 	return res, stale, rows.Err()
+}
+
+func (h sqlHelper) countWikiPendingChangesByType() (map[string]int, error) {
+	query := `
+        SELECT COALESCE(NULLIF(TRIM(c.object_type), ''), q.object_type) AS obj_type, COUNT(1)
+        FROM wiki_pending_queue q
+        JOIN wiki_canvis c ON c.id = q.change_id
+        WHERE c.moderation_status = 'pendent'
+        GROUP BY obj_type`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	res := map[string]int{}
+	for rows.Next() {
+		var objType string
+		var total int
+		if err := rows.Scan(&objType, &total); err != nil {
+			return nil, err
+		}
+		objType = strings.TrimSpace(objType)
+		if objType == "" {
+			continue
+		}
+		res[objType] = total
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) countWikiPendingMunicipiChangesScoped(filter MunicipiScopeFilter) (int, error) {
+	clauses := []string{
+		"c.moderation_status = 'pendent'",
+		"COALESCE(NULLIF(TRIM(c.object_type), ''), q.object_type) = 'municipi'",
+	}
+	args := []interface{}{}
+	if scopeClause, scopeArgs := buildMunicipiScopeFilterClause(filter); scopeClause != "" {
+		clauses = append(clauses, scopeClause)
+		args = append(args, scopeArgs...)
+	}
+	query := `
+        SELECT COUNT(1)
+        FROM wiki_pending_queue q
+        JOIN wiki_canvis c ON c.id = q.change_id
+        JOIN municipis m ON m.id = COALESCE(c.object_id, q.object_id)
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+        WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) countWikiPendingArxiuChangesScoped(filter ArxiuFilter) (int, error) {
+	clauses := []string{
+		"c.moderation_status = 'pendent'",
+		"COALESCE(NULLIF(TRIM(c.object_type), ''), q.object_type) = 'arxiu'",
+	}
+	args := []interface{}{}
+	allowedClauses := []string{}
+	allowedArgs := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		allowedClauses = append(allowedClauses, column+" IN ("+placeholders+")")
+		for _, id := range ids {
+			allowedArgs = append(allowedArgs, id)
+		}
+	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		orParts := make([]string, 0, len(parts))
+		for _, col := range parts {
+			orParts = append(orParts, col+" IN ("+placeholders+")")
+			for _, id := range ids {
+				allowedArgs = append(allowedArgs, id)
+			}
+		}
+		allowedClauses = append(allowedClauses, "("+strings.Join(orParts, " OR ")+")")
+	}
+	inClause("a.id", filter.AllowedArxiuIDs)
+	inClause("a.municipi_id", filter.AllowedMunicipiIDs)
+	inClause("a.entitat_eclesiastica_id", filter.AllowedEclesIDs)
+	inClause("m.nivell_administratiu_id_3", filter.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", filter.AllowedComarcaIDs)
+	inClauseAnyLevel(filter.AllowedNivellIDs)
+	inClause("na1.pais_id", filter.AllowedPaisIDs)
+	if len(allowedClauses) > 0 {
+		clauses = append(clauses, "("+strings.Join(allowedClauses, " OR ")+")")
+		args = append(args, allowedArgs...)
+	}
+	query := `
+        SELECT COUNT(1)
+        FROM wiki_pending_queue q
+        JOIN wiki_canvis c ON c.id = q.change_id
+        JOIN arxius a ON a.id = COALESCE(c.object_id, q.object_id)
+        LEFT JOIN municipis m ON m.id = a.municipi_id
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+        WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) countWikiPendingLlibreChangesScoped(filter LlibreFilter) (int, error) {
+	clauses := []string{
+		"c.moderation_status = 'pendent'",
+		"COALESCE(NULLIF(TRIM(c.object_type), ''), q.object_type) = 'llibre'",
+	}
+	args := []interface{}{}
+	allowedClauses := []string{}
+	allowedArgs := []interface{}{}
+	inClause := func(column string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		allowedClauses = append(allowedClauses, column+" IN ("+placeholders+")")
+		for _, id := range ids {
+			allowedArgs = append(allowedArgs, id)
+		}
+	}
+	inClauseAnyLevel := func(ids []int) {
+		if len(ids) == 0 {
+			return
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		parts := []string{
+			"m.nivell_administratiu_id_1",
+			"m.nivell_administratiu_id_2",
+			"m.nivell_administratiu_id_3",
+			"m.nivell_administratiu_id_4",
+			"m.nivell_administratiu_id_5",
+			"m.nivell_administratiu_id_6",
+			"m.nivell_administratiu_id_7",
+		}
+		orParts := make([]string, 0, len(parts))
+		for _, col := range parts {
+			orParts = append(orParts, col+" IN ("+placeholders+")")
+			for _, id := range ids {
+				allowedArgs = append(allowedArgs, id)
+			}
+		}
+		allowedClauses = append(allowedClauses, "("+strings.Join(orParts, " OR ")+")")
+	}
+	inClause("l.id", filter.AllowedLlibreIDs)
+	inClause("l.municipi_id", filter.AllowedMunicipiIDs)
+	inClause("l.arquevisbat_id", filter.AllowedEclesIDs)
+	inClause("m.nivell_administratiu_id_3", filter.AllowedProvinciaIDs)
+	inClause("m.nivell_administratiu_id_4", filter.AllowedComarcaIDs)
+	inClauseAnyLevel(filter.AllowedNivellIDs)
+	inClause("na1.pais_id", filter.AllowedPaisIDs)
+	if len(filter.AllowedArxiuIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.AllowedArxiuIDs)), ",")
+		allowedClauses = append(allowedClauses, "EXISTS (SELECT 1 FROM arxius_llibres al WHERE al.llibre_id = l.id AND al.arxiu_id IN ("+placeholders+"))")
+		for _, id := range filter.AllowedArxiuIDs {
+			allowedArgs = append(allowedArgs, id)
+		}
+	}
+	if len(allowedClauses) > 0 {
+		clauses = append(clauses, "("+strings.Join(allowedClauses, " OR ")+")")
+		args = append(args, allowedArgs...)
+	}
+	query := `
+        SELECT COUNT(1)
+        FROM wiki_pending_queue q
+        JOIN wiki_canvis c ON c.id = q.change_id
+        JOIN llibres l ON l.id = COALESCE(c.object_id, q.object_id)
+        LEFT JOIN municipis m ON m.id = l.municipi_id
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+        WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (h sqlHelper) searchPersones(f PersonaSearchFilter) ([]PersonaSearchResult, error) {
@@ -12381,6 +12595,26 @@ func (h sqlHelper) listMediaItemsByStatus(status string) ([]MediaItem, error) {
 	return res, nil
 }
 
+func (h sqlHelper) countMediaAlbumsByStatus(status string) (int, error) {
+	query := `SELECT COUNT(*) FROM media_albums WHERE moderation_status = ?`
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, status).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) countMediaItemsByStatus(status string) (int, error) {
+	query := `SELECT COUNT(*) FROM media_items WHERE moderation_status = ?`
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, status).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (h sqlHelper) updateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
 	restricted := sql.NullInt64{Int64: int64(restrictedGroupID), Valid: restrictedGroupID > 0}
 	accessPolicy := sql.NullInt64{Int64: int64(accessPolicyID), Valid: accessPolicyID > 0}
@@ -12876,6 +13110,40 @@ func (h sqlHelper) listMunicipiMapaVersions(filter MunicipiMapaVersionFilter) ([
 		res = append(res, item)
 	}
 	return res, nil
+}
+
+func (h sqlHelper) countMunicipiMapaVersionsScoped(filter MunicipiMapaVersionFilter, scope MunicipiScopeFilter) (int, error) {
+	args := []interface{}{}
+	clauses := []string{"1=1"}
+	if filter.MapaID > 0 {
+		clauses = append(clauses, "v.mapa_id = ?")
+		args = append(args, filter.MapaID)
+	}
+	if strings.TrimSpace(filter.Status) != "" {
+		clauses = append(clauses, "v.status = ?")
+		args = append(args, strings.TrimSpace(filter.Status))
+	}
+	if filter.CreatedBy > 0 {
+		clauses = append(clauses, "v.created_by = ?")
+		args = append(args, filter.CreatedBy)
+	}
+	if scopeClause, scopeArgs := buildMunicipiScopeFilterClause(scope); scopeClause != "" {
+		clauses = append(clauses, scopeClause)
+		args = append(args, scopeArgs...)
+	}
+	query := `
+        SELECT COUNT(1)
+        FROM municipi_mapa_versions v
+        JOIN municipi_mapes mp ON mp.id = v.mapa_id
+        JOIN municipis m ON m.id = mp.municipi_id
+        LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+        WHERE ` + strings.Join(clauses, " AND ")
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (h sqlHelper) getMunicipiMapaVersion(id int) (*MunicipiMapaVersion, error) {

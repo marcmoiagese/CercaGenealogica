@@ -2,7 +2,6 @@ package core
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -230,18 +229,26 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 		}
 	}
 	if scopeModel.canModerateType("municipi_mapa_version") {
-		rows, err := a.DB.ListMunicipiMapaVersions(db.MunicipiMapaVersionFilter{Status: "pendent"})
-		if err != nil {
-			return 0, nil, err
-		}
-		total := 0
-		for _, row := range rows {
-			if scopeModel.canModerateAll || scopeModel.canModerateItem("municipi_mapa_version", row.ID) {
-				total++
+		scope, ok := scopeModel.scopeFilterForType("municipi_mapa_version")
+		if ok && (scope.hasGlobal || !scope.isEmpty()) {
+			filter := db.MunicipiMapaVersionFilter{Status: "pendent"}
+			scopeFilter := db.MunicipiScopeFilter{}
+			if !scope.hasGlobal {
+				scopeFilter = db.MunicipiScopeFilter{
+					AllowedMunicipiIDs:  scope.municipiIDs,
+					AllowedProvinciaIDs: scope.provinciaIDs,
+					AllowedComarcaIDs:   scope.comarcaIDs,
+					AllowedNivellIDs:    scope.nivellIDs,
+					AllowedPaisIDs:      scope.paisIDs,
+				}
 			}
-		}
-		if total > 0 {
-			counts["municipi_mapa_version"] = total
+			total, err := a.DB.CountMunicipiMapaVersionsScoped(filter, scopeFilter)
+			if err != nil {
+				return 0, nil, err
+			}
+			if total > 0 {
+				counts["municipi_mapa_version"] = total
+			}
 		}
 	}
 	if scopeModel.canModerateType("cognom_variant") {
@@ -329,45 +336,41 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 		}
 	}
 	if scopeModel.canModerateType("registre_canvi") {
-		rows, err := a.DB.ListTranscripcioRawChangesPending()
-		if err != nil {
-			return 0, nil, err
-		}
-		total := 0
-		for _, row := range rows {
-			if scopeModel.canModerateAll || scopeModel.canModerateItem("registre_canvi", row.ID) {
-				total++
+		if scopeModel.canModerateAll {
+			if total, err := a.DB.CountTranscripcioRawChangesPending(); err != nil {
+				return 0, nil, err
+			} else if total > 0 {
+				counts["registre_canvi"] = total
 			}
-		}
-		if total > 0 {
-			counts["registre_canvi"] = total
+		} else if scope, ok := scopeModel.scopeFilterForType("registre_canvi"); ok && !scope.isEmpty() {
+			filter := db.TranscripcioFilter{}
+			applyScopeFilterToRegistre(&filter, scope)
+			if total, err := a.DB.CountTranscripcioRawChangesPendingScoped(filter); err != nil {
+				return 0, nil, err
+			} else if total > 0 {
+				counts["registre_canvi"] = total
+			}
 		}
 	}
 	if scopeModel.canModerateType("external_link") {
-		rows, err := a.DB.ExternalLinksListByStatus("pending")
-		if err != nil {
+		if total, err := a.DB.CountExternalLinksByStatus("pending"); err != nil {
 			return 0, nil, err
-		}
-		if len(rows) > 0 {
-			counts["external_link"] = len(rows)
+		} else if total > 0 {
+			counts["external_link"] = total
 		}
 	}
 	if scopeModel.canModerateType("media_album") {
-		rows, err := a.DB.ListMediaAlbumsByStatus("pending")
-		if err != nil {
+		if total, err := a.DB.CountMediaAlbumsByStatus("pending"); err != nil {
 			return 0, nil, err
-		}
-		if len(rows) > 0 {
-			counts["media_album"] = len(rows)
+		} else if total > 0 {
+			counts["media_album"] = total
 		}
 	}
 	if scopeModel.canModerateType("media_item") {
-		rows, err := a.DB.ListMediaItemsByStatus("pending")
-		if err != nil {
+		if total, err := a.DB.CountMediaItemsByStatus("pending"); err != nil {
 			return 0, nil, err
-		}
-		if len(rows) > 0 {
-			counts["media_item"] = len(rows)
+		} else if total > 0 {
+			counts["media_item"] = total
 		}
 	}
 	needsWiki := scopeModel.canModerateType("municipi_canvi") ||
@@ -377,27 +380,93 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.Policy
 		scopeModel.canModerateType("cognom_canvi") ||
 		scopeModel.canModerateType("event_historic_canvi")
 	if needsWiki {
-		if changes, stale, err := a.DB.ListWikiPendingChanges(0); err == nil {
-			for _, changeID := range stale {
-				_ = a.DB.DequeueWikiPending(changeID)
+		wikiCounts, err := a.DB.CountWikiPendingChangesByType()
+		if err != nil {
+			return 0, nil, err
+		}
+		getWikiCount := func(objType string) int {
+			key := strings.ToLower(strings.TrimSpace(objType))
+			if key == "" {
+				return 0
 			}
-			for _, change := range changes {
-				objType := resolveWikiChangeModeracioType(change)
-				if objType == "" {
-					return 0, nil, fmt.Errorf("wiki change sense tipus moderable: %d", change.ID)
-				}
-				if !scopeModel.canModerateType(objType) {
-					continue
-				}
-				if !scopeModel.canModerateAll {
-					if !scopeModel.canModerateWikiChange(change, objType) {
-						continue
+			return wikiCounts[key]
+		}
+		if scopeModel.canModerateType("persona_canvi") {
+			if total := getWikiCount("persona"); total > 0 {
+				counts["persona_canvi"] = total
+			}
+		}
+		if scopeModel.canModerateType("cognom_canvi") {
+			if total := getWikiCount("cognom"); total > 0 {
+				counts["cognom_canvi"] = total
+			}
+		}
+		if scopeModel.canModerateType("event_historic_canvi") {
+			if total := getWikiCount("event_historic"); total > 0 {
+				counts["event_historic_canvi"] = total
+			}
+		}
+		if scopeModel.canModerateType("municipi_canvi") {
+			if scope, ok := scopeModel.scopeFilterForType("municipi_canvi"); ok {
+				if scope.hasGlobal {
+					if total := getWikiCount("municipi"); total > 0 {
+						counts["municipi_canvi"] = total
+					}
+				} else if !scope.isEmpty() {
+					scopeFilter := db.MunicipiScopeFilter{
+						AllowedMunicipiIDs:  scope.municipiIDs,
+						AllowedProvinciaIDs: scope.provinciaIDs,
+						AllowedComarcaIDs:   scope.comarcaIDs,
+						AllowedNivellIDs:    scope.nivellIDs,
+						AllowedPaisIDs:      scope.paisIDs,
+					}
+					total, err := a.DB.CountWikiPendingMunicipiChangesScoped(scopeFilter)
+					if err != nil {
+						return 0, nil, err
+					}
+					if total > 0 {
+						counts["municipi_canvi"] = total
 					}
 				}
-				counts[objType]++
 			}
-		} else {
-			return 0, nil, err
+		}
+		if scopeModel.canModerateType("arxiu_canvi") {
+			if scope, ok := scopeModel.scopeFilterForType("arxiu_canvi"); ok {
+				if scope.hasGlobal {
+					if total := getWikiCount("arxiu"); total > 0 {
+						counts["arxiu_canvi"] = total
+					}
+				} else if !scope.isEmpty() {
+					filter := db.ArxiuFilter{}
+					applyScopeFilterToArxiu(&filter, scope)
+					total, err := a.DB.CountWikiPendingArxiuChangesScoped(filter)
+					if err != nil {
+						return 0, nil, err
+					}
+					if total > 0 {
+						counts["arxiu_canvi"] = total
+					}
+				}
+			}
+		}
+		if scopeModel.canModerateType("llibre_canvi") {
+			if scope, ok := scopeModel.scopeFilterForType("llibre_canvi"); ok {
+				if scope.hasGlobal {
+					if total := getWikiCount("llibre"); total > 0 {
+						counts["llibre_canvi"] = total
+					}
+				} else if !scope.isEmpty() {
+					filter := db.LlibreFilter{}
+					applyScopeFilterToLlibre(&filter, scope)
+					total, err := a.DB.CountWikiPendingLlibreChangesScoped(filter)
+					if err != nil {
+						return 0, nil, err
+					}
+					if total > 0 {
+						counts["llibre_canvi"] = total
+					}
+				}
+			}
 		}
 	}
 	order := []string{

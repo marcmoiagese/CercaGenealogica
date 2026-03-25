@@ -229,6 +229,16 @@ func (h sqlHelper) listExternalLinksByStatus(status string) ([]ExternalLinkAdmin
 	return res, nil
 }
 
+func (h sqlHelper) countExternalLinksByStatus(status string) (int, error) {
+	query := `SELECT COUNT(*) FROM external_links WHERE status = ?`
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, status).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func resolveExternalSiteID(host string, sites []ExternalSite) int {
 	host = strings.ToLower(strings.TrimSpace(host))
 	if host == "" {

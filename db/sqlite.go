@@ -529,6 +529,10 @@ func (d *SQLite) ExternalLinksListByPersona(personaID int, statusFilter string) 
 func (d *SQLite) ExternalLinksListByStatus(status string) ([]ExternalLinkAdminRow, error) {
 	return d.help.listExternalLinksByStatus(status)
 }
+
+func (d *SQLite) CountExternalLinksByStatus(status string) (int, error) {
+	return d.help.countExternalLinksByStatus(status)
+}
 func (d *SQLite) ExternalLinkInsertPending(personaID int, userID int, url, title string) (int, error) {
 	return d.help.createExternalLinkPending(personaID, userID, url, title)
 }
@@ -1114,6 +1118,12 @@ func (d *SQLite) ListMediaAlbumsByStatus(status string) ([]MediaAlbum, error) {
 func (d *SQLite) ListMediaItemsByStatus(status string) ([]MediaItem, error) {
 	return d.help.listMediaItemsByStatus(status)
 }
+func (d *SQLite) CountMediaAlbumsByStatus(status string) (int, error) {
+	return d.help.countMediaAlbumsByStatus(status)
+}
+func (d *SQLite) CountMediaItemsByStatus(status string) (int, error) {
+	return d.help.countMediaItemsByStatus(status)
+}
 func (d *SQLite) UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
 	return d.help.updateMediaAlbumModeration(id, status, visibility, restrictedGroupID, accessPolicyID, creditCost, difficultyScore, sourceType, notes, moderatorID)
 }
@@ -1225,6 +1235,9 @@ func (d *SQLite) ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, e
 func (d *SQLite) CountTranscripcioRawChangesPending() (int, error) {
 	return d.help.countTranscripcioRawChangesPending()
 }
+func (d *SQLite) CountTranscripcioRawChangesPendingScoped(filter TranscripcioFilter) (int, error) {
+	return d.help.countTranscripcioRawChangesPendingScoped(filter)
+}
 func (d *SQLite) UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateTranscripcioRawChangeModeracio(id, estat, motiu, moderatorID)
 }
@@ -1315,10 +1328,25 @@ func (d *SQLite) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 func (d *SQLite) ListWikiPendingChanges(limit int) ([]WikiChange, []int, error) {
 	return d.help.listWikiPendingChanges(limit)
 }
+func (d *SQLite) CountWikiPendingChangesByType() (map[string]int, error) {
+	return d.help.countWikiPendingChangesByType()
+}
+func (d *SQLite) CountWikiPendingMunicipiChangesScoped(filter MunicipiScopeFilter) (int, error) {
+	return d.help.countWikiPendingMunicipiChangesScoped(filter)
+}
+func (d *SQLite) CountWikiPendingArxiuChangesScoped(filter ArxiuFilter) (int, error) {
+	return d.help.countWikiPendingArxiuChangesScoped(filter)
+}
+func (d *SQLite) CountWikiPendingLlibreChangesScoped(filter LlibreFilter) (int, error) {
+	return d.help.countWikiPendingLlibreChangesScoped(filter)
+}
+
 // Espai personal
 func (d *SQLite) CreateEspaiArbre(a *EspaiArbre) (int, error) { return d.help.createEspaiArbre(a) }
-func (d *SQLite) UpdateEspaiArbre(a *EspaiArbre) error { return d.help.updateEspaiArbre(a) }
-func (d *SQLite) DeleteEspaiArbre(ownerID, treeID int) error { return d.help.deleteEspaiArbre(ownerID, treeID) }
+func (d *SQLite) UpdateEspaiArbre(a *EspaiArbre) error        { return d.help.updateEspaiArbre(a) }
+func (d *SQLite) DeleteEspaiArbre(ownerID, treeID int) error {
+	return d.help.deleteEspaiArbre(ownerID, treeID)
+}
 func (d *SQLite) GetEspaiArbre(id int) (*EspaiArbre, error) { return d.help.getEspaiArbre(id) }
 func (d *SQLite) ListEspaiArbresByOwner(ownerID int) ([]EspaiArbre, error) {
 	return d.help.listEspaiArbresByOwner(ownerID)
@@ -1371,7 +1399,9 @@ func (d *SQLite) CountEspaiImportsByFont(fontID int) (int, error) {
 func (d *SQLite) ClearEspaiTreeData(arbreID int) error {
 	return d.help.clearEspaiTreeData(arbreID)
 }
-func (d *SQLite) CreateEspaiPersona(p *EspaiPersona) (int, error) { return d.help.createEspaiPersona(p) }
+func (d *SQLite) CreateEspaiPersona(p *EspaiPersona) (int, error) {
+	return d.help.createEspaiPersona(p)
+}
 func (d *SQLite) UpdateEspaiPersona(p *EspaiPersona) error { return d.help.updateEspaiPersona(p) }
 func (d *SQLite) UpdateEspaiPersonaVisibility(id int, visibility string) error {
 	return d.help.updateEspaiPersonaVisibility(id, visibility)
@@ -1401,7 +1431,9 @@ func (d *SQLite) ListEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPe
 func (d *SQLite) CountEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPersonaDataFilter) (int, error) {
 	return d.help.countEspaiPersonesByOwnerDataFilters(ownerID, filter)
 }
-func (d *SQLite) CreateEspaiRelacio(r *EspaiRelacio) (int, error) { return d.help.createEspaiRelacio(r) }
+func (d *SQLite) CreateEspaiRelacio(r *EspaiRelacio) (int, error) {
+	return d.help.createEspaiRelacio(r)
+}
 func (d *SQLite) ListEspaiRelacionsByArbre(arbreID int) ([]EspaiRelacio, error) {
 	return d.help.listEspaiRelacionsByArbre(arbreID)
 }
@@ -1482,14 +1514,16 @@ func (d *SQLite) CreateEspaiPrivacyAudit(a *EspaiPrivacyAudit) (int, error) {
 	return d.help.createEspaiPrivacyAudit(a)
 }
 func (d *SQLite) CreateEspaiGrup(g *EspaiGrup) (int, error) { return d.help.createEspaiGrup(g) }
-func (d *SQLite) GetEspaiGrup(id int) (*EspaiGrup, error) { return d.help.getEspaiGrup(id) }
+func (d *SQLite) GetEspaiGrup(id int) (*EspaiGrup, error)   { return d.help.getEspaiGrup(id) }
 func (d *SQLite) ListEspaiGrupsByOwner(ownerID int) ([]EspaiGrup, error) {
 	return d.help.listEspaiGrupsByOwner(ownerID)
 }
 func (d *SQLite) ListEspaiGrupsByUser(userID int) ([]EspaiGrup, error) {
 	return d.help.listEspaiGrupsByUser(userID)
 }
-func (d *SQLite) AddEspaiGrupMembre(m *EspaiGrupMembre) (int, error) { return d.help.addEspaiGrupMembre(m) }
+func (d *SQLite) AddEspaiGrupMembre(m *EspaiGrupMembre) (int, error) {
+	return d.help.addEspaiGrupMembre(m)
+}
 func (d *SQLite) GetEspaiGrupMembre(grupID, userID int) (*EspaiGrupMembre, error) {
 	return d.help.getEspaiGrupMembre(grupID, userID)
 }
@@ -1499,7 +1533,9 @@ func (d *SQLite) UpdateEspaiGrupMembre(m *EspaiGrupMembre) error {
 func (d *SQLite) ListEspaiGrupMembres(grupID int) ([]EspaiGrupMembre, error) {
 	return d.help.listEspaiGrupMembres(grupID)
 }
-func (d *SQLite) AddEspaiGrupArbre(a *EspaiGrupArbre) (int, error) { return d.help.addEspaiGrupArbre(a) }
+func (d *SQLite) AddEspaiGrupArbre(a *EspaiGrupArbre) (int, error) {
+	return d.help.addEspaiGrupArbre(a)
+}
 func (d *SQLite) ListEspaiGrupArbres(grupID int) ([]EspaiGrupArbre, error) {
 	return d.help.listEspaiGrupArbres(grupID)
 }
@@ -1897,6 +1933,9 @@ func (d *SQLite) NextMunicipiMapaVersionNumber(mapaID int) (int, error) {
 }
 func (d *SQLite) ListMunicipiMapaVersions(filter MunicipiMapaVersionFilter) ([]MunicipiMapaVersion, error) {
 	return d.help.listMunicipiMapaVersions(filter)
+}
+func (d *SQLite) CountMunicipiMapaVersionsScoped(filter MunicipiMapaVersionFilter, scope MunicipiScopeFilter) (int, error) {
+	return d.help.countMunicipiMapaVersionsScoped(filter, scope)
 }
 func (d *SQLite) GetMunicipiMapaVersion(id int) (*MunicipiMapaVersion, error) {
 	return d.help.getMunicipiMapaVersion(id)

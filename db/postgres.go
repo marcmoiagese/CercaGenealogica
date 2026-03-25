@@ -512,6 +512,10 @@ func (d *PostgreSQL) ExternalLinksListByPersona(personaID int, statusFilter stri
 func (d *PostgreSQL) ExternalLinksListByStatus(status string) ([]ExternalLinkAdminRow, error) {
 	return d.help.listExternalLinksByStatus(status)
 }
+
+func (d *PostgreSQL) CountExternalLinksByStatus(status string) (int, error) {
+	return d.help.countExternalLinksByStatus(status)
+}
 func (d *PostgreSQL) ExternalLinkInsertPending(personaID int, userID int, url, title string) (int, error) {
 	return d.help.createExternalLinkPending(personaID, userID, url, title)
 }
@@ -1828,6 +1832,12 @@ func (d *PostgreSQL) ListMediaAlbumsByStatus(status string) ([]MediaAlbum, error
 func (d *PostgreSQL) ListMediaItemsByStatus(status string) ([]MediaItem, error) {
 	return d.help.listMediaItemsByStatus(status)
 }
+func (d *PostgreSQL) CountMediaAlbumsByStatus(status string) (int, error) {
+	return d.help.countMediaAlbumsByStatus(status)
+}
+func (d *PostgreSQL) CountMediaItemsByStatus(status string) (int, error) {
+	return d.help.countMediaItemsByStatus(status)
+}
 func (d *PostgreSQL) UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
 	return d.help.updateMediaAlbumModeration(id, status, visibility, restrictedGroupID, accessPolicyID, creditCost, difficultyScore, sourceType, notes, moderatorID)
 }
@@ -1939,6 +1949,9 @@ func (d *PostgreSQL) ListTranscripcioRawChangesPending() ([]TranscripcioRawChang
 func (d *PostgreSQL) CountTranscripcioRawChangesPending() (int, error) {
 	return d.help.countTranscripcioRawChangesPending()
 }
+func (d *PostgreSQL) CountTranscripcioRawChangesPendingScoped(filter TranscripcioFilter) (int, error) {
+	return d.help.countTranscripcioRawChangesPendingScoped(filter)
+}
 func (d *PostgreSQL) UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateTranscripcioRawChangeModeracio(id, estat, motiu, moderatorID)
 }
@@ -2029,10 +2042,25 @@ func (d *PostgreSQL) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 func (d *PostgreSQL) ListWikiPendingChanges(limit int) ([]WikiChange, []int, error) {
 	return d.help.listWikiPendingChanges(limit)
 }
+func (d *PostgreSQL) CountWikiPendingChangesByType() (map[string]int, error) {
+	return d.help.countWikiPendingChangesByType()
+}
+func (d *PostgreSQL) CountWikiPendingMunicipiChangesScoped(filter MunicipiScopeFilter) (int, error) {
+	return d.help.countWikiPendingMunicipiChangesScoped(filter)
+}
+func (d *PostgreSQL) CountWikiPendingArxiuChangesScoped(filter ArxiuFilter) (int, error) {
+	return d.help.countWikiPendingArxiuChangesScoped(filter)
+}
+func (d *PostgreSQL) CountWikiPendingLlibreChangesScoped(filter LlibreFilter) (int, error) {
+	return d.help.countWikiPendingLlibreChangesScoped(filter)
+}
+
 // Espai personal
 func (d *PostgreSQL) CreateEspaiArbre(a *EspaiArbre) (int, error) { return d.help.createEspaiArbre(a) }
-func (d *PostgreSQL) UpdateEspaiArbre(a *EspaiArbre) error { return d.help.updateEspaiArbre(a) }
-func (d *PostgreSQL) DeleteEspaiArbre(ownerID, treeID int) error { return d.help.deleteEspaiArbre(ownerID, treeID) }
+func (d *PostgreSQL) UpdateEspaiArbre(a *EspaiArbre) error        { return d.help.updateEspaiArbre(a) }
+func (d *PostgreSQL) DeleteEspaiArbre(ownerID, treeID int) error {
+	return d.help.deleteEspaiArbre(ownerID, treeID)
+}
 func (d *PostgreSQL) GetEspaiArbre(id int) (*EspaiArbre, error) { return d.help.getEspaiArbre(id) }
 func (d *PostgreSQL) ListEspaiArbresByOwner(ownerID int) ([]EspaiArbre, error) {
 	return d.help.listEspaiArbresByOwner(ownerID)
@@ -2049,14 +2077,18 @@ func (d *PostgreSQL) UpdateEspaiFontImportacio(f *EspaiFontImportacio) error {
 func (d *PostgreSQL) GetEspaiFontImportacio(id int) (*EspaiFontImportacio, error) {
 	return d.help.getEspaiFontImportacio(id)
 }
-func (d *PostgreSQL) DeleteEspaiFontImportacio(id int) error { return d.help.deleteEspaiFontImportacio(id) }
+func (d *PostgreSQL) DeleteEspaiFontImportacio(id int) error {
+	return d.help.deleteEspaiFontImportacio(id)
+}
 func (d *PostgreSQL) GetEspaiFontImportacioByChecksum(ownerID int, checksum string) (*EspaiFontImportacio, error) {
 	return d.help.getEspaiFontImportacioByChecksum(ownerID, checksum)
 }
 func (d *PostgreSQL) ListEspaiFontsImportacioByOwner(ownerID int) ([]EspaiFontImportacio, error) {
 	return d.help.listEspaiFontsImportacioByOwner(ownerID)
 }
-func (d *PostgreSQL) CreateEspaiImport(i *EspaiImport) (int, error) { return d.help.createEspaiImport(i) }
+func (d *PostgreSQL) CreateEspaiImport(i *EspaiImport) (int, error) {
+	return d.help.createEspaiImport(i)
+}
 func (d *PostgreSQL) UpdateEspaiImportStatus(id int, status string, errorText, summaryJSON string) error {
 	return d.help.updateEspaiImportStatus(id, status, errorText, summaryJSON)
 }
@@ -2085,12 +2117,16 @@ func (d *PostgreSQL) CountEspaiImportsByFont(fontID int) (int, error) {
 func (d *PostgreSQL) ClearEspaiTreeData(arbreID int) error {
 	return d.help.clearEspaiTreeData(arbreID)
 }
-func (d *PostgreSQL) CreateEspaiPersona(p *EspaiPersona) (int, error) { return d.help.createEspaiPersona(p) }
+func (d *PostgreSQL) CreateEspaiPersona(p *EspaiPersona) (int, error) {
+	return d.help.createEspaiPersona(p)
+}
 func (d *PostgreSQL) UpdateEspaiPersona(p *EspaiPersona) error { return d.help.updateEspaiPersona(p) }
 func (d *PostgreSQL) UpdateEspaiPersonaVisibility(id int, visibility string) error {
 	return d.help.updateEspaiPersonaVisibility(id, visibility)
 }
-func (d *PostgreSQL) GetEspaiPersona(id int) (*EspaiPersona, error) { return d.help.getEspaiPersona(id) }
+func (d *PostgreSQL) GetEspaiPersona(id int) (*EspaiPersona, error) {
+	return d.help.getEspaiPersona(id)
+}
 func (d *PostgreSQL) ListEspaiPersonesByArbre(arbreID int) ([]EspaiPersona, error) {
 	return d.help.listEspaiPersonesByArbre(arbreID)
 }
@@ -2115,7 +2151,9 @@ func (d *PostgreSQL) ListEspaiPersonesByOwnerDataFilters(ownerID int, filter Esp
 func (d *PostgreSQL) CountEspaiPersonesByOwnerDataFilters(ownerID int, filter EspaiPersonaDataFilter) (int, error) {
 	return d.help.countEspaiPersonesByOwnerDataFilters(ownerID, filter)
 }
-func (d *PostgreSQL) CreateEspaiRelacio(r *EspaiRelacio) (int, error) { return d.help.createEspaiRelacio(r) }
+func (d *PostgreSQL) CreateEspaiRelacio(r *EspaiRelacio) (int, error) {
+	return d.help.createEspaiRelacio(r)
+}
 func (d *PostgreSQL) ListEspaiRelacionsByArbre(arbreID int) ([]EspaiRelacio, error) {
 	return d.help.listEspaiRelacionsByArbre(arbreID)
 }
@@ -2125,7 +2163,9 @@ func (d *PostgreSQL) CountEspaiRelacionsByArbre(arbreID int) (int, error) {
 func (d *PostgreSQL) CountEspaiRelacionsByArbreType(arbreID int, relationType string) (int, error) {
 	return d.help.countEspaiRelacionsByArbreType(arbreID, relationType)
 }
-func (d *PostgreSQL) CreateEspaiEvent(ev *EspaiEvent) (int, error) { return d.help.createEspaiEvent(ev) }
+func (d *PostgreSQL) CreateEspaiEvent(ev *EspaiEvent) (int, error) {
+	return d.help.createEspaiEvent(ev)
+}
 func (d *PostgreSQL) ListEspaiEventsByPersona(personaID int) ([]EspaiEvent, error) {
 	return d.help.listEspaiEventsByPersona(personaID)
 }
@@ -2196,7 +2236,7 @@ func (d *PostgreSQL) CreateEspaiPrivacyAudit(a *EspaiPrivacyAudit) (int, error) 
 	return d.help.createEspaiPrivacyAudit(a)
 }
 func (d *PostgreSQL) CreateEspaiGrup(g *EspaiGrup) (int, error) { return d.help.createEspaiGrup(g) }
-func (d *PostgreSQL) GetEspaiGrup(id int) (*EspaiGrup, error) { return d.help.getEspaiGrup(id) }
+func (d *PostgreSQL) GetEspaiGrup(id int) (*EspaiGrup, error)   { return d.help.getEspaiGrup(id) }
 func (d *PostgreSQL) ListEspaiGrupsByOwner(ownerID int) ([]EspaiGrup, error) {
 	return d.help.listEspaiGrupsByOwner(ownerID)
 }
@@ -2619,6 +2659,9 @@ func (d *PostgreSQL) NextMunicipiMapaVersionNumber(mapaID int) (int, error) {
 }
 func (d *PostgreSQL) ListMunicipiMapaVersions(filter MunicipiMapaVersionFilter) ([]MunicipiMapaVersion, error) {
 	return d.help.listMunicipiMapaVersions(filter)
+}
+func (d *PostgreSQL) CountMunicipiMapaVersionsScoped(filter MunicipiMapaVersionFilter, scope MunicipiScopeFilter) (int, error) {
+	return d.help.countMunicipiMapaVersionsScoped(filter, scope)
 }
 func (d *PostgreSQL) GetMunicipiMapaVersion(id int) (*MunicipiMapaVersion, error) {
 	return d.help.getMunicipiMapaVersion(id)

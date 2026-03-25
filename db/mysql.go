@@ -510,6 +510,10 @@ func (d *MySQL) ExternalLinksListByPersona(personaID int, statusFilter string) (
 func (d *MySQL) ExternalLinksListByStatus(status string) ([]ExternalLinkAdminRow, error) {
 	return d.help.listExternalLinksByStatus(status)
 }
+
+func (d *MySQL) CountExternalLinksByStatus(status string) (int, error) {
+	return d.help.countExternalLinksByStatus(status)
+}
 func (d *MySQL) ExternalLinkInsertPending(personaID int, userID int, url, title string) (int, error) {
 	return d.help.createExternalLinkPending(personaID, userID, url, title)
 }
@@ -1088,6 +1092,12 @@ func (d *MySQL) ListMediaAlbumsByStatus(status string) ([]MediaAlbum, error) {
 func (d *MySQL) ListMediaItemsByStatus(status string) ([]MediaItem, error) {
 	return d.help.listMediaItemsByStatus(status)
 }
+func (d *MySQL) CountMediaAlbumsByStatus(status string) (int, error) {
+	return d.help.countMediaAlbumsByStatus(status)
+}
+func (d *MySQL) CountMediaItemsByStatus(status string) (int, error) {
+	return d.help.countMediaItemsByStatus(status)
+}
 func (d *MySQL) UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
 	return d.help.updateMediaAlbumModeration(id, status, visibility, restrictedGroupID, accessPolicyID, creditCost, difficultyScore, sourceType, notes, moderatorID)
 }
@@ -1199,6 +1209,9 @@ func (d *MySQL) ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, er
 func (d *MySQL) CountTranscripcioRawChangesPending() (int, error) {
 	return d.help.countTranscripcioRawChangesPending()
 }
+func (d *MySQL) CountTranscripcioRawChangesPendingScoped(filter TranscripcioFilter) (int, error) {
+	return d.help.countTranscripcioRawChangesPendingScoped(filter)
+}
 func (d *MySQL) UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateTranscripcioRawChangeModeracio(id, estat, motiu, moderatorID)
 }
@@ -1289,10 +1302,25 @@ func (d *MySQL) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 func (d *MySQL) ListWikiPendingChanges(limit int) ([]WikiChange, []int, error) {
 	return d.help.listWikiPendingChanges(limit)
 }
+func (d *MySQL) CountWikiPendingChangesByType() (map[string]int, error) {
+	return d.help.countWikiPendingChangesByType()
+}
+func (d *MySQL) CountWikiPendingMunicipiChangesScoped(filter MunicipiScopeFilter) (int, error) {
+	return d.help.countWikiPendingMunicipiChangesScoped(filter)
+}
+func (d *MySQL) CountWikiPendingArxiuChangesScoped(filter ArxiuFilter) (int, error) {
+	return d.help.countWikiPendingArxiuChangesScoped(filter)
+}
+func (d *MySQL) CountWikiPendingLlibreChangesScoped(filter LlibreFilter) (int, error) {
+	return d.help.countWikiPendingLlibreChangesScoped(filter)
+}
+
 // Espai personal
 func (d *MySQL) CreateEspaiArbre(a *EspaiArbre) (int, error) { return d.help.createEspaiArbre(a) }
-func (d *MySQL) UpdateEspaiArbre(a *EspaiArbre) error { return d.help.updateEspaiArbre(a) }
-func (d *MySQL) DeleteEspaiArbre(ownerID, treeID int) error { return d.help.deleteEspaiArbre(ownerID, treeID) }
+func (d *MySQL) UpdateEspaiArbre(a *EspaiArbre) error        { return d.help.updateEspaiArbre(a) }
+func (d *MySQL) DeleteEspaiArbre(ownerID, treeID int) error {
+	return d.help.deleteEspaiArbre(ownerID, treeID)
+}
 func (d *MySQL) GetEspaiArbre(id int) (*EspaiArbre, error) { return d.help.getEspaiArbre(id) }
 func (d *MySQL) ListEspaiArbresByOwner(ownerID int) ([]EspaiArbre, error) {
 	return d.help.listEspaiArbresByOwner(ownerID)
@@ -1346,7 +1374,7 @@ func (d *MySQL) ClearEspaiTreeData(arbreID int) error {
 	return d.help.clearEspaiTreeData(arbreID)
 }
 func (d *MySQL) CreateEspaiPersona(p *EspaiPersona) (int, error) { return d.help.createEspaiPersona(p) }
-func (d *MySQL) UpdateEspaiPersona(p *EspaiPersona) error { return d.help.updateEspaiPersona(p) }
+func (d *MySQL) UpdateEspaiPersona(p *EspaiPersona) error        { return d.help.updateEspaiPersona(p) }
 func (d *MySQL) UpdateEspaiPersonaVisibility(id int, visibility string) error {
 	return d.help.updateEspaiPersonaVisibility(id, visibility)
 }
@@ -1456,14 +1484,16 @@ func (d *MySQL) CreateEspaiPrivacyAudit(a *EspaiPrivacyAudit) (int, error) {
 	return d.help.createEspaiPrivacyAudit(a)
 }
 func (d *MySQL) CreateEspaiGrup(g *EspaiGrup) (int, error) { return d.help.createEspaiGrup(g) }
-func (d *MySQL) GetEspaiGrup(id int) (*EspaiGrup, error) { return d.help.getEspaiGrup(id) }
+func (d *MySQL) GetEspaiGrup(id int) (*EspaiGrup, error)   { return d.help.getEspaiGrup(id) }
 func (d *MySQL) ListEspaiGrupsByOwner(ownerID int) ([]EspaiGrup, error) {
 	return d.help.listEspaiGrupsByOwner(ownerID)
 }
 func (d *MySQL) ListEspaiGrupsByUser(userID int) ([]EspaiGrup, error) {
 	return d.help.listEspaiGrupsByUser(userID)
 }
-func (d *MySQL) AddEspaiGrupMembre(m *EspaiGrupMembre) (int, error) { return d.help.addEspaiGrupMembre(m) }
+func (d *MySQL) AddEspaiGrupMembre(m *EspaiGrupMembre) (int, error) {
+	return d.help.addEspaiGrupMembre(m)
+}
 func (d *MySQL) GetEspaiGrupMembre(grupID, userID int) (*EspaiGrupMembre, error) {
 	return d.help.getEspaiGrupMembre(grupID, userID)
 }
@@ -1865,6 +1895,9 @@ func (d *MySQL) NextMunicipiMapaVersionNumber(mapaID int) (int, error) {
 }
 func (d *MySQL) ListMunicipiMapaVersions(filter MunicipiMapaVersionFilter) ([]MunicipiMapaVersion, error) {
 	return d.help.listMunicipiMapaVersions(filter)
+}
+func (d *MySQL) CountMunicipiMapaVersionsScoped(filter MunicipiMapaVersionFilter, scope MunicipiScopeFilter) (int, error) {
+	return d.help.countMunicipiMapaVersionsScoped(filter, scope)
 }
 func (d *MySQL) GetMunicipiMapaVersion(id int) (*MunicipiMapaVersion, error) {
 	return d.help.getMunicipiMapaVersion(id)

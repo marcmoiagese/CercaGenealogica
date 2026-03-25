@@ -3,8 +3,8 @@ package core
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -155,10 +155,10 @@ func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, er
 	} else {
 		counts["eclesiastic"] = total
 	}
-	if rows, err := a.DB.ListMunicipiMapaVersions(db.MunicipiMapaVersionFilter{Status: "pendent"}); err != nil {
+	if total, err := a.DB.CountMunicipiMapaVersionsScoped(db.MunicipiMapaVersionFilter{Status: "pendent"}, db.MunicipiScopeFilter{}); err != nil {
 		return 0, nil, err
 	} else {
-		counts["municipi_mapa_version"] = len(rows)
+		counts["municipi_mapa_version"] = total
 	}
 	if total, err := a.DB.CountCognomVariants(db.CognomVariantFilter{Status: "pendent"}); err != nil {
 		return 0, nil, err
@@ -205,34 +205,31 @@ func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, er
 	} else {
 		counts["registre_canvi"] = total
 	}
-	if rows, err := a.DB.ListMediaAlbumsByStatus("pending"); err != nil {
+	if total, err := a.DB.CountMediaAlbumsByStatus("pending"); err != nil {
 		return 0, nil, err
 	} else {
-		counts["media_album"] = len(rows)
+		counts["media_album"] = total
 	}
-	if rows, err := a.DB.ListMediaItemsByStatus("pending"); err != nil {
+	if total, err := a.DB.CountMediaItemsByStatus("pending"); err != nil {
 		return 0, nil, err
 	} else {
-		counts["media_item"] = len(rows)
+		counts["media_item"] = total
 	}
-	if rows, err := a.DB.ExternalLinksListByStatus("pending"); err != nil {
+	if total, err := a.DB.CountExternalLinksByStatus("pending"); err != nil {
 		return 0, nil, err
 	} else {
-		counts["external_link"] = len(rows)
+		counts["external_link"] = total
 	}
 
-	if changes, stale, err := a.DB.ListWikiPendingChanges(0); err != nil {
+	if wikiCounts, err := a.DB.CountWikiPendingChangesByType(); err != nil {
 		return 0, nil, err
-	} else if len(changes) > 0 || len(stale) > 0 {
-		for _, changeID := range stale {
-			_ = a.DB.DequeueWikiPending(changeID)
-		}
-		for _, change := range changes {
-			objType := resolveWikiChangeModeracioType(change)
-			if objType == "" {
-				return 0, nil, fmt.Errorf("wiki change sense tipus moderable: %d", change.ID)
+	} else if len(wikiCounts) > 0 {
+		for objType, total := range wikiCounts {
+			moderacioType := moderacioWikiTypeMap[strings.ToLower(strings.TrimSpace(objType))]
+			if moderacioType == "" {
+				continue
 			}
-			counts[objType]++
+			counts[moderacioType] += total
 		}
 	}
 

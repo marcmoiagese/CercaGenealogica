@@ -231,6 +231,7 @@ type DB interface {
 	NextMunicipiMapaVersionNumber(mapaID int) (int, error)
 	CreateMunicipiMapaVersion(v *MunicipiMapaVersion) (int, error)
 	ListMunicipiMapaVersions(filter MunicipiMapaVersionFilter) ([]MunicipiMapaVersion, error)
+	CountMunicipiMapaVersionsScoped(filter MunicipiMapaVersionFilter, scope MunicipiScopeFilter) (int, error)
 	GetMunicipiMapaVersion(id int) (*MunicipiMapaVersion, error)
 	SaveMunicipiMapaDraft(versionID int, jsonData, changelog string, expectedLock int) (int, error)
 	UpdateMunicipiMapaVersionStatus(id int, status, notes string, moderatorID int) error
@@ -324,6 +325,7 @@ type DB interface {
 	ExternalSiteToggleActive(id int) error
 	ExternalLinksListByPersona(personaID int, statusFilter string) ([]ExternalLinkRow, error)
 	ExternalLinksListByStatus(status string) ([]ExternalLinkAdminRow, error)
+	CountExternalLinksByStatus(status string) (int, error)
 	ExternalLinkInsertPending(personaID int, userID int, url, title string) (int, error)
 	ExternalLinkModerate(id int, status string) error
 	UpdateArxiuModeracio(id int, estat, motiu string, moderatorID int) error
@@ -383,6 +385,8 @@ type DB interface {
 	UpdateMediaItemDerivativesStatus(itemID int, status string) error
 	ListMediaAlbumsByStatus(status string) ([]MediaAlbum, error)
 	ListMediaItemsByStatus(status string) ([]MediaItem, error)
+	CountMediaAlbumsByStatus(status string) (int, error)
+	CountMediaItemsByStatus(status string) (int, error)
 	UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error
 	UpdateMediaItemModeration(id int, status string, creditCost int, notes string, moderatorID int) error
 	// Media credits + grants
@@ -420,6 +424,7 @@ type DB interface {
 	ListTranscripcioRawChanges(transcripcioID int) ([]TranscripcioRawChange, error)
 	ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, error)
 	CountTranscripcioRawChangesPending() (int, error)
+	CountTranscripcioRawChangesPendingScoped(filter TranscripcioFilter) (int, error)
 	UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error
 	ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error)
 	CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error)
@@ -451,6 +456,10 @@ type DB interface {
 	DequeueWikiPending(changeID int) error
 	ListWikiPending(limit int) ([]WikiPendingItem, error)
 	ListWikiPendingChanges(limit int) ([]WikiChange, []int, error)
+	CountWikiPendingChangesByType() (map[string]int, error)
+	CountWikiPendingMunicipiChangesScoped(filter MunicipiScopeFilter) (int, error)
+	CountWikiPendingArxiuChangesScoped(filter ArxiuFilter) (int, error)
+	CountWikiPendingLlibreChangesScoped(filter LlibreFilter) (int, error)
 	// CSV import templates
 	CreateCSVImportTemplate(t *CSVImportTemplate) (int, error)
 	UpdateCSVImportTemplate(t *CSVImportTemplate) error
@@ -1571,8 +1580,8 @@ type MunicipiResolveRow struct {
 }
 
 type ArquebisbatResolveRow struct {
-	ID          int
-	Nom         string
+	ID           int
+	Nom          string
 	TipusEntitat string
 }
 
@@ -2337,16 +2346,16 @@ type PersonaRegistreRow struct {
 }
 
 type TranscripcioFilter struct {
-	LlibreID    int
-	TipusActe   string
-	AnyDoc      int
-	PaginaID    int
-	Status      string
-	Qualitat    string
-	Search      string
-	UseFullText bool
-	Limit       int
-	Offset      int
+	LlibreID            int
+	TipusActe           string
+	AnyDoc              int
+	PaginaID            int
+	Status              string
+	Qualitat            string
+	Search              string
+	UseFullText         bool
+	Limit               int
+	Offset              int
 	AllowedLlibreIDs    []int
 	AllowedArxiuIDs     []int
 	AllowedMunicipiIDs  []int
