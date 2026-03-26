@@ -130,6 +130,7 @@ type DB interface {
 	UpdateUserActivityStatus(id int, status string, moderatedBy *int) error
 	ListUserActivityByUser(userID int, f ActivityFilter) ([]UserActivity, error)
 	ListActivityByObject(objectType string, objectID int, status string) ([]UserActivity, error)
+	ListActivityByObjects(objectType string, objectIDs []int, status string) ([]UserActivity, error)
 	AddPointsToUser(userID int, delta int) error
 	GetUserPoints(userID int) (*UserPoints, error)
 	RecalcUserPoints() error

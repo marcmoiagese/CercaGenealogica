@@ -1641,6 +1641,9 @@ func (d *SQLite) ListUserActivityByUser(userID int, f ActivityFilter) ([]UserAct
 func (d *SQLite) ListActivityByObject(objectType string, objectID int, status string) ([]UserActivity, error) {
 	return d.help.listActivityByObject(objectType, objectID, status)
 }
+func (d *SQLite) ListActivityByObjects(objectType string, objectIDs []int, status string) ([]UserActivity, error) {
+	return d.help.listActivityByObjects(objectType, objectIDs, status)
+}
 func (d *SQLite) AddPointsToUser(userID int, delta int) error {
 	return d.help.addPointsToUser(userID, delta)
 }

@@ -2365,6 +2365,9 @@ func (d *PostgreSQL) ListUserActivityByUser(userID int, f ActivityFilter) ([]Use
 func (d *PostgreSQL) ListActivityByObject(objectType string, objectID int, status string) ([]UserActivity, error) {
 	return d.help.listActivityByObject(objectType, objectID, status)
 }
+func (d *PostgreSQL) ListActivityByObjects(objectType string, objectIDs []int, status string) ([]UserActivity, error) {
+	return d.help.listActivityByObjects(objectType, objectIDs, status)
+}
 func (d *PostgreSQL) AddPointsToUser(userID int, delta int) error {
 	return d.help.addPointsToUser(userID, delta)
 }

@@ -37,6 +37,10 @@ func Debugf(format string, v ...interface{}) {
 	}
 }
 
+func IsDebugEnabled() bool {
+	return currentLevel >= logDebug
+}
+
 func Infof(format string, v ...interface{}) {
 	if currentLevel >= logInfo {
 		log.Printf("[INFO] "+format, v...)

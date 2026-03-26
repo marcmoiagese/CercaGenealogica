@@ -605,9 +605,15 @@ func externalLinkStatusFromModeracio(status string) string {
 	}
 }
 
-func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User, perms db.PolicyPermissions, canModerateAll bool, filters moderacioFilters) ([]moderacioItem, int, moderacioSummary, error) {
+type moderacioBuildMetrics struct {
+	loadDur  time.Duration
+	buildDur time.Duration
+}
+
+func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User, perms db.PolicyPermissions, canModerateAll bool, filters moderacioFilters, metrics *moderacioBuildMetrics) ([]moderacioItem, int, moderacioSummary, error) {
 	var items []moderacioItem
 	userCache := map[int]*db.User{}
+	loadStart := time.Now()
 	autorFromID := func(id sql.NullInt64) (string, string, int) {
 		if !id.Valid {
 			return "—", "", 0
@@ -939,6 +945,11 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 			}
 		}
 	}
+
+	if metrics != nil {
+		metrics.loadDur = time.Since(loadStart)
+	}
+	buildStart := time.Now()
 
 	start := (page - 1) * perPage
 	if start < 0 {
@@ -1784,6 +1795,9 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		summary.TopTypeTotal = byType[0].Total
 	}
 
+	if metrics != nil {
+		metrics.buildDur = time.Since(buildStart)
+	}
 	return items, summary.Total, summary, nil
 }
 
@@ -1899,6 +1913,7 @@ func (a *App) requireModeracioMassivaUser(w http.ResponseWriter, r *http.Request
 
 // Llista de persones pendents de moderació
 func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
+	handlerStart := time.Now()
 	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
 	if !ok {
 		return
@@ -1922,7 +1937,8 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 	filterType := filters.Type
 	filterStatus := filters.Status
 	filterAge := filters.AgeBucket
-	pageItems, total, summary, err := a.buildModeracioItems(ResolveLang(r), page, perPage, user, perms, canModerateAll, filters)
+	metrics := &moderacioBuildMetrics{}
+	pageItems, total, summary, err := a.buildModeracioItems(ResolveLang(r), page, perPage, user, perms, canModerateAll, filters, metrics)
 	if err != nil {
 		http.Error(w, "No s'ha pogut carregar la moderació", http.StatusInternalServerError)
 		return
@@ -1977,6 +1993,7 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 	} else if r.URL.Query().Get("err") != "" {
 		msg = T(ResolveLang(r), "moderation.error")
 	}
+	renderStart := time.Now()
 	RenderPrivateTemplate(w, r, "admin-moderacio-list.html", map[string]interface{}{
 		"Persones":        pageItems,
 		"CanModerate":     true,
@@ -2004,6 +2021,14 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 		"Summary":         summary,
 		"ReturnTo":        r.URL.RequestURI(),
 	})
+	if IsDebugEnabled() {
+		scopeMode := "scoped"
+		if canModerateAll {
+			scopeMode = "global"
+		}
+		renderDur := time.Since(renderStart)
+		Debugf("moderacio entry user=%d page=%d page_size=%d summary_dur=%s list_dur=%s count_dur=%s render_dur=%s total_dur=%s scope=%s type=%s status=%s age=%s", user.ID, page, perPage, metrics.buildDur, metrics.loadDur, metrics.buildDur, renderDur, time.Since(handlerStart), scopeMode, filterType, filterStatus, filterAge)
+	}
 }
 
 func (a *App) applyModeracioAction(ctx context.Context, action string, objType string, id int, motiu string, userID int, metrics *moderacioApplyMetrics) error {
@@ -2073,6 +2098,58 @@ func (a *App) applyModeracioActivity(ctx context.Context, action string, objType
 	return nil
 }
 
+func (a *App) applyModeracioActivitiesBulk(ctx context.Context, action string, objType string, ids []int, motiu string, userID int, metrics *moderacioApplyMetrics) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	start := time.Now()
+	defer func() {
+		if metrics != nil {
+			metrics.ActivityDur += time.Since(start)
+		}
+	}()
+	var acts []db.UserActivity
+	switch action {
+	case "approve", "reject":
+		if rows, err := a.DB.ListActivityByObjects(objType, ids, "pendent"); err == nil {
+			acts = rows
+		}
+	default:
+		return fmt.Errorf("acció no vàlida")
+	}
+	switch action {
+	case "approve":
+		for _, act := range acts {
+			_ = a.validateActivityRow(act, userID)
+		}
+		for _, id := range ids {
+			if objType == "municipi_mapa_version" {
+				_, _ = a.RegisterUserActivity(ctx, userID, ruleMunicipiMapaApprove, "moderar_aprovar", objType, &id, "validat", nil, "")
+			} else {
+				_, _ = a.RegisterUserActivity(ctx, userID, ruleModeracioApprove, "moderar_aprovar", objType, &id, "validat", nil, "")
+			}
+			if objType == "event_historic" {
+				a.registerEventHistoricModerationActivity(ctx, id, "publicat", userID, "")
+			}
+		}
+	case "reject":
+		for _, act := range acts {
+			_ = a.DB.UpdateUserActivityStatus(act.ID, "anulat", &userID)
+		}
+		for _, id := range ids {
+			if objType == "municipi_mapa_version" {
+				_, _ = a.RegisterUserActivity(ctx, userID, ruleMunicipiMapaReject, "moderar_rebutjar", objType, &id, "validat", nil, motiu)
+			} else {
+				_, _ = a.RegisterUserActivity(ctx, userID, ruleModeracioReject, "moderar_rebutjar", objType, &id, "validat", nil, motiu)
+			}
+			if objType == "event_historic" {
+				a.registerEventHistoricModerationActivity(ctx, id, "rebutjat", userID, motiu)
+			}
+		}
+	}
+	return nil
+}
+
 func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, motiu string, user *db.User, perms db.PolicyPermissions, canModerateAll bool, bulkUserID int, update func(processed int, total int)) (moderacioBulkResult, moderacioBulkMetrics, error) {
 	if update == nil {
 		update = func(int, int) {}
@@ -2121,14 +2198,19 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 		processed++
 		update(processed, total)
 	}
-	applyActivity := func(objType string, id int) {
+	applyActivitiesBulk := func(objType string, ids []int) {
+		if len(ids) == 0 {
+			return
+		}
 		perItemUsed = true
-		if err := a.applyModeracioActivity(ctx, action, objType, id, motiu, user.ID, applyMetrics); err != nil {
-			Errorf("Moderacio massiva %s activitats %s:%d ha fallat: %v", action, objType, id, err)
+		if err := a.applyModeracioActivitiesBulk(ctx, action, objType, ids, motiu, user.ID, applyMetrics); err != nil {
+			Errorf("Moderacio massiva %s activitats %s bulk ha fallat: %v", action, objType, err)
 			errCount++
 		}
-		processed++
-		update(processed, total)
+		for range ids {
+			processed++
+			update(processed, total)
+		}
 	}
 
 	bulkStatus := ""
@@ -2244,9 +2326,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			if updated < len(ids) {
 				skipped += len(ids) - updated
 			}
-			for _, id := range ids {
-				applyActivity(objType, id)
-			}
+			applyActivitiesBulk(objType, ids)
 		case "llibre":
 			resolveStart = time.Now()
 			filter := db.LlibreFilter{Status: "pendent"}
@@ -2279,9 +2359,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			if updated < len(ids) {
 				skipped += len(ids) - updated
 			}
-			for _, id := range ids {
-				applyActivity(objType, id)
-			}
+			applyActivitiesBulk(objType, ids)
 		case "nivell":
 			resolveStart = time.Now()
 			filter := db.NivellAdminFilter{Status: "pendent"}
@@ -2314,9 +2392,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			if updated < len(ids) {
 				skipped += len(ids) - updated
 			}
-			for _, id := range ids {
-				applyActivity(objType, id)
-			}
+			applyActivitiesBulk(objType, ids)
 		case "municipi":
 			resolveStart = time.Now()
 			filter := db.MunicipiFilter{Status: "pendent"}
@@ -2349,9 +2425,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			if updated < len(ids) {
 				skipped += len(ids) - updated
 			}
-			for _, id := range ids {
-				applyActivity(objType, id)
-			}
+			applyActivitiesBulk(objType, ids)
 		case "eclesiastic":
 			resolveStart = time.Now()
 			filter := db.ArquebisbatFilter{Status: "pendent"}
@@ -2384,9 +2458,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			if updated < len(ids) {
 				skipped += len(ids) - updated
 			}
-			for _, id := range ids {
-				applyActivity(objType, id)
-			}
+			applyActivitiesBulk(objType, ids)
 		case "municipi_mapa_version":
 			resolveStart = time.Now()
 			rows, err := a.DB.ListMunicipiMapaVersions(db.MunicipiMapaVersionFilter{Status: "pendent"})
@@ -2437,9 +2509,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			if updated < len(ids) {
 				skipped += len(ids) - updated
 			}
-			for _, id := range ids {
-				applyActivity(objType, id)
-			}
+			applyActivitiesBulk(objType, ids)
 		case "cognom_referencia":
 			if !scopeModel.canModerateType("cognom_referencia") {
 				break
@@ -2471,9 +2541,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			if updated < len(ids) {
 				skipped += len(ids) - updated
 			}
-			for _, id := range ids {
-				applyActivity(objType, id)
-			}
+			applyActivitiesBulk(objType, ids)
 		case "cognom_merge":
 			if !scopeModel.canModerateType("cognom_merge") {
 				break
@@ -2578,9 +2646,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			if updated < len(ids) {
 				skipped += len(ids) - updated
 			}
-			for _, id := range ids {
-				applyActivity(objType, id)
-			}
+			applyActivitiesBulk(objType, ids)
 		case "media_album":
 			if !scopeModel.canModerateType("media_album") {
 				break
@@ -2737,6 +2803,9 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 		}
 	}
 	result := moderacioBulkResult{Candidates: candidates, Total: total, Processed: processed, Errors: errCount, Skipped: skipped}
+	if IsDebugEnabled() {
+		Debugf("moderacio bulk bulk_type=%s scope=all candidates=%d total=%d processed=%d errors=%d skipped=%d resolve_dur=%s update_dur=%s activity_dur=%s total_dur=%s mode=%s scope_mode=%s", bulkType, candidates, total, processed, errCount, skipped, metrics.ResolveDur, metrics.UpdateDur, metrics.ActivityDur, metrics.TotalDur, metrics.Mode, metrics.ScopeMode)
+	}
 	if errCount > 0 {
 		return result, metrics, fmt.Errorf("errors: %d", errCount)
 	}
@@ -2832,6 +2901,9 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	if scope == "all" {
 		if async {
 			job := a.moderacioBulkStore().newJob(action, scope, bulkType, user.ID, bulkUserID)
+			if IsDebugEnabled() {
+				Debugf("moderacio job created user=%d job=%s action=%s scope=%s type=%s bulk_user_id=%d", user.ID, job.ID, action, scope, bulkType, bulkUserID)
+			}
 			store := a.moderacioBulkStore()
 			go func() {
 				result, metrics, err := a.processModeracioBulkAll(context.Background(), action, bulkType, motiu, user, perms, canModerateAll, bulkUserID, func(processed int, total int) {
@@ -2887,7 +2959,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	filters, page, perPage := parseModeracioReturnTo(returnTo)
 	start := time.Now()
 	resolveStart := time.Now()
-	pageItems, _, _, err := a.buildModeracioItems(ResolveLang(r), page, perPage, user, perms, canModerateAll, filters)
+	pageItems, _, _, err := a.buildModeracioItems(ResolveLang(r), page, perPage, user, perms, canModerateAll, filters, nil)
 	if err != nil {
 		http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "err"), http.StatusSeeOther)
 		return
@@ -2959,6 +3031,9 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 		Mode:        "per-item",
 		ScopeMode:   scopeMode,
 		Revalidated: true,
+	}
+	if IsDebugEnabled() {
+		Debugf("moderacio bulk bulk_type=%s scope=%s candidates=%d total=%d processed=%d errors=%d skipped=%d resolve_dur=%s update_dur=%s activity_dur=%s total_dur=%s mode=%s scope_mode=%s", bulkType, scope, candidates, total, processed, errCount, skipped, metrics.ResolveDur, metrics.UpdateDur, metrics.ActivityDur, metrics.TotalDur, metrics.Mode, metrics.ScopeMode)
 	}
 	auditStart := time.Now()
 	a.logAdminAudit(r, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{

@@ -1445,6 +1445,40 @@ func (h sqlHelper) listActivityByObject(objectType string, objectID int, status 
 	return res, nil
 }
 
+func (h sqlHelper) listActivityByObjects(objectType string, objectIDs []int, status string) ([]UserActivity, error) {
+	if strings.TrimSpace(objectType) == "" || len(objectIDs) == 0 {
+		return []UserActivity{}, nil
+	}
+	placeholders := buildInPlaceholders(h.style, len(objectIDs))
+	where := []string{"objecte_tipus = ?", "objecte_id IN (" + placeholders + ")"}
+	args := make([]interface{}, 0, len(objectIDs)+2)
+	args = append(args, objectType)
+	for _, id := range objectIDs {
+		args = append(args, id)
+	}
+	if status != "" {
+		where = append(where, "estat = ?")
+		args = append(args, status)
+	}
+	query := `SELECT id, usuari_id, regla_id, accio, objecte_tipus, objecte_id, punts, estat, moderat_per, detalls, data_creacio
+	          FROM usuaris_activitat WHERE ` + strings.Join(where, " AND ") + ` ORDER BY data_creacio DESC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []UserActivity
+	for rows.Next() {
+		var a UserActivity
+		if err := rows.Scan(&a.ID, &a.UserID, &a.RuleID, &a.Action, &a.ObjectType, &a.ObjectID, &a.Points, &a.Status, &a.ModeratedBy, &a.Details, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, nil
+}
+
 func (h sqlHelper) addPointsToUser(userID int, delta int) error {
 	switch h.style {
 	case "mysql":

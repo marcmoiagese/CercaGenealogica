@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"database/sql"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
@@ -65,6 +67,76 @@ func activityBulkModeFromContext(ctx context.Context) (ActivityBulkMode, bool) {
 	return mode, ok
 }
 
+type pointsRuleCacheEntry struct {
+	rule    *db.PointsRule
+	found   bool
+	expires time.Time
+}
+
+const pointsRuleCacheTTL = 5 * time.Minute
+
+var pointsRuleCache = struct {
+	mu     sync.RWMutex
+	byCode map[string]pointsRuleCacheEntry
+	byID   map[int]pointsRuleCacheEntry
+}{
+	byCode: map[string]pointsRuleCacheEntry{},
+	byID:   map[int]pointsRuleCacheEntry{},
+}
+
+func getPointsRuleByCodeCached(database db.DB, code string) (*db.PointsRule, bool) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return nil, false
+	}
+	now := time.Now()
+	pointsRuleCache.mu.RLock()
+	if entry, ok := pointsRuleCache.byCode[code]; ok && now.Before(entry.expires) {
+		pointsRuleCache.mu.RUnlock()
+		return entry.rule, entry.found
+	}
+	pointsRuleCache.mu.RUnlock()
+
+	rule, err := database.GetPointsRuleByCode(code)
+	if err != nil {
+		return nil, false
+	}
+	entry := pointsRuleCacheEntry{rule: rule, found: rule != nil, expires: now.Add(pointsRuleCacheTTL)}
+	pointsRuleCache.mu.Lock()
+	pointsRuleCache.byCode[code] = entry
+	if rule != nil {
+		pointsRuleCache.byID[rule.ID] = entry
+	}
+	pointsRuleCache.mu.Unlock()
+	return rule, entry.found
+}
+
+func getPointsRuleByIDCached(database db.DB, id int) (*db.PointsRule, bool) {
+	if id <= 0 {
+		return nil, false
+	}
+	now := time.Now()
+	pointsRuleCache.mu.RLock()
+	if entry, ok := pointsRuleCache.byID[id]; ok && now.Before(entry.expires) {
+		pointsRuleCache.mu.RUnlock()
+		return entry.rule, entry.found
+	}
+	pointsRuleCache.mu.RUnlock()
+
+	rule, err := database.GetPointsRule(id)
+	if err != nil {
+		return nil, false
+	}
+	entry := pointsRuleCacheEntry{rule: rule, found: rule != nil, expires: now.Add(pointsRuleCacheTTL)}
+	pointsRuleCache.mu.Lock()
+	pointsRuleCache.byID[id] = entry
+	if rule != nil && strings.TrimSpace(rule.Code) != "" {
+		pointsRuleCache.byCode[rule.Code] = entry
+	}
+	pointsRuleCache.mu.Unlock()
+	return rule, entry.found
+}
+
 // RegisterUserActivity crea una entrada d'activitat i, si està validada, suma punts.
 func (a *App) RegisterUserActivity(ctx context.Context, userID int, ruleCode, action, objectType string, objectID *int, status string, moderatedBy *int, details string) (int, error) {
 	var (
@@ -72,7 +144,7 @@ func (a *App) RegisterUserActivity(ctx context.Context, userID int, ruleCode, ac
 		ruleID sql.NullInt64
 	)
 	if ruleCode != "" {
-		if r, err := a.DB.GetPointsRuleByCode(ruleCode); err == nil && r != nil && r.Active {
+		if r, ok := getPointsRuleByCodeCached(a.DB, ruleCode); ok && r != nil && r.Active {
 			points = r.Points
 			ruleID = sql.NullInt64{Int64: int64(r.ID), Valid: true}
 		}
@@ -134,16 +206,11 @@ func (a *App) RegisterUserActivity(ctx context.Context, userID int, ruleCode, ac
 	return id, nil
 }
 
-// ValidateActivity canvia l'estat d'una activitat pendent a validat i aplica punts si cal.
-func (a *App) ValidateActivity(activityID int, moderatorID int) error {
-	act, err := a.DB.GetUserActivity(activityID)
-	if err != nil {
-		return err
-	}
+func (a *App) validateActivityRow(act db.UserActivity, moderatorID int) error {
 	if act.Status == "validat" {
 		return nil
 	}
-	if err := a.DB.UpdateUserActivityStatus(activityID, "validat", &moderatorID); err != nil {
+	if err := a.DB.UpdateUserActivityStatus(act.ID, "validat", &moderatorID); err != nil {
 		return err
 	}
 	if act.Points != 0 {
@@ -153,7 +220,7 @@ func (a *App) ValidateActivity(activityID int, moderatorID int) error {
 	}
 	ruleCode := ""
 	if act.RuleID.Valid {
-		if rule, err := a.DB.GetPointsRule(int(act.RuleID.Int64)); err == nil && rule != nil {
+		if rule, ok := getPointsRuleByIDCached(a.DB, int(act.RuleID.Int64)); ok && rule != nil {
 			ruleCode = rule.Code
 		}
 	}
@@ -172,6 +239,18 @@ func (a *App) ValidateActivity(activityID int, moderatorID int) error {
 	}
 	a.EvaluateAchievementsForUser(context.Background(), act.UserID, trigger)
 	return nil
+}
+
+// ValidateActivity canvia l'estat d'una activitat pendent a validat i aplica punts si cal.
+func (a *App) ValidateActivity(activityID int, moderatorID int) error {
+	act, err := a.DB.GetUserActivity(activityID)
+	if err != nil {
+		return err
+	}
+	if act == nil {
+		return nil
+	}
+	return a.validateActivityRow(*act, moderatorID)
 }
 
 // CancelActivity marca una activitat com a anul·lada (no suma punts).

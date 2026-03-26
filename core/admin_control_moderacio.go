@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -34,7 +35,7 @@ func (a *App) AdminControlModeracioSummaryAPI(w http.ResponseWriter, r *http.Req
 	}
 	filters, _ := parseModeracioFilters(r)
 	start := time.Now()
-	summary, mode, scopeMode, err := a.adminControlModeracioSummaryCached(filters, user, perms, canModerateAll)
+	summary, mode, scopeMode, cacheHit, err := a.adminControlModeracioSummaryCached(filters, user, perms, canModerateAll)
 	if err != nil {
 		http.Error(w, "No s'ha pogut carregar el resum", http.StatusInternalServerError)
 		return
@@ -53,20 +54,23 @@ func (a *App) AdminControlModeracioSummaryAPI(w http.ResponseWriter, r *http.Req
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func (a *App) adminControlModeracioSummaryCached(filters moderacioFilters, user *db.User, perms db.PolicyPermissions, canModerateAll bool) (moderacioSummary, string, string, error) {
-	total, byType, scopeMode, err := a.adminControlModeracioPendingCountsCached(user, perms, canModerateAll)
-	if err != nil {
-		return moderacioSummary{}, "", "", err
+	if IsDebugEnabled() {
+		Debugf("moderacio summary user=%d scope=%s cache=%t total=%d by_type=%s dur=%s", user.ID, scopeMode, cacheHit, summary.Total, moderacioSummaryCountsLabel(summary.ByType), time.Since(start))
 	}
-	return buildModeracioSummaryFromCounts(filters, total, byType), moderacioSummaryMode(filters), scopeMode, nil
 }
 
-func (a *App) adminControlModeracioPendingCountsCached(user *db.User, perms db.PolicyPermissions, canModerateAll bool) (int, []adminControlPendingType, string, error) {
+func (a *App) adminControlModeracioSummaryCached(filters moderacioFilters, user *db.User, perms db.PolicyPermissions, canModerateAll bool) (moderacioSummary, string, string, bool, error) {
+	total, byType, scopeMode, cacheHit, err := a.adminControlModeracioPendingCountsCached(user, perms, canModerateAll)
+	if err != nil {
+		return moderacioSummary{}, "", "", false, err
+	}
+	return buildModeracioSummaryFromCounts(filters, total, byType), moderacioSummaryMode(filters), scopeMode, cacheHit, nil
+}
+
+func (a *App) adminControlModeracioPendingCountsCached(user *db.User, perms db.PolicyPermissions, canModerateAll bool) (int, []adminControlPendingType, string, bool, error) {
 	if !canModerateAll {
 		total, byType, err := a.adminPendingModerationCountsForUser(user, perms, canModerateAll)
-		return total, byType, "scoped", err
+		return total, byType, "scoped", false, err
 	}
 	now := time.Now()
 	adminControlModeracioSummaryCache.mu.RLock()
@@ -74,24 +78,24 @@ func (a *App) adminControlModeracioPendingCountsCached(user *db.User, perms db.P
 		total := adminControlModeracioSummaryCache.total
 		byType := adminControlModeracioSummaryCache.byType
 		adminControlModeracioSummaryCache.mu.RUnlock()
-		return total, byType, "global", nil
+		return total, byType, "global", true, nil
 	}
 	adminControlModeracioSummaryCache.mu.RUnlock()
 
 	adminControlModeracioSummaryCache.mu.Lock()
 	defer adminControlModeracioSummaryCache.mu.Unlock()
 	if adminControlModeracioSummaryCache.loaded && now.Sub(adminControlModeracioSummaryCache.cachedAt) < adminControlModeracioSummaryCacheTTL {
-		return adminControlModeracioSummaryCache.total, adminControlModeracioSummaryCache.byType, "global", nil
+		return adminControlModeracioSummaryCache.total, adminControlModeracioSummaryCache.byType, "global", true, nil
 	}
 	total, byType, err := a.adminPendingModerationCounts()
 	if err != nil {
-		return 0, nil, "", err
+		return 0, nil, "", false, err
 	}
 	adminControlModeracioSummaryCache.loaded = true
 	adminControlModeracioSummaryCache.cachedAt = now
 	adminControlModeracioSummaryCache.total = total
 	adminControlModeracioSummaryCache.byType = byType
-	return total, byType, "global", nil
+	return total, byType, "global", false, nil
 }
 
 func buildModeracioSummaryFromCounts(filters moderacioFilters, total int, byType []adminControlPendingType) moderacioSummary {
@@ -147,6 +151,23 @@ func moderacioSummaryTypesLabel(byType []moderacioTypeCount) string {
 		return "none"
 	}
 	return strings.Join(types, ",")
+}
+
+func moderacioSummaryCountsLabel(byType []moderacioTypeCount) string {
+	if len(byType) == 0 {
+		return "none"
+	}
+	parts := make([]string, 0, len(byType))
+	for _, item := range byType {
+		if strings.TrimSpace(item.Type) == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s:%d", item.Type, item.Total))
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, ",")
 }
 
 func moderacioSummaryMode(filters moderacioFilters) string {
@@ -543,4 +564,7 @@ func (a *App) AdminControlModeracioJobStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, map[string]interface{}{"ok": true, "job": job})
+	if IsDebugEnabled() {
+		Debugf("moderacio job status user=%d job=%s done=%t processed=%d total=%d err=%t age=%s", user.ID, job.ID, job.Done, job.Processed, job.Total, job.Error != "", time.Since(job.StartedAt))
+	}
 }
