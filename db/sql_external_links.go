@@ -229,11 +229,106 @@ func (h sqlHelper) listExternalLinksByStatus(status string) ([]ExternalLinkAdmin
 	return res, nil
 }
 
+func (h sqlHelper) listExternalLinksAdmin(filter ExternalLinkAdminFilter) ([]ExternalLinkAdminRow, error) {
+	clauses := []string{}
+	args := []interface{}{}
+	status := strings.TrimSpace(filter.Status)
+	if status != "" {
+		clauses = append(clauses, "l.status = ?")
+		args = append(args, status)
+	}
+	if len(filter.CreatedByIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.CreatedByIDs)), ",")
+		clauses = append(clauses, "l.created_by_user_id IN ("+placeholders+")")
+		for _, id := range filter.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "l.created_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "l.created_at < ?")
+		args = append(args, filter.CreatedBefore)
+	}
+	query := `SELECT l.id, l.persona_id, l.site_id, l.url, l.url_norm, l.title, l.meta, l.status, l.created_by_user_id, l.created_at, l.updated_at,
+        s.slug, s.name, s.icon_path, s.access_mode,
+        p.nom, p.cognom1, p.cognom2, p.nom_complet
+        FROM external_links l
+        LEFT JOIN external_sites s ON s.id = l.site_id
+        LEFT JOIN persona p ON p.id = l.persona_id`
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query += " ORDER BY l.created_at DESC, l.id DESC"
+	if filter.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, filter.Offset)
+		}
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []ExternalLinkAdminRow
+	for rows.Next() {
+		var row ExternalLinkAdminRow
+		if err := rows.Scan(&row.ID, &row.PersonaID, &row.SiteID, &row.URL, &row.URLNorm, &row.Title, &row.Meta, &row.Status, &row.CreatedByUserID, &row.CreatedAt, &row.UpdatedAt,
+			&row.SiteSlug, &row.SiteName, &row.SiteIconPath, &row.SiteAccessMode,
+			&row.PersonaNom, &row.PersonaCognom1, &row.PersonaCognom2, &row.PersonaNomComplet); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	return res, nil
+}
+
 func (h sqlHelper) countExternalLinksByStatus(status string) (int, error) {
 	query := `SELECT COUNT(*) FROM external_links WHERE status = ?`
 	query = formatPlaceholders(h.style, query)
 	var total int
 	if err := h.db.QueryRow(query, status).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) countExternalLinksAdmin(filter ExternalLinkAdminFilter) (int, error) {
+	clauses := []string{}
+	args := []interface{}{}
+	status := strings.TrimSpace(filter.Status)
+	if status != "" {
+		clauses = append(clauses, "status = ?")
+		args = append(args, status)
+	}
+	if len(filter.CreatedByIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.CreatedByIDs)), ",")
+		clauses = append(clauses, "created_by_user_id IN ("+placeholders+")")
+		for _, id := range filter.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "created_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "created_at < ?")
+		args = append(args, filter.CreatedBefore)
+	}
+	query := `SELECT COUNT(*) FROM external_links`
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
 		return 0, err
 	}
 	return total, nil

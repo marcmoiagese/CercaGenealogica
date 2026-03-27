@@ -533,6 +533,12 @@ func (d *SQLite) ExternalLinksListByStatus(status string) ([]ExternalLinkAdminRo
 func (d *SQLite) CountExternalLinksByStatus(status string) (int, error) {
 	return d.help.countExternalLinksByStatus(status)
 }
+func (d *SQLite) ListExternalLinksAdmin(filter ExternalLinkAdminFilter) ([]ExternalLinkAdminRow, error) {
+	return d.help.listExternalLinksAdmin(filter)
+}
+func (d *SQLite) CountExternalLinksAdmin(filter ExternalLinkAdminFilter) (int, error) {
+	return d.help.countExternalLinksAdmin(filter)
+}
 func (d *SQLite) ExternalLinkInsertPending(personaID int, userID int, url, title string) (int, error) {
 	return d.help.createExternalLinkPending(personaID, userID, url, title)
 }
@@ -1124,6 +1130,18 @@ func (d *SQLite) CountMediaAlbumsByStatus(status string) (int, error) {
 func (d *SQLite) CountMediaItemsByStatus(status string) (int, error) {
 	return d.help.countMediaItemsByStatus(status)
 }
+func (d *SQLite) ListMediaAlbumsModeracio(filter MediaModeracioFilter) ([]MediaAlbum, error) {
+	return d.help.listMediaAlbumsModeracio(filter)
+}
+func (d *SQLite) ListMediaItemsModeracio(filter MediaModeracioFilter) ([]MediaItem, error) {
+	return d.help.listMediaItemsModeracio(filter)
+}
+func (d *SQLite) CountMediaAlbumsModeracio(filter MediaModeracioFilter) (int, error) {
+	return d.help.countMediaAlbumsModeracio(filter)
+}
+func (d *SQLite) CountMediaItemsModeracio(filter MediaModeracioFilter) (int, error) {
+	return d.help.countMediaItemsModeracio(filter)
+}
 func (d *SQLite) UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
 	return d.help.updateMediaAlbumModeration(id, status, visibility, restrictedGroupID, accessPolicyID, creditCost, difficultyScore, sourceType, notes, moderatorID)
 }
@@ -1232,6 +1250,9 @@ func (d *SQLite) GetTranscripcioRawChange(id int) (*TranscripcioRawChange, error
 func (d *SQLite) ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, error) {
 	return d.help.listTranscripcioRawChangesPending()
 }
+func (d *SQLite) ListTranscripcioRawChangesPendingFiltered(filter TranscripcioFilter) ([]TranscripcioRawChange, error) {
+	return d.help.listTranscripcioRawChangesPendingFiltered(filter)
+}
 func (d *SQLite) CountTranscripcioRawChangesPending() (int, error) {
 	return d.help.countTranscripcioRawChangesPending()
 }
@@ -1325,8 +1346,8 @@ func (d *SQLite) DequeueWikiPending(changeID int) error {
 func (d *SQLite) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 	return d.help.listWikiPending(limit)
 }
-func (d *SQLite) ListWikiPendingChanges(limit int) ([]WikiChange, []int, error) {
-	return d.help.listWikiPendingChanges(limit)
+func (d *SQLite) ListWikiPendingChanges(limit, offset int) ([]WikiChange, []int, error) {
+	return d.help.listWikiPendingChanges(limit, offset)
 }
 func (d *SQLite) CountWikiPendingChangesByType() (map[string]int, error) {
 	return d.help.countWikiPendingChangesByType()

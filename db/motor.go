@@ -327,6 +327,8 @@ type DB interface {
 	ExternalLinksListByPersona(personaID int, statusFilter string) ([]ExternalLinkRow, error)
 	ExternalLinksListByStatus(status string) ([]ExternalLinkAdminRow, error)
 	CountExternalLinksByStatus(status string) (int, error)
+	ListExternalLinksAdmin(filter ExternalLinkAdminFilter) ([]ExternalLinkAdminRow, error)
+	CountExternalLinksAdmin(filter ExternalLinkAdminFilter) (int, error)
 	ExternalLinkInsertPending(personaID int, userID int, url, title string) (int, error)
 	ExternalLinkModerate(id int, status string) error
 	UpdateArxiuModeracio(id int, estat, motiu string, moderatorID int) error
@@ -388,6 +390,10 @@ type DB interface {
 	ListMediaItemsByStatus(status string) ([]MediaItem, error)
 	CountMediaAlbumsByStatus(status string) (int, error)
 	CountMediaItemsByStatus(status string) (int, error)
+	ListMediaAlbumsModeracio(filter MediaModeracioFilter) ([]MediaAlbum, error)
+	ListMediaItemsModeracio(filter MediaModeracioFilter) ([]MediaItem, error)
+	CountMediaAlbumsModeracio(filter MediaModeracioFilter) (int, error)
+	CountMediaItemsModeracio(filter MediaModeracioFilter) (int, error)
 	UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error
 	UpdateMediaItemModeration(id int, status string, creditCost int, notes string, moderatorID int) error
 	// Media credits + grants
@@ -424,6 +430,7 @@ type DB interface {
 	GetTranscripcioRawChange(id int) (*TranscripcioRawChange, error)
 	ListTranscripcioRawChanges(transcripcioID int) ([]TranscripcioRawChange, error)
 	ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, error)
+	ListTranscripcioRawChangesPendingFiltered(filter TranscripcioFilter) ([]TranscripcioRawChange, error)
 	CountTranscripcioRawChangesPending() (int, error)
 	CountTranscripcioRawChangesPendingScoped(filter TranscripcioFilter) (int, error)
 	UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error
@@ -456,7 +463,7 @@ type DB interface {
 	EnqueueWikiPending(change *WikiChange) error
 	DequeueWikiPending(changeID int) error
 	ListWikiPending(limit int) ([]WikiPendingItem, error)
-	ListWikiPendingChanges(limit int) ([]WikiChange, []int, error)
+	ListWikiPendingChanges(limit, offset int) ([]WikiChange, []int, error)
 	CountWikiPendingChangesByType() (map[string]int, error)
 	CountWikiPendingMunicipiChangesScoped(filter MunicipiScopeFilter) (int, error)
 	CountWikiPendingArxiuChangesScoped(filter ArxiuFilter) (int, error)
@@ -1011,11 +1018,14 @@ type CognomVariant struct {
 }
 
 type CognomVariantFilter struct {
-	CognomID int
-	Status   string
-	Q        string
-	Limit    int
-	Offset   int
+	CognomID      int
+	Status        string
+	Q             string
+	Limit         int
+	Offset        int
+	CreatedByIDs  []int
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
 }
 
 type CognomRedirect struct {
@@ -1040,11 +1050,14 @@ type CognomRedirectSuggestion struct {
 }
 
 type CognomRedirectSuggestionFilter struct {
-	Status       string
-	FromCognomID int
-	ToCognomID   int
-	Limit        int
-	Offset       int
+	Status        string
+	FromCognomID  int
+	ToCognomID    int
+	Limit         int
+	Offset        int
+	CreatedByIDs  []int
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
 }
 
 type CognomReferencia struct {
@@ -1065,10 +1078,13 @@ type CognomReferencia struct {
 }
 
 type CognomReferenciaFilter struct {
-	CognomID int
-	Status   string
-	Limit    int
-	Offset   int
+	CognomID      int
+	Status        string
+	Limit         int
+	Offset        int
+	CreatedByIDs  []int
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
 }
 
 type CognomFreqRow struct {
@@ -1179,11 +1195,14 @@ type MunicipiMapaVersion struct {
 }
 
 type MunicipiMapaVersionFilter struct {
-	MapaID    int
-	Status    string
-	CreatedBy int
-	Limit     int
-	Offset    int
+	MapaID        int
+	Status        string
+	CreatedBy     int
+	Limit         int
+	Offset        int
+	CreatedByIDs  []int
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
 }
 
 type MunicipiHistoria struct {
@@ -1398,6 +1417,9 @@ type EventHistoricFilter struct {
 	To            time.Time
 	Limit         int
 	Offset        int
+	CreatedByIDs  []int
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
 }
 
 type Pais struct {
@@ -1480,8 +1502,12 @@ type PersonaFieldLink struct {
 }
 
 type PersonaFilter struct {
-	Estat string
-	Limit int
+	Estat         string
+	Limit         int
+	Offset        int
+	CreatedByIDs  []int
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
 }
 
 type PersonaAnecdote struct {
@@ -1529,6 +1555,9 @@ type NivellAdminFilter struct {
 	Limit          int
 	Offset         int
 	AllowedPaisIDs []int
+	CreatedByIDs   []int
+	CreatedAfter   time.Time
+	CreatedBefore  time.Time
 }
 
 type Municipi struct {
@@ -1605,6 +1634,9 @@ type MunicipiFilter struct {
 	AllowedComarcaIDs   []int
 	AllowedNivellIDs    []int
 	AllowedPaisIDs      []int
+	CreatedByIDs        []int
+	CreatedAfter        time.Time
+	CreatedBefore       time.Time
 }
 
 type MunicipiScopeFilter struct {
@@ -1716,6 +1748,9 @@ type ArquebisbatFilter struct {
 	Offset          int
 	AllowedEclesIDs []int
 	AllowedPaisIDs  []int
+	CreatedByIDs    []int
+	CreatedAfter    time.Time
+	CreatedBefore   time.Time
 }
 
 type ArquebisbatMunicipi struct {
@@ -1783,6 +1818,9 @@ type ArxiuFilter struct {
 	AllowedNivellIDs    []int
 	AllowedPaisIDs      []int
 	AllowedEclesIDs     []int
+	CreatedByIDs        []int
+	CreatedAfter        time.Time
+	CreatedBefore       time.Time
 }
 
 type ArxiuWithCount struct {
@@ -1935,6 +1973,9 @@ type LlibreFilter struct {
 	AllowedNivellIDs    []int
 	AllowedPaisIDs      []int
 	AllowedEclesIDs     []int
+	CreatedByIDs        []int
+	CreatedAfter        time.Time
+	CreatedBefore       time.Time
 }
 
 type LlibrePagina struct {
@@ -1988,6 +2029,15 @@ type MediaItem struct {
 	ModeratedAt        sql.NullTime
 	ModerationNotes    string
 	CreditCost         int
+}
+
+type MediaModeracioFilter struct {
+	Status        string
+	OwnerIDs      []int
+	Limit         int
+	Offset        int
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
 }
 
 type MediaItemPage struct {
@@ -2365,6 +2415,9 @@ type TranscripcioFilter struct {
 	AllowedNivellIDs    []int
 	AllowedPaisIDs      []int
 	AllowedEclesIDs     []int
+	CreatedByIDs        []int
+	CreatedAfter        time.Time
+	CreatedBefore       time.Time
 }
 
 type NomHistoric struct {

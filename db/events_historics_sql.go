@@ -78,6 +78,21 @@ func appendEventHistoricFilterClauses(style string, clauses []string, args []int
 		clauses = append(clauses, "e.moderation_status = ?")
 		args = append(args, strings.TrimSpace(filter.Status))
 	}
+	if len(filter.CreatedByIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.CreatedByIDs)), ",")
+		clauses = append(clauses, "e.created_by IN ("+placeholders+")")
+		for _, id := range filter.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "e.created_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "e.created_at < ?")
+		args = append(args, filter.CreatedBefore)
+	}
 	if strings.TrimSpace(filter.Query) != "" {
 		q := "%" + strings.TrimSpace(filter.Query) + "%"
 		if style == "postgres" {

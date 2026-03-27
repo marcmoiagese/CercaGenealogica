@@ -1042,6 +1042,21 @@ func (h sqlHelper) listPersones(f PersonaFilter) ([]Persona, error) {
 		where = append(where, "estat_civil = ?")
 		args = append(args, f.Estat)
 	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where = append(where, "created_by IN ("+placeholders+")")
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where = append(where, "created_at >= ?")
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where = append(where, "created_at < ?")
+		args = append(args, f.CreatedBefore)
+	}
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
@@ -1049,6 +1064,10 @@ func (h sqlHelper) listPersones(f PersonaFilter) ([]Persona, error) {
 	if f.Limit > 0 {
 		query += " LIMIT ?"
 		args = append(args, f.Limit)
+		if f.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, f.Offset)
+		}
 	}
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, args...)
@@ -1077,6 +1096,21 @@ func (h sqlHelper) countPersones(f PersonaFilter) (int, error) {
 	if f.Estat != "" {
 		where = append(where, "estat_civil = ?")
 		args = append(args, f.Estat)
+	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where = append(where, "created_by IN ("+placeholders+")")
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where = append(where, "created_at >= ?")
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where = append(where, "created_at < ?")
+		args = append(args, f.CreatedBefore)
 	}
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
@@ -2285,6 +2319,21 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 		where += " AND n.moderation_status = ?"
 		args = append(args, strings.TrimSpace(f.Status))
 	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where += " AND n.created_by IN (" + placeholders + ")"
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where += " AND n.created_at >= ?"
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where += " AND n.created_at < ?"
+		args = append(args, f.CreatedBefore)
+	}
 	inClause("n.pais_id", f.AllowedPaisIDs)
 	query := `
         SELECT n.id, n.pais_id, pi.codi_iso2, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
@@ -2353,6 +2402,21 @@ func (h sqlHelper) countNivells(f NivellAdminFilter) (int, error) {
 	if strings.TrimSpace(f.Status) != "" {
 		where += " AND n.moderation_status = ?"
 		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where += " AND n.created_by IN (" + placeholders + ")"
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where += " AND n.created_at >= ?"
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where += " AND n.created_at < ?"
+		args = append(args, f.CreatedBefore)
 	}
 	inClause("n.pais_id", f.AllowedPaisIDs)
 	query := `SELECT COUNT(*) FROM nivells_administratius n WHERE ` + where
@@ -2476,6 +2540,36 @@ func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 	if strings.TrimSpace(f.Status) != "" {
 		where += " AND m.moderation_status = ?"
 		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where += " AND m.created_by IN (" + placeholders + ")"
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where += " AND m.data_creacio >= ?"
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where += " AND m.data_creacio < ?"
+		args = append(args, f.CreatedBefore)
+	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where += " AND m.created_by IN (" + placeholders + ")"
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where += " AND m.data_creacio >= ?"
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where += " AND m.data_creacio < ?"
+		args = append(args, f.CreatedBefore)
 	}
 	if f.PaisID > 0 {
 		where += " AND na1.id = ?"
@@ -3417,6 +3511,36 @@ func (h sqlHelper) listArquebisbats(f ArquebisbatFilter) ([]ArquebisbatRow, erro
 	if strings.TrimSpace(f.Status) != "" {
 		where += " AND a.moderation_status = ?"
 		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where += " AND a.created_by IN (" + placeholders + ")"
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where += " AND a.created_at >= ?"
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where += " AND a.created_at < ?"
+		args = append(args, f.CreatedBefore)
+	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where += " AND a.created_by IN (" + placeholders + ")"
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where += " AND a.created_at >= ?"
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where += " AND a.created_at < ?"
+		args = append(args, f.CreatedBefore)
 	}
 	inClause("a.id", f.AllowedEclesIDs)
 	inClause("a.pais_id", f.AllowedPaisIDs)
@@ -6087,6 +6211,21 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 		clauses = append(clauses, "a.moderation_status = ?")
 		args = append(args, strings.TrimSpace(filter.Status))
 	}
+	if len(filter.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(filter.CreatedByIDs))
+		clauses = append(clauses, "a.created_by IN ("+placeholders+")")
+		for _, id := range filter.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "a.created_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "a.created_at < ?")
+		args = append(args, filter.CreatedBefore)
+	}
 	allowedClauses := []string{}
 	allowedArgs := []interface{}{}
 	inClause := func(column string, ids []int) {
@@ -6558,6 +6697,21 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 	if strings.TrimSpace(filter.Status) != "" {
 		clauses = append(clauses, "l.moderation_status = ?")
 		args = append(args, strings.TrimSpace(filter.Status))
+	}
+	if len(filter.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(filter.CreatedByIDs))
+		clauses = append(clauses, "l.created_by IN ("+placeholders+")")
+		for _, id := range filter.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "l.created_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "l.created_at < ?")
+		args = append(args, filter.CreatedBefore)
 	}
 	allowedClauses := []string{}
 	allowedArgs := []interface{}{}
@@ -7308,7 +7462,7 @@ func (h sqlHelper) saveLlibrePagina(p *LlibrePagina) (int, error) {
 }
 
 // Transcripcions RAW
-func (h sqlHelper) transcripcionsRawFilters(llibreID int, f TranscripcioFilter) (string, []interface{}, string) {
+func (h sqlHelper) transcripcionsRawFilters(llibreID int, f TranscripcioFilter, includeCreated bool) (string, []interface{}, string) {
 	clauses := []string{}
 	args := []interface{}{}
 	joinParts := []string{}
@@ -7334,6 +7488,23 @@ func (h sqlHelper) transcripcionsRawFilters(llibreID int, f TranscripcioFilter) 
 	if strings.TrimSpace(f.Status) != "" {
 		clauses = append(clauses, "t.moderation_status = ?")
 		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if includeCreated {
+		if len(f.CreatedByIDs) > 0 {
+			placeholders := strings.TrimRight(strings.Repeat("?,", len(f.CreatedByIDs)), ",")
+			clauses = append(clauses, "t.created_by IN ("+placeholders+")")
+			for _, id := range f.CreatedByIDs {
+				args = append(args, id)
+			}
+		}
+		if !f.CreatedAfter.IsZero() {
+			clauses = append(clauses, "t.created_at >= ?")
+			args = append(args, f.CreatedAfter)
+		}
+		if !f.CreatedBefore.IsZero() {
+			clauses = append(clauses, "t.created_at < ?")
+			args = append(args, f.CreatedBefore)
+		}
 	}
 	if strings.TrimSpace(f.Qualitat) != "" {
 		clauses = append(clauses, "t.data_acte_estat = ?")
@@ -7440,7 +7611,7 @@ func (h sqlHelper) fullTextSearchClause(search string) (string, string, []interf
 }
 
 func (h sqlHelper) listTranscripcionsRaw(llibreID int, f TranscripcioFilter) ([]TranscripcioRaw, error) {
-	where, args, join := h.transcripcionsRawFilters(llibreID, f)
+	where, args, join := h.transcripcionsRawFilters(llibreID, f, true)
 	limit := 50
 	offset := 0
 	withLimit := true
@@ -7492,7 +7663,7 @@ func (h sqlHelper) listTranscripcionsRawGlobal(f TranscripcioFilter) ([]Transcri
 }
 
 func (h sqlHelper) countTranscripcionsRaw(llibreID int, f TranscripcioFilter) (int, error) {
-	where, args, join := h.transcripcionsRawFilters(llibreID, f)
+	where, args, join := h.transcripcionsRawFilters(llibreID, f, true)
 	query := `
         SELECT COUNT(DISTINCT t.id)
         FROM transcripcions_raw t
@@ -7997,6 +8168,75 @@ func (h sqlHelper) listTranscripcioRawChangesPending() ([]TranscripcioRawChange,
 	return res, rows.Err()
 }
 
+func (h sqlHelper) listTranscripcioRawChangesPendingFiltered(filter TranscripcioFilter) ([]TranscripcioRawChange, error) {
+	filterCopy := filter
+	filterCopy.Status = ""
+	where, args, join := h.transcripcionsRawFilters(0, filterCopy, false)
+	clauses := []string{"c.moderation_status = 'pendent'", where}
+	if len(filter.CreatedByIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.CreatedByIDs)), ",")
+		clauses = append(clauses, "c.changed_by IN ("+placeholders+")")
+		for _, id := range filter.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "c.changed_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "c.changed_at < ?")
+		args = append(args, filter.CreatedBefore)
+	}
+	query := `
+        SELECT c.id, c.transcripcio_id, c.change_type, c.field_key, c.old_value, c.new_value, c.metadata,
+               c.moderation_status, c.moderated_by, c.moderated_at, c.moderation_notes,
+               c.changed_by, c.changed_at
+        FROM transcripcions_raw_canvis c
+        JOIN transcripcions_raw t ON t.id = c.transcripcio_id
+        ` + join + `
+        WHERE ` + strings.Join(clauses, " AND ") + `
+        ORDER BY c.changed_at DESC, c.id DESC`
+	if filter.Limit > 0 {
+		query += `
+        LIMIT ?`
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			query += ` OFFSET ?`
+			args = append(args, filter.Offset)
+		}
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []TranscripcioRawChange
+	for rows.Next() {
+		var c TranscripcioRawChange
+		if err := rows.Scan(
+			&c.ID,
+			&c.TranscripcioID,
+			&c.ChangeType,
+			&c.FieldKey,
+			&c.OldValue,
+			&c.NewValue,
+			&c.Metadata,
+			&c.ModeracioEstat,
+			&c.ModeratedBy,
+			&c.ModeratedAt,
+			&c.ModeracioMotiu,
+			&c.ChangedBy,
+			&c.ChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, c)
+	}
+	return res, rows.Err()
+}
+
 func (h sqlHelper) countTranscripcioRawChangesPending() (int, error) {
 	query := `SELECT COUNT(*) FROM transcripcions_raw_canvis WHERE moderation_status = 'pendent'`
 	query = formatPlaceholders(h.style, query)
@@ -8008,13 +8248,31 @@ func (h sqlHelper) countTranscripcioRawChangesPending() (int, error) {
 }
 
 func (h sqlHelper) countTranscripcioRawChangesPendingScoped(filter TranscripcioFilter) (int, error) {
-	where, args, join := h.transcripcionsRawFilters(0, filter)
+	filterCopy := filter
+	filterCopy.Status = ""
+	where, args, join := h.transcripcionsRawFilters(0, filterCopy, false)
+	clauses := []string{"c.moderation_status = 'pendent'", where}
+	if len(filter.CreatedByIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.CreatedByIDs)), ",")
+		clauses = append(clauses, "c.changed_by IN ("+placeholders+")")
+		for _, id := range filter.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "c.changed_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "c.changed_at < ?")
+		args = append(args, filter.CreatedBefore)
+	}
 	query := `
         SELECT COUNT(DISTINCT c.id)
         FROM transcripcions_raw_canvis c
         JOIN transcripcions_raw t ON t.id = c.transcripcio_id
         ` + join + `
-        WHERE c.moderation_status = 'pendent' AND ` + where
+        WHERE ` + strings.Join(clauses, " AND ")
 	query = formatPlaceholders(h.style, query)
 	var total int
 	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
@@ -9053,7 +9311,7 @@ func (h sqlHelper) listWikiPending(limit int) ([]WikiPendingItem, error) {
 	return res, rows.Err()
 }
 
-func (h sqlHelper) listWikiPendingChanges(limit int) ([]WikiChange, []int, error) {
+func (h sqlHelper) listWikiPendingChanges(limit, offset int) ([]WikiChange, []int, error) {
 	query := `
         SELECT q.change_id, q.object_type, q.object_id, q.changed_at, q.changed_by, q.created_at,
                c.id, c.object_type, c.object_id, c.change_type, c.field_key, c.old_value, c.new_value, c.metadata,
@@ -9064,6 +9322,9 @@ func (h sqlHelper) listWikiPendingChanges(limit int) ([]WikiChange, []int, error
         ORDER BY q.changed_at DESC, q.change_id DESC`
 	if limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", limit)
+		if offset > 0 {
+			query += fmt.Sprintf(" OFFSET %d", offset)
+		}
 	}
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query)
@@ -9837,6 +10098,21 @@ func (h sqlHelper) listCognomVariants(f CognomVariantFilter) ([]CognomVariant, e
 		where = append(where, "moderation_status = ?")
 		args = append(args, strings.TrimSpace(f.Status))
 	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where = append(where, "created_by IN ("+placeholders+")")
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where = append(where, "created_at >= ?")
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where = append(where, "created_at < ?")
+		args = append(args, f.CreatedBefore)
+	}
 	if strings.TrimSpace(f.Q) != "" {
 		likeOp := "LIKE"
 		if h.style == "postgres" {
@@ -9903,6 +10179,21 @@ func (h sqlHelper) countCognomVariants(f CognomVariantFilter) (int, error) {
 		where = append(where, "(variant "+likeOp+" ? OR "+keyCol+" "+likeOp+" ?)")
 		qLike := "%" + strings.TrimSpace(f.Q) + "%"
 		args = append(args, qLike, qLike)
+	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where = append(where, "created_by IN ("+placeholders+")")
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where = append(where, "created_at >= ?")
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where = append(where, "created_at < ?")
+		args = append(args, f.CreatedBefore)
 	}
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
@@ -10270,6 +10561,21 @@ func (h sqlHelper) listCognomRedirectSuggestions(f CognomRedirectSuggestionFilte
 		where = append(where, "moderation_status = ?")
 		args = append(args, f.Status)
 	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where = append(where, "created_by IN ("+placeholders+")")
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where = append(where, "created_at >= ?")
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where = append(where, "created_at < ?")
+		args = append(args, f.CreatedBefore)
+	}
 	if f.FromCognomID > 0 {
 		where = append(where, "from_cognom_id = ?")
 		args = append(args, f.FromCognomID)
@@ -10277,6 +10583,21 @@ func (h sqlHelper) listCognomRedirectSuggestions(f CognomRedirectSuggestionFilte
 	if f.ToCognomID > 0 {
 		where = append(where, "to_cognom_id = ?")
 		args = append(args, f.ToCognomID)
+	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where = append(where, "created_by IN ("+placeholders+")")
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where = append(where, "created_at >= ?")
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where = append(where, "created_at < ?")
+		args = append(args, f.CreatedBefore)
 	}
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
@@ -10391,6 +10712,21 @@ func (h sqlHelper) listCognomReferencies(f CognomReferenciaFilter) ([]CognomRefe
 		where = append(where, "moderation_status = ?")
 		args = append(args, strings.TrimSpace(f.Status))
 	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where = append(where, "created_by IN ("+placeholders+")")
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where = append(where, "created_at >= ?")
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where = append(where, "created_at < ?")
+		args = append(args, f.CreatedBefore)
+	}
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
@@ -10441,6 +10777,21 @@ func (h sqlHelper) countCognomReferencies(f CognomReferenciaFilter) (int, error)
 	if strings.TrimSpace(f.Status) != "" {
 		where = append(where, "moderation_status = ?")
 		args = append(args, strings.TrimSpace(f.Status))
+	}
+	if len(f.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.CreatedByIDs))
+		where = append(where, "created_by IN ("+placeholders+")")
+		for _, id := range f.CreatedByIDs {
+			args = append(args, id)
+		}
+	}
+	if !f.CreatedAfter.IsZero() {
+		where = append(where, "created_at >= ?")
+		args = append(args, f.CreatedAfter)
+	}
+	if !f.CreatedBefore.IsZero() {
+		where = append(where, "created_at < ?")
+		args = append(args, f.CreatedBefore)
 	}
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
@@ -12649,6 +13000,206 @@ func (h sqlHelper) countMediaItemsByStatus(status string) (int, error) {
 	return total, nil
 }
 
+func (h sqlHelper) listMediaAlbumsModeracio(filter MediaModeracioFilter) ([]MediaAlbum, error) {
+	clauses := []string{}
+	args := []interface{}{}
+	status := strings.TrimSpace(filter.Status)
+	if status != "" {
+		clauses = append(clauses, "a.moderation_status = ?")
+		args = append(args, status)
+	}
+	if len(filter.OwnerIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.OwnerIDs)), ",")
+		clauses = append(clauses, "a.owner_user_id IN ("+placeholders+")")
+		for _, id := range filter.OwnerIDs {
+			args = append(args, id)
+		}
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "a.created_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "a.created_at < ?")
+		args = append(args, filter.CreatedBefore)
+	}
+	query := `
+        SELECT a.id, a.public_id, a.title, COALESCE(a.description, ''), a.album_type, a.owner_user_id,
+               a.llibre_id, a.moderation_status, a.visibility, a.restricted_group_id, a.access_policy_id,
+               a.credit_cost, a.difficulty_score, COALESCE(a.source_type, ''), a.moderated_by, a.moderated_at,
+               COALESCE(a.moderation_notes, ''), COALESCE(cnt.total, 0) as items_count
+        FROM media_albums a
+        LEFT JOIN (
+            SELECT album_id, COUNT(*) as total FROM media_items GROUP BY album_id
+        ) cnt ON cnt.album_id = a.id`
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query += " ORDER BY a.created_at DESC, a.id DESC"
+	if filter.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, filter.Offset)
+		}
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MediaAlbum
+	for rows.Next() {
+		var a MediaAlbum
+		if err := rows.Scan(
+			&a.ID, &a.PublicID, &a.Title, &a.Description, &a.AlbumType, &a.OwnerUserID,
+			&a.LlibreID, &a.ModerationStatus, &a.Visibility, &a.RestrictedGroupID, &a.AccessPolicyID,
+			&a.CreditCost, &a.DifficultyScore, &a.SourceType, &a.ModeratedBy, &a.ModeratedAt,
+			&a.ModerationNotes, &a.ItemsCount,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) listMediaItemsModeracio(filter MediaModeracioFilter) ([]MediaItem, error) {
+	clauses := []string{}
+	args := []interface{}{}
+	status := strings.TrimSpace(filter.Status)
+	if status != "" {
+		clauses = append(clauses, "i.moderation_status = ?")
+		args = append(args, status)
+	}
+	if len(filter.OwnerIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.OwnerIDs)), ",")
+		clauses = append(clauses, "a.owner_user_id IN ("+placeholders+")")
+		for _, id := range filter.OwnerIDs {
+			args = append(args, id)
+		}
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "i.created_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "i.created_at < ?")
+		args = append(args, filter.CreatedBefore)
+	}
+	query := `
+        SELECT i.id, i.public_id, i.album_id, COALESCE(i.title, ''), COALESCE(i.original_filename, ''), COALESCE(i.mime_type, ''),
+               COALESCE(i.byte_size, 0), COALESCE(i.width, 0), COALESCE(i.height, 0), COALESCE(i.checksum_sha256, ''),
+               i.storage_key_original, COALESCE(i.thumb_path, ''), i.derivatives_status, i.moderation_status,
+               i.moderated_by, i.moderated_at, COALESCE(i.moderation_notes, ''), i.credit_cost
+        FROM media_items i
+        JOIN media_albums a ON a.id = i.album_id`
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query += " ORDER BY i.created_at DESC, i.id DESC"
+	if filter.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, filter.Offset)
+		}
+	}
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MediaItem
+	for rows.Next() {
+		var item MediaItem
+		if err := rows.Scan(
+			&item.ID, &item.PublicID, &item.AlbumID, &item.Title, &item.OriginalFilename, &item.MimeType,
+			&item.ByteSize, &item.Width, &item.Height, &item.ChecksumSHA256,
+			&item.StorageKeyOriginal, &item.ThumbPath, &item.DerivativesStatus, &item.ModerationStatus,
+			&item.ModeratedBy, &item.ModeratedAt, &item.ModerationNotes, &item.CreditCost,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, item)
+	}
+	return res, rows.Err()
+}
+
+func (h sqlHelper) countMediaAlbumsModeracio(filter MediaModeracioFilter) (int, error) {
+	clauses := []string{}
+	args := []interface{}{}
+	status := strings.TrimSpace(filter.Status)
+	if status != "" {
+		clauses = append(clauses, "moderation_status = ?")
+		args = append(args, status)
+	}
+	if len(filter.OwnerIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.OwnerIDs)), ",")
+		clauses = append(clauses, "owner_user_id IN ("+placeholders+")")
+		for _, id := range filter.OwnerIDs {
+			args = append(args, id)
+		}
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "created_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "created_at < ?")
+		args = append(args, filter.CreatedBefore)
+	}
+	query := `SELECT COUNT(*) FROM media_albums`
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (h sqlHelper) countMediaItemsModeracio(filter MediaModeracioFilter) (int, error) {
+	clauses := []string{}
+	args := []interface{}{}
+	status := strings.TrimSpace(filter.Status)
+	if status != "" {
+		clauses = append(clauses, "i.moderation_status = ?")
+		args = append(args, status)
+	}
+	if len(filter.OwnerIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.OwnerIDs)), ",")
+		clauses = append(clauses, "a.owner_user_id IN ("+placeholders+")")
+		for _, id := range filter.OwnerIDs {
+			args = append(args, id)
+		}
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "i.created_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "i.created_at < ?")
+		args = append(args, filter.CreatedBefore)
+	}
+	query := `SELECT COUNT(*) FROM media_items i JOIN media_albums a ON a.id = i.album_id`
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (h sqlHelper) updateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
 	restricted := sql.NullInt64{Int64: int64(restrictedGroupID), Valid: restrictedGroupID > 0}
 	accessPolicy := sql.NullInt64{Int64: int64(accessPolicyID), Valid: accessPolicyID > 0}
@@ -13110,9 +13661,23 @@ func (h sqlHelper) listMunicipiMapaVersions(filter MunicipiMapaVersionFilter) ([
 		clauses = append(clauses, "status = ?")
 		args = append(args, strings.TrimSpace(filter.Status))
 	}
-	if filter.CreatedBy > 0 {
+	if len(filter.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(filter.CreatedByIDs))
+		clauses = append(clauses, "created_by IN ("+placeholders+")")
+		for _, id := range filter.CreatedByIDs {
+			args = append(args, id)
+		}
+	} else if filter.CreatedBy > 0 {
 		clauses = append(clauses, "created_by = ?")
 		args = append(args, filter.CreatedBy)
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "created_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "created_at < ?")
+		args = append(args, filter.CreatedBefore)
 	}
 	query := `
         SELECT id, mapa_id, version, status, data_json, changelog, lock_version,
@@ -13157,9 +13722,23 @@ func (h sqlHelper) countMunicipiMapaVersionsScoped(filter MunicipiMapaVersionFil
 		clauses = append(clauses, "v.status = ?")
 		args = append(args, strings.TrimSpace(filter.Status))
 	}
-	if filter.CreatedBy > 0 {
+	if len(filter.CreatedByIDs) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(filter.CreatedByIDs))
+		clauses = append(clauses, "v.created_by IN ("+placeholders+")")
+		for _, id := range filter.CreatedByIDs {
+			args = append(args, id)
+		}
+	} else if filter.CreatedBy > 0 {
 		clauses = append(clauses, "v.created_by = ?")
 		args = append(args, filter.CreatedBy)
+	}
+	if !filter.CreatedAfter.IsZero() {
+		clauses = append(clauses, "v.created_at >= ?")
+		args = append(args, filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		clauses = append(clauses, "v.created_at < ?")
+		args = append(args, filter.CreatedBefore)
 	}
 	if scopeClause, scopeArgs := buildMunicipiScopeFilterClause(scope); scopeClause != "" {
 		clauses = append(clauses, scopeClause)

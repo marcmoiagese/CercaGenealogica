@@ -514,6 +514,12 @@ func (d *MySQL) ExternalLinksListByStatus(status string) ([]ExternalLinkAdminRow
 func (d *MySQL) CountExternalLinksByStatus(status string) (int, error) {
 	return d.help.countExternalLinksByStatus(status)
 }
+func (d *MySQL) ListExternalLinksAdmin(filter ExternalLinkAdminFilter) ([]ExternalLinkAdminRow, error) {
+	return d.help.listExternalLinksAdmin(filter)
+}
+func (d *MySQL) CountExternalLinksAdmin(filter ExternalLinkAdminFilter) (int, error) {
+	return d.help.countExternalLinksAdmin(filter)
+}
 func (d *MySQL) ExternalLinkInsertPending(personaID int, userID int, url, title string) (int, error) {
 	return d.help.createExternalLinkPending(personaID, userID, url, title)
 }
@@ -1098,6 +1104,18 @@ func (d *MySQL) CountMediaAlbumsByStatus(status string) (int, error) {
 func (d *MySQL) CountMediaItemsByStatus(status string) (int, error) {
 	return d.help.countMediaItemsByStatus(status)
 }
+func (d *MySQL) ListMediaAlbumsModeracio(filter MediaModeracioFilter) ([]MediaAlbum, error) {
+	return d.help.listMediaAlbumsModeracio(filter)
+}
+func (d *MySQL) ListMediaItemsModeracio(filter MediaModeracioFilter) ([]MediaItem, error) {
+	return d.help.listMediaItemsModeracio(filter)
+}
+func (d *MySQL) CountMediaAlbumsModeracio(filter MediaModeracioFilter) (int, error) {
+	return d.help.countMediaAlbumsModeracio(filter)
+}
+func (d *MySQL) CountMediaItemsModeracio(filter MediaModeracioFilter) (int, error) {
+	return d.help.countMediaItemsModeracio(filter)
+}
 func (d *MySQL) UpdateMediaAlbumModeration(id int, status, visibility string, restrictedGroupID, accessPolicyID, creditCost, difficultyScore int, sourceType, notes string, moderatorID int) error {
 	return d.help.updateMediaAlbumModeration(id, status, visibility, restrictedGroupID, accessPolicyID, creditCost, difficultyScore, sourceType, notes, moderatorID)
 }
@@ -1206,6 +1224,9 @@ func (d *MySQL) GetTranscripcioRawChange(id int) (*TranscripcioRawChange, error)
 func (d *MySQL) ListTranscripcioRawChangesPending() ([]TranscripcioRawChange, error) {
 	return d.help.listTranscripcioRawChangesPending()
 }
+func (d *MySQL) ListTranscripcioRawChangesPendingFiltered(filter TranscripcioFilter) ([]TranscripcioRawChange, error) {
+	return d.help.listTranscripcioRawChangesPendingFiltered(filter)
+}
 func (d *MySQL) CountTranscripcioRawChangesPending() (int, error) {
 	return d.help.countTranscripcioRawChangesPending()
 }
@@ -1299,8 +1320,8 @@ func (d *MySQL) DequeueWikiPending(changeID int) error {
 func (d *MySQL) ListWikiPending(limit int) ([]WikiPendingItem, error) {
 	return d.help.listWikiPending(limit)
 }
-func (d *MySQL) ListWikiPendingChanges(limit int) ([]WikiChange, []int, error) {
-	return d.help.listWikiPendingChanges(limit)
+func (d *MySQL) ListWikiPendingChanges(limit, offset int) ([]WikiChange, []int, error) {
+	return d.help.listWikiPendingChanges(limit, offset)
 }
 func (d *MySQL) CountWikiPendingChangesByType() (map[string]int, error) {
 	return d.help.countWikiPendingChangesByType()

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+	"time"
 )
 
 var ErrInvalidExternalURL = errors.New("invalid external url")
@@ -50,6 +51,15 @@ type ExternalLinkAdminRow struct {
 	PersonaCognom1    sql.NullString
 	PersonaCognom2    sql.NullString
 	PersonaNomComplet sql.NullString
+}
+
+type ExternalLinkAdminFilter struct {
+	Status        string
+	Limit         int
+	Offset        int
+	CreatedByIDs  []int
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
 }
 
 func ParseExternalDomains(raw string) []string {
