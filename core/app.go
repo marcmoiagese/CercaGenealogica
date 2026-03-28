@@ -11,21 +11,20 @@ import (
 
 // App encapsula dependències compartides per evitar reobrir recursos per petició.
 type App struct {
-	Config map[string]string
-	DB     db.DB
-	Mail   MailConfig
+	Config              map[string]string
+	DB                  db.DB
+	Mail                MailConfig
 	permCache           *permissionCache
 	llibreTargetCache   *targetCache
 	arxiuTargetCache    *targetCache
 	municipiTargetCache *targetCache
 	achievementCache    *achievementCache
 	nivellRebuildJobs   *nivellRebuildStore
-	moderacioBulkJobs   *moderacioBulkStore
 	searchIndexOnce     sync.Once
 }
 
 func NewApp(cfg map[string]string, database db.DB) *App {
-	return &App{
+	app := &App{
 		Config:              cfg,
 		DB:                  database,
 		Mail:                NewMailConfig(cfg),
@@ -35,8 +34,9 @@ func NewApp(cfg map[string]string, database db.DB) *App {
 		municipiTargetCache: newTargetCache(targetCacheTTL, municipiTargetCacheMax),
 		achievementCache:    newAchievementCache(),
 		nivellRebuildJobs:   newNivellRebuildStore(),
-		moderacioBulkJobs:   newModeracioBulkStore(),
 	}
+	app.failInterruptedModeracioBulkJobs()
+	return app
 }
 
 func (a *App) Close() {

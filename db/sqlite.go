@@ -322,8 +322,8 @@ func (d *SQLite) CreateAdminJob(job *AdminJob) (int, error) {
 func (d *SQLite) UpdateAdminJobProgress(id int, progressDone, progressTotal int) error {
 	return d.help.updateAdminJobProgress(id, progressDone, progressTotal)
 }
-func (d *SQLite) UpdateAdminJobStatus(id int, status, errorText, resultJSON string, finishedAt *time.Time) error {
-	return d.help.updateAdminJobStatus(id, status, errorText, resultJSON, finishedAt)
+func (d *SQLite) UpdateAdminJobStatus(id int, status, phase, errorText, resultJSON string, finishedAt *time.Time) error {
+	return d.help.updateAdminJobStatus(id, status, phase, errorText, resultJSON, finishedAt)
 }
 func (d *SQLite) GetAdminJob(id int) (*AdminJob, error) {
 	return d.help.getAdminJob(id)
@@ -333,6 +333,12 @@ func (d *SQLite) ListAdminJobs(filter AdminJobFilter) ([]AdminJob, error) {
 }
 func (d *SQLite) CountAdminJobs(filter AdminJobFilter) (int, error) {
 	return d.help.countAdminJobs(filter)
+}
+func (d *SQLite) CreateAdminJobTargets(jobID int, targets []AdminJobTarget) error {
+	return d.help.createAdminJobTargets(jobID, targets)
+}
+func (d *SQLite) ListAdminJobTargets(jobID int) ([]AdminJobTarget, error) {
+	return d.help.listAdminJobTargets(jobID)
 }
 func (d *SQLite) InsertAdminAudit(entry *AdminAuditEntry) (int, error) {
 	return d.help.insertAdminAudit(entry)
@@ -1652,6 +1658,9 @@ func (d *SQLite) BulkInsertUserActivities(ctx context.Context, rows []UserActivi
 		return "sqlite-tx", err
 	}
 	return "sqlite-tx", nil
+}
+func (d *SQLite) BulkUpdateUserActivityStatus(ids []int, status string, moderatedBy *int) error {
+	return d.help.bulkUpdateUserActivityStatus(ids, status, moderatedBy)
 }
 func (d *SQLite) UpdateUserActivityStatus(id int, status string, moderatedBy *int) error {
 	return d.help.updateUserActivityStatus(id, status, moderatedBy)

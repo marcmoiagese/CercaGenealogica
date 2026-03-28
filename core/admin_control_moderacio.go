@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -550,8 +551,21 @@ func (a *App) AdminControlModeracioJobStatus(w http.ResponseWriter, r *http.Requ
 		http.NotFound(w, r)
 		return
 	}
-	job, ok := a.moderacioBulkStore().snapshot(jobID)
-	if !ok {
+	jobNum, err := strconv.Atoi(jobID)
+	if err != nil || jobNum <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	job, err := a.DB.GetAdminJob(jobNum)
+	if err != nil {
+		http.Error(w, "No s'ha pogut carregar el job", http.StatusInternalServerError)
+		return
+	}
+	if job == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if job.Kind != adminJobKindModeracioBulk {
 		http.NotFound(w, r)
 		return
 	}
@@ -559,12 +573,29 @@ func (a *App) AdminControlModeracioJobStatus(w http.ResponseWriter, r *http.Requ
 		http.NotFound(w, r)
 		return
 	}
-	if !isAdmin && job.OwnerID != user.ID {
-		http.NotFound(w, r)
-		return
+	done := false
+	status := strings.ToLower(strings.TrimSpace(job.Status))
+	if status == adminJobStatusDone || status == adminJobStatusError {
+		done = true
 	}
-	writeJSON(w, map[string]interface{}{"ok": true, "job": job})
+	writeJSON(w, map[string]interface{}{
+		"ok": true,
+		"job": map[string]interface{}{
+			"id":          fmt.Sprintf("%d", job.ID),
+			"status":      status,
+			"phase":       strings.TrimSpace(job.Phase),
+			"total":       job.ProgressTotal,
+			"processed":   job.ProgressDone,
+			"done":        done,
+			"error":       strings.TrimSpace(job.ErrorText),
+			"result_json": strings.TrimSpace(job.ResultJSON),
+		},
+	})
 	if IsDebugEnabled() {
-		Debugf("moderacio job status user=%d job=%s done=%t processed=%d total=%d err=%t age=%s", user.ID, job.ID, job.Done, job.Processed, job.Total, job.Error != "", time.Since(job.StartedAt))
+		age := time.Duration(0)
+		if job.StartedAt.Valid {
+			age = time.Since(job.StartedAt.Time)
+		}
+		Debugf("moderacio job status user=%d job=%d done=%t processed=%d total=%d err=%t age=%s", user.ID, job.ID, done, job.ProgressDone, job.ProgressTotal, strings.TrimSpace(job.ErrorText) != "", age)
 	}
 }

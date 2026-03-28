@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS admin_jobs (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     kind VARCHAR(64) NOT NULL,
     status VARCHAR(16) NOT NULL,
+    phase VARCHAR(48) NOT NULL DEFAULT 'queued',
     progress_total INT NOT NULL DEFAULT 0,
     progress_done INT NOT NULL DEFAULT 0,
     payload_json LONGTEXT,
@@ -130,7 +131,19 @@ CREATE TABLE IF NOT EXISTS admin_jobs (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_admin_jobs_kind (kind),
     INDEX idx_admin_jobs_status (status),
+    INDEX idx_admin_jobs_phase (phase),
     INDEX idx_admin_jobs_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS admin_job_targets (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    job_id INT UNSIGNED NOT NULL,
+    seq_num INT NOT NULL,
+    object_type VARCHAR(64) NOT NULL,
+    object_id INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY idx_admin_job_targets_job_seq (job_id, seq_num),
+    INDEX idx_admin_job_targets_job_type (job_id, object_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS admin_audit (

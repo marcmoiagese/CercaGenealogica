@@ -3332,46 +3332,137 @@ func (a *App) applyModeracioActivitiesBulk(ctx context.Context, action string, o
 			metrics.ActivityDur += time.Since(start)
 		}
 	}()
-	var acts []db.UserActivity
+	acts, err := a.DB.ListActivityByObjects(objType, ids, "pendent")
+	if err != nil {
+		return err
+	}
+	pendingIDs := make([]int, 0, len(acts))
+	pendingUsers := map[int]struct{}{}
+	pointsByUser := map[int]int{}
+	for _, act := range acts {
+		pendingIDs = append(pendingIDs, act.ID)
+		if act.UserID > 0 {
+			pendingUsers[act.UserID] = struct{}{}
+			if action == "approve" && act.Points != 0 {
+				pointsByUser[act.UserID] += act.Points
+			}
+		}
+	}
 	switch action {
-	case "approve", "reject":
-		if rows, err := a.DB.ListActivityByObjects(objType, ids, "pendent"); err == nil {
-			acts = rows
+	case "approve":
+		if err := a.DB.BulkUpdateUserActivityStatus(pendingIDs, "validat", &userID); err != nil {
+			return err
+		}
+		for uid, delta := range pointsByUser {
+			if delta == 0 {
+				continue
+			}
+			if err := a.DB.AddPointsToUser(uid, delta); err != nil {
+				return err
+			}
+		}
+	case "reject":
+		if err := a.DB.BulkUpdateUserActivityStatus(pendingIDs, "anulat", &userID); err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("acció no vàlida")
 	}
-	switch action {
-	case "approve":
-		for _, act := range acts {
-			_ = a.validateActivityRow(act, userID)
+	activityRows, pointsPerActivity, ruleCode, activityAction, details := buildModeracioBulkActivityRows(a, action, objType, ids, motiu, userID)
+	insertedCount := 0
+	if len(activityRows) > 0 {
+		if _, err := a.DB.BulkInsertUserActivities(ctx, activityRows); err != nil {
+			for i := range activityRows {
+				row := activityRows[i]
+				if _, err := a.DB.InsertUserActivity(&row); err != nil {
+					return err
+				}
+				insertedCount++
+			}
+		} else {
+			insertedCount = len(activityRows)
 		}
+	}
+	if insertedCount > 0 && pointsPerActivity != 0 {
+		if err := a.DB.AddPointsToUser(userID, pointsPerActivity*insertedCount); err != nil {
+			return err
+		}
+	}
+	now := time.Now()
+	for uid := range pendingUsers {
+		a.EvaluateAchievementsForUser(context.Background(), uid, AchievementTrigger{CreatedAt: now})
+		a.logAntiAbuseSignals(uid, now)
+	}
+	if insertedCount > 0 {
+		a.EvaluateAchievementsForUser(context.Background(), userID, AchievementTrigger{
+			RuleCode:   ruleCode,
+			Action:     activityAction,
+			ObjectType: objType,
+			Status:     "validat",
+			CreatedAt:  now,
+		})
+		a.logAntiAbuseSignals(userID, now)
+	}
+	if objType == "event_historic" {
 		for _, id := range ids {
-			if objType == "municipi_mapa_version" {
-				_, _ = a.RegisterUserActivity(ctx, userID, ruleMunicipiMapaApprove, "moderar_aprovar", objType, &id, "validat", nil, "")
+			if action == "approve" {
+				a.registerEventHistoricModerationActivity(ctx, id, "publicat", userID, details)
 			} else {
-				_, _ = a.RegisterUserActivity(ctx, userID, ruleModeracioApprove, "moderar_aprovar", objType, &id, "validat", nil, "")
-			}
-			if objType == "event_historic" {
-				a.registerEventHistoricModerationActivity(ctx, id, "publicat", userID, "")
-			}
-		}
-	case "reject":
-		for _, act := range acts {
-			_ = a.DB.UpdateUserActivityStatus(act.ID, "anulat", &userID)
-		}
-		for _, id := range ids {
-			if objType == "municipi_mapa_version" {
-				_, _ = a.RegisterUserActivity(ctx, userID, ruleMunicipiMapaReject, "moderar_rebutjar", objType, &id, "validat", nil, motiu)
-			} else {
-				_, _ = a.RegisterUserActivity(ctx, userID, ruleModeracioReject, "moderar_rebutjar", objType, &id, "validat", nil, motiu)
-			}
-			if objType == "event_historic" {
-				a.registerEventHistoricModerationActivity(ctx, id, "rebutjat", userID, motiu)
+				a.registerEventHistoricModerationActivity(ctx, id, "rebutjat", userID, details)
 			}
 		}
 	}
 	return nil
+}
+
+func buildModeracioBulkActivityRows(a *App, action, objType string, ids []int, motiu string, userID int) ([]db.UserActivity, int, string, string, string) {
+	ruleCode := ""
+	activityAction := ""
+	details := ""
+	switch action {
+	case "approve":
+		activityAction = "moderar_aprovar"
+		if objType == "municipi_mapa_version" {
+			ruleCode = ruleMunicipiMapaApprove
+		} else {
+			ruleCode = ruleModeracioApprove
+		}
+	case "reject":
+		activityAction = "moderar_rebutjar"
+		details = motiu
+		if objType == "municipi_mapa_version" {
+			ruleCode = ruleMunicipiMapaReject
+		} else {
+			ruleCode = ruleModeracioReject
+		}
+	default:
+		return nil, 0, "", "", ""
+	}
+	ruleID := sql.NullInt64{}
+	points := 0
+	if a != nil && a.DB != nil && ruleCode != "" {
+		if rule, ok := getPointsRuleByCodeCached(a.DB, ruleCode); ok && rule != nil && rule.Active {
+			ruleID = sql.NullInt64{Int64: int64(rule.ID), Valid: true}
+			points = rule.Points
+		}
+	}
+	rows := make([]db.UserActivity, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		rows = append(rows, db.UserActivity{
+			UserID:     userID,
+			RuleID:     ruleID,
+			Action:     activityAction,
+			ObjectType: objType,
+			ObjectID:   sql.NullInt64{Int64: int64(id), Valid: true},
+			Points:     points,
+			Status:     "validat",
+			Details:    details,
+		})
+	}
+	return rows, points, ruleCode, activityAction, details
 }
 
 func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, motiu string, user *db.User, perms db.PolicyPermissions, canModerateAll bool, bulkUserID int, update func(processed int, total int)) (moderacioBulkResult, moderacioBulkMetrics, error) {
@@ -4124,34 +4215,26 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	}
 	if scope == "all" {
 		if async {
-			job := a.moderacioBulkStore().newJob(action, scope, bulkType, user.ID, bulkUserID)
-			if IsDebugEnabled() {
-				Debugf("moderacio job created user=%d job=%s action=%s scope=%s type=%s bulk_user_id=%d", user.ID, job.ID, action, scope, bulkType, bulkUserID)
+			jobID, err := a.startModeracioBulkAdminJob(action, bulkType, motiu, user, perms, bulkUserID)
+			if err != nil {
+				http.Error(w, "failed to start", http.StatusInternalServerError)
+				return
 			}
-			store := a.moderacioBulkStore()
-			go func() {
-				result, metrics, err := a.processModeracioBulkAll(context.Background(), action, bulkType, motiu, user, perms, canModerateAll, bulkUserID, func(processed int, total int) {
-					store.setTotal(job.ID, total)
-					store.setProcessed(job.ID, processed)
-				})
-				store.finish(job.ID, err)
-				auditStart := time.Now()
-				a.logAdminAudit(nil, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
-					"action":       action,
-					"scope":        scope,
-					"bulk_type":    bulkType,
-					"bulk_user_id": bulkUserID,
-					"candidates":   result.Candidates,
-					"total":        result.Total,
-					"processed":    result.Processed,
-					"errors":       result.Errors,
-					"skipped":      result.Skipped,
-					"job_id":       job.ID,
-					"async":        true,
-				})
-				a.logModeracioBulkExecution(action, scope, bulkType, user.ID, bulkUserID, true, result, metrics, time.Since(auditStart))
-			}()
-			writeJSON(w, map[string]interface{}{"ok": true, "job_id": job.ID})
+			a.logAdminAudit(r, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
+				"action":       action,
+				"scope":        scope,
+				"bulk_type":    bulkType,
+				"bulk_user_id": bulkUserID,
+				"job_id":       jobID,
+				"async":        true,
+				"persistent":   true,
+				"phase":        adminJobPhaseQueued,
+			})
+			writeJSON(w, map[string]interface{}{
+				"ok":         true,
+				"job_id":     fmt.Sprintf("%d", jobID),
+				"detail_url": fmt.Sprintf("/admin/jobs/%d", jobID),
+			})
 			return
 		}
 		result, metrics, err := a.processModeracioBulkAll(r.Context(), action, bulkType, motiu, user, perms, canModerateAll, bulkUserID, nil)

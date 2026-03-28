@@ -308,8 +308,8 @@ func (d *PostgreSQL) CreateAdminJob(job *AdminJob) (int, error) {
 func (d *PostgreSQL) UpdateAdminJobProgress(id int, progressDone, progressTotal int) error {
 	return d.help.updateAdminJobProgress(id, progressDone, progressTotal)
 }
-func (d *PostgreSQL) UpdateAdminJobStatus(id int, status, errorText, resultJSON string, finishedAt *time.Time) error {
-	return d.help.updateAdminJobStatus(id, status, errorText, resultJSON, finishedAt)
+func (d *PostgreSQL) UpdateAdminJobStatus(id int, status, phase, errorText, resultJSON string, finishedAt *time.Time) error {
+	return d.help.updateAdminJobStatus(id, status, phase, errorText, resultJSON, finishedAt)
 }
 func (d *PostgreSQL) GetAdminJob(id int) (*AdminJob, error) {
 	return d.help.getAdminJob(id)
@@ -319,6 +319,12 @@ func (d *PostgreSQL) ListAdminJobs(filter AdminJobFilter) ([]AdminJob, error) {
 }
 func (d *PostgreSQL) CountAdminJobs(filter AdminJobFilter) (int, error) {
 	return d.help.countAdminJobs(filter)
+}
+func (d *PostgreSQL) CreateAdminJobTargets(jobID int, targets []AdminJobTarget) error {
+	return d.help.createAdminJobTargets(jobID, targets)
+}
+func (d *PostgreSQL) ListAdminJobTargets(jobID int) ([]AdminJobTarget, error) {
+	return d.help.listAdminJobTargets(jobID)
 }
 func (d *PostgreSQL) InsertAdminAudit(entry *AdminAuditEntry) (int, error) {
 	return d.help.insertAdminAudit(entry)
@@ -2376,6 +2382,9 @@ func (d *PostgreSQL) BulkInsertUserActivities(ctx context.Context, rows []UserAc
 		return "postgres-batch", err
 	}
 	return "postgres-batch", nil
+}
+func (d *PostgreSQL) BulkUpdateUserActivityStatus(ids []int, status string, moderatedBy *int) error {
+	return d.help.bulkUpdateUserActivityStatus(ids, status, moderatedBy)
 }
 func (d *PostgreSQL) UpdateUserActivityStatus(id int, status string, moderatedBy *int) error {
 	return d.help.updateUserActivityStatus(id, status, moderatedBy)

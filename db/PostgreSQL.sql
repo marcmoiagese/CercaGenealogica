@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS admin_jobs (
     id SERIAL PRIMARY KEY,
     kind TEXT NOT NULL,
     status TEXT NOT NULL,
+    phase TEXT NOT NULL DEFAULT 'queued',
     progress_total INTEGER NOT NULL DEFAULT 0,
     progress_done INTEGER NOT NULL DEFAULT 0,
     payload_json TEXT,
@@ -139,7 +140,19 @@ CREATE TABLE IF NOT EXISTS admin_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_admin_jobs_kind ON admin_jobs(kind);
 CREATE INDEX IF NOT EXISTS idx_admin_jobs_status ON admin_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_admin_jobs_phase ON admin_jobs(phase);
 CREATE INDEX IF NOT EXISTS idx_admin_jobs_created ON admin_jobs(created_at);
+
+CREATE TABLE IF NOT EXISTS admin_job_targets (
+    id SERIAL PRIMARY KEY,
+    job_id INTEGER NOT NULL REFERENCES admin_jobs(id) ON DELETE CASCADE,
+    seq_num INTEGER NOT NULL,
+    object_type TEXT NOT NULL,
+    object_id INTEGER NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_job_targets_job_seq ON admin_job_targets(job_id, seq_num);
+CREATE INDEX IF NOT EXISTS idx_admin_job_targets_job_type ON admin_job_targets(job_id, object_type);
 
 CREATE TABLE IF NOT EXISTS admin_audit (
     id SERIAL PRIMARY KEY,

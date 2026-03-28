@@ -1405,6 +1405,35 @@ func (h sqlHelper) updateUserActivityStatus(id int, status string, moderatedBy *
 	return err
 }
 
+func (h sqlHelper) bulkUpdateUserActivityStatus(ids []int, status string, moderatedBy *int) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	var mod interface{}
+	if moderatedBy != nil {
+		mod = *moderatedBy
+	}
+	for start := 0; start < len(ids); start += bulkActivityBatchSize {
+		end := start + bulkActivityBatchSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		batch := ids[start:end]
+		placeholders := buildInPlaceholders(h.style, len(batch))
+		args := make([]interface{}, 0, len(batch)+2)
+		args = append(args, status, mod)
+		for _, id := range batch {
+			args = append(args, id)
+		}
+		stmt := `UPDATE usuaris_activitat SET estat = ?, moderat_per = ? WHERE id IN (` + placeholders + `)`
+		stmt = formatPlaceholders(h.style, stmt)
+		if _, err := h.db.Exec(stmt, args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (h sqlHelper) listUserActivityByUser(userID int, f ActivityFilter) ([]UserActivity, error) {
 	where := []string{"usuari_id = ?"}
 	args := []interface{}{userID}
@@ -5127,6 +5156,10 @@ func (h sqlHelper) createAdminJob(job *AdminJob) (int, error) {
 	if status == "" {
 		status = "queued"
 	}
+	phase := strings.TrimSpace(job.Phase)
+	if phase == "" {
+		phase = status
+	}
 	progressTotal := job.ProgressTotal
 	progressDone := job.ProgressDone
 	if progressTotal < 0 {
@@ -5148,18 +5181,18 @@ func (h sqlHelper) createAdminJob(job *AdminJob) (int, error) {
 		createdBy.Int64 = job.CreatedBy.Int64
 	}
 	stmt := `
-        INSERT INTO admin_jobs (kind, status, progress_total, progress_done, payload_json, result_json, error_text,
+        INSERT INTO admin_jobs (kind, status, phase, progress_total, progress_done, payload_json, result_json, error_text,
                                 started_at, finished_at, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	stmt = formatPlaceholders(h.style, stmt)
 	if h.style == "postgres" {
 		stmt += " RETURNING id"
-		if err := h.db.QueryRow(stmt, kind, status, progressTotal, progressDone, job.PayloadJSON, job.ResultJSON, job.ErrorText, startedAt, finishedAt, createdBy).Scan(&job.ID); err != nil {
+		if err := h.db.QueryRow(stmt, kind, status, phase, progressTotal, progressDone, job.PayloadJSON, job.ResultJSON, job.ErrorText, startedAt, finishedAt, createdBy).Scan(&job.ID); err != nil {
 			return 0, err
 		}
 		return job.ID, nil
 	}
-	res, err := h.db.Exec(stmt, kind, status, progressTotal, progressDone, job.PayloadJSON, job.ResultJSON, job.ErrorText, startedAt, finishedAt, createdBy)
+	res, err := h.db.Exec(stmt, kind, status, phase, progressTotal, progressDone, job.PayloadJSON, job.ResultJSON, job.ErrorText, startedAt, finishedAt, createdBy)
 	if err != nil {
 		return 0, err
 	}
@@ -5185,7 +5218,7 @@ func (h sqlHelper) updateAdminJobProgress(id int, progressDone, progressTotal in
 	return err
 }
 
-func (h sqlHelper) updateAdminJobStatus(id int, status, errorText, resultJSON string, finishedAt *time.Time) error {
+func (h sqlHelper) updateAdminJobStatus(id int, status, phase, errorText, resultJSON string, finishedAt *time.Time) error {
 	if id <= 0 {
 		return errors.New("admin job invàlid")
 	}
@@ -5193,19 +5226,23 @@ func (h sqlHelper) updateAdminJobStatus(id int, status, errorText, resultJSON st
 	if cleanStatus == "" {
 		cleanStatus = "queued"
 	}
+	cleanPhase := strings.TrimSpace(phase)
+	if cleanPhase == "" {
+		cleanPhase = cleanStatus
+	}
 	finishedVal := sql.NullTime{}
 	if finishedAt != nil && !finishedAt.IsZero() {
 		finishedVal = sql.NullTime{Time: *finishedAt, Valid: true}
 	}
-	stmt := `UPDATE admin_jobs SET status = ?, error_text = ?, result_json = ?, finished_at = ?, updated_at = ` + h.nowFun + ` WHERE id = ?`
+	stmt := `UPDATE admin_jobs SET status = ?, phase = ?, error_text = ?, result_json = ?, finished_at = ?, updated_at = ` + h.nowFun + ` WHERE id = ?`
 	stmt = formatPlaceholders(h.style, stmt)
-	_, err := h.db.Exec(stmt, cleanStatus, errorText, resultJSON, finishedVal, id)
+	_, err := h.db.Exec(stmt, cleanStatus, cleanPhase, errorText, resultJSON, finishedVal, id)
 	return err
 }
 
 func (h sqlHelper) getAdminJob(id int) (*AdminJob, error) {
 	query := `
-        SELECT id, kind, status, progress_total, progress_done, payload_json, result_json, error_text,
+        SELECT id, kind, status, phase, progress_total, progress_done, payload_json, result_json, error_text,
                started_at, finished_at, created_at, updated_at, created_by
         FROM admin_jobs
         WHERE id = ?`
@@ -5216,7 +5253,7 @@ func (h sqlHelper) getAdminJob(id int) (*AdminJob, error) {
 	var finishedVal interface{}
 	var createdVal interface{}
 	var updatedVal interface{}
-	if err := row.Scan(&job.ID, &job.Kind, &job.Status, &job.ProgressTotal, &job.ProgressDone, &job.PayloadJSON, &job.ResultJSON, &job.ErrorText, &startedVal, &finishedVal, &createdVal, &updatedVal, &job.CreatedBy); err != nil {
+	if err := row.Scan(&job.ID, &job.Kind, &job.Status, &job.Phase, &job.ProgressTotal, &job.ProgressDone, &job.PayloadJSON, &job.ResultJSON, &job.ErrorText, &startedVal, &finishedVal, &createdVal, &updatedVal, &job.CreatedBy); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -5270,7 +5307,7 @@ func (h sqlHelper) listAdminJobs(filter AdminJobFilter) ([]AdminJob, error) {
 	}
 	args = append(args, limit, offset)
 	query := `
-        SELECT id, kind, status, progress_total, progress_done, payload_json, result_json, error_text,
+        SELECT id, kind, status, phase, progress_total, progress_done, payload_json, result_json, error_text,
                started_at, finished_at, created_at, updated_at, created_by
         FROM admin_jobs
         WHERE ` + strings.Join(clauses, " AND ") + `
@@ -5289,7 +5326,7 @@ func (h sqlHelper) listAdminJobs(filter AdminJobFilter) ([]AdminJob, error) {
 		var finishedVal interface{}
 		var createdVal interface{}
 		var updatedVal interface{}
-		if err := rows.Scan(&job.ID, &job.Kind, &job.Status, &job.ProgressTotal, &job.ProgressDone, &job.PayloadJSON, &job.ResultJSON, &job.ErrorText, &startedVal, &finishedVal, &createdVal, &updatedVal, &job.CreatedBy); err != nil {
+		if err := rows.Scan(&job.ID, &job.Kind, &job.Status, &job.Phase, &job.ProgressTotal, &job.ProgressDone, &job.PayloadJSON, &job.ResultJSON, &job.ErrorText, &startedVal, &finishedVal, &createdVal, &updatedVal, &job.CreatedBy); err != nil {
 			return nil, err
 		}
 		startedAt, err := scanNullTime(startedVal)
@@ -5339,6 +5376,61 @@ func (h sqlHelper) countAdminJobs(filter AdminJobFilter) (int, error) {
 		return 0, err
 	}
 	return total, nil
+}
+
+func (h sqlHelper) createAdminJobTargets(jobID int, targets []AdminJobTarget) error {
+	if jobID <= 0 {
+		return errors.New("admin job invàlid")
+	}
+	if len(targets) == 0 {
+		return nil
+	}
+	cols := []string{"job_id", "seq_num", "object_type", "object_id", "created_at"}
+	values := make([]string, 0, len(targets))
+	args := make([]interface{}, 0, len(targets)*4)
+	for _, target := range targets {
+		if strings.TrimSpace(target.ObjectType) == "" || target.ObjectID <= 0 {
+			return errors.New("admin job target invàlid")
+		}
+		values = append(values, "(?, ?, ?, ?, "+h.nowFun+")")
+		args = append(args, jobID, target.SeqNum, target.ObjectType, target.ObjectID)
+	}
+	stmt := "INSERT INTO admin_job_targets (" + strings.Join(cols, ", ") + ") VALUES " + strings.Join(values, ", ")
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := h.db.Exec(stmt, args...)
+	return err
+}
+
+func (h sqlHelper) listAdminJobTargets(jobID int) ([]AdminJobTarget, error) {
+	if jobID <= 0 {
+		return nil, errors.New("admin job invàlid")
+	}
+	query := `
+        SELECT id, job_id, seq_num, object_type, object_id, created_at
+        FROM admin_job_targets
+        WHERE job_id = ?
+        ORDER BY seq_num ASC, id ASC`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, jobID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	res := make([]AdminJobTarget, 0)
+	for rows.Next() {
+		var target AdminJobTarget
+		var createdVal interface{}
+		if err := rows.Scan(&target.ID, &target.JobID, &target.SeqNum, &target.ObjectType, &target.ObjectID, &createdVal); err != nil {
+			return nil, err
+		}
+		createdAt, err := scanNullTime(createdVal)
+		if err != nil {
+			return nil, err
+		}
+		target.CreatedAt = createdAt
+		res = append(res, target)
+	}
+	return res, rows.Err()
 }
 
 func (h sqlHelper) insertAdminAudit(entry *AdminAuditEntry) (int, error) {

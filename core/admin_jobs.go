@@ -24,6 +24,7 @@ const (
 const (
 	adminJobKindNivellsRebuild = "nivells_rebuild"
 	adminJobKindImport         = "admin_import"
+	adminJobKindModeracioBulk  = "moderacio_bulk"
 )
 
 type adminJobOption struct {
@@ -35,6 +36,7 @@ type adminJobView struct {
 	ID              int
 	Kind            string
 	Status          string
+	Phase           string
 	StatusClass     string
 	ProgressDone    int
 	ProgressTotal   int
@@ -48,6 +50,26 @@ type adminJobView struct {
 	DetailURL       string
 	RetryURL        string
 	CanRetry        bool
+}
+
+type adminModeracioBulkJobSummary struct {
+	Action      string
+	Scope       string
+	BulkType    string
+	BulkUserID  int
+	Phase       string
+	ScopeMode   string
+	Candidates  int
+	Targets     int
+	Processed   int
+	Updated     int
+	Skipped     int
+	Errors      int
+	ResolveDur  string
+	UpdateDur   string
+	ActivityDur string
+	TotalDur    string
+	ByType      []moderacioTypeCount
 }
 
 type adminJobCreateRequest struct {
@@ -66,12 +88,15 @@ func (a *App) AdminJobsListPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, _, ok := a.requirePermission(w, r, permAdmin)
+	user, perms, isAdmin, ok := a.requireAdminJobViewer(w, r)
 	if !ok {
 		return
 	}
 	lang := ResolveLang(r)
 	filterKind := strings.TrimSpace(r.URL.Query().Get("kind"))
+	if !isAdmin {
+		filterKind = adminJobKindModeracioBulk
+	}
 	filterStatus := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
 	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
 	page := parseListPage(r.URL.Query().Get("page"))
@@ -108,7 +133,7 @@ func (a *App) AdminJobsListPage(w http.ResponseWriter, r *http.Request) {
 	userCache := map[int]string{}
 	views := make([]adminJobView, 0, len(jobs))
 	for _, row := range jobs {
-		views = append(views, buildAdminJobView(a, row, userCache))
+		views = append(views, buildAdminJobView(a, row, userCache, isAdmin))
 	}
 	pageValues := cloneValues(r.URL.Query())
 	pageValues.Del("page")
@@ -146,9 +171,11 @@ func (a *App) AdminJobsListPage(w http.ResponseWriter, r *http.Request) {
 		"PageEnd":       pageEnd,
 		"FilterKind":    filterKind,
 		"FilterStatus":  filterStatus,
-		"KindOptions":   adminJobKindOptions(lang),
+		"KindOptions":   adminJobKindOptions(lang, isAdmin),
 		"StatusOptions": adminJobStatusOptions(lang),
 		"CSRFToken":     token,
+		"IsAdmin":       isAdmin,
+		"CanBulkJobs":   !isAdmin && a.canModeracioMassiva(user, perms),
 	})
 }
 
@@ -157,7 +184,7 @@ func (a *App) AdminJobsShowPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, _, ok := a.requirePermission(w, r, permAdmin)
+	user, perms, isAdmin, ok := a.requireAdminJobViewer(w, r)
 	if !ok {
 		return
 	}
@@ -184,17 +211,23 @@ func (a *App) AdminJobsShowPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if !a.canViewAdminJob(user, perms, isAdmin, job) {
+		http.NotFound(w, r)
+		return
+	}
 	userCache := map[int]string{}
-	view := buildAdminJobView(a, *job, userCache)
+	view := buildAdminJobView(a, *job, userCache, isAdmin)
 	payload := formatJSONForDisplay(job.PayloadJSON)
 	result := formatJSONForDisplay(job.ResultJSON)
+	moderacioSummary := buildAdminModeracioBulkJobSummary(*job)
 	token, _ := ensureCSRF(w, r)
 	RenderPrivateTemplate(w, r, "admin-jobs-show.html", map[string]interface{}{
-		"User":      user,
-		"Job":       view,
-		"Payload":   payload,
-		"Result":    result,
-		"CSRFToken": token,
+		"User":             user,
+		"Job":              view,
+		"Payload":          payload,
+		"Result":           result,
+		"ModeracioSummary": moderacioSummary,
+		"CSRFToken":        token,
 	})
 }
 
@@ -232,12 +265,16 @@ func (a *App) AdminJobsDetailAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) adminJobsListAPI(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	user, perms, isAdmin, ok := a.requireAdminJobViewer(w, r)
+	if !ok {
 		return
 	}
 	filter := db.AdminJobFilter{
 		Kind:   strings.TrimSpace(r.URL.Query().Get("kind")),
 		Status: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status"))),
+	}
+	if !isAdmin {
+		filter.Kind = adminJobKindModeracioBulk
 	}
 	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
 	page := parseListPage(r.URL.Query().Get("page"))
@@ -268,6 +305,9 @@ func (a *App) adminJobsListAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	payload := make([]map[string]interface{}, 0, len(jobs))
 	for _, job := range jobs {
+		if !a.canViewAdminJob(user, perms, isAdmin, &job) {
+			continue
+		}
 		payload = append(payload, adminJobAPIItem(job))
 	}
 	writeJSON(w, map[string]interface{}{
@@ -281,7 +321,8 @@ func (a *App) adminJobsListAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) adminJobsShowAPI(w http.ResponseWriter, r *http.Request, jobID int) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	user, perms, isAdmin, ok := a.requireAdminJobViewer(w, r)
+	if !ok {
 		return
 	}
 	job, err := a.DB.GetAdminJob(jobID)
@@ -290,6 +331,10 @@ func (a *App) adminJobsShowAPI(w http.ResponseWriter, r *http.Request, jobID int
 		return
 	}
 	if job == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !a.canViewAdminJob(user, perms, isAdmin, job) {
 		http.NotFound(w, r)
 		return
 	}
@@ -461,10 +506,17 @@ func parseBool(val string) bool {
 	}
 }
 
-func adminJobKindOptions(lang string) []adminJobOption {
-	return []adminJobOption{
+func adminJobKindOptions(lang string, isAdmin bool) []adminJobOption {
+	options := []adminJobOption{
 		{Value: adminJobKindNivellsRebuild, Label: T(lang, "admin.jobs.kind.nivells_rebuild")},
 		{Value: adminJobKindImport, Label: T(lang, "admin.jobs.kind.admin_import")},
+		{Value: adminJobKindModeracioBulk, Label: T(lang, "admin.jobs.kind.moderacio_bulk")},
+	}
+	if isAdmin {
+		return options
+	}
+	return []adminJobOption{
+		{Value: adminJobKindModeracioBulk, Label: T(lang, "admin.jobs.kind.moderacio_bulk")},
 	}
 }
 
@@ -477,7 +529,7 @@ func adminJobStatusOptions(lang string) []adminJobOption {
 	}
 }
 
-func buildAdminJobView(a *App, job db.AdminJob, cache map[int]string) adminJobView {
+func buildAdminJobView(a *App, job db.AdminJob, cache map[int]string, isAdmin bool) adminJobView {
 	progressLabel := "-"
 	progressPercent := 0
 	if job.ProgressTotal > 0 {
@@ -502,6 +554,7 @@ func buildAdminJobView(a *App, job db.AdminJob, cache map[int]string) adminJobVi
 		ID:              job.ID,
 		Kind:            strings.TrimSpace(job.Kind),
 		Status:          status,
+		Phase:           strings.TrimSpace(job.Phase),
 		StatusClass:     statusClass,
 		ProgressDone:    job.ProgressDone,
 		ProgressTotal:   job.ProgressTotal,
@@ -514,8 +567,69 @@ func buildAdminJobView(a *App, job db.AdminJob, cache map[int]string) adminJobVi
 		ErrorText:       errorText,
 		DetailURL:       "/admin/jobs/" + strconv.Itoa(job.ID),
 		RetryURL:        "/api/admin/jobs/" + strconv.Itoa(job.ID) + "/retry",
-		CanRetry:        status == adminJobStatusError,
+		CanRetry:        isAdmin && status == adminJobStatusError && strings.TrimSpace(job.Kind) != adminJobKindModeracioBulk,
 	}
+}
+
+func buildAdminModeracioBulkJobSummary(job db.AdminJob) *adminModeracioBulkJobSummary {
+	if strings.TrimSpace(job.Kind) != adminJobKindModeracioBulk {
+		return nil
+	}
+	summary := &adminModeracioBulkJobSummary{
+		Phase: strings.TrimSpace(job.Phase),
+	}
+	if strings.TrimSpace(job.PayloadJSON) != "" {
+		var payload moderacioBulkJobPayload
+		if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err == nil {
+			summary.Action = strings.TrimSpace(payload.Action)
+			summary.Scope = strings.TrimSpace(payload.Scope)
+			summary.BulkType = strings.TrimSpace(payload.BulkType)
+			summary.BulkUserID = payload.BulkUserID
+		}
+	}
+	if strings.TrimSpace(job.ResultJSON) != "" {
+		var result moderacioBulkJobResult
+		if err := json.Unmarshal([]byte(job.ResultJSON), &result); err == nil {
+			if strings.TrimSpace(result.Action) != "" {
+				summary.Action = strings.TrimSpace(result.Action)
+			}
+			if strings.TrimSpace(result.Scope) != "" {
+				summary.Scope = strings.TrimSpace(result.Scope)
+			}
+			if strings.TrimSpace(result.BulkType) != "" {
+				summary.BulkType = strings.TrimSpace(result.BulkType)
+			}
+			if result.BulkUserID > 0 {
+				summary.BulkUserID = result.BulkUserID
+			}
+			if strings.TrimSpace(result.Phase) != "" {
+				summary.Phase = strings.TrimSpace(result.Phase)
+			}
+			summary.ScopeMode = strings.TrimSpace(result.ScopeMode)
+			summary.Candidates = result.Candidates
+			summary.Targets = result.Targets
+			summary.Processed = result.Processed
+			summary.Updated = result.Updated
+			summary.Skipped = result.Skipped
+			summary.Errors = result.Errors
+			summary.ResolveDur = formatAdminJobDuration(result.ResolveMs)
+			summary.UpdateDur = formatAdminJobDuration(result.UpdateMs)
+			summary.ActivityDur = formatAdminJobDuration(result.ActivityMs)
+			summary.TotalDur = formatAdminJobDuration(result.TotalMs)
+			summary.ByType = result.ByType
+		}
+	}
+	if summary.ByType == nil {
+		summary.ByType = []moderacioTypeCount{}
+	}
+	return summary
+}
+
+func formatAdminJobDuration(ms int64) string {
+	if ms <= 0 {
+		return ""
+	}
+	return (time.Duration(ms) * time.Millisecond).String()
 }
 
 func adminJobStatusClass(status string) string {
@@ -585,6 +699,7 @@ func adminJobAPIItem(job db.AdminJob) map[string]interface{} {
 		"id":             job.ID,
 		"kind":           strings.TrimSpace(job.Kind),
 		"status":         strings.ToLower(strings.TrimSpace(job.Status)),
+		"phase":          strings.TrimSpace(job.Phase),
 		"progress_total": job.ProgressTotal,
 		"progress_done":  job.ProgressDone,
 		"payload_json":   strings.TrimSpace(job.PayloadJSON),
@@ -601,6 +716,39 @@ func adminJobAPIItem(job db.AdminJob) map[string]interface{} {
 	return item
 }
 
+func (a *App) requireAdminJobViewer(w http.ResponseWriter, r *http.Request) (*db.User, db.PolicyPermissions, bool, bool) {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return nil, db.PolicyPermissions{}, false, false
+	}
+	*r = *a.withUser(r, user)
+	perms, found := a.permissionsFromContext(r)
+	if !found {
+		perms = a.getPermissionsForUser(user.ID)
+		*r = *a.withPermissions(r, perms)
+	}
+	isAdmin := a.hasPerm(perms, permAdmin)
+	if isAdmin || a.canModeracioMassiva(user, perms) {
+		return user, perms, isAdmin, true
+	}
+	http.Error(w, "Forbidden", http.StatusForbidden)
+	return user, perms, isAdmin, false
+}
+
+func (a *App) canViewAdminJob(user *db.User, perms db.PolicyPermissions, isAdmin bool, job *db.AdminJob) bool {
+	if job == nil {
+		return false
+	}
+	if isAdmin {
+		return true
+	}
+	if user == nil || !a.canModeracioMassiva(user, perms) {
+		return false
+	}
+	return strings.TrimSpace(job.Kind) == adminJobKindModeracioBulk
+}
+
 func (a *App) updateAdminJobProgress(jobID, progressDone, progressTotal int) {
 	if a == nil || a.DB == nil || jobID <= 0 {
 		return
@@ -611,6 +759,11 @@ func (a *App) updateAdminJobProgress(jobID, progressDone, progressTotal int) {
 }
 
 func (a *App) finishAdminJob(jobID int, status string, err error, resultJSON string) {
+	now := time.Now()
+	a.setAdminJobState(jobID, status, status, err, resultJSON, &now)
+}
+
+func (a *App) setAdminJobState(jobID int, status, phase string, err error, resultJSON string, finishedAt *time.Time) {
 	if a == nil || a.DB == nil || jobID <= 0 {
 		return
 	}
@@ -618,9 +771,14 @@ func (a *App) finishAdminJob(jobID int, status string, err error, resultJSON str
 	if err != nil {
 		errorText = err.Error()
 		status = adminJobStatusError
+		if strings.TrimSpace(phase) == "" {
+			phase = adminJobStatusError
+		}
 	}
-	now := time.Now()
-	if err := a.DB.UpdateAdminJobStatus(jobID, status, errorText, resultJSON, &now); err != nil {
+	if strings.TrimSpace(phase) == "" {
+		phase = status
+	}
+	if err := a.DB.UpdateAdminJobStatus(jobID, status, phase, errorText, resultJSON, finishedAt); err != nil {
 		Errorf("Admin job status update failed: %v", err)
 	}
 }

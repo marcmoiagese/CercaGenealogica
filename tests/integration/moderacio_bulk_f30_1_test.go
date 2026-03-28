@@ -133,8 +133,8 @@ func TestModeracioBulkJobOwnership(t *testing.T) {
 	req.AddCookie(otherSession)
 	rr = httptest.NewRecorder()
 	app.AdminControlModeracioJobStatus(rr, req)
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("job status per altre usuari esperava 404, got %d", rr.Code)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("job status per moderador amb permís esperava 200, got %d", rr.Code)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/admin/control/moderacio/jobs/"+payload.JobID, nil)

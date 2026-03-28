@@ -57,10 +57,12 @@ type DB interface {
 	CountAdminImportRunsSince(since time.Time) (AdminImportRunSummary, error)
 	CreateAdminJob(job *AdminJob) (int, error)
 	UpdateAdminJobProgress(id int, progressDone, progressTotal int) error
-	UpdateAdminJobStatus(id int, status, errorText, resultJSON string, finishedAt *time.Time) error
+	UpdateAdminJobStatus(id int, status, phase, errorText, resultJSON string, finishedAt *time.Time) error
 	GetAdminJob(id int) (*AdminJob, error)
 	ListAdminJobs(filter AdminJobFilter) ([]AdminJob, error)
 	CountAdminJobs(filter AdminJobFilter) (int, error)
+	CreateAdminJobTargets(jobID int, targets []AdminJobTarget) error
+	ListAdminJobTargets(jobID int) ([]AdminJobTarget, error)
 	InsertAdminAudit(entry *AdminAuditEntry) (int, error)
 	ListAdminAudit(filter AdminAuditFilter) ([]AdminAuditEntry, error)
 	CountAdminAudit(filter AdminAuditFilter) (int, error)
@@ -127,6 +129,7 @@ type DB interface {
 	GetUserActivity(id int) (*UserActivity, error)
 	InsertUserActivity(a *UserActivity) (int, error)
 	BulkInsertUserActivities(ctx context.Context, rows []UserActivity) (string, error)
+	BulkUpdateUserActivityStatus(ids []int, status string, moderatedBy *int) error
 	UpdateUserActivityStatus(id int, status string, moderatedBy *int) error
 	ListUserActivityByUser(userID int, f ActivityFilter) ([]UserActivity, error)
 	ListActivityByObject(objectType string, objectID int, status string) ([]UserActivity, error)
@@ -672,6 +675,7 @@ type AdminJob struct {
 	ID            int
 	Kind          string
 	Status        string
+	Phase         string
 	ProgressTotal int
 	ProgressDone  int
 	PayloadJSON   string
@@ -682,6 +686,15 @@ type AdminJob struct {
 	CreatedAt     sql.NullTime
 	UpdatedAt     sql.NullTime
 	CreatedBy     sql.NullInt64
+}
+
+type AdminJobTarget struct {
+	ID         int
+	JobID      int
+	SeqNum     int
+	ObjectType string
+	ObjectID   int
+	CreatedAt  sql.NullTime
 }
 
 type AdminJobFilter struct {

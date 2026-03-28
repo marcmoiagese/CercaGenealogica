@@ -92,6 +92,32 @@
             font-weight: 600;
             margin-top: 0.5rem;
         }
+        .job-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.75rem;
+            margin: 0 0 1.5rem;
+        }
+        .job-summary-card {
+            padding: 0.8rem 0.9rem;
+            border-radius: 12px;
+            background: #f9fafb;
+            border: 1px solid rgba(0,0,0,0.08);
+        }
+        .job-summary-card .label {
+            display: block;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #6b7280;
+            margin-bottom: 0.25rem;
+        }
+        .job-type-list {
+            margin: 0 0 1.5rem;
+        }
+        .job-type-list li {
+            margin-bottom: 0.35rem;
+        }
     </style>
 </head>
 <body>
@@ -115,6 +141,10 @@
                 <div class="job-detail-card">
                     <span class="label">{{ t .Lang "admin.jobs.table.status" }}</span>
                     <span class="job-status {{ .Data.Job.StatusClass }}">{{ t .Lang (printf "admin.jobs.status.%s" .Data.Job.Status) }}</span>
+                </div>
+                <div class="job-detail-card">
+                    <span class="label">{{ t .Lang "admin.jobs.phase" }}</span>
+                    <div>{{ t .Lang (printf "admin.jobs.phase.%s" .Data.Job.Phase) }}</div>
                 </div>
                 <div class="job-detail-card">
                     <span class="label">{{ t .Lang "admin.jobs.table.progress" }}</span>
@@ -142,6 +172,66 @@
             </div>
             {{ if .Data.Job.ErrorText }}
             <div class="job-error-text">{{ .Data.Job.ErrorText }}</div>
+            {{ end }}
+            {{ with .Data.ModeracioSummary }}
+            <h2>{{ t $.Lang "admin.jobs.kind.moderacio_bulk" }}</h2>
+            <div class="job-summary-grid">
+                <div class="job-summary-card">
+                    <span class="label">{{ t $.Lang "moderation.bulk.action" }}</span>
+                    <div>{{ .Action }}</div>
+                </div>
+                <div class="job-summary-card">
+                    <span class="label">{{ t $.Lang "moderation.bulk.scope" }}</span>
+                    <div>{{ .Scope }}</div>
+                </div>
+                <div class="job-summary-card">
+                    <span class="label">{{ t $.Lang "moderation.bulk.type" }}</span>
+                    <div>{{ .BulkType }}</div>
+                </div>
+                <div class="job-summary-card">
+                    <span class="label">Candidats</span>
+                    <div>{{ .Candidates }}</div>
+                </div>
+                <div class="job-summary-card">
+                    <span class="label">Targets</span>
+                    <div>{{ .Targets }}</div>
+                </div>
+                <div class="job-summary-card">
+                    <span class="label">Actualitzats</span>
+                    <div>{{ .Updated }}</div>
+                </div>
+                <div class="job-summary-card">
+                    <span class="label">Saltats</span>
+                    <div>{{ .Skipped }}</div>
+                </div>
+                <div class="job-summary-card">
+                    <span class="label">Errors</span>
+                    <div>{{ .Errors }}</div>
+                </div>
+                <div class="job-summary-card">
+                    <span class="label">Resolució</span>
+                    <div>{{ if .ResolveDur }}{{ .ResolveDur }}{{ else }}-{{ end }}</div>
+                </div>
+                <div class="job-summary-card">
+                    <span class="label">Canvis</span>
+                    <div>{{ if .UpdateDur }}{{ .UpdateDur }}{{ else }}-{{ end }}</div>
+                </div>
+                <div class="job-summary-card">
+                    <span class="label">Historial</span>
+                    <div>{{ if .ActivityDur }}{{ .ActivityDur }}{{ else }}-{{ end }}</div>
+                </div>
+                <div class="job-summary-card">
+                    <span class="label">Total</span>
+                    <div>{{ if .TotalDur }}{{ .TotalDur }}{{ else }}-{{ end }}</div>
+                </div>
+            </div>
+            {{ if .ByType }}
+            <ul class="job-type-list">
+                {{ range .ByType }}
+                <li>{{ .Type }}: {{ .Total }}</li>
+                {{ end }}
+            </ul>
+            {{ end }}
             {{ end }}
             <h2>{{ t .Lang "admin.jobs.payload" }}</h2>
             {{ if .Data.Payload }}

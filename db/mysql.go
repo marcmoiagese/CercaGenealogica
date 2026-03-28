@@ -306,8 +306,8 @@ func (d *MySQL) CreateAdminJob(job *AdminJob) (int, error) {
 func (d *MySQL) UpdateAdminJobProgress(id int, progressDone, progressTotal int) error {
 	return d.help.updateAdminJobProgress(id, progressDone, progressTotal)
 }
-func (d *MySQL) UpdateAdminJobStatus(id int, status, errorText, resultJSON string, finishedAt *time.Time) error {
-	return d.help.updateAdminJobStatus(id, status, errorText, resultJSON, finishedAt)
+func (d *MySQL) UpdateAdminJobStatus(id int, status, phase, errorText, resultJSON string, finishedAt *time.Time) error {
+	return d.help.updateAdminJobStatus(id, status, phase, errorText, resultJSON, finishedAt)
 }
 func (d *MySQL) GetAdminJob(id int) (*AdminJob, error) {
 	return d.help.getAdminJob(id)
@@ -317,6 +317,12 @@ func (d *MySQL) ListAdminJobs(filter AdminJobFilter) ([]AdminJob, error) {
 }
 func (d *MySQL) CountAdminJobs(filter AdminJobFilter) (int, error) {
 	return d.help.countAdminJobs(filter)
+}
+func (d *MySQL) CreateAdminJobTargets(jobID int, targets []AdminJobTarget) error {
+	return d.help.createAdminJobTargets(jobID, targets)
+}
+func (d *MySQL) ListAdminJobTargets(jobID int) ([]AdminJobTarget, error) {
+	return d.help.listAdminJobTargets(jobID)
 }
 func (d *MySQL) InsertAdminAudit(entry *AdminAuditEntry) (int, error) {
 	return d.help.insertAdminAudit(entry)
@@ -1618,6 +1624,9 @@ func (d *MySQL) BulkInsertUserActivities(ctx context.Context, rows []UserActivit
 		return "mysql-batch", err
 	}
 	return "mysql-batch", nil
+}
+func (d *MySQL) BulkUpdateUserActivityStatus(ids []int, status string, moderatedBy *int) error {
+	return d.help.bulkUpdateUserActivityStatus(ids, status, moderatedBy)
 }
 func (d *MySQL) UpdateUserActivityStatus(id int, status string, moderatedBy *int) error {
 	return d.help.updateUserActivityStatus(id, status, moderatedBy)
