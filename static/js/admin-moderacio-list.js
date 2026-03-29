@@ -60,6 +60,16 @@
         var doneLabel = bulkStatus.dataset.done || "";
         var errorLabel = bulkStatus.dataset.error || "";
         var jobBase = bulkStatus.dataset.jobBase || "";
+        var resolveBulkError = function (err) {
+            if (!err || !err.message) {
+                return errorLabel;
+            }
+            var message = String(err.message || "").trim();
+            if (!message || message === "request" || message === "status" || message === "job" || message === "missing") {
+                return errorLabel;
+            }
+            return message;
+        };
         var setBulkStatus = function (message, show) {
             if (!bulkStatus) {
                 return;
@@ -78,7 +88,9 @@
                 fetch(jobBase + jobID, { credentials: "same-origin" })
                     .then(function (resp) {
                         if (!resp.ok) {
-                            throw new Error("status");
+                            return resp.text().then(function (text) {
+                                throw new Error((text || "").trim() || "status");
+                            });
                         }
                         return resp.json();
                     })
@@ -103,8 +115,8 @@
                         }
                         setBulkDisabled(false);
                     })
-                    .catch(function () {
-                        setBulkStatus(errorLabel, true);
+                    .catch(function (err) {
+                        setBulkStatus(resolveBulkError(err), true);
                         setBulkDisabled(false);
                     });
             };
@@ -129,7 +141,9 @@
             })
                 .then(function (resp) {
                     if (!resp.ok) {
-                        throw new Error("request");
+                        return resp.text().then(function (text) {
+                            throw new Error((text || "").trim() || "request");
+                        });
                     }
                     return resp.json();
                 })
@@ -140,8 +154,8 @@
                     }
                     throw new Error("job");
                 })
-                .catch(function () {
-                    setBulkStatus(errorLabel, true);
+                .catch(function (err) {
+                    setBulkStatus(resolveBulkError(err), true);
                     setBulkDisabled(false);
                 });
         });

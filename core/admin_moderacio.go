@@ -4217,7 +4217,8 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 		if async {
 			jobID, err := a.startModeracioBulkAdminJob(action, bulkType, motiu, user, perms, bulkUserID)
 			if err != nil {
-				http.Error(w, "failed to start", http.StatusInternalServerError)
+				Errorf("moderacio bulk job create failed actor=%d action=%s scope=%s type=%s bulk_user_id=%d err=%v", user.ID, action, scope, bulkType, bulkUserID, err)
+				http.Error(w, "No s'ha pogut crear el job de moderacio massiva. Torna-ho a provar.", http.StatusInternalServerError)
 				return
 			}
 			a.logAdminAudit(r, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{

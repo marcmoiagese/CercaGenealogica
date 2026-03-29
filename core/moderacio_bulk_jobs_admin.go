@@ -74,6 +74,9 @@ func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *d
 	if a == nil || a.DB == nil || user == nil {
 		return 0, fmt.Errorf("context bulk invàlid")
 	}
+	if IsDebugEnabled() {
+		Debugf("moderacio bulk job create start actor=%d action=%s scope=all type=%s bulk_user_id=%d", user.ID, action, bulkType, bulkUserID)
+	}
 	payload := moderacioBulkJobPayload{
 		Action:     action,
 		Scope:      "all",
@@ -96,11 +99,16 @@ func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *d
 	}
 	jobID, err := a.DB.CreateAdminJob(&adminJob)
 	if err != nil {
+		Errorf("moderacio bulk admin job row create failed actor=%d action=%s scope=all type=%s bulk_user_id=%d err=%v", user.ID, action, bulkType, bulkUserID, err)
 		return 0, err
+	}
+	if IsDebugEnabled() {
+		Debugf("moderacio bulk admin job row created job=%d actor=%d action=%s type=%s bulk_user_id=%d", jobID, user.ID, action, bulkType, bulkUserID)
 	}
 	canModerateAll := a.hasPerm(perms, permModerate)
 	snapshot, err := a.resolveModeracioBulkAllSnapshot(bulkType, user, perms, canModerateAll, bulkUserID)
 	if err != nil {
+		Errorf("moderacio bulk snapshot resolve failed job=%d actor=%d action=%s type=%s bulk_user_id=%d err=%v", jobID, user.ID, action, bulkType, bulkUserID, err)
 		resultJSON := mustMarshalModeracioBulkResult(moderacioBulkJobResult{
 			Action:     action,
 			Scope:      "all",
@@ -117,7 +125,11 @@ func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *d
 		a.setAdminJobState(jobID, adminJobStatusError, adminJobPhaseError, err, resultJSON, &now)
 		return 0, err
 	}
+	if IsDebugEnabled() {
+		Debugf("moderacio bulk snapshot resolved job=%d actor=%d action=%s type=%s bulk_user_id=%d candidates=%d targets=%d scope_mode=%s resolve_ms=%d", jobID, user.ID, action, bulkType, bulkUserID, snapshot.Candidates, len(snapshot.Targets), snapshot.ScopeMode, durationMillis(snapshot.ResolveDur))
+	}
 	if err := a.DB.CreateAdminJobTargets(jobID, snapshot.Targets); err != nil {
+		Errorf("moderacio bulk snapshot persist failed job=%d actor=%d action=%s type=%s bulk_user_id=%d targets=%d err=%v", jobID, user.ID, action, bulkType, bulkUserID, len(snapshot.Targets), err)
 		resultJSON := mustMarshalModeracioBulkResult(moderacioBulkJobResult{
 			Action:     action,
 			Scope:      "all",
@@ -133,6 +145,9 @@ func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *d
 		})
 		a.setAdminJobState(jobID, adminJobStatusError, adminJobPhaseError, err, resultJSON, &now)
 		return 0, err
+	}
+	if IsDebugEnabled() {
+		Debugf("moderacio bulk snapshot persisted job=%d targets=%d", jobID, len(snapshot.Targets))
 	}
 	progressTotal := len(snapshot.Targets) + moderacioBulkProgressFinalStep
 	if progressTotal <= 0 {
@@ -174,7 +189,13 @@ func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *d
 		})
 		a.updateAdminJobProgress(jobID, progressTotal, progressTotal)
 		a.setAdminJobState(jobID, adminJobStatusDone, adminJobPhaseDone, nil, doneJSON, &now)
+		if IsDebugEnabled() {
+			Debugf("moderacio bulk job completed without targets job=%d", jobID)
+		}
 		return jobID, nil
+	}
+	if IsDebugEnabled() {
+		Debugf("moderacio bulk worker scheduled job=%d targets=%d action=%s type=%s", jobID, len(snapshot.Targets), action, bulkType)
 	}
 	go a.runModeracioBulkAdminJob(jobID, action, motiu, user.ID, snapshot)
 	return jobID, nil
@@ -504,6 +525,9 @@ func (a *App) resolveModeracioBulkAllSnapshot(bulkType string, user *db.User, pe
 
 func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID int, snapshot moderacioBulkSnapshot) {
 	start := time.Now()
+	if IsDebugEnabled() {
+		Debugf("moderacio bulk worker started job=%d actor=%d action=%s targets=%d", jobID, actorID, action, len(snapshot.Targets))
+	}
 	result := moderacioBulkJobResult{
 		Action:     action,
 		Scope:      "all",
@@ -528,6 +552,7 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 	a.setAdminJobState(jobID, adminJobStatusRunning, adminJobPhaseApplyingChanges, nil, mustMarshalModeracioBulkResult(result), nil)
 	targets, err := a.DB.ListAdminJobTargets(jobID)
 	if err != nil {
+		Errorf("moderacio bulk snapshot load failed job=%d actor=%d err=%v", jobID, actorID, err)
 		result.Phase = adminJobPhaseError
 		result.TotalMs = durationMillis(time.Since(start))
 		a.setAdminJobState(jobID, adminJobStatusError, adminJobPhaseError, err, mustMarshalModeracioBulkResult(result), timePtr(time.Now()))
@@ -672,9 +697,13 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 	}, metrics, time.Since(auditStart))
 	finishedAt := time.Now()
 	if errCount > 0 {
+		Errorf("moderacio bulk worker completed with errors job=%d actor=%d processed=%d updated=%d errors=%d", jobID, actorID, result.Processed, result.Updated, errCount)
 		result.Phase = adminJobPhaseError
 		a.setAdminJobState(jobID, adminJobStatusError, adminJobPhaseError, fmt.Errorf("errors: %d", errCount), mustMarshalModeracioBulkResult(result), &finishedAt)
 		return
+	}
+	if IsDebugEnabled() {
+		Debugf("moderacio bulk worker completed job=%d actor=%d processed=%d updated=%d", jobID, actorID, result.Processed, result.Updated)
 	}
 	a.setAdminJobState(jobID, adminJobStatusDone, adminJobPhaseDone, nil, mustMarshalModeracioBulkResult(result), &finishedAt)
 }

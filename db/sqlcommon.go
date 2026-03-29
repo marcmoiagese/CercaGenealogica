@@ -5385,20 +5385,47 @@ func (h sqlHelper) createAdminJobTargets(jobID int, targets []AdminJobTarget) er
 	if len(targets) == 0 {
 		return nil
 	}
-	cols := []string{"job_id", "seq_num", "object_type", "object_id", "created_at"}
-	values := make([]string, 0, len(targets))
-	args := make([]interface{}, 0, len(targets)*4)
+	const adminJobTargetsInsertBatchSize = 1000
 	for _, target := range targets {
 		if strings.TrimSpace(target.ObjectType) == "" || target.ObjectID <= 0 {
 			return errors.New("admin job target invàlid")
 		}
-		values = append(values, "(?, ?, ?, ?, "+h.nowFun+")")
-		args = append(args, jobID, target.SeqNum, target.ObjectType, target.ObjectID)
 	}
-	stmt := "INSERT INTO admin_job_targets (" + strings.Join(cols, ", ") + ") VALUES " + strings.Join(values, ", ")
-	stmt = formatPlaceholders(h.style, stmt)
-	_, err := h.db.Exec(stmt, args...)
-	return err
+	tx, err := h.db.Begin()
+	if err != nil {
+		return fmt.Errorf("admin_job_targets begin tx failed: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	totalBatches := (len(targets) + adminJobTargetsInsertBatchSize - 1) / adminJobTargetsInsertBatchSize
+	cols := []string{"job_id", "seq_num", "object_type", "object_id", "created_at"}
+	for batchIndex, start := 0, 0; start < len(targets); batchIndex, start = batchIndex+1, start+adminJobTargetsInsertBatchSize {
+		end := start + adminJobTargetsInsertBatchSize
+		if end > len(targets) {
+			end = len(targets)
+		}
+		batch := targets[start:end]
+		values := make([]string, 0, len(batch))
+		args := make([]interface{}, 0, len(batch)*4)
+		for _, target := range batch {
+			values = append(values, "(?, ?, ?, ?, "+h.nowFun+")")
+			args = append(args, jobID, target.SeqNum, target.ObjectType, target.ObjectID)
+		}
+		stmt := "INSERT INTO admin_job_targets (" + strings.Join(cols, ", ") + ") VALUES " + strings.Join(values, ", ")
+		stmt = formatPlaceholders(h.style, stmt)
+		if _, err := tx.Exec(stmt, args...); err != nil {
+			return fmt.Errorf("admin_job_targets batch %d/%d failed: %w", batchIndex+1, totalBatches, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("admin_job_targets commit failed: %w", err)
+	}
+	committed = true
+	return nil
 }
 
 func (h sqlHelper) listAdminJobTargets(jobID int) ([]AdminJobTarget, error) {
