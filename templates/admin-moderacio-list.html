@@ -288,7 +288,7 @@
                 </select>
             </div>
             {{ if .Data.CanBulk }}
-            <div id="bulk-status" class="moderacio-bulk-status" data-running="{{ t .Lang "moderation.bulk.async.running" }}" data-done="{{ t .Lang "moderation.bulk.async.done" }}" data-error="{{ t .Lang "moderation.bulk.async.error" }}" data-job-base="/api/admin/control/moderacio/jobs/"></div>
+            <div id="bulk-status" class="moderacio-bulk-status" data-running="{{ t .Lang "moderation.bulk.async.running" }}" data-done="{{ t .Lang "moderation.bulk.async.done" }}" data-error="{{ t .Lang "moderation.bulk.async.error" }}" data-done-errors="{{ t .Lang "moderation.bulk.async.done_with_errors" }}" data-updated-label="{{ t .Lang "moderation.bulk.async.updated_label" }}" data-errors-label="{{ t .Lang "moderation.bulk.async.errors_label" }}" data-view-label="{{ t .Lang "moderation.bulk.async.view_job" }}" data-job-base="/api/admin/control/moderacio/jobs/"></div>
             <form id="bulk-form" class="moderacio-bulk" method="post" action="/moderacio/bulk">
                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                 <input type="hidden" name="return_to" value="{{ .Data.ReturnTo }}">

@@ -589,13 +589,13 @@ func (a *App) AdminControlModeracioJobStatus(w http.ResponseWriter, r *http.Requ
 			"done":        done,
 			"error":       strings.TrimSpace(job.ErrorText),
 			"result_json": strings.TrimSpace(job.ResultJSON),
+			"detail_url":  "/admin/jobs/" + strconv.Itoa(job.ID),
+			"age_ms":      adminJobAge(*job).Milliseconds(),
+			"summary":     buildAdminModeracioBulkJobSummary(*job),
 		},
 	})
 	if IsDebugEnabled() {
-		age := time.Duration(0)
-		if job.StartedAt.Valid {
-			age = time.Since(job.StartedAt.Time)
-		}
+		age := adminJobAge(*job)
 		Debugf("moderacio job status user=%d job=%d done=%t processed=%d total=%d err=%t age=%s", user.ID, job.ID, done, job.ProgressDone, job.ProgressTotal, strings.TrimSpace(job.ErrorText) != "", age)
 	}
 }

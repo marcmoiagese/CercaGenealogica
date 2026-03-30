@@ -54,12 +54,18 @@ type auditOption struct {
 }
 
 func (a *App) logAdminAudit(r *http.Request, actorID int, action string, objectType string, objectID int, metadata map[string]interface{}) {
+	if err := a.insertAdminAudit(r, actorID, action, objectType, objectID, metadata); err != nil {
+		Errorf("Admin audit insert failed: %v", err)
+	}
+}
+
+func (a *App) insertAdminAudit(r *http.Request, actorID int, action string, objectType string, objectID int, metadata map[string]interface{}) error {
 	if a == nil || a.DB == nil {
-		return
+		return nil
 	}
 	action = strings.TrimSpace(action)
 	if action == "" {
-		return
+		return nil
 	}
 	entry := &db.AdminAuditEntry{
 		Action:     action,
@@ -78,8 +84,9 @@ func (a *App) logAdminAudit(r *http.Request, actorID int, action string, objectT
 		}
 	}
 	if _, err := a.DB.InsertAdminAudit(entry); err != nil {
-		Errorf("Admin audit insert failed: %v", err)
+		return err
 	}
+	return nil
 }
 
 func getIPSafe(r *http.Request) string {

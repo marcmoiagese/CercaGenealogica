@@ -3334,7 +3334,7 @@ func (a *App) applyModeracioActivitiesBulk(ctx context.Context, action string, o
 	}()
 	acts, err := a.DB.ListActivityByObjects(objType, ids, "pendent")
 	if err != nil {
-		return err
+		return fmt.Errorf("list_pending_activities failed: %w", err)
 	}
 	pendingIDs := make([]int, 0, len(acts))
 	pendingUsers := map[int]struct{}{}
@@ -3351,19 +3351,19 @@ func (a *App) applyModeracioActivitiesBulk(ctx context.Context, action string, o
 	switch action {
 	case "approve":
 		if err := a.DB.BulkUpdateUserActivityStatus(pendingIDs, "validat", &userID); err != nil {
-			return err
+			return fmt.Errorf("bulk_update_pending_status failed: %w", err)
 		}
 		for uid, delta := range pointsByUser {
 			if delta == 0 {
 				continue
 			}
 			if err := a.DB.AddPointsToUser(uid, delta); err != nil {
-				return err
+				return fmt.Errorf("author_points_update failed user=%d delta=%d: %w", uid, delta, err)
 			}
 		}
 	case "reject":
 		if err := a.DB.BulkUpdateUserActivityStatus(pendingIDs, "anulat", &userID); err != nil {
-			return err
+			return fmt.Errorf("bulk_update_pending_status failed: %w", err)
 		}
 	default:
 		return fmt.Errorf("acció no vàlida")
@@ -3372,10 +3372,11 @@ func (a *App) applyModeracioActivitiesBulk(ctx context.Context, action string, o
 	insertedCount := 0
 	if len(activityRows) > 0 {
 		if _, err := a.DB.BulkInsertUserActivities(ctx, activityRows); err != nil {
+			bulkInsertErr := err
 			for i := range activityRows {
 				row := activityRows[i]
 				if _, err := a.DB.InsertUserActivity(&row); err != nil {
-					return err
+					return fmt.Errorf("insert_activity_fallback failed after bulk_insert_error=%v object_type=%s object_id=%d: %w", bulkInsertErr, row.ObjectType, row.ObjectID.Int64, err)
 				}
 				insertedCount++
 			}
@@ -3385,7 +3386,7 @@ func (a *App) applyModeracioActivitiesBulk(ctx context.Context, action string, o
 	}
 	if insertedCount > 0 && pointsPerActivity != 0 {
 		if err := a.DB.AddPointsToUser(userID, pointsPerActivity*insertedCount); err != nil {
-			return err
+			return fmt.Errorf("moderator_points_update failed user=%d delta=%d: %w", userID, pointsPerActivity*insertedCount, err)
 		}
 	}
 	now := time.Now()

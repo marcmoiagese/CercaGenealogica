@@ -53,23 +53,26 @@ type adminJobView struct {
 }
 
 type adminModeracioBulkJobSummary struct {
-	Action      string
-	Scope       string
-	BulkType    string
-	BulkUserID  int
-	Phase       string
-	ScopeMode   string
-	Candidates  int
-	Targets     int
-	Processed   int
-	Updated     int
-	Skipped     int
-	Errors      int
-	ResolveDur  string
-	UpdateDur   string
-	ActivityDur string
-	TotalDur    string
-	ByType      []moderacioTypeCount
+	Action       string
+	Scope        string
+	BulkType     string
+	BulkUserID   int
+	Phase        string
+	ScopeMode    string
+	Candidates   int
+	Targets      int
+	Processed    int
+	Updated      int
+	Skipped      int
+	Errors       int
+	ResolveDur   string
+	UpdateDur    string
+	ActivityDur  string
+	TotalDur     string
+	ActivityMode string
+	ByType       []moderacioTypeCount
+	ErrorPhases  []moderacioBulkJobErrorPhaseCount
+	ErrorSamples []moderacioBulkJobErrorSample
 }
 
 type adminJobCreateRequest struct {
@@ -616,11 +619,20 @@ func buildAdminModeracioBulkJobSummary(job db.AdminJob) *adminModeracioBulkJobSu
 			summary.UpdateDur = formatAdminJobDuration(result.UpdateMs)
 			summary.ActivityDur = formatAdminJobDuration(result.ActivityMs)
 			summary.TotalDur = formatAdminJobDuration(result.TotalMs)
+			summary.ActivityMode = strings.TrimSpace(result.ActivityMode)
 			summary.ByType = result.ByType
+			summary.ErrorPhases = result.ErrorPhases
+			summary.ErrorSamples = result.ErrorSamples
 		}
 	}
 	if summary.ByType == nil {
 		summary.ByType = []moderacioTypeCount{}
+	}
+	if summary.ErrorPhases == nil {
+		summary.ErrorPhases = []moderacioBulkJobErrorPhaseCount{}
+	}
+	if summary.ErrorSamples == nil {
+		summary.ErrorSamples = []moderacioBulkJobErrorSample{}
 	}
 	return summary
 }
@@ -679,7 +691,7 @@ func formatAdminJobTimeISO(val sql.NullTime) string {
 	if !val.Valid {
 		return ""
 	}
-	return val.Time.Format(time.RFC3339)
+	return val.Time.UTC().Format(time.RFC3339)
 }
 
 func formatJSONForDisplay(raw string) string {
@@ -709,11 +721,47 @@ func adminJobAPIItem(job db.AdminJob) map[string]interface{} {
 		"finished_at":    formatAdminJobTimeISO(job.FinishedAt),
 		"created_at":     formatAdminJobTimeISO(job.CreatedAt),
 		"updated_at":     formatAdminJobTimeISO(job.UpdatedAt),
+		"detail_url":     "/admin/jobs/" + strconv.Itoa(job.ID),
+		"age_ms":         adminJobAge(job).Milliseconds(),
 	}
 	if job.CreatedBy.Valid {
 		item["created_by"] = int(job.CreatedBy.Int64)
 	}
+	if summary := buildAdminModeracioBulkJobSummary(job); summary != nil {
+		item["moderacio_summary"] = summary
+	}
 	return item
+}
+
+func adminJobNow() time.Time {
+	return time.Now().UTC()
+}
+
+func normalizeAdminJobTimePtr(val *time.Time) *time.Time {
+	if val == nil {
+		return nil
+	}
+	utc := val.UTC()
+	return &utc
+}
+
+func adminJobAge(job db.AdminJob) time.Duration {
+	ref := time.Time{}
+	switch {
+	case job.StartedAt.Valid:
+		ref = job.StartedAt.Time
+	case job.CreatedAt.Valid:
+		ref = job.CreatedAt.Time
+	case job.UpdatedAt.Valid:
+		ref = job.UpdatedAt.Time
+	default:
+		return 0
+	}
+	age := adminJobNow().Sub(ref.UTC())
+	if age < 0 {
+		return 0
+	}
+	return age
 }
 
 func (a *App) requireAdminJobViewer(w http.ResponseWriter, r *http.Request) (*db.User, db.PolicyPermissions, bool, bool) {
@@ -759,7 +807,7 @@ func (a *App) updateAdminJobProgress(jobID, progressDone, progressTotal int) {
 }
 
 func (a *App) finishAdminJob(jobID int, status string, err error, resultJSON string) {
-	now := time.Now()
+	now := adminJobNow()
 	a.setAdminJobState(jobID, status, status, err, resultJSON, &now)
 }
 
@@ -778,7 +826,7 @@ func (a *App) setAdminJobState(jobID int, status, phase string, err error, resul
 	if strings.TrimSpace(phase) == "" {
 		phase = status
 	}
-	if err := a.DB.UpdateAdminJobStatus(jobID, status, phase, errorText, resultJSON, finishedAt); err != nil {
+	if err := a.DB.UpdateAdminJobStatus(jobID, status, phase, errorText, resultJSON, normalizeAdminJobTimePtr(finishedAt)); err != nil {
 		Errorf("Admin job status update failed: %v", err)
 	}
 }

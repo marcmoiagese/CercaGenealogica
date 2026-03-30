@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -165,7 +164,7 @@ func (a *App) startNivellRebuildJob(kind string, nivellID int, all bool, created
 		"job_source": "admin",
 	}
 	payloadJSON, _ := json.Marshal(payload)
-	now := time.Now()
+	now := adminJobNow()
 	adminJob := db.AdminJob{
 		Kind:          adminJobKindNivellsRebuild,
 		Status:        adminJobStatusRunning,

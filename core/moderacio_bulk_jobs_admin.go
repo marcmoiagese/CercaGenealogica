@@ -31,24 +31,39 @@ type moderacioBulkJobPayload struct {
 }
 
 type moderacioBulkJobResult struct {
-	Action       string               `json:"action"`
-	Scope        string               `json:"scope"`
-	BulkType     string               `json:"bulk_type"`
-	BulkUserID   int                  `json:"bulk_user_id,omitempty"`
-	Phase        string               `json:"phase"`
-	ScopeMode    string               `json:"scope_mode"`
-	Candidates   int                  `json:"candidates"`
-	Targets      int                  `json:"targets"`
-	Processed    int                  `json:"processed"`
-	Updated      int                  `json:"updated"`
-	Skipped      int                  `json:"skipped"`
-	Errors       int                  `json:"errors"`
-	ByType       []moderacioTypeCount `json:"by_type"`
-	ResolveMs    int64                `json:"resolve_ms"`
-	UpdateMs     int64                `json:"update_ms"`
-	ActivityMs   int64                `json:"activity_ms"`
-	TotalMs      int64                `json:"total_ms"`
-	ActivityMode string               `json:"activity_mode"`
+	Action       string                            `json:"action"`
+	Scope        string                            `json:"scope"`
+	BulkType     string                            `json:"bulk_type"`
+	BulkUserID   int                               `json:"bulk_user_id,omitempty"`
+	Phase        string                            `json:"phase"`
+	ScopeMode    string                            `json:"scope_mode"`
+	Candidates   int                               `json:"candidates"`
+	Targets      int                               `json:"targets"`
+	Processed    int                               `json:"processed"`
+	Updated      int                               `json:"updated"`
+	Skipped      int                               `json:"skipped"`
+	Errors       int                               `json:"errors"`
+	ByType       []moderacioTypeCount              `json:"by_type"`
+	ResolveMs    int64                             `json:"resolve_ms"`
+	UpdateMs     int64                             `json:"update_ms"`
+	ActivityMs   int64                             `json:"activity_ms"`
+	TotalMs      int64                             `json:"total_ms"`
+	ActivityMode string                            `json:"activity_mode"`
+	ErrorPhases  []moderacioBulkJobErrorPhaseCount `json:"error_phases,omitempty"`
+	ErrorSamples []moderacioBulkJobErrorSample     `json:"error_samples,omitempty"`
+}
+
+type moderacioBulkJobErrorPhaseCount struct {
+	Phase string `json:"phase"`
+	Count int    `json:"count"`
+}
+
+type moderacioBulkJobErrorSample struct {
+	Phase      string `json:"phase"`
+	Step       string `json:"step"`
+	ObjectType string `json:"object_type,omitempty"`
+	ObjectID   int    `json:"object_id,omitempty"`
+	Message    string `json:"message"`
 }
 
 type moderacioBulkSnapshot struct {
@@ -70,6 +85,111 @@ var moderacioBulkSimpleTypes = map[string]bool{
 	"event_historic":    true,
 }
 
+const moderacioBulkErrorSampleLimit = 8
+
+type moderacioBulkErrorCollector struct {
+	phaseCounts map[string]int
+	samples     []moderacioBulkJobErrorSample
+}
+
+func newModeracioBulkErrorCollector() *moderacioBulkErrorCollector {
+	return &moderacioBulkErrorCollector{
+		phaseCounts: map[string]int{},
+		samples:     make([]moderacioBulkJobErrorSample, 0, moderacioBulkErrorSampleLimit),
+	}
+}
+
+func (c *moderacioBulkErrorCollector) add(phase, step, objectType string, objectID int, err error) bool {
+	if c == nil || err == nil {
+		return false
+	}
+	phase = strings.TrimSpace(phase)
+	if phase == "" {
+		phase = adminJobPhaseError
+	}
+	c.phaseCounts[phase]++
+	if len(c.samples) >= moderacioBulkErrorSampleLimit {
+		return false
+	}
+	c.samples = append(c.samples, moderacioBulkJobErrorSample{
+		Phase:      phase,
+		Step:       strings.TrimSpace(step),
+		ObjectType: strings.TrimSpace(objectType),
+		ObjectID:   objectID,
+		Message:    strings.TrimSpace(err.Error()),
+	})
+	return true
+}
+
+func (c *moderacioBulkErrorCollector) phaseCountsSlice() []moderacioBulkJobErrorPhaseCount {
+	if c == nil || len(c.phaseCounts) == 0 {
+		return []moderacioBulkJobErrorPhaseCount{}
+	}
+	order := []string{adminJobPhaseResolvingTargets, adminJobPhaseApplyingChanges, adminJobPhaseRecordingHistory, adminJobPhaseError}
+	seen := map[string]bool{}
+	out := make([]moderacioBulkJobErrorPhaseCount, 0, len(c.phaseCounts))
+	for _, phase := range order {
+		if count := c.phaseCounts[phase]; count > 0 {
+			out = append(out, moderacioBulkJobErrorPhaseCount{Phase: phase, Count: count})
+			seen[phase] = true
+		}
+	}
+	for phase, count := range c.phaseCounts {
+		if count <= 0 || seen[phase] {
+			continue
+		}
+		out = append(out, moderacioBulkJobErrorPhaseCount{Phase: phase, Count: count})
+	}
+	return out
+}
+
+func (c *moderacioBulkErrorCollector) samplesSlice() []moderacioBulkJobErrorSample {
+	if c == nil || len(c.samples) == 0 {
+		return []moderacioBulkJobErrorSample{}
+	}
+	out := make([]moderacioBulkJobErrorSample, len(c.samples))
+	copy(out, c.samples)
+	return out
+}
+
+func recordModeracioBulkWorkerError(jobID, actorID int, collector *moderacioBulkErrorCollector, result *moderacioBulkJobResult, phase, step, objectType string, objectID int, err error) int {
+	if err == nil {
+		return 0
+	}
+	if collector.add(phase, step, objectType, objectID, err) {
+		Errorf("moderacio bulk worker issue job=%d actor=%d phase=%s step=%s type=%s object_id=%d err=%v", jobID, actorID, phase, step, objectType, objectID, err)
+	}
+	if result != nil {
+		result.ErrorPhases = collector.phaseCountsSlice()
+		result.ErrorSamples = collector.samplesSlice()
+	}
+	return 1
+}
+
+func moderacioBulkErrorText(result moderacioBulkJobResult) string {
+	if result.Errors <= 0 {
+		return ""
+	}
+	base := fmt.Sprintf("moderacio bulk completada amb incidencies: updated=%d skipped=%d errors=%d", result.Updated, result.Skipped, result.Errors)
+	if len(result.ErrorSamples) == 0 {
+		return base
+	}
+	sample := result.ErrorSamples[0]
+	parts := []string{strings.TrimSpace(sample.Phase), strings.TrimSpace(sample.Step)}
+	if strings.TrimSpace(sample.ObjectType) != "" {
+		if sample.ObjectID > 0 {
+			parts = append(parts, fmt.Sprintf("%s:%d", sample.ObjectType, sample.ObjectID))
+		} else {
+			parts = append(parts, sample.ObjectType)
+		}
+	}
+	context := strings.Join(filterEmptyStrings(parts), "/")
+	if context == "" {
+		return base + "; primer error: " + sample.Message
+	}
+	return base + "; primer error " + context + ": " + sample.Message
+}
+
 func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *db.User, perms db.PolicyPermissions, bulkUserID int) (int, error) {
 	if a == nil || a.DB == nil || user == nil {
 		return 0, fmt.Errorf("context bulk invàlid")
@@ -86,7 +206,7 @@ func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *d
 		Source:     "moderacio",
 	}
 	payloadJSON, _ := json.Marshal(payload)
-	now := time.Now()
+	now := adminJobNow()
 	adminJob := db.AdminJob{
 		Kind:          adminJobKindModeracioBulk,
 		Status:        adminJobStatusRunning,
@@ -539,6 +659,7 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 		ByType:     snapshot.ByType,
 		ResolveMs:  durationMillis(snapshot.ResolveDur),
 	}
+	errorCollector := newModeracioBulkErrorCollector()
 	job, err := a.DB.GetAdminJob(jobID)
 	if err == nil && job != nil {
 		var payload moderacioBulkJobPayload
@@ -552,10 +673,10 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 	a.setAdminJobState(jobID, adminJobStatusRunning, adminJobPhaseApplyingChanges, nil, mustMarshalModeracioBulkResult(result), nil)
 	targets, err := a.DB.ListAdminJobTargets(jobID)
 	if err != nil {
-		Errorf("moderacio bulk snapshot load failed job=%d actor=%d err=%v", jobID, actorID, err)
+		result.Errors += recordModeracioBulkWorkerError(jobID, actorID, errorCollector, &result, adminJobPhaseApplyingChanges, "load_snapshot_targets", "", 0, err)
 		result.Phase = adminJobPhaseError
 		result.TotalMs = durationMillis(time.Since(start))
-		a.setAdminJobState(jobID, adminJobStatusError, adminJobPhaseError, err, mustMarshalModeracioBulkResult(result), timePtr(time.Now()))
+		a.setAdminJobState(jobID, adminJobStatusError, adminJobPhaseError, err, mustMarshalModeracioBulkResult(result), timePtr(adminJobNow()))
 		return
 	}
 	grouped := map[string][]int{}
@@ -605,7 +726,7 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 			updateDur += time.Since(stepStart)
 			processed += len(ids)
 			if err != nil {
-				errCount++
+				errCount += recordModeracioBulkWorkerError(jobID, actorID, errorCollector, &result, adminJobPhaseApplyingChanges, "bulk_update", objType, 0, err)
 				flushProgress()
 				continue
 			}
@@ -623,7 +744,7 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 		for idx, id := range ids {
 			stepStart := time.Now()
 			if err := a.applyModeracioUpdate(action, objType, id, motiu, actorID, nil); err != nil {
-				errCount++
+				errCount += recordModeracioBulkWorkerError(jobID, actorID, errorCollector, &result, adminJobPhaseApplyingChanges, "apply_update", objType, id, err)
 			} else {
 				successIDs = append(successIDs, id)
 				updated++
@@ -649,7 +770,7 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 		}
 		stepStart := time.Now()
 		if err := a.applyModeracioActivitiesBulk(ctx, action, objType, ids, motiu, actorID, nil); err != nil {
-			errCount++
+			errCount += recordModeracioBulkWorkerError(jobID, actorID, errorCollector, &result, adminJobPhaseRecordingHistory, "apply_activity_bulk", objType, 0, err)
 			activityMode = "mixed"
 		}
 		activityDur += time.Since(stepStart)
@@ -664,8 +785,10 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 	result.ActivityMs = durationMillis(activityDur)
 	result.TotalMs = durationMillis(time.Since(start))
 	result.ActivityMode = activityMode
+	result.ErrorPhases = errorCollector.phaseCountsSlice()
+	result.ErrorSamples = errorCollector.samplesSlice()
 	auditStart := time.Now()
-	a.logAdminAudit(nil, actorID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
+	if err := a.insertAdminAudit(nil, actorID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
 		"action":       action,
 		"scope":        "all",
 		"bulk_type":    result.BulkType,
@@ -679,7 +802,12 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 		"job_id":       jobID,
 		"async":        true,
 		"persistent":   true,
-	})
+	}); err != nil {
+		errCount += recordModeracioBulkWorkerError(jobID, actorID, errorCollector, &result, adminJobPhaseRecordingHistory, "admin_audit", "moderacio", 0, err)
+		result.Errors = errCount
+		result.ErrorPhases = errorCollector.phaseCountsSlice()
+		result.ErrorSamples = errorCollector.samplesSlice()
+	}
 	metrics := moderacioBulkMetrics{
 		ResolveDur:  snapshot.ResolveDur,
 		UpdateDur:   updateDur,
@@ -695,11 +823,11 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 		Errors:     result.Errors,
 		Skipped:    result.Skipped,
 	}, metrics, time.Since(auditStart))
-	finishedAt := time.Now()
+	finishedAt := adminJobNow()
 	if errCount > 0 {
 		Errorf("moderacio bulk worker completed with errors job=%d actor=%d processed=%d updated=%d errors=%d", jobID, actorID, result.Processed, result.Updated, errCount)
 		result.Phase = adminJobPhaseError
-		a.setAdminJobState(jobID, adminJobStatusError, adminJobPhaseError, fmt.Errorf("errors: %d", errCount), mustMarshalModeracioBulkResult(result), &finishedAt)
+		a.setAdminJobState(jobID, adminJobStatusError, adminJobPhaseError, fmt.Errorf("%s", moderacioBulkErrorText(result)), mustMarshalModeracioBulkResult(result), &finishedAt)
 		return
 	}
 	if IsDebugEnabled() {
@@ -762,8 +890,20 @@ func (a *App) failInterruptedModeracioBulkJobs() {
 					Phase: adminJobPhaseError,
 				})
 			}
-			finishedAt := time.Now()
+			finishedAt := adminJobNow()
 			a.setAdminJobState(job.ID, adminJobStatusError, adminJobPhaseError, fmt.Errorf("job interromput per reinici del worker"), resultJSON, &finishedAt)
 		}
 	}
+}
+
+func filterEmptyStrings(parts []string) []string {
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		out = append(out, part)
+	}
+	return out
 }

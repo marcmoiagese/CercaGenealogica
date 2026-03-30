@@ -221,10 +221,30 @@
                     <div>{{ if .ActivityDur }}{{ .ActivityDur }}{{ else }}-{{ end }}</div>
                 </div>
                 <div class="job-summary-card">
+                    <span class="label">Mode historial</span>
+                    <div>{{ if .ActivityMode }}{{ .ActivityMode }}{{ else }}-{{ end }}</div>
+                </div>
+                <div class="job-summary-card">
                     <span class="label">Total</span>
                     <div>{{ if .TotalDur }}{{ .TotalDur }}{{ else }}-{{ end }}</div>
                 </div>
             </div>
+            {{ if .ErrorPhases }}
+            <h3>Fases amb errors</h3>
+            <ul class="job-type-list">
+                {{ range .ErrorPhases }}
+                <li>{{ .Phase }}: {{ .Count }}</li>
+                {{ end }}
+            </ul>
+            {{ end }}
+            {{ if .ErrorSamples }}
+            <h3>Mostra d'errors</h3>
+            <ul class="job-type-list">
+                {{ range .ErrorSamples }}
+                <li>{{ .Phase }} / {{ .Step }}{{ if .ObjectType }} / {{ .ObjectType }}{{ if gt .ObjectID 0 }}:{{ .ObjectID }}{{ end }}{{ end }}: {{ .Message }}</li>
+                {{ end }}
+            </ul>
+            {{ end }}
             {{ if .ByType }}
             <ul class="job-type-list">
                 {{ range .ByType }}

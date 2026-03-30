@@ -59,6 +59,10 @@
         var runningLabel = bulkStatus.dataset.running || "";
         var doneLabel = bulkStatus.dataset.done || "";
         var errorLabel = bulkStatus.dataset.error || "";
+        var doneErrorsLabel = bulkStatus.dataset.doneErrors || errorLabel;
+        var updatedLabel = bulkStatus.dataset.updatedLabel || "Updated";
+        var errorsCountLabel = bulkStatus.dataset.errorsLabel || "Errors";
+        var viewLabel = bulkStatus.dataset.viewLabel || "View";
         var jobBase = bulkStatus.dataset.jobBase || "";
         var resolveBulkError = function (err) {
             if (!err || !err.message) {
@@ -70,11 +74,19 @@
             }
             return message;
         };
-        var setBulkStatus = function (message, show) {
+        var setBulkStatus = function (message, show, detailURL) {
             if (!bulkStatus) {
                 return;
             }
-            bulkStatus.textContent = message;
+            bulkStatus.textContent = "";
+            bulkStatus.appendChild(document.createTextNode(message));
+            if (detailURL) {
+                bulkStatus.appendChild(document.createTextNode(" "));
+                var link = document.createElement("a");
+                link.href = detailURL;
+                link.textContent = viewLabel;
+                bulkStatus.appendChild(link);
+            }
             bulkStatus.style.display = show ? "block" : "none";
         };
         var setBulkDisabled = function (disabled) {
@@ -104,19 +116,24 @@
                             if (job.total && job.total > 0) {
                                 label = label + " (" + (job.processed || 0) + "/" + job.total + ")";
                             }
-                            setBulkStatus(label, true);
+                            setBulkStatus(label, true, job.detail_url || "");
                             window.setTimeout(poll, 1000);
                             return;
                         }
+                        var summary = job.summary || null;
                         if (job.error) {
-                            setBulkStatus(errorLabel || job.error, true);
+                            var errorMessage = job.error;
+                            if (summary && summary.errors > 0) {
+                                errorMessage = (doneErrorsLabel || errorLabel) + " (" + updatedLabel + ": " + (summary.updated || 0) + ", " + errorsCountLabel + ": " + (summary.errors || 0) + ")";
+                            }
+                            setBulkStatus(errorMessage || errorLabel, true, job.detail_url || "");
                         } else {
-                            setBulkStatus(doneLabel, true);
+                            setBulkStatus(doneLabel, true, job.detail_url || "");
                         }
                         setBulkDisabled(false);
                     })
                     .catch(function (err) {
-                        setBulkStatus(resolveBulkError(err), true);
+                        setBulkStatus(resolveBulkError(err), true, "");
                         setBulkDisabled(false);
                     });
             };
@@ -155,7 +172,7 @@
                     throw new Error("job");
                 })
                 .catch(function (err) {
-                    setBulkStatus(resolveBulkError(err), true);
+                    setBulkStatus(resolveBulkError(err), true, "");
                     setBulkDisabled(false);
                 });
         });
