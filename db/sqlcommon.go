@@ -69,16 +69,10 @@ func buildInPlaceholders(style string, count int) string {
 	if count <= 0 {
 		return ""
 	}
-	switch strings.ToLower(style) {
-	case "postgres":
-		parts := make([]string, count)
-		for i := 0; i < count; i++ {
-			parts[i] = fmt.Sprintf("$%d", i+1)
-		}
-		return strings.Join(parts, ",")
-	default:
-		return strings.TrimRight(strings.Repeat("?,", count), ",")
-	}
+	// Sempre generem "?" i deleguem la numeració final a formatPlaceholders.
+	// Si aquí fabriquem "$1,$2,..." per Postgres, les consultes mixtes amb
+	// placeholders abans o després de l'IN poden col·lidir i desalinear args.
+	return strings.TrimRight(strings.Repeat("?,", count), ",")
 }
 
 func demografiaYearColumn(style string) string {
