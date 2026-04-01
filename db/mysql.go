@@ -893,6 +893,9 @@ func (d *MySQL) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
 func (d *MySQL) ListLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
 	return d.help.listLlibreArxius(llibreID)
 }
+func (d *MySQL) ListLlibreArxiusByLlibreIDs(llibreIDs []int) (map[int][]ArxiuLlibreDetail, error) {
+	return d.help.listLlibreArxiusByLlibreIDs(llibreIDs)
+}
 
 func (d *MySQL) ListLlibreURLs(llibreID int) ([]LlibreURL, error) {
 	return d.help.listLlibreURLs(llibreID)
@@ -929,6 +932,9 @@ func (d *MySQL) CountIndexedRegistres(status string) (int, error) {
 }
 func (d *MySQL) GetLlibre(id int) (*Llibre, error) {
 	return d.help.getLlibre(id)
+}
+func (d *MySQL) GetLlibresByIDs(ids []int) (map[int]*Llibre, error) {
+	return d.help.getLlibresByIDs(ids)
 }
 func (d *MySQL) CreateLlibre(l *Llibre) (int, error) {
 	return d.help.createLlibre(l)
@@ -1171,6 +1177,9 @@ func (d *MySQL) ListTranscripcionsRaw(llibreID int, f TranscripcioFilter) ([]Tra
 func (d *MySQL) ListTranscripcionsRawGlobal(f TranscripcioFilter) ([]TranscripcioRaw, error) {
 	return d.help.listTranscripcionsRawGlobal(f)
 }
+func (d *MySQL) ListTranscripcionsRawByIDs(ids []int) ([]TranscripcioRaw, error) {
+	return d.help.listTranscripcionsRawByIDs(ids)
+}
 func (d *MySQL) CountTranscripcionsRaw(llibreID int, f TranscripcioFilter) (int, error) {
 	return d.help.countTranscripcionsRaw(llibreID, f)
 }
@@ -1198,6 +1207,12 @@ func (d *MySQL) UpdateTranscripcioModeracio(id int, estat, motiu string, moderat
 }
 func (d *MySQL) UpdateTranscripcioModeracioWithDemografia(id int, estat, motiu string, moderatorID int, municipiID, year int, tipus string, delta int) error {
 	return d.help.updateTranscripcioModeracioWithDemografia(id, estat, motiu, moderatorID, municipiID, year, tipus, delta)
+}
+func (d *MySQL) BulkUpdateTranscripcioModeracio(estat, motiu string, moderatorID int, ids []int) (int, error) {
+	return d.help.bulkUpdateTranscripcioModeracio(estat, motiu, moderatorID, ids)
+}
+func (d *MySQL) BulkUpdateTranscripcioModeracioWithDemografia(estat, motiu string, moderatorID int, ids []int, municipiID, year int, tipus string, delta int) (int, error) {
+	return d.help.bulkUpdateTranscripcioModeracioWithDemografia(estat, motiu, moderatorID, ids, municipiID, year, tipus, delta)
 }
 func (d *MySQL) DeleteTranscripcioRaw(id int) error {
 	return d.help.deleteTranscripcioRaw(id)
@@ -1244,6 +1259,9 @@ func (d *MySQL) UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string
 }
 func (d *MySQL) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersones(transcripcioID)
+}
+func (d *MySQL) ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
+	return d.help.listTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
 }
 func (d *MySQL) CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error) {
 	return d.help.createTranscripcioPersona(p)

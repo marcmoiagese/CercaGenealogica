@@ -918,6 +918,9 @@ func (d *SQLite) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
 func (d *SQLite) ListLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
 	return d.help.listLlibreArxius(llibreID)
 }
+func (d *SQLite) ListLlibreArxiusByLlibreIDs(llibreIDs []int) (map[int][]ArxiuLlibreDetail, error) {
+	return d.help.listLlibreArxiusByLlibreIDs(llibreIDs)
+}
 
 func (d *SQLite) ListLlibreURLs(llibreID int) ([]LlibreURL, error) {
 	return d.help.listLlibreURLs(llibreID)
@@ -954,6 +957,9 @@ func (d *SQLite) CountIndexedRegistres(status string) (int, error) {
 }
 func (d *SQLite) GetLlibre(id int) (*Llibre, error) {
 	return d.help.getLlibre(id)
+}
+func (d *SQLite) GetLlibresByIDs(ids []int) (map[int]*Llibre, error) {
+	return d.help.getLlibresByIDs(ids)
 }
 func (d *SQLite) CreateLlibre(l *Llibre) (int, error) {
 	return d.help.createLlibre(l)
@@ -1197,6 +1203,9 @@ func (d *SQLite) ListTranscripcionsRaw(llibreID int, f TranscripcioFilter) ([]Tr
 func (d *SQLite) ListTranscripcionsRawGlobal(f TranscripcioFilter) ([]TranscripcioRaw, error) {
 	return d.help.listTranscripcionsRawGlobal(f)
 }
+func (d *SQLite) ListTranscripcionsRawByIDs(ids []int) ([]TranscripcioRaw, error) {
+	return d.help.listTranscripcionsRawByIDs(ids)
+}
 func (d *SQLite) CountTranscripcionsRaw(llibreID int, f TranscripcioFilter) (int, error) {
 	return d.help.countTranscripcionsRaw(llibreID, f)
 }
@@ -1224,6 +1233,12 @@ func (d *SQLite) UpdateTranscripcioModeracio(id int, estat, motiu string, modera
 }
 func (d *SQLite) UpdateTranscripcioModeracioWithDemografia(id int, estat, motiu string, moderatorID int, municipiID, year int, tipus string, delta int) error {
 	return d.help.updateTranscripcioModeracioWithDemografia(id, estat, motiu, moderatorID, municipiID, year, tipus, delta)
+}
+func (d *SQLite) BulkUpdateTranscripcioModeracio(estat, motiu string, moderatorID int, ids []int) (int, error) {
+	return d.help.bulkUpdateTranscripcioModeracio(estat, motiu, moderatorID, ids)
+}
+func (d *SQLite) BulkUpdateTranscripcioModeracioWithDemografia(estat, motiu string, moderatorID int, ids []int, municipiID, year int, tipus string, delta int) (int, error) {
+	return d.help.bulkUpdateTranscripcioModeracioWithDemografia(estat, motiu, moderatorID, ids, municipiID, year, tipus, delta)
 }
 func (d *SQLite) DeleteTranscripcioRaw(id int) error {
 	return d.help.deleteTranscripcioRaw(id)
@@ -1270,6 +1285,9 @@ func (d *SQLite) UpdateTranscripcioRawChangeModeracio(id int, estat, motiu strin
 }
 func (d *SQLite) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersones(transcripcioID)
+}
+func (d *SQLite) ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
+	return d.help.listTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
 }
 func (d *SQLite) CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error) {
 	return d.help.createTranscripcioPersona(p)

@@ -77,6 +77,36 @@ type moderacioBulkMetrics struct {
 	Revalidated bool
 }
 
+type moderacioBulkRegistreItemError struct {
+	ID  int
+	Err error
+}
+
+type moderacioBulkRegistreUpdateResult struct {
+	SuccessIDs []int
+	Updated    int
+	Skipped    int
+	Errors     []moderacioBulkRegistreItemError
+}
+
+type moderacioBulkRegistreState struct {
+	Reg        db.TranscripcioRaw
+	Persones   []db.TranscripcioPersonaRaw
+	Llibre     *db.Llibre
+	ArxiuID    int
+	Delta      int
+	MunicipiID int
+	Year       int
+	Tipus      string
+}
+
+type moderacioBulkRegistreDemoKey struct {
+	MunicipiID int
+	Year       int
+	Tipus      string
+	Delta      int
+}
+
 type moderacioTypeSpec struct {
 	Key       string
 	PermKey   string
@@ -3466,6 +3496,225 @@ func buildModeracioBulkActivityRows(a *App, action, objType string, ids []int, m
 	return rows, points, ruleCode, activityAction, details
 }
 
+func listNivellAncestorsForMunicipiCached(a *App, munID int, cache map[int][]int) []int {
+	if munID <= 0 {
+		return nil
+	}
+	if cache != nil {
+		if ids, ok := cache[munID]; ok {
+			return ids
+		}
+	}
+	ids := a.listNivellAncestorsForMunicipi(munID)
+	if cache != nil {
+		cache[munID] = ids
+	}
+	return ids
+}
+
+func firstArxiuIDForLlibre(arxiusByLlibre map[int][]db.ArxiuLlibreDetail, llibreID int) int {
+	if len(arxiusByLlibre) == 0 || llibreID <= 0 {
+		return 0
+	}
+	rows := arxiusByLlibre[llibreID]
+	if len(rows) == 0 {
+		return 0
+	}
+	return rows[0].ArxiuID
+}
+
+func bulkUpdateResultStatusFromAction(action, motiu string) (string, string, error) {
+	switch action {
+	case "approve":
+		return "publicat", "", nil
+	case "reject":
+		return "rebutjat", motiu, nil
+	default:
+		return "", "", fmt.Errorf("acció no vàlida")
+	}
+}
+
+func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu string, moderatorID int, metrics *moderacioApplyMetrics, onChunk func(int)) moderacioBulkRegistreUpdateResult {
+	result := moderacioBulkRegistreUpdateResult{SuccessIDs: make([]int, 0, len(ids))}
+	estat, notes, err := bulkUpdateResultStatusFromAction(action, motiu)
+	if err != nil {
+		for _, id := range ids {
+			result.Errors = append(result.Errors, moderacioBulkRegistreItemError{ID: id, Err: err})
+		}
+		return result
+	}
+	const chunkSize = 500
+	nivellCache := map[int][]int{}
+	for start := 0; start < len(ids); start += chunkSize {
+		end := start + chunkSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunkIDs := ids[start:end]
+		chunkStart := time.Now()
+		rows, err := a.DB.ListTranscripcionsRawByIDs(chunkIDs)
+		if err != nil {
+			for _, id := range chunkIDs {
+				result.Errors = append(result.Errors, moderacioBulkRegistreItemError{ID: id, Err: err})
+			}
+			if onChunk != nil {
+				onChunk(len(chunkIDs))
+			}
+			continue
+		}
+		rowByID := make(map[int]db.TranscripcioRaw, len(rows))
+		llibreIDs := make([]int, 0, len(rows))
+		seenLlibres := map[int]struct{}{}
+		foundIDs := make([]int, 0, len(rows))
+		for _, row := range rows {
+			rowByID[row.ID] = row
+			foundIDs = append(foundIDs, row.ID)
+			if row.LlibreID > 0 {
+				if _, ok := seenLlibres[row.LlibreID]; !ok {
+					seenLlibres[row.LlibreID] = struct{}{}
+					llibreIDs = append(llibreIDs, row.LlibreID)
+				}
+			}
+		}
+		personesByRegistre, err := a.DB.ListTranscripcioPersonesByTranscripcioIDs(foundIDs)
+		if err != nil {
+			Errorf("Moderacio bulk registre persones batch ha fallat: %v", err)
+			personesByRegistre = map[int][]db.TranscripcioPersonaRaw{}
+		}
+		llibresByID, err := a.DB.GetLlibresByIDs(llibreIDs)
+		if err != nil {
+			Errorf("Moderacio bulk registre llibres batch ha fallat: %v", err)
+			llibresByID = map[int]*db.Llibre{}
+		}
+		arxiusByLlibre, err := a.DB.ListLlibreArxiusByLlibreIDs(llibreIDs)
+		if err != nil {
+			Errorf("Moderacio bulk registre arxius batch ha fallat: %v", err)
+			arxiusByLlibre = map[int][]db.ArxiuLlibreDetail{}
+		}
+
+		states := make([]moderacioBulkRegistreState, 0, len(rows))
+		noDemoIDs := make([]int, 0, len(rows))
+		demoGroups := map[moderacioBulkRegistreDemoKey][]int{}
+		for _, id := range chunkIDs {
+			row, ok := rowByID[id]
+			if !ok {
+				result.Errors = append(result.Errors, moderacioBulkRegistreItemError{ID: id, Err: fmt.Errorf("registre no trobat")})
+				continue
+			}
+			state := moderacioBulkRegistreState{
+				Reg:      row,
+				Persones: personesByRegistre[id],
+				Llibre:   llibresByID[row.LlibreID],
+				ArxiuID:  firstArxiuIDForLlibre(arxiusByLlibre, row.LlibreID),
+				Delta:    demografiaDeltaFromStatus(row.ModeracioEstat, estat),
+			}
+			if state.Delta != 0 && state.Llibre != nil {
+				if munID, year, tipus, ok := demografiaDeltaFromRegistre(&state.Reg, state.Llibre); ok {
+					state.MunicipiID = munID
+					state.Year = year
+					state.Tipus = tipus
+					key := moderacioBulkRegistreDemoKey{MunicipiID: munID, Year: year, Tipus: tipus, Delta: state.Delta}
+					demoGroups[key] = append(demoGroups[key], id)
+				} else {
+					noDemoIDs = append(noDemoIDs, id)
+				}
+			} else {
+				noDemoIDs = append(noDemoIDs, id)
+			}
+			states = append(states, state)
+		}
+
+		successSet := map[int]struct{}{}
+		markGroupError := func(groupIDs []int, err error) {
+			for _, id := range groupIDs {
+				result.Errors = append(result.Errors, moderacioBulkRegistreItemError{ID: id, Err: err})
+			}
+		}
+		markUpdated := func(groupIDs []int, updated int, label string) {
+			if updated < 0 {
+				updated = 0
+			}
+			if updated < len(groupIDs) {
+				result.Skipped += len(groupIDs) - updated
+				Errorf("Moderacio bulk registre %s ha actualitzat %d/%d files", label, updated, len(groupIDs))
+			}
+			for _, id := range groupIDs {
+				successSet[id] = struct{}{}
+			}
+		}
+
+		if len(noDemoIDs) > 0 {
+			updateStart := time.Now()
+			updatedNow, err := a.DB.BulkUpdateTranscripcioModeracio(estat, notes, moderatorID, noDemoIDs)
+			if metrics != nil {
+				metrics.UpdateDur += time.Since(updateStart)
+			}
+			if err != nil {
+				markGroupError(noDemoIDs, err)
+			} else {
+				markUpdated(noDemoIDs, updatedNow, "bulk_update")
+			}
+		}
+		for key, groupIDs := range demoGroups {
+			updateStart := time.Now()
+			updatedNow, err := a.DB.BulkUpdateTranscripcioModeracioWithDemografia(estat, notes, moderatorID, groupIDs, key.MunicipiID, key.Year, key.Tipus, key.Delta)
+			if metrics != nil {
+				metrics.UpdateDur += time.Since(updateStart)
+			}
+			if err != nil {
+				markGroupError(groupIDs, err)
+				continue
+			}
+			markUpdated(groupIDs, updatedNow, "bulk_update_demografia")
+			nivellIDs := listNivellAncestorsForMunicipiCached(a, key.MunicipiID, nivellCache)
+			a.applyNivellDemografiaDeltaForMunicipiWithNivells(key.MunicipiID, key.Year, key.Tipus, key.Delta*len(groupIDs), nivellIDs)
+		}
+
+		chunkUpdated := 0
+		for _, state := range states {
+			if _, ok := successSet[state.Reg.ID]; !ok {
+				continue
+			}
+			oldStatus := state.Reg.ModeracioEstat
+			state.Reg.ModeracioEstat = estat
+			result.SuccessIDs = append(result.SuccessIDs, state.Reg.ID)
+			result.Updated++
+			chunkUpdated++
+			if state.Delta != 0 && state.Llibre != nil && state.MunicipiID <= 0 {
+				state.MunicipiID = demografiaMunicipiIDFromRegistre(&state.Reg, state.Llibre)
+			}
+			if state.Delta != 0 && state.Llibre != nil && state.MunicipiID > 0 {
+				contrib := calcNomCognomContribs(state.Reg, state.Persones)
+				nivellIDs := listNivellAncestorsForMunicipiCached(a, state.MunicipiID, nivellCache)
+				if err := a.applyNomCognomDeltaWithNivells(state.MunicipiID, contrib, state.Delta, nivellIDs); err != nil {
+					Errorf("Error actualitzant stats noms/cognoms municipi %d: %v", state.MunicipiID, err)
+				}
+			}
+			if estat == "publicat" {
+				if err := a.upsertSearchDocForRegistre(&state.Reg, state.Persones, state.Llibre, state.ArxiuID); err != nil {
+					Errorf("SearchIndex registre %d: %v", state.Reg.ID, err)
+				}
+			} else if oldStatus == "publicat" {
+				if err := a.DB.DeleteSearchDoc("registre_raw", state.Reg.ID); err != nil {
+					Errorf("SearchIndex delete registre %d: %v", state.Reg.ID, err)
+				}
+			}
+		}
+		if IsDebugEnabled() {
+			chunkDur := time.Since(chunkStart)
+			throughput := 0.0
+			if chunkDur > 0 {
+				throughput = float64(len(chunkIDs)) / chunkDur.Seconds()
+			}
+			Debugf("moderacio bulk registre chunk size=%d updated=%d errors=%d dur=%s throughput=%.1f/s", len(chunkIDs), chunkUpdated, len(result.Errors), chunkDur, throughput)
+		}
+		if onChunk != nil {
+			onChunk(len(chunkIDs))
+		}
+	}
+	return result
+}
+
 func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, motiu string, user *db.User, perms db.PolicyPermissions, canModerateAll bool, bulkUserID int, update func(processed int, total int)) (moderacioBulkResult, moderacioBulkMetrics, error) {
 	if update == nil {
 		update = func(int, int) {}
@@ -4098,8 +4347,26 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			}
 			updateCandidates(len(rows))
 			updateTotal(len(ids))
-			for _, id := range ids {
-				apply(objType, id)
+			if len(ids) == 0 {
+				break
+			}
+			bulkUsed = true
+			registreResult := a.applyModeracioBulkRegistreUpdates(action, ids, motiu, user.ID, applyMetrics, nil)
+			for _, itemErr := range registreResult.Errors {
+				Errorf("Moderacio massiva %s %s:%d ha fallat: %v", action, objType, itemErr.ID, itemErr.Err)
+				errCount++
+			}
+			skipped += registreResult.Skipped
+			if len(registreResult.SuccessIDs) > 0 {
+				perItemUsed = true
+				if err := a.applyModeracioActivitiesBulk(ctx, action, objType, registreResult.SuccessIDs, motiu, user.ID, applyMetrics); err != nil {
+					Errorf("Moderacio massiva %s activitats %s bulk ha fallat: %v", action, objType, err)
+					errCount++
+				}
+			}
+			for range ids {
+				processed++
+				update(processed, total)
 			}
 		}
 	}
@@ -4486,53 +4753,18 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 	case "eclesiastic":
 		return a.DB.UpdateArquebisbatModeracio(id, estat, motiu, moderatorID)
 	case "registre":
-		reg, err := a.DB.GetTranscripcioRaw(id)
-		if err != nil {
-			return err
+		action := ""
+		switch estat {
+		case "publicat":
+			action = "approve"
+		case "rebutjat":
+			action = "reject"
+		default:
+			return fmt.Errorf("estat de moderació invàlid")
 		}
-		if reg == nil {
-			return fmt.Errorf("registre no trobat")
-		}
-		oldStatus := reg.ModeracioEstat
-		delta := demografiaDeltaFromStatus(oldStatus, estat)
-		if delta == 0 {
-			if err := a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID); err != nil {
-				return err
-			}
-		} else {
-			llibre, err := a.loadLlibreForRegistre(reg)
-			if err != nil || llibre == nil {
-				if err := a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID); err != nil {
-					return err
-				}
-				persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
-				a.applyNomCognomDeltaForRegistre(reg, persones, delta)
-			} else {
-				munID, year, tipus, ok := demografiaDeltaFromRegistre(reg, llibre)
-				if !ok {
-					if err := a.DB.UpdateTranscripcioModeracio(id, estat, motiu, moderatorID); err != nil {
-						return err
-					}
-					persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
-					a.applyNomCognomDeltaForRegistre(reg, persones, delta)
-				} else {
-					if err := a.DB.UpdateTranscripcioModeracioWithDemografia(id, estat, motiu, moderatorID, munID, year, tipus, delta); err != nil {
-						return err
-					}
-					a.applyNivellDemografiaDeltaForMunicipi(munID, year, tipus, delta)
-					persones, _ := a.DB.ListTranscripcioPersones(reg.ID)
-					a.applyNomCognomDeltaForRegistre(reg, persones, delta)
-				}
-			}
-		}
-		if estat == "publicat" {
-			if err := a.upsertSearchDocForRegistreID(reg.ID); err != nil {
-				Errorf("SearchIndex registre %d: %v", reg.ID, err)
-			}
-		} else if oldStatus == "publicat" {
-			if err := a.DB.DeleteSearchDoc("registre_raw", reg.ID); err != nil {
-				Errorf("SearchIndex delete registre %d: %v", reg.ID, err)
-			}
+		res := a.applyModeracioBulkRegistreUpdates(action, []int{id}, motiu, moderatorID, nil, nil)
+		if len(res.Errors) > 0 {
+			return res.Errors[0].Err
 		}
 		return nil
 	case "registre_canvi":

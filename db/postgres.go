@@ -1290,6 +1290,9 @@ func (d *PostgreSQL) ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) 
 func (d *PostgreSQL) ListLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
 	return d.help.listLlibreArxius(llibreID)
 }
+func (d *PostgreSQL) ListLlibreArxiusByLlibreIDs(llibreIDs []int) (map[int][]ArxiuLlibreDetail, error) {
+	return d.help.listLlibreArxiusByLlibreIDs(llibreIDs)
+}
 
 func (d *PostgreSQL) ListLlibreURLs(llibreID int) ([]LlibreURL, error) {
 	return d.help.listLlibreURLs(llibreID)
@@ -1326,6 +1329,9 @@ func (d *PostgreSQL) CountIndexedRegistres(status string) (int, error) {
 }
 func (d *PostgreSQL) GetLlibre(id int) (*Llibre, error) {
 	return d.help.getLlibre(id)
+}
+func (d *PostgreSQL) GetLlibresByIDs(ids []int) (map[int]*Llibre, error) {
+	return d.help.getLlibresByIDs(ids)
 }
 func (d *PostgreSQL) CreateLlibre(l *Llibre) (int, error) {
 	return d.help.createLlibre(l)
@@ -1911,6 +1917,9 @@ func (d *PostgreSQL) ListTranscripcionsRaw(llibreID int, f TranscripcioFilter) (
 func (d *PostgreSQL) ListTranscripcionsRawGlobal(f TranscripcioFilter) ([]TranscripcioRaw, error) {
 	return d.help.listTranscripcionsRawGlobal(f)
 }
+func (d *PostgreSQL) ListTranscripcionsRawByIDs(ids []int) ([]TranscripcioRaw, error) {
+	return d.help.listTranscripcionsRawByIDs(ids)
+}
 func (d *PostgreSQL) CountTranscripcionsRaw(llibreID int, f TranscripcioFilter) (int, error) {
 	return d.help.countTranscripcionsRaw(llibreID, f)
 }
@@ -1938,6 +1947,12 @@ func (d *PostgreSQL) UpdateTranscripcioModeracio(id int, estat, motiu string, mo
 }
 func (d *PostgreSQL) UpdateTranscripcioModeracioWithDemografia(id int, estat, motiu string, moderatorID int, municipiID, year int, tipus string, delta int) error {
 	return d.help.updateTranscripcioModeracioWithDemografia(id, estat, motiu, moderatorID, municipiID, year, tipus, delta)
+}
+func (d *PostgreSQL) BulkUpdateTranscripcioModeracio(estat, motiu string, moderatorID int, ids []int) (int, error) {
+	return d.help.bulkUpdateTranscripcioModeracio(estat, motiu, moderatorID, ids)
+}
+func (d *PostgreSQL) BulkUpdateTranscripcioModeracioWithDemografia(estat, motiu string, moderatorID int, ids []int, municipiID, year int, tipus string, delta int) (int, error) {
+	return d.help.bulkUpdateTranscripcioModeracioWithDemografia(estat, motiu, moderatorID, ids, municipiID, year, tipus, delta)
 }
 func (d *PostgreSQL) DeleteTranscripcioRaw(id int) error {
 	return d.help.deleteTranscripcioRaw(id)
@@ -1984,6 +1999,9 @@ func (d *PostgreSQL) UpdateTranscripcioRawChangeModeracio(id int, estat, motiu s
 }
 func (d *PostgreSQL) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersones(transcripcioID)
+}
+func (d *PostgreSQL) ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
+	return d.help.listTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
 }
 func (d *PostgreSQL) CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error) {
 	return d.help.createTranscripcioPersona(p)

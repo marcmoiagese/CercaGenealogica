@@ -720,6 +720,24 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 		if len(ids) == 0 {
 			continue
 		}
+		if objType == "registre" {
+			registreMetrics := &moderacioApplyMetrics{}
+			registreResult := a.applyModeracioBulkRegistreUpdates(action, ids, motiu, actorID, registreMetrics, func(chunkProcessed int) {
+				processed += chunkProcessed
+				flushProgress()
+			})
+			updateDur += registreMetrics.UpdateDur
+			updated += registreResult.Updated
+			skipped += registreResult.Skipped
+			for _, itemErr := range registreResult.Errors {
+				errCount += recordModeracioBulkWorkerError(jobID, actorID, errorCollector, &result, adminJobPhaseApplyingChanges, "bulk_update_registre", objType, itemErr.ID, itemErr.Err)
+			}
+			if len(registreResult.SuccessIDs) > 0 {
+				successByType[objType] = append(successByType[objType], registreResult.SuccessIDs...)
+			}
+			flushProgress()
+			continue
+		}
 		if moderacioBulkSimpleTypes[objType] {
 			stepStart := time.Now()
 			updatedNow, err := a.DB.BulkUpdateModeracioSimple(objType, bulkStatus, bulkNotes, actorID, ids)

@@ -38,6 +38,13 @@ func (a *App) applyNivellDemografiaDeltaForMunicipi(munID, year int, tipus strin
 		return
 	}
 	nivells := a.listNivellAncestorsForMunicipi(munID)
+	a.applyNivellDemografiaDeltaForMunicipiWithNivells(munID, year, tipus, delta, nivells)
+}
+
+func (a *App) applyNivellDemografiaDeltaForMunicipiWithNivells(munID, year int, tipus string, delta int, nivells []int) {
+	if munID <= 0 || year <= 0 || delta == 0 {
+		return
+	}
 	for _, nivellID := range nivells {
 		if err := a.DB.ApplyNivellDemografiaDelta(nivellID, year, tipus, delta); err != nil {
 			Errorf("Error actualitzant demografia nivell %d (mun=%d): %v", nivellID, munID, err)

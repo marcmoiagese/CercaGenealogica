@@ -136,6 +136,13 @@ func (a *App) applyNomCognomDelta(municipiID int, contrib nomCognomContrib, sign
 		return nil
 	}
 	nivellIDs := a.listNivellAncestorsForMunicipi(municipiID)
+	return a.applyNomCognomDeltaWithNivells(municipiID, contrib, sign, nivellIDs)
+}
+
+func (a *App) applyNomCognomDeltaWithNivells(municipiID int, contrib nomCognomContrib, sign int, nivellIDs []int) error {
+	if municipiID <= 0 || contrib.AnyDoc <= 0 || sign == 0 {
+		return nil
+	}
 	for key, count := range contrib.NomCounts {
 		form := strings.TrimSpace(contrib.NomForms[key])
 		if form == "" {

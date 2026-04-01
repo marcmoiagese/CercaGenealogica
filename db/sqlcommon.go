@@ -2223,6 +2223,98 @@ func (h sqlHelper) updateTranscripcioModeracio(id int, estat, motiu string, mode
 	return err
 }
 
+func normalizePositiveUniqueIDs(ids []int) []int {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]int, 0, len(ids))
+	seen := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+func (h sqlHelper) bulkUpdateTranscripcioModeracio(estat, motiu string, moderatorID int, ids []int) (int, error) {
+	return h.bulkUpdateTranscripcioModeracioWithDemografia(estat, motiu, moderatorID, ids, 0, 0, "", 0)
+}
+
+func (h sqlHelper) bulkUpdateTranscripcioModeracioWithDemografia(estat, motiu string, moderatorID int, ids []int, municipiID, year int, tipus string, delta int) (int, error) {
+	estat = strings.TrimSpace(estat)
+	if estat == "" {
+		return 0, fmt.Errorf("bulk moderacio registre invàlida")
+	}
+	ids = normalizePositiveUniqueIDs(ids)
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	applyDemografia := delta != 0 && municipiID > 0 && year > 0 && strings.TrimSpace(tipus) != ""
+	now := time.Now()
+	const maxIDsPerChunk = 900
+	total := 0
+	for start := 0; start < len(ids); start += maxIDsPerChunk {
+		end := start + maxIDsPerChunk
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunk := ids[start:end]
+		if len(chunk) == 0 {
+			continue
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(chunk)), ",")
+		stmt := `UPDATE transcripcions_raw SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE id IN (` + placeholders + `)`
+		stmt = formatPlaceholders(h.style, stmt)
+		args := make([]interface{}, 0, 5+len(chunk))
+		args = append(args, estat, strings.TrimSpace(motiu), moderatorID, now, now)
+		for _, id := range chunk {
+			args = append(args, id)
+		}
+		if !applyDemografia {
+			res, err := h.db.Exec(stmt, args...)
+			if err != nil {
+				return total, err
+			}
+			rows, err := res.RowsAffected()
+			if err == nil {
+				total += int(rows)
+			}
+			continue
+		}
+		tx, err := h.db.Begin()
+		if err != nil {
+			return total, err
+		}
+		res, err := tx.Exec(stmt, args...)
+		if err != nil {
+			tx.Rollback()
+			return total, err
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			tx.Rollback()
+			return total, err
+		}
+		if rows > 0 {
+			if err := h.applyMunicipiDemografiaDeltaTx(tx, municipiID, year, tipus, delta*int(rows)); err != nil {
+				tx.Rollback()
+				return total, err
+			}
+			total += int(rows)
+		}
+		if err := tx.Commit(); err != nil {
+			return total, err
+		}
+	}
+	return total, nil
+}
+
 func (h sqlHelper) updateTranscripcioModeracioWithDemografia(id int, estat, motiu string, moderatorID int, municipiID, year int, tipus string, delta int) error {
 	if delta == 0 || municipiID <= 0 || year <= 0 || strings.TrimSpace(tipus) == "" {
 		return h.updateTranscripcioModeracio(id, estat, motiu, moderatorID)
@@ -6673,6 +6765,59 @@ func (h sqlHelper) listLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
 	return res, nil
 }
 
+func (h sqlHelper) listLlibreArxiusByLlibreIDs(llibreIDs []int) (map[int][]ArxiuLlibreDetail, error) {
+	llibreIDs = normalizePositiveUniqueIDs(llibreIDs)
+	res := make(map[int][]ArxiuLlibreDetail, len(llibreIDs))
+	if len(llibreIDs) == 0 {
+		return res, nil
+	}
+	const maxIDsPerChunk = 900
+	for start := 0; start < len(llibreIDs); start += maxIDsPerChunk {
+		end := start + maxIDsPerChunk
+		if end > len(llibreIDs) {
+			end = len(llibreIDs)
+		}
+		chunk := llibreIDs[start:end]
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(chunk)), ",")
+		query := `
+        SELECT al.arxiu_id,
+               al.llibre_id,
+               MAX(al.signatura) as signatura,
+               MAX(al.url_override) as url_override,
+               a.nom as arxiu_nom,
+               m.nom as municipi
+        FROM arxius_llibres al
+        INNER JOIN arxius a ON a.id = al.arxiu_id
+        LEFT JOIN municipis m ON m.id = a.municipi_id
+        WHERE al.llibre_id IN (` + placeholders + `)
+        GROUP BY al.arxiu_id, al.llibre_id, a.nom, m.nom
+        ORDER BY al.llibre_id, a.nom`
+		query = formatPlaceholders(h.style, query)
+		args := make([]interface{}, 0, len(chunk))
+		for _, id := range chunk {
+			args = append(args, id)
+		}
+		rows, err := h.db.Query(query, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var d ArxiuLlibreDetail
+			if err := rows.Scan(&d.ArxiuID, &d.LlibreID, &d.Signatura, &d.URLOverride, &d.ArxiuNom, &d.Municipi); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			res[d.LlibreID] = append(res[d.LlibreID], d)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+	}
+	return res, nil
+}
+
 func (h sqlHelper) addArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
 	stmt := formatPlaceholders(h.style, `
         INSERT INTO arxius_llibres (arxiu_id, llibre_id, signatura, url_override)
@@ -7068,6 +7213,61 @@ func (h sqlHelper) getLlibre(id int) (*Llibre, error) {
 		return nil, err
 	}
 	return &l, nil
+}
+
+func (h sqlHelper) getLlibresByIDs(ids []int) (map[int]*Llibre, error) {
+	ids = normalizePositiveUniqueIDs(ids)
+	res := make(map[int]*Llibre, len(ids))
+	if len(ids) == 0 {
+		return res, nil
+	}
+	const maxIDsPerChunk = 900
+	for start := 0; start < len(ids); start += maxIDsPerChunk {
+		end := start + maxIDsPerChunk
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunk := ids[start:end]
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(chunk)), ",")
+		query := `
+        SELECT id, COALESCE(arquevisbat_id, 0), municipi_id, nom_esglesia, codi_digital, codi_fisic,
+               titol, tipus_llibre, cronologia, volum, abat, contingut, llengua,
+               requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines,
+               url_base, url_imatge_prefix, pagina, indexacio_completa,
+               created_by, moderation_status, moderated_by, moderated_at, moderation_notes
+        FROM llibres
+        WHERE id IN (` + placeholders + `)`
+		query = formatPlaceholders(h.style, query)
+		args := make([]interface{}, 0, len(chunk))
+		for _, id := range chunk {
+			args = append(args, id)
+		}
+		rows, err := h.db.Query(query, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var l Llibre
+			if err := rows.Scan(
+				&l.ID, &l.ArquebisbatID, &l.MunicipiID, &l.NomEsglesia, &l.CodiDigital, &l.CodiFisic,
+				&l.Titol, &l.TipusLlibre, &l.Cronologia, &l.Volum, &l.Abat, &l.Contingut, &l.Llengua,
+				&l.Requeriments, &l.UnitatCatalogacio, &l.UnitatInstalacio, &l.Pagines,
+				&l.URLBase, &l.URLImatgePrefix, &l.Pagina, &l.IndexacioCompleta,
+				&l.CreatedBy, &l.ModeracioEstat, &l.ModeratedBy, &l.ModeratedAt, &l.ModeracioMotiu,
+			); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			copy := l
+			res[l.ID] = &copy
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+	}
+	return res, nil
 }
 
 func (h sqlHelper) createLlibre(l *Llibre) (int, error) {
@@ -7775,6 +7975,63 @@ func (h sqlHelper) listTranscripcionsRawGlobal(f TranscripcioFilter) ([]Transcri
 	return h.listTranscripcionsRaw(0, f)
 }
 
+func (h sqlHelper) listTranscripcionsRawByIDs(ids []int) ([]TranscripcioRaw, error) {
+	ids = normalizePositiveUniqueIDs(ids)
+	if len(ids) == 0 {
+		return []TranscripcioRaw{}, nil
+	}
+	positions := make(map[int]int, len(ids))
+	for i, id := range ids {
+		positions[id] = i
+	}
+	res := make([]TranscripcioRaw, 0, len(ids))
+	const maxIDsPerChunk = 900
+	for start := 0; start < len(ids); start += maxIDsPerChunk {
+		end := start + maxIDsPerChunk
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunk := ids[start:end]
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(chunk)), ",")
+		query := `
+        SELECT t.id, t.llibre_id, t.pagina_id, t.num_pagina_text, t.posicio_pagina, t.tipus_acte, t.any_doc,
+               t.data_acte_text, t.data_acte_iso, t.data_acte_estat, t.transcripcio_literal, t.notes_marginals, t.observacions_paleografiques,
+               t.moderation_status, t.moderated_by, t.moderated_at, t.moderation_notes, t.created_by, t.created_at, t.updated_at
+        FROM transcripcions_raw t
+        WHERE t.id IN (` + placeholders + `)`
+		query = formatPlaceholders(h.style, query)
+		args := make([]interface{}, 0, len(chunk))
+		for _, id := range chunk {
+			args = append(args, id)
+		}
+		rows, err := h.db.Query(query, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var t TranscripcioRaw
+			if err := rows.Scan(
+				&t.ID, &t.LlibreID, &t.PaginaID, &t.NumPaginaText, &t.PosicioPagina, &t.TipusActe, &t.AnyDoc,
+				&t.DataActeText, &t.DataActeISO, &t.DataActeEstat, &t.TranscripcioLiteral, &t.NotesMarginals, &t.ObservacionsPaleografiques,
+				&t.ModeracioEstat, &t.ModeratedBy, &t.ModeratedAt, &t.ModeracioMotiu, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt,
+			); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			res = append(res, t)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+	}
+	sort.Slice(res, func(i, j int) bool {
+		return positions[res[i].ID] < positions[res[j].ID]
+	})
+	return res, nil
+}
+
 func (h sqlHelper) countTranscripcionsRaw(llibreID int, f TranscripcioFilter) (int, error) {
 	where, args, join := h.transcripcionsRawFilters(llibreID, f, true)
 	query := `
@@ -8443,6 +8700,73 @@ func (h sqlHelper) listTranscripcioPersones(transcripcioID int) ([]TranscripcioP
 			return nil, err
 		}
 		res = append(res, p)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
+	transcripcioIDs = normalizePositiveUniqueIDs(transcripcioIDs)
+	res := make(map[int][]TranscripcioPersonaRaw, len(transcripcioIDs))
+	if len(transcripcioIDs) == 0 {
+		return res, nil
+	}
+	baseQuery := `
+        SELECT id, transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat, cognom_soltera, cognom_soltera_estat, sexe, sexe_estat,
+               edat_text, edat_estat, estat_civil_text, estat_civil_estat, municipi_text, municipi_estat, ofici_text, ofici_estat,
+               casa_nom, casa_estat, persona_id, linked_by, linked_at, notes
+        FROM transcripcions_persones_raw
+        WHERE transcripcio_id IN (%s)
+        ORDER BY transcripcio_id, id`
+	fallbackQuery := `
+        SELECT id, transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat,
+               NULL AS cognom_soltera, NULL AS cognom_soltera_estat, sexe, sexe_estat,
+               edat_text, edat_estat, estat_civil_text, estat_civil_estat, municipi_text, municipi_estat, ofici_text, ofici_estat,
+               casa_nom, casa_estat, persona_id, linked_by, linked_at, notes
+        FROM transcripcions_persones_raw
+        WHERE transcripcio_id IN (%s)
+        ORDER BY transcripcio_id, id`
+	const maxIDsPerChunk = 900
+	for start := 0; start < len(transcripcioIDs); start += maxIDsPerChunk {
+		end := start + maxIDsPerChunk
+		if end > len(transcripcioIDs) {
+			end = len(transcripcioIDs)
+		}
+		chunk := transcripcioIDs[start:end]
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(chunk)), ",")
+		query := formatPlaceholders(h.style, fmt.Sprintf(baseQuery, placeholders))
+		args := make([]interface{}, 0, len(chunk))
+		for _, id := range chunk {
+			args = append(args, id)
+		}
+		rows, err := h.db.Query(query, args...)
+		if err != nil {
+			if isMissingColumnError(err) {
+				query = formatPlaceholders(h.style, fmt.Sprintf(fallbackQuery, placeholders))
+				rows, err = h.db.Query(query, args...)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, err
+			}
+		}
+		for rows.Next() {
+			var p TranscripcioPersonaRaw
+			if err := rows.Scan(
+				&p.ID, &p.TranscripcioID, &p.Rol, &p.Nom, &p.NomEstat, &p.Cognom1, &p.Cognom1Estat, &p.Cognom2, &p.Cognom2Estat, &p.CognomSoltera, &p.CognomSolteraEstat, &p.Sexe, &p.SexeEstat,
+				&p.EdatText, &p.EdatEstat, &p.EstatCivilText, &p.EstatCivilEstat, &p.MunicipiText, &p.MunicipiEstat, &p.OficiText, &p.OficiEstat,
+				&p.CasaNom, &p.CasaEstat, &p.PersonaID, &p.LinkedBy, &p.LinkedAt, &p.Notes,
+			); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			res[p.TranscripcioID] = append(res[p.TranscripcioID], p)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
 	}
 	return res, nil
 }

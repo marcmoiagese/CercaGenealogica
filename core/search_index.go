@@ -209,6 +209,16 @@ func (a *App) upsertSearchDocForRegistreID(registreID int) error {
 			arxiuID = arxius[0].ArxiuID
 		}
 	}
+	return a.upsertSearchDocForRegistre(registre, persones, llibre, arxiuID)
+}
+
+func (a *App) upsertSearchDocForRegistre(registre *db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw, llibre *db.Llibre, arxiuID int) error {
+	if registre == nil || registre.ID <= 0 {
+		return nil
+	}
+	if registre.ModeracioEstat != "publicat" {
+		return a.DB.DeleteSearchDoc("registre_raw", registre.ID)
+	}
 	doc := a.buildSearchDocFromRegistre(registre, persones, llibre, arxiuID)
 	return a.DB.UpsertSearchDoc(doc)
 }

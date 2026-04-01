@@ -342,6 +342,8 @@ type DB interface {
 	BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error)
 	UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error
 	UpdateTranscripcioModeracioWithDemografia(id int, estat, motiu string, moderatorID int, municipiID, year int, tipus string, delta int) error
+	BulkUpdateTranscripcioModeracio(estat, motiu string, moderatorID int, ids []int) (int, error)
+	BulkUpdateTranscripcioModeracioWithDemografia(estat, motiu string, moderatorID int, ids []int, municipiID, year int, tipus string, delta int) (int, error)
 	// Arxius CRUD
 	ListArxius(filter ArxiuFilter) ([]ArxiuWithCount, error)
 	CountArxius(filter ArxiuFilter) (int, error)
@@ -354,6 +356,7 @@ type DB interface {
 	CountArxiuDonacioClicks(arxiuID int) (int, error)
 	ListArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error)
 	ListLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error)
+	ListLlibreArxiusByLlibreIDs(llibreIDs []int) (map[int][]ArxiuLlibreDetail, error)
 	AddArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error
 	UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error
 	DeleteArxiuLlibre(arxiuID, llibreID int) error
@@ -365,6 +368,7 @@ type DB interface {
 	CountLlibres(filter LlibreFilter) (int, error)
 	CountIndexedRegistres(status string) (int, error)
 	GetLlibre(id int) (*Llibre, error)
+	GetLlibresByIDs(ids []int) (map[int]*Llibre, error)
 	CreateLlibre(l *Llibre) (int, error)
 	UpdateLlibre(l *Llibre) error
 	HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error)
@@ -416,6 +420,7 @@ type DB interface {
 	// Transcripcions RAW
 	ListTranscripcionsRaw(llibreID int, f TranscripcioFilter) ([]TranscripcioRaw, error)
 	ListTranscripcionsRawGlobal(f TranscripcioFilter) ([]TranscripcioRaw, error)
+	ListTranscripcionsRawByIDs(ids []int) ([]TranscripcioRaw, error)
 	CountTranscripcionsRaw(llibreID int, f TranscripcioFilter) (int, error)
 	CountTranscripcionsRawGlobal(f TranscripcioFilter) (int, error)
 	CountTranscripcionsRawByPageValue(llibreID int, pageValue string) (int, error)
@@ -438,6 +443,7 @@ type DB interface {
 	CountTranscripcioRawChangesPendingScoped(filter TranscripcioFilter) (int, error)
 	UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error
 	ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error)
+	ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error)
 	CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error)
 	DeleteTranscripcioPersones(transcripcioID int) error
 	LinkTranscripcioPersona(personaRawID int, personaID int, linkedBy int) error
