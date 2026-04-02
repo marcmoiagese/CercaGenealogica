@@ -40,6 +40,7 @@ type territoriExportLevel struct {
 	AnyInici *int   `json:"any_inici,omitempty"`
 	AnyFi    *int   `json:"any_fi,omitempty"`
 	Estat    string `json:"estat"`
+	Status   string `json:"moderation_status,omitempty"`
 }
 
 type territoriExportMunicipi struct {
@@ -57,6 +58,7 @@ type territoriExportMunicipi struct {
 	Wikipedia  string   `json:"wikipedia"`
 	Altres     string   `json:"altres"`
 	Estat      string   `json:"estat"`
+	Status     string   `json:"moderation_status,omitempty"`
 }
 
 type territoriImportMunicipi struct {
@@ -204,6 +206,7 @@ func (a *App) AdminTerritoriExport(w http.ResponseWriter, r *http.Request) {
 			Wikipedia:  m.Wikipedia,
 			Altres:     m.Altres,
 			Estat:      m.Estat,
+			Status:     strings.TrimSpace(m.ModeracioEstat),
 		})
 	}
 	allowedCountries := map[string]struct{}{}
@@ -273,6 +276,7 @@ func (a *App) AdminTerritoriExport(w http.ResponseWriter, r *http.Request) {
 			AnyInici: anyInici,
 			AnyFi:    anyFi,
 			Estat:    n.Estat,
+			Status:   strings.TrimSpace(n.ModeracioEstat),
 		})
 	}
 	sort.Slice(payload.Levels, func(i, j int) bool {
@@ -380,7 +384,9 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 	}
 	existingLevels, _ := a.DB.ListNivells(db.NivellAdminFilter{})
 	levelKeyMap := map[string]int{}
+	existingLevelsByID := map[int]db.NivellAdministratiu{}
 	for _, n := range existingLevels {
+		existingLevelsByID[n.ID] = n
 		key := nivellUniqueKey(n.PaisID, n.Nivel, n.ParentID, n.NomNivell)
 		if key != "" {
 			levelKeyMap[key] = n.ID
@@ -461,7 +467,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 				AnyFi:          intPtrToNull(l.AnyFi),
 				Estat:          strings.TrimSpace(l.Estat),
 				CreatedBy:      sql.NullInt64{Int64: int64(user.ID), Valid: true},
-				ModeracioEstat: "pendent",
+				ModeracioEstat: normalizeTerritoriImportModerationStatus(l.Status),
 			}
 			if n.Estat == "" {
 				n.Estat = "actiu"
@@ -470,6 +476,14 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 			if key != "" {
 				if existingID, ok := levelKeyMap[key]; ok {
 					levelIDMap[l.ID] = existingID
+					if existing, ok := existingLevelsByID[existingID]; ok && shouldAdoptTerritoriImportStatus(existing.ModeracioEstat, n.ModeracioEstat) {
+						existing.ModeracioEstat = n.ModeracioEstat
+						if err := a.DB.UpdateNivell(&existing); err != nil {
+							Errorf("Territori import: no s'ha pogut reparar status nivell id=%d: %v", existingID, err)
+						} else {
+							existingLevelsByID[existingID] = existing
+						}
+					}
 					levelsSkipped++
 					progressed = true
 					continue
@@ -485,6 +499,9 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 					if insertMeta[i].key != "" {
 						levelKeyMap[insertMeta[i].key] = id
 					}
+					inserted := toInsert[i]
+					inserted.ID = id
+					existingLevelsByID[id] = inserted
 					levelsCreated++
 					progressed = true
 					activityCount++
@@ -520,6 +537,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 					if insertMeta[i].key != "" {
 						levelKeyMap[insertMeta[i].key] = id
 					}
+					existingLevelsByID[id] = n
 					levelsCreated++
 					progressed = true
 					activityCount++
@@ -621,7 +639,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 			m.Estat = "actiu"
 		}
 		m.CreatedBy = sql.NullInt64{Int64: int64(user.ID), Valid: true}
-		m.ModeracioEstat = "pendent"
+		m.ModeracioEstat = normalizeTerritoriImportModerationStatus(mu.Status)
 		for i := 0; i < 7; i++ {
 			if nivells[i] > 0 {
 				if id, ok := levelIDMap[nivells[i]]; ok {
@@ -637,6 +655,13 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		if key != "" {
 			if existingID, ok := existingMunicipiKey[key]; ok && existingID > 0 {
 				munIDMap[mu.ID] = existingID
+				existingMun, err := a.DB.GetMunicipi(existingID)
+				if err == nil && existingMun != nil && shouldAdoptTerritoriImportStatus(existingMun.ModeracioEstat, m.ModeracioEstat) {
+					existingMun.ModeracioEstat = m.ModeracioEstat
+					if err := a.DB.UpdateMunicipi(existingMun); err != nil {
+						Errorf("Territori import: no s'ha pogut reparar status municipi id=%d: %v", existingID, err)
+					}
+				}
 				municipisSkipped++
 				if oldParent > 0 {
 					parentCandidates = append(parentCandidates, municipiParentCandidate{childID: existingID, oldParent: oldParent})
@@ -883,6 +908,33 @@ func normalizeNivellSlice(v []int) []int {
 	res := make([]int, 7)
 	copy(res, v)
 	return res
+}
+
+func normalizeTerritoriImportModerationStatus(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "publicat", "pendent", "rebutjat":
+		return strings.ToLower(strings.TrimSpace(raw))
+	default:
+		// Compatibilitat amb exports antics: si el payload no porta
+		// moderation_status, el tractem com a contingut ja publicat.
+		return "publicat"
+	}
+}
+
+func shouldAdoptTerritoriImportStatus(current, target string) bool {
+	target = normalizeTerritoriImportModerationStatus(target)
+	current = strings.ToLower(strings.TrimSpace(current))
+	if current == target {
+		return false
+	}
+	switch target {
+	case "publicat":
+		return current == "" || current == "pendent"
+	case "pendent", "rebutjat":
+		return current == ""
+	default:
+		return false
+	}
 }
 
 type territoriBulkInserter interface {
