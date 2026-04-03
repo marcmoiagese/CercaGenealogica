@@ -18,6 +18,17 @@ import (
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
+type moderacioSummaryPayload struct {
+	Ok      bool `json:"ok"`
+	Summary struct {
+		Total  int `json:"total"`
+		ByType []struct {
+			Type  string `json:"type"`
+			Total int    `json:"total"`
+		} `json:"by_type"`
+	} `json:"summary"`
+}
+
 func TestTerritoriImportBulkMode(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f29_territori_import.sqlite3")
 
@@ -237,7 +248,7 @@ func findMunicipiByNom(t *testing.T, database db.DB, name string) *db.Municipi {
 	return nil
 }
 
-func TestTerritoriImportLegacyPayloadPublishesVisibleHierarchy(t *testing.T) {
+func TestTerritoriImportLegacyPayloadLeavesHierarchyPendingForModeration(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f29_territori_import_legacy_visibility.sqlite3")
 
 	admin := createTestUser(t, database, "f29_import_fix_admin_"+strconv.FormatInt(time.Now().UnixNano(), 10))
@@ -249,24 +260,24 @@ func TestTerritoriImportLegacyPayloadPublishesVisibleHierarchy(t *testing.T) {
 	runTerritoriImportFixture(t, app, session, fixturePath)
 
 	comarca := findNivellByNom(t, database, "Comarca Test")
-	if comarca.ModeracioEstat != "publicat" {
-		t.Fatalf("nivell importat esperat publicat, got %s", comarca.ModeracioEstat)
+	if comarca.ModeracioEstat != "pendent" {
+		t.Fatalf("nivell importat esperat pendent, got %s", comarca.ModeracioEstat)
 	}
 
 	total, err := database.CountMunicipisBrowse(db.MunicipiBrowseFilter{
 		NivellID: comarca.ID,
-		Status:   "publicat",
+		Status:   "pendent",
 	})
 	if err != nil {
 		t.Fatalf("CountMunicipisBrowse ha fallat: %v", err)
 	}
 	if total != 2 {
-		t.Fatalf("municipis públics esperats 2 dins la comarca importada, got %d", total)
+		t.Fatalf("municipis pendents esperats 2 dins la comarca importada, got %d", total)
 	}
 
 	rows, err := database.ListMunicipisBrowse(db.MunicipiBrowseFilter{
 		NivellID: comarca.ID,
-		Status:   "publicat",
+		Status:   "pendent",
 		Sort:     "nom",
 		SortDir:  "asc",
 	})
@@ -274,7 +285,7 @@ func TestTerritoriImportLegacyPayloadPublishesVisibleHierarchy(t *testing.T) {
 		t.Fatalf("ListMunicipisBrowse ha fallat: %v", err)
 	}
 	if len(rows) != 2 {
-		t.Fatalf("rows municipis públics esperades 2, got %d", len(rows))
+		t.Fatalf("rows municipis pendents esperades 2, got %d", len(rows))
 	}
 	if rows[0].Nom != "Municipi Fill" || rows[1].Nom != "Municipi Pare" {
 		t.Fatalf("ordre/contingut municipis inesperat: %+v", rows)
@@ -282,12 +293,41 @@ func TestTerritoriImportLegacyPayloadPublishesVisibleHierarchy(t *testing.T) {
 
 	munPare := findMunicipiByNom(t, database, "Municipi Pare")
 	munFill := findMunicipiByNom(t, database, "Municipi Fill")
-	if munPare.ModeracioEstat != "publicat" || munFill.ModeracioEstat != "publicat" {
-		t.Fatalf("municipis importats esperats publicat/publicat, got %s/%s", munPare.ModeracioEstat, munFill.ModeracioEstat)
+	if munPare.ModeracioEstat != "pendent" || munFill.ModeracioEstat != "pendent" {
+		t.Fatalf("municipis importats esperats pendent/pendent, got %s/%s", munPare.ModeracioEstat, munFill.ModeracioEstat)
+	}
+
+	if totalNivells, err := database.CountNivells(db.NivellAdminFilter{Status: "pendent"}); err != nil || totalNivells != 2 {
+		t.Fatalf("nivells pendents esperats 2, got %d err=%v", totalNivells, err)
+	}
+	if totalMunicipis, err := database.CountMunicipis(db.MunicipiFilter{Status: "pendent"}); err != nil || totalMunicipis != 2 {
+		t.Fatalf("municipis pendents esperats 2, got %d err=%v", totalMunicipis, err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/control/moderacio/summary", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminControlModeracioSummaryAPI(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("summary moderacio esperava 200, got %d", rr.Code)
+	}
+	var payload moderacioSummaryPayload
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("summary moderacio invalid: %v", err)
+	}
+	if !payload.Ok {
+		t.Fatalf("summary moderacio ok esperat true")
+	}
+	got := map[string]int{}
+	for _, item := range payload.Summary.ByType {
+		got[item.Type] = item.Total
+	}
+	if got["nivell"] != 2 || got["municipi"] != 2 {
+		t.Fatalf("summary moderacio esperava nivell=2 i municipi=2, got %+v", got)
 	}
 }
 
-func TestTerritoriImportReimportPromotesPendingDuplicatesToPublicat(t *testing.T) {
+func TestTerritoriImportReimportPreservesPendingDuplicatesForModeration(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f29_territori_import_reimport_promotes.sqlite3")
 
 	admin := createTestUser(t, database, "f29_import_fix_reimport_"+strconv.FormatInt(time.Now().UnixNano(), 10))
@@ -369,24 +409,65 @@ func TestTerritoriImportReimportPromotesPendingDuplicatesToPublicat(t *testing.T
 
 	nivellPaisAfter := findNivellByNom(t, database, "Testland")
 	nivellComarcaAfter := findNivellByNom(t, database, "Comarca Test")
-	if nivellPaisAfter.ModeracioEstat != "publicat" || nivellComarcaAfter.ModeracioEstat != "publicat" {
-		t.Fatalf("nivells reimportats esperats publicat/publicat, got %s/%s", nivellPaisAfter.ModeracioEstat, nivellComarcaAfter.ModeracioEstat)
+	if nivellPaisAfter.ModeracioEstat != "pendent" || nivellComarcaAfter.ModeracioEstat != "pendent" {
+		t.Fatalf("nivells reimportats esperats pendent/pendent, got %s/%s", nivellPaisAfter.ModeracioEstat, nivellComarcaAfter.ModeracioEstat)
 	}
 
 	munPareAfter := findMunicipiByNom(t, database, "Municipi Pare")
 	munFillAfter := findMunicipiByNom(t, database, "Municipi Fill")
-	if munPareAfter.ModeracioEstat != "publicat" || munFillAfter.ModeracioEstat != "publicat" {
-		t.Fatalf("municipis reimportats esperats publicat/publicat, got %s/%s", munPareAfter.ModeracioEstat, munFillAfter.ModeracioEstat)
+	if munPareAfter.ModeracioEstat != "pendent" || munFillAfter.ModeracioEstat != "pendent" {
+		t.Fatalf("municipis reimportats esperats pendent/pendent, got %s/%s", munPareAfter.ModeracioEstat, munFillAfter.ModeracioEstat)
 	}
 
 	total, err := database.CountMunicipisBrowse(db.MunicipiBrowseFilter{
 		NivellID: nivellComarcaAfter.ID,
-		Status:   "publicat",
+		Status:   "pendent",
 	})
 	if err != nil {
 		t.Fatalf("CountMunicipisBrowse després de reimport ha fallat: %v", err)
 	}
 	if total != 2 {
-		t.Fatalf("municipis públics esperats 2 després de reimport, got %d", total)
+		t.Fatalf("municipis pendents esperats 2 després de reimport, got %d", total)
+	}
+}
+
+func TestTerritoriImportRebuildsAdminClosureForImportedMunicipis(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f29_territori_import_closure.sqlite3")
+
+	admin := createTestUser(t, database, "f29_import_closure_admin_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	assignPolicyByName(t, database, admin.ID, "admin")
+	session := createSessionCookie(t, database, admin.ID, "sess_f29_closure_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+
+	projectRoot := findProjectRoot(t)
+	fixturePath := filepath.Join(projectRoot, "tests", "fixtures", "territori_export_sample.json")
+	runTerritoriImportFixture(t, app, session, fixturePath)
+
+	comarca := findNivellByNom(t, database, "Comarca Test")
+	munPare := findMunicipiByNom(t, database, "Municipi Pare")
+
+	entries, err := database.ListAdminClosure(munPare.ID)
+	if err != nil {
+		t.Fatalf("ListAdminClosure ha fallat: %v", err)
+	}
+	if len(entries) < 3 {
+		t.Fatalf("admin_closure esperava com a mínim municipi+nivell+pais, got %d", len(entries))
+	}
+
+	foundMunicipi := false
+	foundComarca := false
+	foundPais := false
+	for _, entry := range entries {
+		if entry.AncestorType == "municipi" && entry.AncestorID == munPare.ID {
+			foundMunicipi = true
+		}
+		if entry.AncestorType == "nivell" && entry.AncestorID == comarca.ID {
+			foundComarca = true
+		}
+		if entry.AncestorType == "pais" {
+			foundPais = true
+		}
+	}
+	if !foundMunicipi || !foundComarca || !foundPais {
+		t.Fatalf("admin_closure incompleta: municipi=%t comarca=%t pais=%t entries=%+v", foundMunicipi, foundComarca, foundPais, entries)
 	}
 }

@@ -299,3 +299,89 @@ func TestAdminMunicipisComarcaScopedViewAndSuggestWhenComarcaAtLevel3F3014Emerge
 		t.Fatalf("esperava suggest visible amb scope comarca quan la comarca és a nivell_id_3: %s", rrSuggest.Body.String())
 	}
 }
+
+func TestTerritorialScopedBooksAndArchivesUseAnyLevelColumnF3015(t *testing.T) {
+	_, database := newTestAppForLogin(t, "test_f30_15_llibres_arxius_any_column.sqlite3")
+
+	user := createTestUser(t, database, "f30_15_scope_docs_user")
+	targetPaisID := createBrowseTestCountry(t, database, "LC")
+	level1 := createBrowseTestLevel(t, database, targetPaisID, 1, "Catalunya Test", "regio", 0)
+	level2 := createBrowseTestLevel(t, database, targetPaisID, 2, "Lleida Test", "provincia", level1)
+	targetComarcaID := createBrowseTestLevel(t, database, targetPaisID, 3, "Garrigues Test", "comarca", level2)
+
+	munID := createBrowseTestMunicipi(t, database, user.ID, "Arbeca Test", [7]int{level1, level2, targetComarcaID})
+	eclesID, err := database.CreateArquebisbat(&db.Arquebisbat{
+		Nom:            "Bisbat Test",
+		TipusEntitat:   "bisbat",
+		ModeracioEstat: "publicat",
+		CreatedBy:      sql.NullInt64{Int64: int64(user.ID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("CreateArquebisbat ha fallat: %v", err)
+	}
+	arxiuID, err := database.CreateArxiu(&db.Arxiu{
+		Nom:            "Arxiu Test",
+		Tipus:          "parroquia",
+		MunicipiID:     sql.NullInt64{Int64: int64(munID), Valid: true},
+		ModeracioEstat: "publicat",
+		CreatedBy:      sql.NullInt64{Int64: int64(user.ID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("CreateArxiu ha fallat: %v", err)
+	}
+	llibreID, err := database.CreateLlibre(&db.Llibre{
+		ArquebisbatID:  eclesID,
+		MunicipiID:     munID,
+		Titol:          "Llibre Test",
+		ModeracioEstat: "publicat",
+		CreatedBy:      sql.NullInt64{Int64: int64(user.ID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("CreateLlibre ha fallat: %v", err)
+	}
+	if err := database.AddArxiuLlibre(arxiuID, llibreID, "", ""); err != nil {
+		t.Fatalf("AddArxiuLlibre ha fallat: %v", err)
+	}
+
+	arxius, err := database.ListArxius(db.ArxiuFilter{
+		Status:            "publicat",
+		AllowedComarcaIDs: []int{targetComarcaID},
+	})
+	if err != nil {
+		t.Fatalf("ListArxius amb AllowedComarcaIDs ha fallat: %v", err)
+	}
+	if len(arxius) != 1 || arxius[0].Nom != "Arxiu Test" {
+		t.Fatalf("esperava Arxiu Test amb filtre de comarca semàntic, got %+v", arxius)
+	}
+	totalArxius, err := database.CountArxius(db.ArxiuFilter{
+		Status:            "publicat",
+		AllowedComarcaIDs: []int{targetComarcaID},
+	})
+	if err != nil {
+		t.Fatalf("CountArxius amb AllowedComarcaIDs ha fallat: %v", err)
+	}
+	if totalArxius != 1 {
+		t.Fatalf("count arxius esperat 1 amb filtre de comarca semàntic, got %d", totalArxius)
+	}
+
+	llibres, err := database.ListLlibres(db.LlibreFilter{
+		Status:            "publicat",
+		AllowedComarcaIDs: []int{targetComarcaID},
+	})
+	if err != nil {
+		t.Fatalf("ListLlibres amb AllowedComarcaIDs ha fallat: %v", err)
+	}
+	if len(llibres) != 1 || llibres[0].Titol != "Llibre Test" {
+		t.Fatalf("esperava Llibre Test amb filtre de comarca semàntic, got %+v", llibres)
+	}
+	totalLlibres, err := database.CountLlibres(db.LlibreFilter{
+		Status:            "publicat",
+		AllowedComarcaIDs: []int{targetComarcaID},
+	})
+	if err != nil {
+		t.Fatalf("CountLlibres amb AllowedComarcaIDs ha fallat: %v", err)
+	}
+	if totalLlibres != 1 {
+		t.Fatalf("count llibres esperat 1 amb filtre de comarca semàntic, got %d", totalLlibres)
+	}
+}

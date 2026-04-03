@@ -774,6 +774,45 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 	}
 	parentDuration := time.Since(parentStart)
 	municipisDuration := time.Since(municipisStart)
+	closureStart := time.Now()
+	closureErrors := 0
+	affectedMunicipiIDs := make([]int, 0, len(munIDMap))
+	for _, id := range munIDMap {
+		if id > 0 {
+			affectedMunicipiIDs = append(affectedMunicipiIDs, id)
+		}
+	}
+	for _, municipiID := range dedupeIntSlice(affectedMunicipiIDs) {
+		mun, err := a.DB.GetMunicipi(municipiID)
+		if err != nil || mun == nil {
+			closureErrors++
+			if err != nil {
+				Errorf("Territori import: no s'ha pogut carregar municipi %d per rebuild closure: %v", municipiID, err)
+			}
+			continue
+		}
+		a.rebuildAdminClosureForMunicipi(mun)
+	}
+	closureDuration := time.Since(closureStart)
+	rebuildStart := time.Now()
+	rebuildErrors := 0
+	affectedLevelIDs := make([]int, 0, len(levelIDMap))
+	for _, id := range levelIDMap {
+		if id > 0 {
+			affectedLevelIDs = append(affectedLevelIDs, id)
+		}
+	}
+	for _, nivellID := range dedupeIntSlice(affectedLevelIDs) {
+		if err := a.DB.RebuildNivellDemografia(nivellID); err != nil {
+			rebuildErrors++
+			Errorf("Territori import: no s'ha pogut recalcular demografia nivell %d: %v", nivellID, err)
+		}
+		if err := a.DB.RebuildNivellNomCognomStats(nivellID); err != nil {
+			rebuildErrors++
+			Errorf("Territori import: no s'ha pogut recalcular stats nivell %d: %v", nivellID, err)
+		}
+	}
+	rebuildDuration := time.Since(rebuildStart)
 
 	activityMode := "bulk"
 	if len(pendingActivities) > 0 {
@@ -798,7 +837,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		a.logAntiAbuseSignals(user.ID, now)
 	}
 	totalDuration := time.Since(start)
-	Infof("Territori import: engine=%s modes=%s/%s/%s activity=%s prep=%s levels=%s municipis=%s parents=%s totals=%d created=%d skipped=%d errors=%d parentErrors=%d duration=%s",
+	Infof("Territori import: engine=%s modes=%s/%s/%s activity=%s prep=%s levels=%s municipis=%s parents=%s closure=%s rebuild=%s totals=%d created=%d skipped=%d errors=%d parentErrors=%d closureErrors=%d rebuildErrors=%d duration=%s",
 		engine,
 		bulkModeLevels,
 		bulkModeMunicipis,
@@ -808,11 +847,15 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		levelsDuration.String(),
 		municipisDuration.String(),
 		parentDuration.String(),
+		closureDuration.String(),
+		rebuildDuration.String(),
 		levelsTotal+municipisTotal,
 		levelsCreated+municipisCreated,
 		levelsSkipped+municipisSkipped,
 		levelsErrors+municipisErrors,
 		parentErrors,
+		closureErrors,
+		rebuildErrors,
 		totalDuration.String(),
 	)
 
@@ -827,9 +870,11 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		"municipis_created": strconv.Itoa(municipisCreated),
 		"municipis_skipped": strconv.Itoa(municipisSkipped),
 		"municipis_errors":  strconv.Itoa(municipisErrors),
+		"closure_errors":    strconv.Itoa(closureErrors),
+		"rebuild_errors":    strconv.Itoa(rebuildErrors),
 	})
 	status := adminImportStatusOK
-	if levelsErrors > 0 || municipisErrors > 0 {
+	if levelsErrors > 0 || municipisErrors > 0 || parentErrors > 0 || closureErrors > 0 || rebuildErrors > 0 {
 		status = adminImportStatusError
 	}
 	a.logAdminImportRun(r, "territori", status, user.ID)
@@ -915,9 +960,9 @@ func normalizeTerritoriImportModerationStatus(raw string) string {
 	case "publicat", "pendent", "rebutjat":
 		return strings.ToLower(strings.TrimSpace(raw))
 	default:
-		// Compatibilitat amb exports antics: si el payload no porta
-		// moderation_status, el tractem com a contingut ja publicat.
-		return "publicat"
+		// Si el payload no porta moderation_status, el flux funcional correcte
+		// d'un territori nou és entrar a moderació, no auto-publicar-se.
+		return "pendent"
 	}
 }
 
