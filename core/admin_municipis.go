@@ -34,6 +34,56 @@ func collectBrowseRowLevelIDs(row db.MunicipiBrowseRow) []int {
 	return dedupeIntSlice(ids)
 }
 
+func (a *App) municipiEffectivePaisID(mun *db.Municipi) int {
+	if a == nil || a.DB == nil || mun == nil {
+		return 0
+	}
+	for _, levelID := range collectMunicipiLevelIDs(mun.NivellAdministratiuID) {
+		if levelID <= 0 {
+			continue
+		}
+		if nivell, err := a.DB.GetNivell(levelID); err == nil && nivell != nil && nivell.PaisID > 0 {
+			return nivell.PaisID
+		}
+	}
+	return 0
+}
+
+func (a *App) debugLogMunicipiBrowse(r *http.Request, filter db.MunicipiBrowseFilter, total int, rows []db.MunicipiBrowseRow) {
+	if !IsDebugEnabled() || a == nil || a.DB == nil || r == nil {
+		return
+	}
+	focusExists := false
+	focusMatches := false
+	focusPaisID := 0
+	if filter.FocusID > 0 {
+		if mun, err := a.DB.GetMunicipi(filter.FocusID); err == nil && mun != nil {
+			focusExists = true
+			focusPaisID = a.municipiEffectivePaisID(mun)
+		}
+		probe := filter
+		probe.FocusID = 0
+		probe.Limit = 0
+		probe.Offset = 0
+		probe.MunicipiID = filter.FocusID
+		if matches, err := a.DB.CountMunicipisBrowse(probe); err == nil {
+			focusMatches = matches > 0
+		}
+	}
+	Debugf(
+		"territori municipis browse params=%q filter=%+v total=%d rows=%d focus_id=%d focus_exists=%t focus_matches=%t focus_effective_pais=%d request_pais_id=%d",
+		r.URL.RawQuery,
+		filter,
+		total,
+		len(rows),
+		filter.FocusID,
+		focusExists,
+		focusMatches,
+		focusPaisID,
+		filter.PaisID,
+	)
+}
+
 func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 	filter := db.MunicipiBrowseFilter{
 		Text:    strings.TrimSpace(r.URL.Query().Get("q")),
@@ -218,6 +268,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 	} else {
 		pagination = buildPagination(r, page, perPage, 0, "#page-stats-controls")
 	}
+	a.debugLogMunicipiBrowse(r, filter, total, muns)
 	knownTypes := []string{"nucli_urba", "urbanitzacio", "masia", "poble", "ciutat", "barri", "llogaret"}
 	typeOptions := make([]municipiTypeOption, 0, len(knownTypes))
 	typeLabels := map[string]string{}

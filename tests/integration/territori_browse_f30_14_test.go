@@ -47,12 +47,17 @@ func createBrowseTestLevel(t *testing.T, database db.DB, paisID, nivel int, nom,
 
 func createBrowseTestMunicipi(t *testing.T, database db.DB, createdBy int, nom string, levelIDs [7]int) int {
 	t.Helper()
+	return createBrowseTestMunicipiWithOptions(t, database, createdBy, nom, "municipi", "publicat", levelIDs)
+}
+
+func createBrowseTestMunicipiWithOptions(t *testing.T, database db.DB, createdBy int, nom, tipus, status string, levelIDs [7]int) int {
+	t.Helper()
 	m := &db.Municipi{
 		Nom:            nom,
-		Tipus:          "municipi",
+		Tipus:          tipus,
 		Estat:          "actiu",
-		ModeracioEstat: "publicat",
-		CreatedBy:      sql.NullInt64{Int64: int64(createdBy), Valid: true},
+		ModeracioEstat: status,
+		CreatedBy:      sql.NullInt64{Int64: int64(createdBy), Valid: createdBy > 0},
 	}
 	for i, id := range levelIDs {
 		if id > 0 {
@@ -98,17 +103,14 @@ func TestMunicipiBrowseFiltersByNivellIDAcrossAnyColumnF3014(t *testing.T) {
 	level3 := createBrowseTestLevel(t, database, targetPaisID, 3, "Nivell 3", "vegueria", level2)
 	level4 := createBrowseTestLevel(t, database, targetPaisID, 4, "Nivell 4", "subregio", level3)
 	level5 := createBrowseTestLevel(t, database, targetPaisID, 5, "Nivell 5", "partit", level4)
-	targetLevelID := createBrowseTestLevel(t, database, targetPaisID, 6, "Garrigues Test", "comarca", level5)
-	if targetLevelID != 6 {
-		t.Fatalf("el test requereix que el nivell objectiu tingui ID 6, got %d", targetLevelID)
-	}
+	targetLevelID := createBrowseTestLevel(t, database, targetPaisID, 6, "Comarca Alfa", "comarca", level5)
 
 	levelIDsA := [7]int{level1, level2, targetLevelID}
 	levelIDsB := [7]int{level1, level2, level3, level4, targetLevelID}
 	levelIDsC := [7]int{level1, level2, level3}
-	createBrowseTestMunicipi(t, database, user.ID, "Arbeca Test", levelIDsA)
-	createBrowseTestMunicipi(t, database, user.ID, "Bovera Test", levelIDsB)
-	createBrowseTestMunicipi(t, database, user.ID, "Sense Garrigues", levelIDsC)
+	createBrowseTestMunicipi(t, database, user.ID, "Municipi Alfa", levelIDsA)
+	createBrowseTestMunicipi(t, database, user.ID, "Municipi Beta", levelIDsB)
+	createBrowseTestMunicipi(t, database, user.ID, "Municipi Fora", levelIDsC)
 
 	rows, err := database.ListMunicipisBrowse(db.MunicipiBrowseFilter{
 		NivellID: targetLevelID,
@@ -122,7 +124,7 @@ func TestMunicipiBrowseFiltersByNivellIDAcrossAnyColumnF3014(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("municipis esperats 2 per NivellID any-column, got %d", len(rows))
 	}
-	if rows[0].Nom != "Arbeca Test" || rows[1].Nom != "Bovera Test" {
+	if rows[0].Nom != "Municipi Alfa" || rows[1].Nom != "Municipi Beta" {
 		t.Fatalf("municipis inesperats per NivellID any-column: %+v", rows)
 	}
 
@@ -138,7 +140,7 @@ func TestMunicipiBrowseFiltersByNivellIDAcrossAnyColumnF3014(t *testing.T) {
 	}
 
 	suggestions, err := database.SuggestMunicipis(db.MunicipiBrowseFilter{
-		Text:     "test",
+		Text:     "Municipi",
 		NivellID: targetLevelID,
 		Status:   "publicat",
 		Limit:    10,
@@ -159,8 +161,8 @@ func TestMunicipiBrowseFiltersByNivellIDAcrossAnyColumnF3014(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListMunicipisBrowse amb filtre explícit de profunditat ha fallat: %v", err)
 	}
-	if len(rowsDepth) != 1 || rowsDepth[0].Nom != "Arbeca Test" {
-		t.Fatalf("filtre explícit LevelIDs[2]=6 hauria de retornar només Arbeca Test, got %+v", rowsDepth)
+	if len(rowsDepth) != 1 || rowsDepth[0].Nom != "Municipi Alfa" {
+		t.Fatalf("filtre explícit LevelIDs[2]=6 hauria de retornar només Municipi Alfa, got %+v", rowsDepth)
 	}
 }
 
@@ -172,11 +174,11 @@ func TestAdminMunicipisCountryScopedEditUsesRealPaisIDF3014(t *testing.T) {
 
 	_ = createBrowseTestCountry(t, database, "DX")
 	targetPaisID := createBrowseTestCountry(t, database, "TX")
-	level1 := createBrowseTestLevel(t, database, targetPaisID, 1, "Catalunya Test", "regio", 0)
-	level2 := createBrowseTestLevel(t, database, targetPaisID, 2, "Lleida Test", "provincia", level1)
-	targetLevelID := createBrowseTestLevel(t, database, targetPaisID, 3, "Garrigues Test", "comarca", level2)
+	level1 := createBrowseTestLevel(t, database, targetPaisID, 1, "Regio Alfa", "regio", 0)
+	level2 := createBrowseTestLevel(t, database, targetPaisID, 2, "Provincia Alfa", "provincia", level1)
+	targetLevelID := createBrowseTestLevel(t, database, targetPaisID, 3, "Comarca Alfa", "comarca", level2)
 
-	munID := createBrowseTestMunicipi(t, database, editor.ID, "Arbeca Test", [7]int{level1, level2, targetLevelID})
+	munID := createBrowseTestMunicipi(t, database, editor.ID, "Municipi Alfa", [7]int{level1, level2, targetLevelID})
 	if targetPaisID == level1 {
 		t.Fatalf("el test requereix pais_id i level1ID diferents; got %d i %d", targetPaisID, level1)
 	}
@@ -210,14 +212,14 @@ func TestMunicipiBrowseAllowedComarcaUsesAnyLevelColumnF3014Emergency(t *testing
 
 	user := createTestUser(t, database, "f30_14_comarca_scope_user")
 	targetPaisID := createBrowseTestCountry(t, database, "TC")
-	level1 := createBrowseTestLevel(t, database, targetPaisID, 1, "Catalunya Test", "regio", 0)
-	level2 := createBrowseTestLevel(t, database, targetPaisID, 2, "Lleida Test", "provincia", level1)
-	targetComarcaID := createBrowseTestLevel(t, database, targetPaisID, 3, "Garrigues Test", "comarca", level2)
-	otherComarcaID := createBrowseTestLevel(t, database, targetPaisID, 3, "Segrià Test", "comarca", level2)
+	level1 := createBrowseTestLevel(t, database, targetPaisID, 1, "Regio Alfa", "regio", 0)
+	level2 := createBrowseTestLevel(t, database, targetPaisID, 2, "Provincia Alfa", "provincia", level1)
+	targetComarcaID := createBrowseTestLevel(t, database, targetPaisID, 3, "Comarca Alfa", "comarca", level2)
+	otherComarcaID := createBrowseTestLevel(t, database, targetPaisID, 3, "Comarca Beta", "comarca", level2)
 
-	createBrowseTestMunicipi(t, database, user.ID, "Arbeca Test", [7]int{level1, level2, targetComarcaID})
-	createBrowseTestMunicipi(t, database, user.ID, "Juneda Test", [7]int{level1, level2, targetComarcaID})
-	createBrowseTestMunicipi(t, database, user.ID, "Lleida Test", [7]int{level1, level2, otherComarcaID})
+	createBrowseTestMunicipi(t, database, user.ID, "Municipi Alfa", [7]int{level1, level2, targetComarcaID})
+	createBrowseTestMunicipi(t, database, user.ID, "Municipi Beta", [7]int{level1, level2, targetComarcaID})
+	createBrowseTestMunicipi(t, database, user.ID, "Municipi Gamma", [7]int{level1, level2, otherComarcaID})
 
 	filter := db.MunicipiBrowseFilter{
 		Status:            "publicat",
@@ -230,8 +232,8 @@ func TestMunicipiBrowseAllowedComarcaUsesAnyLevelColumnF3014Emergency(t *testing
 	if err != nil {
 		t.Fatalf("ListMunicipisBrowse amb AllowedComarcaIDs ha fallat: %v", err)
 	}
-	if len(rows) != 2 || rows[0].Nom != "Arbeca Test" || rows[1].Nom != "Juneda Test" {
-		t.Fatalf("esperava Arbeca/Juneda amb AllowedComarcaIDs semàntic, got %+v", rows)
+	if len(rows) != 2 || rows[0].Nom != "Municipi Alfa" || rows[1].Nom != "Municipi Beta" {
+		t.Fatalf("esperava Municipi Alfa/Beta amb AllowedComarcaIDs semàntic, got %+v", rows)
 	}
 
 	total, err := database.CountMunicipisBrowse(db.MunicipiBrowseFilter{
@@ -246,7 +248,7 @@ func TestMunicipiBrowseAllowedComarcaUsesAnyLevelColumnF3014Emergency(t *testing
 	}
 
 	suggestions, err := database.SuggestMunicipis(db.MunicipiBrowseFilter{
-		Text:              "test",
+		Text:              "Municipi",
 		Status:            "publicat",
 		Limit:             10,
 		AllowedComarcaIDs: []int{targetComarcaID},
@@ -266,36 +268,36 @@ func TestAdminMunicipisComarcaScopedViewAndSuggestWhenComarcaAtLevel3F3014Emerge
 	session := createSessionCookie(t, database, editor.ID, "sess_f30_14_comarca_editor")
 
 	targetPaisID := createBrowseTestCountry(t, database, "GX")
-	level1 := createBrowseTestLevel(t, database, targetPaisID, 1, "Catalunya Test", "regio", 0)
-	level2 := createBrowseTestLevel(t, database, targetPaisID, 2, "Lleida Test", "provincia", level1)
-	targetComarcaID := createBrowseTestLevel(t, database, targetPaisID, 3, "Garrigues Test", "comarca", level2)
+	level1 := createBrowseTestLevel(t, database, targetPaisID, 1, "Regio Alfa", "regio", 0)
+	level2 := createBrowseTestLevel(t, database, targetPaisID, 2, "Provincia Alfa", "provincia", level1)
+	targetComarcaID := createBrowseTestLevel(t, database, targetPaisID, 3, "Comarca Alfa", "comarca", level2)
 
-	createBrowseTestMunicipi(t, database, editor.ID, "Arbeca Test", [7]int{level1, level2, targetComarcaID})
+	createBrowseTestMunicipi(t, database, editor.ID, "Municipi Alfa", [7]int{level1, level2, targetComarcaID})
 
 	viewPolicyID := createScopedPolicyWithGrant(t, database, "f30_14_comarca_view_policy", "territori.municipis.view", core.ScopeComarca, targetComarcaID, true)
 	if err := database.AddUserPolitica(editor.ID, viewPolicyID); err != nil {
 		t.Fatalf("AddUserPolitica view ha fallat: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/municipis?pais_id=%d&q=Arbeca", targetPaisID), nil)
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/municipis?pais_id=%d&q=Alfa", targetPaisID), nil)
 	req.AddCookie(session)
 	rr := httptest.NewRecorder()
 	app.AdminListMunicipis(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("AdminListMunicipis esperava 200, got %d", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "Arbeca Test") {
+	if !strings.Contains(rr.Body.String(), "Municipi Alfa") {
 		t.Fatalf("esperava municipi visible amb scope comarca quan la comarca és a nivell_id_3")
 	}
 
-	reqSuggest := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/admin/municipis/suggest?q=Arb&pais_id=%d", targetPaisID), nil)
+	reqSuggest := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/territori/municipis/suggest?q=Alf&pais_id=%d", targetPaisID), nil)
 	reqSuggest.AddCookie(session)
 	rrSuggest := httptest.NewRecorder()
 	app.AdminMunicipisSuggest(rrSuggest, reqSuggest)
 	if rrSuggest.Code != http.StatusOK {
 		t.Fatalf("AdminMunicipisSuggest esperava 200, got %d", rrSuggest.Code)
 	}
-	if !strings.Contains(rrSuggest.Body.String(), "Arbeca Test") {
+	if !strings.Contains(rrSuggest.Body.String(), "Municipi Alfa") {
 		t.Fatalf("esperava suggest visible amb scope comarca quan la comarca és a nivell_id_3: %s", rrSuggest.Body.String())
 	}
 }
@@ -305,11 +307,11 @@ func TestTerritorialScopedBooksAndArchivesUseAnyLevelColumnF3015(t *testing.T) {
 
 	user := createTestUser(t, database, "f30_15_scope_docs_user")
 	targetPaisID := createBrowseTestCountry(t, database, "LC")
-	level1 := createBrowseTestLevel(t, database, targetPaisID, 1, "Catalunya Test", "regio", 0)
-	level2 := createBrowseTestLevel(t, database, targetPaisID, 2, "Lleida Test", "provincia", level1)
-	targetComarcaID := createBrowseTestLevel(t, database, targetPaisID, 3, "Garrigues Test", "comarca", level2)
+	level1 := createBrowseTestLevel(t, database, targetPaisID, 1, "Regio Alfa", "regio", 0)
+	level2 := createBrowseTestLevel(t, database, targetPaisID, 2, "Provincia Alfa", "provincia", level1)
+	targetComarcaID := createBrowseTestLevel(t, database, targetPaisID, 3, "Comarca Alfa", "comarca", level2)
 
-	munID := createBrowseTestMunicipi(t, database, user.ID, "Arbeca Test", [7]int{level1, level2, targetComarcaID})
+	munID := createBrowseTestMunicipi(t, database, user.ID, "Municipi Alfa", [7]int{level1, level2, targetComarcaID})
 	eclesID, err := database.CreateArquebisbat(&db.Arquebisbat{
 		Nom:            "Bisbat Test",
 		TipusEntitat:   "bisbat",

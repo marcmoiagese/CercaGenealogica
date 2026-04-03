@@ -2890,7 +2890,7 @@ func (h sqlHelper) municipiBrowseWhere(f MunicipiBrowseFilter) (string, []interf
 		args = append(args, strings.TrimSpace(f.Status))
 	}
 	if f.PaisID > 0 {
-		where += " AND na1.pais_id = ?"
+		where += " AND " + municipiBrowsePaisExpr() + " = ?"
 		args = append(args, f.PaisID)
 	}
 	if f.MunicipiID > 0 {
@@ -2924,8 +2924,12 @@ func (h sqlHelper) municipiBrowseWhere(f MunicipiBrowseFilter) (string, []interf
 	inClauseAnyLevel(f.AllowedProvinciaIDs)
 	inClauseAnyLevel(f.AllowedComarcaIDs)
 	inClauseAnyLevel(f.AllowedNivellIDs)
-	inClause("na1.pais_id", f.AllowedPaisIDs)
+	inClause(municipiBrowsePaisExpr(), f.AllowedPaisIDs)
 	return where, args
+}
+
+func municipiBrowsePaisExpr() string {
+	return "COALESCE(na1.pais_id, na2.pais_id, na3.pais_id, na4.pais_id, na5.pais_id, na6.pais_id, na7.pais_id, 0)"
 }
 
 func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowseRow, error) {
@@ -3191,7 +3195,7 @@ func (h sqlHelper) suggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRo
 	}
 	query := `
 		SELECT m.id, m.nom, m.tipus,
-		       COALESCE(na1.pais_id, na2.pais_id, na3.pais_id, na4.pais_id, na5.pais_id, na6.pais_id, na7.pais_id, 0) AS pais_id,
+		       ` + municipiBrowsePaisExpr() + ` AS pais_id,
 		       m.nivell_administratiu_id_1, m.nivell_administratiu_id_2, m.nivell_administratiu_id_3,
 		       m.nivell_administratiu_id_4, m.nivell_administratiu_id_5, m.nivell_administratiu_id_6, m.nivell_administratiu_id_7,
 		       na1.nom_nivell, na2.nom_nivell, na3.nom_nivell, na4.nom_nivell, na5.nom_nivell, na6.nom_nivell, na7.nom_nivell,
