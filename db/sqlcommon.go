@@ -11715,11 +11715,32 @@ func (h sqlHelper) replaceAdminClosure(descendantMunicipiID int, entries []Admin
 	if len(entries) == 0 {
 		return tx.Commit()
 	}
-	placeholders := strings.TrimRight(strings.Repeat("(?, ?, ?),", len(entries)), ",")
+	deduped := make([]AdminClosureEntry, 0, len(entries))
+	seen := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		if descendantMunicipiID <= 0 {
+			continue
+		}
+		entry.DescendantMunicipiID = descendantMunicipiID
+		entry.AncestorType = strings.TrimSpace(entry.AncestorType)
+		if entry.AncestorType == "" || entry.AncestorID <= 0 {
+			continue
+		}
+		key := fmt.Sprintf("%d|%s|%d", entry.DescendantMunicipiID, entry.AncestorType, entry.AncestorID)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		deduped = append(deduped, entry)
+	}
+	if len(deduped) == 0 {
+		return tx.Commit()
+	}
+	placeholders := strings.TrimRight(strings.Repeat("(?, ?, ?),", len(deduped)), ",")
 	query := fmt.Sprintf(`INSERT INTO admin_closure (descendant_municipi_id, ancestor_type, ancestor_id) VALUES %s`, placeholders)
 	query = formatPlaceholders(h.style, query)
-	args := make([]interface{}, 0, len(entries)*3)
-	for _, entry := range entries {
+	args := make([]interface{}, 0, len(deduped)*3)
+	for _, entry := range deduped {
 		args = append(args, entry.DescendantMunicipiID, entry.AncestorType, entry.AncestorID)
 	}
 	if _, err := tx.Exec(query, args...); err != nil {

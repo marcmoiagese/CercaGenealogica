@@ -467,7 +467,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 				AnyFi:          intPtrToNull(l.AnyFi),
 				Estat:          strings.TrimSpace(l.Estat),
 				CreatedBy:      sql.NullInt64{Int64: int64(user.ID), Valid: true},
-				ModeracioEstat: normalizeTerritoriImportModerationStatus(l.Status),
+				ModeracioEstat: territoriImportStatusForNewObject(l.Status),
 			}
 			if n.Estat == "" {
 				n.Estat = "actiu"
@@ -639,7 +639,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 			m.Estat = "actiu"
 		}
 		m.CreatedBy = sql.NullInt64{Int64: int64(user.ID), Valid: true}
-		m.ModeracioEstat = normalizeTerritoriImportModerationStatus(mu.Status)
+		m.ModeracioEstat = territoriImportStatusForNewObject(mu.Status)
 		for i := 0; i < 7; i++ {
 			if nivells[i] > 0 {
 				if id, ok := levelIDMap[nivells[i]]; ok {
@@ -966,20 +966,27 @@ func normalizeTerritoriImportModerationStatus(raw string) string {
 	}
 }
 
+func territoriImportStatusForNewObject(raw string) string {
+	switch normalizeTerritoriImportModerationStatus(raw) {
+	case "rebutjat":
+		return "rebutjat"
+	default:
+		// Els imports territorials no han d'auto-publicar nous nivells/municipis.
+		// Encara que el payload porti "publicat", l'entrada funcional correcta és
+		// "pendent" perquè passi pel flux de moderació.
+		return "pendent"
+	}
+}
+
 func shouldAdoptTerritoriImportStatus(current, target string) bool {
-	target = normalizeTerritoriImportModerationStatus(target)
+	target = territoriImportStatusForNewObject(target)
 	current = strings.ToLower(strings.TrimSpace(current))
 	if current == target {
 		return false
 	}
-	switch target {
-	case "publicat":
-		return current == "" || current == "pendent"
-	case "pendent", "rebutjat":
-		return current == ""
-	default:
-		return false
-	}
+	// L'import pot reparar objectes existents sense estat, però no ha de
+	// promocionar automàticament a "publicat" ni canviar estats ja moderats.
+	return current == ""
 }
 
 type territoriBulkInserter interface {
