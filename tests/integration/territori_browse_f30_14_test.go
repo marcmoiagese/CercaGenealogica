@@ -204,3 +204,98 @@ func TestAdminMunicipisCountryScopedEditUsesRealPaisIDF3014(t *testing.T) {
 		t.Fatalf("esperava acció d'edició per municipi amb permís scoped de país; body no conté %q", editHref)
 	}
 }
+
+func TestMunicipiBrowseAllowedComarcaUsesAnyLevelColumnF3014Emergency(t *testing.T) {
+	_, database := newTestAppForLogin(t, "test_f30_14_allowed_comarca_any_column.sqlite3")
+
+	user := createTestUser(t, database, "f30_14_comarca_scope_user")
+	targetPaisID := createBrowseTestCountry(t, database, "TC")
+	level1 := createBrowseTestLevel(t, database, targetPaisID, 1, "Catalunya Test", "regio", 0)
+	level2 := createBrowseTestLevel(t, database, targetPaisID, 2, "Lleida Test", "provincia", level1)
+	targetComarcaID := createBrowseTestLevel(t, database, targetPaisID, 3, "Garrigues Test", "comarca", level2)
+	otherComarcaID := createBrowseTestLevel(t, database, targetPaisID, 3, "Segrià Test", "comarca", level2)
+
+	createBrowseTestMunicipi(t, database, user.ID, "Arbeca Test", [7]int{level1, level2, targetComarcaID})
+	createBrowseTestMunicipi(t, database, user.ID, "Juneda Test", [7]int{level1, level2, targetComarcaID})
+	createBrowseTestMunicipi(t, database, user.ID, "Lleida Test", [7]int{level1, level2, otherComarcaID})
+
+	filter := db.MunicipiBrowseFilter{
+		Status:            "publicat",
+		Sort:              "nom",
+		SortDir:           "asc",
+		AllowedComarcaIDs: []int{targetComarcaID},
+	}
+
+	rows, err := database.ListMunicipisBrowse(filter)
+	if err != nil {
+		t.Fatalf("ListMunicipisBrowse amb AllowedComarcaIDs ha fallat: %v", err)
+	}
+	if len(rows) != 2 || rows[0].Nom != "Arbeca Test" || rows[1].Nom != "Juneda Test" {
+		t.Fatalf("esperava Arbeca/Juneda amb AllowedComarcaIDs semàntic, got %+v", rows)
+	}
+
+	total, err := database.CountMunicipisBrowse(db.MunicipiBrowseFilter{
+		Status:            "publicat",
+		AllowedComarcaIDs: []int{targetComarcaID},
+	})
+	if err != nil {
+		t.Fatalf("CountMunicipisBrowse amb AllowedComarcaIDs ha fallat: %v", err)
+	}
+	if total != 2 {
+		t.Fatalf("count esperat 2 amb AllowedComarcaIDs semàntic, got %d", total)
+	}
+
+	suggestions, err := database.SuggestMunicipis(db.MunicipiBrowseFilter{
+		Text:              "test",
+		Status:            "publicat",
+		Limit:             10,
+		AllowedComarcaIDs: []int{targetComarcaID},
+	})
+	if err != nil {
+		t.Fatalf("SuggestMunicipis amb AllowedComarcaIDs ha fallat: %v", err)
+	}
+	if len(suggestions) != 2 {
+		t.Fatalf("suggestions esperades 2 amb AllowedComarcaIDs semàntic, got %d", len(suggestions))
+	}
+}
+
+func TestAdminMunicipisComarcaScopedViewAndSuggestWhenComarcaAtLevel3F3014Emergency(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f30_14_comarca_scope_handler.sqlite3")
+
+	editor := createTestUser(t, database, "f30_14_comarca_editor")
+	session := createSessionCookie(t, database, editor.ID, "sess_f30_14_comarca_editor")
+
+	targetPaisID := createBrowseTestCountry(t, database, "GX")
+	level1 := createBrowseTestLevel(t, database, targetPaisID, 1, "Catalunya Test", "regio", 0)
+	level2 := createBrowseTestLevel(t, database, targetPaisID, 2, "Lleida Test", "provincia", level1)
+	targetComarcaID := createBrowseTestLevel(t, database, targetPaisID, 3, "Garrigues Test", "comarca", level2)
+
+	createBrowseTestMunicipi(t, database, editor.ID, "Arbeca Test", [7]int{level1, level2, targetComarcaID})
+
+	viewPolicyID := createScopedPolicyWithGrant(t, database, "f30_14_comarca_view_policy", "territori.municipis.view", core.ScopeComarca, targetComarcaID, true)
+	if err := database.AddUserPolitica(editor.ID, viewPolicyID); err != nil {
+		t.Fatalf("AddUserPolitica view ha fallat: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/municipis?pais_id=%d&q=Arbeca", targetPaisID), nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminListMunicipis(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminListMunicipis esperava 200, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Arbeca Test") {
+		t.Fatalf("esperava municipi visible amb scope comarca quan la comarca és a nivell_id_3")
+	}
+
+	reqSuggest := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/admin/municipis/suggest?q=Arb&pais_id=%d", targetPaisID), nil)
+	reqSuggest.AddCookie(session)
+	rrSuggest := httptest.NewRecorder()
+	app.AdminMunicipisSuggest(rrSuggest, reqSuggest)
+	if rrSuggest.Code != http.StatusOK {
+		t.Fatalf("AdminMunicipisSuggest esperava 200, got %d", rrSuggest.Code)
+	}
+	if !strings.Contains(rrSuggest.Body.String(), "Arbeca Test") {
+		t.Fatalf("esperava suggest visible amb scope comarca quan la comarca és a nivell_id_3: %s", rrSuggest.Body.String())
+	}
+}

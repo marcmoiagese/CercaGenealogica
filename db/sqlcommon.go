@@ -2697,8 +2697,8 @@ func (h sqlHelper) listMunicipis(f MunicipiFilter) ([]MunicipiRow, error) {
 		}
 	}
 	inClause("m.id", f.AllowedMunicipiIDs)
-	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
-	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClauseAnyLevel(f.AllowedProvinciaIDs)
+	inClauseAnyLevel(f.AllowedComarcaIDs)
 	inClauseAnyLevel(f.AllowedNivellIDs)
 	inClause("na1.id", f.AllowedPaisIDs)
 	query := `
@@ -2812,8 +2812,8 @@ func (h sqlHelper) countMunicipis(f MunicipiFilter) (int, error) {
 		}
 	}
 	inClause("m.id", f.AllowedMunicipiIDs)
-	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
-	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClauseAnyLevel(f.AllowedProvinciaIDs)
+	inClauseAnyLevel(f.AllowedComarcaIDs)
 	inClauseAnyLevel(f.AllowedNivellIDs)
 	inClause("na1.id", f.AllowedPaisIDs)
 	query := `
@@ -2921,8 +2921,8 @@ func (h sqlHelper) municipiBrowseWhere(f MunicipiBrowseFilter) (string, []interf
 		args = append(args, id)
 	}
 	inClause("m.id", f.AllowedMunicipiIDs)
-	inClause("m.nivell_administratiu_id_3", f.AllowedProvinciaIDs)
-	inClause("m.nivell_administratiu_id_4", f.AllowedComarcaIDs)
+	inClauseAnyLevel(f.AllowedProvinciaIDs)
+	inClauseAnyLevel(f.AllowedComarcaIDs)
 	inClauseAnyLevel(f.AllowedNivellIDs)
 	inClause("na1.pais_id", f.AllowedPaisIDs)
 	return where, args
@@ -6131,7 +6131,7 @@ func (h sqlHelper) createPrivacyDefaults(userID int) error {
             pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
             address_visibility, employment_visibility, profession_visibility, phone_visibility, preferred_lang_visibility, spoken_langs_visibility,
             show_activity, profile_public, notify_email, allow_contact
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (usuari_id) DO NOTHING
     `)
 	if h.style == "mysql" {
@@ -6141,7 +6141,7 @@ func (h sqlHelper) createPrivacyDefaults(userID int) error {
             pais_visibility, estat_visibility, provincia_visibility, poblacio_visibility, postal_visibility,
             address_visibility, employment_visibility, profession_visibility, phone_visibility, preferred_lang_visibility, spoken_langs_visibility,
             show_activity, profile_public, notify_email, allow_contact
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
 	}
 	_, err := h.db.Exec(stmt,
@@ -6161,6 +6161,10 @@ func (h sqlHelper) createPrivacyDefaults(userID int) error {
 		"private", // phone
 		"private", // preferred lang
 		"private", // spoken langs
+		true,      // show_activity
+		true,      // profile_public
+		true,      // notify_email
+		true,      // allow_contact
 	)
 	return err
 }
@@ -14861,8 +14865,8 @@ func buildMunicipiScopeFilterClause(filter MunicipiScopeFilter) (string, []inter
 		allowedClauses = append(allowedClauses, "("+strings.Join(orParts, " OR ")+")")
 	}
 	inClause("m.id", filter.AllowedMunicipiIDs)
-	inClause("m.nivell_administratiu_id_3", filter.AllowedProvinciaIDs)
-	inClause("m.nivell_administratiu_id_4", filter.AllowedComarcaIDs)
+	inClauseAnyLevel(filter.AllowedProvinciaIDs)
+	inClauseAnyLevel(filter.AllowedComarcaIDs)
 	inClauseAnyLevel(filter.AllowedNivellIDs)
 	inClause("na1.pais_id", filter.AllowedPaisIDs)
 	if len(allowedClauses) == 0 {
