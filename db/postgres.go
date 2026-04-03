@@ -584,6 +584,9 @@ func (d *PostgreSQL) ListMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrow
 func (d *PostgreSQL) CountMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
 	return d.help.countMunicipisBrowse(f)
 }
+func (d *PostgreSQL) DebugMunicipiBrowse(f MunicipiBrowseFilter) MunicipiBrowseDebugInfo {
+	return d.help.debugMunicipiBrowse(f)
+}
 func (d *PostgreSQL) SuggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRow, error) {
 	return d.help.suggestMunicipis(f)
 }

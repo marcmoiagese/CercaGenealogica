@@ -587,6 +587,7 @@ type DB interface {
 	CountMunicipis(f MunicipiFilter) (int, error)
 	ListMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowseRow, error)
 	CountMunicipisBrowse(f MunicipiBrowseFilter) (int, error)
+	DebugMunicipiBrowse(f MunicipiBrowseFilter) MunicipiBrowseDebugInfo
 	SuggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRow, error)
 	GetMunicipi(id int) (*Municipi, error)
 	CreateMunicipi(m *Municipi) (int, error)
@@ -1685,6 +1686,19 @@ type MunicipiBrowseFilter struct {
 	AllowedComarcaIDs   []int
 	AllowedNivellIDs    []int
 	AllowedPaisIDs      []int
+}
+
+type MunicipiBrowseDebugInfo struct {
+	CountSQL       string
+	CountArgs      []interface{}
+	ListSQL        string
+	ListArgs       []interface{}
+	FocusInOrder   bool
+	FocusArgIndex  int
+	LimitApplied   bool
+	LimitArgIndex  int
+	OffsetApplied  bool
+	OffsetArgIndex int
 }
 
 type MunicipiBrowseRow struct {

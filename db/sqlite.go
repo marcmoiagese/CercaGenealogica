@@ -601,6 +601,9 @@ func (d *SQLite) ListMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowseRo
 func (d *SQLite) CountMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
 	return d.help.countMunicipisBrowse(f)
 }
+func (d *SQLite) DebugMunicipiBrowse(f MunicipiBrowseFilter) MunicipiBrowseDebugInfo {
+	return d.help.debugMunicipiBrowse(f)
+}
 func (d *SQLite) SuggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRow, error) {
 	return d.help.suggestMunicipis(f)
 }

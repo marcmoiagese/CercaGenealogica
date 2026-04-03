@@ -2932,8 +2932,43 @@ func municipiBrowsePaisExpr() string {
 	return "COALESCE(na1.pais_id, na2.pais_id, na3.pais_id, na4.pais_id, na5.pais_id, na6.pais_id, na7.pais_id, 0)"
 }
 
-func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowseRow, error) {
+func cloneInterfaceSlice(values []interface{}) []interface{} {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make([]interface{}, len(values))
+	copy(cloned, values)
+	return cloned
+}
+
+type municipiBrowseListQueryMeta struct {
+	FocusInOrder   bool
+	FocusArgIndex  int
+	LimitApplied   bool
+	LimitArgIndex  int
+	OffsetApplied  bool
+	OffsetArgIndex int
+}
+
+func (h sqlHelper) buildCountMunicipisBrowseQuery(f MunicipiBrowseFilter) (string, []interface{}) {
 	where, args := h.municipiBrowseWhere(f)
+	query := `
+		SELECT COUNT(*)
+		FROM municipis m
+		LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
+		LEFT JOIN nivells_administratius na2 ON na2.id = m.nivell_administratiu_id_2
+		LEFT JOIN nivells_administratius na3 ON na3.id = m.nivell_administratiu_id_3
+		LEFT JOIN nivells_administratius na4 ON na4.id = m.nivell_administratiu_id_4
+		LEFT JOIN nivells_administratius na5 ON na5.id = m.nivell_administratiu_id_5
+		LEFT JOIN nivells_administratius na6 ON na6.id = m.nivell_administratiu_id_6
+		LEFT JOIN nivells_administratius na7 ON na7.id = m.nivell_administratiu_id_7
+		WHERE ` + where
+	return formatPlaceholders(h.style, query), cloneInterfaceSlice(args)
+}
+
+func (h sqlHelper) buildListMunicipisBrowseQuery(f MunicipiBrowseFilter) (string, []interface{}, municipiBrowseListQueryMeta) {
+	where, args := h.municipiBrowseWhere(f)
+	meta := municipiBrowseListQueryMeta{}
 	orderBy := "m.nom"
 	switch strings.TrimSpace(f.Sort) {
 	case "pais":
@@ -2963,6 +2998,8 @@ func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowse
 	if f.FocusID > 0 {
 		orderPrefix += "CASE WHEN m.id = ? THEN 0 ELSE 1 END, "
 		args = append(args, f.FocusID)
+		meta.FocusInOrder = true
+		meta.FocusArgIndex = len(args)
 	}
 	if strings.TrimSpace(f.Text) != "" {
 		queryText := strings.ToLower(strings.TrimSpace(f.Text))
@@ -2980,7 +3017,7 @@ func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowse
 		       na1.nom_nivell, na2.nom_nivell, na3.nom_nivell, na4.nom_nivell, na5.nom_nivell, na6.nom_nivell, na7.nom_nivell,
 		       m.latitud, m.longitud,
 		       COUNT(l.id) AS llibres_total,
-		       COALESCE(CAST(ROUND(AVG(CASE WHEN s.percentatge IS NOT NULL THEN s.percentatge ELSE CASE WHEN l.indexacio_completa = 1 THEN 100 ELSE 0 END END)) AS INTEGER), 0) AS index_percent
+		       COALESCE(CAST(ROUND(AVG(CASE WHEN s.percentatge IS NOT NULL THEN s.percentatge ELSE CASE WHEN ` + h.boolTrueExpr("l.indexacio_completa") + ` THEN 100 ELSE 0 END END)) AS INTEGER), 0) AS index_percent
 		FROM municipis m
 		LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
 		LEFT JOIN nivells_administratius na2 ON na2.id = m.nivell_administratiu_id_2
@@ -2997,18 +3034,46 @@ func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowse
 		         m.nivell_administratiu_id_4, m.nivell_administratiu_id_5, m.nivell_administratiu_id_6, m.nivell_administratiu_id_7,
 		         na1.nom_nivell, na2.nom_nivell, na3.nom_nivell, na4.nom_nivell, na5.nom_nivell, na6.nom_nivell, na7.nom_nivell,
 		         m.latitud, m.longitud
-		ORDER BY ` + orderPrefix + orderBy + ` ` + dir + `, m.nom`
+	ORDER BY ` + orderPrefix + orderBy + ` ` + dir + `, m.nom`
 	if f.Limit > 0 {
 		query += " LIMIT ?"
 		args = append(args, f.Limit)
+		meta.LimitApplied = true
+		meta.LimitArgIndex = len(args)
 		if f.Offset > 0 {
 			query += " OFFSET ?"
 			args = append(args, f.Offset)
+			meta.OffsetApplied = true
+			meta.OffsetArgIndex = len(args)
 		}
 	}
 	query = formatPlaceholders(h.style, query)
+	return query, cloneInterfaceSlice(args), meta
+}
+
+func (h sqlHelper) debugMunicipiBrowse(f MunicipiBrowseFilter) MunicipiBrowseDebugInfo {
+	countSQL, countArgs := h.buildCountMunicipisBrowseQuery(f)
+	listSQL, listArgs, listMeta := h.buildListMunicipisBrowseQuery(f)
+	return MunicipiBrowseDebugInfo{
+		CountSQL:       countSQL,
+		CountArgs:      countArgs,
+		ListSQL:        listSQL,
+		ListArgs:       listArgs,
+		FocusInOrder:   listMeta.FocusInOrder,
+		FocusArgIndex:  listMeta.FocusArgIndex,
+		LimitApplied:   listMeta.LimitApplied,
+		LimitArgIndex:  listMeta.LimitArgIndex,
+		OffsetApplied:  listMeta.OffsetApplied,
+		OffsetArgIndex: listMeta.OffsetArgIndex,
+	}
+}
+
+func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowseRow, error) {
+	query, args, meta := h.buildListMunicipisBrowseQuery(f)
+	logDebugf("municipi browse LIST sql=%q args=%v focus_in_order=%t focus_arg_index=%d limit_applied=%t limit_arg_index=%d offset_applied=%t offset_arg_index=%d", query, args, meta.FocusInOrder, meta.FocusArgIndex, meta.LimitApplied, meta.LimitArgIndex, meta.OffsetApplied, meta.OffsetArgIndex)
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
+		logErrorf("ListMunicipisBrowse ha fallat: %v sql=%q args=%v", err, query, args)
 		return nil, err
 	}
 	defer rows.Close()
@@ -3026,6 +3091,11 @@ func (h sqlHelper) listMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowse
 		}
 		res = append(res, r)
 	}
+	if err := rows.Err(); err != nil {
+		logErrorf("ListMunicipisBrowse rows iteration ha fallat: %v sql=%q args=%v", err, query, args)
+		return nil, err
+	}
+	logDebugf("municipi browse LIST rows=%d", len(res))
 	return res, nil
 }
 
@@ -3161,21 +3231,11 @@ func (h sqlHelper) resolveArxiusByNames(names []string) ([]ArxiuResolveRow, erro
 }
 
 func (h sqlHelper) countMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
-	where, args := h.municipiBrowseWhere(f)
-	query := `
-		SELECT COUNT(*)
-		FROM municipis m
-		LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
-		LEFT JOIN nivells_administratius na2 ON na2.id = m.nivell_administratiu_id_2
-		LEFT JOIN nivells_administratius na3 ON na3.id = m.nivell_administratiu_id_3
-		LEFT JOIN nivells_administratius na4 ON na4.id = m.nivell_administratiu_id_4
-		LEFT JOIN nivells_administratius na5 ON na5.id = m.nivell_administratiu_id_5
-		LEFT JOIN nivells_administratius na6 ON na6.id = m.nivell_administratiu_id_6
-		LEFT JOIN nivells_administratius na7 ON na7.id = m.nivell_administratiu_id_7
-		WHERE ` + where
-	query = formatPlaceholders(h.style, query)
+	query, args := h.buildCountMunicipisBrowseQuery(f)
+	logDebugf("municipi browse COUNT sql=%q args=%v", query, args)
 	var total int
 	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		logErrorf("CountMunicipisBrowse ha fallat: %v sql=%q args=%v", err, query, args)
 		return 0, err
 	}
 	return total, nil

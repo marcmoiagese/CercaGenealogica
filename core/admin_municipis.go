@@ -70,6 +70,7 @@ func (a *App) debugLogMunicipiBrowse(r *http.Request, filter db.MunicipiBrowseFi
 			focusMatches = matches > 0
 		}
 	}
+	debugInfo := a.DB.DebugMunicipiBrowse(filter)
 	Debugf(
 		"territori municipis browse params=%q filter=%+v total=%d rows=%d focus_id=%d focus_exists=%t focus_matches=%t focus_effective_pais=%d request_pais_id=%d",
 		r.URL.RawQuery,
@@ -81,6 +82,19 @@ func (a *App) debugLogMunicipiBrowse(r *http.Request, filter db.MunicipiBrowseFi
 		focusMatches,
 		focusPaisID,
 		filter.PaisID,
+	)
+	Debugf(
+		"territori municipis browse sql focus_in_order=%t focus_arg_index=%d limit_applied=%t limit_arg_index=%d offset_applied=%t offset_arg_index=%d count_sql=%q list_sql=%q count_args=%v list_args=%v",
+		debugInfo.FocusInOrder,
+		debugInfo.FocusArgIndex,
+		debugInfo.LimitApplied,
+		debugInfo.LimitArgIndex,
+		debugInfo.OffsetApplied,
+		debugInfo.OffsetArgIndex,
+		debugInfo.CountSQL,
+		debugInfo.ListSQL,
+		debugInfo.CountArgs,
+		debugInfo.ListArgs,
 	)
 }
 
@@ -243,11 +257,19 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		pagination      Pagination
 	)
 	if hasFilters {
-		total, _ = a.DB.CountMunicipisBrowse(filter)
+		var countErr error
+		total, countErr = a.DB.CountMunicipisBrowse(filter)
+		if countErr != nil {
+			Errorf("CountMunicipisBrowse ha fallat: %v", countErr)
+		}
 		pagination = buildPagination(r, page, perPage, total, "#page-stats-controls")
 		filter.Limit = pagination.PerPage
 		filter.Offset = pagination.Offset
-		muns, _ = a.DB.ListMunicipisBrowse(filter)
+		var listErr error
+		muns, listErr = a.DB.ListMunicipisBrowse(filter)
+		if listErr != nil {
+			Errorf("ListMunicipisBrowse ha fallat: %v", listErr)
+		}
 		for _, mun := range muns {
 			names := make([]string, 7)
 			for i := 0; i < 7; i++ {

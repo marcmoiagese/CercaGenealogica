@@ -582,6 +582,9 @@ func (d *MySQL) ListMunicipisBrowse(f MunicipiBrowseFilter) ([]MunicipiBrowseRow
 func (d *MySQL) CountMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
 	return d.help.countMunicipisBrowse(f)
 }
+func (d *MySQL) DebugMunicipiBrowse(f MunicipiBrowseFilter) MunicipiBrowseDebugInfo {
+	return d.help.debugMunicipiBrowse(f)
+}
 func (d *MySQL) SuggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRow, error) {
 	return d.help.suggestMunicipis(f)
 }

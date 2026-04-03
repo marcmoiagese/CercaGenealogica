@@ -26,6 +26,13 @@ func logInfof(format string, v ...interface{}) {
 	log.Printf("[DB] "+format, v...)
 }
 
+func logDebugf(format string, v ...interface{}) {
+	if logLevel() != "debug" {
+		return
+	}
+	log.Printf("[DB][DEBUG] "+format, v...)
+}
+
 func logErrorf(format string, v ...interface{}) {
 	log.Printf("[DB][ERROR] "+format, v...)
 }
