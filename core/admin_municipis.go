@@ -24,6 +24,16 @@ type municipiVisibleCol struct {
 	SortKey string
 }
 
+func collectBrowseRowLevelIDs(row db.MunicipiBrowseRow) []int {
+	ids := make([]int, 0, len(row.LevelIDs))
+	for _, val := range row.LevelIDs {
+		if val.Valid && val.Int64 > 0 {
+			ids = append(ids, int(val.Int64))
+		}
+	}
+	return dedupeIntSlice(ids)
+}
+
 func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 	filter := db.MunicipiBrowseFilter{
 		Text:    strings.TrimSpace(r.URL.Query().Get("q")),
@@ -198,15 +208,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 			levelNamesByID[mun.ID] = names
 			booksClassByID[mun.ID] = progressClassForPercent(mun.RegistresIndexats)
 			munTarget := PermissionTarget{MunicipiID: intPtr(mun.ID)}
-			if mun.LevelIDs[2].Valid {
-				munTarget.ProvinciaID = intPtr(int(mun.LevelIDs[2].Int64))
-			}
-			if mun.LevelIDs[3].Valid {
-				munTarget.ComarcaID = intPtr(int(mun.LevelIDs[3].Int64))
-			}
-			if mun.LevelIDs[0].Valid {
-				munTarget.PaisID = intPtr(int(mun.LevelIDs[0].Int64))
-			}
+			a.fillTerritoryFromNivellIDs(&munTarget, collectBrowseRowLevelIDs(mun))
 			canEdit := a.HasPermission(user.ID, permKeyTerritoriMunicipisEdit, munTarget)
 			canEditMunicipi[mun.ID] = canEdit
 			if canEdit {

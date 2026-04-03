@@ -1,6 +1,8 @@
 package core
 
 import (
+	"database/sql"
+	"strings"
 	"sync"
 	"time"
 )
@@ -98,6 +100,16 @@ func dedupeIntSlice(values []int) []int {
 		out = append(out, v)
 	}
 	return out
+}
+
+func collectMunicipiLevelIDs(values [7]sql.NullInt64) []int {
+	ids := make([]int, 0, len(values))
+	for _, val := range values {
+		if val.Valid && val.Int64 > 0 {
+			ids = append(ids, int(val.Int64))
+		}
+	}
+	return dedupeIntSlice(ids)
 }
 
 func (a *App) ensureTargetCaches() {
@@ -339,34 +351,36 @@ func (a *App) fillTerritoryFromMunicipi(target *PermissionTarget, municipiID int
 	if target.MunicipiID == nil {
 		target.MunicipiID = intPtr(municipiID)
 	}
+	a.fillTerritoryFromNivellIDs(target, collectMunicipiLevelIDs(mun.NivellAdministratiuID))
+}
+
+func (a *App) fillTerritoryFromNivellIDs(target *PermissionTarget, levelIDs []int) {
+	if target == nil || a == nil || a.DB == nil {
+		return
+	}
+	levelIDs = dedupeIntSlice(levelIDs)
+	if len(levelIDs) == 0 {
+		return
+	}
 	if len(target.NivellIDs) == 0 {
-		ids := make([]int, 0, len(mun.NivellAdministratiuID))
-		for _, val := range mun.NivellAdministratiuID {
-			if val.Valid && val.Int64 > 0 {
-				ids = append(ids, int(val.Int64))
+		target.NivellIDs = append([]int(nil), levelIDs...)
+	}
+	for _, levelID := range levelIDs {
+		nivell, err := a.DB.GetNivell(levelID)
+		if err != nil || nivell == nil {
+			continue
+		}
+		if target.PaisID == nil && nivell.PaisID > 0 {
+			target.PaisID = intPtr(nivell.PaisID)
+		}
+		switch strings.ToLower(strings.TrimSpace(nivell.TipusNivell)) {
+		case "provincia":
+			if target.ProvinciaID == nil {
+				target.ProvinciaID = intPtr(nivell.ID)
 			}
-		}
-		if len(ids) > 0 {
-			target.NivellIDs = ids
-		}
-	}
-	if target.ProvinciaID == nil && mun.NivellAdministratiuID[2].Valid {
-		target.ProvinciaID = intPtr(int(mun.NivellAdministratiuID[2].Int64))
-	}
-	if target.ComarcaID == nil && mun.NivellAdministratiuID[3].Valid {
-		target.ComarcaID = intPtr(int(mun.NivellAdministratiuID[3].Int64))
-	}
-	if target.PaisID == nil {
-		nivellID := 0
-		for _, val := range mun.NivellAdministratiuID {
-			if val.Valid {
-				nivellID = int(val.Int64)
-				break
-			}
-		}
-		if nivellID > 0 {
-			if nivell, err := a.DB.GetNivell(nivellID); err == nil && nivell != nil && nivell.PaisID > 0 {
-				target.PaisID = intPtr(nivell.PaisID)
+		case "comarca":
+			if target.ComarcaID == nil {
+				target.ComarcaID = intPtr(nivell.ID)
 			}
 		}
 	}
