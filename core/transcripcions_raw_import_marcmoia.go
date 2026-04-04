@@ -7,6 +7,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -17,6 +18,7 @@ type csvImportResult struct {
 	Failed  int
 	Errors  []importErrorEntry
 	BookIDs map[int]struct{}
+	Debug   csvImportDebugMetrics
 }
 
 func (r *csvImportResult) markBook(id int) {
@@ -106,20 +108,20 @@ func cleanToken(token string) (string, string) {
 }
 
 var surnameJoiners = map[string]bool{
-	"de":   true,
-	"del":  true,
-	"dels": true,
-	"da":   true,
-	"das":  true,
-	"dos":  true,
-	"do":   true,
-	"du":   true,
-	"van":  true,
-	"von":  true,
-	"di":   true,
+	"de":    true,
+	"del":   true,
+	"dels":  true,
+	"da":    true,
+	"das":   true,
+	"dos":   true,
+	"do":    true,
+	"du":    true,
+	"van":   true,
+	"von":   true,
+	"di":    true,
 	"della": true,
-	"d'":   true,
-	"l'":   true,
+	"d'":    true,
+	"l'":    true,
 }
 
 var surnameArticles = map[string]bool{
@@ -466,20 +468,28 @@ func marcmoiaImportFields(llibreRaw, paginaLlibre, paginaReal, anyDoc, cognoms, 
 }
 
 func (a *App) importBaptismesMarcmoiaCSV(reader io.Reader, sep rune, userID int, ctx importContext) csvImportResult {
-	result := csvImportResult{}
+	start := time.Now()
+	result := csvImportResult{
+		Debug: newCSVImportDebugMetrics("baptismes_marcmoia", "global"),
+	}
 	csvReader := csv.NewReader(reader)
 	csvReader.Comma = sep
 	csvReader.TrimLeadingSpace = true
+	parseStart := time.Now()
 	headers, err := csvReader.Read()
+	result.Debug.addParse(time.Since(parseStart))
 	if err != nil {
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "capçalera CSV invàlida"})
+		result.Debug.finalize(len(result.BookIDs), time.Since(start))
 		return result
 	}
 	headerMap := map[string]int{}
+	parseStart = time.Now()
 	for i, h := range headers {
 		headerMap[normalizeCSVHeader(h)] = i
 	}
+	result.Debug.addParse(time.Since(parseStart))
 	filter := db.LlibreFilter{}
 	if ctx.MunicipiID != 0 {
 		filter.MunicipiID = ctx.MunicipiID
@@ -487,7 +497,9 @@ func (a *App) importBaptismesMarcmoiaCSV(reader io.Reader, sep rune, userID int,
 	if ctx.ArxiuID != 0 {
 		filter.ArxiuID = ctx.ArxiuID
 	}
+	resolveStart := time.Now()
 	llibres, _ := a.DB.ListLlibres(filter)
+	result.Debug.addResolve(time.Since(resolveStart))
 	type bookInfo struct {
 		ID      int
 		Indexed bool
@@ -521,6 +533,8 @@ func (a *App) importBaptismesMarcmoiaCSV(reader io.Reader, sep rune, userID int,
 			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "error llegint fila"})
 			continue
 		}
+		result.Debug.incRows()
+		parseStart = time.Now()
 		llibreRaw := valueFromRow(headerMap, record, "llibre")
 		if llibreRaw == "" {
 			result.Failed++
@@ -555,6 +569,7 @@ func (a *App) importBaptismesMarcmoiaCSV(reader io.Reader, sep rune, userID int,
 		ofici := valueFromRow(headerMap, record, "ofici")
 		defuncio := valueFromRow(headerMap, record, "defuncio")
 		fields := marcmoiaImportFields(llibreRaw, paginaLlibre, paginaReal, anyDoc, cognoms, pare, mare, avisPaterns, avisMaterns, nascut, bateig, ofici, defuncio)
+		result.Debug.addParse(time.Since(parseStart))
 
 		t := db.TranscripcioRaw{
 			LlibreID:       llibreID,
@@ -711,6 +726,7 @@ func (a *App) importBaptismesMarcmoiaCSV(reader io.Reader, sep rune, userID int,
 		if bookInfo.Indexed && matchKey != "" {
 			existingMap, ok := existingByBook[llibreID]
 			if !ok {
+				resolveStart = time.Now()
 				existingMap = map[string]int{}
 				trans, _ := a.DB.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{})
 				for _, tr := range trans {
@@ -730,10 +746,13 @@ func (a *App) importBaptismesMarcmoiaCSV(reader io.Reader, sep rune, userID int,
 					}
 				}
 				existingByBook[llibreID] = existingMap
+				result.Debug.addResolve(time.Since(resolveStart))
 			}
 			if existingID, ok := existingMap[matchKey]; ok {
+				writeStart := time.Now()
 				existing, err := a.DB.GetTranscripcioRaw(existingID)
 				if err != nil || existing == nil {
+					result.Debug.addWrite(time.Since(writeStart))
 					result.Failed++
 					reason := "no s'ha pogut actualitzar el registre"
 					if err != nil {
@@ -803,6 +822,7 @@ func (a *App) importBaptismesMarcmoiaCSV(reader io.Reader, sep rune, userID int,
 					_, _ = a.DB.CreateTranscripcioAtribut(attr)
 					attrKeys[attr.Clau] = true
 				}
+				result.Debug.addWrite(time.Since(writeStart))
 				if matchSeenKey != "" {
 					seenMatch[matchSeenKey] = rowNum
 				}
@@ -818,8 +838,10 @@ func (a *App) importBaptismesMarcmoiaCSV(reader io.Reader, sep rune, userID int,
 			continue
 		}
 		seen[key] = rowNum
+		writeStart := time.Now()
 		id, err := a.DB.CreateTranscripcioRaw(&t)
 		if err != nil || id == 0 {
+			result.Debug.addWrite(time.Since(writeStart))
 			result.Failed++
 			reason := "no s'ha pogut crear el registre"
 			if err != nil {
@@ -842,6 +864,7 @@ func (a *App) importBaptismesMarcmoiaCSV(reader io.Reader, sep rune, userID int,
 			attr.TranscripcioID = id
 			_, _ = a.DB.CreateTranscripcioAtribut(attr)
 		}
+		result.Debug.addWrite(time.Since(writeStart))
 		result.Created++
 		result.markBook(llibreID)
 		if bookInfo.Indexed && matchKey != "" {
@@ -855,5 +878,6 @@ func (a *App) importBaptismesMarcmoiaCSV(reader io.Reader, sep rune, userID int,
 			}
 		}
 	}
+	result.Debug.finalize(len(result.BookIDs), time.Since(start))
 	return result
 }

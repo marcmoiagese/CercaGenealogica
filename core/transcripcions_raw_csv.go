@@ -432,6 +432,7 @@ func (a *App) AdminImportRegistresView(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request) {
+	handlerStart := time.Now()
 	llibreID := extractID(r.URL.Path)
 	if llibreID == 0 {
 		http.NotFound(w, r)
@@ -486,9 +487,13 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "model d'importació no suportat"})
 	}
 	token := storeImportErrors(result.Errors)
+	recalcStart := time.Now()
 	if result.Created > 0 || result.Updated > 0 {
 		_, _ = a.recalcLlibreIndexacioStats(llibreID)
 	}
+	result.Debug.addSidefx(time.Since(recalcStart))
+	result.Debug.finalize(len(result.BookIDs), time.Since(handlerStart))
+	a.logCSVImportDebug(user.ID, result)
 	redirectTarget := fmt.Sprintf("/documentals/llibres/%d/indexar?imported=%d&updated=%d&failed=%d", llibreID, result.Created, result.Updated, result.Failed)
 	if token != "" {
 		redirectTarget += "&errors_token=" + token
@@ -497,21 +502,31 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 }
 
 func (a *App) importGenericTranscripcionsCSVForBook(reader io.Reader, sep rune, userID int, llibreID int) csvImportResult {
-	result := csvImportResult{}
+	start := time.Now()
+	result := csvImportResult{
+		Debug: newCSVImportDebugMetrics("generic", "book"),
+	}
 	csvReader := csv.NewReader(reader)
 	csvReader.Comma = sep
 	csvReader.TrimLeadingSpace = true
+	parseStart := time.Now()
 	headers, err := csvReader.Read()
+	result.Debug.addParse(time.Since(parseStart))
 	if err != nil {
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "capçalera CSV invàlida"})
+		result.Debug.finalize(len(result.BookIDs), time.Since(start))
 		return result
 	}
 	columns := make([]csvColumn, len(headers))
+	parseStart = time.Now()
 	for i, h := range headers {
 		columns[i] = parseCSVHeader(h)
 	}
+	result.Debug.addParse(time.Since(parseStart))
+	resolveStart := time.Now()
 	pagines, _ := a.DB.ListLlibrePagines(llibreID)
+	result.Debug.addResolve(time.Since(resolveStart))
 	paginaMap := map[int]bool{}
 	for _, p := range pagines {
 		paginaMap[p.ID] = true
@@ -528,6 +543,8 @@ func (a *App) importGenericTranscripcionsCSVForBook(reader io.Reader, sep rune, 
 			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "error llegint fila"})
 			continue
 		}
+		result.Debug.incRows()
+		parseStart = time.Now()
 		t := db.TranscripcioRaw{
 			LlibreID:       llibreID,
 			ModeracioEstat: "pendent",
@@ -609,6 +626,7 @@ func (a *App) importGenericTranscripcionsCSVForBook(reader io.Reader, sep rune, 
 				}
 			}
 		}
+		result.Debug.addParse(time.Since(parseStart))
 		if rowErr != "" {
 			result.Failed++
 			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: rowErr})
@@ -619,8 +637,10 @@ func (a *App) importGenericTranscripcionsCSVForBook(reader io.Reader, sep rune, 
 			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "tipus_acte invàlid"})
 			continue
 		}
+		writeStart := time.Now()
 		id, err := a.DB.CreateTranscripcioRaw(&t)
 		if err != nil || id == 0 {
+			result.Debug.addWrite(time.Since(writeStart))
 			result.Failed++
 			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "no s'ha pogut crear el registre"})
 			continue
@@ -639,9 +659,11 @@ func (a *App) importGenericTranscripcionsCSVForBook(reader io.Reader, sep rune, 
 			attr.TranscripcioID = id
 			_, _ = a.DB.CreateTranscripcioAtribut(attr)
 		}
+		result.Debug.addWrite(time.Since(writeStart))
 		result.Created++
 		result.markBook(llibreID)
 	}
+	result.Debug.finalize(len(result.BookIDs), time.Since(start))
 	return result
 }
 

@@ -89,6 +89,22 @@ type moderacioBulkRegistreUpdateResult struct {
 	Errors     []moderacioBulkRegistreItemError
 }
 
+type moderacioBulkRegistreChunkMetrics struct {
+	ChunkIndex       int
+	ChunkSize        int
+	LoadedRows       int
+	Updated          int
+	Errors           int
+	LoadDur          time.Duration
+	UpdateDur        time.Duration
+	ActivityDur      time.Duration
+	AuditDur         time.Duration
+	PostprocDur      time.Duration
+	TotalDur         time.Duration
+	Throughput       float64
+	DeferredActivity bool
+}
+
 type moderacioBulkRegistreState struct {
 	Reg        db.TranscripcioRaw
 	Persones   []db.TranscripcioPersonaRaw
@@ -3534,7 +3550,7 @@ func bulkUpdateResultStatusFromAction(action, motiu string) (string, string, err
 	}
 }
 
-func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu string, moderatorID int, metrics *moderacioApplyMetrics, onChunk func(int)) moderacioBulkRegistreUpdateResult {
+func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu string, moderatorID int, metrics *moderacioApplyMetrics, onChunk func(moderacioBulkRegistreChunkMetrics)) moderacioBulkRegistreUpdateResult {
 	result := moderacioBulkRegistreUpdateResult{SuccessIDs: make([]int, 0, len(ids))}
 	estat, notes, err := bulkUpdateResultStatusFromAction(action, motiu)
 	if err != nil {
@@ -3552,13 +3568,25 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 		}
 		chunkIDs := ids[start:end]
 		chunkStart := time.Now()
+		chunkMetrics := moderacioBulkRegistreChunkMetrics{
+			ChunkIndex:       (start / chunkSize) + 1,
+			ChunkSize:        len(chunkIDs),
+			DeferredActivity: true,
+		}
+		loadStart := time.Now()
 		rows, err := a.DB.ListTranscripcionsRawByIDs(chunkIDs)
 		if err != nil {
+			chunkMetrics.LoadDur = time.Since(loadStart)
+			chunkMetrics.Errors = len(chunkIDs)
+			chunkMetrics.TotalDur = time.Since(chunkStart)
+			if chunkMetrics.TotalDur > 0 {
+				chunkMetrics.Throughput = float64(len(chunkIDs)) / chunkMetrics.TotalDur.Seconds()
+			}
 			for _, id := range chunkIDs {
 				result.Errors = append(result.Errors, moderacioBulkRegistreItemError{ID: id, Err: err})
 			}
 			if onChunk != nil {
-				onChunk(len(chunkIDs))
+				onChunk(chunkMetrics)
 			}
 			continue
 		}
@@ -3591,6 +3619,8 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 			Errorf("Moderacio bulk registre arxius batch ha fallat: %v", err)
 			arxiusByLlibre = map[int][]db.ArxiuLlibreDetail{}
 		}
+		chunkMetrics.LoadDur = time.Since(loadStart)
+		chunkMetrics.LoadedRows = len(rows)
 
 		states := make([]moderacioBulkRegistreState, 0, len(rows))
 		noDemoIDs := make([]int, 0, len(rows))
@@ -3643,11 +3673,14 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 			}
 		}
 
+		chunkUpdateDur := time.Duration(0)
 		if len(noDemoIDs) > 0 {
 			updateStart := time.Now()
 			updatedNow, err := a.DB.BulkUpdateTranscripcioModeracio(estat, notes, moderatorID, noDemoIDs)
+			updateElapsed := time.Since(updateStart)
+			chunkUpdateDur += updateElapsed
 			if metrics != nil {
-				metrics.UpdateDur += time.Since(updateStart)
+				metrics.UpdateDur += updateElapsed
 			}
 			if err != nil {
 				markGroupError(noDemoIDs, err)
@@ -3658,19 +3691,24 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 		for key, groupIDs := range demoGroups {
 			updateStart := time.Now()
 			updatedNow, err := a.DB.BulkUpdateTranscripcioModeracioWithDemografia(estat, notes, moderatorID, groupIDs, key.MunicipiID, key.Year, key.Tipus, key.Delta)
+			updateElapsed := time.Since(updateStart)
+			chunkUpdateDur += updateElapsed
 			if metrics != nil {
-				metrics.UpdateDur += time.Since(updateStart)
+				metrics.UpdateDur += updateElapsed
 			}
 			if err != nil {
 				markGroupError(groupIDs, err)
 				continue
 			}
 			markUpdated(groupIDs, updatedNow, "bulk_update_demografia")
+			postprocStart := time.Now()
 			nivellIDs := listNivellAncestorsForMunicipiCached(a, key.MunicipiID, nivellCache)
 			a.applyNivellDemografiaDeltaForMunicipiWithNivells(key.MunicipiID, key.Year, key.Tipus, key.Delta*len(groupIDs), nivellIDs)
+			chunkMetrics.PostprocDur += time.Since(postprocStart)
 		}
 
 		chunkUpdated := 0
+		postprocStart := time.Now()
 		for _, state := range states {
 			if _, ok := successSet[state.Reg.ID]; !ok {
 				continue
@@ -3700,16 +3738,19 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 				}
 			}
 		}
+		chunkMetrics.PostprocDur += time.Since(postprocStart)
+		chunkMetrics.UpdateDur = chunkUpdateDur
+		chunkMetrics.Updated = chunkUpdated
+		chunkMetrics.Errors = len(result.Errors)
+		chunkMetrics.TotalDur = time.Since(chunkStart)
+		if chunkMetrics.TotalDur > 0 {
+			chunkMetrics.Throughput = float64(len(chunkIDs)) / chunkMetrics.TotalDur.Seconds()
+		}
 		if IsDebugEnabled() {
-			chunkDur := time.Since(chunkStart)
-			throughput := 0.0
-			if chunkDur > 0 {
-				throughput = float64(len(chunkIDs)) / chunkDur.Seconds()
-			}
-			Debugf("moderacio bulk registre chunk size=%d updated=%d errors=%d dur=%s throughput=%.1f/s", len(chunkIDs), chunkUpdated, len(result.Errors), chunkDur, throughput)
+			Debugf("moderacio bulk registre chunk=%d size=%d loaded=%d updated=%d errors=%d load_dur=%s update_dur=%s activity_dur=%s audit_dur=%s postproc_dur=%s total_dur=%s throughput=%.1f/s deferred_activity=%t", chunkMetrics.ChunkIndex, chunkMetrics.ChunkSize, chunkMetrics.LoadedRows, chunkMetrics.Updated, chunkMetrics.Errors, chunkMetrics.LoadDur, chunkMetrics.UpdateDur, chunkMetrics.ActivityDur, chunkMetrics.AuditDur, chunkMetrics.PostprocDur, chunkMetrics.TotalDur, chunkMetrics.Throughput, chunkMetrics.DeferredActivity)
 		}
 		if onChunk != nil {
-			onChunk(len(chunkIDs))
+			onChunk(chunkMetrics)
 		}
 	}
 	return result
@@ -4359,9 +4400,13 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 			skipped += registreResult.Skipped
 			if len(registreResult.SuccessIDs) > 0 {
 				perItemUsed = true
+				activityStart := time.Now()
 				if err := a.applyModeracioActivitiesBulk(ctx, action, objType, registreResult.SuccessIDs, motiu, user.ID, applyMetrics); err != nil {
 					Errorf("Moderacio massiva %s activitats %s bulk ha fallat: %v", action, objType, err)
 					errCount++
+				}
+				if IsDebugEnabled() {
+					Debugf("moderacio bulk registre history scope=all ids=%d activity_dur=%s", len(registreResult.SuccessIDs), time.Since(activityStart))
 				}
 			}
 			for range ids {

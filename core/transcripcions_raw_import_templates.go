@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -31,15 +32,15 @@ type templateImportModel struct {
 }
 
 type templatePolicies struct {
-	ModerationStatus          string
-	DedupWithin               bool
-	DedupKeyFields            []string
-	MergeMode                 string
-	PrincipalRoles            []string
-	UpdateMissingOnly         bool
-	AddMissingPeople          bool
-	AddMissingAttrs           bool
-	AvoidDuplicatePrincipal   bool
+	ModerationStatus        string
+	DedupWithin             bool
+	DedupKeyFields          []string
+	MergeMode               string
+	PrincipalRoles          []string
+	UpdateMissingOnly       bool
+	AddMissingPeople        bool
+	AddMissingAttrs         bool
+	AvoidDuplicatePrincipal bool
 }
 
 type templateColumn struct {
@@ -87,10 +88,17 @@ type templateRowContext struct {
 }
 
 func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Reader, sep rune, userID int, ctx importContext, fixedBookID int) csvImportResult {
-	result := csvImportResult{}
+	start := time.Now()
+	result := csvImportResult{
+		Debug: newCSVImportDebugMetrics("template", "global"),
+	}
+	if fixedBookID > 0 {
+		result.Debug.Scope = "book"
+	}
 	if template == nil {
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "plantilla invàlida"})
+		result.Debug.finalize(len(result.BookIDs), time.Since(start))
 		return result
 	}
 	if sep == 0 {
@@ -100,11 +108,13 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	if err != nil {
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "model de plantilla invàlid"})
+		result.Debug.finalize(len(result.BookIDs), time.Since(start))
 		return result
 	}
 	if err := validateTemplateImportModel(model); err != nil {
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: err.Error()})
+		result.Debug.finalize(len(result.BookIDs), time.Since(start))
 		return result
 	}
 	if model.PresetCode == "baptismes_marcmoia_v2" || model.PresetCode == "baptismes_marcmoia" {
@@ -121,14 +131,18 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	csvReader := csv.NewReader(reader)
 	csvReader.Comma = sep
 	csvReader.TrimLeadingSpace = true
+	parseStart := time.Now()
 	headers, err := csvReader.Read()
+	result.Debug.addParse(time.Since(parseStart))
 	if err != nil {
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "capçalera CSV invàlida"})
+		result.Debug.finalize(len(result.BookIDs), time.Since(start))
 		return result
 	}
 
 	headerIndex := map[string]int{}
+	parseStart = time.Now()
 	for i, h := range headers {
 		headerIndex[normalizeCSVHeader(h)] = i
 	}
@@ -138,15 +152,21 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		if model.Mapping[i].Required && model.Mapping[i].Index == -1 {
 			result.Failed = 1
 			result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "falta la columna " + model.Mapping[i].Header})
+			result.Debug.addParse(time.Since(parseStart))
+			result.Debug.finalize(len(result.BookIDs), time.Since(start))
 			return result
 		}
 	}
+	result.Debug.addParse(time.Since(parseStart))
 
+	resolveStart := time.Now()
 	bookInfoByKey, bookInfoByID := a.prepareBookLookups(model, ctx, fixedBookID)
+	result.Debug.addResolve(time.Since(resolveStart))
 	if fixedBookID > 0 {
 		if _, ok := bookInfoByID[fixedBookID]; !ok {
 			result.Failed = 1
 			result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "llibre no trobat"})
+			result.Debug.finalize(len(result.BookIDs), time.Since(start))
 			return result
 		}
 	}
@@ -166,8 +186,13 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "error llegint fila"})
 			continue
 		}
+		result.Debug.incRows()
+		parseStart = time.Now()
 		rowCtx := buildTemplateRowContext(model.Mapping, headerIndex, record)
+		result.Debug.addParse(time.Since(parseStart))
+		resolveStart = time.Now()
 		bookID, bookInfo, bookErr := resolveTemplateBookID(model, rowCtx, bookInfoByKey, bookInfoByID, fixedBookID)
+		result.Debug.addResolve(time.Since(resolveStart))
 		if bookErr != "" {
 			result.Failed++
 			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: bookErr})
@@ -184,6 +209,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		atributs := map[string]*db.TranscripcioAtributRaw{}
 		mappedValues := map[string]string{}
 
+		parseStart = time.Now()
 		for _, col := range model.Mapping {
 			if col.Index < 0 || col.Index >= len(record) {
 				continue
@@ -194,6 +220,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			}
 			applyTemplateColumn(col, rawVal, rowCtx, &t, persones, atributs, mappedValues, parseCfg)
 		}
+		result.Debug.addParse(time.Since(parseStart))
 
 		if model.Policies.DedupWithin && len(model.Policies.DedupKeyFields) > 0 {
 			key := buildTemplateDedupKey(model.Policies.DedupKeyFields, rowCtx, mappedValues)
@@ -226,11 +253,15 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		if matchKey != "" && bookInfo.Indexed {
 			existingMap := existingByBook[bookID]
 			if existingMap == nil {
+				resolveStart = time.Now()
 				existingMap = a.loadExistingByPrincipal(bookID, model.Policies.PrincipalRoles)
+				result.Debug.addResolve(time.Since(resolveStart))
 				existingByBook[bookID] = existingMap
 			}
 			if existingID, ok := existingMap[matchKey]; ok {
+				writeStart := time.Now()
 				updated, okUpdate := a.mergeTemplateRow(existingID, &t, persones, atributs, model.Policies)
+				result.Debug.addWrite(time.Since(writeStart))
 				if okUpdate {
 					result.Updated++
 					result.markBook(bookID)
@@ -249,8 +280,10 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		if t.DataActeEstat == "" {
 			t.DataActeEstat = "clar"
 		}
+		writeStart := time.Now()
 		id, err := a.DB.CreateTranscripcioRaw(&t)
 		if err != nil || id == 0 {
+			result.Debug.addWrite(time.Since(writeStart))
 			result.Failed++
 			reason := "no s'ha pogut crear el registre"
 			if err != nil {
@@ -273,12 +306,14 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			attr.TranscripcioID = id
 			_, _ = a.DB.CreateTranscripcioAtribut(attr)
 		}
+		result.Debug.addWrite(time.Since(writeStart))
 		result.Created++
 		result.markBook(bookID)
 		if matchSeenKey != "" {
 			seenMatch[matchSeenKey] = rowNum
 		}
 	}
+	result.Debug.finalize(len(result.BookIDs), time.Since(start))
 	return result
 }
 
@@ -297,7 +332,7 @@ func parseTemplateImportModel(modelJSON string) (*templateImportModel, error) {
 		AmbiguityPolicy: "fail",
 		BaseDefaults:    map[string]string{},
 		Policies: templatePolicies{
-			ModerationStatus: "pendent",
+			ModerationStatus:  "pendent",
 			UpdateMissingOnly: true,
 			AddMissingPeople:  true,
 			AddMissingAttrs:   true,

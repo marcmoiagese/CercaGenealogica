@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"database/sql"
 	"github.com/marcmoiagese/CercaGenealogica/db"
@@ -43,6 +44,7 @@ func (a *App) AdminImportRegistresGlobalView(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *App) AdminImportRegistresGlobal(w http.ResponseWriter, r *http.Request) {
+	handlerStart := time.Now()
 	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsLlibresImportCSV, PermissionTarget{})
 	if !ok {
 		return
@@ -100,9 +102,13 @@ func (a *App) AdminImportRegistresGlobal(w http.ResponseWriter, r *http.Request)
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "model d'importació no suportat"})
 	}
 	token := storeImportErrors(result.Errors)
+	recalcStart := time.Now()
 	for llibreID := range result.BookIDs {
 		_, _ = a.recalcLlibreIndexacioStats(llibreID)
 	}
+	result.Debug.addSidefx(time.Since(recalcStart))
+	result.Debug.finalize(len(result.BookIDs), time.Since(handlerStart))
+	a.logCSVImportDebug(user.ID, result)
 	target := fmt.Sprintf("/documentals/llibres/importar?imported=%d&updated=%d&failed=%d", result.Created, result.Updated, result.Failed)
 	if token != "" {
 		target += "&errors_token=" + token
@@ -111,18 +117,25 @@ func (a *App) AdminImportRegistresGlobal(w http.ResponseWriter, r *http.Request)
 }
 
 func (a *App) importGenericTranscripcionsCSV(reader io.Reader, sep rune, userID int, ctx importContext) csvImportResult {
-	result := csvImportResult{}
+	start := time.Now()
+	result := csvImportResult{
+		Debug: newCSVImportDebugMetrics("generic", "global"),
+	}
 	csvReader := csv.NewReader(reader)
 	csvReader.Comma = sep
 	csvReader.TrimLeadingSpace = true
+	parseStart := time.Now()
 	headers, err := csvReader.Read()
+	result.Debug.addParse(time.Since(parseStart))
 	if err != nil {
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "capçalera CSV invàlida"})
+		result.Debug.finalize(len(result.BookIDs), time.Since(start))
 		return result
 	}
 	columns := make([]csvColumn, len(headers))
 	hasLlibreID := false
+	parseStart = time.Now()
 	for i, h := range headers {
 		col := parseCSVHeader(h)
 		if col.Kind == "base" && col.Field == "llibre_id" {
@@ -130,9 +143,11 @@ func (a *App) importGenericTranscripcionsCSV(reader io.Reader, sep rune, userID 
 		}
 		columns[i] = col
 	}
+	result.Debug.addParse(time.Since(parseStart))
 	if !hasLlibreID {
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "falta la columna llibre_id"})
+		result.Debug.finalize(len(result.BookIDs), time.Since(start))
 		return result
 	}
 	filter := db.LlibreFilter{}
@@ -142,7 +157,9 @@ func (a *App) importGenericTranscripcionsCSV(reader io.Reader, sep rune, userID 
 	if ctx.ArxiuID != 0 {
 		filter.ArxiuID = ctx.ArxiuID
 	}
+	resolveStart := time.Now()
 	llibres, _ := a.DB.ListLlibres(filter)
+	result.Debug.addResolve(time.Since(resolveStart))
 	llibreMap := map[int]bool{}
 	for _, l := range llibres {
 		llibreMap[l.ID] = true
@@ -159,6 +176,8 @@ func (a *App) importGenericTranscripcionsCSV(reader io.Reader, sep rune, userID 
 			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "error llegint fila"})
 			continue
 		}
+		result.Debug.incRows()
+		parseStart = time.Now()
 		t := db.TranscripcioRaw{
 			ModeracioEstat: "pendent",
 			CreatedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
@@ -237,6 +256,7 @@ func (a *App) importGenericTranscripcionsCSV(reader io.Reader, sep rune, userID 
 				}
 			}
 		}
+		result.Debug.addParse(time.Since(parseStart))
 		if rowErr != "" {
 			result.Failed++
 			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: rowErr})
@@ -261,8 +281,10 @@ func (a *App) importGenericTranscripcionsCSV(reader io.Reader, sep rune, userID 
 		if t.DataActeEstat == "" {
 			t.DataActeEstat = "clar"
 		}
+		writeStart := time.Now()
 		id, err := a.DB.CreateTranscripcioRaw(&t)
 		if err != nil || id == 0 {
+			result.Debug.addWrite(time.Since(writeStart))
 			result.Failed++
 			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "no s'ha pogut crear el registre"})
 			continue
@@ -281,9 +303,11 @@ func (a *App) importGenericTranscripcionsCSV(reader io.Reader, sep rune, userID 
 			attr.TranscripcioID = id
 			_, _ = a.DB.CreateTranscripcioAtribut(attr)
 		}
+		result.Debug.addWrite(time.Since(writeStart))
 		result.Created++
 		result.markBook(t.LlibreID)
 	}
+	result.Debug.finalize(len(result.BookIDs), time.Since(start))
 	return result
 }
 

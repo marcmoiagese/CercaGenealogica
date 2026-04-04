@@ -248,6 +248,7 @@ func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *d
 	if IsDebugEnabled() {
 		Debugf("moderacio bulk snapshot resolved job=%d actor=%d action=%s type=%s bulk_user_id=%d candidates=%d targets=%d scope_mode=%s resolve_ms=%d", jobID, user.ID, action, bulkType, bulkUserID, snapshot.Candidates, len(snapshot.Targets), snapshot.ScopeMode, durationMillis(snapshot.ResolveDur))
 	}
+	persistStart := time.Now()
 	if err := a.DB.CreateAdminJobTargets(jobID, snapshot.Targets); err != nil {
 		Errorf("moderacio bulk snapshot persist failed job=%d actor=%d action=%s type=%s bulk_user_id=%d targets=%d err=%v", jobID, user.ID, action, bulkType, bulkUserID, len(snapshot.Targets), err)
 		resultJSON := mustMarshalModeracioBulkResult(moderacioBulkJobResult{
@@ -267,7 +268,7 @@ func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *d
 		return 0, err
 	}
 	if IsDebugEnabled() {
-		Debugf("moderacio bulk snapshot persisted job=%d targets=%d", jobID, len(snapshot.Targets))
+		Debugf("moderacio bulk snapshot persisted job=%d targets=%d persist_ms=%d", jobID, len(snapshot.Targets), durationMillis(time.Since(persistStart)))
 	}
 	progressTotal := len(snapshot.Targets) + moderacioBulkProgressFinalStep
 	if progressTotal <= 0 {
@@ -315,7 +316,7 @@ func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *d
 		return jobID, nil
 	}
 	if IsDebugEnabled() {
-		Debugf("moderacio bulk worker scheduled job=%d targets=%d action=%s type=%s", jobID, len(snapshot.Targets), action, bulkType)
+		Debugf("moderacio bulk worker scheduled job=%d targets=%d action=%s type=%s queue_setup_ms=%d", jobID, len(snapshot.Targets), action, bulkType, durationMillis(time.Since(persistStart)))
 	}
 	go a.runModeracioBulkAdminJob(jobID, action, motiu, user.ID, snapshot)
 	return jobID, nil
@@ -722,9 +723,12 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 		}
 		if objType == "registre" {
 			registreMetrics := &moderacioApplyMetrics{}
-			registreResult := a.applyModeracioBulkRegistreUpdates(action, ids, motiu, actorID, registreMetrics, func(chunkProcessed int) {
-				processed += chunkProcessed
+			registreResult := a.applyModeracioBulkRegistreUpdates(action, ids, motiu, actorID, registreMetrics, func(chunkMetrics moderacioBulkRegistreChunkMetrics) {
+				processed += chunkMetrics.ChunkSize
 				flushProgress()
+				if IsDebugEnabled() {
+					Debugf("moderacio bulk worker registre job=%d chunk=%d size=%d loaded=%d updated=%d errors=%d load_dur=%s update_dur=%s activity_dur=%s audit_dur=%s postproc_dur=%s total_dur=%s throughput=%.1f/s deferred_activity=%t", jobID, chunkMetrics.ChunkIndex, chunkMetrics.ChunkSize, chunkMetrics.LoadedRows, chunkMetrics.Updated, chunkMetrics.Errors, chunkMetrics.LoadDur, chunkMetrics.UpdateDur, chunkMetrics.ActivityDur, chunkMetrics.AuditDur, chunkMetrics.PostprocDur, chunkMetrics.TotalDur, chunkMetrics.Throughput, chunkMetrics.DeferredActivity)
+				}
 			})
 			updateDur += registreMetrics.UpdateDur
 			updated += registreResult.Updated
@@ -791,7 +795,11 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 			errCount += recordModeracioBulkWorkerError(jobID, actorID, errorCollector, &result, adminJobPhaseRecordingHistory, "apply_activity_bulk", objType, 0, err)
 			activityMode = "mixed"
 		}
-		activityDur += time.Since(stepStart)
+		stepDur := time.Since(stepStart)
+		activityDur += stepDur
+		if IsDebugEnabled() {
+			Debugf("moderacio bulk worker history job=%d type=%s ids=%d activity_dur=%s", jobID, objType, len(ids), stepDur)
+		}
 	}
 	a.updateAdminJobProgress(jobID, len(targets)+moderacioBulkProgressFinalStep, len(targets)+moderacioBulkProgressFinalStep)
 	result.Phase = adminJobPhaseDone
@@ -849,7 +857,7 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 		return
 	}
 	if IsDebugEnabled() {
-		Debugf("moderacio bulk worker completed job=%d actor=%d processed=%d updated=%d", jobID, actorID, result.Processed, result.Updated)
+		Debugf("moderacio bulk worker completed job=%d actor=%d processed=%d updated=%d errors=%d update_dur=%s activity_dur=%s total_dur=%s", jobID, actorID, result.Processed, result.Updated, errCount, updateDur, activityDur, time.Since(start))
 	}
 	a.setAdminJobState(jobID, adminJobStatusDone, adminJobPhaseDone, nil, mustMarshalModeracioBulkResult(result), &finishedAt)
 }
