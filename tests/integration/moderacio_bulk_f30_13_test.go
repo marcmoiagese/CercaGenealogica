@@ -14,12 +14,18 @@ import (
 func submitAsyncRegistreBulkJob(t *testing.T, app interface {
 	AdminModeracioBulk(http.ResponseWriter, *http.Request)
 }, session *http.Cookie, csrf string) int {
+	return submitAsyncBulkJobByType(t, app, session, csrf, "registre")
+}
+
+func submitAsyncBulkJobByType(t *testing.T, app interface {
+	AdminModeracioBulk(http.ResponseWriter, *http.Request)
+}, session *http.Cookie, csrf, bulkType string) int {
 	t.Helper()
 
 	form := newFormValues(map[string]string{
 		"bulk_action": "approve",
 		"bulk_scope":  "all",
-		"bulk_type":   "registre",
+		"bulk_type":   bulkType,
 		"csrf_token":  csrf,
 		"return_to":   "/moderacio",
 		"async":       "1",
@@ -32,7 +38,7 @@ func submitAsyncRegistreBulkJob(t *testing.T, app interface {
 	rr := httptest.NewRecorder()
 	app.AdminModeracioBulk(rr, req)
 	if rr.Code != http.StatusOK {
-		t.Fatalf("bulk async registre esperava 200, got %d", rr.Code)
+		t.Fatalf("bulk async %s esperava 200, got %d", bulkType, rr.Code)
 	}
 	var payload struct {
 		JobID string `json:"job_id"`

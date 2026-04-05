@@ -721,6 +721,16 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 		if len(ids) == 0 {
 			continue
 		}
+		if IsDebugEnabled() {
+			switch {
+			case objType == "registre":
+				Debugf("moderacio bulk worker dispatch job=%d type=%s branch=registre_special apply=applyModeracioBulkRegistreUpdates chunking=true chunk_size=500 deferred_history=true mode=bulk_update_plus_postproc ids=%d", jobID, objType, len(ids))
+			case moderacioBulkSimpleTypes[objType]:
+				Debugf("moderacio bulk worker dispatch job=%d type=%s branch=bulk_simple apply=BulkUpdateModeracioSimple chunking=false deferred_history=true mode=set_based_update ids=%d", jobID, objType, len(ids))
+			default:
+				Debugf("moderacio bulk worker dispatch job=%d type=%s branch=per_item apply=applyModeracioUpdate chunking=false deferred_history=true mode=per_item_update ids=%d", jobID, objType, len(ids))
+			}
+		}
 		if objType == "registre" {
 			registreMetrics := &moderacioApplyMetrics{}
 			registreResult := a.applyModeracioBulkRegistreUpdates(action, ids, motiu, actorID, registreMetrics, func(chunkMetrics moderacioBulkRegistreChunkMetrics) {

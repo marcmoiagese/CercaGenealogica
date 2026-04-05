@@ -3568,6 +3568,7 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 		}
 		chunkIDs := ids[start:end]
 		chunkStart := time.Now()
+		chunkErrorStart := len(result.Errors)
 		chunkMetrics := moderacioBulkRegistreChunkMetrics{
 			ChunkIndex:       (start / chunkSize) + 1,
 			ChunkSize:        len(chunkIDs),
@@ -3625,6 +3626,9 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 		states := make([]moderacioBulkRegistreState, 0, len(rows))
 		noDemoIDs := make([]int, 0, len(rows))
 		demoGroups := map[moderacioBulkRegistreDemoKey][]int{}
+		plannedSearchUpserts := 0
+		plannedSearchDeletes := 0
+		plannedNomCognom := 0
 		for _, id := range chunkIDs {
 			row, ok := rowByID[id]
 			if !ok {
@@ -3651,7 +3655,18 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 			} else {
 				noDemoIDs = append(noDemoIDs, id)
 			}
+			if estat == "publicat" {
+				plannedSearchUpserts++
+			} else if row.ModeracioEstat == "publicat" {
+				plannedSearchDeletes++
+			}
+			if state.Delta != 0 && state.Llibre != nil {
+				plannedNomCognom++
+			}
 			states = append(states, state)
+		}
+		if IsDebugEnabled() {
+			Debugf("moderacio bulk registre chunk plan=%d ids=%d found=%d unique_books=%d no_demo=%d demo_groups=%d planned_search_upserts=%d planned_search_deletes=%d planned_nom_stats=%d batch_reads=4", chunkMetrics.ChunkIndex, len(chunkIDs), len(foundIDs), len(llibreIDs), len(noDemoIDs), len(demoGroups), plannedSearchUpserts, plannedSearchDeletes, plannedNomCognom)
 		}
 
 		successSet := map[int]struct{}{}
@@ -3741,7 +3756,7 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 		chunkMetrics.PostprocDur += time.Since(postprocStart)
 		chunkMetrics.UpdateDur = chunkUpdateDur
 		chunkMetrics.Updated = chunkUpdated
-		chunkMetrics.Errors = len(result.Errors)
+		chunkMetrics.Errors = len(result.Errors) - chunkErrorStart
 		chunkMetrics.TotalDur = time.Since(chunkStart)
 		if chunkMetrics.TotalDur > 0 {
 			chunkMetrics.Throughput = float64(len(chunkIDs)) / chunkMetrics.TotalDur.Seconds()

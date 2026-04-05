@@ -111,6 +111,12 @@ func TestModeracioBulkRegistreDebugInstrumentationRespectsLogLevelF3017(t *testi
 
 			logs := buf.String()
 			if strings.EqualFold(level, "debug") {
+				if !strings.Contains(logs, "type=registre branch=registre_special apply=applyModeracioBulkRegistreUpdates") {
+					t.Fatalf("amb debug esperava log de dispatch especial registre, però no hi és: %s", logs)
+				}
+				if !strings.Contains(logs, "moderacio bulk registre chunk plan=") {
+					t.Fatalf("amb debug esperava log de plan de chunk registre, però no hi és: %s", logs)
+				}
 				if !strings.Contains(logs, "moderacio bulk registre chunk=") {
 					t.Fatalf("amb debug esperava log de chunk bulk registre, però no hi és: %s", logs)
 				}
@@ -118,10 +124,54 @@ func TestModeracioBulkRegistreDebugInstrumentationRespectsLogLevelF3017(t *testi
 					t.Fatalf("amb debug esperava log d'historial bulk, però no hi és: %s", logs)
 				}
 			} else {
-				if strings.Contains(logs, "moderacio bulk registre chunk=") || strings.Contains(logs, "moderacio bulk worker history") {
+				if strings.Contains(logs, "moderacio bulk worker dispatch") || strings.Contains(logs, "moderacio bulk registre chunk plan=") || strings.Contains(logs, "moderacio bulk registre chunk=") || strings.Contains(logs, "moderacio bulk worker history") {
 					t.Fatalf("amb info no haurien d'aparèixer logs detallats bulk registre: %s", logs)
 				}
 			}
 		})
+	}
+}
+
+func TestModeracioBulkWorkerDispatchAuditLogsF3017Fix1(t *testing.T) {
+	app, database := newSQLiteAppWithLogLevel(t, "test_f30_17_fix_1_dispatch.sqlite3", "debug")
+	admin, _ := createF7UserWithSession(t, database)
+	ensureAdminPolicyForUser(t, database, admin.ID)
+	session := createSessionCookie(t, database, admin.ID, "sess_f30_17_fix_1_dispatch")
+
+	llibreID, paginaID := createF7LlibreWithPagina(t, database, admin.ID)
+	llibre, err := database.GetLlibre(llibreID)
+	if err != nil || llibre == nil {
+		t.Fatalf("GetLlibre ha fallat: %v", err)
+	}
+	createPendingArxiu(t, database, admin.ID, llibre.MunicipiID, "Arxiu F30-17-fix-1")
+	createDemografiaRegistre(t, database, llibreID, paginaID, admin.ID, "baptisme", 1901, "pendent")
+
+	core.SetLogLevel("debug")
+	defer core.SetLogLevel("error")
+
+	buf, restore := captureStandardLog(t)
+	defer restore()
+
+	arxiuJobID := submitAsyncBulkJobByType(t, app, session, "csrf_f30_17_fix_1_arxiu", "arxiu")
+	arxiuJob := waitForAdminJobTerminal(t, database, arxiuJobID)
+	if arxiuJob.Status != "done" {
+		t.Fatalf("job arxiu esperat done, got status=%s phase=%s", arxiuJob.Status, arxiuJob.Phase)
+	}
+
+	registreJobID := submitAsyncBulkJobByType(t, app, session, "csrf_f30_17_fix_1_registre", "registre")
+	registreJob := waitForAdminJobTerminal(t, database, registreJobID)
+	if registreJob.Status != "done" {
+		t.Fatalf("job registre esperat done, got status=%s phase=%s", registreJob.Status, registreJob.Phase)
+	}
+
+	logs := buf.String()
+	if !strings.Contains(logs, "type=arxiu branch=bulk_simple apply=BulkUpdateModeracioSimple chunking=false") {
+		t.Fatalf("esperava log de dispatch bulk_simple per arxiu, però no hi és: %s", logs)
+	}
+	if !strings.Contains(logs, "type=registre branch=registre_special apply=applyModeracioBulkRegistreUpdates chunking=true chunk_size=500") {
+		t.Fatalf("esperava log de dispatch registre_special, però no hi és: %s", logs)
+	}
+	if !strings.Contains(logs, "moderacio bulk registre chunk plan=") || !strings.Contains(logs, "demo_groups=") || !strings.Contains(logs, "batch_reads=4") {
+		t.Fatalf("esperava log de plan del chunk de registre amb comptadors interns, però no hi és: %s", logs)
 	}
 }
