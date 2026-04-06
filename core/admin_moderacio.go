@@ -90,19 +90,23 @@ type moderacioBulkRegistreUpdateResult struct {
 }
 
 type moderacioBulkRegistreChunkMetrics struct {
-	ChunkIndex       int
-	ChunkSize        int
-	LoadedRows       int
-	Updated          int
-	Errors           int
-	LoadDur          time.Duration
-	UpdateDur        time.Duration
-	ActivityDur      time.Duration
-	AuditDur         time.Duration
-	PostprocDur      time.Duration
-	TotalDur         time.Duration
-	Throughput       float64
-	DeferredActivity bool
+	ChunkIndex           int
+	ChunkSize            int
+	LoadedRows           int
+	Updated              int
+	Errors               int
+	LoadDur              time.Duration
+	UpdateDur            time.Duration
+	DerivedDur           time.Duration
+	DerivedDemografiaDur time.Duration
+	DerivedStatsDur      time.Duration
+	DerivedSearchDur     time.Duration
+	ActivityDur          time.Duration
+	AuditDur             time.Duration
+	PostprocDur          time.Duration
+	TotalDur             time.Duration
+	Throughput           float64
+	DeferredActivity     bool
 }
 
 type moderacioBulkRegistreState struct {
@@ -121,6 +125,12 @@ type moderacioBulkRegistreDemoKey struct {
 	Year       int
 	Tipus      string
 	Delta      int
+}
+
+type moderacioBulkRegistreDerivedMetrics struct {
+	DemografiaDur time.Duration
+	StatsDur      time.Duration
+	SearchDur     time.Duration
 }
 
 type moderacioTypeSpec struct {
@@ -3670,9 +3680,10 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 		}
 
 		successSet := map[int]struct{}{}
-		markGroupError := func(groupIDs []int, err error) {
+		successIDs := make([]int, 0, len(foundIDs))
+		markGroupError := func(groupIDs []int, groupErr error) {
 			for _, id := range groupIDs {
-				result.Errors = append(result.Errors, moderacioBulkRegistreItemError{ID: id, Err: err})
+				result.Errors = append(result.Errors, moderacioBulkRegistreItemError{ID: id, Err: groupErr})
 			}
 		}
 		markUpdated := func(groupIDs []int, updated int, label string) {
@@ -3685,75 +3696,39 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 			}
 			for _, id := range groupIDs {
 				successSet[id] = struct{}{}
+				successIDs = append(successIDs, id)
 			}
 		}
 
 		chunkUpdateDur := time.Duration(0)
-		if len(noDemoIDs) > 0 {
+		if len(foundIDs) > 0 {
 			updateStart := time.Now()
-			updatedNow, err := a.DB.BulkUpdateTranscripcioModeracio(estat, notes, moderatorID, noDemoIDs)
+			updatedNow, err := a.DB.BulkUpdateTranscripcioModeracio(estat, notes, moderatorID, foundIDs)
 			updateElapsed := time.Since(updateStart)
 			chunkUpdateDur += updateElapsed
 			if metrics != nil {
 				metrics.UpdateDur += updateElapsed
 			}
 			if err != nil {
-				markGroupError(noDemoIDs, err)
+				markGroupError(foundIDs, err)
 			} else {
-				markUpdated(noDemoIDs, updatedNow, "bulk_update")
+				markUpdated(foundIDs, updatedNow, "bulk_update")
 			}
-		}
-		for key, groupIDs := range demoGroups {
-			updateStart := time.Now()
-			updatedNow, err := a.DB.BulkUpdateTranscripcioModeracioWithDemografia(estat, notes, moderatorID, groupIDs, key.MunicipiID, key.Year, key.Tipus, key.Delta)
-			updateElapsed := time.Since(updateStart)
-			chunkUpdateDur += updateElapsed
-			if metrics != nil {
-				metrics.UpdateDur += updateElapsed
-			}
-			if err != nil {
-				markGroupError(groupIDs, err)
-				continue
-			}
-			markUpdated(groupIDs, updatedNow, "bulk_update_demografia")
-			postprocStart := time.Now()
-			nivellIDs := listNivellAncestorsForMunicipiCached(a, key.MunicipiID, nivellCache)
-			a.applyNivellDemografiaDeltaForMunicipiWithNivells(key.MunicipiID, key.Year, key.Tipus, key.Delta*len(groupIDs), nivellIDs)
-			chunkMetrics.PostprocDur += time.Since(postprocStart)
 		}
 
 		chunkUpdated := 0
-		postprocStart := time.Now()
-		for _, state := range states {
-			if _, ok := successSet[state.Reg.ID]; !ok {
-				continue
-			}
-			oldStatus := state.Reg.ModeracioEstat
-			state.Reg.ModeracioEstat = estat
-			result.SuccessIDs = append(result.SuccessIDs, state.Reg.ID)
+		for _, id := range successIDs {
+			result.SuccessIDs = append(result.SuccessIDs, id)
 			result.Updated++
 			chunkUpdated++
-			if state.Delta != 0 && state.Llibre != nil && state.MunicipiID <= 0 {
-				state.MunicipiID = demografiaMunicipiIDFromRegistre(&state.Reg, state.Llibre)
-			}
-			if state.Delta != 0 && state.Llibre != nil && state.MunicipiID > 0 {
-				contrib := calcNomCognomContribs(state.Reg, state.Persones)
-				nivellIDs := listNivellAncestorsForMunicipiCached(a, state.MunicipiID, nivellCache)
-				if err := a.applyNomCognomDeltaWithNivells(state.MunicipiID, contrib, state.Delta, nivellIDs); err != nil {
-					Errorf("Error actualitzant stats noms/cognoms municipi %d: %v", state.MunicipiID, err)
-				}
-			}
-			if estat == "publicat" {
-				if err := a.upsertSearchDocForRegistre(&state.Reg, state.Persones, state.Llibre, state.ArxiuID); err != nil {
-					Errorf("SearchIndex registre %d: %v", state.Reg.ID, err)
-				}
-			} else if oldStatus == "publicat" {
-				if err := a.DB.DeleteSearchDoc("registre_raw", state.Reg.ID); err != nil {
-					Errorf("SearchIndex delete registre %d: %v", state.Reg.ID, err)
-				}
-			}
 		}
-		chunkMetrics.PostprocDur += time.Since(postprocStart)
+		derivedStart := time.Now()
+		derivedMetrics := a.applyModeracioBulkRegistreDerivedSideEffects(states, successSet, estat, demoGroups, nivellCache)
+		chunkMetrics.DerivedDemografiaDur = derivedMetrics.DemografiaDur
+		chunkMetrics.DerivedStatsDur = derivedMetrics.StatsDur
+		chunkMetrics.DerivedSearchDur = derivedMetrics.SearchDur
+		chunkMetrics.DerivedDur = time.Since(derivedStart)
+		chunkMetrics.PostprocDur = chunkMetrics.DerivedDur
 		chunkMetrics.UpdateDur = chunkUpdateDur
 		chunkMetrics.Updated = chunkUpdated
 		chunkMetrics.Errors = len(result.Errors) - chunkErrorStart
@@ -3762,13 +3737,85 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 			chunkMetrics.Throughput = float64(len(chunkIDs)) / chunkMetrics.TotalDur.Seconds()
 		}
 		if IsDebugEnabled() {
-			Debugf("moderacio bulk registre chunk=%d size=%d loaded=%d updated=%d errors=%d load_dur=%s update_dur=%s activity_dur=%s audit_dur=%s postproc_dur=%s total_dur=%s throughput=%.1f/s deferred_activity=%t", chunkMetrics.ChunkIndex, chunkMetrics.ChunkSize, chunkMetrics.LoadedRows, chunkMetrics.Updated, chunkMetrics.Errors, chunkMetrics.LoadDur, chunkMetrics.UpdateDur, chunkMetrics.ActivityDur, chunkMetrics.AuditDur, chunkMetrics.PostprocDur, chunkMetrics.TotalDur, chunkMetrics.Throughput, chunkMetrics.DeferredActivity)
+			Debugf("moderacio bulk registre chunk=%d size=%d loaded=%d updated=%d errors=%d load_dur=%s update_dur=%s derived_dur=%s derived_demografia_dur=%s derived_stats_dur=%s derived_search_dur=%s activity_dur=%s audit_dur=%s postproc_dur=%s total_dur=%s throughput=%.1f/s deferred_activity=%t", chunkMetrics.ChunkIndex, chunkMetrics.ChunkSize, chunkMetrics.LoadedRows, chunkMetrics.Updated, chunkMetrics.Errors, chunkMetrics.LoadDur, chunkMetrics.UpdateDur, chunkMetrics.DerivedDur, chunkMetrics.DerivedDemografiaDur, chunkMetrics.DerivedStatsDur, chunkMetrics.DerivedSearchDur, chunkMetrics.ActivityDur, chunkMetrics.AuditDur, chunkMetrics.PostprocDur, chunkMetrics.TotalDur, chunkMetrics.Throughput, chunkMetrics.DeferredActivity)
 		}
 		if onChunk != nil {
 			onChunk(chunkMetrics)
 		}
 	}
 	return result
+}
+
+func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBulkRegistreState, successSet map[int]struct{}, estat string, demoGroups map[moderacioBulkRegistreDemoKey][]int, nivellCache map[int][]int) moderacioBulkRegistreDerivedMetrics {
+	metrics := moderacioBulkRegistreDerivedMetrics{}
+	if len(states) == 0 || len(successSet) == 0 {
+		return metrics
+	}
+
+	successByID := make(map[int]moderacioBulkRegistreState, len(successSet))
+	for _, state := range states {
+		if _, ok := successSet[state.Reg.ID]; !ok {
+			continue
+		}
+		if state.Delta != 0 && state.Llibre != nil && state.MunicipiID <= 0 {
+			state.MunicipiID = demografiaMunicipiIDFromRegistre(&state.Reg, state.Llibre)
+		}
+		successByID[state.Reg.ID] = state
+	}
+
+	demoStart := time.Now()
+	for key, groupIDs := range demoGroups {
+		appliedCount := 0
+		for _, id := range groupIDs {
+			if _, ok := successByID[id]; ok {
+				appliedCount++
+			}
+		}
+		if appliedCount == 0 {
+			continue
+		}
+		totalDelta := key.Delta * appliedCount
+		if totalDelta == 0 {
+			continue
+		}
+		if err := a.DB.ApplyMunicipiDemografiaDelta(key.MunicipiID, key.Year, key.Tipus, totalDelta); err != nil {
+			Errorf("Error actualitzant demografia municipi %d: %v", key.MunicipiID, err)
+			continue
+		}
+		nivellIDs := listNivellAncestorsForMunicipiCached(a, key.MunicipiID, nivellCache)
+		a.applyNivellDemografiaDeltaForMunicipiWithNivells(key.MunicipiID, key.Year, key.Tipus, totalDelta, nivellIDs)
+	}
+	metrics.DemografiaDur = time.Since(demoStart)
+
+	statsStart := time.Now()
+	for _, state := range successByID {
+		if state.Delta == 0 || state.Llibre == nil || state.MunicipiID <= 0 {
+			continue
+		}
+		contrib := calcNomCognomContribs(state.Reg, state.Persones)
+		nivellIDs := listNivellAncestorsForMunicipiCached(a, state.MunicipiID, nivellCache)
+		if err := a.applyNomCognomDeltaWithNivells(state.MunicipiID, contrib, state.Delta, nivellIDs); err != nil {
+			Errorf("Error actualitzant stats noms/cognoms municipi %d: %v", state.MunicipiID, err)
+		}
+	}
+	metrics.StatsDur = time.Since(statsStart)
+
+	searchStart := time.Now()
+	for _, state := range successByID {
+		oldStatus := state.Reg.ModeracioEstat
+		state.Reg.ModeracioEstat = estat
+		if estat == "publicat" {
+			if err := a.upsertSearchDocForRegistre(&state.Reg, state.Persones, state.Llibre, state.ArxiuID); err != nil {
+				Errorf("SearchIndex registre %d: %v", state.Reg.ID, err)
+			}
+		} else if oldStatus == "publicat" {
+			if err := a.DB.DeleteSearchDoc("registre_raw", state.Reg.ID); err != nil {
+				Errorf("SearchIndex delete registre %d: %v", state.Reg.ID, err)
+			}
+		}
+	}
+	metrics.SearchDur = time.Since(searchStart)
+	return metrics
 }
 
 func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, motiu string, user *db.User, perms db.PolicyPermissions, canModerateAll bool, bulkUserID int, update func(processed int, total int)) (moderacioBulkResult, moderacioBulkMetrics, error) {

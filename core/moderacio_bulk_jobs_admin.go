@@ -737,7 +737,8 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 				processed += chunkMetrics.ChunkSize
 				flushProgress()
 				if IsDebugEnabled() {
-					Debugf("moderacio bulk worker registre job=%d chunk=%d size=%d loaded=%d updated=%d errors=%d load_dur=%s update_dur=%s activity_dur=%s audit_dur=%s postproc_dur=%s total_dur=%s throughput=%.1f/s deferred_activity=%t", jobID, chunkMetrics.ChunkIndex, chunkMetrics.ChunkSize, chunkMetrics.LoadedRows, chunkMetrics.Updated, chunkMetrics.Errors, chunkMetrics.LoadDur, chunkMetrics.UpdateDur, chunkMetrics.ActivityDur, chunkMetrics.AuditDur, chunkMetrics.PostprocDur, chunkMetrics.TotalDur, chunkMetrics.Throughput, chunkMetrics.DeferredActivity)
+					Debugf("[ModeracioBulkWorker] chunk=registre size=%d update_dur=%s derived_dur=%s derived_demografia_dur=%s derived_stats_dur=%s derived_search_dur=%s", chunkMetrics.ChunkSize, chunkMetrics.UpdateDur, chunkMetrics.DerivedDur, chunkMetrics.DerivedDemografiaDur, chunkMetrics.DerivedStatsDur, chunkMetrics.DerivedSearchDur)
+					Debugf("moderacio bulk worker registre job=%d chunk=%d size=%d loaded=%d updated=%d errors=%d load_dur=%s update_dur=%s derived_dur=%s derived_demografia_dur=%s derived_stats_dur=%s derived_search_dur=%s activity_dur=%s audit_dur=%s postproc_dur=%s total_dur=%s throughput=%.1f/s deferred_activity=%t", jobID, chunkMetrics.ChunkIndex, chunkMetrics.ChunkSize, chunkMetrics.LoadedRows, chunkMetrics.Updated, chunkMetrics.Errors, chunkMetrics.LoadDur, chunkMetrics.UpdateDur, chunkMetrics.DerivedDur, chunkMetrics.DerivedDemografiaDur, chunkMetrics.DerivedStatsDur, chunkMetrics.DerivedSearchDur, chunkMetrics.ActivityDur, chunkMetrics.AuditDur, chunkMetrics.PostprocDur, chunkMetrics.TotalDur, chunkMetrics.Throughput, chunkMetrics.DeferredActivity)
 				}
 			})
 			updateDur += registreMetrics.UpdateDur
