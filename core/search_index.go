@@ -14,6 +14,11 @@ type SearchIndexScope struct {
 	LlibreID   int
 }
 
+type bulkSearchDocStore interface {
+	BulkUpsertSearchDocs(docs []db.SearchDoc) error
+	BulkDeleteSearchDocs(entityType string, entityIDs []int) error
+}
+
 func (a *App) ensureSearchIndexReady() {
 	a.searchIndexOnce.Do(func() {
 		if err := a.bootstrapSearchIndex(); err != nil {
@@ -221,6 +226,37 @@ func (a *App) upsertSearchDocForRegistre(registre *db.TranscripcioRaw, persones 
 	}
 	doc := a.buildSearchDocFromRegistre(registre, persones, llibre, arxiuID)
 	return a.DB.UpsertSearchDoc(doc)
+}
+
+func (a *App) bulkUpsertSearchDocs(docs []db.SearchDoc) error {
+	if len(docs) == 0 {
+		return nil
+	}
+	if store, ok := a.DB.(bulkSearchDocStore); ok {
+		return store.BulkUpsertSearchDocs(docs)
+	}
+	for i := range docs {
+		if err := a.DB.UpsertSearchDoc(&docs[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *App) bulkDeleteSearchDocs(entityType string, entityIDs []int) error {
+	entityIDs = dedupeInts(entityIDs)
+	if len(entityIDs) == 0 {
+		return nil
+	}
+	if store, ok := a.DB.(bulkSearchDocStore); ok {
+		return store.BulkDeleteSearchDocs(entityType, entityIDs)
+	}
+	for _, entityID := range entityIDs {
+		if err := a.DB.DeleteSearchDoc(entityType, entityID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *App) upsertSearchDocForEspaiArbreID(arbreID int) error {

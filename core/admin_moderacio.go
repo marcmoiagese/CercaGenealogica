@@ -3788,31 +3788,44 @@ func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBul
 	metrics.DemografiaDur = time.Since(demoStart)
 
 	statsStart := time.Now()
+	statsItems := make([]nomCognomBulkDelta, 0, len(successByID))
 	for _, state := range successByID {
 		if state.Delta == 0 || state.Llibre == nil || state.MunicipiID <= 0 {
 			continue
 		}
 		contrib := calcNomCognomContribs(state.Reg, state.Persones)
 		nivellIDs := listNivellAncestorsForMunicipiCached(a, state.MunicipiID, nivellCache)
-		if err := a.applyNomCognomDeltaWithNivells(state.MunicipiID, contrib, state.Delta, nivellIDs); err != nil {
-			Errorf("Error actualitzant stats noms/cognoms municipi %d: %v", state.MunicipiID, err)
-		}
+		statsItems = append(statsItems, nomCognomBulkDelta{
+			MunicipiID: state.MunicipiID,
+			NivellIDs:  nivellIDs,
+			Contrib:    contrib,
+			Sign:       state.Delta,
+		})
+	}
+	if err := a.applyNomCognomBulkDeltas(statsItems); err != nil {
+		Errorf("Error actualitzant stats noms/cognoms bulk: %v", err)
 	}
 	metrics.StatsDur = time.Since(statsStart)
 
 	searchStart := time.Now()
+	searchDocs := make([]db.SearchDoc, 0, len(successByID))
+	searchDeletes := make([]int, 0, len(successByID))
 	for _, state := range successByID {
 		oldStatus := state.Reg.ModeracioEstat
 		state.Reg.ModeracioEstat = estat
 		if estat == "publicat" {
-			if err := a.upsertSearchDocForRegistre(&state.Reg, state.Persones, state.Llibre, state.ArxiuID); err != nil {
-				Errorf("SearchIndex registre %d: %v", state.Reg.ID, err)
+			if doc := a.buildSearchDocFromRegistre(&state.Reg, state.Persones, state.Llibre, state.ArxiuID); doc != nil {
+				searchDocs = append(searchDocs, *doc)
 			}
 		} else if oldStatus == "publicat" {
-			if err := a.DB.DeleteSearchDoc("registre_raw", state.Reg.ID); err != nil {
-				Errorf("SearchIndex delete registre %d: %v", state.Reg.ID, err)
-			}
+			searchDeletes = append(searchDeletes, state.Reg.ID)
 		}
+	}
+	if err := a.bulkUpsertSearchDocs(searchDocs); err != nil {
+		Errorf("SearchIndex bulk upsert registre: %v", err)
+	}
+	if err := a.bulkDeleteSearchDocs("registre_raw", searchDeletes); err != nil {
+		Errorf("SearchIndex bulk delete registre: %v", err)
 	}
 	metrics.SearchDur = time.Since(searchStart)
 	return metrics

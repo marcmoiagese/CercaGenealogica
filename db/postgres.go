@@ -2567,11 +2567,17 @@ func (d *PostgreSQL) UpdateCognomReferenciaModeracio(id int, estat, motiu string
 
 // Cercador avançat
 func (d *PostgreSQL) UpsertSearchDoc(doc *SearchDoc) error { return d.help.upsertSearchDoc(doc) }
+func (d *PostgreSQL) BulkUpsertSearchDocs(docs []SearchDoc) error {
+	return d.help.bulkUpsertSearchDocs(docs)
+}
 func (d *PostgreSQL) GetSearchDoc(entityType string, entityID int) (*SearchDoc, error) {
 	return d.help.getSearchDoc(entityType, entityID)
 }
 func (d *PostgreSQL) DeleteSearchDoc(entityType string, entityID int) error {
 	return d.help.deleteSearchDoc(entityType, entityID)
+}
+func (d *PostgreSQL) BulkDeleteSearchDocs(entityType string, entityIDs []int) error {
+	return d.help.bulkDeleteSearchDocs(entityType, entityIDs)
 }
 func (d *PostgreSQL) SearchDocs(filter SearchQueryFilter) ([]SearchDocRow, int, SearchFacets, error) {
 	return d.help.searchDocs(filter)

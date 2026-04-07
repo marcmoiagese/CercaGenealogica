@@ -11236,6 +11236,113 @@ func (h sqlHelper) upsertSearchDoc(doc *SearchDoc) error {
 	return err
 }
 
+func (h sqlHelper) bulkUpsertSearchDocs(docs []SearchDoc) error {
+	if len(docs) == 0 {
+		return nil
+	}
+
+	const searchDocsBatchSize = 200
+	columns := []string{
+		"entity_type", "entity_id", "published", "municipi_id", "arxiu_id", "llibre_id", "entitat_eclesiastica_id",
+		"data_acte", "any_acte", "person_nom_norm", "person_cognoms_norm", "person_full_norm", "person_tokens_norm",
+		"cognoms_tokens_norm", "person_phonetic", "cognoms_phonetic", "cognoms_canon",
+	}
+	conflictUpdate := []string{
+		"published = EXCLUDED.published",
+		"municipi_id = EXCLUDED.municipi_id",
+		"arxiu_id = EXCLUDED.arxiu_id",
+		"llibre_id = EXCLUDED.llibre_id",
+		"entitat_eclesiastica_id = EXCLUDED.entitat_eclesiastica_id",
+		"data_acte = EXCLUDED.data_acte",
+		"any_acte = EXCLUDED.any_acte",
+		"person_nom_norm = EXCLUDED.person_nom_norm",
+		"person_cognoms_norm = EXCLUDED.person_cognoms_norm",
+		"person_full_norm = EXCLUDED.person_full_norm",
+		"person_tokens_norm = EXCLUDED.person_tokens_norm",
+		"cognoms_tokens_norm = EXCLUDED.cognoms_tokens_norm",
+		"person_phonetic = EXCLUDED.person_phonetic",
+		"cognoms_phonetic = EXCLUDED.cognoms_phonetic",
+		"cognoms_canon = EXCLUDED.cognoms_canon",
+	}
+	if h.style == "mysql" {
+		conflictUpdate = []string{
+			"published = VALUES(published)",
+			"municipi_id = VALUES(municipi_id)",
+			"arxiu_id = VALUES(arxiu_id)",
+			"llibre_id = VALUES(llibre_id)",
+			"entitat_eclesiastica_id = VALUES(entitat_eclesiastica_id)",
+			"data_acte = VALUES(data_acte)",
+			"any_acte = VALUES(any_acte)",
+			"person_nom_norm = VALUES(person_nom_norm)",
+			"person_cognoms_norm = VALUES(person_cognoms_norm)",
+			"person_full_norm = VALUES(person_full_norm)",
+			"person_tokens_norm = VALUES(person_tokens_norm)",
+			"cognoms_tokens_norm = VALUES(cognoms_tokens_norm)",
+			"person_phonetic = VALUES(person_phonetic)",
+			"cognoms_phonetic = VALUES(cognoms_phonetic)",
+			"cognoms_canon = VALUES(cognoms_canon)",
+		}
+	}
+
+	latestByEntity := make(map[string]SearchDoc, len(docs))
+	orderedKeys := make([]string, 0, len(docs))
+	for _, doc := range docs {
+		if strings.TrimSpace(doc.EntityType) == "" || doc.EntityID <= 0 {
+			continue
+		}
+		entityKey := doc.EntityType + "\x00" + strconv.Itoa(doc.EntityID)
+		if _, ok := latestByEntity[entityKey]; !ok {
+			orderedKeys = append(orderedKeys, entityKey)
+		}
+		latestByEntity[entityKey] = doc
+	}
+
+	filtered := make([]SearchDoc, 0, len(orderedKeys))
+	for _, entityKey := range orderedKeys {
+		filtered = append(filtered, latestByEntity[entityKey])
+	}
+	for start := 0; start < len(filtered); start += searchDocsBatchSize {
+		end := start + searchDocsBatchSize
+		if end > len(filtered) {
+			end = len(filtered)
+		}
+		batch := filtered[start:end]
+		values := make([]string, 0, len(batch))
+		args := make([]interface{}, 0, len(batch)*len(columns))
+		for _, doc := range batch {
+			pubVal := 0
+			if doc.Published {
+				pubVal = 1
+			}
+			values = append(values, "("+strings.TrimRight(strings.Repeat("?,", len(columns)), ",")+")")
+			args = append(args,
+				doc.EntityType, doc.EntityID, pubVal, doc.MunicipiID, doc.ArxiuID, doc.LlibreID, doc.EntitatEclesiasticaID,
+				doc.DataActe, doc.AnyActe, doc.PersonNomNorm, doc.PersonCognomsNorm, doc.PersonFullNorm, doc.PersonTokensNorm,
+				doc.CognomsTokensNorm, doc.PersonPhonetic, doc.CognomsPhonetic, doc.CognomsCanon,
+			)
+		}
+		query := fmt.Sprintf(
+			`INSERT INTO search_docs (%s) VALUES %s ON CONFLICT (entity_type, entity_id) DO UPDATE SET %s`,
+			strings.Join(columns, ", "),
+			strings.Join(values, ", "),
+			strings.Join(conflictUpdate, ", "),
+		)
+		if h.style == "mysql" {
+			query = fmt.Sprintf(
+				`INSERT INTO search_docs (%s) VALUES %s ON DUPLICATE KEY UPDATE %s`,
+				strings.Join(columns, ", "),
+				strings.Join(values, ", "),
+				strings.Join(conflictUpdate, ", "),
+			)
+		}
+		query = formatPlaceholders(h.style, query)
+		if _, err := h.db.Exec(query, args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (h sqlHelper) getSearchDoc(entityType string, entityID int) (*SearchDoc, error) {
 	query := `
         SELECT id, entity_type, entity_id, published, municipi_id, arxiu_id, llibre_id, entitat_eclesiastica_id,
@@ -11262,6 +11369,37 @@ func (h sqlHelper) deleteSearchDoc(entityType string, entityID int) error {
 	stmt = formatPlaceholders(h.style, stmt)
 	_, err := h.db.Exec(stmt, entityType, entityID)
 	return err
+}
+
+func (h sqlHelper) bulkDeleteSearchDocs(entityType string, entityIDs []int) error {
+	entityType = strings.TrimSpace(entityType)
+	if entityType == "" {
+		return nil
+	}
+	entityIDs = normalizePositiveUniqueIDs(entityIDs)
+	if len(entityIDs) == 0 {
+		return nil
+	}
+
+	const deleteBatchSize = 1000
+	for start := 0; start < len(entityIDs); start += deleteBatchSize {
+		end := start + deleteBatchSize
+		if end > len(entityIDs) {
+			end = len(entityIDs)
+		}
+		batch := entityIDs[start:end]
+		stmt := `DELETE FROM search_docs WHERE entity_type = ? AND entity_id IN (` + strings.TrimRight(strings.Repeat("?,", len(batch)), ",") + `)`
+		stmt = formatPlaceholders(h.style, stmt)
+		args := make([]interface{}, 0, len(batch)+1)
+		args = append(args, entityType)
+		for _, entityID := range batch {
+			args = append(args, entityID)
+		}
+		if _, err := h.db.Exec(stmt, args...); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (h sqlHelper) searchDocs(f SearchQueryFilter) ([]SearchDocRow, int, SearchFacets, error) {

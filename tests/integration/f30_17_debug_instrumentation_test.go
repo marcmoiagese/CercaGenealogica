@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/core"
 	"github.com/marcmoiagese/CercaGenealogica/db"
@@ -114,7 +115,7 @@ func TestModeracioBulkRegistreDebugInstrumentationRespectsLogLevelF3017(t *testi
 				if !strings.Contains(logs, "type=registre branch=registre_special apply=applyModeracioBulkRegistreUpdates") {
 					t.Fatalf("amb debug esperava log de dispatch especial registre, però no hi és: %s", logs)
 				}
-				if !strings.Contains(logs, "[ModeracioBulkWorker] chunk=registre") || !strings.Contains(logs, "derived_dur=") || !strings.Contains(logs, "derived_search_dur=") {
+				if !strings.Contains(logs, "[ModeracioBulkWorker] chunk=registre") || !strings.Contains(logs, "derived_dur=") || !strings.Contains(logs, "derived_stats_dur=") || !strings.Contains(logs, "derived_search_dur=") {
 					t.Fatalf("amb debug esperava log resumit update/derived del chunk registre, però no hi és: %s", logs)
 				}
 				if !strings.Contains(logs, "moderacio bulk registre chunk plan=") {
@@ -177,4 +178,52 @@ func TestModeracioBulkWorkerDispatchAuditLogsF3017Fix1(t *testing.T) {
 	if !strings.Contains(logs, "moderacio bulk registre chunk plan=") || !strings.Contains(logs, "demo_groups=") || !strings.Contains(logs, "batch_reads=4") {
 		t.Fatalf("esperava log de plan del chunk de registre amb comptadors interns, però no hi és: %s", logs)
 	}
+}
+
+func TestModeracioBulkRegistreLargeChunkSummaryF311(t *testing.T) {
+	app, database := newSQLiteAppWithLogLevel(t, "test_f31_1_bulk_summary.sqlite3", "debug")
+	admin, _ := createF7UserWithSession(t, database)
+	ensureAdminPolicyForUser(t, database, admin.ID)
+	session := createSessionCookie(t, database, admin.ID, "sess_f31_1_bulk_summary_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+
+	llibreID, paginaID := createF7LlibreWithPagina(t, database, admin.ID)
+	for i := 0; i < 520; i++ {
+		registreID := createDemografiaRegistre(t, database, llibreID, paginaID, admin.ID, "baptisme", 1900+(i%3), "pendent")
+		if _, err := database.CreateTranscripcioPersona(&db.TranscripcioPersonaRaw{
+			TranscripcioID: registreID,
+			Rol:            "batejat",
+			Nom:            "Joan",
+			Cognom1:        "Pujol",
+		}); err != nil {
+			t.Fatalf("CreateTranscripcioPersona ha fallat: %v", err)
+		}
+	}
+
+	core.SetLogLevel("debug")
+	defer core.SetLogLevel("error")
+
+	buf, restore := captureStandardLog(t)
+	defer restore()
+
+	jobID := submitAsyncRegistreBulkJob(t, app, session, "csrf_f31_1_bulk_summary")
+	job := waitForAdminJobTerminal(t, database, jobID)
+	if job.Status != "done" {
+		t.Fatalf("job bulk registre esperat done, got status=%s phase=%s error=%s", job.Status, job.Phase, job.ErrorText)
+	}
+
+	logs := buf.String()
+	lines := []string{}
+	for _, line := range strings.Split(logs, "\n") {
+		if strings.Contains(line, "[ModeracioBulkWorker] chunk=registre") {
+			lines = append(lines, strings.TrimSpace(line))
+		}
+	}
+	if len(lines) == 0 {
+		t.Fatalf("no s'ha trobat cap resum de chunk registre: %s", logs)
+	}
+	summary := strings.Join(lines, " || ")
+	if !strings.Contains(summary, "derived_stats_dur=") || !strings.Contains(summary, "derived_search_dur=") {
+		t.Fatalf("resum de chunk sense mètriques derivades completes: %s", summary)
+	}
+	t.Log(summary)
 }

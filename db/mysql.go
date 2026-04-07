@@ -1803,11 +1803,17 @@ func (d *MySQL) UpdateCognomReferenciaModeracio(id int, estat, motiu string, mod
 
 // Cercador avançat
 func (d *MySQL) UpsertSearchDoc(doc *SearchDoc) error { return d.help.upsertSearchDoc(doc) }
+func (d *MySQL) BulkUpsertSearchDocs(docs []SearchDoc) error {
+	return d.help.bulkUpsertSearchDocs(docs)
+}
 func (d *MySQL) GetSearchDoc(entityType string, entityID int) (*SearchDoc, error) {
 	return d.help.getSearchDoc(entityType, entityID)
 }
 func (d *MySQL) DeleteSearchDoc(entityType string, entityID int) error {
 	return d.help.deleteSearchDoc(entityType, entityID)
+}
+func (d *MySQL) BulkDeleteSearchDocs(entityType string, entityIDs []int) error {
+	return d.help.bulkDeleteSearchDocs(entityType, entityIDs)
 }
 func (d *MySQL) SearchDocs(filter SearchQueryFilter) ([]SearchDocRow, int, SearchFacets, error) {
 	return d.help.searchDocs(filter)

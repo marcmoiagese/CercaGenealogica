@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -15,6 +16,57 @@ type nomCognomContrib struct {
 	NomForms     map[string]string
 	CognomCounts map[string]int
 	CognomForms  map[string]string
+}
+
+type nomCognomBulkDelta struct {
+	MunicipiID int
+	NivellIDs  []int
+	Contrib    nomCognomContrib
+	Sign       int
+}
+
+type bulkNomMunicipiAnyKey struct {
+	Key        string
+	MunicipiID int
+	AnyDoc     int
+}
+
+type bulkNomMunicipiTotalKey struct {
+	Key        string
+	MunicipiID int
+}
+
+type bulkNomNivellAnyKey struct {
+	Key      string
+	NivellID int
+	AnyDoc   int
+}
+
+type bulkNomNivellTotalKey struct {
+	Key      string
+	NivellID int
+}
+
+type bulkCognomMunicipiAnyKey struct {
+	Key        string
+	MunicipiID int
+	AnyDoc     int
+}
+
+type bulkCognomMunicipiTotalKey struct {
+	Key        string
+	MunicipiID int
+}
+
+type bulkCognomNivellAnyKey struct {
+	Key      string
+	NivellID int
+	AnyDoc   int
+}
+
+type bulkCognomNivellTotalKey struct {
+	Key      string
+	NivellID int
 }
 
 func primaryRolesForTipus(tipusActe string) []string {
@@ -193,6 +245,172 @@ func (a *App) applyNomCognomDeltaWithNivells(municipiID int, contrib nomCognomCo
 			}
 		}
 	}
+	return nil
+}
+
+func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	nomForms := map[string]string{}
+	cognomForms := map[string]string{}
+	nomMunicipiAny := map[bulkNomMunicipiAnyKey]int{}
+	nomMunicipiTotal := map[bulkNomMunicipiTotalKey]int{}
+	nomNivellAny := map[bulkNomNivellAnyKey]int{}
+	nomNivellTotal := map[bulkNomNivellTotalKey]int{}
+	cognomMunicipiAny := map[bulkCognomMunicipiAnyKey]int{}
+	cognomMunicipiTotal := map[bulkCognomMunicipiTotalKey]int{}
+	cognomNivellAny := map[bulkCognomNivellAnyKey]int{}
+	cognomNivellTotal := map[bulkCognomNivellTotalKey]int{}
+
+	for _, item := range items {
+		if item.MunicipiID <= 0 || item.Contrib.AnyDoc <= 0 || item.Sign == 0 {
+			continue
+		}
+		nivellIDs := dedupeInts(item.NivellIDs)
+		for key, count := range item.Contrib.NomCounts {
+			delta := count * item.Sign
+			if delta == 0 {
+				continue
+			}
+			form := strings.TrimSpace(item.Contrib.NomForms[key])
+			if form == "" {
+				form = key
+			}
+			if _, ok := nomForms[key]; !ok {
+				nomForms[key] = form
+			}
+			nomMunicipiAny[bulkNomMunicipiAnyKey{Key: key, MunicipiID: item.MunicipiID, AnyDoc: item.Contrib.AnyDoc}] += delta
+			nomMunicipiTotal[bulkNomMunicipiTotalKey{Key: key, MunicipiID: item.MunicipiID}] += delta
+			for _, nivellID := range nivellIDs {
+				nomNivellAny[bulkNomNivellAnyKey{Key: key, NivellID: nivellID, AnyDoc: item.Contrib.AnyDoc}] += delta
+				nomNivellTotal[bulkNomNivellTotalKey{Key: key, NivellID: nivellID}] += delta
+			}
+		}
+		for key, count := range item.Contrib.CognomCounts {
+			delta := count * item.Sign
+			if delta == 0 {
+				continue
+			}
+			form := strings.TrimSpace(item.Contrib.CognomForms[key])
+			if form == "" {
+				form = key
+			}
+			if _, ok := cognomForms[key]; !ok {
+				cognomForms[key] = form
+			}
+			cognomMunicipiAny[bulkCognomMunicipiAnyKey{Key: key, MunicipiID: item.MunicipiID, AnyDoc: item.Contrib.AnyDoc}] += delta
+			cognomMunicipiTotal[bulkCognomMunicipiTotalKey{Key: key, MunicipiID: item.MunicipiID}] += delta
+			for _, nivellID := range nivellIDs {
+				cognomNivellAny[bulkCognomNivellAnyKey{Key: key, NivellID: nivellID, AnyDoc: item.Contrib.AnyDoc}] += delta
+				cognomNivellTotal[bulkCognomNivellTotalKey{Key: key, NivellID: nivellID}] += delta
+			}
+		}
+	}
+
+	nomIDs := make(map[string]int, len(nomForms))
+	nomKeys := make([]string, 0, len(nomForms))
+	for key := range nomForms {
+		nomKeys = append(nomKeys, key)
+	}
+	sort.Strings(nomKeys)
+	for _, key := range nomKeys {
+		form := strings.TrimSpace(nomForms[key])
+		if form == "" {
+			form = key
+		}
+		nomID, err := a.DB.UpsertNom(form, key, "stats_auto", nil)
+		if err != nil {
+			return err
+		}
+		nomIDs[key] = nomID
+	}
+
+	cognomIDs := make(map[string]int, len(cognomForms))
+	cognomKeys := make([]string, 0, len(cognomForms))
+	for key := range cognomForms {
+		cognomKeys = append(cognomKeys, key)
+	}
+	sort.Strings(cognomKeys)
+	for _, key := range cognomKeys {
+		form := strings.TrimSpace(cognomForms[key])
+		if form == "" {
+			form = key
+		}
+		cognomID, err := a.DB.UpsertCognom(form, key, "stats_auto", "stats_auto", nil)
+		if err != nil {
+			return err
+		}
+		cognomIDs[key] = cognomID
+	}
+
+	for agg, delta := range nomMunicipiAny {
+		if delta == 0 {
+			continue
+		}
+		if err := a.DB.UpsertNomFreqMunicipiAny(nomIDs[agg.Key], agg.MunicipiID, agg.AnyDoc, delta); err != nil {
+			return err
+		}
+	}
+	for agg, delta := range nomMunicipiTotal {
+		if delta == 0 {
+			continue
+		}
+		if err := a.DB.UpsertNomFreqMunicipiTotal(nomIDs[agg.Key], agg.MunicipiID, delta); err != nil {
+			return err
+		}
+	}
+	for agg, delta := range nomNivellAny {
+		if delta == 0 {
+			continue
+		}
+		if err := a.DB.UpsertNomFreqNivellAny(nomIDs[agg.Key], agg.NivellID, agg.AnyDoc, delta); err != nil {
+			return err
+		}
+	}
+	for agg, delta := range nomNivellTotal {
+		if delta == 0 {
+			continue
+		}
+		if err := a.DB.UpsertNomFreqNivellTotal(nomIDs[agg.Key], agg.NivellID, delta); err != nil {
+			return err
+		}
+	}
+
+	for agg, delta := range cognomMunicipiAny {
+		if delta == 0 {
+			continue
+		}
+		if err := a.DB.ApplyCognomFreqMunicipiAnyDelta(cognomIDs[agg.Key], agg.MunicipiID, agg.AnyDoc, delta); err != nil {
+			return err
+		}
+	}
+	for agg, delta := range cognomMunicipiTotal {
+		if delta == 0 {
+			continue
+		}
+		if err := a.DB.UpsertCognomFreqMunicipiTotal(cognomIDs[agg.Key], agg.MunicipiID, delta); err != nil {
+			return err
+		}
+	}
+	for agg, delta := range cognomNivellAny {
+		if delta == 0 {
+			continue
+		}
+		if err := a.DB.ApplyCognomFreqNivellAnyDelta(cognomIDs[agg.Key], agg.NivellID, agg.AnyDoc, delta); err != nil {
+			return err
+		}
+	}
+	for agg, delta := range cognomNivellTotal {
+		if delta == 0 {
+			continue
+		}
+		if err := a.DB.UpsertCognomFreqNivellTotal(cognomIDs[agg.Key], agg.NivellID, delta); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

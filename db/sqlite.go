@@ -1841,11 +1841,17 @@ func (d *SQLite) UpdateCognomReferenciaModeracio(id int, estat, motiu string, mo
 func (d *SQLite) UpsertSearchDoc(doc *SearchDoc) error {
 	return d.help.upsertSearchDoc(doc)
 }
+func (d *SQLite) BulkUpsertSearchDocs(docs []SearchDoc) error {
+	return d.help.bulkUpsertSearchDocs(docs)
+}
 func (d *SQLite) GetSearchDoc(entityType string, entityID int) (*SearchDoc, error) {
 	return d.help.getSearchDoc(entityType, entityID)
 }
 func (d *SQLite) DeleteSearchDoc(entityType string, entityID int) error {
 	return d.help.deleteSearchDoc(entityType, entityID)
+}
+func (d *SQLite) BulkDeleteSearchDocs(entityType string, entityIDs []int) error {
+	return d.help.bulkDeleteSearchDocs(entityType, entityIDs)
 }
 func (d *SQLite) SearchDocs(filter SearchQueryFilter) ([]SearchDocRow, int, SearchFacets, error) {
 	return d.help.searchDocs(filter)
