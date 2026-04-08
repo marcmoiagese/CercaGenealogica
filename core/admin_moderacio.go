@@ -3810,11 +3810,12 @@ func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBul
 	searchStart := time.Now()
 	searchDocs := make([]db.SearchDoc, 0, len(successByID))
 	searchDeletes := make([]int, 0, len(successByID))
+	cognomCanonCache := map[string]string{}
 	for _, state := range successByID {
 		oldStatus := state.Reg.ModeracioEstat
 		state.Reg.ModeracioEstat = estat
 		if estat == "publicat" {
-			if doc := a.buildSearchDocFromRegistre(&state.Reg, state.Persones, state.Llibre, state.ArxiuID); doc != nil {
+			if doc := a.buildSearchDocFromRegistreWithCognomCache(&state.Reg, state.Persones, state.Llibre, state.ArxiuID, cognomCanonCache); doc != nil {
 				searchDocs = append(searchDocs, *doc)
 			}
 		} else if oldStatus == "publicat" {
@@ -3826,6 +3827,9 @@ func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBul
 	}
 	if err := a.bulkDeleteSearchDocs("registre_raw", searchDeletes); err != nil {
 		Errorf("SearchIndex bulk delete registre: %v", err)
+	}
+	if IsDebugEnabled() {
+		Debugf("moderacio bulk registre search aggregate docs=%d deletes=%d cognom_canon_cache=%d apply=bulk", len(searchDocs), len(searchDeletes), len(cognomCanonCache))
 	}
 	metrics.SearchDur = time.Since(searchStart)
 	return metrics

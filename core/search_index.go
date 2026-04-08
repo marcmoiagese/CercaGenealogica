@@ -345,6 +345,10 @@ func (a *App) buildSearchDocFromEspaiArbre(arbre *db.EspaiArbre) *db.SearchDoc {
 }
 
 func (a *App) buildSearchDocFromRegistre(reg *db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw, llibre *db.Llibre, arxiuID int) *db.SearchDoc {
+	return a.buildSearchDocFromRegistreWithCognomCache(reg, persones, llibre, arxiuID, nil)
+}
+
+func (a *App) buildSearchDocFromRegistreWithCognomCache(reg *db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw, llibre *db.Llibre, arxiuID int, cognomCanonCache map[string]string) *db.SearchDoc {
 	var noms []string
 	var cognoms []string
 	for _, p := range persones {
@@ -374,7 +378,7 @@ func (a *App) buildSearchDocFromRegistre(reg *db.TranscripcioRaw, persones []db.
 		CognomsTokensNorm: strings.Join(cognomTokens, " "),
 		PersonPhonetic:    strings.Join(phoneticTokens(personTokens), " "),
 		CognomsPhonetic:   strings.Join(phoneticTokens(cognomTokens), " "),
-		CognomsCanon:      strings.Join(a.canonicalizeCognoms(cognoms), " "),
+		CognomsCanon:      strings.Join(a.canonicalizeCognomsCached(cognoms, cognomCanonCache), " "),
 	}
 	if llibre != nil {
 		doc.MunicipiID = sqlNullIntFromInt(llibre.MunicipiID)
@@ -394,6 +398,10 @@ func (a *App) buildSearchDocFromRegistre(reg *db.TranscripcioRaw, persones []db.
 }
 
 func (a *App) canonicalizeCognoms(raw []string) []string {
+	return a.canonicalizeCognomsCached(raw, nil)
+}
+
+func (a *App) canonicalizeCognomsCached(raw []string, cache map[string]string) []string {
 	out := make([]string, 0, len(raw))
 	seen := map[string]struct{}{}
 	for _, val := range raw {
@@ -405,17 +413,22 @@ func (a *App) canonicalizeCognoms(raw []string) []string {
 		if key == "" {
 			continue
 		}
-		canon := ""
-		if id, err := a.DB.FindCognomIDByKey(key); err == nil && id > 0 {
-			if canonID, _, err := a.resolveCognomCanonicalID(id); err == nil && canonID > 0 {
-				id = canonID
+		canon, ok := cache[key]
+		if !ok {
+			if id, err := a.DB.FindCognomIDByKey(key); err == nil && id > 0 {
+				if canonID, _, err := a.resolveCognomCanonicalID(id); err == nil && canonID > 0 {
+					id = canonID
+				}
+				if cognom, err := a.DB.GetCognom(id); err == nil && cognom != nil {
+					canon = normalizeSearchText(cognom.Forma)
+				}
 			}
-			if cognom, err := a.DB.GetCognom(id); err == nil && cognom != nil {
-				canon = normalizeSearchText(cognom.Forma)
+			if canon == "" {
+				canon = normalizeSearchText(val)
 			}
-		}
-		if canon == "" {
-			canon = normalizeSearchText(val)
+			if cache != nil {
+				cache[key] = canon
+			}
 		}
 		if canon == "" {
 			continue

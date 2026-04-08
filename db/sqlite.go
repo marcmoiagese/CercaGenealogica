@@ -1921,6 +1921,9 @@ func (d *SQLite) UpsertNomFreqMunicipiTotal(nomID, municipiID, delta int) error 
 func (d *SQLite) UpsertCognomFreqMunicipiTotal(cognomID, municipiID, delta int) error {
 	return d.help.upsertCognomFreqMunicipiTotal(cognomID, municipiID, delta)
 }
+func (d *SQLite) BulkApplyNomCognomStatsDeltas(deltas NomCognomStatsDeltas) error {
+	return d.help.bulkApplyNomCognomStatsDeltas(deltas)
+}
 func (d *SQLite) ListTopNomsByMunicipi(municipiID, limit int) ([]NomTotalRow, error) {
 	return d.help.listTopNomsByMunicipi(municipiID, limit)
 }

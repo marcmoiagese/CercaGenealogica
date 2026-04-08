@@ -1176,6 +1176,69 @@ type CognomTotalRow struct {
 	Forma      string
 }
 
+type NomFreqMunicipiAnyDelta struct {
+	NomID      int
+	MunicipiID int
+	AnyDoc     int
+	Delta      int
+}
+
+type NomFreqMunicipiTotalDelta struct {
+	NomID      int
+	MunicipiID int
+	Delta      int
+}
+
+type NomFreqNivellAnyDelta struct {
+	NomID    int
+	NivellID int
+	AnyDoc   int
+	Delta    int
+}
+
+type NomFreqNivellTotalDelta struct {
+	NomID    int
+	NivellID int
+	Delta    int
+}
+
+type CognomFreqMunicipiAnyDelta struct {
+	CognomID   int
+	MunicipiID int
+	AnyDoc     int
+	Delta      int
+}
+
+type CognomFreqMunicipiTotalDelta struct {
+	CognomID   int
+	MunicipiID int
+	Delta      int
+}
+
+type CognomFreqNivellAnyDelta struct {
+	CognomID int
+	NivellID int
+	AnyDoc   int
+	Delta    int
+}
+
+type CognomFreqNivellTotalDelta struct {
+	CognomID int
+	NivellID int
+	Delta    int
+}
+
+type NomCognomStatsDeltas struct {
+	NomMunicipiAny      []NomFreqMunicipiAnyDelta
+	NomMunicipiTotal    []NomFreqMunicipiTotalDelta
+	NomNivellAny        []NomFreqNivellAnyDelta
+	NomNivellTotal      []NomFreqNivellTotalDelta
+	CognomMunicipiAny   []CognomFreqMunicipiAnyDelta
+	CognomMunicipiTotal []CognomFreqMunicipiTotalDelta
+	CognomNivellAny     []CognomFreqNivellAnyDelta
+	CognomNivellTotal   []CognomFreqNivellTotalDelta
+}
+
 type MunicipiMapa struct {
 	ID               int
 	MunicipiID       int

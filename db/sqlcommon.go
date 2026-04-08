@@ -11241,7 +11241,7 @@ func (h sqlHelper) bulkUpsertSearchDocs(docs []SearchDoc) error {
 		return nil
 	}
 
-	const searchDocsBatchSize = 200
+	const searchDocsBatchSize = 1000
 	columns := []string{
 		"entity_type", "entity_id", "published", "municipi_id", "arxiu_id", "llibre_id", "entitat_eclesiastica_id",
 		"data_acte", "any_acte", "person_nom_norm", "person_cognoms_norm", "person_full_norm", "person_tokens_norm",
@@ -12466,6 +12466,343 @@ func (h sqlHelper) upsertCognomFreqMunicipiTotal(cognomID, municipiID, delta int
 	if res, err := h.db.Exec(cleanup, cognomID, municipiID); err == nil && delta < 0 {
 		if rows, err := res.RowsAffected(); err == nil && rows > 0 {
 			logInfof("clamp cognoms_freq_municipi_total cognom=%d municipi=%d delta=%d", cognomID, municipiID, delta)
+		}
+	}
+	return nil
+}
+
+type statsDeltaAnyRow struct {
+	EntityID int
+	ScopeID  int
+	AnyDoc   int
+	Delta    int
+}
+
+type statsDeltaTotalRow struct {
+	EntityID int
+	ScopeID  int
+	Delta    int
+}
+
+type sqlStatsExec interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+}
+
+func (h sqlHelper) bulkApplyNomCognomStatsDeltas(d NomCognomStatsDeltas) error {
+	if len(d.NomMunicipiAny) == 0 &&
+		len(d.NomMunicipiTotal) == 0 &&
+		len(d.NomNivellAny) == 0 &&
+		len(d.NomNivellTotal) == 0 &&
+		len(d.CognomMunicipiAny) == 0 &&
+		len(d.CognomMunicipiTotal) == 0 &&
+		len(d.CognomNivellAny) == 0 &&
+		len(d.CognomNivellTotal) == 0 {
+		return nil
+	}
+
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if err := h.bulkApplyStatsAnyDeltas(tx, "noms_freq_municipi_any", "nom_id", "municipi_id", "any_doc", "freq", nomMunicipiAnyRows(d.NomMunicipiAny)); err != nil {
+		return err
+	}
+	if err := h.bulkApplyStatsTotalDeltas(tx, "noms_freq_municipi_total", "nom_id", "municipi_id", "total_freq", nomMunicipiTotalRows(d.NomMunicipiTotal)); err != nil {
+		return err
+	}
+	if err := h.bulkApplyStatsAnyDeltas(tx, "noms_freq_nivell_any", "nom_id", "nivell_id", "any_doc", "freq", nomNivellAnyRows(d.NomNivellAny)); err != nil {
+		return err
+	}
+	if err := h.bulkApplyStatsTotalDeltas(tx, "noms_freq_nivell_total", "nom_id", "nivell_id", "total_freq", nomNivellTotalRows(d.NomNivellTotal)); err != nil {
+		return err
+	}
+	if err := h.bulkApplyStatsAnyDeltas(tx, "cognoms_freq_municipi_any", "cognom_id", "municipi_id", "any_doc", "freq", cognomMunicipiAnyRows(d.CognomMunicipiAny)); err != nil {
+		return err
+	}
+	if err := h.bulkApplyStatsTotalDeltas(tx, "cognoms_freq_municipi_total", "cognom_id", "municipi_id", "total_freq", cognomMunicipiTotalRows(d.CognomMunicipiTotal)); err != nil {
+		return err
+	}
+	if err := h.bulkApplyStatsAnyDeltas(tx, "cognoms_freq_nivell_any", "cognom_id", "nivell_id", "any_doc", "freq", cognomNivellAnyRows(d.CognomNivellAny)); err != nil {
+		return err
+	}
+	if err := h.bulkApplyStatsTotalDeltas(tx, "cognoms_freq_nivell_total", "cognom_id", "nivell_id", "total_freq", cognomNivellTotalRows(d.CognomNivellTotal)); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+func nomMunicipiAnyRows(rows []NomFreqMunicipiAnyDelta) []statsDeltaAnyRow {
+	out := make([]statsDeltaAnyRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, statsDeltaAnyRow{EntityID: row.NomID, ScopeID: row.MunicipiID, AnyDoc: row.AnyDoc, Delta: row.Delta})
+	}
+	return out
+}
+
+func nomMunicipiTotalRows(rows []NomFreqMunicipiTotalDelta) []statsDeltaTotalRow {
+	out := make([]statsDeltaTotalRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, statsDeltaTotalRow{EntityID: row.NomID, ScopeID: row.MunicipiID, Delta: row.Delta})
+	}
+	return out
+}
+
+func nomNivellAnyRows(rows []NomFreqNivellAnyDelta) []statsDeltaAnyRow {
+	out := make([]statsDeltaAnyRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, statsDeltaAnyRow{EntityID: row.NomID, ScopeID: row.NivellID, AnyDoc: row.AnyDoc, Delta: row.Delta})
+	}
+	return out
+}
+
+func nomNivellTotalRows(rows []NomFreqNivellTotalDelta) []statsDeltaTotalRow {
+	out := make([]statsDeltaTotalRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, statsDeltaTotalRow{EntityID: row.NomID, ScopeID: row.NivellID, Delta: row.Delta})
+	}
+	return out
+}
+
+func cognomMunicipiAnyRows(rows []CognomFreqMunicipiAnyDelta) []statsDeltaAnyRow {
+	out := make([]statsDeltaAnyRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, statsDeltaAnyRow{EntityID: row.CognomID, ScopeID: row.MunicipiID, AnyDoc: row.AnyDoc, Delta: row.Delta})
+	}
+	return out
+}
+
+func cognomMunicipiTotalRows(rows []CognomFreqMunicipiTotalDelta) []statsDeltaTotalRow {
+	out := make([]statsDeltaTotalRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, statsDeltaTotalRow{EntityID: row.CognomID, ScopeID: row.MunicipiID, Delta: row.Delta})
+	}
+	return out
+}
+
+func cognomNivellAnyRows(rows []CognomFreqNivellAnyDelta) []statsDeltaAnyRow {
+	out := make([]statsDeltaAnyRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, statsDeltaAnyRow{EntityID: row.CognomID, ScopeID: row.NivellID, AnyDoc: row.AnyDoc, Delta: row.Delta})
+	}
+	return out
+}
+
+func cognomNivellTotalRows(rows []CognomFreqNivellTotalDelta) []statsDeltaTotalRow {
+	out := make([]statsDeltaTotalRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, statsDeltaTotalRow{EntityID: row.CognomID, ScopeID: row.NivellID, Delta: row.Delta})
+	}
+	return out
+}
+
+func (h sqlHelper) bulkApplyStatsAnyDeltas(exec sqlStatsExec, table, entityCol, scopeCol, anyCol, valueCol string, rows []statsDeltaAnyRow) error {
+	rows = compactStatsAnyRows(rows)
+	if len(rows) == 0 {
+		return nil
+	}
+	const batchSize = 1000
+	for start := 0; start < len(rows); start += batchSize {
+		end := start + batchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[start:end]
+		values := make([]string, 0, len(batch))
+		args := make([]interface{}, 0, len(batch)*4)
+		hasNegative := false
+		for _, row := range batch {
+			values = append(values, "(?, ?, ?, ?, "+h.nowFun+")")
+			args = append(args, row.EntityID, row.ScopeID, row.AnyDoc, row.Delta)
+			if row.Delta < 0 {
+				hasNegative = true
+			}
+		}
+		stmt := fmt.Sprintf("INSERT INTO %s (%s, %s, %s, %s, updated_at) VALUES %s", table, entityCol, scopeCol, anyCol, valueCol, strings.Join(values, ", "))
+		if h.style == "mysql" {
+			stmt += fmt.Sprintf(" ON DUPLICATE KEY UPDATE %s = %s + VALUES(%s), updated_at = %s", valueCol, valueCol, valueCol, h.nowFun)
+		} else {
+			stmt += fmt.Sprintf(" ON CONFLICT (%s, %s, %s) DO UPDATE SET %s = %s.%s + excluded.%s, updated_at = %s", entityCol, scopeCol, anyCol, valueCol, table, valueCol, valueCol, h.nowFun)
+		}
+		stmt = formatPlaceholders(h.style, stmt)
+		if _, err := exec.Exec(stmt, args...); err != nil {
+			return err
+		}
+		if hasNegative {
+			if err := h.bulkCleanupStatsAnyRows(exec, table, entityCol, scopeCol, anyCol, valueCol, batch); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) bulkApplyStatsTotalDeltas(exec sqlStatsExec, table, entityCol, scopeCol, valueCol string, rows []statsDeltaTotalRow) error {
+	rows = compactStatsTotalRows(rows)
+	if len(rows) == 0 {
+		return nil
+	}
+	const batchSize = 1000
+	for start := 0; start < len(rows); start += batchSize {
+		end := start + batchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[start:end]
+		values := make([]string, 0, len(batch))
+		args := make([]interface{}, 0, len(batch)*3)
+		hasNegative := false
+		for _, row := range batch {
+			values = append(values, "(?, ?, ?, "+h.nowFun+")")
+			args = append(args, row.EntityID, row.ScopeID, row.Delta)
+			if row.Delta < 0 {
+				hasNegative = true
+			}
+		}
+		stmt := fmt.Sprintf("INSERT INTO %s (%s, %s, %s, updated_at) VALUES %s", table, entityCol, scopeCol, valueCol, strings.Join(values, ", "))
+		if h.style == "mysql" {
+			stmt += fmt.Sprintf(" ON DUPLICATE KEY UPDATE %s = %s + VALUES(%s), updated_at = %s", valueCol, valueCol, valueCol, h.nowFun)
+		} else {
+			stmt += fmt.Sprintf(" ON CONFLICT (%s, %s) DO UPDATE SET %s = %s.%s + excluded.%s, updated_at = %s", entityCol, scopeCol, valueCol, table, valueCol, valueCol, h.nowFun)
+		}
+		stmt = formatPlaceholders(h.style, stmt)
+		if _, err := exec.Exec(stmt, args...); err != nil {
+			return err
+		}
+		if hasNegative {
+			if err := h.bulkCleanupStatsTotalRows(exec, table, entityCol, scopeCol, valueCol, batch); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func compactStatsAnyRows(rows []statsDeltaAnyRow) []statsDeltaAnyRow {
+	if len(rows) == 0 {
+		return nil
+	}
+	type key struct {
+		EntityID int
+		ScopeID  int
+		AnyDoc   int
+	}
+	byKey := make(map[key]int, len(rows))
+	order := make([]key, 0, len(rows))
+	for _, row := range rows {
+		if row.EntityID <= 0 || row.ScopeID <= 0 || row.AnyDoc <= 0 || row.Delta == 0 {
+			continue
+		}
+		k := key{EntityID: row.EntityID, ScopeID: row.ScopeID, AnyDoc: row.AnyDoc}
+		if _, ok := byKey[k]; !ok {
+			order = append(order, k)
+		}
+		byKey[k] += row.Delta
+	}
+	out := make([]statsDeltaAnyRow, 0, len(order))
+	for _, k := range order {
+		delta := byKey[k]
+		if delta == 0 {
+			continue
+		}
+		out = append(out, statsDeltaAnyRow{EntityID: k.EntityID, ScopeID: k.ScopeID, AnyDoc: k.AnyDoc, Delta: delta})
+	}
+	return out
+}
+
+func compactStatsTotalRows(rows []statsDeltaTotalRow) []statsDeltaTotalRow {
+	if len(rows) == 0 {
+		return nil
+	}
+	type key struct {
+		EntityID int
+		ScopeID  int
+	}
+	byKey := make(map[key]int, len(rows))
+	order := make([]key, 0, len(rows))
+	for _, row := range rows {
+		if row.EntityID <= 0 || row.ScopeID <= 0 || row.Delta == 0 {
+			continue
+		}
+		k := key{EntityID: row.EntityID, ScopeID: row.ScopeID}
+		if _, ok := byKey[k]; !ok {
+			order = append(order, k)
+		}
+		byKey[k] += row.Delta
+	}
+	out := make([]statsDeltaTotalRow, 0, len(order))
+	for _, k := range order {
+		delta := byKey[k]
+		if delta == 0 {
+			continue
+		}
+		out = append(out, statsDeltaTotalRow{EntityID: k.EntityID, ScopeID: k.ScopeID, Delta: delta})
+	}
+	return out
+}
+
+func (h sqlHelper) bulkCleanupStatsAnyRows(exec sqlStatsExec, table, entityCol, scopeCol, anyCol, valueCol string, rows []statsDeltaAnyRow) error {
+	const cleanupBatchSize = 200
+	for start := 0; start < len(rows); start += cleanupBatchSize {
+		end := start + cleanupBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		clauses := []string{}
+		args := []interface{}{}
+		for _, row := range rows[start:end] {
+			if row.Delta >= 0 {
+				continue
+			}
+			clauses = append(clauses, fmt.Sprintf("(%s = ? AND %s = ? AND %s = ?)", entityCol, scopeCol, anyCol))
+			args = append(args, row.EntityID, row.ScopeID, row.AnyDoc)
+		}
+		if len(clauses) == 0 {
+			continue
+		}
+		stmt := fmt.Sprintf("DELETE FROM %s WHERE %s <= 0 AND (%s)", table, valueCol, strings.Join(clauses, " OR "))
+		stmt = formatPlaceholders(h.style, stmt)
+		if _, err := exec.Exec(stmt, args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) bulkCleanupStatsTotalRows(exec sqlStatsExec, table, entityCol, scopeCol, valueCol string, rows []statsDeltaTotalRow) error {
+	const cleanupBatchSize = 200
+	for start := 0; start < len(rows); start += cleanupBatchSize {
+		end := start + cleanupBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		clauses := []string{}
+		args := []interface{}{}
+		for _, row := range rows[start:end] {
+			if row.Delta >= 0 {
+				continue
+			}
+			clauses = append(clauses, fmt.Sprintf("(%s = ? AND %s = ?)", entityCol, scopeCol))
+			args = append(args, row.EntityID, row.ScopeID)
+		}
+		if len(clauses) == 0 {
+			continue
+		}
+		stmt := fmt.Sprintf("DELETE FROM %s WHERE %s <= 0 AND (%s)", table, valueCol, strings.Join(clauses, " OR "))
+		stmt = formatPlaceholders(h.style, stmt)
+		if _, err := exec.Exec(stmt, args...); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -2647,6 +2647,9 @@ func (d *PostgreSQL) UpsertNomFreqMunicipiTotal(nomID, municipiID, delta int) er
 func (d *PostgreSQL) UpsertCognomFreqMunicipiTotal(cognomID, municipiID, delta int) error {
 	return d.help.upsertCognomFreqMunicipiTotal(cognomID, municipiID, delta)
 }
+func (d *PostgreSQL) BulkApplyNomCognomStatsDeltas(deltas NomCognomStatsDeltas) error {
+	return d.help.bulkApplyNomCognomStatsDeltas(deltas)
+}
 func (d *PostgreSQL) ListTopNomsByMunicipi(municipiID, limit int) ([]NomTotalRow, error) {
 	return d.help.listTopNomsByMunicipi(municipiID, limit)
 }

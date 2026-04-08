@@ -1883,6 +1883,9 @@ func (d *MySQL) UpsertNomFreqMunicipiTotal(nomID, municipiID, delta int) error {
 func (d *MySQL) UpsertCognomFreqMunicipiTotal(cognomID, municipiID, delta int) error {
 	return d.help.upsertCognomFreqMunicipiTotal(cognomID, municipiID, delta)
 }
+func (d *MySQL) BulkApplyNomCognomStatsDeltas(deltas NomCognomStatsDeltas) error {
+	return d.help.bulkApplyNomCognomStatsDeltas(deltas)
+}
 func (d *MySQL) ListTopNomsByMunicipi(municipiID, limit int) ([]NomTotalRow, error) {
 	return d.help.listTopNomsByMunicipi(municipiID, limit)
 }

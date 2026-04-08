@@ -25,6 +25,10 @@ type nomCognomBulkDelta struct {
 	Sign       int
 }
 
+type bulkNomCognomStatsStore interface {
+	BulkApplyNomCognomStatsDeltas(deltas db.NomCognomStatsDeltas) error
+}
+
 type bulkNomMunicipiAnyKey struct {
 	Key        string
 	MunicipiID int
@@ -345,68 +349,114 @@ func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) error {
 		cognomIDs[key] = cognomID
 	}
 
+	deltas := db.NomCognomStatsDeltas{
+		NomMunicipiAny:      make([]db.NomFreqMunicipiAnyDelta, 0, len(nomMunicipiAny)),
+		NomMunicipiTotal:    make([]db.NomFreqMunicipiTotalDelta, 0, len(nomMunicipiTotal)),
+		NomNivellAny:        make([]db.NomFreqNivellAnyDelta, 0, len(nomNivellAny)),
+		NomNivellTotal:      make([]db.NomFreqNivellTotalDelta, 0, len(nomNivellTotal)),
+		CognomMunicipiAny:   make([]db.CognomFreqMunicipiAnyDelta, 0, len(cognomMunicipiAny)),
+		CognomMunicipiTotal: make([]db.CognomFreqMunicipiTotalDelta, 0, len(cognomMunicipiTotal)),
+		CognomNivellAny:     make([]db.CognomFreqNivellAnyDelta, 0, len(cognomNivellAny)),
+		CognomNivellTotal:   make([]db.CognomFreqNivellTotalDelta, 0, len(cognomNivellTotal)),
+	}
+
 	for agg, delta := range nomMunicipiAny {
 		if delta == 0 {
 			continue
 		}
-		if err := a.DB.UpsertNomFreqMunicipiAny(nomIDs[agg.Key], agg.MunicipiID, agg.AnyDoc, delta); err != nil {
-			return err
-		}
+		deltas.NomMunicipiAny = append(deltas.NomMunicipiAny, db.NomFreqMunicipiAnyDelta{NomID: nomIDs[agg.Key], MunicipiID: agg.MunicipiID, AnyDoc: agg.AnyDoc, Delta: delta})
 	}
 	for agg, delta := range nomMunicipiTotal {
 		if delta == 0 {
 			continue
 		}
-		if err := a.DB.UpsertNomFreqMunicipiTotal(nomIDs[agg.Key], agg.MunicipiID, delta); err != nil {
-			return err
-		}
+		deltas.NomMunicipiTotal = append(deltas.NomMunicipiTotal, db.NomFreqMunicipiTotalDelta{NomID: nomIDs[agg.Key], MunicipiID: agg.MunicipiID, Delta: delta})
 	}
 	for agg, delta := range nomNivellAny {
 		if delta == 0 {
 			continue
 		}
-		if err := a.DB.UpsertNomFreqNivellAny(nomIDs[agg.Key], agg.NivellID, agg.AnyDoc, delta); err != nil {
-			return err
-		}
+		deltas.NomNivellAny = append(deltas.NomNivellAny, db.NomFreqNivellAnyDelta{NomID: nomIDs[agg.Key], NivellID: agg.NivellID, AnyDoc: agg.AnyDoc, Delta: delta})
 	}
 	for agg, delta := range nomNivellTotal {
 		if delta == 0 {
 			continue
 		}
-		if err := a.DB.UpsertNomFreqNivellTotal(nomIDs[agg.Key], agg.NivellID, delta); err != nil {
-			return err
-		}
+		deltas.NomNivellTotal = append(deltas.NomNivellTotal, db.NomFreqNivellTotalDelta{NomID: nomIDs[agg.Key], NivellID: agg.NivellID, Delta: delta})
 	}
 
 	for agg, delta := range cognomMunicipiAny {
 		if delta == 0 {
 			continue
 		}
-		if err := a.DB.ApplyCognomFreqMunicipiAnyDelta(cognomIDs[agg.Key], agg.MunicipiID, agg.AnyDoc, delta); err != nil {
-			return err
-		}
+		deltas.CognomMunicipiAny = append(deltas.CognomMunicipiAny, db.CognomFreqMunicipiAnyDelta{CognomID: cognomIDs[agg.Key], MunicipiID: agg.MunicipiID, AnyDoc: agg.AnyDoc, Delta: delta})
 	}
 	for agg, delta := range cognomMunicipiTotal {
 		if delta == 0 {
 			continue
 		}
-		if err := a.DB.UpsertCognomFreqMunicipiTotal(cognomIDs[agg.Key], agg.MunicipiID, delta); err != nil {
-			return err
-		}
+		deltas.CognomMunicipiTotal = append(deltas.CognomMunicipiTotal, db.CognomFreqMunicipiTotalDelta{CognomID: cognomIDs[agg.Key], MunicipiID: agg.MunicipiID, Delta: delta})
 	}
 	for agg, delta := range cognomNivellAny {
 		if delta == 0 {
 			continue
 		}
-		if err := a.DB.ApplyCognomFreqNivellAnyDelta(cognomIDs[agg.Key], agg.NivellID, agg.AnyDoc, delta); err != nil {
-			return err
-		}
+		deltas.CognomNivellAny = append(deltas.CognomNivellAny, db.CognomFreqNivellAnyDelta{CognomID: cognomIDs[agg.Key], NivellID: agg.NivellID, AnyDoc: agg.AnyDoc, Delta: delta})
 	}
 	for agg, delta := range cognomNivellTotal {
 		if delta == 0 {
 			continue
 		}
-		if err := a.DB.UpsertCognomFreqNivellTotal(cognomIDs[agg.Key], agg.NivellID, delta); err != nil {
+		deltas.CognomNivellTotal = append(deltas.CognomNivellTotal, db.CognomFreqNivellTotalDelta{CognomID: cognomIDs[agg.Key], NivellID: agg.NivellID, Delta: delta})
+	}
+
+	if store, ok := a.DB.(bulkNomCognomStatsStore); ok {
+		if IsDebugEnabled() {
+			Debugf("moderacio bulk registre stats aggregate nom_keys=%d cognom_keys=%d nom_mun_any=%d nom_mun_total=%d nom_nivell_any=%d nom_nivell_total=%d cognom_mun_any=%d cognom_mun_total=%d cognom_nivell_any=%d cognom_nivell_total=%d apply=bulk", len(nomIDs), len(cognomIDs), len(deltas.NomMunicipiAny), len(deltas.NomMunicipiTotal), len(deltas.NomNivellAny), len(deltas.NomNivellTotal), len(deltas.CognomMunicipiAny), len(deltas.CognomMunicipiTotal), len(deltas.CognomNivellAny), len(deltas.CognomNivellTotal))
+		}
+		return store.BulkApplyNomCognomStatsDeltas(deltas)
+	}
+
+	if IsDebugEnabled() {
+		Debugf("moderacio bulk registre stats aggregate nom_keys=%d cognom_keys=%d nom_mun_any=%d nom_mun_total=%d nom_nivell_any=%d nom_nivell_total=%d cognom_mun_any=%d cognom_mun_total=%d cognom_nivell_any=%d cognom_nivell_total=%d apply=sequential_fallback", len(nomIDs), len(cognomIDs), len(deltas.NomMunicipiAny), len(deltas.NomMunicipiTotal), len(deltas.NomNivellAny), len(deltas.NomNivellTotal), len(deltas.CognomMunicipiAny), len(deltas.CognomMunicipiTotal), len(deltas.CognomNivellAny), len(deltas.CognomNivellTotal))
+	}
+	for _, row := range deltas.NomMunicipiAny {
+		if err := a.DB.UpsertNomFreqMunicipiAny(row.NomID, row.MunicipiID, row.AnyDoc, row.Delta); err != nil {
+			return err
+		}
+	}
+	for _, row := range deltas.NomMunicipiTotal {
+		if err := a.DB.UpsertNomFreqMunicipiTotal(row.NomID, row.MunicipiID, row.Delta); err != nil {
+			return err
+		}
+	}
+	for _, row := range deltas.NomNivellAny {
+		if err := a.DB.UpsertNomFreqNivellAny(row.NomID, row.NivellID, row.AnyDoc, row.Delta); err != nil {
+			return err
+		}
+	}
+	for _, row := range deltas.NomNivellTotal {
+		if err := a.DB.UpsertNomFreqNivellTotal(row.NomID, row.NivellID, row.Delta); err != nil {
+			return err
+		}
+	}
+	for _, row := range deltas.CognomMunicipiAny {
+		if err := a.DB.ApplyCognomFreqMunicipiAnyDelta(row.CognomID, row.MunicipiID, row.AnyDoc, row.Delta); err != nil {
+			return err
+		}
+	}
+	for _, row := range deltas.CognomMunicipiTotal {
+		if err := a.DB.UpsertCognomFreqMunicipiTotal(row.CognomID, row.MunicipiID, row.Delta); err != nil {
+			return err
+		}
+	}
+	for _, row := range deltas.CognomNivellAny {
+		if err := a.DB.ApplyCognomFreqNivellAnyDelta(row.CognomID, row.NivellID, row.AnyDoc, row.Delta); err != nil {
+			return err
+		}
+	}
+	for _, row := range deltas.CognomNivellTotal {
+		if err := a.DB.UpsertCognomFreqNivellTotal(row.CognomID, row.NivellID, row.Delta); err != nil {
 			return err
 		}
 	}

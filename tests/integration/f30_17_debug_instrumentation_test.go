@@ -124,11 +124,17 @@ func TestModeracioBulkRegistreDebugInstrumentationRespectsLogLevelF3017(t *testi
 				if !strings.Contains(logs, "moderacio bulk registre chunk=") {
 					t.Fatalf("amb debug esperava log de chunk bulk registre, però no hi és: %s", logs)
 				}
+				if !strings.Contains(logs, "moderacio bulk registre stats aggregate") || !strings.Contains(logs, "apply=bulk") {
+					t.Fatalf("amb debug esperava log agregat de stats bulk registre, però no hi és: %s", logs)
+				}
+				if !strings.Contains(logs, "moderacio bulk registre search aggregate") {
+					t.Fatalf("amb debug esperava log agregat de search bulk registre, però no hi és: %s", logs)
+				}
 				if !strings.Contains(logs, "moderacio bulk worker history") {
 					t.Fatalf("amb debug esperava log d'historial bulk, però no hi és: %s", logs)
 				}
 			} else {
-				if strings.Contains(logs, "moderacio bulk worker dispatch") || strings.Contains(logs, "[ModeracioBulkWorker] chunk=registre") || strings.Contains(logs, "moderacio bulk registre chunk plan=") || strings.Contains(logs, "moderacio bulk registre chunk=") || strings.Contains(logs, "moderacio bulk worker history") {
+				if strings.Contains(logs, "moderacio bulk worker dispatch") || strings.Contains(logs, "[ModeracioBulkWorker] chunk=registre") || strings.Contains(logs, "moderacio bulk registre chunk plan=") || strings.Contains(logs, "moderacio bulk registre chunk=") || strings.Contains(logs, "moderacio bulk registre stats aggregate") || strings.Contains(logs, "moderacio bulk registre search aggregate") || strings.Contains(logs, "moderacio bulk worker history") {
 					t.Fatalf("amb info no haurien d'aparèixer logs detallats bulk registre: %s", logs)
 				}
 			}
