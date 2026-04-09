@@ -31,6 +31,7 @@ func TestApplyModeracioBulkRegistreDerivedSideEffectsDeletesSearchDocsF311(t *te
 		"rebutjat",
 		map[moderacioBulkRegistreDemoKey][]int{},
 		map[int][]int{},
+		nil,
 	)
 
 	doc, err := database.GetSearchDoc("registre_raw", registreID)

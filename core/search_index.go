@@ -349,6 +349,22 @@ func (a *App) buildSearchDocFromRegistre(reg *db.TranscripcioRaw, persones []db.
 }
 
 func (a *App) buildSearchDocFromRegistreWithCognomCache(reg *db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw, llibre *db.Llibre, arxiuID int, cognomCanonCache map[string]string) *db.SearchDoc {
+	return a.buildSearchDocFromRegistreWithCognomCacheStats(reg, persones, llibre, arxiuID, cognomCanonCache, nil)
+}
+
+func (a *App) buildSearchDocFromRegistreWithCognomCacheStats(reg *db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw, llibre *db.Llibre, arxiuID int, cognomCanonCache map[string]string, cognomStats *searchCognomCacheStats) *db.SearchDoc {
+	return a.buildSearchDocFromRegistreWithSearchContext(reg, persones, llibre, arxiuID, nil, cognomCanonCache, cognomStats)
+}
+
+func (a *App) buildSearchDocFromRegistreWithBulkSearchContext(reg *db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw, llibre *db.Llibre, arxiuID int, searchCtx *moderacioBulkRegistreSearchContext, cognomStats *searchCognomCacheStats) *db.SearchDoc {
+	cognomCanonCache := map[string]string(nil)
+	if searchCtx != nil {
+		cognomCanonCache = searchCtx.CognomCanonCache
+	}
+	return a.buildSearchDocFromRegistreWithSearchContext(reg, persones, llibre, arxiuID, searchCtx, cognomCanonCache, cognomStats)
+}
+
+func (a *App) buildSearchDocFromRegistreWithSearchContext(reg *db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw, llibre *db.Llibre, arxiuID int, searchCtx *moderacioBulkRegistreSearchContext, cognomCanonCache map[string]string, cognomStats *searchCognomCacheStats) *db.SearchDoc {
 	var noms []string
 	var cognoms []string
 	for _, p := range persones {
@@ -362,11 +378,11 @@ func (a *App) buildSearchDocFromRegistreWithCognomCache(reg *db.TranscripcioRaw,
 			cognoms = append(cognoms, p.Cognom2)
 		}
 	}
-	nomNorm := normalizeSearchText(strings.Join(noms, " "))
-	cognomsNorm := normalizeSearchText(strings.Join(cognoms, " "))
+	nomNorm := normalizeSearchTextCached(searchCtx, strings.Join(noms, " "))
+	cognomsNorm := normalizeSearchTextCached(searchCtx, strings.Join(cognoms, " "))
 	fullNorm := strings.TrimSpace(strings.Join([]string{nomNorm, cognomsNorm}, " "))
-	personTokens := normalizeTokens(append(noms, cognoms...)...)
-	cognomTokens := normalizeTokens(cognoms...)
+	personTokens := normalizeTokensCached(searchCtx, append(noms, cognoms...)...)
+	cognomTokens := normalizeTokensCached(searchCtx, cognoms...)
 	doc := &db.SearchDoc{
 		EntityType:        "registre_raw",
 		EntityID:          reg.ID,
@@ -376,9 +392,9 @@ func (a *App) buildSearchDocFromRegistreWithCognomCache(reg *db.TranscripcioRaw,
 		PersonFullNorm:    fullNorm,
 		PersonTokensNorm:  strings.Join(personTokens, " "),
 		CognomsTokensNorm: strings.Join(cognomTokens, " "),
-		PersonPhonetic:    strings.Join(phoneticTokens(personTokens), " "),
-		CognomsPhonetic:   strings.Join(phoneticTokens(cognomTokens), " "),
-		CognomsCanon:      strings.Join(a.canonicalizeCognomsCached(cognoms, cognomCanonCache), " "),
+		PersonPhonetic:    strings.Join(phoneticTokensCached(searchCtx, personTokens), " "),
+		CognomsPhonetic:   strings.Join(phoneticTokensCached(searchCtx, cognomTokens), " "),
+		CognomsCanon:      strings.Join(a.canonicalizeCognomsCachedWithStats(cognoms, cognomCanonCache, cognomStats), " "),
 	}
 	if llibre != nil {
 		doc.MunicipiID = sqlNullIntFromInt(llibre.MunicipiID)
@@ -397,11 +413,73 @@ func (a *App) buildSearchDocFromRegistreWithCognomCache(reg *db.TranscripcioRaw,
 	return doc
 }
 
+func normalizeSearchTextCached(searchCtx *moderacioBulkRegistreSearchContext, val string) string {
+	if searchCtx == nil {
+		return normalizeSearchText(val)
+	}
+	if cached, ok := searchCtx.NormalizeCache[val]; ok {
+		return cached
+	}
+	normalized := normalizeSearchText(val)
+	searchCtx.NormalizeCache[val] = normalized
+	return normalized
+}
+
+func normalizeTokensCached(searchCtx *moderacioBulkRegistreSearchContext, parts ...string) []string {
+	seen := map[string]struct{}{}
+	out := []string{}
+	for _, part := range parts {
+		for _, token := range strings.Fields(normalizeSearchTextCached(searchCtx, part)) {
+			if _, ok := seen[token]; ok {
+				continue
+			}
+			seen[token] = struct{}{}
+			out = append(out, token)
+		}
+	}
+	return out
+}
+
+func phoneticTokensCached(searchCtx *moderacioBulkRegistreSearchContext, tokens []string) []string {
+	seen := map[string]struct{}{}
+	out := []string{}
+	for _, token := range tokens {
+		code := ""
+		if searchCtx != nil {
+			code = searchCtx.PhoneticCache[token]
+		}
+		if code == "" {
+			code = soundex(token)
+			if searchCtx != nil {
+				searchCtx.PhoneticCache[token] = code
+			}
+		}
+		if code == "" {
+			continue
+		}
+		if _, ok := seen[code]; ok {
+			continue
+		}
+		seen[code] = struct{}{}
+		out = append(out, code)
+	}
+	return out
+}
+
 func (a *App) canonicalizeCognoms(raw []string) []string {
 	return a.canonicalizeCognomsCached(raw, nil)
 }
 
 func (a *App) canonicalizeCognomsCached(raw []string, cache map[string]string) []string {
+	return a.canonicalizeCognomsCachedWithStats(raw, cache, nil)
+}
+
+type searchCognomCacheStats struct {
+	Hits   int
+	Misses int
+}
+
+func (a *App) canonicalizeCognomsCachedWithStats(raw []string, cache map[string]string, stats *searchCognomCacheStats) []string {
 	out := make([]string, 0, len(raw))
 	seen := map[string]struct{}{}
 	for _, val := range raw {
@@ -415,6 +493,9 @@ func (a *App) canonicalizeCognomsCached(raw []string, cache map[string]string) [
 		}
 		canon, ok := cache[key]
 		if !ok {
+			if stats != nil {
+				stats.Misses++
+			}
 			if id, err := a.DB.FindCognomIDByKey(key); err == nil && id > 0 {
 				if canonID, _, err := a.resolveCognomCanonicalID(id); err == nil && canonID > 0 {
 					id = canonID
@@ -429,6 +510,8 @@ func (a *App) canonicalizeCognomsCached(raw []string, cache map[string]string) [
 			if cache != nil {
 				cache[key] = canon
 			}
+		} else if stats != nil {
+			stats.Hits++
 		}
 		if canon == "" {
 			continue

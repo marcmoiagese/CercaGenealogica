@@ -101,6 +101,16 @@ type moderacioBulkRegistreChunkMetrics struct {
 	DerivedDemografiaDur time.Duration
 	DerivedStatsDur      time.Duration
 	DerivedSearchDur     time.Duration
+	SearchWarmupDur      time.Duration
+	SearchPrepareDur     time.Duration
+	SearchBuildDur       time.Duration
+	SearchUpsertDur      time.Duration
+	SearchDeleteDur      time.Duration
+	SearchDocsUpserts    int
+	SearchDocsDeletes    int
+	SearchCacheHits      int
+	SearchCacheMisses    int
+	SearchCacheSize      int
 	ActivityDur          time.Duration
 	AuditDur             time.Duration
 	PostprocDur          time.Duration
@@ -128,9 +138,32 @@ type moderacioBulkRegistreDemoKey struct {
 }
 
 type moderacioBulkRegistreDerivedMetrics struct {
-	DemografiaDur time.Duration
-	StatsDur      time.Duration
-	SearchDur     time.Duration
+	DemografiaDur     time.Duration
+	StatsDur          time.Duration
+	SearchDur         time.Duration
+	SearchPrepareDur  time.Duration
+	SearchBuildDur    time.Duration
+	SearchUpsertDur   time.Duration
+	SearchDeleteDur   time.Duration
+	SearchDocsUpserts int
+	SearchDocsDeletes int
+	SearchCacheHits   int
+	SearchCacheMisses int
+	SearchCacheSize   int
+}
+
+type moderacioBulkRegistreSearchContext struct {
+	CognomCanonCache map[string]string
+	NormalizeCache   map[string]string
+	PhoneticCache    map[string]string
+}
+
+func newModeracioBulkRegistreSearchContext() *moderacioBulkRegistreSearchContext {
+	return &moderacioBulkRegistreSearchContext{
+		CognomCanonCache: map[string]string{},
+		NormalizeCache:   map[string]string{},
+		PhoneticCache:    map[string]string{},
+	}
 }
 
 type moderacioTypeSpec struct {
@@ -3571,6 +3604,7 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 	}
 	const chunkSize = 500
 	nivellCache := map[int][]int{}
+	searchCtx := newModeracioBulkRegistreSearchContext()
 	for start := 0; start < len(ids); start += chunkSize {
 		end := start + chunkSize
 		if end > len(ids) {
@@ -3722,13 +3756,25 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 			result.Updated++
 			chunkUpdated++
 		}
+		searchWarmupStart := time.Now()
+		warmupStats := a.warmModeracioBulkRegistreSearchCache(states, successSet, estat, searchCtx)
+		chunkMetrics.SearchWarmupDur = time.Since(searchWarmupStart)
 		derivedStart := time.Now()
-		derivedMetrics := a.applyModeracioBulkRegistreDerivedSideEffects(states, successSet, estat, demoGroups, nivellCache)
+		derivedMetrics := a.applyModeracioBulkRegistreDerivedSideEffects(states, successSet, estat, demoGroups, nivellCache, searchCtx)
 		chunkMetrics.DerivedDemografiaDur = derivedMetrics.DemografiaDur
 		chunkMetrics.DerivedStatsDur = derivedMetrics.StatsDur
 		chunkMetrics.DerivedSearchDur = derivedMetrics.SearchDur
+		chunkMetrics.SearchPrepareDur = derivedMetrics.SearchPrepareDur
+		chunkMetrics.SearchBuildDur = derivedMetrics.SearchBuildDur
+		chunkMetrics.SearchUpsertDur = derivedMetrics.SearchUpsertDur
+		chunkMetrics.SearchDeleteDur = derivedMetrics.SearchDeleteDur
+		chunkMetrics.SearchDocsUpserts = derivedMetrics.SearchDocsUpserts
+		chunkMetrics.SearchDocsDeletes = derivedMetrics.SearchDocsDeletes
+		chunkMetrics.SearchCacheHits = derivedMetrics.SearchCacheHits + warmupStats.Hits
+		chunkMetrics.SearchCacheMisses = derivedMetrics.SearchCacheMisses + warmupStats.Misses
+		chunkMetrics.SearchCacheSize = derivedMetrics.SearchCacheSize
 		chunkMetrics.DerivedDur = time.Since(derivedStart)
-		chunkMetrics.PostprocDur = chunkMetrics.DerivedDur
+		chunkMetrics.PostprocDur = chunkMetrics.SearchWarmupDur + chunkMetrics.DerivedDur
 		chunkMetrics.UpdateDur = chunkUpdateDur
 		chunkMetrics.Updated = chunkUpdated
 		chunkMetrics.Errors = len(result.Errors) - chunkErrorStart
@@ -3737,7 +3783,7 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 			chunkMetrics.Throughput = float64(len(chunkIDs)) / chunkMetrics.TotalDur.Seconds()
 		}
 		if IsDebugEnabled() {
-			Debugf("moderacio bulk registre chunk=%d size=%d loaded=%d updated=%d errors=%d load_dur=%s update_dur=%s derived_dur=%s derived_demografia_dur=%s derived_stats_dur=%s derived_search_dur=%s activity_dur=%s audit_dur=%s postproc_dur=%s total_dur=%s throughput=%.1f/s deferred_activity=%t", chunkMetrics.ChunkIndex, chunkMetrics.ChunkSize, chunkMetrics.LoadedRows, chunkMetrics.Updated, chunkMetrics.Errors, chunkMetrics.LoadDur, chunkMetrics.UpdateDur, chunkMetrics.DerivedDur, chunkMetrics.DerivedDemografiaDur, chunkMetrics.DerivedStatsDur, chunkMetrics.DerivedSearchDur, chunkMetrics.ActivityDur, chunkMetrics.AuditDur, chunkMetrics.PostprocDur, chunkMetrics.TotalDur, chunkMetrics.Throughput, chunkMetrics.DeferredActivity)
+			Debugf("moderacio bulk registre chunk=%d size=%d loaded=%d updated=%d errors=%d load_dur=%s update_dur=%s derived_dur=%s derived_demografia_dur=%s derived_stats_dur=%s derived_search_dur=%s search_job_cache_warmup_dur=%s derived_search_prepare_dur=%s derived_search_build_dur=%s derived_search_upsert_dur=%s derived_search_delete_dur=%s search_docs_upserts=%d search_docs_deletes=%d search_cache_hits=%d search_cache_misses=%d search_cache_size=%d activity_dur=%s audit_dur=%s postproc_dur=%s total_dur=%s throughput=%.1f/s deferred_activity=%t", chunkMetrics.ChunkIndex, chunkMetrics.ChunkSize, chunkMetrics.LoadedRows, chunkMetrics.Updated, chunkMetrics.Errors, chunkMetrics.LoadDur, chunkMetrics.UpdateDur, chunkMetrics.DerivedDur, chunkMetrics.DerivedDemografiaDur, chunkMetrics.DerivedStatsDur, chunkMetrics.DerivedSearchDur, chunkMetrics.SearchWarmupDur, chunkMetrics.SearchPrepareDur, chunkMetrics.SearchBuildDur, chunkMetrics.SearchUpsertDur, chunkMetrics.SearchDeleteDur, chunkMetrics.SearchDocsUpserts, chunkMetrics.SearchDocsDeletes, chunkMetrics.SearchCacheHits, chunkMetrics.SearchCacheMisses, chunkMetrics.SearchCacheSize, chunkMetrics.ActivityDur, chunkMetrics.AuditDur, chunkMetrics.PostprocDur, chunkMetrics.TotalDur, chunkMetrics.Throughput, chunkMetrics.DeferredActivity)
 		}
 		if onChunk != nil {
 			onChunk(chunkMetrics)
@@ -3746,7 +3792,43 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 	return result
 }
 
-func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBulkRegistreState, successSet map[int]struct{}, estat string, demoGroups map[moderacioBulkRegistreDemoKey][]int, nivellCache map[int][]int) moderacioBulkRegistreDerivedMetrics {
+func (a *App) warmModeracioBulkRegistreSearchCache(states []moderacioBulkRegistreState, successSet map[int]struct{}, estat string, searchCtx *moderacioBulkRegistreSearchContext) searchCognomCacheStats {
+	stats := searchCognomCacheStats{}
+	if estat != "publicat" || searchCtx == nil || len(states) == 0 || len(successSet) == 0 {
+		return stats
+	}
+	for _, state := range states {
+		if _, ok := successSet[state.Reg.ID]; !ok {
+			continue
+		}
+		noms := make([]string, 0, len(state.Persones))
+		cognoms := make([]string, 0, len(state.Persones)*2)
+		for _, p := range state.Persones {
+			if strings.TrimSpace(p.Nom) != "" {
+				noms = append(noms, p.Nom)
+			}
+			if strings.TrimSpace(p.Cognom1) != "" {
+				cognoms = append(cognoms, p.Cognom1)
+			}
+			if strings.TrimSpace(p.Cognom2) != "" {
+				cognoms = append(cognoms, p.Cognom2)
+			}
+		}
+		nomNorm := normalizeSearchTextCached(searchCtx, strings.Join(noms, " "))
+		cognomsNorm := normalizeSearchTextCached(searchCtx, strings.Join(cognoms, " "))
+		_ = strings.TrimSpace(strings.Join([]string{nomNorm, cognomsNorm}, " "))
+		personTokens := normalizeTokensCached(searchCtx, append(noms, cognoms...)...)
+		cognomTokens := normalizeTokensCached(searchCtx, cognoms...)
+		_ = phoneticTokensCached(searchCtx, personTokens)
+		_ = phoneticTokensCached(searchCtx, cognomTokens)
+		if len(cognoms) > 0 {
+			_ = a.canonicalizeCognomsCachedWithStats(cognoms, searchCtx.CognomCanonCache, &stats)
+		}
+	}
+	return stats
+}
+
+func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBulkRegistreState, successSet map[int]struct{}, estat string, demoGroups map[moderacioBulkRegistreDemoKey][]int, nivellCache map[int][]int, searchCtx *moderacioBulkRegistreSearchContext) moderacioBulkRegistreDerivedMetrics {
 	metrics := moderacioBulkRegistreDerivedMetrics{}
 	if len(states) == 0 || len(successSet) == 0 {
 		return metrics
@@ -3808,28 +3890,44 @@ func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBul
 	metrics.StatsDur = time.Since(statsStart)
 
 	searchStart := time.Now()
+	searchPrepareStart := time.Now()
 	searchDocs := make([]db.SearchDoc, 0, len(successByID))
 	searchDeletes := make([]int, 0, len(successByID))
-	cognomCanonCache := map[string]string{}
+	if searchCtx == nil {
+		searchCtx = newModeracioBulkRegistreSearchContext()
+	}
+	metrics.SearchPrepareDur = time.Since(searchPrepareStart)
+	buildStart := time.Now()
+	cognomStats := searchCognomCacheStats{}
 	for _, state := range successByID {
 		oldStatus := state.Reg.ModeracioEstat
 		state.Reg.ModeracioEstat = estat
 		if estat == "publicat" {
-			if doc := a.buildSearchDocFromRegistreWithCognomCache(&state.Reg, state.Persones, state.Llibre, state.ArxiuID, cognomCanonCache); doc != nil {
+			if doc := a.buildSearchDocFromRegistreWithBulkSearchContext(&state.Reg, state.Persones, state.Llibre, state.ArxiuID, searchCtx, &cognomStats); doc != nil {
 				searchDocs = append(searchDocs, *doc)
 			}
 		} else if oldStatus == "publicat" {
 			searchDeletes = append(searchDeletes, state.Reg.ID)
 		}
 	}
+	metrics.SearchBuildDur = time.Since(buildStart)
+	upsertStart := time.Now()
 	if err := a.bulkUpsertSearchDocs(searchDocs); err != nil {
 		Errorf("SearchIndex bulk upsert registre: %v", err)
 	}
+	metrics.SearchUpsertDur = time.Since(upsertStart)
+	deleteStart := time.Now()
 	if err := a.bulkDeleteSearchDocs("registre_raw", searchDeletes); err != nil {
 		Errorf("SearchIndex bulk delete registre: %v", err)
 	}
+	metrics.SearchDeleteDur = time.Since(deleteStart)
+	metrics.SearchDocsUpserts = len(searchDocs)
+	metrics.SearchDocsDeletes = len(searchDeletes)
+	metrics.SearchCacheHits = cognomStats.Hits
+	metrics.SearchCacheMisses = cognomStats.Misses
+	metrics.SearchCacheSize = len(searchCtx.CognomCanonCache)
 	if IsDebugEnabled() {
-		Debugf("moderacio bulk registre search aggregate docs=%d deletes=%d cognom_canon_cache=%d apply=bulk", len(searchDocs), len(searchDeletes), len(cognomCanonCache))
+		Debugf("moderacio bulk registre search aggregate docs=%d deletes=%d cognom_canon_cache=%d prepare_dur=%s build_dur=%s upsert_dur=%s delete_dur=%s cache_hits=%d cache_misses=%d apply=bulk", len(searchDocs), len(searchDeletes), len(searchCtx.CognomCanonCache), metrics.SearchPrepareDur, metrics.SearchBuildDur, metrics.SearchUpsertDur, metrics.SearchDeleteDur, metrics.SearchCacheHits, metrics.SearchCacheMisses)
 	}
 	metrics.SearchDur = time.Since(searchStart)
 	return metrics
