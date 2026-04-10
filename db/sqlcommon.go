@@ -11301,12 +11301,101 @@ func (h sqlHelper) bulkUpsertSearchDocs(docs []SearchDoc) error {
 	for _, entityKey := range orderedKeys {
 		filtered = append(filtered, latestByEntity[entityKey])
 	}
-	for start := 0; start < len(filtered); start += searchDocsBatchSize {
-		end := start + searchDocsBatchSize
-		if end > len(filtered) {
-			end = len(filtered)
+	sort.Slice(filtered, func(i, j int) bool {
+		if filtered[i].EntityType == filtered[j].EntityType {
+			return filtered[i].EntityID < filtered[j].EntityID
 		}
-		batch := filtered[start:end]
+		return filtered[i].EntityType < filtered[j].EntityType
+	})
+	existingKeys, err := h.existingSearchDocEntityKeys(filtered)
+	if err != nil {
+		return h.bulkUpsertSearchDocsConflict(filtered, columns, conflictUpdate, searchDocsBatchSize)
+	}
+	insertDocs := make([]SearchDoc, 0, len(filtered))
+	upsertDocs := make([]SearchDoc, 0)
+	for _, doc := range filtered {
+		entityKey := searchDocEntityKey(doc.EntityType, doc.EntityID)
+		if _, ok := existingKeys[entityKey]; ok {
+			upsertDocs = append(upsertDocs, doc)
+		} else {
+			insertDocs = append(insertDocs, doc)
+		}
+	}
+	logDebugf("search_docs bulk persist docs=%d inserts=%d upserts=%d style=%s", len(filtered), len(insertDocs), len(upsertDocs), h.style)
+	if err := h.bulkInsertSearchDocs(insertDocs, columns, searchDocsBatchSize); err != nil {
+		logDebugf("search_docs bulk insert fallback docs=%d style=%s err=%v", len(insertDocs), h.style, err)
+		if fallbackErr := h.bulkUpsertSearchDocsConflict(insertDocs, columns, conflictUpdate, searchDocsBatchSize); fallbackErr != nil {
+			return fallbackErr
+		}
+	}
+	return h.bulkUpsertSearchDocsConflict(upsertDocs, columns, conflictUpdate, searchDocsBatchSize)
+}
+
+func searchDocEntityKey(entityType string, entityID int) string {
+	return entityType + "\x00" + strconv.Itoa(entityID)
+}
+
+func (h sqlHelper) existingSearchDocEntityKeys(docs []SearchDoc) (map[string]struct{}, error) {
+	out := make(map[string]struct{})
+	if len(docs) == 0 {
+		return out, nil
+	}
+	idsByType := map[string][]int{}
+	for _, doc := range docs {
+		if strings.TrimSpace(doc.EntityType) == "" || doc.EntityID <= 0 {
+			continue
+		}
+		idsByType[doc.EntityType] = append(idsByType[doc.EntityType], doc.EntityID)
+	}
+	const lookupBatchSize = 1000
+	for entityType, ids := range idsByType {
+		ids = normalizePositiveUniqueIDs(ids)
+		for start := 0; start < len(ids); start += lookupBatchSize {
+			end := start + lookupBatchSize
+			if end > len(ids) {
+				end = len(ids)
+			}
+			batch := ids[start:end]
+			query := `SELECT entity_id FROM search_docs WHERE entity_type = ? AND entity_id IN (` + strings.TrimRight(strings.Repeat("?,", len(batch)), ",") + `)`
+			query = formatPlaceholders(h.style, query)
+			args := make([]interface{}, 0, len(batch)+1)
+			args = append(args, entityType)
+			for _, id := range batch {
+				args = append(args, id)
+			}
+			rows, err := h.db.Query(query, args...)
+			if err != nil {
+				return nil, err
+			}
+			for rows.Next() {
+				var id int
+				if err := rows.Scan(&id); err != nil {
+					rows.Close()
+					return nil, err
+				}
+				out[searchDocEntityKey(entityType, id)] = struct{}{}
+			}
+			if err := rows.Err(); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			rows.Close()
+		}
+	}
+	return out, nil
+}
+
+func (h sqlHelper) bulkInsertSearchDocs(docs []SearchDoc, columns []string, batchSize int) error {
+	if len(docs) == 0 {
+		return nil
+	}
+	rowPlaceholder := "(" + strings.TrimRight(strings.Repeat("?,", len(columns)), ",") + ")"
+	for start := 0; start < len(docs); start += batchSize {
+		end := start + batchSize
+		if end > len(docs) {
+			end = len(docs)
+		}
+		batch := docs[start:end]
 		values := make([]string, 0, len(batch))
 		args := make([]interface{}, 0, len(batch)*len(columns))
 		for _, doc := range batch {
@@ -11314,7 +11403,45 @@ func (h sqlHelper) bulkUpsertSearchDocs(docs []SearchDoc) error {
 			if doc.Published {
 				pubVal = 1
 			}
-			values = append(values, "("+strings.TrimRight(strings.Repeat("?,", len(columns)), ",")+")")
+			values = append(values, rowPlaceholder)
+			args = append(args,
+				doc.EntityType, doc.EntityID, pubVal, doc.MunicipiID, doc.ArxiuID, doc.LlibreID, doc.EntitatEclesiasticaID,
+				doc.DataActe, doc.AnyActe, doc.PersonNomNorm, doc.PersonCognomsNorm, doc.PersonFullNorm, doc.PersonTokensNorm,
+				doc.CognomsTokensNorm, doc.PersonPhonetic, doc.CognomsPhonetic, doc.CognomsCanon,
+			)
+		}
+		query := fmt.Sprintf(
+			`INSERT INTO search_docs (%s) VALUES %s`,
+			strings.Join(columns, ", "),
+			strings.Join(values, ", "),
+		)
+		query = formatPlaceholders(h.style, query)
+		if _, err := h.db.Exec(query, args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) bulkUpsertSearchDocsConflict(docs []SearchDoc, columns []string, conflictUpdate []string, batchSize int) error {
+	if len(docs) == 0 {
+		return nil
+	}
+	rowPlaceholder := "(" + strings.TrimRight(strings.Repeat("?,", len(columns)), ",") + ")"
+	for start := 0; start < len(docs); start += batchSize {
+		end := start + batchSize
+		if end > len(docs) {
+			end = len(docs)
+		}
+		batch := docs[start:end]
+		values := make([]string, 0, len(batch))
+		args := make([]interface{}, 0, len(batch)*len(columns))
+		for _, doc := range batch {
+			pubVal := 0
+			if doc.Published {
+				pubVal = 1
+			}
+			values = append(values, rowPlaceholder)
 			args = append(args,
 				doc.EntityType, doc.EntityID, pubVal, doc.MunicipiID, doc.ArxiuID, doc.LlibreID, doc.EntitatEclesiasticaID,
 				doc.DataActe, doc.AnyActe, doc.PersonNomNorm, doc.PersonCognomsNorm, doc.PersonFullNorm, doc.PersonTokensNorm,

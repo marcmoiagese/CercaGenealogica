@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,62 @@ import (
 	"github.com/marcmoiagese/CercaGenealogica/core"
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
+
+type searchDocFunctionalProjectionF314 struct {
+	Published             bool
+	MunicipiID            sql.NullInt64
+	ArxiuID               sql.NullInt64
+	LlibreID              sql.NullInt64
+	EntitatEclesiasticaID sql.NullInt64
+	DataActe              sql.NullString
+	AnyActe               sql.NullInt64
+	PersonNomNorm         string
+	PersonCognomsNorm     string
+	PersonFullNorm        string
+	PersonTokensNorm      string
+	CognomsTokensNorm     string
+	PersonPhonetic        string
+	CognomsPhonetic       string
+	CognomsCanon          string
+}
+
+func projectSearchDocFunctionalF314(doc *db.SearchDoc) searchDocFunctionalProjectionF314 {
+	if doc == nil {
+		return searchDocFunctionalProjectionF314{}
+	}
+	return searchDocFunctionalProjectionF314{
+		Published:             doc.Published,
+		MunicipiID:            doc.MunicipiID,
+		ArxiuID:               doc.ArxiuID,
+		LlibreID:              doc.LlibreID,
+		EntitatEclesiasticaID: doc.EntitatEclesiasticaID,
+		DataActe:              doc.DataActe,
+		AnyActe:               doc.AnyActe,
+		PersonNomNorm:         doc.PersonNomNorm,
+		PersonCognomsNorm:     doc.PersonCognomsNorm,
+		PersonFullNorm:        doc.PersonFullNorm,
+		PersonTokensNorm:      doc.PersonTokensNorm,
+		CognomsTokensNorm:     doc.CognomsTokensNorm,
+		PersonPhonetic:        doc.PersonPhonetic,
+		CognomsPhonetic:       doc.CognomsPhonetic,
+		CognomsCanon:          doc.CognomsCanon,
+	}
+}
+
+func createF314RegistreWithPeople(t *testing.T, database db.DB, llibreID, paginaID, userID int, status string) int {
+	t.Helper()
+	registreID := createDemografiaRegistre(t, database, llibreID, paginaID, userID, "baptisme", 1902, status)
+	people := []db.TranscripcioPersonaRaw{
+		{TranscripcioID: registreID, Rol: "batejat", Nom: "Àngela", Cognom1: "Pujol-Soler", Cognom2: "d'Oliva"},
+		{TranscripcioID: registreID, Rol: "pare", Nom: "Josep", Cognom1: "Pujol-Soler"},
+	}
+	for _, person := range people {
+		if _, err := database.CreateTranscripcioPersona(&person); err != nil {
+			t.Fatalf("CreateTranscripcioPersona ha fallat: %v", err)
+		}
+	}
+	return registreID
+}
 
 func submitAsyncBulkJobByTypeActionF311(t *testing.T, app interface {
 	AdminModeracioBulk(http.ResponseWriter, *http.Request)
@@ -141,4 +198,53 @@ func TestModeracioBulkAsyncRegistreAggregatesDerivedSideEffectsF311(t *testing.T
 			}
 		}
 	})
+}
+
+func TestModeracioBulkRegistreSearchDocsEquivalentToIndividualF314(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f31_4_search_docs_equiv.sqlite3")
+
+	admin, sessionID := createF7UserWithSession(t, database)
+	ensureAdminPolicyForUser(t, database, admin.ID)
+	bulkSession := &http.Cookie{Name: "cg_session", Value: sessionID, Path: "/"}
+
+	llibreID, paginaID := createF7LlibreWithPagina(t, database, admin.ID)
+	individualID := createF314RegistreWithPeople(t, database, llibreID, paginaID, admin.ID, "pendent")
+	bulkID := createF314RegistreWithPeople(t, database, llibreID, paginaID, admin.ID, "pendent")
+
+	moderateObject(t, app, sessionID, "registre", individualID, "aprovar")
+	individualDoc, err := database.GetSearchDoc("registre_raw", individualID)
+	if err != nil || individualDoc == nil {
+		t.Fatalf("search_doc individual no creat: %v", err)
+	}
+
+	jobID := submitAsyncBulkJobByTypeActionF311(t, app, bulkSession, "csrf_f31_4_equiv", "registre", "approve")
+	job := waitForAdminJobTerminal(t, database, jobID)
+	if job.Status != "done" {
+		t.Fatalf("job bulk esperat done, got status=%s phase=%s error=%s", job.Status, job.Phase, job.ErrorText)
+	}
+	bulkDoc, err := database.GetSearchDoc("registre_raw", bulkID)
+	if err != nil || bulkDoc == nil {
+		t.Fatalf("search_doc bulk no creat: %v", err)
+	}
+
+	individualProjection := projectSearchDocFunctionalF314(individualDoc)
+	bulkProjection := projectSearchDocFunctionalF314(bulkDoc)
+	if individualProjection != bulkProjection {
+		t.Fatalf("search_doc bulk difereix de l'individual:\nindividual=%+v\nbulk=%+v", individualProjection, bulkProjection)
+	}
+
+	moderateObject(t, app, sessionID, "registre", bulkID, "rebutjar")
+	if doc, err := database.GetSearchDoc("registre_raw", bulkID); err == nil && doc != nil {
+		t.Fatalf("search_doc bulk %d no s'ha eliminat en rebutjar-lo: %+v", bulkID, doc)
+	}
+
+	rejectedPendingID := createF314RegistreWithPeople(t, database, llibreID, paginaID, admin.ID, "pendent")
+	jobID = submitAsyncBulkJobByTypeActionF311(t, app, bulkSession, "csrf_f31_4_reject", "registre", "reject")
+	job = waitForAdminJobTerminal(t, database, jobID)
+	if job.Status != "done" {
+		t.Fatalf("job bulk reject esperat done, got status=%s phase=%s error=%s", job.Status, job.Phase, job.ErrorText)
+	}
+	if doc, err := database.GetSearchDoc("registre_raw", rejectedPendingID); err == nil && doc != nil {
+		t.Fatalf("bulk reject d'un pendent no hauria de crear search_doc: %+v", doc)
+	}
 }
