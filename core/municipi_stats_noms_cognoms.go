@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -27,6 +28,32 @@ type nomCognomBulkDelta struct {
 
 type bulkNomCognomStatsStore interface {
 	BulkApplyNomCognomStatsDeltas(deltas db.NomCognomStatsDeltas) error
+}
+
+type bulkNomCognomEntityStore interface {
+	BulkEnsureNoms(formsByKey map[string]string, notes string, createdBy *int) (map[string]int, error)
+	BulkEnsureCognoms(formsByKey map[string]string, origen, notes string, createdBy *int) (map[string]int, error)
+}
+
+type nomCognomBulkApplyMetrics struct {
+	Items                   int
+	NomKeys                 int
+	CognomKeys              int
+	DeltaRows               int
+	NomMunicipiAnyRows      int
+	NomMunicipiTotalRows    int
+	NomNivellAnyRows        int
+	NomNivellTotalRows      int
+	CognomMunicipiAnyRows   int
+	CognomMunicipiTotalRows int
+	CognomNivellAnyRows     int
+	CognomNivellTotalRows   int
+	AggregateDur            time.Duration
+	EnsureDur               time.Duration
+	BuildDeltasDur          time.Duration
+	ApplyDur                time.Duration
+	EnsureMode              string
+	ApplyMode               string
 }
 
 type bulkNomMunicipiAnyKey struct {
@@ -252,11 +279,13 @@ func (a *App) applyNomCognomDeltaWithNivells(municipiID int, contrib nomCognomCo
 	return nil
 }
 
-func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) error {
+func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) (nomCognomBulkApplyMetrics, error) {
+	metrics := nomCognomBulkApplyMetrics{Items: len(items)}
 	if len(items) == 0 {
-		return nil
+		return metrics, nil
 	}
 
+	aggregateStart := time.Now()
 	nomForms := map[string]string{}
 	cognomForms := map[string]string{}
 	nomMunicipiAny := map[bulkNomMunicipiAnyKey]int{}
@@ -312,43 +341,19 @@ func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) error {
 			}
 		}
 	}
+	metrics.AggregateDur = time.Since(aggregateStart)
 
-	nomIDs := make(map[string]int, len(nomForms))
-	nomKeys := make([]string, 0, len(nomForms))
-	for key := range nomForms {
-		nomKeys = append(nomKeys, key)
+	ensureStart := time.Now()
+	nomIDs, cognomIDs, ensureMode, err := a.ensureNomCognomBulkIDs(nomForms, cognomForms)
+	if err != nil {
+		return metrics, err
 	}
-	sort.Strings(nomKeys)
-	for _, key := range nomKeys {
-		form := strings.TrimSpace(nomForms[key])
-		if form == "" {
-			form = key
-		}
-		nomID, err := a.DB.UpsertNom(form, key, "stats_auto", nil)
-		if err != nil {
-			return err
-		}
-		nomIDs[key] = nomID
-	}
+	metrics.EnsureDur = time.Since(ensureStart)
+	metrics.EnsureMode = ensureMode
+	metrics.NomKeys = len(nomIDs)
+	metrics.CognomKeys = len(cognomIDs)
 
-	cognomIDs := make(map[string]int, len(cognomForms))
-	cognomKeys := make([]string, 0, len(cognomForms))
-	for key := range cognomForms {
-		cognomKeys = append(cognomKeys, key)
-	}
-	sort.Strings(cognomKeys)
-	for _, key := range cognomKeys {
-		form := strings.TrimSpace(cognomForms[key])
-		if form == "" {
-			form = key
-		}
-		cognomID, err := a.DB.UpsertCognom(form, key, "stats_auto", "stats_auto", nil)
-		if err != nil {
-			return err
-		}
-		cognomIDs[key] = cognomID
-	}
-
+	buildDeltasStart := time.Now()
 	deltas := db.NomCognomStatsDeltas{
 		NomMunicipiAny:      make([]db.NomFreqMunicipiAnyDelta, 0, len(nomMunicipiAny)),
 		NomMunicipiTotal:    make([]db.NomFreqMunicipiTotalDelta, 0, len(nomMunicipiTotal)),
@@ -409,59 +414,136 @@ func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) error {
 		}
 		deltas.CognomNivellTotal = append(deltas.CognomNivellTotal, db.CognomFreqNivellTotalDelta{CognomID: cognomIDs[agg.Key], NivellID: agg.NivellID, Delta: delta})
 	}
+	metrics.BuildDeltasDur = time.Since(buildDeltasStart)
+	metrics.NomMunicipiAnyRows = len(deltas.NomMunicipiAny)
+	metrics.NomMunicipiTotalRows = len(deltas.NomMunicipiTotal)
+	metrics.NomNivellAnyRows = len(deltas.NomNivellAny)
+	metrics.NomNivellTotalRows = len(deltas.NomNivellTotal)
+	metrics.CognomMunicipiAnyRows = len(deltas.CognomMunicipiAny)
+	metrics.CognomMunicipiTotalRows = len(deltas.CognomMunicipiTotal)
+	metrics.CognomNivellAnyRows = len(deltas.CognomNivellAny)
+	metrics.CognomNivellTotalRows = len(deltas.CognomNivellTotal)
+	metrics.DeltaRows = metrics.NomMunicipiAnyRows + metrics.NomMunicipiTotalRows + metrics.NomNivellAnyRows + metrics.NomNivellTotalRows + metrics.CognomMunicipiAnyRows + metrics.CognomMunicipiTotalRows + metrics.CognomNivellAnyRows + metrics.CognomNivellTotalRows
 
+	applyStart := time.Now()
 	if store, ok := a.DB.(bulkNomCognomStatsStore); ok {
+		err := store.BulkApplyNomCognomStatsDeltas(deltas)
+		metrics.ApplyDur = time.Since(applyStart)
+		metrics.ApplyMode = "bulk"
 		if IsDebugEnabled() {
-			Debugf("moderacio bulk registre stats aggregate nom_keys=%d cognom_keys=%d nom_mun_any=%d nom_mun_total=%d nom_nivell_any=%d nom_nivell_total=%d cognom_mun_any=%d cognom_mun_total=%d cognom_nivell_any=%d cognom_nivell_total=%d apply=bulk", len(nomIDs), len(cognomIDs), len(deltas.NomMunicipiAny), len(deltas.NomMunicipiTotal), len(deltas.NomNivellAny), len(deltas.NomNivellTotal), len(deltas.CognomMunicipiAny), len(deltas.CognomMunicipiTotal), len(deltas.CognomNivellAny), len(deltas.CognomNivellTotal))
+			Debugf("moderacio bulk registre stats aggregate items=%d nom_keys=%d cognom_keys=%d delta_rows=%d nom_mun_any=%d nom_mun_total=%d nom_nivell_any=%d nom_nivell_total=%d cognom_mun_any=%d cognom_mun_total=%d cognom_nivell_any=%d cognom_nivell_total=%d aggregate_dur=%s ensure_dur=%s build_deltas_dur=%s apply_dur=%s ensure=%s apply=bulk", metrics.Items, metrics.NomKeys, metrics.CognomKeys, metrics.DeltaRows, metrics.NomMunicipiAnyRows, metrics.NomMunicipiTotalRows, metrics.NomNivellAnyRows, metrics.NomNivellTotalRows, metrics.CognomMunicipiAnyRows, metrics.CognomMunicipiTotalRows, metrics.CognomNivellAnyRows, metrics.CognomNivellTotalRows, metrics.AggregateDur, metrics.EnsureDur, metrics.BuildDeltasDur, metrics.ApplyDur, metrics.EnsureMode)
 		}
-		return store.BulkApplyNomCognomStatsDeltas(deltas)
+		return metrics, err
 	}
 
+	metrics.ApplyMode = "sequential_fallback"
 	if IsDebugEnabled() {
-		Debugf("moderacio bulk registre stats aggregate nom_keys=%d cognom_keys=%d nom_mun_any=%d nom_mun_total=%d nom_nivell_any=%d nom_nivell_total=%d cognom_mun_any=%d cognom_mun_total=%d cognom_nivell_any=%d cognom_nivell_total=%d apply=sequential_fallback", len(nomIDs), len(cognomIDs), len(deltas.NomMunicipiAny), len(deltas.NomMunicipiTotal), len(deltas.NomNivellAny), len(deltas.NomNivellTotal), len(deltas.CognomMunicipiAny), len(deltas.CognomMunicipiTotal), len(deltas.CognomNivellAny), len(deltas.CognomNivellTotal))
+		defer func() {
+			Debugf("moderacio bulk registre stats aggregate items=%d nom_keys=%d cognom_keys=%d delta_rows=%d nom_mun_any=%d nom_mun_total=%d nom_nivell_any=%d nom_nivell_total=%d cognom_mun_any=%d cognom_mun_total=%d cognom_nivell_any=%d cognom_nivell_total=%d aggregate_dur=%s ensure_dur=%s build_deltas_dur=%s apply_dur=%s ensure=%s apply=sequential_fallback", metrics.Items, metrics.NomKeys, metrics.CognomKeys, metrics.DeltaRows, metrics.NomMunicipiAnyRows, metrics.NomMunicipiTotalRows, metrics.NomNivellAnyRows, metrics.NomNivellTotalRows, metrics.CognomMunicipiAnyRows, metrics.CognomMunicipiTotalRows, metrics.CognomNivellAnyRows, metrics.CognomNivellTotalRows, metrics.AggregateDur, metrics.EnsureDur, metrics.BuildDeltasDur, metrics.ApplyDur, metrics.EnsureMode)
+		}()
 	}
 	for _, row := range deltas.NomMunicipiAny {
 		if err := a.DB.UpsertNomFreqMunicipiAny(row.NomID, row.MunicipiID, row.AnyDoc, row.Delta); err != nil {
-			return err
+			metrics.ApplyDur = time.Since(applyStart)
+			return metrics, err
 		}
 	}
 	for _, row := range deltas.NomMunicipiTotal {
 		if err := a.DB.UpsertNomFreqMunicipiTotal(row.NomID, row.MunicipiID, row.Delta); err != nil {
-			return err
+			metrics.ApplyDur = time.Since(applyStart)
+			return metrics, err
 		}
 	}
 	for _, row := range deltas.NomNivellAny {
 		if err := a.DB.UpsertNomFreqNivellAny(row.NomID, row.NivellID, row.AnyDoc, row.Delta); err != nil {
-			return err
+			metrics.ApplyDur = time.Since(applyStart)
+			return metrics, err
 		}
 	}
 	for _, row := range deltas.NomNivellTotal {
 		if err := a.DB.UpsertNomFreqNivellTotal(row.NomID, row.NivellID, row.Delta); err != nil {
-			return err
+			metrics.ApplyDur = time.Since(applyStart)
+			return metrics, err
 		}
 	}
 	for _, row := range deltas.CognomMunicipiAny {
 		if err := a.DB.ApplyCognomFreqMunicipiAnyDelta(row.CognomID, row.MunicipiID, row.AnyDoc, row.Delta); err != nil {
-			return err
+			metrics.ApplyDur = time.Since(applyStart)
+			return metrics, err
 		}
 	}
 	for _, row := range deltas.CognomMunicipiTotal {
 		if err := a.DB.UpsertCognomFreqMunicipiTotal(row.CognomID, row.MunicipiID, row.Delta); err != nil {
-			return err
+			metrics.ApplyDur = time.Since(applyStart)
+			return metrics, err
 		}
 	}
 	for _, row := range deltas.CognomNivellAny {
 		if err := a.DB.ApplyCognomFreqNivellAnyDelta(row.CognomID, row.NivellID, row.AnyDoc, row.Delta); err != nil {
-			return err
+			metrics.ApplyDur = time.Since(applyStart)
+			return metrics, err
 		}
 	}
 	for _, row := range deltas.CognomNivellTotal {
 		if err := a.DB.UpsertCognomFreqNivellTotal(row.CognomID, row.NivellID, row.Delta); err != nil {
-			return err
+			metrics.ApplyDur = time.Since(applyStart)
+			return metrics, err
 		}
 	}
 
-	return nil
+	metrics.ApplyDur = time.Since(applyStart)
+	return metrics, nil
+}
+
+func (a *App) ensureNomCognomBulkIDs(nomForms, cognomForms map[string]string) (map[string]int, map[string]int, string, error) {
+	if store, ok := a.DB.(bulkNomCognomEntityStore); ok {
+		nomIDs, err := store.BulkEnsureNoms(nomForms, "stats_auto", nil)
+		if err != nil {
+			return nil, nil, "bulk", err
+		}
+		cognomIDs, err := store.BulkEnsureCognoms(cognomForms, "stats_auto", "stats_auto", nil)
+		if err != nil {
+			return nil, nil, "bulk", err
+		}
+		return nomIDs, cognomIDs, "bulk", nil
+	}
+
+	nomIDs := make(map[string]int, len(nomForms))
+	nomKeys := make([]string, 0, len(nomForms))
+	for key := range nomForms {
+		nomKeys = append(nomKeys, key)
+	}
+	sort.Strings(nomKeys)
+	for _, key := range nomKeys {
+		form := strings.TrimSpace(nomForms[key])
+		if form == "" {
+			form = key
+		}
+		nomID, err := a.DB.UpsertNom(form, key, "stats_auto", nil)
+		if err != nil {
+			return nil, nil, "sequential_fallback", err
+		}
+		nomIDs[key] = nomID
+	}
+
+	cognomIDs := make(map[string]int, len(cognomForms))
+	cognomKeys := make([]string, 0, len(cognomForms))
+	for key := range cognomForms {
+		cognomKeys = append(cognomKeys, key)
+	}
+	sort.Strings(cognomKeys)
+	for _, key := range cognomKeys {
+		form := strings.TrimSpace(cognomForms[key])
+		if form == "" {
+			form = key
+		}
+		cognomID, err := a.DB.UpsertCognom(form, key, "stats_auto", "stats_auto", nil)
+		if err != nil {
+			return nil, nil, "sequential_fallback", err
+		}
+		cognomIDs[key] = cognomID
+	}
+	return nomIDs, cognomIDs, "sequential_fallback", nil
 }
 
 func (a *App) applyNomCognomDeltaForRegistre(reg *db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw, delta int) {

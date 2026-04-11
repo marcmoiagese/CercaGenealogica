@@ -133,6 +133,9 @@ func TestModeracioBulkRegistreDebugInstrumentationRespectsLogLevelF3017(t *testi
 				if !strings.Contains(logs, "search_job_cache_warmup_dur=") || !strings.Contains(logs, "derived_search_build_dur=") || !strings.Contains(logs, "derived_search_upsert_dur=") || !strings.Contains(logs, "search_cache_hits=") {
 					t.Fatalf("amb debug esperava mètriques F31-3 de search bulk registre, però no hi són: %s", logs)
 				}
+				if !strings.Contains(logs, "derived_stats_prepare_dur=") || !strings.Contains(logs, "derived_stats_ensure_dur=") || !strings.Contains(logs, "derived_stats_apply_dur=") || !strings.Contains(logs, "derived_stats_delta_rows=") {
+					t.Fatalf("amb debug esperava mètriques F31-5 de stats bulk registre, però no hi són: %s", logs)
+				}
 				if !strings.Contains(logs, "moderacio bulk worker history") {
 					t.Fatalf("amb debug esperava log d'historial bulk, però no hi és: %s", logs)
 				}
@@ -231,7 +234,7 @@ func TestModeracioBulkRegistreLargeChunkSummaryF311(t *testing.T) {
 		t.Fatalf("no s'ha trobat cap resum de chunk registre: %s", logs)
 	}
 	summary := strings.Join(lines, " || ")
-	if !strings.Contains(summary, "derived_stats_dur=") || !strings.Contains(summary, "derived_search_dur=") || !strings.Contains(summary, "derived_search_build_dur=") {
+	if !strings.Contains(summary, "derived_stats_dur=") || !strings.Contains(summary, "derived_stats_prepare_dur=") || !strings.Contains(summary, "derived_stats_apply_dur=") || !strings.Contains(summary, "derived_search_dur=") || !strings.Contains(summary, "derived_search_build_dur=") {
 		t.Fatalf("resum de chunk sense mètriques derivades completes: %s", summary)
 	}
 	t.Log(summary)

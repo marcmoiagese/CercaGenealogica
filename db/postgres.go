@@ -2489,6 +2489,9 @@ func (d *PostgreSQL) FindCognomIDByKey(key string) (int, error) {
 func (d *PostgreSQL) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
 	return d.help.upsertCognom(forma, key, origen, notes, createdBy)
 }
+func (d *PostgreSQL) BulkEnsureCognoms(formsByKey map[string]string, origen, notes string, createdBy *int) (map[string]int, error) {
+	return d.help.bulkEnsureCognoms(formsByKey, origen, notes, createdBy)
+}
 func (d *PostgreSQL) UpdateCognom(c *Cognom) error {
 	return d.help.updateCognom(c)
 }
@@ -2633,6 +2636,9 @@ func (d *PostgreSQL) CountCognomStatsAncestorDistinct(cognomID int, ancestorType
 // Noms
 func (d *PostgreSQL) UpsertNom(forma, key, notes string, createdBy *int) (int, error) {
 	return d.help.upsertNom(forma, key, notes, createdBy)
+}
+func (d *PostgreSQL) BulkEnsureNoms(formsByKey map[string]string, notes string, createdBy *int) (map[string]int, error) {
+	return d.help.bulkEnsureNoms(formsByKey, notes, createdBy)
 }
 func (d *PostgreSQL) GetNom(id int) (*Nom, error) { return d.help.getNom(id) }
 func (d *PostgreSQL) ResolveNomByForma(forma string) (int, string, bool, error) {

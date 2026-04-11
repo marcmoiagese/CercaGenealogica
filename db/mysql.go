@@ -1725,6 +1725,9 @@ func (d *MySQL) FindCognomIDByKey(key string) (int, error) {
 func (d *MySQL) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
 	return d.help.upsertCognom(forma, key, origen, notes, createdBy)
 }
+func (d *MySQL) BulkEnsureCognoms(formsByKey map[string]string, origen, notes string, createdBy *int) (map[string]int, error) {
+	return d.help.bulkEnsureCognoms(formsByKey, origen, notes, createdBy)
+}
 func (d *MySQL) UpdateCognom(c *Cognom) error {
 	return d.help.updateCognom(c)
 }
@@ -1869,6 +1872,9 @@ func (d *MySQL) CountCognomStatsAncestorDistinct(cognomID int, ancestorType stri
 // Noms
 func (d *MySQL) UpsertNom(forma, key, notes string, createdBy *int) (int, error) {
 	return d.help.upsertNom(forma, key, notes, createdBy)
+}
+func (d *MySQL) BulkEnsureNoms(formsByKey map[string]string, notes string, createdBy *int) (map[string]int, error) {
+	return d.help.bulkEnsureNoms(formsByKey, notes, createdBy)
 }
 func (d *MySQL) GetNom(id int) (*Nom, error) { return d.help.getNom(id) }
 func (d *MySQL) ResolveNomByForma(forma string) (int, string, bool, error) {

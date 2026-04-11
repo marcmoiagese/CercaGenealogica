@@ -1761,6 +1761,9 @@ func (d *SQLite) FindCognomIDByKey(key string) (int, error) {
 func (d *SQLite) UpsertCognom(forma, key, origen, notes string, createdBy *int) (int, error) {
 	return d.help.upsertCognom(forma, key, origen, notes, createdBy)
 }
+func (d *SQLite) BulkEnsureCognoms(formsByKey map[string]string, origen, notes string, createdBy *int) (map[string]int, error) {
+	return d.help.bulkEnsureCognoms(formsByKey, origen, notes, createdBy)
+}
 func (d *SQLite) UpdateCognom(c *Cognom) error {
 	return d.help.updateCognom(c)
 }
@@ -1907,6 +1910,9 @@ func (d *SQLite) CountCognomStatsAncestorDistinct(cognomID int, ancestorType str
 // Noms
 func (d *SQLite) UpsertNom(forma, key, notes string, createdBy *int) (int, error) {
 	return d.help.upsertNom(forma, key, notes, createdBy)
+}
+func (d *SQLite) BulkEnsureNoms(formsByKey map[string]string, notes string, createdBy *int) (map[string]int, error) {
+	return d.help.bulkEnsureNoms(formsByKey, notes, createdBy)
 }
 func (d *SQLite) GetNom(id int) (*Nom, error) { return d.help.getNom(id) }
 func (d *SQLite) ResolveNomByForma(forma string) (int, string, bool, error) {

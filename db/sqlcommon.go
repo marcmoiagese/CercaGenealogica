@@ -10340,6 +10340,50 @@ func (h sqlHelper) upsertCognom(forma, key, origen, notes string, createdBy *int
 	return id, nil
 }
 
+func (h sqlHelper) bulkEnsureCognoms(formsByKey map[string]string, origen, notes string, createdBy *int) (map[string]int, error) {
+	keys := sortedBulkEnsureKeys(formsByKey)
+	if len(keys) == 0 {
+		return map[string]int{}, nil
+	}
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	var createdByVal interface{}
+	if createdBy != nil {
+		createdByVal = *createdBy
+	}
+	const batchSize = 500
+	for start := 0; start < len(keys); start += batchSize {
+		end := start + batchSize
+		if end > len(keys) {
+			end = len(keys)
+		}
+		batch := keys[start:end]
+		values := make([]string, 0, len(batch))
+		args := make([]interface{}, 0, len(batch)*5)
+		for _, key := range batch {
+			form := strings.TrimSpace(formsByKey[key])
+			if form == "" {
+				form = key
+			}
+			values = append(values, fmt.Sprintf("(?, ?, ?, ?, ?, %s, %s)", h.nowFun, h.nowFun))
+			args = append(args, form, key, origen, notes, createdByVal)
+		}
+		stmt := fmt.Sprintf("INSERT INTO cognoms (forma, %s, origen, notes, created_by, created_at, updated_at) VALUES %s", keyCol, strings.Join(values, ", "))
+		if h.style == "mysql" {
+			stmt += " ON DUPLICATE KEY UPDATE forma=VALUES(forma), origen=VALUES(origen), notes=VALUES(notes), updated_at=" + h.nowFun
+		} else {
+			stmt += " ON CONFLICT(" + keyCol + ") DO UPDATE SET forma=excluded.forma, origen=excluded.origen, notes=excluded.notes, updated_at=" + h.nowFun
+		}
+		stmt = formatPlaceholders(h.style, stmt)
+		if _, err := h.db.Exec(stmt, args...); err != nil {
+			return nil, err
+		}
+	}
+	return h.selectLexiconIDsByKeys("cognoms", keyCol, keys)
+}
+
 func (h sqlHelper) getNom(id int) (*Nom, error) {
 	keyCol := "key"
 	if h.style == "mysql" {
@@ -10401,6 +10445,107 @@ func (h sqlHelper) upsertNom(forma, key, notes string, createdBy *int) (int, err
 		return 0, err
 	}
 	return id, nil
+}
+
+func (h sqlHelper) bulkEnsureNoms(formsByKey map[string]string, notes string, createdBy *int) (map[string]int, error) {
+	keys := sortedBulkEnsureKeys(formsByKey)
+	if len(keys) == 0 {
+		return map[string]int{}, nil
+	}
+	keyCol := "key"
+	if h.style == "mysql" {
+		keyCol = "`key`"
+	}
+	var createdByVal interface{}
+	if createdBy != nil {
+		createdByVal = *createdBy
+	}
+	const batchSize = 500
+	for start := 0; start < len(keys); start += batchSize {
+		end := start + batchSize
+		if end > len(keys) {
+			end = len(keys)
+		}
+		batch := keys[start:end]
+		values := make([]string, 0, len(batch))
+		args := make([]interface{}, 0, len(batch)*4)
+		for _, key := range batch {
+			form := strings.TrimSpace(formsByKey[key])
+			if form == "" {
+				form = key
+			}
+			values = append(values, fmt.Sprintf("(?, ?, ?, ?, %s, %s)", h.nowFun, h.nowFun))
+			args = append(args, form, key, notes, createdByVal)
+		}
+		stmt := fmt.Sprintf("INSERT INTO noms (forma, %s, notes, created_by, created_at, updated_at) VALUES %s", keyCol, strings.Join(values, ", "))
+		if h.style == "mysql" {
+			stmt += " ON DUPLICATE KEY UPDATE forma=VALUES(forma), notes=VALUES(notes), updated_at=" + h.nowFun
+		} else {
+			stmt += " ON CONFLICT(" + keyCol + ") DO UPDATE SET forma=excluded.forma, notes=excluded.notes, updated_at=" + h.nowFun
+		}
+		stmt = formatPlaceholders(h.style, stmt)
+		if _, err := h.db.Exec(stmt, args...); err != nil {
+			return nil, err
+		}
+	}
+	return h.selectLexiconIDsByKeys("noms", keyCol, keys)
+}
+
+func sortedBulkEnsureKeys(formsByKey map[string]string) []string {
+	keys := make([]string, 0, len(formsByKey))
+	for key := range formsByKey {
+		if strings.TrimSpace(key) == "" {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func (h sqlHelper) selectLexiconIDsByKeys(table, keyCol string, keys []string) (map[string]int, error) {
+	out := make(map[string]int, len(keys))
+	const batchSize = 1000
+	for start := 0; start < len(keys); start += batchSize {
+		end := start + batchSize
+		if end > len(keys) {
+			end = len(keys)
+		}
+		batch := keys[start:end]
+		placeholders := make([]string, 0, len(batch))
+		args := make([]interface{}, 0, len(batch))
+		for _, key := range batch {
+			placeholders = append(placeholders, "?")
+			args = append(args, key)
+		}
+		query := fmt.Sprintf("SELECT id, %s FROM %s WHERE %s IN (%s)", keyCol, table, keyCol, strings.Join(placeholders, ", "))
+		query = formatPlaceholders(h.style, query)
+		rows, err := h.db.Query(query, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var id int
+			var key string
+			if err := rows.Scan(&id, &key); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			out[key] = id
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	for _, key := range keys {
+		if out[key] <= 0 {
+			return nil, fmt.Errorf("bulk ensure %s missing id for key %q", table, key)
+		}
+	}
+	return out, nil
 }
 
 func (h sqlHelper) resolveNomByForma(forma string) (int, string, bool, error) {
