@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/marcmoiagese/CercaGenealogica/cnf"
 	"github.com/marcmoiagese/CercaGenealogica/core"
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -136,6 +137,9 @@ func TestModeracioBulkRegistreDebugInstrumentationRespectsLogLevelF3017(t *testi
 				if !strings.Contains(logs, "derived_stats_prepare_dur=") || !strings.Contains(logs, "derived_stats_ensure_dur=") || !strings.Contains(logs, "derived_stats_apply_dur=") || !strings.Contains(logs, "derived_stats_delta_rows=") {
 					t.Fatalf("amb debug esperava mètriques F31-5 de stats bulk registre, però no hi són: %s", logs)
 				}
+				if !strings.Contains(logs, "derived_stats_municipis=") || !strings.Contains(logs, "derived_stats_negative_rows=") || !strings.Contains(logs, "search_doc_cache_hits=") {
+					t.Fatalf("amb debug esperava mètriques F31-6 de stats/search bulk registre, però no hi són: %s", logs)
+				}
 				if !strings.Contains(logs, "moderacio bulk worker history") {
 					t.Fatalf("amb debug esperava log d'historial bulk, però no hi és: %s", logs)
 				}
@@ -234,8 +238,97 @@ func TestModeracioBulkRegistreLargeChunkSummaryF311(t *testing.T) {
 		t.Fatalf("no s'ha trobat cap resum de chunk registre: %s", logs)
 	}
 	summary := strings.Join(lines, " || ")
-	if !strings.Contains(summary, "derived_stats_dur=") || !strings.Contains(summary, "derived_stats_prepare_dur=") || !strings.Contains(summary, "derived_stats_apply_dur=") || !strings.Contains(summary, "derived_search_dur=") || !strings.Contains(summary, "derived_search_build_dur=") {
+	if !strings.Contains(summary, "derived_stats_dur=") || !strings.Contains(summary, "derived_stats_prepare_dur=") || !strings.Contains(summary, "derived_stats_apply_dur=") || !strings.Contains(summary, "derived_stats_municipis=") || !strings.Contains(summary, "derived_search_dur=") || !strings.Contains(summary, "derived_search_build_dur=") || !strings.Contains(summary, "search_doc_cache_hits=") {
 		t.Fatalf("resum de chunk sense mètriques derivades completes: %s", summary)
 	}
 	t.Log(summary)
+}
+
+func TestModeracioBulkRegistreMetricsAndStatsPersistMultiDBF316(t *testing.T) {
+	forEachModeracioBulkHistoryDB(t, func(t *testing.T, label string, app *core.App, database db.DB, engine string) {
+		admin, _ := createF7UserWithSession(t, database)
+		ensureAdminPolicyForUser(t, database, admin.ID)
+		session := createSessionCookie(t, database, admin.ID, "sess_f31_6_metrics_"+label+"_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+
+		llibreID, paginaID := createF7LlibreWithPagina(t, database, admin.ID)
+		for i := 0; i < 80; i++ {
+			registreID := createDemografiaRegistre(t, database, llibreID, paginaID, admin.ID, "baptisme", 1900+(i%4), "pendent")
+			if _, err := database.CreateTranscripcioPersona(&db.TranscripcioPersonaRaw{
+				TranscripcioID: registreID,
+				Rol:            "batejat",
+				Nom:            "Joan",
+				Cognom1:        "Pujol" + strconv.Itoa(i%7),
+			}); err != nil {
+				t.Fatalf("CreateTranscripcioPersona ha fallat: %v", err)
+			}
+		}
+
+		prevDBConfig := cnf.Config
+		prevDBLogLevel := ""
+		if cnf.Config == nil {
+			cnf.Config = map[string]string{}
+		} else {
+			prevDBLogLevel = cnf.Config["LOG_LEVEL"]
+		}
+		cnf.Config["LOG_LEVEL"] = "debug"
+		core.SetLogLevel("debug")
+		defer func() {
+			core.SetLogLevel("error")
+			if prevDBConfig == nil {
+				cnf.Config = nil
+			} else {
+				cnf.Config["LOG_LEVEL"] = prevDBLogLevel
+			}
+		}()
+
+		buf, restore := captureStandardLog(t)
+		defer restore()
+
+		jobID := submitAsyncRegistreBulkJob(t, app, session, "csrf_f31_6_metrics_"+label)
+		job := waitForAdminJobTerminal(t, database, jobID)
+		if job.Status != "done" {
+			t.Fatalf("job bulk registre esperat done, got status=%s phase=%s error=%s", job.Status, job.Phase, job.ErrorText)
+		}
+
+		logs := buf.String()
+		lines := []string{}
+		for _, line := range strings.Split(logs, "\n") {
+			if strings.Contains(line, "[ModeracioBulkWorker] chunk=registre") {
+				lines = append(lines, strings.TrimSpace(line))
+			}
+		}
+		if len(lines) == 0 {
+			t.Fatalf("%s: no s'ha trobat cap resum de chunk registre: %s", engine, logs)
+		}
+		summary := strings.Join(lines, " || ")
+		for _, token := range []string{
+			"derived_stats_dur=",
+			"derived_stats_prepare_dur=",
+			"derived_stats_apply_dur=",
+			"derived_stats_municipis=",
+			"derived_stats_nivells=",
+			"derived_stats_negative_rows=",
+			"derived_search_dur=",
+			"derived_search_build_dur=",
+			"derived_search_upsert_dur=",
+			"search_doc_cache_hits=80",
+			"search_doc_cache_misses=0",
+		} {
+			if !strings.Contains(summary, token) {
+				t.Fatalf("%s: resum de chunk sense token %q: %s", engine, token, summary)
+			}
+		}
+		for _, token := range []string{
+			"nom_cognom stats bulk persist",
+			"total_batches=",
+			"negative_rows=0",
+			"noms_freq_municipi_any",
+			"cognoms_freq_nivell_total",
+		} {
+			if !strings.Contains(logs, token) {
+				t.Fatalf("%s: log de persistència stats bulk sense token %q: %s", engine, token, logs)
+			}
+		}
+		t.Logf("%s: %s", engine, summary)
+	})
 }

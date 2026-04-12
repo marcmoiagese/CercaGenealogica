@@ -40,6 +40,9 @@ type nomCognomBulkApplyMetrics struct {
 	NomKeys                 int
 	CognomKeys              int
 	DeltaRows               int
+	Municipis               int
+	Nivells                 int
+	NegativeDeltaRows       int
 	NomMunicipiAnyRows      int
 	NomMunicipiTotalRows    int
 	NomNivellAnyRows        int
@@ -288,6 +291,8 @@ func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) (nomCognomBul
 	aggregateStart := time.Now()
 	nomForms := map[string]string{}
 	cognomForms := map[string]string{}
+	municipis := map[int]struct{}{}
+	nivells := map[int]struct{}{}
 	nomMunicipiAny := map[bulkNomMunicipiAnyKey]int{}
 	nomMunicipiTotal := map[bulkNomMunicipiTotalKey]int{}
 	nomNivellAny := map[bulkNomNivellAnyKey]int{}
@@ -301,7 +306,13 @@ func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) (nomCognomBul
 		if item.MunicipiID <= 0 || item.Contrib.AnyDoc <= 0 || item.Sign == 0 {
 			continue
 		}
+		municipis[item.MunicipiID] = struct{}{}
 		nivellIDs := dedupeInts(item.NivellIDs)
+		for _, nivellID := range nivellIDs {
+			if nivellID > 0 {
+				nivells[nivellID] = struct{}{}
+			}
+		}
 		for key, count := range item.Contrib.NomCounts {
 			delta := count * item.Sign
 			if delta == 0 {
@@ -342,6 +353,8 @@ func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) (nomCognomBul
 		}
 	}
 	metrics.AggregateDur = time.Since(aggregateStart)
+	metrics.Municipis = len(municipis)
+	metrics.Nivells = len(nivells)
 
 	ensureStart := time.Now()
 	nomIDs, cognomIDs, ensureMode, err := a.ensureNomCognomBulkIDs(nomForms, cognomForms)
@@ -369,11 +382,17 @@ func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) (nomCognomBul
 		if delta == 0 {
 			continue
 		}
+		if delta < 0 {
+			metrics.NegativeDeltaRows++
+		}
 		deltas.NomMunicipiAny = append(deltas.NomMunicipiAny, db.NomFreqMunicipiAnyDelta{NomID: nomIDs[agg.Key], MunicipiID: agg.MunicipiID, AnyDoc: agg.AnyDoc, Delta: delta})
 	}
 	for agg, delta := range nomMunicipiTotal {
 		if delta == 0 {
 			continue
+		}
+		if delta < 0 {
+			metrics.NegativeDeltaRows++
 		}
 		deltas.NomMunicipiTotal = append(deltas.NomMunicipiTotal, db.NomFreqMunicipiTotalDelta{NomID: nomIDs[agg.Key], MunicipiID: agg.MunicipiID, Delta: delta})
 	}
@@ -381,11 +400,17 @@ func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) (nomCognomBul
 		if delta == 0 {
 			continue
 		}
+		if delta < 0 {
+			metrics.NegativeDeltaRows++
+		}
 		deltas.NomNivellAny = append(deltas.NomNivellAny, db.NomFreqNivellAnyDelta{NomID: nomIDs[agg.Key], NivellID: agg.NivellID, AnyDoc: agg.AnyDoc, Delta: delta})
 	}
 	for agg, delta := range nomNivellTotal {
 		if delta == 0 {
 			continue
+		}
+		if delta < 0 {
+			metrics.NegativeDeltaRows++
 		}
 		deltas.NomNivellTotal = append(deltas.NomNivellTotal, db.NomFreqNivellTotalDelta{NomID: nomIDs[agg.Key], NivellID: agg.NivellID, Delta: delta})
 	}
@@ -394,11 +419,17 @@ func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) (nomCognomBul
 		if delta == 0 {
 			continue
 		}
+		if delta < 0 {
+			metrics.NegativeDeltaRows++
+		}
 		deltas.CognomMunicipiAny = append(deltas.CognomMunicipiAny, db.CognomFreqMunicipiAnyDelta{CognomID: cognomIDs[agg.Key], MunicipiID: agg.MunicipiID, AnyDoc: agg.AnyDoc, Delta: delta})
 	}
 	for agg, delta := range cognomMunicipiTotal {
 		if delta == 0 {
 			continue
+		}
+		if delta < 0 {
+			metrics.NegativeDeltaRows++
 		}
 		deltas.CognomMunicipiTotal = append(deltas.CognomMunicipiTotal, db.CognomFreqMunicipiTotalDelta{CognomID: cognomIDs[agg.Key], MunicipiID: agg.MunicipiID, Delta: delta})
 	}
@@ -406,11 +437,17 @@ func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) (nomCognomBul
 		if delta == 0 {
 			continue
 		}
+		if delta < 0 {
+			metrics.NegativeDeltaRows++
+		}
 		deltas.CognomNivellAny = append(deltas.CognomNivellAny, db.CognomFreqNivellAnyDelta{CognomID: cognomIDs[agg.Key], NivellID: agg.NivellID, AnyDoc: agg.AnyDoc, Delta: delta})
 	}
 	for agg, delta := range cognomNivellTotal {
 		if delta == 0 {
 			continue
+		}
+		if delta < 0 {
+			metrics.NegativeDeltaRows++
 		}
 		deltas.CognomNivellTotal = append(deltas.CognomNivellTotal, db.CognomFreqNivellTotalDelta{CognomID: cognomIDs[agg.Key], NivellID: agg.NivellID, Delta: delta})
 	}
@@ -431,7 +468,7 @@ func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) (nomCognomBul
 		metrics.ApplyDur = time.Since(applyStart)
 		metrics.ApplyMode = "bulk"
 		if IsDebugEnabled() {
-			Debugf("moderacio bulk registre stats aggregate items=%d nom_keys=%d cognom_keys=%d delta_rows=%d nom_mun_any=%d nom_mun_total=%d nom_nivell_any=%d nom_nivell_total=%d cognom_mun_any=%d cognom_mun_total=%d cognom_nivell_any=%d cognom_nivell_total=%d aggregate_dur=%s ensure_dur=%s build_deltas_dur=%s apply_dur=%s ensure=%s apply=bulk", metrics.Items, metrics.NomKeys, metrics.CognomKeys, metrics.DeltaRows, metrics.NomMunicipiAnyRows, metrics.NomMunicipiTotalRows, metrics.NomNivellAnyRows, metrics.NomNivellTotalRows, metrics.CognomMunicipiAnyRows, metrics.CognomMunicipiTotalRows, metrics.CognomNivellAnyRows, metrics.CognomNivellTotalRows, metrics.AggregateDur, metrics.EnsureDur, metrics.BuildDeltasDur, metrics.ApplyDur, metrics.EnsureMode)
+			Debugf("moderacio bulk registre stats aggregate items=%d nom_keys=%d cognom_keys=%d delta_rows=%d municipis=%d nivells=%d negative_delta_rows=%d nom_mun_any=%d nom_mun_total=%d nom_nivell_any=%d nom_nivell_total=%d cognom_mun_any=%d cognom_mun_total=%d cognom_nivell_any=%d cognom_nivell_total=%d aggregate_dur=%s ensure_dur=%s build_deltas_dur=%s apply_dur=%s ensure=%s apply=bulk", metrics.Items, metrics.NomKeys, metrics.CognomKeys, metrics.DeltaRows, metrics.Municipis, metrics.Nivells, metrics.NegativeDeltaRows, metrics.NomMunicipiAnyRows, metrics.NomMunicipiTotalRows, metrics.NomNivellAnyRows, metrics.NomNivellTotalRows, metrics.CognomMunicipiAnyRows, metrics.CognomMunicipiTotalRows, metrics.CognomNivellAnyRows, metrics.CognomNivellTotalRows, metrics.AggregateDur, metrics.EnsureDur, metrics.BuildDeltasDur, metrics.ApplyDur, metrics.EnsureMode)
 		}
 		return metrics, err
 	}
@@ -439,7 +476,7 @@ func (a *App) applyNomCognomBulkDeltas(items []nomCognomBulkDelta) (nomCognomBul
 	metrics.ApplyMode = "sequential_fallback"
 	if IsDebugEnabled() {
 		defer func() {
-			Debugf("moderacio bulk registre stats aggregate items=%d nom_keys=%d cognom_keys=%d delta_rows=%d nom_mun_any=%d nom_mun_total=%d nom_nivell_any=%d nom_nivell_total=%d cognom_mun_any=%d cognom_mun_total=%d cognom_nivell_any=%d cognom_nivell_total=%d aggregate_dur=%s ensure_dur=%s build_deltas_dur=%s apply_dur=%s ensure=%s apply=sequential_fallback", metrics.Items, metrics.NomKeys, metrics.CognomKeys, metrics.DeltaRows, metrics.NomMunicipiAnyRows, metrics.NomMunicipiTotalRows, metrics.NomNivellAnyRows, metrics.NomNivellTotalRows, metrics.CognomMunicipiAnyRows, metrics.CognomMunicipiTotalRows, metrics.CognomNivellAnyRows, metrics.CognomNivellTotalRows, metrics.AggregateDur, metrics.EnsureDur, metrics.BuildDeltasDur, metrics.ApplyDur, metrics.EnsureMode)
+			Debugf("moderacio bulk registre stats aggregate items=%d nom_keys=%d cognom_keys=%d delta_rows=%d municipis=%d nivells=%d negative_delta_rows=%d nom_mun_any=%d nom_mun_total=%d nom_nivell_any=%d nom_nivell_total=%d cognom_mun_any=%d cognom_mun_total=%d cognom_nivell_any=%d cognom_nivell_total=%d aggregate_dur=%s ensure_dur=%s build_deltas_dur=%s apply_dur=%s ensure=%s apply=sequential_fallback", metrics.Items, metrics.NomKeys, metrics.CognomKeys, metrics.DeltaRows, metrics.Municipis, metrics.Nivells, metrics.NegativeDeltaRows, metrics.NomMunicipiAnyRows, metrics.NomMunicipiTotalRows, metrics.NomNivellAnyRows, metrics.NomNivellTotalRows, metrics.CognomMunicipiAnyRows, metrics.CognomMunicipiTotalRows, metrics.CognomNivellAnyRows, metrics.CognomNivellTotalRows, metrics.AggregateDur, metrics.EnsureDur, metrics.BuildDeltasDur, metrics.ApplyDur, metrics.EnsureMode)
 		}()
 	}
 	for _, row := range deltas.NomMunicipiAny {

@@ -12760,6 +12760,29 @@ type sqlStatsExec interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 }
 
+type statsApplyTableMetrics struct {
+	Table        string
+	InputRows    int
+	Rows         int
+	Batches      int
+	NegativeRows int
+	Dur          time.Duration
+}
+
+func logStatsBulkApplyMetrics(style string, totalDur, commitDur time.Duration, tables []statsApplyTableMetrics) {
+	parts := make([]string, 0, len(tables))
+	totalRows := 0
+	totalBatches := 0
+	totalNegativeRows := 0
+	for _, table := range tables {
+		totalRows += table.Rows
+		totalBatches += table.Batches
+		totalNegativeRows += table.NegativeRows
+		parts = append(parts, fmt.Sprintf("%s:input=%d rows=%d batches=%d negative=%d dur=%s", table.Table, table.InputRows, table.Rows, table.Batches, table.NegativeRows, table.Dur))
+	}
+	logDebugf("nom_cognom stats bulk persist style=%s total_rows=%d total_batches=%d negative_rows=%d total_dur=%s commit_dur=%s tables=%q", style, totalRows, totalBatches, totalNegativeRows, totalDur, commitDur, strings.Join(parts, " | "))
+}
+
 func (h sqlHelper) bulkApplyNomCognomStatsDeltas(d NomCognomStatsDeltas) error {
 	if len(d.NomMunicipiAny) == 0 &&
 		len(d.NomMunicipiTotal) == 0 &&
@@ -12783,35 +12806,55 @@ func (h sqlHelper) bulkApplyNomCognomStatsDeltas(d NomCognomStatsDeltas) error {
 		}
 	}()
 
-	if err := h.bulkApplyStatsAnyDeltas(tx, "noms_freq_municipi_any", "nom_id", "municipi_id", "any_doc", "freq", nomMunicipiAnyRows(d.NomMunicipiAny)); err != nil {
+	totalStart := time.Now()
+	tableMetrics := make([]statsApplyTableMetrics, 0, 8)
+	if m, err := h.bulkApplyStatsAnyDeltas(tx, "noms_freq_municipi_any", "nom_id", "municipi_id", "any_doc", "freq", nomMunicipiAnyRows(d.NomMunicipiAny)); err != nil {
 		return err
+	} else {
+		tableMetrics = append(tableMetrics, m)
 	}
-	if err := h.bulkApplyStatsTotalDeltas(tx, "noms_freq_municipi_total", "nom_id", "municipi_id", "total_freq", nomMunicipiTotalRows(d.NomMunicipiTotal)); err != nil {
+	if m, err := h.bulkApplyStatsTotalDeltas(tx, "noms_freq_municipi_total", "nom_id", "municipi_id", "total_freq", nomMunicipiTotalRows(d.NomMunicipiTotal)); err != nil {
 		return err
+	} else {
+		tableMetrics = append(tableMetrics, m)
 	}
-	if err := h.bulkApplyStatsAnyDeltas(tx, "noms_freq_nivell_any", "nom_id", "nivell_id", "any_doc", "freq", nomNivellAnyRows(d.NomNivellAny)); err != nil {
+	if m, err := h.bulkApplyStatsAnyDeltas(tx, "noms_freq_nivell_any", "nom_id", "nivell_id", "any_doc", "freq", nomNivellAnyRows(d.NomNivellAny)); err != nil {
 		return err
+	} else {
+		tableMetrics = append(tableMetrics, m)
 	}
-	if err := h.bulkApplyStatsTotalDeltas(tx, "noms_freq_nivell_total", "nom_id", "nivell_id", "total_freq", nomNivellTotalRows(d.NomNivellTotal)); err != nil {
+	if m, err := h.bulkApplyStatsTotalDeltas(tx, "noms_freq_nivell_total", "nom_id", "nivell_id", "total_freq", nomNivellTotalRows(d.NomNivellTotal)); err != nil {
 		return err
+	} else {
+		tableMetrics = append(tableMetrics, m)
 	}
-	if err := h.bulkApplyStatsAnyDeltas(tx, "cognoms_freq_municipi_any", "cognom_id", "municipi_id", "any_doc", "freq", cognomMunicipiAnyRows(d.CognomMunicipiAny)); err != nil {
+	if m, err := h.bulkApplyStatsAnyDeltas(tx, "cognoms_freq_municipi_any", "cognom_id", "municipi_id", "any_doc", "freq", cognomMunicipiAnyRows(d.CognomMunicipiAny)); err != nil {
 		return err
+	} else {
+		tableMetrics = append(tableMetrics, m)
 	}
-	if err := h.bulkApplyStatsTotalDeltas(tx, "cognoms_freq_municipi_total", "cognom_id", "municipi_id", "total_freq", cognomMunicipiTotalRows(d.CognomMunicipiTotal)); err != nil {
+	if m, err := h.bulkApplyStatsTotalDeltas(tx, "cognoms_freq_municipi_total", "cognom_id", "municipi_id", "total_freq", cognomMunicipiTotalRows(d.CognomMunicipiTotal)); err != nil {
 		return err
+	} else {
+		tableMetrics = append(tableMetrics, m)
 	}
-	if err := h.bulkApplyStatsAnyDeltas(tx, "cognoms_freq_nivell_any", "cognom_id", "nivell_id", "any_doc", "freq", cognomNivellAnyRows(d.CognomNivellAny)); err != nil {
+	if m, err := h.bulkApplyStatsAnyDeltas(tx, "cognoms_freq_nivell_any", "cognom_id", "nivell_id", "any_doc", "freq", cognomNivellAnyRows(d.CognomNivellAny)); err != nil {
 		return err
+	} else {
+		tableMetrics = append(tableMetrics, m)
 	}
-	if err := h.bulkApplyStatsTotalDeltas(tx, "cognoms_freq_nivell_total", "cognom_id", "nivell_id", "total_freq", cognomNivellTotalRows(d.CognomNivellTotal)); err != nil {
+	if m, err := h.bulkApplyStatsTotalDeltas(tx, "cognoms_freq_nivell_total", "cognom_id", "nivell_id", "total_freq", cognomNivellTotalRows(d.CognomNivellTotal)); err != nil {
 		return err
+	} else {
+		tableMetrics = append(tableMetrics, m)
 	}
 
+	commitStart := time.Now()
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 	committed = true
+	logStatsBulkApplyMetrics(h.style, time.Since(totalStart), time.Since(commitStart), tableMetrics)
 	return nil
 }
 
@@ -12879,10 +12922,16 @@ func cognomNivellTotalRows(rows []CognomFreqNivellTotalDelta) []statsDeltaTotalR
 	return out
 }
 
-func (h sqlHelper) bulkApplyStatsAnyDeltas(exec sqlStatsExec, table, entityCol, scopeCol, anyCol, valueCol string, rows []statsDeltaAnyRow) error {
+func (h sqlHelper) bulkApplyStatsAnyDeltas(exec sqlStatsExec, table, entityCol, scopeCol, anyCol, valueCol string, rows []statsDeltaAnyRow) (metrics statsApplyTableMetrics, err error) {
+	start := time.Now()
+	metrics = statsApplyTableMetrics{Table: table, InputRows: len(rows)}
 	rows = compactStatsAnyRows(rows)
+	metrics.Rows = len(rows)
+	defer func() {
+		metrics.Dur = time.Since(start)
+	}()
 	if len(rows) == 0 {
-		return nil
+		return metrics, nil
 	}
 	const batchSize = 1000
 	for start := 0; start < len(rows); start += batchSize {
@@ -12891,6 +12940,7 @@ func (h sqlHelper) bulkApplyStatsAnyDeltas(exec sqlStatsExec, table, entityCol, 
 			end = len(rows)
 		}
 		batch := rows[start:end]
+		metrics.Batches++
 		values := make([]string, 0, len(batch))
 		args := make([]interface{}, 0, len(batch)*4)
 		hasNegative := false
@@ -12899,6 +12949,7 @@ func (h sqlHelper) bulkApplyStatsAnyDeltas(exec sqlStatsExec, table, entityCol, 
 			args = append(args, row.EntityID, row.ScopeID, row.AnyDoc, row.Delta)
 			if row.Delta < 0 {
 				hasNegative = true
+				metrics.NegativeRows++
 			}
 		}
 		stmt := fmt.Sprintf("INSERT INTO %s (%s, %s, %s, %s, updated_at) VALUES %s", table, entityCol, scopeCol, anyCol, valueCol, strings.Join(values, ", "))
@@ -12909,21 +12960,27 @@ func (h sqlHelper) bulkApplyStatsAnyDeltas(exec sqlStatsExec, table, entityCol, 
 		}
 		stmt = formatPlaceholders(h.style, stmt)
 		if _, err := exec.Exec(stmt, args...); err != nil {
-			return err
+			return metrics, err
 		}
 		if hasNegative {
 			if err := h.bulkCleanupStatsAnyRows(exec, table, entityCol, scopeCol, anyCol, valueCol, batch); err != nil {
-				return err
+				return metrics, err
 			}
 		}
 	}
-	return nil
+	return metrics, nil
 }
 
-func (h sqlHelper) bulkApplyStatsTotalDeltas(exec sqlStatsExec, table, entityCol, scopeCol, valueCol string, rows []statsDeltaTotalRow) error {
+func (h sqlHelper) bulkApplyStatsTotalDeltas(exec sqlStatsExec, table, entityCol, scopeCol, valueCol string, rows []statsDeltaTotalRow) (metrics statsApplyTableMetrics, err error) {
+	start := time.Now()
+	metrics = statsApplyTableMetrics{Table: table, InputRows: len(rows)}
 	rows = compactStatsTotalRows(rows)
+	metrics.Rows = len(rows)
+	defer func() {
+		metrics.Dur = time.Since(start)
+	}()
 	if len(rows) == 0 {
-		return nil
+		return metrics, nil
 	}
 	const batchSize = 1000
 	for start := 0; start < len(rows); start += batchSize {
@@ -12932,6 +12989,7 @@ func (h sqlHelper) bulkApplyStatsTotalDeltas(exec sqlStatsExec, table, entityCol
 			end = len(rows)
 		}
 		batch := rows[start:end]
+		metrics.Batches++
 		values := make([]string, 0, len(batch))
 		args := make([]interface{}, 0, len(batch)*3)
 		hasNegative := false
@@ -12940,6 +12998,7 @@ func (h sqlHelper) bulkApplyStatsTotalDeltas(exec sqlStatsExec, table, entityCol
 			args = append(args, row.EntityID, row.ScopeID, row.Delta)
 			if row.Delta < 0 {
 				hasNegative = true
+				metrics.NegativeRows++
 			}
 		}
 		stmt := fmt.Sprintf("INSERT INTO %s (%s, %s, %s, updated_at) VALUES %s", table, entityCol, scopeCol, valueCol, strings.Join(values, ", "))
@@ -12950,15 +13009,15 @@ func (h sqlHelper) bulkApplyStatsTotalDeltas(exec sqlStatsExec, table, entityCol
 		}
 		stmt = formatPlaceholders(h.style, stmt)
 		if _, err := exec.Exec(stmt, args...); err != nil {
-			return err
+			return metrics, err
 		}
 		if hasNegative {
 			if err := h.bulkCleanupStatsTotalRows(exec, table, entityCol, scopeCol, valueCol, batch); err != nil {
-				return err
+				return metrics, err
 			}
 		}
 	}
-	return nil
+	return metrics, nil
 }
 
 func compactStatsAnyRows(rows []statsDeltaAnyRow) []statsDeltaAnyRow {
