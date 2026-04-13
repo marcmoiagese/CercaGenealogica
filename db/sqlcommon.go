@@ -16033,6 +16033,9 @@ func (h sqlHelper) applyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year i
 	if _, err := tx.Exec(upsert, municipiID, year, natalitat, matrimonis, defuncions); err != nil {
 		return err
 	}
+	if delta > 0 {
+		return h.applyDemografiaPositiveMetaTx(tx, "municipi_demografia_meta", "municipi_id", municipiID, year, natalitat, matrimonis, defuncions)
+	}
 	selectStmt := fmt.Sprintf(`SELECT natalitat, matrimonis, defuncions
         FROM municipi_demografia_any
         WHERE municipi_id = ? AND %s = ?`, yearCol)
@@ -16104,6 +16107,38 @@ func (h sqlHelper) applyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year i
         WHERE municipi_id = ?`
 	updateRange = formatPlaceholders(h.style, updateRange)
 	if _, err := tx.Exec(updateRange, minAny, maxAny, municipiID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (h sqlHelper) applyDemografiaPositiveMetaTx(tx *sql.Tx, metaTable, idCol string, id, year, natalitat, matrimonis, defuncions int) error {
+	if tx == nil {
+		return errors.New("tx required")
+	}
+	insertMeta := fmt.Sprintf(`INSERT INTO %s (%s, any_min, any_max, total_natalitat, total_matrimonis, total_defuncions, updated_at)
+        VALUES (?, NULL, NULL, 0, 0, 0, `+h.nowFun+`)`, metaTable, idCol)
+	if h.style == "postgres" {
+		insertMeta += fmt.Sprintf(" ON CONFLICT (%s) DO NOTHING", idCol)
+	} else if h.style == "mysql" {
+		insertMeta += fmt.Sprintf(" ON DUPLICATE KEY UPDATE %s = VALUES(%s)", idCol, idCol)
+	} else {
+		insertMeta += fmt.Sprintf(" ON CONFLICT(%s) DO NOTHING", idCol)
+	}
+	insertMeta = formatPlaceholders(h.style, insertMeta)
+	if _, err := tx.Exec(insertMeta, id); err != nil {
+		return err
+	}
+	updateTotals := fmt.Sprintf(`UPDATE %s
+        SET total_natalitat = total_natalitat + ?,
+            total_matrimonis = total_matrimonis + ?,
+            total_defuncions = total_defuncions + ?,
+            any_min = CASE WHEN any_min IS NULL OR any_min > ? THEN ? ELSE any_min END,
+            any_max = CASE WHEN any_max IS NULL OR any_max < ? THEN ? ELSE any_max END,
+            updated_at = `+h.nowFun+`
+        WHERE %s = ?`, metaTable, idCol)
+	updateTotals = formatPlaceholders(h.style, updateTotals)
+	if _, err := tx.Exec(updateTotals, natalitat, matrimonis, defuncions, year, year, year, year, id); err != nil {
 		return err
 	}
 	return nil
@@ -16369,6 +16404,9 @@ func (h sqlHelper) applyNivellDemografiaDeltaTx(tx *sql.Tx, nivellID, year int, 
 	upsert = formatPlaceholders(h.style, upsert)
 	if _, err := tx.Exec(upsert, nivellID, year, natalitat, matrimonis, defuncions); err != nil {
 		return err
+	}
+	if delta > 0 {
+		return h.applyDemografiaPositiveMetaTx(tx, "nivell_demografia_meta", "nivell_id", nivellID, year, natalitat, matrimonis, defuncions)
 	}
 	selectStmt := fmt.Sprintf(`SELECT natalitat, matrimonis, defuncions
         FROM nivell_demografia_any

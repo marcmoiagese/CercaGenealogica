@@ -87,6 +87,9 @@ func TestDemografiaModerationDelta(t *testing.T) {
 	if meta.TotalNatalitat != 1 {
 		t.Fatalf("esperava natalitat 1, got %d", meta.TotalNatalitat)
 	}
+	if !meta.AnyMin.Valid || meta.AnyMin.Int64 != 1900 || !meta.AnyMax.Valid || meta.AnyMax.Int64 != 1900 {
+		t.Fatalf("rang demogràfic després d'aprovar esperat 1900-1900, got min=%v max=%v", meta.AnyMin, meta.AnyMax)
+	}
 
 	moderateObject(t, app, sessionID, "registre", registreID, "rebutjar")
 	meta, err = database.GetMunicipiDemografiaMeta(munID)
@@ -158,6 +161,13 @@ func TestDemografiaModerationDelta(t *testing.T) {
 	}
 	if !found1910 {
 		t.Fatalf("no s'ha trobat la fila 1910 després del canvi")
+	}
+	meta, err = database.GetMunicipiDemografiaMeta(munID)
+	if err != nil || meta == nil {
+		t.Fatalf("GetMunicipiDemografiaMeta després canvi ha fallat: %v", err)
+	}
+	if !meta.AnyMin.Valid || meta.AnyMin.Int64 != 1910 || !meta.AnyMax.Valid || meta.AnyMax.Int64 != 1910 || meta.TotalMatrimonis != 1 || meta.TotalNatalitat != 0 {
+		t.Fatalf("meta demogràfica després canvi incoherent: min=%v max=%v natalitat=%d matrimonis=%d", meta.AnyMin, meta.AnyMax, meta.TotalNatalitat, meta.TotalMatrimonis)
 	}
 }
 
