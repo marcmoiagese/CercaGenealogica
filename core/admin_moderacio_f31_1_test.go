@@ -74,6 +74,9 @@ func TestModeracioBulkRegistreSearchBuildUsesWarmupDocCacheF316(t *testing.T) {
 	successSet := map[int]struct{}{registre.ID: {}}
 
 	warmupStats := app.warmModeracioBulkRegistreSearchCache([]moderacioBulkRegistreState{state}, successSet, "publicat", searchCtx)
+	if warmupStats.Docs != 1 {
+		t.Fatalf("warmup hauria de construir 1 search doc, got %d", warmupStats.Docs)
+	}
 	if len(searchCtx.SearchDocCache) != 1 {
 		t.Fatalf("warmup hauria de deixar 1 search doc cachejat, got %d", len(searchCtx.SearchDocCache))
 	}

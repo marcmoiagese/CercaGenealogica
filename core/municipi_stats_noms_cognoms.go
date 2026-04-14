@@ -159,13 +159,7 @@ func yearFromActe(registre db.TranscripcioRaw) int {
 
 func calcNomCognomContribs(registre db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw) nomCognomContrib {
 	anyDoc := yearFromActe(registre)
-	contrib := nomCognomContrib{
-		AnyDoc:       anyDoc,
-		NomCounts:    map[string]int{},
-		NomForms:     map[string]string{},
-		CognomCounts: map[string]int{},
-		CognomForms:  map[string]string{},
-	}
+	contrib := nomCognomContrib{AnyDoc: anyDoc}
 	if anyDoc <= 0 {
 		return contrib
 	}
@@ -173,6 +167,10 @@ func calcNomCognomContribs(registre db.TranscripcioRaw, persones []db.Transcripc
 	if len(roles) == 0 {
 		return contrib
 	}
+	contrib.NomCounts = make(map[string]int)
+	contrib.NomForms = make(map[string]string)
+	contrib.CognomCounts = make(map[string]int)
+	contrib.CognomForms = make(map[string]string)
 	roleSet := map[string]bool{}
 	for _, role := range roles {
 		roleSet[strings.ToLower(role)] = true
