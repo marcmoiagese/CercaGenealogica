@@ -103,3 +103,34 @@ func TestModeracioBulkRegistreSearchBuildUsesWarmupDocCacheF316(t *testing.T) {
 		t.Fatalf("search_doc no creat: doc=%v err=%v", doc, err)
 	}
 }
+
+func TestNomCognomContribMetricsF319(t *testing.T) {
+	registre := db.TranscripcioRaw{
+		TipusActe: "baptisme",
+		AnyDoc:    sql.NullInt64{Int64: 1901, Valid: true},
+	}
+	persones := []db.TranscripcioPersonaRaw{
+		{Rol: "batejat", Nom: "Joan", Cognom1: "Pujol", Cognom2: "Serra"},
+		{Rol: "testimoni", Nom: "Pere", Cognom1: "Ferrer"},
+	}
+	metrics := nomCognomContribMetrics{Cache: newNomCognomContribCache()}
+	contrib := calcNomCognomContribsWithMetrics(registre, persones, &metrics)
+
+	if contrib.AnyDoc != 1901 {
+		t.Fatalf("AnyDoc inesperat: %d", contrib.AnyDoc)
+	}
+	if contrib.NomCounts[NormalizeNomKey("Joan")] != 1 {
+		t.Fatalf("nom esperat no agregat: %#v", contrib.NomCounts)
+	}
+	if contrib.CognomCounts[NormalizeCognomKey("Pujol")] != 1 || contrib.CognomCounts[NormalizeCognomKey("Serra")] != 1 {
+		t.Fatalf("cognoms esperats no agregats: %#v", contrib.CognomCounts)
+	}
+	if metrics.Persones != 2 || metrics.Matched != 1 || metrics.NomValues != 1 || metrics.CognomValues != 2 {
+		t.Fatalf("mètriques de contribució inesperades: %#v", metrics)
+	}
+	secondMetrics := nomCognomContribMetrics{Cache: metrics.Cache}
+	_ = calcNomCognomContribsWithMetrics(registre, persones, &secondMetrics)
+	if secondMetrics.NomCacheHits != 1 || secondMetrics.CognomCacheHits != 2 {
+		t.Fatalf("cache de contribució no reutilitzada: %#v", secondMetrics)
+	}
+}

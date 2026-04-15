@@ -19,6 +19,85 @@ type nomCognomContrib struct {
 	CognomForms  map[string]string
 }
 
+type nomCognomContribMetrics struct {
+	Cache             *nomCognomContribCache
+	SetupDur          time.Duration
+	RoleMatchDur      time.Duration
+	NomDur            time.Duration
+	CognomDur         time.Duration
+	Persones          int
+	Matched           int
+	NomValues         int
+	CognomValues      int
+	NomCacheHits      int
+	NomCacheMisses    int
+	CognomCacheHits   int
+	CognomCacheMisses int
+}
+
+type nomCognomContribCache struct {
+	nom    map[string]nomCognomCleanKey
+	cognom map[string]nomCognomCleanKey
+}
+
+type nomCognomCleanKey struct {
+	form string
+	key  string
+}
+
+func newNomCognomContribCache() *nomCognomContribCache {
+	return &nomCognomContribCache{
+		nom:    map[string]nomCognomCleanKey{},
+		cognom: map[string]nomCognomCleanKey{},
+	}
+}
+
+func contribCacheKey(value, status string) string {
+	return status + "\x00" + value
+}
+
+func (c *nomCognomContribCache) cleanNom(value, status string) (string, string, bool) {
+	if c == nil {
+		form := cleanNomValue(value, status)
+		if form == "" {
+			return "", "", false
+		}
+		return form, NormalizeNomKey(form), false
+	}
+	cacheKey := contribCacheKey(value, status)
+	if cached, ok := c.nom[cacheKey]; ok {
+		return cached.form, cached.key, true
+	}
+	form := cleanNomValue(value, status)
+	key := ""
+	if form != "" {
+		key = NormalizeNomKey(form)
+	}
+	c.nom[cacheKey] = nomCognomCleanKey{form: form, key: key}
+	return form, key, false
+}
+
+func (c *nomCognomContribCache) cleanCognom(value, status string) (string, string, bool) {
+	if c == nil {
+		form := cleanCognomValue(value, status)
+		if form == "" {
+			return "", "", false
+		}
+		return form, NormalizeCognomKey(form), false
+	}
+	cacheKey := contribCacheKey(value, status)
+	if cached, ok := c.cognom[cacheKey]; ok {
+		return cached.form, cached.key, true
+	}
+	form := cleanCognomValue(value, status)
+	key := ""
+	if form != "" {
+		key = NormalizeCognomKey(form)
+	}
+	c.cognom[cacheKey] = nomCognomCleanKey{form: form, key: key}
+	return form, key, false
+}
+
 type nomCognomBulkDelta struct {
 	MunicipiID int
 	NivellIDs  []int
@@ -158,13 +237,27 @@ func yearFromActe(registre db.TranscripcioRaw) int {
 }
 
 func calcNomCognomContribs(registre db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw) nomCognomContrib {
+	return calcNomCognomContribsWithMetrics(registre, persones, nil)
+}
+
+func calcNomCognomContribsWithMetrics(registre db.TranscripcioRaw, persones []db.TranscripcioPersonaRaw, metrics *nomCognomContribMetrics) nomCognomContrib {
+	setupStart := time.Now()
 	anyDoc := yearFromActe(registre)
 	contrib := nomCognomContrib{AnyDoc: anyDoc}
+	if metrics != nil {
+		metrics.Persones += len(persones)
+	}
 	if anyDoc <= 0 {
+		if metrics != nil {
+			metrics.SetupDur += time.Since(setupStart)
+		}
 		return contrib
 	}
 	roles := primaryRolesForTipus(registre.TipusActe)
 	if len(roles) == 0 {
+		if metrics != nil {
+			metrics.SetupDur += time.Since(setupStart)
+		}
 		return contrib
 	}
 	contrib.NomCounts = make(map[string]int)
@@ -175,38 +268,95 @@ func calcNomCognomContribs(registre db.TranscripcioRaw, persones []db.Transcripc
 	for _, role := range roles {
 		roleSet[strings.ToLower(role)] = true
 	}
+	if metrics != nil {
+		metrics.SetupDur += time.Since(setupStart)
+	}
 	addNom := func(value, status string) {
-		form := cleanNomValue(value, status)
+		if metrics != nil {
+			metrics.NomValues++
+		}
+		nomStart := time.Now()
+		var form, key string
+		var hit bool
+		if metrics != nil {
+			form, key, hit = metrics.Cache.cleanNom(value, status)
+			if hit {
+				metrics.NomCacheHits++
+			} else {
+				metrics.NomCacheMisses++
+			}
+		} else {
+			form, key, _ = (*nomCognomContribCache)(nil).cleanNom(value, status)
+		}
 		if form == "" {
+			if metrics != nil {
+				metrics.NomDur += time.Since(nomStart)
+			}
 			return
 		}
-		key := NormalizeNomKey(form)
 		if key == "" {
+			if metrics != nil {
+				metrics.NomDur += time.Since(nomStart)
+			}
 			return
 		}
 		contrib.NomCounts[key]++
 		if _, ok := contrib.NomForms[key]; !ok {
 			contrib.NomForms[key] = form
 		}
+		if metrics != nil {
+			metrics.NomDur += time.Since(nomStart)
+		}
 	}
 	addCognom := func(value, status string) {
-		form := cleanCognomValue(value, status)
+		if metrics != nil {
+			metrics.CognomValues++
+		}
+		cognomStart := time.Now()
+		var form, key string
+		var hit bool
+		if metrics != nil {
+			form, key, hit = metrics.Cache.cleanCognom(value, status)
+			if hit {
+				metrics.CognomCacheHits++
+			} else {
+				metrics.CognomCacheMisses++
+			}
+		} else {
+			form, key, _ = (*nomCognomContribCache)(nil).cleanCognom(value, status)
+		}
 		if form == "" {
+			if metrics != nil {
+				metrics.CognomDur += time.Since(cognomStart)
+			}
 			return
 		}
-		key := NormalizeCognomKey(form)
 		if key == "" {
+			if metrics != nil {
+				metrics.CognomDur += time.Since(cognomStart)
+			}
 			return
 		}
 		contrib.CognomCounts[key]++
 		if _, ok := contrib.CognomForms[key]; !ok {
 			contrib.CognomForms[key] = form
 		}
+		if metrics != nil {
+			metrics.CognomDur += time.Since(cognomStart)
+		}
 	}
 	for _, persona := range persones {
+		roleStart := time.Now()
 		role := strings.ToLower(strings.TrimSpace(persona.Rol))
-		if !roleSet[role] {
+		matched := roleSet[role]
+		if metrics != nil {
+			metrics.RoleMatchDur += time.Since(roleStart)
+		}
+		if !matched {
 			continue
+		}
+		if metrics != nil {
+			metrics.Matched++
 		}
 		addNom(persona.Nom, persona.NomEstat)
 		addCognom(persona.Cognom1, persona.Cognom1Estat)

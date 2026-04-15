@@ -90,53 +90,65 @@ type moderacioBulkRegistreUpdateResult struct {
 }
 
 type moderacioBulkRegistreChunkMetrics struct {
-	ChunkIndex                    int
-	ChunkSize                     int
-	LoadedRows                    int
-	Updated                       int
-	Errors                        int
-	LoadDur                       time.Duration
-	UpdateDur                     time.Duration
-	DerivedDur                    time.Duration
-	DerivedDemografiaDur          time.Duration
-	DerivedStatsDur               time.Duration
-	DerivedStatsPrepareDur        time.Duration
-	DerivedStatsPrepareContribDur time.Duration
-	DerivedStatsPrepareNivellsDur time.Duration
-	DerivedStatsAggregateDur      time.Duration
-	DerivedStatsEnsureDur         time.Duration
-	DerivedStatsBuildDeltasDur    time.Duration
-	DerivedStatsApplyDur          time.Duration
-	DerivedStatsItems             int
-	DerivedStatsNomKeys           int
-	DerivedStatsCognomKeys        int
-	DerivedStatsDeltaRows         int
-	DerivedStatsMunicipis         int
-	DerivedStatsNivells           int
-	DerivedStatsNegativeRows      int
-	DerivedSearchDur              time.Duration
-	SearchWarmupDur               time.Duration
-	SearchWarmupBuildDur          time.Duration
-	SearchWarmupStoreDur          time.Duration
-	SearchWarmupDocs              int
-	SearchPrepareDur              time.Duration
-	SearchBuildDur                time.Duration
-	SearchUpsertDur               time.Duration
-	SearchDeleteDur               time.Duration
-	SearchDocsUpserts             int
-	SearchDocsDeletes             int
-	SearchCacheHits               int
-	SearchCacheMisses             int
-	SearchCacheSize               int
-	SearchDocCacheHits            int
-	SearchDocCacheMisses          int
-	SearchDocCacheSize            int
-	ActivityDur                   time.Duration
-	AuditDur                      time.Duration
-	PostprocDur                   time.Duration
-	TotalDur                      time.Duration
-	Throughput                    float64
-	DeferredActivity              bool
+	ChunkIndex                           int
+	ChunkSize                            int
+	LoadedRows                           int
+	Updated                              int
+	Errors                               int
+	LoadDur                              time.Duration
+	UpdateDur                            time.Duration
+	DerivedDur                           time.Duration
+	DerivedDemografiaDur                 time.Duration
+	DerivedStatsDur                      time.Duration
+	DerivedStatsPrepareDur               time.Duration
+	DerivedStatsPrepareContribDur        time.Duration
+	DerivedStatsPrepareSetupDur          time.Duration
+	DerivedStatsPrepareRoleDur           time.Duration
+	DerivedStatsPrepareNomDur            time.Duration
+	DerivedStatsPrepareCognomDur         time.Duration
+	DerivedStatsPrepareNivellsDur        time.Duration
+	DerivedStatsPreparePersones          int
+	DerivedStatsPrepareMatched           int
+	DerivedStatsPrepareNomValues         int
+	DerivedStatsPrepareCognomValues      int
+	DerivedStatsPrepareNomCacheHits      int
+	DerivedStatsPrepareNomCacheMisses    int
+	DerivedStatsPrepareCognomCacheHits   int
+	DerivedStatsPrepareCognomCacheMisses int
+	DerivedStatsAggregateDur             time.Duration
+	DerivedStatsEnsureDur                time.Duration
+	DerivedStatsBuildDeltasDur           time.Duration
+	DerivedStatsApplyDur                 time.Duration
+	DerivedStatsItems                    int
+	DerivedStatsNomKeys                  int
+	DerivedStatsCognomKeys               int
+	DerivedStatsDeltaRows                int
+	DerivedStatsMunicipis                int
+	DerivedStatsNivells                  int
+	DerivedStatsNegativeRows             int
+	DerivedSearchDur                     time.Duration
+	SearchWarmupDur                      time.Duration
+	SearchWarmupBuildDur                 time.Duration
+	SearchWarmupStoreDur                 time.Duration
+	SearchWarmupDocs                     int
+	SearchPrepareDur                     time.Duration
+	SearchBuildDur                       time.Duration
+	SearchUpsertDur                      time.Duration
+	SearchDeleteDur                      time.Duration
+	SearchDocsUpserts                    int
+	SearchDocsDeletes                    int
+	SearchCacheHits                      int
+	SearchCacheMisses                    int
+	SearchCacheSize                      int
+	SearchDocCacheHits                   int
+	SearchDocCacheMisses                 int
+	SearchDocCacheSize                   int
+	ActivityDur                          time.Duration
+	AuditDur                             time.Duration
+	PostprocDur                          time.Duration
+	TotalDur                             time.Duration
+	Throughput                           float64
+	DeferredActivity                     bool
 }
 
 type moderacioBulkRegistreState struct {
@@ -158,35 +170,47 @@ type moderacioBulkRegistreDemoKey struct {
 }
 
 type moderacioBulkRegistreDerivedMetrics struct {
-	DemografiaDur          time.Duration
-	StatsDur               time.Duration
-	StatsPrepareDur        time.Duration
-	StatsPrepareContribDur time.Duration
-	StatsPrepareNivellsDur time.Duration
-	StatsAggregateDur      time.Duration
-	StatsEnsureDur         time.Duration
-	StatsBuildDeltasDur    time.Duration
-	StatsApplyDur          time.Duration
-	StatsItems             int
-	StatsNomKeys           int
-	StatsCognomKeys        int
-	StatsDeltaRows         int
-	StatsMunicipis         int
-	StatsNivells           int
-	StatsNegativeRows      int
-	SearchDur              time.Duration
-	SearchPrepareDur       time.Duration
-	SearchBuildDur         time.Duration
-	SearchUpsertDur        time.Duration
-	SearchDeleteDur        time.Duration
-	SearchDocsUpserts      int
-	SearchDocsDeletes      int
-	SearchCacheHits        int
-	SearchCacheMisses      int
-	SearchCacheSize        int
-	SearchDocCacheHits     int
-	SearchDocCacheMisses   int
-	SearchDocCacheSize     int
+	DemografiaDur                 time.Duration
+	StatsDur                      time.Duration
+	StatsPrepareDur               time.Duration
+	StatsPrepareContribDur        time.Duration
+	StatsPrepareSetupDur          time.Duration
+	StatsPrepareRoleDur           time.Duration
+	StatsPrepareNomDur            time.Duration
+	StatsPrepareCognomDur         time.Duration
+	StatsPrepareNivellsDur        time.Duration
+	StatsPreparePersones          int
+	StatsPrepareMatched           int
+	StatsPrepareNomValues         int
+	StatsPrepareCognomValues      int
+	StatsPrepareNomCacheHits      int
+	StatsPrepareNomCacheMisses    int
+	StatsPrepareCognomCacheHits   int
+	StatsPrepareCognomCacheMisses int
+	StatsAggregateDur             time.Duration
+	StatsEnsureDur                time.Duration
+	StatsBuildDeltasDur           time.Duration
+	StatsApplyDur                 time.Duration
+	StatsItems                    int
+	StatsNomKeys                  int
+	StatsCognomKeys               int
+	StatsDeltaRows                int
+	StatsMunicipis                int
+	StatsNivells                  int
+	StatsNegativeRows             int
+	SearchDur                     time.Duration
+	SearchPrepareDur              time.Duration
+	SearchBuildDur                time.Duration
+	SearchUpsertDur               time.Duration
+	SearchDeleteDur               time.Duration
+	SearchDocsUpserts             int
+	SearchDocsDeletes             int
+	SearchCacheHits               int
+	SearchCacheMisses             int
+	SearchCacheSize               int
+	SearchDocCacheHits            int
+	SearchDocCacheMisses          int
+	SearchDocCacheSize            int
 }
 
 type moderacioBulkRegistreSearchContext struct {
@@ -3825,7 +3849,19 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 		chunkMetrics.DerivedStatsDur = derivedMetrics.StatsDur
 		chunkMetrics.DerivedStatsPrepareDur = derivedMetrics.StatsPrepareDur
 		chunkMetrics.DerivedStatsPrepareContribDur = derivedMetrics.StatsPrepareContribDur
+		chunkMetrics.DerivedStatsPrepareSetupDur = derivedMetrics.StatsPrepareSetupDur
+		chunkMetrics.DerivedStatsPrepareRoleDur = derivedMetrics.StatsPrepareRoleDur
+		chunkMetrics.DerivedStatsPrepareNomDur = derivedMetrics.StatsPrepareNomDur
+		chunkMetrics.DerivedStatsPrepareCognomDur = derivedMetrics.StatsPrepareCognomDur
 		chunkMetrics.DerivedStatsPrepareNivellsDur = derivedMetrics.StatsPrepareNivellsDur
+		chunkMetrics.DerivedStatsPreparePersones = derivedMetrics.StatsPreparePersones
+		chunkMetrics.DerivedStatsPrepareMatched = derivedMetrics.StatsPrepareMatched
+		chunkMetrics.DerivedStatsPrepareNomValues = derivedMetrics.StatsPrepareNomValues
+		chunkMetrics.DerivedStatsPrepareCognomValues = derivedMetrics.StatsPrepareCognomValues
+		chunkMetrics.DerivedStatsPrepareNomCacheHits = derivedMetrics.StatsPrepareNomCacheHits
+		chunkMetrics.DerivedStatsPrepareNomCacheMisses = derivedMetrics.StatsPrepareNomCacheMisses
+		chunkMetrics.DerivedStatsPrepareCognomCacheHits = derivedMetrics.StatsPrepareCognomCacheHits
+		chunkMetrics.DerivedStatsPrepareCognomCacheMisses = derivedMetrics.StatsPrepareCognomCacheMisses
 		chunkMetrics.DerivedStatsAggregateDur = derivedMetrics.StatsAggregateDur
 		chunkMetrics.DerivedStatsEnsureDur = derivedMetrics.StatsEnsureDur
 		chunkMetrics.DerivedStatsBuildDeltasDur = derivedMetrics.StatsBuildDeltasDur
@@ -3860,7 +3896,7 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 			chunkMetrics.Throughput = float64(len(chunkIDs)) / chunkMetrics.TotalDur.Seconds()
 		}
 		if IsDebugEnabled() {
-			Debugf("moderacio bulk registre chunk=%d size=%d loaded=%d updated=%d errors=%d load_dur=%s update_dur=%s derived_dur=%s derived_demografia_dur=%s derived_stats_dur=%s derived_stats_prepare_dur=%s derived_stats_prepare_contrib_dur=%s derived_stats_prepare_nivells_dur=%s derived_stats_aggregate_dur=%s derived_stats_ensure_dur=%s derived_stats_build_deltas_dur=%s derived_stats_apply_dur=%s derived_stats_items=%d derived_stats_nom_keys=%d derived_stats_cognom_keys=%d derived_stats_delta_rows=%d derived_stats_municipis=%d derived_stats_nivells=%d derived_stats_negative_rows=%d derived_search_dur=%s search_job_cache_warmup_dur=%s search_job_cache_warmup_build_dur=%s search_job_cache_warmup_store_dur=%s search_job_cache_warmup_docs=%d derived_search_prepare_dur=%s derived_search_build_dur=%s derived_search_upsert_dur=%s derived_search_delete_dur=%s search_docs_upserts=%d search_docs_deletes=%d search_cache_hits=%d search_cache_misses=%d search_cache_size=%d search_doc_cache_hits=%d search_doc_cache_misses=%d search_doc_cache_size=%d activity_dur=%s audit_dur=%s postproc_dur=%s total_dur=%s throughput=%.1f/s deferred_activity=%t", chunkMetrics.ChunkIndex, chunkMetrics.ChunkSize, chunkMetrics.LoadedRows, chunkMetrics.Updated, chunkMetrics.Errors, chunkMetrics.LoadDur, chunkMetrics.UpdateDur, chunkMetrics.DerivedDur, chunkMetrics.DerivedDemografiaDur, chunkMetrics.DerivedStatsDur, chunkMetrics.DerivedStatsPrepareDur, chunkMetrics.DerivedStatsPrepareContribDur, chunkMetrics.DerivedStatsPrepareNivellsDur, chunkMetrics.DerivedStatsAggregateDur, chunkMetrics.DerivedStatsEnsureDur, chunkMetrics.DerivedStatsBuildDeltasDur, chunkMetrics.DerivedStatsApplyDur, chunkMetrics.DerivedStatsItems, chunkMetrics.DerivedStatsNomKeys, chunkMetrics.DerivedStatsCognomKeys, chunkMetrics.DerivedStatsDeltaRows, chunkMetrics.DerivedStatsMunicipis, chunkMetrics.DerivedStatsNivells, chunkMetrics.DerivedStatsNegativeRows, chunkMetrics.DerivedSearchDur, chunkMetrics.SearchWarmupDur, chunkMetrics.SearchWarmupBuildDur, chunkMetrics.SearchWarmupStoreDur, chunkMetrics.SearchWarmupDocs, chunkMetrics.SearchPrepareDur, chunkMetrics.SearchBuildDur, chunkMetrics.SearchUpsertDur, chunkMetrics.SearchDeleteDur, chunkMetrics.SearchDocsUpserts, chunkMetrics.SearchDocsDeletes, chunkMetrics.SearchCacheHits, chunkMetrics.SearchCacheMisses, chunkMetrics.SearchCacheSize, chunkMetrics.SearchDocCacheHits, chunkMetrics.SearchDocCacheMisses, chunkMetrics.SearchDocCacheSize, chunkMetrics.ActivityDur, chunkMetrics.AuditDur, chunkMetrics.PostprocDur, chunkMetrics.TotalDur, chunkMetrics.Throughput, chunkMetrics.DeferredActivity)
+			Debugf("moderacio bulk registre chunk=%d size=%d loaded=%d updated=%d errors=%d load_dur=%s update_dur=%s derived_dur=%s derived_demografia_dur=%s derived_stats_dur=%s derived_stats_prepare_dur=%s derived_stats_prepare_contrib_dur=%s derived_stats_prepare_setup_dur=%s derived_stats_prepare_role_dur=%s derived_stats_prepare_nom_dur=%s derived_stats_prepare_cognom_dur=%s derived_stats_prepare_nivells_dur=%s derived_stats_prepare_persones=%d derived_stats_prepare_matched=%d derived_stats_prepare_nom_values=%d derived_stats_prepare_cognom_values=%d derived_stats_prepare_nom_cache_hits=%d derived_stats_prepare_nom_cache_misses=%d derived_stats_prepare_cognom_cache_hits=%d derived_stats_prepare_cognom_cache_misses=%d derived_stats_aggregate_dur=%s derived_stats_ensure_dur=%s derived_stats_build_deltas_dur=%s derived_stats_apply_dur=%s derived_stats_items=%d derived_stats_nom_keys=%d derived_stats_cognom_keys=%d derived_stats_delta_rows=%d derived_stats_municipis=%d derived_stats_nivells=%d derived_stats_negative_rows=%d derived_search_dur=%s search_job_cache_warmup_dur=%s search_job_cache_warmup_build_dur=%s search_job_cache_warmup_store_dur=%s search_job_cache_warmup_docs=%d derived_search_prepare_dur=%s derived_search_build_dur=%s derived_search_upsert_dur=%s derived_search_delete_dur=%s search_docs_upserts=%d search_docs_deletes=%d search_cache_hits=%d search_cache_misses=%d search_cache_size=%d search_doc_cache_hits=%d search_doc_cache_misses=%d search_doc_cache_size=%d activity_dur=%s audit_dur=%s postproc_dur=%s total_dur=%s throughput=%.1f/s deferred_activity=%t", chunkMetrics.ChunkIndex, chunkMetrics.ChunkSize, chunkMetrics.LoadedRows, chunkMetrics.Updated, chunkMetrics.Errors, chunkMetrics.LoadDur, chunkMetrics.UpdateDur, chunkMetrics.DerivedDur, chunkMetrics.DerivedDemografiaDur, chunkMetrics.DerivedStatsDur, chunkMetrics.DerivedStatsPrepareDur, chunkMetrics.DerivedStatsPrepareContribDur, chunkMetrics.DerivedStatsPrepareSetupDur, chunkMetrics.DerivedStatsPrepareRoleDur, chunkMetrics.DerivedStatsPrepareNomDur, chunkMetrics.DerivedStatsPrepareCognomDur, chunkMetrics.DerivedStatsPrepareNivellsDur, chunkMetrics.DerivedStatsPreparePersones, chunkMetrics.DerivedStatsPrepareMatched, chunkMetrics.DerivedStatsPrepareNomValues, chunkMetrics.DerivedStatsPrepareCognomValues, chunkMetrics.DerivedStatsPrepareNomCacheHits, chunkMetrics.DerivedStatsPrepareNomCacheMisses, chunkMetrics.DerivedStatsPrepareCognomCacheHits, chunkMetrics.DerivedStatsPrepareCognomCacheMisses, chunkMetrics.DerivedStatsAggregateDur, chunkMetrics.DerivedStatsEnsureDur, chunkMetrics.DerivedStatsBuildDeltasDur, chunkMetrics.DerivedStatsApplyDur, chunkMetrics.DerivedStatsItems, chunkMetrics.DerivedStatsNomKeys, chunkMetrics.DerivedStatsCognomKeys, chunkMetrics.DerivedStatsDeltaRows, chunkMetrics.DerivedStatsMunicipis, chunkMetrics.DerivedStatsNivells, chunkMetrics.DerivedStatsNegativeRows, chunkMetrics.DerivedSearchDur, chunkMetrics.SearchWarmupDur, chunkMetrics.SearchWarmupBuildDur, chunkMetrics.SearchWarmupStoreDur, chunkMetrics.SearchWarmupDocs, chunkMetrics.SearchPrepareDur, chunkMetrics.SearchBuildDur, chunkMetrics.SearchUpsertDur, chunkMetrics.SearchDeleteDur, chunkMetrics.SearchDocsUpserts, chunkMetrics.SearchDocsDeletes, chunkMetrics.SearchCacheHits, chunkMetrics.SearchCacheMisses, chunkMetrics.SearchCacheSize, chunkMetrics.SearchDocCacheHits, chunkMetrics.SearchDocCacheMisses, chunkMetrics.SearchDocCacheSize, chunkMetrics.ActivityDur, chunkMetrics.AuditDur, chunkMetrics.PostprocDur, chunkMetrics.TotalDur, chunkMetrics.Throughput, chunkMetrics.DeferredActivity)
 		}
 		if onChunk != nil {
 			onChunk(chunkMetrics)
@@ -3937,6 +3973,7 @@ func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBul
 	statsStart := time.Now()
 	statsPrepareStart := time.Now()
 	statsItems := make([]nomCognomBulkDelta, 0, len(successByID))
+	contribCache := newNomCognomContribCache()
 	for _, state := range states {
 		if _, ok := successSet[state.Reg.ID]; !ok {
 			continue
@@ -3944,9 +3981,22 @@ func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBul
 		if state.Delta == 0 || state.Llibre == nil || state.MunicipiID <= 0 {
 			continue
 		}
+		contribMetrics := nomCognomContribMetrics{Cache: contribCache}
 		contribStart := time.Now()
-		contrib := calcNomCognomContribs(state.Reg, state.Persones)
+		contrib := calcNomCognomContribsWithMetrics(state.Reg, state.Persones, &contribMetrics)
 		metrics.StatsPrepareContribDur += time.Since(contribStart)
+		metrics.StatsPrepareSetupDur += contribMetrics.SetupDur
+		metrics.StatsPrepareRoleDur += contribMetrics.RoleMatchDur
+		metrics.StatsPrepareNomDur += contribMetrics.NomDur
+		metrics.StatsPrepareCognomDur += contribMetrics.CognomDur
+		metrics.StatsPreparePersones += contribMetrics.Persones
+		metrics.StatsPrepareMatched += contribMetrics.Matched
+		metrics.StatsPrepareNomValues += contribMetrics.NomValues
+		metrics.StatsPrepareCognomValues += contribMetrics.CognomValues
+		metrics.StatsPrepareNomCacheHits += contribMetrics.NomCacheHits
+		metrics.StatsPrepareNomCacheMisses += contribMetrics.NomCacheMisses
+		metrics.StatsPrepareCognomCacheHits += contribMetrics.CognomCacheHits
+		metrics.StatsPrepareCognomCacheMisses += contribMetrics.CognomCacheMisses
 		nivellsStart := time.Now()
 		nivellIDs := listNivellAncestorsForMunicipiCached(a, state.MunicipiID, nivellCache)
 		metrics.StatsPrepareNivellsDur += time.Since(nivellsStart)
