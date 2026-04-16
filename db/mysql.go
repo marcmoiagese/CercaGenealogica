@@ -2084,6 +2084,9 @@ func (d *MySQL) ListNivellDemografiaDecades(nivellID int, from, to int) ([]Nivel
 func (d *MySQL) ApplyNivellDemografiaDelta(nivellID, year int, tipus string, delta int) error {
 	return d.help.applyNivellDemografiaDelta(nivellID, year, tipus, delta)
 }
+func (d *MySQL) BulkApplyPositiveDemografiaDeltas(municipis []DemografiaDelta, nivells []DemografiaDelta) error {
+	return d.help.bulkApplyPositiveDemografiaDeltas(municipis, nivells)
+}
 func (d *MySQL) RebuildNivellDemografia(nivellID int) error {
 	return d.help.rebuildNivellDemografia(nivellID)
 }

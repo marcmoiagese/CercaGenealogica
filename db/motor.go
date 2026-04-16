@@ -1395,6 +1395,13 @@ type NivellDemografiaMeta struct {
 	UpdatedAt       sql.NullTime
 }
 
+type DemografiaDelta struct {
+	ID    int
+	Any   int
+	Tipus string
+	Delta int
+}
+
 type DemografiaQueueItem struct {
 	ID          int
 	MunicipiID  int

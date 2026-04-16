@@ -2848,6 +2848,9 @@ func (d *PostgreSQL) ListNivellDemografiaDecades(nivellID int, from, to int) ([]
 func (d *PostgreSQL) ApplyNivellDemografiaDelta(nivellID, year int, tipus string, delta int) error {
 	return d.help.applyNivellDemografiaDelta(nivellID, year, tipus, delta)
 }
+func (d *PostgreSQL) BulkApplyPositiveDemografiaDeltas(municipis []DemografiaDelta, nivells []DemografiaDelta) error {
+	return d.help.bulkApplyPositiveDemografiaDeltas(municipis, nivells)
+}
 func (d *PostgreSQL) RebuildNivellDemografia(nivellID int) error {
 	return d.help.rebuildNivellDemografia(nivellID)
 }

@@ -16144,6 +16144,40 @@ func (h sqlHelper) applyDemografiaPositiveMetaTx(tx *sql.Tx, metaTable, idCol st
 	return nil
 }
 
+func (h sqlHelper) bulkApplyPositiveDemografiaDeltas(municipis []DemografiaDelta, nivells []DemografiaDelta) error {
+	if len(municipis) == 0 && len(nivells) == 0 {
+		return nil
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, delta := range municipis {
+		if delta.Delta == 0 {
+			continue
+		}
+		if delta.Delta < 0 {
+			return errors.New("negative municipi demografia delta not allowed in positive bulk path")
+		}
+		if err := h.applyMunicipiDemografiaDeltaTx(tx, delta.ID, delta.Any, delta.Tipus, delta.Delta); err != nil {
+			return err
+		}
+	}
+	for _, delta := range nivells {
+		if delta.Delta == 0 {
+			continue
+		}
+		if delta.Delta < 0 {
+			return errors.New("negative nivell demografia delta not allowed in positive bulk path")
+		}
+		if err := h.applyNivellDemografiaDeltaTx(tx, delta.ID, delta.Any, delta.Tipus, delta.Delta); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (h sqlHelper) rebuildMunicipiDemografia(municipiID int) error {
 	if municipiID <= 0 {
 		return errors.New("municipi_id invalid")

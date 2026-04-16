@@ -99,6 +99,9 @@ type moderacioBulkRegistreChunkMetrics struct {
 	UpdateDur                            time.Duration
 	DerivedDur                           time.Duration
 	DerivedDemografiaDur                 time.Duration
+	DerivedDemografiaBulkPositive        bool
+	DerivedDemografiaMunicipiDeltas      int
+	DerivedDemografiaNivellDeltas        int
 	DerivedStatsDur                      time.Duration
 	DerivedStatsPrepareDur               time.Duration
 	DerivedStatsPrepareContribDur        time.Duration
@@ -169,8 +172,21 @@ type moderacioBulkRegistreDemoKey struct {
 	Delta      int
 }
 
+type moderacioBulkRegistreDemografiaDeltaKey struct {
+	ID    int
+	Year  int
+	Tipus string
+}
+
+type bulkPositiveDemografiaStore interface {
+	BulkApplyPositiveDemografiaDeltas(municipis []db.DemografiaDelta, nivells []db.DemografiaDelta) error
+}
+
 type moderacioBulkRegistreDerivedMetrics struct {
 	DemografiaDur                 time.Duration
+	DemografiaBulkPositive        bool
+	DemografiaMunicipiDeltas      int
+	DemografiaNivellDeltas        int
 	StatsDur                      time.Duration
 	StatsPrepareDur               time.Duration
 	StatsPrepareContribDur        time.Duration
@@ -3846,6 +3862,9 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 		derivedStart := time.Now()
 		derivedMetrics := a.applyModeracioBulkRegistreDerivedSideEffects(states, successSet, estat, demoGroups, nivellCache, searchCtx)
 		chunkMetrics.DerivedDemografiaDur = derivedMetrics.DemografiaDur
+		chunkMetrics.DerivedDemografiaBulkPositive = derivedMetrics.DemografiaBulkPositive
+		chunkMetrics.DerivedDemografiaMunicipiDeltas = derivedMetrics.DemografiaMunicipiDeltas
+		chunkMetrics.DerivedDemografiaNivellDeltas = derivedMetrics.DemografiaNivellDeltas
 		chunkMetrics.DerivedStatsDur = derivedMetrics.StatsDur
 		chunkMetrics.DerivedStatsPrepareDur = derivedMetrics.StatsPrepareDur
 		chunkMetrics.DerivedStatsPrepareContribDur = derivedMetrics.StatsPrepareContribDur
@@ -3896,7 +3915,7 @@ func (a *App) applyModeracioBulkRegistreUpdates(action string, ids []int, motiu 
 			chunkMetrics.Throughput = float64(len(chunkIDs)) / chunkMetrics.TotalDur.Seconds()
 		}
 		if IsDebugEnabled() {
-			Debugf("moderacio bulk registre chunk=%d size=%d loaded=%d updated=%d errors=%d load_dur=%s update_dur=%s derived_dur=%s derived_demografia_dur=%s derived_stats_dur=%s derived_stats_prepare_dur=%s derived_stats_prepare_contrib_dur=%s derived_stats_prepare_setup_dur=%s derived_stats_prepare_role_dur=%s derived_stats_prepare_nom_dur=%s derived_stats_prepare_cognom_dur=%s derived_stats_prepare_nivells_dur=%s derived_stats_prepare_persones=%d derived_stats_prepare_matched=%d derived_stats_prepare_nom_values=%d derived_stats_prepare_cognom_values=%d derived_stats_prepare_nom_cache_hits=%d derived_stats_prepare_nom_cache_misses=%d derived_stats_prepare_cognom_cache_hits=%d derived_stats_prepare_cognom_cache_misses=%d derived_stats_aggregate_dur=%s derived_stats_ensure_dur=%s derived_stats_build_deltas_dur=%s derived_stats_apply_dur=%s derived_stats_items=%d derived_stats_nom_keys=%d derived_stats_cognom_keys=%d derived_stats_delta_rows=%d derived_stats_municipis=%d derived_stats_nivells=%d derived_stats_negative_rows=%d derived_search_dur=%s search_job_cache_warmup_dur=%s search_job_cache_warmup_build_dur=%s search_job_cache_warmup_store_dur=%s search_job_cache_warmup_docs=%d derived_search_prepare_dur=%s derived_search_build_dur=%s derived_search_upsert_dur=%s derived_search_delete_dur=%s search_docs_upserts=%d search_docs_deletes=%d search_cache_hits=%d search_cache_misses=%d search_cache_size=%d search_doc_cache_hits=%d search_doc_cache_misses=%d search_doc_cache_size=%d activity_dur=%s audit_dur=%s postproc_dur=%s total_dur=%s throughput=%.1f/s deferred_activity=%t", chunkMetrics.ChunkIndex, chunkMetrics.ChunkSize, chunkMetrics.LoadedRows, chunkMetrics.Updated, chunkMetrics.Errors, chunkMetrics.LoadDur, chunkMetrics.UpdateDur, chunkMetrics.DerivedDur, chunkMetrics.DerivedDemografiaDur, chunkMetrics.DerivedStatsDur, chunkMetrics.DerivedStatsPrepareDur, chunkMetrics.DerivedStatsPrepareContribDur, chunkMetrics.DerivedStatsPrepareSetupDur, chunkMetrics.DerivedStatsPrepareRoleDur, chunkMetrics.DerivedStatsPrepareNomDur, chunkMetrics.DerivedStatsPrepareCognomDur, chunkMetrics.DerivedStatsPrepareNivellsDur, chunkMetrics.DerivedStatsPreparePersones, chunkMetrics.DerivedStatsPrepareMatched, chunkMetrics.DerivedStatsPrepareNomValues, chunkMetrics.DerivedStatsPrepareCognomValues, chunkMetrics.DerivedStatsPrepareNomCacheHits, chunkMetrics.DerivedStatsPrepareNomCacheMisses, chunkMetrics.DerivedStatsPrepareCognomCacheHits, chunkMetrics.DerivedStatsPrepareCognomCacheMisses, chunkMetrics.DerivedStatsAggregateDur, chunkMetrics.DerivedStatsEnsureDur, chunkMetrics.DerivedStatsBuildDeltasDur, chunkMetrics.DerivedStatsApplyDur, chunkMetrics.DerivedStatsItems, chunkMetrics.DerivedStatsNomKeys, chunkMetrics.DerivedStatsCognomKeys, chunkMetrics.DerivedStatsDeltaRows, chunkMetrics.DerivedStatsMunicipis, chunkMetrics.DerivedStatsNivells, chunkMetrics.DerivedStatsNegativeRows, chunkMetrics.DerivedSearchDur, chunkMetrics.SearchWarmupDur, chunkMetrics.SearchWarmupBuildDur, chunkMetrics.SearchWarmupStoreDur, chunkMetrics.SearchWarmupDocs, chunkMetrics.SearchPrepareDur, chunkMetrics.SearchBuildDur, chunkMetrics.SearchUpsertDur, chunkMetrics.SearchDeleteDur, chunkMetrics.SearchDocsUpserts, chunkMetrics.SearchDocsDeletes, chunkMetrics.SearchCacheHits, chunkMetrics.SearchCacheMisses, chunkMetrics.SearchCacheSize, chunkMetrics.SearchDocCacheHits, chunkMetrics.SearchDocCacheMisses, chunkMetrics.SearchDocCacheSize, chunkMetrics.ActivityDur, chunkMetrics.AuditDur, chunkMetrics.PostprocDur, chunkMetrics.TotalDur, chunkMetrics.Throughput, chunkMetrics.DeferredActivity)
+			Debugf("moderacio bulk registre chunk=%d size=%d loaded=%d updated=%d errors=%d load_dur=%s update_dur=%s derived_dur=%s derived_demografia_dur=%s derived_demografia_bulk_positive=%t derived_demografia_municipi_deltas=%d derived_demografia_nivell_deltas=%d derived_stats_dur=%s derived_stats_prepare_dur=%s derived_stats_prepare_contrib_dur=%s derived_stats_prepare_setup_dur=%s derived_stats_prepare_role_dur=%s derived_stats_prepare_nom_dur=%s derived_stats_prepare_cognom_dur=%s derived_stats_prepare_nivells_dur=%s derived_stats_prepare_persones=%d derived_stats_prepare_matched=%d derived_stats_prepare_nom_values=%d derived_stats_prepare_cognom_values=%d derived_stats_prepare_nom_cache_hits=%d derived_stats_prepare_nom_cache_misses=%d derived_stats_prepare_cognom_cache_hits=%d derived_stats_prepare_cognom_cache_misses=%d derived_stats_aggregate_dur=%s derived_stats_ensure_dur=%s derived_stats_build_deltas_dur=%s derived_stats_apply_dur=%s derived_stats_items=%d derived_stats_nom_keys=%d derived_stats_cognom_keys=%d derived_stats_delta_rows=%d derived_stats_municipis=%d derived_stats_nivells=%d derived_stats_negative_rows=%d derived_search_dur=%s search_job_cache_warmup_dur=%s search_job_cache_warmup_build_dur=%s search_job_cache_warmup_store_dur=%s search_job_cache_warmup_docs=%d derived_search_prepare_dur=%s derived_search_build_dur=%s derived_search_upsert_dur=%s derived_search_delete_dur=%s search_docs_upserts=%d search_docs_deletes=%d search_cache_hits=%d search_cache_misses=%d search_cache_size=%d search_doc_cache_hits=%d search_doc_cache_misses=%d search_doc_cache_size=%d activity_dur=%s audit_dur=%s postproc_dur=%s total_dur=%s throughput=%.1f/s deferred_activity=%t", chunkMetrics.ChunkIndex, chunkMetrics.ChunkSize, chunkMetrics.LoadedRows, chunkMetrics.Updated, chunkMetrics.Errors, chunkMetrics.LoadDur, chunkMetrics.UpdateDur, chunkMetrics.DerivedDur, chunkMetrics.DerivedDemografiaDur, chunkMetrics.DerivedDemografiaBulkPositive, chunkMetrics.DerivedDemografiaMunicipiDeltas, chunkMetrics.DerivedDemografiaNivellDeltas, chunkMetrics.DerivedStatsDur, chunkMetrics.DerivedStatsPrepareDur, chunkMetrics.DerivedStatsPrepareContribDur, chunkMetrics.DerivedStatsPrepareSetupDur, chunkMetrics.DerivedStatsPrepareRoleDur, chunkMetrics.DerivedStatsPrepareNomDur, chunkMetrics.DerivedStatsPrepareCognomDur, chunkMetrics.DerivedStatsPrepareNivellsDur, chunkMetrics.DerivedStatsPreparePersones, chunkMetrics.DerivedStatsPrepareMatched, chunkMetrics.DerivedStatsPrepareNomValues, chunkMetrics.DerivedStatsPrepareCognomValues, chunkMetrics.DerivedStatsPrepareNomCacheHits, chunkMetrics.DerivedStatsPrepareNomCacheMisses, chunkMetrics.DerivedStatsPrepareCognomCacheHits, chunkMetrics.DerivedStatsPrepareCognomCacheMisses, chunkMetrics.DerivedStatsAggregateDur, chunkMetrics.DerivedStatsEnsureDur, chunkMetrics.DerivedStatsBuildDeltasDur, chunkMetrics.DerivedStatsApplyDur, chunkMetrics.DerivedStatsItems, chunkMetrics.DerivedStatsNomKeys, chunkMetrics.DerivedStatsCognomKeys, chunkMetrics.DerivedStatsDeltaRows, chunkMetrics.DerivedStatsMunicipis, chunkMetrics.DerivedStatsNivells, chunkMetrics.DerivedStatsNegativeRows, chunkMetrics.DerivedSearchDur, chunkMetrics.SearchWarmupDur, chunkMetrics.SearchWarmupBuildDur, chunkMetrics.SearchWarmupStoreDur, chunkMetrics.SearchWarmupDocs, chunkMetrics.SearchPrepareDur, chunkMetrics.SearchBuildDur, chunkMetrics.SearchUpsertDur, chunkMetrics.SearchDeleteDur, chunkMetrics.SearchDocsUpserts, chunkMetrics.SearchDocsDeletes, chunkMetrics.SearchCacheHits, chunkMetrics.SearchCacheMisses, chunkMetrics.SearchCacheSize, chunkMetrics.SearchDocCacheHits, chunkMetrics.SearchDocCacheMisses, chunkMetrics.SearchDocCacheSize, chunkMetrics.ActivityDur, chunkMetrics.AuditDur, chunkMetrics.PostprocDur, chunkMetrics.TotalDur, chunkMetrics.Throughput, chunkMetrics.DeferredActivity)
 		}
 		if onChunk != nil {
 			onChunk(chunkMetrics)
@@ -3929,24 +3948,102 @@ func (a *App) warmModeracioBulkRegistreSearchCache(states []moderacioBulkRegistr
 	return stats
 }
 
-func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBulkRegistreState, successSet map[int]struct{}, estat string, demoGroups map[moderacioBulkRegistreDemoKey][]int, nivellCache map[int][]int, searchCtx *moderacioBulkRegistreSearchContext) moderacioBulkRegistreDerivedMetrics {
-	metrics := moderacioBulkRegistreDerivedMetrics{}
-	if len(states) == 0 || len(successSet) == 0 {
-		return metrics
+func (a *App) applyModeracioBulkRegistreDemografiaSideEffects(demoGroups map[moderacioBulkRegistreDemoKey][]int, successByID map[int]moderacioBulkRegistreState, nivellCache map[int][]int) (bool, int, int) {
+	if len(demoGroups) == 0 || len(successByID) == 0 {
+		return false, 0, 0
 	}
+	store, canBulk := a.DB.(bulkPositiveDemografiaStore)
+	municipiDeltaMap := map[moderacioBulkRegistreDemografiaDeltaKey]int{}
+	nivellDeltaMap := map[moderacioBulkRegistreDemografiaDeltaKey]int{}
+	canBulkPositive := canBulk
+	hasDelta := false
 
-	successByID := make(map[int]moderacioBulkRegistreState, len(successSet))
-	for _, state := range states {
-		if _, ok := successSet[state.Reg.ID]; !ok {
+	for key, groupIDs := range demoGroups {
+		appliedCount := 0
+		for _, id := range groupIDs {
+			if _, ok := successByID[id]; ok {
+				appliedCount++
+			}
+		}
+		if appliedCount == 0 {
 			continue
 		}
-		if state.Delta != 0 && state.Llibre != nil && state.MunicipiID <= 0 {
-			state.MunicipiID = demografiaMunicipiIDFromRegistre(&state.Reg, state.Llibre)
+		totalDelta := key.Delta * appliedCount
+		if totalDelta == 0 {
+			continue
 		}
-		successByID[state.Reg.ID] = state
+		hasDelta = true
+		if totalDelta < 0 {
+			canBulkPositive = false
+			continue
+		}
+		if !canBulkPositive {
+			continue
+		}
+		municipiKey := moderacioBulkRegistreDemografiaDeltaKey{ID: key.MunicipiID, Year: key.Year, Tipus: key.Tipus}
+		municipiDeltaMap[municipiKey] += totalDelta
+		for _, nivellID := range listNivellAncestorsForMunicipiCached(a, key.MunicipiID, nivellCache) {
+			nivellKey := moderacioBulkRegistreDemografiaDeltaKey{ID: nivellID, Year: key.Year, Tipus: key.Tipus}
+			nivellDeltaMap[nivellKey] += totalDelta
+		}
+	}
+	if !hasDelta {
+		return false, 0, 0
+	}
+	if canBulkPositive {
+		municipis := buildModeracioBulkRegistreDemografiaDeltas(municipiDeltaMap)
+		nivells := buildModeracioBulkRegistreDemografiaDeltas(nivellDeltaMap)
+		if err := store.BulkApplyPositiveDemografiaDeltas(municipis, nivells); err != nil {
+			Errorf("Error actualitzant demografia bulk positiva registre: %v", err)
+		} else {
+			if IsDebugEnabled() {
+				Debugf("moderacio bulk registre demografia aggregate municipi_deltas=%d nivell_deltas=%d apply=bulk_positive", len(municipis), len(nivells))
+			}
+			return true, len(municipis), len(nivells)
+		}
 	}
 
-	demoStart := time.Now()
+	municipiDeltas, nivellDeltas := a.applyModeracioBulkRegistreDemografiaLegacy(demoGroups, successByID, nivellCache)
+	if IsDebugEnabled() {
+		Debugf("moderacio bulk registre demografia aggregate municipi_deltas=%d nivell_deltas=%d apply=fallback", municipiDeltas, nivellDeltas)
+	}
+	return false, municipiDeltas, nivellDeltas
+}
+
+func buildModeracioBulkRegistreDemografiaDeltas(deltaMap map[moderacioBulkRegistreDemografiaDeltaKey]int) []db.DemografiaDelta {
+	if len(deltaMap) == 0 {
+		return nil
+	}
+	keys := make([]moderacioBulkRegistreDemografiaDeltaKey, 0, len(deltaMap))
+	for key, delta := range deltaMap {
+		if delta != 0 {
+			keys = append(keys, key)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].ID != keys[j].ID {
+			return keys[i].ID < keys[j].ID
+		}
+		if keys[i].Year != keys[j].Year {
+			return keys[i].Year < keys[j].Year
+		}
+		return keys[i].Tipus < keys[j].Tipus
+	})
+	out := make([]db.DemografiaDelta, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, db.DemografiaDelta{
+			ID:    key.ID,
+			Any:   key.Year,
+			Tipus: key.Tipus,
+			Delta: deltaMap[key],
+		})
+	}
+	return out
+}
+
+func (a *App) applyModeracioBulkRegistreDemografiaLegacy(demoGroups map[moderacioBulkRegistreDemoKey][]int, successByID map[int]moderacioBulkRegistreState, nivellCache map[int][]int) (int, int) {
+	municipiDeltas := 0
+	nivellDeltas := 0
 	for key, groupIDs := range demoGroups {
 		appliedCount := 0
 		for _, id := range groupIDs {
@@ -3965,9 +4062,33 @@ func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBul
 			Errorf("Error actualitzant demografia municipi %d: %v", key.MunicipiID, err)
 			continue
 		}
+		municipiDeltas++
 		nivellIDs := listNivellAncestorsForMunicipiCached(a, key.MunicipiID, nivellCache)
 		a.applyNivellDemografiaDeltaForMunicipiWithNivells(key.MunicipiID, key.Year, key.Tipus, totalDelta, nivellIDs)
+		nivellDeltas += len(nivellIDs)
 	}
+	return municipiDeltas, nivellDeltas
+}
+
+func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBulkRegistreState, successSet map[int]struct{}, estat string, demoGroups map[moderacioBulkRegistreDemoKey][]int, nivellCache map[int][]int, searchCtx *moderacioBulkRegistreSearchContext) moderacioBulkRegistreDerivedMetrics {
+	metrics := moderacioBulkRegistreDerivedMetrics{}
+	if len(states) == 0 || len(successSet) == 0 {
+		return metrics
+	}
+
+	successByID := make(map[int]moderacioBulkRegistreState, len(successSet))
+	for _, state := range states {
+		if _, ok := successSet[state.Reg.ID]; !ok {
+			continue
+		}
+		if state.Delta != 0 && state.Llibre != nil && state.MunicipiID <= 0 {
+			state.MunicipiID = demografiaMunicipiIDFromRegistre(&state.Reg, state.Llibre)
+		}
+		successByID[state.Reg.ID] = state
+	}
+
+	demoStart := time.Now()
+	metrics.DemografiaBulkPositive, metrics.DemografiaMunicipiDeltas, metrics.DemografiaNivellDeltas = a.applyModeracioBulkRegistreDemografiaSideEffects(demoGroups, successByID, nivellCache)
 	metrics.DemografiaDur = time.Since(demoStart)
 
 	statsStart := time.Now()

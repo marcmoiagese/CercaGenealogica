@@ -171,6 +171,66 @@ func TestDemografiaModerationDelta(t *testing.T) {
 	}
 }
 
+func TestDemografiaBulkPositivePreservesTotalsAndRangeF3110(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f31_10_demografia_bulk_positive.sqlite3")
+
+	admin, _ := createF7UserWithSession(t, database)
+	ensureAdminPolicyForUser(t, database, admin.ID)
+	session := createSessionCookie(t, database, admin.ID, "sess_f31_10_demografia_bulk_positive")
+
+	llibreID, paginaID := createF7LlibreWithPagina(t, database, admin.ID)
+	llibre, err := database.GetLlibre(llibreID)
+	if err != nil || llibre == nil {
+		t.Fatalf("GetLlibre ha fallat: %v", err)
+	}
+	munID := llibre.MunicipiID
+
+	registres := []struct {
+		tipus string
+		any   int
+	}{
+		{tipus: "baptisme", any: 1899},
+		{tipus: "baptisme", any: 1901},
+		{tipus: "matrimoni", any: 1901},
+		{tipus: "obit", any: 1905},
+		{tipus: "obit", any: 1905},
+		{tipus: "baptisme", any: 1905},
+	}
+	ids := make([]int, 0, len(registres))
+	for _, registre := range registres {
+		ids = append(ids, createDemografiaRegistre(t, database, llibreID, paginaID, admin.ID, registre.tipus, registre.any, "pendent"))
+	}
+
+	jobID := submitAsyncRegistreBulkJob(t, app, session, "csrf_f31_10_demografia_bulk_positive")
+	job := waitForAdminJobTerminal(t, database, jobID)
+	if job.Status != "done" {
+		t.Fatalf("job bulk registre esperat done, got status=%s phase=%s error=%s", job.Status, job.Phase, job.ErrorText)
+	}
+
+	meta, err := database.GetMunicipiDemografiaMeta(munID)
+	if err != nil || meta == nil {
+		t.Fatalf("GetMunicipiDemografiaMeta ha fallat: %v", err)
+	}
+	if meta.TotalNatalitat != 3 || meta.TotalMatrimonis != 1 || meta.TotalDefuncions != 2 {
+		t.Fatalf("totals bulk inesperats: natalitat=%d matrimonis=%d defuncions=%d", meta.TotalNatalitat, meta.TotalMatrimonis, meta.TotalDefuncions)
+	}
+	if !meta.AnyMin.Valid || meta.AnyMin.Int64 != 1899 || !meta.AnyMax.Valid || meta.AnyMax.Int64 != 1905 {
+		t.Fatalf("rang bulk esperat 1899-1905, got min=%v max=%v", meta.AnyMin, meta.AnyMax)
+	}
+
+	moderateObject(t, app, session.Value, "registre", ids[0], "rebutjar")
+	meta, err = database.GetMunicipiDemografiaMeta(munID)
+	if err != nil || meta == nil {
+		t.Fatalf("GetMunicipiDemografiaMeta després reject ha fallat: %v", err)
+	}
+	if meta.TotalNatalitat != 2 || meta.TotalMatrimonis != 1 || meta.TotalDefuncions != 2 {
+		t.Fatalf("totals després reject inesperats: natalitat=%d matrimonis=%d defuncions=%d", meta.TotalNatalitat, meta.TotalMatrimonis, meta.TotalDefuncions)
+	}
+	if !meta.AnyMin.Valid || meta.AnyMin.Int64 != 1901 || !meta.AnyMax.Valid || meta.AnyMax.Int64 != 1905 {
+		t.Fatalf("rang després reject esperat 1901-1905, got min=%v max=%v", meta.AnyMin, meta.AnyMax)
+	}
+}
+
 func TestDemografiaRebuildFiltersInvalid(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f15_demografia_rebuild.sqlite3")
 	_ = app

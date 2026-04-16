@@ -2122,6 +2122,9 @@ func (d *SQLite) ListNivellDemografiaDecades(nivellID int, from, to int) ([]Nive
 func (d *SQLite) ApplyNivellDemografiaDelta(nivellID, year int, tipus string, delta int) error {
 	return d.help.applyNivellDemografiaDelta(nivellID, year, tipus, delta)
 }
+func (d *SQLite) BulkApplyPositiveDemografiaDeltas(municipis []DemografiaDelta, nivells []DemografiaDelta) error {
+	return d.help.bulkApplyPositiveDemografiaDeltas(municipis, nivells)
+}
 func (d *SQLite) RebuildNivellDemografia(nivellID int) error {
 	return d.help.rebuildNivellDemografia(nivellID)
 }

@@ -116,7 +116,7 @@ func TestModeracioBulkRegistreDebugInstrumentationRespectsLogLevelF3017(t *testi
 				if !strings.Contains(logs, "type=registre branch=registre_special apply=applyModeracioBulkRegistreUpdates") {
 					t.Fatalf("amb debug esperava log de dispatch especial registre, però no hi és: %s", logs)
 				}
-				if !strings.Contains(logs, "[ModeracioBulkWorker] chunk=registre") || !strings.Contains(logs, "derived_dur=") || !strings.Contains(logs, "derived_stats_dur=") || !strings.Contains(logs, "derived_search_dur=") {
+				if !strings.Contains(logs, "[ModeracioBulkWorker] chunk=registre") || !strings.Contains(logs, "derived_dur=") || !strings.Contains(logs, "derived_demografia_bulk_positive=") || !strings.Contains(logs, "derived_stats_dur=") || !strings.Contains(logs, "derived_search_dur=") {
 					t.Fatalf("amb debug esperava log resumit update/derived del chunk registre, però no hi és: %s", logs)
 				}
 				if !strings.Contains(logs, "moderacio bulk registre chunk plan=") {
@@ -238,7 +238,7 @@ func TestModeracioBulkRegistreLargeChunkSummaryF311(t *testing.T) {
 		t.Fatalf("no s'ha trobat cap resum de chunk registre: %s", logs)
 	}
 	summary := strings.Join(lines, " || ")
-	if !strings.Contains(summary, "derived_stats_dur=") || !strings.Contains(summary, "derived_stats_prepare_dur=") || !strings.Contains(summary, "derived_stats_prepare_contrib_dur=") || !strings.Contains(summary, "derived_stats_prepare_role_dur=") || !strings.Contains(summary, "derived_stats_prepare_nom_dur=") || !strings.Contains(summary, "derived_stats_prepare_cognom_dur=") || !strings.Contains(summary, "derived_stats_prepare_persones=") || !strings.Contains(summary, "derived_stats_prepare_nom_cache_hits=") || !strings.Contains(summary, "derived_stats_prepare_cognom_cache_hits=") || !strings.Contains(summary, "derived_stats_prepare_nivells_dur=") || !strings.Contains(summary, "derived_stats_apply_dur=") || !strings.Contains(summary, "derived_stats_municipis=") || !strings.Contains(summary, "derived_search_dur=") || !strings.Contains(summary, "search_job_cache_warmup_build_dur=") || !strings.Contains(summary, "search_job_cache_warmup_docs=") || !strings.Contains(summary, "derived_search_build_dur=") || !strings.Contains(summary, "search_doc_cache_hits=") {
+	if !strings.Contains(summary, "derived_demografia_bulk_positive=true") || !strings.Contains(summary, "derived_demografia_municipi_deltas=") || !strings.Contains(summary, "derived_demografia_nivell_deltas=") || !strings.Contains(summary, "derived_stats_dur=") || !strings.Contains(summary, "derived_stats_prepare_dur=") || !strings.Contains(summary, "derived_stats_prepare_contrib_dur=") || !strings.Contains(summary, "derived_stats_prepare_role_dur=") || !strings.Contains(summary, "derived_stats_prepare_nom_dur=") || !strings.Contains(summary, "derived_stats_prepare_cognom_dur=") || !strings.Contains(summary, "derived_stats_prepare_persones=") || !strings.Contains(summary, "derived_stats_prepare_nom_cache_hits=") || !strings.Contains(summary, "derived_stats_prepare_cognom_cache_hits=") || !strings.Contains(summary, "derived_stats_prepare_nivells_dur=") || !strings.Contains(summary, "derived_stats_apply_dur=") || !strings.Contains(summary, "derived_stats_municipis=") || !strings.Contains(summary, "derived_search_dur=") || !strings.Contains(summary, "search_job_cache_warmup_build_dur=") || !strings.Contains(summary, "search_job_cache_warmup_docs=") || !strings.Contains(summary, "derived_search_build_dur=") || !strings.Contains(summary, "search_doc_cache_hits=") {
 		t.Fatalf("resum de chunk sense mètriques derivades completes: %s", summary)
 	}
 	t.Log(summary)
@@ -317,6 +317,9 @@ func TestModeracioBulkRegistreMetricsAndStatsPersistMultiDBF316(t *testing.T) {
 			"derived_stats_nivells=",
 			"derived_stats_negative_rows=",
 			"derived_search_dur=",
+			"derived_demografia_bulk_positive=true",
+			"derived_demografia_municipi_deltas=",
+			"derived_demografia_nivell_deltas=",
 			"search_job_cache_warmup_build_dur=",
 			"search_job_cache_warmup_docs=80",
 			"derived_search_build_dur=",
