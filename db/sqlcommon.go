@@ -12767,6 +12767,7 @@ type statsApplyTableMetrics struct {
 	Batches      int
 	NegativeRows int
 	Dur          time.Duration
+	Mode         string
 }
 
 func logStatsBulkApplyMetrics(style string, totalDur, commitDur time.Duration, tables []statsApplyTableMetrics) {
@@ -12778,7 +12779,11 @@ func logStatsBulkApplyMetrics(style string, totalDur, commitDur time.Duration, t
 		totalRows += table.Rows
 		totalBatches += table.Batches
 		totalNegativeRows += table.NegativeRows
-		parts = append(parts, fmt.Sprintf("%s:input=%d rows=%d batches=%d negative=%d dur=%s", table.Table, table.InputRows, table.Rows, table.Batches, table.NegativeRows, table.Dur))
+		mode := strings.TrimSpace(table.Mode)
+		if mode != "" {
+			mode = " mode=" + mode
+		}
+		parts = append(parts, fmt.Sprintf("%s:input=%d rows=%d batches=%d negative=%d dur=%s%s", table.Table, table.InputRows, table.Rows, table.Batches, table.NegativeRows, table.Dur, mode))
 	}
 	logDebugf("nom_cognom stats bulk persist style=%s total_rows=%d total_batches=%d negative_rows=%d total_dur=%s commit_dur=%s tables=%q", style, totalRows, totalBatches, totalNegativeRows, totalDur, commitDur, strings.Join(parts, " | "))
 }
@@ -12952,6 +12957,13 @@ func (h sqlHelper) bulkApplyStatsAnyDeltas(exec sqlStatsExec, table, entityCol, 
 				metrics.NegativeRows++
 			}
 		}
+		if h.style == "postgres" && !hasNegative {
+			metrics.Mode = "postgres_positive_update_insert"
+			if err := h.bulkApplyStatsAnyDeltasPostgresPositive(exec, table, entityCol, scopeCol, anyCol, valueCol, batch); err != nil {
+				return metrics, err
+			}
+			continue
+		}
 		stmt := fmt.Sprintf("INSERT INTO %s (%s, %s, %s, %s, updated_at) VALUES %s", table, entityCol, scopeCol, anyCol, valueCol, strings.Join(values, ", "))
 		if h.style == "mysql" {
 			stmt += fmt.Sprintf(" ON DUPLICATE KEY UPDATE %s = %s + VALUES(%s), updated_at = %s", valueCol, valueCol, valueCol, h.nowFun)
@@ -13001,6 +13013,13 @@ func (h sqlHelper) bulkApplyStatsTotalDeltas(exec sqlStatsExec, table, entityCol
 				metrics.NegativeRows++
 			}
 		}
+		if h.style == "postgres" && !hasNegative {
+			metrics.Mode = "postgres_positive_update_insert"
+			if err := h.bulkApplyStatsTotalDeltasPostgresPositive(exec, table, entityCol, scopeCol, valueCol, batch); err != nil {
+				return metrics, err
+			}
+			continue
+		}
 		stmt := fmt.Sprintf("INSERT INTO %s (%s, %s, %s, updated_at) VALUES %s", table, entityCol, scopeCol, valueCol, strings.Join(values, ", "))
 		if h.style == "mysql" {
 			stmt += fmt.Sprintf(" ON DUPLICATE KEY UPDATE %s = %s + VALUES(%s), updated_at = %s", valueCol, valueCol, valueCol, h.nowFun)
@@ -13018,6 +13037,99 @@ func (h sqlHelper) bulkApplyStatsTotalDeltas(exec sqlStatsExec, table, entityCol
 		}
 	}
 	return metrics, nil
+}
+
+func (h sqlHelper) bulkApplyStatsAnyDeltasPostgresPositive(exec sqlStatsExec, table, entityCol, scopeCol, anyCol, valueCol string, rows []statsDeltaAnyRow) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	values := make([]string, 0, len(rows))
+	args := make([]interface{}, 0, len(rows)*4)
+	for _, row := range rows {
+		values = append(values, "(?::INTEGER, ?::INTEGER, ?::INTEGER, ?::INTEGER)")
+		args = append(args, row.EntityID, row.ScopeID, row.AnyDoc, row.Delta)
+	}
+	stmt := fmt.Sprintf(`
+WITH delta(entity_id, scope_id, any_doc, delta) AS (
+    VALUES %s
+), updated AS (
+    UPDATE %s AS target
+    SET %s = target.%s + delta.delta, updated_at = %s
+    FROM delta
+    WHERE target.%s = delta.entity_id
+      AND target.%s = delta.scope_id
+      AND target.%s = delta.any_doc
+    RETURNING target.%s AS entity_id, target.%s AS scope_id, target.%s AS any_doc
+)
+INSERT INTO %s (%s, %s, %s, %s, updated_at)
+SELECT delta.entity_id, delta.scope_id, delta.any_doc, delta.delta, %s
+FROM delta
+LEFT JOIN updated
+  ON updated.entity_id = delta.entity_id
+ AND updated.scope_id = delta.scope_id
+ AND updated.any_doc = delta.any_doc
+WHERE updated.entity_id IS NULL
+ON CONFLICT (%s, %s, %s) DO UPDATE
+SET %s = %s.%s + excluded.%s, updated_at = %s`,
+		strings.Join(values, ", "),
+		table,
+		valueCol, valueCol, h.nowFun,
+		entityCol,
+		scopeCol,
+		anyCol,
+		entityCol, scopeCol, anyCol,
+		table, entityCol, scopeCol, anyCol, valueCol,
+		h.nowFun,
+		entityCol, scopeCol, anyCol,
+		valueCol, table, valueCol, valueCol, h.nowFun)
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := exec.Exec(stmt, args...)
+	return err
+}
+
+func (h sqlHelper) bulkApplyStatsTotalDeltasPostgresPositive(exec sqlStatsExec, table, entityCol, scopeCol, valueCol string, rows []statsDeltaTotalRow) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	values := make([]string, 0, len(rows))
+	args := make([]interface{}, 0, len(rows)*3)
+	for _, row := range rows {
+		values = append(values, "(?::INTEGER, ?::INTEGER, ?::INTEGER)")
+		args = append(args, row.EntityID, row.ScopeID, row.Delta)
+	}
+	stmt := fmt.Sprintf(`
+WITH delta(entity_id, scope_id, delta) AS (
+    VALUES %s
+), updated AS (
+    UPDATE %s AS target
+    SET %s = target.%s + delta.delta, updated_at = %s
+    FROM delta
+    WHERE target.%s = delta.entity_id
+      AND target.%s = delta.scope_id
+    RETURNING target.%s AS entity_id, target.%s AS scope_id
+)
+INSERT INTO %s (%s, %s, %s, updated_at)
+SELECT delta.entity_id, delta.scope_id, delta.delta, %s
+FROM delta
+LEFT JOIN updated
+  ON updated.entity_id = delta.entity_id
+ AND updated.scope_id = delta.scope_id
+WHERE updated.entity_id IS NULL
+ON CONFLICT (%s, %s) DO UPDATE
+SET %s = %s.%s + excluded.%s, updated_at = %s`,
+		strings.Join(values, ", "),
+		table,
+		valueCol, valueCol, h.nowFun,
+		entityCol,
+		scopeCol,
+		entityCol, scopeCol,
+		table, entityCol, scopeCol, valueCol,
+		h.nowFun,
+		entityCol, scopeCol,
+		valueCol, table, valueCol, valueCol, h.nowFun)
+	stmt = formatPlaceholders(h.style, stmt)
+	_, err := exec.Exec(stmt, args...)
+	return err
 }
 
 func compactStatsAnyRows(rows []statsDeltaAnyRow) []statsDeltaAnyRow {

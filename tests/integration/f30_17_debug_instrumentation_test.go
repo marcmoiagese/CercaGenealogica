@@ -342,6 +342,9 @@ func TestModeracioBulkRegistreMetricsAndStatsPersistMultiDBF316(t *testing.T) {
 				t.Fatalf("%s: log de persistència stats bulk sense token %q: %s", engine, token, logs)
 			}
 		}
+		if engine == "postgres" && !strings.Contains(logs, "mode=postgres_positive_update_insert") {
+			t.Fatalf("%s: log de persistència stats bulk sense camí positiu PostgreSQL: %s", engine, logs)
+		}
 		t.Logf("%s: %s", engine, summary)
 	})
 }
