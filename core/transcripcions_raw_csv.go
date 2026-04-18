@@ -478,10 +478,16 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 		}
 		result = a.RunCSVTemplateImport(template, file, separator, user.ID, importContext{}, llibreID)
 	case "generic":
+		template, err := a.getSystemImportTemplateByName(systemImportTemplateGenericName)
+		if err != nil || template == nil {
+			result.Failed = 1
+			result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "plantilla system generic no trobada"})
+			break
+		}
 		if separator == 0 {
 			separator = ','
 		}
-		result = a.importGenericTranscripcionsCSVForBook(file, separator, user.ID, llibreID)
+		result = a.RunCSVTemplateImport(template, file, separator, user.ID, importContext{}, llibreID)
 	default:
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "model d'importació no suportat"})

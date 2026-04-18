@@ -32,15 +32,16 @@ type templateImportModel struct {
 }
 
 type templatePolicies struct {
-	ModerationStatus        string
-	DedupWithin             bool
-	DedupKeyFields          []string
-	MergeMode               string
-	PrincipalRoles          []string
-	UpdateMissingOnly       bool
-	AddMissingPeople        bool
-	AddMissingAttrs         bool
-	AvoidDuplicatePrincipal bool
+	ModerationStatus                     string
+	DedupWithin                          bool
+	DedupKeyFields                       []string
+	DedupAddRowIndexWhenPrincipalMissing bool
+	MergeMode                            string
+	PrincipalRoles                       []string
+	UpdateMissingOnly                    bool
+	AddMissingPeople                     bool
+	AddMissingAttrs                      bool
+	AvoidDuplicatePrincipal              bool
 }
 
 type templateColumn struct {
@@ -117,14 +118,8 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		result.Debug.finalize(len(result.BookIDs), time.Since(start))
 		return result
 	}
-	if model.PresetCode == "baptismes_marcmoia_v2" || model.PresetCode == "baptismes_marcmoia" {
-		return a.importBaptismesMarcmoiaCSV(reader, sep, userID, ctx)
-	}
-	if model.PresetCode == "generic_v1" {
-		if fixedBookID > 0 {
-			return a.importGenericTranscripcionsCSVForBook(reader, sep, userID, fixedBookID)
-		}
-		return a.importGenericTranscripcionsCSV(reader, sep, userID, ctx)
+	if debugModel := templateImportDebugModel(model); debugModel != "" {
+		result.Debug.Model = debugModel
 	}
 	parseCfg := buildTemplateParseConfig(model)
 
@@ -145,6 +140,9 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	parseStart = time.Now()
 	for i, h := range headers {
 		headerIndex[normalizeCSVHeader(h)] = i
+	}
+	if model.PresetCode == "generic_v1" && len(model.Mapping) == 0 {
+		model.Mapping = buildGenericTemplateColumns(headers)
 	}
 	for i := range model.Mapping {
 		model.Mapping[i].Index = resolveTemplateColumnIndex(model.Mapping[i], headerIndex)
@@ -225,6 +223,9 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		if model.Policies.DedupWithin && len(model.Policies.DedupKeyFields) > 0 {
 			key := buildTemplateDedupKey(model.Policies.DedupKeyFields, rowCtx, mappedValues)
 			if key != "" {
+				if model.Policies.DedupAddRowIndexWhenPrincipalMissing && principalPersonKey(persones, model.Policies.PrincipalRoles) == "" {
+					key += "|row:" + strconv.Itoa(rowNum)
+				}
 				if firstRow, ok := seen[key]; ok {
 					result.Failed++
 					fields := map[string]string{"duplicate_row": strconv.Itoa(firstRow)}
@@ -279,6 +280,11 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		t.DataActeEstat = normalizeDataActeEstat(t.DataActeEstat)
 		if t.DataActeEstat == "" {
 			t.DataActeEstat = "clar"
+		}
+		if !validTipusActe(t.TipusActe) {
+			result.Failed++
+			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "tipus_acte invàlid"})
+			continue
 		}
 		writeStart := time.Now()
 		id, err := a.DB.CreateTranscripcioRaw(&t)
@@ -406,6 +412,7 @@ func parseTemplateImportModel(modelJSON string) (*templateImportModel, error) {
 			model.Policies.DedupWithin = asBool(dedup["within_file"])
 			model.Policies.DedupKeyFields = append(model.Policies.DedupKeyFields, asStringSlice(dedup["key_fields"])...)
 			model.Policies.DedupKeyFields = append(model.Policies.DedupKeyFields, asStringSlice(dedup["key_columns"])...)
+			model.Policies.DedupAddRowIndexWhenPrincipalMissing = asBool(dedup["if_principal_name_missing_add_row_index"])
 		}
 		if merge, ok := policies["merge_existing"].(map[string]interface{}); ok {
 			model.Policies.MergeMode = asString(merge["mode"])
@@ -446,6 +453,36 @@ func parseTemplateColumns(raw []interface{}) []templateColumn {
 			col.Condition = parseTemplateCondition(cond)
 		}
 		cols = append(cols, col)
+	}
+	return cols
+}
+
+func buildGenericTemplateColumns(headers []string) []templateColumn {
+	cols := make([]templateColumn, 0, len(headers))
+	for _, header := range headers {
+		col := parseCSVHeader(header)
+		target := ""
+		switch col.Kind {
+		case "base":
+			target = "base." + col.Field
+		case "person":
+			target = "person." + col.Role + "." + col.Field
+		case "attr":
+			attrType := strings.TrimSpace(col.AttrType)
+			if attrType == "" {
+				attrType = "text"
+			}
+			target = "attr." + col.AttrKey + "." + attrType
+		}
+		if target == "" {
+			continue
+		}
+		cols = append(cols, templateColumn{
+			Header: strings.TrimSpace(header),
+			Key:    strings.TrimSpace(header),
+			MapTo:  []templateMapTo{{Target: target}},
+			Index:  -1,
+		})
 	}
 	return cols
 }
@@ -622,16 +659,20 @@ func resolveTemplateBookID(model *templateImportModel, rowCtx templateRowContext
 	}
 	switch model.BookMode {
 	case "cronologia_lookup":
-		key := rowCtx.HeaderValues[normalizeCSVHeader(model.BookColumn)]
+		raw := rowCtx.HeaderValues[normalizeCSVHeader(model.BookColumn)]
+		if strings.TrimSpace(raw) == "" {
+			return 0, bookInfo{}, "llibre buit"
+		}
+		key := raw
 		if model.CronologiaNormalize {
 			key = normalizeCronologia(key)
 		}
 		info, ok := byKey[key]
 		if !ok || info.ID == 0 {
-			return 0, bookInfo{}, "llibre no trobat"
+			return 0, bookInfo{}, "llibre no trobat: " + raw
 		}
 		if info.ID < 0 {
-			return 0, bookInfo{}, "llibre ambigu"
+			return 0, bookInfo{}, "llibre ambigu: " + raw
 		}
 		return info.ID, info, ""
 	default:
@@ -764,6 +805,9 @@ func applyTemplateTransforms(value string, transforms []templateTransform, parse
 		case "strip_marriage_order_text":
 			value = stripMarriageOrderText(value)
 		case "parse_date_flexible_to_base_data_acte", "parse_date_flexible_to_date_or_text_with_quality":
+			if strings.TrimSpace(value) != "" {
+				extras["date_text"] = strings.TrimSpace(value)
+			}
 			iso, textRaw, estat := parseFlexibleDateWithConfig(value, parseCfg)
 			if iso != "" {
 				value = iso
@@ -920,6 +964,9 @@ func applyBaseTarget(field string, value string, extras map[string]string, t *db
 	case "data_acte_estat":
 		t.DataActeEstat = value
 	case "data_acte_iso_text_estat":
+		if text := extras["date_text"]; text != "" {
+			t.DataActeText = text
+		}
 		if value != "" {
 			if isISODate(value) {
 				t.DataActeISO = parseNullString(value)
@@ -1069,10 +1116,11 @@ func applyAttrTarget(field string, value string, extras map[string]string, atrib
 	case "estat":
 		attr.Estat = value
 	case "date_or_text_with_quality":
-		attr.TipusValor = "text"
 		if isISODate(value) {
+			attr.TipusValor = "date"
 			attr.ValorDate = parseNullString(value)
 		} else {
+			attr.TipusValor = "text"
 			attr.ValorText = value
 		}
 		if estat := extras["date_estat"]; estat != "" {
@@ -1361,6 +1409,23 @@ func applyBaseDefaults(t *db.TranscripcioRaw, defaults map[string]string) {
 	}
 	if v := defaults["moderation_status"]; v != "" {
 		t.ModeracioEstat = v
+	}
+	if v := defaults["data_acte_estat"]; v != "" {
+		t.DataActeEstat = v
+	}
+}
+
+func templateImportDebugModel(model *templateImportModel) string {
+	if model == nil {
+		return ""
+	}
+	switch model.PresetCode {
+	case "generic_v1":
+		return "generic"
+	case "baptismes_marcmoia", "baptismes_marcmoia_v2":
+		return "template:" + model.PresetCode
+	default:
+		return ""
 	}
 }
 

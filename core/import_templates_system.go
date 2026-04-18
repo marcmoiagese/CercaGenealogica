@@ -7,6 +7,11 @@ import (
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
+const (
+	systemImportTemplateGenericName           = "System: Generic"
+	systemImportTemplateBaptismesMarcmoiaName = "System: Baptismes Marcmoia (v2)"
+)
+
 func (a *App) EnsureSystemImportTemplates() error {
 	if a == nil || a.DB == nil {
 		return nil
@@ -20,18 +25,21 @@ func (a *App) EnsureSystemImportTemplates() error {
 	}
 	hasGeneric := false
 	hasMarcmoia := false
+	var marcmoiaTemplate *db.CSVImportTemplate
 	for _, tpl := range existing {
+		tpl := tpl
 		name := strings.TrimSpace(tpl.Name)
-		if name == "System: Generic" && !tpl.OwnerUserID.Valid {
+		if name == systemImportTemplateGenericName && !tpl.OwnerUserID.Valid {
 			hasGeneric = true
 		}
-		if name == "System: Baptismes Marcmoia (v2)" && !tpl.OwnerUserID.Valid {
+		if name == systemImportTemplateBaptismesMarcmoiaName && !tpl.OwnerUserID.Valid {
 			hasMarcmoia = true
+			marcmoiaTemplate = &tpl
 		}
 	}
 	if !hasGeneric {
 		_, err := a.DB.CreateCSVImportTemplate(&db.CSVImportTemplate{
-			Name:             "System: Generic",
+			Name:             systemImportTemplateGenericName,
 			Description:      "Plantilla base per a capçaleres estàndard.",
 			OwnerUserID:      sql.NullInt64{},
 			Visibility:       "public",
@@ -52,10 +60,21 @@ func (a *App) EnsureSystemImportTemplates() error {
 			return err
 		}
 	}
+	if hasMarcmoia && marcmoiaTemplate != nil {
+		patched := patchSystemMarcmoiaTemplateJSON(marcmoiaTemplate.ModelJSON)
+		if strings.TrimSpace(patched) != strings.TrimSpace(marcmoiaTemplate.ModelJSON) || marcmoiaTemplate.DefaultSeparator == "" {
+			marcmoiaTemplate.ModelJSON = patched
+			marcmoiaTemplate.DefaultSeparator = ";"
+			marcmoiaTemplate.Description = "Plantilla del preset Marcmoia via motor genèric de plantilles."
+			if err := a.DB.UpdateCSVImportTemplate(marcmoiaTemplate); err != nil {
+				return err
+			}
+		}
+	}
 	if !hasMarcmoia {
 		_, err := a.DB.CreateCSVImportTemplate(&db.CSVImportTemplate{
-			Name:             "System: Baptismes Marcmoia (v2)",
-			Description:      "Plantilla del preset Marcmoia amb parsers avançats.",
+			Name:             systemImportTemplateBaptismesMarcmoiaName,
+			Description:      "Plantilla del preset Marcmoia via motor genèric de plantilles.",
 			OwnerUserID:      sql.NullInt64{},
 			Visibility:       "public",
 			DefaultSeparator: ";",
@@ -75,7 +94,8 @@ func (a *App) EnsureSystemImportTemplates() error {
   },
   "base_defaults": {
     "tipus_acte": "baptisme",
-    "moderation_status": "pendent"
+    "moderation_status": "pendent",
+    "data_acte_estat": "no_consta"
   },
   "mapping": {
     "columns": [
@@ -86,7 +106,7 @@ func (a *App) EnsureSystemImportTemplates() error {
       },
 
       { "header": "Pàgina digital", "key": "pagina_digital", "required": false, "aliases": ["paginareal","pagina_real","pag_digital"],
-        "map_to": [{ "target": "attr.pagina_digital.text", "transform": [{ "op": "trim" }] }]
+        "map_to": [{ "target": "attr.pagina_digital.text_with_quality", "transform": [{ "op": "trim" }, { "op": "default_quality_if_present" }] }]
       },
 
       { "header": "Any", "key": "any", "required": false, "aliases": ["anydoc","anno","año","year"],
@@ -94,29 +114,37 @@ func (a *App) EnsureSystemImportTemplates() error {
       },
 
       { "header": "Cognoms", "key": "cognoms", "required": true, "aliases": ["batejat","infant","persona","nomcomplet"],
-        "map_to": [{ "target": "person.batejat", "transform": [{ "op": "parse_person_from_cognoms_marcmoia_v2" }] }]
+        "map_to": [{ "target": "person.batejat", "transform": [{ "op": "parse_person_from_cognoms" }] }]
       },
 
       { "header": "Pare", "key": "pare", "required": false, "aliases": ["pare_nom","nom_pare"],
-        "map_to": [{ "target": "person.pare", "transform": [{ "op": "parse_person_from_nom_marcmoia_v2" }] }]
+        "map_to": [{ "target": "person.pare", "transform": [{ "op": "parse_person_from_nom" }] }]
       },
 
       { "header": "Mare", "key": "mare", "required": false, "aliases": ["mare_nom","nom_mare"],
-        "map_to": [{ "target": "person.mare", "transform": [{ "op": "parse_person_from_nom_marcmoia_v2" }] }]
+        "map_to": [{ "target": "person.mare", "transform": [{ "op": "parse_person_from_nom" }] }]
       },
 
       { "header": "Avis paterns", "key": "avis_paterns", "required": false, "aliases": ["avispaterns","avis_pare"],
         "map_to": [
-          { "target": "person.avi_patern",  "transform": [{ "op": "split_couple_i", "args": { "select": "left" } },  { "op": "parse_person_from_nom_marcmoia_v2" }] },
-          { "target": "person.avia_paterna","transform": [{ "op": "split_couple_i", "args": { "select": "right" } }, { "op": "parse_person_from_nom_marcmoia_v2" }] }
+          { "target": "person.avi_patern",  "transform": [{ "op": "split_couple_i", "args": { "select": "left" } },  { "op": "parse_person_from_nom" }] },
+          { "target": "person.avia_paterna","transform": [{ "op": "split_couple_i", "args": { "select": "right" } }, { "op": "parse_person_from_nom" }] }
         ]
       },
 
       { "header": "Avis materns", "key": "avis_materns", "required": false, "aliases": ["avismaterns","avis_mare"],
         "map_to": [
-          { "target": "person.avi_matern",  "transform": [{ "op": "split_couple_i", "args": { "select": "left" } },  { "op": "parse_person_from_nom_marcmoia_v2" }] },
-          { "target": "person.avia_materna","transform": [{ "op": "split_couple_i", "args": { "select": "right" } }, { "op": "parse_person_from_nom_marcmoia_v2" }] }
+          { "target": "person.avi_matern",  "transform": [{ "op": "split_couple_i", "args": { "select": "left" } },  { "op": "parse_person_from_nom" }] },
+          { "target": "person.avia_materna","transform": [{ "op": "split_couple_i", "args": { "select": "right" } }, { "op": "parse_person_from_nom" }] }
         ]
+      },
+
+      { "header": "Padrí de bateig", "key": "padri", "required": false, "aliases": ["padridbateig","padribateig","padri_bateig"],
+        "map_to": [{ "target": "person.padri", "transform": [{ "op": "parse_person_from_nom" }] }]
+      },
+
+      { "header": "Padrina de bateig", "key": "padrina", "required": false, "aliases": ["padrinetadebateig","padrinadebateig","padrina_bateig"],
+        "map_to": [{ "target": "person.padrina", "transform": [{ "op": "parse_person_from_nom" }] }]
       },
 
       { "header": "Bateig", "key": "bateig", "required": false, "aliases": ["data_bateig","data_acte","acte"],
@@ -153,7 +181,7 @@ func (a *App) EnsureSystemImportTemplates() error {
     "dedup": {
       "within_file": true,
       "key_strategy": "hash_raw_inputs_like_marcmoia",
-      "key_columns": ["llibre","pagina_llibre","pagina_digital","any","cognoms","pare","mare","avis_paterns","avis_materns","casat","nascut","bateig","ofici","defuncio"],
+      "key_columns": ["llibre","pagina_llibre","pagina_digital","any","cognoms","pare","mare","avis_paterns","avis_materns","casat","nascut","padri","padrina","bateig","ofici","defuncio"],
       "if_principal_name_missing_add_row_index": true
     },
     "merge_existing": {
@@ -172,4 +200,62 @@ func (a *App) EnsureSystemImportTemplates() error {
 		}
 	}
 	return nil
+}
+
+func (a *App) getSystemImportTemplateByName(name string) (*db.CSVImportTemplate, error) {
+	if a == nil || a.DB == nil {
+		return nil, nil
+	}
+	if err := a.EnsureSystemImportTemplates(); err != nil {
+		return nil, err
+	}
+	templates, err := a.DB.ListCSVImportTemplates(db.CSVImportTemplateFilter{
+		IncludePublic: true,
+		Limit:         500,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, tpl := range templates {
+		if strings.TrimSpace(tpl.Name) == name && !tpl.OwnerUserID.Valid {
+			tpl := tpl
+			return &tpl, nil
+		}
+	}
+	return nil, nil
+}
+
+func patchSystemMarcmoiaTemplateJSON(modelJSON string) string {
+	out := modelJSON
+	if !strings.Contains(out, `"data_acte_estat"`) {
+		out = strings.Replace(out, `"moderation_status": "pendent"`, `"moderation_status": "pendent",
+    "data_acte_estat": "no_consta"`, 1)
+	}
+	if !strings.Contains(out, `"key": "padri"`) {
+		insert := `
+
+      { "header": "Padrí de bateig", "key": "padri", "required": false, "aliases": ["padridbateig","padribateig","padri_bateig"],
+        "map_to": [{ "target": "person.padri", "transform": [{ "op": "parse_person_from_nom" }] }]
+      },
+
+      { "header": "Padrina de bateig", "key": "padrina", "required": false, "aliases": ["padrinetadebateig","padrinadebateig","padrina_bateig"],
+        "map_to": [{ "target": "person.padrina", "transform": [{ "op": "parse_person_from_nom" }] }]
+      },`
+		out = strings.Replace(out, `
+
+      { "header": "Bateig", "key": "bateig"`, insert+`
+
+      { "header": "Bateig", "key": "bateig"`, 1)
+	}
+	out = strings.Replace(out,
+		`"key_columns": ["llibre","pagina_llibre","pagina_digital","any","cognoms","pare","mare","avis_paterns","avis_materns","casat","nascut","bateig","ofici","defuncio"]`,
+		`"key_columns": ["llibre","pagina_llibre","pagina_digital","any","cognoms","pare","mare","avis_paterns","avis_materns","casat","nascut","padri","padrina","bateig","ofici","defuncio"]`,
+		1)
+	out = strings.ReplaceAll(out, `"parse_person_from_cognoms_marcmoia_v2"`, `"parse_person_from_cognoms"`)
+	out = strings.ReplaceAll(out, `"parse_person_from_nom_marcmoia_v2"`, `"parse_person_from_nom"`)
+	out = strings.Replace(out,
+		`{ "target": "attr.pagina_digital.text", "transform": [{ "op": "trim" }] }`,
+		`{ "target": "attr.pagina_digital.text_with_quality", "transform": [{ "op": "trim" }, { "op": "default_quality_if_present" }] }`,
+		1)
+	return out
 }

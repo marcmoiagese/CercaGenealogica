@@ -88,15 +88,27 @@ func (a *App) AdminImportRegistresGlobal(w http.ResponseWriter, r *http.Request)
 		}
 		result = a.RunCSVTemplateImport(template, file, separator, user.ID, ctx, 0)
 	case "baptismes_marcmoia":
+		template, err := a.getSystemImportTemplateByName(systemImportTemplateBaptismesMarcmoiaName)
+		if err != nil || template == nil {
+			result.Failed = 1
+			result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "plantilla system Marcmoia no trobada"})
+			break
+		}
 		if separator == 0 {
 			separator = ','
 		}
-		result = a.importBaptismesMarcmoiaCSV(file, separator, user.ID, ctx)
+		result = a.RunCSVTemplateImport(template, file, separator, user.ID, ctx, 0)
 	case "generic":
+		template, err := a.getSystemImportTemplateByName(systemImportTemplateGenericName)
+		if err != nil || template == nil {
+			result.Failed = 1
+			result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "plantilla system generic no trobada"})
+			break
+		}
 		if separator == 0 {
 			separator = ','
 		}
-		result = a.importGenericTranscripcionsCSV(file, separator, user.ID, ctx)
+		result = a.RunCSVTemplateImport(template, file, separator, user.ID, ctx, 0)
 	default:
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "model d'importació no suportat"})

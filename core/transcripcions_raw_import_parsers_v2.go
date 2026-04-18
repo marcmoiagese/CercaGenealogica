@@ -475,7 +475,7 @@ func splitParentheticalNotes(extras []string) (string, string) {
 		return "", ""
 	}
 	if len(extras) == 1 {
-		return "", extras[0]
+		return extras[0], extras[0]
 	}
 	notes := strings.Join(extras[:len(extras)-1], "; ")
 	return notes, extras[len(extras)-1]
