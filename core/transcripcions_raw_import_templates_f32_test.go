@@ -132,6 +132,106 @@ func TestF321MarcmoiaPresetRunsThroughTemplateEngine(t *testing.T) {
 	}
 }
 
+func TestF322MarcmoiaDoesNotMergeExistingWhenPageNotIndexed(t *testing.T) {
+	app, database, userID, llibreID, template := setupF322MarcmoiaTemplate(t, "pendent")
+	createF322ExistingBaptisme(t, database, llibreID, 12, "Joan", "Garcia", "Soler", "Pere", "Garcia", "Puig", "1890-02-05", "1890-02-01")
+
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF322MarcmoiaCSV(t, [][]string{
+		{"12", "12", "Garcia Soler Joan", "Pere Garcia", "Maria Puig", "01/02/1890", "05/02/1890"},
+	})), ',', userID, importContext{}, 0)
+	if result.Created != 1 || result.Updated != 0 || result.Failed != 0 {
+		t.Fatalf("pàgina no indexada no hauria de fusionar ni bloquejar: %+v", result)
+	}
+	if got := countF32Registres(t, database, llibreID); got != 2 {
+		t.Fatalf("esperava 2 registres després d'importar en pàgina no indexada, got=%d", got)
+	}
+}
+
+func TestF322MarcmoiaMergesStrongDuplicateOnIndexedPage(t *testing.T) {
+	app, database, userID, llibreID, template := setupF322MarcmoiaTemplate(t, "indexada")
+	createF322ExistingBaptisme(t, database, llibreID, 12, "Joan", "Garcia", "Soler", "Pere", "Garcia", "Puig", "1890-02-05", "1890-02-01")
+	incoming, incomingPeople, incomingAttrs := buildF322IncomingStrongRow(llibreID, 12)
+	if pageKey, indexed := app.templateIndexedPageKey(llibreID, incoming, incomingAttrs); !indexed {
+		t.Fatalf("la pàgina 12 hauria de constar indexada, pageKey=%q", pageKey)
+	}
+	matchKey := buildTemplateStrongMatchKey(incoming, incomingPeople, incomingAttrs, templatePolicies{PrincipalRoles: []string{"batejat", "persona_principal"}})
+	existingMap := app.loadExistingByStrongMatch(llibreID, incoming, incomingAttrs, templatePolicies{PrincipalRoles: []string{"batejat", "persona_principal"}})
+	if matchKey == "" || existingMap[matchKey] == 0 {
+		t.Fatalf("el setup de duplicat fort no és coherent: matchKey=%q existingMap=%+v", matchKey, existingMap)
+	}
+
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF322MarcmoiaCSV(t, [][]string{
+		{"12", "12", "Garcia Soler Joan", "Pere Garcia", "Maria Puig", "01/02/1890", "05/02/1890"},
+	})), ',', userID, importContext{}, 0)
+	if result.Created != 0 || result.Updated != 1 || result.Failed != 0 {
+		t.Fatalf("duplicat fort en pàgina indexada s'hauria de fusionar amb existent: %+v", result)
+	}
+	if got := countF32Registres(t, database, llibreID); got != 1 {
+		t.Fatalf("esperava 1 registre després de fusionar duplicat fort, got=%d", got)
+	}
+}
+
+func TestF322MarcmoiaDoesNotDedupSameSurnamesOrWeakSameName(t *testing.T) {
+	app, database, userID, llibreID, template := setupF322MarcmoiaTemplate(t, "indexada")
+	createF322ExistingBaptisme(t, database, llibreID, 12, "Joan", "Garcia", "Soler", "", "", "", "", "")
+
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF322MarcmoiaCSV(t, [][]string{
+		{"12", "12", "Garcia Soler Pere", "", "", "", ""},
+		{"12", "12", "Garcia Soler Joan", "", "", "", ""},
+	})), ',', userID, importContext{}, 0)
+	if result.Created != 2 || result.Updated != 0 || result.Failed != 0 {
+		t.Fatalf("cognoms iguals o nom+cognoms sense senyals forts no han de duplicar: %+v", result)
+	}
+	if got := countF32Registres(t, database, llibreID); got != 3 {
+		t.Fatalf("esperava conservar els registres legítims amb dades parcials, got=%d", got)
+	}
+}
+
+func TestF322MarcmoiaKeepsSiblingsTwinsWithSharedContext(t *testing.T) {
+	app, database, userID, llibreID, template := setupF322MarcmoiaTemplate(t, "indexada")
+
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF322MarcmoiaCSV(t, [][]string{
+		{"12", "12", "Garcia Soler Joan", "Pere Garcia", "Maria Soler", "01/02/1890", "05/02/1890"},
+		{"12", "12", "Garcia Soler Josep", "Pere Garcia", "Maria Soler", "01/02/1890", "05/02/1890"},
+	})), ',', userID, importContext{}, 0)
+	if result.Created != 2 || result.Updated != 0 || result.Failed != 0 {
+		t.Fatalf("germans/bessons amb mateix context però nom diferent no han de col·lapsar: %+v", result)
+	}
+	if got := countF32Registres(t, database, llibreID); got != 2 {
+		t.Fatalf("esperava 2 registres de germans/bessons, got=%d", got)
+	}
+}
+
+func TestF322MarcmoiaWithinFileDoesNotDedupWhenPrincipalNameMissing(t *testing.T) {
+	app, database, userID, llibreID, template := setupF322MarcmoiaTemplate(t, "pendent")
+
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF322MarcmoiaCSV(t, [][]string{
+		{"12", "12", "Garcia Soler", "", "", "", ""},
+		{"12", "12", "Garcia Soler", "", "", "", ""},
+	})), ',', userID, importContext{}, 0)
+	if result.Created != 2 || result.Updated != 0 || result.Failed != 0 {
+		t.Fatalf("files amb només cognoms no han de deduplicar-se dins el fitxer: %+v", result)
+	}
+	if got := countF32Registres(t, database, llibreID); got != 2 {
+		t.Fatalf("esperava 2 registres amb només cognoms, got=%d", got)
+	}
+}
+
+func TestF322MarcmoiaWithinFileStillDedupsExactRowsWithPrincipalName(t *testing.T) {
+	app, database, userID, llibreID, template := setupF322MarcmoiaTemplate(t, "pendent")
+
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF322MarcmoiaCSV(t, [][]string{
+		{"12", "12", "Garcia Soler Joan", "Pere Garcia", "Maria Soler", "01/02/1890", "05/02/1890"},
+		{"12", "12", "Garcia Soler Joan", "Pere Garcia", "Maria Soler", "01/02/1890", "05/02/1890"},
+	})), ',', userID, importContext{}, 0)
+	if result.Created != 1 || result.Updated != 0 || result.Failed != 1 {
+		t.Fatalf("files idèntiques amb nom principal present han de continuar deduplicant-se: %+v", result)
+	}
+	if got := countF32Registres(t, database, llibreID); got != 1 {
+		t.Fatalf("esperava 1 registre després de dedup exacte, got=%d", got)
+	}
+}
+
 func runF32StaticMarcmoiaImport(t *testing.T, csvContent string) (csvImportResult, f32ImportSnapshot) {
 	t.Helper()
 	app, database := newModeracioBulkDiagnosticsApp(t)
@@ -191,6 +291,138 @@ func createF32Book(t *testing.T, database db.DB, userID int, cronologia string, 
 		t.Fatalf("CreateLlibre ha fallat: %v", err)
 	}
 	return llibreID
+}
+
+func setupF322MarcmoiaTemplate(t *testing.T, pageStatus string) (*App, db.DB, int, int, *db.CSVImportTemplate) {
+	t.Helper()
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f322_"+pageStatus)
+	llibreID := createF32Book(t, database, user.ID, "1890-1891", true)
+	_, err := database.SaveLlibrePagina(&db.LlibrePagina{
+		LlibreID:  llibreID,
+		NumPagina: 12,
+		Estat:     pageStatus,
+	})
+	if err != nil {
+		t.Fatalf("SaveLlibrePagina ha fallat: %v", err)
+	}
+	if err := app.EnsureSystemImportTemplates(); err != nil {
+		t.Fatalf("EnsureSystemImportTemplates ha fallat: %v", err)
+	}
+	template, err := app.getSystemImportTemplateByName(systemImportTemplateBaptismesMarcmoiaName)
+	if err != nil || template == nil {
+		t.Fatalf("plantilla Marcmoia system no trobada: %v", err)
+	}
+	return app, database, user.ID, llibreID, template
+}
+
+func createF322ExistingBaptisme(t *testing.T, database db.DB, llibreID, page int, nom, cognom1, cognom2, pareNom, pareCognom, mareCognom, dataBateigISO, dataNaixementISO string) int {
+	t.Helper()
+	reg := &db.TranscripcioRaw{
+		LlibreID:       llibreID,
+		NumPaginaText:  strconv.Itoa(page),
+		TipusActe:      "baptisme",
+		DataActeEstat:  "clar",
+		ModeracioEstat: "pendent",
+	}
+	if dataBateigISO != "" {
+		reg.DataActeISO = parseNullString(dataBateigISO)
+		reg.DataActeText = strings.ReplaceAll(dataBateigISO, "-", "/")
+	}
+	regID, err := database.CreateTranscripcioRaw(reg)
+	if err != nil {
+		t.Fatalf("CreateTranscripcioRaw ha fallat: %v", err)
+	}
+	_, _ = database.CreateTranscripcioPersona(&db.TranscripcioPersonaRaw{
+		TranscripcioID: regID,
+		Rol:            "batejat",
+		Nom:            nom,
+		Cognom1:        cognom1,
+		Cognom2:        cognom2,
+	})
+	if pareNom != "" || pareCognom != "" {
+		_, _ = database.CreateTranscripcioPersona(&db.TranscripcioPersonaRaw{
+			TranscripcioID: regID,
+			Rol:            "pare",
+			Nom:            pareNom,
+			Cognom1:        pareCognom,
+		})
+	}
+	if mareCognom != "" {
+		_, _ = database.CreateTranscripcioPersona(&db.TranscripcioPersonaRaw{
+			TranscripcioID: regID,
+			Rol:            "mare",
+			Nom:            "Maria",
+			Cognom1:        mareCognom,
+		})
+	}
+	_, _ = database.CreateTranscripcioAtribut(&db.TranscripcioAtributRaw{
+		TranscripcioID: regID,
+		Clau:           "pagina_digital",
+		TipusValor:     "text",
+		ValorText:      strconv.Itoa(page),
+		Estat:          "clar",
+	})
+	if dataBateigISO != "" {
+		_, _ = database.CreateTranscripcioAtribut(&db.TranscripcioAtributRaw{
+			TranscripcioID: regID,
+			Clau:           "data_bateig",
+			TipusValor:     "date",
+			ValorDate:      parseNullString(dataBateigISO),
+			Estat:          "clar",
+		})
+	}
+	if dataNaixementISO != "" {
+		_, _ = database.CreateTranscripcioAtribut(&db.TranscripcioAtributRaw{
+			TranscripcioID: regID,
+			Clau:           "data_naixement",
+			TipusValor:     "date",
+			ValorDate:      parseNullString(dataNaixementISO),
+			Estat:          "clar",
+		})
+	}
+	return regID
+}
+
+func buildF322IncomingStrongRow(llibreID, page int) (*db.TranscripcioRaw, map[string]*db.TranscripcioPersonaRaw, map[string]*db.TranscripcioAtributRaw) {
+	reg := &db.TranscripcioRaw{
+		LlibreID:       llibreID,
+		NumPaginaText:  strconv.Itoa(page),
+		TipusActe:      "baptisme",
+		DataActeISO:    parseNullString("1890-02-05"),
+		DataActeText:   "05/02/1890",
+		DataActeEstat:  "clar",
+		ModeracioEstat: "pendent",
+	}
+	people := map[string]*db.TranscripcioPersonaRaw{
+		"batejat": &db.TranscripcioPersonaRaw{Rol: "batejat", Nom: "Joan", Cognom1: "Garcia", Cognom2: "Soler"},
+		"pare":    &db.TranscripcioPersonaRaw{Rol: "pare", Nom: "Pere", Cognom1: "Garcia"},
+		"mare":    &db.TranscripcioPersonaRaw{Rol: "mare", Nom: "Maria", Cognom1: "Puig"},
+	}
+	attrs := map[string]*db.TranscripcioAtributRaw{
+		"pagina_digital": &db.TranscripcioAtributRaw{Clau: "pagina_digital", TipusValor: "text", ValorText: strconv.Itoa(page), Estat: "clar"},
+		"data_bateig":    &db.TranscripcioAtributRaw{Clau: "data_bateig", TipusValor: "date", ValorDate: parseNullString("1890-02-05"), Estat: "clar"},
+		"data_naixement": &db.TranscripcioAtributRaw{Clau: "data_naixement", TipusValor: "date", ValorDate: parseNullString("1890-02-01"), Estat: "clar"},
+	}
+	return reg, people, attrs
+}
+
+func buildF322MarcmoiaCSV(t *testing.T, rows [][]string) string {
+	t.Helper()
+	all := [][]string{{"llibre", "paginallibre", "paginareal", "any", "cognoms", "pare", "mare", "nascut", "bateig"}}
+	for _, row := range rows {
+		all = append(all, []string{"1890-1891", row[0], row[1], "1890", row[2], row[3], row[4], row[5], row[6]})
+	}
+	return buildF32CSV(t, all)
+}
+
+func countF32Registres(t *testing.T, database db.DB, llibreID int) int {
+	t.Helper()
+	registres, err := database.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{Limit: -1})
+	if err != nil {
+		t.Fatalf("ListTranscripcionsRaw ha fallat: %v", err)
+	}
+	return len(registres)
 }
 
 func snapshotF32Import(t *testing.T, database db.DB, llibreID int) f32ImportSnapshot {

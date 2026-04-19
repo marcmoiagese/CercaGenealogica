@@ -185,7 +185,7 @@ func (a *App) EnsureSystemImportTemplates() error {
       "if_principal_name_missing_add_row_index": true
     },
     "merge_existing": {
-      "mode": "by_principal_person_if_book_indexed",
+      "mode": "by_strong_signature_if_page_indexed",
       "principal_roles": ["batejat","persona_principal"],
       "update_missing_only": true,
       "add_missing_people": true,
@@ -253,6 +253,7 @@ func patchSystemMarcmoiaTemplateJSON(modelJSON string) string {
 		1)
 	out = strings.ReplaceAll(out, `"parse_person_from_cognoms_marcmoia_v2"`, `"parse_person_from_cognoms"`)
 	out = strings.ReplaceAll(out, `"parse_person_from_nom_marcmoia_v2"`, `"parse_person_from_nom"`)
+	out = strings.ReplaceAll(out, `"mode": "by_principal_person_if_book_indexed"`, `"mode": "by_strong_signature_if_page_indexed"`)
 	out = strings.Replace(out,
 		`{ "target": "attr.pagina_digital.text", "transform": [{ "op": "trim" }] }`,
 		`{ "target": "attr.pagina_digital.text_with_quality", "transform": [{ "op": "trim" }, { "op": "default_quality_if_present" }] }`,

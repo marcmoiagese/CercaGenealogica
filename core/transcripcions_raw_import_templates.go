@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -171,7 +172,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 
 	seen := map[string]int{}
 	seenMatch := map[string]int{}
-	existingByBook := map[int]map[string]int{}
+	existingByContext := map[string]map[string]int{}
 	rowNum := 1
 	for {
 		record, err := csvReader.Read()
@@ -223,7 +224,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		if model.Policies.DedupWithin && len(model.Policies.DedupKeyFields) > 0 {
 			key := buildTemplateDedupKey(model.Policies.DedupKeyFields, rowCtx, mappedValues)
 			if key != "" {
-				if model.Policies.DedupAddRowIndexWhenPrincipalMissing && principalPersonKey(persones, model.Policies.PrincipalRoles) == "" {
+				if model.Policies.DedupAddRowIndexWhenPrincipalMissing && !principalPersonHasName(persones, model.Policies.PrincipalRoles) {
 					key += "|row:" + strconv.Itoa(rowNum)
 				}
 				if firstRow, ok := seen[key]; ok {
@@ -238,7 +239,30 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 
 		matchKey := ""
 		matchSeenKey := ""
-		if model.Policies.MergeMode == "by_principal_person_if_book_indexed" && bookInfo.Indexed {
+		matchContextKey := ""
+		matchMode := model.Policies.MergeMode
+		switch matchMode {
+		case "by_strong_signature_if_page_indexed":
+			pageKey, pageIndexed := a.templateIndexedPageKey(bookID, &t, atributs)
+			if pageIndexed {
+				matchKey = buildTemplateStrongMatchKey(&t, persones, atributs, model.Policies)
+				if matchKey != "" {
+					matchContextKey = "strong|" + strconv.Itoa(bookID) + "|" + normalizeTemplateMatchPart(pageKey) + "|" + normalizeTemplateMatchPart(t.TipusActe)
+					if model.Policies.AvoidDuplicatePrincipal {
+						matchSeenKey = matchContextKey + "|" + matchKey
+						if firstRow, ok := seenMatch[matchSeenKey]; ok {
+							result.Failed++
+							fields := map[string]string{"duplicate_row": strconv.Itoa(firstRow)}
+							result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "registre duplicat", Fields: fields})
+							continue
+						}
+					}
+				}
+			}
+		case "by_principal_person_if_book_indexed":
+			if !bookInfo.Indexed {
+				break
+			}
 			matchKey = principalPersonKey(persones, model.Policies.PrincipalRoles)
 			if matchKey != "" && model.Policies.AvoidDuplicatePrincipal {
 				matchSeenKey = strconv.Itoa(bookID) + "|" + matchKey
@@ -249,15 +273,22 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 					continue
 				}
 			}
+			if matchKey != "" {
+				matchContextKey = "principal|" + strconv.Itoa(bookID)
+			}
 		}
 
-		if matchKey != "" && bookInfo.Indexed {
-			existingMap := existingByBook[bookID]
+		if matchKey != "" && matchContextKey != "" {
+			existingMap := existingByContext[matchContextKey]
 			if existingMap == nil {
 				resolveStart = time.Now()
-				existingMap = a.loadExistingByPrincipal(bookID, model.Policies.PrincipalRoles)
+				if matchMode == "by_strong_signature_if_page_indexed" {
+					existingMap = a.loadExistingByStrongMatch(bookID, &t, atributs, model.Policies)
+				} else {
+					existingMap = a.loadExistingByPrincipal(bookID, model.Policies.PrincipalRoles)
+				}
 				result.Debug.addResolve(time.Since(resolveStart))
-				existingByBook[bookID] = existingMap
+				existingByContext[matchContextKey] = existingMap
 			}
 			if existingID, ok := existingMap[matchKey]; ok {
 				writeStart := time.Now()
@@ -1260,6 +1291,222 @@ func (a *App) loadExistingByPrincipal(bookID int, roles []string) map[string]int
 	return existingMap
 }
 
+func (a *App) loadExistingByStrongMatch(bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) map[string]int {
+	existingMap := map[string]int{}
+	if incoming == nil {
+		return existingMap
+	}
+	pageKey := templateLogicalPageKey(incoming, incomingAttrs)
+	if pageKey == "" || strings.TrimSpace(incoming.TipusActe) == "" {
+		return existingMap
+	}
+	trans, _ := a.DB.ListTranscripcionsRaw(bookID, db.TranscripcioFilter{TipusActe: incoming.TipusActe})
+	for _, tr := range trans {
+		attrsExistents, _ := a.DB.ListTranscripcioAtributs(tr.ID)
+		if normalizeTemplateMatchPart(a.templateLogicalPageKeyForExisting(&tr, attrsExistents)) != normalizeTemplateMatchPart(pageKey) {
+			continue
+		}
+		personesExistentsRows, _ := a.DB.ListTranscripcioPersones(tr.ID)
+		personesExistents := map[string]*db.TranscripcioPersonaRaw{}
+		for i := range personesExistentsRows {
+			personesExistents[personesExistentsRows[i].Rol] = &personesExistentsRows[i]
+		}
+		attrsByKey := map[string]*db.TranscripcioAtributRaw{}
+		for i := range attrsExistents {
+			attrsByKey[attrsExistents[i].Clau] = &attrsExistents[i]
+		}
+		matchKey := buildTemplateStrongMatchKey(&tr, personesExistents, attrsByKey, policies)
+		if matchKey == "" {
+			continue
+		}
+		if _, exists := existingMap[matchKey]; !exists {
+			existingMap[matchKey] = tr.ID
+		}
+	}
+	return existingMap
+}
+
+func (a *App) templateIndexedPageKey(bookID int, t *db.TranscripcioRaw, attrs map[string]*db.TranscripcioAtributRaw) (string, bool) {
+	pageKey := templateLogicalPageKey(t, attrs)
+	if t != nil && t.PaginaID.Valid {
+		page, err := a.DB.GetLlibrePaginaByID(int(t.PaginaID.Int64))
+		if err == nil && page != nil {
+			if pageKey == "" && page.NumPagina > 0 {
+				pageKey = strconv.Itoa(page.NumPagina)
+			}
+			return pageKey, page.LlibreID == bookID && page.Estat == "indexada"
+		}
+	}
+	if pageKey == "" {
+		return "", false
+	}
+	pageNum, ok := parseStrictPositiveInt(pageKey)
+	if !ok {
+		return pageKey, false
+	}
+	page, err := a.DB.GetLlibrePaginaByNum(bookID, pageNum)
+	if err != nil || page == nil {
+		return pageKey, false
+	}
+	return strconv.Itoa(page.NumPagina), page.Estat == "indexada"
+}
+
+func (a *App) templateLogicalPageKeyForExisting(t *db.TranscripcioRaw, attrs []db.TranscripcioAtributRaw) string {
+	attrsByKey := map[string]*db.TranscripcioAtributRaw{}
+	for i := range attrs {
+		attrsByKey[attrs[i].Clau] = &attrs[i]
+	}
+	pageKey := templateLogicalPageKey(t, attrsByKey)
+	if pageKey != "" || t == nil || !t.PaginaID.Valid {
+		return pageKey
+	}
+	page, err := a.DB.GetLlibrePaginaByID(int(t.PaginaID.Int64))
+	if err != nil || page == nil || page.NumPagina <= 0 {
+		return ""
+	}
+	return strconv.Itoa(page.NumPagina)
+}
+
+func templateLogicalPageKey(t *db.TranscripcioRaw, attrs map[string]*db.TranscripcioAtributRaw) string {
+	if attr := attrs["pagina_digital"]; attr != nil {
+		if value := templateAttrComparableValue(attr); value != "" {
+			return value
+		}
+	}
+	if t != nil && strings.TrimSpace(t.NumPaginaText) != "" {
+		return strings.TrimSpace(t.NumPaginaText)
+	}
+	return ""
+}
+
+func buildTemplateStrongMatchKey(t *db.TranscripcioRaw, persones map[string]*db.TranscripcioPersonaRaw, attrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) string {
+	if t == nil {
+		return ""
+	}
+	principalKey := templateStrongPrincipalKey(persones, policies.PrincipalRoles)
+	if principalKey == "" {
+		return ""
+	}
+	signals := []string{"principal:" + principalKey}
+	extra := map[string]struct{}{}
+	addExtra := func(kind, value string) {
+		value = normalizeTemplateMatchPart(value)
+		if value == "" {
+			return
+		}
+		extra[kind+":"+value] = struct{}{}
+	}
+	if t.DataActeISO.Valid {
+		addExtra("data_acte", t.DataActeISO.String)
+	} else {
+		addExtra("data_acte", t.DataActeText)
+	}
+	switch strings.ToLower(strings.TrimSpace(t.TipusActe)) {
+	case "baptisme":
+		for _, key := range []string{"data_bateig", "data_naixement", "data_defuncio", "casat"} {
+			if attr := attrs[key]; attr != nil {
+				addExtra("attr:"+key, templateAttrComparableValue(attr))
+			}
+		}
+		for _, role := range []string{"pare", "mare", "avi_patern", "avia_paterna", "avi_matern", "avia_materna", "padri", "padrina"} {
+			if p := persones[role]; p != nil {
+				addExtra("person:"+role, templateStrongPersonKey(p))
+			}
+		}
+	default:
+		for key, attr := range attrs {
+			if key == "pagina_digital" {
+				continue
+			}
+			addExtra("attr:"+key, templateAttrComparableValue(attr))
+		}
+		for role, p := range persones {
+			if stringInSlice(role, policies.PrincipalRoles) {
+				continue
+			}
+			addExtra("person:"+role, templateStrongPersonKey(p))
+		}
+	}
+	if len(extra) < 2 {
+		return ""
+	}
+	for key := range extra {
+		signals = append(signals, key)
+	}
+	sort.Strings(signals[1:])
+	return strings.Join(signals, "|")
+}
+
+func templateStrongPrincipalKey(persones map[string]*db.TranscripcioPersonaRaw, roles []string) string {
+	if len(roles) == 0 {
+		roles = []string{"batejat", "persona_principal"}
+	}
+	for _, role := range roles {
+		if key := templateStrongPersonKey(persones[role]); key != "" {
+			return key
+		}
+	}
+	return ""
+}
+
+func templateStrongPersonKey(p *db.TranscripcioPersonaRaw) string {
+	if p == nil {
+		return ""
+	}
+	nom := normalizeTemplateMatchPart(p.Nom)
+	cognom1 := normalizeTemplateMatchPart(p.Cognom1)
+	cognom2 := normalizeTemplateMatchPart(p.Cognom2)
+	if nom == "" || (cognom1 == "" && cognom2 == "") {
+		return ""
+	}
+	return nom + "|" + cognom1 + "|" + cognom2
+}
+
+func templateAttrComparableValue(attr *db.TranscripcioAtributRaw) string {
+	if attr == nil {
+		return ""
+	}
+	if attr.ValorDate.Valid {
+		return attr.ValorDate.String
+	}
+	if attr.ValorInt.Valid {
+		return strconv.FormatInt(attr.ValorInt.Int64, 10)
+	}
+	if attr.ValorBool.Valid {
+		if attr.ValorBool.Bool {
+			return "true"
+		}
+		return "false"
+	}
+	return attr.ValorText
+}
+
+func normalizeTemplateMatchPart(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if len(value) >= 10 && isISODate(value[:10]) {
+		return value[:10]
+	}
+	value = stripDiacritics(value)
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func parseStrictPositiveInt(value string) (int, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return 0, false
+		}
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
+}
+
 func (a *App) mergeTemplateRow(existingID int, t *db.TranscripcioRaw, persones map[string]*db.TranscripcioPersonaRaw, atributs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) (bool, bool) {
 	existing, err := a.DB.GetTranscripcioRaw(existingID)
 	if err != nil || existing == nil {
@@ -1385,6 +1632,21 @@ func principalPersonKey(persones map[string]*db.TranscripcioPersonaRaw, roles []
 		}
 	}
 	return ""
+}
+
+func principalPersonHasName(persones map[string]*db.TranscripcioPersonaRaw, roles []string) bool {
+	if len(persones) == 0 {
+		return false
+	}
+	if len(roles) == 0 {
+		roles = []string{"batejat", "persona_principal"}
+	}
+	for _, role := range roles {
+		if p := persones[role]; p != nil && strings.TrimSpace(p.Nom) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func pickTemplateModerationStatus(model *templateImportModel) string {
