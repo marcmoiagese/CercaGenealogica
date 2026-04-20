@@ -2365,6 +2365,27 @@ type TranscripcioAtributRaw struct {
 	Notes          string
 }
 
+type TranscripcioRawImportBundle struct {
+	Transcripcio TranscripcioRaw
+	Persones     []TranscripcioPersonaRaw
+	Atributs     []TranscripcioAtributRaw
+}
+
+type TranscripcioRawImportBulkMetrics struct {
+	TranscripcioInsertDur time.Duration
+	PersonaPersistDur     time.Duration
+	LinksPersistDur       time.Duration
+	CommitDur             time.Duration
+	Rows                  int
+	Persones              int
+	Atributs              int
+}
+
+type TranscripcioRawImportBulkResult struct {
+	IDs     []int
+	Metrics TranscripcioRawImportBulkMetrics
+}
+
 type TranscripcioDraft struct {
 	ID        int
 	LlibreID  int

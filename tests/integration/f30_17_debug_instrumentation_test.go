@@ -78,6 +78,22 @@ func TestRegistreImportDebugInstrumentationRespectsLogLevelF3017(t *testing.T) {
 				if !strings.Contains(logs, "registre import model=generic scope=global") {
 					t.Fatalf("amb debug esperava log d'import, però no hi és: %s", logs)
 				}
+				for _, token := range []string{
+					"write_prepare_dur=",
+					"write_page_lookup_dur=",
+					"write_duplicate_check_dur=",
+					"write_transcripcio_insert_dur=",
+					"write_persona_resolve_dur=",
+					"write_persona_persist_dur=",
+					"write_links_persist_dur=",
+					"write_commit_dur=",
+					"write_bulk_batches=",
+					"write_bulk_rows=",
+				} {
+					if !strings.Contains(logs, token) {
+						t.Fatalf("amb debug esperava mètrica F32-3 %s, però no hi és: %s", token, logs)
+					}
+				}
 			} else if strings.Contains(logs, "registre import model=") {
 				t.Fatalf("amb info no haurien d'aparèixer logs detallats d'import: %s", logs)
 			}

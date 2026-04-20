@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/csv"
+	"fmt"
+	"os"
 	"reflect"
 	"sort"
 	"strconv"
@@ -230,6 +232,108 @@ func TestF322MarcmoiaWithinFileStillDedupsExactRowsWithPrincipalName(t *testing.
 	if got := countF32Registres(t, database, llibreID); got != 1 {
 		t.Fatalf("esperava 1 registre després de dedup exacte, got=%d", got)
 	}
+}
+
+type f323NoBulkDB struct {
+	db.DB
+}
+
+func TestF323TemplateImportWriteMetricsAndBulkEquivalent(t *testing.T) {
+	SetLogLevel("debug")
+	defer SetLogLevel("error")
+
+	rows := make([][]string, 0, 220)
+	for i := 0; i < 220; i++ {
+		rows = append(rows, []string{
+			"12",
+			"12",
+			fmt.Sprintf("Garcia%d Soler%d Joan%d", i, i, i),
+			fmt.Sprintf("Pere%d Garcia", i),
+			fmt.Sprintf("Maria%d Soler", i),
+			fmt.Sprintf("%02d/01/1890", 1+(i%28)),
+			fmt.Sprintf("%02d/02/1890", 1+(i%28)),
+		})
+	}
+	csvContent := buildF322MarcmoiaCSV(t, rows)
+
+	fallbackApp, fallbackDB, fallbackUserID, fallbackLlibreID, fallbackTemplate := setupF322MarcmoiaTemplate(t, "indexada")
+	fallbackApp.DB = f323NoBulkDB{DB: fallbackDB}
+	fallbackResult := fallbackApp.RunCSVTemplateImport(fallbackTemplate, strings.NewReader(csvContent), ',', fallbackUserID, importContext{}, 0)
+	if fallbackResult.Created != len(rows) || fallbackResult.Failed != 0 {
+		t.Fatalf("fallback import inesperat: created=%d failed=%d errors=%+v", fallbackResult.Created, fallbackResult.Failed, fallbackResult.Errors)
+	}
+	if fallbackResult.Debug.WriteBulkBatches != 0 || fallbackResult.Debug.WriteBulkRows != 0 {
+		t.Fatalf("fallback no hauria d'usar bulk: %+v", fallbackResult.Debug)
+	}
+
+	bulkApp, bulkDB, bulkUserID, bulkLlibreID, bulkTemplate := setupF322MarcmoiaTemplate(t, "indexada")
+	bulkResult := bulkApp.RunCSVTemplateImport(bulkTemplate, strings.NewReader(csvContent), ',', bulkUserID, importContext{}, 0)
+	if bulkResult.Created != len(rows) || bulkResult.Failed != 0 {
+		t.Fatalf("bulk import inesperat: created=%d failed=%d errors=%+v", bulkResult.Created, bulkResult.Failed, bulkResult.Errors)
+	}
+	if bulkResult.Debug.WriteBulkBatches == 0 || bulkResult.Debug.WriteBulkRows != len(rows) || bulkResult.Debug.WriteBulkFallbacks != 0 {
+		t.Fatalf("bulk import no ha usat el camí esperat: %+v", bulkResult.Debug)
+	}
+	if bulkResult.Debug.WriteTranscripcioInsertDur <= 0 || bulkResult.Debug.WritePersonaPersistDur <= 0 || bulkResult.Debug.WriteLinksPersistDur <= 0 || bulkResult.Debug.WriteCommitDur <= 0 {
+		t.Fatalf("mètriques write F32-3 incompletes: %+v", bulkResult.Debug)
+	}
+	if !reflect.DeepEqual(snapshotF32Import(t, fallbackDB, fallbackLlibreID), snapshotF32Import(t, bulkDB, bulkLlibreID)) {
+		t.Fatalf("bulk i fallback no produeixen el mateix snapshot funcional")
+	}
+	t.Logf("fallback write=%s insert=%s persona=%s links=%s commit=%s batches=%d; bulk write=%s insert=%s persona=%s links=%s commit=%s batches=%d",
+		fallbackResult.Debug.WriteDur,
+		fallbackResult.Debug.WriteTranscripcioInsertDur,
+		fallbackResult.Debug.WritePersonaPersistDur,
+		fallbackResult.Debug.WriteLinksPersistDur,
+		fallbackResult.Debug.WriteCommitDur,
+		fallbackResult.Debug.WriteBulkBatches,
+		bulkResult.Debug.WriteDur,
+		bulkResult.Debug.WriteTranscripcioInsertDur,
+		bulkResult.Debug.WritePersonaPersistDur,
+		bulkResult.Debug.WriteLinksPersistDur,
+		bulkResult.Debug.WriteCommitDur,
+		bulkResult.Debug.WriteBulkBatches,
+	)
+}
+
+func TestF323MarcmoiaLargeImportCreatedFailedCount(t *testing.T) {
+	if os.Getenv("CG_F323_LARGE_IMPORT") != "1" {
+		t.Skip("validació gran F32-3 només s'executa explícitament amb CG_F323_LARGE_IMPORT=1")
+	}
+	SetLogLevel("debug")
+	defer SetLogLevel("error")
+
+	const totalRows = 19578
+	rows := make([][]string, 0, totalRows)
+	for i := 0; i < totalRows; i++ {
+		rows = append(rows, []string{
+			"12",
+			"12",
+			fmt.Sprintf("Garcia%d Soler%d Joan%d", i, i, i),
+			fmt.Sprintf("Pere%d Garcia", i),
+			fmt.Sprintf("Maria%d Soler", i),
+			fmt.Sprintf("%02d/01/%04d", 1+(i%28), 1890+(i%20)),
+			fmt.Sprintf("%02d/02/%04d", 1+(i%28), 1890+(i%20)),
+		})
+	}
+	app, _, userID, _, template := setupF322MarcmoiaTemplate(t, "pendent")
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF322MarcmoiaCSV(t, rows)), ',', userID, importContext{}, 0)
+	if result.Created != totalRows || result.Updated != 0 || result.Failed != 0 {
+		t.Fatalf("validació gran F32-3 inesperada: created=%d updated=%d failed=%d errors=%+v", result.Created, result.Updated, result.Failed, result.Errors)
+	}
+	t.Logf("large import rows=%d created=%d updated=%d failed=%d write=%s insert=%s persona=%s links=%s commit=%s batches=%d fallbacks=%d",
+		result.Debug.Rows,
+		result.Created,
+		result.Updated,
+		result.Failed,
+		result.Debug.WriteDur,
+		result.Debug.WriteTranscripcioInsertDur,
+		result.Debug.WritePersonaPersistDur,
+		result.Debug.WriteLinksPersistDur,
+		result.Debug.WriteCommitDur,
+		result.Debug.WriteBulkBatches,
+		result.Debug.WriteBulkFallbacks,
+	)
 }
 
 func runF32StaticMarcmoiaImport(t *testing.T, csvContent string) (csvImportResult, f32ImportSnapshot) {

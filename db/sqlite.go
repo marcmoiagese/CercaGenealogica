@@ -1310,6 +1310,9 @@ func (d *SQLite) ListTranscripcioAtributs(transcripcioID int) ([]TranscripcioAtr
 func (d *SQLite) CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error) {
 	return d.help.createTranscripcioAtribut(a)
 }
+func (d *SQLite) BulkCreateTranscripcioRawBundles(rows []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
+	return d.help.bulkCreateTranscripcioRawBundles(rows)
+}
 func (d *SQLite) DeleteTranscripcioAtributs(transcripcioID int) error {
 	return d.help.deleteTranscripcioAtributs(transcripcioID)
 }

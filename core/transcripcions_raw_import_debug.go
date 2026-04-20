@@ -3,16 +3,27 @@ package core
 import "time"
 
 type csvImportDebugMetrics struct {
-	Enabled    bool
-	Model      string
-	Scope      string
-	Rows       int
-	Books      int
-	ParseDur   time.Duration
-	ResolveDur time.Duration
-	WriteDur   time.Duration
-	SidefxDur  time.Duration
-	TotalDur   time.Duration
+	Enabled                    bool
+	Model                      string
+	Scope                      string
+	Rows                       int
+	Books                      int
+	ParseDur                   time.Duration
+	ResolveDur                 time.Duration
+	WriteDur                   time.Duration
+	WritePrepareDur            time.Duration
+	WritePageLookupDur         time.Duration
+	WriteDuplicateCheckDur     time.Duration
+	WriteTranscripcioInsertDur time.Duration
+	WritePersonaResolveDur     time.Duration
+	WritePersonaPersistDur     time.Duration
+	WriteLinksPersistDur       time.Duration
+	WriteCommitDur             time.Duration
+	WriteBulkBatches           int
+	WriteBulkRows              int
+	WriteBulkFallbacks         int
+	SidefxDur                  time.Duration
+	TotalDur                   time.Duration
 }
 
 func newCSVImportDebugMetrics(model, scope string) csvImportDebugMetrics {
@@ -41,6 +52,75 @@ func (m *csvImportDebugMetrics) addWrite(d time.Duration) {
 	}
 }
 
+func (m *csvImportDebugMetrics) addWritePrepare(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.WritePrepareDur += d
+		m.WriteDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addWritePageLookup(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.WritePageLookupDur += d
+		m.WriteDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addWriteDuplicateCheck(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.WriteDuplicateCheckDur += d
+		m.WriteDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addWriteTranscripcioInsert(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.WriteTranscripcioInsertDur += d
+		m.WriteDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addWritePersonaResolve(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.WritePersonaResolveDur += d
+		m.WriteDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addWritePersonaPersist(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.WritePersonaPersistDur += d
+		m.WriteDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addWriteLinksPersist(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.WriteLinksPersistDur += d
+		m.WriteDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addWriteCommit(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.WriteCommitDur += d
+		m.WriteDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addWriteBulkBatch(rows int) {
+	if m != nil && m.Enabled {
+		m.WriteBulkBatches++
+		m.WriteBulkRows += rows
+	}
+}
+
+func (m *csvImportDebugMetrics) addWriteBulkFallback() {
+	if m != nil && m.Enabled {
+		m.WriteBulkFallbacks++
+	}
+}
+
 func (m *csvImportDebugMetrics) addSidefx(d time.Duration) {
 	if m != nil && m.Enabled {
 		m.SidefxDur += d
@@ -65,7 +145,7 @@ func (a *App) logCSVImportDebug(actorID int, result csvImportResult) {
 		return
 	}
 	Debugf(
-		"registre import model=%s scope=%s actor=%d rows=%d books=%d created=%d updated=%d failed=%d parse_dur=%s resolve_dur=%s write_dur=%s sidefx_dur=%s total_dur=%s",
+		"registre import model=%s scope=%s actor=%d rows=%d books=%d created=%d updated=%d failed=%d parse_dur=%s resolve_dur=%s write_dur=%s write_prepare_dur=%s write_page_lookup_dur=%s write_duplicate_check_dur=%s write_transcripcio_insert_dur=%s write_persona_resolve_dur=%s write_persona_persist_dur=%s write_links_persist_dur=%s write_commit_dur=%s write_bulk_batches=%d write_bulk_rows=%d write_bulk_fallbacks=%d sidefx_dur=%s total_dur=%s",
 		result.Debug.Model,
 		result.Debug.Scope,
 		actorID,
@@ -77,6 +157,17 @@ func (a *App) logCSVImportDebug(actorID int, result csvImportResult) {
 		result.Debug.ParseDur,
 		result.Debug.ResolveDur,
 		result.Debug.WriteDur,
+		result.Debug.WritePrepareDur,
+		result.Debug.WritePageLookupDur,
+		result.Debug.WriteDuplicateCheckDur,
+		result.Debug.WriteTranscripcioInsertDur,
+		result.Debug.WritePersonaResolveDur,
+		result.Debug.WritePersonaPersistDur,
+		result.Debug.WriteLinksPersistDur,
+		result.Debug.WriteCommitDur,
+		result.Debug.WriteBulkBatches,
+		result.Debug.WriteBulkRows,
+		result.Debug.WriteBulkFallbacks,
 		result.Debug.SidefxDur,
 		result.Debug.TotalDur,
 	)

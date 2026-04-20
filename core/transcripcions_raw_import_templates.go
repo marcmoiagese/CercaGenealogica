@@ -89,6 +89,18 @@ type templateRowContext struct {
 	ColumnValues map[string]string
 }
 
+const templateImportCreateBatchSize = 500
+
+type templatePendingCreate struct {
+	RowNum int
+	BookID int
+	Bundle db.TranscripcioRawImportBundle
+}
+
+type transcripcioRawBundleCreator interface {
+	BulkCreateTranscripcioRawBundles([]db.TranscripcioRawImportBundle) (db.TranscripcioRawImportBulkResult, error)
+}
+
 func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Reader, sep rune, userID int, ctx importContext, fixedBookID int) csvImportResult {
 	start := time.Now()
 	result := csvImportResult{
@@ -173,6 +185,10 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	seen := map[string]int{}
 	seenMatch := map[string]int{}
 	existingByContext := map[string]map[string]int{}
+	pendingCreates := make([]templatePendingCreate, 0, templateImportCreateBatchSize)
+	flushPendingCreates := func() {
+		pendingCreates = a.flushTemplatePendingCreates(pendingCreates, &result)
+	}
 	rowNum := 1
 	for {
 		record, err := csvReader.Read()
@@ -222,12 +238,14 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		result.Debug.addParse(time.Since(parseStart))
 
 		if model.Policies.DedupWithin && len(model.Policies.DedupKeyFields) > 0 {
+			duplicateStart := time.Now()
 			key := buildTemplateDedupKey(model.Policies.DedupKeyFields, rowCtx, mappedValues)
 			if key != "" {
 				if model.Policies.DedupAddRowIndexWhenPrincipalMissing && !principalPersonHasName(persones, model.Policies.PrincipalRoles) {
 					key += "|row:" + strconv.Itoa(rowNum)
 				}
 				if firstRow, ok := seen[key]; ok {
+					result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 					result.Failed++
 					fields := map[string]string{"duplicate_row": strconv.Itoa(firstRow)}
 					result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "registre duplicat", Fields: fields})
@@ -235,6 +253,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 				}
 				seen[key] = rowNum
 			}
+			result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 		}
 
 		matchKey := ""
@@ -243,14 +262,18 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		matchMode := model.Policies.MergeMode
 		switch matchMode {
 		case "by_strong_signature_if_page_indexed":
+			pageLookupStart := time.Now()
 			pageKey, pageIndexed := a.templateIndexedPageKey(bookID, &t, atributs)
+			result.Debug.addWritePageLookup(time.Since(pageLookupStart))
 			if pageIndexed {
+				duplicateStart := time.Now()
 				matchKey = buildTemplateStrongMatchKey(&t, persones, atributs, model.Policies)
 				if matchKey != "" {
 					matchContextKey = "strong|" + strconv.Itoa(bookID) + "|" + normalizeTemplateMatchPart(pageKey) + "|" + normalizeTemplateMatchPart(t.TipusActe)
 					if model.Policies.AvoidDuplicatePrincipal {
 						matchSeenKey = matchContextKey + "|" + matchKey
 						if firstRow, ok := seenMatch[matchSeenKey]; ok {
+							result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 							result.Failed++
 							fields := map[string]string{"duplicate_row": strconv.Itoa(firstRow)}
 							result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "registre duplicat", Fields: fields})
@@ -258,15 +281,18 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 						}
 					}
 				}
+				result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 			}
 		case "by_principal_person_if_book_indexed":
 			if !bookInfo.Indexed {
 				break
 			}
+			duplicateStart := time.Now()
 			matchKey = principalPersonKey(persones, model.Policies.PrincipalRoles)
 			if matchKey != "" && model.Policies.AvoidDuplicatePrincipal {
 				matchSeenKey = strconv.Itoa(bookID) + "|" + matchKey
 				if firstRow, ok := seenMatch[matchSeenKey]; ok {
+					result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 					result.Failed++
 					fields := map[string]string{"duplicate_row": strconv.Itoa(firstRow)}
 					result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "registre duplicat", Fields: fields})
@@ -276,6 +302,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			if matchKey != "" {
 				matchContextKey = "principal|" + strconv.Itoa(bookID)
 			}
+			result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 		}
 
 		if matchKey != "" && matchContextKey != "" {
@@ -308,50 +335,118 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			}
 		}
 
+		writePrepareStart := time.Now()
 		t.DataActeEstat = normalizeDataActeEstat(t.DataActeEstat)
 		if t.DataActeEstat == "" {
 			t.DataActeEstat = "clar"
 		}
 		if !validTipusActe(t.TipusActe) {
+			result.Debug.addWritePrepare(time.Since(writePrepareStart))
 			result.Failed++
 			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "tipus_acte invàlid"})
 			continue
 		}
-		writeStart := time.Now()
-		id, err := a.DB.CreateTranscripcioRaw(&t)
-		if err != nil || id == 0 {
-			result.Debug.addWrite(time.Since(writeStart))
-			result.Failed++
-			reason := "no s'ha pogut crear el registre"
-			if err != nil {
-				reason = fmt.Sprintf("no s'ha pogut crear el registre: %v", err)
-			}
-			result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: reason})
-			continue
-		}
+		result.Debug.addWritePrepare(time.Since(writePrepareStart))
+		personaResolveStart := time.Now()
+		personesRows := make([]db.TranscripcioPersonaRaw, 0, len(persones))
 		for _, p := range persones {
 			if isEmptyPerson(p) {
 				continue
 			}
-			p.TranscripcioID = id
-			_, _ = a.DB.CreateTranscripcioPersona(p)
+			personesRows = append(personesRows, *p)
 		}
+		atributRows := make([]db.TranscripcioAtributRaw, 0, len(atributs))
 		for _, attr := range atributs {
 			if isEmptyAttr(attr) {
 				continue
 			}
-			attr.TranscripcioID = id
-			_, _ = a.DB.CreateTranscripcioAtribut(attr)
+			atributRows = append(atributRows, *attr)
 		}
-		result.Debug.addWrite(time.Since(writeStart))
-		result.Created++
-		result.markBook(bookID)
+		result.Debug.addWritePersonaResolve(time.Since(personaResolveStart))
+		pendingCreates = append(pendingCreates, templatePendingCreate{
+			RowNum: rowNum,
+			BookID: bookID,
+			Bundle: db.TranscripcioRawImportBundle{
+				Transcripcio: t,
+				Persones:     personesRows,
+				Atributs:     atributRows,
+			},
+		})
 		if matchSeenKey != "" {
 			seenMatch[matchSeenKey] = rowNum
 		}
+		if len(pendingCreates) >= templateImportCreateBatchSize {
+			flushPendingCreates()
+		}
 	}
+	flushPendingCreates()
 	result.Debug.finalize(len(result.BookIDs), time.Since(start))
 	return result
+}
+
+func (a *App) flushTemplatePendingCreates(pending []templatePendingCreate, result *csvImportResult) []templatePendingCreate {
+	if len(pending) == 0 || result == nil {
+		return pending[:0]
+	}
+	if creator, ok := a.DB.(transcripcioRawBundleCreator); ok {
+		bundles := make([]db.TranscripcioRawImportBundle, len(pending))
+		for i := range pending {
+			bundles[i] = pending[i].Bundle
+		}
+		bulkResult, err := creator.BulkCreateTranscripcioRawBundles(bundles)
+		if err == nil && len(bulkResult.IDs) == len(pending) {
+			result.Debug.addWriteBulkBatch(len(pending))
+			result.Debug.addWriteTranscripcioInsert(bulkResult.Metrics.TranscripcioInsertDur)
+			result.Debug.addWritePersonaPersist(bulkResult.Metrics.PersonaPersistDur)
+			result.Debug.addWriteLinksPersist(bulkResult.Metrics.LinksPersistDur)
+			result.Debug.addWriteCommit(bulkResult.Metrics.CommitDur)
+			for i := range pending {
+				result.Created++
+				result.markBook(pending[i].BookID)
+			}
+			return pending[:0]
+		}
+		result.Debug.addWriteBulkFallback()
+	}
+	for i := range pending {
+		a.createTemplatePendingRow(pending[i], result)
+	}
+	return pending[:0]
+}
+
+func (a *App) createTemplatePendingRow(row templatePendingCreate, result *csvImportResult) {
+	if result == nil {
+		return
+	}
+	raw := row.Bundle.Transcripcio
+	insertStart := time.Now()
+	id, err := a.DB.CreateTranscripcioRaw(&raw)
+	result.Debug.addWriteTranscripcioInsert(time.Since(insertStart))
+	if err != nil || id == 0 {
+		result.Failed++
+		reason := "no s'ha pogut crear el registre"
+		if err != nil {
+			reason = fmt.Sprintf("no s'ha pogut crear el registre: %v", err)
+		}
+		result.Errors = append(result.Errors, importErrorEntry{Row: row.RowNum, Reason: reason})
+		return
+	}
+	for i := range row.Bundle.Persones {
+		p := row.Bundle.Persones[i]
+		p.TranscripcioID = id
+		persistStart := time.Now()
+		_, _ = a.DB.CreateTranscripcioPersona(&p)
+		result.Debug.addWritePersonaPersist(time.Since(persistStart))
+	}
+	for i := range row.Bundle.Atributs {
+		attr := row.Bundle.Atributs[i]
+		attr.TranscripcioID = id
+		persistStart := time.Now()
+		_, _ = a.DB.CreateTranscripcioAtribut(&attr)
+		result.Debug.addWriteLinksPersist(time.Since(persistStart))
+	}
+	result.Created++
+	result.markBook(row.BookID)
 }
 
 func parseTemplateImportModel(modelJSON string) (*templateImportModel, error) {

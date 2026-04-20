@@ -1284,6 +1284,9 @@ func (d *MySQL) ListTranscripcioAtributs(transcripcioID int) ([]TranscripcioAtri
 func (d *MySQL) CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error) {
 	return d.help.createTranscripcioAtribut(a)
 }
+func (d *MySQL) BulkCreateTranscripcioRawBundles(rows []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
+	return d.help.bulkCreateTranscripcioRawBundles(rows)
+}
 func (d *MySQL) DeleteTranscripcioAtributs(transcripcioID int) error {
 	return d.help.deleteTranscripcioAtributs(transcripcioID)
 }
