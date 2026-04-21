@@ -202,6 +202,30 @@ func collectChangeSnapshots(changes []db.TranscripcioRawChange) map[int]changeSn
 	return snaps
 }
 
+func resolveBaseHistorySnapshot(changes []db.TranscripcioRawChange, snaps map[int]changeSnapshots, current *transcripcioSnapshot) *transcripcioSnapshot {
+	if current == nil {
+		return nil
+	}
+	if len(changes) == 0 {
+		return current
+	}
+	baseSnap := (*transcripcioSnapshot)(nil)
+	for i := len(changes) - 1; i >= 0; i-- {
+		snap := snaps[changes[i].ID]
+		if snap.Before != nil {
+			baseSnap = snap.Before
+			break
+		}
+		if baseSnap == nil && snap.After != nil {
+			baseSnap = snap.After
+		}
+	}
+	if baseSnap == nil {
+		baseSnap = current
+	}
+	return baseSnap
+}
+
 func cloneSnapshot(src *transcripcioSnapshot) *transcripcioSnapshot {
 	if src == nil {
 		return nil
@@ -584,21 +608,8 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	baseSnap := (*transcripcioSnapshot)(nil)
-	if totalChanges > 0 {
-		for i := len(changes) - 1; i >= 0; i-- {
-			snap := snaps[changes[i].ID]
-			if snap.Before != nil {
-				baseSnap = snap.Before
-				break
-			}
-			if baseSnap == nil && snap.After != nil {
-				baseSnap = snap.After
-			}
-		}
-		if baseSnap == nil {
-			baseSnap = currentSnapshot
-		}
+	baseSnap := resolveBaseHistorySnapshot(changes, snaps, currentSnapshot)
+	if baseSnap != nil {
 		baseChangedByID := 0
 		if baseSnap != nil && baseSnap.Raw.CreatedBy.Valid {
 			baseChangedByID = int(baseSnap.Raw.CreatedBy.Int64)
@@ -619,20 +630,23 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 			baseModeratedAt = baseSnap.Raw.ModeratedAt.Time.Format("02/01/2006 15:04")
 		}
 		history = append(history, registreHistoryItem{
-			ID:             0,
-			Key:            "base",
-			Seq:            1,
-			ChangeType:     "",
-			FieldKey:       "",
-			OldValue:       "",
-			NewValue:       "",
-			ChangedAt:      baseChangedAt,
-			ChangedBy:      baseChangedBy,
-			ChangedByID:    baseChangedByID,
-			ModeratedBy:    baseModeratedBy,
-			ModeratedByID:  baseModeratedByID,
-			ModeratedAt:    baseModeratedAt,
+			ID:            0,
+			Key:           "base",
+			Seq:           1,
+			ChangeType:    "",
+			FieldKey:      "",
+			OldValue:      "",
+			NewValue:      "",
+			ChangedAt:     baseChangedAt,
+			ChangedBy:     baseChangedBy,
+			ChangedByID:   baseChangedByID,
+			ModeratedBy:   baseModeratedBy,
+			ModeratedByID: baseModeratedByID,
+			ModeratedAt:   baseModeratedAt,
 			ModeracioEstat: func() string {
+				if totalChanges == 0 {
+					return normalizeModeracioEstat(baseSnap.Raw.ModeracioEstat)
+				}
 				if publishedVersion == 1 {
 					return "publicat"
 				}
@@ -640,7 +654,7 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 			}(),
 			HasSnapshot:   true,
 			HasComparator: true,
-			IsPublished:    publishedVersion == 1,
+			IsPublished:   publishedVersion == 1,
 		})
 	}
 
@@ -833,7 +847,7 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 		"Llibre":            llibre,
 		"Registre":          registre,
 		"History":           history,
-		"PublishedKey":       publishedKey,
+		"PublishedKey":      publishedKey,
 		"ViewFields":        viewFields,
 		"ViewLabel":         viewLabel,
 		"CompareFields":     compareFields,
@@ -956,7 +970,7 @@ func (a *App) AdminRevertRegistreChange(w http.ResponseWriter, r *http.Request) 
 	afterSnap.Raw.ID = registreID
 	revertMeta := map[string]interface{}{
 		"source_change_key": sourceKey,
-		"reason":           reason,
+		"reason":            reason,
 	}
 	if sourceChange != nil {
 		revertMeta["source_change_id"] = sourceChange.ID

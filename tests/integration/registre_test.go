@@ -47,6 +47,7 @@ func loadTemplatesForTests(t *testing.T, projectRoot string) {
 	templatesOnce.Do(func() {
 		patterns := []string{
 			filepath.Join(projectRoot, "templates", "*.html"),
+			filepath.Join(projectRoot, "templates", "admin", "*.html"),
 			filepath.Join(projectRoot, "templates", "layouts", "*.html"),
 		}
 

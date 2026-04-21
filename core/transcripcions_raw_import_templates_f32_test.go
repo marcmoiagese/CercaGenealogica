@@ -234,6 +234,28 @@ func TestF322MarcmoiaWithinFileStillDedupsExactRowsWithPrincipalName(t *testing.
 	}
 }
 
+func TestF324MarcmoiaDoesNotMergeStrongDuplicateAcrossDifferentIndexedPages(t *testing.T) {
+	app, database, userID, llibreID, template := setupF322MarcmoiaTemplate(t, "indexada")
+	if _, err := database.SaveLlibrePagina(&db.LlibrePagina{
+		LlibreID:  llibreID,
+		NumPagina: 13,
+		Estat:     "indexada",
+	}); err != nil {
+		t.Fatalf("SaveLlibrePagina 13 ha fallat: %v", err)
+	}
+	createF322ExistingBaptisme(t, database, llibreID, 12, "Joan", "Garcia", "Soler", "Pere", "Garcia", "Soler", "1890-02-05", "1890-02-01")
+
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF322MarcmoiaCSV(t, [][]string{
+		{"13", "13", "Garcia Soler Joan", "Pere Garcia", "Maria Soler", "01/02/1890", "05/02/1890"},
+	})), ',', userID, importContext{}, 0)
+	if result.Created != 1 || result.Updated != 0 || result.Failed != 0 {
+		t.Fatalf("mateixa signatura forta en pàgina indexada diferent no s'ha de fusionar: %+v", result)
+	}
+	if got := countF32Registres(t, database, llibreID); got != 2 {
+		t.Fatalf("esperava 2 registres en pàgines indexades diferents, got=%d", got)
+	}
+}
+
 type f323NoBulkDB struct {
 	db.DB
 }

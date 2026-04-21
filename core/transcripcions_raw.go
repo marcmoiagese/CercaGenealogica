@@ -861,28 +861,28 @@ func parseTranscripcioPersones(r *http.Request) []db.TranscripcioPersonaRaw {
 	var res []db.TranscripcioPersonaRaw
 	for i := 0; i < max; i++ {
 		p := db.TranscripcioPersonaRaw{
-			Rol:             sliceValue(roles, i),
-			Nom:             sliceValue(noms, i),
-			NomEstat:        sliceValue(nomEstats, i),
-			Cognom1:         sliceValue(c1, i),
-			Cognom1Estat:    sliceValue(c1Estats, i),
-			Cognom2:         sliceValue(c2, i),
-			Cognom2Estat:    sliceValue(c2Estats, i),
-			CognomSoltera:   sliceValue(cSoltera, i),
+			Rol:                sliceValue(roles, i),
+			Nom:                sliceValue(noms, i),
+			NomEstat:           sliceValue(nomEstats, i),
+			Cognom1:            sliceValue(c1, i),
+			Cognom1Estat:       sliceValue(c1Estats, i),
+			Cognom2:            sliceValue(c2, i),
+			Cognom2Estat:       sliceValue(c2Estats, i),
+			CognomSoltera:      sliceValue(cSoltera, i),
 			CognomSolteraEstat: sliceValue(cSolteraEstats, i),
-			Sexe:            sliceValue(sexes, i),
-			SexeEstat:       sliceValue(sexesEstats, i),
-			EdatText:        sliceValue(edats, i),
-			EdatEstat:       sliceValue(edatEstats, i),
-			EstatCivilText:  sliceValue(civils, i),
-			EstatCivilEstat: sliceValue(civilEstats, i),
-			MunicipiText:    sliceValue(muns, i),
-			MunicipiEstat:   sliceValue(munEstats, i),
-			OficiText:       sliceValue(oficis, i),
-			OficiEstat:      sliceValue(oficiEstats, i),
-			CasaNom:         sliceValue(cases, i),
-			CasaEstat:       sliceValue(casaEstats, i),
-			Notes:           sliceValue(notes, i),
+			Sexe:               sliceValue(sexes, i),
+			SexeEstat:          sliceValue(sexesEstats, i),
+			EdatText:           sliceValue(edats, i),
+			EdatEstat:          sliceValue(edatEstats, i),
+			EstatCivilText:     sliceValue(civils, i),
+			EstatCivilEstat:    sliceValue(civilEstats, i),
+			MunicipiText:       sliceValue(muns, i),
+			MunicipiEstat:      sliceValue(munEstats, i),
+			OficiText:          sliceValue(oficis, i),
+			OficiEstat:         sliceValue(oficiEstats, i),
+			CasaNom:            sliceValue(cases, i),
+			CasaEstat:          sliceValue(casaEstats, i),
+			Notes:              sliceValue(notes, i),
 		}
 		if p.Rol == "" && p.Nom == "" && p.Cognom1 == "" && p.Cognom2 == "" && p.CognomSoltera == "" && p.Sexe == "" && p.EdatText == "" && p.EstatCivilText == "" && p.MunicipiText == "" && p.OficiText == "" && p.CasaNom == "" && p.Notes == "" {
 			continue
@@ -1644,22 +1644,7 @@ func (a *App) AdminShowRegistre(w http.ResponseWriter, r *http.Request) {
 		snaps = fillMissingSnapshots(changes, snaps, currentSnap)
 		publishedSnap, publishedKey, publishedChangeID, _ := resolvePublishedSnapshot(registre, currentSnap, changes, snaps)
 		publishedVersion := publishedVersionNumber(publishedKey, publishedChangeID, seqByID, offset)
-		baseSnap := (*transcripcioSnapshot)(nil)
-		if totalChanges > 0 {
-			for i := len(changes) - 1; i >= 0; i-- {
-				snap := snaps[changes[i].ID]
-				if snap.Before != nil {
-					baseSnap = snap.Before
-					break
-				}
-				if baseSnap == nil && snap.After != nil {
-					baseSnap = snap.After
-				}
-			}
-			if baseSnap == nil {
-				baseSnap = currentSnap
-			}
-		}
+		baseSnap := resolveBaseHistorySnapshot(changes, snaps, currentSnap)
 		resolveSnapshot := func(token string) (*transcripcioSnapshot, string) {
 			token = strings.TrimSpace(token)
 			if token == "" || token == "current" {

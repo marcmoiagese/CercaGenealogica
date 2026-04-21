@@ -164,6 +164,73 @@ func TestTemplateImportCreatesRows(t *testing.T) {
 	}
 }
 
+func TestTemplateImportHistoryShowsInitialVersionWithoutManualChangesF324(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f32_4_template_history.sqlite3")
+	user, sessionID := createF7UserWithSession(t, database)
+	ensureAdminPolicyForUser(t, database, user.ID)
+	llibreID, _ := createF7LlibreWithPagina(t, database, user.ID)
+
+	modelJSON := `{
+  "version": 1,
+  "kind": "transcripcions_raw",
+  "book_resolution": { "mode": "llibre_id", "column": "llibre_id" },
+  "mapping": {
+    "columns": [
+      { "header": "llibre_id", "key": "llibre_id", "required": true, "map_to": [{ "target": "base.llibre_id" }] },
+      { "header": "tipus_acte", "key": "tipus_acte", "required": true, "map_to": [{ "target": "base.tipus_acte" }] },
+      { "header": "batejat", "key": "batejat", "map_to": [{ "target": "person.batejat", "transform": [{ "op": "parse_person_from_nom" }] }] }
+    ]
+  }
+}`
+	templateID, err := database.CreateCSVImportTemplate(&db.CSVImportTemplate{
+		Name:             "Template Historial Inicial",
+		OwnerUserID:      sqlNullFromInt(user.ID),
+		Visibility:       "private",
+		DefaultSeparator: ",",
+		ModelJSON:        modelJSON,
+	})
+	if err != nil || templateID == 0 {
+		t.Fatalf("CreateCSVImportTemplate ha fallat: %v", err)
+	}
+
+	req := buildImportGlobalRequest(t, sessionID, "csrf-f32-4-history", map[string]string{
+		"model":       "template",
+		"template_id": strconv.Itoa(templateID),
+		"separator":   ",",
+	}, strings.Join([]string{
+		"llibre_id,tipus_acte,batejat",
+		fmt.Sprintf("%d,baptisme,Joan Garcia", llibreID),
+	}, "\n"))
+	rr := httptest.NewRecorder()
+	app.AdminImportRegistresGlobal(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("import via plantilla esperava 303, got %d", rr.Code)
+	}
+
+	registres, err := database.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{Limit: -1})
+	if err != nil {
+		t.Fatalf("ListTranscripcionsRaw ha fallat: %v", err)
+	}
+	if len(registres) != 1 {
+		t.Fatalf("esperava 1 registre importat, got %d", len(registres))
+	}
+
+	historyReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/documentals/registres/%d/historial", registres[0].ID), nil)
+	historyReq.AddCookie(&http.Cookie{Name: "cg_session", Value: sessionID})
+	historyRR := httptest.NewRecorder()
+	app.AdminRegistreHistory(historyRR, historyReq)
+	if historyRR.Code != http.StatusOK {
+		t.Fatalf("historial esperava 200, got %d body=%s", historyRR.Code, historyRR.Body.String())
+	}
+	body := historyRR.Body.String()
+	if !strings.Contains(body, fmt.Sprintf("/documentals/registres/%d?view=base", registres[0].ID)) {
+		t.Fatalf("esperava enllaç a la versió base, body=%s", body)
+	}
+	if !strings.Contains(body, "#1") {
+		t.Fatalf("esperava versió inicial #1 visible a l'historial, body=%s", body)
+	}
+}
+
 func TestTemplateImportConditions(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f20_template_conditions.sqlite3")
 	user, sessionID := createF7UserWithSession(t, database)
