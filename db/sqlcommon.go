@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	pq "github.com/lib/pq"
 )
 
 // formatPlaceholders converteix '?' a placeholders de l'estil PostgreSQL ($1, $2...) si cal.
@@ -8625,6 +8627,9 @@ func (h sqlHelper) listTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []i
 	if len(transcripcioIDs) == 0 {
 		return res, nil
 	}
+	if h.style == "postgres" {
+		return h.listTranscripcioPersonesByTranscripcioIDsPostgres(transcripcioIDs)
+	}
 	baseQuery := `
         SELECT id, transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat, cognom_soltera, cognom_soltera_estat, sexe, sexe_estat,
                edat_text, edat_estat, estat_civil_text, estat_civil_estat, municipi_text, municipi_estat, ofici_text, ofici_estat,
@@ -8682,6 +8687,56 @@ func (h sqlHelper) listTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []i
 			return nil, err
 		}
 		rows.Close()
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listTranscripcioPersonesByTranscripcioIDsPostgres(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
+	res := make(map[int][]TranscripcioPersonaRaw, len(transcripcioIDs))
+	if len(transcripcioIDs) == 0 {
+		return res, nil
+	}
+	baseQuery := `
+        SELECT id, transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat, cognom_soltera, cognom_soltera_estat, sexe, sexe_estat,
+               edat_text, edat_estat, estat_civil_text, estat_civil_estat, municipi_text, municipi_estat, ofici_text, ofici_estat,
+               casa_nom, casa_estat, persona_id, linked_by, linked_at, notes
+        FROM transcripcions_persones_raw
+        WHERE transcripcio_id = ANY($1)
+        ORDER BY transcripcio_id, id`
+	fallbackQuery := `
+        SELECT id, transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat,
+               NULL AS cognom_soltera, NULL AS cognom_soltera_estat, sexe, sexe_estat,
+               edat_text, edat_estat, estat_civil_text, estat_civil_estat, municipi_text, municipi_estat, ofici_text, ofici_estat,
+               casa_nom, casa_estat, persona_id, linked_by, linked_at, notes
+        FROM transcripcions_persones_raw
+        WHERE transcripcio_id = ANY($1)
+        ORDER BY transcripcio_id, id`
+	args := []interface{}{pq.Array(intIDsToInt64Slice(transcripcioIDs))}
+	rows, err := h.db.Query(baseQuery, args...)
+	if err != nil {
+		if isMissingColumnError(err) {
+			rows, err = h.db.Query(fallbackQuery, args...)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p TranscripcioPersonaRaw
+		if err := rows.Scan(
+			&p.ID, &p.TranscripcioID, &p.Rol, &p.Nom, &p.NomEstat, &p.Cognom1, &p.Cognom1Estat, &p.Cognom2, &p.Cognom2Estat, &p.CognomSoltera, &p.CognomSolteraEstat, &p.Sexe, &p.SexeEstat,
+			&p.EdatText, &p.EdatEstat, &p.EstatCivilText, &p.EstatCivilEstat, &p.MunicipiText, &p.MunicipiEstat, &p.OficiText, &p.OficiEstat,
+			&p.CasaNom, &p.CasaEstat, &p.PersonaID, &p.LinkedBy, &p.LinkedAt, &p.Notes,
+		); err != nil {
+			return nil, err
+		}
+		res[p.TranscripcioID] = append(res[p.TranscripcioID], p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return res, nil
 }
@@ -8993,6 +9048,9 @@ func (h sqlHelper) listTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []i
 	if len(transcripcioIDs) == 0 {
 		return res, nil
 	}
+	if h.style == "postgres" {
+		return h.listTranscripcioAtributsByTranscripcioIDsPostgres(transcripcioIDs)
+	}
 	const maxIDsPerChunk = 900
 	for start := 0; start < len(transcripcioIDs); start += maxIDsPerChunk {
 		end := start + maxIDsPerChunk
@@ -9029,6 +9087,45 @@ func (h sqlHelper) listTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []i
 		rows.Close()
 	}
 	return res, nil
+}
+
+func (h sqlHelper) listTranscripcioAtributsByTranscripcioIDsPostgres(transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
+	res := make(map[int][]TranscripcioAtributRaw, len(transcripcioIDs))
+	if len(transcripcioIDs) == 0 {
+		return res, nil
+	}
+	query := `
+        SELECT id, transcripcio_id, clau, tipus_valor, valor_text, valor_int, valor_date, valor_bool, estat, notes
+        FROM transcripcions_atributs_raw
+        WHERE transcripcio_id = ANY($1)
+        ORDER BY transcripcio_id, id`
+	rows, err := h.db.Query(query, pq.Array(intIDsToInt64Slice(transcripcioIDs)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var a TranscripcioAtributRaw
+		if err := rows.Scan(&a.ID, &a.TranscripcioID, &a.Clau, &a.TipusValor, &a.ValorText, &a.ValorInt, &a.ValorDate, &a.ValorBool, &a.Estat, &a.Notes); err != nil {
+			return nil, err
+		}
+		res[a.TranscripcioID] = append(res[a.TranscripcioID], a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func intIDsToInt64Slice(ids []int) []int64 {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, int64(id))
+	}
+	return out
 }
 
 func (h sqlHelper) createTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error) {
