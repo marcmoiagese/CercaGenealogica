@@ -1292,6 +1292,9 @@ func (d *SQLite) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPer
 func (d *SQLite) ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
 }
+func (d *SQLite) GetMaxTranscripcioRawID() (int, error) {
+	return d.help.getMaxTranscripcioRawID()
+}
 func (d *SQLite) CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error) {
 	return d.help.createTranscripcioPersona(p)
 }

@@ -8742,6 +8742,10 @@ func (h sqlHelper) listTranscripcioPersonesByTranscripcioIDsPostgres(transcripci
 }
 
 func (h sqlHelper) listTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
+	return h.listTranscripcioStrongMatchCandidatesUpToID(bookID, tipusActe, pageKey, 0)
+}
+
+func (h sqlHelper) listTranscripcioStrongMatchCandidatesUpToID(bookID int, tipusActe, pageKey string, maxExistingID int) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
 	personesByTranscripcioID := map[int][]TranscripcioPersonaRaw{}
 	atributsByTranscripcioID := map[int][]TranscripcioAtributRaw{}
 	pageKey = strings.TrimSpace(pageKey)
@@ -8769,7 +8773,13 @@ func (h sqlHelper) listTranscripcioStrongMatchCandidates(bookID int, tipusActe, 
 		args = append(args, pageNum)
 	}
 	query += `
-          )
+          )`
+	if maxExistingID > 0 {
+		query += `
+          AND t.id <= $` + strconv.Itoa(len(args)+1)
+		args = append(args, maxExistingID)
+	}
+	query += `
         ORDER BY t.id`
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
@@ -8802,6 +8812,17 @@ func (h sqlHelper) listTranscripcioStrongMatchCandidates(bookID int, tipusActe, 
 		}
 	}
 	return trans, personesByTranscripcioID, atributsByTranscripcioID, nil
+}
+
+func (h sqlHelper) getMaxTranscripcioRawID() (int, error) {
+	var maxID sql.NullInt64
+	if err := h.db.QueryRow(`SELECT MAX(id) FROM transcripcions_raw`).Scan(&maxID); err != nil {
+		return 0, err
+	}
+	if !maxID.Valid || maxID.Int64 <= 0 {
+		return 0, nil
+	}
+	return int(maxID.Int64), nil
 }
 
 func isMissingColumnError(err error) bool {

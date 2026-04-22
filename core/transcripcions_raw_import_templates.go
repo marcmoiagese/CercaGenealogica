@@ -97,6 +97,10 @@ type templatePendingCreate struct {
 	Bundle db.TranscripcioRawImportBundle
 }
 
+type transcripcioRawMaxIDProvider interface {
+	GetMaxTranscripcioRawID() (int, error)
+}
+
 type templatePageLookupCache struct {
 	database db.DB
 	books    map[int]*templateBookPageLookup
@@ -214,6 +218,12 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	pendingCreates := make([]templatePendingCreate, 0, templateImportCreateBatchSize)
 	pageLookupCache := newTemplatePageLookupCache(a.DB)
 	matchBuildCache := newTemplateMatchBuildCache()
+	existingSnapshotMaxID := 0
+	if maxProvider, ok := a.DB.(transcripcioRawMaxIDProvider); ok {
+		if maxID, err := maxProvider.GetMaxTranscripcioRawID(); err == nil && maxID > 0 {
+			existingSnapshotMaxID = maxID
+		}
+	}
 	flushPendingCreates := func() {
 		pendingCreates = a.flushTemplatePendingCreates(pendingCreates, &result)
 	}
@@ -336,7 +346,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			if existingMap == nil {
 				resolveStart = time.Now()
 				if matchMode == "by_strong_signature_if_page_indexed" {
-					existingMap = a.loadExistingByStrongMatchWithPageCache(pageLookupCache, bookID, &t, atributs, model.Policies)
+					existingMap = a.loadExistingByStrongMatchWithPageCacheSnapshot(pageLookupCache, bookID, &t, atributs, model.Policies, existingSnapshotMaxID)
 				} else {
 					existingMap = a.loadExistingByPrincipal(bookID, model.Policies.PrincipalRoles)
 				}
@@ -1453,7 +1463,15 @@ type templateStrongMatchCandidateLoader interface {
 	ListTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]db.TranscripcioRaw, map[int][]db.TranscripcioPersonaRaw, map[int][]db.TranscripcioAtributRaw, error)
 }
 
+type templateStrongMatchCandidateSnapshotLoader interface {
+	ListTranscripcioStrongMatchCandidatesUpToID(bookID int, tipusActe, pageKey string, maxExistingID int) ([]db.TranscripcioRaw, map[int][]db.TranscripcioPersonaRaw, map[int][]db.TranscripcioAtributRaw, error)
+}
+
 func (a *App) loadExistingByStrongMatchWithPageCache(pageCache *templatePageLookupCache, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) map[string]int {
+	return a.loadExistingByStrongMatchWithPageCacheSnapshot(pageCache, bookID, incoming, incomingAttrs, policies, -1)
+}
+
+func (a *App) loadExistingByStrongMatchWithPageCacheSnapshot(pageCache *templatePageLookupCache, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies, snapshotMaxID int) map[string]int {
 	existingMap := map[string]int{}
 	if incoming == nil {
 		return existingMap
@@ -1462,20 +1480,37 @@ func (a *App) loadExistingByStrongMatchWithPageCache(pageCache *templatePageLook
 	if pageKey == "" || strings.TrimSpace(incoming.TipusActe) == "" {
 		return existingMap
 	}
+	if snapshotMaxID == 0 {
+		return existingMap
+	}
 	matchBuildCache := newTemplateMatchBuildCache()
 	pageKeyNorm := normalizeTemplateMatchPartWithCache(matchBuildCache, pageKey)
 	attrsByTranscripcioID := map[int][]db.TranscripcioAtributRaw{}
 	personesByTranscripcioID := map[int][]db.TranscripcioPersonaRaw{}
 	trans := []db.TranscripcioRaw{}
+	if snapshotMaxID > 0 {
+		if loader, ok := a.DB.(templateStrongMatchCandidateSnapshotLoader); ok {
+			if scopedTrans, scopedPersones, scopedAttrs, err := loader.ListTranscripcioStrongMatchCandidatesUpToID(bookID, incoming.TipusActe, pageKey, snapshotMaxID); err == nil {
+				trans = scopedTrans
+				personesByTranscripcioID = scopedPersones
+				attrsByTranscripcioID = scopedAttrs
+			}
+		}
+	}
 	if loader, ok := a.DB.(templateStrongMatchCandidateLoader); ok {
-		if scopedTrans, scopedPersones, scopedAttrs, err := loader.ListTranscripcioStrongMatchCandidates(bookID, incoming.TipusActe, pageKey); err == nil {
-			trans = scopedTrans
-			personesByTranscripcioID = scopedPersones
-			attrsByTranscripcioID = scopedAttrs
+		if len(trans) == 0 {
+			if scopedTrans, scopedPersones, scopedAttrs, err := loader.ListTranscripcioStrongMatchCandidates(bookID, incoming.TipusActe, pageKey); err == nil {
+				trans = scopedTrans
+				personesByTranscripcioID = scopedPersones
+				attrsByTranscripcioID = scopedAttrs
+			}
 		}
 	}
 	if len(trans) > 0 {
 		for _, tr := range trans {
+			if tr.ID <= 0 || (snapshotMaxID >= 0 && tr.ID > snapshotMaxID) {
+				continue
+			}
 			attrsExistents, okAttrs := attrsByTranscripcioID[tr.ID]
 			if !okAttrs {
 				attrsExistents, _ = a.DB.ListTranscripcioAtributs(tr.ID)
@@ -1505,11 +1540,11 @@ func (a *App) loadExistingByStrongMatchWithPageCache(pageCache *templatePageLook
 		}
 		return existingMap
 	}
-	trans, _ = a.DB.ListTranscripcionsRaw(bookID, db.TranscripcioFilter{TipusActe: incoming.TipusActe})
+	trans, _ = a.DB.ListTranscripcionsRaw(bookID, db.TranscripcioFilter{TipusActe: incoming.TipusActe, Limit: -1})
 	if len(trans) > 0 {
 		ids := make([]int, 0, len(trans))
 		for _, tr := range trans {
-			if tr.ID > 0 {
+			if tr.ID > 0 && (snapshotMaxID < 0 || tr.ID <= snapshotMaxID) {
 				ids = append(ids, tr.ID)
 			}
 		}
@@ -1523,6 +1558,9 @@ func (a *App) loadExistingByStrongMatchWithPageCache(pageCache *templatePageLook
 		}
 	}
 	for _, tr := range trans {
+		if tr.ID <= 0 || (snapshotMaxID >= 0 && tr.ID > snapshotMaxID) {
+			continue
+		}
 		attrsExistents, okAttrs := attrsByTranscripcioID[tr.ID]
 		if !okAttrs {
 			attrsExistents, _ = a.DB.ListTranscripcioAtributs(tr.ID)

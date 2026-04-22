@@ -2009,6 +2009,12 @@ func (d *PostgreSQL) ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs [
 func (d *PostgreSQL) ListTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
 	return d.help.listTranscripcioStrongMatchCandidates(bookID, tipusActe, pageKey)
 }
+func (d *PostgreSQL) ListTranscripcioStrongMatchCandidatesUpToID(bookID int, tipusActe, pageKey string, maxExistingID int) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
+	return d.help.listTranscripcioStrongMatchCandidatesUpToID(bookID, tipusActe, pageKey, maxExistingID)
+}
+func (d *PostgreSQL) GetMaxTranscripcioRawID() (int, error) {
+	return d.help.getMaxTranscripcioRawID()
+}
 func (d *PostgreSQL) ListTranscripcioPersonesByLlibreID(llibreID int) (map[int][]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersonesByLlibreID(llibreID)
 }

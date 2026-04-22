@@ -101,6 +101,17 @@ func (d *f3212Fix2CountingDB) ListTranscripcioStrongMatchCandidates(bookID int, 
 	return loader.ListTranscripcioStrongMatchCandidates(bookID, tipusActe, pageKey)
 }
 
+func (d *f3212Fix2CountingDB) ListTranscripcioStrongMatchCandidatesUpToID(bookID int, tipusActe, pageKey string, maxExistingID int) ([]db.TranscripcioRaw, map[int][]db.TranscripcioPersonaRaw, map[int][]db.TranscripcioAtributRaw, error) {
+	d.listStrongCandidatesCalls++
+	loader, ok := d.DB.(interface {
+		ListTranscripcioStrongMatchCandidatesUpToID(bookID int, tipusActe, pageKey string, maxExistingID int) ([]db.TranscripcioRaw, map[int][]db.TranscripcioPersonaRaw, map[int][]db.TranscripcioAtributRaw, error)
+	})
+	if !ok {
+		return nil, nil, nil, nil
+	}
+	return loader.ListTranscripcioStrongMatchCandidatesUpToID(bookID, tipusActe, pageKey, maxExistingID)
+}
+
 func (d *f3212Fix2CountingDB) ListTranscripcioPersones(transcripcioID int) ([]db.TranscripcioPersonaRaw, error) {
 	d.listPersonesCalls++
 	return d.DB.ListTranscripcioPersones(transcripcioID)
@@ -141,6 +152,16 @@ func (d *f3212Fix2CountingDB) ListTranscripcioAtributsByLlibreID(llibreID int) (
 		return nil, nil
 	}
 	return loader.ListTranscripcioAtributsByLlibreID(llibreID)
+}
+
+func (d *f3212Fix2CountingDB) GetMaxTranscripcioRawID() (int, error) {
+	loader, ok := d.DB.(interface {
+		GetMaxTranscripcioRawID() (int, error)
+	})
+	if !ok {
+		return 0, nil
+	}
+	return loader.GetMaxTranscripcioRawID()
 }
 
 func TestRegistreImportSidefxUsesBookScopedBulkFetchPostgresF3212Fix2(t *testing.T) {

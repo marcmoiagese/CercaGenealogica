@@ -1266,6 +1266,9 @@ func (d *MySQL) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPers
 func (d *MySQL) ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
 }
+func (d *MySQL) GetMaxTranscripcioRawID() (int, error) {
+	return d.help.getMaxTranscripcioRawID()
+}
 func (d *MySQL) CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error) {
 	return d.help.createTranscripcioPersona(p)
 }
