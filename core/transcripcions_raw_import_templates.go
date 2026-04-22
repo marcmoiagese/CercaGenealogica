@@ -195,7 +195,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	}
 
 	seen := map[string]int{}
-	seenMatch := map[string]int{}
+	seenMatchByContext := map[string]map[string]int{}
 	existingByContext := map[string]map[string]int{}
 	pendingCreates := make([]templatePendingCreate, 0, templateImportCreateBatchSize)
 	pageLookupCache := newTemplatePageLookupCache(a.DB)
@@ -270,7 +270,6 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		}
 
 		matchKey := ""
-		matchSeenKey := ""
 		matchContextKey := ""
 		matchMode := model.Policies.MergeMode
 		switch matchMode {
@@ -284,8 +283,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 				if matchKey != "" {
 					matchContextKey = "strong|" + strconv.Itoa(bookID) + "|" + normalizeTemplateMatchPart(pageKey) + "|" + normalizeTemplateMatchPart(t.TipusActe)
 					if model.Policies.AvoidDuplicatePrincipal {
-						matchSeenKey = matchContextKey + "|" + matchKey
-						if firstRow, ok := seenMatch[matchSeenKey]; ok {
+						if firstRow, ok := templateSeenMatchRow(seenMatchByContext, matchContextKey, matchKey); ok {
 							result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 							result.Failed++
 							fields := map[string]string{"duplicate_row": strconv.Itoa(firstRow)}
@@ -303,8 +301,8 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			duplicateStart := time.Now()
 			matchKey = principalPersonKey(persones, model.Policies.PrincipalRoles)
 			if matchKey != "" && model.Policies.AvoidDuplicatePrincipal {
-				matchSeenKey = strconv.Itoa(bookID) + "|" + matchKey
-				if firstRow, ok := seenMatch[matchSeenKey]; ok {
+				matchContextKey = "principal|" + strconv.Itoa(bookID)
+				if firstRow, ok := templateSeenMatchRow(seenMatchByContext, matchContextKey, matchKey); ok {
 					result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 					result.Failed++
 					fields := map[string]string{"duplicate_row": strconv.Itoa(firstRow)}
@@ -312,7 +310,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 					continue
 				}
 			}
-			if matchKey != "" {
+			if matchKey != "" && matchContextKey == "" {
 				matchContextKey = "principal|" + strconv.Itoa(bookID)
 			}
 			result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
@@ -337,8 +335,8 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 				if okUpdate {
 					result.Updated++
 					result.markBook(bookID)
-					if matchSeenKey != "" {
-						seenMatch[matchSeenKey] = rowNum
+					if matchContextKey != "" && matchKey != "" {
+						templateRememberSeenMatch(seenMatchByContext, matchContextKey, matchKey, rowNum)
 					}
 					if updated {
 						existingMap[matchKey] = existingID
@@ -385,8 +383,8 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 				Atributs:     atributRows,
 			},
 		})
-		if matchSeenKey != "" {
-			seenMatch[matchSeenKey] = rowNum
+		if matchContextKey != "" && matchKey != "" {
+			templateRememberSeenMatch(seenMatchByContext, matchContextKey, matchKey, rowNum)
 		}
 		if len(pendingCreates) >= templateImportCreateBatchSize {
 			flushPendingCreates()
@@ -1311,6 +1309,30 @@ func buildTemplateDedupKey(fields []string, rowCtx templateRowContext, mapped ma
 	return strings.Join(parts, "|")
 }
 
+func templateSeenMatchRow(seenByContext map[string]map[string]int, contextKey, matchKey string) (int, bool) {
+	if contextKey == "" || matchKey == "" {
+		return 0, false
+	}
+	rows := seenByContext[contextKey]
+	if rows == nil {
+		return 0, false
+	}
+	firstRow, ok := rows[matchKey]
+	return firstRow, ok
+}
+
+func templateRememberSeenMatch(seenByContext map[string]map[string]int, contextKey, matchKey string, rowNum int) {
+	if contextKey == "" || matchKey == "" {
+		return
+	}
+	rows := seenByContext[contextKey]
+	if rows == nil {
+		rows = map[string]int{}
+		seenByContext[contextKey] = rows
+	}
+	rows[matchKey] = rowNum
+}
+
 func evalTemplateCondition(expr string, value string, rowCtx templateRowContext) bool {
 	expr = strings.TrimSpace(expr)
 	if expr == "" {
@@ -1617,13 +1639,20 @@ func buildTemplateStrongMatchKey(t *db.TranscripcioRaw, persones map[string]*db.
 		return ""
 	}
 	signals := []string{"principal:" + principalKey}
-	extra := map[string]struct{}{}
+	extraCount := 0
+	seenSignals := map[string]struct{}{}
 	addExtra := func(kind, value string) {
 		value = normalizeTemplateMatchPart(value)
 		if value == "" {
 			return
 		}
-		extra[kind+":"+value] = struct{}{}
+		signal := kind + ":" + value
+		if _, exists := seenSignals[signal]; exists {
+			return
+		}
+		seenSignals[signal] = struct{}{}
+		signals = append(signals, signal)
+		extraCount++
 	}
 	if t.DataActeISO.Valid {
 		addExtra("data_acte", t.DataActeISO.String)
@@ -1643,26 +1672,43 @@ func buildTemplateStrongMatchKey(t *db.TranscripcioRaw, persones map[string]*db.
 			}
 		}
 	default:
-		for key, attr := range attrs {
+		attrKeys := make([]string, 0, len(attrs))
+		for key := range attrs {
 			if key == "pagina_digital" {
 				continue
 			}
-			addExtra("attr:"+key, templateAttrComparableValue(attr))
+			attrKeys = append(attrKeys, key)
 		}
-		for role, p := range persones {
-			if stringInSlice(role, policies.PrincipalRoles) {
+		sort.Strings(attrKeys)
+		for _, key := range attrKeys {
+			addExtra("attr:"+key, templateAttrComparableValue(attrs[key]))
+		}
+		principalRoles := map[string]struct{}{}
+		for _, role := range policies.PrincipalRoles {
+			role = strings.TrimSpace(role)
+			if role != "" {
+				principalRoles[role] = struct{}{}
+			}
+		}
+		if len(principalRoles) == 0 {
+			principalRoles["batejat"] = struct{}{}
+			principalRoles["persona_principal"] = struct{}{}
+		}
+		roleKeys := make([]string, 0, len(persones))
+		for role := range persones {
+			if _, skip := principalRoles[role]; skip {
 				continue
 			}
-			addExtra("person:"+role, templateStrongPersonKey(p))
+			roleKeys = append(roleKeys, role)
+		}
+		sort.Strings(roleKeys)
+		for _, role := range roleKeys {
+			addExtra("person:"+role, templateStrongPersonKey(persones[role]))
 		}
 	}
-	if len(extra) < 2 {
+	if extraCount < 2 {
 		return ""
 	}
-	for key := range extra {
-		signals = append(signals, key)
-	}
-	sort.Strings(signals[1:])
 	return strings.Join(signals, "|")
 }
 

@@ -486,6 +486,93 @@ func TestF327LoadExistingByStrongMatchUsesCachedPagesForExisting(t *testing.T) {
 	}
 }
 
+func TestF328StrongMatchKeyBaptismeDeterministicAcrossMapOrder(t *testing.T) {
+	reg := &db.TranscripcioRaw{
+		LlibreID:      1,
+		NumPaginaText: "12",
+		TipusActe:     "baptisme",
+		DataActeISO:   parseNullString("1890-02-05"),
+	}
+	personesA := map[string]*db.TranscripcioPersonaRaw{
+		"mare":    {Rol: "mare", Nom: "Maria", Cognom1: "Puig"},
+		"pare":    {Rol: "pare", Nom: "Pere", Cognom1: "Garcia"},
+		"batejat": {Rol: "batejat", Nom: "Joan", Cognom1: "Garcia", Cognom2: "Soler"},
+	}
+	personesB := map[string]*db.TranscripcioPersonaRaw{
+		"batejat": {Rol: "batejat", Nom: "Joan", Cognom1: "Garcia", Cognom2: "Soler"},
+		"pare":    {Rol: "pare", Nom: "Pere", Cognom1: "Garcia"},
+		"mare":    {Rol: "mare", Nom: "Maria", Cognom1: "Puig"},
+	}
+	attrsA := map[string]*db.TranscripcioAtributRaw{
+		"data_bateig":    {Clau: "data_bateig", TipusValor: "date", ValorDate: parseNullString("1890-02-05"), Estat: "clar"},
+		"data_naixement": {Clau: "data_naixement", TipusValor: "date", ValorDate: parseNullString("1890-02-01"), Estat: "clar"},
+	}
+	attrsB := map[string]*db.TranscripcioAtributRaw{
+		"data_naixement": {Clau: "data_naixement", TipusValor: "date", ValorDate: parseNullString("1890-02-01"), Estat: "clar"},
+		"data_bateig":    {Clau: "data_bateig", TipusValor: "date", ValorDate: parseNullString("1890-02-05"), Estat: "clar"},
+	}
+
+	keyA := buildTemplateStrongMatchKey(reg, personesA, attrsA, templatePolicies{PrincipalRoles: []string{"batejat", "persona_principal"}})
+	keyB := buildTemplateStrongMatchKey(reg, personesB, attrsB, templatePolicies{PrincipalRoles: []string{"batejat", "persona_principal"}})
+	if keyA == "" || keyB == "" {
+		t.Fatalf("la clau forta de baptisme no pot quedar buida: A=%q B=%q", keyA, keyB)
+	}
+	if keyA != keyB {
+		t.Fatalf("la clau forta ha de ser estable malgrat l'ordre dels mapes: A=%q B=%q", keyA, keyB)
+	}
+}
+
+func TestF328StrongMatchKeyObitRequiresTwoSignals(t *testing.T) {
+	reg := &db.TranscripcioRaw{
+		LlibreID:    1,
+		TipusActe:   "obit",
+		DataActeISO: parseNullString("1890-02-05"),
+	}
+	persones := map[string]*db.TranscripcioPersonaRaw{
+		"persona_principal": {Rol: "persona_principal", Nom: "Joan", Cognom1: "Garcia", Cognom2: "Soler"},
+	}
+	if key := buildTemplateStrongMatchKey(reg, persones, map[string]*db.TranscripcioAtributRaw{}, templatePolicies{PrincipalRoles: []string{"persona_principal"}}); key != "" {
+		t.Fatalf("amb només data_acte no hi pot haver clau forta d'obit: %q", key)
+	}
+	attrs := map[string]*db.TranscripcioAtributRaw{
+		"edat": {Clau: "edat", TipusValor: "int", ValorInt: sql.NullInt64{Int64: 70, Valid: true}, Estat: "clar"},
+	}
+	if key := buildTemplateStrongMatchKey(reg, persones, attrs, templatePolicies{PrincipalRoles: []string{"persona_principal"}}); key == "" {
+		t.Fatalf("amb data_acte + un segon senyal fort l'obit ha de generar clau")
+	}
+}
+
+func TestF328StrongMatchKeyMatrimoniIgnoresPaginaDigitalAndStaysDeterministic(t *testing.T) {
+	reg := &db.TranscripcioRaw{
+		LlibreID:    1,
+		TipusActe:   "matrimoni",
+		DataActeISO: parseNullString("1890-06-05"),
+	}
+	personesA := map[string]*db.TranscripcioPersonaRaw{
+		"persona_principal": {Rol: "persona_principal", Nom: "Joan", Cognom1: "Garcia", Cognom2: "Soler"},
+		"conjuge":           {Rol: "conjuge", Nom: "Maria", Cognom1: "Puig"},
+	}
+	personesB := map[string]*db.TranscripcioPersonaRaw{
+		"conjuge":           {Rol: "conjuge", Nom: "Maria", Cognom1: "Puig"},
+		"persona_principal": {Rol: "persona_principal", Nom: "Joan", Cognom1: "Garcia", Cognom2: "Soler"},
+	}
+	attrsA := map[string]*db.TranscripcioAtributRaw{
+		"pagina_digital": {Clau: "pagina_digital", TipusValor: "text", ValorText: "12", Estat: "clar"},
+		"lloc":           {Clau: "lloc", TipusValor: "text", ValorText: "Arbeca", Estat: "clar"},
+	}
+	attrsB := map[string]*db.TranscripcioAtributRaw{
+		"lloc": {Clau: "lloc", TipusValor: "text", ValorText: "Arbeca", Estat: "clar"},
+	}
+	keyA := buildTemplateStrongMatchKey(reg, personesA, attrsA, templatePolicies{PrincipalRoles: []string{"persona_principal"}})
+	keyB := buildTemplateStrongMatchKey(reg, personesB, attrsB, templatePolicies{PrincipalRoles: []string{"persona_principal"}})
+	if keyA == "" || keyB == "" {
+		t.Fatalf("la clau forta de matrimoni no pot quedar buida: A=%q B=%q", keyA, keyB)
+	}
+	if keyA != keyB {
+		t.Fatalf("pagina_digital no ha d'afectar ni l'ordre dels mapes; A=%q B=%q", keyA, keyB)
+	}
+}
+
 func runF32StaticMarcmoiaImport(t *testing.T, csvContent string) (csvImportResult, f32ImportSnapshot) {
 	t.Helper()
 	app, database := newModeracioBulkDiagnosticsApp(t)
