@@ -9108,6 +9108,7 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPrepared(bundles []Transcripc
 		if err != nil {
 			return res, err
 		}
+		res.Metrics.TranscripcioBatches++
 		lastID, err := execRes.LastInsertId()
 		if err != nil || lastID <= 0 {
 			return res, fmt.Errorf("%s bulk insert transcripcions_raw: no last insert id", h.style)
@@ -9123,6 +9124,7 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPrepared(bundles []Transcripc
 				return res, err
 			}
 			res.Metrics.PersonaPersistDur += time.Since(start)
+			res.Metrics.PersonaBatches++
 			res.Metrics.Persones++
 		}
 		for j := range bundles[i].Atributs {
@@ -9134,6 +9136,7 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPrepared(bundles []Transcripc
 				return res, err
 			}
 			res.Metrics.LinksPersistDur += time.Since(start)
+			res.Metrics.AtributBatches++
 			res.Metrics.Atributs++
 		}
 	}
@@ -9169,6 +9172,9 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgres(bundles []Transcripc
 	}()
 	totalPersones := 0
 	totalAtributs := 0
+	rawBatchSize := bulkInsertStatementBatchSize(h.style, len(buildInsertTranscripcioRawArgs(TranscripcioRaw{}, 1, true)))
+	personBatchSize := bulkInsertStatementBatchSize(h.style, len(buildInsertTranscripcioPersonaArgs(TranscripcioPersonaRaw{})))
+	attrBatchSize := bulkInsertStatementBatchSize(h.style, len(buildInsertTranscripcioAtributArgs(TranscripcioAtributRaw{})))
 	for i := range bundles {
 		totalPersones += len(bundles[i].Persones)
 		totalAtributs += len(bundles[i].Atributs)
@@ -9176,8 +9182,8 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgres(bundles []Transcripc
 	personRows := make([]TranscripcioPersonaRaw, 0, totalPersones)
 	attrRows := make([]TranscripcioAtributRaw, 0, totalAtributs)
 	start := time.Now()
-	for i := 0; i < len(bundles); i += bulkTranscripcioRawBundleBatchSize {
-		end := i + bulkTranscripcioRawBundleBatchSize
+	for i := 0; i < len(bundles); i += rawBatchSize {
+		end := i + rawBatchSize
 		if end > len(bundles) {
 			end = len(bundles)
 		}
@@ -9212,11 +9218,12 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgres(bundles []Transcripc
 			res.Metrics.TranscripcioInsertDur += time.Since(start)
 			return res, err
 		}
+		res.Metrics.TranscripcioBatches++
 	}
 	res.Metrics.TranscripcioInsertDur += time.Since(start)
 	start = time.Now()
-	for i := 0; i < len(personRows); i += bulkTranscripcioRawBundleBatchSize {
-		end := i + bulkTranscripcioRawBundleBatchSize
+	for i := 0; i < len(personRows); i += personBatchSize {
+		end := i + personBatchSize
 		if end > len(personRows) {
 			end = len(personRows)
 		}
@@ -9228,12 +9235,13 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgres(bundles []Transcripc
 			res.Metrics.PersonaPersistDur += time.Since(start)
 			return res, err
 		}
+		res.Metrics.PersonaBatches++
 	}
 	res.Metrics.PersonaPersistDur += time.Since(start)
 	res.Metrics.Persones = len(personRows)
 	start = time.Now()
-	for i := 0; i < len(attrRows); i += bulkTranscripcioRawBundleBatchSize {
-		end := i + bulkTranscripcioRawBundleBatchSize
+	for i := 0; i < len(attrRows); i += attrBatchSize {
+		end := i + attrBatchSize
 		if end > len(attrRows) {
 			end = len(attrRows)
 		}
@@ -9245,6 +9253,7 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgres(bundles []Transcripc
 			res.Metrics.LinksPersistDur += time.Since(start)
 			return res, err
 		}
+		res.Metrics.AtributBatches++
 	}
 	res.Metrics.LinksPersistDur += time.Since(start)
 	res.Metrics.Atributs = len(attrRows)

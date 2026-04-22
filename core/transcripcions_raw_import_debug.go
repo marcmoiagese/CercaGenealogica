@@ -3,37 +3,40 @@ package core
 import "time"
 
 type csvImportDebugMetrics struct {
-	Enabled                    bool
-	Model                      string
-	Scope                      string
-	Rows                       int
-	Books                      int
-	ParseDur                   time.Duration
-	ResolveDur                 time.Duration
-	WriteDur                   time.Duration
-	WritePrepareDur            time.Duration
-	WritePageLookupDur         time.Duration
-	WriteDuplicateCheckDur     time.Duration
-	WriteTranscripcioInsertDur time.Duration
-	WritePersonaResolveDur     time.Duration
-	WritePersonaPersistDur     time.Duration
-	WriteLinksPersistDur       time.Duration
-	WriteCommitDur             time.Duration
-	WriteBulkBatches           int
-	WriteBulkRows              int
-	WriteBulkFallbacks         int
-	SidefxIndexacioStatsDur    time.Duration
-	SidefxLoadRegistresDur     time.Duration
-	SidefxLoadPersonesDur      time.Duration
-	SidefxLoadAtributsDur      time.Duration
-	SidefxComputeDur           time.Duration
-	SidefxUpsertDur            time.Duration
-	SidefxPageStatsDur         time.Duration
-	SidefxIndexacioRegistres   int
-	SidefxIndexacioPersones    int
-	SidefxIndexacioAtributs    int
-	SidefxDur                  time.Duration
-	TotalDur                   time.Duration
+	Enabled                      bool
+	Model                        string
+	Scope                        string
+	Rows                         int
+	Books                        int
+	ParseDur                     time.Duration
+	ResolveDur                   time.Duration
+	WriteDur                     time.Duration
+	WritePrepareDur              time.Duration
+	WritePageLookupDur           time.Duration
+	WriteDuplicateCheckDur       time.Duration
+	WriteTranscripcioInsertDur   time.Duration
+	WritePersonaResolveDur       time.Duration
+	WritePersonaPersistDur       time.Duration
+	WriteLinksPersistDur         time.Duration
+	WriteCommitDur               time.Duration
+	WriteBulkBatches             int
+	WriteBulkRows                int
+	WriteBulkFallbacks           int
+	WriteBulkTranscripcioBatches int
+	WriteBulkPersonaBatches      int
+	WriteBulkLinksBatches        int
+	SidefxIndexacioStatsDur      time.Duration
+	SidefxLoadRegistresDur       time.Duration
+	SidefxLoadPersonesDur        time.Duration
+	SidefxLoadAtributsDur        time.Duration
+	SidefxComputeDur             time.Duration
+	SidefxUpsertDur              time.Duration
+	SidefxPageStatsDur           time.Duration
+	SidefxIndexacioRegistres     int
+	SidefxIndexacioPersones      int
+	SidefxIndexacioAtributs      int
+	SidefxDur                    time.Duration
+	TotalDur                     time.Duration
 }
 
 func newCSVImportDebugMetrics(model, scope string) csvImportDebugMetrics {
@@ -131,6 +134,14 @@ func (m *csvImportDebugMetrics) addWriteBulkFallback() {
 	}
 }
 
+func (m *csvImportDebugMetrics) addWriteBulkStatementBatches(transcripcions, persones, links int) {
+	if m != nil && m.Enabled {
+		m.WriteBulkTranscripcioBatches += transcripcions
+		m.WriteBulkPersonaBatches += persones
+		m.WriteBulkLinksBatches += links
+	}
+}
+
 func (m *csvImportDebugMetrics) addSidefx(d time.Duration) {
 	if m != nil && m.Enabled {
 		m.SidefxDur += d
@@ -172,7 +183,7 @@ func (a *App) logCSVImportDebug(actorID int, result csvImportResult) {
 		return
 	}
 	Debugf(
-		"registre import model=%s scope=%s actor=%d rows=%d books=%d created=%d updated=%d failed=%d parse_dur=%s resolve_dur=%s write_dur=%s write_prepare_dur=%s write_page_lookup_dur=%s write_duplicate_check_dur=%s write_transcripcio_insert_dur=%s write_persona_resolve_dur=%s write_persona_persist_dur=%s write_links_persist_dur=%s write_commit_dur=%s write_bulk_batches=%d write_bulk_rows=%d write_bulk_fallbacks=%d sidefx_dur=%s sidefx_indexacio_stats_dur=%s sidefx_load_registres_dur=%s sidefx_load_persones_dur=%s sidefx_load_atributs_dur=%s sidefx_compute_dur=%s sidefx_upsert_dur=%s sidefx_page_stats_dur=%s sidefx_indexacio_registres=%d sidefx_indexacio_persones=%d sidefx_indexacio_atributs=%d total_dur=%s",
+		"registre import model=%s scope=%s actor=%d rows=%d books=%d created=%d updated=%d failed=%d parse_dur=%s resolve_dur=%s write_dur=%s write_prepare_dur=%s write_page_lookup_dur=%s write_duplicate_check_dur=%s write_transcripcio_insert_dur=%s write_persona_resolve_dur=%s write_persona_persist_dur=%s write_links_persist_dur=%s write_commit_dur=%s write_bulk_batches=%d write_bulk_rows=%d write_bulk_fallbacks=%d write_bulk_transcripcio_batches=%d write_bulk_persona_batches=%d write_bulk_links_batches=%d sidefx_dur=%s sidefx_indexacio_stats_dur=%s sidefx_load_registres_dur=%s sidefx_load_persones_dur=%s sidefx_load_atributs_dur=%s sidefx_compute_dur=%s sidefx_upsert_dur=%s sidefx_page_stats_dur=%s sidefx_indexacio_registres=%d sidefx_indexacio_persones=%d sidefx_indexacio_atributs=%d total_dur=%s",
 		result.Debug.Model,
 		result.Debug.Scope,
 		actorID,
@@ -195,6 +206,9 @@ func (a *App) logCSVImportDebug(actorID int, result csvImportResult) {
 		result.Debug.WriteBulkBatches,
 		result.Debug.WriteBulkRows,
 		result.Debug.WriteBulkFallbacks,
+		result.Debug.WriteBulkTranscripcioBatches,
+		result.Debug.WriteBulkPersonaBatches,
+		result.Debug.WriteBulkLinksBatches,
 		result.Debug.SidefxDur,
 		result.Debug.SidefxIndexacioStatsDur,
 		result.Debug.SidefxLoadRegistresDur,

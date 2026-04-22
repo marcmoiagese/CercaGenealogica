@@ -3,6 +3,8 @@ package db
 import "strings"
 
 const bulkTranscripcioRawBundleBatchSize = 200
+const postgresBulkInsertParamLimit = 65535
+const postgresBulkInsertTargetRows = 1000
 
 func normalizeTranscripcioRawForInsert(t *TranscripcioRaw) {
 	if t == nil {
@@ -14,6 +16,23 @@ func normalizeTranscripcioRawForInsert(t *TranscripcioRaw) {
 	if strings.TrimSpace(t.DataActeEstat) == "" {
 		t.DataActeEstat = "clar"
 	}
+}
+
+func bulkInsertStatementBatchSize(style string, argsPerRow int) int {
+	if strings.ToLower(style) != "postgres" || argsPerRow <= 0 {
+		return bulkTranscripcioRawBundleBatchSize
+	}
+	maxRows := postgresBulkInsertParamLimit / argsPerRow
+	if maxRows <= 0 {
+		return 1
+	}
+	if maxRows > postgresBulkInsertTargetRows {
+		maxRows = postgresBulkInsertTargetRows
+	}
+	if maxRows < bulkTranscripcioRawBundleBatchSize {
+		return maxRows
+	}
+	return maxRows
 }
 
 func buildInsertTranscripcioRawQuery(style, nowFun string, includeID, returning bool) string {

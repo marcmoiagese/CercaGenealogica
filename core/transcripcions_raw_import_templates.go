@@ -422,6 +422,11 @@ func (a *App) flushTemplatePendingCreates(pending []templatePendingCreate, resul
 		bulkResult, err := creator.BulkCreateTranscripcioRawBundles(bundles)
 		if err == nil && len(bulkResult.IDs) == len(pending) {
 			result.Debug.addWriteBulkBatch(len(pending))
+			result.Debug.addWriteBulkStatementBatches(
+				bulkResult.Metrics.TranscripcioBatches,
+				bulkResult.Metrics.PersonaBatches,
+				bulkResult.Metrics.AtributBatches,
+			)
 			result.Debug.addWriteTranscripcioInsert(bulkResult.Metrics.TranscripcioInsertDur)
 			result.Debug.addWritePersonaPersist(bulkResult.Metrics.PersonaPersistDur)
 			result.Debug.addWriteLinksPersist(bulkResult.Metrics.LinksPersistDur)

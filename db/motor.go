@@ -2377,6 +2377,9 @@ type TranscripcioRawImportBulkMetrics struct {
 	PersonaPersistDur     time.Duration
 	LinksPersistDur       time.Duration
 	CommitDur             time.Duration
+	TranscripcioBatches   int
+	PersonaBatches        int
+	AtributBatches        int
 	Rows                  int
 	Persones              int
 	Atributs              int
