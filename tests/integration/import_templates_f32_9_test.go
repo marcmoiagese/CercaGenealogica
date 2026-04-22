@@ -75,12 +75,30 @@ func TestRegistreImportSidefxUsesBulkIndexacioFetchSQLitePostgresF329(t *testing
 
 type f3212Fix2CountingDB struct {
 	db.DB
-	listPersonesCalls  int
-	listPersonesByIDs  int
-	listPersonesByBook int
-	listAtributsCalls  int
-	listAtributsByIDs  int
-	listAtributsByBook int
+	listStrongCandidatesCalls int
+	listTranscripcionsCalls   int
+	listPersonesCalls         int
+	listPersonesByIDs         int
+	listPersonesByBook        int
+	listAtributsCalls         int
+	listAtributsByIDs         int
+	listAtributsByBook        int
+}
+
+func (d *f3212Fix2CountingDB) ListTranscripcionsRaw(llibreID int, f db.TranscripcioFilter) ([]db.TranscripcioRaw, error) {
+	d.listTranscripcionsCalls++
+	return d.DB.ListTranscripcionsRaw(llibreID, f)
+}
+
+func (d *f3212Fix2CountingDB) ListTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]db.TranscripcioRaw, map[int][]db.TranscripcioPersonaRaw, map[int][]db.TranscripcioAtributRaw, error) {
+	d.listStrongCandidatesCalls++
+	loader, ok := d.DB.(interface {
+		ListTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]db.TranscripcioRaw, map[int][]db.TranscripcioPersonaRaw, map[int][]db.TranscripcioAtributRaw, error)
+	})
+	if !ok {
+		return nil, nil, nil, nil
+	}
+	return loader.ListTranscripcioStrongMatchCandidates(bookID, tipusActe, pageKey)
 }
 
 func (d *f3212Fix2CountingDB) ListTranscripcioPersones(transcripcioID int) ([]db.TranscripcioPersonaRaw, error) {
@@ -161,6 +179,77 @@ func TestRegistreImportSidefxUsesBookScopedBulkFetchPostgresF3212Fix2(t *testing
 			}
 			if countingDB.listPersonesCalls != 0 || countingDB.listAtributsCalls != 0 {
 				t.Fatalf("[%s] PostgreSQL no ha d'usar càrrega fila-a-fila: persones=%d atributs=%d", cfg.Label, countingDB.listPersonesCalls, countingDB.listAtributsCalls)
+			}
+		})
+	}
+}
+
+func TestTemplateImportStrongDedupUsesPageScopedCandidatesPostgresF3212Fix2(t *testing.T) {
+	for _, cfg := range loadSQLiteAndPostgresConfigsForImportHistory(t) {
+		if cfg.Engine != "postgres" {
+			continue
+		}
+		cfg := cfg
+		t.Run(cfg.Label, func(t *testing.T) {
+			app, database := newTestAppForConfig(t, cfg.Config)
+			user, sessionID := createF7UserWithSession(t, database)
+			ensureAdminPolicyForUser(t, database, user.ID)
+			llibreID, _ := createF7LlibreWithPagina(t, database, user.ID)
+
+			for pageNum := 2; pageNum <= 13; pageNum++ {
+				if _, err := database.SaveLlibrePagina(&db.LlibrePagina{
+					LlibreID:  llibreID,
+					NumPagina: pageNum,
+					Estat:     "indexada",
+				}); err != nil {
+					t.Fatalf("[%s] SaveLlibrePagina(%d) ha fallat: %v", cfg.Label, pageNum, err)
+				}
+			}
+
+			for pageNum := 1; pageNum <= 12; pageNum++ {
+				pagina, err := database.GetLlibrePaginaByNum(llibreID, pageNum)
+				if err != nil || pagina == nil {
+					t.Fatalf("[%s] GetLlibrePaginaByNum(%d) ha fallat: %v", cfg.Label, pageNum, err)
+				}
+				createF3210ExistingStrongBaptismeForPage(t, database, llibreID, pageNum, pagina.ID)
+			}
+
+			countingDB := &f3212Fix2CountingDB{DB: database}
+			app.DB = countingDB
+			templateID := createF3210Template(t, database, user.ID, "f3212-fix2-pages-"+cfg.Label)
+
+			rows := []string{"llibre_id,tipus_acte,pagina,cognoms,pare,mare,nascut,acte"}
+			for pageNum := 1; pageNum <= 12; pageNum++ {
+				rows = append(rows, strings.Join([]string{
+					strconv.Itoa(llibreID),
+					"baptisme",
+					strconv.Itoa(pageNum),
+					"Garcia Soler Joan" + strconv.Itoa(100+pageNum),
+					"Pere Garcia" + strconv.Itoa(100+pageNum),
+					"Maria Puig" + strconv.Itoa(100+pageNum),
+					"01/02/1890",
+					"05/02/1890",
+				}, ","))
+			}
+
+			req := buildImportGlobalRequest(t, sessionID, "csrf-f3212-fix2-pages-"+cfg.Label, map[string]string{
+				"model":       "template",
+				"template_id": strconv.Itoa(templateID),
+				"separator":   ",",
+			}, strings.Join(rows, "\n"))
+			rr := httptest.NewRecorder()
+			app.AdminImportRegistresGlobal(rr, req)
+			if rr.Result().StatusCode != http.StatusSeeOther {
+				t.Fatalf("[%s] status inesperat: %d body=%s", cfg.Label, rr.Result().StatusCode, rr.Body.String())
+			}
+			if countingDB.listStrongCandidatesCalls == 0 {
+				t.Fatalf("[%s] PostgreSQL ha d'usar candidats forts acotats per pàgina", cfg.Label)
+			}
+			if countingDB.listTranscripcionsCalls > 1 {
+				t.Fatalf("[%s] PostgreSQL no hauria d'usar ListTranscripcionsRaw ampli fora del read lateral esperat: %d", cfg.Label, countingDB.listTranscripcionsCalls)
+			}
+			if countingDB.listPersonesCalls != 0 || countingDB.listAtributsCalls != 0 {
+				t.Fatalf("[%s] el camí acotat no ha d'anar fila-a-fila: persones=%d atributs=%d", cfg.Label, countingDB.listPersonesCalls, countingDB.listAtributsCalls)
 			}
 		})
 	}

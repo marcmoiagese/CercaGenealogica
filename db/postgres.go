@@ -2006,6 +2006,9 @@ func (d *PostgreSQL) ListTranscripcioPersones(transcripcioID int) ([]Transcripci
 func (d *PostgreSQL) ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
 }
+func (d *PostgreSQL) ListTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
+	return d.help.listTranscripcioStrongMatchCandidates(bookID, tipusActe, pageKey)
+}
 func (d *PostgreSQL) ListTranscripcioPersonesByLlibreID(llibreID int) (map[int][]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersonesByLlibreID(llibreID)
 }

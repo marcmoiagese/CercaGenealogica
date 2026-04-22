@@ -8741,6 +8741,69 @@ func (h sqlHelper) listTranscripcioPersonesByTranscripcioIDsPostgres(transcripci
 	return res, nil
 }
 
+func (h sqlHelper) listTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
+	personesByTranscripcioID := map[int][]TranscripcioPersonaRaw{}
+	atributsByTranscripcioID := map[int][]TranscripcioAtributRaw{}
+	pageKey = strings.TrimSpace(pageKey)
+	tipusActe = strings.TrimSpace(tipusActe)
+	if h.style != "postgres" || bookID <= 0 || pageKey == "" || tipusActe == "" {
+		return nil, personesByTranscripcioID, atributsByTranscripcioID, nil
+	}
+	query := `
+        SELECT DISTINCT t.id
+        FROM transcripcions_raw t
+        LEFT JOIN transcripcions_atributs_raw a
+               ON a.transcripcio_id = t.id
+              AND a.clau = 'pagina_digital'
+        LEFT JOIN llibre_pagines p
+               ON p.id = t.pagina_id
+        WHERE t.llibre_id = $1
+          AND t.tipus_acte = $2
+          AND (
+                LOWER(TRIM(COALESCE(a.valor_text, ''))) = LOWER(TRIM($3))
+             OR LOWER(TRIM(COALESCE(t.num_pagina_text, ''))) = LOWER(TRIM($3))`
+	args := []interface{}{bookID, tipusActe, pageKey}
+	if pageNum, err := strconv.Atoi(pageKey); err == nil && pageNum > 0 {
+		query += `
+             OR p.num_pagina = $4`
+		args = append(args, pageNum)
+	}
+	query += `
+          )
+        ORDER BY t.id`
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, personesByTranscripcioID, atributsByTranscripcioID, err
+	}
+	defer rows.Close()
+	ids := make([]int, 0)
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, personesByTranscripcioID, atributsByTranscripcioID, err
+		}
+		if id > 0 {
+			ids = append(ids, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, personesByTranscripcioID, atributsByTranscripcioID, err
+	}
+	trans, err := h.listTranscripcionsRawByIDs(ids)
+	if err != nil {
+		return nil, personesByTranscripcioID, atributsByTranscripcioID, err
+	}
+	if len(ids) > 0 {
+		if personesByTranscripcioID, err = h.listTranscripcioPersonesByTranscripcioIDsPostgres(ids); err != nil {
+			return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, err
+		}
+		if atributsByTranscripcioID, err = h.listTranscripcioAtributsByTranscripcioIDsPostgres(ids); err != nil {
+			return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, err
+		}
+	}
+	return trans, personesByTranscripcioID, atributsByTranscripcioID, nil
+}
+
 func isMissingColumnError(err error) bool {
 	if err == nil {
 		return false

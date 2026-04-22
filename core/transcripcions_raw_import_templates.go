@@ -1449,6 +1449,10 @@ func (a *App) loadExistingByStrongMatch(bookID int, incoming *db.TranscripcioRaw
 	return a.loadExistingByStrongMatchWithPageCache(nil, bookID, incoming, incomingAttrs, policies)
 }
 
+type templateStrongMatchCandidateLoader interface {
+	ListTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]db.TranscripcioRaw, map[int][]db.TranscripcioPersonaRaw, map[int][]db.TranscripcioAtributRaw, error)
+}
+
 func (a *App) loadExistingByStrongMatchWithPageCache(pageCache *templatePageLookupCache, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) map[string]int {
 	existingMap := map[string]int{}
 	if incoming == nil {
@@ -1460,9 +1464,48 @@ func (a *App) loadExistingByStrongMatchWithPageCache(pageCache *templatePageLook
 	}
 	matchBuildCache := newTemplateMatchBuildCache()
 	pageKeyNorm := normalizeTemplateMatchPartWithCache(matchBuildCache, pageKey)
-	trans, _ := a.DB.ListTranscripcionsRaw(bookID, db.TranscripcioFilter{TipusActe: incoming.TipusActe})
 	attrsByTranscripcioID := map[int][]db.TranscripcioAtributRaw{}
 	personesByTranscripcioID := map[int][]db.TranscripcioPersonaRaw{}
+	trans := []db.TranscripcioRaw{}
+	if loader, ok := a.DB.(templateStrongMatchCandidateLoader); ok {
+		if scopedTrans, scopedPersones, scopedAttrs, err := loader.ListTranscripcioStrongMatchCandidates(bookID, incoming.TipusActe, pageKey); err == nil {
+			trans = scopedTrans
+			personesByTranscripcioID = scopedPersones
+			attrsByTranscripcioID = scopedAttrs
+		}
+	}
+	if len(trans) > 0 {
+		for _, tr := range trans {
+			attrsExistents, okAttrs := attrsByTranscripcioID[tr.ID]
+			if !okAttrs {
+				attrsExistents, _ = a.DB.ListTranscripcioAtributs(tr.ID)
+			}
+			if normalizeTemplateMatchPartWithCache(matchBuildCache, a.templateLogicalPageKeyForExistingWithCache(pageCache, bookID, &tr, attrsExistents)) != pageKeyNorm {
+				continue
+			}
+			personesExistentsRows, okPersones := personesByTranscripcioID[tr.ID]
+			if !okPersones {
+				personesExistentsRows, _ = a.DB.ListTranscripcioPersones(tr.ID)
+			}
+			personesExistents := map[string]*db.TranscripcioPersonaRaw{}
+			for i := range personesExistentsRows {
+				personesExistents[personesExistentsRows[i].Rol] = &personesExistentsRows[i]
+			}
+			attrsByKey := map[string]*db.TranscripcioAtributRaw{}
+			for i := range attrsExistents {
+				attrsByKey[attrsExistents[i].Clau] = &attrsExistents[i]
+			}
+			matchKey := buildTemplateStrongMatchKeyWithCache(matchBuildCache, &tr, personesExistents, attrsByKey, policies)
+			if matchKey == "" {
+				continue
+			}
+			if _, exists := existingMap[matchKey]; !exists {
+				existingMap[matchKey] = tr.ID
+			}
+		}
+		return existingMap
+	}
+	trans, _ = a.DB.ListTranscripcionsRaw(bookID, db.TranscripcioFilter{TipusActe: incoming.TipusActe})
 	if len(trans) > 0 {
 		ids := make([]int, 0, len(trans))
 		for _, tr := range trans {

@@ -18,6 +18,7 @@ import (
 type f3210CountingDB struct {
 	db.DB
 	listTranscripcionsRawCalls int
+	listStrongCandidatesCalls  int
 	listPersonesCalls          int
 	listPersonesByIDs          int
 	listAtributsCalls          int
@@ -27,6 +28,17 @@ type f3210CountingDB struct {
 func (d *f3210CountingDB) ListTranscripcionsRaw(llibreID int, f db.TranscripcioFilter) ([]db.TranscripcioRaw, error) {
 	d.listTranscripcionsRawCalls++
 	return d.DB.ListTranscripcionsRaw(llibreID, f)
+}
+
+func (d *f3210CountingDB) ListTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]db.TranscripcioRaw, map[int][]db.TranscripcioPersonaRaw, map[int][]db.TranscripcioAtributRaw, error) {
+	d.listStrongCandidatesCalls++
+	loader, ok := d.DB.(interface {
+		ListTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]db.TranscripcioRaw, map[int][]db.TranscripcioPersonaRaw, map[int][]db.TranscripcioAtributRaw, error)
+	})
+	if !ok {
+		return nil, nil, nil, nil
+	}
+	return loader.ListTranscripcioStrongMatchCandidates(bookID, tipusActe, pageKey)
 }
 
 func (d *f3210CountingDB) ListTranscripcioPersones(transcripcioID int) ([]db.TranscripcioPersonaRaw, error) {
@@ -88,7 +100,14 @@ func TestTemplateImportStrongDedupUsesBulkExistingFetchSQLitePostgresF3210(t *te
 			if len(registres) != 1 || registres[0].ID != existingID {
 				t.Fatalf("[%s] el duplicat fort ha de fusionar amb l'existent, registres=%+v existingID=%d", cfg.Label, registres, existingID)
 			}
-			if countingDB.listTranscripcionsRawCalls == 0 {
+			if cfg.Engine == "postgres" {
+				if countingDB.listStrongCandidatesCalls == 0 {
+					t.Fatalf("[%s] PostgreSQL ha d'usar el carregador fort acotat per pàgina", cfg.Label)
+				}
+				if countingDB.listTranscripcionsRawCalls > 1 {
+					t.Fatalf("[%s] PostgreSQL no hauria de recórrer al llistat ampli per llibre/tipus fora del read lateral esperat: list_transcripcions=%d", cfg.Label, countingDB.listTranscripcionsRawCalls)
+				}
+			} else if countingDB.listTranscripcionsRawCalls == 0 {
 				t.Fatalf("[%s] s'esperava almenys una lectura de transcripcions per al context fort", cfg.Label)
 			}
 			if countingDB.listPersonesByIDs == 0 || countingDB.listAtributsByIDs == 0 {
@@ -209,12 +228,16 @@ func createF3210Template(t *testing.T, database db.DB, userID int, label string)
 }
 
 func createF3210ExistingStrongBaptisme(t *testing.T, database db.DB, llibreID, paginaID int) int {
+	return createF3210ExistingStrongBaptismeForPage(t, database, llibreID, 1, paginaID)
+}
+
+func createF3210ExistingStrongBaptismeForPage(t *testing.T, database db.DB, llibreID, pageNum, paginaID int) int {
 	t.Helper()
 
 	existingID, err := database.CreateTranscripcioRaw(&db.TranscripcioRaw{
 		LlibreID:       llibreID,
 		PaginaID:       sql.NullInt64{Int64: int64(paginaID), Valid: true},
-		NumPaginaText:  "1",
+		NumPaginaText:  strconv.Itoa(pageNum),
 		TipusActe:      "baptisme",
 		DataActeText:   "05/02/1890",
 		DataActeISO:    sql.NullString{String: "1890-02-05", Valid: true},
@@ -235,7 +258,7 @@ func createF3210ExistingStrongBaptisme(t *testing.T, database db.DB, llibreID, p
 		}
 	}
 	for _, attr := range []db.TranscripcioAtributRaw{
-		{TranscripcioID: existingID, Clau: "pagina_digital", TipusValor: "text", ValorText: "1", Estat: "clar"},
+		{TranscripcioID: existingID, Clau: "pagina_digital", TipusValor: "text", ValorText: strconv.Itoa(pageNum), Estat: "clar"},
 		{TranscripcioID: existingID, Clau: "data_bateig", TipusValor: "date", ValorDate: sql.NullString{String: "1890-02-05", Valid: true}, Estat: "clar"},
 		{TranscripcioID: existingID, Clau: "data_naixement", TipusValor: "date", ValorDate: sql.NullString{String: "1890-02-01", Valid: true}, Estat: "clar"},
 	} {
