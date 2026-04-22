@@ -109,6 +109,12 @@ type templateBookPageLookup struct {
 	byID  map[int]*db.LlibrePagina
 }
 
+type templateMatchBuildCache struct {
+	normalizedParts map[string]string
+	loweredParts    map[string]string
+	personKeys      map[string]string
+}
+
 type transcripcioRawBundleCreator interface {
 	BulkCreateTranscripcioRawBundles([]db.TranscripcioRawImportBundle) (db.TranscripcioRawImportBulkResult, error)
 }
@@ -199,6 +205,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	existingByContext := map[string]map[string]int{}
 	pendingCreates := make([]templatePendingCreate, 0, templateImportCreateBatchSize)
 	pageLookupCache := newTemplatePageLookupCache(a.DB)
+	matchBuildCache := newTemplateMatchBuildCache()
 	flushPendingCreates := func() {
 		pendingCreates = a.flushTemplatePendingCreates(pendingCreates, &result)
 	}
@@ -252,7 +259,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 
 		if model.Policies.DedupWithin && len(model.Policies.DedupKeyFields) > 0 {
 			duplicateStart := time.Now()
-			key := buildTemplateDedupKey(model.Policies.DedupKeyFields, rowCtx, mappedValues)
+			key := buildTemplateDedupKeyWithCache(matchBuildCache, model.Policies.DedupKeyFields, rowCtx, mappedValues)
 			if key != "" {
 				if model.Policies.DedupAddRowIndexWhenPrincipalMissing && !principalPersonHasName(persones, model.Policies.PrincipalRoles) {
 					key += "|row:" + strconv.Itoa(rowNum)
@@ -279,9 +286,9 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			result.Debug.addWritePageLookup(time.Since(pageLookupStart))
 			if pageIndexed {
 				duplicateStart := time.Now()
-				matchKey = buildTemplateStrongMatchKey(&t, persones, atributs, model.Policies)
+				matchKey = buildTemplateStrongMatchKeyWithCache(matchBuildCache, &t, persones, atributs, model.Policies)
 				if matchKey != "" {
-					matchContextKey = "strong|" + strconv.Itoa(bookID) + "|" + normalizeTemplateMatchPart(pageKey) + "|" + normalizeTemplateMatchPart(t.TipusActe)
+					matchContextKey = "strong|" + strconv.Itoa(bookID) + "|" + normalizeTemplateMatchPartWithCache(matchBuildCache, pageKey) + "|" + normalizeTemplateMatchPartWithCache(matchBuildCache, t.TipusActe)
 					if model.Policies.AvoidDuplicatePrincipal {
 						if firstRow, ok := templateSeenMatchRow(seenMatchByContext, matchContextKey, matchKey); ok {
 							result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
@@ -1281,6 +1288,10 @@ func applyAttrTarget(field string, value string, extras map[string]string, atrib
 }
 
 func buildTemplateDedupKey(fields []string, rowCtx templateRowContext, mapped map[string]string) string {
+	return buildTemplateDedupKeyWithCache(nil, fields, rowCtx, mapped)
+}
+
+func buildTemplateDedupKeyWithCache(cache *templateMatchBuildCache, fields []string, rowCtx templateRowContext, mapped map[string]string) string {
 	parts := make([]string, 0, len(fields))
 	for _, key := range fields {
 		if key == "" {
@@ -1304,7 +1315,7 @@ func buildTemplateDedupKey(fields []string, rowCtx templateRowContext, mapped ma
 		return ""
 	}
 	for i, p := range parts {
-		parts[i] = strings.ToLower(strings.TrimSpace(p))
+		parts[i] = normalizeTemplateLowerPartWithCache(cache, p)
 	}
 	return strings.Join(parts, "|")
 }
@@ -1434,13 +1445,39 @@ func (a *App) loadExistingByStrongMatchWithPageCache(pageCache *templatePageLook
 	if pageKey == "" || strings.TrimSpace(incoming.TipusActe) == "" {
 		return existingMap
 	}
+	matchBuildCache := newTemplateMatchBuildCache()
+	pageKeyNorm := normalizeTemplateMatchPartWithCache(matchBuildCache, pageKey)
 	trans, _ := a.DB.ListTranscripcionsRaw(bookID, db.TranscripcioFilter{TipusActe: incoming.TipusActe})
+	attrsByTranscripcioID := map[int][]db.TranscripcioAtributRaw{}
+	personesByTranscripcioID := map[int][]db.TranscripcioPersonaRaw{}
+	if len(trans) > 0 {
+		ids := make([]int, 0, len(trans))
+		for _, tr := range trans {
+			if tr.ID > 0 {
+				ids = append(ids, tr.ID)
+			}
+		}
+		if len(ids) > 0 {
+			if attrsBulk, err := a.DB.ListTranscripcioAtributsByTranscripcioIDs(ids); err == nil {
+				attrsByTranscripcioID = attrsBulk
+			}
+			if personesBulk, err := a.DB.ListTranscripcioPersonesByTranscripcioIDs(ids); err == nil {
+				personesByTranscripcioID = personesBulk
+			}
+		}
+	}
 	for _, tr := range trans {
-		attrsExistents, _ := a.DB.ListTranscripcioAtributs(tr.ID)
-		if normalizeTemplateMatchPart(a.templateLogicalPageKeyForExistingWithCache(pageCache, bookID, &tr, attrsExistents)) != normalizeTemplateMatchPart(pageKey) {
+		attrsExistents, okAttrs := attrsByTranscripcioID[tr.ID]
+		if !okAttrs {
+			attrsExistents, _ = a.DB.ListTranscripcioAtributs(tr.ID)
+		}
+		if normalizeTemplateMatchPartWithCache(matchBuildCache, a.templateLogicalPageKeyForExistingWithCache(pageCache, bookID, &tr, attrsExistents)) != pageKeyNorm {
 			continue
 		}
-		personesExistentsRows, _ := a.DB.ListTranscripcioPersones(tr.ID)
+		personesExistentsRows, okPersones := personesByTranscripcioID[tr.ID]
+		if !okPersones {
+			personesExistentsRows, _ = a.DB.ListTranscripcioPersones(tr.ID)
+		}
 		personesExistents := map[string]*db.TranscripcioPersonaRaw{}
 		for i := range personesExistentsRows {
 			personesExistents[personesExistentsRows[i].Rol] = &personesExistentsRows[i]
@@ -1449,7 +1486,7 @@ func (a *App) loadExistingByStrongMatchWithPageCache(pageCache *templatePageLook
 		for i := range attrsExistents {
 			attrsByKey[attrsExistents[i].Clau] = &attrsExistents[i]
 		}
-		matchKey := buildTemplateStrongMatchKey(&tr, personesExistents, attrsByKey, policies)
+		matchKey := buildTemplateStrongMatchKeyWithCache(matchBuildCache, &tr, personesExistents, attrsByKey, policies)
 		if matchKey == "" {
 			continue
 		}
@@ -1631,10 +1668,14 @@ func templateLogicalPageKey(t *db.TranscripcioRaw, attrs map[string]*db.Transcri
 }
 
 func buildTemplateStrongMatchKey(t *db.TranscripcioRaw, persones map[string]*db.TranscripcioPersonaRaw, attrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) string {
+	return buildTemplateStrongMatchKeyWithCache(nil, t, persones, attrs, policies)
+}
+
+func buildTemplateStrongMatchKeyWithCache(cache *templateMatchBuildCache, t *db.TranscripcioRaw, persones map[string]*db.TranscripcioPersonaRaw, attrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) string {
 	if t == nil {
 		return ""
 	}
-	principalKey := templateStrongPrincipalKey(persones, policies.PrincipalRoles)
+	principalKey := templateStrongPrincipalKeyWithCache(cache, persones, policies.PrincipalRoles)
 	if principalKey == "" {
 		return ""
 	}
@@ -1642,7 +1683,7 @@ func buildTemplateStrongMatchKey(t *db.TranscripcioRaw, persones map[string]*db.
 	extraCount := 0
 	seenSignals := map[string]struct{}{}
 	addExtra := func(kind, value string) {
-		value = normalizeTemplateMatchPart(value)
+		value = normalizeTemplateMatchPartWithCache(cache, value)
 		if value == "" {
 			return
 		}
@@ -1668,7 +1709,7 @@ func buildTemplateStrongMatchKey(t *db.TranscripcioRaw, persones map[string]*db.
 		}
 		for _, role := range []string{"pare", "mare", "avi_patern", "avia_paterna", "avi_matern", "avia_materna", "padri", "padrina"} {
 			if p := persones[role]; p != nil {
-				addExtra("person:"+role, templateStrongPersonKey(p))
+				addExtra("person:"+role, templateStrongPersonKeyWithCache(cache, p))
 			}
 		}
 	default:
@@ -1703,7 +1744,7 @@ func buildTemplateStrongMatchKey(t *db.TranscripcioRaw, persones map[string]*db.
 		}
 		sort.Strings(roleKeys)
 		for _, role := range roleKeys {
-			addExtra("person:"+role, templateStrongPersonKey(persones[role]))
+			addExtra("person:"+role, templateStrongPersonKeyWithCache(cache, persones[role]))
 		}
 	}
 	if extraCount < 2 {
@@ -1713,11 +1754,15 @@ func buildTemplateStrongMatchKey(t *db.TranscripcioRaw, persones map[string]*db.
 }
 
 func templateStrongPrincipalKey(persones map[string]*db.TranscripcioPersonaRaw, roles []string) string {
+	return templateStrongPrincipalKeyWithCache(nil, persones, roles)
+}
+
+func templateStrongPrincipalKeyWithCache(cache *templateMatchBuildCache, persones map[string]*db.TranscripcioPersonaRaw, roles []string) string {
 	if len(roles) == 0 {
 		roles = []string{"batejat", "persona_principal"}
 	}
 	for _, role := range roles {
-		if key := templateStrongPersonKey(persones[role]); key != "" {
+		if key := templateStrongPersonKeyWithCache(cache, persones[role]); key != "" {
 			return key
 		}
 	}
@@ -1725,16 +1770,34 @@ func templateStrongPrincipalKey(persones map[string]*db.TranscripcioPersonaRaw, 
 }
 
 func templateStrongPersonKey(p *db.TranscripcioPersonaRaw) string {
+	return templateStrongPersonKeyWithCache(nil, p)
+}
+
+func templateStrongPersonKeyWithCache(cache *templateMatchBuildCache, p *db.TranscripcioPersonaRaw) string {
 	if p == nil {
 		return ""
 	}
-	nom := normalizeTemplateMatchPart(p.Nom)
-	cognom1 := normalizeTemplateMatchPart(p.Cognom1)
-	cognom2 := normalizeTemplateMatchPart(p.Cognom2)
+	cacheKey := ""
+	if cache != nil {
+		cacheKey = p.Nom + "\x00" + p.Cognom1 + "\x00" + p.Cognom2
+		if key, ok := cache.personKeys[cacheKey]; ok {
+			return key
+		}
+	}
+	nom := normalizeTemplateMatchPartWithCache(cache, p.Nom)
+	cognom1 := normalizeTemplateMatchPartWithCache(cache, p.Cognom1)
+	cognom2 := normalizeTemplateMatchPartWithCache(cache, p.Cognom2)
 	if nom == "" || (cognom1 == "" && cognom2 == "") {
+		if cache != nil {
+			cache.personKeys[cacheKey] = ""
+		}
 		return ""
 	}
-	return nom + "|" + cognom1 + "|" + cognom2
+	key := nom + "|" + cognom1 + "|" + cognom2
+	if cache != nil {
+		cache.personKeys[cacheKey] = key
+	}
+	return key
 }
 
 func templateAttrComparableValue(attr *db.TranscripcioAtributRaw) string {
@@ -1757,12 +1820,51 @@ func templateAttrComparableValue(attr *db.TranscripcioAtributRaw) string {
 }
 
 func normalizeTemplateMatchPart(value string) string {
+	return normalizeTemplateMatchPartWithCache(nil, value)
+}
+
+func normalizeTemplateMatchPartWithCache(cache *templateMatchBuildCache, value string) string {
+	rawValue := value
+	if cache != nil {
+		if normalized, ok := cache.normalizedParts[rawValue]; ok {
+			return normalized
+		}
+	}
 	value = strings.ToLower(strings.TrimSpace(value))
 	if len(value) >= 10 && isISODate(value[:10]) {
-		return value[:10]
+		value = value[:10]
+		if cache != nil {
+			cache.normalizedParts[rawValue] = value
+		}
+		return value
 	}
 	value = stripDiacritics(value)
-	return strings.Join(strings.Fields(value), " ")
+	value = strings.Join(strings.Fields(value), " ")
+	if cache != nil {
+		cache.normalizedParts[rawValue] = value
+	}
+	return value
+}
+
+func normalizeTemplateLowerPartWithCache(cache *templateMatchBuildCache, value string) string {
+	if cache != nil {
+		if lowered, ok := cache.loweredParts[value]; ok {
+			return lowered
+		}
+	}
+	lowered := strings.ToLower(strings.TrimSpace(value))
+	if cache != nil {
+		cache.loweredParts[value] = lowered
+	}
+	return lowered
+}
+
+func newTemplateMatchBuildCache() *templateMatchBuildCache {
+	return &templateMatchBuildCache{
+		normalizedParts: map[string]string{},
+		loweredParts:    map[string]string{},
+		personKeys:      map[string]string{},
+	}
 }
 
 func parseStrictPositiveInt(value string) (int, bool) {
