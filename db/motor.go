@@ -449,6 +449,7 @@ type DB interface {
 	LinkTranscripcioPersona(personaRawID int, personaID int, linkedBy int) error
 	UnlinkTranscripcioPersona(personaRawID int, linkedBy int) error
 	ListTranscripcioAtributs(transcripcioID int) ([]TranscripcioAtributRaw, error)
+	ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error)
 	CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error)
 	DeleteTranscripcioAtributs(transcripcioID int) error
 	GetTranscripcioDraft(userID, llibreID int) (*TranscripcioDraft, error)

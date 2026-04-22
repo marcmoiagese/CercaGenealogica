@@ -155,8 +155,8 @@ func (f *fakeDBVerificar) markEmailChangeReverted(id int) error {
 func (f *fakeDBVerificar) UserHasAnyPolicy(userID int, policies []string) (bool, error) {
 	return false, nil
 }
-func (f *fakeDBVerificar) EnsureDefaultPolicies() error    { return nil }
-func (f *fakeDBVerificar) EnsureDefaultPointsRules() error { return nil }
+func (f *fakeDBVerificar) EnsureDefaultPolicies() error     { return nil }
+func (f *fakeDBVerificar) EnsureDefaultPointsRules() error  { return nil }
 func (f *fakeDBVerificar) EnsureDefaultAchievements() error { return nil }
 func (f *fakeDBVerificar) ListArxius(filter db.ArxiuFilter) ([]db.ArxiuWithCount, error) {
 	return nil, nil
@@ -421,6 +421,9 @@ func (f *fakeDBVerificar) DeleteTranscripcioPersones(transcripcioID int) error {
 }
 func (f *fakeDBVerificar) ListTranscripcioAtributs(transcripcioID int) ([]db.TranscripcioAtributRaw, error) {
 	return nil, nil
+}
+func (f *fakeDBVerificar) ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []int) (map[int][]db.TranscripcioAtributRaw, error) {
+	return map[int][]db.TranscripcioAtributRaw{}, nil
 }
 func (f *fakeDBVerificar) CreateTranscripcioAtribut(a *db.TranscripcioAtributRaw) (int, error) {
 	return 0, nil

@@ -1281,6 +1281,9 @@ func (d *MySQL) UnlinkTranscripcioPersona(personaRawID int, linkedBy int) error 
 func (d *MySQL) ListTranscripcioAtributs(transcripcioID int) ([]TranscripcioAtributRaw, error) {
 	return d.help.listTranscripcioAtributs(transcripcioID)
 }
+func (d *MySQL) ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
+	return d.help.listTranscripcioAtributsByTranscripcioIDs(transcripcioIDs)
+}
 func (d *MySQL) CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error) {
 	return d.help.createTranscripcioAtribut(a)
 }

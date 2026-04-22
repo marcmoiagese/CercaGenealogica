@@ -4,9 +4,30 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
+
+type llibreIndexacioRecalcMetrics struct {
+	LoadRegistresDur time.Duration
+	LoadPersonesDur  time.Duration
+	LoadAtributsDur  time.Duration
+	ComputeDur       time.Duration
+	UpsertDur        time.Duration
+	PageStatsDur     time.Duration
+	TotalRegistres   int
+	TotalPersones    int
+	TotalAtributs    int
+}
+
+func (m llibreIndexacioRecalcMetrics) IndexacioStatsDur() time.Duration {
+	return m.LoadRegistresDur + m.LoadPersonesDur + m.LoadAtributsDur + m.ComputeDur + m.UpsertDur
+}
+
+func (m llibreIndexacioRecalcMetrics) TotalDur() time.Duration {
+	return m.IndexacioStatsDur() + m.PageStatsDur
+}
 
 type LlibreIndexacioView struct {
 	TotalRegistres int
@@ -66,31 +87,86 @@ func indexacioColorClass(percent int) string {
 }
 
 func (a *App) recalcLlibreIndexacioStats(llibreID int) (*db.LlibreIndexacioStats, error) {
+	stats, _, err := a.recalcLlibreIndexacioStatsWithMetrics(llibreID)
+	return stats, err
+}
+
+func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreIndexacioStats, llibreIndexacioRecalcMetrics, error) {
+	metrics := llibreIndexacioRecalcMetrics{}
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil {
-		return nil, err
+		return nil, metrics, err
 	}
 	if llibre == nil {
-		return nil, nil
+		return nil, metrics, nil
 	}
 	bookType := normalizeIndexerBookType(llibre.TipusLlibre)
 	fields := indexerContentFields(indexerSchema(bookType))
 	stats := &db.LlibreIndexacioStats{LlibreID: llibreID}
+	loadStart := time.Now()
 	registres, err := a.DB.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{Limit: -1})
+	metrics.LoadRegistresDur = time.Since(loadStart)
 	if err != nil {
-		return nil, err
+		return nil, metrics, err
 	}
 	stats.TotalRegistres = len(registres)
+	metrics.TotalRegistres = len(registres)
 	if stats.TotalRegistres == 0 || len(fields) == 0 {
 		stats.TotalCamps = 0
 		stats.CampsEmplenats = 0
 		stats.Percentatge = 0
-		return stats, a.DB.UpsertLlibreIndexacioStats(stats)
+		upsertStart := time.Now()
+		err = a.DB.UpsertLlibreIndexacioStats(stats)
+		metrics.UpsertDur = time.Since(upsertStart)
+		return stats, metrics, err
+	}
+	registreIDs := make([]int, 0, len(registres))
+	for _, registre := range registres {
+		registreIDs = append(registreIDs, registre.ID)
+	}
+	personesByRegistre := map[int][]db.TranscripcioPersonaRaw{}
+	loadStart = time.Now()
+	personesByRegistre, err = a.DB.ListTranscripcioPersonesByTranscripcioIDs(registreIDs)
+	metrics.LoadPersonesDur = time.Since(loadStart)
+	if err != nil {
+		personesByRegistre = make(map[int][]db.TranscripcioPersonaRaw, len(registreIDs))
+		fallbackStart := time.Now()
+		for _, registreID := range registreIDs {
+			persones, listErr := a.DB.ListTranscripcioPersones(registreID)
+			if listErr != nil {
+				return nil, metrics, listErr
+			}
+			personesByRegistre[registreID] = persones
+		}
+		metrics.LoadPersonesDur = time.Since(fallbackStart)
+	}
+	for _, persones := range personesByRegistre {
+		metrics.TotalPersones += len(persones)
+	}
+	atributsByRegistre := map[int][]db.TranscripcioAtributRaw{}
+	loadStart = time.Now()
+	atributsByRegistre, err = a.DB.ListTranscripcioAtributsByTranscripcioIDs(registreIDs)
+	metrics.LoadAtributsDur = time.Since(loadStart)
+	if err != nil {
+		atributsByRegistre = make(map[int][]db.TranscripcioAtributRaw, len(registreIDs))
+		fallbackStart := time.Now()
+		for _, registreID := range registreIDs {
+			atributs, listErr := a.DB.ListTranscripcioAtributs(registreID)
+			if listErr != nil {
+				return nil, metrics, listErr
+			}
+			atributsByRegistre[registreID] = atributs
+		}
+		metrics.LoadAtributsDur = time.Since(fallbackStart)
+	}
+	for _, atributs := range atributsByRegistre {
+		metrics.TotalAtributs += len(atributs)
 	}
 	stats.TotalCamps = len(fields) * stats.TotalRegistres
+	computeStart := time.Now()
 	for _, registre := range registres {
-		persones, _ := a.DB.ListTranscripcioPersones(registre.ID)
-		atributs, _ := a.DB.ListTranscripcioAtributs(registre.ID)
+		persones := personesByRegistre[registre.ID]
+		atributs := atributsByRegistre[registre.ID]
 		cache := map[string]*db.TranscripcioPersonaRaw{}
 		for _, field := range fields {
 			if indexerFieldValue(field, registre, persones, atributs, cache) != "" {
@@ -98,6 +174,7 @@ func (a *App) recalcLlibreIndexacioStats(llibreID int) (*db.LlibreIndexacioStats
 			}
 		}
 	}
+	metrics.ComputeDur = time.Since(computeStart)
 	stats.Percentatge = int(math.Round(float64(stats.CampsEmplenats) * 100 / float64(stats.TotalCamps)))
 	if stats.Percentatge < 0 {
 		stats.Percentatge = 0
@@ -105,15 +182,22 @@ func (a *App) recalcLlibreIndexacioStats(llibreID int) (*db.LlibreIndexacioStats
 	if stats.Percentatge > 100 {
 		stats.Percentatge = 100
 	}
+	upsertStart := time.Now()
 	if err := a.DB.UpsertLlibreIndexacioStats(stats); err != nil {
-		return stats, err
+		metrics.UpsertDur = time.Since(upsertStart)
+		return stats, metrics, err
 	}
+	metrics.UpsertDur = time.Since(upsertStart)
 	if llibre.IndexacioCompleta {
+		pageStatsStart := time.Now()
 		if err := a.DB.RecalcTranscripcionsRawPageStats(llibreID); err != nil {
+			metrics.PageStatsDur = time.Since(pageStatsStart)
 			Errorf("Error recalculant registres per pagina del llibre %d: %v", llibreID, err)
+		} else {
+			metrics.PageStatsDur = time.Since(pageStatsStart)
 		}
 	}
-	return stats, nil
+	return stats, metrics, nil
 }
 
 func indexerContentFields(fields []indexerField) []indexerField {

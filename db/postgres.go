@@ -2021,6 +2021,9 @@ func (d *PostgreSQL) UnlinkTranscripcioPersona(personaRawID int, linkedBy int) e
 func (d *PostgreSQL) ListTranscripcioAtributs(transcripcioID int) ([]TranscripcioAtributRaw, error) {
 	return d.help.listTranscripcioAtributs(transcripcioID)
 }
+func (d *PostgreSQL) ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
+	return d.help.listTranscripcioAtributsByTranscripcioIDs(transcripcioIDs)
+}
 func (d *PostgreSQL) CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error) {
 	return d.help.createTranscripcioAtribut(a)
 }

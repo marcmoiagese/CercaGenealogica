@@ -114,11 +114,10 @@ func (a *App) AdminImportRegistresGlobal(w http.ResponseWriter, r *http.Request)
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "model d'importació no suportat"})
 	}
 	token := storeImportErrors(result.Errors)
-	recalcStart := time.Now()
 	for llibreID := range result.BookIDs {
-		_, _ = a.recalcLlibreIndexacioStats(llibreID)
+		_, metrics, _ := a.recalcLlibreIndexacioStatsWithMetrics(llibreID)
+		result.Debug.addSidefxIndexacio(metrics)
 	}
-	result.Debug.addSidefx(time.Since(recalcStart))
 	result.Debug.finalize(len(result.BookIDs), time.Since(handlerStart))
 	a.logCSVImportDebug(user.ID, result)
 	target := fmt.Sprintf("/documentals/llibres/importar?imported=%d&updated=%d&failed=%d", result.Created, result.Updated, result.Failed)

@@ -8987,6 +8987,50 @@ func (h sqlHelper) listTranscripcioAtributs(transcripcioID int) ([]TranscripcioA
 	return res, nil
 }
 
+func (h sqlHelper) listTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
+	transcripcioIDs = normalizePositiveUniqueIDs(transcripcioIDs)
+	res := make(map[int][]TranscripcioAtributRaw, len(transcripcioIDs))
+	if len(transcripcioIDs) == 0 {
+		return res, nil
+	}
+	const maxIDsPerChunk = 900
+	for start := 0; start < len(transcripcioIDs); start += maxIDsPerChunk {
+		end := start + maxIDsPerChunk
+		if end > len(transcripcioIDs) {
+			end = len(transcripcioIDs)
+		}
+		chunk := transcripcioIDs[start:end]
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(chunk)), ",")
+		query := formatPlaceholders(h.style, fmt.Sprintf(`
+        SELECT id, transcripcio_id, clau, tipus_valor, valor_text, valor_int, valor_date, valor_bool, estat, notes
+        FROM transcripcions_atributs_raw
+        WHERE transcripcio_id IN (%s)
+        ORDER BY transcripcio_id, id`, placeholders))
+		args := make([]interface{}, 0, len(chunk))
+		for _, id := range chunk {
+			args = append(args, id)
+		}
+		rows, err := h.db.Query(query, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var a TranscripcioAtributRaw
+			if err := rows.Scan(&a.ID, &a.TranscripcioID, &a.Clau, &a.TipusValor, &a.ValorText, &a.ValorInt, &a.ValorDate, &a.ValorBool, &a.Estat, &a.Notes); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			res[a.TranscripcioID] = append(res[a.TranscripcioID], a)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+	}
+	return res, nil
+}
+
 func (h sqlHelper) createTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error) {
 	query := `
         INSERT INTO transcripcions_atributs_raw (transcripcio_id, clau, tipus_valor, valor_text, valor_int, valor_date, valor_bool, estat, notes)

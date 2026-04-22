@@ -89,6 +89,16 @@ func TestRegistreImportDebugInstrumentationRespectsLogLevelF3017(t *testing.T) {
 					"write_commit_dur=",
 					"write_bulk_batches=",
 					"write_bulk_rows=",
+					"sidefx_indexacio_stats_dur=",
+					"sidefx_load_registres_dur=",
+					"sidefx_load_persones_dur=",
+					"sidefx_load_atributs_dur=",
+					"sidefx_compute_dur=",
+					"sidefx_upsert_dur=",
+					"sidefx_page_stats_dur=",
+					"sidefx_indexacio_registres=",
+					"sidefx_indexacio_persones=",
+					"sidefx_indexacio_atributs=",
 				} {
 					if !strings.Contains(logs, token) {
 						t.Fatalf("amb debug esperava mètrica F32-3 %s, però no hi és: %s", token, logs)

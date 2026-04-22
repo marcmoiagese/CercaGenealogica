@@ -1307,6 +1307,9 @@ func (d *SQLite) UnlinkTranscripcioPersona(personaRawID int, linkedBy int) error
 func (d *SQLite) ListTranscripcioAtributs(transcripcioID int) ([]TranscripcioAtributRaw, error) {
 	return d.help.listTranscripcioAtributs(transcripcioID)
 }
+func (d *SQLite) ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
+	return d.help.listTranscripcioAtributsByTranscripcioIDs(transcripcioIDs)
+}
 func (d *SQLite) CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error) {
 	return d.help.createTranscripcioAtribut(a)
 }
