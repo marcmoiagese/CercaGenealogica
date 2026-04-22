@@ -515,7 +515,7 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 
 	snaps, explicitSnapshots := collectChangeSnapshotsWithSource(changes)
 	snaps = fillMissingSnapshots(changes, snaps, currentSnapshot)
-	publishedSnap, publishedKey, publishedID, publishedSource := resolvePublishedSnapshot(registre, currentSnapshot, changes, snaps)
+	publishedSnap, publishedKey, publishedID, _ := resolvePublishedSnapshot(registre, currentSnapshot, changes, snaps)
 	publishedFromCurrent := publishedKey == "published"
 	publishedChangeID := 0
 	if !publishedFromCurrent && publishedID > 0 {
@@ -658,52 +658,11 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if publishedKey == "published" && publishedSnap != nil && publishedSource != "after" && totalChanges == 0 {
-		changedByID := 0
-		if publishedSnap.Raw.ModeratedBy.Valid {
-			changedByID = int(publishedSnap.Raw.ModeratedBy.Int64)
-		} else if publishedSnap.Raw.CreatedBy.Valid {
-			changedByID = int(publishedSnap.Raw.CreatedBy.Int64)
-		}
-		changedBy := resolveUserName(changedByID)
-		changedAt := ""
-		if publishedSnap.Raw.ModeratedAt.Valid {
-			changedAt = publishedSnap.Raw.ModeratedAt.Time.Format("02/01/2006 15:04")
-		} else if !publishedSnap.Raw.UpdatedAt.IsZero() {
-			changedAt = publishedSnap.Raw.UpdatedAt.Format("02/01/2006 15:04")
-		} else if !publishedSnap.Raw.CreatedAt.IsZero() {
-			changedAt = publishedSnap.Raw.CreatedAt.Format("02/01/2006 15:04")
-		}
-		moderatedBy := ""
-		moderatedByID := 0
-		if publishedSnap.Raw.ModeratedBy.Valid {
-			moderatedByID = int(publishedSnap.Raw.ModeratedBy.Int64)
-			moderatedBy = resolveUserName(moderatedByID)
-		}
-		moderatedAt := ""
-		if publishedSnap.Raw.ModeratedAt.Valid {
-			moderatedAt = publishedSnap.Raw.ModeratedAt.Time.Format("02/01/2006 15:04")
-		}
-		publishedItem := registreHistoryItem{
-			ID:             0,
-			Key:            "published",
-			Seq:            publishedVersion,
-			ChangeType:     "",
-			FieldKey:       "",
-			OldValue:       "",
-			NewValue:       "",
-			ChangedAt:      changedAt,
-			ChangedBy:      changedBy,
-			ChangedByID:    changedByID,
-			ModeratedBy:    moderatedBy,
-			ModeratedByID:  moderatedByID,
-			ModeratedAt:    moderatedAt,
-			ModeracioEstat: "publicat",
-			HasSnapshot:    true,
-			HasComparator:  true,
-			IsPublished:    true,
-		}
-		history = append([]registreHistoryItem{publishedItem}, history...)
+	publishedKeyForUI := publishedKey
+	if publishedKey == "published" && totalChanges == 0 {
+		// Sense canvis persistits, la base ja és l'única revisió real.
+		// No dupliquem una segona entrada "published" només per l'estat.
+		publishedKeyForUI = ""
 	}
 
 	var viewFields []registreHistoryFieldView
@@ -847,7 +806,7 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 		"Llibre":            llibre,
 		"Registre":          registre,
 		"History":           history,
-		"PublishedKey":      publishedKey,
+		"PublishedKey":      publishedKeyForUI,
 		"ViewFields":        viewFields,
 		"ViewLabel":         viewLabel,
 		"CompareFields":     compareFields,
