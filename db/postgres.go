@@ -2006,6 +2006,9 @@ func (d *PostgreSQL) ListTranscripcioPersones(transcripcioID int) ([]Transcripci
 func (d *PostgreSQL) ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
 }
+func (d *PostgreSQL) ListTranscripcioPersonesByLlibreID(llibreID int) (map[int][]TranscripcioPersonaRaw, error) {
+	return d.help.listTranscripcioPersonesByLlibreID(llibreID)
+}
 func (d *PostgreSQL) CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error) {
 	return d.help.createTranscripcioPersona(p)
 }
@@ -2023,6 +2026,9 @@ func (d *PostgreSQL) ListTranscripcioAtributs(transcripcioID int) ([]Transcripci
 }
 func (d *PostgreSQL) ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
 	return d.help.listTranscripcioAtributsByTranscripcioIDs(transcripcioIDs)
+}
+func (d *PostgreSQL) ListTranscripcioAtributsByLlibreID(llibreID int) (map[int][]TranscripcioAtributRaw, error) {
+	return d.help.listTranscripcioAtributsByLlibreID(llibreID)
 }
 func (d *PostgreSQL) CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error) {
 	return d.help.createTranscripcioAtribut(a)

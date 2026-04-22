@@ -116,8 +116,8 @@ func TestTemplateImportPersonaPersistMetricsSQLitePostgresF3212(t *testing.T) {
 			}
 
 			if cfg.Engine == "postgres" {
-				if transcripcioBatches != 1 || personaBatches != 1 || linksBatches != 1 {
-					t.Fatalf("[%s] PostgreSQL hauria d'usar un sol statement bulk per segment amb 240 files, got trans=%d persones=%d atributs=%d", cfg.Label, transcripcioBatches, personaBatches, linksBatches)
+				if transcripcioBatches != 2 || personaBatches != 1 || linksBatches != 1 {
+					t.Fatalf("[%s] PostgreSQL hauria d'usar batching específic per taula amb 240 files, got trans=%d persones=%d atributs=%d", cfg.Label, transcripcioBatches, personaBatches, linksBatches)
 				}
 			} else {
 				if transcripcioBatches != 240 || personaBatches != 720 || linksBatches != 720 {

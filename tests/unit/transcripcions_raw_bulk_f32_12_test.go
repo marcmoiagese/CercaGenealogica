@@ -37,8 +37,8 @@ func TestF3212BulkCreateTranscripcioRawBundlesBatchMetricsSQLitePostgres(t *test
 			}
 
 			if cfg.Engine == "postgres" {
-				if result.Metrics.TranscripcioBatches != 1 {
-					t.Fatalf("[%s] esperava 1 batch bulk de transcripcions, got=%d", cfg.Label, result.Metrics.TranscripcioBatches)
+				if result.Metrics.TranscripcioBatches != 3 {
+					t.Fatalf("[%s] esperava 3 batches bulk de transcripcions amb estratègia específica PG, got=%d", cfg.Label, result.Metrics.TranscripcioBatches)
 				}
 				if result.Metrics.PersonaBatches != 1 {
 					t.Fatalf("[%s] esperava 1 batch bulk de persones, got=%d", cfg.Label, result.Metrics.PersonaBatches)

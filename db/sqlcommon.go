@@ -9269,9 +9269,9 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgres(bundles []Transcripc
 	}()
 	totalPersones := 0
 	totalAtributs := 0
-	rawBatchSize := bulkInsertStatementBatchSize(h.style, len(buildInsertTranscripcioRawArgs(TranscripcioRaw{}, 1, true)))
-	personBatchSize := bulkInsertStatementBatchSize(h.style, len(buildInsertTranscripcioPersonaArgs(TranscripcioPersonaRaw{})))
-	attrBatchSize := bulkInsertStatementBatchSize(h.style, len(buildInsertTranscripcioAtributArgs(TranscripcioAtributRaw{})))
+	rawBatchSize := bulkInsertStatementBatchSizeFor(h.style, "transcripcions_raw", len(buildInsertTranscripcioRawArgs(TranscripcioRaw{}, 1, true)))
+	personBatchSize := bulkInsertStatementBatchSizeFor(h.style, "transcripcions_persones_raw", len(buildInsertTranscripcioPersonaArgs(TranscripcioPersonaRaw{})))
+	attrBatchSize := bulkInsertStatementBatchSizeFor(h.style, "transcripcions_atributs_raw", len(buildInsertTranscripcioAtributArgs(TranscripcioAtributRaw{})))
 	for i := range bundles {
 		totalPersones += len(bundles[i].Persones)
 		totalAtributs += len(bundles[i].Atributs)
@@ -9389,6 +9389,89 @@ func (h sqlHelper) allocatePostgresSerialIDsTx(tx *sql.Tx, table, column string,
 		return nil, fmt.Errorf("postgres bulk insert transcripcions_raw: expected %d ids, got %d", count, len(ids))
 	}
 	return ids, nil
+}
+
+func (h sqlHelper) listTranscripcioPersonesByLlibreID(llibreID int) (map[int][]TranscripcioPersonaRaw, error) {
+	res := map[int][]TranscripcioPersonaRaw{}
+	if llibreID <= 0 {
+		return res, nil
+	}
+	query := `
+        SELECT p.id, p.transcripcio_id, p.rol, p.nom, p.nom_estat, p.cognom1, p.cognom1_estat, p.cognom2, p.cognom2_estat, p.cognom_soltera, p.cognom_soltera_estat, p.sexe, p.sexe_estat,
+               p.edat_text, p.edat_estat, p.estat_civil_text, p.estat_civil_estat, p.municipi_text, p.municipi_estat, p.ofici_text, p.ofici_estat,
+               p.casa_nom, p.casa_estat, p.persona_id, p.linked_by, p.linked_at, p.notes
+        FROM transcripcions_persones_raw p
+        JOIN transcripcions_raw t ON t.id = p.transcripcio_id
+        WHERE t.llibre_id = ?
+        ORDER BY p.transcripcio_id, p.id`
+	fallbackQuery := `
+        SELECT p.id, p.transcripcio_id, p.rol, p.nom, p.nom_estat, p.cognom1, p.cognom1_estat, p.cognom2, p.cognom2_estat,
+               NULL AS cognom_soltera, NULL AS cognom_soltera_estat, p.sexe, p.sexe_estat,
+               p.edat_text, p.edat_estat, p.estat_civil_text, p.estat_civil_estat, p.municipi_text, p.municipi_estat, p.ofici_text, p.ofici_estat,
+               p.casa_nom, p.casa_estat, p.persona_id, p.linked_by, p.linked_at, p.notes
+        FROM transcripcions_persones_raw p
+        JOIN transcripcions_raw t ON t.id = p.transcripcio_id
+        WHERE t.llibre_id = ?
+        ORDER BY p.transcripcio_id, p.id`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, llibreID)
+	if err != nil {
+		if isMissingColumnError(err) {
+			query = formatPlaceholders(h.style, fallbackQuery)
+			rows, err = h.db.Query(query, llibreID)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p TranscripcioPersonaRaw
+		if err := rows.Scan(
+			&p.ID, &p.TranscripcioID, &p.Rol, &p.Nom, &p.NomEstat, &p.Cognom1, &p.Cognom1Estat, &p.Cognom2, &p.Cognom2Estat, &p.CognomSoltera, &p.CognomSolteraEstat, &p.Sexe, &p.SexeEstat,
+			&p.EdatText, &p.EdatEstat, &p.EstatCivilText, &p.EstatCivilEstat, &p.MunicipiText, &p.MunicipiEstat, &p.OficiText, &p.OficiEstat,
+			&p.CasaNom, &p.CasaEstat, &p.PersonaID, &p.LinkedBy, &p.LinkedAt, &p.Notes,
+		); err != nil {
+			return nil, err
+		}
+		res[p.TranscripcioID] = append(res[p.TranscripcioID], p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (h sqlHelper) listTranscripcioAtributsByLlibreID(llibreID int) (map[int][]TranscripcioAtributRaw, error) {
+	res := map[int][]TranscripcioAtributRaw{}
+	if llibreID <= 0 {
+		return res, nil
+	}
+	query := `
+        SELECT a.id, a.transcripcio_id, a.clau, a.tipus_valor, a.valor_text, a.valor_int, a.valor_date, a.valor_bool, a.estat, a.notes
+        FROM transcripcions_atributs_raw a
+        JOIN transcripcions_raw t ON t.id = a.transcripcio_id
+        WHERE t.llibre_id = ?
+        ORDER BY a.transcripcio_id, a.id`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, llibreID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var a TranscripcioAtributRaw
+		if err := rows.Scan(&a.ID, &a.TranscripcioID, &a.Clau, &a.TipusValor, &a.ValorText, &a.ValorInt, &a.ValorDate, &a.ValorBool, &a.Estat, &a.Notes); err != nil {
+			return nil, err
+		}
+		res[a.TranscripcioID] = append(res[a.TranscripcioID], a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func (h sqlHelper) createTranscripcioRawTx(tx *sql.Tx, t *TranscripcioRaw) (int, error) {

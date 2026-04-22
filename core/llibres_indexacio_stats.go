@@ -21,6 +21,11 @@ type llibreIndexacioRecalcMetrics struct {
 	TotalAtributs    int
 }
 
+type transcripcioRelatedByBookLoader interface {
+	ListTranscripcioPersonesByLlibreID(llibreID int) (map[int][]db.TranscripcioPersonaRaw, error)
+	ListTranscripcioAtributsByLlibreID(llibreID int) (map[int][]db.TranscripcioAtributRaw, error)
+}
+
 func (m llibreIndexacioRecalcMetrics) IndexacioStatsDur() time.Duration {
 	return m.LoadRegistresDur + m.LoadPersonesDur + m.LoadAtributsDur + m.ComputeDur + m.UpsertDur
 }
@@ -126,7 +131,11 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 	}
 	personesByRegistre := map[int][]db.TranscripcioPersonaRaw{}
 	loadStart = time.Now()
-	personesByRegistre, err = a.DB.ListTranscripcioPersonesByTranscripcioIDs(registreIDs)
+	if byBookLoader, ok := a.DB.(transcripcioRelatedByBookLoader); ok {
+		personesByRegistre, err = byBookLoader.ListTranscripcioPersonesByLlibreID(llibreID)
+	} else {
+		personesByRegistre, err = a.DB.ListTranscripcioPersonesByTranscripcioIDs(registreIDs)
+	}
 	metrics.LoadPersonesDur = time.Since(loadStart)
 	if err != nil {
 		personesByRegistre = make(map[int][]db.TranscripcioPersonaRaw, len(registreIDs))
@@ -145,7 +154,11 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 	}
 	atributsByRegistre := map[int][]db.TranscripcioAtributRaw{}
 	loadStart = time.Now()
-	atributsByRegistre, err = a.DB.ListTranscripcioAtributsByTranscripcioIDs(registreIDs)
+	if byBookLoader, ok := a.DB.(transcripcioRelatedByBookLoader); ok {
+		atributsByRegistre, err = byBookLoader.ListTranscripcioAtributsByLlibreID(llibreID)
+	} else {
+		atributsByRegistre, err = a.DB.ListTranscripcioAtributsByTranscripcioIDs(registreIDs)
+	}
 	metrics.LoadAtributsDur = time.Since(loadStart)
 	if err != nil {
 		atributsByRegistre = make(map[int][]db.TranscripcioAtributRaw, len(registreIDs))
