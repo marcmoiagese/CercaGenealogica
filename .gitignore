@@ -16,3 +16,12 @@ coverage.out
 plantilla-temporal/
 *.zip
 data/*
+.github/
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

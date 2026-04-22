@@ -105,14 +105,22 @@ type templatePageLookupCache struct {
 }
 
 type templateBookPageLookup struct {
-	byNum map[int]*db.LlibrePagina
-	byID  map[int]*db.LlibrePagina
+	byNum            map[int]*db.LlibrePagina
+	byID             map[int]*db.LlibrePagina
+	resolvedByKey    map[string]templatePageResolution
+	resolvedByPageID map[int]templatePageResolution
 }
 
 type templateMatchBuildCache struct {
 	normalizedParts map[string]string
 	loweredParts    map[string]string
 	personKeys      map[string]string
+}
+
+type templatePageResolution struct {
+	canonicalKey string
+	indexed      bool
+	resolved     bool
 }
 
 type transcripcioRawBundleCreator interface {
@@ -1503,27 +1511,80 @@ func (a *App) templateIndexedPageKey(bookID int, t *db.TranscripcioRaw, attrs ma
 
 func (a *App) templateIndexedPageKeyWithCache(pageCache *templatePageLookupCache, bookID int, t *db.TranscripcioRaw, attrs map[string]*db.TranscripcioAtributRaw) (string, bool) {
 	pageKey := templateLogicalPageKey(t, attrs)
+	pageKeyNorm := normalizeTemplatePageResolutionKey(pageKey)
 	if t != nil && t.PaginaID.Valid {
+		if pageCache != nil {
+			if resolution, ok := pageCache.lookupPageResolutionByID(bookID, int(t.PaginaID.Int64)); ok {
+				if pageKey == "" && resolution.canonicalKey != "" {
+					pageKey = resolution.canonicalKey
+				}
+				return pageKey, resolution.indexed
+			}
+		}
 		page, err := templateLookupPageByID(a.DB, pageCache, bookID, int(t.PaginaID.Int64))
 		if err == nil && page != nil {
 			if pageKey == "" && page.NumPagina > 0 {
 				pageKey = strconv.Itoa(page.NumPagina)
 			}
-			return pageKey, page.LlibreID == bookID && page.Estat == "indexada"
+			resolution := templatePageResolution{
+				canonicalKey: normalizeTemplatePageResolutionKey(pageKey),
+				indexed:      page.LlibreID == bookID && page.Estat == "indexada",
+				resolved:     true,
+			}
+			if pageCache != nil {
+				pageCache.rememberPageResolutionByID(bookID, int(t.PaginaID.Int64), resolution)
+				if pageKeyNorm != "" {
+					pageCache.rememberPageResolutionByKey(bookID, pageKeyNorm, resolution)
+				}
+			}
+			return pageKey, resolution.indexed
 		}
 	}
 	if pageKey == "" {
 		return "", false
 	}
+	if pageCache != nil {
+		if resolution, ok := pageCache.lookupPageResolutionByKey(bookID, pageKeyNorm); ok {
+			if resolution.resolved && resolution.canonicalKey != "" {
+				return resolution.canonicalKey, resolution.indexed
+			}
+			return pageKey, resolution.indexed
+		}
+	}
 	pageNum, ok := parseStrictPositiveInt(pageKey)
 	if !ok {
+		if pageCache != nil {
+			pageCache.rememberPageResolutionByKey(bookID, pageKeyNorm, templatePageResolution{
+				canonicalKey: pageKeyNorm,
+				indexed:      false,
+				resolved:     false,
+			})
+		}
 		return pageKey, false
 	}
 	page, err := templateLookupPageByNum(a.DB, pageCache, bookID, pageNum)
 	if err != nil || page == nil {
+		if pageCache != nil {
+			pageCache.rememberPageResolutionByKey(bookID, pageKeyNorm, templatePageResolution{
+				canonicalKey: pageKeyNorm,
+				indexed:      false,
+				resolved:     false,
+			})
+		}
 		return pageKey, false
 	}
-	return strconv.Itoa(page.NumPagina), page.Estat == "indexada"
+	resolution := templatePageResolution{
+		canonicalKey: strconv.Itoa(page.NumPagina),
+		indexed:      page.Estat == "indexada",
+		resolved:     true,
+	}
+	if pageCache != nil {
+		pageCache.rememberPageResolutionByKey(bookID, pageKeyNorm, resolution)
+		if page.ID > 0 {
+			pageCache.rememberPageResolutionByID(bookID, page.ID, resolution)
+		}
+	}
+	return resolution.canonicalKey, resolution.indexed
 }
 
 func (a *App) templateLogicalPageKeyForExisting(t *db.TranscripcioRaw, attrs []db.TranscripcioAtributRaw) string {
@@ -1574,8 +1635,10 @@ func (c *templatePageLookupCache) loadBook(bookID int) (*templateBookPageLookup,
 		return nil, err
 	}
 	pages := &templateBookPageLookup{
-		byNum: map[int]*db.LlibrePagina{},
-		byID:  map[int]*db.LlibrePagina{},
+		byNum:            map[int]*db.LlibrePagina{},
+		byID:             map[int]*db.LlibrePagina{},
+		resolvedByKey:    map[string]templatePageResolution{},
+		resolvedByPageID: map[int]templatePageResolution{},
 	}
 	for i := range rows {
 		page := rows[i]
@@ -1584,13 +1647,79 @@ func (c *templatePageLookupCache) loadBook(bookID int) (*templateBookPageLookup,
 			pages.byID[pageCopy.ID] = &pageCopy
 			c.byID[pageCopy.ID] = &pageCopy
 			delete(c.missing, pageCopy.ID)
+			pages.resolvedByPageID[pageCopy.ID] = templatePageResolution{
+				canonicalKey: strconv.Itoa(pageCopy.NumPagina),
+				indexed:      pageCopy.Estat == "indexada",
+				resolved:     true,
+			}
 		}
 		if pageCopy.NumPagina > 0 {
 			pages.byNum[pageCopy.NumPagina] = &pageCopy
+			pages.resolvedByKey[strconv.Itoa(pageCopy.NumPagina)] = templatePageResolution{
+				canonicalKey: strconv.Itoa(pageCopy.NumPagina),
+				indexed:      pageCopy.Estat == "indexada",
+				resolved:     true,
+			}
 		}
 	}
 	c.books[bookID] = pages
 	return pages, nil
+}
+
+func (c *templatePageLookupCache) getBook(bookID int) (*templateBookPageLookup, error) {
+	if c == nil || bookID <= 0 {
+		return nil, nil
+	}
+	return c.loadBook(bookID)
+}
+
+func (c *templatePageLookupCache) lookupPageResolutionByKey(bookID int, pageKey string) (templatePageResolution, bool) {
+	pages, err := c.getBook(bookID)
+	if err != nil || pages == nil {
+		return templatePageResolution{}, false
+	}
+	resolution, ok := pages.resolvedByKey[normalizeTemplatePageResolutionKey(pageKey)]
+	return resolution, ok
+}
+
+func (c *templatePageLookupCache) rememberPageResolutionByKey(bookID int, pageKey string, resolution templatePageResolution) {
+	pages, err := c.getBook(bookID)
+	if err != nil || pages == nil {
+		return
+	}
+	normKey := normalizeTemplatePageResolutionKey(pageKey)
+	if normKey != "" {
+		pages.resolvedByKey[normKey] = resolution
+	}
+	if resolution.resolved && resolution.canonicalKey != "" {
+		pages.resolvedByKey[normalizeTemplatePageResolutionKey(resolution.canonicalKey)] = resolution
+	}
+}
+
+func (c *templatePageLookupCache) lookupPageResolutionByID(bookID, pageID int) (templatePageResolution, bool) {
+	if pageID <= 0 {
+		return templatePageResolution{}, false
+	}
+	pages, err := c.getBook(bookID)
+	if err != nil || pages == nil {
+		return templatePageResolution{}, false
+	}
+	resolution, ok := pages.resolvedByPageID[pageID]
+	return resolution, ok
+}
+
+func (c *templatePageLookupCache) rememberPageResolutionByID(bookID, pageID int, resolution templatePageResolution) {
+	if pageID <= 0 {
+		return
+	}
+	pages, err := c.getBook(bookID)
+	if err != nil || pages == nil {
+		return
+	}
+	pages.resolvedByPageID[pageID] = resolution
+	if resolution.resolved && resolution.canonicalKey != "" {
+		pages.resolvedByKey[normalizeTemplatePageResolutionKey(resolution.canonicalKey)] = resolution
+	}
 }
 
 func templateLookupPageByNum(database db.DB, pageCache *templatePageLookupCache, bookID, pageNum int) (*db.LlibrePagina, error) {
@@ -1665,6 +1794,10 @@ func templateLogicalPageKey(t *db.TranscripcioRaw, attrs map[string]*db.Transcri
 		return strings.TrimSpace(t.NumPaginaText)
 	}
 	return ""
+}
+
+func normalizeTemplatePageResolutionKey(pageKey string) string {
+	return strings.TrimSpace(pageKey)
 }
 
 func buildTemplateStrongMatchKey(t *db.TranscripcioRaw, persones map[string]*db.TranscripcioPersonaRaw, attrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) string {

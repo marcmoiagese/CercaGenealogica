@@ -1,0 +1,17 @@
+{
+  "name": "cercagenealogica3",
+  "version": "1.0.0",
+  "description": "Aplicació web en **Go** per a **recerca i col·laboració genealògica**, centrada en la **indexació de documentació històrica** (llibres, pàgines i registres) i la seva **vinculació amb persones**.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^25.6.0"
+  }
+}
