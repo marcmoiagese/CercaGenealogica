@@ -358,6 +358,40 @@ func TestF323MarcmoiaLargeImportCreatedFailedCount(t *testing.T) {
 	)
 }
 
+func TestF325TemplateImportBulkSplitsBatchesWithoutFallback(t *testing.T) {
+	SetLogLevel("debug")
+	defer SetLogLevel("error")
+
+	const totalRows = templateImportCreateBatchSize + 120
+	rows := make([][]string, 0, totalRows)
+	for i := 0; i < totalRows; i++ {
+		rows = append(rows, []string{
+			"12",
+			"12",
+			fmt.Sprintf("GarciaF325_%d SolerF325_%d JoanF325_%d", i, i, i),
+			fmt.Sprintf("PereF325_%d Garcia", i),
+			fmt.Sprintf("MariaF325_%d Soler", i),
+			fmt.Sprintf("%02d/01/1891", 1+(i%28)),
+			fmt.Sprintf("%02d/02/1891", 1+(i%28)),
+		})
+	}
+
+	app, database, userID, llibreID, template := setupF322MarcmoiaTemplate(t, "indexada")
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF322MarcmoiaCSV(t, rows)), ',', userID, importContext{}, 0)
+	if result.Created != totalRows || result.Updated != 0 || result.Failed != 0 {
+		t.Fatalf("import F32-5 inesperat: created=%d updated=%d failed=%d errors=%+v", result.Created, result.Updated, result.Failed, result.Errors)
+	}
+	if result.Debug.WriteBulkBatches != 2 || result.Debug.WriteBulkRows != totalRows || result.Debug.WriteBulkFallbacks != 0 {
+		t.Fatalf("batching F32-5 inesperat: %+v", result.Debug)
+	}
+	if result.Debug.WriteTranscripcioInsertDur <= 0 || result.Debug.WritePersonaPersistDur <= 0 || result.Debug.WriteLinksPersistDur <= 0 || result.Debug.WriteCommitDur <= 0 {
+		t.Fatalf("mètriques write F32-5 incompletes: %+v", result.Debug)
+	}
+	if got := countF32Registres(t, database, llibreID); got != totalRows {
+		t.Fatalf("esperava %d registres persistits, got=%d", totalRows, got)
+	}
+}
+
 func runF32StaticMarcmoiaImport(t *testing.T, csvContent string) (csvImportResult, f32ImportSnapshot) {
 	t.Helper()
 	app, database := newModeracioBulkDiagnosticsApp(t)

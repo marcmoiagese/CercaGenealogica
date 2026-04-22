@@ -9012,6 +9012,15 @@ func (h sqlHelper) createTranscripcioAtribut(a *TranscripcioAtributRaw) (int, er
 }
 
 func (h sqlHelper) bulkCreateTranscripcioRawBundles(bundles []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
+	switch h.style {
+	case "postgres":
+		return h.bulkCreateTranscripcioRawBundlesPostgres(bundles)
+	default:
+		return h.bulkCreateTranscripcioRawBundlesPrepared(bundles)
+	}
+}
+
+func (h sqlHelper) bulkCreateTranscripcioRawBundlesPrepared(bundles []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
 	res := TranscripcioRawImportBulkResult{
 		IDs: make([]int, 0, len(bundles)),
 		Metrics: TranscripcioRawImportBulkMetrics{
@@ -9031,36 +9040,57 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundles(bundles []TranscripcioRawImp
 			_ = tx.Rollback()
 		}
 	}()
+	rawStmt, err := tx.Prepare(buildInsertTranscripcioRawQuery(h.style, h.nowFun, false, false))
+	if err != nil {
+		return res, err
+	}
+	defer rawStmt.Close()
+	personStmt, err := tx.Prepare(buildInsertTranscripcioPersonaQuery(h.style, false))
+	if err != nil {
+		return res, err
+	}
+	defer personStmt.Close()
+	attrStmt, err := tx.Prepare(buildInsertTranscripcioAtributQuery(h.style, false))
+	if err != nil {
+		return res, err
+	}
+	defer attrStmt.Close()
 	for i := range bundles {
 		raw := bundles[i].Transcripcio
+		normalizeTranscripcioRawForInsert(&raw)
 		start := time.Now()
-		id, err := h.createTranscripcioRawTx(tx, &raw)
+		execRes, err := rawStmt.Exec(buildInsertTranscripcioRawArgs(raw, 0, false)...)
 		res.Metrics.TranscripcioInsertDur += time.Since(start)
 		if err != nil {
 			return res, err
 		}
+		lastID, err := execRes.LastInsertId()
+		if err != nil || lastID <= 0 {
+			return res, fmt.Errorf("%s bulk insert transcripcions_raw: no last insert id", h.style)
+		}
+		id := int(lastID)
 		res.IDs = append(res.IDs, id)
 		for j := range bundles[i].Persones {
 			p := bundles[i].Persones[j]
 			p.TranscripcioID = id
 			start = time.Now()
-			_, err := h.createTranscripcioPersonaTx(tx, &p)
-			res.Metrics.PersonaPersistDur += time.Since(start)
-			res.Metrics.Persones++
-			if err != nil {
+			if _, err := personStmt.Exec(buildInsertTranscripcioPersonaArgs(p)...); err != nil {
+				res.Metrics.PersonaPersistDur += time.Since(start)
 				return res, err
 			}
+			res.Metrics.PersonaPersistDur += time.Since(start)
+			res.Metrics.Persones++
 		}
 		for j := range bundles[i].Atributs {
 			attr := bundles[i].Atributs[j]
 			attr.TranscripcioID = id
 			start = time.Now()
-			_, err := h.createTranscripcioAtributTx(tx, &attr)
-			res.Metrics.LinksPersistDur += time.Since(start)
-			res.Metrics.Atributs++
-			if err != nil {
+			if _, err := attrStmt.Exec(buildInsertTranscripcioAtributArgs(attr)...); err != nil {
+				res.Metrics.LinksPersistDur += time.Since(start)
 				return res, err
 			}
+			res.Metrics.LinksPersistDur += time.Since(start)
+			res.Metrics.Atributs++
 		}
 	}
 	start := time.Now()
@@ -9073,30 +9103,148 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundles(bundles []TranscripcioRawImp
 	return res, nil
 }
 
+func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgres(bundles []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
+	res := TranscripcioRawImportBulkResult{
+		IDs: make([]int, 0, len(bundles)),
+		Metrics: TranscripcioRawImportBulkMetrics{
+			Rows: len(bundles),
+		},
+	}
+	if len(bundles) == 0 {
+		return res, nil
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return res, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	totalPersones := 0
+	totalAtributs := 0
+	for i := range bundles {
+		totalPersones += len(bundles[i].Persones)
+		totalAtributs += len(bundles[i].Atributs)
+	}
+	personRows := make([]TranscripcioPersonaRaw, 0, totalPersones)
+	attrRows := make([]TranscripcioAtributRaw, 0, totalAtributs)
+	start := time.Now()
+	for i := 0; i < len(bundles); i += bulkTranscripcioRawBundleBatchSize {
+		end := i + bulkTranscripcioRawBundleBatchSize
+		if end > len(bundles) {
+			end = len(bundles)
+		}
+		batchIDs, err := h.allocatePostgresSerialIDsTx(tx, "transcripcions_raw", "id", end-i)
+		if err != nil {
+			res.Metrics.TranscripcioInsertDur += time.Since(start)
+			return res, err
+		}
+		rawRows := make([]TranscripcioRaw, 0, end-i)
+		for offset := i; offset < end; offset++ {
+			raw := bundles[offset].Transcripcio
+			normalizeTranscripcioRawForInsert(&raw)
+			rawID := batchIDs[offset-i]
+			rawRows = append(rawRows, raw)
+			res.IDs = append(res.IDs, rawID)
+			for j := range bundles[offset].Persones {
+				p := bundles[offset].Persones[j]
+				p.TranscripcioID = rawID
+				personRows = append(personRows, p)
+			}
+			for j := range bundles[offset].Atributs {
+				attr := bundles[offset].Atributs[j]
+				attr.TranscripcioID = rawID
+				attrRows = append(attrRows, attr)
+			}
+		}
+		query, args := buildBulkInsertTranscripcionsRaw(h.style, h.nowFun, rawRows, batchIDs)
+		if query == "" {
+			continue
+		}
+		if _, err := tx.Exec(query, args...); err != nil {
+			res.Metrics.TranscripcioInsertDur += time.Since(start)
+			return res, err
+		}
+	}
+	res.Metrics.TranscripcioInsertDur += time.Since(start)
+	start = time.Now()
+	for i := 0; i < len(personRows); i += bulkTranscripcioRawBundleBatchSize {
+		end := i + bulkTranscripcioRawBundleBatchSize
+		if end > len(personRows) {
+			end = len(personRows)
+		}
+		query, args := buildBulkInsertTranscripcioPersones(h.style, personRows[i:end])
+		if query == "" {
+			continue
+		}
+		if _, err := tx.Exec(query, args...); err != nil {
+			res.Metrics.PersonaPersistDur += time.Since(start)
+			return res, err
+		}
+	}
+	res.Metrics.PersonaPersistDur += time.Since(start)
+	res.Metrics.Persones = len(personRows)
+	start = time.Now()
+	for i := 0; i < len(attrRows); i += bulkTranscripcioRawBundleBatchSize {
+		end := i + bulkTranscripcioRawBundleBatchSize
+		if end > len(attrRows) {
+			end = len(attrRows)
+		}
+		query, args := buildBulkInsertTranscripcioAtributs(h.style, attrRows[i:end])
+		if query == "" {
+			continue
+		}
+		if _, err := tx.Exec(query, args...); err != nil {
+			res.Metrics.LinksPersistDur += time.Since(start)
+			return res, err
+		}
+	}
+	res.Metrics.LinksPersistDur += time.Since(start)
+	res.Metrics.Atributs = len(attrRows)
+	start = time.Now()
+	if err := tx.Commit(); err != nil {
+		res.Metrics.CommitDur += time.Since(start)
+		return res, err
+	}
+	res.Metrics.CommitDur += time.Since(start)
+	committed = true
+	return res, nil
+}
+
+func (h sqlHelper) allocatePostgresSerialIDsTx(tx *sql.Tx, table, column string, count int) ([]int, error) {
+	if count <= 0 {
+		return nil, nil
+	}
+	query := fmt.Sprintf("SELECT nextval(pg_get_serial_sequence('%s', '%s')) FROM generate_series(1, $1)", table, column)
+	rows, err := tx.Query(query, count)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]int, 0, count)
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ids) != count {
+		return nil, fmt.Errorf("postgres bulk insert transcripcions_raw: expected %d ids, got %d", count, len(ids))
+	}
+	return ids, nil
+}
+
 func (h sqlHelper) createTranscripcioRawTx(tx *sql.Tx, t *TranscripcioRaw) (int, error) {
-	status := strings.TrimSpace(t.ModeracioEstat)
-	if status == "" {
-		status = "pendent"
-	}
-	if strings.TrimSpace(t.DataActeEstat) == "" {
-		t.DataActeEstat = "clar"
-	}
-	query := `
-        INSERT INTO transcripcions_raw (
-            llibre_id, pagina_id, num_pagina_text, posicio_pagina, tipus_acte, any_doc, data_acte_text, data_acte_iso, data_acte_estat,
-            transcripcio_literal, notes_marginals, observacions_paleografiques,
-            moderation_status, moderated_by, moderated_at, moderation_notes, created_by, created_at, updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
-	if h.style == "postgres" {
-		query += " RETURNING id"
-	}
-	query = formatPlaceholders(h.style, query)
-	args := []interface{}{
-		t.LlibreID, t.PaginaID, t.NumPaginaText, t.PosicioPagina, t.TipusActe, t.AnyDoc, t.DataActeText, t.DataActeISO, t.DataActeEstat,
-		t.TranscripcioLiteral, t.NotesMarginals, t.ObservacionsPaleografiques,
-		status, t.ModeratedBy, t.ModeratedAt, t.ModeracioMotiu, t.CreatedBy,
-	}
+	normalizeTranscripcioRawForInsert(t)
+	query := buildInsertTranscripcioRawQuery(h.style, h.nowFun, false, h.style == "postgres")
+	args := buildInsertTranscripcioRawArgs(*t, 0, false)
 	if h.style == "postgres" {
 		if err := tx.QueryRow(query, args...).Scan(&t.ID); err != nil {
 			return 0, err
@@ -9114,21 +9262,8 @@ func (h sqlHelper) createTranscripcioRawTx(tx *sql.Tx, t *TranscripcioRaw) (int,
 }
 
 func (h sqlHelper) createTranscripcioPersonaTx(tx *sql.Tx, p *TranscripcioPersonaRaw) (int, error) {
-	query := `
-        INSERT INTO transcripcions_persones_raw (
-            transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat, cognom_soltera, cognom_soltera_estat, sexe, sexe_estat,
-            edat_text, edat_estat, estat_civil_text, estat_civil_estat, municipi_text, municipi_estat, ofici_text, ofici_estat,
-            casa_nom, casa_estat, persona_id, linked_by, linked_at, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	if h.style == "postgres" {
-		query += " RETURNING id"
-	}
-	query = formatPlaceholders(h.style, query)
-	args := []interface{}{
-		p.TranscripcioID, p.Rol, p.Nom, p.NomEstat, p.Cognom1, p.Cognom1Estat, p.Cognom2, p.Cognom2Estat, p.CognomSoltera, p.CognomSolteraEstat, p.Sexe, p.SexeEstat,
-		p.EdatText, p.EdatEstat, p.EstatCivilText, p.EstatCivilEstat, p.MunicipiText, p.MunicipiEstat, p.OficiText, p.OficiEstat,
-		p.CasaNom, p.CasaEstat, p.PersonaID, p.LinkedBy, p.LinkedAt, p.Notes,
-	}
+	query := buildInsertTranscripcioPersonaQuery(h.style, h.style == "postgres")
+	args := buildInsertTranscripcioPersonaArgs(*p)
 	if h.style == "postgres" {
 		if err := tx.QueryRow(query, args...).Scan(&p.ID); err != nil {
 			return 0, err
@@ -9146,20 +9281,14 @@ func (h sqlHelper) createTranscripcioPersonaTx(tx *sql.Tx, p *TranscripcioPerson
 }
 
 func (h sqlHelper) createTranscripcioAtributTx(tx *sql.Tx, a *TranscripcioAtributRaw) (int, error) {
-	query := `
-        INSERT INTO transcripcions_atributs_raw (transcripcio_id, clau, tipus_valor, valor_text, valor_int, valor_date, valor_bool, estat, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	query := buildInsertTranscripcioAtributQuery(h.style, h.style == "postgres")
 	if h.style == "postgres" {
-		query += " RETURNING id"
-	}
-	query = formatPlaceholders(h.style, query)
-	if h.style == "postgres" {
-		if err := tx.QueryRow(query, a.TranscripcioID, a.Clau, a.TipusValor, a.ValorText, a.ValorInt, a.ValorDate, a.ValorBool, a.Estat, a.Notes).Scan(&a.ID); err != nil {
+		if err := tx.QueryRow(query, buildInsertTranscripcioAtributArgs(*a)...).Scan(&a.ID); err != nil {
 			return 0, err
 		}
 		return a.ID, nil
 	}
-	execRes, err := tx.Exec(query, a.TranscripcioID, a.Clau, a.TipusValor, a.ValorText, a.ValorInt, a.ValorDate, a.ValorBool, a.Estat, a.Notes)
+	execRes, err := tx.Exec(query, buildInsertTranscripcioAtributArgs(*a)...)
 	if err != nil {
 		return 0, err
 	}
