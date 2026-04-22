@@ -260,6 +260,28 @@ type f323NoBulkDB struct {
 	db.DB
 }
 
+type f327PageLookupCountingDB struct {
+	db.DB
+	listCalls     int
+	getByIDCalls  int
+	getByNumCalls int
+}
+
+func (f *f327PageLookupCountingDB) ListLlibrePagines(llibreID int) ([]db.LlibrePagina, error) {
+	f.listCalls++
+	return f.DB.ListLlibrePagines(llibreID)
+}
+
+func (f *f327PageLookupCountingDB) GetLlibrePaginaByID(id int) (*db.LlibrePagina, error) {
+	f.getByIDCalls++
+	return f.DB.GetLlibrePaginaByID(id)
+}
+
+func (f *f327PageLookupCountingDB) GetLlibrePaginaByNum(llibreID, num int) (*db.LlibrePagina, error) {
+	f.getByNumCalls++
+	return f.DB.GetLlibrePaginaByNum(llibreID, num)
+}
+
 func TestF323TemplateImportWriteMetricsAndBulkEquivalent(t *testing.T) {
 	SetLogLevel("debug")
 	defer SetLogLevel("error")
@@ -389,6 +411,78 @@ func TestF325TemplateImportBulkSplitsBatchesWithoutFallback(t *testing.T) {
 	}
 	if got := countF32Registres(t, database, llibreID); got != totalRows {
 		t.Fatalf("esperava %d registres persistits, got=%d", totalRows, got)
+	}
+}
+
+func TestF327TemplateImportIndexedPageLookupUsesBookCache(t *testing.T) {
+	SetLogLevel("debug")
+	defer SetLogLevel("error")
+
+	app, database, userID, _, template := setupF322MarcmoiaTemplate(t, "indexada")
+	countingDB := &f327PageLookupCountingDB{DB: database}
+	app.DB = countingDB
+
+	rows := make([][]string, 0, 12)
+	for i := 0; i < 12; i++ {
+		rows = append(rows, []string{
+			"12",
+			"12",
+			fmt.Sprintf("Cache Joan %d", i),
+			fmt.Sprintf("Pare Cache %d", i),
+			fmt.Sprintf("Mare Cache %d", i),
+			fmt.Sprintf("%02d/02/1890", 1+(i%28)),
+			fmt.Sprintf("%02d/03/1890", 1+(i%28)),
+		})
+	}
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF322MarcmoiaCSV(t, rows)), ',', userID, importContext{}, 0)
+	if result.Created != len(rows) || result.Updated != 0 || result.Failed != 0 {
+		t.Fatalf("import F32-7 inesperat: %+v", result)
+	}
+	if countingDB.listCalls != 1 {
+		t.Fatalf("ListLlibrePagines s'hauria de resoldre un sol cop per llibre, got=%d", countingDB.listCalls)
+	}
+	if countingDB.getByIDCalls != 0 || countingDB.getByNumCalls != 0 {
+		t.Fatalf("no s'haurien d'usar lookups puntuals de pàgina, got byID=%d byNum=%d", countingDB.getByIDCalls, countingDB.getByNumCalls)
+	}
+	if result.Debug.WritePageLookupDur <= 0 {
+		t.Fatalf("mètrica write_page_lookup_dur absent: %+v", result.Debug)
+	}
+}
+
+func TestF327LoadExistingByStrongMatchUsesCachedPagesForExisting(t *testing.T) {
+	app, database, _, llibreID, _ := setupF322MarcmoiaTemplate(t, "indexada")
+	page13ID, err := database.SaveLlibrePagina(&db.LlibrePagina{
+		LlibreID:  llibreID,
+		NumPagina: 13,
+		Estat:     "indexada",
+	})
+	if err != nil {
+		t.Fatalf("SaveLlibrePagina 13 ha fallat: %v", err)
+	}
+	page14ID, err := database.SaveLlibrePagina(&db.LlibrePagina{
+		LlibreID:  llibreID,
+		NumPagina: 14,
+		Estat:     "indexada",
+	})
+	if err != nil {
+		t.Fatalf("SaveLlibrePagina 14 ha fallat: %v", err)
+	}
+	createF327ExistingBaptismeWithPaginaID(t, database, llibreID, page13ID, "Joan", "Garcia", "Soler", "Pere", "Garcia", "Puig", "1890-02-05", "1890-02-01")
+	createF327ExistingBaptismeWithPaginaID(t, database, llibreID, page14ID, "Pere", "Garcia", "Soler", "Pau", "Garcia", "Soler", "1890-02-06", "1890-02-02")
+
+	countingDB := &f327PageLookupCountingDB{DB: database}
+	app.DB = countingDB
+
+	incoming, _, incomingAttrs := buildF322IncomingStrongRow(llibreID, 13)
+	existingMap := app.loadExistingByStrongMatchWithPageCache(newTemplatePageLookupCache(app.DB), llibreID, incoming, incomingAttrs, templatePolicies{PrincipalRoles: []string{"batejat", "persona_principal"}})
+	if len(existingMap) != 1 {
+		t.Fatalf("no s'ha resolt l'existent esperat: %+v", existingMap)
+	}
+	if countingDB.listCalls != 1 {
+		t.Fatalf("ListLlibrePagines s'hauria de reutilitzar per a existents, got=%d", countingDB.listCalls)
+	}
+	if countingDB.getByIDCalls != 0 || countingDB.getByNumCalls != 0 {
+		t.Fatalf("no s'haurien d'usar lookups puntuals en existents, got byID=%d byNum=%d", countingDB.getByIDCalls, countingDB.getByNumCalls)
 	}
 }
 
@@ -541,6 +635,54 @@ func createF322ExistingBaptisme(t *testing.T, database db.DB, llibreID, page int
 			Estat:          "clar",
 		})
 	}
+	return regID
+}
+
+func createF327ExistingBaptismeWithPaginaID(t *testing.T, database db.DB, llibreID, paginaID int, nom, cognom1, cognom2, pareNom, pareCognom, mareCognom, dataBateigISO, dataNaixementISO string) int {
+	t.Helper()
+	reg := &db.TranscripcioRaw{
+		LlibreID:       llibreID,
+		PaginaID:       sql.NullInt64{Int64: int64(paginaID), Valid: true},
+		TipusActe:      "baptisme",
+		DataActeEstat:  "clar",
+		ModeracioEstat: "pendent",
+	}
+	if dataBateigISO != "" {
+		reg.DataActeISO = parseNullString(dataBateigISO)
+		reg.DataActeText = strings.ReplaceAll(dataBateigISO, "-", "/")
+	}
+	regID, err := database.CreateTranscripcioRaw(reg)
+	if err != nil {
+		t.Fatalf("CreateTranscripcioRaw amb PaginaID ha fallat: %v", err)
+	}
+	_, _ = database.CreateTranscripcioPersona(&db.TranscripcioPersonaRaw{
+		TranscripcioID: regID,
+		Rol:            "batejat",
+		Nom:            nom,
+		Cognom1:        cognom1,
+		Cognom2:        cognom2,
+	})
+	if pareNom != "" || pareCognom != "" {
+		_, _ = database.CreateTranscripcioPersona(&db.TranscripcioPersonaRaw{
+			TranscripcioID: regID,
+			Rol:            "pare",
+			Nom:            pareNom,
+			Cognom1:        pareCognom,
+		})
+	}
+	if mareCognom != "" {
+		_, _ = database.CreateTranscripcioPersona(&db.TranscripcioPersonaRaw{
+			TranscripcioID: regID,
+			Rol:            "mare",
+			Nom:            "Maria",
+			Cognom1:        mareCognom,
+		})
+	}
+	_, _ = database.CreateTranscripcioAtribut(&db.TranscripcioAtributRaw{
+		TranscripcioID: regID,
+		Clau:           "data_naixement",
+		ValorDate:      parseNullString(dataNaixementISO),
+	})
 	return regID
 }
 

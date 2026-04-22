@@ -97,6 +97,18 @@ type templatePendingCreate struct {
 	Bundle db.TranscripcioRawImportBundle
 }
 
+type templatePageLookupCache struct {
+	database db.DB
+	books    map[int]*templateBookPageLookup
+	byID     map[int]*db.LlibrePagina
+	missing  map[int]struct{}
+}
+
+type templateBookPageLookup struct {
+	byNum map[int]*db.LlibrePagina
+	byID  map[int]*db.LlibrePagina
+}
+
 type transcripcioRawBundleCreator interface {
 	BulkCreateTranscripcioRawBundles([]db.TranscripcioRawImportBundle) (db.TranscripcioRawImportBulkResult, error)
 }
@@ -186,6 +198,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	seenMatch := map[string]int{}
 	existingByContext := map[string]map[string]int{}
 	pendingCreates := make([]templatePendingCreate, 0, templateImportCreateBatchSize)
+	pageLookupCache := newTemplatePageLookupCache(a.DB)
 	flushPendingCreates := func() {
 		pendingCreates = a.flushTemplatePendingCreates(pendingCreates, &result)
 	}
@@ -263,7 +276,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		switch matchMode {
 		case "by_strong_signature_if_page_indexed":
 			pageLookupStart := time.Now()
-			pageKey, pageIndexed := a.templateIndexedPageKey(bookID, &t, atributs)
+			pageKey, pageIndexed := a.templateIndexedPageKeyWithCache(pageLookupCache, bookID, &t, atributs)
 			result.Debug.addWritePageLookup(time.Since(pageLookupStart))
 			if pageIndexed {
 				duplicateStart := time.Now()
@@ -310,7 +323,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			if existingMap == nil {
 				resolveStart = time.Now()
 				if matchMode == "by_strong_signature_if_page_indexed" {
-					existingMap = a.loadExistingByStrongMatch(bookID, &t, atributs, model.Policies)
+					existingMap = a.loadExistingByStrongMatchWithPageCache(pageLookupCache, bookID, &t, atributs, model.Policies)
 				} else {
 					existingMap = a.loadExistingByPrincipal(bookID, model.Policies.PrincipalRoles)
 				}
@@ -1387,6 +1400,10 @@ func (a *App) loadExistingByPrincipal(bookID int, roles []string) map[string]int
 }
 
 func (a *App) loadExistingByStrongMatch(bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) map[string]int {
+	return a.loadExistingByStrongMatchWithPageCache(nil, bookID, incoming, incomingAttrs, policies)
+}
+
+func (a *App) loadExistingByStrongMatchWithPageCache(pageCache *templatePageLookupCache, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) map[string]int {
 	existingMap := map[string]int{}
 	if incoming == nil {
 		return existingMap
@@ -1398,7 +1415,7 @@ func (a *App) loadExistingByStrongMatch(bookID int, incoming *db.TranscripcioRaw
 	trans, _ := a.DB.ListTranscripcionsRaw(bookID, db.TranscripcioFilter{TipusActe: incoming.TipusActe})
 	for _, tr := range trans {
 		attrsExistents, _ := a.DB.ListTranscripcioAtributs(tr.ID)
-		if normalizeTemplateMatchPart(a.templateLogicalPageKeyForExisting(&tr, attrsExistents)) != normalizeTemplateMatchPart(pageKey) {
+		if normalizeTemplateMatchPart(a.templateLogicalPageKeyForExistingWithCache(pageCache, bookID, &tr, attrsExistents)) != normalizeTemplateMatchPart(pageKey) {
 			continue
 		}
 		personesExistentsRows, _ := a.DB.ListTranscripcioPersones(tr.ID)
@@ -1422,9 +1439,13 @@ func (a *App) loadExistingByStrongMatch(bookID int, incoming *db.TranscripcioRaw
 }
 
 func (a *App) templateIndexedPageKey(bookID int, t *db.TranscripcioRaw, attrs map[string]*db.TranscripcioAtributRaw) (string, bool) {
+	return a.templateIndexedPageKeyWithCache(nil, bookID, t, attrs)
+}
+
+func (a *App) templateIndexedPageKeyWithCache(pageCache *templatePageLookupCache, bookID int, t *db.TranscripcioRaw, attrs map[string]*db.TranscripcioAtributRaw) (string, bool) {
 	pageKey := templateLogicalPageKey(t, attrs)
 	if t != nil && t.PaginaID.Valid {
-		page, err := a.DB.GetLlibrePaginaByID(int(t.PaginaID.Int64))
+		page, err := templateLookupPageByID(a.DB, pageCache, bookID, int(t.PaginaID.Int64))
 		if err == nil && page != nil {
 			if pageKey == "" && page.NumPagina > 0 {
 				pageKey = strconv.Itoa(page.NumPagina)
@@ -1439,7 +1460,7 @@ func (a *App) templateIndexedPageKey(bookID int, t *db.TranscripcioRaw, attrs ma
 	if !ok {
 		return pageKey, false
 	}
-	page, err := a.DB.GetLlibrePaginaByNum(bookID, pageNum)
+	page, err := templateLookupPageByNum(a.DB, pageCache, bookID, pageNum)
 	if err != nil || page == nil {
 		return pageKey, false
 	}
@@ -1447,6 +1468,10 @@ func (a *App) templateIndexedPageKey(bookID int, t *db.TranscripcioRaw, attrs ma
 }
 
 func (a *App) templateLogicalPageKeyForExisting(t *db.TranscripcioRaw, attrs []db.TranscripcioAtributRaw) string {
+	return a.templateLogicalPageKeyForExistingWithCache(nil, 0, t, attrs)
+}
+
+func (a *App) templateLogicalPageKeyForExistingWithCache(pageCache *templatePageLookupCache, bookID int, t *db.TranscripcioRaw, attrs []db.TranscripcioAtributRaw) string {
 	attrsByKey := map[string]*db.TranscripcioAtributRaw{}
 	for i := range attrs {
 		attrsByKey[attrs[i].Clau] = &attrs[i]
@@ -1455,11 +1480,120 @@ func (a *App) templateLogicalPageKeyForExisting(t *db.TranscripcioRaw, attrs []d
 	if pageKey != "" || t == nil || !t.PaginaID.Valid {
 		return pageKey
 	}
-	page, err := a.DB.GetLlibrePaginaByID(int(t.PaginaID.Int64))
+	lookupBookID := bookID
+	if lookupBookID <= 0 && t != nil {
+		lookupBookID = t.LlibreID
+	}
+	page, err := templateLookupPageByID(a.DB, pageCache, lookupBookID, int(t.PaginaID.Int64))
 	if err != nil || page == nil || page.NumPagina <= 0 {
 		return ""
 	}
 	return strconv.Itoa(page.NumPagina)
+}
+
+func newTemplatePageLookupCache(database db.DB) *templatePageLookupCache {
+	if database == nil {
+		return nil
+	}
+	return &templatePageLookupCache{
+		database: database,
+		books:    map[int]*templateBookPageLookup{},
+		byID:     map[int]*db.LlibrePagina{},
+		missing:  map[int]struct{}{},
+	}
+}
+
+func (c *templatePageLookupCache) loadBook(bookID int) (*templateBookPageLookup, error) {
+	if c == nil || c.database == nil || bookID <= 0 {
+		return nil, nil
+	}
+	if pages, ok := c.books[bookID]; ok {
+		return pages, nil
+	}
+	rows, err := c.database.ListLlibrePagines(bookID)
+	if err != nil {
+		return nil, err
+	}
+	pages := &templateBookPageLookup{
+		byNum: map[int]*db.LlibrePagina{},
+		byID:  map[int]*db.LlibrePagina{},
+	}
+	for i := range rows {
+		page := rows[i]
+		pageCopy := page
+		if pageCopy.ID > 0 {
+			pages.byID[pageCopy.ID] = &pageCopy
+			c.byID[pageCopy.ID] = &pageCopy
+			delete(c.missing, pageCopy.ID)
+		}
+		if pageCopy.NumPagina > 0 {
+			pages.byNum[pageCopy.NumPagina] = &pageCopy
+		}
+	}
+	c.books[bookID] = pages
+	return pages, nil
+}
+
+func templateLookupPageByNum(database db.DB, pageCache *templatePageLookupCache, bookID, pageNum int) (*db.LlibrePagina, error) {
+	if pageCache != nil {
+		if pages, err := pageCache.loadBook(bookID); err != nil {
+			return nil, err
+		} else if pages != nil {
+			return pages.byNum[pageNum], nil
+		}
+	}
+	if database == nil {
+		return nil, nil
+	}
+	return database.GetLlibrePaginaByNum(bookID, pageNum)
+}
+
+func templateLookupPageByID(database db.DB, pageCache *templatePageLookupCache, bookID, pageID int) (*db.LlibrePagina, error) {
+	if pageID <= 0 {
+		return nil, nil
+	}
+	if pageCache != nil {
+		if page, ok := pageCache.byID[pageID]; ok {
+			return page, nil
+		}
+		if _, missing := pageCache.missing[pageID]; missing {
+			return nil, nil
+		}
+		if pages, err := pageCache.loadBook(bookID); err != nil {
+			return nil, err
+		} else if pages != nil {
+			if page, ok := pages.byID[pageID]; ok {
+				return page, nil
+			}
+		}
+	}
+	if database == nil {
+		return nil, nil
+	}
+	page, err := database.GetLlibrePaginaByID(pageID)
+	if err != nil || page == nil {
+		if pageCache != nil && err == nil {
+			pageCache.missing[pageID] = struct{}{}
+		}
+		return page, err
+	}
+	if pageCache != nil {
+		pageCache.byID[pageID] = page
+		delete(pageCache.missing, pageID)
+		if page.LlibreID > 0 {
+			pages, loadErr := pageCache.loadBook(page.LlibreID)
+			if loadErr != nil {
+				return nil, loadErr
+			}
+			if pages != nil {
+				pages.byID[pageID] = page
+				if page.NumPagina > 0 {
+					pages.byNum[page.NumPagina] = page
+				}
+			}
+		}
+	}
+	return page, nil
 }
 
 func templateLogicalPageKey(t *db.TranscripcioRaw, attrs map[string]*db.TranscripcioAtributRaw) string {
