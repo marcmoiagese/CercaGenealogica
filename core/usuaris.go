@@ -830,13 +830,10 @@ func defaultPrivacySettings() *db.PrivacySettings {
 }
 
 func resolveUserLang(r *http.Request, user *db.User) string {
-	lang := ResolveLang(r)
 	if user != nil {
-		if l := normalizeLang(strings.TrimSpace(user.PreferredLang)); l != "" && isSupportedLang(l) {
-			return l
-		}
+		return ResolveLangForUser(r, user.PreferredLang)
 	}
-	return lang
+	return ResolveLang(r)
 }
 
 func setLangCookie(w http.ResponseWriter, r *http.Request, lang string) {

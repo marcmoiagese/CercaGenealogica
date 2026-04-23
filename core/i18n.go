@@ -11,6 +11,7 @@ import (
 )
 
 const defaultLang = "cat"
+
 type langOverrideKey struct{}
 
 var (
@@ -189,6 +190,19 @@ func ResolveLang(r *http.Request) string {
 
 // ResolveLangForUser retorna l'idioma de l'usuari si és vàlid, altrament fa servir ResolveLang.
 func ResolveLangForUser(r *http.Request, pref string) string {
+	if r != nil {
+		if v := r.Context().Value(langOverrideKey{}); v != nil {
+			if lang, ok := v.(string); ok && isSupportedLang(lang) {
+				return lang
+			}
+		}
+		if c, err := r.Cookie("lang"); err == nil && c != nil {
+			lang := normalizeLang(c.Value)
+			if isSupportedLang(lang) {
+				return lang
+			}
+		}
+	}
 	if l := normalizeLang(strings.TrimSpace(pref)); l != "" && isSupportedLang(l) {
 		return l
 	}

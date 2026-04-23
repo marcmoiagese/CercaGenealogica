@@ -137,3 +137,24 @@ func TestResolveLangAcceptLanguageHeader(t *testing.T) {
 	//     t.Errorf("s'esperava 'oc' per Accept-Language, rebut: %q", lang)
 	// }
 }
+
+func TestResolveLangForUserCookieOverridesPreferredLang(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "lang",
+		Value: "en",
+	})
+
+	if got := core.ResolveLangForUser(req, "cat"); got != "en" {
+		t.Errorf("ResolveLangForUser amb cookie en i preferencia cat = %q, vull 'en'", got)
+	}
+}
+
+func TestResolveLangForUserFallsBackToPreferredLangWithoutCookie(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+
+	if got := core.ResolveLangForUser(req, "cat"); got != "cat" {
+		t.Errorf("ResolveLangForUser sense cookie i amb preferencia cat = %q, vull 'cat'", got)
+	}
+}
