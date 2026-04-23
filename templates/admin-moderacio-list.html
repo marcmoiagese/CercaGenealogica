@@ -382,7 +382,7 @@
                             </td>
                             <td>{{ .ID }}</td>
                             <td>{{ t $.Lang (printf "moderation.type.%s" .Type) }}</td>
-                            <td>{{ if .Status }}{{ t $.Lang (printf "moderation.status.%s" .Status) }}{{ else }}—{{ end }}</td>
+                            <td>{{ if .Status }}{{ t $.Lang (printf "activity.status.%s" .Status) }}{{ else }}—{{ end }}</td>
                             <td>{{ .Nom }}</td>
                             <td>
                                 {{ if .Context }}

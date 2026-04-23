@@ -116,6 +116,12 @@ func TestModeracioListUserFilter(t *testing.T) {
 	if strings.Contains(body, "Laura A") {
 		t.Fatalf("filtre usuari no hauria de mostrar persona de user_a")
 	}
+	if !strings.Contains(body, "Pendent") {
+		t.Fatalf("la columna d'estat hauria de traduir 'pendent'")
+	}
+	if strings.Contains(body, "moderation.status.pendent") {
+		t.Fatalf("la columna d'estat no hauria de renderitzar la clau d'i18n crua")
+	}
 }
 
 func TestModeracioListDebugLogs(t *testing.T) {
