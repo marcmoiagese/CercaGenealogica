@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 type TemplateImportStrongMatchRequest struct {
@@ -18,6 +19,16 @@ type TemplateImportStrongMatchResult struct {
 	AtributsByTranscripcioID map[int][]TranscripcioAtributRaw
 }
 
+type TemplateImportPrincipalMatchRequest struct {
+	BookID        int
+	SnapshotMaxID int
+}
+
+type TemplateImportPrincipalMatchResult struct {
+	Transcripcions           []TranscripcioRaw
+	PersonesByTranscripcioID map[int][]TranscripcioPersonaRaw
+}
+
 type TemplateImportRuntime interface {
 	Engine() string
 	ListBookPages(bookID int) ([]LlibrePagina, error)
@@ -25,7 +36,9 @@ type TemplateImportRuntime interface {
 	GetBookPageByNum(bookID, pageNum int) (*LlibrePagina, error)
 	ExistingSnapshotMaxID() (int, error)
 	LoadStrongMatchCandidates(req TemplateImportStrongMatchRequest) (TemplateImportStrongMatchResult, error)
+	LoadPrincipalMatchCandidates(req TemplateImportPrincipalMatchRequest) (TemplateImportPrincipalMatchResult, error)
 	BulkCreateBundles(rows []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error)
+	CreateBundle(row TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error)
 	LoadPersonesByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error)
 	LoadAtributsByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error)
 }
@@ -159,11 +172,75 @@ func (r templateImportRuntimeAdapter) LoadStrongMatchCandidates(req TemplateImpo
 	return result, nil
 }
 
+func (r templateImportRuntimeAdapter) LoadPrincipalMatchCandidates(req TemplateImportPrincipalMatchRequest) (TemplateImportPrincipalMatchResult, error) {
+	result := TemplateImportPrincipalMatchResult{
+		PersonesByTranscripcioID: map[int][]TranscripcioPersonaRaw{},
+	}
+	if r.database == nil || req.BookID <= 0 {
+		return result, nil
+	}
+	if req.SnapshotMaxID == 0 {
+		return result, nil
+	}
+	trans, err := r.database.ListTranscripcionsRaw(req.BookID, TranscripcioFilter{Limit: -1})
+	if err != nil {
+		return result, err
+	}
+	filtered := filterTranscripcionsBySnapshot(trans, req.SnapshotMaxID)
+	result.Transcripcions = filtered
+	ids := transcripcioIDs(filtered)
+	if len(ids) == 0 {
+		return result, nil
+	}
+	personesByID, err := r.database.ListTranscripcioPersonesByTranscripcioIDs(ids)
+	if err != nil {
+		return result, err
+	}
+	result.PersonesByTranscripcioID = ensurePersonaMaps(personesByID)
+	return result, nil
+}
+
 func (r templateImportRuntimeAdapter) BulkCreateBundles(rows []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
 	if creator, ok := r.database.(templateImportBundleCreator); ok {
 		return creator.BulkCreateTranscripcioRawBundles(rows)
 	}
 	return TranscripcioRawImportBulkResult{}, fmt.Errorf("template import bulk create unsupported for engine=%s", r.Engine())
+}
+
+func (r templateImportRuntimeAdapter) CreateBundle(row TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
+	res := TranscripcioRawImportBulkResult{
+		Metrics: TranscripcioRawImportBulkMetrics{
+			Rows:     1,
+			Persones: len(row.Persones),
+			Atributs: len(row.Atributs),
+		},
+	}
+	if r.database == nil {
+		return res, fmt.Errorf("template import create unsupported for engine=%s", r.Engine())
+	}
+	raw := row.Transcripcio
+	start := time.Now()
+	id, err := r.database.CreateTranscripcioRaw(&raw)
+	res.Metrics.TranscripcioInsertDur += time.Since(start)
+	if err != nil || id == 0 {
+		return res, err
+	}
+	res.IDs = []int{id}
+	for i := range row.Persones {
+		persona := row.Persones[i]
+		persona.TranscripcioID = id
+		start = time.Now()
+		_, _ = r.database.CreateTranscripcioPersona(&persona)
+		res.Metrics.PersonaPersistDur += time.Since(start)
+	}
+	for i := range row.Atributs {
+		attr := row.Atributs[i]
+		attr.TranscripcioID = id
+		start = time.Now()
+		_, _ = r.database.CreateTranscripcioAtribut(&attr)
+		res.Metrics.LinksPersistDur += time.Since(start)
+	}
+	return res, nil
 }
 
 func (r templateImportRuntimeAdapter) LoadPersonesByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
