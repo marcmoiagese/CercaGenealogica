@@ -97,15 +97,11 @@ type templatePendingCreate struct {
 	Bundle db.TranscripcioRawImportBundle
 }
 
-type transcripcioRawMaxIDProvider interface {
-	GetMaxTranscripcioRawID() (int, error)
-}
-
 type templatePageLookupCache struct {
-	database db.DB
-	books    map[int]*templateBookPageLookup
-	byID     map[int]*db.LlibrePagina
-	missing  map[int]struct{}
+	runtime db.TemplateImportRuntime
+	books   map[int]*templateBookPageLookup
+	byID    map[int]*db.LlibrePagina
+	missing map[int]struct{}
 }
 
 type templateBookPageLookup struct {
@@ -125,10 +121,6 @@ type templatePageResolution struct {
 	canonicalKey string
 	indexed      bool
 	resolved     bool
-}
-
-type transcripcioRawBundleCreator interface {
-	BulkCreateTranscripcioRawBundles([]db.TranscripcioRawImportBundle) (db.TranscripcioRawImportBulkResult, error)
 }
 
 func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Reader, sep rune, userID int, ctx importContext, fixedBookID int) csvImportResult {
@@ -216,16 +208,15 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	seenMatchByContext := map[string]map[string]int{}
 	existingByContext := map[string]map[string]int{}
 	pendingCreates := make([]templatePendingCreate, 0, templateImportCreateBatchSize)
+	importRuntime := db.TemplateImportRuntimeFor(a.DB)
 	pageLookupCache := newTemplatePageLookupCache(a.DB)
 	matchBuildCache := newTemplateMatchBuildCache()
 	existingSnapshotMaxID := 0
-	if maxProvider, ok := a.DB.(transcripcioRawMaxIDProvider); ok {
-		if maxID, err := maxProvider.GetMaxTranscripcioRawID(); err == nil && maxID > 0 {
-			existingSnapshotMaxID = maxID
-		}
+	if maxID, err := importRuntime.ExistingSnapshotMaxID(); err == nil && maxID > 0 {
+		existingSnapshotMaxID = maxID
 	}
 	flushPendingCreates := func() {
-		pendingCreates = a.flushTemplatePendingCreates(pendingCreates, &result)
+		pendingCreates = a.flushTemplatePendingCreates(pendingCreates, &result, importRuntime)
 	}
 	rowNum := 1
 	for {
@@ -420,16 +411,16 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	return result
 }
 
-func (a *App) flushTemplatePendingCreates(pending []templatePendingCreate, result *csvImportResult) []templatePendingCreate {
+func (a *App) flushTemplatePendingCreates(pending []templatePendingCreate, result *csvImportResult, runtime db.TemplateImportRuntime) []templatePendingCreate {
 	if len(pending) == 0 || result == nil {
 		return pending[:0]
 	}
-	if creator, ok := a.DB.(transcripcioRawBundleCreator); ok {
+	if runtime != nil {
 		bundles := make([]db.TranscripcioRawImportBundle, len(pending))
 		for i := range pending {
 			bundles[i] = pending[i].Bundle
 		}
-		bulkResult, err := creator.BulkCreateTranscripcioRawBundles(bundles)
+		bulkResult, err := runtime.BulkCreateBundles(bundles)
 		if err == nil && len(bulkResult.IDs) == len(pending) {
 			result.Debug.addWriteBulkBatch(len(pending))
 			result.Debug.addWriteBulkStatementBatches(
@@ -1459,14 +1450,6 @@ func (a *App) loadExistingByStrongMatch(bookID int, incoming *db.TranscripcioRaw
 	return a.loadExistingByStrongMatchWithPageCache(nil, bookID, incoming, incomingAttrs, policies)
 }
 
-type templateStrongMatchCandidateLoader interface {
-	ListTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]db.TranscripcioRaw, map[int][]db.TranscripcioPersonaRaw, map[int][]db.TranscripcioAtributRaw, error)
-}
-
-type templateStrongMatchCandidateSnapshotLoader interface {
-	ListTranscripcioStrongMatchCandidatesUpToID(bookID int, tipusActe, pageKey string, maxExistingID int) ([]db.TranscripcioRaw, map[int][]db.TranscripcioPersonaRaw, map[int][]db.TranscripcioAtributRaw, error)
-}
-
 func (a *App) loadExistingByStrongMatchWithPageCache(pageCache *templatePageLookupCache, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) map[string]int {
 	return a.loadExistingByStrongMatchWithPageCacheSnapshot(pageCache, bookID, incoming, incomingAttrs, policies, -1)
 }
@@ -1485,27 +1468,16 @@ func (a *App) loadExistingByStrongMatchWithPageCacheSnapshot(pageCache *template
 	}
 	matchBuildCache := newTemplateMatchBuildCache()
 	pageKeyNorm := normalizeTemplateMatchPartWithCache(matchBuildCache, pageKey)
-	attrsByTranscripcioID := map[int][]db.TranscripcioAtributRaw{}
-	personesByTranscripcioID := map[int][]db.TranscripcioPersonaRaw{}
-	trans := []db.TranscripcioRaw{}
-	if snapshotMaxID > 0 {
-		if loader, ok := a.DB.(templateStrongMatchCandidateSnapshotLoader); ok {
-			if scopedTrans, scopedPersones, scopedAttrs, err := loader.ListTranscripcioStrongMatchCandidatesUpToID(bookID, incoming.TipusActe, pageKey, snapshotMaxID); err == nil {
-				trans = scopedTrans
-				personesByTranscripcioID = scopedPersones
-				attrsByTranscripcioID = scopedAttrs
-			}
-		}
-	}
-	if loader, ok := a.DB.(templateStrongMatchCandidateLoader); ok {
-		if len(trans) == 0 {
-			if scopedTrans, scopedPersones, scopedAttrs, err := loader.ListTranscripcioStrongMatchCandidates(bookID, incoming.TipusActe, pageKey); err == nil {
-				trans = scopedTrans
-				personesByTranscripcioID = scopedPersones
-				attrsByTranscripcioID = scopedAttrs
-			}
-		}
-	}
+	runtime := db.TemplateImportRuntimeFor(a.DB)
+	candidates, _ := runtime.LoadStrongMatchCandidates(db.TemplateImportStrongMatchRequest{
+		BookID:        bookID,
+		TipusActe:     incoming.TipusActe,
+		PageKey:       pageKey,
+		SnapshotMaxID: snapshotMaxID,
+	})
+	attrsByTranscripcioID := candidates.AtributsByTranscripcioID
+	personesByTranscripcioID := candidates.PersonesByTranscripcioID
+	trans := candidates.Transcripcions
 	if len(trans) > 0 {
 		for _, tr := range trans {
 			if tr.ID <= 0 || (snapshotMaxID >= 0 && tr.ID > snapshotMaxID) {
@@ -1540,54 +1512,6 @@ func (a *App) loadExistingByStrongMatchWithPageCacheSnapshot(pageCache *template
 		}
 		return existingMap
 	}
-	trans, _ = a.DB.ListTranscripcionsRaw(bookID, db.TranscripcioFilter{TipusActe: incoming.TipusActe, Limit: -1})
-	if len(trans) > 0 {
-		ids := make([]int, 0, len(trans))
-		for _, tr := range trans {
-			if tr.ID > 0 && (snapshotMaxID < 0 || tr.ID <= snapshotMaxID) {
-				ids = append(ids, tr.ID)
-			}
-		}
-		if len(ids) > 0 {
-			if attrsBulk, err := a.DB.ListTranscripcioAtributsByTranscripcioIDs(ids); err == nil {
-				attrsByTranscripcioID = attrsBulk
-			}
-			if personesBulk, err := a.DB.ListTranscripcioPersonesByTranscripcioIDs(ids); err == nil {
-				personesByTranscripcioID = personesBulk
-			}
-		}
-	}
-	for _, tr := range trans {
-		if tr.ID <= 0 || (snapshotMaxID >= 0 && tr.ID > snapshotMaxID) {
-			continue
-		}
-		attrsExistents, okAttrs := attrsByTranscripcioID[tr.ID]
-		if !okAttrs {
-			attrsExistents, _ = a.DB.ListTranscripcioAtributs(tr.ID)
-		}
-		if normalizeTemplateMatchPartWithCache(matchBuildCache, a.templateLogicalPageKeyForExistingWithCache(pageCache, bookID, &tr, attrsExistents)) != pageKeyNorm {
-			continue
-		}
-		personesExistentsRows, okPersones := personesByTranscripcioID[tr.ID]
-		if !okPersones {
-			personesExistentsRows, _ = a.DB.ListTranscripcioPersones(tr.ID)
-		}
-		personesExistents := map[string]*db.TranscripcioPersonaRaw{}
-		for i := range personesExistentsRows {
-			personesExistents[personesExistentsRows[i].Rol] = &personesExistentsRows[i]
-		}
-		attrsByKey := map[string]*db.TranscripcioAtributRaw{}
-		for i := range attrsExistents {
-			attrsByKey[attrsExistents[i].Clau] = &attrsExistents[i]
-		}
-		matchKey := buildTemplateStrongMatchKeyWithCache(matchBuildCache, &tr, personesExistents, attrsByKey, policies)
-		if matchKey == "" {
-			continue
-		}
-		if _, exists := existingMap[matchKey]; !exists {
-			existingMap[matchKey] = tr.ID
-		}
-	}
 	return existingMap
 }
 
@@ -1607,7 +1531,7 @@ func (a *App) templateIndexedPageKeyWithCache(pageCache *templatePageLookupCache
 				return pageKey, resolution.indexed
 			}
 		}
-		page, err := templateLookupPageByID(a.DB, pageCache, bookID, int(t.PaginaID.Int64))
+		page, err := templateLookupPageByID(db.TemplateImportRuntimeFor(a.DB), pageCache, bookID, int(t.PaginaID.Int64))
 		if err == nil && page != nil {
 			if pageKey == "" && page.NumPagina > 0 {
 				pageKey = strconv.Itoa(page.NumPagina)
@@ -1648,7 +1572,7 @@ func (a *App) templateIndexedPageKeyWithCache(pageCache *templatePageLookupCache
 		}
 		return pageKey, false
 	}
-	page, err := templateLookupPageByNum(a.DB, pageCache, bookID, pageNum)
+	page, err := templateLookupPageByNum(db.TemplateImportRuntimeFor(a.DB), pageCache, bookID, pageNum)
 	if err != nil || page == nil {
 		if pageCache != nil {
 			pageCache.rememberPageResolutionByKey(bookID, pageKeyNorm, templatePageResolution{
@@ -1690,7 +1614,7 @@ func (a *App) templateLogicalPageKeyForExistingWithCache(pageCache *templatePage
 	if lookupBookID <= 0 && t != nil {
 		lookupBookID = t.LlibreID
 	}
-	page, err := templateLookupPageByID(a.DB, pageCache, lookupBookID, int(t.PaginaID.Int64))
+	page, err := templateLookupPageByID(db.TemplateImportRuntimeFor(a.DB), pageCache, lookupBookID, int(t.PaginaID.Int64))
 	if err != nil || page == nil || page.NumPagina <= 0 {
 		return ""
 	}
@@ -1698,25 +1622,26 @@ func (a *App) templateLogicalPageKeyForExistingWithCache(pageCache *templatePage
 }
 
 func newTemplatePageLookupCache(database db.DB) *templatePageLookupCache {
-	if database == nil {
+	runtime := db.TemplateImportRuntimeFor(database)
+	if runtime == nil {
 		return nil
 	}
 	return &templatePageLookupCache{
-		database: database,
-		books:    map[int]*templateBookPageLookup{},
-		byID:     map[int]*db.LlibrePagina{},
-		missing:  map[int]struct{}{},
+		runtime: runtime,
+		books:   map[int]*templateBookPageLookup{},
+		byID:    map[int]*db.LlibrePagina{},
+		missing: map[int]struct{}{},
 	}
 }
 
 func (c *templatePageLookupCache) loadBook(bookID int) (*templateBookPageLookup, error) {
-	if c == nil || c.database == nil || bookID <= 0 {
+	if c == nil || c.runtime == nil || bookID <= 0 {
 		return nil, nil
 	}
 	if pages, ok := c.books[bookID]; ok {
 		return pages, nil
 	}
-	rows, err := c.database.ListLlibrePagines(bookID)
+	rows, err := c.runtime.ListBookPages(bookID)
 	if err != nil {
 		return nil, err
 	}
@@ -1808,7 +1733,7 @@ func (c *templatePageLookupCache) rememberPageResolutionByID(bookID, pageID int,
 	}
 }
 
-func templateLookupPageByNum(database db.DB, pageCache *templatePageLookupCache, bookID, pageNum int) (*db.LlibrePagina, error) {
+func templateLookupPageByNum(runtime db.TemplateImportRuntime, pageCache *templatePageLookupCache, bookID, pageNum int) (*db.LlibrePagina, error) {
 	if pageCache != nil {
 		if pages, err := pageCache.loadBook(bookID); err != nil {
 			return nil, err
@@ -1816,13 +1741,13 @@ func templateLookupPageByNum(database db.DB, pageCache *templatePageLookupCache,
 			return pages.byNum[pageNum], nil
 		}
 	}
-	if database == nil {
+	if runtime == nil {
 		return nil, nil
 	}
-	return database.GetLlibrePaginaByNum(bookID, pageNum)
+	return runtime.GetBookPageByNum(bookID, pageNum)
 }
 
-func templateLookupPageByID(database db.DB, pageCache *templatePageLookupCache, bookID, pageID int) (*db.LlibrePagina, error) {
+func templateLookupPageByID(runtime db.TemplateImportRuntime, pageCache *templatePageLookupCache, bookID, pageID int) (*db.LlibrePagina, error) {
 	if pageID <= 0 {
 		return nil, nil
 	}
@@ -1841,10 +1766,10 @@ func templateLookupPageByID(database db.DB, pageCache *templatePageLookupCache, 
 			}
 		}
 	}
-	if database == nil {
+	if runtime == nil {
 		return nil, nil
 	}
-	page, err := database.GetLlibrePaginaByID(pageID)
+	page, err := runtime.GetBookPageByID(pageID)
 	if err != nil || page == nil {
 		if pageCache != nil && err == nil {
 			pageCache.missing[pageID] = struct{}{}

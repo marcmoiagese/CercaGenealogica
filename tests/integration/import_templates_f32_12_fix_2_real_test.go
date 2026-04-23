@@ -45,7 +45,12 @@ func TestTemplateImportRealCSVMetricsSQLitePostgresF3212Fix2(t *testing.T) {
 	for _, cfg := range loadSQLiteAndPostgresConfigsForImportHistory(t) {
 		cfg := cfg
 		t.Run(cfg.Label, func(t *testing.T) {
-			app, database := newTestAppForConfig(t, cfg.Config)
+			cfgMap := map[string]string{}
+			for k, v := range cfg.Config {
+				cfgMap[k] = v
+			}
+			cfgMap["RECREADB_RESET"] = "true"
+			app, database := newTestAppForConfig(t, cfgMap)
 			if err := app.EnsureSystemImportTemplates(); err != nil {
 				t.Fatalf("[%s] EnsureSystemImportTemplates ha fallat: %v", cfg.Label, err)
 			}
