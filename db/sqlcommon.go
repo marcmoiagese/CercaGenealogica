@@ -8746,11 +8746,22 @@ func (h sqlHelper) listTranscripcioStrongMatchCandidates(bookID int, tipusActe, 
 }
 
 func (h sqlHelper) listTranscripcioStrongMatchCandidatesUpToID(bookID int, tipusActe, pageKey string, maxExistingID int) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
+	switch h.style {
+	case "postgres":
+		return h.listTranscripcioStrongMatchCandidatesPostgres(bookID, tipusActe, pageKey, maxExistingID)
+	case "mysql":
+		return h.listTranscripcioStrongMatchCandidatesMySQL(bookID, tipusActe, pageKey, maxExistingID)
+	default:
+		return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, nil
+	}
+}
+
+func (h sqlHelper) listTranscripcioStrongMatchCandidatesPostgres(bookID int, tipusActe, pageKey string, maxExistingID int) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
 	personesByTranscripcioID := map[int][]TranscripcioPersonaRaw{}
 	atributsByTranscripcioID := map[int][]TranscripcioAtributRaw{}
 	pageKey = strings.TrimSpace(pageKey)
 	tipusActe = strings.TrimSpace(tipusActe)
-	if h.style != "postgres" || bookID <= 0 || pageKey == "" || tipusActe == "" {
+	if bookID <= 0 || pageKey == "" || tipusActe == "" {
 		return nil, personesByTranscripcioID, atributsByTranscripcioID, nil
 	}
 	query := `
@@ -8808,6 +8819,76 @@ func (h sqlHelper) listTranscripcioStrongMatchCandidatesUpToID(bookID int, tipus
 			return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, err
 		}
 		if atributsByTranscripcioID, err = h.listTranscripcioAtributsByTranscripcioIDsPostgres(ids); err != nil {
+			return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, err
+		}
+	}
+	return trans, personesByTranscripcioID, atributsByTranscripcioID, nil
+}
+
+func (h sqlHelper) listTranscripcioStrongMatchCandidatesMySQL(bookID int, tipusActe, pageKey string, maxExistingID int) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
+	personesByTranscripcioID := map[int][]TranscripcioPersonaRaw{}
+	atributsByTranscripcioID := map[int][]TranscripcioAtributRaw{}
+	pageKey = strings.TrimSpace(pageKey)
+	tipusActe = strings.TrimSpace(tipusActe)
+	if bookID <= 0 || pageKey == "" || tipusActe == "" {
+		return nil, personesByTranscripcioID, atributsByTranscripcioID, nil
+	}
+	query := `
+        SELECT DISTINCT t.id
+        FROM transcripcions_raw t
+        LEFT JOIN transcripcions_atributs_raw a
+               ON a.transcripcio_id = t.id
+              AND a.clau = 'pagina_digital'
+        LEFT JOIN llibre_pagines p
+               ON p.id = t.pagina_id
+        WHERE t.llibre_id = ?
+          AND t.tipus_acte = ?
+          AND (
+                LOWER(TRIM(COALESCE(a.valor_text, ''))) = LOWER(TRIM(?))
+             OR LOWER(TRIM(COALESCE(t.num_pagina_text, ''))) = LOWER(TRIM(?))`
+	args := []interface{}{bookID, tipusActe, pageKey, pageKey}
+	if pageNum, err := strconv.Atoi(pageKey); err == nil && pageNum > 0 {
+		query += `
+             OR p.num_pagina = ?`
+		args = append(args, pageNum)
+	}
+	query += `
+          )`
+	if maxExistingID > 0 {
+		query += `
+          AND t.id <= ?`
+		args = append(args, maxExistingID)
+	}
+	query += `
+        ORDER BY t.id`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, personesByTranscripcioID, atributsByTranscripcioID, err
+	}
+	defer rows.Close()
+	ids := make([]int, 0)
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, personesByTranscripcioID, atributsByTranscripcioID, err
+		}
+		if id > 0 {
+			ids = append(ids, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, personesByTranscripcioID, atributsByTranscripcioID, err
+	}
+	trans, err := h.listTranscripcionsRawByIDs(ids)
+	if err != nil {
+		return nil, personesByTranscripcioID, atributsByTranscripcioID, err
+	}
+	if len(ids) > 0 {
+		if personesByTranscripcioID, err = h.listTranscripcioPersonesByTranscripcioIDs(ids); err != nil {
+			return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, err
+		}
+		if atributsByTranscripcioID, err = h.listTranscripcioAtributsByTranscripcioIDs(ids); err != nil {
 			return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, err
 		}
 	}
@@ -9240,6 +9321,8 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundles(bundles []TranscripcioRawImp
 	switch h.style {
 	case "postgres":
 		return h.bulkCreateTranscripcioRawBundlesPostgres(bundles)
+	case "mysql":
+		return h.bulkCreateTranscripcioRawBundlesMySQL(bundles)
 	default:
 		return h.bulkCreateTranscripcioRawBundlesPrepared(bundles)
 	}
@@ -9398,6 +9481,126 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgres(bundles []Transcripc
 		if _, err := tx.Exec(query, args...); err != nil {
 			res.Metrics.TranscripcioInsertDur += time.Since(start)
 			return res, err
+		}
+		res.Metrics.TranscripcioBatches++
+	}
+	res.Metrics.TranscripcioInsertDur += time.Since(start)
+	start = time.Now()
+	for i := 0; i < len(personRows); i += personBatchSize {
+		end := i + personBatchSize
+		if end > len(personRows) {
+			end = len(personRows)
+		}
+		query, args := buildBulkInsertTranscripcioPersones(h.style, personRows[i:end])
+		if query == "" {
+			continue
+		}
+		if _, err := tx.Exec(query, args...); err != nil {
+			res.Metrics.PersonaPersistDur += time.Since(start)
+			return res, err
+		}
+		res.Metrics.PersonaBatches++
+	}
+	res.Metrics.PersonaPersistDur += time.Since(start)
+	res.Metrics.Persones = len(personRows)
+	start = time.Now()
+	for i := 0; i < len(attrRows); i += attrBatchSize {
+		end := i + attrBatchSize
+		if end > len(attrRows) {
+			end = len(attrRows)
+		}
+		query, args := buildBulkInsertTranscripcioAtributs(h.style, attrRows[i:end])
+		if query == "" {
+			continue
+		}
+		if _, err := tx.Exec(query, args...); err != nil {
+			res.Metrics.LinksPersistDur += time.Since(start)
+			return res, err
+		}
+		res.Metrics.AtributBatches++
+	}
+	res.Metrics.LinksPersistDur += time.Since(start)
+	res.Metrics.Atributs = len(attrRows)
+	start = time.Now()
+	if err := tx.Commit(); err != nil {
+		res.Metrics.CommitDur += time.Since(start)
+		return res, err
+	}
+	res.Metrics.CommitDur += time.Since(start)
+	committed = true
+	return res, nil
+}
+
+func (h sqlHelper) bulkCreateTranscripcioRawBundlesMySQL(bundles []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
+	res := TranscripcioRawImportBulkResult{
+		IDs: make([]int, 0, len(bundles)),
+		Metrics: TranscripcioRawImportBulkMetrics{
+			Rows: len(bundles),
+		},
+	}
+	if len(bundles) == 0 {
+		return res, nil
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return res, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	rawBatchSize := bulkInsertStatementBatchSizeFor(h.style, "transcripcions_raw", len(buildInsertTranscripcioRawArgs(TranscripcioRaw{}, 0, false)))
+	personBatchSize := bulkInsertStatementBatchSizeFor(h.style, "transcripcions_persones_raw", len(buildInsertTranscripcioPersonaArgs(TranscripcioPersonaRaw{})))
+	attrBatchSize := bulkInsertStatementBatchSizeFor(h.style, "transcripcions_atributs_raw", len(buildInsertTranscripcioAtributArgs(TranscripcioAtributRaw{})))
+	totalPersones := 0
+	totalAtributs := 0
+	for i := range bundles {
+		totalPersones += len(bundles[i].Persones)
+		totalAtributs += len(bundles[i].Atributs)
+	}
+	personRows := make([]TranscripcioPersonaRaw, 0, totalPersones)
+	attrRows := make([]TranscripcioAtributRaw, 0, totalAtributs)
+	start := time.Now()
+	for i := 0; i < len(bundles); i += rawBatchSize {
+		end := i + rawBatchSize
+		if end > len(bundles) {
+			end = len(bundles)
+		}
+		rawRows := make([]TranscripcioRaw, 0, end-i)
+		for offset := i; offset < end; offset++ {
+			raw := bundles[offset].Transcripcio
+			normalizeTranscripcioRawForInsert(&raw)
+			rawRows = append(rawRows, raw)
+		}
+		query, args := buildBulkInsertTranscripcionsRaw(h.style, h.nowFun, rawRows, nil)
+		if query == "" {
+			continue
+		}
+		execRes, err := tx.Exec(query, args...)
+		if err != nil {
+			res.Metrics.TranscripcioInsertDur += time.Since(start)
+			return res, err
+		}
+		firstID, err := execRes.LastInsertId()
+		if err != nil || firstID <= 0 {
+			res.Metrics.TranscripcioInsertDur += time.Since(start)
+			return res, fmt.Errorf("mysql bulk insert transcripcions_raw: no last insert id")
+		}
+		for offset := i; offset < end; offset++ {
+			rawID := int(firstID) + (offset - i)
+			res.IDs = append(res.IDs, rawID)
+			for j := range bundles[offset].Persones {
+				p := bundles[offset].Persones[j]
+				p.TranscripcioID = rawID
+				personRows = append(personRows, p)
+			}
+			for j := range bundles[offset].Atributs {
+				attr := bundles[offset].Atributs[j]
+				attr.TranscripcioID = rawID
+				attrRows = append(attrRows, attr)
+			}
 		}
 		res.Metrics.TranscripcioBatches++
 	}

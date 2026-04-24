@@ -51,10 +51,10 @@ func (d *f329CountingDB) ListTranscripcioAtributsByLlibreID(llibreID int) (map[i
 }
 
 func TestRegistreImportSidefxUsesBulkIndexacioFetchSQLitePostgresF329(t *testing.T) {
-	for _, cfg := range loadSQLiteAndPostgresConfigsForImportHistory(t) {
+	for _, cfg := range loadSQLitePostgresAndMySQLConfigsForImportHistory(t) {
 		cfg := cfg
 		t.Run(cfg.Label, func(t *testing.T) {
-			app, database := newTestAppForConfig(t, cfg.Config)
+			app, database := newTestAppForConfigOrSkipMySQL(t, cfg.Config)
 			user, sessionID := createF7UserWithSession(t, database)
 			ensureAdminPolicyForUser(t, database, user.ID)
 			llibreID, _ := createF7LlibreWithPagina(t, database, user.ID)
@@ -78,16 +78,16 @@ func TestRegistreImportSidefxUsesBulkIndexacioFetchSQLitePostgresF329(t *testing
 			if countingDB.listPersonesCalls != 0 || countingDB.listAtributsCalls != 0 {
 				t.Fatalf("[%s] el recalcul d'indexació no ha d'usar càrrega fila-a-fila: persones=%d atributs=%d", cfg.Label, countingDB.listPersonesCalls, countingDB.listAtributsCalls)
 			}
-			if cfg.Engine == "postgres" {
+			if cfg.Engine == "postgres" || cfg.Engine == "mysql" {
 				if countingDB.listPersonesByBook == 0 || countingDB.listAtributsByBook == 0 {
-					t.Fatalf("[%s] PostgreSQL ha d'usar càrrega bulk per llibre: persones_by_book=%d atributs_by_book=%d", cfg.Label, countingDB.listPersonesByBook, countingDB.listAtributsByBook)
+					t.Fatalf("[%s] %s ha d'usar càrrega bulk per llibre: persones_by_book=%d atributs_by_book=%d", cfg.Label, cfg.Engine, countingDB.listPersonesByBook, countingDB.listAtributsByBook)
 				}
 				if countingDB.listPersonesByIDs != 0 || countingDB.listAtributsByIDs != 0 {
-					t.Fatalf("[%s] PostgreSQL no hauria de recórrer a by_ids quan el runtime específic per llibre és disponible: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
+					t.Fatalf("[%s] %s no hauria de recórrer a by_ids quan el runtime específic per llibre és disponible: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, cfg.Engine, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
 				}
 			} else {
 				if countingDB.listPersonesByIDs == 0 || countingDB.listAtributsByIDs == 0 {
-					t.Fatalf("[%s] SQLite/MySQL han de mantenir la càrrega bulk per IDs: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
+					t.Fatalf("[%s] SQLite ha de mantenir la càrrega bulk per IDs: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
 				}
 			}
 		})

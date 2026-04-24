@@ -39,10 +39,10 @@ func (d *f32132BulkPersistCountingDB) CreateTranscripcioAtribut(row *db.Transcri
 }
 
 func TestTemplateImportPersistsThroughRuntimeBulkBundlesSQLitePostgresF32132(t *testing.T) {
-	for _, cfg := range loadSQLiteAndPostgresConfigsForImportHistory(t) {
+	for _, cfg := range loadSQLitePostgresAndMySQLConfigsForImportHistory(t) {
 		cfg := cfg
 		t.Run(cfg.Label, func(t *testing.T) {
-			app, database := newTestAppForConfig(t, cfg.Config)
+			app, database := newTestAppForConfigOrSkipMySQL(t, cfg.Config)
 			user, sessionID := createF7UserWithSession(t, database)
 			ensureAdminPolicyForUser(t, database, user.ID)
 			llibreID, _ := createF7LlibreWithPagina(t, database, user.ID)

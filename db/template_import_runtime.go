@@ -199,7 +199,7 @@ func (r sqliteTemplateImportRuntime) LoadStrongMatchCandidates(req TemplateImpor
 }
 
 func (r mysqlTemplateImportRuntime) LoadStrongMatchCandidates(req TemplateImportStrongMatchRequest) (TemplateImportStrongMatchResult, error) {
-	return genericStrongMatchCandidates(r.database, req)
+	return scopedStrongMatchCandidates(r.database, req)
 }
 
 func (r genericTemplateImportRuntime) LoadStrongMatchCandidates(req TemplateImportStrongMatchRequest) (TemplateImportStrongMatchResult, error) {
@@ -231,7 +231,7 @@ func (r sqliteTemplateImportRuntime) LoadPrincipalMatchCandidates(req TemplateIm
 }
 
 func (r mysqlTemplateImportRuntime) LoadPrincipalMatchCandidates(req TemplateImportPrincipalMatchRequest) (TemplateImportPrincipalMatchResult, error) {
-	return genericPrincipalMatchCandidates(r.database, req)
+	return bookScopedPrincipalMatchCandidates(r.database, req)
 }
 
 func (r genericTemplateImportRuntime) LoadPrincipalMatchCandidates(req TemplateImportPrincipalMatchRequest) (TemplateImportPrincipalMatchResult, error) {
@@ -239,38 +239,15 @@ func (r genericTemplateImportRuntime) LoadPrincipalMatchCandidates(req TemplateI
 }
 
 func (r postgresTemplateImportRuntime) LoadPrincipalMatchCandidates(req TemplateImportPrincipalMatchRequest) (TemplateImportPrincipalMatchResult, error) {
-	result := TemplateImportPrincipalMatchResult{
-		PersonesByTranscripcioID: map[int][]TranscripcioPersonaRaw{},
-	}
-	if r.database == nil || req.BookID <= 0 || req.SnapshotMaxID == 0 {
-		return result, nil
-	}
-	trans, err := r.database.ListTranscripcionsRaw(req.BookID, TranscripcioFilter{Limit: -1})
-	if err != nil {
-		return result, err
-	}
-	result.Transcripcions = filterTranscripcionsBySnapshot(trans, req.SnapshotMaxID)
-	ids := transcripcioIDs(result.Transcripcions)
-	if len(ids) == 0 {
-		return result, nil
-	}
-	personesByID, err := r.database.ListTranscripcioPersonesByLlibreID(req.BookID)
-	if err != nil {
-		return result, err
-	}
-	result.PersonesByTranscripcioID = filterPersonaMapsByIDs(personesByID, ids)
-	return result, nil
+	return bookScopedPrincipalMatchCandidates(r.database, req)
 }
 
 func (r postgresTemplateImportRuntime) CreateBundle(row TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
-	res, err := r.BulkCreateBundles([]TranscripcioRawImportBundle{row})
-	if err != nil {
-		return res, err
-	}
-	if len(res.IDs) != 1 || res.IDs[0] == 0 {
-		return res, fmt.Errorf("template import create unsupported for engine=%s", r.Engine())
-	}
-	return res, nil
+	return createBundleThroughBulk(r, row)
+}
+
+func (r mysqlTemplateImportRuntime) CreateBundle(row TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
+	return createBundleThroughBulk(r, row)
 }
 
 func (r sqliteTemplateImportRuntime) LoadPersonesByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
@@ -278,7 +255,7 @@ func (r sqliteTemplateImportRuntime) LoadPersonesByLlibreID(llibreID int, transc
 }
 
 func (r mysqlTemplateImportRuntime) LoadPersonesByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
-	return genericRelatedPersonesByIDs(r.database, transcripcioIDs)
+	return relatedPersonesByLlibreID(r.database, llibreID, transcripcioIDs)
 }
 
 func (r genericTemplateImportRuntime) LoadPersonesByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
@@ -286,14 +263,7 @@ func (r genericTemplateImportRuntime) LoadPersonesByLlibreID(llibreID int, trans
 }
 
 func (r postgresTemplateImportRuntime) LoadPersonesByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
-	if r.database == nil {
-		return map[int][]TranscripcioPersonaRaw{}, nil
-	}
-	rows, err := r.database.ListTranscripcioPersonesByLlibreID(llibreID)
-	if err != nil {
-		return nil, err
-	}
-	return filterPersonaMapsByIDs(rows, transcripcioIDs), nil
+	return relatedPersonesByLlibreID(r.database, llibreID, transcripcioIDs)
 }
 
 func (r sqliteTemplateImportRuntime) LoadAtributsByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
@@ -301,7 +271,7 @@ func (r sqliteTemplateImportRuntime) LoadAtributsByLlibreID(llibreID int, transc
 }
 
 func (r mysqlTemplateImportRuntime) LoadAtributsByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
-	return genericRelatedAtributsByIDs(r.database, transcripcioIDs)
+	return relatedAtributsByLlibreID(r.database, llibreID, transcripcioIDs)
 }
 
 func (r genericTemplateImportRuntime) LoadAtributsByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
@@ -309,10 +279,39 @@ func (r genericTemplateImportRuntime) LoadAtributsByLlibreID(llibreID int, trans
 }
 
 func (r postgresTemplateImportRuntime) LoadAtributsByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
-	if r.database == nil {
+	return relatedAtributsByLlibreID(r.database, llibreID, transcripcioIDs)
+}
+
+func createBundleThroughBulk(runtime interface {
+	Engine() string
+	BulkCreateBundles(rows []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error)
+}, row TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
+	res, err := runtime.BulkCreateBundles([]TranscripcioRawImportBundle{row})
+	if err != nil {
+		return res, err
+	}
+	if len(res.IDs) != 1 || res.IDs[0] == 0 {
+		return res, fmt.Errorf("template import create unsupported for engine=%s", runtime.Engine())
+	}
+	return res, nil
+}
+
+func relatedPersonesByLlibreID(database DB, llibreID int, transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
+	if database == nil {
+		return map[int][]TranscripcioPersonaRaw{}, nil
+	}
+	rows, err := database.ListTranscripcioPersonesByLlibreID(llibreID)
+	if err != nil {
+		return nil, err
+	}
+	return filterPersonaMapsByIDs(rows, transcripcioIDs), nil
+}
+
+func relatedAtributsByLlibreID(database DB, llibreID int, transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
+	if database == nil {
 		return map[int][]TranscripcioAtributRaw{}, nil
 	}
-	rows, err := r.database.ListTranscripcioAtributsByLlibreID(llibreID)
+	rows, err := database.ListTranscripcioAtributsByLlibreID(llibreID)
 	if err != nil {
 		return nil, err
 	}
@@ -629,6 +628,26 @@ func genericStrongMatchCandidates(database DB, req TemplateImportStrongMatchRequ
 	return result, nil
 }
 
+func scopedStrongMatchCandidates(database DB, req TemplateImportStrongMatchRequest) (TemplateImportStrongMatchResult, error) {
+	result := emptyStrongMatchResult()
+	if database == nil || req.BookID <= 0 || req.SnapshotMaxID == 0 {
+		return result, nil
+	}
+	pageKey := strings.TrimSpace(req.PageKey)
+	tipusActe := strings.TrimSpace(req.TipusActe)
+	if pageKey == "" || tipusActe == "" {
+		return result, nil
+	}
+	trans, personesByID, atributsByID, err := database.ListTranscripcioStrongMatchCandidatesUpToID(req.BookID, tipusActe, pageKey, req.SnapshotMaxID)
+	if err != nil {
+		return result, err
+	}
+	result.Transcripcions = filterTranscripcionsBySnapshot(trans, req.SnapshotMaxID)
+	result.PersonesByTranscripcioID = ensurePersonaMaps(personesByID)
+	result.AtributsByTranscripcioID = ensureAtributMaps(atributsByID)
+	return result, nil
+}
+
 func genericPrincipalMatchCandidates(database DB, req TemplateImportPrincipalMatchRequest) (TemplateImportPrincipalMatchResult, error) {
 	result := TemplateImportPrincipalMatchResult{
 		PersonesByTranscripcioID: map[int][]TranscripcioPersonaRaw{},
@@ -651,6 +670,30 @@ func genericPrincipalMatchCandidates(database DB, req TemplateImportPrincipalMat
 		return result, err
 	}
 	result.PersonesByTranscripcioID = ensurePersonaMaps(personesByID)
+	return result, nil
+}
+
+func bookScopedPrincipalMatchCandidates(database DB, req TemplateImportPrincipalMatchRequest) (TemplateImportPrincipalMatchResult, error) {
+	result := TemplateImportPrincipalMatchResult{
+		PersonesByTranscripcioID: map[int][]TranscripcioPersonaRaw{},
+	}
+	if database == nil || req.BookID <= 0 || req.SnapshotMaxID == 0 {
+		return result, nil
+	}
+	trans, err := database.ListTranscripcionsRaw(req.BookID, TranscripcioFilter{Limit: -1})
+	if err != nil {
+		return result, err
+	}
+	result.Transcripcions = filterTranscripcionsBySnapshot(trans, req.SnapshotMaxID)
+	ids := transcripcioIDs(result.Transcripcions)
+	if len(ids) == 0 {
+		return result, nil
+	}
+	personesByID, err := database.ListTranscripcioPersonesByLlibreID(req.BookID)
+	if err != nil {
+		return result, err
+	}
+	result.PersonesByTranscripcioID = filterPersonaMapsByIDs(personesByID, ids)
 	return result, nil
 }
 

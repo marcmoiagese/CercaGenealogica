@@ -71,10 +71,10 @@ func TestTemplateImportPrincipalMatchUsesRuntimeBulkCandidatesSQLitePostgresF321
   }
 }`
 
-	for _, cfg := range loadSQLiteAndPostgresConfigsForImportHistory(t) {
+	for _, cfg := range loadSQLitePostgresAndMySQLConfigsForImportHistory(t) {
 		cfg := cfg
 		t.Run(cfg.Label, func(t *testing.T) {
-			app, database := newTestAppForConfig(t, cfg.Config)
+			app, database := newTestAppForConfigOrSkipMySQL(t, cfg.Config)
 			user, sessionID := createF7UserWithSession(t, database)
 			ensureAdminPolicyForUser(t, database, user.ID)
 			llibreID, _ := createF7LlibreWithPagina(t, database, user.ID)
@@ -140,16 +140,16 @@ func TestTemplateImportPrincipalMatchUsesRuntimeBulkCandidatesSQLitePostgresF321
 			if countingDB.listPersonesCalls > 1 {
 				t.Fatalf("[%s] el camí per principal no ha d'escalar fila-a-fila en càrrega d'existents: persones=%d", cfg.Label, countingDB.listPersonesCalls)
 			}
-			if cfg.Engine == "postgres" {
+			if cfg.Engine == "postgres" || cfg.Engine == "mysql" {
 				if countingDB.listPersonesByBook == 0 {
-					t.Fatalf("[%s] PostgreSQL ha d'usar càrrega bulk per llibre al camí principal", cfg.Label)
+					t.Fatalf("[%s] %s ha d'usar càrrega bulk per llibre al camí principal", cfg.Label, cfg.Engine)
 				}
 				if countingDB.listPersonesByIDs != 0 {
-					t.Fatalf("[%s] PostgreSQL no ha de recórrer a càrrega per IDs al camí principal: persones_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs)
+					t.Fatalf("[%s] %s no ha de recórrer a càrrega per IDs al camí principal: persones_by_ids=%d", cfg.Label, cfg.Engine, countingDB.listPersonesByIDs)
 				}
 			} else {
 				if countingDB.listPersonesByIDs == 0 {
-					t.Fatalf("[%s] SQLite/MySQL han de mantenir la càrrega bulk per IDs al camí principal", cfg.Label)
+					t.Fatalf("[%s] SQLite ha de mantenir la càrrega bulk per IDs al camí principal", cfg.Label)
 				}
 			}
 		})
