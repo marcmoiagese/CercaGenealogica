@@ -114,18 +114,6 @@ type templateMatchBuildCache struct {
 	personKeys      map[string]string
 }
 
-type templateStrongExistingPreparedCache struct {
-	rows map[int]*templateStrongExistingPreparedRow
-}
-
-type templateStrongExistingPreparedRow struct {
-	personesByRole    map[string]*db.TranscripcioPersonaRaw
-	attrsByKey        map[string]*db.TranscripcioAtributRaw
-	pageKeyNorm       string
-	pageKeyNormLoaded bool
-	matchKeysByPolicy map[string]string
-}
-
 func (ctx templateRowContext) HeaderValue(key string) string {
 	value, _ := ctx.LookupHeaderValue(key)
 	return value
@@ -264,7 +252,6 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	importRuntime := db.TemplateImportRuntimeFor(a.DB)
 	pageResolver := importRuntime.NewPageResolver()
 	matchBuildCache := newTemplateMatchBuildCache()
-	existingStrongPreparedCache := newTemplateStrongExistingPreparedCache()
 	existingSnapshotMaxID := 0
 	if maxID, err := importRuntime.ExistingSnapshotMaxID(); err == nil && maxID > 0 {
 		existingSnapshotMaxID = maxID
@@ -395,7 +382,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			if existingMap == nil {
 				resolveStart = time.Now()
 				if matchMode == "by_strong_signature_if_page_indexed" {
-					existingMap = a.loadExistingByStrongMatchWithPageResolverSnapshotCached(importRuntime, pageResolver, bookID, &t, atributs, model.Policies, existingSnapshotMaxID, matchBuildCache, existingStrongPreparedCache)
+					existingMap = a.loadExistingByStrongMatchWithPageResolverSnapshot(importRuntime, pageResolver, bookID, &t, atributs, model.Policies, existingSnapshotMaxID)
 				} else {
 					existingMap = a.loadExistingByPrincipal(importRuntime, bookID, model.Policies.PrincipalRoles, existingSnapshotMaxID)
 				}
@@ -1590,10 +1577,6 @@ func (a *App) loadExistingByStrongMatchWithPageResolver(pageResolver db.Template
 }
 
 func (a *App) loadExistingByStrongMatchWithPageResolverSnapshot(runtime db.TemplateImportRuntime, pageResolver db.TemplateImportPageResolver, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies, snapshotMaxID int) map[string]int {
-	return a.loadExistingByStrongMatchWithPageResolverSnapshotCached(runtime, pageResolver, bookID, incoming, incomingAttrs, policies, snapshotMaxID, nil, nil)
-}
-
-func (a *App) loadExistingByStrongMatchWithPageResolverSnapshotCached(runtime db.TemplateImportRuntime, pageResolver db.TemplateImportPageResolver, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies, snapshotMaxID int, matchBuildCache *templateMatchBuildCache, preparedCache *templateStrongExistingPreparedCache) map[string]int {
 	existingMap := map[string]int{}
 	if incoming == nil {
 		return existingMap
@@ -1605,12 +1588,7 @@ func (a *App) loadExistingByStrongMatchWithPageResolverSnapshotCached(runtime db
 	if snapshotMaxID == 0 {
 		return existingMap
 	}
-	if matchBuildCache == nil {
-		matchBuildCache = newTemplateMatchBuildCache()
-	}
-	if preparedCache == nil {
-		preparedCache = newTemplateStrongExistingPreparedCache()
-	}
+	matchBuildCache := newTemplateMatchBuildCache()
 	pageKeyNorm := normalizeTemplateMatchPartWithCache(matchBuildCache, pageKey)
 	candidates, _ := runtime.LoadStrongMatchCandidates(db.TemplateImportStrongMatchRequest{
 		BookID:        bookID,
@@ -1626,7 +1604,6 @@ func (a *App) loadExistingByStrongMatchWithPageResolverSnapshotCached(runtime db
 			if tr.ID <= 0 || (snapshotMaxID >= 0 && tr.ID > snapshotMaxID) {
 				continue
 			}
-			prepared := preparedCache.row(tr.ID)
 			attrsExistents, okAttrs := attrsByTranscripcioID[tr.ID]
 			if !okAttrs {
 				attrsExistents, _ = a.DB.ListTranscripcioAtributs(tr.ID)
@@ -1635,31 +1612,18 @@ func (a *App) loadExistingByStrongMatchWithPageResolverSnapshotCached(runtime db
 			if !okPersones {
 				personesExistentsRows, _ = a.DB.ListTranscripcioPersones(tr.ID)
 			}
-			if !prepared.pageKeyNormLoaded {
-				prepared.pageKeyNorm = normalizeTemplateMatchPartWithCache(matchBuildCache, a.templateLogicalPageKeyForExistingWithResolver(pageResolver, bookID, &tr, attrsExistents))
-				prepared.pageKeyNormLoaded = true
-			}
-			if prepared.pageKeyNorm != pageKeyNorm {
+			if normalizeTemplateMatchPartWithCache(matchBuildCache, a.templateLogicalPageKeyForExistingWithResolver(pageResolver, bookID, &tr, attrsExistents)) != pageKeyNorm {
 				continue
 			}
-			if prepared.personesByRole == nil {
-				prepared.personesByRole = make(map[string]*db.TranscripcioPersonaRaw, len(personesExistentsRows))
-				for i := range personesExistentsRows {
-					prepared.personesByRole[personesExistentsRows[i].Rol] = &personesExistentsRows[i]
-				}
+			personesExistents := map[string]*db.TranscripcioPersonaRaw{}
+			for i := range personesExistentsRows {
+				personesExistents[personesExistentsRows[i].Rol] = &personesExistentsRows[i]
 			}
-			if prepared.attrsByKey == nil {
-				prepared.attrsByKey = make(map[string]*db.TranscripcioAtributRaw, len(attrsExistents))
-				for i := range attrsExistents {
-					prepared.attrsByKey[attrsExistents[i].Clau] = &attrsExistents[i]
-				}
+			attrsByKey := map[string]*db.TranscripcioAtributRaw{}
+			for i := range attrsExistents {
+				attrsByKey[attrsExistents[i].Clau] = &attrsExistents[i]
 			}
-			policyKey := templateStrongExistingPolicyKey(policies)
-			matchKey, ok := prepared.matchKeysByPolicy[policyKey]
-			if !ok {
-				matchKey = buildTemplateStrongMatchKeyWithCache(matchBuildCache, &tr, prepared.personesByRole, prepared.attrsByKey, policies)
-				prepared.matchKeysByPolicy[policyKey] = matchKey
-			}
+			matchKey := buildTemplateStrongMatchKeyWithCache(matchBuildCache, &tr, personesExistents, attrsByKey, policies)
 			if matchKey == "" {
 				continue
 			}
@@ -1920,38 +1884,6 @@ func newTemplateMatchBuildCache() *templateMatchBuildCache {
 		loweredParts:    map[string]string{},
 		personKeys:      map[string]string{},
 	}
-}
-
-func newTemplateStrongExistingPreparedCache() *templateStrongExistingPreparedCache {
-	return &templateStrongExistingPreparedCache{
-		rows: map[int]*templateStrongExistingPreparedRow{},
-	}
-}
-
-func (c *templateStrongExistingPreparedCache) row(transcripcioID int) *templateStrongExistingPreparedRow {
-	if c == nil || transcripcioID <= 0 {
-		return &templateStrongExistingPreparedRow{
-			matchKeysByPolicy: map[string]string{},
-		}
-	}
-	if c.rows == nil {
-		c.rows = map[int]*templateStrongExistingPreparedRow{}
-	}
-	if row, ok := c.rows[transcripcioID]; ok && row != nil {
-		return row
-	}
-	row := &templateStrongExistingPreparedRow{
-		matchKeysByPolicy: map[string]string{},
-	}
-	c.rows[transcripcioID] = row
-	return row
-}
-
-func templateStrongExistingPolicyKey(policies templatePolicies) string {
-	if len(policies.PrincipalRoles) == 0 {
-		return "batejat\x1fpersona_principal"
-	}
-	return strings.Join(policies.PrincipalRoles, "\x1f")
 }
 
 func parseStrictPositiveInt(value string) (int, bool) {
