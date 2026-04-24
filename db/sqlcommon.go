@@ -9437,8 +9437,6 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgres(bundles []Transcripc
 	totalPersones := 0
 	totalAtributs := 0
 	rawBatchSize := bulkInsertStatementBatchSizeFor(h.style, "transcripcions_raw", len(buildInsertTranscripcioRawArgs(TranscripcioRaw{}, 1, true)))
-	personBatchSize := bulkInsertStatementBatchSizeFor(h.style, "transcripcions_persones_raw", len(buildInsertTranscripcioPersonaArgs(TranscripcioPersonaRaw{})))
-	attrBatchSize := bulkInsertStatementBatchSizeFor(h.style, "transcripcions_atributs_raw", len(buildInsertTranscripcioAtributArgs(TranscripcioAtributRaw{})))
 	for i := range bundles {
 		totalPersones += len(bundles[i].Persones)
 		totalAtributs += len(bundles[i].Atributs)
@@ -9486,38 +9484,22 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgres(bundles []Transcripc
 	}
 	res.Metrics.TranscripcioInsertDur += time.Since(start)
 	start = time.Now()
-	for i := 0; i < len(personRows); i += personBatchSize {
-		end := i + personBatchSize
-		if end > len(personRows) {
-			end = len(personRows)
-		}
-		query, args := buildBulkInsertTranscripcioPersones(h.style, personRows[i:end])
-		if query == "" {
-			continue
-		}
-		if _, err := tx.Exec(query, args...); err != nil {
-			res.Metrics.PersonaPersistDur += time.Since(start)
-			return res, err
-		}
-		res.Metrics.PersonaBatches++
+	if err := h.copyInPostgresTranscripcioPersonesTx(tx, personRows); err != nil {
+		res.Metrics.PersonaPersistDur += time.Since(start)
+		return res, err
+	}
+	if len(personRows) > 0 {
+		res.Metrics.PersonaBatches = 1
 	}
 	res.Metrics.PersonaPersistDur += time.Since(start)
 	res.Metrics.Persones = len(personRows)
 	start = time.Now()
-	for i := 0; i < len(attrRows); i += attrBatchSize {
-		end := i + attrBatchSize
-		if end > len(attrRows) {
-			end = len(attrRows)
-		}
-		query, args := buildBulkInsertTranscripcioAtributs(h.style, attrRows[i:end])
-		if query == "" {
-			continue
-		}
-		if _, err := tx.Exec(query, args...); err != nil {
-			res.Metrics.LinksPersistDur += time.Since(start)
-			return res, err
-		}
-		res.Metrics.AtributBatches++
+	if err := h.copyInPostgresTranscripcioAtributsTx(tx, attrRows); err != nil {
+		res.Metrics.LinksPersistDur += time.Since(start)
+		return res, err
+	}
+	if len(attrRows) > 0 {
+		res.Metrics.AtributBatches = 1
 	}
 	res.Metrics.LinksPersistDur += time.Since(start)
 	res.Metrics.Atributs = len(attrRows)
@@ -9529,6 +9511,73 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgres(bundles []Transcripc
 	res.Metrics.CommitDur += time.Since(start)
 	committed = true
 	return res, nil
+}
+
+func (h sqlHelper) copyInPostgresTranscripcioPersonesTx(tx *sql.Tx, rows []TranscripcioPersonaRaw) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	stmt, err := tx.Prepare(pq.CopyIn(
+		"transcripcions_persones_raw",
+		"transcripcio_id", "rol", "nom", "nom_estat", "cognom1", "cognom1_estat", "cognom2", "cognom2_estat",
+		"cognom_soltera", "cognom_soltera_estat", "sexe", "sexe_estat", "edat_text", "edat_estat",
+		"estat_civil_text", "estat_civil_estat", "municipi_text", "municipi_estat", "ofici_text", "ofici_estat",
+		"casa_nom", "casa_estat", "persona_id", "linked_by", "linked_at", "notes",
+	))
+	if err != nil {
+		return err
+	}
+	closeStmt := true
+	defer func() {
+		if closeStmt {
+			_ = stmt.Close()
+		}
+	}()
+	for _, row := range rows {
+		if _, err := stmt.Exec(buildInsertTranscripcioPersonaArgs(row)...); err != nil {
+			return err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		return err
+	}
+	if err := stmt.Close(); err != nil {
+		return err
+	}
+	closeStmt = false
+	return nil
+}
+
+func (h sqlHelper) copyInPostgresTranscripcioAtributsTx(tx *sql.Tx, rows []TranscripcioAtributRaw) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	stmt, err := tx.Prepare(pq.CopyIn(
+		"transcripcions_atributs_raw",
+		"transcripcio_id", "clau", "tipus_valor", "valor_text", "valor_int", "valor_date", "valor_bool", "estat", "notes",
+	))
+	if err != nil {
+		return err
+	}
+	closeStmt := true
+	defer func() {
+		if closeStmt {
+			_ = stmt.Close()
+		}
+	}()
+	for _, row := range rows {
+		if _, err := stmt.Exec(buildInsertTranscripcioAtributArgs(row)...); err != nil {
+			return err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		return err
+	}
+	if err := stmt.Close(); err != nil {
+		return err
+	}
+	closeStmt = false
+	return nil
 }
 
 func (h sqlHelper) bulkCreateTranscripcioRawBundlesMySQL(bundles []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
