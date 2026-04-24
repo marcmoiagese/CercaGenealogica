@@ -121,10 +121,12 @@ func TestTemplateImportStrongDedupUsesBulkExistingFetchSQLitePostgresF3210(t *te
 			if len(registres) != 1 || registres[0].ID != existingID {
 				t.Fatalf("[%s] el duplicat fort ha de fusionar amb l'existent, registres=%+v existingID=%d", cfg.Label, registres, existingID)
 			}
-			if cfg.Engine == "postgres" || cfg.Engine == "mysql" {
+			if cfg.Engine == "mysql" {
 				if countingDB.listStrongCandidatesCalls == 0 {
 					t.Fatalf("[%s] %s ha d'usar el carregador fort acotat per pàgina", cfg.Label, cfg.Engine)
 				}
+			}
+			if cfg.Engine == "postgres" || cfg.Engine == "mysql" {
 				if countingDB.listTranscripcionsRawCalls > 1 {
 					t.Fatalf("[%s] %s no hauria de recórrer al llistat ampli per llibre/tipus fora del read lateral esperat: list_transcripcions=%d", cfg.Label, cfg.Engine, countingDB.listTranscripcionsRawCalls)
 				}

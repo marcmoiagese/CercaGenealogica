@@ -63,6 +63,7 @@ type sqliteTemplateImportRuntime struct {
 
 type postgresTemplateImportRuntime struct {
 	templateImportRuntimeBase
+	strongSnapshots map[string]*postgresTemplateImportStrongSnapshot
 }
 
 type mysqlTemplateImportRuntime struct {
@@ -107,7 +108,7 @@ func TemplateImportRuntimeFor(database DB) TemplateImportRuntime {
 	base := templateImportRuntimeBase{database: database}
 	switch engine := base.Engine(); engine {
 	case "postgres":
-		return postgresTemplateImportRuntime{templateImportRuntimeBase: base}
+		return &postgresTemplateImportRuntime{templateImportRuntimeBase: base}
 	case "sqlite":
 		return sqliteTemplateImportRuntime{templateImportRuntimeBase: base}
 	case "mysql":
@@ -206,7 +207,7 @@ func (r genericTemplateImportRuntime) LoadStrongMatchCandidates(req TemplateImpo
 	return genericStrongMatchCandidates(r.database, req)
 }
 
-func (r postgresTemplateImportRuntime) LoadStrongMatchCandidates(req TemplateImportStrongMatchRequest) (TemplateImportStrongMatchResult, error) {
+func (r *postgresTemplateImportRuntime) LoadStrongMatchCandidates(req TemplateImportStrongMatchRequest) (TemplateImportStrongMatchResult, error) {
 	result := emptyStrongMatchResult()
 	if r.database == nil || req.BookID <= 0 || req.SnapshotMaxID == 0 {
 		return result, nil
@@ -216,13 +217,17 @@ func (r postgresTemplateImportRuntime) LoadStrongMatchCandidates(req TemplateImp
 	if pageKey == "" || tipusActe == "" {
 		return result, nil
 	}
-	trans, personesByID, atributsByID, err := r.database.ListTranscripcioStrongMatchCandidatesUpToID(req.BookID, tipusActe, pageKey, req.SnapshotMaxID)
+	snapshot, err := r.strongSnapshot(req.BookID, req.SnapshotMaxID)
 	if err != nil {
 		return result, err
 	}
-	result.Transcripcions = filterTranscripcionsBySnapshot(trans, req.SnapshotMaxID)
-	result.PersonesByTranscripcioID = ensurePersonaMaps(personesByID)
-	result.AtributsByTranscripcioID = ensureAtributMaps(atributsByID)
+	ids := snapshot.lookupStrongContextIDs(pageKey, tipusActe)
+	if len(ids) == 0 {
+		return result, nil
+	}
+	result.Transcripcions = snapshot.transcripcionsForIDs(ids)
+	result.PersonesByTranscripcioID = snapshot.personesForIDs(ids)
+	result.AtributsByTranscripcioID = snapshot.atributsForIDs(ids)
 	return result, nil
 }
 
@@ -238,11 +243,23 @@ func (r genericTemplateImportRuntime) LoadPrincipalMatchCandidates(req TemplateI
 	return genericPrincipalMatchCandidates(r.database, req)
 }
 
-func (r postgresTemplateImportRuntime) LoadPrincipalMatchCandidates(req TemplateImportPrincipalMatchRequest) (TemplateImportPrincipalMatchResult, error) {
-	return bookScopedPrincipalMatchCandidates(r.database, req)
+func (r *postgresTemplateImportRuntime) LoadPrincipalMatchCandidates(req TemplateImportPrincipalMatchRequest) (TemplateImportPrincipalMatchResult, error) {
+	result := TemplateImportPrincipalMatchResult{
+		PersonesByTranscripcioID: map[int][]TranscripcioPersonaRaw{},
+	}
+	if r.database == nil || req.BookID <= 0 || req.SnapshotMaxID == 0 {
+		return result, nil
+	}
+	snapshot, err := r.strongSnapshot(req.BookID, req.SnapshotMaxID)
+	if err != nil {
+		return result, err
+	}
+	result.Transcripcions = append(result.Transcripcions, snapshot.transcripcions...)
+	result.PersonesByTranscripcioID = snapshot.personesForIDs(snapshot.ids)
+	return result, nil
 }
 
-func (r postgresTemplateImportRuntime) CreateBundle(row TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
+func (r *postgresTemplateImportRuntime) CreateBundle(row TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
 	return createBundleThroughBulk(r, row)
 }
 
@@ -760,6 +777,207 @@ func emptyStrongMatchResult() TemplateImportStrongMatchResult {
 		PersonesByTranscripcioID: map[int][]TranscripcioPersonaRaw{},
 		AtributsByTranscripcioID: map[int][]TranscripcioAtributRaw{},
 	}
+}
+
+type postgresTemplateImportStrongSnapshot struct {
+	bookID             int
+	snapshotMaxID      int
+	ids                []int
+	transcripcions     []TranscripcioRaw
+	transcripcioByID   map[int]TranscripcioRaw
+	personesByID       map[int][]TranscripcioPersonaRaw
+	atributsByID       map[int][]TranscripcioAtributRaw
+	strongIDsByContext map[string][]int
+	pageNumsByPaginaID map[int]int
+}
+
+func (r *postgresTemplateImportRuntime) strongSnapshot(bookID, snapshotMaxID int) (*postgresTemplateImportStrongSnapshot, error) {
+	if r == nil || r.database == nil || bookID <= 0 || snapshotMaxID == 0 {
+		return nil, nil
+	}
+	if r.strongSnapshots == nil {
+		r.strongSnapshots = map[string]*postgresTemplateImportStrongSnapshot{}
+	}
+	cacheKey := postgresTemplateImportSnapshotKey(bookID, snapshotMaxID)
+	if snapshot, ok := r.strongSnapshots[cacheKey]; ok && snapshot != nil {
+		return snapshot, nil
+	}
+	snapshot, err := r.loadStrongSnapshot(bookID, snapshotMaxID)
+	if err != nil {
+		return nil, err
+	}
+	r.strongSnapshots[cacheKey] = snapshot
+	return snapshot, nil
+}
+
+func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID int) (*postgresTemplateImportStrongSnapshot, error) {
+	trans, err := r.database.ListTranscripcionsRaw(bookID, TranscripcioFilter{Limit: -1})
+	if err != nil {
+		return nil, err
+	}
+	filtered := filterTranscripcionsBySnapshot(trans, snapshotMaxID)
+	ids := transcripcioIDs(filtered)
+	personesByID, err := r.database.ListTranscripcioPersonesByLlibreID(bookID)
+	if err != nil {
+		return nil, err
+	}
+	atributsByID, err := r.database.ListTranscripcioAtributsByLlibreID(bookID)
+	if err != nil {
+		return nil, err
+	}
+	pages, err := r.database.ListLlibrePagines(bookID)
+	if err != nil {
+		return nil, err
+	}
+	pageNumsByPaginaID := make(map[int]int, len(pages))
+	for _, page := range pages {
+		if page.ID > 0 && page.NumPagina > 0 {
+			pageNumsByPaginaID[page.ID] = page.NumPagina
+		}
+	}
+	filteredPersones := filterPersonaMapsByIDs(personesByID, ids)
+	filteredAtributs := filterAtributMapsByIDs(atributsByID, ids)
+	transcripcioByID := make(map[int]TranscripcioRaw, len(filtered))
+	strongIDsByContext := map[string][]int{}
+	for _, row := range filtered {
+		if row.ID <= 0 {
+			continue
+		}
+		transcripcioByID[row.ID] = row
+		contextKeys := postgresStrongContextKeysForExisting(&row, filteredAtributs[row.ID], pageNumsByPaginaID)
+		tipusActe := normalizePostgresStrongContextPart(row.TipusActe)
+		if tipusActe == "" {
+			continue
+		}
+		for _, pageKey := range contextKeys {
+			contextKey := postgresStrongContextKey(tipusActe, pageKey)
+			strongIDsByContext[contextKey] = append(strongIDsByContext[contextKey], row.ID)
+		}
+	}
+	return &postgresTemplateImportStrongSnapshot{
+		bookID:             bookID,
+		snapshotMaxID:      snapshotMaxID,
+		ids:                ids,
+		transcripcions:     filtered,
+		transcripcioByID:   transcripcioByID,
+		personesByID:       filteredPersones,
+		atributsByID:       filteredAtributs,
+		strongIDsByContext: strongIDsByContext,
+		pageNumsByPaginaID: pageNumsByPaginaID,
+	}, nil
+}
+
+func (s *postgresTemplateImportStrongSnapshot) lookupStrongContextIDs(pageKey, tipusActe string) []int {
+	if s == nil {
+		return nil
+	}
+	tipusActe = normalizePostgresStrongContextPart(tipusActe)
+	if tipusActe == "" {
+		return nil
+	}
+	pageKeys := postgresStrongContextKeysForIncoming(pageKey)
+	if len(pageKeys) == 0 {
+		return nil
+	}
+	merged := make([]int, 0)
+	seen := map[int]struct{}{}
+	for _, key := range pageKeys {
+		for _, id := range s.strongIDsByContext[postgresStrongContextKey(tipusActe, key)] {
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			merged = append(merged, id)
+		}
+	}
+	return merged
+}
+
+func (s *postgresTemplateImportStrongSnapshot) transcripcionsForIDs(ids []int) []TranscripcioRaw {
+	if s == nil || len(ids) == 0 {
+		return nil
+	}
+	rows := make([]TranscripcioRaw, 0, len(ids))
+	for _, id := range normalizePositiveUniqueIDs(ids) {
+		if row, ok := s.transcripcioByID[id]; ok {
+			rows = append(rows, row)
+		}
+	}
+	return rows
+}
+
+func (s *postgresTemplateImportStrongSnapshot) personesForIDs(ids []int) map[int][]TranscripcioPersonaRaw {
+	if s == nil {
+		return map[int][]TranscripcioPersonaRaw{}
+	}
+	return filterPersonaMapsByIDs(s.personesByID, ids)
+}
+
+func (s *postgresTemplateImportStrongSnapshot) atributsForIDs(ids []int) map[int][]TranscripcioAtributRaw {
+	if s == nil {
+		return map[int][]TranscripcioAtributRaw{}
+	}
+	return filterAtributMapsByIDs(s.atributsByID, ids)
+}
+
+func postgresTemplateImportSnapshotKey(bookID, snapshotMaxID int) string {
+	return strconv.Itoa(bookID) + ":" + strconv.Itoa(snapshotMaxID)
+}
+
+func postgresStrongContextKey(tipusActe, pageKey string) string {
+	return normalizePostgresStrongContextPart(tipusActe) + "|" + normalizePostgresStrongContextPart(pageKey)
+}
+
+func normalizePostgresStrongContextPart(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func postgresStrongContextKeysForIncoming(pageKey string) []string {
+	pageKey = strings.TrimSpace(pageKey)
+	if pageKey == "" {
+		return nil
+	}
+	keys := []string{normalizePostgresStrongContextPart(pageKey)}
+	if pageNum, err := strconv.Atoi(pageKey); err == nil && pageNum > 0 {
+		numeric := strconv.Itoa(pageNum)
+		if numeric != keys[0] {
+			keys = append(keys, numeric)
+		}
+	}
+	return keys
+}
+
+func postgresStrongContextKeysForExisting(row *TranscripcioRaw, attrs []TranscripcioAtributRaw, pageNumsByPaginaID map[int]int) []string {
+	keys := make([]string, 0, 3)
+	seen := map[string]struct{}{}
+	add := func(value string) {
+		value = normalizePostgresStrongContextPart(value)
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		keys = append(keys, value)
+	}
+	if row != nil {
+		add(row.NumPaginaText)
+		if row.PaginaID.Valid {
+			if pageNum, ok := pageNumsByPaginaID[int(row.PaginaID.Int64)]; ok && pageNum > 0 {
+				add(strconv.Itoa(pageNum))
+			}
+		}
+	}
+	for _, attr := range attrs {
+		if attr.Clau != "pagina_digital" {
+			continue
+		}
+		if value := strings.TrimSpace(attr.ValorText); value != "" {
+			add(value)
+		}
+	}
+	return keys
 }
 
 func filterTranscripcionsBySnapshot(rows []TranscripcioRaw, snapshotMaxID int) []TranscripcioRaw {
