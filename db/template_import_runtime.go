@@ -851,8 +851,7 @@ func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID
 	for id, rows := range filteredPersones {
 		byRole := make(map[string]*TranscripcioPersonaRaw, len(rows))
 		for i := range rows {
-			row := rows[i]
-			byRole[row.Rol] = &row
+			byRole[rows[i].Rol] = &rows[i]
 		}
 		preparedPersonesByID[id] = byRole
 	}
@@ -860,8 +859,7 @@ func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID
 	for id, rows := range filteredAtributs {
 		byKey := make(map[string]*TranscripcioAtributRaw, len(rows))
 		for i := range rows {
-			row := rows[i]
-			byKey[row.Clau] = &row
+			byKey[rows[i].Clau] = &rows[i]
 		}
 		preparedAtributsByID[id] = byKey
 	}
