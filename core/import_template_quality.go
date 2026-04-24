@@ -2,6 +2,7 @@ package core
 
 import (
 	"strings"
+	"time"
 )
 
 type templateQualityConfig struct {
@@ -12,10 +13,11 @@ type templateQualityConfig struct {
 type templateParseConfig struct {
 	DateFormat string
 	Quality    templateQualityConfig
+	Metrics    *csvImportDebugMetrics
 }
 
 var defaultTemplateQualityMarkers = map[string]string{
-	"dubtos":   "?",
+	"dubtos":    "?",
 	"no_consta": "¿",
 }
 
@@ -199,4 +201,13 @@ func extractQuality(raw string, cfg templateQualityConfig) (string, string) {
 	cleaned, label := stripQualityLabel(raw, cfg)
 	cleaned, marker := stripQualityMarkers(cleaned, cfg)
 	return cleaned, mergeQualityStatus(label, marker)
+}
+
+func extractQualityWithConfig(raw string, cfg templateParseConfig) (string, string) {
+	start := time.Now()
+	cleaned, qual := extractQuality(raw, cfg.Quality)
+	if cfg.Metrics != nil {
+		cfg.Metrics.addParseQuality(time.Since(start))
+	}
+	return cleaned, qual
 }

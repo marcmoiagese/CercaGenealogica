@@ -51,11 +51,17 @@ func parseFlexibleDateV2(raw string) (string, string, string) {
 }
 
 func parseFlexibleDateWithConfig(raw string, cfg templateParseConfig) (string, string, string) {
+	start := time.Now()
+	defer func() {
+		if cfg.Metrics != nil {
+			cfg.Metrics.addParseDate(time.Since(start))
+		}
+	}()
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return "", "", ""
 	}
-	cleaned, qual := extractQuality(raw, cfg.Quality)
+	cleaned, qual := extractQualityWithConfig(raw, cfg)
 	cleaned = strings.TrimSpace(cleaned)
 	if cleaned == "" {
 		return "", "", qual
@@ -310,6 +316,12 @@ func buildPersonFromNomV2(raw, role string) *db.TranscripcioPersonaRaw {
 }
 
 func buildPersonFromCognomsV2WithConfig(raw, role string, cfg templateParseConfig) *db.TranscripcioPersonaRaw {
+	start := time.Now()
+	defer func() {
+		if cfg.Metrics != nil {
+			cfg.Metrics.addParsePersonBuild(time.Since(start))
+		}
+	}()
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
@@ -368,7 +380,7 @@ func buildPersonFromCognomsV2WithConfig(raw, role string, cfg templateParseConfi
 		}
 	}
 	notes, municipi := splitParentheticalNotes(extras)
-	munText, munQual := cleanFreeTextWithConfig(municipi, cfg.Quality)
+	munText, munQual := cleanFreeTextWithConfig(municipi, cfg)
 	p := &db.TranscripcioPersonaRaw{
 		Rol:          role,
 		Nom:          nom,
@@ -387,6 +399,12 @@ func buildPersonFromCognomsV2WithConfig(raw, role string, cfg templateParseConfi
 }
 
 func buildPersonFromNomV2WithConfig(raw, role string, cfg templateParseConfig) *db.TranscripcioPersonaRaw {
+	start := time.Now()
+	defer func() {
+		if cfg.Metrics != nil {
+			cfg.Metrics.addParsePersonBuild(time.Since(start))
+		}
+	}()
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
@@ -452,7 +470,7 @@ func buildPersonFromNomV2WithConfig(raw, role string, cfg templateParseConfig) *
 		}
 	}
 	notes, municipi := splitParentheticalNotes(extras)
-	munText, munQual := cleanFreeTextWithConfig(municipi, cfg.Quality)
+	munText, munQual := cleanFreeTextWithConfig(municipi, cfg)
 	p := &db.TranscripcioPersonaRaw{
 		Rol:          role,
 		Nom:          nom,
@@ -506,11 +524,11 @@ func cleanTokenWithConfig(token string, cfg templateQualityConfig) (string, stri
 	return cleaned, qual
 }
 
-func cleanFreeTextWithConfig(raw string, cfg templateQualityConfig) (string, string) {
+func cleanFreeTextWithConfig(raw string, cfg templateParseConfig) (string, string) {
 	if raw == "" {
 		return "", ""
 	}
-	text, qual := extractQuality(raw, cfg)
+	text, qual := extractQualityWithConfig(raw, cfg)
 	return strings.TrimSpace(text), qual
 }
 

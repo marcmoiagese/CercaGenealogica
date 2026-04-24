@@ -120,30 +120,44 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	if sep == 0 {
 		sep = ','
 	}
+	parseStart := time.Now()
 	model, err := parseTemplateImportModel(template.ModelJSON)
+	parseElapsed := time.Since(parseStart)
+	result.Debug.addParseModel(parseElapsed)
+	result.Debug.addParse(parseElapsed)
 	if err != nil {
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "model de plantilla invàlid"})
 		result.Debug.finalize(len(result.BookIDs), time.Since(start))
 		return result
 	}
+	parseStart = time.Now()
 	if err := validateTemplateImportModel(model); err != nil {
+		parseElapsed = time.Since(parseStart)
+		result.Debug.addParseValidation(parseElapsed)
+		result.Debug.addParse(parseElapsed)
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: err.Error()})
 		result.Debug.finalize(len(result.BookIDs), time.Since(start))
 		return result
 	}
+	parseElapsed = time.Since(parseStart)
+	result.Debug.addParseValidation(parseElapsed)
+	result.Debug.addParse(parseElapsed)
 	if debugModel := templateImportDebugModel(model); debugModel != "" {
 		result.Debug.Model = debugModel
 	}
 	parseCfg := buildTemplateParseConfig(model)
+	parseCfg.Metrics = &result.Debug
 
 	csvReader := csv.NewReader(reader)
 	csvReader.Comma = sep
 	csvReader.TrimLeadingSpace = true
-	parseStart := time.Now()
+	parseStart = time.Now()
 	headers, err := csvReader.Read()
-	result.Debug.addParse(time.Since(parseStart))
+	parseElapsed = time.Since(parseStart)
+	result.Debug.addParseHeaderRead(parseElapsed)
+	result.Debug.addParse(parseElapsed)
 	if err != nil {
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "capçalera CSV invàlida"})
@@ -170,7 +184,9 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			return result
 		}
 	}
-	result.Debug.addParse(time.Since(parseStart))
+	parseElapsed = time.Since(parseStart)
+	result.Debug.addParseHeaderPrepare(parseElapsed)
+	result.Debug.addParse(parseElapsed)
 
 	resolveStart := time.Now()
 	bookInfoByKey, bookInfoByID := a.prepareBookLookups(model, ctx, fixedBookID)
@@ -213,7 +229,9 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		result.Debug.incRows()
 		parseStart = time.Now()
 		rowCtx := buildTemplateRowContext(model.Mapping, headerIndex, record)
-		result.Debug.addParse(time.Since(parseStart))
+		parseElapsed = time.Since(parseStart)
+		result.Debug.addParseRowContext(parseElapsed)
+		result.Debug.addParse(parseElapsed)
 		resolveStart = time.Now()
 		bookID, bookInfo, bookErr := resolveTemplateBookID(model, rowCtx, bookInfoByKey, bookInfoByID, fixedBookID)
 		result.Debug.addResolve(time.Since(resolveStart))
@@ -244,7 +262,9 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			}
 			applyTemplateColumn(col, rawVal, rowCtx, &t, persones, atributs, mappedValues, parseCfg)
 		}
-		result.Debug.addParse(time.Since(parseStart))
+		parseElapsed = time.Since(parseStart)
+		result.Debug.addParseColumns(parseElapsed)
+		result.Debug.addParse(parseElapsed)
 
 		if model.Policies.DedupWithin && len(model.Policies.DedupKeyFields) > 0 {
 			duplicateStart := time.Now()
@@ -821,7 +841,11 @@ func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRow
 	applyMapTo := col.MapTo
 	preTransforms := []templateTransform{}
 	if col.Condition != nil {
+		conditionStart := time.Now()
 		ok := evalTemplateCondition(col.Condition.Expr, rawValue, rowCtx)
+		if parseCfg.Metrics != nil {
+			parseCfg.Metrics.addParseCondition(time.Since(conditionStart))
+		}
 		if ok {
 			applyMapTo = col.Condition.Then.MapTo
 			preTransforms = col.Condition.Then.Transforms
@@ -836,16 +860,28 @@ func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRow
 		if entry.Target == "" {
 			continue
 		}
-		if entry.Condition != nil && !evalInlineCondition(entry.Condition, rowCtx) {
-			continue
+		if entry.Condition != nil {
+			conditionStart := time.Now()
+			ok := evalInlineCondition(entry.Condition, rowCtx)
+			if parseCfg.Metrics != nil {
+				parseCfg.Metrics.addParseCondition(time.Since(conditionStart))
+			}
+			if !ok {
+				continue
+			}
 		}
 		value := rawValue
 		extras := map[string]string{}
 		if len(preTransforms) > 0 {
+			transformStart := time.Now()
 			value, extras = applyTemplateTransforms(value, preTransforms, parseCfg)
+			if parseCfg.Metrics != nil {
+				parseCfg.Metrics.addParseTransform(time.Since(transformStart))
+			}
 		}
 		personMode, personFound := "", false
 		if len(entry.Transforms) > 0 {
+			transformStart := time.Now()
 			val, ex, mode, found := applyTemplateTransformsWithPerson(value, entry.Transforms, parseCfg)
 			value = val
 			for k, v := range ex {
@@ -853,11 +889,15 @@ func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRow
 			}
 			personMode = mode
 			personFound = found
+			if parseCfg.Metrics != nil {
+				parseCfg.Metrics.addParseTransform(time.Since(transformStart))
+			}
 		}
 		if personFound && isPersonRoleTarget(entry.Target) {
 			role := strings.TrimPrefix(entry.Target, "person.")
 			role = strings.Split(role, ".")[0]
 			var p *db.TranscripcioPersonaRaw
+			personBuildStart := time.Now()
 			switch personMode {
 			case "nom_v2":
 				p = buildPersonFromNomV2WithConfig(value, role, parseCfg)
@@ -871,6 +911,9 @@ func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRow
 				p = buildPersonFromNom(value, role)
 			default:
 				p = buildPersonFromCognoms(value, role)
+			}
+			if parseCfg.Metrics != nil && (personMode == "nom" || personMode == "cognoms") {
+				parseCfg.Metrics.addParsePersonBuild(time.Since(personBuildStart))
 			}
 			if p != nil {
 				persones[role] = mergePerson(persones[role], p)
@@ -1195,7 +1238,7 @@ func applyTemplateQualityToPersonField(value string, extras map[string]string, p
 	if extras == nil {
 		extras = map[string]string{}
 	}
-	cleaned, qual := extractQuality(value, parseCfg.Quality)
+	cleaned, qual := extractQualityWithConfig(value, parseCfg)
 	if cleaned != "" || qual != "" {
 		value = cleaned
 	}

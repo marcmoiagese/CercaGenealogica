@@ -9,6 +9,22 @@ type csvImportDebugMetrics struct {
 	Rows                         int
 	Books                        int
 	ParseDur                     time.Duration
+	ParseModelDur                time.Duration
+	ParseValidationDur           time.Duration
+	ParseHeaderReadDur           time.Duration
+	ParseHeaderPrepareDur        time.Duration
+	ParseRowContextDur           time.Duration
+	ParseColumnsDur              time.Duration
+	ParseConditionDur            time.Duration
+	ParseTransformsDur           time.Duration
+	ParseDateDur                 time.Duration
+	ParseQualityDur              time.Duration
+	ParsePersonBuildDur          time.Duration
+	ParseConditionCalls          int
+	ParseTransformCalls          int
+	ParseDateCalls               int
+	ParseQualityCalls            int
+	ParsePersonBuildCalls        int
 	ResolveDur                   time.Duration
 	WriteDur                     time.Duration
 	WritePrepareDur              time.Duration
@@ -50,6 +66,77 @@ func newCSVImportDebugMetrics(model, scope string) csvImportDebugMetrics {
 func (m *csvImportDebugMetrics) addParse(d time.Duration) {
 	if m != nil && m.Enabled {
 		m.ParseDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addParseModel(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.ParseModelDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addParseValidation(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.ParseValidationDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addParseHeaderRead(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.ParseHeaderReadDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addParseHeaderPrepare(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.ParseHeaderPrepareDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addParseRowContext(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.ParseRowContextDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addParseColumns(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.ParseColumnsDur += d
+	}
+}
+
+func (m *csvImportDebugMetrics) addParseCondition(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.ParseConditionDur += d
+		m.ParseConditionCalls++
+	}
+}
+
+func (m *csvImportDebugMetrics) addParseTransform(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.ParseTransformsDur += d
+		m.ParseTransformCalls++
+	}
+}
+
+func (m *csvImportDebugMetrics) addParseDate(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.ParseDateDur += d
+		m.ParseDateCalls++
+	}
+}
+
+func (m *csvImportDebugMetrics) addParseQuality(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.ParseQualityDur += d
+		m.ParseQualityCalls++
+	}
+}
+
+func (m *csvImportDebugMetrics) addParsePersonBuild(d time.Duration) {
+	if m != nil && m.Enabled {
+		m.ParsePersonBuildDur += d
+		m.ParsePersonBuildCalls++
 	}
 }
 
@@ -183,7 +270,7 @@ func (a *App) logCSVImportDebug(actorID int, result csvImportResult) {
 		return
 	}
 	Debugf(
-		"registre import model=%s scope=%s actor=%d rows=%d books=%d created=%d updated=%d failed=%d parse_dur=%s resolve_dur=%s write_dur=%s write_prepare_dur=%s write_page_lookup_dur=%s write_duplicate_check_dur=%s write_transcripcio_insert_dur=%s write_persona_resolve_dur=%s write_persona_persist_dur=%s write_links_persist_dur=%s write_commit_dur=%s write_bulk_batches=%d write_bulk_rows=%d write_bulk_fallbacks=%d write_bulk_transcripcio_batches=%d write_bulk_persona_batches=%d write_bulk_links_batches=%d sidefx_dur=%s sidefx_indexacio_stats_dur=%s sidefx_load_registres_dur=%s sidefx_load_persones_dur=%s sidefx_load_atributs_dur=%s sidefx_compute_dur=%s sidefx_upsert_dur=%s sidefx_page_stats_dur=%s sidefx_indexacio_registres=%d sidefx_indexacio_persones=%d sidefx_indexacio_atributs=%d total_dur=%s",
+		"registre import model=%s scope=%s actor=%d rows=%d books=%d created=%d updated=%d failed=%d parse_dur=%s parse_model_dur=%s parse_validation_dur=%s parse_header_read_dur=%s parse_header_prepare_dur=%s parse_row_context_dur=%s parse_columns_dur=%s parse_condition_dur=%s parse_condition_calls=%d parse_transforms_dur=%s parse_transform_calls=%d parse_date_dur=%s parse_date_calls=%d parse_quality_dur=%s parse_quality_calls=%d parse_person_build_dur=%s parse_person_build_calls=%d resolve_dur=%s write_dur=%s write_prepare_dur=%s write_page_lookup_dur=%s write_duplicate_check_dur=%s write_transcripcio_insert_dur=%s write_persona_resolve_dur=%s write_persona_persist_dur=%s write_links_persist_dur=%s write_commit_dur=%s write_bulk_batches=%d write_bulk_rows=%d write_bulk_fallbacks=%d write_bulk_transcripcio_batches=%d write_bulk_persona_batches=%d write_bulk_links_batches=%d sidefx_dur=%s sidefx_indexacio_stats_dur=%s sidefx_load_registres_dur=%s sidefx_load_persones_dur=%s sidefx_load_atributs_dur=%s sidefx_compute_dur=%s sidefx_upsert_dur=%s sidefx_page_stats_dur=%s sidefx_indexacio_registres=%d sidefx_indexacio_persones=%d sidefx_indexacio_atributs=%d total_dur=%s",
 		result.Debug.Model,
 		result.Debug.Scope,
 		actorID,
@@ -193,6 +280,22 @@ func (a *App) logCSVImportDebug(actorID int, result csvImportResult) {
 		result.Updated,
 		result.Failed,
 		result.Debug.ParseDur,
+		result.Debug.ParseModelDur,
+		result.Debug.ParseValidationDur,
+		result.Debug.ParseHeaderReadDur,
+		result.Debug.ParseHeaderPrepareDur,
+		result.Debug.ParseRowContextDur,
+		result.Debug.ParseColumnsDur,
+		result.Debug.ParseConditionDur,
+		result.Debug.ParseConditionCalls,
+		result.Debug.ParseTransformsDur,
+		result.Debug.ParseTransformCalls,
+		result.Debug.ParseDateDur,
+		result.Debug.ParseDateCalls,
+		result.Debug.ParseQualityDur,
+		result.Debug.ParseQualityCalls,
+		result.Debug.ParsePersonBuildDur,
+		result.Debug.ParsePersonBuildCalls,
 		result.Debug.ResolveDur,
 		result.Debug.WriteDur,
 		result.Debug.WritePrepareDur,
