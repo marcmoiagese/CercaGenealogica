@@ -114,12 +114,6 @@ type templateMatchBuildCache struct {
 	personKeys      map[string]string
 }
 
-type templateStrongExistingBuildCache struct {
-	matchKeyByTranscripcioID map[int]string
-	personesByTranscripcioID map[int]map[string]*db.TranscripcioPersonaRaw
-	atributsByTranscripcioID map[int]map[string]*db.TranscripcioAtributRaw
-}
-
 func (ctx templateRowContext) HeaderValue(key string) string {
 	value, _ := ctx.LookupHeaderValue(key)
 	return value
@@ -254,7 +248,6 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	seen := map[string]int{}
 	seenMatchByContext := map[string]map[string]int{}
 	existingByContext := map[string]map[string]int{}
-	existingStrongCache := newTemplateStrongExistingBuildCache()
 	pendingCreates := make([]templatePendingCreate, 0, templateImportCreateBatchSize)
 	importRuntime := db.TemplateImportRuntimeFor(a.DB)
 	pageResolver := importRuntime.NewPageResolver()
@@ -389,7 +382,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			if existingMap == nil {
 				resolveStart = time.Now()
 				if matchMode == "by_strong_signature_if_page_indexed" {
-					existingMap = a.loadExistingByStrongMatchWithPageResolverSnapshot(importRuntime, pageResolver, bookID, &t, atributs, model.Policies, existingSnapshotMaxID, existingStrongCache)
+					existingMap = a.loadExistingByStrongMatchWithPageResolverSnapshot(importRuntime, pageResolver, bookID, &t, atributs, model.Policies, existingSnapshotMaxID)
 				} else {
 					existingMap = a.loadExistingByPrincipal(importRuntime, bookID, model.Policies.PrincipalRoles, existingSnapshotMaxID)
 				}
@@ -1580,10 +1573,10 @@ func (a *App) loadExistingByStrongMatch(bookID int, incoming *db.TranscripcioRaw
 }
 
 func (a *App) loadExistingByStrongMatchWithPageResolver(pageResolver db.TemplateImportPageResolver, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) map[string]int {
-	return a.loadExistingByStrongMatchWithPageResolverSnapshot(db.TemplateImportRuntimeFor(a.DB), pageResolver, bookID, incoming, incomingAttrs, policies, -1, nil)
+	return a.loadExistingByStrongMatchWithPageResolverSnapshot(db.TemplateImportRuntimeFor(a.DB), pageResolver, bookID, incoming, incomingAttrs, policies, -1)
 }
 
-func (a *App) loadExistingByStrongMatchWithPageResolverSnapshot(runtime db.TemplateImportRuntime, pageResolver db.TemplateImportPageResolver, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies, snapshotMaxID int, existingCache *templateStrongExistingBuildCache) map[string]int {
+func (a *App) loadExistingByStrongMatchWithPageResolverSnapshot(runtime db.TemplateImportRuntime, pageResolver db.TemplateImportPageResolver, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies, snapshotMaxID int) map[string]int {
 	existingMap := map[string]int{}
 	if incoming == nil {
 		return existingMap
@@ -1606,7 +1599,6 @@ func (a *App) loadExistingByStrongMatchWithPageResolverSnapshot(runtime db.Templ
 	attrsByTranscripcioID := candidates.AtributsByTranscripcioID
 	personesByTranscripcioID := candidates.PersonesByTranscripcioID
 	trans := candidates.Transcripcions
-	postgresSnapshotFastPath := runtime != nil && runtime.Engine() == "postgres" && snapshotMaxID > 0
 	if len(trans) > 0 {
 		for _, tr := range trans {
 			if tr.ID <= 0 || (snapshotMaxID >= 0 && tr.ID > snapshotMaxID) {
@@ -1620,43 +1612,18 @@ func (a *App) loadExistingByStrongMatchWithPageResolverSnapshot(runtime db.Templ
 			if !okPersones {
 				personesExistentsRows, _ = a.DB.ListTranscripcioPersones(tr.ID)
 			}
-			if !postgresSnapshotFastPath {
-				if normalizeTemplateMatchPartWithCache(matchBuildCache, a.templateLogicalPageKeyForExistingWithResolver(pageResolver, bookID, &tr, attrsExistents)) != pageKeyNorm {
-					continue
-				}
+			if normalizeTemplateMatchPartWithCache(matchBuildCache, a.templateLogicalPageKeyForExistingWithResolver(pageResolver, bookID, &tr, attrsExistents)) != pageKeyNorm {
+				continue
 			}
 			personesExistents := map[string]*db.TranscripcioPersonaRaw{}
+			for i := range personesExistentsRows {
+				personesExistents[personesExistentsRows[i].Rol] = &personesExistentsRows[i]
+			}
 			attrsByKey := map[string]*db.TranscripcioAtributRaw{}
-			matchKey := ""
-			if existingCache != nil {
-				personesExistents = existingCache.personesByTranscripcioID[tr.ID]
-				attrsByKey = existingCache.atributsByTranscripcioID[tr.ID]
-				matchKey = existingCache.matchKeyByTranscripcioID[tr.ID]
+			for i := range attrsExistents {
+				attrsByKey[attrsExistents[i].Clau] = &attrsExistents[i]
 			}
-			if personesExistents == nil {
-				personesExistents = map[string]*db.TranscripcioPersonaRaw{}
-				for i := range personesExistentsRows {
-					personesExistents[personesExistentsRows[i].Rol] = &personesExistentsRows[i]
-				}
-				if existingCache != nil {
-					existingCache.personesByTranscripcioID[tr.ID] = personesExistents
-				}
-			}
-			if attrsByKey == nil {
-				attrsByKey = map[string]*db.TranscripcioAtributRaw{}
-				for i := range attrsExistents {
-					attrsByKey[attrsExistents[i].Clau] = &attrsExistents[i]
-				}
-				if existingCache != nil {
-					existingCache.atributsByTranscripcioID[tr.ID] = attrsByKey
-				}
-			}
-			if matchKey == "" {
-				matchKey = buildTemplateStrongMatchKeyWithCache(matchBuildCache, &tr, personesExistents, attrsByKey, policies)
-				if existingCache != nil {
-					existingCache.matchKeyByTranscripcioID[tr.ID] = matchKey
-				}
-			}
+			matchKey := buildTemplateStrongMatchKeyWithCache(matchBuildCache, &tr, personesExistents, attrsByKey, policies)
 			if matchKey == "" {
 				continue
 			}
@@ -1916,14 +1883,6 @@ func newTemplateMatchBuildCache() *templateMatchBuildCache {
 		normalizedParts: map[string]string{},
 		loweredParts:    map[string]string{},
 		personKeys:      map[string]string{},
-	}
-}
-
-func newTemplateStrongExistingBuildCache() *templateStrongExistingBuildCache {
-	return &templateStrongExistingBuildCache{
-		matchKeyByTranscripcioID: map[int]string{},
-		personesByTranscripcioID: map[int]map[string]*db.TranscripcioPersonaRaw{},
-		atributsByTranscripcioID: map[int]map[string]*db.TranscripcioAtributRaw{},
 	}
 }
 
