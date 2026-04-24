@@ -10,6 +10,7 @@ import (
 )
 
 type DB interface {
+	Engine() string
 	Connect() error
 	Close()
 	Exec(query string, args ...interface{}) (int64, error)
@@ -444,12 +445,18 @@ type DB interface {
 	UpdateTranscripcioRawChangeModeracio(id int, estat, motiu string, moderatorID int) error
 	ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPersonaRaw, error)
 	ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error)
+	ListTranscripcioPersonesByLlibreID(llibreID int) (map[int][]TranscripcioPersonaRaw, error)
 	CreateTranscripcioPersona(p *TranscripcioPersonaRaw) (int, error)
 	DeleteTranscripcioPersones(transcripcioID int) error
 	LinkTranscripcioPersona(personaRawID int, personaID int, linkedBy int) error
 	UnlinkTranscripcioPersona(personaRawID int, linkedBy int) error
 	ListTranscripcioAtributs(transcripcioID int) ([]TranscripcioAtributRaw, error)
 	ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error)
+	ListTranscripcioAtributsByLlibreID(llibreID int) (map[int][]TranscripcioAtributRaw, error)
+	ListTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error)
+	ListTranscripcioStrongMatchCandidatesUpToID(bookID int, tipusActe, pageKey string, maxExistingID int) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error)
+	GetMaxTranscripcioRawID() (int, error)
+	BulkCreateTranscripcioRawBundles(rows []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error)
 	CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error)
 	DeleteTranscripcioAtributs(transcripcioID int) error
 	GetTranscripcioDraft(userID, llibreID int) (*TranscripcioDraft, error)

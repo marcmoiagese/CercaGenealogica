@@ -14,6 +14,7 @@ type f32131PrincipalCountingDB struct {
 	listTranscripcionsCalls int
 	listPersonesCalls       int
 	listPersonesByIDs       int
+	listPersonesByBook      int
 }
 
 func (d *f32131PrincipalCountingDB) ListTranscripcionsRaw(llibreID int, f db.TranscripcioFilter) ([]db.TranscripcioRaw, error) {
@@ -29,6 +30,11 @@ func (d *f32131PrincipalCountingDB) ListTranscripcioPersones(transcripcioID int)
 func (d *f32131PrincipalCountingDB) ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]db.TranscripcioPersonaRaw, error) {
 	d.listPersonesByIDs++
 	return d.DB.ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
+}
+
+func (d *f32131PrincipalCountingDB) ListTranscripcioPersonesByLlibreID(llibreID int) (map[int][]db.TranscripcioPersonaRaw, error) {
+	d.listPersonesByBook++
+	return d.DB.ListTranscripcioPersonesByLlibreID(llibreID)
 }
 
 func (d *f32131PrincipalCountingDB) GetMaxTranscripcioRawID() (int, error) {
@@ -131,11 +137,20 @@ func TestTemplateImportPrincipalMatchUsesRuntimeBulkCandidatesSQLitePostgresF321
 			if countingDB.listTranscripcionsCalls == 0 {
 				t.Fatalf("[%s] s'esperava càrrega de candidats de transcripcions al camí per principal", cfg.Label)
 			}
-			if countingDB.listPersonesByIDs == 0 {
-				t.Fatalf("[%s] el camí per principal ha d'usar càrrega bulk de persones", cfg.Label)
-			}
 			if countingDB.listPersonesCalls > 1 {
 				t.Fatalf("[%s] el camí per principal no ha d'escalar fila-a-fila en càrrega d'existents: persones=%d", cfg.Label, countingDB.listPersonesCalls)
+			}
+			if cfg.Engine == "postgres" {
+				if countingDB.listPersonesByBook == 0 {
+					t.Fatalf("[%s] PostgreSQL ha d'usar càrrega bulk per llibre al camí principal", cfg.Label)
+				}
+				if countingDB.listPersonesByIDs != 0 {
+					t.Fatalf("[%s] PostgreSQL no ha de recórrer a càrrega per IDs al camí principal: persones_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs)
+				}
+			} else {
+				if countingDB.listPersonesByIDs == 0 {
+					t.Fatalf("[%s] SQLite/MySQL han de mantenir la càrrega bulk per IDs al camí principal", cfg.Label)
+				}
 			}
 		})
 	}

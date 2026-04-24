@@ -97,30 +97,10 @@ type templatePendingCreate struct {
 	Bundle db.TranscripcioRawImportBundle
 }
 
-type templatePageLookupCache struct {
-	runtime db.TemplateImportRuntime
-	books   map[int]*templateBookPageLookup
-	byID    map[int]*db.LlibrePagina
-	missing map[int]struct{}
-}
-
-type templateBookPageLookup struct {
-	byNum            map[int]*db.LlibrePagina
-	byID             map[int]*db.LlibrePagina
-	resolvedByKey    map[string]templatePageResolution
-	resolvedByPageID map[int]templatePageResolution
-}
-
 type templateMatchBuildCache struct {
 	normalizedParts map[string]string
 	loweredParts    map[string]string
 	personKeys      map[string]string
-}
-
-type templatePageResolution struct {
-	canonicalKey string
-	indexed      bool
-	resolved     bool
 }
 
 func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Reader, sep rune, userID int, ctx importContext, fixedBookID int) csvImportResult {
@@ -209,7 +189,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	existingByContext := map[string]map[string]int{}
 	pendingCreates := make([]templatePendingCreate, 0, templateImportCreateBatchSize)
 	importRuntime := db.TemplateImportRuntimeFor(a.DB)
-	pageLookupCache := newTemplatePageLookupCache(a.DB)
+	pageResolver := importRuntime.NewPageResolver()
 	matchBuildCache := newTemplateMatchBuildCache()
 	existingSnapshotMaxID := 0
 	if maxID, err := importRuntime.ExistingSnapshotMaxID(); err == nil && maxID > 0 {
@@ -291,7 +271,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		switch matchMode {
 		case "by_strong_signature_if_page_indexed":
 			pageLookupStart := time.Now()
-			pageKey, pageIndexed := a.templateIndexedPageKeyWithCache(importRuntime, pageLookupCache, bookID, &t, atributs)
+			pageKey, pageIndexed := a.templateIndexedPageKeyWithResolver(pageResolver, bookID, &t, atributs)
 			result.Debug.addWritePageLookup(time.Since(pageLookupStart))
 			if pageIndexed {
 				duplicateStart := time.Now()
@@ -337,7 +317,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			if existingMap == nil {
 				resolveStart = time.Now()
 				if matchMode == "by_strong_signature_if_page_indexed" {
-					existingMap = a.loadExistingByStrongMatchWithPageCacheSnapshot(importRuntime, pageLookupCache, bookID, &t, atributs, model.Policies, existingSnapshotMaxID)
+					existingMap = a.loadExistingByStrongMatchWithPageResolverSnapshot(importRuntime, pageResolver, bookID, &t, atributs, model.Policies, existingSnapshotMaxID)
 				} else {
 					existingMap = a.loadExistingByPrincipal(importRuntime, bookID, model.Policies.PrincipalRoles, existingSnapshotMaxID)
 				}
@@ -1443,14 +1423,14 @@ func (a *App) loadExistingByPrincipal(runtime db.TemplateImportRuntime, bookID i
 }
 
 func (a *App) loadExistingByStrongMatch(bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) map[string]int {
-	return a.loadExistingByStrongMatchWithPageCache(nil, bookID, incoming, incomingAttrs, policies)
+	return a.loadExistingByStrongMatchWithPageResolver(nil, bookID, incoming, incomingAttrs, policies)
 }
 
-func (a *App) loadExistingByStrongMatchWithPageCache(pageCache *templatePageLookupCache, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) map[string]int {
-	return a.loadExistingByStrongMatchWithPageCacheSnapshot(db.TemplateImportRuntimeFor(a.DB), pageCache, bookID, incoming, incomingAttrs, policies, -1)
+func (a *App) loadExistingByStrongMatchWithPageResolver(pageResolver db.TemplateImportPageResolver, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) map[string]int {
+	return a.loadExistingByStrongMatchWithPageResolverSnapshot(db.TemplateImportRuntimeFor(a.DB), pageResolver, bookID, incoming, incomingAttrs, policies, -1)
 }
 
-func (a *App) loadExistingByStrongMatchWithPageCacheSnapshot(runtime db.TemplateImportRuntime, pageCache *templatePageLookupCache, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies, snapshotMaxID int) map[string]int {
+func (a *App) loadExistingByStrongMatchWithPageResolverSnapshot(runtime db.TemplateImportRuntime, pageResolver db.TemplateImportPageResolver, bookID int, incoming *db.TranscripcioRaw, incomingAttrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies, snapshotMaxID int) map[string]int {
 	existingMap := map[string]int{}
 	if incoming == nil {
 		return existingMap
@@ -1482,7 +1462,7 @@ func (a *App) loadExistingByStrongMatchWithPageCacheSnapshot(runtime db.Template
 			if !okAttrs {
 				attrsExistents, _ = a.DB.ListTranscripcioAtributs(tr.ID)
 			}
-			if normalizeTemplateMatchPartWithCache(matchBuildCache, a.templateLogicalPageKeyForExistingWithCache(runtime, pageCache, bookID, &tr, attrsExistents)) != pageKeyNorm {
+			if normalizeTemplateMatchPartWithCache(matchBuildCache, a.templateLogicalPageKeyForExistingWithResolver(pageResolver, bookID, &tr, attrsExistents)) != pageKeyNorm {
 				continue
 			}
 			personesExistentsRows, okPersones := personesByTranscripcioID[tr.ID]
@@ -1511,283 +1491,41 @@ func (a *App) loadExistingByStrongMatchWithPageCacheSnapshot(runtime db.Template
 }
 
 func (a *App) templateIndexedPageKey(bookID int, t *db.TranscripcioRaw, attrs map[string]*db.TranscripcioAtributRaw) (string, bool) {
-	return a.templateIndexedPageKeyWithCache(db.TemplateImportRuntimeFor(a.DB), nil, bookID, t, attrs)
+	return a.templateIndexedPageKeyWithResolver(db.TemplateImportRuntimeFor(a.DB).NewPageResolver(), bookID, t, attrs)
 }
 
-func (a *App) templateIndexedPageKeyWithCache(runtime db.TemplateImportRuntime, pageCache *templatePageLookupCache, bookID int, t *db.TranscripcioRaw, attrs map[string]*db.TranscripcioAtributRaw) (string, bool) {
-	pageKey := templateLogicalPageKey(t, attrs)
-	pageKeyNorm := normalizeTemplatePageResolutionKey(pageKey)
-	if t != nil && t.PaginaID.Valid {
-		if pageCache != nil {
-			if resolution, ok := pageCache.lookupPageResolutionByID(bookID, int(t.PaginaID.Int64)); ok {
-				if pageKey == "" && resolution.canonicalKey != "" {
-					pageKey = resolution.canonicalKey
-				}
-				return pageKey, resolution.indexed
-			}
-		}
-		page, err := templateLookupPageByID(runtime, pageCache, bookID, int(t.PaginaID.Int64))
-		if err == nil && page != nil {
-			if pageKey == "" && page.NumPagina > 0 {
-				pageKey = strconv.Itoa(page.NumPagina)
-			}
-			resolution := templatePageResolution{
-				canonicalKey: normalizeTemplatePageResolutionKey(pageKey),
-				indexed:      page.LlibreID == bookID && page.Estat == "indexada",
-				resolved:     true,
-			}
-			if pageCache != nil {
-				pageCache.rememberPageResolutionByID(bookID, int(t.PaginaID.Int64), resolution)
-				if pageKeyNorm != "" {
-					pageCache.rememberPageResolutionByKey(bookID, pageKeyNorm, resolution)
-				}
-			}
-			return pageKey, resolution.indexed
-		}
+func (a *App) templateIndexedPageKeyWithResolver(pageResolver db.TemplateImportPageResolver, bookID int, t *db.TranscripcioRaw, attrs map[string]*db.TranscripcioAtributRaw) (string, bool) {
+	if pageResolver == nil {
+		return templateLogicalPageKey(t, attrs), false
 	}
-	if pageKey == "" {
-		return "", false
+	resolution, err := pageResolver.ResolveIncoming(bookID, t, attrs)
+	if err != nil {
+		return templateLogicalPageKey(t, attrs), false
 	}
-	if pageCache != nil {
-		if resolution, ok := pageCache.lookupPageResolutionByKey(bookID, pageKeyNorm); ok {
-			if resolution.resolved && resolution.canonicalKey != "" {
-				return resolution.canonicalKey, resolution.indexed
-			}
-			return pageKey, resolution.indexed
-		}
+	if resolution.Resolved && resolution.CanonicalKey != "" {
+		return resolution.CanonicalKey, resolution.Indexed
 	}
-	pageNum, ok := parseStrictPositiveInt(pageKey)
-	if !ok {
-		if pageCache != nil {
-			pageCache.rememberPageResolutionByKey(bookID, pageKeyNorm, templatePageResolution{
-				canonicalKey: pageKeyNorm,
-				indexed:      false,
-				resolved:     false,
-			})
-		}
-		return pageKey, false
-	}
-	page, err := templateLookupPageByNum(runtime, pageCache, bookID, pageNum)
-	if err != nil || page == nil {
-		if pageCache != nil {
-			pageCache.rememberPageResolutionByKey(bookID, pageKeyNorm, templatePageResolution{
-				canonicalKey: pageKeyNorm,
-				indexed:      false,
-				resolved:     false,
-			})
-		}
-		return pageKey, false
-	}
-	resolution := templatePageResolution{
-		canonicalKey: strconv.Itoa(page.NumPagina),
-		indexed:      page.Estat == "indexada",
-		resolved:     true,
-	}
-	if pageCache != nil {
-		pageCache.rememberPageResolutionByKey(bookID, pageKeyNorm, resolution)
-		if page.ID > 0 {
-			pageCache.rememberPageResolutionByID(bookID, page.ID, resolution)
-		}
-	}
-	return resolution.canonicalKey, resolution.indexed
+	return templateLogicalPageKey(t, attrs), resolution.Indexed
 }
 
 func (a *App) templateLogicalPageKeyForExisting(t *db.TranscripcioRaw, attrs []db.TranscripcioAtributRaw) string {
-	return a.templateLogicalPageKeyForExistingWithCache(db.TemplateImportRuntimeFor(a.DB), nil, 0, t, attrs)
+	return a.templateLogicalPageKeyForExistingWithResolver(db.TemplateImportRuntimeFor(a.DB).NewPageResolver(), 0, t, attrs)
 }
 
-func (a *App) templateLogicalPageKeyForExistingWithCache(runtime db.TemplateImportRuntime, pageCache *templatePageLookupCache, bookID int, t *db.TranscripcioRaw, attrs []db.TranscripcioAtributRaw) string {
+func (a *App) templateLogicalPageKeyForExistingWithResolver(pageResolver db.TemplateImportPageResolver, bookID int, t *db.TranscripcioRaw, attrs []db.TranscripcioAtributRaw) string {
 	attrsByKey := map[string]*db.TranscripcioAtributRaw{}
 	for i := range attrs {
 		attrsByKey[attrs[i].Clau] = &attrs[i]
 	}
 	pageKey := templateLogicalPageKey(t, attrsByKey)
-	if pageKey != "" || t == nil || !t.PaginaID.Valid {
+	if pageKey != "" || pageResolver == nil {
 		return pageKey
 	}
-	lookupBookID := bookID
-	if lookupBookID <= 0 && t != nil {
-		lookupBookID = t.LlibreID
-	}
-	page, err := templateLookupPageByID(runtime, pageCache, lookupBookID, int(t.PaginaID.Int64))
-	if err != nil || page == nil || page.NumPagina <= 0 {
+	resolved, err := pageResolver.ResolveExisting(bookID, t, attrs)
+	if err != nil {
 		return ""
 	}
-	return strconv.Itoa(page.NumPagina)
-}
-
-func newTemplatePageLookupCache(database db.DB) *templatePageLookupCache {
-	runtime := db.TemplateImportRuntimeFor(database)
-	if runtime == nil {
-		return nil
-	}
-	return &templatePageLookupCache{
-		runtime: runtime,
-		books:   map[int]*templateBookPageLookup{},
-		byID:    map[int]*db.LlibrePagina{},
-		missing: map[int]struct{}{},
-	}
-}
-
-func (c *templatePageLookupCache) loadBook(bookID int) (*templateBookPageLookup, error) {
-	if c == nil || c.runtime == nil || bookID <= 0 {
-		return nil, nil
-	}
-	if pages, ok := c.books[bookID]; ok {
-		return pages, nil
-	}
-	rows, err := c.runtime.ListBookPages(bookID)
-	if err != nil {
-		return nil, err
-	}
-	pages := &templateBookPageLookup{
-		byNum:            map[int]*db.LlibrePagina{},
-		byID:             map[int]*db.LlibrePagina{},
-		resolvedByKey:    map[string]templatePageResolution{},
-		resolvedByPageID: map[int]templatePageResolution{},
-	}
-	for i := range rows {
-		page := rows[i]
-		pageCopy := page
-		if pageCopy.ID > 0 {
-			pages.byID[pageCopy.ID] = &pageCopy
-			c.byID[pageCopy.ID] = &pageCopy
-			delete(c.missing, pageCopy.ID)
-			pages.resolvedByPageID[pageCopy.ID] = templatePageResolution{
-				canonicalKey: strconv.Itoa(pageCopy.NumPagina),
-				indexed:      pageCopy.Estat == "indexada",
-				resolved:     true,
-			}
-		}
-		if pageCopy.NumPagina > 0 {
-			pages.byNum[pageCopy.NumPagina] = &pageCopy
-			pages.resolvedByKey[strconv.Itoa(pageCopy.NumPagina)] = templatePageResolution{
-				canonicalKey: strconv.Itoa(pageCopy.NumPagina),
-				indexed:      pageCopy.Estat == "indexada",
-				resolved:     true,
-			}
-		}
-	}
-	c.books[bookID] = pages
-	return pages, nil
-}
-
-func (c *templatePageLookupCache) getBook(bookID int) (*templateBookPageLookup, error) {
-	if c == nil || bookID <= 0 {
-		return nil, nil
-	}
-	return c.loadBook(bookID)
-}
-
-func (c *templatePageLookupCache) lookupPageResolutionByKey(bookID int, pageKey string) (templatePageResolution, bool) {
-	pages, err := c.getBook(bookID)
-	if err != nil || pages == nil {
-		return templatePageResolution{}, false
-	}
-	resolution, ok := pages.resolvedByKey[normalizeTemplatePageResolutionKey(pageKey)]
-	return resolution, ok
-}
-
-func (c *templatePageLookupCache) rememberPageResolutionByKey(bookID int, pageKey string, resolution templatePageResolution) {
-	pages, err := c.getBook(bookID)
-	if err != nil || pages == nil {
-		return
-	}
-	normKey := normalizeTemplatePageResolutionKey(pageKey)
-	if normKey != "" {
-		pages.resolvedByKey[normKey] = resolution
-	}
-	if resolution.resolved && resolution.canonicalKey != "" {
-		pages.resolvedByKey[normalizeTemplatePageResolutionKey(resolution.canonicalKey)] = resolution
-	}
-}
-
-func (c *templatePageLookupCache) lookupPageResolutionByID(bookID, pageID int) (templatePageResolution, bool) {
-	if pageID <= 0 {
-		return templatePageResolution{}, false
-	}
-	pages, err := c.getBook(bookID)
-	if err != nil || pages == nil {
-		return templatePageResolution{}, false
-	}
-	resolution, ok := pages.resolvedByPageID[pageID]
-	return resolution, ok
-}
-
-func (c *templatePageLookupCache) rememberPageResolutionByID(bookID, pageID int, resolution templatePageResolution) {
-	if pageID <= 0 {
-		return
-	}
-	pages, err := c.getBook(bookID)
-	if err != nil || pages == nil {
-		return
-	}
-	pages.resolvedByPageID[pageID] = resolution
-	if resolution.resolved && resolution.canonicalKey != "" {
-		pages.resolvedByKey[normalizeTemplatePageResolutionKey(resolution.canonicalKey)] = resolution
-	}
-}
-
-func templateLookupPageByNum(runtime db.TemplateImportRuntime, pageCache *templatePageLookupCache, bookID, pageNum int) (*db.LlibrePagina, error) {
-	if pageCache != nil {
-		if pages, err := pageCache.loadBook(bookID); err != nil {
-			return nil, err
-		} else if pages != nil {
-			return pages.byNum[pageNum], nil
-		}
-	}
-	if runtime == nil {
-		return nil, nil
-	}
-	return runtime.GetBookPageByNum(bookID, pageNum)
-}
-
-func templateLookupPageByID(runtime db.TemplateImportRuntime, pageCache *templatePageLookupCache, bookID, pageID int) (*db.LlibrePagina, error) {
-	if pageID <= 0 {
-		return nil, nil
-	}
-	if pageCache != nil {
-		if page, ok := pageCache.byID[pageID]; ok {
-			return page, nil
-		}
-		if _, missing := pageCache.missing[pageID]; missing {
-			return nil, nil
-		}
-		if pages, err := pageCache.loadBook(bookID); err != nil {
-			return nil, err
-		} else if pages != nil {
-			if page, ok := pages.byID[pageID]; ok {
-				return page, nil
-			}
-		}
-	}
-	if runtime == nil {
-		return nil, nil
-	}
-	page, err := runtime.GetBookPageByID(pageID)
-	if err != nil || page == nil {
-		if pageCache != nil && err == nil {
-			pageCache.missing[pageID] = struct{}{}
-		}
-		return page, err
-	}
-	if pageCache != nil {
-		pageCache.byID[pageID] = page
-		delete(pageCache.missing, pageID)
-		if page.LlibreID > 0 {
-			pages, loadErr := pageCache.loadBook(page.LlibreID)
-			if loadErr != nil {
-				return nil, loadErr
-			}
-			if pages != nil {
-				pages.byID[pageID] = page
-				if page.NumPagina > 0 {
-					pages.byNum[page.NumPagina] = page
-				}
-			}
-		}
-	}
-	return page, nil
+	return resolved
 }
 
 func templateLogicalPageKey(t *db.TranscripcioRaw, attrs map[string]*db.TranscripcioAtributRaw) string {
@@ -1800,10 +1538,6 @@ func templateLogicalPageKey(t *db.TranscripcioRaw, attrs map[string]*db.Transcri
 		return strings.TrimSpace(t.NumPaginaText)
 	}
 	return ""
-}
-
-func normalizeTemplatePageResolutionKey(pageKey string) string {
-	return strings.TrimSpace(pageKey)
 }
 
 func buildTemplateStrongMatchKey(t *db.TranscripcioRaw, persones map[string]*db.TranscripcioPersonaRaw, attrs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) string {

@@ -260,6 +260,10 @@ type f323NoBulkDB struct {
 	db.DB
 }
 
+func (f f323NoBulkDB) BulkCreateTranscripcioRawBundles(rows []db.TranscripcioRawImportBundle) (db.TranscripcioRawImportBulkResult, error) {
+	return db.TranscripcioRawImportBulkResult{}, fmt.Errorf("bulk disabled for fallback test")
+}
+
 type f327PageLookupCountingDB struct {
 	db.DB
 	listCalls     int
@@ -474,7 +478,7 @@ func TestF327LoadExistingByStrongMatchUsesCachedPagesForExisting(t *testing.T) {
 	app.DB = countingDB
 
 	incoming, _, incomingAttrs := buildF322IncomingStrongRow(llibreID, 13)
-	existingMap := app.loadExistingByStrongMatchWithPageCache(newTemplatePageLookupCache(app.DB), llibreID, incoming, incomingAttrs, templatePolicies{PrincipalRoles: []string{"batejat", "persona_principal"}})
+	existingMap := app.loadExistingByStrongMatchWithPageResolver(db.TemplateImportRuntimeFor(app.DB).NewPageResolver(), llibreID, incoming, incomingAttrs, templatePolicies{PrincipalRoles: []string{"batejat", "persona_principal"}})
 	if len(existingMap) != 1 {
 		t.Fatalf("no s'ha resolt l'existent esperat: %+v", existingMap)
 	}

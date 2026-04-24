@@ -17,6 +17,10 @@ type SQLite struct {
 	help sqlHelper
 }
 
+func (d *SQLite) Engine() string {
+	return "sqlite"
+}
+
 func (d *SQLite) Connect() error {
 	dsn := d.Path
 	if !strings.HasPrefix(dsn, "file:") {
@@ -1292,6 +1296,15 @@ func (d *SQLite) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPer
 func (d *SQLite) ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
 }
+func (d *SQLite) ListTranscripcioPersonesByLlibreID(llibreID int) (map[int][]TranscripcioPersonaRaw, error) {
+	return d.help.listTranscripcioPersonesByLlibreID(llibreID)
+}
+func (d *SQLite) ListTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
+	return genericDBStrongMatchCandidates(d, bookID, tipusActe, pageKey, -1)
+}
+func (d *SQLite) ListTranscripcioStrongMatchCandidatesUpToID(bookID int, tipusActe, pageKey string, maxExistingID int) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
+	return genericDBStrongMatchCandidates(d, bookID, tipusActe, pageKey, maxExistingID)
+}
 func (d *SQLite) GetMaxTranscripcioRawID() (int, error) {
 	return d.help.getMaxTranscripcioRawID()
 }
@@ -1312,6 +1325,9 @@ func (d *SQLite) ListTranscripcioAtributs(transcripcioID int) ([]TranscripcioAtr
 }
 func (d *SQLite) ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
 	return d.help.listTranscripcioAtributsByTranscripcioIDs(transcripcioIDs)
+}
+func (d *SQLite) ListTranscripcioAtributsByLlibreID(llibreID int) (map[int][]TranscripcioAtributRaw, error) {
+	return d.help.listTranscripcioAtributsByLlibreID(llibreID)
 }
 func (d *SQLite) CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error) {
 	return d.help.createTranscripcioAtribut(a)

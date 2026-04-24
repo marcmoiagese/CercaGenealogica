@@ -21,6 +21,10 @@ type PostgreSQL struct {
 	help   sqlHelper
 }
 
+func (d *PostgreSQL) Engine() string {
+	return "postgres"
+}
+
 func (d *PostgreSQL) Connect() error {
 	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		d.Host, d.Port, d.User, d.Pass, d.DBName)

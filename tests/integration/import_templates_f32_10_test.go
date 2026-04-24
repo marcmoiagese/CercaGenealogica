@@ -131,11 +131,15 @@ func TestTemplateImportStrongDedupUsesBulkExistingFetchSQLitePostgresF3210(t *te
 			} else if countingDB.listTranscripcionsRawCalls == 0 {
 				t.Fatalf("[%s] s'esperava almenys una lectura de transcripcions per al context fort", cfg.Label)
 			}
-			if countingDB.listPersonesByIDs == 0 || countingDB.listAtributsByIDs == 0 {
-				t.Fatalf("[%s] el carregador d'existents ha d'usar càrrega bulk: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
-			}
 			if countingDB.listPersonesCalls > 1 || countingDB.listAtributsCalls > 1 {
 				t.Fatalf("[%s] el carregador d'existents no ha d'anar fila a fila; només s'accepta el read únic del merge: persones=%d atributs=%d", cfg.Label, countingDB.listPersonesCalls, countingDB.listAtributsCalls)
+			}
+			if cfg.Engine == "postgres" {
+				if countingDB.listPersonesByIDs != 0 || countingDB.listAtributsByIDs != 0 {
+					t.Fatalf("[%s] PostgreSQL no ha de recórrer al camí genèric by_ids quan usa candidats forts acotats: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
+				}
+			} else if countingDB.listPersonesByIDs == 0 || countingDB.listAtributsByIDs == 0 {
+				t.Fatalf("[%s] SQLite/MySQL han de mantenir la càrrega bulk by_ids al carregador d'existents: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
 			}
 		})
 	}

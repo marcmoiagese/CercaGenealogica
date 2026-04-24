@@ -20,6 +20,10 @@ type MySQL struct {
 	help   sqlHelper
 }
 
+func (d *MySQL) Engine() string {
+	return "mysql"
+}
+
 func (d *MySQL) Connect() error {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=UTC", d.User, d.Pass, d.Host, d.Port, d.DBName)
 	conn, err := sql.Open("mysql", dsn)
@@ -1266,6 +1270,15 @@ func (d *MySQL) ListTranscripcioPersones(transcripcioID int) ([]TranscripcioPers
 func (d *MySQL) ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
 	return d.help.listTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
 }
+func (d *MySQL) ListTranscripcioPersonesByLlibreID(llibreID int) (map[int][]TranscripcioPersonaRaw, error) {
+	return d.help.listTranscripcioPersonesByLlibreID(llibreID)
+}
+func (d *MySQL) ListTranscripcioStrongMatchCandidates(bookID int, tipusActe, pageKey string) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
+	return genericDBStrongMatchCandidates(d, bookID, tipusActe, pageKey, -1)
+}
+func (d *MySQL) ListTranscripcioStrongMatchCandidatesUpToID(bookID int, tipusActe, pageKey string, maxExistingID int) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
+	return genericDBStrongMatchCandidates(d, bookID, tipusActe, pageKey, maxExistingID)
+}
 func (d *MySQL) GetMaxTranscripcioRawID() (int, error) {
 	return d.help.getMaxTranscripcioRawID()
 }
@@ -1286,6 +1299,9 @@ func (d *MySQL) ListTranscripcioAtributs(transcripcioID int) ([]TranscripcioAtri
 }
 func (d *MySQL) ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
 	return d.help.listTranscripcioAtributsByTranscripcioIDs(transcripcioIDs)
+}
+func (d *MySQL) ListTranscripcioAtributsByLlibreID(llibreID int) (map[int][]TranscripcioAtributRaw, error) {
+	return d.help.listTranscripcioAtributsByLlibreID(llibreID)
 }
 func (d *MySQL) CreateTranscripcioAtribut(a *TranscripcioAtributRaw) (int, error) {
 	return d.help.createTranscripcioAtribut(a)

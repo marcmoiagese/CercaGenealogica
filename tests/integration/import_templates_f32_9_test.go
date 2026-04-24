@@ -12,10 +12,12 @@ import (
 
 type f329CountingDB struct {
 	db.DB
-	listPersonesCalls int
-	listPersonesByIDs int
-	listAtributsCalls int
-	listAtributsByIDs int
+	listPersonesCalls  int
+	listPersonesByIDs  int
+	listPersonesByBook int
+	listAtributsCalls  int
+	listAtributsByIDs  int
+	listAtributsByBook int
 }
 
 func (d *f329CountingDB) ListTranscripcioPersones(transcripcioID int) ([]db.TranscripcioPersonaRaw, error) {
@@ -28,6 +30,11 @@ func (d *f329CountingDB) ListTranscripcioPersonesByTranscripcioIDs(transcripcioI
 	return d.DB.ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
 }
 
+func (d *f329CountingDB) ListTranscripcioPersonesByLlibreID(llibreID int) (map[int][]db.TranscripcioPersonaRaw, error) {
+	d.listPersonesByBook++
+	return d.DB.ListTranscripcioPersonesByLlibreID(llibreID)
+}
+
 func (d *f329CountingDB) ListTranscripcioAtributs(transcripcioID int) ([]db.TranscripcioAtributRaw, error) {
 	d.listAtributsCalls++
 	return d.DB.ListTranscripcioAtributs(transcripcioID)
@@ -36,6 +43,11 @@ func (d *f329CountingDB) ListTranscripcioAtributs(transcripcioID int) ([]db.Tran
 func (d *f329CountingDB) ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []int) (map[int][]db.TranscripcioAtributRaw, error) {
 	d.listAtributsByIDs++
 	return d.DB.ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs)
+}
+
+func (d *f329CountingDB) ListTranscripcioAtributsByLlibreID(llibreID int) (map[int][]db.TranscripcioAtributRaw, error) {
+	d.listAtributsByBook++
+	return d.DB.ListTranscripcioAtributsByLlibreID(llibreID)
 }
 
 func TestRegistreImportSidefxUsesBulkIndexacioFetchSQLitePostgresF329(t *testing.T) {
@@ -63,11 +75,20 @@ func TestRegistreImportSidefxUsesBulkIndexacioFetchSQLitePostgresF329(t *testing
 			if rr.Result().StatusCode != http.StatusSeeOther {
 				t.Fatalf("[%s] status inesperat: %d body=%s", cfg.Label, rr.Result().StatusCode, rr.Body.String())
 			}
-			if countingDB.listPersonesByIDs == 0 || countingDB.listAtributsByIDs == 0 {
-				t.Fatalf("[%s] el recalcul d'indexació ha d'usar càrrega bulk: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
-			}
 			if countingDB.listPersonesCalls != 0 || countingDB.listAtributsCalls != 0 {
 				t.Fatalf("[%s] el recalcul d'indexació no ha d'usar càrrega fila-a-fila: persones=%d atributs=%d", cfg.Label, countingDB.listPersonesCalls, countingDB.listAtributsCalls)
+			}
+			if cfg.Engine == "postgres" {
+				if countingDB.listPersonesByBook == 0 || countingDB.listAtributsByBook == 0 {
+					t.Fatalf("[%s] PostgreSQL ha d'usar càrrega bulk per llibre: persones_by_book=%d atributs_by_book=%d", cfg.Label, countingDB.listPersonesByBook, countingDB.listAtributsByBook)
+				}
+				if countingDB.listPersonesByIDs != 0 || countingDB.listAtributsByIDs != 0 {
+					t.Fatalf("[%s] PostgreSQL no hauria de recórrer a by_ids quan el runtime específic per llibre és disponible: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
+				}
+			} else {
+				if countingDB.listPersonesByIDs == 0 || countingDB.listAtributsByIDs == 0 {
+					t.Fatalf("[%s] SQLite/MySQL han de mantenir la càrrega bulk per IDs: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
+				}
 			}
 		})
 	}
