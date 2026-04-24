@@ -1604,7 +1604,7 @@ func (a *App) loadExistingByStrongMatchWithPageResolverSnapshot(runtime db.Templ
 	preparedMatchIDsByKey := candidates.PreparedMatchIDsByKey
 	exactContextMatch := candidates.ExactContextMatch
 	trans := candidates.Transcripcions
-	if exactContextMatch && len(preparedMatchIDsByKey) > 0 {
+	if exactContextMatch {
 		return preparedMatchIDsByKey
 	}
 	if len(trans) > 0 {
