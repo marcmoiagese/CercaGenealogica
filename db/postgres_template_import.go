@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -271,4 +272,165 @@ func (h sqlHelper) allocatePostgresSerialIDsTx(tx *sql.Tx, table, column string,
 		return nil, sql.ErrNoRows
 	}
 	return ids, nil
+}
+
+func postgresStrongMatchPolicyKey(principalRoles []string) string {
+	if len(principalRoles) == 0 {
+		return "batejat\x1fpersona_principal"
+	}
+	return strings.Join(principalRoles, "\x1f")
+}
+
+func postgresStrongMatchKeyForRow(row *TranscripcioRaw, persones map[string]*TranscripcioPersonaRaw, attrs map[string]*TranscripcioAtributRaw, principalRoles []string) string {
+	if row == nil {
+		return ""
+	}
+	principalKey := postgresStrongPrincipalKey(persones, principalRoles)
+	if principalKey == "" {
+		return ""
+	}
+	signals := []string{"principal:" + principalKey}
+	extraCount := 0
+	seenSignals := map[string]struct{}{}
+	addExtra := func(kind, value string) {
+		value = postgresNormalizeStrongMatchPart(value)
+		if value == "" {
+			return
+		}
+		signal := kind + ":" + value
+		if _, exists := seenSignals[signal]; exists {
+			return
+		}
+		seenSignals[signal] = struct{}{}
+		signals = append(signals, signal)
+		extraCount++
+	}
+	if row.DataActeISO.Valid {
+		addExtra("data_acte", row.DataActeISO.String)
+	} else {
+		addExtra("data_acte", row.DataActeText)
+	}
+	switch strings.ToLower(strings.TrimSpace(row.TipusActe)) {
+	case "baptisme":
+		for _, key := range []string{"data_bateig", "data_naixement", "data_defuncio", "casat"} {
+			if attr := attrs[key]; attr != nil {
+				addExtra("attr:"+key, postgresStrongAttrComparableValue(attr))
+			}
+		}
+		for _, role := range []string{"pare", "mare", "avi_patern", "avia_paterna", "avi_matern", "avia_materna", "padri", "padrina"} {
+			if p := persones[role]; p != nil {
+				addExtra("person:"+role, postgresStrongPersonKey(p))
+			}
+		}
+	default:
+		attrKeys := make([]string, 0, len(attrs))
+		for key := range attrs {
+			if key == "pagina_digital" {
+				continue
+			}
+			attrKeys = append(attrKeys, key)
+		}
+		sort.Strings(attrKeys)
+		for _, key := range attrKeys {
+			addExtra("attr:"+key, postgresStrongAttrComparableValue(attrs[key]))
+		}
+		principalRoleSet := map[string]struct{}{}
+		for _, role := range principalRoles {
+			role = strings.TrimSpace(role)
+			if role != "" {
+				principalRoleSet[role] = struct{}{}
+			}
+		}
+		if len(principalRoleSet) == 0 {
+			principalRoleSet["batejat"] = struct{}{}
+			principalRoleSet["persona_principal"] = struct{}{}
+		}
+		roleKeys := make([]string, 0, len(persones))
+		for role := range persones {
+			if _, skip := principalRoleSet[role]; skip {
+				continue
+			}
+			roleKeys = append(roleKeys, role)
+		}
+		sort.Strings(roleKeys)
+		for _, role := range roleKeys {
+			addExtra("person:"+role, postgresStrongPersonKey(persones[role]))
+		}
+	}
+	if extraCount < 2 {
+		return ""
+	}
+	return strings.Join(signals, "|")
+}
+
+func postgresStrongPrincipalKey(persones map[string]*TranscripcioPersonaRaw, roles []string) string {
+	if len(roles) == 0 {
+		roles = []string{"batejat", "persona_principal"}
+	}
+	for _, role := range roles {
+		if key := postgresStrongPersonKey(persones[role]); key != "" {
+			return key
+		}
+	}
+	return ""
+}
+
+func postgresStrongPersonKey(p *TranscripcioPersonaRaw) string {
+	if p == nil {
+		return ""
+	}
+	nom := postgresNormalizeStrongMatchPart(p.Nom)
+	cognom1 := postgresNormalizeStrongMatchPart(p.Cognom1)
+	cognom2 := postgresNormalizeStrongMatchPart(p.Cognom2)
+	if nom == "" || (cognom1 == "" && cognom2 == "") {
+		return ""
+	}
+	return nom + "|" + cognom1 + "|" + cognom2
+}
+
+func postgresStrongAttrComparableValue(attr *TranscripcioAtributRaw) string {
+	if attr == nil {
+		return ""
+	}
+	if attr.ValorDate.Valid {
+		return attr.ValorDate.String
+	}
+	if attr.ValorInt.Valid {
+		return strconv.FormatInt(attr.ValorInt.Int64, 10)
+	}
+	if attr.ValorBool.Valid {
+		if attr.ValorBool.Bool {
+			return "true"
+		}
+		return "false"
+	}
+	return attr.ValorText
+}
+
+func postgresNormalizeStrongMatchPart(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if len(value) >= 10 && isISODate(value[:10]) {
+		return value[:10]
+	}
+	value = stripDiacritics(value)
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func isISODate(value string) bool {
+	if len(value) != 10 {
+		return false
+	}
+	for i, r := range value {
+		switch i {
+		case 4, 7:
+			if r != '-' {
+				return false
+			}
+		default:
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
+	}
+	return true
 }

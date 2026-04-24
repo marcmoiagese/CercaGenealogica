@@ -1591,17 +1591,22 @@ func (a *App) loadExistingByStrongMatchWithPageResolverSnapshot(runtime db.Templ
 	matchBuildCache := newTemplateMatchBuildCache()
 	pageKeyNorm := normalizeTemplateMatchPartWithCache(matchBuildCache, pageKey)
 	candidates, _ := runtime.LoadStrongMatchCandidates(db.TemplateImportStrongMatchRequest{
-		BookID:        bookID,
-		TipusActe:     incoming.TipusActe,
-		PageKey:       pageKey,
-		SnapshotMaxID: snapshotMaxID,
+		BookID:         bookID,
+		TipusActe:      incoming.TipusActe,
+		PageKey:        pageKey,
+		SnapshotMaxID:  snapshotMaxID,
+		PrincipalRoles: policies.PrincipalRoles,
 	})
 	attrsByTranscripcioID := candidates.AtributsByTranscripcioID
 	personesByTranscripcioID := candidates.PersonesByTranscripcioID
 	preparedAtributsByTranscripcioID := candidates.PreparedAtributsByTranscripcioID
 	preparedPersonesByTranscripcioID := candidates.PreparedPersonesByTranscripcioID
+	preparedMatchIDsByKey := candidates.PreparedMatchIDsByKey
 	exactContextMatch := candidates.ExactContextMatch
 	trans := candidates.Transcripcions
+	if exactContextMatch && len(preparedMatchIDsByKey) > 0 {
+		return preparedMatchIDsByKey
+	}
 	if len(trans) > 0 {
 		for _, tr := range trans {
 			if tr.ID <= 0 || (snapshotMaxID >= 0 && tr.ID > snapshotMaxID) {
