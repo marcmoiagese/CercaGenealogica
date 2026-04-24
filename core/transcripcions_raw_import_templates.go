@@ -79,14 +79,25 @@ type templateInlineCondition struct {
 }
 
 type templateTransform struct {
-	Name  string
-	Value string
-	Args  map[string]interface{}
+	Name         string
+	Value        string
+	Args         map[string]interface{}
+	Kind         string
+	DefaultValue string
+	SelectRight  bool
+	Regex        *regexp.Regexp
+	RegexGroup   int
+	MapValues    map[string]string
 }
 
 type templateRowContext struct {
-	HeaderValues map[string]string
-	ColumnValues map[string]string
+	plan   *templateRowContextPlan
+	values []string
+}
+
+type templateRowContextPlan struct {
+	HeaderRefs map[string]int
+	ColumnRefs map[string]int
 }
 
 const templateImportCreateBatchSize = 500
@@ -101,6 +112,38 @@ type templateMatchBuildCache struct {
 	normalizedParts map[string]string
 	loweredParts    map[string]string
 	personKeys      map[string]string
+}
+
+func (ctx templateRowContext) HeaderValue(key string) string {
+	value, _ := ctx.LookupHeaderValue(key)
+	return value
+}
+
+func (ctx templateRowContext) ColumnValue(key string) string {
+	value, _ := ctx.LookupColumnValue(key)
+	return value
+}
+
+func (ctx templateRowContext) LookupHeaderValue(key string) (string, bool) {
+	if ctx.plan == nil {
+		return "", false
+	}
+	idx, ok := ctx.plan.HeaderRefs[key]
+	if !ok || idx < 0 || idx >= len(ctx.values) {
+		return "", false
+	}
+	return ctx.values[idx], true
+}
+
+func (ctx templateRowContext) LookupColumnValue(key string) (string, bool) {
+	if ctx.plan == nil {
+		return "", false
+	}
+	idx, ok := ctx.plan.ColumnRefs[key]
+	if !ok || idx < 0 || idx >= len(ctx.values) {
+		return "", false
+	}
+	return ctx.values[idx], true
 }
 
 func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Reader, sep rune, userID int, ctx importContext, fixedBookID int) csvImportResult {
@@ -144,6 +187,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	parseElapsed = time.Since(parseStart)
 	result.Debug.addParseValidation(parseElapsed)
 	result.Debug.addParse(parseElapsed)
+	compileTemplateImportModel(model)
 	if debugModel := templateImportDebugModel(model); debugModel != "" {
 		result.Debug.Model = debugModel
 	}
@@ -175,7 +219,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	}
 	for i := range model.Mapping {
 		model.Mapping[i].Index = resolveTemplateColumnIndex(model.Mapping[i], headerIndex)
-		model.Mapping[i].KeyNorm = normalizeCSVHeader(model.Mapping[i].Key)
+		model.Mapping[i].KeyNorm = normalizeCSVHeader(firstNonEmpty(model.Mapping[i].Key, model.Mapping[i].Header))
 		if model.Mapping[i].Required && model.Mapping[i].Index == -1 {
 			result.Failed = 1
 			result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "falta la columna " + model.Mapping[i].Header})
@@ -187,6 +231,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	parseElapsed = time.Since(parseStart)
 	result.Debug.addParseHeaderPrepare(parseElapsed)
 	result.Debug.addParse(parseElapsed)
+	rowContextPlan := buildTemplateRowContextPlan(model.Mapping, headerIndex)
 
 	resolveStart := time.Now()
 	bookInfoByKey, bookInfoByID := a.prepareBookLookups(model, ctx, fixedBookID)
@@ -228,7 +273,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		}
 		result.Debug.incRows()
 		parseStart = time.Now()
-		rowCtx := buildTemplateRowContext(model.Mapping, headerIndex, record)
+		rowCtx := buildTemplateRowContext(rowContextPlan, record)
 		parseElapsed = time.Since(parseStart)
 		result.Debug.addParseRowContext(parseElapsed)
 		result.Debug.addParse(parseElapsed)
@@ -253,10 +298,10 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 
 		parseStart = time.Now()
 		for _, col := range model.Mapping {
-			if col.Index < 0 || col.Index >= len(record) {
+			if col.Index < 0 || col.Index >= len(rowCtx.values) {
 				continue
 			}
-			rawVal := strings.TrimSpace(record[col.Index])
+			rawVal := rowCtx.values[col.Index]
 			if rawVal == "" && !columnHasDefault(col) {
 				continue
 			}
@@ -707,6 +752,60 @@ func parseTemplateTransforms(raw interface{}) []templateTransform {
 	return out
 }
 
+func compileTemplateTransforms(transforms []templateTransform) {
+	for i := range transforms {
+		kind := strings.TrimSpace(strings.ToLower(transforms[i].Name))
+		transforms[i].Kind = kind
+		switch kind {
+		case "set_default":
+			transforms[i].DefaultValue = firstNonEmpty(transforms[i].Value, asString(transforms[i].Args["value"]))
+		case "map_values":
+			transforms[i].MapValues = asMapString(transforms[i].Args)
+		case "regex_extract":
+			pattern := asString(transforms[i].Args["pattern"])
+			transforms[i].RegexGroup = intFromInterface(transforms[i].Args["group"], 1)
+			if pattern != "" {
+				if re, err := regexp.Compile(pattern); err == nil {
+					transforms[i].Regex = re
+				}
+			}
+		case "split_couple_i":
+			selectSide := strings.ToLower(firstNonEmpty(asString(transforms[i].Args["select"]), transforms[i].Value))
+			transforms[i].SelectRight = selectSide == "right"
+		}
+	}
+}
+
+func compileTemplateImportModel(model *templateImportModel) {
+	if model == nil {
+		return
+	}
+	for i := range model.Mapping {
+		compileTemplateTransformsInColumn(&model.Mapping[i])
+	}
+}
+
+func compileTemplateTransformsInColumn(col *templateColumn) {
+	if col == nil {
+		return
+	}
+	for i := range col.MapTo {
+		compileTemplateTransforms(col.MapTo[i].Transforms)
+	}
+	if col.Condition != nil {
+		compileTemplateTransforms(col.Condition.Then.Transforms)
+		for i := range col.Condition.Then.MapTo {
+			compileTemplateTransforms(col.Condition.Then.MapTo[i].Transforms)
+		}
+		if col.Condition.Else != nil {
+			compileTemplateTransforms(col.Condition.Else.Transforms)
+			for i := range col.Condition.Else.MapTo {
+				compileTemplateTransforms(col.Condition.Else.MapTo[i].Transforms)
+			}
+		}
+	}
+}
+
 func resolveTemplateColumnIndex(col templateColumn, headers map[string]int) int {
 	if idx, ok := headers[normalizeCSVHeader(col.Header)]; ok {
 		return idx
@@ -719,27 +818,36 @@ func resolveTemplateColumnIndex(col templateColumn, headers map[string]int) int 
 	return -1
 }
 
-func buildTemplateRowContext(cols []templateColumn, headers map[string]int, record []string) templateRowContext {
-	headerValues := map[string]string{}
+func buildTemplateRowContextPlan(cols []templateColumn, headers map[string]int) *templateRowContextPlan {
+	plan := &templateRowContextPlan{
+		HeaderRefs: make(map[string]int, len(headers)),
+		ColumnRefs: make(map[string]int, len(cols)),
+	}
 	for key, idx := range headers {
-		if idx >= 0 && idx < len(record) {
-			headerValues[key] = strings.TrimSpace(record[idx])
-		}
+		plan.HeaderRefs[key] = idx
 	}
-	columnValues := map[string]string{}
 	for _, col := range cols {
-		if col.Index >= 0 && col.Index < len(record) {
-			key := col.Key
-			if key == "" {
-				key = col.Header
-			}
-			if key == "" {
-				continue
-			}
-			columnValues[normalizeCSVHeader(key)] = strings.TrimSpace(record[col.Index])
+		if col.Index < 0 {
+			continue
 		}
+		keyNorm := col.KeyNorm
+		if keyNorm == "" {
+			keyNorm = normalizeCSVHeader(col.Header)
+		}
+		if keyNorm == "" {
+			continue
+		}
+		plan.ColumnRefs[keyNorm] = col.Index
 	}
-	return templateRowContext{HeaderValues: headerValues, ColumnValues: columnValues}
+	return plan
+}
+
+func buildTemplateRowContext(plan *templateRowContextPlan, record []string) templateRowContext {
+	values := make([]string, len(record))
+	for i := range record {
+		values[i] = strings.TrimSpace(record[i])
+	}
+	return templateRowContext{plan: plan, values: values}
 }
 
 type bookInfo struct {
@@ -793,7 +901,7 @@ func resolveTemplateBookID(model *templateImportModel, rowCtx templateRowContext
 			return 0, bookInfo{}, "llibre no trobat"
 		}
 		if model.BookMode == "llibre_id" && model.BookColumn != "" {
-			val := rowCtx.HeaderValues[normalizeCSVHeader(model.BookColumn)]
+			val := rowCtx.HeaderValue(normalizeCSVHeader(model.BookColumn))
 			if val != "" {
 				if id, err := strconv.Atoi(val); err == nil && id != fixedBookID {
 					return 0, bookInfo{}, "llibre_id no coincideix"
@@ -804,7 +912,7 @@ func resolveTemplateBookID(model *templateImportModel, rowCtx templateRowContext
 	}
 	switch model.BookMode {
 	case "cronologia_lookup":
-		raw := rowCtx.HeaderValues[normalizeCSVHeader(model.BookColumn)]
+		raw := rowCtx.HeaderValue(normalizeCSVHeader(model.BookColumn))
 		if strings.TrimSpace(raw) == "" {
 			return 0, bookInfo{}, "llibre buit"
 		}
@@ -821,7 +929,7 @@ func resolveTemplateBookID(model *templateImportModel, rowCtx templateRowContext
 		}
 		return info.ID, info, ""
 	default:
-		raw := rowCtx.HeaderValues[normalizeCSVHeader(model.BookColumn)]
+		raw := rowCtx.HeaderValue(normalizeCSVHeader(model.BookColumn))
 		id, err := strconv.Atoi(raw)
 		if err != nil || id == 0 {
 			return 0, bookInfo{}, "llibre_id obligatori"
@@ -897,7 +1005,6 @@ func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRow
 			role := strings.TrimPrefix(entry.Target, "person.")
 			role = strings.Split(role, ".")[0]
 			var p *db.TranscripcioPersonaRaw
-			personBuildStart := time.Now()
 			switch personMode {
 			case "nom_v2":
 				p = buildPersonFromNomV2WithConfig(value, role, parseCfg)
@@ -908,12 +1015,9 @@ func applyTemplateColumn(col templateColumn, rawValue string, rowCtx templateRow
 			case "cognoms_v2_maternal_first":
 				p = swapPersonCognoms(buildPersonFromCognomsV2WithConfig(value, role, parseCfg))
 			case "nom":
-				p = buildPersonFromNom(value, role)
+				p = buildPersonFromNomWithConfig(value, role, parseCfg)
 			default:
-				p = buildPersonFromCognoms(value, role)
-			}
-			if parseCfg.Metrics != nil && (personMode == "nom" || personMode == "cognoms") {
-				parseCfg.Metrics.addParsePersonBuild(time.Since(personBuildStart))
+				p = buildPersonFromCognomsWithConfig(value, role, parseCfg)
 			}
 			if p != nil {
 				persones[role] = mergePerson(persones[role], p)
@@ -942,8 +1046,11 @@ func swapPersonCognoms(p *db.TranscripcioPersonaRaw) *db.TranscripcioPersonaRaw 
 func applyTemplateTransforms(value string, transforms []templateTransform, parseCfg templateParseConfig) (string, map[string]string) {
 	extras := map[string]string{}
 	for _, tr := range transforms {
-		name := strings.TrimSpace(strings.ToLower(tr.Name))
-		switch name {
+		kind := tr.Kind
+		if kind == "" {
+			kind = strings.TrimSpace(strings.ToLower(tr.Name))
+		}
+		switch kind {
 		case "trim":
 			value = strings.TrimSpace(value)
 		case "lower":
@@ -989,31 +1096,24 @@ func applyTemplateTransforms(value string, transforms []templateTransform, parse
 			}
 		case "split_couple_i":
 			left, right := splitCouple(value)
-			selectSide := strings.ToLower(firstNonEmpty(asString(tr.Args["select"]), tr.Value))
-			if selectSide == "right" {
+			if tr.SelectRight {
 				value = right
 			} else {
 				value = left
 			}
 		case "set_default":
 			if strings.TrimSpace(value) == "" {
-				value = firstNonEmpty(tr.Value, asString(tr.Args["value"]))
+				value = tr.DefaultValue
 			}
 		case "map_values":
-			if mapping := asMapString(tr.Args); mapping != nil {
-				if mapped, ok := mapping[value]; ok {
-					value = mapped
-				}
+			if mapped, ok := tr.MapValues[value]; ok {
+				value = mapped
 			}
 		case "regex_extract":
-			pattern := asString(tr.Args["pattern"])
-			group := intFromInterface(tr.Args["group"], 1)
-			if pattern != "" {
-				if re, err := regexp.Compile(pattern); err == nil {
-					matches := re.FindStringSubmatch(value)
-					if group >= 0 && group < len(matches) {
-						value = matches[group]
-					}
+			if tr.Regex != nil {
+				matches := tr.Regex.FindStringSubmatch(value)
+				if tr.RegexGroup >= 0 && tr.RegexGroup < len(matches) {
+					value = matches[tr.RegexGroup]
 				}
 			}
 		case "extract_parenthetical_last":
@@ -1034,23 +1134,26 @@ func applyTemplateTransforms(value string, transforms []templateTransform, parse
 func applyTemplateTransformsWithPerson(value string, transforms []templateTransform, parseCfg templateParseConfig) (string, map[string]string, string, bool) {
 	extras := map[string]string{}
 	for _, tr := range transforms {
-		name := strings.TrimSpace(strings.ToLower(tr.Name))
-		switch name {
+		kind := tr.Kind
+		if kind == "" {
+			kind = strings.TrimSpace(strings.ToLower(tr.Name))
+		}
+		switch kind {
 		case "parse_person_from_cognoms", "parse_person_from_cognoms_marcmoia_v2", "parse_person_from_cognoms_marcmoia_v2_maternal_first":
 			mode := "cognoms"
-			if name == "parse_person_from_cognoms_marcmoia_v2" {
+			if kind == "parse_person_from_cognoms_marcmoia_v2" {
 				mode = "cognoms_v2"
 			}
-			if name == "parse_person_from_cognoms_marcmoia_v2_maternal_first" {
+			if kind == "parse_person_from_cognoms_marcmoia_v2_maternal_first" {
 				mode = "cognoms_v2_maternal_first"
 			}
 			return value, extras, mode, true
 		case "parse_person_from_nom", "parse_person_from_nom_marcmoia_v2", "parse_person_from_nom_marcmoia_v2_maternal_first":
 			mode := "nom"
-			if name == "parse_person_from_nom_marcmoia_v2" {
+			if kind == "parse_person_from_nom_marcmoia_v2" {
 				mode = "nom_v2"
 			}
-			if name == "parse_person_from_nom_marcmoia_v2_maternal_first" {
+			if kind == "parse_person_from_nom_marcmoia_v2_maternal_first" {
 				mode = "nom_v2_maternal_first"
 			}
 			return value, extras, mode, true
@@ -1181,7 +1284,7 @@ func applyPersonTarget(field string, value string, extras map[string]string, per
 		if strings.TrimSpace(value) == "" {
 			return
 		}
-		p := buildPersonFromCognoms(value, role)
+		p := buildPersonFromCognomsWithConfig(value, role, parseCfg)
 		if p == nil {
 			return
 		}
@@ -1322,11 +1425,11 @@ func buildTemplateDedupKeyWithCache(cache *templateMatchBuildCache, fields []str
 			continue
 		}
 		norm := normalizeCSVHeader(key)
-		if val, ok := rowCtx.ColumnValues[norm]; ok {
+		if val, ok := rowCtx.LookupColumnValue(norm); ok {
 			parts = append(parts, val)
 			continue
 		}
-		if val, ok := rowCtx.HeaderValues[norm]; ok {
+		if val, ok := rowCtx.LookupHeaderValue(norm); ok {
 			parts = append(parts, val)
 			continue
 		}
@@ -1392,9 +1495,9 @@ func evalTemplateCondition(expr string, value string, rowCtx templateRowContext)
 		if strings.HasPrefix(strings.ToLower(left), "column:") {
 			ref := strings.TrimSpace(left[7:])
 			if ref != "" {
-				leftVal = rowCtx.ColumnValues[normalizeCSVHeader(ref)]
+				leftVal, _ = rowCtx.LookupColumnValue(normalizeCSVHeader(ref))
 				if leftVal == "" {
-					leftVal = rowCtx.HeaderValues[normalizeCSVHeader(ref)]
+					leftVal = rowCtx.HeaderValue(normalizeCSVHeader(ref))
 				}
 			}
 		}
@@ -1416,17 +1519,17 @@ func evalInlineCondition(cond *templateInlineCondition, rowCtx templateRowContex
 		if ref == "" {
 			return false
 		}
-		val := rowCtx.ColumnValues[normalizeCSVHeader(ref)]
+		val := rowCtx.ColumnValue(normalizeCSVHeader(ref))
 		if val == "" {
-			val = rowCtx.HeaderValues[normalizeCSVHeader(ref)]
+			val = rowCtx.HeaderValue(normalizeCSVHeader(ref))
 		}
 		return strings.TrimSpace(val) != ""
 	case "equals":
 		ref := asString(cond.Args["column"])
 		expected := asString(cond.Args["value"])
-		val := rowCtx.ColumnValues[normalizeCSVHeader(ref)]
+		val := rowCtx.ColumnValue(normalizeCSVHeader(ref))
 		if val == "" {
-			val = rowCtx.HeaderValues[normalizeCSVHeader(ref)]
+			val = rowCtx.HeaderValue(normalizeCSVHeader(ref))
 		}
 		return val == expected
 	default:

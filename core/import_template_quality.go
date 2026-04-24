@@ -3,17 +3,44 @@ package core
 import (
 	"strings"
 	"time"
+
+	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
 type templateQualityConfig struct {
-	Labels  bool
-	Markers map[string]string
+	Labels     bool
+	Markers    map[string]string
+	normalized bool
 }
 
 type templateParseConfig struct {
 	DateFormat string
 	Quality    templateQualityConfig
 	Metrics    *csvImportDebugMetrics
+	Caches     *templateParseCaches
+}
+
+type templateParseCaches struct {
+	quality map[string]templateQualityCacheEntry
+	date    map[string]templateDateCacheEntry
+	person  map[string]templatePersonCacheEntry
+}
+
+type templateQualityCacheEntry struct {
+	Cleaned string
+	Qual    string
+}
+
+type templateDateCacheEntry struct {
+	ISO    string
+	Text   string
+	Estat  string
+	Loaded bool
+}
+
+type templatePersonCacheEntry struct {
+	Person db.TranscripcioPersonaRaw
+	Loaded bool
 }
 
 var defaultTemplateQualityMarkers = map[string]string{
@@ -43,6 +70,9 @@ func normalizeTemplateDateFormat(raw string) string {
 }
 
 func normalizeTemplateQualityConfig(cfg templateQualityConfig) templateQualityConfig {
+	if cfg.normalized {
+		return cfg
+	}
 	markers := map[string]string{}
 	if cfg.Markers != nil {
 		for key, val := range cfg.Markers {
@@ -55,13 +85,20 @@ func normalizeTemplateQualityConfig(cfg templateQualityConfig) templateQualityCo
 		}
 	}
 	return templateQualityConfig{
-		Labels:  cfg.Labels,
-		Markers: markers,
+		Labels:     cfg.Labels,
+		Markers:    markers,
+		normalized: true,
 	}
 }
 
 func buildTemplateParseConfig(model *templateImportModel) templateParseConfig {
-	cfg := templateParseConfig{}
+	cfg := templateParseConfig{
+		Caches: &templateParseCaches{
+			quality: map[string]templateQualityCacheEntry{},
+			date:    map[string]templateDateCacheEntry{},
+			person:  map[string]templatePersonCacheEntry{},
+		},
+	}
 	if model != nil {
 		cfg.DateFormat = model.DateFormat
 		cfg.Quality = model.Quality
@@ -148,7 +185,9 @@ func stripQualityMarkers(raw string, cfg templateQualityConfig) (string, string)
 	}
 	status := ""
 	cleaned := raw
-	cfg = normalizeTemplateQualityConfig(cfg)
+	if !cfg.normalized {
+		cfg = normalizeTemplateQualityConfig(cfg)
+	}
 	for _, key := range []string{"no_consta", "illegible", "incomplet", "dubtos"} {
 		marker := cfg.Markers[key]
 		if marker == "" {
@@ -205,7 +244,18 @@ func extractQuality(raw string, cfg templateQualityConfig) (string, string) {
 
 func extractQualityWithConfig(raw string, cfg templateParseConfig) (string, string) {
 	start := time.Now()
+	if cfg.Caches != nil {
+		if cached, ok := cfg.Caches.quality[raw]; ok {
+			if cfg.Metrics != nil {
+				cfg.Metrics.addParseQuality(time.Since(start))
+			}
+			return cached.Cleaned, cached.Qual
+		}
+	}
 	cleaned, qual := extractQuality(raw, cfg.Quality)
+	if cfg.Caches != nil {
+		cfg.Caches.quality[raw] = templateQualityCacheEntry{Cleaned: cleaned, Qual: qual}
+	}
 	if cfg.Metrics != nil {
 		cfg.Metrics.addParseQuality(time.Since(start))
 	}

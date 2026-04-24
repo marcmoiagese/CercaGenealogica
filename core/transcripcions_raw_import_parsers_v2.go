@@ -10,6 +10,13 @@ import (
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
+var (
+	parseMarriageOrderParenRe     = regexp.MustCompile(`\(\s*(\d+)\s*[rnt]?\s*\)`)
+	parseMarriageOrderOrdinalRe   = regexp.MustCompile(`\b(\d+)\s*(r|n|t)\b`)
+	parseMarriageOrderMatAfterRe  = regexp.MustCompile(`matrimoni\s*(\d+)`)
+	parseMarriageOrderMatBeforeRe = regexp.MustCompile(`\b(\d+)\s*(?:r|n|t)?\s*matrimoni\b`)
+)
+
 func parseFlexibleDateV2(raw string) (string, string, string) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -57,6 +64,11 @@ func parseFlexibleDateWithConfig(raw string, cfg templateParseConfig) (string, s
 			cfg.Metrics.addParseDate(time.Since(start))
 		}
 	}()
+	if cfg.Caches != nil {
+		if cached, ok := cfg.Caches.date[raw]; ok && cached.Loaded {
+			return cached.ISO, cached.Text, cached.Estat
+		}
+	}
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return "", "", ""
@@ -64,15 +76,25 @@ func parseFlexibleDateWithConfig(raw string, cfg templateParseConfig) (string, s
 	cleaned, qual := extractQualityWithConfig(raw, cfg)
 	cleaned = strings.TrimSpace(cleaned)
 	if cleaned == "" {
+		if cfg.Caches != nil {
+			cfg.Caches.date[raw] = templateDateCacheEntry{Text: "", Estat: qual, Loaded: true}
+		}
 		return "", "", qual
 	}
 	format := normalizeTemplateDateFormat(cfg.DateFormat)
 	iso, ok := parseDateByFormat(cleaned, format)
 	if ok {
-		return iso, "", mergeQualityStatus(qual, "clar")
+		estat := mergeQualityStatus(qual, "clar")
+		if cfg.Caches != nil {
+			cfg.Caches.date[raw] = templateDateCacheEntry{ISO: iso, Text: "", Estat: estat, Loaded: true}
+		}
+		return iso, "", estat
 	}
 	if qual == "" {
 		qual = "incomplet"
+	}
+	if cfg.Caches != nil {
+		cfg.Caches.date[raw] = templateDateCacheEntry{ISO: "", Text: cleaned, Estat: qual, Loaded: true}
 	}
 	return "", cleaned, qual
 }
@@ -253,6 +275,26 @@ func buildPersonFromCognomsV2(raw, role string) *db.TranscripcioPersonaRaw {
 	return p
 }
 
+func buildPersonFromCognomsWithConfig(raw, role string, cfg templateParseConfig) *db.TranscripcioPersonaRaw {
+	start := time.Now()
+	defer func() {
+		if cfg.Metrics != nil {
+			cfg.Metrics.addParsePersonBuild(time.Since(start))
+		}
+	}()
+	cacheKey := "cognoms_v1\x00" + role + "\x00" + raw
+	if cfg.Caches != nil {
+		if cached, ok := cfg.Caches.person[cacheKey]; ok && cached.Loaded {
+			return cloneTemplateCachedPerson(&cached.Person)
+		}
+	}
+	p := buildPersonFromCognoms(raw, role)
+	if cfg.Caches != nil && p != nil {
+		cfg.Caches.person[cacheKey] = templatePersonCacheEntry{Person: *p, Loaded: true}
+	}
+	return cloneTemplateCachedPerson(p)
+}
+
 func buildPersonFromNomV2(raw, role string) *db.TranscripcioPersonaRaw {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -315,6 +357,26 @@ func buildPersonFromNomV2(raw, role string) *db.TranscripcioPersonaRaw {
 	return p
 }
 
+func buildPersonFromNomWithConfig(raw, role string, cfg templateParseConfig) *db.TranscripcioPersonaRaw {
+	start := time.Now()
+	defer func() {
+		if cfg.Metrics != nil {
+			cfg.Metrics.addParsePersonBuild(time.Since(start))
+		}
+	}()
+	cacheKey := "nom_v1\x00" + role + "\x00" + raw
+	if cfg.Caches != nil {
+		if cached, ok := cfg.Caches.person[cacheKey]; ok && cached.Loaded {
+			return cloneTemplateCachedPerson(&cached.Person)
+		}
+	}
+	p := buildPersonFromNom(raw, role)
+	if cfg.Caches != nil && p != nil {
+		cfg.Caches.person[cacheKey] = templatePersonCacheEntry{Person: *p, Loaded: true}
+	}
+	return cloneTemplateCachedPerson(p)
+}
+
 func buildPersonFromCognomsV2WithConfig(raw, role string, cfg templateParseConfig) *db.TranscripcioPersonaRaw {
 	start := time.Now()
 	defer func() {
@@ -322,12 +384,22 @@ func buildPersonFromCognomsV2WithConfig(raw, role string, cfg templateParseConfi
 			cfg.Metrics.addParsePersonBuild(time.Since(start))
 		}
 	}()
+	cacheKey := "cognoms_v2\x00" + role + "\x00" + raw
+	if cfg.Caches != nil {
+		if cached, ok := cfg.Caches.person[cacheKey]; ok && cached.Loaded {
+			return cloneTemplateCachedPerson(&cached.Person)
+		}
+	}
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
 	}
 	if isDefaultQualityConfig(cfg.Quality) && !cfg.Quality.Labels {
-		return buildPersonFromCognomsV2(raw, role)
+		p := buildPersonFromCognomsV2(raw, role)
+		if cfg.Caches != nil && p != nil {
+			cfg.Caches.person[cacheKey] = templatePersonCacheEntry{Person: *p, Loaded: true}
+		}
+		return cloneTemplateCachedPerson(p)
 	}
 	main := stripParentheticals(raw)
 	extras := extractParentheticalAll(raw)
@@ -395,7 +467,10 @@ func buildPersonFromCognomsV2WithConfig(raw, role string, cfg templateParseConfi
 		p.MunicipiText = munText
 		p.MunicipiEstat = defaultQuality(munText, munQual)
 	}
-	return p
+	if cfg.Caches != nil && p != nil {
+		cfg.Caches.person[cacheKey] = templatePersonCacheEntry{Person: *p, Loaded: true}
+	}
+	return cloneTemplateCachedPerson(p)
 }
 
 func buildPersonFromNomV2WithConfig(raw, role string, cfg templateParseConfig) *db.TranscripcioPersonaRaw {
@@ -405,12 +480,22 @@ func buildPersonFromNomV2WithConfig(raw, role string, cfg templateParseConfig) *
 			cfg.Metrics.addParsePersonBuild(time.Since(start))
 		}
 	}()
+	cacheKey := "nom_v2\x00" + role + "\x00" + raw
+	if cfg.Caches != nil {
+		if cached, ok := cfg.Caches.person[cacheKey]; ok && cached.Loaded {
+			return cloneTemplateCachedPerson(&cached.Person)
+		}
+	}
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
 	}
 	if isDefaultQualityConfig(cfg.Quality) && !cfg.Quality.Labels {
-		return buildPersonFromNomV2(raw, role)
+		p := buildPersonFromNomV2(raw, role)
+		if cfg.Caches != nil && p != nil {
+			cfg.Caches.person[cacheKey] = templatePersonCacheEntry{Person: *p, Loaded: true}
+		}
+		return cloneTemplateCachedPerson(p)
 	}
 	main := stripParentheticals(raw)
 	extras := extractParentheticalAll(raw)
@@ -485,7 +570,18 @@ func buildPersonFromNomV2WithConfig(raw, role string, cfg templateParseConfig) *
 		p.MunicipiText = munText
 		p.MunicipiEstat = defaultQuality(munText, munQual)
 	}
-	return p
+	if cfg.Caches != nil && p != nil {
+		cfg.Caches.person[cacheKey] = templatePersonCacheEntry{Person: *p, Loaded: true}
+	}
+	return cloneTemplateCachedPerson(p)
+}
+
+func cloneTemplateCachedPerson(p *db.TranscripcioPersonaRaw) *db.TranscripcioPersonaRaw {
+	if p == nil {
+		return nil
+	}
+	cp := *p
+	return &cp
 }
 
 func splitParentheticalNotes(extras []string) (string, string) {
@@ -538,26 +634,22 @@ func parseMarriageOrder(raw string) (int, bool) {
 		return 0, false
 	}
 	lower := strings.ToLower(raw)
-	reParen := regexp.MustCompile(`\(\s*(\d+)\s*[rnt]?\s*\)`)
-	if match := reParen.FindStringSubmatch(lower); len(match) > 1 {
+	if match := parseMarriageOrderParenRe.FindStringSubmatch(lower); len(match) > 1 {
 		if n, err := strconv.Atoi(match[1]); err == nil {
 			return n, true
 		}
 	}
-	reOrdinal := regexp.MustCompile(`\b(\d+)\s*(r|n|t)\b`)
-	if match := reOrdinal.FindStringSubmatch(lower); len(match) > 1 {
+	if match := parseMarriageOrderOrdinalRe.FindStringSubmatch(lower); len(match) > 1 {
 		if n, err := strconv.Atoi(match[1]); err == nil {
 			return n, true
 		}
 	}
-	reMatAfter := regexp.MustCompile(`matrimoni\s*(\d+)`)
-	if match := reMatAfter.FindStringSubmatch(lower); len(match) > 1 {
+	if match := parseMarriageOrderMatAfterRe.FindStringSubmatch(lower); len(match) > 1 {
 		if n, err := strconv.Atoi(match[1]); err == nil {
 			return n, true
 		}
 	}
-	reMatBefore := regexp.MustCompile(`\b(\d+)\s*(?:r|n|t)?\s*matrimoni\b`)
-	if match := reMatBefore.FindStringSubmatch(lower); len(match) > 1 {
+	if match := parseMarriageOrderMatBeforeRe.FindStringSubmatch(lower); len(match) > 1 {
 		if n, err := strconv.Atoi(match[1]); err == nil {
 			return n, true
 		}
