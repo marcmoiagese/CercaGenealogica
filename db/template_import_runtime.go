@@ -15,9 +15,12 @@ type TemplateImportStrongMatchRequest struct {
 }
 
 type TemplateImportStrongMatchResult struct {
-	Transcripcions           []TranscripcioRaw
-	PersonesByTranscripcioID map[int][]TranscripcioPersonaRaw
-	AtributsByTranscripcioID map[int][]TranscripcioAtributRaw
+	Transcripcions                   []TranscripcioRaw
+	PersonesByTranscripcioID         map[int][]TranscripcioPersonaRaw
+	AtributsByTranscripcioID         map[int][]TranscripcioAtributRaw
+	PreparedPersonesByTranscripcioID map[int]map[string]*TranscripcioPersonaRaw
+	PreparedAtributsByTranscripcioID map[int]map[string]*TranscripcioAtributRaw
+	ExactContextMatch                bool
 }
 
 type TemplateImportPrincipalMatchRequest struct {
@@ -228,6 +231,9 @@ func (r *postgresTemplateImportRuntime) LoadStrongMatchCandidates(req TemplateIm
 	result.Transcripcions = snapshot.transcripcionsForIDs(ids)
 	result.PersonesByTranscripcioID = snapshot.personesForIDs(ids)
 	result.AtributsByTranscripcioID = snapshot.atributsForIDs(ids)
+	result.PreparedPersonesByTranscripcioID = snapshot.preparedPersonesForIDs(ids)
+	result.PreparedAtributsByTranscripcioID = snapshot.preparedAtributsForIDs(ids)
+	result.ExactContextMatch = true
 	return result, nil
 }
 
@@ -774,21 +780,25 @@ func normalizeTemplatePageResolutionKey(pageKey string) string {
 
 func emptyStrongMatchResult() TemplateImportStrongMatchResult {
 	return TemplateImportStrongMatchResult{
-		PersonesByTranscripcioID: map[int][]TranscripcioPersonaRaw{},
-		AtributsByTranscripcioID: map[int][]TranscripcioAtributRaw{},
+		PersonesByTranscripcioID:         map[int][]TranscripcioPersonaRaw{},
+		AtributsByTranscripcioID:         map[int][]TranscripcioAtributRaw{},
+		PreparedPersonesByTranscripcioID: map[int]map[string]*TranscripcioPersonaRaw{},
+		PreparedAtributsByTranscripcioID: map[int]map[string]*TranscripcioAtributRaw{},
 	}
 }
 
 type postgresTemplateImportStrongSnapshot struct {
-	bookID             int
-	snapshotMaxID      int
-	ids                []int
-	transcripcions     []TranscripcioRaw
-	transcripcioByID   map[int]TranscripcioRaw
-	personesByID       map[int][]TranscripcioPersonaRaw
-	atributsByID       map[int][]TranscripcioAtributRaw
-	strongIDsByContext map[string][]int
-	pageNumsByPaginaID map[int]int
+	bookID               int
+	snapshotMaxID        int
+	ids                  []int
+	transcripcions       []TranscripcioRaw
+	transcripcioByID     map[int]TranscripcioRaw
+	personesByID         map[int][]TranscripcioPersonaRaw
+	atributsByID         map[int][]TranscripcioAtributRaw
+	preparedPersonesByID map[int]map[string]*TranscripcioPersonaRaw
+	preparedAtributsByID map[int]map[string]*TranscripcioAtributRaw
+	strongIDsByContext   map[string][]int
+	pageNumsByPaginaID   map[int]int
 }
 
 func (r *postgresTemplateImportRuntime) strongSnapshot(bookID, snapshotMaxID int) (*postgresTemplateImportStrongSnapshot, error) {
@@ -837,6 +847,24 @@ func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID
 	}
 	filteredPersones := filterPersonaMapsByIDs(personesByID, ids)
 	filteredAtributs := filterAtributMapsByIDs(atributsByID, ids)
+	preparedPersonesByID := make(map[int]map[string]*TranscripcioPersonaRaw, len(filteredPersones))
+	for id, rows := range filteredPersones {
+		byRole := make(map[string]*TranscripcioPersonaRaw, len(rows))
+		for i := range rows {
+			row := rows[i]
+			byRole[row.Rol] = &row
+		}
+		preparedPersonesByID[id] = byRole
+	}
+	preparedAtributsByID := make(map[int]map[string]*TranscripcioAtributRaw, len(filteredAtributs))
+	for id, rows := range filteredAtributs {
+		byKey := make(map[string]*TranscripcioAtributRaw, len(rows))
+		for i := range rows {
+			row := rows[i]
+			byKey[row.Clau] = &row
+		}
+		preparedAtributsByID[id] = byKey
+	}
 	transcripcioByID := make(map[int]TranscripcioRaw, len(filtered))
 	strongIDsByContext := map[string][]int{}
 	for _, row := range filtered {
@@ -855,15 +883,17 @@ func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID
 		}
 	}
 	return &postgresTemplateImportStrongSnapshot{
-		bookID:             bookID,
-		snapshotMaxID:      snapshotMaxID,
-		ids:                ids,
-		transcripcions:     filtered,
-		transcripcioByID:   transcripcioByID,
-		personesByID:       filteredPersones,
-		atributsByID:       filteredAtributs,
-		strongIDsByContext: strongIDsByContext,
-		pageNumsByPaginaID: pageNumsByPaginaID,
+		bookID:               bookID,
+		snapshotMaxID:        snapshotMaxID,
+		ids:                  ids,
+		transcripcions:       filtered,
+		transcripcioByID:     transcripcioByID,
+		personesByID:         filteredPersones,
+		atributsByID:         filteredAtributs,
+		preparedPersonesByID: preparedPersonesByID,
+		preparedAtributsByID: preparedAtributsByID,
+		strongIDsByContext:   strongIDsByContext,
+		pageNumsByPaginaID:   pageNumsByPaginaID,
 	}, nil
 }
 
@@ -918,6 +948,32 @@ func (s *postgresTemplateImportStrongSnapshot) atributsForIDs(ids []int) map[int
 		return map[int][]TranscripcioAtributRaw{}
 	}
 	return filterAtributMapsByIDs(s.atributsByID, ids)
+}
+
+func (s *postgresTemplateImportStrongSnapshot) preparedPersonesForIDs(ids []int) map[int]map[string]*TranscripcioPersonaRaw {
+	if s == nil {
+		return map[int]map[string]*TranscripcioPersonaRaw{}
+	}
+	filtered := map[int]map[string]*TranscripcioPersonaRaw{}
+	for _, id := range normalizePositiveUniqueIDs(ids) {
+		if persones, ok := s.preparedPersonesByID[id]; ok {
+			filtered[id] = persones
+		}
+	}
+	return filtered
+}
+
+func (s *postgresTemplateImportStrongSnapshot) preparedAtributsForIDs(ids []int) map[int]map[string]*TranscripcioAtributRaw {
+	if s == nil {
+		return map[int]map[string]*TranscripcioAtributRaw{}
+	}
+	filtered := map[int]map[string]*TranscripcioAtributRaw{}
+	for _, id := range normalizePositiveUniqueIDs(ids) {
+		if atributs, ok := s.preparedAtributsByID[id]; ok {
+			filtered[id] = atributs
+		}
+	}
+	return filtered
 }
 
 func postgresTemplateImportSnapshotKey(bookID, snapshotMaxID int) string {

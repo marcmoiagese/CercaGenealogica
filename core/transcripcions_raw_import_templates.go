@@ -1598,6 +1598,9 @@ func (a *App) loadExistingByStrongMatchWithPageResolverSnapshot(runtime db.Templ
 	})
 	attrsByTranscripcioID := candidates.AtributsByTranscripcioID
 	personesByTranscripcioID := candidates.PersonesByTranscripcioID
+	preparedAtributsByTranscripcioID := candidates.PreparedAtributsByTranscripcioID
+	preparedPersonesByTranscripcioID := candidates.PreparedPersonesByTranscripcioID
+	exactContextMatch := candidates.ExactContextMatch
 	trans := candidates.Transcripcions
 	if len(trans) > 0 {
 		for _, tr := range trans {
@@ -1612,16 +1615,22 @@ func (a *App) loadExistingByStrongMatchWithPageResolverSnapshot(runtime db.Templ
 			if !okPersones {
 				personesExistentsRows, _ = a.DB.ListTranscripcioPersones(tr.ID)
 			}
-			if normalizeTemplateMatchPartWithCache(matchBuildCache, a.templateLogicalPageKeyForExistingWithResolver(pageResolver, bookID, &tr, attrsExistents)) != pageKeyNorm {
+			if !exactContextMatch && normalizeTemplateMatchPartWithCache(matchBuildCache, a.templateLogicalPageKeyForExistingWithResolver(pageResolver, bookID, &tr, attrsExistents)) != pageKeyNorm {
 				continue
 			}
-			personesExistents := map[string]*db.TranscripcioPersonaRaw{}
-			for i := range personesExistentsRows {
-				personesExistents[personesExistentsRows[i].Rol] = &personesExistentsRows[i]
+			personesExistents := preparedPersonesByTranscripcioID[tr.ID]
+			if personesExistents == nil {
+				personesExistents = map[string]*db.TranscripcioPersonaRaw{}
+				for i := range personesExistentsRows {
+					personesExistents[personesExistentsRows[i].Rol] = &personesExistentsRows[i]
+				}
 			}
-			attrsByKey := map[string]*db.TranscripcioAtributRaw{}
-			for i := range attrsExistents {
-				attrsByKey[attrsExistents[i].Clau] = &attrsExistents[i]
+			attrsByKey := preparedAtributsByTranscripcioID[tr.ID]
+			if attrsByKey == nil {
+				attrsByKey = map[string]*db.TranscripcioAtributRaw{}
+				for i := range attrsExistents {
+					attrsByKey[attrsExistents[i].Clau] = &attrsExistents[i]
+				}
 			}
 			matchKey := buildTemplateStrongMatchKeyWithCache(matchBuildCache, &tr, personesExistents, attrsByKey, policies)
 			if matchKey == "" {
