@@ -826,12 +826,11 @@ func (r *postgresTemplateImportRuntime) strongSnapshot(bookID, snapshotMaxID int
 }
 
 func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID int) (*postgresTemplateImportStrongSnapshot, error) {
-	trans, err := r.database.ListTranscripcionsRaw(bookID, TranscripcioFilter{Limit: -1})
+	trans, ids, err := strongSnapshotTranscripcionsPostgres(r.database, bookID, snapshotMaxID)
 	if err != nil {
 		return nil, err
 	}
-	filtered := filterTranscripcionsBySnapshot(trans, snapshotMaxID)
-	ids := transcripcioIDs(filtered)
+	filtered := trans
 	personesByID, atributsByID, err := strongSnapshotRelatedByIDsPostgres(r.database, ids)
 	if err != nil {
 		return nil, err

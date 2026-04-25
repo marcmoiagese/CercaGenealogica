@@ -10,6 +10,37 @@ import (
 	pq "github.com/lib/pq"
 )
 
+func strongSnapshotTranscripcionsPostgres(database DB, bookID, snapshotMaxID int) ([]TranscripcioRaw, []int, error) {
+	if database == nil || bookID <= 0 || snapshotMaxID <= 0 {
+		return nil, nil, nil
+	}
+	rows, err := database.Query(`
+        SELECT id
+        FROM transcripcions_raw
+        WHERE llibre_id = $1
+          AND id <= $2
+        ORDER BY id`, bookID, snapshotMaxID)
+	if err != nil {
+		return nil, nil, err
+	}
+	ids := make([]int, 0, len(rows))
+	for _, row := range rows {
+		id := parseIntValue(row["id"])
+		if id > 0 {
+			ids = append(ids, id)
+		}
+	}
+	ids = normalizePositiveUniqueIDs(ids)
+	if len(ids) == 0 {
+		return nil, nil, nil
+	}
+	trans, err := database.ListTranscripcionsRawByIDs(ids)
+	if err != nil {
+		return nil, nil, err
+	}
+	return trans, ids, nil
+}
+
 func strongSnapshotRelatedByIDsPostgres(database DB, transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
 	personesByTranscripcioID := map[int][]TranscripcioPersonaRaw{}
 	atributsByTranscripcioID := map[int][]TranscripcioAtributRaw{}
