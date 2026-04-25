@@ -19,7 +19,9 @@ type f32142PostgresStrongSnapshotCountingDB struct {
 	db.DB
 	listTranscripcionsCalls int
 	listPersonesByBookCalls int
+	listPersonesByIDsCalls  int
 	listAtributsByBookCalls int
+	listAtributsByIDsCalls  int
 	listStrongScopedCalls   int
 }
 
@@ -33,9 +35,19 @@ func (d *f32142PostgresStrongSnapshotCountingDB) ListTranscripcioPersonesByLlibr
 	return d.DB.ListTranscripcioPersonesByLlibreID(llibreID)
 }
 
+func (d *f32142PostgresStrongSnapshotCountingDB) ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs []int) (map[int][]db.TranscripcioPersonaRaw, error) {
+	d.listPersonesByIDsCalls++
+	return d.DB.ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
+}
+
 func (d *f32142PostgresStrongSnapshotCountingDB) ListTranscripcioAtributsByLlibreID(llibreID int) (map[int][]db.TranscripcioAtributRaw, error) {
 	d.listAtributsByBookCalls++
 	return d.DB.ListTranscripcioAtributsByLlibreID(llibreID)
+}
+
+func (d *f32142PostgresStrongSnapshotCountingDB) ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs []int) (map[int][]db.TranscripcioAtributRaw, error) {
+	d.listAtributsByIDsCalls++
+	return d.DB.ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs)
 }
 
 func (d *f32142PostgresStrongSnapshotCountingDB) ListTranscripcioStrongMatchCandidatesUpToID(bookID int, tipusActe, pageKey string, maxExistingID int) ([]db.TranscripcioRaw, map[int][]db.TranscripcioPersonaRaw, map[int][]db.TranscripcioAtributRaw, error) {
@@ -114,8 +126,11 @@ func TestTemplateImportStrongDedupUsesBookScopedSnapshotPostgresF32142(t *testin
 			if countingDB.listStrongScopedCalls != 0 {
 				t.Fatalf("[%s] PostgreSQL no ha de recórrer al carregador scoped per context un cop té snapshot per llibre: scoped_calls=%d", cfg.Label, countingDB.listStrongScopedCalls)
 			}
+			if countingDB.listPersonesByIDsCalls == 0 || countingDB.listAtributsByIDsCalls == 0 {
+				t.Fatalf("[%s] PostgreSQL ha d'usar càrrega per IDs al snapshot fort: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDsCalls, countingDB.listAtributsByIDsCalls)
+			}
 			if countingDB.listTranscripcionsCalls > 2 || countingDB.listPersonesByBookCalls > 2 || countingDB.listAtributsByBookCalls > 2 {
-				t.Fatalf("[%s] PostgreSQL no ha d'escalar per context al duplicate-check fort; s'accepta el preload del write i el read lateral de sidefx, got trans=%d persones=%d atributs=%d", cfg.Label, countingDB.listTranscripcionsCalls, countingDB.listPersonesByBookCalls, countingDB.listAtributsByBookCalls)
+				t.Fatalf("[%s] PostgreSQL no ha d'escalar per context al duplicate-check fort; s'accepta el preload del write i el read lateral de sidefx, got trans=%d persones_by_book=%d atributs_by_book=%d", cfg.Label, countingDB.listTranscripcionsCalls, countingDB.listPersonesByBookCalls, countingDB.listAtributsByBookCalls)
 			}
 		})
 	}
