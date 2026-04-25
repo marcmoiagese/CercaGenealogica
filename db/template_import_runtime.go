@@ -793,8 +793,9 @@ type postgresTemplateImportStrongSnapshot struct {
 	preparedPersonesByID    map[int]map[string]*TranscripcioPersonaRaw
 	preparedAtributsByID    map[int]map[string]*TranscripcioAtributRaw
 	strongMatchKeysByPolicy map[string]map[int]string
-	strongMatchIDsByRequest map[string]map[string]int
+	strongMatchIDsByContext map[string]map[string]map[string]int
 	strongIDsByContext      map[string][]int
+	strongContextKeysByID   map[int][]string
 	pageNumsByPaginaID      map[int]int
 }
 
@@ -862,19 +863,26 @@ func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID
 	}
 	transcripcioByID := make(map[int]TranscripcioRaw, len(filtered))
 	strongIDsByContext := map[string][]int{}
+	strongContextKeysByID := make(map[int][]string, len(filtered))
 	for _, row := range filtered {
 		if row.ID <= 0 {
 			continue
 		}
 		transcripcioByID[row.ID] = row
-		contextKeys := postgresStrongContextKeysForExisting(&row, filteredAtributs[row.ID], pageNumsByPaginaID)
 		tipusActe := normalizePostgresStrongContextPart(row.TipusActe)
 		if tipusActe == "" {
 			continue
 		}
+		pageKeys := postgresStrongContextKeysForExisting(&row, filteredAtributs[row.ID], pageNumsByPaginaID)
+		contextKeys := make([]string, 0, len(pageKeys))
+		for _, pageKey := range pageKeys {
+			contextKeys = append(contextKeys, postgresStrongContextKey(tipusActe, pageKey))
+		}
+		if len(contextKeys) > 0 {
+			strongContextKeysByID[row.ID] = contextKeys
+		}
 		for _, pageKey := range contextKeys {
-			contextKey := postgresStrongContextKey(tipusActe, pageKey)
-			strongIDsByContext[contextKey] = append(strongIDsByContext[contextKey], row.ID)
+			strongIDsByContext[pageKey] = append(strongIDsByContext[pageKey], row.ID)
 		}
 	}
 	return &postgresTemplateImportStrongSnapshot{
@@ -888,8 +896,9 @@ func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID
 		preparedPersonesByID:    preparedPersonesByID,
 		preparedAtributsByID:    preparedAtributsByID,
 		strongMatchKeysByPolicy: map[string]map[int]string{},
-		strongMatchIDsByRequest: map[string]map[string]int{},
+		strongMatchIDsByContext: map[string]map[string]map[string]int{},
 		strongIDsByContext:      strongIDsByContext,
+		strongContextKeysByID:   strongContextKeysByID,
 		pageNumsByPaginaID:      pageNumsByPaginaID,
 	}, nil
 }
@@ -999,6 +1008,39 @@ func (s *postgresTemplateImportStrongSnapshot) strongMatchKeysForPolicy(principa
 	return keys
 }
 
+func (s *postgresTemplateImportStrongSnapshot) strongMatchIDsByPolicyForRequest(principalRoles []string) map[string]map[string]int {
+	if s == nil {
+		return map[string]map[string]int{}
+	}
+	if s.strongMatchIDsByContext == nil {
+		s.strongMatchIDsByContext = map[string]map[string]map[string]int{}
+	}
+	policyKey := postgresStrongMatchPolicyKey(principalRoles)
+	if cached, ok := s.strongMatchIDsByContext[policyKey]; ok && cached != nil {
+		return cached
+	}
+	keysByID := s.strongMatchKeysForPolicy(principalRoles)
+	contextMaps := map[string]map[string]int{}
+	for _, id := range s.ids {
+		matchKey := keysByID[id]
+		if matchKey == "" {
+			continue
+		}
+		for _, contextKey := range s.strongContextKeysByID[id] {
+			matchMap := contextMaps[contextKey]
+			if matchMap == nil {
+				matchMap = map[string]int{}
+				contextMaps[contextKey] = matchMap
+			}
+			if _, exists := matchMap[matchKey]; !exists {
+				matchMap[matchKey] = id
+			}
+		}
+	}
+	s.strongMatchIDsByContext[policyKey] = contextMaps
+	return contextMaps
+}
+
 func (s *postgresTemplateImportStrongSnapshot) strongMatchIDsForContext(ids []int, principalRoles []string) map[string]int {
 	if s == nil {
 		return map[string]int{}
@@ -1019,17 +1061,28 @@ func (s *postgresTemplateImportStrongSnapshot) strongMatchIDsForRequest(pageKey,
 	if s == nil {
 		return map[string]int{}
 	}
-	if s.strongMatchIDsByRequest == nil {
-		s.strongMatchIDsByRequest = map[string]map[string]int{}
+	contextMaps := s.strongMatchIDsByPolicyForRequest(principalRoles)
+	if len(contextMaps) == 0 {
+		return map[string]int{}
 	}
-	cacheKey := postgresStrongContextRequestCacheKey(pageKey, tipusActe, principalRoles)
-	if cached, ok := s.strongMatchIDsByRequest[cacheKey]; ok {
-		return cached
+	tipusActe = normalizePostgresStrongContextPart(tipusActe)
+	if tipusActe == "" {
+		return map[string]int{}
 	}
-	ids := s.lookupStrongContextIDs(pageKey, tipusActe)
-	prepared := s.strongMatchIDsForContext(ids, principalRoles)
-	s.strongMatchIDsByRequest[cacheKey] = prepared
-	return prepared
+	pageKeys := postgresStrongContextKeysForIncoming(pageKey)
+	if len(pageKeys) == 0 {
+		return map[string]int{}
+	}
+	merged := map[string]int{}
+	for _, key := range pageKeys {
+		contextKey := postgresStrongContextKey(tipusActe, key)
+		for matchKey, id := range contextMaps[contextKey] {
+			if _, exists := merged[matchKey]; !exists {
+				merged[matchKey] = id
+			}
+		}
+	}
+	return merged
 }
 
 func postgresTemplateImportSnapshotKey(bookID, snapshotMaxID int) string {
@@ -1038,10 +1091,6 @@ func postgresTemplateImportSnapshotKey(bookID, snapshotMaxID int) string {
 
 func postgresStrongContextKey(tipusActe, pageKey string) string {
 	return normalizePostgresStrongContextPart(tipusActe) + "|" + normalizePostgresStrongContextPart(pageKey)
-}
-
-func postgresStrongContextRequestCacheKey(pageKey, tipusActe string, principalRoles []string) string {
-	return postgresStrongContextKey(tipusActe, pageKey) + "\x1e" + postgresStrongMatchPolicyKey(principalRoles)
 }
 
 func normalizePostgresStrongContextPart(value string) string {
