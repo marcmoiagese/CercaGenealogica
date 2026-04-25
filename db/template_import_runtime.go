@@ -280,7 +280,7 @@ func (r genericTemplateImportRuntime) LoadPersonesByLlibreID(llibreID int, trans
 }
 
 func (r postgresTemplateImportRuntime) LoadPersonesByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
-	return relatedPersonesByLlibreID(r.database, llibreID, transcripcioIDs)
+	return relatedPersonesByTranscripcioIDsPostgres(r.database, transcripcioIDs)
 }
 
 func (r sqliteTemplateImportRuntime) LoadAtributsByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
@@ -296,7 +296,7 @@ func (r genericTemplateImportRuntime) LoadAtributsByLlibreID(llibreID int, trans
 }
 
 func (r postgresTemplateImportRuntime) LoadAtributsByLlibreID(llibreID int, transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
-	return relatedAtributsByLlibreID(r.database, llibreID, transcripcioIDs)
+	return relatedAtributsByTranscripcioIDsPostgres(r.database, transcripcioIDs)
 }
 
 func createBundleThroughBulk(runtime interface {

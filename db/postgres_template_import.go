@@ -10,6 +10,28 @@ import (
 	pq "github.com/lib/pq"
 )
 
+func relatedPersonesByTranscripcioIDsPostgres(database DB, transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, error) {
+	if database == nil {
+		return map[int][]TranscripcioPersonaRaw{}, nil
+	}
+	rows, err := database.ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
+	if err != nil {
+		return nil, err
+	}
+	return ensurePersonaMaps(rows), nil
+}
+
+func relatedAtributsByTranscripcioIDsPostgres(database DB, transcripcioIDs []int) (map[int][]TranscripcioAtributRaw, error) {
+	if database == nil {
+		return map[int][]TranscripcioAtributRaw{}, nil
+	}
+	rows, err := database.ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs)
+	if err != nil {
+		return nil, err
+	}
+	return ensureAtributMaps(rows), nil
+}
+
 func (h sqlHelper) listTranscripcioStrongMatchCandidatesPostgres(bookID int, tipusActe, pageKey string, maxExistingID int) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
 	personesByTranscripcioID := map[int][]TranscripcioPersonaRaw{}
 	atributsByTranscripcioID := map[int][]TranscripcioAtributRaw{}

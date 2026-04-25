@@ -78,12 +78,19 @@ func TestRegistreImportSidefxUsesBulkIndexacioFetchSQLitePostgresF329(t *testing
 			if countingDB.listPersonesCalls != 0 || countingDB.listAtributsCalls != 0 {
 				t.Fatalf("[%s] el recalcul d'indexació no ha d'usar càrrega fila-a-fila: persones=%d atributs=%d", cfg.Label, countingDB.listPersonesCalls, countingDB.listAtributsCalls)
 			}
-			if cfg.Engine == "postgres" || cfg.Engine == "mysql" {
+			if cfg.Engine == "postgres" {
+				if countingDB.listPersonesByIDs == 0 || countingDB.listAtributsByIDs == 0 {
+					t.Fatalf("[%s] PostgreSQL ha d'usar càrrega bulk per IDs al sidefx: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
+				}
+				if countingDB.listPersonesByBook != 0 || countingDB.listAtributsByBook != 0 {
+					t.Fatalf("[%s] PostgreSQL no hauria de carregar tot el llibre al sidefx quan ja té els IDs exactes: persones_by_book=%d atributs_by_book=%d", cfg.Label, countingDB.listPersonesByBook, countingDB.listAtributsByBook)
+				}
+			} else if cfg.Engine == "mysql" {
 				if countingDB.listPersonesByBook == 0 || countingDB.listAtributsByBook == 0 {
-					t.Fatalf("[%s] %s ha d'usar càrrega bulk per llibre: persones_by_book=%d atributs_by_book=%d", cfg.Label, cfg.Engine, countingDB.listPersonesByBook, countingDB.listAtributsByBook)
+					t.Fatalf("[%s] MySQL ha d'usar càrrega bulk per llibre: persones_by_book=%d atributs_by_book=%d", cfg.Label, countingDB.listPersonesByBook, countingDB.listAtributsByBook)
 				}
 				if countingDB.listPersonesByIDs != 0 || countingDB.listAtributsByIDs != 0 {
-					t.Fatalf("[%s] %s no hauria de recórrer a by_ids quan el runtime específic per llibre és disponible: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, cfg.Engine, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
+					t.Fatalf("[%s] MySQL no hauria de recórrer a by_ids quan el runtime específic per llibre és disponible: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
 				}
 			} else {
 				if countingDB.listPersonesByIDs == 0 || countingDB.listAtributsByIDs == 0 {
@@ -185,7 +192,7 @@ func (d *f3212Fix2CountingDB) GetMaxTranscripcioRawID() (int, error) {
 	return loader.GetMaxTranscripcioRawID()
 }
 
-func TestRegistreImportSidefxUsesBookScopedBulkFetchPostgresF3212Fix2(t *testing.T) {
+func TestRegistreImportSidefxUsesIDScopedBulkFetchPostgresF3212Fix2(t *testing.T) {
 	for _, cfg := range loadSQLiteAndPostgresConfigsForImportHistory(t) {
 		if cfg.Engine != "postgres" {
 			continue
@@ -213,11 +220,11 @@ func TestRegistreImportSidefxUsesBookScopedBulkFetchPostgresF3212Fix2(t *testing
 			if rr.Result().StatusCode != http.StatusSeeOther {
 				t.Fatalf("[%s] status inesperat: %d body=%s", cfg.Label, rr.Result().StatusCode, rr.Body.String())
 			}
-			if countingDB.listPersonesByBook == 0 || countingDB.listAtributsByBook == 0 {
-				t.Fatalf("[%s] PostgreSQL ha d'usar càrrega bulk per llibre: persones_by_book=%d atributs_by_book=%d", cfg.Label, countingDB.listPersonesByBook, countingDB.listAtributsByBook)
+			if countingDB.listPersonesByIDs == 0 || countingDB.listAtributsByIDs == 0 {
+				t.Fatalf("[%s] PostgreSQL ha d'usar càrrega bulk per IDs al sidefx: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
 			}
-			if countingDB.listPersonesByIDs != 0 || countingDB.listAtributsByIDs != 0 {
-				t.Fatalf("[%s] PostgreSQL no hauria de recórrer a by_ids quan existeix el camí per llibre: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
+			if countingDB.listPersonesByBook != 0 || countingDB.listAtributsByBook != 0 {
+				t.Fatalf("[%s] PostgreSQL no hauria de recórrer al carregador per llibre al sidefx quan ja té els IDs exactes: persones_by_book=%d atributs_by_book=%d", cfg.Label, countingDB.listPersonesByBook, countingDB.listAtributsByBook)
 			}
 			if countingDB.listPersonesCalls != 0 || countingDB.listAtributsCalls != 0 {
 				t.Fatalf("[%s] PostgreSQL no ha d'usar càrrega fila-a-fila: persones=%d atributs=%d", cfg.Label, countingDB.listPersonesCalls, countingDB.listAtributsCalls)
