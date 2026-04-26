@@ -36,6 +36,7 @@ type templatePolicies struct {
 	ModerationStatus                     string
 	DedupWithin                          bool
 	DedupKeyFields                       []string
+	DedupKeyStrategy                     string
 	DedupAddRowIndexWhenPrincipalMissing bool
 	MergeMode                            string
 	PrincipalRoles                       []string
@@ -98,6 +99,27 @@ type templateRowContext struct {
 type templateRowContextPlan struct {
 	HeaderRefs map[string]int
 	ColumnRefs map[string]int
+}
+
+type templateDedupKeyFieldSource int
+
+const (
+	templateDedupKeyFieldSourceMissing templateDedupKeyFieldSource = iota
+	templateDedupKeyFieldSourceColumn
+	templateDedupKeyFieldSourceHeader
+	templateDedupKeyFieldSourceMapped
+)
+
+type templateDedupKeyFieldPlan struct {
+	RawKey  string
+	NormKey string
+	Source  templateDedupKeyFieldSource
+	Index   int
+}
+
+type templateDedupKeyPlan struct {
+	Strategy string
+	Fields   []templateDedupKeyFieldPlan
 }
 
 const templateImportCreateBatchSize = 500
@@ -294,6 +316,94 @@ type templateMatchBuildCache struct {
 	personKeys      map[string]string
 }
 
+type templateDedupKeyProfileMetrics struct {
+	BookID                  int
+	Rows                    int
+	MatchKeysGenerated      int
+	PeopleProcessed         int
+	AtributsProcessed       int
+	FieldExtractDur         time.Duration
+	StringNormalizeDur      time.Duration
+	DateParseDur            time.Duration
+	PeopleBuildDur          time.Duration
+	AttrsPeopleIterateDur   time.Duration
+	FinalAssemblyDur        time.Duration
+	FieldsProcessed         int
+	NormalizeCacheHits      int
+	NormalizeCacheMisses    int
+	RepeatedRowBuilds       int
+	RepeatedSubcomponentHit int
+}
+
+type templateDedupKeyProfiler struct {
+	enabledBooks map[int]struct{}
+	byBook       map[int]*templateDedupKeyProfileMetrics
+}
+
+func newTemplateDedupKeyProfiler(bookIDs ...int) *templateDedupKeyProfiler {
+	profiler := &templateDedupKeyProfiler{
+		enabledBooks: map[int]struct{}{},
+		byBook:       map[int]*templateDedupKeyProfileMetrics{},
+	}
+	for _, bookID := range bookIDs {
+		if bookID > 0 {
+			profiler.enabledBooks[bookID] = struct{}{}
+		}
+	}
+	return profiler
+}
+
+func (p *templateDedupKeyProfiler) metricsForBook(bookID int) *templateDedupKeyProfileMetrics {
+	if p == nil {
+		return nil
+	}
+	if _, ok := p.enabledBooks[bookID]; !ok {
+		return nil
+	}
+	metrics := p.byBook[bookID]
+	if metrics == nil {
+		metrics = &templateDedupKeyProfileMetrics{BookID: bookID}
+		p.byBook[bookID] = metrics
+	}
+	return metrics
+}
+
+func (p *templateDedupKeyProfiler) logDebug() {
+	if p == nil || len(p.byBook) == 0 {
+		return
+	}
+	bookIDs := make([]int, 0, len(p.byBook))
+	for bookID := range p.byBook {
+		bookIDs = append(bookIDs, bookID)
+	}
+	sort.Ints(bookIDs)
+	for _, bookID := range bookIDs {
+		metrics := p.byBook[bookID]
+		if metrics == nil {
+			continue
+		}
+		Debugf(
+			"duplicate_check_dedup_key_profile book_id=%d rows=%d match_keys_generated=%d people_processed=%d atributs_processed=%d field_extract_dur=%s string_normalize_dur=%s date_parse_dur=%s people_build_dur=%s iterate_atributs_persones_dur=%s final_key_assembly_dur=%s fields_processed=%d normalize_cache_hits=%d normalize_cache_misses=%d repeated_row_builds=%d repeated_subcomponent_hits=%d",
+			metrics.BookID,
+			metrics.Rows,
+			metrics.MatchKeysGenerated,
+			metrics.PeopleProcessed,
+			metrics.AtributsProcessed,
+			metrics.FieldExtractDur,
+			metrics.StringNormalizeDur,
+			metrics.DateParseDur,
+			metrics.PeopleBuildDur,
+			metrics.AttrsPeopleIterateDur,
+			metrics.FinalAssemblyDur,
+			metrics.FieldsProcessed,
+			metrics.NormalizeCacheHits,
+			metrics.NormalizeCacheMisses,
+			metrics.RepeatedRowBuilds,
+			metrics.RepeatedSubcomponentHit,
+		)
+	}
+}
+
 func (ctx templateRowContext) HeaderValue(key string) string {
 	value, _ := ctx.LookupHeaderValue(key)
 	return value
@@ -324,6 +434,40 @@ func (ctx templateRowContext) LookupColumnValue(key string) (string, bool) {
 		return "", false
 	}
 	return ctx.values[idx], true
+}
+
+func newTemplateDedupKeyPlan(rowPlan *templateRowContextPlan, policies templatePolicies) *templateDedupKeyPlan {
+	if rowPlan == nil || len(policies.DedupKeyFields) == 0 {
+		return nil
+	}
+	plan := &templateDedupKeyPlan{
+		Strategy: policies.DedupKeyStrategy,
+		Fields:   make([]templateDedupKeyFieldPlan, 0, len(policies.DedupKeyFields)),
+	}
+	for _, key := range policies.DedupKeyFields {
+		if key == "" {
+			continue
+		}
+		norm := normalizeCSVHeader(key)
+		field := templateDedupKeyFieldPlan{
+			RawKey:  key,
+			NormKey: norm,
+			Source:  templateDedupKeyFieldSourceMapped,
+			Index:   -1,
+		}
+		if idx, ok := rowPlan.ColumnRefs[norm]; ok {
+			field.Source = templateDedupKeyFieldSourceColumn
+			field.Index = idx
+		} else if idx, ok := rowPlan.HeaderRefs[norm]; ok {
+			field.Source = templateDedupKeyFieldSourceHeader
+			field.Index = idx
+		}
+		plan.Fields = append(plan.Fields, field)
+	}
+	if len(plan.Fields) == 0 {
+		return nil
+	}
+	return plan
 }
 
 func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Reader, sep rune, userID int, ctx importContext, fixedBookID int) csvImportResult {
@@ -412,6 +556,8 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	result.Debug.addParseHeaderPrepare(parseElapsed)
 	result.Debug.addParse(parseElapsed)
 	rowContextPlan := buildTemplateRowContextPlan(model.Mapping, headerIndex)
+	dedupKeyPlan := newTemplateDedupKeyPlan(rowContextPlan, model.Policies)
+	dedupKeyProfiler := newTemplateDedupKeyProfiler(6827, 6826, 6814)
 
 	resolveStart := time.Now()
 	bookInfoByKey, bookInfoByID := a.prepareBookLookups(model, ctx, fixedBookID)
@@ -517,7 +663,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 				block.ReasonIfNotCalled = "dedup_within_only"
 			}
 			buildStart := time.Now()
-			key := buildTemplateDedupKeyWithCache(matchBuildCache, model.Policies.DedupKeyFields, rowCtx, mappedValues)
+			key := buildTemplateDedupKeyWithPlan(matchBuildCache, dedupKeyPlan, rowCtx, mappedValues, dedupKeyProfiler.metricsForBook(bookID))
 			buildDur := time.Since(buildStart)
 			if block != nil {
 				block.BuildMatchKeyDur += buildDur
@@ -762,6 +908,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			flushPendingCreates()
 		}
 	}
+	dedupKeyProfiler.logDebug()
 	flushPendingCreates()
 	duplicateCheckRun.logBlocksAndSummary(result.Debug.Rows)
 	result.Debug.finalize(len(result.BookIDs), time.Since(start))
@@ -914,6 +1061,7 @@ func parseTemplateImportModel(modelJSON string) (*templateImportModel, error) {
 			model.Policies.DedupWithin = asBool(dedup["within_file"])
 			model.Policies.DedupKeyFields = append(model.Policies.DedupKeyFields, asStringSlice(dedup["key_fields"])...)
 			model.Policies.DedupKeyFields = append(model.Policies.DedupKeyFields, asStringSlice(dedup["key_columns"])...)
+			model.Policies.DedupKeyStrategy = asString(dedup["key_strategy"])
 			model.Policies.DedupAddRowIndexWhenPrincipalMissing = asBool(dedup["if_principal_name_missing_add_row_index"])
 		}
 		if merge, ok := policies["merge_existing"].(map[string]interface{}); ok {
@@ -1731,6 +1879,93 @@ func buildTemplateDedupKey(fields []string, rowCtx templateRowContext, mapped ma
 }
 
 func buildTemplateDedupKeyWithCache(cache *templateMatchBuildCache, fields []string, rowCtx templateRowContext, mapped map[string]string) string {
+	plan := newTemplateDedupKeyPlan(rowCtx.plan, templatePolicies{DedupKeyFields: fields})
+	if plan == nil || len(plan.Fields) == 0 {
+		return buildTemplateDedupKeyLegacyWithCache(cache, fields, rowCtx, mapped)
+	}
+	return buildTemplateDedupKeyWithPlan(cache, plan, rowCtx, mapped, nil)
+}
+
+func buildTemplateDedupKeyWithPlan(cache *templateMatchBuildCache, plan *templateDedupKeyPlan, rowCtx templateRowContext, mapped map[string]string, profile *templateDedupKeyProfileMetrics) string {
+	if plan == nil || len(plan.Fields) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	segments := 0
+	if profile != nil {
+		profile.Rows++
+	}
+	for _, field := range plan.Fields {
+		fieldLookupStart := time.Now()
+		value, ok := templateDedupKeyFieldValue(field, rowCtx, mapped)
+		if profile != nil {
+			profile.FieldExtractDur += time.Since(fieldLookupStart)
+		}
+		if !ok {
+			continue
+		}
+		if profile != nil {
+			profile.FieldsProcessed++
+		}
+		normalizeStart := time.Now()
+		value = normalizeTemplateLowerPartProfiled(cache, value, profile)
+		if profile != nil {
+			profile.StringNormalizeDur += time.Since(normalizeStart)
+		}
+		assembleStart := time.Now()
+		if segments > 0 {
+			builder.WriteByte('|')
+		}
+		builder.WriteString(value)
+		segments++
+		if profile != nil {
+			profile.FinalAssemblyDur += time.Since(assembleStart)
+		}
+	}
+	if segments == 0 {
+		return ""
+	}
+	if profile != nil {
+		profile.MatchKeysGenerated++
+	}
+	return builder.String()
+}
+
+func templateDedupKeyFieldValue(field templateDedupKeyFieldPlan, rowCtx templateRowContext, mapped map[string]string) (string, bool) {
+	switch field.Source {
+	case templateDedupKeyFieldSourceColumn, templateDedupKeyFieldSourceHeader:
+		if field.Index < 0 || field.Index >= len(rowCtx.values) {
+			return "", false
+		}
+		return rowCtx.values[field.Index], true
+	case templateDedupKeyFieldSourceMapped:
+		if mapped == nil {
+			return "", false
+		}
+		val, ok := mapped[field.RawKey]
+		return val, ok
+	default:
+		return "", false
+	}
+}
+
+func normalizeTemplateLowerPartProfiled(cache *templateMatchBuildCache, value string, profile *templateDedupKeyProfileMetrics) string {
+	if cache != nil {
+		if lowered, ok := cache.loweredParts[value]; ok {
+			if profile != nil {
+				profile.NormalizeCacheHits++
+				profile.RepeatedSubcomponentHit++
+			}
+			return lowered
+		}
+		if profile != nil {
+			profile.NormalizeCacheMisses++
+		}
+	}
+	return normalizeTemplateLowerPartWithCache(cache, value)
+}
+
+func buildTemplateDedupKeyLegacyWithCache(cache *templateMatchBuildCache, fields []string, rowCtx templateRowContext, mapped map[string]string) string {
 	parts := make([]string, 0, len(fields))
 	for _, key := range fields {
 		if key == "" {
