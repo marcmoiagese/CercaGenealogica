@@ -241,11 +241,25 @@ func (m *templateDuplicateCheckRunMetrics) logBlocksAndSummary(rows int) {
 	}
 	m.Rows = rows
 	totalDur := time.Duration(0)
+	pageLookupDur := time.Duration(0)
+	dedupWithinOnlyDur := time.Duration(0)
+	buildKeysDur := time.Duration(0)
+	pageIndexedFalseDur := time.Duration(0)
+	blocks := make([]*templateDuplicateCheckBlockMetrics, 0, len(m.Blocks))
 	for _, block := range m.Blocks {
 		if block == nil {
 			continue
 		}
+		blocks = append(blocks, block)
 		totalDur += block.TotalBlockDuplicateCheckDur
+		pageLookupDur += block.PageLookupDur
+		buildKeysDur += block.BuildMatchKeyDur
+		if block.ReasonIfNotCalled == "dedup_within_only" {
+			dedupWithinOnlyDur += block.TotalBlockDuplicateCheckDur
+		}
+		if block.ReasonIfNotCalled == "pageIndexed=false" {
+			pageIndexedFalseDur += block.TotalBlockDuplicateCheckDur
+		}
 	}
 	Debugf(
 		"duplicate_check_summary total_dur=%s runtime_calls_count=%d fallback_calls_count=%d strong_snapshot_log_lines_expected_count=%d blocks=%d rows=%d",
@@ -256,6 +270,43 @@ func (m *templateDuplicateCheckRunMetrics) logBlocksAndSummary(rows int) {
 		len(m.Blocks),
 		m.Rows,
 	)
+	Debugf(
+		"duplicate_check_breakdown group_book_page_dur=%s dedup_within_only_dur=%s build_keys_dur=%s page_indexed_false_dur=%s runtime_calls_count=%d fallback_calls_count=%d blocks=%d rows=%d",
+		pageLookupDur,
+		dedupWithinOnlyDur,
+		buildKeysDur,
+		pageIndexedFalseDur,
+		m.RuntimeCallsCount,
+		m.FallbackCallsCount,
+		len(m.Blocks),
+		m.Rows,
+	)
+	sort.Slice(blocks, func(i, j int) bool {
+		if blocks[i].TotalBlockDuplicateCheckDur == blocks[j].TotalBlockDuplicateCheckDur {
+			return blocks[i].BookID < blocks[j].BookID
+		}
+		return blocks[i].TotalBlockDuplicateCheckDur > blocks[j].TotalBlockDuplicateCheckDur
+	})
+	limit := 10
+	if len(blocks) < limit {
+		limit = len(blocks)
+	}
+	for i := 0; i < limit; i++ {
+		block := blocks[i]
+		Debugf(
+			"duplicate_check_top_slow_block rank=%d book_id=%d incoming_rows_count=%d reason=%q page_key=%q tipus_acte=%q build_match_key_dur=%s existing_load_dur=%s compare_dur=%s total_block_duplicate_check_dur=%s",
+			i+1,
+			block.BookID,
+			block.IncomingRowsCount,
+			block.ReasonIfNotCalled,
+			block.PageKey,
+			block.TipusActe,
+			block.BuildMatchKeyDur,
+			block.ExistingLoadDur,
+			block.CompareDur,
+			block.TotalBlockDuplicateCheckDur,
+		)
+	}
 }
 
 type templateMatchBuildCache struct {
@@ -483,7 +534,6 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	}
 	parseCfg := buildTemplateParseConfig(model)
 	parseCfg.Metrics = &result.Debug
-	parseCfg.PersonProfiler = newTemplatePersonBuildProfiler(result.Debug.Enabled)
 
 	csvReader := csv.NewReader(reader)
 	csvReader.Comma = sep
@@ -558,6 +608,15 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		len(bookInfoByID),
 	)
 	duplicateCheckRun.logStart()
+	postgresDebug := result.Debug.Enabled && strings.EqualFold(importRuntime.Engine(), "postgres")
+	var writePrepareBreakdown *templateWritePrepareBreakdown
+	var importPhaseGaps *templateImportPhaseGapMetrics
+	if postgresDebug {
+		writePrepareBreakdown = &templateWritePrepareBreakdown{}
+		importPhaseGaps = &templateImportPhaseGapMetrics{}
+		result.WritePrepareBreakdown = writePrepareBreakdown
+		result.ImportPhaseGaps = importPhaseGaps
+	}
 	flushPendingCreates := func() {
 		pendingCreates = a.flushTemplatePendingCreates(pendingCreates, &result, importRuntime)
 	}
@@ -612,6 +671,8 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		parseElapsed = time.Since(parseStart)
 		result.Debug.addParseColumns(parseElapsed)
 		result.Debug.addParse(parseElapsed)
+		parseColumnsEnd := time.Now()
+		lastDuplicateEnd := time.Time{}
 
 		if model.Policies.DedupWithin && len(model.Policies.DedupKeyFields) > 0 {
 			duplicateStart := time.Now()
@@ -659,6 +720,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 				block.TotalBlockDuplicateCheckDur += time.Since(duplicateStart)
 			}
 			result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
+			lastDuplicateEnd = time.Now()
 		}
 
 		matchKey := ""
@@ -714,8 +776,10 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 					duplicateBlock.TotalBlockDuplicateCheckDur += time.Since(duplicateStart)
 				}
 				result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
+				lastDuplicateEnd = time.Now()
 			} else if duplicateBlock != nil {
 				duplicateCheckRun.logSkipRuntimeLoadStrongCandidates(duplicateBlock, "pageIndexed=false", importRuntime, "")
+				lastDuplicateEnd = time.Now()
 			}
 		case "by_principal_person_if_book_indexed":
 			duplicateBlockKey = "principal|" + strconv.Itoa(bookID)
@@ -765,6 +829,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 				duplicateBlock.TotalBlockDuplicateCheckDur += time.Since(duplicateStart)
 			}
 			result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
+			lastDuplicateEnd = time.Now()
 		}
 
 		if matchKey != "" && matchContextKey != "" {
@@ -831,6 +896,12 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		}
 
 		writePrepareStart := time.Now()
+		if importPhaseGaps != nil {
+			importPhaseGaps.ParseToWritePrepareGap += writePrepareStart.Sub(parseColumnsEnd)
+			if !lastDuplicateEnd.IsZero() {
+				importPhaseGaps.DuplicateBeforeWritePrepareCount++
+			}
+		}
 		t.DataActeEstat = normalizeDataActeEstat(t.DataActeEstat)
 		if t.DataActeEstat == "" {
 			t.DataActeEstat = "clar"
@@ -843,21 +914,40 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		}
 		result.Debug.addWritePrepare(time.Since(writePrepareStart))
 		personaResolveStart := time.Now()
+		if importPhaseGaps != nil && !lastDuplicateEnd.IsZero() {
+			importPhaseGaps.DuplicateCheckToInsertsGap += personaResolveStart.Sub(lastDuplicateEnd)
+		}
+		preallocStart := time.Now()
 		personesRows := make([]db.TranscripcioPersonaRaw, 0, len(persones))
+		atributRows := make([]db.TranscripcioAtributRaw, 0, len(atributs))
+		if writePrepareBreakdown != nil {
+			writePrepareBreakdown.PreallocDur += time.Since(preallocStart)
+		}
+		personesBuildStart := time.Now()
 		for _, p := range persones {
 			if isEmptyPerson(p) {
 				continue
 			}
 			personesRows = append(personesRows, *p)
 		}
-		atributRows := make([]db.TranscripcioAtributRaw, 0, len(atributs))
+		atributsBuildStart := time.Now()
 		for _, attr := range atributs {
 			if isEmptyAttr(attr) {
 				continue
 			}
 			atributRows = append(atributRows, *attr)
 		}
+		if writePrepareBreakdown != nil {
+			writePrepareBreakdown.BuildPersonesBatchDur += atributsBuildStart.Sub(personesBuildStart)
+			writePrepareBreakdown.BuildLinksBatchDur += time.Since(atributsBuildStart)
+			writePrepareBreakdown.PrepareMapsSlicesDur += time.Since(personaResolveStart)
+			writePrepareBreakdown.TranscripcionsCount++
+			writePrepareBreakdown.PersonesCount += len(personesRows)
+			writePrepareBreakdown.LinksCount += len(atributRows)
+			writePrepareBreakdown.AtributsCount += len(atributRows)
+		}
 		result.Debug.addWritePersonaResolve(time.Since(personaResolveStart))
+		transBatchStart := time.Now()
 		pendingCreates = append(pendingCreates, templatePendingCreate{
 			RowNum: rowNum,
 			BookID: bookID,
@@ -867,6 +957,9 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 				Atributs:     atributRows,
 			},
 		})
+		if writePrepareBreakdown != nil {
+			writePrepareBreakdown.BuildTranscripcionsBatchDur += time.Since(transBatchStart)
+		}
 		if matchContextKey != "" && matchKey != "" {
 			templateRememberSeenMatch(seenMatchByContext, matchContextKey, matchKey, rowNum)
 		}
@@ -876,9 +969,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	}
 	flushPendingCreates()
 	duplicateCheckRun.logBlocksAndSummary(result.Debug.Rows)
-	if parseCfg.PersonProfiler != nil {
-		parseCfg.PersonProfiler.logDebug()
-	}
+	result.WriteCompletedAt = time.Now()
 	result.Debug.finalize(len(result.BookIDs), time.Since(start))
 	return result
 }
@@ -887,10 +978,31 @@ func (a *App) flushTemplatePendingCreates(pending []templatePendingCreate, resul
 	if len(pending) == 0 || result == nil {
 		return pending[:0]
 	}
+	if result.WritePrepareBreakdown != nil {
+		result.WritePrepareBreakdown.Batches++
+	}
 	if runtime != nil {
+		preallocStart := time.Now()
 		bundles := make([]db.TranscripcioRawImportBundle, len(pending))
+		if result.WritePrepareBreakdown != nil {
+			result.WritePrepareBreakdown.PreallocDur += time.Since(preallocStart)
+		}
 		for i := range pending {
-			bundles[i] = pending[i].Bundle
+			transStart := time.Now()
+			bundles[i].Transcripcio = pending[i].Bundle.Transcripcio
+			if result.WritePrepareBreakdown != nil {
+				result.WritePrepareBreakdown.BuildTranscripcionsBatchDur += time.Since(transStart)
+			}
+			personesStart := time.Now()
+			bundles[i].Persones = pending[i].Bundle.Persones
+			if result.WritePrepareBreakdown != nil {
+				result.WritePrepareBreakdown.BuildPersonesBatchDur += time.Since(personesStart)
+			}
+			linksStart := time.Now()
+			bundles[i].Atributs = pending[i].Bundle.Atributs
+			if result.WritePrepareBreakdown != nil {
+				result.WritePrepareBreakdown.BuildLinksBatchDur += time.Since(linksStart)
+			}
 		}
 		bulkResult, err := runtime.BulkCreateBundles(bundles)
 		if err == nil && len(bulkResult.IDs) == len(pending) {

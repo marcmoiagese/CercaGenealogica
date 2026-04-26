@@ -115,6 +115,9 @@ func (a *App) AdminImportRegistresGlobal(w http.ResponseWriter, r *http.Request)
 	}
 	token := storeImportErrors(result.Errors)
 	for llibreID := range result.BookIDs {
+		if result.ImportPhaseGaps != nil && result.ImportPhaseGaps.WriteToSidefxGap == 0 && !result.WriteCompletedAt.IsZero() {
+			result.ImportPhaseGaps.WriteToSidefxGap += time.Since(result.WriteCompletedAt)
+		}
 		_, metrics, _ := a.recalcLlibreIndexacioStatsWithMetrics(llibreID)
 		result.Debug.addSidefxIndexacio(metrics)
 	}

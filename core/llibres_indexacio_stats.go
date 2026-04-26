@@ -10,15 +10,22 @@ import (
 )
 
 type llibreIndexacioRecalcMetrics struct {
-	LoadRegistresDur time.Duration
-	LoadPersonesDur  time.Duration
-	LoadAtributsDur  time.Duration
-	ComputeDur       time.Duration
-	UpsertDur        time.Duration
-	PageStatsDur     time.Duration
-	TotalRegistres   int
-	TotalPersones    int
-	TotalAtributs    int
+	LoadRegistresDur           time.Duration
+	LoadPersonesDur            time.Duration
+	LoadAtributsDur            time.Duration
+	ComputeDur                 time.Duration
+	ComputeGroupRegistresDur   time.Duration
+	ComputeGroupPersonesDur    time.Duration
+	ComputeGroupAtributsDur    time.Duration
+	ComputeNormalizeStringsDur time.Duration
+	ComputeBuildPayloadDur     time.Duration
+	ComputeStatsDemografiaDur  time.Duration
+	UpsertDur                  time.Duration
+	PageStatsDur               time.Duration
+	TotalRegistres             int
+	TotalPersones              int
+	TotalAtributs              int
+	ComputeFieldEvaluations    int
 }
 
 func (m llibreIndexacioRecalcMetrics) IndexacioStatsDur() time.Duration {
@@ -121,10 +128,13 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 		return stats, metrics, err
 	}
 	registreIDs := make([]int, 0, len(registres))
+	groupStart := time.Now()
 	for _, registre := range registres {
 		registreIDs = append(registreIDs, registre.ID)
 	}
+	metrics.ComputeGroupRegistresDur += time.Since(groupStart)
 	importRuntime := db.TemplateImportRuntimeFor(a.DB)
+	postgresDebug := IsDebugEnabled() && strings.EqualFold(importRuntime.Engine(), "postgres")
 	personesByRegistre := map[int][]db.TranscripcioPersonaRaw{}
 	loadStart = time.Now()
 	personesByRegistre, err = importRuntime.LoadPersonesByLlibreID(llibreID, registreIDs)
@@ -170,12 +180,50 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 		atributs := atributsByRegistre[registre.ID]
 		cache := map[string]*db.TranscripcioPersonaRaw{}
 		for _, field := range fields {
-			if indexerFieldValue(field, registre, persones, atributs, cache) != "" {
+			metrics.ComputeFieldEvaluations++
+			val := ""
+			buildPayloadStart := time.Now()
+			switch field.Target {
+			case "raw":
+				partStart := time.Now()
+				val = rawFieldValue(registre, field.RawField)
+				metrics.ComputeGroupRegistresDur += time.Since(partStart)
+			case "attr":
+				partStart := time.Now()
+				val = attrValueByKeysRaw(atributs, field.AttrKey)
+				metrics.ComputeGroupAtributsDur += time.Since(partStart)
+			case "person":
+				partStart := time.Now()
+				person := personForField(persones, field.Role, field.PersonKey, cache)
+				val = personFieldValue(person, field.PersonField)
+				metrics.ComputeGroupPersonesDur += time.Since(partStart)
+			}
+			metrics.ComputeBuildPayloadDur += time.Since(buildPayloadStart)
+			normalizeStart := time.Now()
+			val = strings.TrimSpace(val)
+			metrics.ComputeNormalizeStringsDur += time.Since(normalizeStart)
+			if val != "" {
 				stats.CampsEmplenats++
 			}
 		}
 	}
 	metrics.ComputeDur = time.Since(computeStart)
+	if postgresDebug {
+		Debugf(
+			"sidefx_compute_breakdown llibre_id=%d group_registres_dur=%s group_persones_dur=%s group_atributs_dur=%s normalize_strings_dur=%s build_payload_dur=%s stats_demografia_dur=%s registres=%d persones=%d atributs=%d field_evaluations=%d",
+			llibreID,
+			metrics.ComputeGroupRegistresDur,
+			metrics.ComputeGroupPersonesDur,
+			metrics.ComputeGroupAtributsDur,
+			metrics.ComputeNormalizeStringsDur,
+			metrics.ComputeBuildPayloadDur,
+			metrics.ComputeStatsDemografiaDur,
+			metrics.TotalRegistres,
+			metrics.TotalPersones,
+			metrics.TotalAtributs,
+			metrics.ComputeFieldEvaluations,
+		)
+	}
 	stats.Percentatge = int(math.Round(float64(stats.CampsEmplenats) * 100 / float64(stats.TotalCamps)))
 	if stats.Percentatge < 0 {
 		stats.Percentatge = 0

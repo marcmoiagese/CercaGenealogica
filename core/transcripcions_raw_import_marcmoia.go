@@ -13,12 +13,36 @@ import (
 )
 
 type csvImportResult struct {
-	Created int
-	Updated int
-	Failed  int
-	Errors  []importErrorEntry
-	BookIDs map[int]struct{}
-	Debug   csvImportDebugMetrics
+	Created               int
+	Updated               int
+	Failed                int
+	Errors                []importErrorEntry
+	BookIDs               map[int]struct{}
+	Debug                 csvImportDebugMetrics
+	WritePrepareBreakdown *templateWritePrepareBreakdown
+	ImportPhaseGaps       *templateImportPhaseGapMetrics
+	WriteCompletedAt      time.Time
+}
+
+type templateWritePrepareBreakdown struct {
+	BuildTranscripcionsBatchDur time.Duration
+	BuildPersonesBatchDur       time.Duration
+	BuildLinksBatchDur          time.Duration
+	PrepareMapsSlicesDur        time.Duration
+	PreallocDur                 time.Duration
+	TranscripcionsCount         int
+	PersonesCount               int
+	LinksCount                  int
+	AtributsCount               int
+	Batches                     int
+}
+
+type templateImportPhaseGapMetrics struct {
+	ParseToWritePrepareGap           time.Duration
+	WritePrepareToDuplicateCheckGap  time.Duration
+	DuplicateCheckToInsertsGap       time.Duration
+	WriteToSidefxGap                 time.Duration
+	DuplicateBeforeWritePrepareCount int
 }
 
 func (r *csvImportResult) markBook(id int) {

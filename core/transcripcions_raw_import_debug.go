@@ -325,4 +325,29 @@ func (a *App) logCSVImportDebug(actorID int, result csvImportResult) {
 		result.Debug.SidefxIndexacioAtributs,
 		result.Debug.TotalDur,
 	)
+	if result.WritePrepareBreakdown != nil {
+		Debugf(
+			"write_prepare_breakdown build_transcripcions_batch_dur=%s build_persones_batch_dur=%s build_links_batch_dur=%s prepare_maps_slices_dur=%s prealloc_dur=%s transcripcions=%d persones=%d links=%d atributs=%d batches=%d",
+			result.WritePrepareBreakdown.BuildTranscripcionsBatchDur,
+			result.WritePrepareBreakdown.BuildPersonesBatchDur,
+			result.WritePrepareBreakdown.BuildLinksBatchDur,
+			result.WritePrepareBreakdown.PrepareMapsSlicesDur,
+			result.WritePrepareBreakdown.PreallocDur,
+			result.WritePrepareBreakdown.TranscripcionsCount,
+			result.WritePrepareBreakdown.PersonesCount,
+			result.WritePrepareBreakdown.LinksCount,
+			result.WritePrepareBreakdown.AtributsCount,
+			result.WritePrepareBreakdown.Batches,
+		)
+	}
+	if result.ImportPhaseGaps != nil {
+		Debugf(
+			"import_phase_gap_summary parse_to_write_prepare_gap=%s write_prepare_to_duplicate_check_gap=%s duplicate_check_to_inserts_gap=%s write_to_sidefx_gap=%s duplicate_before_write_prepare_count=%d",
+			result.ImportPhaseGaps.ParseToWritePrepareGap,
+			result.ImportPhaseGaps.WritePrepareToDuplicateCheckGap,
+			result.ImportPhaseGaps.DuplicateCheckToInsertsGap,
+			result.ImportPhaseGaps.WriteToSidefxGap,
+			result.ImportPhaseGaps.DuplicateBeforeWritePrepareCount,
+		)
+	}
 }
