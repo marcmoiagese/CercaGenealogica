@@ -322,17 +322,24 @@ type templateDedupKeyProfileMetrics struct {
 	MatchKeysGenerated      int
 	PeopleProcessed         int
 	AtributsProcessed       int
+	NonEmptyFields          int
+	EmptyFields             int
+	NormalizationsTotal     int
+	NormalizationsUnique    int
 	FieldExtractDur         time.Duration
 	StringNormalizeDur      time.Duration
 	DateParseDur            time.Duration
 	PeopleBuildDur          time.Duration
 	AttrsPeopleIterateDur   time.Duration
 	FinalAssemblyDur        time.Duration
+	TotalBuildMatchKeyDur   time.Duration
 	FieldsProcessed         int
 	NormalizeCacheHits      int
 	NormalizeCacheMisses    int
 	RepeatedRowBuilds       int
 	RepeatedSubcomponentHit int
+	MaxNormalizedLen        int
+	TotalNormalizedLen      int
 }
 
 type templateDedupKeyProfiler struct {
@@ -357,7 +364,12 @@ func (p *templateDedupKeyProfiler) metricsForBook(bookID int) *templateDedupKeyP
 	if p == nil {
 		return nil
 	}
-	if _, ok := p.enabledBooks[bookID]; !ok {
+	if len(p.enabledBooks) > 0 {
+		if _, ok := p.enabledBooks[bookID]; !ok {
+			return nil
+		}
+	}
+	if bookID <= 0 {
 		return nil
 	}
 	metrics := p.byBook[bookID]
@@ -382,24 +394,35 @@ func (p *templateDedupKeyProfiler) logDebug() {
 		if metrics == nil {
 			continue
 		}
+		avgNormalizedLen := 0.0
+		if metrics.NonEmptyFields > 0 {
+			avgNormalizedLen = float64(metrics.TotalNormalizedLen) / float64(metrics.NonEmptyFields)
+		}
 		Debugf(
-			"duplicate_check_dedup_key_profile book_id=%d rows=%d match_keys_generated=%d people_processed=%d atributs_processed=%d field_extract_dur=%s string_normalize_dur=%s date_parse_dur=%s people_build_dur=%s iterate_atributs_persones_dur=%s final_key_assembly_dur=%s fields_processed=%d normalize_cache_hits=%d normalize_cache_misses=%d repeated_row_builds=%d repeated_subcomponent_hits=%d",
+			"duplicate_check_dedup_key_profile book_id=%d rows=%d match_keys_generated=%d people_processed=%d atributs_processed=%d nonempty_fields=%d empty_fields=%d normalizations_total=%d normalizations_unique=%d field_extract_dur=%s string_normalize_dur=%s date_parse_dur=%s people_build_dur=%s iterate_atributs_persones_dur=%s final_key_assembly_dur=%s total_build_match_key_dur=%s fields_processed=%d normalize_cache_hits=%d normalize_cache_misses=%d repeated_row_builds=%d repeated_subcomponent_hits=%d max_normalized_len=%d avg_normalized_len=%.2f",
 			metrics.BookID,
 			metrics.Rows,
 			metrics.MatchKeysGenerated,
 			metrics.PeopleProcessed,
 			metrics.AtributsProcessed,
+			metrics.NonEmptyFields,
+			metrics.EmptyFields,
+			metrics.NormalizationsTotal,
+			metrics.NormalizationsUnique,
 			metrics.FieldExtractDur,
 			metrics.StringNormalizeDur,
 			metrics.DateParseDur,
 			metrics.PeopleBuildDur,
 			metrics.AttrsPeopleIterateDur,
 			metrics.FinalAssemblyDur,
+			metrics.TotalBuildMatchKeyDur,
 			metrics.FieldsProcessed,
 			metrics.NormalizeCacheHits,
 			metrics.NormalizeCacheMisses,
 			metrics.RepeatedRowBuilds,
 			metrics.RepeatedSubcomponentHit,
+			metrics.MaxNormalizedLen,
+			avgNormalizedLen,
 		)
 	}
 }
@@ -557,7 +580,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	result.Debug.addParse(parseElapsed)
 	rowContextPlan := buildTemplateRowContextPlan(model.Mapping, headerIndex)
 	dedupKeyPlan := newTemplateDedupKeyPlan(rowContextPlan, model.Policies)
-	dedupKeyProfiler := newTemplateDedupKeyProfiler(6827, 6826, 6814)
+	dedupKeyProfiler := newTemplateDedupKeyProfiler()
 
 	resolveStart := time.Now()
 	bookInfoByKey, bookInfoByID := a.prepareBookLookups(model, ctx, fixedBookID)
@@ -663,10 +686,14 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 				block.ReasonIfNotCalled = "dedup_within_only"
 			}
 			buildStart := time.Now()
-			key := buildTemplateDedupKeyWithPlan(matchBuildCache, dedupKeyPlan, rowCtx, mappedValues, dedupKeyProfiler.metricsForBook(bookID))
+			profile := dedupKeyProfiler.metricsForBook(bookID)
+			key := buildTemplateDedupKeyWithPlan(matchBuildCache, dedupKeyPlan, rowCtx, mappedValues, profile)
 			buildDur := time.Since(buildStart)
 			if block != nil {
 				block.BuildMatchKeyDur += buildDur
+			}
+			if profile != nil {
+				profile.TotalBuildMatchKeyDur += buildDur
 			}
 			if key != "" {
 				compareStart := time.Now()
@@ -1911,6 +1938,16 @@ func buildTemplateDedupKeyWithPlan(cache *templateMatchBuildCache, plan *templat
 		value = normalizeTemplateLowerPartProfiled(cache, value, profile)
 		if profile != nil {
 			profile.StringNormalizeDur += time.Since(normalizeStart)
+			if value == "" {
+				profile.EmptyFields++
+			} else {
+				profile.NonEmptyFields++
+				valueLen := len(value)
+				profile.TotalNormalizedLen += valueLen
+				if valueLen > profile.MaxNormalizedLen {
+					profile.MaxNormalizedLen = valueLen
+				}
+			}
 		}
 		assembleStart := time.Now()
 		if segments > 0 {
@@ -1950,6 +1987,9 @@ func templateDedupKeyFieldValue(field templateDedupKeyFieldPlan, rowCtx template
 }
 
 func normalizeTemplateLowerPartProfiled(cache *templateMatchBuildCache, value string, profile *templateDedupKeyProfileMetrics) string {
+	if profile != nil {
+		profile.NormalizationsTotal++
+	}
 	if cache != nil {
 		if lowered, ok := cache.loweredParts[value]; ok {
 			if profile != nil {
@@ -1960,6 +2000,7 @@ func normalizeTemplateLowerPartProfiled(cache *templateMatchBuildCache, value st
 		}
 		if profile != nil {
 			profile.NormalizeCacheMisses++
+			profile.NormalizationsUnique++
 		}
 	}
 	return normalizeTemplateLowerPartWithCache(cache, value)
