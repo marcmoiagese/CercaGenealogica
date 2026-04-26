@@ -108,6 +108,186 @@ type templatePendingCreate struct {
 	Bundle db.TranscripcioRawImportBundle
 }
 
+type templateDuplicateCheckBlockMetrics struct {
+	Key                         string
+	BookID                      int
+	PageKey                     string
+	TipusActe                   string
+	SnapshotMaxID               int
+	IncomingRowsCount           int
+	PageIndexed                 bool
+	PageResolverUsed            bool
+	StrongMatchEnabled          bool
+	RuntimeLoadCandidatesCalled bool
+	ReasonIfNotCalled           string
+	FallbackPath                string
+	PageLookupDur               time.Duration
+	BuildMatchKeyDur            time.Duration
+	ExistingLoadDur             time.Duration
+	CompareDur                  time.Duration
+	TotalBlockDuplicateCheckDur time.Duration
+	SkipLogged                  bool
+}
+
+type templateDuplicateCheckRunMetrics struct {
+	Enabled                             bool
+	Engine                              string
+	RuntimeType                         string
+	Model                               string
+	Scope                               string
+	TemplateID                          int
+	Books                               int
+	Rows                                int
+	RuntimeCallsCount                   int
+	FallbackCallsCount                  int
+	StrongSnapshotLogLinesExpectedCount int
+	Blocks                              map[string]*templateDuplicateCheckBlockMetrics
+}
+
+func newTemplateDuplicateCheckRunMetrics(enabled bool, engine, runtimeType, model, scope string, templateID, books int) *templateDuplicateCheckRunMetrics {
+	return &templateDuplicateCheckRunMetrics{
+		Enabled:     enabled,
+		Engine:      engine,
+		RuntimeType: runtimeType,
+		Model:       model,
+		Scope:       scope,
+		TemplateID:  templateID,
+		Books:       books,
+		Blocks:      map[string]*templateDuplicateCheckBlockMetrics{},
+	}
+}
+
+func (m *templateDuplicateCheckRunMetrics) logStart() {
+	if m == nil || !m.Enabled {
+		return
+	}
+	Debugf(
+		"duplicate_check_start engine=%s rows=%d books=%d runtime_type=%q model=%q template_id=%d scope=%s",
+		m.Engine,
+		m.Rows,
+		m.Books,
+		m.RuntimeType,
+		m.Model,
+		m.TemplateID,
+		m.Scope,
+	)
+}
+
+func (m *templateDuplicateCheckRunMetrics) block(key string, bookID int, pageKey, tipusActe string, snapshotMaxID int) *templateDuplicateCheckBlockMetrics {
+	if m == nil || !m.Enabled {
+		return nil
+	}
+	block := m.Blocks[key]
+	if block == nil {
+		block = &templateDuplicateCheckBlockMetrics{
+			Key:           key,
+			BookID:        bookID,
+			PageKey:       pageKey,
+			TipusActe:     tipusActe,
+			SnapshotMaxID: snapshotMaxID,
+		}
+		m.Blocks[key] = block
+	}
+	if bookID > 0 {
+		block.BookID = bookID
+	}
+	if pageKey != "" {
+		block.PageKey = pageKey
+	}
+	if tipusActe != "" {
+		block.TipusActe = tipusActe
+	}
+	if snapshotMaxID != 0 {
+		block.SnapshotMaxID = snapshotMaxID
+	}
+	block.IncomingRowsCount++
+	return block
+}
+
+func (m *templateDuplicateCheckRunMetrics) logSkipRuntimeLoadStrongCandidates(block *templateDuplicateCheckBlockMetrics, reason string, runtime db.TemplateImportRuntime, fallbackPath string) {
+	if m == nil || !m.Enabled || block == nil || block.SkipLogged {
+		return
+	}
+	block.SkipLogged = true
+	block.ReasonIfNotCalled = reason
+	if fallbackPath != "" {
+		block.FallbackPath = fallbackPath
+	}
+	runtimeType := ""
+	if runtime != nil {
+		runtimeType = fmt.Sprintf("%T", runtime)
+	}
+	Debugf(
+		"duplicate_check skip_runtime_load_strong_candidates reason=%q pageIndexed=%t matchKey=%q snapshotMaxID=%d tipusActe=%q pageKey=%q runtime_nil=%t runtime_type=%q fallback_path=%q book_id=%d",
+		reason,
+		block.PageIndexed,
+		"",
+		block.SnapshotMaxID,
+		block.TipusActe,
+		block.PageKey,
+		runtime == nil,
+		runtimeType,
+		block.FallbackPath,
+		block.BookID,
+	)
+}
+
+func (m *templateDuplicateCheckRunMetrics) logFallbackPath(reason string, dur time.Duration, rows, bookID int) {
+	if m == nil || !m.Enabled {
+		return
+	}
+	m.FallbackCallsCount++
+	Debugf("duplicate_check fallback_path reason=%q dur=%s rows=%d book_id=%d", reason, dur, rows, bookID)
+}
+
+func (m *templateDuplicateCheckRunMetrics) logBlocksAndSummary(rows int) {
+	if m == nil || !m.Enabled {
+		return
+	}
+	m.Rows = rows
+	totalDur := time.Duration(0)
+	keys := make([]string, 0, len(m.Blocks))
+	for key := range m.Blocks {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		block := m.Blocks[key]
+		if block == nil {
+			continue
+		}
+		totalDur += block.TotalBlockDuplicateCheckDur
+		Debugf(
+			"duplicate_check_block book_id=%d incoming_rows_count=%d page_indexed=%t page_resolver_used=%t strong_match_enabled=%t runtime_load_candidates_called=%t reason_if_not_called=%q page_key=%q tipus_acte=%q snapshot_max_id=%d fallback_path=%q page_lookup_dur=%s build_match_key_dur=%s existing_load_dur=%s compare_dur=%s total_block_duplicate_check_dur=%s",
+			block.BookID,
+			block.IncomingRowsCount,
+			block.PageIndexed,
+			block.PageResolverUsed,
+			block.StrongMatchEnabled,
+			block.RuntimeLoadCandidatesCalled,
+			block.ReasonIfNotCalled,
+			block.PageKey,
+			block.TipusActe,
+			block.SnapshotMaxID,
+			block.FallbackPath,
+			block.PageLookupDur,
+			block.BuildMatchKeyDur,
+			block.ExistingLoadDur,
+			block.CompareDur,
+			block.TotalBlockDuplicateCheckDur,
+		)
+	}
+	Debugf(
+		"duplicate_check_summary total_dur=%s runtime_calls_count=%d fallback_calls_count=%d strong_snapshot_log_lines_expected_count=%d blocks=%d rows=%d",
+		totalDur,
+		m.RuntimeCallsCount,
+		m.FallbackCallsCount,
+		m.StrongSnapshotLogLinesExpectedCount,
+		len(m.Blocks),
+		m.Rows,
+	)
+}
+
 type templateMatchBuildCache struct {
 	normalizedParts map[string]string
 	loweredParts    map[string]string
@@ -256,6 +436,16 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	if maxID, err := importRuntime.ExistingSnapshotMaxID(); err == nil && maxID > 0 {
 		existingSnapshotMaxID = maxID
 	}
+	duplicateCheckRun := newTemplateDuplicateCheckRunMetrics(
+		result.Debug.Enabled && strings.EqualFold(importRuntime.Engine(), "postgres"),
+		importRuntime.Engine(),
+		fmt.Sprintf("%T", importRuntime),
+		result.Debug.Model,
+		result.Debug.Scope,
+		template.ID,
+		len(bookInfoByID),
+	)
+	duplicateCheckRun.logStart()
 	flushPendingCreates := func() {
 		pendingCreates = a.flushTemplatePendingCreates(pendingCreates, &result, importRuntime)
 	}
@@ -313,19 +503,48 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 
 		if model.Policies.DedupWithin && len(model.Policies.DedupKeyFields) > 0 {
 			duplicateStart := time.Now()
+			block := duplicateCheckRun.block(
+				"dedup|"+strconv.Itoa(bookID)+"|"+strings.Join(model.Policies.DedupKeyFields, ","),
+				bookID,
+				"",
+				"",
+				existingSnapshotMaxID,
+			)
+			if block != nil {
+				block.PageIndexed = false
+				block.PageResolverUsed = false
+				block.StrongMatchEnabled = false
+				block.ReasonIfNotCalled = "dedup_within_only"
+			}
+			buildStart := time.Now()
 			key := buildTemplateDedupKeyWithCache(matchBuildCache, model.Policies.DedupKeyFields, rowCtx, mappedValues)
+			buildDur := time.Since(buildStart)
+			if block != nil {
+				block.BuildMatchKeyDur += buildDur
+			}
 			if key != "" {
+				compareStart := time.Now()
 				if model.Policies.DedupAddRowIndexWhenPrincipalMissing && !principalPersonHasName(persones, model.Policies.PrincipalRoles) {
 					key += "|row:" + strconv.Itoa(rowNum)
 				}
 				if firstRow, ok := seen[key]; ok {
+					if block != nil {
+						block.CompareDur += time.Since(compareStart)
+						block.TotalBlockDuplicateCheckDur += time.Since(duplicateStart)
+					}
 					result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 					result.Failed++
 					fields := map[string]string{"duplicate_row": strconv.Itoa(firstRow)}
 					result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "registre duplicat", Fields: fields})
 					continue
 				}
+				if block != nil {
+					block.CompareDur += time.Since(compareStart)
+				}
 				seen[key] = rowNum
+			}
+			if block != nil {
+				block.TotalBlockDuplicateCheckDur += time.Since(duplicateStart)
 			}
 			result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 		}
@@ -333,46 +552,105 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		matchKey := ""
 		matchContextKey := ""
 		matchMode := model.Policies.MergeMode
+		duplicateBlock := (*templateDuplicateCheckBlockMetrics)(nil)
+		duplicateBlockKey := ""
 		switch matchMode {
 		case "by_strong_signature_if_page_indexed":
 			pageLookupStart := time.Now()
 			pageKey, pageIndexed := a.templateIndexedPageKeyWithResolver(pageResolver, bookID, &t, atributs)
-			result.Debug.addWritePageLookup(time.Since(pageLookupStart))
+			pageLookupDur := time.Since(pageLookupStart)
+			result.Debug.addWritePageLookup(pageLookupDur)
+			duplicateBlockKey = "strong|" + strconv.Itoa(bookID) + "|" + pageKey + "|" + strings.TrimSpace(t.TipusActe)
+			duplicateBlock = duplicateCheckRun.block(duplicateBlockKey, bookID, pageKey, strings.TrimSpace(t.TipusActe), existingSnapshotMaxID)
+			if duplicateBlock != nil {
+				duplicateBlock.PageIndexed = pageIndexed
+				duplicateBlock.PageResolverUsed = true
+				duplicateBlock.StrongMatchEnabled = true
+				duplicateBlock.PageLookupDur += pageLookupDur
+				duplicateBlock.TotalBlockDuplicateCheckDur += pageLookupDur
+			}
 			if pageIndexed {
 				duplicateStart := time.Now()
+				buildStart := time.Now()
 				matchKey = buildTemplateStrongMatchKeyWithCache(matchBuildCache, &t, persones, atributs, model.Policies)
+				if duplicateBlock != nil {
+					duplicateBlock.BuildMatchKeyDur += time.Since(buildStart)
+				}
 				if matchKey != "" {
 					matchContextKey = "strong|" + strconv.Itoa(bookID) + "|" + normalizeTemplateMatchPartWithCache(matchBuildCache, pageKey) + "|" + normalizeTemplateMatchPartWithCache(matchBuildCache, t.TipusActe)
 					if model.Policies.AvoidDuplicatePrincipal {
+						compareStart := time.Now()
 						if firstRow, ok := templateSeenMatchRow(seenMatchByContext, matchContextKey, matchKey); ok {
+							if duplicateBlock != nil {
+								duplicateBlock.CompareDur += time.Since(compareStart)
+								duplicateBlock.TotalBlockDuplicateCheckDur += time.Since(duplicateStart)
+							}
 							result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 							result.Failed++
 							fields := map[string]string{"duplicate_row": strconv.Itoa(firstRow)}
 							result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "registre duplicat", Fields: fields})
 							continue
 						}
+						if duplicateBlock != nil {
+							duplicateBlock.CompareDur += time.Since(compareStart)
+						}
 					}
+				} else if duplicateBlock != nil {
+					duplicateCheckRun.logSkipRuntimeLoadStrongCandidates(duplicateBlock, `matchKey=""`, importRuntime, "")
+				}
+				if duplicateBlock != nil {
+					duplicateBlock.TotalBlockDuplicateCheckDur += time.Since(duplicateStart)
 				}
 				result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
+			} else if duplicateBlock != nil {
+				duplicateCheckRun.logSkipRuntimeLoadStrongCandidates(duplicateBlock, "pageIndexed=false", importRuntime, "")
 			}
 		case "by_principal_person_if_book_indexed":
+			duplicateBlockKey = "principal|" + strconv.Itoa(bookID)
+			duplicateBlock = duplicateCheckRun.block(duplicateBlockKey, bookID, "", "", existingSnapshotMaxID)
+			if duplicateBlock != nil {
+				duplicateBlock.PageIndexed = bookInfo.Indexed
+				duplicateBlock.PageResolverUsed = false
+				duplicateBlock.StrongMatchEnabled = false
+				duplicateBlock.FallbackPath = "principal_match_mode"
+			}
 			if !bookInfo.Indexed {
+				if duplicateBlock != nil {
+					duplicateCheckRun.logSkipRuntimeLoadStrongCandidates(duplicateBlock, "bookInfo.Indexed=false", importRuntime, "principal_match_mode")
+				}
 				break
 			}
 			duplicateStart := time.Now()
+			buildStart := time.Now()
 			matchKey = principalPersonKey(persones, model.Policies.PrincipalRoles)
+			if duplicateBlock != nil {
+				duplicateBlock.BuildMatchKeyDur += time.Since(buildStart)
+			}
 			if matchKey != "" && model.Policies.AvoidDuplicatePrincipal {
 				matchContextKey = "principal|" + strconv.Itoa(bookID)
+				compareStart := time.Now()
 				if firstRow, ok := templateSeenMatchRow(seenMatchByContext, matchContextKey, matchKey); ok {
+					if duplicateBlock != nil {
+						duplicateBlock.CompareDur += time.Since(compareStart)
+						duplicateBlock.TotalBlockDuplicateCheckDur += time.Since(duplicateStart)
+					}
 					result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 					result.Failed++
 					fields := map[string]string{"duplicate_row": strconv.Itoa(firstRow)}
 					result.Errors = append(result.Errors, importErrorEntry{Row: rowNum, Reason: "registre duplicat", Fields: fields})
 					continue
 				}
+				if duplicateBlock != nil {
+					duplicateBlock.CompareDur += time.Since(compareStart)
+				}
 			}
 			if matchKey != "" && matchContextKey == "" {
 				matchContextKey = "principal|" + strconv.Itoa(bookID)
+			} else if matchKey == "" && duplicateBlock != nil {
+				duplicateCheckRun.logSkipRuntimeLoadStrongCandidates(duplicateBlock, `matchKey=""`, importRuntime, "principal_match_mode")
+			}
+			if duplicateBlock != nil {
+				duplicateBlock.TotalBlockDuplicateCheckDur += time.Since(duplicateStart)
 			}
 			result.Debug.addWriteDuplicateCheck(time.Since(duplicateStart))
 		}
@@ -382,14 +660,45 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			if existingMap == nil {
 				resolveStart = time.Now()
 				if matchMode == "by_strong_signature_if_page_indexed" {
+					if duplicateBlock != nil {
+						duplicateBlock.RuntimeLoadCandidatesCalled = true
+						duplicateCheckRun.RuntimeCallsCount++
+						duplicateCheckRun.StrongSnapshotLogLinesExpectedCount++
+						Debugf(
+							"duplicate_check calling_runtime_load_strong_candidates book_id=%d page_key=%q tipus_acte=%q snapshot_max_id=%d",
+							bookID,
+							duplicateBlock.PageKey,
+							duplicateBlock.TipusActe,
+							existingSnapshotMaxID,
+						)
+					}
+					existingLoadStart := time.Now()
 					existingMap = a.loadExistingByStrongMatchWithPageResolverSnapshot(importRuntime, pageResolver, bookID, &t, atributs, model.Policies, existingSnapshotMaxID)
+					if duplicateBlock != nil {
+						existingLoadDur := time.Since(existingLoadStart)
+						duplicateBlock.ExistingLoadDur += existingLoadDur
+						duplicateBlock.TotalBlockDuplicateCheckDur += existingLoadDur
+					}
 				} else {
+					existingLoadStart := time.Now()
 					existingMap = a.loadExistingByPrincipal(importRuntime, bookID, model.Policies.PrincipalRoles, existingSnapshotMaxID)
+					existingLoadDur := time.Since(existingLoadStart)
+					if duplicateBlock != nil {
+						duplicateBlock.ExistingLoadDur += existingLoadDur
+						duplicateBlock.TotalBlockDuplicateCheckDur += existingLoadDur
+					}
+					duplicateCheckRun.logFallbackPath("principal_match_mode", existingLoadDur, 1, bookID)
 				}
 				result.Debug.addResolve(time.Since(resolveStart))
 				existingByContext[matchContextKey] = existingMap
+			} else if duplicateBlock != nil && !duplicateBlock.RuntimeLoadCandidatesCalled {
+				duplicateBlock.ReasonIfNotCalled = "existing_map_cached"
 			}
+			compareStart := time.Now()
 			if existingID, ok := existingMap[matchKey]; ok {
+				if duplicateBlock != nil {
+					duplicateBlock.CompareDur += time.Since(compareStart)
+				}
 				writeStart := time.Now()
 				updated, okUpdate := a.mergeTemplateRow(existingID, &t, persones, atributs, model.Policies)
 				result.Debug.addWrite(time.Since(writeStart))
@@ -404,6 +713,8 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 					}
 					continue
 				}
+			} else if duplicateBlock != nil {
+				duplicateBlock.CompareDur += time.Since(compareStart)
 			}
 		}
 
@@ -452,6 +763,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		}
 	}
 	flushPendingCreates()
+	duplicateCheckRun.logBlocksAndSummary(result.Debug.Rows)
 	result.Debug.finalize(len(result.BookIDs), time.Since(start))
 	return result
 }
