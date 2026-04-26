@@ -1,125 +1,87 @@
-# CercaGenealogica
+# CercaGenealògica
 
-Aplicació web en **Go** per a **recerca i col·laboració genealògica**, centrada en la **indexació de documentació històrica** (llibres, pàgines i registres) i la seva **vinculació amb persones**.
+[Català](https://github.com/marcmoiagese/CercaGenealogica/blob/master/README.md) · [Anglès](https://github.com/marcmoiagese/CercaGenealogica/blob/master/docs/README.en.md) · [Castellà](https://github.com/marcmoiagese/CercaGenealogica/blob/master/docs/README.cast.md) · [Francès](https://github.com/marcmoiagese/CercaGenealogica/blob/master/docs/README.fr.md) · [Italià](https://github.com/marcmoiagese/CercaGenealogica/blob/master/docs/README.it.md)
 
-> Servei local per defecte: `http://localhost:8080`
+**CercaGenealògica** és un projecte obert dedicat a la recerca, indexació i consulta de documentació històrica amb valor genealògic.
 
-## Què hi trobaràs (estat actual)
+L’objectiu és facilitar que persones, famílies, investigadors, arxius i col·laboradors puguin transformar documents antics en informació cercable, connectada i útil per reconstruir històries familiars i comunitàries.
 
-### Usuari, seguretat i perfils
-- Registre (opcional), activació per correu, login/logout i recuperació de contrasenya.
-- Perfil d’usuari (incloent privacitat per camp).
-- Perfils públics (`/u/...`) i rànquing per punts.
-- Mesures bàsiques: rate limit, bloqueig d’IP, CSRF, sessions.
+## Què és aquest projecte?
 
-### Documentals (arxius → llibres → pàgines → registres)
-- CRUD d’**arxius** i **llibres** (amb relacions i metadades).
-- Gestió de **pàgines**.
-- **Registres**: llistat, formularis, vista detall i taula de cerca.
-- Import/export (segons mòduls disponibles) i utilitats d’indexació.
+CercaGenealògica neix amb la voluntat de crear una eina col·laborativa per treballar amb fonts històriques com llibres parroquials, padrons, censos, registres civils, documentació municipal, expedients i altres materials que poden contenir informació sobre persones, famílies, llocs i relacions.
 
-### Indexació literal (RAW) i moderació
-- Indexació RAW a taules `transcripcions_*`.
-- Vinculació registre ⇄ persona (segons fluxos actuals).
-- Moderació: cua d’elements pendents i accions d’aprovar/rebutjar (segons permisos).
+El projecte busca fer més accessible la informació que sovint queda amagada dins de documents escanejats, manuscrits, llistats antics o arxius difícils de consultar.
 
-### Punts i rànquing
-- Regles de punts, registre d’activitat i recalcul.
-- Vista de rànquing.
+## Per què és útil?
 
-### Cognoms
-- Llistat/cerca i pàgina de detall.
-- Import i estadístiques.
-- **Mapa (heatmap)** per distribució.
+La genealogia no és només una llista de noms i dates. També és memòria, territori, migracions, oficis, vincles familiars, canvis socials i història local.
 
-## Estructura del repositori
+CercaGenealògica vol ajudar a:
 
-- `main.go` — rutes principals i arrencada del servidor
-- `cnf/` — configuració (fitxer `cnf/config.cfg`)
-- `core/` — handlers, seguretat, render de plantilles, permisos, i18n
-- `db/` — capa d’accés a dades + esquemes `SQLite.sql`, `PostgreSQL.sql`, `MySQL.sql`
-- `templates/` — plantilles HTML (layouts i vistes)
-- `static/` — CSS/JS/assets
-- `locales/` — traduccions JSON (`cat`, `en`, `oc`)
-- `tests/` — tests unit i integració
-- `tools/` — scripts auxiliars (p. ex. `test.sh`)
-- `plantilla-temporal/` — maquetes/plantilles de referència (disseny)
+- localitzar persones dins de documents històrics;
+- relacionar registres amb persones i famílies;
+- preservar informació extreta de fonts documentals;
+- facilitar la col·laboració entre investigadors i voluntaris;
+- donar valor a arxius locals i documentació històrica;
+- construir una base de coneixement oberta i reutilitzable.
 
-## Requisits
+## Què s’hi pot trobar?
 
-- **Go 1.23** (el `go.mod` inclou `toolchain go1.23.10`)
-- Compilació amb CGO (necessari per `github.com/mattn/go-sqlite3`)
-  - Ubuntu/Debian: `sudo apt-get install -y build-essential`
+El projecte està pensat per treballar amb diferents tipus d’informació genealògica i documental:
 
-## Arrencada ràpida (SQLite)
+- **Arxius i fons documentals**, per identificar d’on prové la informació.
+- **Llibres i documents històrics**, com a unitats de consulta.
+- **Pàgines o imatges**, vinculades al document original.
+- **Registres transcrits**, amb noms, dates, llocs i altres dades rellevants.
+- **Persones i vincles familiars**, quan la informació permet relacionar registres.
+- **Cognoms i distribució territorial**, per estudiar presència i evolució de famílies.
+- **Col·laboracions i revisions**, per millorar la qualitat de les dades.
 
-1) Configura `cnf/config.cfg` (valors per defecte recomanats en local):
-- `DB_ENGINE=sqlite`
-- `DB_PATH=./database.db`
-- `RECREADB=true` (només desenvolupament; recrea l’esquema a l’arrencada)
-- `MAIL_ENABLED=false` (si no vols SMTP en local)
+## Una eina oberta i col·laborativa
 
-2) Engega:
-```bash
-go run .
-```
+CercaGenealògica és un projecte obert perquè la preservació i l’accés a la memòria històrica funcionen millor quan es fan de manera compartida.
 
-3) Obre:
-- `http://localhost:8080`
+La idea és que qualsevol persona interessada pugui contribuir-hi segons les seves possibilitats: transcrivint documents, revisant dades, millorant continguts, aportant fonts, proposant millores o ajudant a fer créixer el projecte.
 
-### Correu en local (opcional)
-Si vols provar activacions i recuperació de contrasenya, pots aixecar un SMTP de desenvolupament (exemple amb Mailpit):
+## Filosofia del projecte
 
-```bash
-docker run --rm -p 1025:1025 -p 8025:8025 axllent/mailpit
-```
+Aquest projecte parteix d’algunes idees bàsiques:
 
-I a `cnf/config.cfg`:
-- `MAIL_ENABLED=true`
-- `MAIL_SMTP_HOST=localhost`
-- `MAIL_SMTP_PORT=1025`
+- La documentació històrica ha de ser més fàcil de trobar i consultar.
+- Les dades genealògiques han de poder ser revisades, corregides i millorades.
+- Les fonts originals són essencials per donar confiança a la informació.
+- La col·laboració pot convertir documents dispersos en coneixement compartit.
+- La història familiar també forma part de la història dels pobles i territoris.
 
-UI de Mailpit: `http://localhost:8025`
+## A qui va adreçat?
 
-## Configuració (`cnf/config.cfg`)
+CercaGenealògica pot ser útil per a:
 
-Claus principals:
-- `DB_ENGINE`: `sqlite` | `postgres` | `mysql`
-- `DB_PATH`: path del fitxer SQLite
-- `DB_HOST`, `DB_PORT`, `DB_USR`, `DB_PASS`, `DB_NAME`: per Postgres/MySQL
-- `RECREADB`: si és `true`, aplica l’esquema del motor a l’arrencada (**compte en entorns amb dades**)
-- `REGISTERD`: activa/desactiva el registre d’usuaris
-- `MAIL_ENABLED`, `MAIL_FROM`, `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`
-- `LOG_LEVEL`: `silent/error`, `info`, `debug`
-- `ENVIRONMENT`: si no es defineix, `development`
+- persones que investiguen la seva família;
+- genealogistes aficionats o professionals;
+- investigadors d’història local;
+- arxius i entitats culturals;
+- voluntaris que treballen en transcripció o indexació;
+- comunitats interessades a preservar la seva memòria documental.
 
-## Tests
+## Estat del projecte
 
-Executar tota la suite:
-```bash
-./tools/test.sh
-```
+CercaGenealògica està en desenvolupament actiu.
 
-> Nota: el repositori treballa amb SQLite i pot tenir proves d’integració multi-DB segons la configuració de tests.
+El projecte evoluciona a mesura que es van incorporant noves necessitats, nous tipus de documents, millores en la cerca, eines de revisió i formes més potents de relacionar persones, registres i fonts.
 
-## Esquema SQL i compatibilitat entre motors
+## Documentació tècnica
 
-Quan es toca l’esquema, cal mantenir homogeni:
-- `db/SQLite.sql`
-- `db/PostgreSQL.sql`
-- `db/MySQL.sql`
+Aquest README principal està pensat com a presentació general del projecte.
 
-## Documentació interna i roadmap
+La documentació tècnica, les instruccions d’instal·lació, configuració, proves, desplegament i desenvolupament es poden mantenir en altres seccions del repositori, com ara carpetes de documentació, la wiki o fitxers específics per a desenvolupadors.
 
-A `.codex/` tens:
-- `overview/` — visió global i decisions
-- `prompts/roadmap/` — fases implementables (prompts per Codex)
-- `instructions/` — regles de treball per evitar regressions
+## Participació
 
-## Pendents destacats (backlog)
+Qualsevol ajuda és benvinguda.
 
-- Fer visible l’**historial de canvis** i comparació de versions en registres (estil wiki/confluence).
-- Tancar el **fix de permisos** (evitar qualsevol elevació per defecte i garantir que assignar polítiques té efecte).
-- Evolució de la part genealògica (cerques i arbres amb càrrega progressiva).
+Pots participar-hi proposant idees, informant d’errors, millorant textos, revisant dades, aportant coneixement genealògic o col·laborant en el desenvolupament del projecte.
 
----
+## Llicència
+
+Aquest projecte és obert. Consulta la llicència del repositori per conèixer les condicions d’ús, distribució i contribució.
