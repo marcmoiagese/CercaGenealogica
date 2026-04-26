@@ -1586,6 +1586,9 @@ func (a *App) loadExistingByStrongMatchWithPageResolverSnapshot(runtime db.Templ
 		return existingMap
 	}
 	if snapshotMaxID == 0 {
+		if runtime != nil && runtime.Engine() == "postgres" {
+			Debugf("duplicate_check strong_snapshot engine=postgres strategy=context-first book_id=%d page_key=%q tipus_acte=%q snapshot_max_id=%d candidate_transcripcio_ids_count=0 loaded_transcripcions_count=0 loaded_persones_count=0 loaded_atributs_count=0 query_candidates_dur=0s query_transcripcions_dur=0s query_persones_dur=0s query_atributs_dur=0s total_context_snapshot_dur=0s", bookID, pageKey, strings.TrimSpace(incoming.TipusActe), snapshotMaxID)
+		}
 		return existingMap
 	}
 	matchBuildCache := newTemplateMatchBuildCache()

@@ -214,12 +214,24 @@ func (r genericTemplateImportRuntime) LoadStrongMatchCandidates(req TemplateImpo
 
 func (r *postgresTemplateImportRuntime) LoadStrongMatchCandidates(req TemplateImportStrongMatchRequest) (TemplateImportStrongMatchResult, error) {
 	result := emptyStrongMatchResult()
-	if r.database == nil || req.BookID <= 0 || req.SnapshotMaxID == 0 {
+	metrics := postgresStrongSnapshotMetrics{
+		Strategy:      "context-first",
+		BookID:        req.BookID,
+		PageKey:       strings.TrimSpace(req.PageKey),
+		TipusActe:     strings.TrimSpace(req.TipusActe),
+		SnapshotMaxID: req.SnapshotMaxID,
+	}
+	if r.database == nil || req.BookID <= 0 {
 		return result, nil
 	}
-	pageKey := strings.TrimSpace(req.PageKey)
-	tipusActe := strings.TrimSpace(req.TipusActe)
+	if req.SnapshotMaxID == 0 {
+		metrics.logDebug()
+		return result, nil
+	}
+	pageKey := metrics.PageKey
+	tipusActe := metrics.TipusActe
 	if pageKey == "" || tipusActe == "" {
+		metrics.logDebug()
 		return result, nil
 	}
 	snapshot, err := r.loadStrongContextSnapshot(req)
@@ -829,17 +841,22 @@ func (r *postgresTemplateImportRuntime) strongSnapshot(bookID, snapshotMaxID int
 }
 
 func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID int) (*postgresTemplateImportStrongSnapshot, error) {
-	trans, ids, err := strongSnapshotTranscripcionsPostgres(r.database, bookID, snapshotMaxID)
+	totalStart := time.Now()
+	trans, ids, metrics, err := strongSnapshotTranscripcionsPostgres(r.database, bookID, snapshotMaxID)
 	if err != nil {
 		return nil, err
 	}
 	filtered := trans
-	personesByID, atributsByID, err := strongSnapshotRelatedByIDsPostgres(r.database, ids)
+	personesByID, atributsByID, err := strongSnapshotRelatedByIDsPostgres(r.database, ids, &metrics)
 	if err != nil {
+		metrics.TotalContextSnapshotDur = time.Since(totalStart)
+		metrics.logDebug()
 		return nil, err
 	}
 	pages, err := r.database.ListLlibrePagines(bookID)
 	if err != nil {
+		metrics.TotalContextSnapshotDur = time.Since(totalStart)
+		metrics.logDebug()
 		return nil, err
 	}
 	pageNumsByPaginaID := make(map[int]int, len(pages))
@@ -848,6 +865,8 @@ func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID
 			pageNumsByPaginaID[page.ID] = page.NumPagina
 		}
 	}
+	metrics.TotalContextSnapshotDur = time.Since(totalStart)
+	metrics.logDebug()
 	return newPostgresStrongSnapshot(bookID, snapshotMaxID, filtered, personesByID, atributsByID, pageNumsByPaginaID), nil
 }
 

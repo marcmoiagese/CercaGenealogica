@@ -10,10 +10,69 @@ import (
 	pq "github.com/lib/pq"
 )
 
-func strongSnapshotTranscripcionsPostgres(database DB, bookID, snapshotMaxID int) ([]TranscripcioRaw, []int, error) {
-	if database == nil || bookID <= 0 || snapshotMaxID <= 0 {
-		return nil, nil, nil
+type postgresStrongSnapshotMetrics struct {
+	Strategy                 string
+	BookID                   int
+	PageKey                  string
+	TipusActe                string
+	SnapshotMaxID            int
+	CandidateTranscripcioIDs int
+	LoadedTranscripcions     int
+	LoadedPersones           int
+	LoadedAtributs           int
+	QueryCandidatesDur       time.Duration
+	QueryTranscripcionsDur   time.Duration
+	QueryPersonesDur         time.Duration
+	QueryAtributsDur         time.Duration
+	TotalContextSnapshotDur  time.Duration
+}
+
+func (m postgresStrongSnapshotMetrics) logDebug() {
+	logDebugf(
+		"duplicate_check strong_snapshot engine=postgres strategy=%s book_id=%d page_key=%q tipus_acte=%q snapshot_max_id=%d candidate_transcripcio_ids_count=%d loaded_transcripcions_count=%d loaded_persones_count=%d loaded_atributs_count=%d query_candidates_dur=%s query_transcripcions_dur=%s query_persones_dur=%s query_atributs_dur=%s total_context_snapshot_dur=%s",
+		m.Strategy,
+		m.BookID,
+		m.PageKey,
+		m.TipusActe,
+		m.SnapshotMaxID,
+		m.CandidateTranscripcioIDs,
+		m.LoadedTranscripcions,
+		m.LoadedPersones,
+		m.LoadedAtributs,
+		m.QueryCandidatesDur,
+		m.QueryTranscripcionsDur,
+		m.QueryPersonesDur,
+		m.QueryAtributsDur,
+		m.TotalContextSnapshotDur,
+	)
+}
+
+func countPersonesRowsByTranscripcioID(rows map[int][]TranscripcioPersonaRaw) int {
+	total := 0
+	for _, items := range rows {
+		total += len(items)
 	}
+	return total
+}
+
+func countAtributsRowsByTranscripcioID(rows map[int][]TranscripcioAtributRaw) int {
+	total := 0
+	for _, items := range rows {
+		total += len(items)
+	}
+	return total
+}
+
+func strongSnapshotTranscripcionsPostgres(database DB, bookID, snapshotMaxID int) ([]TranscripcioRaw, []int, postgresStrongSnapshotMetrics, error) {
+	metrics := postgresStrongSnapshotMetrics{
+		Strategy:      "legacy/full-snapshot",
+		BookID:        bookID,
+		SnapshotMaxID: snapshotMaxID,
+	}
+	if database == nil || bookID <= 0 || snapshotMaxID <= 0 {
+		return nil, nil, metrics, nil
+	}
+	start := time.Now()
 	rows, err := database.Query(`
         SELECT id
         FROM transcripcions_raw
@@ -21,8 +80,12 @@ func strongSnapshotTranscripcionsPostgres(database DB, bookID, snapshotMaxID int
           AND id <= $2
         ORDER BY id`, bookID, snapshotMaxID)
 	if err != nil {
-		return nil, nil, err
+		metrics.QueryCandidatesDur = time.Since(start)
+		metrics.TotalContextSnapshotDur = metrics.QueryCandidatesDur
+		metrics.logDebug()
+		return nil, nil, metrics, err
 	}
+	metrics.QueryCandidatesDur = time.Since(start)
 	ids := make([]int, 0, len(rows))
 	for _, row := range rows {
 		id := parseIntValue(row["id"])
@@ -31,17 +94,26 @@ func strongSnapshotTranscripcionsPostgres(database DB, bookID, snapshotMaxID int
 		}
 	}
 	ids = normalizePositiveUniqueIDs(ids)
+	metrics.CandidateTranscripcioIDs = len(ids)
 	if len(ids) == 0 {
-		return nil, nil, nil
+		metrics.TotalContextSnapshotDur = metrics.QueryCandidatesDur
+		metrics.logDebug()
+		return nil, nil, metrics, nil
 	}
+	start = time.Now()
 	trans, err := database.ListTranscripcionsRawByIDs(ids)
 	if err != nil {
-		return nil, nil, err
+		metrics.QueryTranscripcionsDur = time.Since(start)
+		metrics.TotalContextSnapshotDur = metrics.QueryCandidatesDur + metrics.QueryTranscripcionsDur
+		metrics.logDebug()
+		return nil, nil, metrics, err
 	}
-	return trans, ids, nil
+	metrics.QueryTranscripcionsDur = time.Since(start)
+	metrics.LoadedTranscripcions = len(trans)
+	return trans, ids, metrics, nil
 }
 
-func strongSnapshotRelatedByIDsPostgres(database DB, transcripcioIDs []int) (map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
+func strongSnapshotRelatedByIDsPostgres(database DB, transcripcioIDs []int, metrics *postgresStrongSnapshotMetrics) (map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
 	personesByTranscripcioID := map[int][]TranscripcioPersonaRaw{}
 	atributsByTranscripcioID := map[int][]TranscripcioAtributRaw{}
 	if database == nil {
@@ -50,23 +122,49 @@ func strongSnapshotRelatedByIDsPostgres(database DB, transcripcioIDs []int) (map
 	if len(transcripcioIDs) == 0 {
 		return personesByTranscripcioID, atributsByTranscripcioID, nil
 	}
+	start := time.Now()
 	persones, err := database.ListTranscripcioPersonesByTranscripcioIDs(transcripcioIDs)
 	if err != nil {
 		return nil, nil, err
 	}
+	if metrics != nil {
+		metrics.QueryPersonesDur = time.Since(start)
+	}
+	start = time.Now()
 	atributs, err := database.ListTranscripcioAtributsByTranscripcioIDs(transcripcioIDs)
 	if err != nil {
 		return nil, nil, err
 	}
-	return ensurePersonaMaps(persones), ensureAtributMaps(atributs), nil
+	if metrics != nil {
+		metrics.QueryAtributsDur = time.Since(start)
+	}
+	personesMap := ensurePersonaMaps(persones)
+	atributsMap := ensureAtributMaps(atributs)
+	if metrics != nil {
+		metrics.LoadedPersones = countPersonesRowsByTranscripcioID(personesMap)
+		metrics.LoadedAtributs = countAtributsRowsByTranscripcioID(atributsMap)
+	}
+	return personesMap, atributsMap, nil
 }
 
 func (h sqlHelper) listTranscripcioStrongMatchCandidatesPostgres(bookID int, tipusActe, pageKey string, maxExistingID int) ([]TranscripcioRaw, map[int][]TranscripcioPersonaRaw, map[int][]TranscripcioAtributRaw, error) {
 	personesByTranscripcioID := map[int][]TranscripcioPersonaRaw{}
 	atributsByTranscripcioID := map[int][]TranscripcioAtributRaw{}
+	metrics := postgresStrongSnapshotMetrics{
+		Strategy:      "context-first",
+		BookID:        bookID,
+		PageKey:       pageKey,
+		TipusActe:     tipusActe,
+		SnapshotMaxID: maxExistingID,
+	}
+	totalStart := time.Now()
 	pageKey = strings.TrimSpace(pageKey)
 	tipusActe = strings.TrimSpace(tipusActe)
+	metrics.PageKey = pageKey
+	metrics.TipusActe = tipusActe
 	if bookID <= 0 || pageKey == "" || tipusActe == "" {
+		metrics.TotalContextSnapshotDur = time.Since(totalStart)
+		metrics.logDebug()
 		return nil, personesByTranscripcioID, atributsByTranscripcioID, nil
 	}
 	query := `
@@ -97,15 +195,22 @@ func (h sqlHelper) listTranscripcioStrongMatchCandidatesPostgres(bookID int, tip
 	}
 	query += `
         ORDER BY t.id`
+	start := time.Now()
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
+		metrics.QueryCandidatesDur = time.Since(start)
+		metrics.TotalContextSnapshotDur = time.Since(totalStart)
+		metrics.logDebug()
 		return nil, personesByTranscripcioID, atributsByTranscripcioID, err
 	}
 	defer rows.Close()
+	metrics.QueryCandidatesDur = time.Since(start)
 	ids := make([]int, 0)
 	for rows.Next() {
 		var id int
 		if err := rows.Scan(&id); err != nil {
+			metrics.TotalContextSnapshotDur = time.Since(totalStart)
+			metrics.logDebug()
 			return nil, personesByTranscripcioID, atributsByTranscripcioID, err
 		}
 		if id > 0 {
@@ -113,22 +218,47 @@ func (h sqlHelper) listTranscripcioStrongMatchCandidatesPostgres(bookID int, tip
 		}
 	}
 	if err := rows.Err(); err != nil {
+		metrics.TotalContextSnapshotDur = time.Since(totalStart)
+		metrics.logDebug()
 		return nil, personesByTranscripcioID, atributsByTranscripcioID, err
 	}
 	ids = normalizePositiveUniqueIDs(ids)
+	metrics.CandidateTranscripcioIDs = len(ids)
 	if len(ids) == 0 {
+		metrics.TotalContextSnapshotDur = time.Since(totalStart)
+		metrics.logDebug()
 		return nil, personesByTranscripcioID, atributsByTranscripcioID, nil
 	}
+	start = time.Now()
 	trans, err := listStrongMatchTranscripcionsByIDsPostgres(h.db, ids)
 	if err != nil {
+		metrics.QueryTranscripcionsDur = time.Since(start)
+		metrics.TotalContextSnapshotDur = time.Since(totalStart)
+		metrics.logDebug()
 		return nil, personesByTranscripcioID, atributsByTranscripcioID, err
 	}
+	metrics.QueryTranscripcionsDur = time.Since(start)
+	metrics.LoadedTranscripcions = len(trans)
+	start = time.Now()
 	if personesByTranscripcioID, err = listStrongMatchPersonesByIDsPostgres(h.db, ids); err != nil {
+		metrics.QueryPersonesDur = time.Since(start)
+		metrics.TotalContextSnapshotDur = time.Since(totalStart)
+		metrics.logDebug()
 		return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, err
 	}
+	metrics.QueryPersonesDur = time.Since(start)
+	metrics.LoadedPersones = countPersonesRowsByTranscripcioID(personesByTranscripcioID)
+	start = time.Now()
 	if atributsByTranscripcioID, err = listStrongMatchAtributsByIDsPostgres(h.db, ids); err != nil {
+		metrics.QueryAtributsDur = time.Since(start)
+		metrics.TotalContextSnapshotDur = time.Since(totalStart)
+		metrics.logDebug()
 		return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, err
 	}
+	metrics.QueryAtributsDur = time.Since(start)
+	metrics.LoadedAtributs = countAtributsRowsByTranscripcioID(atributsByTranscripcioID)
+	metrics.TotalContextSnapshotDur = time.Since(totalStart)
+	metrics.logDebug()
 	return trans, personesByTranscripcioID, atributsByTranscripcioID, nil
 }
 
