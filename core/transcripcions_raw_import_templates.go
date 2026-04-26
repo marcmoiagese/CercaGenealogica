@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
@@ -149,6 +151,10 @@ type templateDuplicateCheckBlockMetrics struct {
 	CompareDur                  time.Duration
 	TotalBlockDuplicateCheckDur time.Duration
 	SkipLogged                  bool
+	StartSnapshot               templateRuntimeSnapshot
+	EndSnapshot                 templateRuntimeSnapshot
+	StartedAt                   time.Time
+	Finished                    bool
 }
 
 type templateDuplicateCheckRunMetrics struct {
@@ -164,6 +170,23 @@ type templateDuplicateCheckRunMetrics struct {
 	FallbackCallsCount                  int
 	StrongSnapshotLogLinesExpectedCount int
 	Blocks                              map[string]*templateDuplicateCheckBlockMetrics
+	StartSnapshot                       templateRuntimeSnapshot
+	EndSnapshot                         templateRuntimeSnapshot
+	activeBlock                         *templateDuplicateCheckBlockMetrics
+}
+
+type templateRuntimeSnapshot struct {
+	HeapAlloc     uint64
+	TotalAlloc    uint64
+	Mallocs       uint64
+	Frees         uint64
+	NumGC         uint32
+	PauseTotalNs  uint64
+	LastGC        uint64
+	NextGC        uint64
+	GCCPUFraction float64
+	UserCPU       time.Duration
+	SysCPU        time.Duration
 }
 
 func newTemplateDuplicateCheckRunMetrics(enabled bool, engine, runtimeType, model, scope string, templateID, books int) *templateDuplicateCheckRunMetrics {
@@ -179,10 +202,37 @@ func newTemplateDuplicateCheckRunMetrics(enabled bool, engine, runtimeType, mode
 	}
 }
 
+func captureTemplateRuntimeSnapshot() templateRuntimeSnapshot {
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	snapshot := templateRuntimeSnapshot{
+		HeapAlloc:     mem.HeapAlloc,
+		TotalAlloc:    mem.TotalAlloc,
+		Mallocs:       mem.Mallocs,
+		Frees:         mem.Frees,
+		NumGC:         mem.NumGC,
+		PauseTotalNs:  mem.PauseTotalNs,
+		LastGC:        mem.LastGC,
+		NextGC:        mem.NextGC,
+		GCCPUFraction: mem.GCCPUFraction,
+	}
+	var usage syscall.Rusage
+	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage); err == nil {
+		snapshot.UserCPU = time.Duration(usage.Utime.Sec)*time.Second + time.Duration(usage.Utime.Usec)*time.Microsecond
+		snapshot.SysCPU = time.Duration(usage.Stime.Sec)*time.Second + time.Duration(usage.Stime.Usec)*time.Microsecond
+	}
+	return snapshot
+}
+
+func (s templateRuntimeSnapshot) totalCPU() time.Duration {
+	return s.UserCPU + s.SysCPU
+}
+
 func (m *templateDuplicateCheckRunMetrics) logStart() {
 	if m == nil || !m.Enabled {
 		return
 	}
+	m.StartSnapshot = captureTemplateRuntimeSnapshot()
 	Debugf(
 		"duplicate_check_start engine=%s rows=%d books=%d runtime_type=%q model=%q template_id=%d scope=%s",
 		m.Engine,
@@ -193,6 +243,31 @@ func (m *templateDuplicateCheckRunMetrics) logStart() {
 		m.TemplateID,
 		m.Scope,
 	)
+}
+
+func (m *templateDuplicateCheckRunMetrics) beginBlock(block *templateDuplicateCheckBlockMetrics) {
+	if m == nil || !m.Enabled || block == nil {
+		return
+	}
+	if block.StartedAt.IsZero() {
+		block.StartedAt = time.Now()
+		block.StartSnapshot = captureTemplateRuntimeSnapshot()
+	}
+	m.activeBlock = block
+}
+
+func (m *templateDuplicateCheckRunMetrics) finishActiveBlockIfNeeded(nextKey string) {
+	if m == nil || !m.Enabled || m.activeBlock == nil {
+		return
+	}
+	if nextKey != "" && m.activeBlock.Key == nextKey {
+		return
+	}
+	if !m.activeBlock.Finished {
+		m.activeBlock.EndSnapshot = captureTemplateRuntimeSnapshot()
+		m.activeBlock.Finished = true
+	}
+	m.activeBlock = nil
 }
 
 func (m *templateDuplicateCheckRunMetrics) block(key string, bookID int, pageKey, tipusActe string, snapshotMaxID int) *templateDuplicateCheckBlockMetrics {
@@ -230,73 +305,74 @@ func (m *templateDuplicateCheckRunMetrics) logSkipRuntimeLoadStrongCandidates(bl
 	if m == nil || !m.Enabled || block == nil || block.SkipLogged {
 		return
 	}
+	_ = runtime
 	block.SkipLogged = true
 	block.ReasonIfNotCalled = reason
 	if fallbackPath != "" {
 		block.FallbackPath = fallbackPath
 	}
-	runtimeType := ""
-	if runtime != nil {
-		runtimeType = fmt.Sprintf("%T", runtime)
-	}
-	Debugf(
-		"duplicate_check skip_runtime_load_strong_candidates reason=%q pageIndexed=%t matchKey=%q snapshotMaxID=%d tipusActe=%q pageKey=%q runtime_nil=%t runtime_type=%q fallback_path=%q book_id=%d",
-		reason,
-		block.PageIndexed,
-		"",
-		block.SnapshotMaxID,
-		block.TipusActe,
-		block.PageKey,
-		runtime == nil,
-		runtimeType,
-		block.FallbackPath,
-		block.BookID,
-	)
 }
 
 func (m *templateDuplicateCheckRunMetrics) logFallbackPath(reason string, dur time.Duration, rows, bookID int) {
 	if m == nil || !m.Enabled {
 		return
 	}
+	_, _, _ = dur, rows, bookID
+	_ = reason
 	m.FallbackCallsCount++
-	Debugf("duplicate_check fallback_path reason=%q dur=%s rows=%d book_id=%d", reason, dur, rows, bookID)
 }
 
-func (m *templateDuplicateCheckRunMetrics) logBlocksAndSummary(rows int) {
+func (m *templateDuplicateCheckRunMetrics) logBlocksAndSummary(rows int) []int {
 	if m == nil || !m.Enabled {
-		return
+		return nil
 	}
+	m.finishActiveBlockIfNeeded("")
 	m.Rows = rows
+	m.EndSnapshot = captureTemplateRuntimeSnapshot()
 	totalDur := time.Duration(0)
-	keys := make([]string, 0, len(m.Blocks))
-	for key := range m.Blocks {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		block := m.Blocks[key]
+	blocks := make([]*templateDuplicateCheckBlockMetrics, 0, len(m.Blocks))
+	for _, block := range m.Blocks {
 		if block == nil {
 			continue
 		}
 		totalDur += block.TotalBlockDuplicateCheckDur
+		blocks = append(blocks, block)
+	}
+	sort.Slice(blocks, func(i, j int) bool {
+		if blocks[i].TotalBlockDuplicateCheckDur == blocks[j].TotalBlockDuplicateCheckDur {
+			if blocks[i].BuildMatchKeyDur == blocks[j].BuildMatchKeyDur {
+				return blocks[i].BookID < blocks[j].BookID
+			}
+			return blocks[i].BuildMatchKeyDur > blocks[j].BuildMatchKeyDur
+		}
+		return blocks[i].TotalBlockDuplicateCheckDur > blocks[j].TotalBlockDuplicateCheckDur
+	})
+	topN := 10
+	if len(blocks) < topN {
+		topN = len(blocks)
+	}
+	topBookIDs := make([]int, 0, topN)
+	for i := 0; i < topN; i++ {
+		block := blocks[i]
+		topBookIDs = append(topBookIDs, block.BookID)
+		memAllocDelta := int64(block.EndSnapshot.HeapAlloc) - int64(block.StartSnapshot.HeapAlloc)
+		mallocsDelta := int64(block.EndSnapshot.Mallocs) - int64(block.StartSnapshot.Mallocs)
+		numGCDelta := int64(block.EndSnapshot.NumGC) - int64(block.StartSnapshot.NumGC)
+		gcPauseDelta := time.Duration(int64(block.EndSnapshot.PauseTotalNs) - int64(block.StartSnapshot.PauseTotalNs))
+		cpuDelta := block.EndSnapshot.totalCPU() - block.StartSnapshot.totalCPU()
 		Debugf(
-			"duplicate_check_block book_id=%d incoming_rows_count=%d page_indexed=%t page_resolver_used=%t strong_match_enabled=%t runtime_load_candidates_called=%t reason_if_not_called=%q page_key=%q tipus_acte=%q snapshot_max_id=%d fallback_path=%q page_lookup_dur=%s build_match_key_dur=%s existing_load_dur=%s compare_dur=%s total_block_duplicate_check_dur=%s",
+			"duplicate_check_top_slow_blocks rank=%d book_id=%d rows=%d reason=%q build_match_key_dur=%s total_block_duplicate_check_dur=%s mem_alloc_delta=%d mallocs_delta=%d num_gc_delta=%d gc_pause_delta=%s cpu_total_delta=%s",
+			i+1,
 			block.BookID,
 			block.IncomingRowsCount,
-			block.PageIndexed,
-			block.PageResolverUsed,
-			block.StrongMatchEnabled,
-			block.RuntimeLoadCandidatesCalled,
 			block.ReasonIfNotCalled,
-			block.PageKey,
-			block.TipusActe,
-			block.SnapshotMaxID,
-			block.FallbackPath,
-			block.PageLookupDur,
 			block.BuildMatchKeyDur,
-			block.ExistingLoadDur,
-			block.CompareDur,
 			block.TotalBlockDuplicateCheckDur,
+			memAllocDelta,
+			mallocsDelta,
+			numGCDelta,
+			gcPauseDelta,
+			cpuDelta,
 		)
 	}
 	Debugf(
@@ -308,6 +384,21 @@ func (m *templateDuplicateCheckRunMetrics) logBlocksAndSummary(rows int) {
 		len(m.Blocks),
 		m.Rows,
 	)
+	Debugf(
+		"duplicate_check_mem_summary heap_alloc_before=%d heap_alloc_after=%d total_alloc_delta=%d mallocs_delta=%d frees_delta=%d num_gc_delta=%d gc_pause_delta=%s last_gc=%d next_gc=%d gc_cpu_fraction=%.6f cpu_total_delta=%s",
+		m.StartSnapshot.HeapAlloc,
+		m.EndSnapshot.HeapAlloc,
+		int64(m.EndSnapshot.TotalAlloc)-int64(m.StartSnapshot.TotalAlloc),
+		int64(m.EndSnapshot.Mallocs)-int64(m.StartSnapshot.Mallocs),
+		int64(m.EndSnapshot.Frees)-int64(m.StartSnapshot.Frees),
+		int64(m.EndSnapshot.NumGC)-int64(m.StartSnapshot.NumGC),
+		time.Duration(int64(m.EndSnapshot.PauseTotalNs)-int64(m.StartSnapshot.PauseTotalNs)),
+		m.EndSnapshot.LastGC,
+		m.EndSnapshot.NextGC,
+		m.EndSnapshot.GCCPUFraction,
+		m.EndSnapshot.totalCPU()-m.StartSnapshot.totalCPU(),
+	)
+	return topBookIDs
 }
 
 type templateMatchBuildCache struct {
@@ -380,15 +471,10 @@ func (p *templateDedupKeyProfiler) metricsForBook(bookID int) *templateDedupKeyP
 	return metrics
 }
 
-func (p *templateDedupKeyProfiler) logDebug() {
-	if p == nil || len(p.byBook) == 0 {
+func (p *templateDedupKeyProfiler) logDebug(bookIDs []int) {
+	if p == nil || len(p.byBook) == 0 || len(bookIDs) == 0 {
 		return
 	}
-	bookIDs := make([]int, 0, len(p.byBook))
-	for bookID := range p.byBook {
-		bookIDs = append(bookIDs, bookID)
-	}
-	sort.Ints(bookIDs)
 	for _, bookID := range bookIDs {
 		metrics := p.byBook[bookID]
 		if metrics == nil {
@@ -671,14 +757,17 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		result.Debug.addParse(parseElapsed)
 
 		if model.Policies.DedupWithin && len(model.Policies.DedupKeyFields) > 0 {
+			blockKey := "dedup|" + strconv.Itoa(bookID) + "|" + strings.Join(model.Policies.DedupKeyFields, ",")
+			duplicateCheckRun.finishActiveBlockIfNeeded(blockKey)
 			duplicateStart := time.Now()
 			block := duplicateCheckRun.block(
-				"dedup|"+strconv.Itoa(bookID)+"|"+strings.Join(model.Policies.DedupKeyFields, ","),
+				blockKey,
 				bookID,
 				"",
 				"",
 				existingSnapshotMaxID,
 			)
+			duplicateCheckRun.beginBlock(block)
 			if block != nil {
 				block.PageIndexed = false
 				block.PageResolverUsed = false
@@ -935,9 +1024,9 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			flushPendingCreates()
 		}
 	}
-	dedupKeyProfiler.logDebug()
 	flushPendingCreates()
-	duplicateCheckRun.logBlocksAndSummary(result.Debug.Rows)
+	topBookIDs := duplicateCheckRun.logBlocksAndSummary(result.Debug.Rows)
+	dedupKeyProfiler.logDebug(topBookIDs)
 	result.Debug.finalize(len(result.BookIDs), time.Since(start))
 	return result
 }
