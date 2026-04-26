@@ -222,15 +222,18 @@ func (r *postgresTemplateImportRuntime) LoadStrongMatchCandidates(req TemplateIm
 	if pageKey == "" || tipusActe == "" {
 		return result, nil
 	}
-	snapshot, err := r.strongSnapshot(req.BookID, req.SnapshotMaxID)
+	snapshot, err := r.loadStrongContextSnapshot(req)
 	if err != nil {
 		return result, err
 	}
-	ids := snapshot.lookupStrongContextIDs(pageKey, tipusActe)
+	if snapshot == nil {
+		return result, nil
+	}
+	ids := snapshot.ids
 	if len(ids) == 0 {
 		return result, nil
 	}
-	result.Transcripcions = snapshot.transcripcionsForIDs(ids)
+	result.Transcripcions = append(result.Transcripcions, snapshot.transcripcions...)
 	result.PersonesByTranscripcioID = snapshot.personesForIDs(ids)
 	result.AtributsByTranscripcioID = snapshot.atributsForIDs(ids)
 	result.PreparedPersonesByTranscripcioID = snapshot.preparedPersonesForIDs(ids)
@@ -845,25 +848,55 @@ func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID
 			pageNumsByPaginaID[page.ID] = page.NumPagina
 		}
 	}
-	preparedPersonesByID := make(map[int]map[string]*TranscripcioPersonaRaw, len(personesByID))
+	return newPostgresStrongSnapshot(bookID, snapshotMaxID, filtered, personesByID, atributsByID, pageNumsByPaginaID), nil
+}
+
+func (r *postgresTemplateImportRuntime) loadStrongContextSnapshot(req TemplateImportStrongMatchRequest) (*postgresTemplateImportStrongSnapshot, error) {
+	if r == nil || r.database == nil || req.BookID <= 0 || req.SnapshotMaxID == 0 {
+		return nil, nil
+	}
+	trans, personesByID, atributsByID, err := r.database.ListTranscripcioStrongMatchCandidatesUpToID(req.BookID, req.TipusActe, req.PageKey, req.SnapshotMaxID)
+	if err != nil {
+		return nil, err
+	}
+	filtered := filterTranscripcionsBySnapshot(trans, req.SnapshotMaxID)
+	if len(filtered) == 0 {
+		return nil, nil
+	}
+	return newPostgresStrongSnapshot(req.BookID, req.SnapshotMaxID, filtered, personesByID, atributsByID, nil), nil
+}
+
+func buildPreparedPersonesByID(personesByID map[int][]TranscripcioPersonaRaw) map[int]map[string]*TranscripcioPersonaRaw {
+	prepared := make(map[int]map[string]*TranscripcioPersonaRaw, len(personesByID))
 	for id, rows := range personesByID {
 		byRole := make(map[string]*TranscripcioPersonaRaw, len(rows))
 		for i := range rows {
 			byRole[rows[i].Rol] = &rows[i]
 		}
-		preparedPersonesByID[id] = byRole
+		prepared[id] = byRole
 	}
-	preparedAtributsByID := make(map[int]map[string]*TranscripcioAtributRaw, len(atributsByID))
+	return prepared
+}
+
+func buildPreparedAtributsByID(atributsByID map[int][]TranscripcioAtributRaw) map[int]map[string]*TranscripcioAtributRaw {
+	prepared := make(map[int]map[string]*TranscripcioAtributRaw, len(atributsByID))
 	for id, rows := range atributsByID {
 		byKey := make(map[string]*TranscripcioAtributRaw, len(rows))
 		for i := range rows {
 			byKey[rows[i].Clau] = &rows[i]
 		}
-		preparedAtributsByID[id] = byKey
+		prepared[id] = byKey
 	}
-	transcripcioByID := make(map[int]TranscripcioRaw, len(filtered))
+	return prepared
+}
+
+func newPostgresStrongSnapshot(bookID, snapshotMaxID int, trans []TranscripcioRaw, personesByID map[int][]TranscripcioPersonaRaw, atributsByID map[int][]TranscripcioAtributRaw, pageNumsByPaginaID map[int]int) *postgresTemplateImportStrongSnapshot {
+	ids := transcripcioIDs(trans)
+	preparedPersonesByID := buildPreparedPersonesByID(personesByID)
+	preparedAtributsByID := buildPreparedAtributsByID(atributsByID)
+	transcripcioByID := make(map[int]TranscripcioRaw, len(trans))
 	strongIDsByContext := map[string][]int{}
-	for _, row := range filtered {
+	for _, row := range trans {
 		if row.ID <= 0 {
 			continue
 		}
@@ -882,7 +915,7 @@ func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID
 		bookID:                  bookID,
 		snapshotMaxID:           snapshotMaxID,
 		ids:                     ids,
-		transcripcions:          filtered,
+		transcripcions:          trans,
 		transcripcioByID:        transcripcioByID,
 		personesByID:            personesByID,
 		atributsByID:            atributsByID,
@@ -891,7 +924,7 @@ func (r *postgresTemplateImportRuntime) loadStrongSnapshot(bookID, snapshotMaxID
 		strongMatchKeysByPolicy: map[string]map[int]string{},
 		strongIDsByContext:      strongIDsByContext,
 		pageNumsByPaginaID:      pageNumsByPaginaID,
-	}, nil
+	}
 }
 
 func (s *postgresTemplateImportStrongSnapshot) lookupStrongContextIDs(pageKey, tipusActe string) []int {

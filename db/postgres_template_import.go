@@ -115,19 +115,102 @@ func (h sqlHelper) listTranscripcioStrongMatchCandidatesPostgres(bookID int, tip
 	if err := rows.Err(); err != nil {
 		return nil, personesByTranscripcioID, atributsByTranscripcioID, err
 	}
-	trans, err := h.listTranscripcionsRawByIDs(ids)
+	ids = normalizePositiveUniqueIDs(ids)
+	if len(ids) == 0 {
+		return nil, personesByTranscripcioID, atributsByTranscripcioID, nil
+	}
+	trans, err := listStrongMatchTranscripcionsByIDsPostgres(h.db, ids)
 	if err != nil {
 		return nil, personesByTranscripcioID, atributsByTranscripcioID, err
 	}
-	if len(ids) > 0 {
-		if personesByTranscripcioID, err = h.listTranscripcioPersonesByTranscripcioIDsPostgres(ids); err != nil {
-			return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, err
-		}
-		if atributsByTranscripcioID, err = h.listTranscripcioAtributsByTranscripcioIDsPostgres(ids); err != nil {
-			return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, err
-		}
+	if personesByTranscripcioID, err = listStrongMatchPersonesByIDsPostgres(h.db, ids); err != nil {
+		return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, err
+	}
+	if atributsByTranscripcioID, err = listStrongMatchAtributsByIDsPostgres(h.db, ids); err != nil {
+		return nil, map[int][]TranscripcioPersonaRaw{}, map[int][]TranscripcioAtributRaw{}, err
 	}
 	return trans, personesByTranscripcioID, atributsByTranscripcioID, nil
+}
+
+func listStrongMatchTranscripcionsByIDsPostgres(conn *sql.DB, ids []int) ([]TranscripcioRaw, error) {
+	if conn == nil || len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := conn.Query(`
+        SELECT id, llibre_id, pagina_id, COALESCE(num_pagina_text, ''), tipus_acte, COALESCE(data_acte_text, ''), data_acte_iso
+        FROM transcripcions_raw
+        WHERE id = ANY($1)
+        ORDER BY id`, pq.Array(intIDsToInt64Slice(ids)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	trans := make([]TranscripcioRaw, 0, len(ids))
+	for rows.Next() {
+		var row TranscripcioRaw
+		if err := rows.Scan(&row.ID, &row.LlibreID, &row.PaginaID, &row.NumPaginaText, &row.TipusActe, &row.DataActeText, &row.DataActeISO); err != nil {
+			return nil, err
+		}
+		trans = append(trans, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return trans, nil
+}
+
+func listStrongMatchPersonesByIDsPostgres(conn *sql.DB, ids []int) (map[int][]TranscripcioPersonaRaw, error) {
+	res := map[int][]TranscripcioPersonaRaw{}
+	if conn == nil || len(ids) == 0 {
+		return res, nil
+	}
+	rows, err := conn.Query(`
+        SELECT id, transcripcio_id, rol, nom, cognom1, cognom2
+        FROM transcripcions_persones_raw
+        WHERE transcripcio_id = ANY($1)
+        ORDER BY transcripcio_id, id`, pq.Array(intIDsToInt64Slice(ids)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var row TranscripcioPersonaRaw
+		if err := rows.Scan(&row.ID, &row.TranscripcioID, &row.Rol, &row.Nom, &row.Cognom1, &row.Cognom2); err != nil {
+			return nil, err
+		}
+		res[row.TranscripcioID] = append(res[row.TranscripcioID], row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func listStrongMatchAtributsByIDsPostgres(conn *sql.DB, ids []int) (map[int][]TranscripcioAtributRaw, error) {
+	res := map[int][]TranscripcioAtributRaw{}
+	if conn == nil || len(ids) == 0 {
+		return res, nil
+	}
+	rows, err := conn.Query(`
+        SELECT id, transcripcio_id, clau, valor_text, valor_int, valor_date, valor_bool
+        FROM transcripcions_atributs_raw
+        WHERE transcripcio_id = ANY($1)
+        ORDER BY transcripcio_id, id`, pq.Array(intIDsToInt64Slice(ids)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var row TranscripcioAtributRaw
+		if err := rows.Scan(&row.ID, &row.TranscripcioID, &row.Clau, &row.ValorText, &row.ValorInt, &row.ValorDate, &row.ValorBool); err != nil {
+			return nil, err
+		}
+		res[row.TranscripcioID] = append(res[row.TranscripcioID], row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgres(bundles []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
