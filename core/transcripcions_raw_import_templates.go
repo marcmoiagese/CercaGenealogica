@@ -484,6 +484,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	parseCfg := buildTemplateParseConfig(model)
 	parseCfg.Metrics = &result.Debug
 	parseCfg.PersonProfiler = newTemplatePersonBuildProfiler(result.Debug.Enabled)
+	result.PersonBuildProfile = parseCfg.PersonProfiler
 
 	csvReader := csv.NewReader(reader)
 	csvReader.Comma = sep
@@ -876,9 +877,6 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	}
 	flushPendingCreates()
 	duplicateCheckRun.logBlocksAndSummary(result.Debug.Rows)
-	if parseCfg.PersonProfiler != nil {
-		parseCfg.PersonProfiler.logDebug()
-	}
 	result.Debug.finalize(len(result.BookIDs), time.Since(start))
 	return result
 }

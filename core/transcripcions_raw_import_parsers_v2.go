@@ -49,17 +49,42 @@ type templatePersonBuildProfiler struct {
 }
 
 type templatePersonBuildRoleStats struct {
-	Parser      string
-	Role        string
-	Calls       int
-	CacheHits   int
-	CacheMisses int
-	TotalDur    time.Duration
+	Parser              string
+	Role                string
+	Calls               int
+	CacheHits           int
+	CacheMisses         int
+	ValuesTotal         int
+	ValuesTotalLen      int
+	MaxValueLen         int
+	FieldsEmpty         int
+	FieldsNonEmpty      int
+	NormalizationsTotal int
+	SplitCalls          int
+	ParticleRows        int
+	ParenRows           int
+	QualityMarkRows     int
+	UniqueValues        map[string]struct{}
+	UniqueNormalized    map[string]struct{}
+	TotalDur            time.Duration
+	FieldLookupDur      time.Duration
+	CacheLookupDur      time.Duration
+	StringNormalizeDur  time.Duration
+	SplitParseDur       time.Duration
+	SurnameSplitDur     time.Duration
+	ParticleDur         time.Duration
+	RegexDur            time.Duration
+	EmptyDetectDur      time.Duration
+	StructBuildDur      time.Duration
+	AtributsDur         time.Duration
+	ValidationDur       time.Duration
 }
 
 type templatePersonBuildCallMetrics struct {
 	Parser             string
 	Role               string
+	RawValue           string
+	NormalizedValue    string
 	Attempted          bool
 	Created            bool
 	DiscardedEmpty     bool
@@ -74,10 +99,17 @@ type templatePersonBuildCallMetrics struct {
 	StructBuilt        bool
 	AttributeBuilt     bool
 	ValidationCalled   bool
+	HasParticles       bool
+	HasParens          bool
+	HasQualityMarks    bool
 	FieldLookupDur     time.Duration
 	CacheLookupDur     time.Duration
 	StringNormalizeDur time.Duration
 	SplitParseDur      time.Duration
+	SurnameSplitDur    time.Duration
+	ParticleDur        time.Duration
+	RegexDur           time.Duration
+	EmptyDetectDur     time.Duration
 	RoleAssignDur      time.Duration
 	StructBuildDur     time.Duration
 	AtributsDur        time.Duration
@@ -157,7 +189,12 @@ func (p *templatePersonBuildProfiler) addCall(call templatePersonBuildCallMetric
 	statKey := call.Parser + "\x00" + call.Role
 	stat := p.roleStats[statKey]
 	if stat == nil {
-		stat = &templatePersonBuildRoleStats{Parser: call.Parser, Role: call.Role}
+		stat = &templatePersonBuildRoleStats{
+			Parser:           call.Parser,
+			Role:             call.Role,
+			UniqueValues:     map[string]struct{}{},
+			UniqueNormalized: map[string]struct{}{},
+		}
 		p.roleStats[statKey] = stat
 	}
 	stat.Calls++
@@ -167,7 +204,44 @@ func (p *templatePersonBuildProfiler) addCall(call templatePersonBuildCallMetric
 	if call.CacheMiss {
 		stat.CacheMisses++
 	}
+	stat.ValuesTotal++
+	stat.ValuesTotalLen += len(call.RawValue)
+	if len(call.RawValue) > stat.MaxValueLen {
+		stat.MaxValueLen = len(call.RawValue)
+	}
+	stat.FieldsEmpty += call.FieldsEmpty
+	stat.FieldsNonEmpty += call.FieldsNonEmpty
+	stat.NormalizationsTotal += call.Normalizations
+	if call.FullNameSplit {
+		stat.SplitCalls++
+	}
+	if call.HasParticles {
+		stat.ParticleRows++
+	}
+	if call.HasParens {
+		stat.ParenRows++
+	}
+	if call.HasQualityMarks {
+		stat.QualityMarkRows++
+	}
+	if call.RawValue != "" {
+		stat.UniqueValues[call.RawValue] = struct{}{}
+	}
+	if call.NormalizedValue != "" {
+		stat.UniqueNormalized[call.NormalizedValue] = struct{}{}
+	}
 	stat.TotalDur += call.TotalDur
+	stat.FieldLookupDur += call.FieldLookupDur
+	stat.CacheLookupDur += call.CacheLookupDur
+	stat.StringNormalizeDur += call.StringNormalizeDur
+	stat.SplitParseDur += call.SplitParseDur
+	stat.SurnameSplitDur += call.SurnameSplitDur
+	stat.ParticleDur += call.ParticleDur
+	stat.RegexDur += call.RegexDur
+	stat.EmptyDetectDur += call.EmptyDetectDur
+	stat.StructBuildDur += call.StructBuildDur
+	stat.AtributsDur += call.AtributsDur
+	stat.ValidationDur += call.ValidationDur
 }
 
 func (p *templatePersonBuildProfiler) logDebug() {
@@ -234,6 +308,46 @@ func (p *templatePersonBuildProfiler) logDebug() {
 			stat.Calls,
 			stat.CacheHits,
 			stat.CacheMisses,
+			stat.TotalDur,
+		)
+		avgLen := 0.0
+		if stat.ValuesTotal > 0 {
+			avgLen = float64(stat.ValuesTotalLen) / float64(stat.ValuesTotal)
+		}
+		repeated := stat.ValuesTotal - len(stat.UniqueValues)
+		if repeated < 0 {
+			repeated = 0
+		}
+		Debugf(
+			"parse_person_build_role_detail parser=%q role=%q rows=%d cache_hits=%d cache_misses=%d values_unique=%d values_repeated=%d values_normalized_unique=%d avg_value_len=%.2f max_value_len=%d fields_empty=%d fields_nonempty=%d normalizations_total=%d split_calls=%d particle_rows=%d paren_rows=%d quality_mark_rows=%d field_lookup_dur=%s cache_lookup_dur=%s string_normalize_dur=%s split_parse_dur=%s surname_split_dur=%s particle_dur=%s regex_dur=%s empty_detect_dur=%s struct_build_dur=%s atributs_dur=%s validation_dur=%s total_dur=%s",
+			stat.Parser,
+			stat.Role,
+			stat.Calls,
+			stat.CacheHits,
+			stat.CacheMisses,
+			len(stat.UniqueValues),
+			repeated,
+			len(stat.UniqueNormalized),
+			avgLen,
+			stat.MaxValueLen,
+			stat.FieldsEmpty,
+			stat.FieldsNonEmpty,
+			stat.NormalizationsTotal,
+			stat.SplitCalls,
+			stat.ParticleRows,
+			stat.ParenRows,
+			stat.QualityMarkRows,
+			stat.FieldLookupDur,
+			stat.CacheLookupDur,
+			stat.StringNormalizeDur,
+			stat.SplitParseDur,
+			stat.SurnameSplitDur,
+			stat.ParticleDur,
+			stat.RegexDur,
+			stat.EmptyDetectDur,
+			stat.StructBuildDur,
+			stat.AtributsDur,
+			stat.ValidationDur,
 			stat.TotalDur,
 		)
 	}
@@ -579,7 +693,7 @@ type templatePersonBuildFunc func(raw, role string, cfg templateParseConfig, cal
 
 func buildTemplatePersonWithConfig(raw, role, parser string, cfg templateParseConfig, build templatePersonBuildFunc) *db.TranscripcioPersonaRaw {
 	start := time.Now()
-	call := templatePersonBuildCallMetrics{Parser: parser, Role: role}
+	call := templatePersonBuildCallMetrics{Parser: parser, Role: role, RawValue: strings.TrimSpace(raw)}
 	defer func() {
 		call.TotalDur = time.Since(start)
 		if cfg.Metrics != nil {
@@ -589,12 +703,15 @@ func buildTemplatePersonWithConfig(raw, role, parser string, cfg templateParseCo
 			cfg.PersonProfiler.addCall(call)
 		}
 	}()
-	trimmed := strings.TrimSpace(raw)
+	trimmed := call.RawValue
 	if trimmed == "" {
 		call.DiscardedEmpty = true
 		return nil
 	}
 	call.Attempted = true
+	call.NormalizedValue = normalizeTemplatePersonCacheValue(trimmed)
+	call.HasParens = strings.Contains(trimmed, "(") && strings.Contains(trimmed, ")")
+	call.HasQualityMarks = strings.Contains(trimmed, "?") || strings.Contains(trimmed, "¿")
 	cacheStart := time.Now()
 	if cached, ok := templateCachedPersonLookup(cfg, parser, trimmed); ok {
 		call.CacheLookupDur += time.Since(cacheStart)
@@ -642,6 +759,15 @@ func templateStoreCachedPerson(cfg templateParseConfig, parser, raw string, p *d
 	}] = entry
 }
 
+func normalizeTemplatePersonCacheValue(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	raw = stripDiacritics(raw)
+	raw = strings.ReplaceAll(raw, "¿", "")
+	raw = strings.ReplaceAll(raw, "?", "")
+	raw = strings.Join(strings.Fields(raw), " ")
+	return strings.Trim(raw, " ,.;:")
+}
+
 func templatePersonFromCacheForRole(entry templatePersonCacheEntry, role string, call *templatePersonBuildCallMetrics) *db.TranscripcioPersonaRaw {
 	if !entry.HasPerson {
 		return nil
@@ -658,12 +784,68 @@ func templatePersonFromCacheForRole(entry templatePersonCacheEntry, role string,
 }
 
 func buildPersonFromCognomsProfiled(raw, role string, _ templateParseConfig, call *templatePersonBuildCallMetrics) *db.TranscripcioPersonaRaw {
-	p := buildPersonFromCognoms(raw, role)
-	templateProfilePersonFields(p, call)
-	if p != nil {
-		call.StructBuilt = true
-		call.RoleAssigned = true
+	emptyStart := time.Now()
+	if raw == "" {
+		call.EmptyDetectDur += time.Since(emptyStart)
+		return nil
 	}
+	call.EmptyDetectDur += time.Since(emptyStart)
+	splitStart := time.Now()
+	main, extras := splitParentheticals(raw)
+	call.SplitParseDur += time.Since(splitStart)
+	call.FullNameSplit = true
+	if len(extras) > 0 {
+		call.HasParens = true
+	}
+	clean, quals := templateProfiledCleanTokens(main, false, templateParseConfig{}, call)
+	if len(clean) == 0 {
+		return nil
+	}
+	surnameStart := time.Now()
+	cognom1, cognom1Qual, consumed := templateSplitSurnameFromStartFast(clean, quals, call)
+	restTokens := clean[consumed:]
+	restQuals := quals[consumed:]
+	var cognom2, nom string
+	var cognom2Qual, nomQual string
+	if len(restTokens) == 1 {
+		cognom2 = restTokens[0]
+		cognom2Qual = restQuals[0]
+	} else if len(restTokens) >= 2 {
+		cognom2, cognom2Qual, consumed = templateSplitSurnameFromStartFast(restTokens, restQuals, call)
+		if consumed < len(restTokens) {
+			nameTokens := restTokens[consumed:]
+			if len(nameTokens) == 1 {
+				nom = nameTokens[0]
+				nomQual = restQuals[consumed]
+			} else if len(nameTokens) > 1 {
+				nom = strings.Join(nameTokens, " ")
+				nomQual = mergeQuality(restQuals[consumed:]...)
+			}
+		}
+	}
+	call.SurnameSplitDur += time.Since(surnameStart)
+	attrStart := time.Now()
+	notes, municipi := templateNotesAndMunicipiFromExtras(extras)
+	call.AtributsDur += time.Since(attrStart)
+	buildStart := time.Now()
+	p := &db.TranscripcioPersonaRaw{
+		Rol:          role,
+		Nom:          nom,
+		Cognom1:      cognom1,
+		Cognom2:      cognom2,
+		NomEstat:     defaultQuality(nom, nomQual),
+		Cognom1Estat: defaultQuality(cognom1, cognom1Qual),
+		Cognom2Estat: defaultQuality(cognom2, cognom2Qual),
+		Notes:        notes,
+	}
+	if municipi != "" {
+		p.MunicipiText = municipi
+		p.MunicipiEstat = "clar"
+	}
+	call.StructBuildDur += time.Since(buildStart)
+	call.StructBuilt = true
+	call.RoleAssigned = true
+	templateProfilePersonFields(p, call)
 	return p
 }
 
@@ -895,6 +1077,52 @@ func templateProfiledCleanTokens(main string, useConfig bool, cfg templateParseC
 		}
 	}
 	return clean, quals
+}
+
+func templateSplitSurnameFromStartFast(tokens, quals []string, call *templatePersonBuildCallMetrics) (string, string, int) {
+	if len(tokens) == 0 {
+		return "", "", 0
+	}
+	particleStart := time.Now()
+	first := tokens[0]
+	firstQual := quals[0]
+	lower := strings.ToLower(first)
+	if isSurnameJoiner(lower) && len(tokens) > 1 {
+		if call != nil {
+			call.HasParticles = true
+		}
+		if lower == "de" && len(tokens) > 2 && isSurnameArticle(tokens[1]) {
+			if call != nil {
+				call.ParticleDur += time.Since(particleStart)
+			}
+			return first + " " + tokens[1] + " " + tokens[2], mergeQualityStatus(firstQual, quals[1], quals[2]), 3
+		}
+		if call != nil {
+			call.ParticleDur += time.Since(particleStart)
+		}
+		return first + " " + tokens[1], mergeQualityStatus(firstQual, quals[1]), 2
+	}
+	if isSurnameArticle(lower) && len(tokens) > 1 {
+		if call != nil {
+			call.HasParticles = true
+			call.ParticleDur += time.Since(particleStart)
+		}
+		return first + " " + tokens[1], mergeQualityStatus(firstQual, quals[1]), 2
+	}
+	if call != nil {
+		call.ParticleDur += time.Since(particleStart)
+	}
+	return first, firstQual, 1
+}
+
+func templateNotesAndMunicipiFromExtras(extras []string) (string, string) {
+	if len(extras) == 0 {
+		return "", ""
+	}
+	if len(extras) == 1 {
+		return extras[0], extras[0]
+	}
+	return strings.Join(extras, "; "), extras[0]
 }
 
 func templateProfilePersonFields(p *db.TranscripcioPersonaRaw, call *templatePersonBuildCallMetrics) {
