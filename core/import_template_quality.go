@@ -14,16 +14,18 @@ type templateQualityConfig struct {
 }
 
 type templateParseConfig struct {
-	DateFormat string
-	Quality    templateQualityConfig
-	Metrics    *csvImportDebugMetrics
-	Caches     *templateParseCaches
+	DateFormat        string
+	Quality           templateQualityConfig
+	Metrics           *csvImportDebugMetrics
+	Caches            *templateParseCaches
+	PersonCacheFlavor string
+	PersonProfiler    *templatePersonBuildProfiler
 }
 
 type templateParseCaches struct {
 	quality map[string]templateQualityCacheEntry
 	date    map[string]templateDateCacheEntry
-	person  map[string]templatePersonCacheEntry
+	person  map[templatePersonCacheKey]templatePersonCacheEntry
 }
 
 type templateQualityCacheEntry struct {
@@ -39,8 +41,15 @@ type templateDateCacheEntry struct {
 }
 
 type templatePersonCacheEntry struct {
-	Person db.TranscripcioPersonaRaw
-	Loaded bool
+	Person    db.TranscripcioPersonaRaw
+	Loaded    bool
+	HasPerson bool
+}
+
+type templatePersonCacheKey struct {
+	Parser string
+	Flavor string
+	Raw    string
 }
 
 var defaultTemplateQualityMarkers = map[string]string{
@@ -96,7 +105,7 @@ func buildTemplateParseConfig(model *templateImportModel) templateParseConfig {
 		Caches: &templateParseCaches{
 			quality: map[string]templateQualityCacheEntry{},
 			date:    map[string]templateDateCacheEntry{},
-			person:  map[string]templatePersonCacheEntry{},
+			person:  map[templatePersonCacheKey]templatePersonCacheEntry{},
 		},
 	}
 	if model != nil {
@@ -105,7 +114,25 @@ func buildTemplateParseConfig(model *templateImportModel) templateParseConfig {
 	}
 	cfg.DateFormat = normalizeTemplateDateFormat(cfg.DateFormat)
 	cfg.Quality = normalizeTemplateQualityConfig(cfg.Quality)
+	cfg.PersonCacheFlavor = templatePersonCacheFlavor(cfg.Quality)
 	return cfg
+}
+
+func templatePersonCacheFlavor(cfg templateQualityConfig) string {
+	cfg = normalizeTemplateQualityConfig(cfg)
+	var b strings.Builder
+	if cfg.Labels {
+		b.WriteString("labels=1")
+	} else {
+		b.WriteString("labels=0")
+	}
+	for _, key := range []string{"dubtos", "no_consta", "incomplet", "illegible"} {
+		b.WriteString("|")
+		b.WriteString(key)
+		b.WriteString("=")
+		b.WriteString(cfg.Markers[key])
+	}
+	return b.String()
 }
 
 func isDefaultQualityConfig(cfg templateQualityConfig) bool {
