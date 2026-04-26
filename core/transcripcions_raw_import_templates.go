@@ -483,8 +483,6 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	}
 	parseCfg := buildTemplateParseConfig(model)
 	parseCfg.Metrics = &result.Debug
-	parseCfg.PersonProfiler = newTemplatePersonBuildProfiler(result.Debug.Enabled)
-	result.PersonBuildProfile = parseCfg.PersonProfiler
 
 	csvReader := csv.NewReader(reader)
 	csvReader.Comma = sep

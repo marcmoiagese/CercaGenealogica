@@ -325,7 +325,4 @@ func (a *App) logCSVImportDebug(actorID int, result csvImportResult) {
 		result.Debug.SidefxIndexacioAtributs,
 		result.Debug.TotalDur,
 	)
-	if result.PersonBuildProfile != nil {
-		result.PersonBuildProfile.logDebug()
-	}
 }

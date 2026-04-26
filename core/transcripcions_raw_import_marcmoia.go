@@ -13,13 +13,12 @@ import (
 )
 
 type csvImportResult struct {
-	Created            int
-	Updated            int
-	Failed             int
-	Errors             []importErrorEntry
-	BookIDs            map[int]struct{}
-	Debug              csvImportDebugMetrics
-	PersonBuildProfile *templatePersonBuildProfiler
+	Created int
+	Updated int
+	Failed  int
+	Errors  []importErrorEntry
+	BookIDs map[int]struct{}
+	Debug   csvImportDebugMetrics
 }
 
 func (r *csvImportResult) markBook(id int) {

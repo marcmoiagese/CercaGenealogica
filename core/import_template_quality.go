@@ -19,7 +19,6 @@ type templateParseConfig struct {
 	Metrics           *csvImportDebugMetrics
 	Caches            *templateParseCaches
 	PersonCacheFlavor string
-	PersonProfiler    *templatePersonBuildProfiler
 }
 
 type templateParseCaches struct {
