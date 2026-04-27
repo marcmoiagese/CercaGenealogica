@@ -1,17 +1,36 @@
 package core
 
-import "github.com/marcmoiagese/CercaGenealogica/db"
+import (
+	"os"
+	"strconv"
+
+	"github.com/marcmoiagese/CercaGenealogica/db"
+)
 
 const (
 	sqliteTemplateImportLargeBatchThreshold = templateImportCreateBatchSize * 2
-	sqliteTemplateImportLargeBatchSize      = 2000
 )
 
 func sqliteTemplateImportPersistBatchSize(totalRows int) int {
-	if totalRows > sqliteTemplateImportLargeBatchThreshold {
-		return sqliteTemplateImportLargeBatchSize
+	if totalRows <= sqliteTemplateImportLargeBatchThreshold {
+		return templateImportCreateBatchSize
 	}
-	return templateImportCreateBatchSize
+	defaultSize := totalRows
+	raw := os.Getenv("CG_SQLITE_TEMPLATE_IMPORT_BATCH_SIZE")
+	if raw == "" {
+		return defaultSize
+	}
+	size, err := strconv.Atoi(raw)
+	if err != nil {
+		return defaultSize
+	}
+	if size < templateImportCreateBatchSize {
+		return templateImportCreateBatchSize
+	}
+	if size > totalRows {
+		return totalRows
+	}
+	return size
 }
 
 func persistTemplateImportPlanSQLite(plan *TemplateImportPlan, options TemplateImportPersistOptions) TemplateImportPersistResult {
