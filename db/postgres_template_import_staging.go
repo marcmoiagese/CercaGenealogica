@@ -163,8 +163,12 @@ func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx) error
 		return fmt.Errorf("nil tx")
 	}
 	stmts := []string{
+		`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_raw`,
+		`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_persones_raw`,
+		`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_atributs_raw`,
 		`
-        CREATE TEMP TABLE tmp_template_import_transcripcions_raw AS
+        CREATE TEMP TABLE tmp_template_import_transcripcions_raw
+        ON COMMIT DROP AS
         SELECT
             0::INTEGER AS import_seq,
             id,
@@ -188,7 +192,8 @@ func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx) error
         FROM transcripcions_raw
         WITH NO DATA`,
 		`
-        CREATE TEMP TABLE tmp_template_import_transcripcions_persones_raw AS
+        CREATE TEMP TABLE tmp_template_import_transcripcions_persones_raw
+        ON COMMIT DROP AS
         SELECT
             0::INTEGER AS import_seq,
             0::INTEGER AS import_subseq,
@@ -221,7 +226,8 @@ func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx) error
         FROM transcripcions_persones_raw
         WITH NO DATA`,
 		`
-        CREATE TEMP TABLE tmp_template_import_transcripcions_atributs_raw AS
+        CREATE TEMP TABLE tmp_template_import_transcripcions_atributs_raw
+        ON COMMIT DROP AS
         SELECT
             0::INTEGER AS import_seq,
             0::INTEGER AS import_subseq,
