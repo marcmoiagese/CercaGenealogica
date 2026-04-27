@@ -41,6 +41,10 @@ func IsDebugEnabled() bool {
 	return currentLevel >= logDebug
 }
 
+func IsImportProfileEnabled() bool {
+	return strings.TrimSpace(os.Getenv("CG_IMPORT_PROFILE")) == "1"
+}
+
 func Infof(format string, v ...interface{}) {
 	if currentLevel >= logInfo {
 		log.Printf("[INFO] "+format, v...)

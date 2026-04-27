@@ -270,6 +270,9 @@ func (m *templateDuplicateCheckRunMetrics) logBlocksAndSummary(rows int) {
 		len(m.Blocks),
 		m.Rows,
 	)
+	if !IsImportProfileEnabled() {
+		return
+	}
 	Debugf(
 		"duplicate_check_breakdown group_book_page_dur=%s dedup_within_only_dur=%s build_keys_dur=%s page_indexed_false_dur=%s runtime_calls_count=%d fallback_calls_count=%d blocks=%d rows=%d",
 		pageLookupDur,
@@ -609,16 +612,14 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 	)
 	duplicateCheckRun.logStart()
 	postgresDebug := result.Debug.Enabled && strings.EqualFold(importRuntime.Engine(), "postgres")
+	importProfileDebug := postgresDebug && IsImportProfileEnabled()
 	var writePrepareBreakdown *templateWritePrepareBreakdown
 	var importPhaseGaps *templateImportPhaseGapMetrics
-	if postgresDebug {
+	if importProfileDebug {
 		writePrepareBreakdown = &templateWritePrepareBreakdown{}
 		importPhaseGaps = &templateImportPhaseGapMetrics{}
 		result.WritePrepareBreakdown = writePrepareBreakdown
 		result.ImportPhaseGaps = importPhaseGaps
-	}
-	flushPendingCreates := func() {
-		pendingCreates = a.flushTemplatePendingCreates(pendingCreates, &result, importRuntime)
 	}
 	rowNum := 1
 	for {
@@ -963,11 +964,14 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		if matchContextKey != "" && matchKey != "" {
 			templateRememberSeenMatch(seenMatchByContext, matchContextKey, matchKey, rowNum)
 		}
-		if len(pendingCreates) >= templateImportCreateBatchSize {
-			flushPendingCreates()
-		}
 	}
-	flushPendingCreates()
+	plan := buildTemplateImportPlan(pendingCreates)
+	persister := newTemplateImportPersister(importRuntime)
+	persister.Persist(plan, TemplateImportPersistOptions{
+		App:     a,
+		Result:  &result,
+		Runtime: importRuntime,
+	})
 	duplicateCheckRun.logBlocksAndSummary(result.Debug.Rows)
 	result.WriteCompletedAt = time.Now()
 	result.Debug.finalize(len(result.BookIDs), time.Since(start))

@@ -208,7 +208,7 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 		}
 	}
 	metrics.ComputeDur = time.Since(computeStart)
-	if postgresDebug {
+	if postgresDebug && IsImportProfileEnabled() {
 		Debugf(
 			"sidefx_compute_breakdown llibre_id=%d group_registres_dur=%s group_persones_dur=%s group_atributs_dur=%s normalize_strings_dur=%s build_payload_dur=%s stats_demografia_dur=%s registres=%d persones=%d atributs=%d field_evaluations=%d",
 			llibreID,
