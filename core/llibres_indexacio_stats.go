@@ -2,6 +2,7 @@ package core
 
 import (
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -44,6 +45,26 @@ type LlibreIndexacioView struct {
 	TotalRegistres int
 	Percentatge    int
 	ColorClass     string
+}
+
+type compiledIndexField struct {
+	Field        indexerField
+	AttrKeyNorm  string
+	PersonLookup string
+}
+
+type indexAttrLookupValue struct {
+	Value string
+	Found bool
+}
+
+type indexPayloadFastContext struct {
+	raw                db.TranscripcioRaw
+	personesByRole     map[string][]*db.TranscripcioPersonaRaw
+	atributsByKey      map[string]indexAttrLookupValue
+	personSelection    map[string]*db.TranscripcioPersonaRaw
+	rawValueCache      map[string]string
+	normalizedValCache map[string]string
 }
 
 func (a *App) buildLlibresIndexacioViews(llibres []db.LlibreRow) map[string]LlibreIndexacioView {
@@ -113,6 +134,7 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 	}
 	bookType := normalizeIndexerBookType(llibre.TipusLlibre)
 	fields := indexerContentFields(indexerSchema(bookType))
+	compiledFields := compileIndexFields(fields)
 	stats := &db.LlibreIndexacioStats{LlibreID: llibreID}
 	loadStart := time.Now()
 	registres, err := a.DB.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{Limit: -1})
@@ -122,7 +144,7 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 	}
 	stats.TotalRegistres = len(registres)
 	metrics.TotalRegistres = len(registres)
-	if stats.TotalRegistres == 0 || len(fields) == 0 {
+	if stats.TotalRegistres == 0 || len(compiledFields) == 0 {
 		stats.TotalCamps = 0
 		stats.CampsEmplenats = 0
 		stats.Percentatge = 0
@@ -181,39 +203,12 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 		metrics.TotalAtributs += len(atributs)
 		metrics.ComputeGroupAtributsMapDur += time.Since(groupStart)
 	}
-	stats.TotalCamps = len(fields) * stats.TotalRegistres
+	stats.TotalCamps = len(compiledFields) * stats.TotalRegistres
 	computeStart := time.Now()
 	for _, registre := range registres {
 		persones := personesByRegistre[registre.ID]
 		atributs := atributsByRegistre[registre.ID]
-		cache := map[string]*db.TranscripcioPersonaRaw{}
-		for _, field := range fields {
-			metrics.ComputeFieldEvaluations++
-			val := ""
-			buildPayloadStart := time.Now()
-			switch field.Target {
-			case "raw":
-				partStart := time.Now()
-				val = rawFieldValue(registre, field.RawField)
-				metrics.ComputeGroupRegistresDur += time.Since(partStart)
-			case "attr":
-				partStart := time.Now()
-				val = attrValueByKeysRaw(atributs, field.AttrKey)
-				metrics.ComputeGroupAtributsDur += time.Since(partStart)
-			case "person":
-				partStart := time.Now()
-				person := personForField(persones, field.Role, field.PersonKey, cache)
-				val = personFieldValue(person, field.PersonField)
-				metrics.ComputeGroupPersonesDur += time.Since(partStart)
-			}
-			metrics.ComputeBuildPayloadDur += time.Since(buildPayloadStart)
-			normalizeStart := time.Now()
-			val = strings.TrimSpace(val)
-			metrics.ComputeNormalizeStringsDur += time.Since(normalizeStart)
-			if val != "" {
-				stats.CampsEmplenats++
-			}
-		}
+		stats.CampsEmplenats += buildIndexPayloadFast(registre, compiledFields, persones, atributs, &metrics)
 	}
 	metrics.ComputeDur = time.Since(computeStart)
 	if postgresDebug && IsImportProfileEnabled() {
@@ -257,6 +252,168 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 		}
 	}
 	return stats, metrics, nil
+}
+
+func compileIndexFields(fields []indexerField) []compiledIndexField {
+	compiled := make([]compiledIndexField, 0, len(fields))
+	for _, field := range fields {
+		entry := compiledIndexField{Field: field}
+		if field.Target == "attr" {
+			entry.AttrKeyNorm = normalizeRole(field.AttrKey)
+		}
+		if field.Target == "person" {
+			entry.PersonLookup = strings.TrimSpace(field.Role) + "\x1f" + strconv.Itoa(personKeyIndex(field.PersonKey))
+		}
+		compiled = append(compiled, entry)
+	}
+	return compiled
+}
+
+func buildIndexPersonesByTranscripcio(persones []db.TranscripcioPersonaRaw) map[string][]*db.TranscripcioPersonaRaw {
+	if len(persones) == 0 {
+		return map[string][]*db.TranscripcioPersonaRaw{}
+	}
+	byRole := make(map[string][]*db.TranscripcioPersonaRaw, len(persones))
+	for i := range persones {
+		byRole[persones[i].Rol] = append(byRole[persones[i].Rol], &persones[i])
+	}
+	for role := range byRole {
+		sort.Slice(byRole[role], func(i, j int) bool {
+			return byRole[role][i].ID < byRole[role][j].ID
+		})
+	}
+	return byRole
+}
+
+func buildIndexAtributsByTranscripcio(attrs []db.TranscripcioAtributRaw) map[string]indexAttrLookupValue {
+	if len(attrs) == 0 {
+		return map[string]indexAttrLookupValue{}
+	}
+	byKey := make(map[string]indexAttrLookupValue, len(attrs))
+	for _, attr := range attrs {
+		key := normalizeRole(attr.Clau)
+		if key == "" {
+			continue
+		}
+		if _, ok := byKey[key]; ok {
+			continue
+		}
+		byKey[key] = indexAttrLookupValue{
+			Value: attrValueStringRaw(attr),
+			Found: true,
+		}
+	}
+	return byKey
+}
+
+func buildIndexPayloadFast(raw db.TranscripcioRaw, fields []compiledIndexField, persones []db.TranscripcioPersonaRaw, attrs []db.TranscripcioAtributRaw, metrics *llibreIndexacioRecalcMetrics) int {
+	personesGroupStart := time.Now()
+	personesByRole := buildIndexPersonesByTranscripcio(persones)
+	if metrics != nil {
+		metrics.ComputeGroupPersonesDur += time.Since(personesGroupStart)
+	}
+	atributsGroupStart := time.Now()
+	atributsByKey := buildIndexAtributsByTranscripcio(attrs)
+	if metrics != nil {
+		metrics.ComputeGroupAtributsDur += time.Since(atributsGroupStart)
+	}
+	ctx := indexPayloadFastContext{
+		raw:                raw,
+		personesByRole:     personesByRole,
+		atributsByKey:      atributsByKey,
+		personSelection:    make(map[string]*db.TranscripcioPersonaRaw, len(personesByRole)),
+		rawValueCache:      make(map[string]string, 4),
+		normalizedValCache: make(map[string]string, len(fields)),
+	}
+	filled := 0
+	for _, field := range fields {
+		if metrics != nil {
+			metrics.ComputeFieldEvaluations++
+		}
+		buildPayloadStart := time.Now()
+		val := buildIndexPayloadFastValue(ctx, field, metrics)
+		if metrics != nil {
+			metrics.ComputeBuildPayloadDur += time.Since(buildPayloadStart)
+		}
+		normalizeStart := time.Now()
+		val = normalizeIndexedPayloadValue(ctx.normalizedValCache, val)
+		if metrics != nil {
+			metrics.ComputeNormalizeStringsDur += time.Since(normalizeStart)
+		}
+		if val != "" {
+			filled++
+		}
+	}
+	return filled
+}
+
+func buildIndexPayloadFastValue(ctx indexPayloadFastContext, field compiledIndexField, metrics *llibreIndexacioRecalcMetrics) string {
+	switch field.Field.Target {
+	case "raw":
+		partStart := time.Now()
+		val, ok := ctx.rawValueCache[field.Field.RawField]
+		if !ok {
+			val = rawFieldValue(ctx.raw, field.Field.RawField)
+			ctx.rawValueCache[field.Field.RawField] = val
+		}
+		if metrics != nil {
+			metrics.ComputeGroupRegistresDur += time.Since(partStart)
+		}
+		return val
+	case "attr":
+		partStart := time.Now()
+		if attr, ok := ctx.atributsByKey[field.AttrKeyNorm]; ok && attr.Found {
+			if metrics != nil {
+				metrics.ComputeGroupAtributsDur += time.Since(partStart)
+			}
+			return attr.Value
+		}
+		if metrics != nil {
+			metrics.ComputeGroupAtributsDur += time.Since(partStart)
+		}
+		return ""
+	case "person":
+		partStart := time.Now()
+		person := ctx.personSelection[field.PersonLookup]
+		if person == nil {
+			role := field.Field.Role
+			list := ctx.personesByRole[role]
+			if len(list) > 0 {
+				parts := strings.Split(field.PersonLookup, "\x1f")
+				idx := 1
+				if len(parts) == 2 {
+					if parsed, err := strconv.Atoi(parts[1]); err == nil && parsed > 0 {
+						idx = parsed
+					}
+				}
+				if idx > len(list) {
+					idx = 1
+				}
+				person = list[idx-1]
+				ctx.personSelection[field.PersonLookup] = person
+			}
+		}
+		val := personFieldValue(person, field.Field.PersonField)
+		if metrics != nil {
+			metrics.ComputeGroupPersonesDur += time.Since(partStart)
+		}
+		return val
+	default:
+		return ""
+	}
+}
+
+func normalizeIndexedPayloadValue(cache map[string]string, val string) string {
+	if cache != nil {
+		if cached, ok := cache[val]; ok {
+			return cached
+		}
+	}
+	normalized := strings.TrimSpace(val)
+	if cache != nil {
+		cache[val] = normalized
+	}
+	return normalized
 }
 
 func indexerContentFields(fields []indexerField) []indexerField {
