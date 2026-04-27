@@ -411,7 +411,7 @@ func (a *App) logCSVImportDebug(actorID int, result csvImportResult) {
 			result.ImportPhaseGaps.DuplicateBeforeWritePrepareCount,
 		)
 	}
-	if len(result.Debug.SidefxComputeProfile.Books) > 0 {
+	if len(result.Debug.SidefxComputeProfile.Books) > 0 && IsImportProfileEnabled() {
 		Debugf(
 			"sidefx_compute_summary books=%d total_compute_dur=%s group_registres_by_book_dur=%s group_persones_by_transcripcio_dur=%s group_atributs_by_transcripcio_dur=%s normalize_strings_dur=%s build_index_payload_dur=%s json_serialize_dur=%s derived_stats_dur=%s registres=%d persones=%d atributs=%d field_evaluations=%d",
 			len(result.Debug.SidefxComputeProfile.Books),
