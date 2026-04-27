@@ -21,50 +21,51 @@ func persistTemplateImportPlanPostgres(plan *TemplateImportPlan, options Templat
 		if end > len(plan.Rows) {
 			end = len(plan.Rows)
 		}
-		persistTemplateImportPlanPostgresBatch(plan.Rows[start:end], options.Result, runtime)
+		persistTemplateImportPlanPostgresBatch(plan.Rows[start:end], options.App, options.Result, runtime)
 	}
 	result.Created = options.Result.Created
 	result.Failed = options.Result.Failed
 	return result
 }
 
-func persistTemplateImportPlanPostgresBatch(rows []TemplateImportPlanRow, result *csvImportResult, runtime db.TemplateImportRuntime) {
+func persistTemplateImportPlanPostgresBatch(rows []TemplateImportPlanRow, app *App, result *csvImportResult, runtime db.TemplateImportRuntime) {
 	if len(rows) == 0 || result == nil {
 		return
 	}
 	if result.WritePrepareBreakdown != nil {
 		result.WritePrepareBreakdown.Batches++
 	}
-	if runtime != nil {
+	if app != nil && app.DB != nil {
 		preallocStart := time.Now()
-		bundles := make([]db.TranscripcioRawImportBundle, len(rows))
+		bundles := make([]db.TranscripcioRawImportBundle, 0, len(rows))
 		if result.WritePrepareBreakdown != nil {
 			result.WritePrepareBreakdown.PreallocDur += time.Since(preallocStart)
 		}
 		for i := range rows {
 			transStart := time.Now()
-			bundles[i].Transcripcio = rows[i].Transcripcio
+			bundle := db.TranscripcioRawImportBundle{Transcripcio: rows[i].Transcripcio}
 			if result.WritePrepareBreakdown != nil {
 				result.WritePrepareBreakdown.BuildTranscripcionsBatchDur += time.Since(transStart)
 			}
 			personesStart := time.Now()
-			bundles[i].Persones = make([]db.TranscripcioPersonaRaw, 0, len(rows[i].Persones))
+			bundle.Persones = make([]db.TranscripcioPersonaRaw, 0, len(rows[i].Persones))
 			for _, persona := range rows[i].Persones {
-				bundles[i].Persones = append(bundles[i].Persones, persona.Persona)
+				bundle.Persones = append(bundle.Persones, persona.Persona)
 			}
 			if result.WritePrepareBreakdown != nil {
 				result.WritePrepareBreakdown.BuildPersonesBatchDur += time.Since(personesStart)
 			}
 			linksStart := time.Now()
-			bundles[i].Atributs = make([]db.TranscripcioAtributRaw, 0, len(rows[i].Atributs))
+			bundle.Atributs = make([]db.TranscripcioAtributRaw, 0, len(rows[i].Atributs))
 			for _, attribute := range rows[i].Atributs {
-				bundles[i].Atributs = append(bundles[i].Atributs, attribute.Attribute)
+				bundle.Atributs = append(bundle.Atributs, attribute.Attribute)
 			}
 			if result.WritePrepareBreakdown != nil {
 				result.WritePrepareBreakdown.BuildLinksBatchDur += time.Since(linksStart)
 			}
+			bundles = append(bundles, bundle)
 		}
-		bulkResult, err := runtime.BulkCreateBundles(bundles)
+		bulkResult, err := app.DB.BulkCreateTranscripcioRawBundles(bundles)
 		if err == nil && len(bulkResult.IDs) == len(rows) {
 			result.Debug.addWriteBulkBatch(len(rows))
 			result.Debug.addWriteBulkStatementBatches(
