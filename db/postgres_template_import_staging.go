@@ -14,6 +14,12 @@ type postgresTemplateImportStagedRawRow struct {
 	Row       TranscripcioRaw
 }
 
+type postgresTemplateImportStagedPersonaRow struct {
+	ImportSeq int
+	SubSeq    int
+	Row       TranscripcioPersonaRaw
+}
+
 type postgresTemplateImportStagedAtributRow struct {
 	ImportSeq int
 	SubSeq    int
@@ -48,7 +54,7 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 		totalAtributs += len(bundles[i].Atributs)
 	}
 	rawRows := make([]postgresTemplateImportStagedRawRow, 0, len(bundles))
-	personRows := make([]TranscripcioPersonaRaw, 0, totalPersones)
+	personRows := make([]postgresTemplateImportStagedPersonaRow, 0, totalPersones)
 	attrRows := make([]postgresTemplateImportStagedAtributRow, 0, totalAtributs)
 	if err := h.createPostgresTemplateImportStagingTablesTx(tx); err != nil {
 		return res, err
@@ -78,7 +84,11 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 			for j := range bundles[offset].Persones {
 				persona := bundles[offset].Persones[j]
 				persona.TranscripcioID = rawID
-				personRows = append(personRows, persona)
+				personRows = append(personRows, postgresTemplateImportStagedPersonaRow{
+					ImportSeq: offset,
+					SubSeq:    j,
+					Row:       persona,
+				})
 			}
 			for j := range bundles[offset].Atributs {
 				attribute := bundles[offset].Atributs[j]
@@ -109,7 +119,11 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 	res.Metrics.TranscripcioInsertDur += time.Since(start)
 
 	start = time.Now()
-	if err := h.copyInPostgresTranscripcioPersonesTx(tx, personRows); err != nil {
+	if err := h.copyInPostgresTemplateImportStagedPersonesTx(tx, personRows); err != nil {
+		res.Metrics.PersonaPersistDur += time.Since(start)
+		return res, err
+	}
+	if err := h.insertPostgresTemplateImportStagedPersonesTx(tx); err != nil {
 		res.Metrics.PersonaPersistDur += time.Since(start)
 		return res, err
 	}
@@ -150,6 +164,7 @@ func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx) error
 	}
 	stmts := []string{
 		`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_raw`,
+		`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_persones_raw`,
 		`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_atributs_raw`,
 		`
         CREATE TEMP TABLE tmp_template_import_transcripcions_raw
@@ -175,6 +190,40 @@ func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx) error
             moderation_notes,
             created_by
         FROM transcripcions_raw
+        WITH NO DATA`,
+		`
+        CREATE TEMP TABLE tmp_template_import_transcripcions_persones_raw
+        ON COMMIT DROP AS
+        SELECT
+            0::INTEGER AS import_seq,
+            0::INTEGER AS import_subseq,
+            transcripcio_id,
+            rol,
+            nom,
+            nom_estat,
+            cognom1,
+            cognom1_estat,
+            cognom2,
+            cognom2_estat,
+            cognom_soltera,
+            cognom_soltera_estat,
+            sexe,
+            sexe_estat,
+            edat_text,
+            edat_estat,
+            estat_civil_text,
+            estat_civil_estat,
+            municipi_text,
+            municipi_estat,
+            ofici_text,
+            ofici_estat,
+            casa_nom,
+            casa_estat,
+            persona_id,
+            linked_by,
+            linked_at,
+            notes
+        FROM transcripcions_persones_raw
         WITH NO DATA`,
 		`
         CREATE TEMP TABLE tmp_template_import_transcripcions_atributs_raw
@@ -256,6 +305,64 @@ func (h sqlHelper) insertPostgresTemplateImportStagedRawBatchTx(tx *sql.Tx, star
         FROM tmp_template_import_transcripcions_raw
         WHERE import_seq >= $1 AND import_seq < $2
         ORDER BY import_seq`, startSeq, endSeq)
+	return err
+}
+
+func (h sqlHelper) copyInPostgresTemplateImportStagedPersonesTx(tx *sql.Tx, rows []postgresTemplateImportStagedPersonaRow) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	stmt, err := tx.Prepare(pq.CopyIn(
+		"tmp_template_import_transcripcions_persones_raw",
+		"import_seq", "import_subseq",
+		"transcripcio_id", "rol", "nom", "nom_estat", "cognom1", "cognom1_estat", "cognom2", "cognom2_estat",
+		"cognom_soltera", "cognom_soltera_estat", "sexe", "sexe_estat", "edat_text", "edat_estat",
+		"estat_civil_text", "estat_civil_estat", "municipi_text", "municipi_estat", "ofici_text", "ofici_estat",
+		"casa_nom", "casa_estat", "persona_id", "linked_by", "linked_at", "notes",
+	))
+	if err != nil {
+		return err
+	}
+	closeStmt := true
+	defer func() {
+		if closeStmt {
+			_ = stmt.Close()
+		}
+	}()
+	for _, row := range rows {
+		args := append([]interface{}{row.ImportSeq, row.SubSeq}, buildInsertTranscripcioPersonaArgs(row.Row)...)
+		if _, err := stmt.Exec(args...); err != nil {
+			return err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		return err
+	}
+	if err := stmt.Close(); err != nil {
+		return err
+	}
+	closeStmt = false
+	return nil
+}
+
+func (h sqlHelper) insertPostgresTemplateImportStagedPersonesTx(tx *sql.Tx) error {
+	if tx == nil {
+		return nil
+	}
+	_, err := tx.Exec(`
+        INSERT INTO transcripcions_persones_raw (
+            transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat,
+            cognom_soltera, cognom_soltera_estat, sexe, sexe_estat, edat_text, edat_estat,
+            estat_civil_text, estat_civil_estat, municipi_text, municipi_estat, ofici_text, ofici_estat,
+            casa_nom, casa_estat, persona_id, linked_by, linked_at, notes
+        )
+        SELECT
+            transcripcio_id, rol, nom, nom_estat, cognom1, cognom1_estat, cognom2, cognom2_estat,
+            cognom_soltera, cognom_soltera_estat, sexe, sexe_estat, edat_text, edat_estat,
+            estat_civil_text, estat_civil_estat, municipi_text, municipi_estat, ofici_text, ofici_estat,
+            casa_nom, casa_estat, persona_id, linked_by, linked_at, notes
+        FROM tmp_template_import_transcripcions_persones_raw
+        ORDER BY import_seq, import_subseq`)
 	return err
 }
 
