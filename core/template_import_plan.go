@@ -115,7 +115,7 @@ func (p PostgresTemplateImportPersister) Persist(plan *TemplateImportPlan, optio
 }
 
 func (p SQLiteTemplateImportPersister) Persist(plan *TemplateImportPlan, options TemplateImportPersistOptions) TemplateImportPersistResult {
-	return persistTemplateImportPlanSQLiteLegacy(plan, options)
+	return persistTemplateImportPlanSQLite(plan, options)
 }
 
 func (p legacyTemplateImportPersister) Persist(plan *TemplateImportPlan, options TemplateImportPersistOptions) TemplateImportPersistResult {
