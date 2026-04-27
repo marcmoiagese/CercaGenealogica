@@ -10,15 +10,19 @@ import (
 )
 
 type llibreIndexacioRecalcMetrics struct {
+	LlibreID                   int
 	LoadRegistresDur           time.Duration
 	LoadPersonesDur            time.Duration
 	LoadAtributsDur            time.Duration
 	ComputeDur                 time.Duration
 	ComputeGroupRegistresDur   time.Duration
+	ComputeGroupPersonesMapDur time.Duration
+	ComputeGroupAtributsMapDur time.Duration
 	ComputeGroupPersonesDur    time.Duration
 	ComputeGroupAtributsDur    time.Duration
 	ComputeNormalizeStringsDur time.Duration
 	ComputeBuildPayloadDur     time.Duration
+	ComputeJSONSerializeDur    time.Duration
 	ComputeStatsDemografiaDur  time.Duration
 	UpsertDur                  time.Duration
 	PageStatsDur               time.Duration
@@ -99,7 +103,7 @@ func (a *App) recalcLlibreIndexacioStats(llibreID int) (*db.LlibreIndexacioStats
 }
 
 func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreIndexacioStats, llibreIndexacioRecalcMetrics, error) {
-	metrics := llibreIndexacioRecalcMetrics{}
+	metrics := llibreIndexacioRecalcMetrics{LlibreID: llibreID}
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil {
 		return nil, metrics, err
@@ -152,7 +156,9 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 		metrics.LoadPersonesDur = time.Since(fallbackStart)
 	}
 	for _, persones := range personesByRegistre {
+		groupStart = time.Now()
 		metrics.TotalPersones += len(persones)
+		metrics.ComputeGroupPersonesMapDur += time.Since(groupStart)
 	}
 	atributsByRegistre := map[int][]db.TranscripcioAtributRaw{}
 	loadStart = time.Now()
@@ -171,7 +177,9 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 		metrics.LoadAtributsDur = time.Since(fallbackStart)
 	}
 	for _, atributs := range atributsByRegistre {
+		groupStart = time.Now()
 		metrics.TotalAtributs += len(atributs)
+		metrics.ComputeGroupAtributsMapDur += time.Since(groupStart)
 	}
 	stats.TotalCamps = len(fields) * stats.TotalRegistres
 	computeStart := time.Now()
@@ -224,6 +232,7 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 			metrics.ComputeFieldEvaluations,
 		)
 	}
+	derivedStatsStart := time.Now()
 	stats.Percentatge = int(math.Round(float64(stats.CampsEmplenats) * 100 / float64(stats.TotalCamps)))
 	if stats.Percentatge < 0 {
 		stats.Percentatge = 0
@@ -231,6 +240,7 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 	if stats.Percentatge > 100 {
 		stats.Percentatge = 100
 	}
+	metrics.ComputeStatsDemografiaDur += time.Since(derivedStatsStart)
 	upsertStart := time.Now()
 	if err := a.DB.UpsertLlibreIndexacioStats(stats); err != nil {
 		metrics.UpsertDur = time.Since(upsertStart)

@@ -1,6 +1,40 @@
 package core
 
-import "time"
+import (
+	"sort"
+	"time"
+)
+
+type sidefxComputeBookDebugMetrics struct {
+	LlibreID                int
+	ComputeDur              time.Duration
+	GroupRegistresByBookDur time.Duration
+	GroupPersonesByTransDur time.Duration
+	GroupAtributsByTransDur time.Duration
+	NormalizeStringsDur     time.Duration
+	BuildIndexPayloadDur    time.Duration
+	JSONSerializeDur        time.Duration
+	DerivedStatsDur         time.Duration
+	Registres               int
+	Persones                int
+	Atributs                int
+	FieldEvaluations        int
+}
+
+type sidefxComputeDebugMetrics struct {
+	GroupRegistresByBookDur time.Duration
+	GroupPersonesByTransDur time.Duration
+	GroupAtributsByTransDur time.Duration
+	NormalizeStringsDur     time.Duration
+	BuildIndexPayloadDur    time.Duration
+	JSONSerializeDur        time.Duration
+	DerivedStatsDur         time.Duration
+	Registres               int
+	Persones                int
+	Atributs                int
+	FieldEvaluations        int
+	Books                   []sidefxComputeBookDebugMetrics
+}
 
 type csvImportDebugMetrics struct {
 	Enabled                      bool
@@ -51,6 +85,7 @@ type csvImportDebugMetrics struct {
 	SidefxIndexacioRegistres     int
 	SidefxIndexacioPersones      int
 	SidefxIndexacioAtributs      int
+	SidefxComputeProfile         sidefxComputeDebugMetrics
 	SidefxDur                    time.Duration
 	TotalDur                     time.Duration
 }
@@ -249,6 +284,32 @@ func (m *csvImportDebugMetrics) addSidefxIndexacio(metrics llibreIndexacioRecalc
 	m.SidefxIndexacioRegistres += metrics.TotalRegistres
 	m.SidefxIndexacioPersones += metrics.TotalPersones
 	m.SidefxIndexacioAtributs += metrics.TotalAtributs
+	m.SidefxComputeProfile.GroupRegistresByBookDur += metrics.ComputeGroupRegistresDur
+	m.SidefxComputeProfile.GroupPersonesByTransDur += metrics.ComputeGroupPersonesMapDur
+	m.SidefxComputeProfile.GroupAtributsByTransDur += metrics.ComputeGroupAtributsMapDur
+	m.SidefxComputeProfile.NormalizeStringsDur += metrics.ComputeNormalizeStringsDur
+	m.SidefxComputeProfile.BuildIndexPayloadDur += metrics.ComputeBuildPayloadDur
+	m.SidefxComputeProfile.JSONSerializeDur += metrics.ComputeJSONSerializeDur
+	m.SidefxComputeProfile.DerivedStatsDur += metrics.ComputeStatsDemografiaDur
+	m.SidefxComputeProfile.Registres += metrics.TotalRegistres
+	m.SidefxComputeProfile.Persones += metrics.TotalPersones
+	m.SidefxComputeProfile.Atributs += metrics.TotalAtributs
+	m.SidefxComputeProfile.FieldEvaluations += metrics.ComputeFieldEvaluations
+	m.SidefxComputeProfile.Books = append(m.SidefxComputeProfile.Books, sidefxComputeBookDebugMetrics{
+		LlibreID:                metrics.LlibreID,
+		ComputeDur:              metrics.ComputeDur,
+		GroupRegistresByBookDur: metrics.ComputeGroupRegistresDur,
+		GroupPersonesByTransDur: metrics.ComputeGroupPersonesMapDur,
+		GroupAtributsByTransDur: metrics.ComputeGroupAtributsMapDur,
+		NormalizeStringsDur:     metrics.ComputeNormalizeStringsDur,
+		BuildIndexPayloadDur:    metrics.ComputeBuildPayloadDur,
+		JSONSerializeDur:        metrics.ComputeJSONSerializeDur,
+		DerivedStatsDur:         metrics.ComputeStatsDemografiaDur,
+		Registres:               metrics.TotalRegistres,
+		Persones:                metrics.TotalPersones,
+		Atributs:                metrics.TotalAtributs,
+		FieldEvaluations:        metrics.ComputeFieldEvaluations,
+	})
 	m.SidefxDur += metrics.TotalDur()
 }
 
@@ -349,5 +410,54 @@ func (a *App) logCSVImportDebug(actorID int, result csvImportResult) {
 			result.ImportPhaseGaps.WriteToSidefxGap,
 			result.ImportPhaseGaps.DuplicateBeforeWritePrepareCount,
 		)
+	}
+	if len(result.Debug.SidefxComputeProfile.Books) > 0 {
+		Debugf(
+			"sidefx_compute_summary books=%d total_compute_dur=%s group_registres_by_book_dur=%s group_persones_by_transcripcio_dur=%s group_atributs_by_transcripcio_dur=%s normalize_strings_dur=%s build_index_payload_dur=%s json_serialize_dur=%s derived_stats_dur=%s registres=%d persones=%d atributs=%d field_evaluations=%d",
+			len(result.Debug.SidefxComputeProfile.Books),
+			result.Debug.SidefxComputeDur,
+			result.Debug.SidefxComputeProfile.GroupRegistresByBookDur,
+			result.Debug.SidefxComputeProfile.GroupPersonesByTransDur,
+			result.Debug.SidefxComputeProfile.GroupAtributsByTransDur,
+			result.Debug.SidefxComputeProfile.NormalizeStringsDur,
+			result.Debug.SidefxComputeProfile.BuildIndexPayloadDur,
+			result.Debug.SidefxComputeProfile.JSONSerializeDur,
+			result.Debug.SidefxComputeProfile.DerivedStatsDur,
+			result.Debug.SidefxComputeProfile.Registres,
+			result.Debug.SidefxComputeProfile.Persones,
+			result.Debug.SidefxComputeProfile.Atributs,
+			result.Debug.SidefxComputeProfile.FieldEvaluations,
+		)
+		books := append([]sidefxComputeBookDebugMetrics(nil), result.Debug.SidefxComputeProfile.Books...)
+		sort.Slice(books, func(i, j int) bool {
+			if books[i].ComputeDur == books[j].ComputeDur {
+				return books[i].LlibreID < books[j].LlibreID
+			}
+			return books[i].ComputeDur > books[j].ComputeDur
+		})
+		limit := 5
+		if len(books) < limit {
+			limit = len(books)
+		}
+		for i := 0; i < limit; i++ {
+			book := books[i]
+			Debugf(
+				"sidefx_compute_top_book rank=%d llibre_id=%d compute_dur=%s group_registres_by_book_dur=%s group_persones_by_transcripcio_dur=%s group_atributs_by_transcripcio_dur=%s normalize_strings_dur=%s build_index_payload_dur=%s json_serialize_dur=%s derived_stats_dur=%s registres=%d persones=%d atributs=%d field_evaluations=%d",
+				i+1,
+				book.LlibreID,
+				book.ComputeDur,
+				book.GroupRegistresByBookDur,
+				book.GroupPersonesByTransDur,
+				book.GroupAtributsByTransDur,
+				book.NormalizeStringsDur,
+				book.BuildIndexPayloadDur,
+				book.JSONSerializeDur,
+				book.DerivedStatsDur,
+				book.Registres,
+				book.Persones,
+				book.Atributs,
+				book.FieldEvaluations,
+			)
+		}
 	}
 }
