@@ -7,13 +7,6 @@ import (
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
-func postgresTemplateImportPersistBatchSize(totalRows int) int {
-	if totalRows <= 0 {
-		return templateImportCreateBatchSize
-	}
-	return totalRows
-}
-
 func persistTemplateImportPlanPostgres(plan *TemplateImportPlan, options TemplateImportPersistOptions) TemplateImportPersistResult {
 	result := TemplateImportPersistResult{}
 	if plan == nil || options.Result == nil || len(plan.Rows) == 0 {
@@ -23,9 +16,8 @@ func persistTemplateImportPlanPostgres(plan *TemplateImportPlan, options Templat
 	if runtime == nil && options.App != nil {
 		runtime = db.TemplateImportRuntimeFor(options.App.DB)
 	}
-	batchSize := postgresTemplateImportPersistBatchSize(len(plan.Rows))
-	for start := 0; start < len(plan.Rows); start += batchSize {
-		end := start + batchSize
+	for start := 0; start < len(plan.Rows); start += templateImportCreateBatchSize {
+		end := start + templateImportCreateBatchSize
 		if end > len(plan.Rows) {
 			end = len(plan.Rows)
 		}
