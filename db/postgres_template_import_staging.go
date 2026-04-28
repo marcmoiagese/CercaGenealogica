@@ -27,6 +27,7 @@ type PostgresTemplateImportStagingBatchMetrics struct {
 	CopyAtributsStagingDur  time.Duration
 	InsertAtributsFinalDur  time.Duration
 	CommitDur               time.Duration
+	UnaccountedDur          time.Duration
 	TotalDur                time.Duration
 }
 
@@ -41,6 +42,7 @@ type PostgresTemplateImportStagingMetrics struct {
 	CopyAtributsStagingDur  time.Duration
 	InsertAtributsFinalDur  time.Duration
 	CommitDur               time.Duration
+	UnaccountedDur          time.Duration
 	TotalDur                time.Duration
 	Rows                    int
 	Persones                int
@@ -102,10 +104,23 @@ func recordPostgresTemplateImportStagingBatch(batch PostgresTemplateImportStagin
 	postgresTemplateImportStagingProfile.CopyAtributsStagingDur += batch.CopyAtributsStagingDur
 	postgresTemplateImportStagingProfile.InsertAtributsFinalDur += batch.InsertAtributsFinalDur
 	postgresTemplateImportStagingProfile.CommitDur += batch.CommitDur
+	postgresTemplateImportStagingProfile.UnaccountedDur += batch.UnaccountedDur
 	postgresTemplateImportStagingProfile.TotalDur += batch.TotalDur
 	postgresTemplateImportStagingProfile.Rows += batch.Rows
 	postgresTemplateImportStagingProfile.Persones += batch.Persones
 	postgresTemplateImportStagingProfile.Atributs += batch.Atributs
+}
+
+func (m PostgresTemplateImportStagingBatchMetrics) measuredDur() time.Duration {
+	return m.CreateDropTempTablesDur +
+		m.BuildRowsDur +
+		m.CopyRawStagingDur +
+		m.InsertRawFinalDur +
+		m.CopyPersonesStagingDur +
+		m.InsertPersonesFinalDur +
+		m.CopyAtributsStagingDur +
+		m.InsertAtributsFinalDur +
+		m.CommitDur
 }
 
 func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
@@ -122,11 +137,11 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 	if postgresTemplateImportStagingProfileEnabled() {
 		stagingBatch = &PostgresTemplateImportStagingBatchMetrics{Rows: len(bundles)}
 	}
-	totalStart := time.Now()
 	tx, err := h.db.Begin()
 	if err != nil {
 		return res, err
 	}
+	totalStart := time.Now()
 	committed := false
 	defer func() {
 		if !committed {
@@ -274,9 +289,13 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 	res.Metrics.CommitDur += time.Since(start)
 	if stagingBatch != nil {
 		stagingBatch.CommitDur += res.Metrics.CommitDur
-		stagingBatch.TotalDur += time.Since(totalStart)
 		stagingBatch.Persones = len(personRows)
 		stagingBatch.Atributs = len(attrRows)
+		measuredDur := stagingBatch.measuredDur()
+		if elapsed := time.Since(totalStart); elapsed > measuredDur {
+			stagingBatch.UnaccountedDur += elapsed - measuredDur
+		}
+		stagingBatch.TotalDur += measuredDur + stagingBatch.UnaccountedDur
 		recordPostgresTemplateImportStagingBatch(*stagingBatch)
 	}
 	committed = true
