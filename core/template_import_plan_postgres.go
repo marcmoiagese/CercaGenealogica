@@ -16,6 +16,13 @@ func persistTemplateImportPlanPostgres(plan *TemplateImportPlan, options Templat
 	if runtime == nil && options.App != nil {
 		runtime = db.TemplateImportRuntimeFor(options.App.DB)
 	}
+	if IsPostgresStagingWholeImportEnabled() {
+		if persistTemplateImportPlanPostgresWhole(plan, options.App, options.Result) {
+			result.Created = options.Result.Created
+			result.Failed = options.Result.Failed
+			return result
+		}
+	}
 	for start := 0; start < len(plan.Rows); start += templateImportCreateBatchSize {
 		end := start + templateImportCreateBatchSize
 		if end > len(plan.Rows) {
@@ -26,6 +33,62 @@ func persistTemplateImportPlanPostgres(plan *TemplateImportPlan, options Templat
 	result.Created = options.Result.Created
 	result.Failed = options.Result.Failed
 	return result
+}
+
+func persistTemplateImportPlanPostgresWhole(plan *TemplateImportPlan, app *App, result *csvImportResult) bool {
+	if plan == nil || len(plan.Rows) == 0 || app == nil || app.DB == nil || result == nil {
+		return false
+	}
+	preallocStart := time.Now()
+	bundles := make([]db.TranscripcioRawImportBundle, 0, len(plan.Rows))
+	preallocDur := time.Since(preallocStart)
+	buildTranscripcionsDur := time.Duration(0)
+	buildPersonesDur := time.Duration(0)
+	buildLinksDur := time.Duration(0)
+	for i := range plan.Rows {
+		transStart := time.Now()
+		bundle := db.TranscripcioRawImportBundle{Transcripcio: plan.Rows[i].Transcripcio}
+		buildTranscripcionsDur += time.Since(transStart)
+		personesStart := time.Now()
+		bundle.Persones = make([]db.TranscripcioPersonaRaw, 0, len(plan.Rows[i].Persones))
+		for _, persona := range plan.Rows[i].Persones {
+			bundle.Persones = append(bundle.Persones, persona.Persona)
+		}
+		buildPersonesDur += time.Since(personesStart)
+		linksStart := time.Now()
+		bundle.Atributs = make([]db.TranscripcioAtributRaw, 0, len(plan.Rows[i].Atributs))
+		for _, attribute := range plan.Rows[i].Atributs {
+			bundle.Atributs = append(bundle.Atributs, attribute.Attribute)
+		}
+		buildLinksDur += time.Since(linksStart)
+		bundles = append(bundles, bundle)
+	}
+	bulkResult, err := app.DB.BulkCreateTranscripcioRawBundles(bundles)
+	if err != nil || len(bulkResult.IDs) != len(plan.Rows) {
+		return false
+	}
+	if result.WritePrepareBreakdown != nil {
+		result.WritePrepareBreakdown.Batches++
+		result.WritePrepareBreakdown.PreallocDur += preallocDur
+		result.WritePrepareBreakdown.BuildTranscripcionsBatchDur += buildTranscripcionsDur
+		result.WritePrepareBreakdown.BuildPersonesBatchDur += buildPersonesDur
+		result.WritePrepareBreakdown.BuildLinksBatchDur += buildLinksDur
+	}
+	result.Debug.addWriteBulkBatch(len(plan.Rows))
+	result.Debug.addWriteBulkStatementBatches(
+		bulkResult.Metrics.TranscripcioBatches,
+		bulkResult.Metrics.PersonaBatches,
+		bulkResult.Metrics.AtributBatches,
+	)
+	result.Debug.addWriteTranscripcioInsert(bulkResult.Metrics.TranscripcioInsertDur)
+	result.Debug.addWritePersonaPersist(bulkResult.Metrics.PersonaPersistDur)
+	result.Debug.addWriteLinksPersist(bulkResult.Metrics.LinksPersistDur)
+	result.Debug.addWriteCommit(bulkResult.Metrics.CommitDur)
+	for i := range plan.Rows {
+		result.Created++
+		result.markBook(plan.Rows[i].BookID)
+	}
+	return true
 }
 
 func persistTemplateImportPlanPostgresBatch(rows []TemplateImportPlanRow, app *App, result *csvImportResult, runtime db.TemplateImportRuntime) {

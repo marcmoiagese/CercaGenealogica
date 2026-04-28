@@ -493,6 +493,10 @@ func (a *App) logPostgresStagingProfile(result csvImportResult) {
 		profile.UnaccountedDur,
 		profile.TotalDur,
 	)
+	if len(profile.Batches) == 1 && profile.Rows > templateImportCreateBatchSize {
+		logPostgresStagingTopPhases(profile.Batches[0])
+		return
+	}
 	batches := append([]db.PostgresTemplateImportStagingBatchMetrics(nil), profile.Batches...)
 	sort.Slice(batches, func(i, j int) bool {
 		if batches[i].TotalDur == batches[j].TotalDur {
@@ -525,6 +529,48 @@ func (a *App) logPostgresStagingProfile(result csvImportResult) {
 			batch.InsertAtributsFinalDur,
 			batch.CommitDur,
 			batch.UnaccountedDur,
+			batch.TotalDur,
+		)
+	}
+}
+
+func logPostgresStagingTopPhases(batch db.PostgresTemplateImportStagingBatchMetrics) {
+	type postgresStagingPhase struct {
+		Name string
+		Dur  time.Duration
+	}
+	phases := []postgresStagingPhase{
+		{Name: "create_drop_temp_tables", Dur: batch.CreateDropTempTablesDur},
+		{Name: "build_rows", Dur: batch.BuildRowsDur},
+		{Name: "copy_raw_staging", Dur: batch.CopyRawStagingDur},
+		{Name: "insert_raw_final", Dur: batch.InsertRawFinalDur},
+		{Name: "copy_persones_staging", Dur: batch.CopyPersonesStagingDur},
+		{Name: "insert_persones_final", Dur: batch.InsertPersonesFinalDur},
+		{Name: "copy_atributs_staging", Dur: batch.CopyAtributsStagingDur},
+		{Name: "insert_atributs_final", Dur: batch.InsertAtributsFinalDur},
+		{Name: "commit", Dur: batch.CommitDur},
+		{Name: "unaccounted", Dur: batch.UnaccountedDur},
+	}
+	sort.Slice(phases, func(i, j int) bool {
+		if phases[i].Dur == phases[j].Dur {
+			return phases[i].Name < phases[j].Name
+		}
+		return phases[i].Dur > phases[j].Dur
+	})
+	limit := 5
+	if len(phases) < limit {
+		limit = len(phases)
+	}
+	for i := 0; i < limit; i++ {
+		phase := phases[i]
+		PostgresStagingProfilef(
+			"postgres_staging_profile_top_phase rank=%d phase=%s rows=%d persones=%d atributs=%d dur=%s total_dur=%s",
+			i+1,
+			phase.Name,
+			batch.Rows,
+			batch.Persones,
+			batch.Atributs,
+			phase.Dur,
 			batch.TotalDur,
 		)
 	}
