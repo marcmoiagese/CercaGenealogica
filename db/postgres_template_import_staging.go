@@ -415,8 +415,27 @@ func (h sqlHelper) copyInPostgresTemplateImportStagedRawTx(tx *sql.Tx, rows []po
 		}
 	}()
 	for _, row := range rows {
-		args := append([]interface{}{row.ImportSeq}, buildInsertTranscripcioRawArgs(row.Row, row.ID, true)...)
-		if _, err := stmt.Exec(args...); err != nil {
+		if _, err := stmt.Exec(
+			row.ImportSeq,
+			row.ID,
+			row.Row.LlibreID,
+			row.Row.PaginaID,
+			row.Row.NumPaginaText,
+			row.Row.PosicioPagina,
+			row.Row.TipusActe,
+			row.Row.AnyDoc,
+			row.Row.DataActeText,
+			row.Row.DataActeISO,
+			row.Row.DataActeEstat,
+			row.Row.TranscripcioLiteral,
+			row.Row.NotesMarginals,
+			row.Row.ObservacionsPaleografiques,
+			row.Row.ModeracioEstat,
+			row.Row.ModeratedBy,
+			row.Row.ModeratedAt,
+			row.Row.ModeracioMotiu,
+			row.Row.CreatedBy,
+		); err != nil {
 			return err
 		}
 	}
@@ -474,8 +493,36 @@ func (h sqlHelper) copyInPostgresTemplateImportStagedPersonesTx(tx *sql.Tx, rows
 		}
 	}()
 	for _, row := range rows {
-		args := append([]interface{}{row.ImportSeq, row.SubSeq}, buildInsertTranscripcioPersonaArgs(row.Row)...)
-		if _, err := stmt.Exec(args...); err != nil {
+		if _, err := stmt.Exec(
+			row.ImportSeq,
+			row.SubSeq,
+			row.Row.TranscripcioID,
+			row.Row.Rol,
+			row.Row.Nom,
+			row.Row.NomEstat,
+			row.Row.Cognom1,
+			row.Row.Cognom1Estat,
+			row.Row.Cognom2,
+			row.Row.Cognom2Estat,
+			row.Row.CognomSoltera,
+			row.Row.CognomSolteraEstat,
+			row.Row.Sexe,
+			row.Row.SexeEstat,
+			row.Row.EdatText,
+			row.Row.EdatEstat,
+			row.Row.EstatCivilText,
+			row.Row.EstatCivilEstat,
+			row.Row.MunicipiText,
+			row.Row.MunicipiEstat,
+			row.Row.OficiText,
+			row.Row.OficiEstat,
+			row.Row.CasaNom,
+			row.Row.CasaEstat,
+			row.Row.PersonaID,
+			row.Row.LinkedBy,
+			row.Row.LinkedAt,
+			row.Row.Notes,
+		); err != nil {
 			return err
 		}
 	}
@@ -529,8 +576,19 @@ func (h sqlHelper) copyInPostgresTemplateImportStagedAtributsTx(tx *sql.Tx, rows
 		}
 	}()
 	for _, row := range rows {
-		args := append([]interface{}{row.ImportSeq, row.SubSeq}, buildInsertTranscripcioAtributArgs(row.Row)...)
-		if _, err := stmt.Exec(args...); err != nil {
+		if _, err := stmt.Exec(
+			row.ImportSeq,
+			row.SubSeq,
+			row.Row.TranscripcioID,
+			row.Row.Clau,
+			row.Row.TipusValor,
+			row.Row.ValorText,
+			row.Row.ValorInt,
+			row.Row.ValorDate,
+			row.Row.ValorBool,
+			row.Row.Estat,
+			row.Row.Notes,
+		); err != nil {
 			return err
 		}
 	}
