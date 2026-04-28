@@ -45,10 +45,18 @@ func IsImportProfileEnabled() bool {
 	return strings.TrimSpace(os.Getenv("CG_IMPORT_PROFILE")) == "1"
 }
 
+func IsPostgresStagingProfileEnabled() bool {
+	return strings.TrimSpace(os.Getenv("CG_POSTGRES_STAGING_PROFILE")) == "1"
+}
+
 func Infof(format string, v ...interface{}) {
 	if currentLevel >= logInfo {
 		log.Printf("[INFO] "+format, v...)
 	}
+}
+
+func PostgresStagingProfilef(format string, v ...interface{}) {
+	log.Printf("[POSTGRES_STAGING_PROFILE] "+format, v...)
 }
 
 func Errorf(format string, v ...interface{}) {

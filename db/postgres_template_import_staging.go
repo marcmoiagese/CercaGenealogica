@@ -3,10 +3,52 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"strings"
+	"sync"
 	"time"
 
 	pq "github.com/lib/pq"
 )
+
+type PostgresTemplateImportStagingBatchMetrics struct {
+	Index                   int
+	RangeStart              int
+	RangeEnd                int
+	Rows                    int
+	Persones                int
+	Atributs                int
+	CreateDropTempTablesDur time.Duration
+	BuildRowsDur            time.Duration
+	CopyRawStagingDur       time.Duration
+	InsertRawFinalDur       time.Duration
+	CopyPersonesStagingDur  time.Duration
+	InsertPersonesFinalDur  time.Duration
+	CopyAtributsStagingDur  time.Duration
+	InsertAtributsFinalDur  time.Duration
+	CommitDur               time.Duration
+	TotalDur                time.Duration
+}
+
+type PostgresTemplateImportStagingMetrics struct {
+	Batches                 []PostgresTemplateImportStagingBatchMetrics
+	CreateDropTempTablesDur time.Duration
+	BuildRowsDur            time.Duration
+	CopyRawStagingDur       time.Duration
+	InsertRawFinalDur       time.Duration
+	CopyPersonesStagingDur  time.Duration
+	InsertPersonesFinalDur  time.Duration
+	CopyAtributsStagingDur  time.Duration
+	InsertAtributsFinalDur  time.Duration
+	CommitDur               time.Duration
+	TotalDur                time.Duration
+	Rows                    int
+	Persones                int
+	Atributs                int
+}
+
+var postgresTemplateImportStagingProfileMu sync.Mutex
+var postgresTemplateImportStagingProfile PostgresTemplateImportStagingMetrics
 
 type postgresTemplateImportStagedRawRow struct {
 	ImportSeq int
@@ -26,6 +68,46 @@ type postgresTemplateImportStagedAtributRow struct {
 	Row       TranscripcioAtributRaw
 }
 
+func postgresTemplateImportStagingProfileEnabled() bool {
+	return strings.TrimSpace(os.Getenv("CG_POSTGRES_STAGING_PROFILE")) == "1"
+}
+
+func ResetPostgresTemplateImportStagingProfile() {
+	postgresTemplateImportStagingProfileMu.Lock()
+	defer postgresTemplateImportStagingProfileMu.Unlock()
+	postgresTemplateImportStagingProfile = PostgresTemplateImportStagingMetrics{}
+}
+
+func DrainPostgresTemplateImportStagingProfile() PostgresTemplateImportStagingMetrics {
+	postgresTemplateImportStagingProfileMu.Lock()
+	defer postgresTemplateImportStagingProfileMu.Unlock()
+	metrics := postgresTemplateImportStagingProfile
+	postgresTemplateImportStagingProfile = PostgresTemplateImportStagingMetrics{}
+	return metrics
+}
+
+func recordPostgresTemplateImportStagingBatch(batch PostgresTemplateImportStagingBatchMetrics) {
+	postgresTemplateImportStagingProfileMu.Lock()
+	defer postgresTemplateImportStagingProfileMu.Unlock()
+	batch.Index = len(postgresTemplateImportStagingProfile.Batches) + 1
+	batch.RangeStart = postgresTemplateImportStagingProfile.Rows + 1
+	batch.RangeEnd = postgresTemplateImportStagingProfile.Rows + batch.Rows
+	postgresTemplateImportStagingProfile.Batches = append(postgresTemplateImportStagingProfile.Batches, batch)
+	postgresTemplateImportStagingProfile.CreateDropTempTablesDur += batch.CreateDropTempTablesDur
+	postgresTemplateImportStagingProfile.BuildRowsDur += batch.BuildRowsDur
+	postgresTemplateImportStagingProfile.CopyRawStagingDur += batch.CopyRawStagingDur
+	postgresTemplateImportStagingProfile.InsertRawFinalDur += batch.InsertRawFinalDur
+	postgresTemplateImportStagingProfile.CopyPersonesStagingDur += batch.CopyPersonesStagingDur
+	postgresTemplateImportStagingProfile.InsertPersonesFinalDur += batch.InsertPersonesFinalDur
+	postgresTemplateImportStagingProfile.CopyAtributsStagingDur += batch.CopyAtributsStagingDur
+	postgresTemplateImportStagingProfile.InsertAtributsFinalDur += batch.InsertAtributsFinalDur
+	postgresTemplateImportStagingProfile.CommitDur += batch.CommitDur
+	postgresTemplateImportStagingProfile.TotalDur += batch.TotalDur
+	postgresTemplateImportStagingProfile.Rows += batch.Rows
+	postgresTemplateImportStagingProfile.Persones += batch.Persones
+	postgresTemplateImportStagingProfile.Atributs += batch.Atributs
+}
+
 func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
 	res := TranscripcioRawImportBulkResult{
 		IDs: make([]int, 0, len(bundles)),
@@ -36,6 +118,11 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 	if len(bundles) == 0 {
 		return res, nil
 	}
+	var stagingBatch *PostgresTemplateImportStagingBatchMetrics
+	if postgresTemplateImportStagingProfileEnabled() {
+		stagingBatch = &PostgresTemplateImportStagingBatchMetrics{Rows: len(bundles)}
+	}
+	totalStart := time.Now()
 	tx, err := h.db.Begin()
 	if err != nil {
 		return res, err
@@ -56,8 +143,12 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 	rawRows := make([]postgresTemplateImportStagedRawRow, 0, len(bundles))
 	personRows := make([]postgresTemplateImportStagedPersonaRow, 0, totalPersones)
 	attrRows := make([]postgresTemplateImportStagedAtributRow, 0, totalAtributs)
+	phaseStart := time.Now()
 	if err := h.createPostgresTemplateImportStagingTablesTx(tx); err != nil {
 		return res, err
+	}
+	if stagingBatch != nil {
+		stagingBatch.CreateDropTempTablesDur += time.Since(phaseStart)
 	}
 
 	start := time.Now()
@@ -101,10 +192,18 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 			}
 		}
 	}
+	if stagingBatch != nil {
+		stagingBatch.BuildRowsDur += time.Since(start)
+	}
+	phaseStart = time.Now()
 	if err := h.copyInPostgresTemplateImportStagedRawTx(tx, rawRows); err != nil {
 		res.Metrics.TranscripcioInsertDur += time.Since(start)
 		return res, err
 	}
+	if stagingBatch != nil {
+		stagingBatch.CopyRawStagingDur += time.Since(phaseStart)
+	}
+	phaseStart = time.Now()
 	for i := 0; i < len(rawRows); i += rawBatchSize {
 		end := i + rawBatchSize
 		if end > len(rawRows) {
@@ -116,16 +215,27 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 		}
 		res.Metrics.TranscripcioBatches++
 	}
+	if stagingBatch != nil {
+		stagingBatch.InsertRawFinalDur += time.Since(phaseStart)
+	}
 	res.Metrics.TranscripcioInsertDur += time.Since(start)
 
 	start = time.Now()
+	phaseStart = time.Now()
 	if err := h.copyInPostgresTemplateImportStagedPersonesTx(tx, personRows); err != nil {
 		res.Metrics.PersonaPersistDur += time.Since(start)
 		return res, err
 	}
+	if stagingBatch != nil {
+		stagingBatch.CopyPersonesStagingDur += time.Since(phaseStart)
+	}
+	phaseStart = time.Now()
 	if err := h.insertPostgresTemplateImportStagedPersonesTx(tx); err != nil {
 		res.Metrics.PersonaPersistDur += time.Since(start)
 		return res, err
+	}
+	if stagingBatch != nil {
+		stagingBatch.InsertPersonesFinalDur += time.Since(phaseStart)
 	}
 	if len(personRows) > 0 {
 		res.Metrics.PersonaBatches = 1
@@ -134,13 +244,21 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 	res.Metrics.Persones = len(personRows)
 
 	start = time.Now()
+	phaseStart = time.Now()
 	if err := h.copyInPostgresTemplateImportStagedAtributsTx(tx, attrRows); err != nil {
 		res.Metrics.LinksPersistDur += time.Since(start)
 		return res, err
 	}
+	if stagingBatch != nil {
+		stagingBatch.CopyAtributsStagingDur += time.Since(phaseStart)
+	}
+	phaseStart = time.Now()
 	if err := h.insertPostgresTemplateImportStagedAtributsTx(tx); err != nil {
 		res.Metrics.LinksPersistDur += time.Since(start)
 		return res, err
+	}
+	if stagingBatch != nil {
+		stagingBatch.InsertAtributsFinalDur += time.Since(phaseStart)
 	}
 	if len(attrRows) > 0 {
 		res.Metrics.AtributBatches = 1
@@ -154,6 +272,13 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 		return res, err
 	}
 	res.Metrics.CommitDur += time.Since(start)
+	if stagingBatch != nil {
+		stagingBatch.CommitDur += res.Metrics.CommitDur
+		stagingBatch.TotalDur += time.Since(totalStart)
+		stagingBatch.Persones = len(personRows)
+		stagingBatch.Atributs = len(attrRows)
+		recordPostgresTemplateImportStagingBatch(*stagingBatch)
+	}
 	committed = true
 	return res, nil
 }

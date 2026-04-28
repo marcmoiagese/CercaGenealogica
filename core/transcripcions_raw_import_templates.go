@@ -492,6 +492,9 @@ func newTemplateDedupKeyPlan(rowPlan *templateRowContextPlan, policies templateP
 
 func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Reader, sep rune, userID int, ctx importContext, fixedBookID int) csvImportResult {
 	start := time.Now()
+	if IsPostgresStagingProfileEnabled() {
+		db.ResetPostgresTemplateImportStagingProfile()
+	}
 	result := csvImportResult{
 		Debug: newCSVImportDebugMetrics("template", "global"),
 	}

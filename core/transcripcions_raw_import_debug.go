@@ -3,6 +3,8 @@ package core
 import (
 	"sort"
 	"time"
+
+	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
 type sidefxComputeBookDebugMetrics struct {
@@ -327,65 +329,67 @@ func (m *csvImportDebugMetrics) finalize(bookCount int, total time.Duration) {
 }
 
 func (a *App) logCSVImportDebug(actorID int, result csvImportResult) {
-	if a == nil || !result.Debug.Enabled {
+	if a == nil {
 		return
 	}
-	Debugf(
-		"registre import model=%s scope=%s actor=%d rows=%d books=%d created=%d updated=%d failed=%d parse_dur=%s parse_model_dur=%s parse_validation_dur=%s parse_header_read_dur=%s parse_header_prepare_dur=%s parse_row_context_dur=%s parse_columns_dur=%s parse_condition_dur=%s parse_condition_calls=%d parse_transforms_dur=%s parse_transform_calls=%d parse_date_dur=%s parse_date_calls=%d parse_quality_dur=%s parse_quality_calls=%d parse_person_build_dur=%s parse_person_build_calls=%d resolve_dur=%s write_dur=%s write_prepare_dur=%s write_page_lookup_dur=%s write_duplicate_check_dur=%s write_transcripcio_insert_dur=%s write_persona_resolve_dur=%s write_persona_persist_dur=%s write_links_persist_dur=%s write_commit_dur=%s write_bulk_batches=%d write_bulk_rows=%d write_bulk_fallbacks=%d write_bulk_transcripcio_batches=%d write_bulk_persona_batches=%d write_bulk_links_batches=%d sidefx_dur=%s sidefx_indexacio_stats_dur=%s sidefx_load_registres_dur=%s sidefx_load_persones_dur=%s sidefx_load_atributs_dur=%s sidefx_compute_dur=%s sidefx_upsert_dur=%s sidefx_page_stats_dur=%s sidefx_indexacio_registres=%d sidefx_indexacio_persones=%d sidefx_indexacio_atributs=%d total_dur=%s",
-		result.Debug.Model,
-		result.Debug.Scope,
-		actorID,
-		result.Debug.Rows,
-		result.Debug.Books,
-		result.Created,
-		result.Updated,
-		result.Failed,
-		result.Debug.ParseDur,
-		result.Debug.ParseModelDur,
-		result.Debug.ParseValidationDur,
-		result.Debug.ParseHeaderReadDur,
-		result.Debug.ParseHeaderPrepareDur,
-		result.Debug.ParseRowContextDur,
-		result.Debug.ParseColumnsDur,
-		result.Debug.ParseConditionDur,
-		result.Debug.ParseConditionCalls,
-		result.Debug.ParseTransformsDur,
-		result.Debug.ParseTransformCalls,
-		result.Debug.ParseDateDur,
-		result.Debug.ParseDateCalls,
-		result.Debug.ParseQualityDur,
-		result.Debug.ParseQualityCalls,
-		result.Debug.ParsePersonBuildDur,
-		result.Debug.ParsePersonBuildCalls,
-		result.Debug.ResolveDur,
-		result.Debug.WriteDur,
-		result.Debug.WritePrepareDur,
-		result.Debug.WritePageLookupDur,
-		result.Debug.WriteDuplicateCheckDur,
-		result.Debug.WriteTranscripcioInsertDur,
-		result.Debug.WritePersonaResolveDur,
-		result.Debug.WritePersonaPersistDur,
-		result.Debug.WriteLinksPersistDur,
-		result.Debug.WriteCommitDur,
-		result.Debug.WriteBulkBatches,
-		result.Debug.WriteBulkRows,
-		result.Debug.WriteBulkFallbacks,
-		result.Debug.WriteBulkTranscripcioBatches,
-		result.Debug.WriteBulkPersonaBatches,
-		result.Debug.WriteBulkLinksBatches,
-		result.Debug.SidefxDur,
-		result.Debug.SidefxIndexacioStatsDur,
-		result.Debug.SidefxLoadRegistresDur,
-		result.Debug.SidefxLoadPersonesDur,
-		result.Debug.SidefxLoadAtributsDur,
-		result.Debug.SidefxComputeDur,
-		result.Debug.SidefxUpsertDur,
-		result.Debug.SidefxPageStatsDur,
-		result.Debug.SidefxIndexacioRegistres,
-		result.Debug.SidefxIndexacioPersones,
-		result.Debug.SidefxIndexacioAtributs,
-		result.Debug.TotalDur,
-	)
+	if result.Debug.Enabled {
+		Debugf(
+			"registre import model=%s scope=%s actor=%d rows=%d books=%d created=%d updated=%d failed=%d parse_dur=%s parse_model_dur=%s parse_validation_dur=%s parse_header_read_dur=%s parse_header_prepare_dur=%s parse_row_context_dur=%s parse_columns_dur=%s parse_condition_dur=%s parse_condition_calls=%d parse_transforms_dur=%s parse_transform_calls=%d parse_date_dur=%s parse_date_calls=%d parse_quality_dur=%s parse_quality_calls=%d parse_person_build_dur=%s parse_person_build_calls=%d resolve_dur=%s write_dur=%s write_prepare_dur=%s write_page_lookup_dur=%s write_duplicate_check_dur=%s write_transcripcio_insert_dur=%s write_persona_resolve_dur=%s write_persona_persist_dur=%s write_links_persist_dur=%s write_commit_dur=%s write_bulk_batches=%d write_bulk_rows=%d write_bulk_fallbacks=%d write_bulk_transcripcio_batches=%d write_bulk_persona_batches=%d write_bulk_links_batches=%d sidefx_dur=%s sidefx_indexacio_stats_dur=%s sidefx_load_registres_dur=%s sidefx_load_persones_dur=%s sidefx_load_atributs_dur=%s sidefx_compute_dur=%s sidefx_upsert_dur=%s sidefx_page_stats_dur=%s sidefx_indexacio_registres=%d sidefx_indexacio_persones=%d sidefx_indexacio_atributs=%d total_dur=%s",
+			result.Debug.Model,
+			result.Debug.Scope,
+			actorID,
+			result.Debug.Rows,
+			result.Debug.Books,
+			result.Created,
+			result.Updated,
+			result.Failed,
+			result.Debug.ParseDur,
+			result.Debug.ParseModelDur,
+			result.Debug.ParseValidationDur,
+			result.Debug.ParseHeaderReadDur,
+			result.Debug.ParseHeaderPrepareDur,
+			result.Debug.ParseRowContextDur,
+			result.Debug.ParseColumnsDur,
+			result.Debug.ParseConditionDur,
+			result.Debug.ParseConditionCalls,
+			result.Debug.ParseTransformsDur,
+			result.Debug.ParseTransformCalls,
+			result.Debug.ParseDateDur,
+			result.Debug.ParseDateCalls,
+			result.Debug.ParseQualityDur,
+			result.Debug.ParseQualityCalls,
+			result.Debug.ParsePersonBuildDur,
+			result.Debug.ParsePersonBuildCalls,
+			result.Debug.ResolveDur,
+			result.Debug.WriteDur,
+			result.Debug.WritePrepareDur,
+			result.Debug.WritePageLookupDur,
+			result.Debug.WriteDuplicateCheckDur,
+			result.Debug.WriteTranscripcioInsertDur,
+			result.Debug.WritePersonaResolveDur,
+			result.Debug.WritePersonaPersistDur,
+			result.Debug.WriteLinksPersistDur,
+			result.Debug.WriteCommitDur,
+			result.Debug.WriteBulkBatches,
+			result.Debug.WriteBulkRows,
+			result.Debug.WriteBulkFallbacks,
+			result.Debug.WriteBulkTranscripcioBatches,
+			result.Debug.WriteBulkPersonaBatches,
+			result.Debug.WriteBulkLinksBatches,
+			result.Debug.SidefxDur,
+			result.Debug.SidefxIndexacioStatsDur,
+			result.Debug.SidefxLoadRegistresDur,
+			result.Debug.SidefxLoadPersonesDur,
+			result.Debug.SidefxLoadAtributsDur,
+			result.Debug.SidefxComputeDur,
+			result.Debug.SidefxUpsertDur,
+			result.Debug.SidefxPageStatsDur,
+			result.Debug.SidefxIndexacioRegistres,
+			result.Debug.SidefxIndexacioPersones,
+			result.Debug.SidefxIndexacioAtributs,
+			result.Debug.TotalDur,
+		)
+	}
 	if result.WritePrepareBreakdown != nil && IsImportProfileEnabled() {
 		Debugf(
 			"write_prepare_breakdown build_transcripcions_batch_dur=%s build_persones_batch_dur=%s build_links_batch_dur=%s prepare_maps_slices_dur=%s prealloc_dur=%s transcripcions=%d persones=%d links=%d atributs=%d batches=%d",
@@ -459,5 +463,67 @@ func (a *App) logCSVImportDebug(actorID int, result csvImportResult) {
 				book.FieldEvaluations,
 			)
 		}
+	}
+	a.logPostgresStagingProfile(result)
+}
+
+func (a *App) logPostgresStagingProfile(result csvImportResult) {
+	if !IsPostgresStagingProfileEnabled() {
+		return
+	}
+	profile := db.DrainPostgresTemplateImportStagingProfile()
+	if len(profile.Batches) == 0 {
+		return
+	}
+	PostgresStagingProfilef(
+		"postgres_staging_profile_summary batches=%d rows=%d persones=%d atributs=%d create_drop_temp_tables_dur=%s build_rows_dur=%s copy_raw_staging_dur=%s insert_raw_final_dur=%s copy_persones_staging_dur=%s insert_persones_final_dur=%s copy_atributs_staging_dur=%s insert_atributs_final_dur=%s commit_dur=%s total_dur=%s",
+		len(profile.Batches),
+		profile.Rows,
+		profile.Persones,
+		profile.Atributs,
+		profile.CreateDropTempTablesDur,
+		profile.BuildRowsDur,
+		profile.CopyRawStagingDur,
+		profile.InsertRawFinalDur,
+		profile.CopyPersonesStagingDur,
+		profile.InsertPersonesFinalDur,
+		profile.CopyAtributsStagingDur,
+		profile.InsertAtributsFinalDur,
+		profile.CommitDur,
+		profile.TotalDur,
+	)
+	batches := append([]db.PostgresTemplateImportStagingBatchMetrics(nil), profile.Batches...)
+	sort.Slice(batches, func(i, j int) bool {
+		if batches[i].TotalDur == batches[j].TotalDur {
+			return batches[i].Index < batches[j].Index
+		}
+		return batches[i].TotalDur > batches[j].TotalDur
+	})
+	limit := 5
+	if len(batches) < limit {
+		limit = len(batches)
+	}
+	for i := 0; i < limit; i++ {
+		batch := batches[i]
+		PostgresStagingProfilef(
+			"postgres_staging_profile_top_batch rank=%d batch=%d range=%d-%d rows=%d persones=%d atributs=%d create_drop_temp_tables_dur=%s build_rows_dur=%s copy_raw_staging_dur=%s insert_raw_final_dur=%s copy_persones_staging_dur=%s insert_persones_final_dur=%s copy_atributs_staging_dur=%s insert_atributs_final_dur=%s commit_dur=%s total_dur=%s",
+			i+1,
+			batch.Index,
+			batch.RangeStart,
+			batch.RangeEnd,
+			batch.Rows,
+			batch.Persones,
+			batch.Atributs,
+			batch.CreateDropTempTablesDur,
+			batch.BuildRowsDur,
+			batch.CopyRawStagingDur,
+			batch.InsertRawFinalDur,
+			batch.CopyPersonesStagingDur,
+			batch.InsertPersonesFinalDur,
+			batch.CopyAtributsStagingDur,
+			batch.InsertAtributsFinalDur,
+			batch.CommitDur,
+			batch.TotalDur,
+		)
 	}
 }
