@@ -53,6 +53,10 @@ func IsPostgresStagingWholeImportEnabled() bool {
 	return strings.TrimSpace(os.Getenv("CG_POSTGRES_STAGING_WHOLE_IMPORT")) == "1"
 }
 
+func IsPostgresDirectChildCopyEnabled() bool {
+	return strings.TrimSpace(os.Getenv("CG_POSTGRES_DIRECT_CHILD_COPY")) == "1"
+}
+
 func Infof(format string, v ...interface{}) {
 	if currentLevel >= logInfo {
 		log.Printf("[INFO] "+format, v...)

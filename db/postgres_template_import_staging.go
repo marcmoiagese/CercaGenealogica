@@ -26,6 +26,8 @@ type PostgresTemplateImportStagingBatchMetrics struct {
 	InsertPersonesFinalDur  time.Duration
 	CopyAtributsStagingDur  time.Duration
 	InsertAtributsFinalDur  time.Duration
+	DirectPersonesCopyDur   time.Duration
+	DirectAtributsCopyDur   time.Duration
 	CommitDur               time.Duration
 	UnaccountedDur          time.Duration
 	TotalDur                time.Duration
@@ -41,6 +43,8 @@ type PostgresTemplateImportStagingMetrics struct {
 	InsertPersonesFinalDur  time.Duration
 	CopyAtributsStagingDur  time.Duration
 	InsertAtributsFinalDur  time.Duration
+	DirectPersonesCopyDur   time.Duration
+	DirectAtributsCopyDur   time.Duration
 	CommitDur               time.Duration
 	UnaccountedDur          time.Duration
 	TotalDur                time.Duration
@@ -74,6 +78,11 @@ func postgresTemplateImportStagingProfileEnabled() bool {
 	return strings.TrimSpace(os.Getenv("CG_POSTGRES_STAGING_PROFILE")) == "1"
 }
 
+func postgresTemplateImportDirectChildCopyEnabled() bool {
+	return strings.TrimSpace(os.Getenv("CG_POSTGRES_DIRECT_CHILD_COPY")) == "1" &&
+		strings.TrimSpace(os.Getenv("CG_POSTGRES_STAGING_WHOLE_IMPORT")) != "1"
+}
+
 func ResetPostgresTemplateImportStagingProfile() {
 	postgresTemplateImportStagingProfileMu.Lock()
 	defer postgresTemplateImportStagingProfileMu.Unlock()
@@ -103,6 +112,8 @@ func recordPostgresTemplateImportStagingBatch(batch PostgresTemplateImportStagin
 	postgresTemplateImportStagingProfile.InsertPersonesFinalDur += batch.InsertPersonesFinalDur
 	postgresTemplateImportStagingProfile.CopyAtributsStagingDur += batch.CopyAtributsStagingDur
 	postgresTemplateImportStagingProfile.InsertAtributsFinalDur += batch.InsertAtributsFinalDur
+	postgresTemplateImportStagingProfile.DirectPersonesCopyDur += batch.DirectPersonesCopyDur
+	postgresTemplateImportStagingProfile.DirectAtributsCopyDur += batch.DirectAtributsCopyDur
 	postgresTemplateImportStagingProfile.CommitDur += batch.CommitDur
 	postgresTemplateImportStagingProfile.UnaccountedDur += batch.UnaccountedDur
 	postgresTemplateImportStagingProfile.TotalDur += batch.TotalDur
@@ -120,10 +131,22 @@ func (m PostgresTemplateImportStagingBatchMetrics) measuredDur() time.Duration {
 		m.InsertPersonesFinalDur +
 		m.CopyAtributsStagingDur +
 		m.InsertAtributsFinalDur +
+		m.DirectPersonesCopyDur +
+		m.DirectAtributsCopyDur +
 		m.CommitDur
 }
 
 func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
+	if postgresTemplateImportDirectChildCopyEnabled() {
+		res, err := h.bulkCreateTranscripcioRawBundlesPostgresStagingTx(bundles, true)
+		if err == nil {
+			return res, nil
+		}
+	}
+	return h.bulkCreateTranscripcioRawBundlesPostgresStagingTx(bundles, false)
+}
+
+func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStagingTx(bundles []TranscripcioRawImportBundle, directChildCopy bool) (TranscripcioRawImportBulkResult, error) {
 	res := TranscripcioRawImportBulkResult{
 		IDs: make([]int, 0, len(bundles)),
 		Metrics: TranscripcioRawImportBulkMetrics{
@@ -159,7 +182,7 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 	personRows := make([]postgresTemplateImportStagedPersonaRow, 0, totalPersones)
 	attrRows := make([]postgresTemplateImportStagedAtributRow, 0, totalAtributs)
 	phaseStart := time.Now()
-	if err := h.createPostgresTemplateImportStagingTablesTx(tx); err != nil {
+	if err := h.createPostgresTemplateImportStagingTablesTx(tx, directChildCopy); err != nil {
 		return res, err
 	}
 	if stagingBatch != nil {
@@ -237,20 +260,30 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 
 	start = time.Now()
 	phaseStart = time.Now()
-	if err := h.copyInPostgresTemplateImportStagedPersonesTx(tx, personRows); err != nil {
-		res.Metrics.PersonaPersistDur += time.Since(start)
-		return res, err
-	}
-	if stagingBatch != nil {
-		stagingBatch.CopyPersonesStagingDur += time.Since(phaseStart)
-	}
-	phaseStart = time.Now()
-	if err := h.insertPostgresTemplateImportStagedPersonesTx(tx); err != nil {
-		res.Metrics.PersonaPersistDur += time.Since(start)
-		return res, err
-	}
-	if stagingBatch != nil {
-		stagingBatch.InsertPersonesFinalDur += time.Since(phaseStart)
+	if directChildCopy {
+		if err := h.copyInPostgresTemplateImportDirectPersonesTx(tx, personRows); err != nil {
+			res.Metrics.PersonaPersistDur += time.Since(start)
+			return res, err
+		}
+		if stagingBatch != nil {
+			stagingBatch.DirectPersonesCopyDur += time.Since(phaseStart)
+		}
+	} else {
+		if err := h.copyInPostgresTemplateImportStagedPersonesTx(tx, personRows); err != nil {
+			res.Metrics.PersonaPersistDur += time.Since(start)
+			return res, err
+		}
+		if stagingBatch != nil {
+			stagingBatch.CopyPersonesStagingDur += time.Since(phaseStart)
+		}
+		phaseStart = time.Now()
+		if err := h.insertPostgresTemplateImportStagedPersonesTx(tx); err != nil {
+			res.Metrics.PersonaPersistDur += time.Since(start)
+			return res, err
+		}
+		if stagingBatch != nil {
+			stagingBatch.InsertPersonesFinalDur += time.Since(phaseStart)
+		}
 	}
 	if len(personRows) > 0 {
 		res.Metrics.PersonaBatches = 1
@@ -260,20 +293,30 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 
 	start = time.Now()
 	phaseStart = time.Now()
-	if err := h.copyInPostgresTemplateImportStagedAtributsTx(tx, attrRows); err != nil {
-		res.Metrics.LinksPersistDur += time.Since(start)
-		return res, err
-	}
-	if stagingBatch != nil {
-		stagingBatch.CopyAtributsStagingDur += time.Since(phaseStart)
-	}
-	phaseStart = time.Now()
-	if err := h.insertPostgresTemplateImportStagedAtributsTx(tx); err != nil {
-		res.Metrics.LinksPersistDur += time.Since(start)
-		return res, err
-	}
-	if stagingBatch != nil {
-		stagingBatch.InsertAtributsFinalDur += time.Since(phaseStart)
+	if directChildCopy {
+		if err := h.copyInPostgresTemplateImportDirectAtributsTx(tx, attrRows); err != nil {
+			res.Metrics.LinksPersistDur += time.Since(start)
+			return res, err
+		}
+		if stagingBatch != nil {
+			stagingBatch.DirectAtributsCopyDur += time.Since(phaseStart)
+		}
+	} else {
+		if err := h.copyInPostgresTemplateImportStagedAtributsTx(tx, attrRows); err != nil {
+			res.Metrics.LinksPersistDur += time.Since(start)
+			return res, err
+		}
+		if stagingBatch != nil {
+			stagingBatch.CopyAtributsStagingDur += time.Since(phaseStart)
+		}
+		phaseStart = time.Now()
+		if err := h.insertPostgresTemplateImportStagedAtributsTx(tx); err != nil {
+			res.Metrics.LinksPersistDur += time.Since(start)
+			return res, err
+		}
+		if stagingBatch != nil {
+			stagingBatch.InsertAtributsFinalDur += time.Since(phaseStart)
+		}
 	}
 	if len(attrRows) > 0 {
 		res.Metrics.AtributBatches = 1
@@ -302,14 +345,12 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []Tra
 	return res, nil
 }
 
-func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx) error {
+func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx, directChildCopy bool) error {
 	if tx == nil {
 		return fmt.Errorf("nil tx")
 	}
 	stmts := []string{
 		`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_raw`,
-		`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_persones_raw`,
-		`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_atributs_raw`,
 		`
         CREATE TEMP TABLE tmp_template_import_transcripcions_raw
         ON COMMIT DROP AS
@@ -335,7 +376,12 @@ func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx) error
             created_by
         FROM transcripcions_raw
         WITH NO DATA`,
-		`
+	}
+	if !directChildCopy {
+		stmts = append(stmts,
+			`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_persones_raw`,
+			`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_atributs_raw`,
+			`
         CREATE TEMP TABLE tmp_template_import_transcripcions_persones_raw
         ON COMMIT DROP AS
         SELECT
@@ -386,6 +432,7 @@ func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx) error
             notes
         FROM transcripcions_atributs_raw
         WITH NO DATA`,
+		)
 	}
 	for _, stmt := range stmts {
 		if _, err := tx.Exec(stmt); err != nil {
@@ -557,6 +604,68 @@ func (h sqlHelper) insertPostgresTemplateImportStagedPersonesTx(tx *sql.Tx) erro
 	return err
 }
 
+func (h sqlHelper) copyInPostgresTemplateImportDirectPersonesTx(tx *sql.Tx, rows []postgresTemplateImportStagedPersonaRow) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	stmt, err := tx.Prepare(pq.CopyIn(
+		"transcripcions_persones_raw",
+		"transcripcio_id", "rol", "nom", "nom_estat", "cognom1", "cognom1_estat", "cognom2", "cognom2_estat",
+		"cognom_soltera", "cognom_soltera_estat", "sexe", "sexe_estat", "edat_text", "edat_estat",
+		"estat_civil_text", "estat_civil_estat", "municipi_text", "municipi_estat", "ofici_text", "ofici_estat",
+		"casa_nom", "casa_estat", "persona_id", "linked_by", "linked_at", "notes",
+	))
+	if err != nil {
+		return err
+	}
+	closeStmt := true
+	defer func() {
+		if closeStmt {
+			_ = stmt.Close()
+		}
+	}()
+	for _, row := range rows {
+		if _, err := stmt.Exec(
+			row.Row.TranscripcioID,
+			row.Row.Rol,
+			row.Row.Nom,
+			row.Row.NomEstat,
+			row.Row.Cognom1,
+			row.Row.Cognom1Estat,
+			row.Row.Cognom2,
+			row.Row.Cognom2Estat,
+			row.Row.CognomSoltera,
+			row.Row.CognomSolteraEstat,
+			row.Row.Sexe,
+			row.Row.SexeEstat,
+			row.Row.EdatText,
+			row.Row.EdatEstat,
+			row.Row.EstatCivilText,
+			row.Row.EstatCivilEstat,
+			row.Row.MunicipiText,
+			row.Row.MunicipiEstat,
+			row.Row.OficiText,
+			row.Row.OficiEstat,
+			row.Row.CasaNom,
+			row.Row.CasaEstat,
+			row.Row.PersonaID,
+			row.Row.LinkedBy,
+			row.Row.LinkedAt,
+			row.Row.Notes,
+		); err != nil {
+			return err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		return err
+	}
+	if err := stmt.Close(); err != nil {
+		return err
+	}
+	closeStmt = false
+	return nil
+}
+
 func (h sqlHelper) copyInPostgresTemplateImportStagedAtributsTx(tx *sql.Tx, rows []postgresTemplateImportStagedAtributRow) error {
 	if len(rows) == 0 {
 		return nil
@@ -615,4 +724,46 @@ func (h sqlHelper) insertPostgresTemplateImportStagedAtributsTx(tx *sql.Tx) erro
         FROM tmp_template_import_transcripcions_atributs_raw
         ORDER BY import_seq, import_subseq`)
 	return err
+}
+
+func (h sqlHelper) copyInPostgresTemplateImportDirectAtributsTx(tx *sql.Tx, rows []postgresTemplateImportStagedAtributRow) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	stmt, err := tx.Prepare(pq.CopyIn(
+		"transcripcions_atributs_raw",
+		"transcripcio_id", "clau", "tipus_valor", "valor_text", "valor_int", "valor_date", "valor_bool", "estat", "notes",
+	))
+	if err != nil {
+		return err
+	}
+	closeStmt := true
+	defer func() {
+		if closeStmt {
+			_ = stmt.Close()
+		}
+	}()
+	for _, row := range rows {
+		if _, err := stmt.Exec(
+			row.Row.TranscripcioID,
+			row.Row.Clau,
+			row.Row.TipusValor,
+			row.Row.ValorText,
+			row.Row.ValorInt,
+			row.Row.ValorDate,
+			row.Row.ValorBool,
+			row.Row.Estat,
+			row.Row.Notes,
+		); err != nil {
+			return err
+		}
+	}
+	if _, err := stmt.Exec(); err != nil {
+		return err
+	}
+	if err := stmt.Close(); err != nil {
+		return err
+	}
+	closeStmt = false
+	return nil
 }
