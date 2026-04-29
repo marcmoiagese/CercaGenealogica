@@ -41,6 +41,16 @@ func (m llibreIndexacioRecalcMetrics) TotalDur() time.Duration {
 	return m.IndexacioStatsDur() + m.PageStatsDur
 }
 
+func (m *llibreIndexacioRecalcMetrics) ensureMeasuredDuration(elapsed time.Duration) {
+	if m == nil || elapsed <= 0 || m.TotalDur() > 0 {
+		return
+	}
+	if m.TotalRegistres == 0 && m.TotalPersones == 0 && m.TotalAtributs == 0 {
+		return
+	}
+	m.ComputeDur += elapsed
+}
+
 type LlibreIndexacioView struct {
 	TotalRegistres int
 	Percentatge    int
@@ -123,8 +133,12 @@ func (a *App) recalcLlibreIndexacioStats(llibreID int) (*db.LlibreIndexacioStats
 	return stats, err
 }
 
-func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreIndexacioStats, llibreIndexacioRecalcMetrics, error) {
-	metrics := llibreIndexacioRecalcMetrics{LlibreID: llibreID}
+func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (stats *db.LlibreIndexacioStats, metrics llibreIndexacioRecalcMetrics, err error) {
+	metrics = llibreIndexacioRecalcMetrics{LlibreID: llibreID}
+	totalStart := time.Now()
+	defer func() {
+		metrics.ensureMeasuredDuration(time.Since(totalStart))
+	}()
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil {
 		return nil, metrics, err
@@ -135,7 +149,7 @@ func (a *App) recalcLlibreIndexacioStatsWithMetrics(llibreID int) (*db.LlibreInd
 	bookType := normalizeIndexerBookType(llibre.TipusLlibre)
 	fields := indexerContentFields(indexerSchema(bookType))
 	compiledFields := compileIndexFields(fields)
-	stats := &db.LlibreIndexacioStats{LlibreID: llibreID}
+	stats = &db.LlibreIndexacioStats{LlibreID: llibreID}
 	loadStart := time.Now()
 	registres, err := a.DB.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{Limit: -1})
 	metrics.LoadRegistresDur = time.Since(loadStart)
