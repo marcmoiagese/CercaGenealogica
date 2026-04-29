@@ -2,9 +2,17 @@ package core
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
+)
+
+const (
+	postgresTemplateImportBatchSizeMin = templateImportCreateBatchSize
+	postgresTemplateImportBatchSizeMax = 1500
 )
 
 func persistTemplateImportPlanPostgres(plan *TemplateImportPlan, options TemplateImportPersistOptions) TemplateImportPersistResult {
@@ -16,8 +24,9 @@ func persistTemplateImportPlanPostgres(plan *TemplateImportPlan, options Templat
 	if runtime == nil && options.App != nil {
 		runtime = db.TemplateImportRuntimeFor(options.App.DB)
 	}
-	for start := 0; start < len(plan.Rows); start += templateImportCreateBatchSize {
-		end := start + templateImportCreateBatchSize
+	batchSize := postgresTemplateImportBatchSize()
+	for start := 0; start < len(plan.Rows); start += batchSize {
+		end := start + batchSize
 		if end > len(plan.Rows) {
 			end = len(plan.Rows)
 		}
@@ -26,6 +35,24 @@ func persistTemplateImportPlanPostgres(plan *TemplateImportPlan, options Templat
 	result.Created = options.Result.Created
 	result.Failed = options.Result.Failed
 	return result
+}
+
+func postgresTemplateImportBatchSize() int {
+	value := strings.TrimSpace(os.Getenv("CG_POSTGRES_TEMPLATE_IMPORT_BATCH_SIZE"))
+	if value == "" {
+		return templateImportCreateBatchSize
+	}
+	size, err := strconv.Atoi(value)
+	if err != nil {
+		return templateImportCreateBatchSize
+	}
+	if size < postgresTemplateImportBatchSizeMin {
+		return postgresTemplateImportBatchSizeMin
+	}
+	if size > postgresTemplateImportBatchSizeMax {
+		return postgresTemplateImportBatchSizeMax
+	}
+	return size
 }
 
 func persistTemplateImportPlanPostgresBatch(rows []TemplateImportPlanRow, app *App, result *csvImportResult, runtime db.TemplateImportRuntime) {
