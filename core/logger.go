@@ -49,22 +49,6 @@ func IsPostgresStagingProfileEnabled() bool {
 	return strings.TrimSpace(os.Getenv("CG_POSTGRES_STAGING_PROFILE")) == "1"
 }
 
-func IsPostgresStagingWholeImportEnabled() bool {
-	return strings.TrimSpace(os.Getenv("CG_POSTGRES_STAGING_WHOLE_IMPORT")) == "1"
-}
-
-func IsPostgresDirectChildCopyEnabled() bool {
-	return strings.TrimSpace(os.Getenv("CG_POSTGRES_DIRECT_CHILD_COPY")) == "1"
-}
-
-func IsPostgresDirectPersonCopyEnabled() bool {
-	return IsPostgresDirectChildCopyEnabled() || strings.TrimSpace(os.Getenv("CG_POSTGRES_DIRECT_PERSON_COPY")) == "1"
-}
-
-func IsPostgresDirectAttrCopyEnabled() bool {
-	return IsPostgresDirectChildCopyEnabled() || strings.TrimSpace(os.Getenv("CG_POSTGRES_DIRECT_ATTR_COPY")) == "1"
-}
-
 func Infof(format string, v ...interface{}) {
 	if currentLevel >= logInfo {
 		log.Printf("[INFO] "+format, v...)

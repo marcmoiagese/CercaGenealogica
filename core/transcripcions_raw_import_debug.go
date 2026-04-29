@@ -476,7 +476,7 @@ func (a *App) logPostgresStagingProfile(result csvImportResult) {
 		return
 	}
 	PostgresStagingProfilef(
-		"postgres_staging_profile_summary batches=%d rows=%d persones=%d atributs=%d create_drop_temp_tables_dur=%s build_rows_dur=%s copy_raw_staging_dur=%s insert_raw_final_dur=%s copy_persones_staging_dur=%s insert_persones_final_dur=%s copy_atributs_staging_dur=%s insert_atributs_final_dur=%s direct_persones_copy_dur=%s direct_atributs_copy_dur=%s commit_dur=%s unaccounted_dur=%s total_dur=%s",
+		"postgres_staging_profile_summary batches=%d rows=%d persones=%d atributs=%d create_drop_temp_tables_dur=%s build_rows_dur=%s copy_raw_staging_dur=%s insert_raw_final_dur=%s copy_persones_staging_dur=%s insert_persones_final_dur=%s copy_atributs_staging_dur=%s insert_atributs_final_dur=%s commit_dur=%s unaccounted_dur=%s total_dur=%s",
 		len(profile.Batches),
 		profile.Rows,
 		profile.Persones,
@@ -489,16 +489,10 @@ func (a *App) logPostgresStagingProfile(result csvImportResult) {
 		profile.InsertPersonesFinalDur,
 		profile.CopyAtributsStagingDur,
 		profile.InsertAtributsFinalDur,
-		profile.DirectPersonesCopyDur,
-		profile.DirectAtributsCopyDur,
 		profile.CommitDur,
 		profile.UnaccountedDur,
 		profile.TotalDur,
 	)
-	if len(profile.Batches) == 1 && IsPostgresStagingWholeImportEnabled() {
-		logPostgresStagingTopPhases(profile.Batches[0])
-		return
-	}
 	batches := append([]db.PostgresTemplateImportStagingBatchMetrics(nil), profile.Batches...)
 	sort.Slice(batches, func(i, j int) bool {
 		if batches[i].TotalDur == batches[j].TotalDur {
@@ -513,7 +507,7 @@ func (a *App) logPostgresStagingProfile(result csvImportResult) {
 	for i := 0; i < limit; i++ {
 		batch := batches[i]
 		PostgresStagingProfilef(
-			"postgres_staging_profile_top_batch rank=%d batch=%d range=%d-%d rows=%d persones=%d atributs=%d create_drop_temp_tables_dur=%s build_rows_dur=%s copy_raw_staging_dur=%s insert_raw_final_dur=%s copy_persones_staging_dur=%s insert_persones_final_dur=%s copy_atributs_staging_dur=%s insert_atributs_final_dur=%s direct_persones_copy_dur=%s direct_atributs_copy_dur=%s commit_dur=%s unaccounted_dur=%s total_dur=%s",
+			"postgres_staging_profile_top_batch rank=%d batch=%d range=%d-%d rows=%d persones=%d atributs=%d create_drop_temp_tables_dur=%s build_rows_dur=%s copy_raw_staging_dur=%s insert_raw_final_dur=%s copy_persones_staging_dur=%s insert_persones_final_dur=%s copy_atributs_staging_dur=%s insert_atributs_final_dur=%s commit_dur=%s unaccounted_dur=%s total_dur=%s",
 			i+1,
 			batch.Index,
 			batch.RangeStart,
@@ -529,8 +523,6 @@ func (a *App) logPostgresStagingProfile(result csvImportResult) {
 			batch.InsertPersonesFinalDur,
 			batch.CopyAtributsStagingDur,
 			batch.InsertAtributsFinalDur,
-			batch.DirectPersonesCopyDur,
-			batch.DirectAtributsCopyDur,
 			batch.CommitDur,
 			batch.UnaccountedDur,
 			batch.TotalDur,
@@ -552,8 +544,6 @@ func logPostgresStagingTopPhases(batch db.PostgresTemplateImportStagingBatchMetr
 		{Name: "insert_persones_final", Dur: batch.InsertPersonesFinalDur},
 		{Name: "copy_atributs_staging", Dur: batch.CopyAtributsStagingDur},
 		{Name: "insert_atributs_final", Dur: batch.InsertAtributsFinalDur},
-		{Name: "direct_persones_copy", Dur: batch.DirectPersonesCopyDur},
-		{Name: "direct_atributs_copy", Dur: batch.DirectAtributsCopyDur},
 		{Name: "commit", Dur: batch.CommitDur},
 		{Name: "unaccounted", Dur: batch.UnaccountedDur},
 	}
