@@ -564,6 +564,49 @@ func (d *PostgreSQL) CountNivells(f NivellAdminFilter) (int, error) {
 func (d *PostgreSQL) GetNivell(id int) (*NivellAdministratiu, error) {
 	return d.help.getNivell(id)
 }
+func (d *PostgreSQL) GetNivellsByIDs(ids []int) ([]*NivellAdministratiu, error) {
+	cleanIDs := make([]int, 0, len(ids))
+	seen := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		cleanIDs = append(cleanIDs, id)
+	}
+	if len(cleanIDs) == 0 {
+		return nil, nil
+	}
+	query := `
+        SELECT n.id, n.pais_id, pi.codi_iso2, n.nivel, n.nom_nivell, n.tipus_nivell, n.codi_oficial, n.altres,
+               n.parent_id, p.nom_nivell as parent_nom, n.any_inici, n.any_fi, n.estat,
+               n.created_by, n.moderation_status, n.moderated_by, n.moderated_at, n.moderation_notes
+        FROM nivells_administratius n
+        LEFT JOIN nivells_administratius p ON p.id = n.parent_id
+        LEFT JOIN paisos pi ON pi.id = n.pais_id
+        WHERE n.id = ANY($1)`
+	rows, err := d.Conn.Query(query, pq.Array(intIDsToInt64Slice(cleanIDs)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]*NivellAdministratiu, 0, len(cleanIDs))
+	for rows.Next() {
+		var n NivellAdministratiu
+		if err := rows.Scan(&n.ID, &n.PaisID, &n.PaisISO2, &n.Nivel, &n.NomNivell, &n.TipusNivell, &n.CodiOficial, &n.Altres, &n.ParentID, &n.ParentNom, &n.AnyInici, &n.AnyFi, &n.Estat,
+			&n.CreatedBy, &n.ModeracioEstat, &n.ModeratedBy, &n.ModeratedAt, &n.ModeracioMotiu); err != nil {
+			return nil, err
+		}
+		out = append(out, &n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 func (d *PostgreSQL) CreateNivell(n *NivellAdministratiu) (int, error) {
 	return d.help.createNivell(n)
 }
@@ -596,6 +639,54 @@ func (d *PostgreSQL) SuggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggest
 }
 func (d *PostgreSQL) GetMunicipi(id int) (*Municipi, error) {
 	return d.help.getMunicipi(id)
+}
+func (d *PostgreSQL) GetMunicipisByIDs(ids []int) ([]*Municipi, error) {
+	cleanIDs := make([]int, 0, len(ids))
+	seen := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		cleanIDs = append(cleanIDs, id)
+	}
+	if len(cleanIDs) == 0 {
+		return nil, nil
+	}
+	query := `
+        SELECT id, nom, municipi_id, tipus,
+               nivell_administratiu_id_1, nivell_administratiu_id_2, nivell_administratiu_id_3,
+               nivell_administratiu_id_4, nivell_administratiu_id_5, nivell_administratiu_id_6, nivell_administratiu_id_7,
+               codi_postal, latitud, longitud, what3words, web, wikipedia, altres, estat,
+               created_by, moderation_status, moderated_by, moderated_at, moderation_notes
+        FROM municipis
+        WHERE id = ANY($1)`
+	rows, err := d.Conn.Query(query, pq.Array(intIDsToInt64Slice(cleanIDs)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]*Municipi, 0, len(cleanIDs))
+	for rows.Next() {
+		var m Municipi
+		if err := rows.Scan(
+			&m.ID, &m.Nom, &m.MunicipiID, &m.Tipus,
+			&m.NivellAdministratiuID[0], &m.NivellAdministratiuID[1], &m.NivellAdministratiuID[2],
+			&m.NivellAdministratiuID[3], &m.NivellAdministratiuID[4], &m.NivellAdministratiuID[5], &m.NivellAdministratiuID[6],
+			&m.CodiPostal, &m.Latitud, &m.Longitud, &m.What3Words, &m.Web, &m.Wikipedia, &m.Altres, &m.Estat,
+			&m.CreatedBy, &m.ModeracioEstat, &m.ModeratedBy, &m.ModeratedAt, &m.ModeracioMotiu,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, &m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 func (d *PostgreSQL) CreateMunicipi(m *Municipi) (int, error) {
 	return d.help.createMunicipi(m)
@@ -2635,7 +2726,7 @@ func (d *PostgreSQL) ReplaceAdminClosureBulk(descendantMunicipiIDs []int, entrie
 		return metrics, err
 	}
 	deleteStart := time.Now()
-	if _, err := tx.Exec(`DELETE FROM admin_closure WHERE descendant_municipi_id = ANY($1)`, pq.Array(ids)); err != nil {
+	if _, err := tx.Exec(`DELETE FROM admin_closure WHERE descendant_municipi_id = ANY($1)`, pq.Array(intIDsToInt64Slice(ids))); err != nil {
 		_ = tx.Rollback()
 		return metrics, err
 	}

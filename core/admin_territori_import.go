@@ -922,6 +922,14 @@ type territoriAdminClosureBulkReplacer interface {
 	ReplaceAdminClosureBulk(descendantMunicipiIDs []int, entries []db.AdminClosureEntry) (db.AdminClosureBulkMetrics, error)
 }
 
+type territoriMunicipisBulkLoader interface {
+	GetMunicipisByIDs(ids []int) ([]*db.Municipi, error)
+}
+
+type territoriNivellsBulkLoader interface {
+	GetNivellsByIDs(ids []int) ([]*db.NivellAdministratiu, error)
+}
+
 func (a *App) runTerritoriImportClosureSidefx(sidefx *TerritoriImportSidefxPlan, metrics *TerritoriImportMetrics) {
 	closureStart := time.Now()
 	mode := "generic-legacy"
@@ -952,39 +960,86 @@ func (a *App) runTerritoriImportClosureSidefx(sidefx *TerritoriImportSidefxPlan,
 func (a *App) runTerritoriImportClosurePostgresBulk(sidefx *TerritoriImportSidefxPlan, metrics *TerritoriImportMetrics, replacer territoriAdminClosureBulkReplacer) bool {
 	buildStart := time.Now()
 	municipiIDs := dedupeIntSlice(sidefx.AffectedMunicipiIDs)
-	municipis := make([]*db.Municipi, 0, len(municipiIDs))
-	levelIDs := make(map[int]struct{})
 	closureErrorsBefore := sidefx.ClosureErrors
+
+	loadMunicipisStart := time.Now()
+	loader, ok := a.DB.(territoriMunicipisBulkLoader)
+	if !ok {
+		return false
+	}
+	municipis, err := loader.GetMunicipisByIDs(municipiIDs)
+	if metrics != nil {
+		metrics.SidefxClosureLoadMunicipisDur += time.Since(loadMunicipisStart)
+	}
+	if err != nil {
+		Errorf("Territori import: bulk load municipis per admin_closure fallit, es fa fallback legacy: %v", err)
+		return false
+	}
+	municipisByID := make(map[int]*db.Municipi, len(municipis))
+	for _, mun := range municipis {
+		if mun != nil && mun.ID > 0 {
+			municipisByID[mun.ID] = mun
+		}
+	}
+	orderedMunicipis := make([]*db.Municipi, 0, len(municipisByID))
+	levelIDs := make(map[int]struct{})
 	for _, municipiID := range municipiIDs {
-		mun, err := a.DB.GetMunicipi(municipiID)
-		if err != nil || mun == nil {
+		mun := municipisByID[municipiID]
+		if mun == nil {
 			sidefx.ClosureErrors++
-			if err != nil {
-				Errorf("Territori import: no s'ha pogut carregar municipi %d per rebuild closure: %v", municipiID, err)
-			}
+			Errorf("Territori import: no s'ha pogut carregar municipi %d per rebuild closure: %v", municipiID, sql.ErrNoRows)
 			continue
 		}
-		municipis = append(municipis, mun)
+		orderedMunicipis = append(orderedMunicipis, mun)
 		for _, level := range mun.NivellAdministratiuID {
 			if level.Valid && level.Int64 > 0 {
 				levelIDs[int(level.Int64)] = struct{}{}
 			}
 		}
 	}
+
+	loadLevelsStart := time.Now()
 	levelsByID := make(map[int]db.NivellAdministratiu, len(levelIDs))
-	for nivellID := range levelIDs {
-		lvl, err := a.DB.GetNivell(nivellID)
-		if err == nil && lvl != nil {
-			levelsByID[nivellID] = *lvl
+	levelIDList := make([]int, 0, len(levelIDs))
+	for id := range levelIDs {
+		levelIDList = append(levelIDList, id)
+	}
+	if levelLoader, ok := a.DB.(territoriNivellsBulkLoader); ok {
+		levels, err := levelLoader.GetNivellsByIDs(levelIDList)
+		if metrics != nil {
+			metrics.SidefxClosureLoadLevelsDur += time.Since(loadLevelsStart)
+		}
+		if err != nil {
+			Errorf("Territori import: bulk load nivells per admin_closure fallit, es fa fallback legacy: %v", err)
+			sidefx.ClosureErrors = closureErrorsBefore
+			return false
+		}
+		for _, lvl := range levels {
+			if lvl != nil && lvl.ID > 0 {
+				levelsByID[lvl.ID] = *lvl
+			}
+		}
+	} else {
+		for _, nivellID := range levelIDList {
+			lvl, err := a.DB.GetNivell(nivellID)
+			if err == nil && lvl != nil {
+				levelsByID[nivellID] = *lvl
+			}
+		}
+		if metrics != nil {
+			metrics.SidefxClosureLoadLevelsDur += time.Since(loadLevelsStart)
 		}
 	}
-	entries := make([]db.AdminClosureEntry, 0, len(municipis)*4)
-	replaceMunicipiIDs := make([]int, 0, len(municipis))
-	for _, mun := range municipis {
+
+	buildEntriesStart := time.Now()
+	entries := make([]db.AdminClosureEntry, 0, len(orderedMunicipis)*4)
+	replaceMunicipiIDs := make([]int, 0, len(orderedMunicipis))
+	for _, mun := range orderedMunicipis {
 		replaceMunicipiIDs = append(replaceMunicipiIDs, mun.ID)
 		entries = append(entries, buildAdminClosureEntriesWithLevels(mun, levelsByID)...)
 	}
 	if metrics != nil {
+		metrics.SidefxClosureBuildEntriesDur += time.Since(buildEntriesStart)
 		metrics.SidefxClosureBuildDur += time.Since(buildStart)
 		metrics.SidefxClosureMunicipis = len(municipiIDs)
 		metrics.SidefxClosureEntries = len(entries)
@@ -1021,7 +1076,7 @@ func (a *App) runTerritoriImportClosureLegacy(sidefx *TerritoriImportSidefxPlan)
 }
 
 func (a *App) logTerritoriImport(plan TerritoriImportPlan, result TerritoriImportPersistResult, metrics TerritoriImportMetrics) {
-	Infof("Territori import: engine=%s modes=%s/%s/%s activity=%s parse_dur=%s prep_dur=%s countries_dur=%s levels_build_dur=%s levels_persist_dur=%s municipis_existing_lookup_dur=%s municipis_build_dur=%s municipis_persist_dur=%s parents_build_dur=%s parents_persist_dur=%s sidefx_closure_dur=%s sidefx_closure_build_dur=%s sidefx_closure_delete_dur=%s sidefx_closure_insert_dur=%s sidefx_closure_municipis=%d sidefx_closure_entries=%d sidefx_closure_mode=%s sidefx_rebuild_demografia_dur=%s sidefx_rebuild_nom_cognom_dur=%s sidefx_activities_dur=%s sidefx_achievements_dur=%s total_dur=%s totals=%d created=%d skipped=%d errors=%d parentErrors=%d closureErrors=%d rebuildErrors=%d",
+	Infof("Territori import: engine=%s modes=%s/%s/%s activity=%s parse_dur=%s prep_dur=%s countries_dur=%s levels_build_dur=%s levels_persist_dur=%s municipis_existing_lookup_dur=%s municipis_build_dur=%s municipis_persist_dur=%s parents_build_dur=%s parents_persist_dur=%s sidefx_closure_dur=%s sidefx_closure_build_dur=%s sidefx_closure_load_municipis_dur=%s sidefx_closure_load_levels_dur=%s sidefx_closure_build_entries_dur=%s sidefx_closure_delete_dur=%s sidefx_closure_insert_dur=%s sidefx_closure_municipis=%d sidefx_closure_entries=%d sidefx_closure_mode=%s sidefx_rebuild_demografia_dur=%s sidefx_rebuild_nom_cognom_dur=%s sidefx_activities_dur=%s sidefx_achievements_dur=%s total_dur=%s totals=%d created=%d skipped=%d errors=%d parentErrors=%d closureErrors=%d rebuildErrors=%d",
 		plan.Engine,
 		result.BulkModeLevels,
 		result.BulkModeMunicipis,
@@ -1039,6 +1094,9 @@ func (a *App) logTerritoriImport(plan TerritoriImportPlan, result TerritoriImpor
 		metrics.ParentsPersistDur.String(),
 		metrics.SidefxClosureDur.String(),
 		metrics.SidefxClosureBuildDur.String(),
+		metrics.SidefxClosureLoadMunicipisDur.String(),
+		metrics.SidefxClosureLoadLevelsDur.String(),
+		metrics.SidefxClosureBuildEntriesDur.String(),
 		metrics.SidefxClosureDeleteDur.String(),
 		metrics.SidefxClosureInsertDur.String(),
 		metrics.SidefxClosureMunicipis,

@@ -57,20 +57,23 @@ type TerritoriImportMetrics struct {
 	MunicipisExistingLookupDur time.Duration
 	MunicipisBuildDur          time.Duration
 	MunicipisPersistDur        time.Duration
-	ParentsBuildDur            time.Duration
-	ParentsPersistDur          time.Duration
-	SidefxClosureDur           time.Duration
-	SidefxClosureBuildDur      time.Duration
-	SidefxClosureDeleteDur     time.Duration
-	SidefxClosureInsertDur     time.Duration
-	SidefxClosureMunicipis     int
-	SidefxClosureEntries       int
-	SidefxClosureMode          string
-	SidefxRebuildDemografiaDur time.Duration
-	SidefxRebuildNomCognomDur  time.Duration
-	SidefxActivitiesDur        time.Duration
-	SidefxAchievementsDur      time.Duration
-	TotalDur                   time.Duration
+	ParentsBuildDur               time.Duration
+	ParentsPersistDur             time.Duration
+	SidefxClosureDur              time.Duration
+	SidefxClosureBuildDur         time.Duration
+	SidefxClosureLoadMunicipisDur time.Duration
+	SidefxClosureLoadLevelsDur    time.Duration
+	SidefxClosureBuildEntriesDur  time.Duration
+	SidefxClosureDeleteDur        time.Duration
+	SidefxClosureInsertDur        time.Duration
+	SidefxClosureMunicipis        int
+	SidefxClosureEntries          int
+	SidefxClosureMode             string
+	SidefxRebuildDemografiaDur    time.Duration
+	SidefxRebuildNomCognomDur     time.Duration
+	SidefxActivitiesDur           time.Duration
+	SidefxAchievementsDur         time.Duration
+	TotalDur                      time.Duration
 }
 
 type territoriImportActivityRule struct {
