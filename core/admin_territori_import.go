@@ -320,60 +320,70 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+	metrics := TerritoriImportMetrics{}
 	var payload territoriExportPayload
+	parseStart := time.Now()
 	dec := json.NewDecoder(file)
 	if err := dec.Decode(&payload); err != nil {
 		a.logAdminImportRun(r, "territori", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
+	metrics.ParseDur = time.Since(parseStart)
+	plan, err := a.buildTerritoriImportPlan(payload, user.ID, &metrics)
+	if err != nil {
+		a.logAdminImportRun(r, "territori", adminImportStatusError, user.ID)
+		http.Redirect(w, r, "/admin/territori/import?err=1", http.StatusSeeOther)
+		return
+	}
+	result := a.persistTerritoriImportPlan(r.Context(), plan, &metrics)
+	a.runTerritoriImportSidefx(r.Context(), &result.Sidefx, &metrics)
+	metrics.TotalDur = time.Since(start)
+	a.logTerritoriImport(plan, result, metrics)
+	redirect := withQueryParams(returnTo, map[string]string{
+		"import":            "1",
+		"countries_created": strconv.Itoa(result.CountriesCreated),
+		"levels_total":      strconv.Itoa(result.LevelsTotal),
+		"levels_created":    strconv.Itoa(result.LevelsCreated),
+		"levels_skipped":    strconv.Itoa(result.LevelsSkipped),
+		"levels_errors":     strconv.Itoa(result.LevelsErrors),
+		"municipis_total":   strconv.Itoa(result.MunicipisTotal),
+		"municipis_created": strconv.Itoa(result.MunicipisCreated),
+		"municipis_skipped": strconv.Itoa(result.MunicipisSkipped),
+		"municipis_errors":  strconv.Itoa(result.MunicipisErrors),
+		"closure_errors":    strconv.Itoa(result.Sidefx.ClosureErrors),
+		"rebuild_errors":    strconv.Itoa(result.Sidefx.RebuildErrors),
+	})
+	status := adminImportStatusOK
+	if result.LevelsErrors > 0 || result.MunicipisErrors > 0 || result.ParentErrors > 0 || result.Sidefx.ClosureErrors > 0 || result.Sidefx.RebuildErrors > 0 {
+		status = adminImportStatusError
+	}
+	a.logAdminImportRun(r, "territori", status, user.ID)
+	http.Redirect(w, r, redirect, http.StatusSeeOther)
+}
+
+func (a *App) buildTerritoriImportPlan(payload territoriExportPayload, userID int, metrics *TerritoriImportMetrics) (TerritoriImportPlan, error) {
+	prepStart := time.Now()
 	engine := territoriImportEngineName(a.DB)
 	bulkInserter, hasBulkInserter := a.DB.(territoriBulkInserter)
-	activityCount := 0
-	type activityRule struct {
-		ruleID sql.NullInt64
-		points int
-	}
-	resolveActivityRule := func(code string) activityRule {
+	resolveActivityRule := func(code string) territoriImportActivityRule {
 		if code == "" {
-			return activityRule{}
+			return territoriImportActivityRule{}
 		}
 		rule, err := a.DB.GetPointsRuleByCode(code)
 		if err != nil || rule == nil || !rule.Active {
-			return activityRule{}
+			return territoriImportActivityRule{}
 		}
-		return activityRule{
+		return territoriImportActivityRule{
 			ruleID: sql.NullInt64{Int64: int64(rule.ID), Valid: true},
 			points: rule.Points,
 		}
 	}
 	activityRuleNivell := resolveActivityRule(ruleNivellCreate)
 	activityRuleMunicipi := resolveActivityRule(ruleMunicipiCreate)
-	pendingActivities := make([]db.UserActivity, 0, len(payload.Levels)+len(payload.Municipis))
-	addActivity := func(rule activityRule, objectType string, objectID int) {
-		if objectID <= 0 {
-			return
-		}
-		pendingActivities = append(pendingActivities, db.UserActivity{
-			UserID:     user.ID,
-			RuleID:     rule.ruleID,
-			Action:     "crear",
-			ObjectType: objectType,
-			ObjectID:   sql.NullInt64{Int64: int64(objectID), Valid: true},
-			Points:     rule.points,
-			Status:     "pendent",
-			Details:    "import",
-		})
-	}
-	bulkModeLevels := "generic"
-	bulkModeMunicipis := "generic"
-	bulkModeParents := "generic"
-	prepStart := time.Now()
 	paisos, err := a.DB.ListPaisos()
 	if err != nil {
-		a.logAdminImportRun(r, "territori", adminImportStatusError, user.ID)
-		http.Redirect(w, r, "/admin/territori/import?err=1", http.StatusSeeOther)
-		return
+		return TerritoriImportPlan{}, err
 	}
 	paisByISO2 := map[string]db.Pais{}
 	for _, p := range paisos {
@@ -392,8 +402,55 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 			levelKeyMap[key] = n.ID
 		}
 	}
-	prepDuration := time.Since(prepStart)
-	countriesCreated := 0
+	if metrics != nil {
+		metrics.PrepDur += time.Since(prepStart)
+	}
+	return TerritoriImportPlan{
+		Payload:            payload,
+		UserID:             userID,
+		Engine:             engine,
+		BulkInserter:       bulkInserter,
+		HasBulkInserter:    hasBulkInserter,
+		PaisByISO2:         paisByISO2,
+		LevelKeyMap:        levelKeyMap,
+		ExistingLevelsByID: existingLevelsByID,
+		ActivityRuleNivell: activityRuleNivell,
+		ActivityRuleMun:    activityRuleMunicipi,
+	}, nil
+}
+
+func (a *App) persistTerritoriImportPlan(ctx context.Context, plan TerritoriImportPlan, metrics *TerritoriImportMetrics) TerritoriImportPersistResult {
+	payload := plan.Payload
+	paisByISO2 := plan.PaisByISO2
+	levelKeyMap := plan.LevelKeyMap
+	existingLevelsByID := plan.ExistingLevelsByID
+	result := TerritoriImportPersistResult{
+		LevelsTotal:       len(payload.Levels),
+		MunicipisTotal:    len(payload.Municipis),
+		BulkModeLevels:    "generic",
+		BulkModeMunicipis: "generic",
+		BulkModeParents:   "generic",
+		Sidefx: TerritoriImportSidefxPlan{
+			UserID:            plan.UserID,
+			PendingActivities: make([]db.UserActivity, 0, len(payload.Levels)+len(payload.Municipis)),
+		},
+	}
+	addActivity := func(rule territoriImportActivityRule, objectType string, objectID int) {
+		if objectID <= 0 {
+			return
+		}
+		result.Sidefx.PendingActivities = append(result.Sidefx.PendingActivities, db.UserActivity{
+			UserID:     plan.UserID,
+			RuleID:     rule.ruleID,
+			Action:     "crear",
+			ObjectType: objectType,
+			ObjectID:   sql.NullInt64{Int64: int64(objectID), Valid: true},
+			Points:     rule.points,
+			Status:     "pendent",
+			Details:    "import",
+		})
+	}
+	countriesStart := time.Now()
 	for _, c := range payload.Countries {
 		iso2 := strings.ToUpper(strings.TrimSpace(c.ISO2))
 		if iso2 == "" {
@@ -411,15 +468,13 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		paisByISO2[iso2] = p
-		countriesCreated++
+		result.CountriesCreated++
+	}
+	if metrics != nil {
+		metrics.CountriesDur += time.Since(countriesStart)
 	}
 
 	levelIDMap := map[int]int{}
-	levelsTotal := len(payload.Levels)
-	levelsCreated := 0
-	levelsSkipped := 0
-	levelsErrors := 0
-	levelsStart := time.Now()
 	pending := make([]territoriExportLevel, 0, len(payload.Levels))
 	for _, l := range payload.Levels {
 		pending = append(pending, l)
@@ -437,13 +492,14 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 			exportID int
 			key      string
 		}
+		levelsBuildStart := time.Now()
 		toInsert := make([]db.NivellAdministratiu, 0, len(pending))
 		insertMeta := make([]levelInsertMeta, 0, len(pending))
 		for _, l := range pending {
 			iso2 := strings.ToUpper(strings.TrimSpace(l.PaisISO2))
 			pais, ok := paisByISO2[iso2]
 			if !ok || iso2 == "" {
-				levelsSkipped++
+				result.LevelsSkipped++
 				continue
 			}
 			var parent sql.NullInt64
@@ -466,7 +522,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 				AnyInici:       intPtrToNull(l.AnyInici),
 				AnyFi:          intPtrToNull(l.AnyFi),
 				Estat:          strings.TrimSpace(l.Estat),
-				CreatedBy:      sql.NullInt64{Int64: int64(user.ID), Valid: true},
+				CreatedBy:      sql.NullInt64{Int64: int64(plan.UserID), Valid: true},
 				ModeracioEstat: territoriImportStatusForNewObject(l.Status),
 			}
 			if n.Estat == "" {
@@ -484,7 +540,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 							existingLevelsByID[existingID] = existing
 						}
 					}
-					levelsSkipped++
+					result.LevelsSkipped++
 					progressed = true
 					continue
 				}
@@ -492,6 +548,10 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 			toInsert = append(toInsert, n)
 			insertMeta = append(insertMeta, levelInsertMeta{exportID: l.ID, key: key})
 		}
+		if metrics != nil {
+			metrics.LevelsBuildDur += time.Since(levelsBuildStart)
+		}
+		levelsPersistStart := time.Now()
 		if len(toInsert) > 0 {
 			applyInserted := func(ids []int) {
 				for i, id := range ids {
@@ -502,35 +562,35 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 					inserted := toInsert[i]
 					inserted.ID = id
 					existingLevelsByID[id] = inserted
-					levelsCreated++
+					result.LevelsCreated++
 					progressed = true
-					activityCount++
-					addActivity(activityRuleNivell, "nivell", id)
+					result.Sidefx.ActivityCount++
+					addActivity(plan.ActivityRuleNivell, "nivell", id)
 				}
 			}
 			var ids []int
 			var mode string
 			var err error
 			bulkAttempted := false
-			if hasBulkInserter {
+			if plan.HasBulkInserter {
 				bulkAttempted = true
-				ids, mode, err = bulkInserter.BulkInsertNivells(r.Context(), toInsert)
+				ids, mode, err = plan.BulkInserter.BulkInsertNivells(ctx, toInsert)
 				if mode != "" {
-					bulkModeLevels = mode
+					result.BulkModeLevels = mode
 				}
 			}
 			if err == nil && len(ids) == len(toInsert) {
 				applyInserted(ids)
 			} else {
 				if err != nil && bulkAttempted {
-					Errorf("Territori import: bulk insert nivells fallit (%s): %v", bulkModeLevels, err)
+					Errorf("Territori import: bulk insert nivells fallit (%s): %v", result.BulkModeLevels, err)
 				}
-				bulkModeLevels = "generic"
+				result.BulkModeLevels = "generic"
 				for i := range toInsert {
 					n := toInsert[i]
 					id, err := a.DB.CreateNivell(&n)
 					if err != nil {
-						levelsErrors++
+						result.LevelsErrors++
 						continue
 					}
 					levelIDMap[insertMeta[i].exportID] = id
@@ -538,21 +598,24 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 						levelKeyMap[insertMeta[i].key] = id
 					}
 					existingLevelsByID[id] = n
-					levelsCreated++
+					result.LevelsCreated++
 					progressed = true
-					activityCount++
-					addActivity(activityRuleNivell, "nivell", id)
+					result.Sidefx.ActivityCount++
+					addActivity(plan.ActivityRuleNivell, "nivell", id)
 				}
 			}
 		}
+		if metrics != nil {
+			metrics.LevelsPersistDur += time.Since(levelsPersistStart)
+		}
 		if !progressed {
-			levelsSkipped += len(next)
+			result.LevelsSkipped += len(next)
 			break
 		}
 		pending = next
 	}
-	levelsDuration := time.Since(levelsStart)
 
+	municipisLookupStart := time.Now()
 	existingMunicipiKey := map[string]int{}
 	existingMunicipiParent := map[int]int{}
 	duplicateMunicipiKeys := map[string]struct{}{}
@@ -599,13 +662,12 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if metrics != nil {
+		metrics.MunicipisExistingLookupDur += time.Since(municipisLookupStart)
+	}
 
-	municipisTotal := len(payload.Municipis)
-	municipisCreated := 0
-	municipisSkipped := 0
-	municipisErrors := 0
 	munIDMap := map[int]int{}
-	municipisStart := time.Now()
+	municipisBuildStart := time.Now()
 	type municipiInsertMeta struct {
 		exportID  int
 		oldParent int
@@ -620,7 +682,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 	parentCandidates := make([]municipiParentCandidate, 0, len(payload.Municipis))
 	for _, mu := range payload.Municipis {
 		if strings.TrimSpace(mu.Nom) == "" {
-			municipisSkipped++
+			result.MunicipisSkipped++
 			continue
 		}
 		nivells := normalizeNivellSlice(mu.Nivells)
@@ -638,7 +700,7 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		if m.Estat == "" {
 			m.Estat = "actiu"
 		}
-		m.CreatedBy = sql.NullInt64{Int64: int64(user.ID), Valid: true}
+		m.CreatedBy = sql.NullInt64{Int64: int64(plan.UserID), Valid: true}
 		m.ModeracioEstat = territoriImportStatusForNewObject(mu.Status)
 		for i := 0; i < 7; i++ {
 			if nivells[i] > 0 {
@@ -662,18 +724,18 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 						Errorf("Territori import: no s'ha pogut reparar status municipi id=%d: %v", existingID, err)
 					}
 				}
-				municipisSkipped++
+				result.MunicipisSkipped++
 				if oldParent > 0 {
 					parentCandidates = append(parentCandidates, municipiParentCandidate{childID: existingID, oldParent: oldParent})
 				}
 				continue
 			}
 			if _, dup := duplicateMunicipiKeys[key]; dup {
-				municipisSkipped++
+				result.MunicipisSkipped++
 				continue
 			}
 			if _, seen := seenMunicipiKeys[key]; seen {
-				municipisSkipped++
+				result.MunicipisSkipped++
 				continue
 			}
 			seenMunicipiKeys[key] = struct{}{}
@@ -681,14 +743,18 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		toInsertMunicipis = append(toInsertMunicipis, m)
 		insertMeta = append(insertMeta, municipiInsertMeta{exportID: mu.ID, oldParent: oldParent})
 	}
+	if metrics != nil {
+		metrics.MunicipisBuildDur += time.Since(municipisBuildStart)
+	}
+	municipisPersistStart := time.Now()
 	if len(toInsertMunicipis) > 0 {
 		applyInserted := func(ids []int) {
 			for i, id := range ids {
 				meta := insertMeta[i]
 				munIDMap[meta.exportID] = id
-				municipisCreated++
-				activityCount++
-				addActivity(activityRuleMunicipi, "municipi", id)
+				result.MunicipisCreated++
+				result.Sidefx.ActivityCount++
+				addActivity(plan.ActivityRuleMun, "municipi", id)
 				if meta.oldParent > 0 {
 					parentCandidates = append(parentCandidates, municipiParentCandidate{childID: id, oldParent: meta.oldParent})
 				}
@@ -698,39 +764,41 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		var mode string
 		var err error
 		bulkAttempted := false
-		if hasBulkInserter {
+		if plan.HasBulkInserter {
 			bulkAttempted = true
-			ids, mode, err = bulkInserter.BulkInsertMunicipis(r.Context(), toInsertMunicipis)
+			ids, mode, err = plan.BulkInserter.BulkInsertMunicipis(ctx, toInsertMunicipis)
 			if mode != "" {
-				bulkModeMunicipis = mode
+				result.BulkModeMunicipis = mode
 			}
 		}
 		if err == nil && len(ids) == len(toInsertMunicipis) {
 			applyInserted(ids)
 		} else {
 			if err != nil && bulkAttempted {
-				Errorf("Territori import: bulk insert municipis fallit (%s): %v", bulkModeMunicipis, err)
+				Errorf("Territori import: bulk insert municipis fallit (%s): %v", result.BulkModeMunicipis, err)
 			}
-			bulkModeMunicipis = "generic"
+			result.BulkModeMunicipis = "generic"
 			for i := range toInsertMunicipis {
 				m := toInsertMunicipis[i]
 				newID, err := a.DB.CreateMunicipi(&m)
 				if err != nil {
-					municipisErrors++
+					result.MunicipisErrors++
 					continue
 				}
 				munIDMap[insertMeta[i].exportID] = newID
-				municipisCreated++
-				activityCount++
-				addActivity(activityRuleMunicipi, "municipi", newID)
+				result.MunicipisCreated++
+				result.Sidefx.ActivityCount++
+				addActivity(plan.ActivityRuleMun, "municipi", newID)
 				if insertMeta[i].oldParent > 0 {
 					parentCandidates = append(parentCandidates, municipiParentCandidate{childID: newID, oldParent: insertMeta[i].oldParent})
 				}
 			}
 		}
 	}
-	parentStart := time.Now()
-	parentErrors := 0
+	if metrics != nil {
+		metrics.MunicipisPersistDur += time.Since(municipisPersistStart)
+	}
+	parentBuildStart := time.Now()
 	parentUpdates := make([]db.MunicipiParentUpdate, 0, len(parentCandidates))
 	for _, cand := range parentCandidates {
 		if cand.oldParent <= 0 {
@@ -743,49 +811,66 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 			parentUpdates = append(parentUpdates, db.MunicipiParentUpdate{ID: cand.childID, ParentID: newParent})
 		}
 	}
+	if metrics != nil {
+		metrics.ParentsBuildDur += time.Since(parentBuildStart)
+	}
+	parentPersistStart := time.Now()
 	if len(parentUpdates) > 0 {
 		var mode string
 		var err error
 		bulkAttempted := false
-		if hasBulkInserter {
+		if plan.HasBulkInserter {
 			bulkAttempted = true
-			mode, err = bulkInserter.BulkUpdateMunicipiParents(r.Context(), parentUpdates)
+			mode, err = plan.BulkInserter.BulkUpdateMunicipiParents(ctx, parentUpdates)
 			if mode != "" {
-				bulkModeParents = mode
+				result.BulkModeParents = mode
 			}
 		}
-		if !hasBulkInserter || err != nil {
+		if !plan.HasBulkInserter || err != nil {
 			if err != nil && bulkAttempted {
-				Errorf("Territori import: bulk update parents fallit (%s): %v", bulkModeParents, err)
+				Errorf("Territori import: bulk update parents fallit (%s): %v", result.BulkModeParents, err)
 			}
-			bulkModeParents = "generic"
+			result.BulkModeParents = "generic"
 			for _, upd := range parentUpdates {
 				mun, err := a.DB.GetMunicipi(upd.ID)
 				if err != nil {
-					parentErrors++
+					result.ParentErrors++
 					continue
 				}
 				mun.MunicipiID = sql.NullInt64{Int64: int64(upd.ParentID), Valid: true}
 				if err := a.DB.UpdateMunicipi(mun); err != nil {
-					parentErrors++
+					result.ParentErrors++
 				}
 			}
 		}
 	}
-	parentDuration := time.Since(parentStart)
-	municipisDuration := time.Since(municipisStart)
-	closureStart := time.Now()
-	closureErrors := 0
-	affectedMunicipiIDs := make([]int, 0, len(munIDMap))
+	if metrics != nil {
+		metrics.ParentsPersistDur += time.Since(parentPersistStart)
+	}
+	result.Sidefx.AffectedMunicipiIDs = make([]int, 0, len(munIDMap))
 	for _, id := range munIDMap {
 		if id > 0 {
-			affectedMunicipiIDs = append(affectedMunicipiIDs, id)
+			result.Sidefx.AffectedMunicipiIDs = append(result.Sidefx.AffectedMunicipiIDs, id)
 		}
 	}
-	for _, municipiID := range dedupeIntSlice(affectedMunicipiIDs) {
+	result.Sidefx.AffectedLevelIDs = make([]int, 0, len(levelIDMap))
+	for _, id := range levelIDMap {
+		if id > 0 {
+			result.Sidefx.AffectedLevelIDs = append(result.Sidefx.AffectedLevelIDs, id)
+		}
+	}
+	return result
+}
+
+func (a *App) runTerritoriImportSidefx(ctx context.Context, sidefx *TerritoriImportSidefxPlan, metrics *TerritoriImportMetrics) {
+	if sidefx == nil {
+		return
+	}
+	closureStart := time.Now()
+	for _, municipiID := range dedupeIntSlice(sidefx.AffectedMunicipiIDs) {
 		mun, err := a.DB.GetMunicipi(municipiID)
 		if err != nil || mun == nil {
-			closureErrors++
+			sidefx.ClosureErrors++
 			if err != nil {
 				Errorf("Territori import: no s'ha pogut carregar municipi %d per rebuild closure: %v", municipiID, err)
 			}
@@ -793,92 +878,91 @@ func (a *App) AdminTerritoriImportRun(w http.ResponseWriter, r *http.Request) {
 		}
 		a.rebuildAdminClosureForMunicipi(mun)
 	}
-	closureDuration := time.Since(closureStart)
-	rebuildStart := time.Now()
-	rebuildErrors := 0
-	affectedLevelIDs := make([]int, 0, len(levelIDMap))
-	for _, id := range levelIDMap {
-		if id > 0 {
-			affectedLevelIDs = append(affectedLevelIDs, id)
-		}
+	if metrics != nil {
+		metrics.SidefxClosureDur += time.Since(closureStart)
 	}
-	for _, nivellID := range dedupeIntSlice(affectedLevelIDs) {
+	for _, nivellID := range dedupeIntSlice(sidefx.AffectedLevelIDs) {
+		demografiaStart := time.Now()
 		if err := a.DB.RebuildNivellDemografia(nivellID); err != nil {
-			rebuildErrors++
+			sidefx.RebuildErrors++
 			Errorf("Territori import: no s'ha pogut recalcular demografia nivell %d: %v", nivellID, err)
 		}
+		if metrics != nil {
+			metrics.SidefxRebuildDemografiaDur += time.Since(demografiaStart)
+		}
+		nomCognomStart := time.Now()
 		if err := a.DB.RebuildNivellNomCognomStats(nivellID); err != nil {
-			rebuildErrors++
+			sidefx.RebuildErrors++
 			Errorf("Territori import: no s'ha pogut recalcular stats nivell %d: %v", nivellID, err)
 		}
+		if metrics != nil {
+			metrics.SidefxRebuildNomCognomDur += time.Since(nomCognomStart)
+		}
 	}
-	rebuildDuration := time.Since(rebuildStart)
 
-	activityMode := "bulk"
-	if len(pendingActivities) > 0 {
-		mode, err := a.DB.BulkInsertUserActivities(r.Context(), pendingActivities)
+	activitiesStart := time.Now()
+	sidefx.ActivityMode = "bulk"
+	if len(sidefx.PendingActivities) > 0 {
+		mode, err := a.DB.BulkInsertUserActivities(ctx, sidefx.PendingActivities)
 		if err != nil {
 			Errorf("Territori import: bulk insert activitats fallit (%s): %v", mode, err)
-			activityMode = "generic"
-			for i := range pendingActivities {
-				act := pendingActivities[i]
+			sidefx.ActivityMode = "generic"
+			for i := range sidefx.PendingActivities {
+				act := sidefx.PendingActivities[i]
 				if _, err := a.DB.InsertUserActivity(&act); err != nil {
 					Errorf("Territori import: insert activitat fallit: %v", err)
 				}
 			}
 		} else if mode != "" {
-			activityMode = mode
+			sidefx.ActivityMode = mode
 		}
 	}
+	if metrics != nil {
+		metrics.SidefxActivitiesDur += time.Since(activitiesStart)
+	}
 
-	if activityCount > 0 {
+	achievementsStart := time.Now()
+	if sidefx.ActivityCount > 0 {
 		now := time.Now()
-		a.EvaluateAchievementsForUser(context.Background(), user.ID, AchievementTrigger{CreatedAt: now})
-		a.logAntiAbuseSignals(user.ID, now)
+		a.EvaluateAchievementsForUser(context.Background(), sidefx.UserID, AchievementTrigger{CreatedAt: now})
+		a.logAntiAbuseSignals(sidefx.UserID, now)
 	}
-	totalDuration := time.Since(start)
-	Infof("Territori import: engine=%s modes=%s/%s/%s activity=%s prep=%s levels=%s municipis=%s parents=%s closure=%s rebuild=%s totals=%d created=%d skipped=%d errors=%d parentErrors=%d closureErrors=%d rebuildErrors=%d duration=%s",
-		engine,
-		bulkModeLevels,
-		bulkModeMunicipis,
-		bulkModeParents,
-		activityMode,
-		prepDuration.String(),
-		levelsDuration.String(),
-		municipisDuration.String(),
-		parentDuration.String(),
-		closureDuration.String(),
-		rebuildDuration.String(),
-		levelsTotal+municipisTotal,
-		levelsCreated+municipisCreated,
-		levelsSkipped+municipisSkipped,
-		levelsErrors+municipisErrors,
-		parentErrors,
-		closureErrors,
-		rebuildErrors,
-		totalDuration.String(),
-	)
+	if metrics != nil {
+		metrics.SidefxAchievementsDur += time.Since(achievementsStart)
+	}
+}
 
-	redirect := withQueryParams(returnTo, map[string]string{
-		"import":            "1",
-		"countries_created": strconv.Itoa(countriesCreated),
-		"levels_total":      strconv.Itoa(levelsTotal),
-		"levels_created":    strconv.Itoa(levelsCreated),
-		"levels_skipped":    strconv.Itoa(levelsSkipped),
-		"levels_errors":     strconv.Itoa(levelsErrors),
-		"municipis_total":   strconv.Itoa(municipisTotal),
-		"municipis_created": strconv.Itoa(municipisCreated),
-		"municipis_skipped": strconv.Itoa(municipisSkipped),
-		"municipis_errors":  strconv.Itoa(municipisErrors),
-		"closure_errors":    strconv.Itoa(closureErrors),
-		"rebuild_errors":    strconv.Itoa(rebuildErrors),
-	})
-	status := adminImportStatusOK
-	if levelsErrors > 0 || municipisErrors > 0 || parentErrors > 0 || closureErrors > 0 || rebuildErrors > 0 {
-		status = adminImportStatusError
-	}
-	a.logAdminImportRun(r, "territori", status, user.ID)
-	http.Redirect(w, r, redirect, http.StatusSeeOther)
+func (a *App) logTerritoriImport(plan TerritoriImportPlan, result TerritoriImportPersistResult, metrics TerritoriImportMetrics) {
+	Infof("Territori import: engine=%s modes=%s/%s/%s activity=%s parse_dur=%s prep_dur=%s countries_dur=%s levels_build_dur=%s levels_persist_dur=%s municipis_existing_lookup_dur=%s municipis_build_dur=%s municipis_persist_dur=%s parents_build_dur=%s parents_persist_dur=%s sidefx_closure_dur=%s sidefx_rebuild_demografia_dur=%s sidefx_rebuild_nom_cognom_dur=%s sidefx_activities_dur=%s sidefx_achievements_dur=%s total_dur=%s totals=%d created=%d skipped=%d errors=%d parentErrors=%d closureErrors=%d rebuildErrors=%d",
+		plan.Engine,
+		result.BulkModeLevels,
+		result.BulkModeMunicipis,
+		result.BulkModeParents,
+		result.Sidefx.ActivityMode,
+		metrics.ParseDur.String(),
+		metrics.PrepDur.String(),
+		metrics.CountriesDur.String(),
+		metrics.LevelsBuildDur.String(),
+		metrics.LevelsPersistDur.String(),
+		metrics.MunicipisExistingLookupDur.String(),
+		metrics.MunicipisBuildDur.String(),
+		metrics.MunicipisPersistDur.String(),
+		metrics.ParentsBuildDur.String(),
+		metrics.ParentsPersistDur.String(),
+		metrics.SidefxClosureDur.String(),
+		metrics.SidefxRebuildDemografiaDur.String(),
+		metrics.SidefxRebuildNomCognomDur.String(),
+		metrics.SidefxActivitiesDur.String(),
+		metrics.SidefxAchievementsDur.String(),
+		metrics.TotalDur.String(),
+		result.LevelsTotal+result.MunicipisTotal,
+		result.LevelsCreated+result.MunicipisCreated,
+		result.LevelsSkipped+result.MunicipisSkipped,
+		result.LevelsErrors+result.MunicipisErrors,
+		result.ParentErrors,
+		result.Sidefx.ClosureErrors,
+		result.Sidefx.RebuildErrors,
+	)
 }
 
 func intPtrToNull(v *int) sql.NullInt64 {
