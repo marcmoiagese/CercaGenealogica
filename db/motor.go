@@ -2335,6 +2335,12 @@ type AdminClosureBulkMetrics struct {
 	InsertDur time.Duration
 }
 
+type NivellNomCognomBulkMetrics struct {
+	DeleteDur  time.Duration
+	ComputeDur time.Duration
+	InsertDur  time.Duration
+}
+
 type TranscripcioPersonaRaw struct {
 	ID                 int
 	TranscripcioID     int

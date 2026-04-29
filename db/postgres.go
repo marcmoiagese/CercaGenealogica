@@ -2900,6 +2900,100 @@ func (d *PostgreSQL) ClearNomCognomStatsByNivell(nivellID int) error {
 func (d *PostgreSQL) RebuildNivellNomCognomStats(nivellID int) error {
 	return d.help.rebuildNivellNomCognomStats(nivellID)
 }
+func (d *PostgreSQL) RebuildNivellsNomCognomStatsBulk(nivellIDs []int) (NivellNomCognomBulkMetrics, error) {
+	var metrics NivellNomCognomBulkMetrics
+	ids := make([]int, 0, len(nivellIDs))
+	seen := make(map[int]struct{}, len(nivellIDs))
+	for _, id := range nivellIDs {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return metrics, nil
+	}
+	args := []interface{}{pq.Array(intIDsToInt64Slice(ids))}
+	tx, err := d.Conn.Begin()
+	if err != nil {
+		return metrics, err
+	}
+	defer tx.Rollback()
+
+	deleteStart := time.Now()
+	deleteQueries := []string{
+		`DELETE FROM noms_freq_nivell_any WHERE nivell_id = ANY($1)`,
+		`DELETE FROM noms_freq_nivell_total WHERE nivell_id = ANY($1)`,
+		`DELETE FROM cognoms_freq_nivell_any WHERE nivell_id = ANY($1)`,
+		`DELETE FROM cognoms_freq_nivell_total WHERE nivell_id = ANY($1)`,
+	}
+	for _, query := range deleteQueries {
+		if _, err := tx.Exec(query, args...); err != nil {
+			return metrics, err
+		}
+	}
+	metrics.DeleteDur = time.Since(deleteStart)
+
+	computeStart := time.Now()
+	computeQueries := []string{
+		`CREATE TEMP TABLE tmp_nom_nivell_any_rebuild ON COMMIT DROP AS
+		 SELECT n.nom_id, ac.ancestor_id AS nivell_id, n.any_doc, SUM(n.freq) AS freq
+		 FROM noms_freq_municipi_any n
+		 JOIN admin_closure ac ON ac.descendant_municipi_id = n.municipi_id
+		 WHERE ac.ancestor_type = 'nivell' AND ac.ancestor_id = ANY($1)
+		 GROUP BY n.nom_id, ac.ancestor_id, n.any_doc`,
+		`CREATE TEMP TABLE tmp_nom_nivell_total_rebuild ON COMMIT DROP AS
+		 SELECT n.nom_id, ac.ancestor_id AS nivell_id, SUM(n.total_freq) AS total_freq
+		 FROM noms_freq_municipi_total n
+		 JOIN admin_closure ac ON ac.descendant_municipi_id = n.municipi_id
+		 WHERE ac.ancestor_type = 'nivell' AND ac.ancestor_id = ANY($1)
+		 GROUP BY n.nom_id, ac.ancestor_id`,
+		`CREATE TEMP TABLE tmp_cognom_nivell_any_rebuild ON COMMIT DROP AS
+		 SELECT c.cognom_id, ac.ancestor_id AS nivell_id, c.any_doc, SUM(c.freq) AS freq
+		 FROM cognoms_freq_municipi_any c
+		 JOIN admin_closure ac ON ac.descendant_municipi_id = c.municipi_id
+		 WHERE ac.ancestor_type = 'nivell' AND ac.ancestor_id = ANY($1)
+		 GROUP BY c.cognom_id, ac.ancestor_id, c.any_doc`,
+		`CREATE TEMP TABLE tmp_cognom_nivell_total_rebuild ON COMMIT DROP AS
+		 SELECT c.cognom_id, ac.ancestor_id AS nivell_id, SUM(c.total_freq) AS total_freq
+		 FROM cognoms_freq_municipi_total c
+		 JOIN admin_closure ac ON ac.descendant_municipi_id = c.municipi_id
+		 WHERE ac.ancestor_type = 'nivell' AND ac.ancestor_id = ANY($1)
+		 GROUP BY c.cognom_id, ac.ancestor_id`,
+	}
+	for _, query := range computeQueries {
+		if _, err := tx.Exec(query, args...); err != nil {
+			return metrics, err
+		}
+	}
+	metrics.ComputeDur = time.Since(computeStart)
+
+	insertStart := time.Now()
+	insertQueries := []string{
+		`INSERT INTO noms_freq_nivell_any (nom_id, nivell_id, any_doc, freq, updated_at)
+		 SELECT nom_id, nivell_id, any_doc, freq, NOW() FROM tmp_nom_nivell_any_rebuild`,
+		`INSERT INTO noms_freq_nivell_total (nom_id, nivell_id, total_freq, updated_at)
+		 SELECT nom_id, nivell_id, total_freq, NOW() FROM tmp_nom_nivell_total_rebuild`,
+		`INSERT INTO cognoms_freq_nivell_any (cognom_id, nivell_id, any_doc, freq, updated_at)
+		 SELECT cognom_id, nivell_id, any_doc, freq, NOW() FROM tmp_cognom_nivell_any_rebuild`,
+		`INSERT INTO cognoms_freq_nivell_total (cognom_id, nivell_id, total_freq, updated_at)
+		 SELECT cognom_id, nivell_id, total_freq, NOW() FROM tmp_cognom_nivell_total_rebuild`,
+	}
+	for _, query := range insertQueries {
+		if _, err := tx.Exec(query); err != nil {
+			return metrics, err
+		}
+	}
+	metrics.InsertDur = time.Since(insertStart)
+	if err := tx.Commit(); err != nil {
+		return metrics, err
+	}
+	return metrics, nil
+}
 
 func (d *PostgreSQL) ListMunicipiMapes(filter MunicipiMapaFilter) ([]MunicipiMapa, error) {
 	return d.help.listMunicipiMapes(filter)
