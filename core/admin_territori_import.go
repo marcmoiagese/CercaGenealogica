@@ -866,21 +866,7 @@ func (a *App) runTerritoriImportSidefx(ctx context.Context, sidefx *TerritoriImp
 	if sidefx == nil {
 		return
 	}
-	closureStart := time.Now()
-	for _, municipiID := range dedupeIntSlice(sidefx.AffectedMunicipiIDs) {
-		mun, err := a.DB.GetMunicipi(municipiID)
-		if err != nil || mun == nil {
-			sidefx.ClosureErrors++
-			if err != nil {
-				Errorf("Territori import: no s'ha pogut carregar municipi %d per rebuild closure: %v", municipiID, err)
-			}
-			continue
-		}
-		a.rebuildAdminClosureForMunicipi(mun)
-	}
-	if metrics != nil {
-		metrics.SidefxClosureDur += time.Since(closureStart)
-	}
+	a.runTerritoriImportClosureSidefx(sidefx, metrics)
 	for _, nivellID := range dedupeIntSlice(sidefx.AffectedLevelIDs) {
 		demografiaStart := time.Now()
 		if err := a.DB.RebuildNivellDemografia(nivellID); err != nil {
@@ -932,8 +918,110 @@ func (a *App) runTerritoriImportSidefx(ctx context.Context, sidefx *TerritoriImp
 	}
 }
 
+type territoriAdminClosureBulkReplacer interface {
+	ReplaceAdminClosureBulk(descendantMunicipiIDs []int, entries []db.AdminClosureEntry) (db.AdminClosureBulkMetrics, error)
+}
+
+func (a *App) runTerritoriImportClosureSidefx(sidefx *TerritoriImportSidefxPlan, metrics *TerritoriImportMetrics) {
+	closureStart := time.Now()
+	mode := "generic-legacy"
+	if a.DB != nil && a.DB.Engine() == "sqlite" {
+		mode = "sqlite-legacy"
+	}
+	if a.DB != nil && a.DB.Engine() == "postgres" {
+		if replacer, ok := a.DB.(territoriAdminClosureBulkReplacer); ok {
+			if a.runTerritoriImportClosurePostgresBulk(sidefx, metrics, replacer) {
+				if metrics != nil {
+					metrics.SidefxClosureDur += time.Since(closureStart)
+					if metrics.SidefxClosureMode == "" {
+						metrics.SidefxClosureMode = "postgres-bulk"
+					}
+				}
+				return
+			}
+		}
+	}
+	a.runTerritoriImportClosureLegacy(sidefx)
+	if metrics != nil {
+		metrics.SidefxClosureDur += time.Since(closureStart)
+		metrics.SidefxClosureMode = mode
+		metrics.SidefxClosureMunicipis = len(dedupeIntSlice(sidefx.AffectedMunicipiIDs))
+	}
+}
+
+func (a *App) runTerritoriImportClosurePostgresBulk(sidefx *TerritoriImportSidefxPlan, metrics *TerritoriImportMetrics, replacer territoriAdminClosureBulkReplacer) bool {
+	buildStart := time.Now()
+	municipiIDs := dedupeIntSlice(sidefx.AffectedMunicipiIDs)
+	municipis := make([]*db.Municipi, 0, len(municipiIDs))
+	levelIDs := make(map[int]struct{})
+	closureErrorsBefore := sidefx.ClosureErrors
+	for _, municipiID := range municipiIDs {
+		mun, err := a.DB.GetMunicipi(municipiID)
+		if err != nil || mun == nil {
+			sidefx.ClosureErrors++
+			if err != nil {
+				Errorf("Territori import: no s'ha pogut carregar municipi %d per rebuild closure: %v", municipiID, err)
+			}
+			continue
+		}
+		municipis = append(municipis, mun)
+		for _, level := range mun.NivellAdministratiuID {
+			if level.Valid && level.Int64 > 0 {
+				levelIDs[int(level.Int64)] = struct{}{}
+			}
+		}
+	}
+	levelsByID := make(map[int]db.NivellAdministratiu, len(levelIDs))
+	for nivellID := range levelIDs {
+		lvl, err := a.DB.GetNivell(nivellID)
+		if err == nil && lvl != nil {
+			levelsByID[nivellID] = *lvl
+		}
+	}
+	entries := make([]db.AdminClosureEntry, 0, len(municipis)*4)
+	replaceMunicipiIDs := make([]int, 0, len(municipis))
+	for _, mun := range municipis {
+		replaceMunicipiIDs = append(replaceMunicipiIDs, mun.ID)
+		entries = append(entries, buildAdminClosureEntriesWithLevels(mun, levelsByID)...)
+	}
+	if metrics != nil {
+		metrics.SidefxClosureBuildDur += time.Since(buildStart)
+		metrics.SidefxClosureMunicipis = len(municipiIDs)
+		metrics.SidefxClosureEntries = len(entries)
+		metrics.SidefxClosureMode = "postgres-bulk"
+	}
+	bulkMetrics, err := replacer.ReplaceAdminClosureBulk(replaceMunicipiIDs, entries)
+	if err != nil {
+		Errorf("Territori import: bulk rebuild admin_closure fallit, es fa fallback legacy: %v", err)
+		sidefx.ClosureErrors = closureErrorsBefore
+		if metrics != nil {
+			metrics.SidefxClosureMode = "generic-legacy"
+		}
+		return false
+	}
+	if metrics != nil {
+		metrics.SidefxClosureDeleteDur += bulkMetrics.DeleteDur
+		metrics.SidefxClosureInsertDur += bulkMetrics.InsertDur
+	}
+	return true
+}
+
+func (a *App) runTerritoriImportClosureLegacy(sidefx *TerritoriImportSidefxPlan) {
+	for _, municipiID := range dedupeIntSlice(sidefx.AffectedMunicipiIDs) {
+		mun, err := a.DB.GetMunicipi(municipiID)
+		if err != nil || mun == nil {
+			sidefx.ClosureErrors++
+			if err != nil {
+				Errorf("Territori import: no s'ha pogut carregar municipi %d per rebuild closure: %v", municipiID, err)
+			}
+			continue
+		}
+		a.rebuildAdminClosureForMunicipi(mun)
+	}
+}
+
 func (a *App) logTerritoriImport(plan TerritoriImportPlan, result TerritoriImportPersistResult, metrics TerritoriImportMetrics) {
-	Infof("Territori import: engine=%s modes=%s/%s/%s activity=%s parse_dur=%s prep_dur=%s countries_dur=%s levels_build_dur=%s levels_persist_dur=%s municipis_existing_lookup_dur=%s municipis_build_dur=%s municipis_persist_dur=%s parents_build_dur=%s parents_persist_dur=%s sidefx_closure_dur=%s sidefx_rebuild_demografia_dur=%s sidefx_rebuild_nom_cognom_dur=%s sidefx_activities_dur=%s sidefx_achievements_dur=%s total_dur=%s totals=%d created=%d skipped=%d errors=%d parentErrors=%d closureErrors=%d rebuildErrors=%d",
+	Infof("Territori import: engine=%s modes=%s/%s/%s activity=%s parse_dur=%s prep_dur=%s countries_dur=%s levels_build_dur=%s levels_persist_dur=%s municipis_existing_lookup_dur=%s municipis_build_dur=%s municipis_persist_dur=%s parents_build_dur=%s parents_persist_dur=%s sidefx_closure_dur=%s sidefx_closure_build_dur=%s sidefx_closure_delete_dur=%s sidefx_closure_insert_dur=%s sidefx_closure_municipis=%d sidefx_closure_entries=%d sidefx_closure_mode=%s sidefx_rebuild_demografia_dur=%s sidefx_rebuild_nom_cognom_dur=%s sidefx_activities_dur=%s sidefx_achievements_dur=%s total_dur=%s totals=%d created=%d skipped=%d errors=%d parentErrors=%d closureErrors=%d rebuildErrors=%d",
 		plan.Engine,
 		result.BulkModeLevels,
 		result.BulkModeMunicipis,
@@ -950,6 +1038,12 @@ func (a *App) logTerritoriImport(plan TerritoriImportPlan, result TerritoriImpor
 		metrics.ParentsBuildDur.String(),
 		metrics.ParentsPersistDur.String(),
 		metrics.SidefxClosureDur.String(),
+		metrics.SidefxClosureBuildDur.String(),
+		metrics.SidefxClosureDeleteDur.String(),
+		metrics.SidefxClosureInsertDur.String(),
+		metrics.SidefxClosureMunicipis,
+		metrics.SidefxClosureEntries,
+		metrics.SidefxClosureMode,
 		metrics.SidefxRebuildDemografiaDur.String(),
 		metrics.SidefxRebuildNomCognomDur.String(),
 		metrics.SidefxActivitiesDur.String(),

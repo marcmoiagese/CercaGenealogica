@@ -2613,6 +2613,83 @@ func (d *PostgreSQL) SearchDocs(filter SearchQueryFilter) ([]SearchDocRow, int, 
 func (d *PostgreSQL) ReplaceAdminClosure(descendantMunicipiID int, entries []AdminClosureEntry) error {
 	return d.help.replaceAdminClosure(descendantMunicipiID, entries)
 }
+func (d *PostgreSQL) ReplaceAdminClosureBulk(descendantMunicipiIDs []int, entries []AdminClosureEntry) (AdminClosureBulkMetrics, error) {
+	var metrics AdminClosureBulkMetrics
+	ids := make([]int, 0, len(descendantMunicipiIDs))
+	seenIDs := make(map[int]struct{}, len(descendantMunicipiIDs))
+	for _, id := range descendantMunicipiIDs {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seenIDs[id]; ok {
+			continue
+		}
+		seenIDs[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return metrics, nil
+	}
+	tx, err := d.Conn.Begin()
+	if err != nil {
+		return metrics, err
+	}
+	deleteStart := time.Now()
+	if _, err := tx.Exec(`DELETE FROM admin_closure WHERE descendant_municipi_id = ANY($1)`, pq.Array(ids)); err != nil {
+		_ = tx.Rollback()
+		return metrics, err
+	}
+	metrics.DeleteDur = time.Since(deleteStart)
+
+	deduped := make([]AdminClosureEntry, 0, len(entries))
+	seenEntries := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		if entry.DescendantMunicipiID <= 0 {
+			continue
+		}
+		if _, ok := seenIDs[entry.DescendantMunicipiID]; !ok {
+			continue
+		}
+		entry.AncestorType = strings.TrimSpace(entry.AncestorType)
+		if entry.AncestorType == "" || entry.AncestorID <= 0 {
+			continue
+		}
+		key := fmt.Sprintf("%d|%s|%d", entry.DescendantMunicipiID, entry.AncestorType, entry.AncestorID)
+		if _, ok := seenEntries[key]; ok {
+			continue
+		}
+		seenEntries[key] = struct{}{}
+		deduped = append(deduped, entry)
+	}
+	if len(deduped) == 0 {
+		return metrics, tx.Commit()
+	}
+
+	insertStart := time.Now()
+	const batchSize = 5000
+	for start := 0; start < len(deduped); start += batchSize {
+		end := start + batchSize
+		if end > len(deduped) {
+			end = len(deduped)
+		}
+		batch := deduped[start:end]
+		placeholders := make([]string, 0, len(batch))
+		args := make([]interface{}, 0, len(batch)*3)
+		argPos := 1
+		for _, entry := range batch {
+			placeholders = append(placeholders, fmt.Sprintf("($%d,$%d,$%d)", argPos, argPos+1, argPos+2))
+			args = append(args, entry.DescendantMunicipiID, entry.AncestorType, entry.AncestorID)
+			argPos += 3
+		}
+		query := fmt.Sprintf(`INSERT INTO admin_closure (descendant_municipi_id, ancestor_type, ancestor_id) VALUES %s`, strings.Join(placeholders, ","))
+		if _, err := tx.Exec(query, args...); err != nil {
+			_ = tx.Rollback()
+			return metrics, err
+		}
+	}
+	metrics.InsertDur = time.Since(insertStart)
+	return metrics, tx.Commit()
+}
 func (d *PostgreSQL) ListAdminClosure(descendantMunicipiID int) ([]AdminClosureEntry, error) {
 	return d.help.listAdminClosure(descendantMunicipiID)
 }

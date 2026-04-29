@@ -2330,6 +2330,11 @@ type AdminClosureEntry struct {
 	AncestorID           int
 }
 
+type AdminClosureBulkMetrics struct {
+	DeleteDur time.Duration
+	InsertDur time.Duration
+}
+
 type TranscripcioPersonaRaw struct {
 	ID                 int
 	TranscripcioID     int

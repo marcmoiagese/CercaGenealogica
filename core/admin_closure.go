@@ -72,3 +72,44 @@ func (a *App) buildAdminClosureEntries(mun *db.Municipi) []db.AdminClosureEntry 
 	}
 	return entries
 }
+
+func buildAdminClosureEntriesWithLevels(mun *db.Municipi, levelsByID map[int]db.NivellAdministratiu) []db.AdminClosureEntry {
+	entries := []db.AdminClosureEntry{}
+	if mun == nil || mun.ID <= 0 {
+		return entries
+	}
+	seen := map[string]struct{}{}
+	add := func(typ string, id int) {
+		if id <= 0 || strings.TrimSpace(typ) == "" {
+			return
+		}
+		key := typ + ":" + strconv.Itoa(id)
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		entries = append(entries, db.AdminClosureEntry{
+			DescendantMunicipiID: mun.ID,
+			AncestorType:         typ,
+			AncestorID:           id,
+		})
+	}
+	add("municipi", mun.ID)
+	paisID := 0
+	for _, level := range mun.NivellAdministratiuID {
+		if !level.Valid || level.Int64 <= 0 {
+			continue
+		}
+		lvlID := int(level.Int64)
+		add("nivell", lvlID)
+		if paisID == 0 {
+			if lvl, ok := levelsByID[lvlID]; ok && lvl.PaisID > 0 {
+				paisID = lvl.PaisID
+			}
+		}
+	}
+	if paisID > 0 {
+		add("pais", paisID)
+	}
+	return entries
+}

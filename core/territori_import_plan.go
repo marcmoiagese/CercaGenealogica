@@ -60,6 +60,12 @@ type TerritoriImportMetrics struct {
 	ParentsBuildDur            time.Duration
 	ParentsPersistDur          time.Duration
 	SidefxClosureDur           time.Duration
+	SidefxClosureBuildDur      time.Duration
+	SidefxClosureDeleteDur     time.Duration
+	SidefxClosureInsertDur     time.Duration
+	SidefxClosureMunicipis     int
+	SidefxClosureEntries       int
+	SidefxClosureMode          string
 	SidefxRebuildDemografiaDur time.Duration
 	SidefxRebuildNomCognomDur  time.Duration
 	SidefxActivitiesDur        time.Duration
