@@ -74,13 +74,28 @@ type postgresTemplateImportStagedAtributRow struct {
 	Row       TranscripcioAtributRaw
 }
 
+type postgresTemplateImportDirectChildCopyOptions struct {
+	Persones bool
+	Atributs bool
+}
+
+func (o postgresTemplateImportDirectChildCopyOptions) enabled() bool {
+	return o.Persones || o.Atributs
+}
+
 func postgresTemplateImportStagingProfileEnabled() bool {
 	return strings.TrimSpace(os.Getenv("CG_POSTGRES_STAGING_PROFILE")) == "1"
 }
 
-func postgresTemplateImportDirectChildCopyEnabled() bool {
-	return strings.TrimSpace(os.Getenv("CG_POSTGRES_DIRECT_CHILD_COPY")) == "1" &&
-		strings.TrimSpace(os.Getenv("CG_POSTGRES_STAGING_WHOLE_IMPORT")) != "1"
+func postgresTemplateImportDirectChildCopyOptionsFromEnv() postgresTemplateImportDirectChildCopyOptions {
+	if strings.TrimSpace(os.Getenv("CG_POSTGRES_STAGING_WHOLE_IMPORT")) == "1" {
+		return postgresTemplateImportDirectChildCopyOptions{}
+	}
+	directChildren := strings.TrimSpace(os.Getenv("CG_POSTGRES_DIRECT_CHILD_COPY")) == "1"
+	return postgresTemplateImportDirectChildCopyOptions{
+		Persones: directChildren || strings.TrimSpace(os.Getenv("CG_POSTGRES_DIRECT_PERSON_COPY")) == "1",
+		Atributs: directChildren || strings.TrimSpace(os.Getenv("CG_POSTGRES_DIRECT_ATTR_COPY")) == "1",
+	}
 }
 
 func ResetPostgresTemplateImportStagingProfile() {
@@ -137,16 +152,17 @@ func (m PostgresTemplateImportStagingBatchMetrics) measuredDur() time.Duration {
 }
 
 func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStaging(bundles []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
-	if postgresTemplateImportDirectChildCopyEnabled() {
-		res, err := h.bulkCreateTranscripcioRawBundlesPostgresStagingTx(bundles, true)
+	directChildCopy := postgresTemplateImportDirectChildCopyOptionsFromEnv()
+	if directChildCopy.enabled() {
+		res, err := h.bulkCreateTranscripcioRawBundlesPostgresStagingTx(bundles, directChildCopy)
 		if err == nil {
 			return res, nil
 		}
 	}
-	return h.bulkCreateTranscripcioRawBundlesPostgresStagingTx(bundles, false)
+	return h.bulkCreateTranscripcioRawBundlesPostgresStagingTx(bundles, postgresTemplateImportDirectChildCopyOptions{})
 }
 
-func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStagingTx(bundles []TranscripcioRawImportBundle, directChildCopy bool) (TranscripcioRawImportBulkResult, error) {
+func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStagingTx(bundles []TranscripcioRawImportBundle, directChildCopy postgresTemplateImportDirectChildCopyOptions) (TranscripcioRawImportBulkResult, error) {
 	res := TranscripcioRawImportBulkResult{
 		IDs: make([]int, 0, len(bundles)),
 		Metrics: TranscripcioRawImportBulkMetrics{
@@ -260,7 +276,7 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStagingTx(bundles []T
 
 	start = time.Now()
 	phaseStart = time.Now()
-	if directChildCopy {
+	if directChildCopy.Persones {
 		if err := h.copyInPostgresTemplateImportDirectPersonesTx(tx, personRows); err != nil {
 			res.Metrics.PersonaPersistDur += time.Since(start)
 			return res, err
@@ -293,7 +309,7 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStagingTx(bundles []T
 
 	start = time.Now()
 	phaseStart = time.Now()
-	if directChildCopy {
+	if directChildCopy.Atributs {
 		if err := h.copyInPostgresTemplateImportDirectAtributsTx(tx, attrRows); err != nil {
 			res.Metrics.LinksPersistDur += time.Since(start)
 			return res, err
@@ -345,7 +361,7 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPostgresStagingTx(bundles []T
 	return res, nil
 }
 
-func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx, directChildCopy bool) error {
+func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx, directChildCopy postgresTemplateImportDirectChildCopyOptions) error {
 	if tx == nil {
 		return fmt.Errorf("nil tx")
 	}
@@ -377,10 +393,9 @@ func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx, direc
         FROM transcripcions_raw
         WITH NO DATA`,
 	}
-	if !directChildCopy {
+	if !directChildCopy.Persones {
 		stmts = append(stmts,
 			`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_persones_raw`,
-			`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_atributs_raw`,
 			`
         CREATE TEMP TABLE tmp_template_import_transcripcions_persones_raw
         ON COMMIT DROP AS
@@ -415,7 +430,12 @@ func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx, direc
             notes
         FROM transcripcions_persones_raw
         WITH NO DATA`,
-		`
+		)
+	}
+	if !directChildCopy.Atributs {
+		stmts = append(stmts,
+			`DROP TABLE IF EXISTS pg_temp.tmp_template_import_transcripcions_atributs_raw`,
+			`
         CREATE TEMP TABLE tmp_template_import_transcripcions_atributs_raw
         ON COMMIT DROP AS
         SELECT
