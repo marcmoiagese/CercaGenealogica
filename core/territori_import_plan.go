@@ -57,29 +57,35 @@ type TerritoriImportMetrics struct {
 	MunicipisExistingLookupDur time.Duration
 	MunicipisBuildDur          time.Duration
 	MunicipisPersistDur        time.Duration
-	ParentsBuildDur                  time.Duration
-	ParentsPersistDur                time.Duration
-	SidefxClosureDur                 time.Duration
-	SidefxClosureBuildDur            time.Duration
-	SidefxClosureLoadMunicipisDur    time.Duration
-	SidefxClosureLoadLevelsDur       time.Duration
-	SidefxClosureBuildEntriesDur     time.Duration
-	SidefxClosureDeleteDur           time.Duration
-	SidefxClosureInsertDur           time.Duration
-	SidefxClosureMunicipis           int
-	SidefxClosureEntries             int
-	SidefxClosureMode                string
-	SidefxRebuildDemografiaDur       time.Duration
-	SidefxRebuildNomCognomDur        time.Duration
-	SidefxRebuildNomCognomMode       string
-	SidefxRebuildNomCognomLevels     int
-	SidefxRebuildNomCognomDeleteDur  time.Duration
-	SidefxRebuildNomCognomInsertDur  time.Duration
-	SidefxRebuildNomCognomComputeDur time.Duration
-	SidefxRebuildNomCognomTotalDur   time.Duration
-	SidefxActivitiesDur              time.Duration
-	SidefxAchievementsDur            time.Duration
-	TotalDur                         time.Duration
+	ParentsBuildDur                   time.Duration
+	ParentsPersistDur                 time.Duration
+	SidefxClosureDur                  time.Duration
+	SidefxClosureBuildDur             time.Duration
+	SidefxClosureLoadMunicipisDur     time.Duration
+	SidefxClosureLoadLevelsDur        time.Duration
+	SidefxClosureBuildEntriesDur      time.Duration
+	SidefxClosureDeleteDur            time.Duration
+	SidefxClosureInsertDur            time.Duration
+	SidefxClosureMunicipis            int
+	SidefxClosureEntries              int
+	SidefxClosureMode                 string
+	SidefxRebuildDemografiaDur        time.Duration
+	SidefxRebuildDemografiaMode       string
+	SidefxRebuildDemografiaLevels     int
+	SidefxRebuildDemografiaDeleteDur  time.Duration
+	SidefxRebuildDemografiaInsertDur  time.Duration
+	SidefxRebuildDemografiaComputeDur time.Duration
+	SidefxRebuildDemografiaTotalDur   time.Duration
+	SidefxRebuildNomCognomDur         time.Duration
+	SidefxRebuildNomCognomMode        string
+	SidefxRebuildNomCognomLevels      int
+	SidefxRebuildNomCognomDeleteDur   time.Duration
+	SidefxRebuildNomCognomInsertDur   time.Duration
+	SidefxRebuildNomCognomComputeDur  time.Duration
+	SidefxRebuildNomCognomTotalDur    time.Duration
+	SidefxActivitiesDur               time.Duration
+	SidefxAchievementsDur             time.Duration
+	TotalDur                          time.Duration
 }
 
 type territoriImportActivityRule struct {

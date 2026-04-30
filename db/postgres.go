@@ -3141,6 +3141,86 @@ func (d *PostgreSQL) BulkApplyPositiveDemografiaDeltas(municipis []DemografiaDel
 func (d *PostgreSQL) RebuildNivellDemografia(nivellID int) error {
 	return d.help.rebuildNivellDemografia(nivellID)
 }
+func (d *PostgreSQL) RebuildNivellsDemografiaBulk(nivellIDs []int) (NivellDemografiaBulkMetrics, error) {
+	var metrics NivellDemografiaBulkMetrics
+	ids := make([]int, 0, len(nivellIDs))
+	seen := make(map[int]struct{}, len(nivellIDs))
+	for _, id := range nivellIDs {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return metrics, nil
+	}
+	args := []interface{}{pq.Array(intIDsToInt64Slice(ids))}
+	tx, err := d.Conn.Begin()
+	if err != nil {
+		return metrics, err
+	}
+	defer tx.Rollback()
+
+	deleteStart := time.Now()
+	deleteQueries := []string{
+		`DELETE FROM nivell_demografia_any WHERE nivell_id = ANY($1)`,
+		`DELETE FROM nivell_demografia_meta WHERE nivell_id = ANY($1)`,
+	}
+	for _, query := range deleteQueries {
+		if _, err := tx.Exec(query, args...); err != nil {
+			return metrics, err
+		}
+	}
+	metrics.DeleteDur = time.Since(deleteStart)
+
+	computeStart := time.Now()
+	if _, err := tx.Exec(`CREATE TEMP TABLE tmp_nivell_demografia_rebuild ON COMMIT DROP AS
+		 SELECT ac.ancestor_id AS nivell_id,
+		        d."any" AS any_doc,
+		        SUM(d.natalitat)::integer AS natalitat,
+		        SUM(d.matrimonis)::integer AS matrimonis,
+		        SUM(d.defuncions)::integer AS defuncions
+		 FROM municipi_demografia_any d
+		 JOIN admin_closure ac ON ac.descendant_municipi_id = d.municipi_id
+		 WHERE ac.ancestor_type = 'nivell'
+		   AND ac.ancestor_id = ANY($1)
+		   AND d."any" > 0
+		 GROUP BY ac.ancestor_id, d."any"`, args...); err != nil {
+		return metrics, err
+	}
+	metrics.ComputeDur = time.Since(computeStart)
+
+	insertStart := time.Now()
+	insertQueries := []string{
+		`INSERT INTO nivell_demografia_any (nivell_id, "any", natalitat, matrimonis, defuncions, updated_at)
+		 SELECT nivell_id, any_doc, natalitat, matrimonis, defuncions, NOW()
+		 FROM tmp_nivell_demografia_rebuild`,
+		`INSERT INTO nivell_demografia_meta (nivell_id, any_min, any_max, total_natalitat, total_matrimonis, total_defuncions, updated_at)
+		 SELECT nivell_id,
+		        MIN(any_doc),
+		        MAX(any_doc),
+		        SUM(natalitat)::integer,
+		        SUM(matrimonis)::integer,
+		        SUM(defuncions)::integer,
+		        NOW()
+		 FROM tmp_nivell_demografia_rebuild
+		 GROUP BY nivell_id`,
+	}
+	for _, query := range insertQueries {
+		if _, err := tx.Exec(query); err != nil {
+			return metrics, err
+		}
+	}
+	metrics.InsertDur = time.Since(insertStart)
+	if err := tx.Commit(); err != nil {
+		return metrics, err
+	}
+	return metrics, nil
+}
 
 func (d *PostgreSQL) ListMunicipiAnecdotariPublished(municipiID int, f MunicipiAnecdotariFilter) ([]MunicipiAnecdotariVersion, int, error) {
 	return d.help.listMunicipiAnecdotariPublished(municipiID, f)

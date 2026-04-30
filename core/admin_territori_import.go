@@ -867,16 +867,7 @@ func (a *App) runTerritoriImportSidefx(ctx context.Context, sidefx *TerritoriImp
 		return
 	}
 	a.runTerritoriImportClosureSidefx(sidefx, metrics)
-	for _, nivellID := range dedupeIntSlice(sidefx.AffectedLevelIDs) {
-		demografiaStart := time.Now()
-		if err := a.DB.RebuildNivellDemografia(nivellID); err != nil {
-			sidefx.RebuildErrors++
-			Errorf("Territori import: no s'ha pogut recalcular demografia nivell %d: %v", nivellID, err)
-		}
-		if metrics != nil {
-			metrics.SidefxRebuildDemografiaDur += time.Since(demografiaStart)
-		}
-	}
+	a.runTerritoriImportDemografiaSidefx(sidefx, metrics)
 	a.runTerritoriImportNomCognomSidefx(sidefx, metrics)
 
 	activitiesStart := time.Now()
@@ -925,6 +916,10 @@ type territoriNivellsBulkLoader interface {
 
 type territoriNivellNomCognomBulkRebuilder interface {
 	RebuildNivellsNomCognomStatsBulk(nivellIDs []int) (db.NivellNomCognomBulkMetrics, error)
+}
+
+type territoriNivellDemografiaBulkRebuilder interface {
+	RebuildNivellsDemografiaBulk(nivellIDs []int) (db.NivellDemografiaBulkMetrics, error)
 }
 
 func (a *App) runTerritoriImportClosureSidefx(sidefx *TerritoriImportSidefxPlan, metrics *TerritoriImportMetrics) {
@@ -1072,6 +1067,48 @@ func (a *App) runTerritoriImportClosureLegacy(sidefx *TerritoriImportSidefxPlan)
 	}
 }
 
+func (a *App) runTerritoriImportDemografiaSidefx(sidefx *TerritoriImportSidefxPlan, metrics *TerritoriImportMetrics) {
+	nivellIDs := dedupeIntSlice(sidefx.AffectedLevelIDs)
+	totalStart := time.Now()
+	if metrics != nil {
+		metrics.SidefxRebuildDemografiaLevels = len(nivellIDs)
+	}
+	if a.DB != nil && a.DB.Engine() == "postgres" {
+		if rebuilder, ok := a.DB.(territoriNivellDemografiaBulkRebuilder); ok {
+			bulkMetrics, err := rebuilder.RebuildNivellsDemografiaBulk(nivellIDs)
+			if err == nil {
+				if metrics != nil {
+					dur := time.Since(totalStart)
+					metrics.SidefxRebuildDemografiaDur += dur
+					metrics.SidefxRebuildDemografiaTotalDur += dur
+					metrics.SidefxRebuildDemografiaMode = "postgres-bulk"
+					metrics.SidefxRebuildDemografiaDeleteDur += bulkMetrics.DeleteDur
+					metrics.SidefxRebuildDemografiaComputeDur += bulkMetrics.ComputeDur
+					metrics.SidefxRebuildDemografiaInsertDur += bulkMetrics.InsertDur
+				}
+				return
+			}
+			Errorf("Territori import: bulk rebuild demografia nivells fallit, es fa fallback legacy: %v", err)
+		}
+	}
+	mode := "generic-legacy"
+	if a.DB != nil && a.DB.Engine() == "sqlite" {
+		mode = "sqlite-legacy"
+	}
+	for _, nivellID := range nivellIDs {
+		if err := a.DB.RebuildNivellDemografia(nivellID); err != nil {
+			sidefx.RebuildErrors++
+			Errorf("Territori import: no s'ha pogut recalcular demografia nivell %d: %v", nivellID, err)
+		}
+	}
+	if metrics != nil {
+		dur := time.Since(totalStart)
+		metrics.SidefxRebuildDemografiaDur += dur
+		metrics.SidefxRebuildDemografiaTotalDur += dur
+		metrics.SidefxRebuildDemografiaMode = mode
+	}
+}
+
 func (a *App) runTerritoriImportNomCognomSidefx(sidefx *TerritoriImportSidefxPlan, metrics *TerritoriImportMetrics) {
 	nivellIDs := dedupeIntSlice(sidefx.AffectedLevelIDs)
 	totalStart := time.Now()
@@ -1115,7 +1152,7 @@ func (a *App) runTerritoriImportNomCognomSidefx(sidefx *TerritoriImportSidefxPla
 }
 
 func (a *App) logTerritoriImport(plan TerritoriImportPlan, result TerritoriImportPersistResult, metrics TerritoriImportMetrics) {
-	Infof("Territori import: engine=%s modes=%s/%s/%s activity=%s parse_dur=%s prep_dur=%s countries_dur=%s levels_build_dur=%s levels_persist_dur=%s municipis_existing_lookup_dur=%s municipis_build_dur=%s municipis_persist_dur=%s parents_build_dur=%s parents_persist_dur=%s sidefx_closure_dur=%s sidefx_closure_build_dur=%s sidefx_closure_load_municipis_dur=%s sidefx_closure_load_levels_dur=%s sidefx_closure_build_entries_dur=%s sidefx_closure_delete_dur=%s sidefx_closure_insert_dur=%s sidefx_closure_municipis=%d sidefx_closure_entries=%d sidefx_closure_mode=%s sidefx_rebuild_demografia_dur=%s sidefx_rebuild_nom_cognom_dur=%s sidefx_rebuild_nom_cognom_mode=%s sidefx_rebuild_nom_cognom_levels=%d sidefx_rebuild_nom_cognom_delete_dur=%s sidefx_rebuild_nom_cognom_insert_dur=%s sidefx_rebuild_nom_cognom_compute_dur=%s sidefx_rebuild_nom_cognom_total_dur=%s sidefx_activities_dur=%s sidefx_achievements_dur=%s total_dur=%s totals=%d created=%d skipped=%d errors=%d parentErrors=%d closureErrors=%d rebuildErrors=%d",
+	Infof("Territori import: engine=%s modes=%s/%s/%s activity=%s parse_dur=%s prep_dur=%s countries_dur=%s levels_build_dur=%s levels_persist_dur=%s municipis_existing_lookup_dur=%s municipis_build_dur=%s municipis_persist_dur=%s parents_build_dur=%s parents_persist_dur=%s sidefx_closure_dur=%s sidefx_closure_build_dur=%s sidefx_closure_load_municipis_dur=%s sidefx_closure_load_levels_dur=%s sidefx_closure_build_entries_dur=%s sidefx_closure_delete_dur=%s sidefx_closure_insert_dur=%s sidefx_closure_municipis=%d sidefx_closure_entries=%d sidefx_closure_mode=%s sidefx_rebuild_demografia_dur=%s sidefx_rebuild_demografia_mode=%s sidefx_rebuild_demografia_levels=%d sidefx_rebuild_demografia_delete_dur=%s sidefx_rebuild_demografia_insert_dur=%s sidefx_rebuild_demografia_compute_dur=%s sidefx_rebuild_demografia_total_dur=%s sidefx_rebuild_nom_cognom_dur=%s sidefx_rebuild_nom_cognom_mode=%s sidefx_rebuild_nom_cognom_levels=%d sidefx_rebuild_nom_cognom_delete_dur=%s sidefx_rebuild_nom_cognom_insert_dur=%s sidefx_rebuild_nom_cognom_compute_dur=%s sidefx_rebuild_nom_cognom_total_dur=%s sidefx_activities_dur=%s sidefx_achievements_dur=%s total_dur=%s totals=%d created=%d skipped=%d errors=%d parentErrors=%d closureErrors=%d rebuildErrors=%d",
 		plan.Engine,
 		result.BulkModeLevels,
 		result.BulkModeMunicipis,
@@ -1142,6 +1179,12 @@ func (a *App) logTerritoriImport(plan TerritoriImportPlan, result TerritoriImpor
 		metrics.SidefxClosureEntries,
 		metrics.SidefxClosureMode,
 		metrics.SidefxRebuildDemografiaDur.String(),
+		metrics.SidefxRebuildDemografiaMode,
+		metrics.SidefxRebuildDemografiaLevels,
+		metrics.SidefxRebuildDemografiaDeleteDur.String(),
+		metrics.SidefxRebuildDemografiaInsertDur.String(),
+		metrics.SidefxRebuildDemografiaComputeDur.String(),
+		metrics.SidefxRebuildDemografiaTotalDur.String(),
 		metrics.SidefxRebuildNomCognomDur.String(),
 		metrics.SidefxRebuildNomCognomMode,
 		metrics.SidefxRebuildNomCognomLevels,
