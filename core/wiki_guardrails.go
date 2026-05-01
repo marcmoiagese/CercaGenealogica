@@ -142,20 +142,33 @@ func (a *App) countWikiPending(objectType string, objectID int, userID int) (int
 	if strings.TrimSpace(objectType) == "" || objectID <= 0 {
 		return 0, fmt.Errorf("objecte invàlid")
 	}
+	query, args := buildCountWikiPendingQuery(a.DB, objectType, objectID, userID)
+	rows, err := a.DB.Query(query, args...)
+	if err != nil {
+		a.logDBOperationError(DBOperationLog{
+			Component: "wiki_guardrails",
+			Op:        "count_pending",
+			Object:    objectType,
+			ObjectID:  objectID,
+			UserID:    userID,
+			Err:       err,
+		})
+		return 0, fmt.Errorf("count wiki pending %s %d: %w", objectType, objectID, err)
+	}
+	if len(rows) == 0 {
+		return 0, nil
+	}
+	return parseCountValue(rows[0]["n"])
+}
+
+func buildCountWikiPendingQuery(database db.DB, objectType string, objectID int, userID int) (string, []interface{}) {
 	query := `SELECT COUNT(*) AS n FROM wiki_canvis WHERE object_type = ? AND object_id = ? AND moderation_status = 'pendent'`
 	args := []interface{}{objectType, objectID}
 	if userID > 0 {
 		query += " AND changed_by = ?"
 		args = append(args, userID)
 	}
-	rows, err := a.DB.Query(query, args...)
-	if err != nil {
-		return 0, err
-	}
-	if len(rows) == 0 {
-		return 0, nil
-	}
-	return parseCountValue(rows[0]["n"])
+	return formatSQLForDB(database, query), args
 }
 
 func parseCountValue(raw interface{}) (int, error) {

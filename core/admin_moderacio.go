@@ -3298,6 +3298,24 @@ func (a *App) requireModeracioUser(w http.ResponseWriter, r *http.Request) (*db.
 	return user, perms, false, false
 }
 
+func (a *App) requireModeracioAnyTypeUser(w http.ResponseWriter, r *http.Request, objTypes ...string) (*db.User, db.PolicyPermissions, bool, bool) {
+	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
+	if !ok {
+		return nil, db.PolicyPermissions{}, false, false
+	}
+	if canModerateAll {
+		return user, perms, true, true
+	}
+	scopeModel := a.newModeracioScopeModel(user, perms, false)
+	for _, objType := range objTypes {
+		if scopeModel.canModerateType(strings.TrimSpace(objType)) {
+			return user, perms, false, true
+		}
+	}
+	http.Error(w, "Forbidden", http.StatusForbidden)
+	return user, perms, false, false
+}
+
 func (a *App) canModeracioMassiva(user *db.User, perms db.PolicyPermissions) bool {
 	if user == nil {
 		return false

@@ -530,6 +530,21 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		}
 		return permKeys[key]
 	}
+	hasModeracioKey := hasKey(permKeyModeracioMassiva) ||
+		hasKey(permKeyPersonesModerate) ||
+		hasKey(permKeyCognomsModerate) ||
+		hasKey(permKeyMediaModerate) ||
+		hasKey(permKeyEventsModerate) ||
+		hasKey(permKeyAdminExternalLinksModerate) ||
+		hasKey(permKeyTerritoriMunicipisMapesModerate) ||
+		hasKey(permKeyTerritoriMunicipisHistoriaModerate) ||
+		hasKey(permKeyTerritoriMunicipisAnecdotesModerate) ||
+		hasKey(permKeyTerritoriMunicipisEdit) ||
+		hasKey(permKeyTerritoriNivellsEdit) ||
+		hasKey(permKeyTerritoriEclesEdit) ||
+		hasKey(permKeyDocumentalsArxiusEdit) ||
+		hasKey(permKeyDocumentalsLlibresEdit) ||
+		hasKey(permKeyDocumentalsRegistresEdit)
 	if _, found := m["CanManageArxius"]; !found {
 		m["CanManageArxius"] = effectiveAdmin || perms.CanManageArchives
 	}
@@ -546,7 +561,7 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		m["CanManagePolicies"] = effectiveAdmin || perms.CanManagePolicies
 	}
 	if _, found := m["CanModerate"]; !found {
-		m["CanModerate"] = effectiveAdmin || perms.CanModerate
+		m["CanModerate"] = effectiveAdmin || perms.CanModerate || hasModeracioKey
 	}
 	if _, found := m["IsAdmin"]; !found {
 		m["IsAdmin"] = effectiveAdmin

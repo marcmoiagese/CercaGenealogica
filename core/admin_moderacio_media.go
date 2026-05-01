@@ -25,7 +25,7 @@ type mediaModerationItemView struct {
 }
 
 func (a *App) AdminModeracioMediaList(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permModerate); !ok {
+	if _, _, _, ok := a.requireModeracioAnyTypeUser(w, r, "media_album", "media_item"); !ok {
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -135,7 +135,7 @@ func (a *App) AdminModeracioMediaList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminModeracioMediaAlbumApprove(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permModerate); !ok {
+	if _, _, _, ok := a.requireModeracioAnyTypeUser(w, r, "media_album"); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -206,7 +206,7 @@ func (a *App) AdminModeracioMediaAlbumApprove(w http.ResponseWriter, r *http.Req
 }
 
 func (a *App) AdminModeracioMediaAlbumReject(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permModerate); !ok {
+	if _, _, _, ok := a.requireModeracioAnyTypeUser(w, r, "media_album"); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -254,7 +254,7 @@ func (a *App) AdminModeracioMediaAlbumReject(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *App) AdminModeracioMediaItemApprove(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permModerate); !ok {
+	if _, _, _, ok := a.requireModeracioAnyTypeUser(w, r, "media_item"); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -317,7 +317,7 @@ func (a *App) AdminModeracioMediaItemApprove(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *App) AdminModeracioMediaItemReject(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permModerate); !ok {
+	if _, _, _, ok := a.requireModeracioAnyTypeUser(w, r, "media_item"); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
