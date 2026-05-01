@@ -50,8 +50,11 @@
                     </div>
                 </div>
                 <p class="muted muni-subtitle">{{ t .Lang "municipi.pro.hero.subtitle" }}</p>
-                {{ if or .Data.CanViewLlibres .Data.CanCreateLlibre }}
+                {{ if or .Data.CanEditMunicipi .Data.CanViewLlibres .Data.CanCreateLlibre }}
                 <div class="muni-actions">
+                    {{ if .Data.CanEditMunicipi }}
+                    <a class="boto-secundari" href="{{ .Data.EditMunicipiURL }}"><i class="fas fa-pen-to-square"></i> Editar</a>
+                    {{ end }}
                     {{ if .Data.CanViewLlibres }}
                     <a class="boto-primari" href="{{ .Data.LlibresURL }}"><i class="fas fa-folder-open"></i> {{ t .Lang "municipi.pro.cta.catalog" }}</a>
                     {{ end }}

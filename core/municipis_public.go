@@ -20,7 +20,20 @@ type municipiCategoryView struct {
 }
 
 func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisView); !ok {
+	if user, logged := a.VerificarSessio(r); logged && user != nil {
+		*r = *a.withUser(r, user)
+		perms := a.getPermissionsForUser(user.ID)
+		*r = *a.withPermissions(r, perms)
+		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
+		*r = *a.ensureUnreadMessagesCount(r, user.ID)
+		if _, found := permissionKeysFromContext(r); !found {
+			*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
+		}
+		if !a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisView) && !a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisEdit) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	} else if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriMunicipisView); !ok {
 		return
 	}
 	id := extractID(r.URL.Path)
@@ -44,6 +57,15 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 	canManageArxius := user != nil && a.hasPerm(perms, permArxius)
 	canManagePolicies := user != nil && (perms.CanManagePolicies || perms.Admin)
 	munTarget := a.resolveMunicipiTarget(mun.ID)
+	if user != nil && !a.HasPermission(user.ID, permKeyTerritoriMunicipisView, munTarget) && !a.HasPermission(user.ID, permKeyTerritoriMunicipisEdit, munTarget) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	canEditMunicipi := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisEdit, munTarget)
+	editURL := fmt.Sprintf("/territori/municipis/%d/edit", mun.ID)
+	if ret := strings.TrimSpace(currentRequestURL(r)); ret != "" {
+		editURL += "?return_to=" + url.QueryEscape(ret)
+	}
 	canViewMap := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisMapesView, munTarget)
 	canCreateMap := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisMapesCreate, munTarget)
 	canViewLlibres := user != nil && a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresView)
@@ -285,6 +307,8 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 		"CanManagePolicies":         canManagePolicies,
 		"CanModerate":               canModerate,
 		"CanManageTerritory":        canManageTerritory,
+		"CanEditMunicipi":           canEditMunicipi,
+		"EditMunicipiURL":           editURL,
 		"CanViewMap":                canViewMap,
 		"CanCreateMap":              canCreateMap,
 		"CanCreateAnecdote":         canCreateAnecdote,

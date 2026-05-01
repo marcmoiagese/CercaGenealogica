@@ -346,6 +346,128 @@ func TestF331ScopedNivellEditAndSaveStayInsidePais(t *testing.T) {
 	}
 }
 
+func TestF332MunicipiProfileShowsEditForGlobalAdmin(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f33_2_municipi_profile_admin.sqlite3")
+	session := createBrowseTestSessionAdmin(t, database, "f33_2_mun_admin")
+
+	paisID := createBrowseTestCountry(t, database, "MA")
+	level1 := createBrowseTestLevel(t, database, paisID, 1, "Regio Admin", "regio", 0)
+	munID := createBrowseTestMunicipi(t, database, 0, "Municipi Admin", [7]int{level1})
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/municipis/%d", munID), nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.MunicipiPublic(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("MunicipiPublic admin esperava 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	editPrefix := fmt.Sprintf(`/territori/municipis/%d/edit?return_to=`, munID)
+	expectedReturnTo := url.QueryEscape(fmt.Sprintf("/territori/municipis/%d", munID))
+	if !strings.Contains(body, editPrefix) || !strings.Contains(body, expectedReturnTo) || !strings.Contains(body, "Editar") {
+		t.Fatalf("perfil de municipi hauria de mostrar Editar amb return_to; falten %q o %q", editPrefix, expectedReturnTo)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/municipis/%d/edit", munID), nil)
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.AdminEditMunicipi(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminEditMunicipi admin esperava 200, got %d", rr.Code)
+	}
+}
+
+func TestF332MunicipiProfileHidesEditWithoutPermissionAndEditURLForbids(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f33_2_municipi_profile_no_permission.sqlite3")
+
+	paisID := createBrowseTestCountry(t, database, "MB")
+	level1 := createBrowseTestLevel(t, database, paisID, 1, "Regio Publica", "regio", 0)
+	munID := createBrowseTestMunicipi(t, database, 0, "Municipi Public", [7]int{level1})
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/municipis/%d", munID), nil)
+	rr := httptest.NewRecorder()
+	app.MunicipiPublic(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("MunicipiPublic anonim esperava 200, got %d", rr.Code)
+	}
+	editPrefix := fmt.Sprintf(`/territori/municipis/%d/edit?return_to=`, munID)
+	if strings.Contains(rr.Body.String(), editPrefix) {
+		t.Fatalf("perfil de municipi anonim no hauria de mostrar Editar")
+	}
+
+	user := createTestUser(t, database, "f33_2_mun_no_perm")
+	session := createSessionCookie(t, database, user.ID, "sess_f33_2_mun_no_perm")
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/municipis/%d/edit", munID), nil)
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.AdminEditMunicipi(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("AdminEditMunicipi sense permis hauria de bloquejar amb 403, got %d", rr.Code)
+	}
+}
+
+func TestF332MunicipiProfileUsesScopedEditPermission(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f33_2_municipi_profile_scoped.sqlite3")
+
+	allowedPaisID := createBrowseTestCountry(t, database, "MC")
+	blockedPaisID := createBrowseTestCountry(t, database, "MD")
+	allowedLevel := createBrowseTestLevel(t, database, allowedPaisID, 1, "Regio Permesa", "regio", 0)
+	blockedLevel := createBrowseTestLevel(t, database, blockedPaisID, 1, "Regio Bloquejada", "regio", 0)
+	allowedMunID := createBrowseTestMunicipi(t, database, 0, "Municipi Permes", [7]int{allowedLevel})
+	blockedMunID := createBrowseTestMunicipi(t, database, 0, "Municipi Bloquejat", [7]int{blockedLevel})
+
+	editor := createTestUser(t, database, "f33_2_mun_scoped_editor")
+	session := createSessionCookie(t, database, editor.ID, "sess_f33_2_mun_scoped_editor")
+	allowedViewID := createScopedPolicyWithGrant(t, database, "f33_2_mun_allowed_view", "territori.municipis.view", core.ScopePais, allowedPaisID, true)
+	allowedEditID := createScopedPolicyWithGrant(t, database, "f33_2_mun_allowed_edit", "territori.municipis.edit", core.ScopePais, allowedPaisID, true)
+	blockedViewID := createScopedPolicyWithGrant(t, database, "f33_2_mun_blocked_view", "territori.municipis.view", core.ScopePais, blockedPaisID, true)
+	for _, policyID := range []int{allowedViewID, allowedEditID, blockedViewID} {
+		if err := database.AddUserPolitica(editor.ID, policyID); err != nil {
+			t.Fatalf("AddUserPolitica ha fallat: %v", err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/municipis/%d", allowedMunID), nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.MunicipiPublic(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("MunicipiPublic dins pais permes esperava 200, got %d", rr.Code)
+	}
+	allowedEditPrefix := fmt.Sprintf(`/territori/municipis/%d/edit?return_to=`, allowedMunID)
+	if !strings.Contains(rr.Body.String(), allowedEditPrefix) {
+		t.Fatalf("perfil de municipi dins pais permes hauria de mostrar Editar; falta %q", allowedEditPrefix)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/municipis/%d/edit", allowedMunID), nil)
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.AdminEditMunicipi(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminEditMunicipi dins pais permes esperava 200, got %d", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/municipis/%d", blockedMunID), nil)
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.MunicipiPublic(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("MunicipiPublic fora ambit edit permes esperava 200 per view scoped, got %d", rr.Code)
+	}
+	blockedEditPrefix := fmt.Sprintf(`/territori/municipis/%d/edit?return_to=`, blockedMunID)
+	if strings.Contains(rr.Body.String(), blockedEditPrefix) {
+		t.Fatalf("perfil de municipi fora ambit edit no hauria de mostrar Editar")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/municipis/%d/edit", blockedMunID), nil)
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.AdminEditMunicipi(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("AdminEditMunicipi fora ambit edit hauria de bloquejar amb 403, got %d", rr.Code)
+	}
+}
+
 func TestMunicipiBrowseAllowedComarcaUsesAnyLevelColumnF3014Emergency(t *testing.T) {
 	_, database := newTestAppForLogin(t, "test_f30_14_allowed_comarca_any_column.sqlite3")
 
