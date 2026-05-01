@@ -71,8 +71,7 @@ func (d *MySQL) Query(query string, args ...interface{}) ([]map[string]interface
 			scanArgs[i] = &values[i]
 		}
 
-		err := rows.Scan(scanArgs...)
-		if err != nil {
+		if err := rows.Scan(scanArgs...); err != nil {
 			return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "mysql", Op: "scan"}, err)
 		}
 
