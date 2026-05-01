@@ -211,6 +211,9 @@ func (h sqlHelper) postgresExtensionExists(name string) bool {
 	}
 	var tmp int
 	if err := h.db.QueryRow("SELECT 1 FROM pg_extension WHERE extname = $1", name).Scan(&tmp); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false
+		}
 		_ = h.wrapSQLError("sql_helper", "postgres_extension_exists", "pg_extension", 0, err)
 		return false
 	}
@@ -9347,7 +9350,6 @@ func (h sqlHelper) bulkCreateTranscripcioRawBundlesPrepared(bundles []Transcripc
 	committed = true
 	return res, nil
 }
-
 
 func (h sqlHelper) bulkCreateTranscripcioRawBundlesMySQL(bundles []TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
 	res := TranscripcioRawImportBulkResult{

@@ -2730,9 +2730,12 @@ func applyDatabaseFromSQL(sqlFile, engine string, db DB, reset bool) error {
 	if _, err := db.Exec(beginStmt); err != nil {
 		return fmt.Errorf("no s’ha pogut començar transacció: %w", err)
 	}
+	committed := false
 	defer func() {
 		// en cas d’error, el caller retornarà; aquí fem un ROLLBACK best-effort
-		_, _ = db.Exec("ROLLBACK")
+		if !committed {
+			_, _ = db.Exec("ROLLBACK")
+		}
 	}()
 
 	// 4) Activar FKs només per SQLite (PRAGMA és específic de SQLite)
@@ -2781,6 +2784,7 @@ func applyDatabaseFromSQL(sqlFile, engine string, db DB, reset bool) error {
 		return fmt.Errorf("error fent COMMIT: %w", err)
 	}
 
+	committed = true
 	if reset {
 		logInfof("BD recreada correctament")
 	} else {
