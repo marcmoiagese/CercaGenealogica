@@ -519,6 +519,10 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	if !ok {
 		return data
 	}
+	effectiveAdmin := perms.Admin
+	if isAdmin, found := effectiveAdminFromContext(r); found {
+		effectiveAdmin = isAdmin
+	}
 	permKeys, permKeysFound := permissionKeysFromContext(r)
 	hasKey := func(key string) bool {
 		if !permKeysFound {
@@ -527,60 +531,60 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		return permKeys[key]
 	}
 	if _, found := m["CanManageArxius"]; !found {
-		m["CanManageArxius"] = perms.Admin || perms.CanManageArchives
+		m["CanManageArxius"] = effectiveAdmin || perms.CanManageArchives
 	}
 	if _, found := m["CanManageTerritory"]; !found {
-		m["CanManageTerritory"] = perms.Admin || perms.CanManageTerritory
+		m["CanManageTerritory"] = effectiveAdmin || perms.CanManageTerritory
 	}
 	if _, found := m["CanManageEclesia"]; !found {
-		m["CanManageEclesia"] = perms.Admin || perms.CanManageEclesia
+		m["CanManageEclesia"] = effectiveAdmin || perms.CanManageEclesia
 	}
 	if _, found := m["CanManageUsers"]; !found {
-		m["CanManageUsers"] = perms.Admin || perms.CanManageUsers
+		m["CanManageUsers"] = effectiveAdmin || perms.CanManageUsers
 	}
 	if _, found := m["CanManagePolicies"]; !found {
-		m["CanManagePolicies"] = perms.Admin || perms.CanManagePolicies
+		m["CanManagePolicies"] = effectiveAdmin || perms.CanManagePolicies
 	}
 	if _, found := m["CanModerate"]; !found {
-		m["CanModerate"] = perms.Admin || perms.CanModerate
+		m["CanModerate"] = effectiveAdmin || perms.CanModerate
 	}
 	if _, found := m["IsAdmin"]; !found {
-		m["IsAdmin"] = perms.Admin
+		m["IsAdmin"] = effectiveAdmin
 	}
 	if _, found := m["CanViewArxius"]; !found {
-		m["CanViewArxius"] = perms.Admin || perms.CanManageArchives || hasKey(permKeyDocumentalsArxiusView) ||
+		m["CanViewArxius"] = effectiveAdmin || perms.CanManageArchives || hasKey(permKeyDocumentalsArxiusView) ||
 			hasKey(permKeyDocumentalsArxiusCreate) || hasKey(permKeyDocumentalsArxiusEdit) || hasKey(permKeyDocumentalsArxiusDelete) ||
 			hasKey(permKeyDocumentalsArxiusImport) || hasKey(permKeyDocumentalsArxiusExport)
 	}
 	if _, found := m["CanViewHome"]; !found {
-		m["CanViewHome"] = perms.Admin || hasKey(permKeyHomeView)
+		m["CanViewHome"] = effectiveAdmin || hasKey(permKeyHomeView)
 	}
 	if _, found := m["CanViewMessages"]; !found {
-		m["CanViewMessages"] = perms.Admin || hasKey(permKeyMessagesView)
+		m["CanViewMessages"] = effectiveAdmin || hasKey(permKeyMessagesView)
 	}
 	if _, found := m["CanViewSearch"]; !found {
-		m["CanViewSearch"] = perms.Admin || hasKey(permKeySearchAdvancedView)
+		m["CanViewSearch"] = effectiveAdmin || hasKey(permKeySearchAdvancedView)
 	}
 	if _, found := m["CanViewRanking"]; !found {
-		m["CanViewRanking"] = perms.Admin || hasKey(permKeyRankingView)
+		m["CanViewRanking"] = effectiveAdmin || hasKey(permKeyRankingView)
 	}
 	if _, found := m["CanViewPersones"]; !found {
-		m["CanViewPersones"] = perms.Admin || perms.CanCreatePerson || hasKey(permKeyPersonsView)
+		m["CanViewPersones"] = effectiveAdmin || perms.CanCreatePerson || hasKey(permKeyPersonsView)
 	}
 	if _, found := m["CanCreatePerson"]; !found {
-		m["CanCreatePerson"] = perms.Admin || perms.CanCreatePerson
+		m["CanCreatePerson"] = effectiveAdmin || perms.CanCreatePerson
 	}
 	if _, found := m["CanViewCognoms"]; !found {
-		m["CanViewCognoms"] = perms.Admin || hasKey(permKeyCognomsView)
+		m["CanViewCognoms"] = effectiveAdmin || hasKey(permKeyCognomsView)
 	}
 	if _, found := m["CanViewMedia"]; !found {
-		m["CanViewMedia"] = perms.Admin || hasKey(permKeyMediaView)
+		m["CanViewMedia"] = effectiveAdmin || hasKey(permKeyMediaView)
 	}
 	if _, found := m["CanViewEvents"]; !found {
-		m["CanViewEvents"] = perms.Admin || hasKey(permKeyEventsView)
+		m["CanViewEvents"] = effectiveAdmin || hasKey(permKeyEventsView)
 	}
 	if _, found := m["CanViewLlibres"]; !found {
-		m["CanViewLlibres"] = perms.Admin || perms.CanManageArchives || hasKey(permKeyDocumentalsLlibresView) ||
+		m["CanViewLlibres"] = effectiveAdmin || perms.CanManageArchives || hasKey(permKeyDocumentalsLlibresView) ||
 			hasKey(permKeyDocumentalsLlibresCreate) || hasKey(permKeyDocumentalsLlibresEdit) || hasKey(permKeyDocumentalsLlibresDelete) ||
 			hasKey(permKeyDocumentalsLlibresImport) || hasKey(permKeyDocumentalsLlibresExport) || hasKey(permKeyDocumentalsLlibresExportCSV) ||
 			hasKey(permKeyDocumentalsLlibresImportCSV) || hasKey(permKeyDocumentalsLlibresViewRegistres) || hasKey(permKeyDocumentalsLlibresBulkIndex) ||
@@ -592,27 +596,27 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		m["CanViewDocumentals"] = m["CanViewArxius"].(bool) || m["CanViewLlibres"].(bool)
 	}
 	if _, found := m["CanViewImportTemplates"]; !found {
-		m["CanViewImportTemplates"] = perms.Admin || hasKey(permKeyImportTemplatesView) ||
+		m["CanViewImportTemplates"] = effectiveAdmin || hasKey(permKeyImportTemplatesView) ||
 			hasKey(permKeyDocumentalsLlibresImportCSV) || hasKey(permKeyDocumentalsLlibresImport)
 	}
 	if _, found := m["CanImportTemplates"]; !found {
-		m["CanImportTemplates"] = perms.Admin || perms.CanManageArchives ||
+		m["CanImportTemplates"] = effectiveAdmin || perms.CanManageArchives ||
 			hasKey(permKeyDocumentalsLlibresImportCSV) || hasKey(permKeyDocumentalsLlibresImport)
 	}
 	if _, found := m["CanIndexRegistres"]; !found {
-		m["CanIndexRegistres"] = perms.Admin || perms.CanManageArchives ||
+		m["CanIndexRegistres"] = effectiveAdmin || perms.CanManageArchives ||
 			hasKey(permKeyDocumentalsRegistresEdit) || hasKey(permKeyDocumentalsRegistresEditInline)
 	}
 	if _, found := m["CanBulkIndex"]; !found {
-		m["CanBulkIndex"] = perms.Admin || perms.CanManageArchives || hasKey(permKeyDocumentalsLlibresBulkIndex)
+		m["CanBulkIndex"] = effectiveAdmin || perms.CanManageArchives || hasKey(permKeyDocumentalsLlibresBulkIndex)
 	}
 	if _, found := m["CanViewNivells"]; !found {
-		m["CanViewNivells"] = perms.Admin || perms.CanManageTerritory ||
+		m["CanViewNivells"] = effectiveAdmin || perms.CanManageTerritory ||
 			hasKey(permKeyTerritoriNivellsView) || hasKey(permKeyTerritoriNivellsCreate) || hasKey(permKeyTerritoriNivellsEdit) ||
 			hasKey(permKeyTerritoriNivellsRebuild)
 	}
 	if _, found := m["CanViewMunicipis"]; !found {
-		m["CanViewMunicipis"] = perms.Admin || perms.CanManageTerritory ||
+		m["CanViewMunicipis"] = effectiveAdmin || perms.CanManageTerritory ||
 			hasKey(permKeyTerritoriMunicipisView) || hasKey(permKeyTerritoriMunicipisCreate) || hasKey(permKeyTerritoriMunicipisEdit) ||
 			hasKey(permKeyTerritoriMunicipisMapesView) || hasKey(permKeyTerritoriMunicipisMapesCreate) || hasKey(permKeyTerritoriMunicipisMapesEdit) ||
 			hasKey(permKeyTerritoriMunicipisMapesSubmit) || hasKey(permKeyTerritoriMunicipisMapesModerate) ||
@@ -623,7 +627,7 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 			hasKey(permKeyTerritoriMunicipisAnecdotesModerate)
 	}
 	if _, found := m["CanViewEcles"]; !found {
-		m["CanViewEcles"] = perms.Admin || perms.CanManageEclesia ||
+		m["CanViewEcles"] = effectiveAdmin || perms.CanManageEclesia ||
 			hasKey(permKeyTerritoriEclesView) || hasKey(permKeyTerritoriEclesCreate) || hasKey(permKeyTerritoriEclesEdit) ||
 			hasKey(permKeyTerritoriEclesImportJSON)
 	}

@@ -993,6 +993,9 @@ func (a *App) requirePermissionKey(w http.ResponseWriter, r *http.Request, permK
 		perms = a.getPermissionsForUser(user.ID)
 		*r = *a.withPermissions(r, perms)
 	}
+	if _, found := effectiveAdminFromContext(r); !found {
+		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
+	}
 	*r = *a.ensureUnreadMessagesCount(r, user.ID)
 	if _, found := permissionKeysFromContext(r); !found {
 		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
@@ -1016,6 +1019,9 @@ func (a *App) requireAnyPermissionKey(w http.ResponseWriter, r *http.Request, pe
 		perms = a.getPermissionsForUser(user.ID)
 		*r = *a.withPermissions(r, perms)
 	}
+	if _, found := effectiveAdminFromContext(r); !found {
+		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
+	}
 	*r = *a.ensureUnreadMessagesCount(r, user.ID)
 	if _, found := permissionKeysFromContext(r); !found {
 		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
@@ -1037,6 +1043,9 @@ func (a *App) requirePermissionKeyIfLogged(w http.ResponseWriter, r *http.Reques
 	if !found {
 		perms = a.getPermissionsForUser(user.ID)
 		*r = *a.withPermissions(r, perms)
+	}
+	if _, found := effectiveAdminFromContext(r); !found {
+		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
 	}
 	*r = *a.ensureUnreadMessagesCount(r, user.ID)
 	if _, found := permissionKeysFromContext(r); !found {
@@ -1060,6 +1069,9 @@ func (a *App) requirePermissionKeyAnyScope(w http.ResponseWriter, r *http.Reques
 	if !found {
 		perms = a.getPermissionsForUser(user.ID)
 		*r = *a.withPermissions(r, perms)
+	}
+	if _, found := effectiveAdminFromContext(r); !found {
+		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
 	}
 	*r = *a.ensureUnreadMessagesCount(r, user.ID)
 	if _, found := permissionKeysFromContext(r); !found {

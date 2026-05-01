@@ -39,6 +39,9 @@
                     {{ if .Data.CanViewMunicipis }}
                     <a class="boto-secundari" id="ctaMunicipis" href="#"><i class="fas fa-map-marker-alt"></i> Veure municipis</a>
                     {{ end }}
+                    {{ if .Data.CanEditNivell }}
+                    <a class="boto-secundari" href="{{ .Data.EditNivellURL }}"><i class="fas fa-pen-to-square"></i> Editar</a>
+                    {{ end }}
                 </div>
                 {{ end }}
             </div>

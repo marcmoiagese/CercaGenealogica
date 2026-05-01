@@ -19,6 +19,10 @@ type unreadMessagesContextKey string
 
 const unreadMessagesKey unreadMessagesContextKey = "unread_messages"
 
+type effectiveAdminContextKey string
+
+const effectiveAdminKey effectiveAdminContextKey = "effective_admin"
+
 // PolicyPermissions is re-exported for convenience
 type PolicyPermissions = db.PolicyPermissions
 
@@ -50,6 +54,39 @@ func (a *App) permissionsFromContext(r *http.Request) (db.PolicyPermissions, boo
 
 func (a *App) withPermissions(r *http.Request, perms db.PolicyPermissions) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), permissionsKey, perms))
+}
+
+func (a *App) withEffectiveAdmin(r *http.Request, isAdmin bool) *http.Request {
+	if r == nil {
+		return r
+	}
+	return r.WithContext(context.WithValue(r.Context(), effectiveAdminKey, isAdmin))
+}
+
+func effectiveAdminFromContext(r *http.Request) (bool, bool) {
+	if r == nil {
+		return false, false
+	}
+	if val := r.Context().Value(effectiveAdminKey); val != nil {
+		if isAdmin, ok := val.(bool); ok {
+			return isAdmin, true
+		}
+	}
+	return false, false
+}
+
+func (a *App) effectiveAdminForUser(userID int, perms db.PolicyPermissions) bool {
+	if perms.Admin {
+		return true
+	}
+	if userID == 0 || a == nil {
+		return false
+	}
+	snap, err := a.getPermissionSnapshot(userID)
+	if err != nil {
+		return false
+	}
+	return snap.isAdmin
 }
 
 func (a *App) withUser(r *http.Request, u *db.User) *http.Request {
@@ -124,6 +161,9 @@ func (a *App) requirePermission(w http.ResponseWriter, r *http.Request, check fu
 		perms = a.getPermissionsForUser(user.ID)
 		*r = *a.withPermissions(r, perms)
 	}
+	if _, found := effectiveAdminFromContext(r); !found {
+		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
+	}
 	*r = *a.ensureUnreadMessagesCount(r, user.ID)
 	if _, found := permissionKeysFromContext(r); !found {
 		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
@@ -156,6 +196,9 @@ func (a *App) RequireLogin(next http.HandlerFunc) http.HandlerFunc {
 			if !found {
 				perms = a.getPermissionsForUser(user.ID)
 				*r = *a.withPermissions(r, perms)
+			}
+			if _, found := effectiveAdminFromContext(r); !found {
+				*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
 			}
 			*r = *a.ensureUnreadMessagesCount(r, user.ID)
 			if _, found := permissionKeysFromContext(r); !found {

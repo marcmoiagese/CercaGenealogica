@@ -33,7 +33,20 @@ type nivellDemoTotals struct {
 var nivellYearRegex = regexp.MustCompile(`\d{4}`)
 
 func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriNivellsView); !ok {
+	if user, logged := a.VerificarSessio(r); logged && user != nil {
+		*r = *a.withUser(r, user)
+		perms := a.getPermissionsForUser(user.ID)
+		*r = *a.withPermissions(r, perms)
+		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
+		*r = *a.ensureUnreadMessagesCount(r, user.ID)
+		if _, found := permissionKeysFromContext(r); !found {
+			*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
+		}
+		if !a.hasAnyPermissionKey(user.ID, permKeyTerritoriNivellsView) && !a.hasAnyPermissionKey(user.ID, permKeyTerritoriNivellsEdit) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	} else if _, ok := a.requirePermissionKeyIfLogged(w, r, permKeyTerritoriNivellsView); !ok {
 		return
 	}
 	id := extractID(r.URL.Path)
@@ -62,6 +75,11 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 	canViewMunicipis := user != nil && a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisView)
 	canViewLlibres := user != nil && a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresView)
 	canManageArxius := user != nil && a.hasPerm(perms, permArxius)
+	canEditNivell := user != nil && a.HasPermission(user.ID, permKeyTerritoriNivellsEdit, PermissionTarget{PaisID: intPtr(nivell.PaisID)})
+	editURL := fmt.Sprintf("/territori/nivells/%d/edit", nivell.ID)
+	if ret := strings.TrimSpace(currentRequestURL(r)); ret != "" {
+		editURL += "?return_to=" + url.QueryEscape(ret)
+	}
 
 	status := nivell.ModeracioEstat
 	if status == "" {
@@ -165,6 +183,8 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 		"StatusBadgeClass": statusClass,
 		"CanViewLlibres":   canViewLlibres,
 		"CanViewMunicipis": canViewMunicipis,
+		"CanEditNivell":    canEditNivell,
+		"EditNivellURL":    editURL,
 		"HasActions":       true,
 		"DemografiaTotals": demoTotals,
 		"StatsLimited":     false,
@@ -175,9 +195,9 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 		"CanManageArxius":  canManageArxius,
 		"CanManageTerritory": canManageTerritory,
 		"CanManageEclesia": user != nil && a.hasPerm(perms, permEclesia),
-		"CanManagePolicies": user != nil && (perms.CanManagePolicies || perms.Admin),
+		"CanManagePolicies": user != nil && (perms.CanManagePolicies || a.effectiveAdminForUser(user.ID, perms)),
 		"CanModerate":       canModerate,
-		"IsAdmin":           user != nil && perms.Admin,
+		"IsAdmin":           user != nil && a.effectiveAdminForUser(user.ID, perms),
 	}
 	if user != nil {
 		RenderPrivateTemplate(w, r, "nivell-administratiu-perfil-pro.html", data)

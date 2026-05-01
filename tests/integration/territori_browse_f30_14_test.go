@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -204,6 +205,144 @@ func TestAdminMunicipisCountryScopedEditUsesRealPaisIDF3014(t *testing.T) {
 	editHref := fmt.Sprintf("/territori/municipis/%d/edit?", munID)
 	if !strings.Contains(body, editHref) {
 		t.Fatalf("esperava acció d'edició per municipi amb permís scoped de país; body no conté %q", editHref)
+	}
+}
+
+func TestF331MunicipiBrowseLinksAdministrativeLevels(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f33_1_municipi_level_links.sqlite3")
+	session := createBrowseTestSessionAdmin(t, database, "f33_1_links_admin")
+
+	targetPaisID := createBrowseTestCountry(t, database, "LQ")
+	level1 := createBrowseTestLevel(t, database, targetPaisID, 1, "Regio Link", "regio", 0)
+	level2 := createBrowseTestLevel(t, database, targetPaisID, 2, "Provincia Link", "provincia", level1)
+	level3 := createBrowseTestLevel(t, database, targetPaisID, 3, "Comarca Link", "comarca", level2)
+	munID := createBrowseTestMunicipi(t, database, 0, "Municipi Link", [7]int{level1, level2, level3})
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/municipis?pais_id=%d&nivell_id_1=%d&nivell_id_2=%d&nivell_id_3=%d&status=publicat", targetPaisID, level1, level2, level3), nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminListMunicipis(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminListMunicipis esperava 200, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	for _, levelID := range []int{level1, level2, level3} {
+		href := fmt.Sprintf(`href="/territori/nivells/%d"`, levelID)
+		if !strings.Contains(body, href) {
+			t.Fatalf("esperava link de nivell %d a la taula de municipis; body no conté %q", levelID, href)
+		}
+	}
+	munHref := fmt.Sprintf(`href="/territori/municipis/%d"`, munID)
+	if !strings.Contains(body, munHref) {
+		t.Fatalf("el link existent del municipi s'ha de mantenir; body no conté %q", munHref)
+	}
+}
+
+func TestF331NivellProfileShowsEditOnlyWithPermission(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f33_1_nivell_profile_edit.sqlite3")
+
+	paisID := createBrowseTestCountry(t, database, "PE")
+	levelID := createBrowseTestLevel(t, database, paisID, 1, "Regio Editable", "regio", 0)
+
+	editor := createTestUser(t, database, "f33_1_nivell_editor")
+	editorSession := createSessionCookie(t, database, editor.ID, "sess_f33_1_nivell_editor")
+	viewPolicyID := createScopedPolicyWithGrant(t, database, "f33_1_nivell_view", "territori.nivells.view", core.ScopePais, paisID, true)
+	editPolicyID := createScopedPolicyWithGrant(t, database, "f33_1_nivell_edit", "territori.nivells.edit", core.ScopePais, paisID, true)
+	if err := database.AddUserPolitica(editor.ID, viewPolicyID); err != nil {
+		t.Fatalf("AddUserPolitica view ha fallat: %v", err)
+	}
+	if err := database.AddUserPolitica(editor.ID, editPolicyID); err != nil {
+		t.Fatalf("AddUserPolitica edit ha fallat: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/nivells/%d", levelID), nil)
+	req.AddCookie(editorSession)
+	rr := httptest.NewRecorder()
+	app.NivellPublic(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("NivellPublic editor esperava 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	editPrefix := fmt.Sprintf(`/territori/nivells/%d/edit?return_to=`, levelID)
+	if !strings.Contains(body, editPrefix) || !strings.Contains(body, "Editar") {
+		t.Fatalf("perfil de nivell hauria de mostrar botó Editar amb permís scoped; falta %q", editPrefix)
+	}
+
+	viewer := createTestUser(t, database, "f33_1_nivell_viewer")
+	viewerSession := createSessionCookie(t, database, viewer.ID, "sess_f33_1_nivell_viewer")
+	viewOnlyID := createScopedPolicyWithGrant(t, database, "f33_1_nivell_view_only", "territori.nivells.view", core.ScopePais, paisID, true)
+	if err := database.AddUserPolitica(viewer.ID, viewOnlyID); err != nil {
+		t.Fatalf("AddUserPolitica view-only ha fallat: %v", err)
+	}
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/nivells/%d", levelID), nil)
+	req.AddCookie(viewerSession)
+	rr = httptest.NewRecorder()
+	app.NivellPublic(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("NivellPublic viewer esperava 200, got %d", rr.Code)
+	}
+	if strings.Contains(rr.Body.String(), editPrefix) {
+		t.Fatalf("perfil de nivell no hauria de mostrar Editar sense permís d'edició")
+	}
+}
+
+func TestF331ScopedNivellEditAndSaveStayInsidePais(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f33_1_nivell_scoped_edit.sqlite3")
+
+	allowedPaisID := createBrowseTestCountry(t, database, "EA")
+	blockedPaisID := createBrowseTestCountry(t, database, "EB")
+	allowedLevelID := createBrowseTestLevel(t, database, allowedPaisID, 1, "Regio Permesa", "regio", 0)
+	blockedLevelID := createBrowseTestLevel(t, database, blockedPaisID, 1, "Regio Bloquejada", "regio", 0)
+
+	editor := createTestUser(t, database, "f33_1_scoped_editor")
+	session := createSessionCookie(t, database, editor.ID, "sess_f33_1_scoped_editor")
+	viewPolicyID := createScopedPolicyWithGrant(t, database, "f33_1_scoped_view", "territori.nivells.view", core.ScopePais, allowedPaisID, true)
+	editPolicyID := createScopedPolicyWithGrant(t, database, "f33_1_scoped_edit", "territori.nivells.edit", core.ScopePais, allowedPaisID, true)
+	if err := database.AddUserPolitica(editor.ID, viewPolicyID); err != nil {
+		t.Fatalf("AddUserPolitica view ha fallat: %v", err)
+	}
+	if err := database.AddUserPolitica(editor.ID, editPolicyID); err != nil {
+		t.Fatalf("AddUserPolitica edit ha fallat: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/nivells/%d/edit", allowedLevelID), nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminEditNivell(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminEditNivell dins pais permès esperava 200, got %d", rr.Code)
+	}
+
+	form := url.Values{}
+	form.Set("id", strconv.Itoa(allowedLevelID))
+	form.Set("pais_id", strconv.Itoa(allowedPaisID))
+	form.Set("nivel", "1")
+	form.Set("nom_nivell", "Regio Permesa Editada")
+	form.Set("tipus_nivell", "regio")
+	form.Set("estat", "actiu")
+	req = httptest.NewRequest(http.MethodPost, "/territori/nivells/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.AdminSaveNivell(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("AdminSaveNivell dins pais permès esperava redirect, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	updated, err := database.GetNivell(allowedLevelID)
+	if err != nil || updated == nil {
+		t.Fatalf("GetNivell actualitzat ha fallat: %v", err)
+	}
+	if updated.NomNivell != "Regio Permesa Editada" {
+		t.Fatalf("AdminSaveNivell no ha guardat el canvi dins pais permès: %+v", updated)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/nivells/%d/edit", blockedLevelID), nil)
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.AdminEditNivell(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("AdminEditNivell fora pais hauria de bloquejar amb 403, got %d", rr.Code)
 	}
 }
 

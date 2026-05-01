@@ -128,17 +128,28 @@
                         {{ else }}
                         {{ range .Data.Municipis }}
                         {{ $levelNames := index $.Data.LevelNamesByID .ID }}
+                        {{ $levelIDs := index $.Data.LevelIDsByID .ID }}
                         <tr>
                             <td class="pais-cell">
                                 {{ $paisName := "" }}
+                                {{ $paisLevelID := 0 }}
                                 {{ if $levelNames }}{{ $paisName = index $levelNames 0 }}{{ end }}
-                                {{ if $paisName }}{{ $paisName }}{{ else }}-{{ end }}
+                                {{ if $levelIDs }}{{ $paisLevelID = index $levelIDs 0 }}{{ end }}
+                                {{ if $paisName }}
+                                    {{ if gt $paisLevelID 0 }}<a href="/territori/nivells/{{ $paisLevelID }}">{{ $paisName }}</a>{{ else }}{{ $paisName }}{{ end }}
+                                {{ else }}-{{ end }}
                             </td>
                             {{ range $.Data.VisibleLevelCols }}
                             {{ $idx := add .Level -1 }}
                             {{ $val := "" }}
+                            {{ $levelID := 0 }}
                             {{ if $levelNames }}{{ $val = index $levelNames $idx }}{{ end }}
-                            <td>{{ if $val }}{{ $val }}{{ else }}-{{ end }}</td>
+                            {{ if $levelIDs }}{{ $levelID = index $levelIDs $idx }}{{ end }}
+                            <td>
+                                {{ if $val }}
+                                    {{ if gt $levelID 0 }}<a href="/territori/nivells/{{ $levelID }}">{{ $val }}</a>{{ else }}{{ $val }}{{ end }}
+                                {{ else }}-{{ end }}
+                            </td>
                             {{ end }}
                             <td class="municipi-cell">
                                 <a href="/territori/municipis/{{ .ID }}">{{ .Nom }}</a>

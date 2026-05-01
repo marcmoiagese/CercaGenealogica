@@ -164,6 +164,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 				"TipusLabels":         map[string]string{},
 				"LevelTypeLabels":     []string{},
 				"LevelNamesByID":      map[int][]string{},
+				"LevelIDsByID":        map[int][]int{},
 				"BooksClassByID":      map[int]string{},
 				"CanManageArxius":     a.hasPerm(perms, permArxius),
 				"CanCreateMunicipi":   false,
@@ -251,6 +252,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		muns            []db.MunicipiBrowseRow
 		total           int
 		levelNamesByID  = map[int][]string{}
+		levelIDsByID    = map[int][]int{}
 		booksClassByID  = map[int]string{}
 		canEditMunicipi = map[int]bool{}
 		showActions     = false
@@ -272,12 +274,17 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, mun := range muns {
 			names := make([]string, 7)
+			ids := make([]int, 7)
 			for i := 0; i < 7; i++ {
 				if mun.LevelNames[i].Valid {
 					names[i] = strings.TrimSpace(mun.LevelNames[i].String)
 				}
+				if mun.LevelIDs[i].Valid {
+					ids[i] = int(mun.LevelIDs[i].Int64)
+				}
 			}
 			levelNamesByID[mun.ID] = names
+			levelIDsByID[mun.ID] = ids
 			booksClassByID[mun.ID] = progressClassForPercent(mun.RegistresIndexats)
 			munTarget := PermissionTarget{MunicipiID: intPtr(mun.ID)}
 			a.fillTerritoryFromNivellIDs(&munTarget, collectBrowseRowLevelIDs(mun))
@@ -316,6 +323,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		"TipusLabels":         typeLabels,
 		"LevelTypeLabels":     levelTypeLabels,
 		"LevelNamesByID":      levelNamesByID,
+		"LevelIDsByID":        levelIDsByID,
 		"BooksClassByID":      booksClassByID,
 		"CanManageArxius":     a.hasPerm(perms, permArxius),
 		"CanCreateMunicipi":   canCreateMunicipi,
