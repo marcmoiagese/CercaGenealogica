@@ -272,19 +272,19 @@ func listStrongMatchTranscripcionsByIDsPostgres(conn *sql.DB, ids []int) ([]Tran
         WHERE id = ANY($1)
         ORDER BY id`, pq.Array(intIDsToInt64Slice(ids)))
 	if err != nil {
-		return nil, err
+		return nil, WrapSQLError(SQLErrorContext{Engine: "postgres", Component: "template_import", Op: "query_strong_match_transcripcions_by_ids", Object: "transcripcions_raw"}, err)
 	}
 	defer rows.Close()
 	trans := make([]TranscripcioRaw, 0, len(ids))
 	for rows.Next() {
 		var row TranscripcioRaw
 		if err := rows.Scan(&row.ID, &row.LlibreID, &row.PaginaID, &row.NumPaginaText, &row.TipusActe, &row.DataActeText, &row.DataActeISO); err != nil {
-			return nil, err
+			return nil, WrapSQLError(SQLErrorContext{Engine: "postgres", Component: "template_import", Op: "scan_strong_match_transcripcions_by_ids", Object: "transcripcions_raw"}, err)
 		}
 		trans = append(trans, row)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, WrapSQLError(SQLErrorContext{Engine: "postgres", Component: "template_import", Op: "rows_err_strong_match_transcripcions_by_ids", Object: "transcripcions_raw"}, err)
 	}
 	return trans, nil
 }
@@ -300,18 +300,18 @@ func listStrongMatchPersonesByIDsPostgres(conn *sql.DB, ids []int) (map[int][]Tr
         WHERE transcripcio_id = ANY($1)
         ORDER BY transcripcio_id, id`, pq.Array(intIDsToInt64Slice(ids)))
 	if err != nil {
-		return nil, err
+		return nil, WrapSQLError(SQLErrorContext{Engine: "postgres", Component: "template_import", Op: "query_strong_match_persones_by_ids", Object: "transcripcions_persones_raw"}, err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var row TranscripcioPersonaRaw
 		if err := rows.Scan(&row.ID, &row.TranscripcioID, &row.Rol, &row.Nom, &row.Cognom1, &row.Cognom2); err != nil {
-			return nil, err
+			return nil, WrapSQLError(SQLErrorContext{Engine: "postgres", Component: "template_import", Op: "scan_strong_match_persones_by_ids", Object: "transcripcions_persones_raw"}, err)
 		}
 		res[row.TranscripcioID] = append(res[row.TranscripcioID], row)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, WrapSQLError(SQLErrorContext{Engine: "postgres", Component: "template_import", Op: "rows_err_strong_match_persones_by_ids", Object: "transcripcions_persones_raw"}, err)
 	}
 	return res, nil
 }
@@ -327,18 +327,18 @@ func listStrongMatchAtributsByIDsPostgres(conn *sql.DB, ids []int) (map[int][]Tr
         WHERE transcripcio_id = ANY($1)
         ORDER BY transcripcio_id, id`, pq.Array(intIDsToInt64Slice(ids)))
 	if err != nil {
-		return nil, err
+		return nil, WrapSQLError(SQLErrorContext{Engine: "postgres", Component: "template_import", Op: "query_strong_match_atributs_by_ids", Object: "transcripcions_atributs_raw"}, err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var row TranscripcioAtributRaw
 		if err := rows.Scan(&row.ID, &row.TranscripcioID, &row.Clau, &row.ValorText, &row.ValorInt, &row.ValorDate, &row.ValorBool); err != nil {
-			return nil, err
+			return nil, WrapSQLError(SQLErrorContext{Engine: "postgres", Component: "template_import", Op: "scan_strong_match_atributs_by_ids", Object: "transcripcions_atributs_raw"}, err)
 		}
 		res[row.TranscripcioID] = append(res[row.TranscripcioID], row)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, WrapSQLError(SQLErrorContext{Engine: "postgres", Component: "template_import", Op: "rows_err_strong_match_atributs_by_ids", Object: "transcripcions_atributs_raw"}, err)
 	}
 	return res, nil
 }
@@ -359,7 +359,7 @@ func (h sqlHelper) copyInPostgresTranscripcioPersonesTx(tx *sql.Tx, rows []Trans
 		"casa_nom", "casa_estat", "persona_id", "linked_by", "linked_at", "notes",
 	))
 	if err != nil {
-		return err
+		return h.wrapSQLError("template_import", "prepare_copy_transcripcio_persones", "transcripcions_persones_raw", 0, err)
 	}
 	closeStmt := true
 	defer func() {
@@ -369,14 +369,14 @@ func (h sqlHelper) copyInPostgresTranscripcioPersonesTx(tx *sql.Tx, rows []Trans
 	}()
 	for _, row := range rows {
 		if _, err := stmt.Exec(buildInsertTranscripcioPersonaArgs(row)...); err != nil {
-			return err
+			return h.wrapSQLError("template_import", "exec_copy_transcripcio_persones", "transcripcions_persones_raw", row.TranscripcioID, err)
 		}
 	}
 	if _, err := stmt.Exec(); err != nil {
-		return err
+		return h.wrapSQLError("template_import", "flush_copy_transcripcio_persones", "transcripcions_persones_raw", 0, err)
 	}
 	if err := stmt.Close(); err != nil {
-		return err
+		return h.wrapSQLError("template_import", "close_copy_transcripcio_persones", "transcripcions_persones_raw", 0, err)
 	}
 	closeStmt = false
 	return nil
@@ -391,7 +391,7 @@ func (h sqlHelper) copyInPostgresTranscripcioAtributsTx(tx *sql.Tx, rows []Trans
 		"transcripcio_id", "clau", "tipus_valor", "valor_text", "valor_int", "valor_date", "valor_bool", "estat", "notes",
 	))
 	if err != nil {
-		return err
+		return h.wrapSQLError("template_import", "prepare_copy_transcripcio_atributs", "transcripcions_atributs_raw", 0, err)
 	}
 	closeStmt := true
 	defer func() {
@@ -401,14 +401,14 @@ func (h sqlHelper) copyInPostgresTranscripcioAtributsTx(tx *sql.Tx, rows []Trans
 	}()
 	for _, row := range rows {
 		if _, err := stmt.Exec(buildInsertTranscripcioAtributArgs(row)...); err != nil {
-			return err
+			return h.wrapSQLError("template_import", "exec_copy_transcripcio_atributs", "transcripcions_atributs_raw", row.TranscripcioID, err)
 		}
 	}
 	if _, err := stmt.Exec(); err != nil {
-		return err
+		return h.wrapSQLError("template_import", "flush_copy_transcripcio_atributs", "transcripcions_atributs_raw", 0, err)
 	}
 	if err := stmt.Close(); err != nil {
-		return err
+		return h.wrapSQLError("template_import", "close_copy_transcripcio_atributs", "transcripcions_atributs_raw", 0, err)
 	}
 	closeStmt = false
 	return nil
@@ -421,19 +421,19 @@ func (h sqlHelper) allocatePostgresSerialIDsTx(tx *sql.Tx, table, column string,
 	query := "SELECT nextval(pg_get_serial_sequence('" + table + "', '" + column + "')) FROM generate_series(1, $1)"
 	rows, err := tx.Query(query, count)
 	if err != nil {
-		return nil, err
+		return nil, h.wrapSQLError("template_import", "query_allocate_postgres_serial_ids", table, 0, err)
 	}
 	defer rows.Close()
 	ids := make([]int, 0, count)
 	for rows.Next() {
 		var id int
 		if err := rows.Scan(&id); err != nil {
-			return nil, err
+			return nil, h.wrapSQLError("template_import", "scan_allocate_postgres_serial_ids", table, 0, err)
 		}
 		ids = append(ids, id)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, h.wrapSQLError("template_import", "rows_err_allocate_postgres_serial_ids", table, 0, err)
 	}
 	if len(ids) != count {
 		return nil, sql.ErrNoRows

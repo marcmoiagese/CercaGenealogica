@@ -389,7 +389,7 @@ func (h sqlHelper) createPostgresTemplateImportStagingTablesTx(tx *sql.Tx) error
 	}
 	for _, stmt := range stmts {
 		if _, err := tx.Exec(stmt); err != nil {
-			return err
+			return h.wrapSQLError("template_import_staging", "exec_create_staging_tables", "pg_temp.template_import", 0, err)
 		}
 	}
 	return nil
@@ -406,7 +406,7 @@ func (h sqlHelper) copyInPostgresTemplateImportStagedRawTx(tx *sql.Tx, rows []po
 		"observacions_paleografiques", "moderation_status", "moderated_by", "moderated_at", "moderation_notes", "created_by",
 	))
 	if err != nil {
-		return err
+		return h.wrapSQLError("template_import_staging", "prepare_copy_staged_raw", "tmp_template_import_transcripcions_raw", 0, err)
 	}
 	closeStmt := true
 	defer func() {
@@ -436,14 +436,14 @@ func (h sqlHelper) copyInPostgresTemplateImportStagedRawTx(tx *sql.Tx, rows []po
 			row.Row.ModeracioMotiu,
 			row.Row.CreatedBy,
 		); err != nil {
-			return err
+			return h.wrapSQLError("template_import_staging", "exec_copy_staged_raw", "tmp_template_import_transcripcions_raw", row.ImportSeq, err)
 		}
 	}
 	if _, err := stmt.Exec(); err != nil {
-		return err
+		return h.wrapSQLError("template_import_staging", "flush_copy_staged_raw", "tmp_template_import_transcripcions_raw", 0, err)
 	}
 	if err := stmt.Close(); err != nil {
-		return err
+		return h.wrapSQLError("template_import_staging", "close_copy_staged_raw", "tmp_template_import_transcripcions_raw", 0, err)
 	}
 	closeStmt = false
 	return nil
@@ -468,7 +468,7 @@ func (h sqlHelper) insertPostgresTemplateImportStagedRawBatchTx(tx *sql.Tx, star
         FROM tmp_template_import_transcripcions_raw
         WHERE import_seq >= $1 AND import_seq < $2
         ORDER BY import_seq`, startSeq, endSeq)
-	return err
+	return h.wrapSQLError("template_import_staging", "insert_staged_raw_batch", "transcripcions_raw", 0, err)
 }
 
 func (h sqlHelper) copyInPostgresTemplateImportStagedPersonesTx(tx *sql.Tx, rows []postgresTemplateImportStagedPersonaRow) error {
@@ -484,7 +484,7 @@ func (h sqlHelper) copyInPostgresTemplateImportStagedPersonesTx(tx *sql.Tx, rows
 		"casa_nom", "casa_estat", "persona_id", "linked_by", "linked_at", "notes",
 	))
 	if err != nil {
-		return err
+		return h.wrapSQLError("template_import_staging", "prepare_copy_staged_persones", "tmp_template_import_transcripcions_persones_raw", 0, err)
 	}
 	closeStmt := true
 	defer func() {
@@ -523,14 +523,14 @@ func (h sqlHelper) copyInPostgresTemplateImportStagedPersonesTx(tx *sql.Tx, rows
 			row.Row.LinkedAt,
 			row.Row.Notes,
 		); err != nil {
-			return err
+			return h.wrapSQLError("template_import_staging", "exec_copy_staged_persones", "tmp_template_import_transcripcions_persones_raw", row.ImportSeq, err)
 		}
 	}
 	if _, err := stmt.Exec(); err != nil {
-		return err
+		return h.wrapSQLError("template_import_staging", "flush_copy_staged_persones", "tmp_template_import_transcripcions_persones_raw", 0, err)
 	}
 	if err := stmt.Close(); err != nil {
-		return err
+		return h.wrapSQLError("template_import_staging", "close_copy_staged_persones", "tmp_template_import_transcripcions_persones_raw", 0, err)
 	}
 	closeStmt = false
 	return nil
@@ -554,7 +554,7 @@ func (h sqlHelper) insertPostgresTemplateImportStagedPersonesTx(tx *sql.Tx) erro
             casa_nom, casa_estat, persona_id, linked_by, linked_at, notes
         FROM tmp_template_import_transcripcions_persones_raw
         ORDER BY import_seq, import_subseq`)
-	return err
+	return h.wrapSQLError("template_import_staging", "insert_staged_persones", "transcripcions_persones_raw", 0, err)
 }
 
 func (h sqlHelper) copyInPostgresTemplateImportStagedAtributsTx(tx *sql.Tx, rows []postgresTemplateImportStagedAtributRow) error {
@@ -567,7 +567,7 @@ func (h sqlHelper) copyInPostgresTemplateImportStagedAtributsTx(tx *sql.Tx, rows
 		"transcripcio_id", "clau", "tipus_valor", "valor_text", "valor_int", "valor_date", "valor_bool", "estat", "notes",
 	))
 	if err != nil {
-		return err
+		return h.wrapSQLError("template_import_staging", "prepare_copy_staged_atributs", "tmp_template_import_transcripcions_atributs_raw", 0, err)
 	}
 	closeStmt := true
 	defer func() {
@@ -589,14 +589,14 @@ func (h sqlHelper) copyInPostgresTemplateImportStagedAtributsTx(tx *sql.Tx, rows
 			row.Row.Estat,
 			row.Row.Notes,
 		); err != nil {
-			return err
+			return h.wrapSQLError("template_import_staging", "exec_copy_staged_atributs", "tmp_template_import_transcripcions_atributs_raw", row.ImportSeq, err)
 		}
 	}
 	if _, err := stmt.Exec(); err != nil {
-		return err
+		return h.wrapSQLError("template_import_staging", "flush_copy_staged_atributs", "tmp_template_import_transcripcions_atributs_raw", 0, err)
 	}
 	if err := stmt.Close(); err != nil {
-		return err
+		return h.wrapSQLError("template_import_staging", "close_copy_staged_atributs", "tmp_template_import_transcripcions_atributs_raw", 0, err)
 	}
 	closeStmt = false
 	return nil
@@ -614,5 +614,5 @@ func (h sqlHelper) insertPostgresTemplateImportStagedAtributsTx(tx *sql.Tx) erro
             transcripcio_id, clau, tipus_valor, valor_text, valor_int, valor_date, valor_bool, estat, notes
         FROM tmp_template_import_transcripcions_atributs_raw
         ORDER BY import_seq, import_subseq`)
-	return err
+	return h.wrapSQLError("template_import_staging", "insert_staged_atributs", "transcripcions_atributs_raw", 0, err)
 }

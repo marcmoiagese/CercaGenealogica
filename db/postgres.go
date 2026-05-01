@@ -48,7 +48,7 @@ func (d *PostgreSQL) Close() {
 func (d *PostgreSQL) Exec(query string, args ...interface{}) (int64, error) {
 	res, err := d.Conn.Exec(query, args...)
 	if err != nil {
-		return 0, err
+		return 0, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "postgres", Op: "exec"}, err)
 	}
 	id, _ := res.LastInsertId()
 	return id, nil
@@ -57,13 +57,16 @@ func (d *PostgreSQL) Exec(query string, args ...interface{}) (int64, error) {
 func (d *PostgreSQL) Query(query string, args ...interface{}) ([]map[string]interface{}, error) {
 	rows, err := d.Conn.Query(query, args...)
 	if err != nil {
-		return nil, err
+		return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "postgres", Op: "query"}, err)
 	}
 	defer rows.Close()
 
 	var results []map[string]interface{}
 	for rows.Next() {
-		columns, _ := rows.Columns()
+		columns, err := rows.Columns()
+		if err != nil {
+			return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "postgres", Op: "columns"}, err)
+		}
 		scanArgs := make([]interface{}, len(columns))
 		values := make([]interface{}, len(columns))
 
@@ -72,7 +75,7 @@ func (d *PostgreSQL) Query(query string, args ...interface{}) ([]map[string]inte
 		}
 
 		if err := rows.Scan(scanArgs...); err != nil {
-			return nil, err
+			return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "postgres", Op: "scan"}, err)
 		}
 
 		row := make(map[string]interface{})
@@ -80,6 +83,9 @@ func (d *PostgreSQL) Query(query string, args ...interface{}) ([]map[string]inte
 			row[col] = values[i]
 		}
 		results = append(results, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "postgres", Op: "rows_err"}, err)
 	}
 	return results, nil
 }

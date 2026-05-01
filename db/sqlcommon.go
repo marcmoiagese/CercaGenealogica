@@ -211,6 +211,7 @@ func (h sqlHelper) postgresExtensionExists(name string) bool {
 	}
 	var tmp int
 	if err := h.db.QueryRow("SELECT 1 FROM pg_extension WHERE extname = $1", name).Scan(&tmp); err != nil {
+		_ = h.wrapSQLError("sql_helper", "postgres_extension_exists", "pg_extension", 0, err)
 		return false
 	}
 	return true
@@ -5392,12 +5393,14 @@ func (h sqlHelper) createAdminJobTargets(jobID int, targets []AdminJobTarget) er
 	}
 	tx, err := h.db.Begin()
 	if err != nil {
-		return fmt.Errorf("admin_job_targets begin tx failed: %w", err)
+		return h.wrapSQLError("admin_jobs", "begin_create_admin_job_targets", "admin_job_targets", jobID, err)
 	}
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			if rollbackErr := tx.Rollback(); rollbackErr != nil && rollbackErr != sql.ErrTxDone {
+				_ = h.wrapSQLError("admin_jobs", "rollback_create_admin_job_targets", "admin_job_targets", jobID, rollbackErr)
+			}
 		}
 	}()
 	totalBatches := (len(targets) + adminJobTargetsInsertBatchSize - 1) / adminJobTargetsInsertBatchSize
@@ -5417,11 +5420,11 @@ func (h sqlHelper) createAdminJobTargets(jobID int, targets []AdminJobTarget) er
 		stmt := "INSERT INTO admin_job_targets (" + strings.Join(cols, ", ") + ") VALUES " + strings.Join(values, ", ")
 		stmt = formatPlaceholders(h.style, stmt)
 		if _, err := tx.Exec(stmt, args...); err != nil {
-			return fmt.Errorf("admin_job_targets batch %d/%d failed: %w", batchIndex+1, totalBatches, err)
+			return h.wrapSQLError("admin_jobs", fmt.Sprintf("insert_admin_job_targets_batch_%d_of_%d", batchIndex+1, totalBatches), "admin_job_targets", jobID, err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("admin_job_targets commit failed: %w", err)
+		return h.wrapSQLError("admin_jobs", "commit_create_admin_job_targets", "admin_job_targets", jobID, err)
 	}
 	committed = true
 	return nil
@@ -9555,13 +9558,13 @@ func (h sqlHelper) createTranscripcioRawTx(tx *sql.Tx, t *TranscripcioRaw) (int,
 	args := buildInsertTranscripcioRawArgs(*t, 0, false)
 	if h.style == "postgres" {
 		if err := tx.QueryRow(query, args...).Scan(&t.ID); err != nil {
-			return 0, err
+			return 0, h.wrapSQLError("template_import", "scan_insert_transcripcio_raw_tx", "transcripcions_raw", t.ID, err)
 		}
 		return t.ID, nil
 	}
 	execRes, err := tx.Exec(query, args...)
 	if err != nil {
-		return 0, err
+		return 0, h.wrapSQLError("template_import", "insert_transcripcio_raw_tx", "transcripcions_raw", t.ID, err)
 	}
 	if id, err := execRes.LastInsertId(); err == nil {
 		t.ID = int(id)
@@ -9574,13 +9577,13 @@ func (h sqlHelper) createTranscripcioPersonaTx(tx *sql.Tx, p *TranscripcioPerson
 	args := buildInsertTranscripcioPersonaArgs(*p)
 	if h.style == "postgres" {
 		if err := tx.QueryRow(query, args...).Scan(&p.ID); err != nil {
-			return 0, err
+			return 0, h.wrapSQLError("template_import", "scan_insert_transcripcio_persona_tx", "transcripcions_persones_raw", p.TranscripcioID, err)
 		}
 		return p.ID, nil
 	}
 	execRes, err := tx.Exec(query, args...)
 	if err != nil {
-		return 0, err
+		return 0, h.wrapSQLError("template_import", "insert_transcripcio_persona_tx", "transcripcions_persones_raw", p.TranscripcioID, err)
 	}
 	if id, err := execRes.LastInsertId(); err == nil {
 		p.ID = int(id)
@@ -9592,13 +9595,13 @@ func (h sqlHelper) createTranscripcioAtributTx(tx *sql.Tx, a *TranscripcioAtribu
 	query := buildInsertTranscripcioAtributQuery(h.style, h.style == "postgres")
 	if h.style == "postgres" {
 		if err := tx.QueryRow(query, buildInsertTranscripcioAtributArgs(*a)...).Scan(&a.ID); err != nil {
-			return 0, err
+			return 0, h.wrapSQLError("template_import", "scan_insert_transcripcio_atribut_tx", "transcripcions_atributs_raw", a.TranscripcioID, err)
 		}
 		return a.ID, nil
 	}
 	execRes, err := tx.Exec(query, buildInsertTranscripcioAtributArgs(*a)...)
 	if err != nil {
-		return 0, err
+		return 0, h.wrapSQLError("template_import", "insert_transcripcio_atribut_tx", "transcripcions_atributs_raw", a.TranscripcioID, err)
 	}
 	if id, err := execRes.LastInsertId(); err == nil {
 		a.ID = int(id)
@@ -16681,13 +16684,24 @@ func (h sqlHelper) applyMunicipiDemografiaDelta(municipiID, year int, tipus stri
 	}
 	tx, err := h.db.Begin()
 	if err != nil {
-		return err
+		return h.wrapSQLError("demografia", "begin_apply_municipi_demografia_delta", "municipi", municipiID, err)
 	}
-	defer tx.Rollback()
+	committed := false
+	defer func() {
+		if !committed {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil && rollbackErr != sql.ErrTxDone {
+				_ = h.wrapSQLError("demografia", "rollback_apply_municipi_demografia_delta", "municipi", municipiID, rollbackErr)
+			}
+		}
+	}()
 	if err := h.applyMunicipiDemografiaDeltaTx(tx, municipiID, year, tipus, delta); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return h.wrapSQLError("demografia", "commit_apply_municipi_demografia_delta", "municipi", municipiID, err)
+	}
+	committed = true
+	return nil
 }
 
 func (h sqlHelper) applyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year int, tipus string, delta int) error {
@@ -16742,7 +16756,7 @@ func (h sqlHelper) applyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year i
 	}
 	upsert = formatPlaceholders(h.style, upsert)
 	if _, err := tx.Exec(upsert, municipiID, year, natalitat, matrimonis, defuncions); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "upsert_municipi_demografia_any", "municipi", municipiID, err)
 	}
 	if delta > 0 {
 		return h.applyDemografiaPositiveMetaTx(tx, "municipi_demografia_meta", "municipi_id", municipiID, year, natalitat, matrimonis, defuncions)
@@ -16753,7 +16767,7 @@ func (h sqlHelper) applyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year i
 	selectStmt = formatPlaceholders(h.style, selectStmt)
 	var curNat, curMat, curDef int
 	if err := tx.QueryRow(selectStmt, municipiID, year).Scan(&curNat, &curMat, &curDef); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "scan_municipi_demografia_any", "municipi", municipiID, err)
 	}
 	changed := false
 	if curNat < 0 {
@@ -16772,7 +16786,7 @@ func (h sqlHelper) applyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year i
 		delStmt := fmt.Sprintf(`DELETE FROM municipi_demografia_any WHERE municipi_id = ? AND %s = ?`, yearCol)
 		delStmt = formatPlaceholders(h.style, delStmt)
 		if _, err := tx.Exec(delStmt, municipiID, year); err != nil {
-			return err
+			return h.wrapSQLError("demografia", "delete_municipi_demografia_any", "municipi", municipiID, err)
 		}
 	} else if changed {
 		updateStmt := fmt.Sprintf(`UPDATE municipi_demografia_any
@@ -16780,7 +16794,7 @@ func (h sqlHelper) applyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year i
             WHERE municipi_id = ? AND %s = ?`, yearCol)
 		updateStmt = formatPlaceholders(h.style, updateStmt)
 		if _, err := tx.Exec(updateStmt, curNat, curMat, curDef, municipiID, year); err != nil {
-			return err
+			return h.wrapSQLError("demografia", "update_municipi_demografia_any", "municipi", municipiID, err)
 		}
 	}
 	insertMeta := `INSERT INTO municipi_demografia_meta (municipi_id, any_min, any_max, total_natalitat, total_matrimonis, total_defuncions, updated_at)
@@ -16794,7 +16808,7 @@ func (h sqlHelper) applyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year i
 	}
 	insertMeta = formatPlaceholders(h.style, insertMeta)
 	if _, err := tx.Exec(insertMeta, municipiID); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "insert_municipi_demografia_meta", "municipi", municipiID, err)
 	}
 	updateTotals := `UPDATE municipi_demografia_meta
         SET total_natalitat = CASE WHEN total_natalitat + ? < 0 THEN 0 ELSE total_natalitat + ? END,
@@ -16804,21 +16818,21 @@ func (h sqlHelper) applyMunicipiDemografiaDeltaTx(tx *sql.Tx, municipiID, year i
         WHERE municipi_id = ?`
 	updateTotals = formatPlaceholders(h.style, updateTotals)
 	if _, err := tx.Exec(updateTotals, natalitat, natalitat, matrimonis, matrimonis, defuncions, defuncions, municipiID); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "update_municipi_demografia_meta_totals", "municipi", municipiID, err)
 	}
 	minMaxStmt := fmt.Sprintf(`SELECT MIN(%s), MAX(%s) FROM municipi_demografia_any WHERE municipi_id = ?`, yearCol, yearCol)
 	minMaxStmt = formatPlaceholders(h.style, minMaxStmt)
 	var minAny sql.NullInt64
 	var maxAny sql.NullInt64
 	if err := tx.QueryRow(minMaxStmt, municipiID).Scan(&minAny, &maxAny); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "scan_municipi_demografia_min_max", "municipi", municipiID, err)
 	}
 	updateRange := `UPDATE municipi_demografia_meta
         SET any_min = ?, any_max = ?, updated_at = ` + h.nowFun + `
         WHERE municipi_id = ?`
 	updateRange = formatPlaceholders(h.style, updateRange)
 	if _, err := tx.Exec(updateRange, minAny, maxAny, municipiID); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "update_municipi_demografia_meta_range", "municipi", municipiID, err)
 	}
 	return nil
 }
@@ -16838,7 +16852,7 @@ func (h sqlHelper) applyDemografiaPositiveMetaTx(tx *sql.Tx, metaTable, idCol st
 	}
 	insertMeta = formatPlaceholders(h.style, insertMeta)
 	if _, err := tx.Exec(insertMeta, id); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "insert_positive_demografia_meta", metaTable, id, err)
 	}
 	updateTotals := fmt.Sprintf(`UPDATE %s
         SET total_natalitat = total_natalitat + ?,
@@ -16850,7 +16864,7 @@ func (h sqlHelper) applyDemografiaPositiveMetaTx(tx *sql.Tx, metaTable, idCol st
         WHERE %s = ?`, metaTable, idCol)
 	updateTotals = formatPlaceholders(h.style, updateTotals)
 	if _, err := tx.Exec(updateTotals, natalitat, matrimonis, defuncions, year, year, year, year, id); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "update_positive_demografia_meta", metaTable, id, err)
 	}
 	return nil
 }
@@ -16861,9 +16875,16 @@ func (h sqlHelper) bulkApplyPositiveDemografiaDeltas(municipis []DemografiaDelta
 	}
 	tx, err := h.db.Begin()
 	if err != nil {
-		return err
+		return h.wrapSQLError("demografia", "begin_bulk_apply_positive_demografia_deltas", "demografia", 0, err)
 	}
-	defer tx.Rollback()
+	committed := false
+	defer func() {
+		if !committed {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil && rollbackErr != sql.ErrTxDone {
+				_ = h.wrapSQLError("demografia", "rollback_bulk_apply_positive_demografia_deltas", "demografia", 0, rollbackErr)
+			}
+		}
+	}()
 	for _, delta := range municipis {
 		if delta.Delta == 0 {
 			continue
@@ -16886,7 +16907,11 @@ func (h sqlHelper) bulkApplyPositiveDemografiaDeltas(municipis []DemografiaDelta
 			return err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return h.wrapSQLError("demografia", "commit_bulk_apply_positive_demografia_deltas", "demografia", 0, err)
+	}
+	committed = true
+	return nil
 }
 
 func (h sqlHelper) rebuildMunicipiDemografia(municipiID int) error {
@@ -17087,13 +17112,24 @@ func (h sqlHelper) applyNivellDemografiaDelta(nivellID, year int, tipus string, 
 	}
 	tx, err := h.db.Begin()
 	if err != nil {
-		return err
+		return h.wrapSQLError("demografia", "begin_apply_nivell_demografia_delta", "nivell", nivellID, err)
 	}
-	defer tx.Rollback()
+	committed := false
+	defer func() {
+		if !committed {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil && rollbackErr != sql.ErrTxDone {
+				_ = h.wrapSQLError("demografia", "rollback_apply_nivell_demografia_delta", "nivell", nivellID, rollbackErr)
+			}
+		}
+	}()
 	if err := h.applyNivellDemografiaDeltaTx(tx, nivellID, year, tipus, delta); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return h.wrapSQLError("demografia", "commit_apply_nivell_demografia_delta", "nivell", nivellID, err)
+	}
+	committed = true
+	return nil
 }
 
 func (h sqlHelper) applyNivellDemografiaDeltaTx(tx *sql.Tx, nivellID, year int, tipus string, delta int) error {
@@ -17148,7 +17184,7 @@ func (h sqlHelper) applyNivellDemografiaDeltaTx(tx *sql.Tx, nivellID, year int, 
 	}
 	upsert = formatPlaceholders(h.style, upsert)
 	if _, err := tx.Exec(upsert, nivellID, year, natalitat, matrimonis, defuncions); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "upsert_nivell_demografia_any", "nivell", nivellID, err)
 	}
 	if delta > 0 {
 		return h.applyDemografiaPositiveMetaTx(tx, "nivell_demografia_meta", "nivell_id", nivellID, year, natalitat, matrimonis, defuncions)
@@ -17159,7 +17195,7 @@ func (h sqlHelper) applyNivellDemografiaDeltaTx(tx *sql.Tx, nivellID, year int, 
 	selectStmt = formatPlaceholders(h.style, selectStmt)
 	var curNat, curMat, curDef int
 	if err := tx.QueryRow(selectStmt, nivellID, year).Scan(&curNat, &curMat, &curDef); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "scan_nivell_demografia_any", "nivell", nivellID, err)
 	}
 	changed := false
 	if curNat < 0 {
@@ -17178,7 +17214,7 @@ func (h sqlHelper) applyNivellDemografiaDeltaTx(tx *sql.Tx, nivellID, year int, 
 		delStmt := fmt.Sprintf(`DELETE FROM nivell_demografia_any WHERE nivell_id = ? AND %s = ?`, yearCol)
 		delStmt = formatPlaceholders(h.style, delStmt)
 		if _, err := tx.Exec(delStmt, nivellID, year); err != nil {
-			return err
+			return h.wrapSQLError("demografia", "delete_nivell_demografia_any", "nivell", nivellID, err)
 		}
 	} else if changed {
 		updateStmt := fmt.Sprintf(`UPDATE nivell_demografia_any
@@ -17186,7 +17222,7 @@ func (h sqlHelper) applyNivellDemografiaDeltaTx(tx *sql.Tx, nivellID, year int, 
             WHERE nivell_id = ? AND %s = ?`, yearCol)
 		updateStmt = formatPlaceholders(h.style, updateStmt)
 		if _, err := tx.Exec(updateStmt, curNat, curMat, curDef, nivellID, year); err != nil {
-			return err
+			return h.wrapSQLError("demografia", "update_nivell_demografia_any", "nivell", nivellID, err)
 		}
 	}
 	insertMeta := `INSERT INTO nivell_demografia_meta (nivell_id, any_min, any_max, total_natalitat, total_matrimonis, total_defuncions, updated_at)
@@ -17200,7 +17236,7 @@ func (h sqlHelper) applyNivellDemografiaDeltaTx(tx *sql.Tx, nivellID, year int, 
 	}
 	insertMeta = formatPlaceholders(h.style, insertMeta)
 	if _, err := tx.Exec(insertMeta, nivellID); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "insert_nivell_demografia_meta", "nivell", nivellID, err)
 	}
 	updateTotals := `UPDATE nivell_demografia_meta
         SET total_natalitat = CASE WHEN total_natalitat + ? < 0 THEN 0 ELSE total_natalitat + ? END,
@@ -17210,21 +17246,21 @@ func (h sqlHelper) applyNivellDemografiaDeltaTx(tx *sql.Tx, nivellID, year int, 
         WHERE nivell_id = ?`
 	updateTotals = formatPlaceholders(h.style, updateTotals)
 	if _, err := tx.Exec(updateTotals, natalitat, natalitat, matrimonis, matrimonis, defuncions, defuncions, nivellID); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "update_nivell_demografia_meta_totals", "nivell", nivellID, err)
 	}
 	minMaxStmt := fmt.Sprintf(`SELECT MIN(%s), MAX(%s) FROM nivell_demografia_any WHERE nivell_id = ?`, yearCol, yearCol)
 	minMaxStmt = formatPlaceholders(h.style, minMaxStmt)
 	var minAny sql.NullInt64
 	var maxAny sql.NullInt64
 	if err := tx.QueryRow(minMaxStmt, nivellID).Scan(&minAny, &maxAny); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "scan_nivell_demografia_min_max", "nivell", nivellID, err)
 	}
 	updateRange := `UPDATE nivell_demografia_meta
         SET any_min = ?, any_max = ?, updated_at = ` + h.nowFun + `
         WHERE nivell_id = ?`
 	updateRange = formatPlaceholders(h.style, updateRange)
 	if _, err := tx.Exec(updateRange, minAny, maxAny, nivellID); err != nil {
-		return err
+		return h.wrapSQLError("demografia", "update_nivell_demografia_meta_range", "nivell", nivellID, err)
 	}
 	return nil
 }

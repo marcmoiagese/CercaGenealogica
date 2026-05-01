@@ -37,10 +37,19 @@ func (d *SQLite) Connect() error {
 	}
 	conn.SetMaxOpenConns(1)
 	conn.SetMaxIdleConns(1)
-	_, _ = conn.Exec("PRAGMA foreign_keys = ON")
-	_, _ = conn.Exec("PRAGMA journal_mode = WAL")
-	_, _ = conn.Exec("PRAGMA busy_timeout = 15000")
-	_, _ = conn.Exec("PRAGMA synchronous = NORMAL")
+	for _, pragma := range []struct {
+		op    string
+		query string
+	}{
+		{"pragma_foreign_keys", "PRAGMA foreign_keys = ON"},
+		{"pragma_journal_mode", "PRAGMA journal_mode = WAL"},
+		{"pragma_busy_timeout", "PRAGMA busy_timeout = 15000"},
+		{"pragma_synchronous", "PRAGMA synchronous = NORMAL"},
+	} {
+		if _, err := conn.Exec(pragma.query); err != nil {
+			_ = WrapSQLError(SQLErrorContext{Engine: "sqlite", Component: "sqlite_connect", Op: pragma.op}, err)
+		}
+	}
 	d.Conn = conn
 	d.help = newSQLHelper(conn, "sqlite", "datetime('now')")
 	logInfof("Conectat a SQLite")
@@ -56,12 +65,15 @@ func (d *SQLite) Close() {
 func (d *SQLite) Query(query string, args ...interface{}) ([]map[string]interface{}, error) {
 	rows, err := d.Conn.Query(query, args...)
 	if err != nil {
-		return nil, err
+		return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "sqlite", Op: "query"}, err)
 	}
 	defer rows.Close()
 
 	// Processa resultats
-	columns, _ := rows.Columns()
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "sqlite", Op: "columns"}, err)
+	}
 	results := []map[string]interface{}{}
 
 	for rows.Next() {
@@ -72,7 +84,9 @@ func (d *SQLite) Query(query string, args ...interface{}) ([]map[string]interfac
 			scanArgs[i] = &values[i]
 		}
 
-		rows.Scan(scanArgs...)
+		if err := rows.Scan(scanArgs...); err != nil {
+			return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "sqlite", Op: "scan"}, err)
+		}
 
 		row := make(map[string]interface{})
 		for i, col := range columns {
@@ -81,6 +95,9 @@ func (d *SQLite) Query(query string, args ...interface{}) ([]map[string]interfac
 
 		results = append(results, row)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "sqlite", Op: "rows_err"}, err)
+	}
 
 	return results, nil
 }
@@ -88,7 +105,7 @@ func (d *SQLite) Query(query string, args ...interface{}) ([]map[string]interfac
 func (d *SQLite) Exec(query string, args ...interface{}) (int64, error) {
 	res, err := d.Conn.Exec(query, args...)
 	if err != nil {
-		return 0, err
+		return 0, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "sqlite", Op: "exec"}, err)
 	}
 	id, _ := res.LastInsertId()
 	return id, nil

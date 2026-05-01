@@ -45,7 +45,7 @@ func (d *MySQL) Close() {
 func (d *MySQL) Exec(query string, args ...interface{}) (int64, error) {
 	res, err := d.Conn.Exec(query, args...)
 	if err != nil {
-		return 0, err
+		return 0, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "mysql", Op: "exec"}, err)
 	}
 	id, _ := res.LastInsertId()
 	return id, nil
@@ -54,13 +54,16 @@ func (d *MySQL) Exec(query string, args ...interface{}) (int64, error) {
 func (d *MySQL) Query(query string, args ...interface{}) ([]map[string]interface{}, error) {
 	rows, err := d.Conn.Query(query, args...)
 	if err != nil {
-		return nil, err
+		return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "mysql", Op: "query"}, err)
 	}
 	defer rows.Close()
 
 	var results []map[string]interface{}
 	for rows.Next() {
-		columns, _ := rows.Columns()
+		columns, err := rows.Columns()
+		if err != nil {
+			return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "mysql", Op: "columns"}, err)
+		}
 		scanArgs := make([]interface{}, len(columns))
 		values := make([]interface{}, len(columns))
 
@@ -70,7 +73,7 @@ func (d *MySQL) Query(query string, args ...interface{}) ([]map[string]interface
 
 		err := rows.Scan(scanArgs...)
 		if err != nil {
-			return nil, err
+			return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "mysql", Op: "scan"}, err)
 		}
 
 		row := make(map[string]interface{})
@@ -78,6 +81,9 @@ func (d *MySQL) Query(query string, args ...interface{}) ([]map[string]interface
 			row[col] = values[i]
 		}
 		results = append(results, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "mysql", Op: "rows_err"}, err)
 	}
 	return results, nil
 }
