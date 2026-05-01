@@ -288,7 +288,7 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	canManageUsers := a.hasPerm(perms, permUsers)
 	canManagePolicies := a.hasPerm(perms, permPolicies)
 	canCreateArxiu := a.hasAnyPermissionKey(user.ID, permKeyDocumentalsArxiusCreate)
-	canImportArxiu := a.HasPermission(user.ID, permKeyAdminArxiusImport, PermissionTarget{})
+	canImportArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusImport, PermissionTarget{})
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
 	if status == "" {
 		status = "publicat"

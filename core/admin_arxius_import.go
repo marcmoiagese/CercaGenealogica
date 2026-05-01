@@ -41,7 +41,7 @@ func (a *App) AdminArxiusImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminArxiusExport(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.requirePermissionKey(w, r, permKeyAdminArxiusExport, PermissionTarget{}); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusExport, PermissionTarget{}); !ok {
 		return
 	}
 	levelISO := a.levelISOMap()
@@ -86,7 +86,7 @@ func (a *App) AdminArxiusExport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requirePermissionKey(w, r, permKeyAdminArxiusImport, PermissionTarget{})
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusImport, PermissionTarget{})
 	if !ok {
 		return
 	}

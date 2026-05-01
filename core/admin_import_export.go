@@ -11,8 +11,8 @@ func (a *App) AdminImportExport(w http.ResponseWriter, r *http.Request) {
 		permKeyAdminTerritoriExport,
 		permKeyAdminEclesImport,
 		permKeyAdminEclesExport,
-		permKeyAdminArxiusImport,
-		permKeyAdminArxiusExport,
+		permKeyDocumentalsArxiusImport,
+		permKeyDocumentalsArxiusExport,
 		permKeyDocumentalsLlibresImport,
 		permKeyDocumentalsLlibresExport,
 	}
@@ -24,8 +24,8 @@ func (a *App) AdminImportExport(w http.ResponseWriter, r *http.Request) {
 	canTerritoriExport := a.HasPermission(user.ID, permKeyAdminTerritoriExport, PermissionTarget{})
 	canEclesImport := a.HasPermission(user.ID, permKeyAdminEclesImport, PermissionTarget{})
 	canEclesExport := a.HasPermission(user.ID, permKeyAdminEclesExport, PermissionTarget{})
-	canArxiusImport := a.HasPermission(user.ID, permKeyAdminArxiusImport, PermissionTarget{})
-	canArxiusExport := a.HasPermission(user.ID, permKeyAdminArxiusExport, PermissionTarget{})
+	canArxiusImport := a.HasPermission(user.ID, permKeyDocumentalsArxiusImport, PermissionTarget{})
+	canArxiusExport := a.HasPermission(user.ID, permKeyDocumentalsArxiusExport, PermissionTarget{})
 	canLlibresImport := a.HasPermission(user.ID, permKeyDocumentalsLlibresImport, PermissionTarget{})
 	canLlibresExport := a.HasPermission(user.ID, permKeyDocumentalsLlibresExport, PermissionTarget{})
 
