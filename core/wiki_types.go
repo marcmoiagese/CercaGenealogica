@@ -42,8 +42,15 @@ func (a *App) createWikiChange(change *db.WikiChange) (int, error) {
 		if change.ChangedBy.Valid {
 			userID = int(change.ChangedBy.Int64)
 		}
-		Errorf("WikiChangeCreate failed object=%s object_id=%d user_id=%d err=%v", change.ObjectType, change.ObjectID, userID, err)
-		return 0, err
+		a.logDBOperationError(DBOperationLog{
+			Component: "wiki",
+			Op:        "create_wiki_change",
+			Object:    change.ObjectType,
+			ObjectID:  change.ObjectID,
+			UserID:    userID,
+			Err:       err,
+		})
+		return 0, fmt.Errorf("create wiki change %s %d: %w", change.ObjectType, change.ObjectID, err)
 	}
 	elapsed := time.Since(start)
 	if elapsed > time.Second {

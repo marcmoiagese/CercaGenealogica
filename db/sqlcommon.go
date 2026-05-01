@@ -9867,11 +9867,13 @@ func (h sqlHelper) createWikiChange(c *WikiChange) (int, error) {
 	}
 	if h.style == "postgres" {
 		if err := h.db.QueryRow(query, args...).Scan(&c.ID); err != nil {
-			return 0, err
+			return 0, fmt.Errorf("wiki_canvis insert object=%s object_id=%d engine=%s: %w", c.ObjectType, c.ObjectID, h.style, err)
 		}
 		if estado == "pendent" {
 			if err := h.enqueueWikiPending(c); err != nil {
-				_, _ = h.db.Exec(formatPlaceholders(h.style, `DELETE FROM wiki_canvis WHERE id = ?`), c.ID)
+				if _, cleanupErr := h.db.Exec(formatPlaceholders(h.style, `DELETE FROM wiki_canvis WHERE id = ?`), c.ID); cleanupErr != nil {
+					return 0, fmt.Errorf("wiki_pending_enqueue object=%s object_id=%d change_id=%d engine=%s: %w; cleanup delete wiki_canvis: %v", c.ObjectType, c.ObjectID, c.ID, h.style, err, cleanupErr)
+				}
 				return 0, fmt.Errorf("wiki_pending_enqueue: %w", err)
 			}
 		}
@@ -9879,14 +9881,16 @@ func (h sqlHelper) createWikiChange(c *WikiChange) (int, error) {
 	}
 	res, err := h.db.Exec(query, args...)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("wiki_canvis insert object=%s object_id=%d engine=%s: %w", c.ObjectType, c.ObjectID, h.style, err)
 	}
 	if id, err := res.LastInsertId(); err == nil {
 		c.ID = int(id)
 	}
 	if estado == "pendent" {
 		if err := h.enqueueWikiPending(c); err != nil {
-			_, _ = h.db.Exec(formatPlaceholders(h.style, `DELETE FROM wiki_canvis WHERE id = ?`), c.ID)
+			if _, cleanupErr := h.db.Exec(formatPlaceholders(h.style, `DELETE FROM wiki_canvis WHERE id = ?`), c.ID); cleanupErr != nil {
+				return 0, fmt.Errorf("wiki_pending_enqueue object=%s object_id=%d change_id=%d engine=%s: %w; cleanup delete wiki_canvis: %v", c.ObjectType, c.ObjectID, c.ID, h.style, err, cleanupErr)
+			}
 			return 0, fmt.Errorf("wiki_pending_enqueue: %w", err)
 		}
 	}
