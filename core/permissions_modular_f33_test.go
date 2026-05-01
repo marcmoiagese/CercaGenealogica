@@ -35,7 +35,7 @@ func newF330PermissionsTestApp(t *testing.T) (*App, db.DB) {
 	t.Cleanup(func() { _ = os.Chdir(start) })
 
 	cfg := map[string]string{
-		"DB_DRIVER": "sqlite",
+		"DB_ENGINE": "sqlite",
 		"DB_PATH":   filepath.Join(t.TempDir(), "f33-0-permissions.db"),
 		"RECREADB":  "true",
 	}
@@ -88,9 +88,9 @@ func TestF330AdminPolicyNameIsEffectiveModularAdminForUI(t *testing.T) {
 	adminID := findF330PolicyID(t, database, "admin")
 
 	if _, err := database.SavePolitica(&db.Politica{
-		ID:        adminID,
-		Nom:       "admin",
-		Permisos:  "{}",
+		ID:         adminID,
+		Nom:        "admin",
+		Permisos:   "{}",
 		Descripcio: "",
 	}); err != nil {
 		t.Fatalf("no s'ha pogut simular admin legacy sense flag JSON: %v", err)
@@ -136,8 +136,8 @@ func TestF330PermissionPolicyAdminFlagIsEffectiveModularAdmin(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-admin-flag")
 	policy := &db.Politica{
-		Nom:       "admin-json",
-		Permisos:  `{"admin":true}`,
+		Nom:        "admin-json",
+		Permisos:   `{"admin":true}`,
 		Descripcio: "",
 	}
 	policyID, err := database.SavePolitica(policy)
@@ -160,8 +160,8 @@ func TestF330ScopedTerritoryUserDoesNotBecomeGlobalAdmin(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-scoped")
 	policy := &db.Politica{
-		Nom:       "territori-scoped",
-		Permisos:  "{}",
+		Nom:        "territori-scoped",
+		Permisos:   "{}",
 		Descripcio: "",
 	}
 	policyID, err := database.SavePolitica(policy)
@@ -196,8 +196,8 @@ func TestF334MediaModerationKeyEnablesModerationUI(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-4-media-moderator")
 	policy := &db.Politica{
-		Nom:       "media-moderator",
-		Permisos:  "{}",
+		Nom:        "media-moderator",
+		Permisos:   "{}",
 		Descripcio: "",
 	}
 	policyID, err := database.SavePolitica(policy)
@@ -238,8 +238,8 @@ func TestF334ScopedMunicipiModeratorDoesNotModerateOutsideScope(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-4-municipi-scoped")
 	policy := &db.Politica{
-		Nom:       "municipi-moderator-scoped",
-		Permisos:  "{}",
+		Nom:        "municipi-moderator-scoped",
+		Permisos:   "{}",
 		Descripcio: "",
 	}
 	policyID, err := database.SavePolitica(policy)
@@ -272,5 +272,51 @@ func TestF334ScopedMunicipiModeratorDoesNotModerateOutsideScope(t *testing.T) {
 	}
 	if app.HasPermission(userID, permKeyTerritoriMunicipisMapesModerate, PermissionTarget{MunicipiID: intPtr(8)}) {
 		t.Fatalf("grant scoped no hauria d'autoritzar municipi 8")
+	}
+}
+
+func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-5-platform-user")
+	policy := &db.Politica{
+		Nom:        "platform-users",
+		Permisos:   "{}",
+		Descripcio: "",
+	}
+	policyID, err := database.SavePolitica(policy)
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica platform: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: policyID,
+		PermKey:    permKeyAdminUsersManage,
+		ScopeType:  string(ScopeGlobal),
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant admin.users.manage: %v", err)
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica platform: %v", err)
+	}
+
+	perms := app.getPermissionsForUser(userID)
+	if app.hasPerm(perms, permAdmin) || app.hasPerm(perms, permPolicies) {
+		t.Fatalf("el test necessita usuari sense permisos legacy admin/policies")
+	}
+	req := httptest.NewRequest("GET", "/admin/usuaris", nil)
+	req = app.withPermissions(req, perms)
+	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID, perms))
+	req = app.withPermissionKeys(req, app.permissionKeysForUser(userID))
+	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	if got := data["CanManageUsers"]; got != true {
+		t.Fatalf("admin.users.manage hauria de mostrar gestio d'usuaris, rebut %#v", got)
+	}
+	if got := data["CanManagePolicies"]; got == true {
+		t.Fatalf("admin.users.manage no hauria de mostrar politiques sense key, rebut %#v", got)
+	}
+	if !app.HasPermission(userID, permKeyAdminUsersManage, PermissionTarget{}) {
+		t.Fatalf("admin.users.manage hauria d'autoritzar backend d'usuaris")
+	}
+	if app.HasPermission(userID, permKeyAdminPoliciesManage, PermissionTarget{}) {
+		t.Fatalf("admin.users.manage no hauria d'autoritzar politiques")
 	}
 }

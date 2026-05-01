@@ -2027,6 +2027,7 @@
   "policies.gui.modular.group.documentals_view": "Documentals (read-only)",
   "policies.gui.modular.group.documentals_index": "Documentals (indexing & import)",
   "policies.gui.modular.group.territori_view": "Territory (read-only)",
+  "policies.gui.modular.group.admin_platform": "Platform (admin)",
   "policies.gui.modular.group.admin_external": "External links (admin)",
   "policies.gui.modular.group.moderation": "Moderation (global)",
   "policies.name": "Name",

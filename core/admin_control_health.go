@@ -29,11 +29,11 @@ type adminControlHealthResponse struct {
 }
 
 type adminControlMetricsResponse struct {
-	Users7d     int                     `json:"users_7d"`
+	Users7d     int                      `json:"users_7d"`
 	Imports24h  db.AdminImportRunSummary `json:"imports_24h"`
-	JobsTotal   int                     `json:"jobs_total"`
-	JobsFailed  int                     `json:"jobs_failed"`
-	GeneratedAt string                  `json:"generated_at"`
+	JobsTotal   int                      `json:"jobs_total"`
+	JobsFailed  int                      `json:"jobs_failed"`
+	GeneratedAt string                   `json:"generated_at"`
 }
 
 func (a *App) AdminControlHealthAPI(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +41,11 @@ func (a *App) AdminControlHealthAPI(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requireAnyPermissionKey(w, r, []string{
+		permKeyAdminAnalyticsView,
+		permKeyAdminJobsManage,
+		permKeyAdminPlatformSettingsEdit,
+	}, PermissionTarget{}); !ok {
 		return
 	}
 
@@ -80,7 +84,7 @@ func (a *App) AdminControlMetricsAPI(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminAnalyticsView, PermissionTarget{}); !ok {
 		return
 	}
 

@@ -93,6 +93,19 @@ func guiGrantGroups() []policyGuiGrantGroup {
 			},
 		},
 		{
+			TitleKey: "policies.gui.modular.group.admin_platform",
+			Keys: []string{
+				permKeyAdminUsersManage,
+				permKeyAdminPoliciesManage,
+				permKeyAdminAuditView,
+				permKeyAdminJobsManage,
+				permKeyAdminPlatformSettingsEdit,
+				permKeyAdminMaintenanceManage,
+				permKeyAdminAnalyticsView,
+				permKeyAdminTransparencyManage,
+			},
+		},
+		{
 			TitleKey: "policies.gui.modular.group.admin_external",
 			Keys: []string{
 				permKeyAdminExternalSitesManage,
@@ -318,7 +331,7 @@ func (a *App) politicaFormData(r *http.Request, pol *db.Politica, isNew bool, ac
 }
 
 func (a *App) AdminListPolitiques(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
@@ -336,7 +349,7 @@ func (a *App) AdminListPolitiques(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminNewPolitica(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
@@ -346,7 +359,7 @@ func (a *App) AdminNewPolitica(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminEditPolitica(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
@@ -362,7 +375,7 @@ func (a *App) AdminEditPolitica(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminSavePolitica(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -507,7 +520,7 @@ func (a *App) syncPolicyGlobalGrants(politicaID int, keySet map[string]bool, sel
 }
 
 func (a *App) AdminSavePoliticaGrant(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -601,7 +614,7 @@ func (a *App) AdminSavePoliticaGrant(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminDeletePoliticaGrant(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {

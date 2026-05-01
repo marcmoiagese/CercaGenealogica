@@ -101,7 +101,7 @@ func (a *App) AdminAuditPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, _, ok := a.requirePermission(w, r, permAdmin)
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminAuditView, PermissionTarget{})
 	if !ok {
 		return
 	}
@@ -205,7 +205,7 @@ func (a *App) AdminAuditAPI(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminAuditView, PermissionTarget{}); !ok {
 		return
 	}
 	filter := db.AdminAuditFilter{
@@ -277,7 +277,7 @@ func (a *App) AdminRevokeUserSessions(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, _, ok := a.requirePermission(w, r, permAdmin)
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminUsersManage, PermissionTarget{})
 	if !ok {
 		return
 	}

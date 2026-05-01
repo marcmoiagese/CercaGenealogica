@@ -29,7 +29,7 @@ type userAdminCounter interface {
 }
 
 func (a *App) AdminListUsuaris(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permUsers)
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminUsersManage, PermissionTarget{})
 	if !ok {
 		return
 	}
@@ -135,7 +135,7 @@ func (a *App) AdminListUsuaris(w http.ResponseWriter, r *http.Request) {
 		"Ok":                okMsg,
 		"CSRFToken":         token,
 		"CurrentUserID":     user.ID,
-		"CanManagePolicies": perms.Admin || perms.CanManagePolicies,
+		"CanManagePolicies": a.HasPermission(user.ID, permKeyAdminPoliciesManage, PermissionTarget{}),
 		"FilterQuery":       q,
 		"FilterStatus":      status,
 		"FilterBanned":      banned,
@@ -155,7 +155,7 @@ func (a *App) AdminListUsuaris(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminSetUserActive(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permUsers)
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminUsersManage, PermissionTarget{})
 	if !ok {
 		return
 	}
@@ -191,7 +191,7 @@ func (a *App) AdminSetUserActive(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminSetUserBanned(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permUsers)
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminUsersManage, PermissionTarget{})
 	if !ok {
 		return
 	}

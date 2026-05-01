@@ -13,21 +13,21 @@ import (
 )
 
 type DashboardWidgetDefinition struct {
-	ID           string
-	Title        string
-	DefaultOrder int
+	ID            string
+	Title         string
+	DefaultOrder  int
 	DefaultHidden bool
 }
 
 type DashboardWidgetState struct {
-	Order        int
-	Hidden       bool
-	DefaultOrder int
+	Order         int
+	Hidden        bool
+	DefaultOrder  int
 	DefaultHidden bool
-	Settings     DashboardWidgetSettings
-	SettingsJSON string
-	RangeLabel   string
-	RoleHidden   bool
+	Settings      DashboardWidgetSettings
+	SettingsJSON  string
+	RangeLabel    string
+	RoleHidden    bool
 }
 
 type DashboardWidgetSettings struct {
@@ -38,9 +38,9 @@ type DashboardWidgetSettings struct {
 }
 
 type dashboardWidgetSettingsInput struct {
-	Range         *string `json:"range,omitempty"`
-	AlertWarning  *int    `json:"alert_warning,omitempty"`
-	AlertCritical *int    `json:"alert_critical,omitempty"`
+	Range         *string  `json:"range,omitempty"`
+	AlertWarning  *int     `json:"alert_warning,omitempty"`
+	AlertCritical *int     `json:"alert_critical,omitempty"`
 	Roles         []string `json:"roles,omitempty"`
 }
 
@@ -79,15 +79,15 @@ type DashboardPointsView struct {
 }
 
 type DashboardWidgetConfigView struct {
-	ID           string
-	Title        string
-	Schema       DashboardWidgetSchema
-	Settings     DashboardWidgetSettings
-	SettingsJSON string
-	RoleSet      map[string]bool
-	AlertWarning string
+	ID            string
+	Title         string
+	Schema        DashboardWidgetSchema
+	Settings      DashboardWidgetSettings
+	SettingsJSON  string
+	RoleSet       map[string]bool
+	AlertWarning  string
 	AlertCritical string
-	RangeOptions []DashboardRangeOption
+	RangeOptions  []DashboardRangeOption
 }
 
 type DashboardRangeOption struct {
@@ -114,9 +114,9 @@ type dashboardWidgetsPayload struct {
 }
 
 type dashboardWidgetPayloadItem struct {
-	ID          string `json:"id"`
-	Order       int    `json:"order"`
-	Hidden      bool   `json:"hidden"`
+	ID           string `json:"id"`
+	Order        int    `json:"order"`
+	Hidden       bool   `json:"hidden"`
 	SettingsJSON string `json:"settings_json"`
 }
 
@@ -664,15 +664,15 @@ func buildDashboardWidgetConfigViews(lang string, states map[string]DashboardWid
 			alertCritical = strconv.Itoa(*state.Settings.AlertCritical)
 		}
 		views = append(views, DashboardWidgetConfigView{
-			ID:           def.ID,
-			Title:        def.Title,
-			Schema:       schema,
-			Settings:     state.Settings,
-			SettingsJSON: state.SettingsJSON,
-			RoleSet:      roleSet,
-			AlertWarning: alertWarning,
+			ID:            def.ID,
+			Title:         def.Title,
+			Schema:        schema,
+			Settings:      state.Settings,
+			SettingsJSON:  state.SettingsJSON,
+			RoleSet:       roleSet,
+			AlertWarning:  alertWarning,
 			AlertCritical: alertCritical,
-			RangeOptions: rangeOptions,
+			RangeOptions:  rangeOptions,
 		})
 	}
 	return views
@@ -834,7 +834,7 @@ func (a *App) DashboardPointsWidget(userID int, lang string, settings DashboardW
 }
 
 func (a *App) AdminDashboardWidgetsPage(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permAdmin)
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminPlatformSettingsEdit, PermissionTarget{})
 	if !ok {
 		return
 	}

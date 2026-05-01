@@ -555,10 +555,25 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		m["CanManageEclesia"] = effectiveAdmin || perms.CanManageEclesia
 	}
 	if _, found := m["CanManageUsers"]; !found {
-		m["CanManageUsers"] = effectiveAdmin || perms.CanManageUsers
+		m["CanManageUsers"] = effectiveAdmin || perms.CanManageUsers || hasKey(permKeyAdminUsersManage)
 	}
 	if _, found := m["CanManagePolicies"]; !found {
-		m["CanManagePolicies"] = effectiveAdmin || perms.CanManagePolicies
+		m["CanManagePolicies"] = effectiveAdmin || perms.CanManagePolicies || hasKey(permKeyAdminPoliciesManage)
+	}
+	if _, found := m["CanViewAdminAudit"]; !found {
+		m["CanViewAdminAudit"] = effectiveAdmin || hasKey(permKeyAdminAuditView)
+	}
+	if _, found := m["CanManageAdminJobs"]; !found {
+		m["CanManageAdminJobs"] = effectiveAdmin || hasKey(permKeyAdminJobsManage)
+	}
+	if _, found := m["CanViewAdminControl"]; !found {
+		m["CanViewAdminControl"] = effectiveAdmin ||
+			hasKey(permKeyAdminAnalyticsView) ||
+			hasKey(permKeyAdminAuditView) ||
+			hasKey(permKeyAdminJobsManage) ||
+			hasKey(permKeyAdminPlatformSettingsEdit) ||
+			hasKey(permKeyAdminMaintenanceManage) ||
+			hasKey(permKeyAdminTransparencyManage)
 	}
 	if _, found := m["CanModerate"]; !found {
 		m["CanModerate"] = effectiveAdmin || perms.CanModerate || hasModeracioKey

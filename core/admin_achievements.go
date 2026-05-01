@@ -233,7 +233,7 @@ func (a *App) AdminAchievementIcons(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, _, ok := a.requirePermission(w, r, permAdmin)
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminAchievementsEdit, PermissionTarget{})
 	if !ok {
 		return
 	}

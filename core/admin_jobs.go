@@ -348,7 +348,7 @@ func (a *App) adminJobsShowAPI(w http.ResponseWriter, r *http.Request, jobID int
 }
 
 func (a *App) adminJobsCreateAPI(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permAdmin)
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminJobsManage, PermissionTarget{})
 	if !ok {
 		return
 	}
@@ -389,7 +389,7 @@ func (a *App) adminJobsCreateAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) adminJobsRetryAPI(w http.ResponseWriter, r *http.Request, jobID int) {
-	user, _, ok := a.requirePermission(w, r, permAdmin)
+	user, ok := a.requirePermissionKey(w, r, permKeyAdminJobsManage, PermissionTarget{})
 	if !ok {
 		return
 	}
@@ -776,12 +776,12 @@ func (a *App) requireAdminJobViewer(w http.ResponseWriter, r *http.Request) (*db
 		perms = a.getPermissionsForUser(user.ID)
 		*r = *a.withPermissions(r, perms)
 	}
-	isAdmin := a.hasPerm(perms, permAdmin)
-	if isAdmin || a.canModeracioMassiva(user, perms) {
-		return user, perms, isAdmin, true
+	canManageJobs := a.HasPermission(user.ID, permKeyAdminJobsManage, PermissionTarget{})
+	if canManageJobs || a.canModeracioMassiva(user, perms) {
+		return user, perms, canManageJobs, true
 	}
 	http.Error(w, "Forbidden", http.StatusForbidden)
-	return user, perms, isAdmin, false
+	return user, perms, canManageJobs, false
 }
 
 func (a *App) canViewAdminJob(user *db.User, perms db.PolicyPermissions, isAdmin bool, job *db.AdminJob) bool {

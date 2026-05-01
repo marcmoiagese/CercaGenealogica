@@ -2027,6 +2027,7 @@
   "policies.gui.modular.group.documentals_view": "Documentals (lectura)",
   "policies.gui.modular.group.documentals_index": "Documentals (indexació i importació)",
   "policies.gui.modular.group.territori_view": "Territori (lectura)",
+  "policies.gui.modular.group.admin_platform": "Plataforma (admin)",
   "policies.gui.modular.group.admin_external": "Enllaços externs (admin)",
   "policies.gui.modular.group.moderation": "Moderació (global)",
   "policies.name": "Nom",

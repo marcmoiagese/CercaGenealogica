@@ -1988,6 +1988,7 @@
   "policies.gui.modular.group.documentals_view": "Documentals (lectura)",
   "policies.gui.modular.group.documentals_index": "Documentals (indexacion e importacion)",
   "policies.gui.modular.group.territori_view": "Territòri (lectura)",
+  "policies.gui.modular.group.admin_platform": "Plataforma (admin)",
   "policies.gui.modular.group.admin_external": "Ligams extèrnes (admin)",
   "policies.gui.modular.group.moderation": "Moderacion (global)",
   "policies.name": "Nom",

@@ -12,17 +12,38 @@ func (a *App) AdminControlCenter(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, _, ok := a.requirePermission(w, r, permAdmin)
+	user, ok := a.requireAnyPermissionKey(w, r, []string{
+		permKeyAdminAnalyticsView,
+		permKeyAdminAuditView,
+		permKeyAdminJobsManage,
+		permKeyAdminPlatformSettingsEdit,
+		permKeyAdminMaintenanceManage,
+		permKeyAdminTransparencyManage,
+	}, PermissionTarget{})
 	if !ok {
 		return
 	}
 	lang := ResolveLang(r)
+	canPlatformSettings := a.HasPermission(user.ID, permKeyAdminPlatformSettingsEdit, PermissionTarget{})
+	canMaintenance := a.HasPermission(user.ID, permKeyAdminMaintenanceManage, PermissionTarget{})
+	canAnalytics := a.HasPermission(user.ID, permKeyAdminAnalyticsView, PermissionTarget{})
+	canTransparency := a.HasPermission(user.ID, permKeyAdminTransparencyManage, PermissionTarget{})
+	canJobs := a.HasPermission(user.ID, permKeyAdminJobsManage, PermissionTarget{})
+	canAudit := a.HasPermission(user.ID, permKeyAdminAuditView, PermissionTarget{})
 	recentAudit := []adminAuditView{}
-	if rows, err := a.DB.ListAdminAudit(db.AdminAuditFilter{Limit: 5}); err == nil {
-		recentAudit = buildAdminAuditViews(a, lang, rows, map[int]string{})
+	if canAudit {
+		if rows, err := a.DB.ListAdminAudit(db.AdminAuditFilter{Limit: 5}); err == nil {
+			recentAudit = buildAdminAuditViews(a, lang, rows, map[int]string{})
+		}
 	}
 	RenderPrivateTemplate(w, r, "admin-control.html", map[string]interface{}{
-		"User": user,
+		"User":                user,
+		"CanPlatformSettings": canPlatformSettings,
+		"CanMaintenance":      canMaintenance,
+		"CanAnalytics":        canAnalytics,
+		"CanTransparency":     canTransparency,
+		"CanManageAdminJobs":  canJobs,
+		"CanViewAdminAudit":   canAudit,
 		"ModerationTypeLabels": map[string]string{
 			"persona":                   T(lang, "moderation.type.persona"),
 			"arxiu":                     T(lang, "moderation.type.arxiu"),

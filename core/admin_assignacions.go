@@ -10,7 +10,7 @@ import (
 )
 
 func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
@@ -162,7 +162,7 @@ func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request
 }
 
 func (a *App) AdminCreateGroup(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -189,7 +189,7 @@ func (a *App) AdminCreateGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminAssignarUsuariGrup(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -210,7 +210,7 @@ func (a *App) AdminAssignarUsuariGrup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminTreureUsuariGrup(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -231,7 +231,7 @@ func (a *App) AdminTreureUsuariGrup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminAssignarPoliticaUsuari(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -251,7 +251,7 @@ func (a *App) AdminAssignarPoliticaUsuari(w http.ResponseWriter, r *http.Request
 }
 
 func (a *App) AdminTreurePoliticaUsuari(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -271,7 +271,7 @@ func (a *App) AdminTreurePoliticaUsuari(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *App) AdminAssignarPoliticaGrup(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -291,7 +291,7 @@ func (a *App) AdminAssignarPoliticaGrup(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *App) AdminTreurePoliticaGrup(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permPolicies); !ok {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {

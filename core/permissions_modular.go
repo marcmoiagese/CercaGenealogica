@@ -23,6 +23,10 @@ const (
 	permKeyAdminPuntsEdit             = "admin.punts.regles.edit"
 	permKeyAdminAchievementsAdd       = "admin.achievements.add"
 	permKeyAdminAchievementsEdit      = "admin.achievements.edit"
+	permKeyAdminUsersManage           = "admin.users.manage"
+	permKeyAdminPoliciesManage        = "admin.policies.manage"
+	permKeyAdminAuditView             = "admin.audit.view"
+	permKeyAdminJobsManage            = "admin.jobs.manage"
 	permKeyAdminPlatformSettingsEdit  = "admin.platform.settings.edit"
 	permKeyAdminMaintenanceManage     = "admin.maintenance.manage"
 	permKeyAdminAnalyticsView         = "admin.analytics.view"
@@ -112,6 +116,10 @@ var permissionCatalogKeys = []string{
 	permKeyAdminPuntsEdit,
 	permKeyAdminAchievementsAdd,
 	permKeyAdminAchievementsEdit,
+	permKeyAdminUsersManage,
+	permKeyAdminPoliciesManage,
+	permKeyAdminAuditView,
+	permKeyAdminJobsManage,
 	permKeyAdminPlatformSettingsEdit,
 	permKeyAdminMaintenanceManage,
 	permKeyAdminAnalyticsView,
@@ -313,10 +321,17 @@ var legacyArchivePermKeys = []string{
 }
 
 var legacyPolicyPermKeys = []string{
+	permKeyAdminPoliciesManage,
+	permKeyAdminAuditView,
 	permKeyAdminPuntsAdd,
 	permKeyAdminPuntsEdit,
 	permKeyAdminAchievementsAdd,
 	permKeyAdminAchievementsEdit,
+}
+
+var legacyUserPermKeys = []string{
+	permKeyAdminUsersManage,
+	permKeyAdminAuditView,
 }
 
 type ScopeType string
@@ -627,6 +642,9 @@ func legacyPermKeys(perms db.PolicyPermissions) []string {
 	}
 	if perms.CanManagePolicies {
 		keys = append(keys, legacyPolicyPermKeys...)
+	}
+	if perms.CanManageUsers {
+		keys = append(keys, legacyUserPermKeys...)
 	}
 	return keys
 }

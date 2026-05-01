@@ -36,24 +36,38 @@
             </ul>
         </div>
         {{ end }}
-        {{ if and .Data (index .Data "IsAdmin") }}
+        {{ if and .Data (or (index .Data "IsAdmin") (index .Data "CanViewAdminControl") (index .Data "CanViewAdminAudit") (index .Data "CanManageUsers") (index .Data "CanManagePolicies") (index .Data "CanManageAdminJobs")) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-tools"></i>
                 <h3>{{ t .Lang "menu.section.admin" }}</h3>
             </div>
             <ul>
+                {{ if or (index .Data "IsAdmin") (index .Data "CanViewAdminControl") }}
                 <li class="menu-opcio"><a href="/admin/control"><i class="fas fa-gauge-high"></i> {{ t .Lang "admin.menu.control_center" }}</a></li>
+                {{ end }}
+                {{ if or (index .Data "IsAdmin") (index .Data "CanViewAdminAudit") }}
                 <li class="menu-opcio"><a href="/admin/auditoria"><i class="fas fa-shield-alt"></i> {{ t .Lang "admin.menu.audit" }}</a></li>
+                {{ end }}
+                {{ if index .Data "IsAdmin" }}
                 <li class="menu-opcio"><a href="/admin/paisos"><i class="fas fa-globe"></i> {{ t .Lang "admin.menu.countries" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/external-sites"><i class="fas fa-link"></i> {{ t .Lang "admin.menu.external_sites" }}</a></li>
+                {{ end }}
+                {{ if or (index .Data "IsAdmin") (index .Data "CanModerate") }}
                 <li class="menu-opcio"><a href="/admin/external-links"><i class="fas fa-check-double"></i> {{ t .Lang "admin.menu.external_links" }}</a></li>
+                {{ end }}
+                {{ if or (index .Data "IsAdmin") (index .Data "CanManageUsers") }}
                 <li class="menu-opcio"><a href="/admin/usuaris"><i class="fas fa-user-cog"></i> {{ t .Lang "admin.menu.users" }}</a></li>
+                {{ end }}
+                {{ if or (index .Data "IsAdmin") (index .Data "CanManagePolicies") }}
                 <li class="menu-opcio"><a href="/admin/politiques"><i class="fas fa-shield-alt"></i> {{ t .Lang "admin.menu.policies" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/politiques/assignacions"><i class="fas fa-user-check"></i> {{ t .Lang "admin.menu.policies_assign" }}</a></li>
+                {{ end }}
+                {{ if index .Data "IsAdmin" }}
                 <li class="menu-opcio"><a href="/admin/import-export"><i class="fas fa-exchange-alt"></i> {{ t .Lang "admin.menu.io" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/cognoms/import"><i class="fas fa-signature"></i> {{ t .Lang "admin.menu.surnames_import" }}</a></li>
                 <li class="menu-opcio"><a href="/admin/cognoms/merge"><i class="fas fa-link"></i> {{ t .Lang "admin.menu.surnames_merge" }}</a></li>
+                {{ end }}
             </ul>
         </div>
         {{ end }}

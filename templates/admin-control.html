@@ -26,6 +26,7 @@
                 <p>{{ t .Lang "admin.control.governance.desc" }}</p>
             </header>
             <div class="control-grid">
+                {{ if .Data.CanPlatformSettings }}
                 <a class="control-card" href="/admin/plataforma/config">
                     <div class="control-icon"><i class="fas fa-pen-nib"></i></div>
                     <div>
@@ -33,6 +34,8 @@
                         <p>{{ t .Lang "admin.control.card.branding.desc" }}</p>
                     </div>
                 </a>
+                {{ end }}
+                {{ if .Data.CanMaintenance }}
                 <a class="control-card" href="/admin/manteniments">
                     <div class="control-icon"><i class="fas fa-triangle-exclamation"></i></div>
                     <div>
@@ -40,6 +43,8 @@
                         <p>{{ t .Lang "admin.control.card.maintenance.desc" }}</p>
                     </div>
                 </a>
+                {{ end }}
+                {{ if .Data.CanAnalytics }}
                 <a class="control-card" href="/admin/kpis">
                     <div class="control-icon"><i class="fas fa-chart-pie"></i></div>
                     <div>
@@ -47,6 +52,8 @@
                         <p>{{ t .Lang "admin.control.card.kpis.desc" }}</p>
                     </div>
                 </a>
+                {{ end }}
+                {{ if .Data.CanTransparency }}
                 <a class="control-card" href="/admin/transparencia">
                     <div class="control-icon"><i class="fas fa-handshake"></i></div>
                     <div>
@@ -54,9 +61,11 @@
                         <p>{{ t .Lang "admin.control.card.transparency.desc" }}</p>
                     </div>
                 </a>
+                {{ end }}
             </div>
         </section>
 
+        {{ if .Data.CanAnalytics }}
         <section class="card control-section control-ops"
                  data-control-kpis-api="/api/admin/control/kpis"
                  data-state-ok="{{ t .Lang "admin.control.ops.state.ok" }}"
@@ -140,11 +149,13 @@
                 </div>
             </div>
         </section>
+        {{ end }}
 
+        {{ if or .Data.CanAnalytics .Data.CanManageAdminJobs .Data.CanPlatformSettings }}
         <section class="card control-section control-health"
                  id="control-observability"
                  data-control-health-api="/api/admin/control/health"
-                 data-control-metrics-api="/api/admin/control/metrics"
+                 {{ if .Data.CanAnalytics }}data-control-metrics-api="/api/admin/control/metrics"{{ end }}
                  data-state-ok="{{ t .Lang "admin.control.ops.state.ok" }}"
                  data-state-warn="{{ t .Lang "admin.control.ops.state.warn" }}"
                  data-state-crit="{{ t .Lang "admin.control.ops.state.crit" }}"
@@ -192,6 +203,7 @@
                     </div>
                     <div class="health-meta">{{ t .Lang "admin.control.health.card.jobs.helper" }}</div>
                 </div>
+                {{ if .Data.CanAnalytics }}
                 <div class="health-card" data-health-card="metrics">
                     <div class="health-card__header">
                         <span class="health-label">{{ t .Lang "admin.control.health.card.metrics.title" }}</span>
@@ -213,8 +225,10 @@
                     </div>
                     <div class="health-meta">{{ t .Lang "admin.control.health.card.metrics.helper" }}</div>
                 </div>
+                {{ end }}
             </div>
         </section>
+        {{ end }}
 
         <section class="card control-section">
             <header class="control-section-header">
@@ -222,6 +236,7 @@
                 <p>{{ t .Lang "admin.control.operations.desc" }}</p>
             </header>
             <div class="control-grid">
+                {{ if .Data.CanManageAdminJobs }}
                 <div class="control-card is-disabled">
                     <div class="control-icon"><i class="fas fa-clipboard-check"></i></div>
                     <div>
@@ -237,6 +252,8 @@
                         <p>{{ t .Lang "admin.control.card.jobs.desc" }}</p>
                     </div>
                 </a>
+                {{ end }}
+                {{ if .Data.CanViewAdminAudit }}
                 <a class="control-card" href="/admin/auditoria">
                     <div class="control-icon"><i class="fas fa-shield-alt"></i></div>
                     <div>
@@ -244,6 +261,8 @@
                         <p>{{ t .Lang "admin.control.card.audit.desc" }}</p>
                     </div>
                 </a>
+                {{ end }}
+                {{ if .Data.CanPlatformSettings }}
                 <a class="control-card" href="/admin/control/widgets">
                     <div class="control-icon"><i class="fas fa-sliders-h"></i></div>
                     <div>
@@ -251,6 +270,8 @@
                         <p>{{ t .Lang "admin.control.card.widgets.desc" }}</p>
                     </div>
                 </a>
+                {{ end }}
+                {{ if or .Data.CanAnalytics .Data.CanManageAdminJobs .Data.CanPlatformSettings }}
                 <a class="control-card" href="#control-observability">
                     <div class="control-icon"><i class="fas fa-heartbeat"></i></div>
                     <div>
@@ -258,9 +279,11 @@
                         <p>{{ t .Lang "admin.control.card.health.desc" }}</p>
                     </div>
                 </a>
+                {{ end }}
             </div>
         </section>
 
+        {{ if .Data.CanViewAdminAudit }}
         <section class="card control-section">
             <header class="control-section-header">
                 <h2>{{ t .Lang "admin.control.activity.title" }}</h2>
@@ -284,6 +307,7 @@
                 {{ end }}
             </div>
         </section>
+        {{ end }}
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
