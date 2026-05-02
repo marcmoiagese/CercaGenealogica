@@ -17,20 +17,13 @@ func TestResolveLlibresByCodesMultiDB(t *testing.T) {
 		t.Run(env.Label, func(t *testing.T) {
 			t.Helper()
 			database := env.DB
+			suffix := env.Label + "_" + strconv.FormatInt(time.Now().UnixNano(), 36)
 
-			pais := &db.Pais{
-				CodiISO2:    "ES",
-				CodiISO3:    "ESP",
-				CodiPaisNum: "724",
-			}
-			paisID, err := database.CreatePais(pais)
-			if err != nil {
-				t.Fatalf("CreatePais ha fallat: %v", err)
-			}
+			paisID := getOrCreateF298Pais(t, database)
 			nivell := &db.NivellAdministratiu{
 				PaisID:         paisID,
 				Nivel:          1,
-				NomNivell:      "Test nivell",
+				NomNivell:      "Test nivell " + suffix,
 				TipusNivell:    "pais",
 				Estat:          "actiu",
 				ModeracioEstat: "pendent",
@@ -40,7 +33,7 @@ func TestResolveLlibresByCodesMultiDB(t *testing.T) {
 				t.Fatalf("CreateNivell ha fallat: %v", err)
 			}
 			mun := &db.Municipi{
-				Nom:            "Municipi Test",
+				Nom:            "Municipi Test " + suffix,
 				Tipus:          "municipi",
 				Estat:          "actiu",
 				ModeracioEstat: "pendent",
@@ -51,7 +44,7 @@ func TestResolveLlibresByCodesMultiDB(t *testing.T) {
 				t.Fatalf("CreateMunicipi ha fallat: %v", err)
 			}
 			entitat := &db.Arquebisbat{
-				Nom:            "Bisbat Test",
+				Nom:            "Bisbat Test " + suffix,
 				TipusEntitat:   "bisbat",
 				PaisID:         sql.NullInt64{Int64: int64(paisID), Valid: true},
 				ModeracioEstat: "pendent",
@@ -85,4 +78,29 @@ func TestResolveLlibresByCodesMultiDB(t *testing.T) {
 			}
 		})
 	}
+}
+
+func getOrCreateF298Pais(t *testing.T, database db.DB) int {
+	t.Helper()
+
+	paisos, err := database.ListPaisos()
+	if err != nil {
+		t.Fatalf("ListPaisos ha fallat: %v", err)
+	}
+	for _, pais := range paisos {
+		if pais.CodiISO3 == "ESP" {
+			return pais.ID
+		}
+	}
+
+	pais := &db.Pais{
+		CodiISO2:    "ES",
+		CodiISO3:    "ESP",
+		CodiPaisNum: "724",
+	}
+	paisID, err := database.CreatePais(pais)
+	if err != nil {
+		t.Fatalf("CreatePais ha fallat: %v", err)
+	}
+	return paisID
 }
