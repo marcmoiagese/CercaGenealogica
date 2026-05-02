@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/marcmoiagese/CercaGenealogica/core"
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
@@ -163,6 +164,104 @@ func TestWikiMunicipiFlowApproveReject(t *testing.T) {
 	if change.ModeracioEstat != "rebutjat" {
 		t.Fatalf("estat esperat rebutjat, got %s", change.ModeracioEstat)
 	}
+}
+
+func TestF336WikiMunicipiScopedRevertStaysInsideScope(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f33_6_wiki_municipi_scoped.sqlite3")
+
+	admin := createTestUser(t, database, "wiki_mun_f336_admin_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	assignPolicyByName(t, database, admin.ID, "admin")
+	adminSession := createSessionCookie(t, database, admin.ID, "sess_mun_f336_admin_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+
+	_, nivellID := createTestPaisNivell(t, database, admin.ID)
+	allowedMunID := createF336WikiMunicipi(t, database, admin.ID, nivellID, "Municipi F33-6 allowed")
+	blockedMunID := createF336WikiMunicipi(t, database, admin.ID, nivellID, "Municipi F33-6 blocked")
+	allowedChangeID := submitF336MunicipiUpdate(t, app, adminSession, allowedMunID, nivellID, "Municipi F33-6 allowed v2")
+	blockedChangeID := submitF336MunicipiUpdate(t, app, adminSession, blockedMunID, nivellID, "Municipi F33-6 blocked v2")
+
+	moderator := createTestUser(t, database, "wiki_mun_f336_mod_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	policyID := createPolicyWithScopedGrant(t, database, "f33_6_wiki_municipi_scoped", "territori.municipis.edit", "municipi", allowedMunID)
+	addGrantToPolicy(t, database, policyID, "wiki.revert")
+	if err := database.AddUserPolitica(moderator.ID, policyID); err != nil {
+		t.Fatalf("AddUserPolitica scoped wiki ha fallat: %v", err)
+	}
+	moderatorSession := createSessionCookie(t, database, moderator.ID, "sess_mun_f336_mod_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+
+	csrf := "csrf_f33_6_allowed"
+	form := url.Values{}
+	form.Set("csrf_token", csrf)
+	form.Set("change_id", strconv.Itoa(allowedChangeID))
+	form.Set("reason", "revert scoped")
+	req := httptest.NewRequest(http.MethodPost, "/territori/municipis/"+strconv.Itoa(allowedMunID)+"/historial/revert", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(moderatorSession)
+	req.AddCookie(csrfCookie(csrf))
+	rr := httptest.NewRecorder()
+	app.MunicipiWikiRevert(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("revert scoped dins ambit esperava 303, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	csrf = "csrf_f33_6_blocked"
+	form = url.Values{}
+	form.Set("csrf_token", csrf)
+	form.Set("change_id", strconv.Itoa(blockedChangeID))
+	form.Set("reason", "revert scoped out")
+	req = httptest.NewRequest(http.MethodPost, "/territori/municipis/"+strconv.Itoa(blockedMunID)+"/historial/revert", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(moderatorSession)
+	req.AddCookie(csrfCookie(csrf))
+	rr = httptest.NewRecorder()
+	app.MunicipiWikiRevert(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("revert scoped fora ambit esperava 403, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func createF336WikiMunicipi(t *testing.T, database db.DB, userID, nivellID int, nom string) int {
+	t.Helper()
+	mun := &db.Municipi{
+		Nom:            nom,
+		Tipus:          "municipi",
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+		CreatedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
+	}
+	mun.NivellAdministratiuID[0] = sql.NullInt64{Int64: int64(nivellID), Valid: true}
+	munID, err := database.CreateMunicipi(mun)
+	if err != nil {
+		t.Fatalf("CreateMunicipi F33-6 ha fallat: %v", err)
+	}
+	return munID
+}
+
+func submitF336MunicipiUpdate(t *testing.T, app *core.App, session *http.Cookie, munID, nivellID int, nom string) int {
+	t.Helper()
+	form := url.Values{}
+	form.Set("id", strconv.Itoa(munID))
+	form.Set("nom", nom)
+	form.Set("tipus", "municipi")
+	form.Set("estat", "actiu")
+	form.Set("nivell_administratiu_id_1", strconv.Itoa(nivellID))
+	req := httptest.NewRequest(http.MethodPost, "/territori/municipis/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminSaveMunicipi(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("save municipi F33-6 expected 303, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	changes, err := app.DB.ListWikiChanges("municipi", munID)
+	if err != nil {
+		t.Fatalf("ListWikiChanges F33-6 ha fallat: %v", err)
+	}
+	for _, ch := range changes {
+		if ch.ModeracioEstat == "pendent" {
+			return ch.ID
+		}
+	}
+	t.Fatalf("no s'ha creat canvi wiki pendent F33-6")
+	return 0
 }
 
 func createTestPaisNivell(t *testing.T, database db.DB, userID int) (int, int) {

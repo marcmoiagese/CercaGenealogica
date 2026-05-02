@@ -35,7 +35,7 @@ func (a *App) ArxiuWikiHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateWikiObject(user, perms, "arxiu", arxiu.ID)
 	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 	canManageArxius := a.CanManageArxius(user)
 	if arxiu.ModeracioEstat != "" && arxiu.ModeracioEstat != "publicat" && !(canManageArxius || canModerate) {
@@ -255,7 +255,7 @@ func (a *App) ArxiuWikiStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateWikiObject(user, perms, "arxiu", arxiu.ID)
 	canManageArxius := a.CanManageArxius(user)
 	if arxiu.ModeracioEstat != "" && arxiu.ModeracioEstat != "publicat" && !(canManageArxius || canModerate) {
 		http.NotFound(w, r)
@@ -310,7 +310,7 @@ func (a *App) ArxiuWikiRevert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateWikiObject(user, perms, "arxiu", arxiu.ID)
 	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -414,7 +414,7 @@ func (a *App) ArxiuWikiMark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	if arxiu.ModeracioEstat != "" && arxiu.ModeracioEstat != "publicat" && !(a.CanManageArxius(user) || a.hasPerm(perms, permModerate)) {
+	if arxiu.ModeracioEstat != "" && arxiu.ModeracioEstat != "publicat" && !(a.CanManageArxius(user) || a.canModerateWikiObject(user, perms, "arxiu", arxiu.ID)) {
 		http.NotFound(w, r)
 		return
 	}
@@ -487,7 +487,7 @@ func (a *App) ArxiuWikiUnmark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	if arxiu.ModeracioEstat != "" && arxiu.ModeracioEstat != "publicat" && !(a.CanManageArxius(user) || a.hasPerm(perms, permModerate)) {
+	if arxiu.ModeracioEstat != "" && arxiu.ModeracioEstat != "publicat" && !(a.CanManageArxius(user) || a.canModerateWikiObject(user, perms, "arxiu", arxiu.ID)) {
 		http.NotFound(w, r)
 		return
 	}

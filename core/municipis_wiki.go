@@ -72,7 +72,7 @@ func (a *App) MunicipiWikiHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	canManageTerritory := a.hasPerm(perms, permTerritory)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateWikiObject(user, perms, "municipi", mun.ID)
 	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 	target := a.resolveMunicipiTarget(mun.ID)
 	if !a.HasPermission(user.ID, permKeyTerritoriMunicipisView, target) && !(canManageTerritory || canModerate) {
@@ -300,7 +300,7 @@ func (a *App) MunicipiWikiStats(w http.ResponseWriter, r *http.Request) {
 	perms := a.getPermissionsForUser(user.ID)
 	*r = *a.withPermissions(r, perms)
 	canManageTerritory := a.hasPerm(perms, permTerritory)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateWikiObject(user, perms, "municipi", mun.ID)
 	target := a.resolveMunicipiTarget(mun.ID)
 	if !a.HasPermission(user.ID, permKeyTerritoriMunicipisView, target) && !(canManageTerritory || canModerate) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -362,7 +362,11 @@ func (a *App) MunicipiWikiRevert(w http.ResponseWriter, r *http.Request) {
 	*r = *a.withUser(r, user)
 	perms := a.getPermissionsForUser(user.ID)
 	*r = *a.withPermissions(r, perms)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateWikiObject(user, perms, "municipi", mun.ID)
+	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	target := a.resolveMunicipiTarget(mun.ID)
 	if !a.HasPermission(user.ID, permKeyTerritoriMunicipisView, target) && !canModerate {
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -467,7 +471,7 @@ func (a *App) MunicipiWikiMark(w http.ResponseWriter, r *http.Request) {
 	if !a.ensureWikiMarkAllowed(w, r, lang) {
 		return
 	}
-	if mun.ModeracioEstat != "" && mun.ModeracioEstat != "publicat" && !a.hasPerm(a.getPermissionsForUser(user.ID), permModerate) {
+	if mun.ModeracioEstat != "" && mun.ModeracioEstat != "publicat" && !a.canModerateWikiObject(user, a.getPermissionsForUser(user.ID), "municipi", mun.ID) {
 		http.NotFound(w, r)
 		return
 	}
@@ -540,7 +544,7 @@ func (a *App) MunicipiWikiUnmark(w http.ResponseWriter, r *http.Request) {
 	if !a.ensureWikiMarkAllowed(w, r, lang) {
 		return
 	}
-	if mun.ModeracioEstat != "" && mun.ModeracioEstat != "publicat" && !a.hasPerm(a.getPermissionsForUser(user.ID), permModerate) {
+	if mun.ModeracioEstat != "" && mun.ModeracioEstat != "publicat" && !a.canModerateWikiObject(user, a.getPermissionsForUser(user.ID), "municipi", mun.ID) {
 		http.NotFound(w, r)
 		return
 	}

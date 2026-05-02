@@ -35,7 +35,7 @@ func (a *App) LlibreWikiHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateWikiObject(user, perms, "llibre", llibre.ID)
 	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -263,7 +263,7 @@ func (a *App) LlibreWikiStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateWikiObject(user, perms, "llibre", llibre.ID)
 	canManageArxius := a.CanManageArxius(user)
 	if llibre.ModeracioEstat != "publicat" && !(canManageArxius || canModerate) {
 		http.NotFound(w, r)
@@ -322,7 +322,11 @@ func (a *App) LlibreWikiRevert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateWikiObject(user, perms, "llibre", llibre.ID)
+	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	changeID, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("change_id")))
 	if changeID == 0 {
 		http.Error(w, "Canvi invàlid", http.StatusBadRequest)
@@ -422,7 +426,7 @@ func (a *App) LlibreWikiMark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	if llibre.ModeracioEstat != "publicat" && !(a.CanManageArxius(user) || a.hasPerm(perms, permModerate)) {
+	if llibre.ModeracioEstat != "publicat" && !(a.CanManageArxius(user) || a.canModerateWikiObject(user, perms, "llibre", llibre.ID)) {
 		http.NotFound(w, r)
 		return
 	}
@@ -495,7 +499,7 @@ func (a *App) LlibreWikiUnmark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	if llibre.ModeracioEstat != "publicat" && !(a.CanManageArxius(user) || a.hasPerm(perms, permModerate)) {
+	if llibre.ModeracioEstat != "publicat" && !(a.CanManageArxius(user) || a.canModerateWikiObject(user, perms, "llibre", llibre.ID)) {
 		http.NotFound(w, r)
 		return
 	}

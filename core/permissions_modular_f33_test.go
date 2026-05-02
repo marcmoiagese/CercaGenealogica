@@ -275,6 +275,117 @@ func TestF334ScopedMunicipiModeratorDoesNotModerateOutsideScope(t *testing.T) {
 	}
 }
 
+func TestF336WikiModerationUsesScopedObjectTargets(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-6-wiki-scoped")
+	policy := &db.Politica{
+		Nom:        "wiki-scoped-moderator",
+		Permisos:   "{}",
+		Descripcio: "",
+	}
+	policyID, err := database.SavePolitica(policy)
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica wiki scoped: %v", err)
+	}
+	grants := []db.PoliticaGrant{
+		{
+			PoliticaID:      policyID,
+			PermKey:         permKeyTerritoriMunicipisEdit,
+			ScopeType:       string(ScopeMunicipi),
+			ScopeID:         sql.NullInt64{Int64: 7, Valid: true},
+			IncludeChildren: false,
+		},
+		{
+			PoliticaID:      policyID,
+			PermKey:         permKeyDocumentalsArxiusEdit,
+			ScopeType:       string(ScopeArxiu),
+			ScopeID:         sql.NullInt64{Int64: 11, Valid: true},
+			IncludeChildren: false,
+		},
+		{
+			PoliticaID:      policyID,
+			PermKey:         permKeyDocumentalsLlibresEdit,
+			ScopeType:       string(ScopeLlibre),
+			ScopeID:         sql.NullInt64{Int64: 13, Valid: true},
+			IncludeChildren: false,
+		},
+	}
+	for _, grant := range grants {
+		grant := grant
+		if _, err := database.SavePoliticaGrant(&grant); err != nil {
+			t.Fatalf("no s'ha pogut crear grant wiki scoped: %v", err)
+		}
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica wiki scoped: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	perms := app.getPermissionsForUser(userID)
+	if app.hasPerm(perms, permModerate) {
+		t.Fatalf("el test necessita usuari sense permModerate legacy")
+	}
+	if !app.canModerateWikiObject(user, perms, "municipi", 7) {
+		t.Fatalf("territori.municipis.edit scoped hauria d'autoritzar wiki municipi dins ambit")
+	}
+	if app.canModerateWikiObject(user, perms, "municipi", 8) {
+		t.Fatalf("territori.municipis.edit scoped no hauria d'autoritzar wiki municipi fora ambit")
+	}
+	if !app.canModerateWikiObject(user, perms, "arxiu", 11) {
+		t.Fatalf("documentals.arxius.edit scoped hauria d'autoritzar wiki arxiu dins ambit")
+	}
+	if app.canModerateWikiObject(user, perms, "arxiu", 12) {
+		t.Fatalf("documentals.arxius.edit scoped no hauria d'autoritzar wiki arxiu fora ambit")
+	}
+	if !app.canModerateWikiObject(user, perms, "llibre", 13) {
+		t.Fatalf("documentals.llibres.edit scoped hauria d'autoritzar wiki llibre dins ambit")
+	}
+	if app.canModerateWikiObject(user, perms, "llibre", 14) {
+		t.Fatalf("documentals.llibres.edit scoped no hauria d'autoritzar wiki llibre fora ambit")
+	}
+}
+
+func TestF336WikiModerationUsesDomainGlobalKeys(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-6-wiki-domain")
+	policy := &db.Politica{
+		Nom:        "wiki-domain-moderator",
+		Permisos:   "{}",
+		Descripcio: "",
+	}
+	policyID, err := database.SavePolitica(policy)
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica wiki domain: %v", err)
+	}
+	for _, key := range []string{permKeyPersonesModerate, permKeyCognomsModerate, permKeyEventsModerate} {
+		grant := &db.PoliticaGrant{
+			PoliticaID: policyID,
+			PermKey:    key,
+			ScopeType:  string(ScopeGlobal),
+		}
+		if _, err := database.SavePoliticaGrant(grant); err != nil {
+			t.Fatalf("no s'ha pogut crear grant %s: %v", key, err)
+		}
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica wiki domain: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	perms := app.getPermissionsForUser(userID)
+	if app.hasPerm(perms, permModerate) {
+		t.Fatalf("el test necessita usuari sense permModerate legacy")
+	}
+	for _, objectType := range []string{"persona", "cognom", "event_historic"} {
+		if !app.canModerateWikiObject(user, perms, objectType, 1) {
+			t.Fatalf("key modular de domini hauria d'autoritzar wiki %s", objectType)
+		}
+	}
+	if app.canModerateWikiObject(user, perms, "municipi", 1) {
+		t.Fatalf("keys globals de persona/cognom/event no han d'autoritzar municipi")
+	}
+}
+
 func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-5-platform-user")
