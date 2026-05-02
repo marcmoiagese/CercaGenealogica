@@ -1,12 +1,34 @@
 package unit
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
 func TestNivellRollupsBasics(t *testing.T) {
+	start, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+	root := start
+	for {
+		if _, err := os.Stat(filepath.Join(root, "go.mod")); err == nil {
+			break
+		}
+		parent := filepath.Dir(root)
+		if parent == root {
+			t.Fatalf("no s'ha trobat go.mod a cap directori pare de %s", start)
+		}
+		root = parent
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("os.Chdir(%s): %v", root, err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(start) })
+
 	app := newTestApp(t)
 	defer closeTestApp(t, app)
 

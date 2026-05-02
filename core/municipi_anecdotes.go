@@ -17,25 +17,25 @@ import (
 )
 
 const (
-	municipiAnecdoteMaxBytes int64 = 64 << 10
-	municipiAnecdoteRateLimit      = 0.5
-	municipiAnecdoteRateBurst      = 3
-	anecdoteTitleMin               = 3
-	anecdoteTitleMax               = 120
-	anecdoteTextMin                = 20
-	anecdoteTextMax                = 4000
-	anecdoteTagMaxLen              = 40
-	anecdoteDataRefMax             = 32
-	anecdoteFontURLMax             = 200
-	anecdoteCommentMin             = 3
-	anecdoteCommentMax             = 1000
-	municipiAnecdoteSubmitDailyLimit = 5
-	municipiAnecdoteSubmitWindow     = 24 * time.Hour
-	municipiAnecdoteCommentCooldown  = 30 * time.Second
+	municipiAnecdoteMaxBytes         int64 = 64 << 10
+	municipiAnecdoteRateLimit              = 0.5
+	municipiAnecdoteRateBurst              = 3
+	anecdoteTitleMin                       = 3
+	anecdoteTitleMax                       = 120
+	anecdoteTextMin                        = 20
+	anecdoteTextMax                        = 4000
+	anecdoteTagMaxLen                      = 40
+	anecdoteDataRefMax                     = 32
+	anecdoteFontURLMax                     = 200
+	anecdoteCommentMin                     = 3
+	anecdoteCommentMax                     = 1000
+	municipiAnecdoteSubmitDailyLimit       = 5
+	municipiAnecdoteSubmitWindow           = 24 * time.Hour
+	municipiAnecdoteCommentCooldown        = 30 * time.Second
 )
 
 var (
-	anecdoteTags = []string{"cases", "carrers", "toponims", "costums", "festes", "cognoms", "altres"}
+	anecdoteTags           = []string{"cases", "carrers", "toponims", "costums", "festes", "cognoms", "altres"}
 	anecdoteDataRefPattern = regexp.MustCompile(`^\d{4}(-\d{2}-\d{2})?$`)
 )
 
@@ -97,12 +97,9 @@ func (a *App) MunicipiAnecdotesListPage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	user, _ := a.VerificarSessio(r)
-	perms := db.PolicyPermissions{}
-	if user != nil {
-		perms = a.getPermissionsForUser(user.ID)
-	}
-	canManageTerritory := user != nil && a.hasPerm(perms, permTerritory)
-	canModerate := user != nil && a.hasPerm(perms, permModerate)
+	munTarget := a.resolveMunicipiTarget(mun.ID)
+	canManageTerritory := a.canEditMunicipiPublic(user, munTarget)
+	canModerate := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisAnecdotesModerate, munTarget)
 	if mun.ModeracioEstat != "" && mun.ModeracioEstat != "publicat" && !(canManageTerritory || canModerate) {
 		http.NotFound(w, r)
 		return
@@ -168,23 +165,22 @@ func (a *App) MunicipiAnecdotesListPage(w http.ResponseWriter, r *http.Request) 
 	}
 	pageBase := "/territori/municipis/" + strconv.Itoa(munID) + "/anecdotes?" + values.Encode()
 
-	munTarget := a.resolveMunicipiTarget(mun.ID)
 	canCreateAnecdote := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisAnecdotesCreate, munTarget)
 
 	data := map[string]interface{}{
-		"Municipi":         mun,
-		"Anecdotes":        viewItems,
-		"FilterQ":          filterQ,
-		"FilterTag":        filterTag,
-		"TagOptions":       anecdoteTagOptions(ResolveLang(r)),
-		"Page":             page,
-		"PerPage":          perPage,
-		"TotalPages":       totalPages,
-		"HasPrev":          page > 1,
-		"HasNext":          page < totalPages,
-		"PrevPage":         page - 1,
-		"NextPage":         page + 1,
-		"PageBase":         pageBase,
+		"Municipi":          mun,
+		"Anecdotes":         viewItems,
+		"FilterQ":           filterQ,
+		"FilterTag":         filterTag,
+		"TagOptions":        anecdoteTagOptions(ResolveLang(r)),
+		"Page":              page,
+		"PerPage":           perPage,
+		"TotalPages":        totalPages,
+		"HasPrev":           page > 1,
+		"HasNext":           page < totalPages,
+		"PrevPage":          page - 1,
+		"NextPage":          page + 1,
+		"PageBase":          pageBase,
 		"CanCreateAnecdote": canCreateAnecdote,
 	}
 	if user != nil {
@@ -210,13 +206,9 @@ func (a *App) MunicipiAnecdoteDetailPage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	user, _ := a.VerificarSessio(r)
-	perms := db.PolicyPermissions{}
-	if user != nil {
-		perms = a.getPermissionsForUser(user.ID)
-	}
-	canManageTerritory := user != nil && a.hasPerm(perms, permTerritory)
 	munTarget := a.resolveMunicipiTarget(mun.ID)
-	canModerate := user != nil && (a.hasPerm(perms, permModerate) || a.HasPermission(user.ID, permKeyTerritoriMunicipisAnecdotesModerate, munTarget))
+	canManageTerritory := a.canEditMunicipiPublic(user, munTarget)
+	canModerate := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisAnecdotesModerate, munTarget)
 	if mun.ModeracioEstat != "" && mun.ModeracioEstat != "publicat" && !(canManageTerritory || canModerate) {
 		http.NotFound(w, r)
 		return
@@ -300,25 +292,25 @@ func (a *App) MunicipiAnecdoteDetailPage(w http.ResponseWriter, r *http.Request)
 	}
 
 	data := map[string]interface{}{
-		"Municipi":         mun,
-		"Anecdote":         anecdote,
-		"AnecdoteDate":     formatCronologiaDisplay(anecdote.DataRef),
-		"AnecdoteSnippet":  summarizeAnecdoteText(anecdote.Text, 320),
-		"Comments":         commentViews,
-		"Page":             page,
-		"PerPage":          perPage,
-		"TotalPages":       totalPages,
-		"HasPrev":          page > 1,
-		"HasNext":          page < totalPages,
-		"PrevPage":         page - 1,
-		"NextPage":         page + 1,
-		"PageBase":         pageBase,
-		"CanComment":       canComment,
+		"Municipi":          mun,
+		"Anecdote":          anecdote,
+		"AnecdoteDate":      formatCronologiaDisplay(anecdote.DataRef),
+		"AnecdoteSnippet":   summarizeAnecdoteText(anecdote.Text, 320),
+		"Comments":          commentViews,
+		"Page":              page,
+		"PerPage":           perPage,
+		"TotalPages":        totalPages,
+		"HasPrev":           page > 1,
+		"HasNext":           page < totalPages,
+		"PrevPage":          page - 1,
+		"NextPage":          page + 1,
+		"PageBase":          pageBase,
+		"CanComment":        canComment,
 		"CanCreateAnecdote": canCreateAnecdote,
-		"CSRFToken":        token,
-		"Ok":               ok,
-		"Submitted":        submitted,
-		"ErrorMessage":     errMsg,
+		"CSRFToken":         token,
+		"Ok":                ok,
+		"Submitted":         submitted,
+		"ErrorMessage":      errMsg,
 	}
 	if user != nil {
 		RenderPrivateTemplate(w, r, "municipi-anecdotes-detail.html", data)
@@ -525,17 +517,16 @@ func (a *App) MunicipiAnecdoteEditPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	form := anecdoteFormData{
-		VersionID:  version.ID,
+		VersionID:   version.ID,
 		LockVersion: version.LockVersion,
-		Title:      strings.TrimSpace(version.Titol),
-		Tag:        strings.TrimSpace(version.Tag),
-		DataRef:    strings.TrimSpace(version.DataRef),
-		Text:       strings.TrimSpace(version.Text),
-		FontURL:    strings.TrimSpace(version.FontURL),
+		Title:       strings.TrimSpace(version.Titol),
+		Tag:         strings.TrimSpace(version.Tag),
+		DataRef:     strings.TrimSpace(version.DataRef),
+		Text:        strings.TrimSpace(version.Text),
+		FontURL:     strings.TrimSpace(version.FontURL),
 	}
 	a.renderAnecdoteForm(w, r, mun, form, token, "", false)
 }
-
 
 func (a *App) AnecdotesAPI(w http.ResponseWriter, r *http.Request) {
 	base := strings.TrimPrefix(r.URL.Path, "/api/anecdotes/")
@@ -639,12 +630,12 @@ func (a *App) municipiAnecdotesListJSON(w http.ResponseWriter, r *http.Request, 
 			tagLabel = tag
 		}
 		payload = append(payload, map[string]interface{}{
-			"item_id":  item.ItemID,
-			"title":    strings.TrimSpace(item.Titol),
-			"tag":      tag,
+			"item_id":   item.ItemID,
+			"title":     strings.TrimSpace(item.Titol),
+			"tag":       tag,
 			"tag_label": tagLabel,
-			"data_ref": formatCronologiaDisplay(item.DataRef),
-			"snippet":  summarizeAnecdoteText(item.Text, 180),
+			"data_ref":  formatCronologiaDisplay(item.DataRef),
+			"snippet":   summarizeAnecdoteText(item.Text, 180),
 		})
 	}
 	writeJSON(w, map[string]interface{}{"items": payload})
@@ -1019,16 +1010,16 @@ func readAnecdoteForm(r *http.Request) anecdoteFormData {
 
 func (a *App) renderAnecdoteForm(w http.ResponseWriter, r *http.Request, mun *db.Municipi, form anecdoteFormData, token string, errMsg string, isNew bool) {
 	data := map[string]interface{}{
-		"Municipi":       mun,
-		"Form":           form,
-		"TagOptions":     anecdoteTagOptions(ResolveLang(r)),
-		"CSRFToken":      token,
-		"ErrorMessage":   errMsg,
-		"IsNew":          isNew,
-		"IsEdit":         !isNew,
-		"Submitted":      strings.TrimSpace(r.URL.Query().Get("submitted")) == "1",
-		"Ok":             strings.TrimSpace(r.URL.Query().Get("ok")) == "1",
-		"Conflict":       strings.TrimSpace(r.URL.Query().Get("err")) == "conflict",
+		"Municipi":     mun,
+		"Form":         form,
+		"TagOptions":   anecdoteTagOptions(ResolveLang(r)),
+		"CSRFToken":    token,
+		"ErrorMessage": errMsg,
+		"IsNew":        isNew,
+		"IsEdit":       !isNew,
+		"Submitted":    strings.TrimSpace(r.URL.Query().Get("submitted")) == "1",
+		"Ok":           strings.TrimSpace(r.URL.Query().Get("ok")) == "1",
+		"Conflict":     strings.TrimSpace(r.URL.Query().Get("err")) == "conflict",
 	}
 	RenderPrivateTemplate(w, r, "municipi-anecdotes-form.html", data)
 }

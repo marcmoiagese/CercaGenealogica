@@ -796,8 +796,8 @@ func (a *App) loadMunicipiStatsAccess(r *http.Request, municipiID int) (*db.Muni
 	if user == nil {
 		return nil, false
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	if a.hasPerm(perms, permTerritory) || a.hasPerm(perms, permModerate) {
+	target := a.resolveMunicipiTarget(municipiID)
+	if a.canEditMunicipiPublic(user, target) || a.canModerateMunicipiPublic(user, target) {
 		return mun, true
 	}
 	return nil, false

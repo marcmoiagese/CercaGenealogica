@@ -24,19 +24,19 @@ type historiaTimelineViewItem struct {
 }
 
 const (
-	municipiHistoriaMaxBytes    int64 = 256 << 10
-	municipiHistoriaRateLimit         = 0.5
-	municipiHistoriaRateBurst         = 3
-	historiaTitleMin                  = 3
-	historiaTitleMax                  = 120
-	historiaResumMax                  = 600
-	historiaBodyMax                   = 50000
-	historiaTagsMax                   = 10
-	historiaTagMaxLen                 = 40
-	historiaYearMin                   = 0
-	historiaYearMax                   = 2100
-	historiaSourceLabelMax            = 120
-	historiaSourceURLMax              = 200
+	municipiHistoriaMaxBytes  int64 = 256 << 10
+	municipiHistoriaRateLimit       = 0.5
+	municipiHistoriaRateBurst       = 3
+	historiaTitleMin                = 3
+	historiaTitleMax                = 120
+	historiaResumMax                = 600
+	historiaBodyMax                 = 50000
+	historiaTagsMax                 = 10
+	historiaTagMaxLen               = 40
+	historiaYearMin                 = 0
+	historiaYearMax                 = 2100
+	historiaSourceLabelMax          = 120
+	historiaSourceURLMax            = 200
 )
 
 func (a *App) MunicipiHistoriaPublic(w http.ResponseWriter, r *http.Request) {
@@ -55,12 +55,9 @@ func (a *App) MunicipiHistoriaPublic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, _ := a.VerificarSessio(r)
-	perms := db.PolicyPermissions{}
-	if user != nil {
-		perms = a.getPermissionsForUser(user.ID)
-	}
-	canManageTerritory := user != nil && a.hasPerm(perms, permTerritory)
-	canModerate := user != nil && a.hasPerm(perms, permModerate)
+	munTarget := a.resolveMunicipiTarget(mun.ID)
+	canManageTerritory := a.canEditMunicipiPublic(user, munTarget)
+	canModerate := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaModerate, munTarget)
 	if mun.ModeracioEstat != "" && mun.ModeracioEstat != "publicat" && !(canManageTerritory || canModerate) {
 		http.NotFound(w, r)
 		return
@@ -141,25 +138,24 @@ func (a *App) MunicipiHistoriaPublic(w http.ResponseWriter, r *http.Request) {
 	}
 	pageBase := "/territori/municipis/" + strconv.Itoa(munID) + "/historia?" + values.Encode()
 
-	munTarget := a.resolveMunicipiTarget(mun.ID)
 	canAportarHistoria := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaCreate, munTarget)
 
 	data := map[string]interface{}{
-		"Municipi":             mun,
-		"HistoriaGeneral":      general,
-		"Timeline":             viewItems,
-		"FilterQ":              filterQ,
-		"FilterFrom":           filterFrom,
-		"FilterTo":             filterTo,
-		"Page":                 page,
-		"PerPage":              perPage,
-		"TotalPages":           totalPages,
-		"HasPrev":              page > 1,
-		"HasNext":              page < totalPages,
-		"PrevPage":             page - 1,
-		"NextPage":             page + 1,
-		"PageBase":             pageBase,
-		"CanAportarHistoria":   canAportarHistoria,
+		"Municipi":           mun,
+		"HistoriaGeneral":    general,
+		"Timeline":           viewItems,
+		"FilterQ":            filterQ,
+		"FilterFrom":         filterFrom,
+		"FilterTo":           filterTo,
+		"Page":               page,
+		"PerPage":            perPage,
+		"TotalPages":         totalPages,
+		"HasPrev":            page > 1,
+		"HasNext":            page < totalPages,
+		"PrevPage":           page - 1,
+		"NextPage":           page + 1,
+		"PageBase":           pageBase,
+		"CanAportarHistoria": canAportarHistoria,
 	}
 	if user != nil {
 		RenderPrivateTemplate(w, r, "municipi-historia.html", data)
@@ -184,8 +180,7 @@ func (a *App) MunicipiHistoriaAportar(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	canModerateHistory := user != nil && (a.hasPerm(perms, permModerate) || a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaModerate, target))
+	canModerateHistory := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisHistoriaModerate, target)
 	token, _ := ensureCSRF(w, r)
 
 	var generalDraft *db.MunicipiHistoriaGeneralVersion
@@ -273,31 +268,31 @@ func (a *App) MunicipiHistoriaAportar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"Municipi":           mun,
-		"CSRFToken":          token,
-		"GeneralDraftID":     generalDraftID,
-		"GeneralDraftLock":   generalLock,
-		"GeneralDraftStatus": generalStatus,
-		"GeneralDraftTitle":  strings.TrimSpace(generalTitle),
-		"GeneralDraftResum":  strings.TrimSpace(generalResum),
-		"GeneralDraftBody":   strings.TrimSpace(generalBody),
-		"GeneralDraftTags":   strings.TrimSpace(generalTags),
-		"FetDraftID":         fetDraftID,
-		"FetDraftFetID":      fetDraftFetID,
-		"FetDraftLock":       fetLock,
-		"FetDraftStatus":     fetStatus,
+		"Municipi":            mun,
+		"CSRFToken":           token,
+		"GeneralDraftID":      generalDraftID,
+		"GeneralDraftLock":    generalLock,
+		"GeneralDraftStatus":  generalStatus,
+		"GeneralDraftTitle":   strings.TrimSpace(generalTitle),
+		"GeneralDraftResum":   strings.TrimSpace(generalResum),
+		"GeneralDraftBody":    strings.TrimSpace(generalBody),
+		"GeneralDraftTags":    strings.TrimSpace(generalTags),
+		"FetDraftID":          fetDraftID,
+		"FetDraftFetID":       fetDraftFetID,
+		"FetDraftLock":        fetLock,
+		"FetDraftStatus":      fetStatus,
 		"FetDraftDataDisplay": strings.TrimSpace(fetDataDisplay),
-		"FetDraftAnyInici":   draftInt(fetDraft, true),
-		"FetDraftAnyFi":      draftInt(fetDraft, false),
-		"FetDraftTitle":      strings.TrimSpace(fetTitle),
-		"FetDraftResum":      strings.TrimSpace(fetResum),
-		"FetDraftBody":       strings.TrimSpace(fetBody),
-		"FetDraftTags":       strings.TrimSpace(fetTags),
-		"FetDraftFonts":      strings.TrimSpace(fetFonts),
-		"FetFormAction":      fetFormAction,
-		"Ok":                 okMsg,
-		"Error":              errMsg,
-		"User":               user,
+		"FetDraftAnyInici":    draftInt(fetDraft, true),
+		"FetDraftAnyFi":       draftInt(fetDraft, false),
+		"FetDraftTitle":       strings.TrimSpace(fetTitle),
+		"FetDraftResum":       strings.TrimSpace(fetResum),
+		"FetDraftBody":        strings.TrimSpace(fetBody),
+		"FetDraftTags":        strings.TrimSpace(fetTags),
+		"FetDraftFonts":       strings.TrimSpace(fetFonts),
+		"FetFormAction":       fetFormAction,
+		"Ok":                  okMsg,
+		"Error":               errMsg,
+		"User":                user,
 	}
 	RenderPrivateTemplate(w, r, "municipi-historia-aportar.html", data)
 }

@@ -502,6 +502,77 @@ func TestF337DocumentalScopedModerationUsesRegistreKey(t *testing.T) {
 	}
 }
 
+func TestF338TerritoriPublicDoesNotUseLegacyPermModerate(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-8-legacy-moderate")
+	user := &db.User{ID: userID}
+	perms := db.PolicyPermissions{CanModerate: true, CanManageTerritory: true}
+	target := PermissionTarget{MunicipiID: intPtr(7)}
+
+	if app.canModerateMunicipiPublic(user, target) {
+		t.Fatalf("permModerate legacy pur no hauria d'autoritzar territori public")
+	}
+	if app.canEditMunicipiPublic(user, target) {
+		t.Fatalf("permTerritory legacy pur no hauria d'autoritzar edit/rebuild de municipi")
+	}
+	if app.canModerateModular(user, perms) {
+		t.Fatalf("permisos legacy purs no haurien d'obrir moderacio modular")
+	}
+}
+
+func TestF338TerritoriPublicScopedModerationStaysInsideMunicipi(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-8-historia-scoped")
+	policy := &db.Politica{Nom: "f33-8-historia", Permisos: "{}", Descripcio: ""}
+	policyID, err := database.SavePolitica(policy)
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica historia: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: policyID,
+		PermKey:    permKeyTerritoriMunicipisHistoriaModerate,
+		ScopeType:  string(ScopeMunicipi),
+		ScopeID:    sql.NullInt64{Int64: 7, Valid: true},
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant historia scoped: %v", err)
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica historia: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	if !app.canModerateMunicipiPublic(user, PermissionTarget{MunicipiID: intPtr(7)}) {
+		t.Fatalf("historia moderate scoped hauria d'autoritzar el municipi permes")
+	}
+	if app.canModerateMunicipiPublic(user, PermissionTarget{MunicipiID: intPtr(8)}) {
+		t.Fatalf("historia moderate scoped no hauria d'autoritzar un altre municipi")
+	}
+	if app.canEditMunicipiPublic(user, PermissionTarget{MunicipiID: intPtr(7)}) {
+		t.Fatalf("historia moderate no ha de convertir-se en edit/rebuild de municipi")
+	}
+}
+
+func TestF338TerritoriPublicAdminBridge(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-8-admin")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(userID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	target := PermissionTarget{MunicipiID: intPtr(99)}
+	if !app.canModerateMunicipiPublic(user, target) {
+		t.Fatalf("admin global hauria de moderar territori public via bridge modular")
+	}
+	if !app.canEditMunicipiPublic(user, target) {
+		t.Fatalf("admin global hauria d'editar/rebuild municipi via bridge modular")
+	}
+	if !app.canEditNivellPublic(user, PermissionTarget{PaisID: intPtr(1)}) {
+		t.Fatalf("admin global hauria d'editar nivell via bridge modular")
+	}
+}
+
 func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-5-platform-user")

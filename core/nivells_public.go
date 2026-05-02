@@ -69,8 +69,8 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	canManageTerritory := user != nil && a.hasPerm(perms, permTerritory)
-	canModerate := user != nil && a.hasPerm(perms, permModerate)
+	canManageTerritory := a.canEditNivellPublic(user, nivellTarget)
+	canModerate := canManageTerritory
 	if nivell.ModeracioEstat != "" && nivell.ModeracioEstat != "publicat" && !(canManageTerritory || canModerate) {
 		http.NotFound(w, r)
 		return
@@ -80,7 +80,7 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 	canViewMunicipis := user != nil && a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisView)
 	canViewLlibres := user != nil && a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresView)
 	canManageArxius := user != nil && a.hasPerm(perms, permArxius)
-	canEditNivell := user != nil && a.HasPermission(user.ID, permKeyTerritoriNivellsEdit, nivellTarget)
+	canEditNivell := a.canEditNivellPublic(user, nivellTarget)
 	editURL := fmt.Sprintf("/territori/nivells/%d/edit", nivell.ID)
 	if ret := strings.TrimSpace(currentRequestURL(r)); ret != "" {
 		editURL += "?return_to=" + url.QueryEscape(ret)

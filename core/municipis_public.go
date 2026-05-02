@@ -52,8 +52,6 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 	if user != nil {
 		perms = a.getPermissionsForUser(user.ID)
 	}
-	canManageTerritory := user != nil && a.hasPerm(perms, permTerritory)
-	canModerate := user != nil && a.hasPerm(perms, permModerate)
 	canManageArxius := user != nil && a.hasPerm(perms, permArxius)
 	canManagePolicies := user != nil && (perms.CanManagePolicies || perms.Admin)
 	munTarget := a.resolveMunicipiTarget(mun.ID)
@@ -61,7 +59,9 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	canEditMunicipi := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisEdit, munTarget)
+	canEditMunicipi := a.canEditMunicipiPublic(user, munTarget)
+	canManageTerritory := canEditMunicipi
+	canModerate := a.canModerateMunicipiPublic(user, munTarget)
 	editURL := fmt.Sprintf("/territori/municipis/%d/edit", mun.ID)
 	if ret := strings.TrimSpace(currentRequestURL(r)); ret != "" {
 		editURL += "?return_to=" + url.QueryEscape(ret)

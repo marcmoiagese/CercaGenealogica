@@ -41,12 +41,9 @@ func (a *App) MunicipiDemografiaPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
-	perms := db.PolicyPermissions{}
-	if user != nil {
-		perms = a.getPermissionsForUser(user.ID)
-	}
-	canManageTerritory := user != nil && a.hasPerm(perms, permTerritory)
-	canModerate := user != nil && a.hasPerm(perms, permModerate)
+	munTarget := a.resolveMunicipiTarget(mun.ID)
+	canManageTerritory := a.canEditMunicipiPublic(user, munTarget)
+	canModerate := a.canModerateMunicipiPublic(user, munTarget)
 	if mun.ModeracioEstat != "" && mun.ModeracioEstat != "publicat" && !(canManageTerritory || canModerate) {
 		http.NotFound(w, r)
 		return
@@ -65,14 +62,14 @@ func (a *App) MunicipiDemografiaPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"Municipi":        mun,
-		"Summary":         summary,
-		"CanViewLlibres":  canViewLlibres,
-		"CanCreateLlibre": canCreateLlibre,
-		"LlibresURL":      llibresURL,
-		"DemografiaMetaAPI":   "/api/municipis/" + strconv.Itoa(mun.ID) + "/demografia/meta",
-		"DemografiaSeriesAPI": "/api/municipis/" + strconv.Itoa(mun.ID) + "/demografia/series",
-		"CanRebuildDemografia": user != nil && a.hasPerm(perms, permModerate),
+		"Municipi":             mun,
+		"Summary":              summary,
+		"CanViewLlibres":       canViewLlibres,
+		"CanCreateLlibre":      canCreateLlibre,
+		"LlibresURL":           llibresURL,
+		"DemografiaMetaAPI":    "/api/municipis/" + strconv.Itoa(mun.ID) + "/demografia/meta",
+		"DemografiaSeriesAPI":  "/api/municipis/" + strconv.Itoa(mun.ID) + "/demografia/series",
+		"CanRebuildDemografia": a.canEditMunicipiPublic(user, munTarget),
 		"DemografiaRebuildAPI": "/api/admin/municipis/" + strconv.Itoa(mun.ID) + "/demografia/rebuild",
 	}
 	if user != nil {
@@ -185,10 +182,6 @@ func (a *App) MunicipiDemografiaAdminAPI(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	_, _, ok := a.requirePermission(w, r, permModerate)
-	if !ok {
-		return
-	}
 	munID, err := strconv.Atoi(parts[3])
 	if err != nil || munID < 0 {
 		http.NotFound(w, r)
@@ -200,6 +193,9 @@ func (a *App) MunicipiDemografiaAdminAPI(w http.ResponseWriter, r *http.Request)
 			http.NotFound(w, r)
 			return
 		}
+		if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisEdit, a.resolveMunicipiTarget(munID)); !ok {
+			return
+		}
 		if err := a.DB.RebuildMunicipiDemografia(munID); err != nil {
 			http.Error(w, "failed to rebuild", http.StatusInternalServerError)
 			return
@@ -209,6 +205,9 @@ func (a *App) MunicipiDemografiaAdminAPI(w http.ResponseWriter, r *http.Request)
 		if munID <= 0 {
 			if strings.TrimSpace(r.URL.Query().Get("all")) != "1" {
 				http.NotFound(w, r)
+				return
+			}
+			if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisEdit, PermissionTarget{}); !ok {
 				return
 			}
 			muns, err := a.DB.ListMunicipis(db.MunicipiFilter{})
@@ -228,9 +227,12 @@ func (a *App) MunicipiDemografiaAdminAPI(w http.ResponseWriter, r *http.Request)
 				processed++
 			}
 			writeJSON(w, map[string]interface{}{
-				"ok":                 true,
+				"ok":                  true,
 				"municipis_processed": processed,
 			})
+			return
+		}
+		if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriMunicipisEdit, a.resolveMunicipiTarget(munID)); !ok {
 			return
 		}
 		processed, err := a.rebuildMunicipiNomCognomStats(munID)
