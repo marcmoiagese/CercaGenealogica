@@ -284,8 +284,11 @@ func TestTemplateImportStrongDedupUsesPageScopedCandidatesPostgresF3212Fix2(t *t
 			if rr.Result().StatusCode != http.StatusSeeOther {
 				t.Fatalf("[%s] status inesperat: %d body=%s", cfg.Label, rr.Result().StatusCode, rr.Body.String())
 			}
-			if countingDB.listStrongCandidatesCalls == 0 {
-				t.Fatalf("[%s] PostgreSQL ha d'usar candidats forts acotats per pàgina", cfg.Label)
+			if countingDB.listStrongCandidatesCalls != 0 {
+				t.Fatalf("[%s] PostgreSQL ha d'usar el snapshot fort per llibre sense recórrer al loader scoped: %d", cfg.Label, countingDB.listStrongCandidatesCalls)
+			}
+			if countingDB.listPersonesByIDs == 0 || countingDB.listAtributsByIDs == 0 {
+				t.Fatalf("[%s] PostgreSQL ha de carregar relacionats del snapshot fort per IDs: persones_by_ids=%d atributs_by_ids=%d", cfg.Label, countingDB.listPersonesByIDs, countingDB.listAtributsByIDs)
 			}
 			if countingDB.listTranscripcionsCalls > 1 {
 				t.Fatalf("[%s] PostgreSQL no hauria d'usar ListTranscripcionsRaw ampli fora del read lateral esperat: %d", cfg.Label, countingDB.listTranscripcionsCalls)
