@@ -427,7 +427,7 @@ func (a *App) AdminImportRegistresView(w http.ResponseWriter, r *http.Request) {
 		"User":              user,
 		"CanManageArxius":   a.hasPerm(perms, permArxius),
 		"CanManagePolicies": a.hasPerm(perms, permPolicies),
-		"CanModerate":       a.hasPerm(perms, permModerate),
+		"CanModerate":       a.canModerateModular(user, perms),
 	})
 }
 

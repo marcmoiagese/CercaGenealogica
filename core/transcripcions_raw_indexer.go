@@ -57,7 +57,7 @@ func (a *App) AdminIndexarLlibre(w http.ResponseWriter, r *http.Request) {
 	perms := a.getPermissionsForUser(user.ID)
 	canManageArxius := a.hasPerm(perms, permArxius)
 	canManagePolicies := perms.CanManagePolicies || perms.Admin
-	canModerate := perms.CanModerate || perms.Admin
+	canModerate := a.canModerateModular(user, perms)
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)

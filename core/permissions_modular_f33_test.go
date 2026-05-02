@@ -416,6 +416,92 @@ func TestF336RWikiModerationKeepsAdminViaModularBridge(t *testing.T) {
 	}
 }
 
+func TestF337LegacyPermModerateDoesNotGrantDocumentalOrMediaModeration(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-7-legacy-moderate")
+	user := &db.User{ID: userID}
+	perms := db.PolicyPermissions{CanModerate: true}
+
+	if app.canModerateModular(user, perms) {
+		t.Fatalf("permModerate legacy pur no hauria d'obrir moderacio modular")
+	}
+	if isAdmin, isModerator := app.mediaUserRoles(httptest.NewRequest("GET", "/media/albums", nil), user); isAdmin || isModerator {
+		t.Fatalf("permModerate legacy pur no hauria de donar privilegi media, admin=%v moderator=%v", isAdmin, isModerator)
+	}
+}
+
+func TestF337MediaModerationUsesMediaModerateKeyAndAdminBridge(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-7-media-moderator")
+	policy := &db.Politica{Nom: "f33-7-media", Permisos: "{}", Descripcio: ""}
+	policyID, err := database.SavePolitica(policy)
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica media: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: policyID,
+		PermKey:    permKeyMediaModerate,
+		ScopeType:  string(ScopeGlobal),
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant media.moderate: %v", err)
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica media: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	isAdmin, isModerator := app.mediaUserRoles(httptest.NewRequest("GET", "/media/albums", nil), user)
+	if isAdmin {
+		t.Fatalf("media.moderate no ha de convertir l'usuari en admin")
+	}
+	if !isModerator {
+		t.Fatalf("media.moderate modular hauria de donar privilegi media")
+	}
+
+	adminUserID := createF330User(t, database, "f33-7-media-admin")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(adminUserID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
+	}
+	isAdmin, isModerator = app.mediaUserRoles(httptest.NewRequest("GET", "/media/albums", nil), &db.User{ID: adminUserID})
+	if !isAdmin || !isModerator {
+		t.Fatalf("admin global hauria de mantenir privilegis media via bridge modular, admin=%v moderator=%v", isAdmin, isModerator)
+	}
+}
+
+func TestF337DocumentalScopedModerationUsesRegistreKey(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-7-registre-scoped")
+	policy := &db.Politica{Nom: "f33-7-registre", Permisos: "{}", Descripcio: ""}
+	policyID, err := database.SavePolitica(policy)
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica registre: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: policyID,
+		PermKey:    permKeyDocumentalsRegistresEdit,
+		ScopeType:  string(ScopeLlibre),
+		ScopeID:    sql.NullInt64{Int64: 11, Valid: true},
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant registre scoped: %v", err)
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica registre: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	perms := app.getPermissionsForUser(userID)
+	if !app.canModerateModular(user, perms) {
+		t.Fatalf("documentals.registres.edit scoped hauria d'obrir moderacio modular")
+	}
+	if !app.HasPermission(userID, permKeyDocumentalsRegistresEdit, PermissionTarget{LlibreID: intPtr(11)}) {
+		t.Fatalf("grant scoped de registre hauria d'autoritzar el llibre permès")
+	}
+	if app.HasPermission(userID, permKeyDocumentalsRegistresEdit, PermissionTarget{LlibreID: intPtr(12)}) {
+		t.Fatalf("grant scoped de registre no hauria d'autoritzar un altre llibre")
+	}
+}
+
 func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-5-platform-user")

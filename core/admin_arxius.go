@@ -77,7 +77,7 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 	isAdmin := a.hasPerm(perms, permAdmin)
 	canManageTerritory := a.hasPerm(perms, permTerritory)
 	canManageEclesia := a.hasPerm(perms, permEclesia)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateModular(user, perms)
 	canManageUsers := a.hasPerm(perms, permUsers)
 	canManagePolicies := a.hasPerm(perms, permPolicies)
 	filter := db.ArxiuFilter{
@@ -284,7 +284,7 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	isAdmin := a.hasPerm(perms, permAdmin)
 	canManageTerritory := a.hasPerm(perms, permTerritory)
 	canManageEclesia := a.hasPerm(perms, permEclesia)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateModular(user, perms)
 	canManageUsers := a.hasPerm(perms, permUsers)
 	canManagePolicies := a.hasPerm(perms, permPolicies)
 	canCreateArxiu := a.hasAnyPermissionKey(user.ID, permKeyDocumentalsArxiusCreate)

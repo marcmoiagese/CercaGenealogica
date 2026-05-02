@@ -833,7 +833,7 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 	if user != nil {
 		perms := a.getPermissionsForUser(user.ID)
 		isAdmin = a.hasPerm(perms, permAdmin)
-		canModerate = a.hasPerm(perms, permModerate)
+		canModerate = a.canModerateModular(user, perms)
 	}
 	canEditLlibre := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresEdit, target)
 	canDeleteLlibre := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresDelete, target)
