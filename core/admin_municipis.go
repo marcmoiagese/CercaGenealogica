@@ -876,6 +876,14 @@ func (a *App) AdminSaveMunicipi(w http.ResponseWriter, r *http.Request) {
 		a.renderMunicipiFormError(w, r, m, "Cal seleccionar un país i el primer nivell administratiu.", id == 0)
 		return
 	}
+	if id != 0 {
+		nextTarget := PermissionTarget{MunicipiID: intPtr(id)}
+		a.fillTerritoryFromNivellIDs(&nextTarget, collectMunicipiLevelIDs(m.NivellAdministratiuID))
+		if !a.HasPermission(user.ID, permKeyTerritoriMunicipisEdit, nextTarget) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	}
 	if m.Estat == "" {
 		m.Estat = "actiu"
 	}

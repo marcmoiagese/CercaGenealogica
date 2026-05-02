@@ -241,6 +241,7 @@ func TestF331MunicipiBrowseLinksAdministrativeLevels(t *testing.T) {
 
 func TestF331NivellProfileShowsEditOnlyWithPermission(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f33_1_nivell_profile_edit.sqlite3")
+	_ = createTestUser(t, database, "f33_1_nivell_seed_admin")
 
 	paisID := createBrowseTestCountry(t, database, "PE")
 	levelID := createBrowseTestLevel(t, database, paisID, 1, "Regio Editable", "regio", 0)
@@ -289,6 +290,7 @@ func TestF331NivellProfileShowsEditOnlyWithPermission(t *testing.T) {
 
 func TestF331ScopedNivellEditAndSaveStayInsidePais(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f33_1_nivell_scoped_edit.sqlite3")
+	_ = createTestUser(t, database, "f33_1_scoped_seed_admin")
 
 	allowedPaisID := createBrowseTestCountry(t, database, "EA")
 	blockedPaisID := createBrowseTestCountry(t, database, "EB")
@@ -344,6 +346,30 @@ func TestF331ScopedNivellEditAndSaveStayInsidePais(t *testing.T) {
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("AdminEditNivell fora pais hauria de bloquejar amb 403, got %d", rr.Code)
 	}
+
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/territori/nivells/%d", blockedLevelID), nil)
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.NivellPublic(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("NivellPublic fora pais hauria de bloquejar amb 403, got %d", rr.Code)
+	}
+
+	form = url.Values{}
+	form.Set("id", strconv.Itoa(blockedLevelID))
+	form.Set("pais_id", strconv.Itoa(allowedPaisID))
+	form.Set("nivel", "1")
+	form.Set("nom_nivell", "Regio Bloquejada Editada")
+	form.Set("tipus_nivell", "regio")
+	form.Set("estat", "actiu")
+	req = httptest.NewRequest(http.MethodPost, "/territori/nivells/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.AdminSaveNivell(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("AdminSaveNivell no hauria d'acceptar un pais_id manipulat fora ambit, got %d", rr.Code)
+	}
 }
 
 func TestF332MunicipiProfileShowsEditForGlobalAdmin(t *testing.T) {
@@ -379,6 +405,7 @@ func TestF332MunicipiProfileShowsEditForGlobalAdmin(t *testing.T) {
 
 func TestF332MunicipiProfileHidesEditWithoutPermissionAndEditURLForbids(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f33_2_municipi_profile_no_permission.sqlite3")
+	_ = createTestUser(t, database, "f33_2_no_perm_seed_admin")
 
 	paisID := createBrowseTestCountry(t, database, "MB")
 	level1 := createBrowseTestLevel(t, database, paisID, 1, "Regio Publica", "regio", 0)
@@ -408,6 +435,7 @@ func TestF332MunicipiProfileHidesEditWithoutPermissionAndEditURLForbids(t *testi
 
 func TestF332MunicipiProfileUsesScopedEditPermission(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f33_2_municipi_profile_scoped.sqlite3")
+	_ = createTestUser(t, database, "f33_2_scoped_seed_admin")
 
 	allowedPaisID := createBrowseTestCountry(t, database, "MC")
 	blockedPaisID := createBrowseTestCountry(t, database, "MD")
@@ -465,6 +493,21 @@ func TestF332MunicipiProfileUsesScopedEditPermission(t *testing.T) {
 	app.AdminEditMunicipi(rr, req)
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("AdminEditMunicipi fora ambit edit hauria de bloquejar amb 403, got %d", rr.Code)
+	}
+
+	form := url.Values{}
+	form.Set("id", strconv.Itoa(allowedMunID))
+	form.Set("nom", "Municipi Permes Mogut")
+	form.Set("tipus", "municipi")
+	form.Set("estat", "actiu")
+	form.Set("nivell_administratiu_id_1", strconv.Itoa(blockedLevel))
+	req = httptest.NewRequest(http.MethodPost, "/territori/municipis/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.AdminSaveMunicipi(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("AdminSaveMunicipi no hauria de moure municipi fora ambit edit, got %d", rr.Code)
 	}
 }
 

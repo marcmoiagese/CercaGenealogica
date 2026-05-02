@@ -321,7 +321,7 @@ func (a *App) parseExternalSiteForm(r *http.Request, id int) (*db.ExternalSite, 
 	if slug == "" {
 		slug = slugifyExternalSite(name)
 		if slug == "" {
-		slug = slugifyExternalSite(externalSiteFirstDomain(domainsInput))
+			slug = slugifyExternalSite(externalSiteFirstDomain(domainsInput))
 		}
 	}
 	if name == "" || slug == "" {
@@ -367,6 +367,8 @@ func (a *App) parseExternalSiteForm(r *http.Request, id int) (*db.ExternalSite, 
 	}
 	if uploadedIconPath != "" {
 		site.IconPath = sql.NullString{String: uploadedIconPath, Valid: true}
+	} else if iconPath := strings.TrimSpace(r.FormValue("icon_path")); iconPath != "" {
+		site.IconPath = sql.NullString{String: iconPath, Valid: true}
 	}
 	return site, domainsValue, ""
 }
@@ -493,7 +495,7 @@ func saveExternalSiteIcon(r *http.Request, slug string) (string, string) {
 	}
 	file, header, err := r.FormFile("icon_file")
 	if err != nil {
-		if err == http.ErrMissingFile {
+		if err == http.ErrMissingFile || err == http.ErrNotMultipart {
 			return "", ""
 		}
 		return "", T(ResolveLang(r), "admin.external_sites.error.icon")

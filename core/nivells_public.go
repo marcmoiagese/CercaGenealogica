@@ -64,6 +64,11 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 	if user != nil {
 		perms = a.getPermissionsForUser(user.ID)
 	}
+	nivellTarget := PermissionTarget{PaisID: intPtr(nivell.PaisID)}
+	if user != nil && !a.HasPermission(user.ID, permKeyTerritoriNivellsView, nivellTarget) && !a.HasPermission(user.ID, permKeyTerritoriNivellsEdit, nivellTarget) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	canManageTerritory := user != nil && a.hasPerm(perms, permTerritory)
 	canModerate := user != nil && a.hasPerm(perms, permModerate)
 	if nivell.ModeracioEstat != "" && nivell.ModeracioEstat != "publicat" && !(canManageTerritory || canModerate) {
@@ -75,7 +80,7 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 	canViewMunicipis := user != nil && a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisView)
 	canViewLlibres := user != nil && a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresView)
 	canManageArxius := user != nil && a.hasPerm(perms, permArxius)
-	canEditNivell := user != nil && a.HasPermission(user.ID, permKeyTerritoriNivellsEdit, PermissionTarget{PaisID: intPtr(nivell.PaisID)})
+	canEditNivell := user != nil && a.HasPermission(user.ID, permKeyTerritoriNivellsEdit, nivellTarget)
 	editURL := fmt.Sprintf("/territori/nivells/%d/edit", nivell.ID)
 	if ret := strings.TrimSpace(currentRequestURL(r)); ret != "" {
 		editURL += "?return_to=" + url.QueryEscape(ret)
@@ -150,14 +155,14 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	adminData := map[string]interface{}{
-		"id":        nivell.ID,
-		"name":      nivell.NomNivell,
-		"subtitle":  subtitle,
-		"level":     levelLabel,
-		"status":    statusLabel,
-		"country":   countryLabel,
-		"code":      strings.TrimSpace(nivell.CodiOficial),
-		"municipis": len(municipis),
+		"id":         nivell.ID,
+		"name":       nivell.NomNivell,
+		"subtitle":   subtitle,
+		"level":      levelLabel,
+		"status":     statusLabel,
+		"country":    countryLabel,
+		"code":       strings.TrimSpace(nivell.CodiOficial),
+		"municipis":  len(municipis),
 		"updated_at": formatDateISO(nivell.ModeratedAt),
 		"links":      links,
 		"kpis":       kpis,
@@ -178,26 +183,26 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"AdminLevelName":  nivell.NomNivell,
-		"AdminLevelData":   adminData,
-		"StatusBadgeClass": statusClass,
-		"CanViewLlibres":   canViewLlibres,
-		"CanViewMunicipis": canViewMunicipis,
-		"CanEditNivell":    canEditNivell,
-		"EditNivellURL":    editURL,
-		"HasActions":       true,
-		"DemografiaTotals": demoTotals,
-		"StatsLimited":     false,
-		"ShowBooksAnchor":  true,
-		"NivellID":         nivell.ID,
-		"BookCategories":   bookCategories,
-		"User":             user,
-		"CanManageArxius":  canManageArxius,
+		"AdminLevelName":     nivell.NomNivell,
+		"AdminLevelData":     adminData,
+		"StatusBadgeClass":   statusClass,
+		"CanViewLlibres":     canViewLlibres,
+		"CanViewMunicipis":   canViewMunicipis,
+		"CanEditNivell":      canEditNivell,
+		"EditNivellURL":      editURL,
+		"HasActions":         true,
+		"DemografiaTotals":   demoTotals,
+		"StatsLimited":       false,
+		"ShowBooksAnchor":    true,
+		"NivellID":           nivell.ID,
+		"BookCategories":     bookCategories,
+		"User":               user,
+		"CanManageArxius":    canManageArxius,
 		"CanManageTerritory": canManageTerritory,
-		"CanManageEclesia": user != nil && a.hasPerm(perms, permEclesia),
-		"CanManagePolicies": user != nil && (perms.CanManagePolicies || a.effectiveAdminForUser(user.ID, perms)),
-		"CanModerate":       canModerate,
-		"IsAdmin":           user != nil && a.effectiveAdminForUser(user.ID, perms),
+		"CanManageEclesia":   user != nil && a.hasPerm(perms, permEclesia),
+		"CanManagePolicies":  user != nil && (perms.CanManagePolicies || a.effectiveAdminForUser(user.ID, perms)),
+		"CanModerate":        canModerate,
+		"IsAdmin":            user != nil && a.effectiveAdminForUser(user.ID, perms),
 	}
 	if user != nil {
 		RenderPrivateTemplate(w, r, "nivell-administratiu-perfil-pro.html", data)

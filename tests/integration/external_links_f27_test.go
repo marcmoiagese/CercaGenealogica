@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/core"
 	"github.com/marcmoiagese/CercaGenealogica/db"
@@ -154,7 +155,8 @@ func TestExternalLinksSubmitValidationAndDup(t *testing.T) {
 func TestAdminExternalSitesCRUD(t *testing.T) {
 	forEachArbreDB(t, func(t *testing.T, label string, app *core.App, database db.DB, _ string) {
 		user, _ := createF7UserWithSession(t, database)
-		session := createSessionCookie(t, database, user.ID, "sess_admin_ext_"+label)
+		assignPolicyByName(t, database, user.ID, "admin")
+		session := createSessionCookie(t, database, user.ID, fmt.Sprintf("sess_admin_ext_%s_%d", label, time.Now().UnixNano()))
 		csrf := "csrf_admin_ext_" + label
 
 		form := newFormValues(map[string]string{

@@ -106,25 +106,25 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		if scopeFilter.isEmpty() {
 			pagination := buildPagination(r, page, perPage, 0, "#nivellsTable")
 			RenderPrivateTemplate(w, r, "admin-nivells-list.html", map[string]interface{}{
-				"Nivells":           []db.NivellAdministratiu{},
-				"Pais":              nil,
-				"Paisos":            []db.Pais{},
-				"Filter":            filter,
-				"FilterValues":      filterValues,
-				"FilterOrder":       strings.Join(filterOrder, ","),
-				"CanManageArxius":   a.hasPerm(perms, permArxius),
-				"CanCreateNivell":   false,
-				"CanEditNivell":     map[int]bool{},
-				"ShowNivellActions": false,
+				"Nivells":               []db.NivellAdministratiu{},
+				"Pais":                  nil,
+				"Paisos":                []db.Pais{},
+				"Filter":                filter,
+				"FilterValues":          filterValues,
+				"FilterOrder":           strings.Join(filterOrder, ","),
+				"CanManageArxius":       a.hasPerm(perms, permArxius),
+				"CanCreateNivell":       false,
+				"CanEditNivell":         map[int]bool{},
+				"ShowNivellActions":     false,
 				"CanRebuildNivellStats": canRebuildNivellStats,
-				"Page":              pagination.Page,
-				"PerPage":           pagination.PerPage,
-				"Total":             pagination.Total,
-				"TotalPages":        pagination.TotalPages,
-				"PageLinks":         pagination.Links,
-				"PageSelectBase":    pagination.SelectBase,
-				"PageAnchor":        pagination.Anchor,
-				"User":              user,
+				"Page":                  pagination.Page,
+				"PerPage":               pagination.PerPage,
+				"Total":                 pagination.Total,
+				"TotalPages":            pagination.TotalPages,
+				"PageLinks":             pagination.Links,
+				"PageSelectBase":        pagination.SelectBase,
+				"PageAnchor":            pagination.Anchor,
+				"User":                  user,
 			})
 			return
 		}
@@ -209,25 +209,25 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	RenderPrivateTemplate(w, r, "admin-nivells-list.html", map[string]interface{}{
-		"Nivells":           nivells,
-		"Pais":              pais,
-		"Paisos":            paisos,
-		"Filter":            filter,
-		"FilterValues":      filterValues,
-		"FilterOrder":       strings.Join(filterOrder, ","),
-		"CanManageArxius":   a.hasPerm(perms, permArxius),
-		"CanCreateNivell":   canCreateNivell,
-		"CanEditNivell":     canEditNivell,
-		"ShowNivellActions": showNivellActions,
+		"Nivells":               nivells,
+		"Pais":                  pais,
+		"Paisos":                paisos,
+		"Filter":                filter,
+		"FilterValues":          filterValues,
+		"FilterOrder":           strings.Join(filterOrder, ","),
+		"CanManageArxius":       a.hasPerm(perms, permArxius),
+		"CanCreateNivell":       canCreateNivell,
+		"CanEditNivell":         canEditNivell,
+		"ShowNivellActions":     showNivellActions,
 		"CanRebuildNivellStats": canRebuildNivellStats,
-		"Page":              pagination.Page,
-		"PerPage":           pagination.PerPage,
-		"Total":             pagination.Total,
-		"TotalPages":        pagination.TotalPages,
-		"PageLinks":         pagination.Links,
-		"PageSelectBase":    pagination.SelectBase,
-		"PageAnchor":        pagination.Anchor,
-		"User":              user,
+		"Page":                  pagination.Page,
+		"PerPage":               pagination.PerPage,
+		"Total":                 pagination.Total,
+		"TotalPages":            pagination.TotalPages,
+		"PageLinks":             pagination.Links,
+		"PageSelectBase":        pagination.SelectBase,
+		"PageAnchor":            pagination.Anchor,
+		"User":                  user,
 	})
 }
 
@@ -756,6 +756,14 @@ func (a *App) AdminSaveNivell(w http.ResponseWriter, r *http.Request) {
 	}
 	paisID, _ := strconv.Atoi(r.FormValue("pais_id"))
 	target := PermissionTarget{PaisID: intPtr(paisID)}
+	if id != 0 {
+		existing, err := a.DB.GetNivell(id)
+		if err != nil || existing == nil {
+			http.NotFound(w, r)
+			return
+		}
+		target = PermissionTarget{PaisID: intPtr(existing.PaisID)}
+	}
 	user, ok := a.requirePermissionKey(w, r, permKey, target)
 	if !ok {
 		return
@@ -789,6 +797,10 @@ func (a *App) AdminSaveNivell(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.ensureNivellUnique(nivell); err != "" {
 		a.renderNivellFormError(w, r, nivell, err, id == 0)
+		return
+	}
+	if id != 0 && !a.HasPermission(user.ID, permKeyTerritoriNivellsEdit, PermissionTarget{PaisID: intPtr(nivell.PaisID)}) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	var saveErr error

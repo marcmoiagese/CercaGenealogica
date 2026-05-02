@@ -12,9 +12,9 @@ import (
 func createTestUser(t *testing.T, database db.DB, username string) *db.User {
 	t.Helper()
 	user := &db.User{
-		Usuari: username,
-		Email:  username + "@example.com",
-		Active: true,
+		Usuari:   username,
+		Email:    username + "@example.com",
+		Active:   true,
 		Password: []byte("hash"),
 	}
 	if err := database.InsertUser(user); err != nil {
@@ -32,11 +32,20 @@ func createTestUser(t *testing.T, database db.DB, username string) *db.User {
 func assignPolicyByName(t *testing.T, database db.DB, userID int, policyName string) {
 	t.Helper()
 	_ = database.EnsureDefaultPolicies()
-	rows, err := database.Query("SELECT id FROM politiques WHERE nom = ?", policyName)
-	if err != nil || len(rows) == 0 {
-		t.Fatalf("no puc obtenir politica %q: %v", policyName, err)
+	policies, err := database.ListPolitiques()
+	if err != nil {
+		t.Fatalf("no puc llistar politiques per obtenir %q: %v", policyName, err)
 	}
-	policyID := parseCountValue(t, rows[0]["id"])
+	policyID := 0
+	for _, policy := range policies {
+		if policy.Nom == policyName {
+			policyID = policy.ID
+			break
+		}
+	}
+	if policyID == 0 {
+		t.Fatalf("no puc obtenir politica %q", policyName)
+	}
 	if err := database.AddUserPolitica(userID, policyID); err != nil {
 		t.Fatalf("AddUserPolitica ha fallat: %v", err)
 	}
