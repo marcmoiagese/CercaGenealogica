@@ -619,6 +619,10 @@ type DB interface {
 }
 
 // Tipus comú d'usuari al paquet `db`
+type SchemaErrorSuppressor interface {
+	SetSchemaErrorSuppression(enabled bool)
+}
+
 type User struct {
 	ID            int
 	Usuari        string
@@ -2691,6 +2695,10 @@ func applyDatabaseFromSQL(sqlFile, engine string, db DB, reset bool) error {
 		if err := resetDatabase(engine, db); err != nil {
 			return fmt.Errorf("error netejant BD (%s): %w", engine, err)
 		}
+	}
+	if suppressor, ok := db.(SchemaErrorSuppressor); ok {
+		suppressor.SetSchemaErrorSuppression(true)
+		defer suppressor.SetSchemaErrorSuppression(false)
 	}
 
 	raw := string(data)

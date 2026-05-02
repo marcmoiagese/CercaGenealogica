@@ -18,6 +18,8 @@ type MySQL struct {
 	DBName string
 	Conn   *sql.DB
 	help   sqlHelper
+
+	suppressExpectedSchemaErrors bool
 }
 
 func (d *MySQL) Engine() string {
@@ -45,10 +47,17 @@ func (d *MySQL) Close() {
 func (d *MySQL) Exec(query string, args ...interface{}) (int64, error) {
 	res, err := d.Conn.Exec(query, args...)
 	if err != nil {
+		if d.suppressExpectedSchemaErrors && shouldIgnoreSQLError(d.Engine(), query, err) {
+			return 0, err
+		}
 		return 0, WrapSQLError(SQLErrorContext{Engine: d.Engine(), Component: "mysql", Op: "exec"}, err)
 	}
 	id, _ := res.LastInsertId()
 	return id, nil
+}
+
+func (d *MySQL) SetSchemaErrorSuppression(enabled bool) {
+	d.suppressExpectedSchemaErrors = enabled
 }
 
 func (d *MySQL) Query(query string, args ...interface{}) ([]map[string]interface{}, error) {

@@ -132,6 +132,87 @@ func TestSQLiteInitDoesNotLogRollbackWithoutActiveTransaction(t *testing.T) {
 	}
 }
 
+func TestMySQLSchemaDuplicateIndexDoesNotLogError(t *testing.T) {
+	sqlFile := filepath.Join(t.TempDir(), "schema.sql")
+	if err := os.WriteFile(sqlFile, []byte("CREATE INDEX idx_existing ON demo(id);"), 0o644); err != nil {
+		t.Fatalf("no puc escriure schema temporal: %v", err)
+	}
+
+	var logged bytes.Buffer
+	prev := log.Writer()
+	defer log.SetOutput(prev)
+	log.SetOutput(&logged)
+
+	fake := &fakeSchemaMySQLDB{
+		err: errors.New("Error 1061 (42000): Duplicate key name 'idx_existing'"),
+	}
+	if err := db.ApplyDatabaseFromSQL(sqlFile, "mysql", fake); err != nil {
+		t.Fatalf("ApplyDatabaseFromSQL hauria d'ignorar index duplicat idempotent: %v", err)
+	}
+	out := logged.String()
+	if strings.Contains(out, "[DB][ERROR]") || strings.Contains(out, "Duplicate key name") {
+		t.Fatalf("l'index duplicat idempotent de schema no hauria de sortir com ERROR; sortida=%q", out)
+	}
+	if !fake.suppressionWasEnabled {
+		t.Fatalf("ApplyDatabaseFromSQL hauria d'activar la supressio de logs esperats de schema")
+	}
+}
+
+func TestMySQLSchemaUnexpectedErrorStillLogsError(t *testing.T) {
+	sqlFile := filepath.Join(t.TempDir(), "schema.sql")
+	if err := os.WriteFile(sqlFile, []byte("CREATE INDEX idx_broken ON demo(id);"), 0o644); err != nil {
+		t.Fatalf("no puc escriure schema temporal: %v", err)
+	}
+
+	var logged bytes.Buffer
+	prev := log.Writer()
+	defer log.SetOutput(prev)
+	log.SetOutput(&logged)
+
+	fake := &fakeSchemaMySQLDB{
+		err: errors.New("Error 1064 (42000): syntax error near 'demo'"),
+	}
+	if err := db.ApplyDatabaseFromSQL(sqlFile, "mysql", fake); err == nil {
+		t.Fatalf("ApplyDatabaseFromSQL hauria de propagar errors MySQL reals de schema")
+	}
+	out := logged.String()
+	if !strings.Contains(out, "[DB][ERROR] sql op failed") || !strings.Contains(out, "1064") {
+		t.Fatalf("un error MySQL real de schema ha de continuar loguejant-se; sortida=%q", out)
+	}
+}
+
+type fakeSchemaMySQLDB struct {
+	db.DB
+	err                   error
+	suppress              bool
+	suppressionWasEnabled bool
+}
+
+func (f *fakeSchemaMySQLDB) Exec(query string, args ...interface{}) (int64, error) {
+	low := strings.ToLower(strings.TrimSpace(query))
+	if low == "begin" || low == "commit" || low == "rollback" {
+		return 0, nil
+	}
+	if strings.HasPrefix(low, "create index") && f.err != nil {
+		if f.suppress && strings.Contains(f.err.Error(), "Duplicate key name") {
+			return 0, f.err
+		}
+		return 0, db.WrapSQLError(db.SQLErrorContext{
+			Engine:    "mysql",
+			Component: "mysql",
+			Op:        "exec",
+		}, f.err)
+	}
+	return 0, nil
+}
+
+func (f *fakeSchemaMySQLDB) SetSchemaErrorSuppression(enabled bool) {
+	if enabled {
+		f.suppressionWasEnabled = true
+	}
+	f.suppress = enabled
+}
+
 func findRepoRootForF343(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
