@@ -268,19 +268,7 @@ func (r genericTemplateImportRuntime) LoadPrincipalMatchCandidates(req TemplateI
 }
 
 func (r *postgresTemplateImportRuntime) LoadPrincipalMatchCandidates(req TemplateImportPrincipalMatchRequest) (TemplateImportPrincipalMatchResult, error) {
-	result := TemplateImportPrincipalMatchResult{
-		PersonesByTranscripcioID: map[int][]TranscripcioPersonaRaw{},
-	}
-	if r.database == nil || req.BookID <= 0 || req.SnapshotMaxID == 0 {
-		return result, nil
-	}
-	snapshot, err := r.strongSnapshot(req.BookID, req.SnapshotMaxID)
-	if err != nil {
-		return result, err
-	}
-	result.Transcripcions = append(result.Transcripcions, snapshot.transcripcions...)
-	result.PersonesByTranscripcioID = snapshot.personesForIDs(snapshot.ids)
-	return result, nil
+	return bookScopedPrincipalMatchCandidates(r.database, req)
 }
 
 func (r *postgresTemplateImportRuntime) CreateBundle(row TranscripcioRawImportBundle) (TranscripcioRawImportBulkResult, error) {
