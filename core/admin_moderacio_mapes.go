@@ -32,19 +32,16 @@ func (a *App) requireMapModerationUser(w http.ResponseWriter, r *http.Request) (
 		perms = a.getPermissionsForUser(user.ID)
 		*r = *a.withPermissions(r, perms)
 	}
-	if !a.hasPerm(perms, permModerate) && !a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisMapesModerate) {
+	if !a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisMapesModerate) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return user, perms, false
 	}
 	return user, perms, true
 }
 
-func (a *App) canModerateMap(perms db.PolicyPermissions, user *db.User, munID int) bool {
+func (a *App) canModerateMap(user *db.User, munID int) bool {
 	if user == nil {
 		return false
-	}
-	if a.hasPerm(perms, permModerate) {
-		return true
 	}
 	target := a.resolveMunicipiTarget(munID)
 	return a.HasPermission(user.ID, permKeyTerritoriMunicipisMapesModerate, target)
@@ -55,7 +52,7 @@ func (a *App) AdminModeracioMapesList(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, perms, ok := a.requireMapModerationUser(w, r)
+	user, _, ok := a.requireMapModerationUser(w, r)
 	if !ok {
 		return
 	}
@@ -125,7 +122,7 @@ func (a *App) AdminModeracioMapesList(w http.ResponseWriter, r *http.Request) {
 		if mun == nil {
 			continue
 		}
-		if !a.canModerateMap(perms, user, mun.ID) {
+		if !a.canModerateMap(user, mun.ID) {
 			continue
 		}
 		authorID := 0
@@ -150,9 +147,9 @@ func (a *App) AdminModeracioMapesList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RenderPrivateTemplateLang(w, r, "admin-moderacio-mapes.html", lang, map[string]interface{}{
-		"User": user,
-		"Msg":  msg,
-		"Ok":   okFlag,
+		"User":  user,
+		"Msg":   msg,
+		"Ok":    okFlag,
 		"Items": items,
 	})
 }
@@ -162,7 +159,7 @@ func (a *App) AdminModeracioMapesApprove(w http.ResponseWriter, r *http.Request)
 		http.NotFound(w, r)
 		return
 	}
-	user, perms, ok := a.requireMapModerationUser(w, r)
+	user, _, ok := a.requireMapModerationUser(w, r)
 	if !ok {
 		return
 	}
@@ -194,7 +191,7 @@ func (a *App) AdminModeracioMapesApprove(w http.ResponseWriter, r *http.Request)
 		http.NotFound(w, r)
 		return
 	}
-	if !a.canModerateMap(perms, user, mun.ID) {
+	if !a.canModerateMap(user, mun.ID) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -224,7 +221,7 @@ func (a *App) AdminModeracioMapesReject(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
-	user, perms, ok := a.requireMapModerationUser(w, r)
+	user, _, ok := a.requireMapModerationUser(w, r)
 	if !ok {
 		return
 	}
@@ -256,7 +253,7 @@ func (a *App) AdminModeracioMapesReject(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
-	if !a.canModerateMap(perms, user, mun.ID) {
+	if !a.canModerateMap(user, mun.ID) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

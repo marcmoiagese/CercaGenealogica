@@ -557,6 +557,30 @@ func (m *moderacioScopeModel) canModerateAnything() bool {
 	return false
 }
 
+func (a *App) canModerateAllModular(user *db.User, perms db.PolicyPermissions) bool {
+	if user == nil {
+		return false
+	}
+	if a.effectiveAdminForUser(user.ID, perms) {
+		return true
+	}
+	seen := map[string]bool{}
+	for _, objType := range moderacioBulkAllowedTypes {
+		spec, ok := moderacioTypeSpecs[objType]
+		if !ok || strings.TrimSpace(spec.PermKey) == "" {
+			return false
+		}
+		if seen[spec.PermKey] {
+			continue
+		}
+		seen[spec.PermKey] = true
+		if !a.HasPermission(user.ID, spec.PermKey, PermissionTarget{}) {
+			return false
+		}
+	}
+	return true
+}
+
 func applyScopeFilterToArxiu(filter *db.ArxiuFilter, scope listScopeFilter) {
 	if filter == nil {
 		return
@@ -3289,7 +3313,7 @@ func (a *App) requireModeracioUser(w http.ResponseWriter, r *http.Request) (*db.
 		perms = a.getPermissionsForUser(user.ID)
 		*r = *a.withPermissions(r, perms)
 	}
-	canModerateAll := a.hasPerm(perms, permModerate)
+	canModerateAll := a.canModerateAllModular(user, perms)
 	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
 	if canModerateAll || scopeModel.canModerateAnything() {
 		return user, perms, canModerateAll, true
@@ -3320,18 +3344,25 @@ func (a *App) canModeracioMassiva(user *db.User, perms db.PolicyPermissions) boo
 	if user == nil {
 		return false
 	}
-	if a.hasPerm(perms, permAdmin) {
+	if a.effectiveAdminForUser(user.ID, perms) {
 		return true
 	}
 	return a.hasAnyPermissionKey(user.ID, permKeyModeracioMassiva)
 }
 
 func (a *App) requireModeracioMassivaUser(w http.ResponseWriter, r *http.Request) (*db.User, db.PolicyPermissions, bool, bool) {
-	user, perms, _, ok := a.requireModeracioUser(w, r)
-	if !ok {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return nil, db.PolicyPermissions{}, false, false
 	}
-	isAdmin := a.hasPerm(perms, permAdmin)
+	*r = *a.withUser(r, user)
+	perms, found := a.permissionsFromContext(r)
+	if !found {
+		perms = a.getPermissionsForUser(user.ID)
+		*r = *a.withPermissions(r, perms)
+	}
+	isAdmin := a.effectiveAdminForUser(user.ID, perms)
 	if isAdmin || a.hasAnyPermissionKey(user.ID, permKeyModeracioMassiva) {
 		return user, perms, isAdmin, true
 	}
@@ -4988,7 +5019,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	}
 	selected := r.Form["selected"]
 	motiu := strings.TrimSpace(r.FormValue("bulk_reason"))
-	canModerateAll := a.hasPerm(perms, permModerate)
+	canModerateAll := a.canModerateAllModular(user, perms)
 	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
 	async := strings.TrimSpace(r.FormValue("async")) == "1" || strings.Contains(r.Header.Get("Accept"), "application/json")
 	returnTo := strings.TrimSpace(r.FormValue("return_to"))

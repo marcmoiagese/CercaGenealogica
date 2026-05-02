@@ -722,6 +722,110 @@ func createF339EventWithImpact(t *testing.T, database db.DB, userID, municipiID 
 	return eventID
 }
 
+func TestF3310LegacyPermModerateDoesNotGrantResidualModeration(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-10-legacy-moderate")
+	user := &db.User{ID: userID}
+	perms := db.PolicyPermissions{CanModerate: true}
+
+	if app.canModerateAllModular(user, perms) {
+		t.Fatalf("permModerate legacy pur no hauria d'autoritzar canModerateAll residual")
+	}
+	if app.newModeracioScopeModel(user, perms, app.canModerateAllModular(user, perms)).canModerateAnything() {
+		t.Fatalf("permModerate legacy pur no hauria d'obrir moderacio residual")
+	}
+	if app.canModerateMap(user, 7) {
+		t.Fatalf("permModerate legacy pur no hauria d'autoritzar moderacio de mapes")
+	}
+}
+
+func TestF3310ResidualModerationKeepsAdminBridge(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-10-admin")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(userID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	perms := app.getPermissionsForUser(userID)
+	if !app.canModerateAllModular(user, perms) {
+		t.Fatalf("admin global hauria de tenir canModerateAll via bridge modular")
+	}
+	if !app.canModerateMap(user, 7) {
+		t.Fatalf("admin global hauria de moderar mapes via bridge modular")
+	}
+}
+
+func TestF3310GlobalModularGrantsCanModerateAllResidual(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-10-global-modular")
+	policy := &db.Politica{Nom: "f33-10-all-moderation", Permisos: "{}", Descripcio: ""}
+	policyID, err := database.SavePolitica(policy)
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica global: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, objType := range moderacioBulkAllowedTypes {
+		spec := moderacioTypeSpecs[objType]
+		if seen[spec.PermKey] {
+			continue
+		}
+		seen[spec.PermKey] = true
+		if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+			PoliticaID: policyID,
+			PermKey:    spec.PermKey,
+			ScopeType:  string(ScopeGlobal),
+		}); err != nil {
+			t.Fatalf("no s'ha pogut crear grant %s: %v", spec.PermKey, err)
+		}
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica global: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	perms := app.getPermissionsForUser(userID)
+	if !app.canModerateAllModular(user, perms) {
+		t.Fatalf("grants globals de tots els tipus haurien d'autoritzar canModerateAll residual")
+	}
+}
+
+func TestF3310MapModerationRespectsMunicipiScope(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-10-mapes-scoped")
+	allowedMunID := createF339Municipi(t, database, "mapes-allowed")
+	blockedMunID := createF339Municipi(t, database, "mapes-blocked")
+	policy := &db.Politica{Nom: "f33-10-mapes-scoped", Permisos: "{}", Descripcio: ""}
+	policyID, err := database.SavePolitica(policy)
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica mapes scoped: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: policyID,
+		PermKey:    permKeyTerritoriMunicipisMapesModerate,
+		ScopeType:  string(ScopeMunicipi),
+		ScopeID:    sql.NullInt64{Int64: int64(allowedMunID), Valid: true},
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant mapes scoped: %v", err)
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica mapes scoped: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	if !app.canModerateMap(user, allowedMunID) {
+		t.Fatalf("mapes scoped hauria d'autoritzar el municipi permes")
+	}
+	if app.canModerateMap(user, blockedMunID) {
+		t.Fatalf("mapes scoped no hauria d'autoritzar un altre municipi")
+	}
+	perms := app.getPermissionsForUser(userID)
+	if app.canModerateAllModular(user, perms) {
+		t.Fatalf("mapes scoped no hauria de convertir-se en canModerateAll")
+	}
+}
+
 func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-5-platform-user")

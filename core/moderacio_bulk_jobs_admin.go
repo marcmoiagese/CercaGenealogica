@@ -225,7 +225,7 @@ func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *d
 	if IsDebugEnabled() {
 		Debugf("moderacio bulk admin job row created job=%d actor=%d action=%s type=%s bulk_user_id=%d", jobID, user.ID, action, bulkType, bulkUserID)
 	}
-	canModerateAll := a.hasPerm(perms, permModerate)
+	canModerateAll := a.canModerateAllModular(user, perms)
 	snapshot, err := a.resolveModeracioBulkAllSnapshot(bulkType, user, perms, canModerateAll, bulkUserID)
 	if err != nil {
 		Errorf("moderacio bulk snapshot resolve failed job=%d actor=%d action=%s type=%s bulk_user_id=%d err=%v", jobID, user.ID, action, bulkType, bulkUserID, err)
