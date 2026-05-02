@@ -6,8 +6,7 @@ func (a *App) canModerateWikiObject(user *db.User, perms db.PolicyPermissions, o
 	if user == nil {
 		return false
 	}
-	canModerateAll := a.hasPerm(perms, permModerate)
-	model := a.newModeracioScopeModel(user, perms, canModerateAll)
+	model := a.newModeracioScopeModel(user, perms, false)
 	changeType := wikiObjectTypeToModeracioType(objectType)
 	if changeType == "" {
 		return false

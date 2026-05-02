@@ -386,6 +386,36 @@ func TestF336WikiModerationUsesDomainGlobalKeys(t *testing.T) {
 	}
 }
 
+func TestF336RWikiModerationDoesNotUseLegacyPermModerateFallback(t *testing.T) {
+	app, _ := newF330PermissionsTestApp(t)
+	user := &db.User{ID: 9901}
+	perms := db.PolicyPermissions{CanModerate: true}
+
+	for _, objectType := range []string{"municipi", "arxiu", "llibre", "persona", "cognom", "event_historic"} {
+		if app.canModerateWikiObject(user, perms, objectType, 1) {
+			t.Fatalf("permModerate legacy pur no hauria d'autoritzar wiki %s", objectType)
+		}
+	}
+}
+
+func TestF336RWikiModerationKeepsAdminViaModularBridge(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-6r-admin")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(userID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	perms := app.getPermissionsForUser(userID)
+	if !app.canModerateWikiObject(user, perms, "municipi", 123) {
+		t.Fatalf("admin global hauria d'autoritzar wiki municipi via pont modular")
+	}
+	if !app.canModerateWikiObject(user, perms, "persona", 123) {
+		t.Fatalf("admin global hauria d'autoritzar wiki persona via pont modular")
+	}
+}
+
 func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-5-platform-user")
