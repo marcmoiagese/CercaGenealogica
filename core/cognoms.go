@@ -233,8 +233,7 @@ func (a *App) CognomDetall(w http.ResponseWriter, r *http.Request) {
 	if user != nil {
 		lang = resolveUserLang(r, user)
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateCognomsPublic(user)
 	markType := ""
 	markPublic := true
 	markOwn := false

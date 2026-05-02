@@ -141,12 +141,9 @@ func (a *App) MunicipiEventsListPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
-	perms := db.PolicyPermissions{}
-	if user != nil {
-		perms = a.getPermissionsForUser(user.ID)
-	}
-	canManageTerritory := user != nil && a.hasPerm(perms, permTerritory)
-	canModerate := user != nil && a.hasPerm(perms, permModerate)
+	munTarget := a.resolveMunicipiTarget(mun.ID)
+	canManageTerritory := a.canEditMunicipiPublic(user, munTarget)
+	canModerate := user != nil && a.HasPermission(user.ID, permKeyEventsModerate, munTarget)
 	if mun.ModeracioEstat != "" && mun.ModeracioEstat != "publicat" && !(canManageTerritory || canModerate) {
 		http.NotFound(w, r)
 		return
@@ -175,13 +172,9 @@ func (a *App) EventHistoricShow(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	perms := db.PolicyPermissions{}
-	if user != nil {
-		perms = a.getPermissionsForUser(user.ID)
-	}
-	canModerate := user != nil && a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateEventHistoricPublic(user, event.ID)
 	ownsEvent := user != nil && event.CreatedBy.Valid && int(event.CreatedBy.Int64) == user.ID
-	if !a.canViewEventHistoric(user, perms, event) {
+	if !a.canViewEventHistoricPublic(user, event, canModerate) {
 		http.NotFound(w, r)
 		return
 	}
@@ -398,8 +391,7 @@ func (a *App) EventHistoricEdit(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateEventHistoricPublic(user, event.ID)
 	ownsEvent := event.CreatedBy.Valid && int(event.CreatedBy.Int64) == user.ID
 	if event.ModerationStatus != "publicat" && !(canModerate || ownsEvent) {
 		http.NotFound(w, r)
@@ -447,8 +439,7 @@ func (a *App) EventHistoricUpdate(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.hasPerm(perms, permModerate)
+	canModerate := a.canModerateEventHistoricPublic(user, event.ID)
 	ownsEvent := event.CreatedBy.Valid && int(event.CreatedBy.Int64) == user.ID
 	if event.ModerationStatus != "publicat" && !(canModerate || ownsEvent) {
 		http.Error(w, "Forbidden", http.StatusForbidden)

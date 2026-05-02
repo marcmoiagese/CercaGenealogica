@@ -109,7 +109,7 @@ func (a *App) PersonaForm(w http.ResponseWriter, r *http.Request) {
 		"User":              user,
 		"CanManageArxius":   canManageArxius,
 		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
-		"CanModerate":       perms.CanModerate || perms.Admin,
+		"CanModerate":       a.canModeratePersonesPublic(user),
 	})
 }
 
@@ -323,7 +323,7 @@ func (a *App) renderPersonaFormError(w http.ResponseWriter, r *http.Request, id 
 		"User":              user,
 		"CanManageArxius":   a.hasPerm(perms, permArxius),
 		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
-		"CanModerate":       perms.CanModerate || perms.Admin,
+		"CanModerate":       a.canModeratePersonesPublic(user),
 	})
 }
 
@@ -346,7 +346,7 @@ func (a *App) ListPersonesPublic(w http.ResponseWriter, r *http.Request) {
 		"User":              user,
 		"CanManageArxius":   canManageArxius,
 		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
-		"CanModerate":       perms.CanModerate || perms.Admin,
+		"CanModerate":       a.canModeratePersonesPublic(user),
 	})
 }
 
@@ -982,49 +982,49 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	RenderPrivateTemplate(w, r, "persona-detall.html", map[string]interface{}{
-		"Persona":           p,
-		"NomComplet":        fullName,
-		"Initials":          initials,
-		"BirthDate":         birthDate,
-		"BaptismDate":       baptismDate,
-		"DeathDate":         deathDate,
-		"LifeRange":         lifeRange,
-		"SexLabel":          "",
-		"SexIcon":           "",
-		"BirthLabel":        birthLabel,
-		"DeathLabel":        deathLabel,
-		"BirthLocation":     birthLocation,
-		"DeathLocation":     deathLocation,
-		"LastUpdated":       lastUpdated,
-		"Completesa":        completesa,
-		"QualitatFonts":     qualitatFonts,
-		"FieldNeedsLink":    fieldNeedsLink,
-		"CanEditPersona":    canEditPersona,
-		"CanLinkPersonaFields": canLinkPersonaFields,
-		"DocRegistres":      docs,
-		"DocTotal":          totalDocs,
-		"OriginMunicipi":    originMunicipi,
-		"OriginDefuncio":    originDefuncioMunicipi,
-		"OriginLlibre":      originLlibre,
-		"OriginPagina":      originPagina,
-		"OriginRegistreID":  originRegistreID,
-		"OriginAny":         originAny,
-		"Relacions":         relacions,
-		"TimelineEvents":    timeline,
-		"Anecdotes":         anecdotes,
-		"TipusOptions":      transcripcioTipusActe,
-		"User":              user,
-		"CanManageArxius":   a.hasPerm(perms, permArxius),
-		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
-		"CanModerate":       perms.CanModerate || perms.Admin,
-		"MarkType":          markType,
-		"MarkPublic":        markPublic,
-		"MarkOwn":           markOwn,
-		"WikiPending":       wikiPending,
+		"Persona":                p,
+		"NomComplet":             fullName,
+		"Initials":               initials,
+		"BirthDate":              birthDate,
+		"BaptismDate":            baptismDate,
+		"DeathDate":              deathDate,
+		"LifeRange":              lifeRange,
+		"SexLabel":               "",
+		"SexIcon":                "",
+		"BirthLabel":             birthLabel,
+		"DeathLabel":             deathLabel,
+		"BirthLocation":          birthLocation,
+		"DeathLocation":          deathLocation,
+		"LastUpdated":            lastUpdated,
+		"Completesa":             completesa,
+		"QualitatFonts":          qualitatFonts,
+		"FieldNeedsLink":         fieldNeedsLink,
+		"CanEditPersona":         canEditPersona,
+		"CanLinkPersonaFields":   canLinkPersonaFields,
+		"DocRegistres":           docs,
+		"DocTotal":               totalDocs,
+		"OriginMunicipi":         originMunicipi,
+		"OriginDefuncio":         originDefuncioMunicipi,
+		"OriginLlibre":           originLlibre,
+		"OriginPagina":           originPagina,
+		"OriginRegistreID":       originRegistreID,
+		"OriginAny":              originAny,
+		"Relacions":              relacions,
+		"TimelineEvents":         timeline,
+		"Anecdotes":              anecdotes,
+		"TipusOptions":           transcripcioTipusActe,
+		"User":                   user,
+		"CanManageArxius":        a.hasPerm(perms, permArxius),
+		"CanManagePolicies":      perms.CanManagePolicies || perms.Admin,
+		"CanModerate":            a.canModeratePersonesPublic(user),
+		"MarkType":               markType,
+		"MarkPublic":             markPublic,
+		"MarkOwn":                markOwn,
+		"WikiPending":            wikiPending,
 		"ExternalLinksPersonaID": p.ID,
 		"ExternalLinksNotice":    externalLinksNotice,
 		"ExternalLinksError":     externalLinksError,
-		"Tab":               "detall",
+		"Tab":                    "detall",
 	})
 }
 
@@ -1179,7 +1179,7 @@ func (a *App) PersonaRegistres(w http.ResponseWriter, r *http.Request) {
 		"TipusSelected":     tipus,
 		"CanManageArxius":   a.hasPerm(perms, permArxius),
 		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
-		"CanModerate":       perms.CanModerate || perms.Admin,
+		"CanModerate":       a.canModeratePersonesPublic(user),
 		"Tab":               "registres",
 	})
 }
@@ -1266,9 +1266,8 @@ func (a *App) PersonaAnecdoteCreate(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	status := "pendent"
-	if perms.Admin || perms.CanModerate {
+	if a.canModeratePersonesPublic(user) {
 		status = "publicat"
 	}
 	anecdote := &db.PersonaAnecdote{

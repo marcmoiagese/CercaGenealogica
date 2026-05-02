@@ -573,6 +573,155 @@ func TestF338TerritoriPublicAdminBridge(t *testing.T) {
 	}
 }
 
+func TestF339PersonesCognomsEventsDoNotUseLegacyPermModerate(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-9-legacy-moderate")
+	user := &db.User{ID: userID}
+	perms := db.PolicyPermissions{CanModerate: true, Admin: true}
+
+	if app.canModeratePersonesPublic(user) {
+		t.Fatalf("permModerate legacy pur no hauria d'autoritzar persones publiques")
+	}
+	if app.canModerateCognomsPublic(user) {
+		t.Fatalf("permModerate legacy pur no hauria d'autoritzar cognoms publics")
+	}
+	if app.canModerateEventHistoricPublic(user, 0) {
+		t.Fatalf("permModerate legacy pur no hauria d'autoritzar events historics publics")
+	}
+	if app.canModerateModular(user, perms) {
+		t.Fatalf("permisos legacy purs no haurien d'obrir moderacio modular")
+	}
+}
+
+func TestF339DomainGlobalKeysEnablePublicModeration(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-9-domain-global")
+	policy := &db.Politica{Nom: "f33-9-domain-global", Permisos: "{}", Descripcio: ""}
+	policyID, err := database.SavePolitica(policy)
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica: %v", err)
+	}
+	for _, key := range []string{permKeyPersonesModerate, permKeyCognomsModerate, permKeyEventsModerate} {
+		if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+			PoliticaID: policyID,
+			PermKey:    key,
+			ScopeType:  string(ScopeGlobal),
+		}); err != nil {
+			t.Fatalf("no s'ha pogut crear grant %s: %v", key, err)
+		}
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	if !app.canModeratePersonesPublic(user) {
+		t.Fatalf("persones.moderate global hauria d'autoritzar persones publiques")
+	}
+	if !app.canModerateCognomsPublic(user) {
+		t.Fatalf("cognoms.moderate global hauria d'autoritzar cognoms publics")
+	}
+	if !app.canModerateEventHistoricPublic(user, 0) {
+		t.Fatalf("events.moderate global hauria d'autoritzar events publics")
+	}
+}
+
+func TestF339EventHistoricScopedModerationUsesImpactTarget(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-9-event-scoped")
+	allowedMunID := createF339Municipi(t, database, "allowed")
+	blockedMunID := createF339Municipi(t, database, "blocked")
+	allowedEventID := createF339EventWithImpact(t, database, userID, allowedMunID)
+	blockedEventID := createF339EventWithImpact(t, database, userID, blockedMunID)
+	policy := &db.Politica{Nom: "f33-9-event-scoped", Permisos: "{}", Descripcio: ""}
+	policyID, err := database.SavePolitica(policy)
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica events scoped: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: policyID,
+		PermKey:    permKeyEventsModerate,
+		ScopeType:  string(ScopeMunicipi),
+		ScopeID:    sql.NullInt64{Int64: int64(allowedMunID), Valid: true},
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant events scoped: %v", err)
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica events scoped: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	if !app.canModerateEventHistoricPublic(user, allowedEventID) {
+		t.Fatalf("events.moderate scoped hauria d'autoritzar l'event amb impacte dins municipi permes")
+	}
+	if app.canModerateEventHistoricPublic(user, blockedEventID) {
+		t.Fatalf("events.moderate scoped no hauria d'autoritzar l'event fora de municipi")
+	}
+}
+
+func TestF339PublicModerationKeepsAdminBridge(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-9-admin")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(userID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	if !app.canModeratePersonesPublic(user) {
+		t.Fatalf("admin global hauria de moderar persones via bridge modular")
+	}
+	if !app.canModerateCognomsPublic(user) {
+		t.Fatalf("admin global hauria de moderar cognoms via bridge modular")
+	}
+	if !app.canModerateEventHistoricPublic(user, 0) {
+		t.Fatalf("admin global hauria de moderar events via bridge modular")
+	}
+}
+
+func createF339Municipi(t *testing.T, database db.DB, suffix string) int {
+	t.Helper()
+	id, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            fmt.Sprintf("Municipi F33-9 %s", suffix),
+		Tipus:          "municipi",
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	})
+	if err != nil {
+		t.Fatalf("CreateMunicipi ha fallat: %v", err)
+	}
+	return id
+}
+
+func createF339EventWithImpact(t *testing.T, database db.DB, userID, municipiID int) int {
+	t.Helper()
+	event := &db.EventHistoric{
+		Titol:            fmt.Sprintf("Event F33-9 %d", municipiID),
+		Slug:             fmt.Sprintf("event-f33-9-%d", municipiID),
+		Tipus:            "revolta",
+		Resum:            "resum",
+		Descripcio:       "desc",
+		CreatedBy:        sql.NullInt64{Int64: int64(userID), Valid: true},
+		ModerationStatus: "pendent",
+	}
+	eventID, err := database.CreateEventHistoric(event)
+	if err != nil {
+		t.Fatalf("CreateEventHistoric ha fallat: %v", err)
+	}
+	impact := db.EventHistoricImpact{
+		EventID:      eventID,
+		ScopeType:    "municipi",
+		ScopeID:      municipiID,
+		ImpacteTipus: "directe",
+		Intensitat:   3,
+		CreatedBy:    sql.NullInt64{Int64: int64(userID), Valid: true},
+	}
+	if err := database.ReplaceEventImpacts(eventID, []db.EventHistoricImpact{impact}); err != nil {
+		t.Fatalf("ReplaceEventImpacts ha fallat: %v", err)
+	}
+	return eventID
+}
+
 func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-5-platform-user")
