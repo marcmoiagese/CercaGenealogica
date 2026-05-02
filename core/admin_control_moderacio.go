@@ -17,6 +17,7 @@ const adminControlModeracioSummaryCacheTTL = 10 * time.Second
 type adminControlModeracioSummaryCacheState struct {
 	mu       sync.RWMutex
 	loaded   bool
+	key      string
 	total    int
 	byType   []adminControlPendingType
 	cachedAt time.Time
@@ -74,8 +75,9 @@ func (a *App) adminControlModeracioPendingCountsCached(user *db.User, perms db.P
 		return total, byType, "scoped", false, err
 	}
 	now := time.Now()
+	cacheKey := fmt.Sprintf("%p", a.DB)
 	adminControlModeracioSummaryCache.mu.RLock()
-	if adminControlModeracioSummaryCache.loaded && now.Sub(adminControlModeracioSummaryCache.cachedAt) < adminControlModeracioSummaryCacheTTL {
+	if adminControlModeracioSummaryCache.loaded && adminControlModeracioSummaryCache.key == cacheKey && now.Sub(adminControlModeracioSummaryCache.cachedAt) < adminControlModeracioSummaryCacheTTL {
 		total := adminControlModeracioSummaryCache.total
 		byType := adminControlModeracioSummaryCache.byType
 		adminControlModeracioSummaryCache.mu.RUnlock()
@@ -85,7 +87,7 @@ func (a *App) adminControlModeracioPendingCountsCached(user *db.User, perms db.P
 
 	adminControlModeracioSummaryCache.mu.Lock()
 	defer adminControlModeracioSummaryCache.mu.Unlock()
-	if adminControlModeracioSummaryCache.loaded && now.Sub(adminControlModeracioSummaryCache.cachedAt) < adminControlModeracioSummaryCacheTTL {
+	if adminControlModeracioSummaryCache.loaded && adminControlModeracioSummaryCache.key == cacheKey && now.Sub(adminControlModeracioSummaryCache.cachedAt) < adminControlModeracioSummaryCacheTTL {
 		return adminControlModeracioSummaryCache.total, adminControlModeracioSummaryCache.byType, "global", true, nil
 	}
 	total, byType, err := a.adminPendingModerationCounts()
@@ -93,6 +95,7 @@ func (a *App) adminControlModeracioPendingCountsCached(user *db.User, perms db.P
 		return 0, nil, "", false, err
 	}
 	adminControlModeracioSummaryCache.loaded = true
+	adminControlModeracioSummaryCache.key = cacheKey
 	adminControlModeracioSummaryCache.cachedAt = now
 	adminControlModeracioSummaryCache.total = total
 	adminControlModeracioSummaryCache.byType = byType

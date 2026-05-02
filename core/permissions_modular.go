@@ -804,6 +804,38 @@ func (a *App) HasAnyPermission(userID int, permKeys []string, target PermissionT
 	return false
 }
 
+func (a *App) canManageTerritoryTarget(user *db.User, target PermissionTarget) bool {
+	if user == nil {
+		return false
+	}
+	return a.HasAnyPermission(user.ID, []string{
+		permKeyTerritoriPaisosEdit,
+		permKeyTerritoriNivellsEdit,
+		permKeyTerritoriNivellsRebuild,
+		permKeyTerritoriMunicipisEdit,
+	}, target)
+}
+
+func (a *App) canManageAnyTerritoryModular(user *db.User) bool {
+	if user == nil {
+		return false
+	}
+	for _, key := range []string{
+		permKeyTerritoriPaisosCreate,
+		permKeyTerritoriPaisosEdit,
+		permKeyTerritoriNivellsCreate,
+		permKeyTerritoriNivellsEdit,
+		permKeyTerritoriNivellsRebuild,
+		permKeyTerritoriMunicipisCreate,
+		permKeyTerritoriMunicipisEdit,
+	} {
+		if a.hasAnyPermissionKey(user.ID, key) {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *App) hasAnyPermissionKey(userID int, permKey string) bool {
 	snap, err := a.getPermissionSnapshot(userID)
 	if err != nil {

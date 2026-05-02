@@ -71,10 +71,10 @@ func (a *App) MunicipiWikiHistory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	canManageTerritory := a.hasPerm(perms, permTerritory)
 	canModerate := a.canModerateWikiObject(user, perms, "municipi", mun.ID)
 	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 	target := a.resolveMunicipiTarget(mun.ID)
+	canManageTerritory := a.canManageTerritoryTarget(user, target)
 	if !a.HasPermission(user.ID, permKeyTerritoriMunicipisView, target) && !(canManageTerritory || canModerate) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -299,9 +299,9 @@ func (a *App) MunicipiWikiStats(w http.ResponseWriter, r *http.Request) {
 	*r = *a.withUser(r, user)
 	perms := a.getPermissionsForUser(user.ID)
 	*r = *a.withPermissions(r, perms)
-	canManageTerritory := a.hasPerm(perms, permTerritory)
 	canModerate := a.canModerateWikiObject(user, perms, "municipi", mun.ID)
 	target := a.resolveMunicipiTarget(mun.ID)
+	canManageTerritory := a.canManageTerritoryTarget(user, target)
 	if !a.HasPermission(user.ID, permKeyTerritoriMunicipisView, target) && !(canManageTerritory || canModerate) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return

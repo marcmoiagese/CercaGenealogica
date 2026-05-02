@@ -530,21 +530,7 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		}
 		return permKeys[key]
 	}
-	hasModeracioKey := hasKey(permKeyModeracioMassiva) ||
-		hasKey(permKeyPersonesModerate) ||
-		hasKey(permKeyCognomsModerate) ||
-		hasKey(permKeyMediaModerate) ||
-		hasKey(permKeyEventsModerate) ||
-		hasKey(permKeyAdminExternalLinksModerate) ||
-		hasKey(permKeyTerritoriMunicipisMapesModerate) ||
-		hasKey(permKeyTerritoriMunicipisHistoriaModerate) ||
-		hasKey(permKeyTerritoriMunicipisAnecdotesModerate) ||
-		hasKey(permKeyTerritoriMunicipisEdit) ||
-		hasKey(permKeyTerritoriNivellsEdit) ||
-		hasKey(permKeyTerritoriEclesEdit) ||
-		hasKey(permKeyDocumentalsArxiusEdit) ||
-		hasKey(permKeyDocumentalsLlibresEdit) ||
-		hasKey(permKeyDocumentalsRegistresEdit)
+	hasModeracioKey := hasModularModerationKey(hasKey)
 	if _, found := m["CanManageArxius"]; !found {
 		m["CanManageArxius"] = effectiveAdmin || perms.CanManageArchives
 	}
@@ -576,7 +562,7 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 			hasKey(permKeyAdminTransparencyManage)
 	}
 	if _, found := m["CanModerate"]; !found {
-		m["CanModerate"] = effectiveAdmin || perms.CanModerate || hasModeracioKey
+		m["CanModerate"] = effectiveAdmin || hasModeracioKey
 	}
 	if _, found := m["IsAdmin"]; !found {
 		m["IsAdmin"] = effectiveAdmin
@@ -670,4 +656,25 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		}
 	}
 	return m
+}
+
+func hasModularModerationKey(hasKey func(string) bool) bool {
+	if hasKey == nil {
+		return false
+	}
+	return hasKey(permKeyModeracioMassiva) ||
+		hasKey(permKeyPersonesModerate) ||
+		hasKey(permKeyCognomsModerate) ||
+		hasKey(permKeyMediaModerate) ||
+		hasKey(permKeyEventsModerate) ||
+		hasKey(permKeyAdminExternalLinksModerate) ||
+		hasKey(permKeyTerritoriMunicipisMapesModerate) ||
+		hasKey(permKeyTerritoriMunicipisHistoriaModerate) ||
+		hasKey(permKeyTerritoriMunicipisAnecdotesModerate) ||
+		hasKey(permKeyTerritoriMunicipisEdit) ||
+		hasKey(permKeyTerritoriNivellsEdit) ||
+		hasKey(permKeyTerritoriEclesEdit) ||
+		hasKey(permKeyDocumentalsArxiusEdit) ||
+		hasKey(permKeyDocumentalsLlibresEdit) ||
+		hasKey(permKeyDocumentalsRegistresEdit)
 }

@@ -871,3 +871,132 @@ func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
 		t.Fatalf("admin.users.manage no hauria d'autoritzar politiques")
 	}
 }
+
+func TestF3311LegacyCanModerateDoesNotSetGlobalTemplateFlag(t *testing.T) {
+	app := &App{}
+	req := httptest.NewRequest("GET", "/admin/moderacio", nil)
+	req = app.withPermissions(req, db.PolicyPermissions{CanModerate: true})
+	req = app.withEffectiveAdmin(req, false)
+	req = app.withPermissionKeys(req, map[string]bool{})
+
+	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	if got := data["CanModerate"]; got == true {
+		t.Fatalf("perms.CanModerate legacy pur no hauria d'activar CanModerate global, rebut %#v", got)
+	}
+}
+
+func TestF3311GlobalTemplateModerationKeepsAdminAndModularKeys(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	adminUserID := createF330User(t, database, "f33-11-template-admin")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(adminUserID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
+	}
+	adminPerms := app.getPermissionsForUser(adminUserID)
+	adminReq := httptest.NewRequest("GET", "/admin/moderacio", nil)
+	adminReq = app.withPermissions(adminReq, adminPerms)
+	adminReq = app.withEffectiveAdmin(adminReq, app.effectiveAdminForUser(adminUserID, adminPerms))
+	adminReq = app.withPermissionKeys(adminReq, app.permissionKeysForUser(adminUserID))
+	adminData := injectPermsIfMissing(adminReq, map[string]interface{}{}).(map[string]interface{})
+	if got := adminData["CanModerate"]; got != true {
+		t.Fatalf("admin global hauria d'activar CanModerate via bridge modular, rebut %#v", got)
+	}
+
+	moderatorUserID := createF330User(t, database, "f33-11-template-modular")
+	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-11-media-moderator", Permisos: "{}", Descripcio: ""})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica modular: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: policyID,
+		PermKey:    permKeyMediaModerate,
+		ScopeType:  string(ScopeGlobal),
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant media.moderate: %v", err)
+	}
+	if err := database.AddUserPolitica(moderatorUserID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica modular: %v", err)
+	}
+	moderatorPerms := app.getPermissionsForUser(moderatorUserID)
+	modReq := httptest.NewRequest("GET", "/admin/moderacio/media", nil)
+	modReq = app.withPermissions(modReq, moderatorPerms)
+	modReq = app.withEffectiveAdmin(modReq, app.effectiveAdminForUser(moderatorUserID, moderatorPerms))
+	modReq = app.withPermissionKeys(modReq, app.permissionKeysForUser(moderatorUserID))
+	modData := injectPermsIfMissing(modReq, map[string]interface{}{}).(map[string]interface{})
+	if got := modData["CanModerate"]; got != true {
+		t.Fatalf("media.moderate modular hauria d'activar CanModerate global, rebut %#v", got)
+	}
+}
+
+func TestF3311DashboardRoleSetDoesNotUseLegacyCanModerate(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-11-dashboard-legacy")
+	policyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "",
+		Permisos:   `{"can_moderate":true}`,
+		Descripcio: "legacy moderate only",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica legacy: %v", err)
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica legacy: %v", err)
+	}
+
+	if app.getPermissionsForUser(userID).CanModerate != true {
+		t.Fatalf("el test necessita CanModerate legacy a true")
+	}
+	if roles := app.dashboardUserRoleSet(userID); roles["moderador"] {
+		t.Fatalf("dashboard no hauria d'afegir rol moderador per CanModerate legacy pur: %#v", roles)
+	}
+}
+
+func TestF3311PermTerritoryLegacyDoesNotGrantTerritoryOrArchivesUI(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-11-legacy-territory")
+	perms := db.PolicyPermissions{CanManageTerritory: true}
+	user := &db.User{ID: userID}
+	target := PermissionTarget{MunicipiID: intPtr(7)}
+
+	if app.hasPerm(perms, permTerritory) != true {
+		t.Fatalf("el test necessita permTerritory legacy pur")
+	}
+	if app.canManageTerritoryTarget(user, target) {
+		t.Fatalf("permTerritory legacy pur no hauria d'autoritzar gestio territorial scoped")
+	}
+	if app.canManageAnyTerritoryModular(user) {
+		t.Fatalf("permTerritory legacy pur no hauria d'activar UI territorial en arxius")
+	}
+}
+
+func TestF3311ModularTerritoryScopedKeepsAccessWithinScope(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-11-territory-scoped")
+	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-11-territory", Permisos: "{}", Descripcio: ""})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica territorial: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: policyID,
+		PermKey:    permKeyTerritoriMunicipisEdit,
+		ScopeType:  string(ScopeMunicipi),
+		ScopeID:    sql.NullInt64{Int64: 7, Valid: true},
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant territorial: %v", err)
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica territorial: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	if !app.canManageTerritoryTarget(user, PermissionTarget{MunicipiID: intPtr(7)}) {
+		t.Fatalf("territori.municipis.edit scoped hauria d'autoritzar gestio dins ambit")
+	}
+	if app.canManageTerritoryTarget(user, PermissionTarget{MunicipiID: intPtr(8)}) {
+		t.Fatalf("territori.municipis.edit scoped no hauria d'autoritzar gestio fora ambit")
+	}
+	if !app.canManageAnyTerritoryModular(user) {
+		t.Fatalf("un grant territorial modular hauria de mantenir visible la UI territorial relacionada")
+	}
+}
