@@ -139,7 +139,7 @@ func TestF330AdminPolicyNameIsEffectiveModularAdminForUI(t *testing.T) {
 	}
 }
 
-func TestF330PermissionPolicyAdminFlagIsEffectiveModularAdmin(t *testing.T) {
+func TestF3319PolicyPermissionsAdminFlagDoesNotGrantSnapshotAdmin(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-admin-flag")
 	policy := &db.Politica{
@@ -155,11 +155,18 @@ func TestF330PermissionPolicyAdminFlagIsEffectiveModularAdmin(t *testing.T) {
 		t.Fatalf("no s'ha pogut assignar politica admin JSON: %v", err)
 	}
 
-	if !app.HasPermission(userID, permKeyTerritoriNivellsEdit, PermissionTarget{PaisID: intPtr(1)}) {
-		t.Fatalf("PolicyPermissions.Admin=true hauria de donar permisos modulars efectius")
+	snap, err := app.buildPermissionSnapshot(userID)
+	if err != nil {
+		t.Fatalf("no s'ha pogut construir snapshot: %v", err)
 	}
-	if filter := app.buildListScopeFilter(userID, permKeyTerritoriNivellsView, ScopePais); !filter.hasGlobal {
-		t.Fatalf("PolicyPermissions.Admin=true hauria de donar filtre global")
+	if snap.isAdmin {
+		t.Fatalf("PolicyPermissions.Admin=true legacy no hauria d'activar admin modular")
+	}
+	if app.HasPermission(userID, permKeyTerritoriNivellsEdit, PermissionTarget{PaisID: intPtr(1)}) {
+		t.Fatalf("PolicyPermissions.Admin=true legacy no hauria de donar permisos modulars efectius")
+	}
+	if filter := app.buildListScopeFilter(userID, permKeyTerritoriNivellsView, ScopePais); filter.hasGlobal {
+		t.Fatalf("PolicyPermissions.Admin=true legacy no hauria de donar filtre global")
 	}
 }
 
@@ -1719,6 +1726,159 @@ func TestF3316DashboardAdminRoleUsesEffectiveAdminBridge(t *testing.T) {
 	if roles := app.dashboardUserRoleSet(plainUserID); roles["admin"] {
 		t.Fatalf("usuari no admin no hauria de rebre rol admin")
 	}
+}
+
+func TestF3319LegacyPolicyPermissionsDoNotGrantSnapshotPermissions(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-19-legacy-full")
+	policyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-19-legacy-full",
+		Permisos:   `{"admin":true,"can_manage_territory":true,"can_manage_archives":true,"can_manage_policies":true,"can_manage_users":true,"can_manage_eclesiastic":true}`,
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica legacy F33-19: %v", err)
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica legacy F33-19: %v", err)
+	}
+
+	snap, err := app.buildPermissionSnapshot(userID)
+	if err != nil {
+		t.Fatalf("no s'ha pogut construir snapshot F33-19: %v", err)
+	}
+	if snap.isAdmin {
+		t.Fatalf("PolicyPermissions.Admin legacy no hauria d'activar admin al snapshot")
+	}
+	for _, key := range []string{
+		permKeyTerritoriNivellsEdit,
+		permKeyTerritoriMunicipisEdit,
+		permKeyTerritoriEclesEdit,
+		permKeyDocumentalsArxiusEdit,
+		permKeyDocumentalsLlibresEdit,
+		permKeyAdminPoliciesManage,
+		permKeyAdminUsersManage,
+	} {
+		if f3319SnapshotHasGrant(snap, key) {
+			t.Fatalf("legacy PolicyPermissions no hauria de crear grant modular per %s", key)
+		}
+		if app.HasPermission(userID, key, PermissionTarget{}) {
+			t.Fatalf("legacy PolicyPermissions no hauria d'autoritzar %s", key)
+		}
+	}
+}
+
+func TestF3319RealModularGrantAndAdminPolicyStillWork(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	adminUserID := createF330User(t, database, "f33-19-admin-name")
+	adminPolicyID := findF330PolicyID(t, database, "admin")
+	if _, err := database.SavePolitica(&db.Politica{
+		ID:         adminPolicyID,
+		Nom:        "admin",
+		Permisos:   `{"admin":false}`,
+		Descripcio: "",
+	}); err != nil {
+		t.Fatalf("no s'ha pogut preparar politica admin F33-19: %v", err)
+	}
+	if err := database.AddUserPolitica(adminUserID, adminPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin F33-19: %v", err)
+	}
+	adminSnap, err := app.buildPermissionSnapshot(adminUserID)
+	if err != nil {
+		t.Fatalf("no s'ha pogut construir snapshot admin F33-19: %v", err)
+	}
+	if !adminSnap.isAdmin {
+		t.Fatalf("la politica amb nom admin hauria de continuar activant admin modular")
+	}
+	if !app.HasPermission(adminUserID, permKeyAdminPoliciesManage, PermissionTarget{}) {
+		t.Fatalf("admin per nom hauria de conservar permisos modulars globals")
+	}
+
+	grantUserID := createF330User(t, database, "f33-19-real-grant")
+	grantPolicyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-19-real-grant",
+		Permisos:   `{"can_manage_policies":false}`,
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica grant F33-19: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: grantPolicyID,
+		PermKey:    permKeyAdminPoliciesManage,
+		ScopeType:  string(ScopeGlobal),
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant real F33-19: %v", err)
+	}
+	if err := database.AddUserPolitica(grantUserID, grantPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica grant F33-19: %v", err)
+	}
+	grantSnap, err := app.buildPermissionSnapshot(grantUserID)
+	if err != nil {
+		t.Fatalf("no s'ha pogut construir snapshot grant F33-19: %v", err)
+	}
+	if !f3319SnapshotHasGrant(grantSnap, permKeyAdminPoliciesManage) {
+		t.Fatalf("un grant real politica_grants hauria d'apareixer al snapshot")
+	}
+	if !app.HasPermission(grantUserID, permKeyAdminPoliciesManage, PermissionTarget{}) {
+		t.Fatalf("un grant real politica_grants hauria d'autoritzar el permis modular")
+	}
+}
+
+func TestF3319KnownPolicyDefaultsAndImportWorkerLimitRemainExplicit(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	defaultUserID := createF330User(t, database, "f33-19-default-policy")
+	defaultPolicyID := findF330PolicyID(t, database, "confiança")
+	if _, err := database.SavePolitica(&db.Politica{
+		ID:         defaultPolicyID,
+		Nom:        "confiança",
+		Permisos:   `{"can_manage_users":true}`,
+		Descripcio: "",
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear politica default F33-19: %v", err)
+	}
+	if err := database.AddUserPolitica(defaultUserID, defaultPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica default F33-19: %v", err)
+	}
+	defaultSnap, err := app.buildPermissionSnapshot(defaultUserID)
+	if err != nil {
+		t.Fatalf("no s'ha pogut construir snapshot default F33-19: %v", err)
+	}
+	if !f3319SnapshotHasGrant(defaultSnap, permKeyPersonesCreate) {
+		t.Fatalf("la politica confiança hauria de conservar els defaults modulars explícits")
+	}
+	if f3319SnapshotHasGrant(defaultSnap, permKeyAdminUsersManage) {
+		t.Fatalf("el JSON legacy no hauria d'afegir admin.users.manage als defaults explícits")
+	}
+
+	limitUserID := createF330User(t, database, "f33-19-import-limit")
+	limitPolicyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-19-import-limit",
+		Permisos:   `{"import_worker_limit":7,"can_manage_users":true}`,
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica import limit F33-19: %v", err)
+	}
+	if err := database.AddUserPolitica(limitUserID, limitPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica import limit F33-19: %v", err)
+	}
+	limitSnap, err := app.buildPermissionSnapshot(limitUserID)
+	if err != nil {
+		t.Fatalf("no s'ha pogut construir snapshot import limit F33-19: %v", err)
+	}
+	if limitSnap.importWorkerLimit != 7 {
+		t.Fatalf("import_worker_limit hauria de conservar-se com opcio operativa, rebut %d", limitSnap.importWorkerLimit)
+	}
+	if f3319SnapshotHasGrant(limitSnap, permKeyAdminUsersManage) {
+		t.Fatalf("import_worker_limit no hauria d'arrossegar permisos legacy al snapshot")
+	}
+}
+
+func f3319SnapshotHasGrant(snap permissionSnapshot, key string) bool {
+	return len(snap.grants[key]) > 0
 }
 
 func TestF3317ImportTemplateEditUsesOwnerOrEffectiveAdmin(t *testing.T) {

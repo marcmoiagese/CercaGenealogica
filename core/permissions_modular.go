@@ -591,18 +591,16 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 	}
 	for _, policy := range byID {
 		if strings.EqualFold(policy.Nom, "admin") {
+			// Admin remains an explicit policy-name contract; legacy JSON flags do not grant modular permissions.
 			snap.isAdmin = true
 		}
-		var perms db.PolicyPermissions
-		permsLoaded := false
 		if strings.TrimSpace(policy.Permisos) != "" {
-			if err := json.Unmarshal([]byte(policy.Permisos), &perms); err == nil {
-				permsLoaded = true
-				if perms.Admin {
-					snap.isAdmin = true
-				}
-				if perms.ImportWorkerLimit > workerLimit {
-					workerLimit = perms.ImportWorkerLimit
+			var policyOptions struct {
+				ImportWorkerLimit int `json:"import_worker_limit,omitempty"`
+			}
+			if err := json.Unmarshal([]byte(policy.Permisos), &policyOptions); err == nil {
+				if policyOptions.ImportWorkerLimit > workerLimit {
+					workerLimit = policyOptions.ImportWorkerLimit
 				}
 			}
 		}
@@ -620,13 +618,6 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 			for _, key := range keys {
 				addGlobalGrant(snap.grants, key)
 			}
-			continue
-		}
-		if !permsLoaded {
-			continue
-		}
-		for _, key := range legacyPermKeys(perms) {
-			addGlobalGrant(snap.grants, key)
 		}
 	}
 	snap.importWorkerLimit = workerLimit
