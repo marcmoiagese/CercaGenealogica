@@ -209,10 +209,9 @@ func (a *App) AdminEclesSuggest(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	allowAll := false
 	if !a.hasAnyPermissionKey(user.ID, permKeyTerritoriEclesView) {
-		if !permPolicies(perms) {
+		if !a.canManagePoliciesModular(user) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}

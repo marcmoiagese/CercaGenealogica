@@ -38,7 +38,7 @@ func (a *App) AdminImportRegistresGlobalView(w http.ResponseWriter, r *http.Requ
 		"ImportTemplates":   templates,
 		"User":              user,
 		"CanManageArxius":   a.canManageAnyDocumentalsModular(user),
-		"CanManagePolicies": a.hasPerm(perms, permPolicies),
+		"CanManagePolicies": a.canManagePoliciesModular(user),
 		"CanModerate":       a.canModerateModular(user, perms),
 	})
 }

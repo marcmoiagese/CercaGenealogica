@@ -114,7 +114,7 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 	canManageEclesia := a.hasPerm(perms, permEclesia)
 	canModerate := a.canModerateModular(user, perms)
 	canManageUsers := a.hasPerm(perms, permUsers)
-	canManagePolicies := a.hasPerm(perms, permPolicies)
+	canManagePolicies := a.canManagePoliciesModular(user)
 	filter := db.ArxiuFilter{
 		Text:  strings.TrimSpace(r.URL.Query().Get("q")),
 		Tipus: strings.TrimSpace(r.URL.Query().Get("tipus")),
@@ -322,7 +322,7 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	canManageEclesia := a.hasPerm(perms, permEclesia)
 	canModerate := a.canModerateModular(user, perms)
 	canManageUsers := a.hasPerm(perms, permUsers)
-	canManagePolicies := a.hasPerm(perms, permPolicies)
+	canManagePolicies := a.canManagePoliciesModular(user)
 	canCreateArxiu := a.hasAnyPermissionKey(user.ID, permKeyDocumentalsArxiusCreate)
 	canImportArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusImport, PermissionTarget{})
 	status := strings.TrimSpace(r.URL.Query().Get("status"))

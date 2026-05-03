@@ -108,7 +108,7 @@ func (a *App) PersonaForm(w http.ResponseWriter, r *http.Request) {
 		"FieldLinkable":     fieldLinkable,
 		"User":              user,
 		"CanManageArxius":   canManageArxius,
-		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
+		"CanManagePolicies": a.canManagePoliciesModular(user),
 		"CanModerate":       a.canModeratePersonesPublic(user),
 	})
 }
@@ -261,10 +261,6 @@ func (a *App) PersonaSave(w http.ResponseWriter, r *http.Request) {
 // renderPersonaFormError retorna el formulari amb un missatge d'error reutilitzant l'estat
 func (a *App) renderPersonaFormError(w http.ResponseWriter, r *http.Request, id int, msg string) {
 	user := userFromContext(r)
-	perms := db.PolicyPermissions{}
-	if user != nil {
-		perms = a.getPermissionsForUser(user.ID)
-	}
 	p := &db.Persona{}
 	if id > 0 {
 		if existent, _ := a.DB.GetPersona(id); existent != nil {
@@ -322,7 +318,7 @@ func (a *App) renderPersonaFormError(w http.ResponseWriter, r *http.Request, id 
 		"FieldLinkable":     fieldLinkable,
 		"User":              user,
 		"CanManageArxius":   a.canManageAnyDocumentalsModular(user),
-		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
+		"CanManagePolicies": a.canManagePoliciesModular(user),
 		"CanModerate":       a.canModeratePersonesPublic(user),
 	})
 }
@@ -333,7 +329,6 @@ func (a *App) ListPersonesPublic(w http.ResponseWriter, r *http.Request) {
 	if !ok || user == nil {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	persones, err := a.DB.ListPersones(db.PersonaFilter{Estat: "publicat", Limit: 500})
 	if err != nil {
@@ -345,7 +340,7 @@ func (a *App) ListPersonesPublic(w http.ResponseWriter, r *http.Request) {
 		"Persones":          persones,
 		"User":              user,
 		"CanManageArxius":   canManageArxius,
-		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
+		"CanManagePolicies": a.canManagePoliciesModular(user),
 		"CanModerate":       a.canModeratePersonesPublic(user),
 	})
 }
@@ -1015,7 +1010,7 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"TipusOptions":           transcripcioTipusActe,
 		"User":                   user,
 		"CanManageArxius":        a.canManageAnyDocumentalsModular(user),
-		"CanManagePolicies":      perms.CanManagePolicies || perms.Admin,
+		"CanManagePolicies":      a.canManagePoliciesModular(user),
 		"CanModerate":            a.canModeratePersonesPublic(user),
 		"MarkType":               markType,
 		"MarkPublic":             markPublic,
@@ -1127,10 +1122,6 @@ func (a *App) PersonaRegistres(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := userFromContext(r)
-	perms := db.PolicyPermissions{}
-	if user != nil {
-		perms = a.getPermissionsForUser(user.ID)
-	}
 	p, err := a.DB.GetPersona(id)
 	if err != nil || p == nil || p.ModeracioEstat != "publicat" {
 		http.NotFound(w, r)
@@ -1178,7 +1169,7 @@ func (a *App) PersonaRegistres(w http.ResponseWriter, r *http.Request) {
 		"TipusOptions":      transcripcioTipusActe,
 		"TipusSelected":     tipus,
 		"CanManageArxius":   a.canManageAnyDocumentalsModular(user),
-		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
+		"CanManagePolicies": a.canManagePoliciesModular(user),
 		"CanModerate":       a.canModeratePersonesPublic(user),
 		"Tab":               "registres",
 	})

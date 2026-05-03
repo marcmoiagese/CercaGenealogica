@@ -550,7 +550,7 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		m["CanManageUsers"] = effectiveAdmin || perms.CanManageUsers || hasKey(permKeyAdminUsersManage)
 	}
 	if _, found := m["CanManagePolicies"]; !found {
-		m["CanManagePolicies"] = effectiveAdmin || perms.CanManagePolicies || hasKey(permKeyAdminPoliciesManage)
+		m["CanManagePolicies"] = effectiveAdmin || hasKey(permKeyAdminPoliciesManage)
 	}
 	if _, found := m["CanViewAdminAudit"]; !found {
 		m["CanViewAdminAudit"] = effectiveAdmin || hasKey(permKeyAdminAuditView)

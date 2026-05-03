@@ -236,10 +236,9 @@ func (a *App) AdminNivellsSuggest(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	allowAll := false
 	if !a.hasAnyPermissionKey(user.ID, permKeyTerritoriNivellsView) {
-		if !permPolicies(perms) {
+		if !a.canManagePoliciesModular(user) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -318,7 +317,6 @@ func (a *App) AdminNivellAdministratiuSuggest(w http.ResponseWriter, r *http.Req
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if len(query) < 1 {
 		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
@@ -338,7 +336,7 @@ func (a *App) AdminNivellAdministratiuSuggest(w http.ResponseWriter, r *http.Req
 	}
 	hasNivellPerm := a.hasAnyPermissionKey(user.ID, permKeyTerritoriNivellsView)
 	hasMunicipiPerm := a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisView)
-	allowAll := permPolicies(perms)
+	allowAll := a.canManagePoliciesModular(user)
 	if !allowAll && !hasNivellPerm && !hasMunicipiPerm {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return

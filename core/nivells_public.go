@@ -200,7 +200,7 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 		"CanManageArxius":    canManageArxius,
 		"CanManageTerritory": canManageTerritory,
 		"CanManageEclesia":   user != nil && a.hasPerm(perms, permEclesia),
-		"CanManagePolicies":  user != nil && (perms.CanManagePolicies || a.effectiveAdminForUser(user.ID, perms)),
+		"CanManagePolicies":  a.canManagePoliciesModular(user),
 		"CanModerate":        canModerate,
 		"IsAdmin":            user != nil && a.effectiveAdminForUser(user.ID, perms),
 	}

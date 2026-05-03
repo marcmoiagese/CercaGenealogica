@@ -3,10 +3,12 @@ package core
 import (
 	"database/sql"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -1154,4 +1156,173 @@ func TestF3312DocumentalScopedKeysStayInScope(t *testing.T) {
 	if app.HasPermission(userID, permKeyDocumentalsLlibresEdit, PermissionTarget{LlibreID: intPtr(35)}) {
 		t.Fatalf("documentals.llibres.edit scoped no hauria de permetre el llibre 35")
 	}
+}
+
+func TestF3313LegacyCanManagePoliciesDoesNotSetTemplateFlag(t *testing.T) {
+	app := &App{}
+	req := httptest.NewRequest("GET", "/persones", nil)
+	req = app.withPermissions(req, db.PolicyPermissions{CanManagePolicies: true})
+	req = app.withEffectiveAdmin(req, false)
+	req = app.withPermissionKeys(req, map[string]bool{})
+
+	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	if got := data["CanManagePolicies"]; got == true {
+		t.Fatalf("CanManagePolicies legacy pur no hauria d'activar el flag de template, rebut %#v", got)
+	}
+}
+
+func TestF3313TemplatePoliciesFlagUsesAdminBridgeAndModularKey(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	adminUserID := createF330User(t, database, "f33-13-template-admin")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(adminUserID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
+	}
+	adminPerms := app.getPermissionsForUser(adminUserID)
+	adminReq := httptest.NewRequest("GET", "/admin/politiques", nil)
+	adminReq = app.withPermissions(adminReq, adminPerms)
+	adminReq = app.withEffectiveAdmin(adminReq, app.effectiveAdminForUser(adminUserID, adminPerms))
+	adminReq = app.withPermissionKeys(adminReq, app.permissionKeysForUser(adminUserID))
+	adminData := injectPermsIfMissing(adminReq, map[string]interface{}{}).(map[string]interface{})
+	if got := adminData["CanManagePolicies"]; got != true {
+		t.Fatalf("admin global hauria d'activar CanManagePolicies via bridge, rebut %#v", got)
+	}
+
+	policyUserID := createF330User(t, database, "f33-13-template-policy")
+	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-13-policy-manage", Permisos: "{}", Descripcio: ""})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica modular policies: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: policyID,
+		PermKey:    permKeyAdminPoliciesManage,
+		ScopeType:  string(ScopeGlobal),
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant admin.policies.manage: %v", err)
+	}
+	if err := database.AddUserPolitica(policyUserID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica modular policies: %v", err)
+	}
+	policyPerms := app.getPermissionsForUser(policyUserID)
+	policyReq := httptest.NewRequest("GET", "/admin/politiques", nil)
+	policyReq = app.withPermissions(policyReq, policyPerms)
+	policyReq = app.withEffectiveAdmin(policyReq, app.effectiveAdminForUser(policyUserID, policyPerms))
+	policyReq = app.withPermissionKeys(policyReq, map[string]bool{permKeyAdminPoliciesManage: true})
+	policyData := injectPermsIfMissing(policyReq, map[string]interface{}{}).(map[string]interface{})
+	if got := policyData["CanManagePolicies"]; got != true {
+		t.Fatalf("admin.policies.manage hauria d'activar CanManagePolicies, rebut %#v", got)
+	}
+}
+
+func TestF3313CanManagePoliciesModularIgnoresLegacyPure(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	legacyUserID := createF330User(t, database, "f33-13-legacy-policies")
+	legacyPolicyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-13-legacy-policies",
+		Permisos:   `{"can_manage_policies":true}`,
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica legacy policies: %v", err)
+	}
+	if err := database.AddUserPolitica(legacyUserID, legacyPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica legacy policies: %v", err)
+	}
+	if app.canManagePoliciesModular(&db.User{ID: legacyUserID}) {
+		t.Fatalf("CanManagePolicies legacy pur no hauria de passar canManagePoliciesModular")
+	}
+
+	modularUserID := createF330User(t, database, "f33-13-modular-policies")
+	modularPolicyID, err := database.SavePolitica(&db.Politica{Nom: "f33-13-modular-policies", Permisos: "{}", Descripcio: ""})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica modular policies: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: modularPolicyID,
+		PermKey:    permKeyAdminPoliciesManage,
+		ScopeType:  string(ScopeGlobal),
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant modular policies: %v", err)
+	}
+	if err := database.AddUserPolitica(modularUserID, modularPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica modular policies: %v", err)
+	}
+	if !app.canManagePoliciesModular(&db.User{ID: modularUserID}) {
+		t.Fatalf("admin.policies.manage hauria de passar canManagePoliciesModular")
+	}
+}
+
+func TestF3313PoliciesSuggestGuardsUseModularKey(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	legacyUserID := createF330User(t, database, "f33-13-suggest-legacy")
+	legacyPolicyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-13-suggest-legacy",
+		Permisos:   `{"can_manage_policies":true}`,
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica legacy suggest: %v", err)
+	}
+	if err := database.AddUserPolitica(legacyUserID, legacyPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica legacy suggest: %v", err)
+	}
+	legacySession := createF3313SessionCookie(t, database, legacyUserID, "sess_f33_13_legacy")
+	for name, handler := range f3313SuggestHandlers(app) {
+		rr := runF3313SuggestHandler(handler, legacySession)
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("%s amb legacy pur esperava 403, rebut %d", name, rr.Code)
+		}
+	}
+
+	modularUserID := createF330User(t, database, "f33-13-suggest-modular")
+	modularPolicyID, err := database.SavePolitica(&db.Politica{Nom: "f33-13-suggest-modular", Permisos: "{}", Descripcio: ""})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica modular suggest: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: modularPolicyID,
+		PermKey:    permKeyAdminPoliciesManage,
+		ScopeType:  string(ScopeGlobal),
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant modular suggest: %v", err)
+	}
+	if err := database.AddUserPolitica(modularUserID, modularPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica modular suggest: %v", err)
+	}
+	modularSession := createF3313SessionCookie(t, database, modularUserID, "sess_f33_13_modular")
+	for name, handler := range f3313SuggestHandlers(app) {
+		rr := runF3313SuggestHandler(handler, modularSession)
+		if rr.Code == http.StatusForbidden {
+			t.Fatalf("%s amb admin.policies.manage no hauria de retornar 403", name)
+		}
+	}
+}
+
+func createF3313SessionCookie(t *testing.T, database db.DB, userID int, sessionID string) *http.Cookie {
+	t.Helper()
+	expiry := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
+	if err := database.SaveSession(sessionID, userID, expiry); err != nil {
+		t.Fatalf("no s'ha pogut crear sessio F33-13: %v", err)
+	}
+	return &http.Cookie{Name: "cg_session", Value: sessionID, Path: "/"}
+}
+
+func f3313SuggestHandlers(app *App) map[string]func(http.ResponseWriter, *http.Request) {
+	return map[string]func(http.ResponseWriter, *http.Request){
+		"AdminMunicipisSuggest":           app.AdminMunicipisSuggest,
+		"AdminNivellsSuggest":             app.AdminNivellsSuggest,
+		"AdminNivellAdministratiuSuggest": app.AdminNivellAdministratiuSuggest,
+		"AdminEclesSuggest":               app.AdminEclesSuggest,
+	}
+}
+
+func runF3313SuggestHandler(handler func(http.ResponseWriter, *http.Request), session *http.Cookie) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/suggest?q=a", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+	return rr
 }

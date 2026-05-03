@@ -48,12 +48,8 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, _ := a.VerificarSessio(r)
-	perms := db.PolicyPermissions{}
-	if user != nil {
-		perms = a.getPermissionsForUser(user.ID)
-	}
 	canManageArxius := user != nil && a.canManageAnyDocumentalsModular(user)
-	canManagePolicies := user != nil && (perms.CanManagePolicies || perms.Admin)
+	canManagePolicies := a.canManagePoliciesModular(user)
 	munTarget := a.resolveMunicipiTarget(mun.ID)
 	if user != nil && !a.HasPermission(user.ID, permKeyTerritoriMunicipisView, munTarget) && !a.HasPermission(user.ID, permKeyTerritoriMunicipisEdit, munTarget) {
 		http.Error(w, "Forbidden", http.StatusForbidden)

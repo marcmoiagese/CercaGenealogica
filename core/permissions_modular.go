@@ -836,6 +836,34 @@ func (a *App) canManageAnyTerritoryModular(user *db.User) bool {
 	return false
 }
 
+func (a *App) canManagePoliciesModular(user *db.User) bool {
+	if user == nil || a.DB == nil {
+		return false
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	if a.effectiveAdminForUser(user.ID, perms) {
+		return true
+	}
+	policies, err := a.DB.ListUserPolitiques(user.ID)
+	if err != nil {
+		Errorf("canManagePoliciesModular: error carregant politiques usuari=%d: %v", user.ID, err)
+		return false
+	}
+	for _, policy := range policies {
+		grants, err := a.DB.ListPoliticaGrants(policy.ID)
+		if err != nil {
+			Errorf("canManagePoliciesModular: error carregant grants politica=%d usuari=%d: %v", policy.ID, user.ID, err)
+			return false
+		}
+		for _, grant := range grants {
+			if strings.TrimSpace(grant.PermKey) == permKeyAdminPoliciesManage && strings.TrimSpace(grant.ScopeType) == string(ScopeGlobal) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (a *App) hasAnyPermissionKey(userID int, permKey string) bool {
 	snap, err := a.getPermissionSnapshot(userID)
 	if err != nil {
