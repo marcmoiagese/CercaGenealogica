@@ -3442,7 +3442,7 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 		pageBase += "?" + encoded
 	}
 	canManageArxius := a.canManageAnyDocumentalsModular(user)
-	isAdmin := a.hasPerm(perms, permAdmin)
+	isAdmin := a.effectiveAdminForUser(user.ID, perms)
 	canBulk := a.canModeracioMassiva(user, perms)
 	msg := ""
 	okFlag := false

@@ -109,7 +109,7 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 	perms := a.getPermissionsForUser(user.ID)
 	*r = *a.withPermissions(r, perms)
 	canManage := a.canManageAnyDocumentalsModular(user)
-	isAdmin := a.hasPerm(perms, permAdmin)
+	isAdmin := a.effectiveAdminForUser(user.ID, perms)
 	canManageTerritory := a.canManageAnyTerritoryModular(user)
 	canManageEclesia := a.canManageEclesiaModular(user)
 	canModerate := a.canModerateModular(user, perms)
@@ -317,7 +317,7 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	canManage := a.canManageAnyDocumentalsModular(user)
-	isAdmin := a.hasPerm(perms, permAdmin)
+	isAdmin := a.effectiveAdminForUser(user.ID, perms)
 	canManageTerritory := a.canManageAnyTerritoryModular(user)
 	canManageEclesia := a.canManageEclesiaModular(user)
 	canModerate := a.canModerateModular(user, perms)

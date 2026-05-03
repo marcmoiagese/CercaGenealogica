@@ -515,11 +515,10 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		return data
 	}
 	permsVal := r.Context().Value(permissionsKey)
-	perms, ok := permsVal.(db.PolicyPermissions)
-	if !ok {
+	if _, ok := permsVal.(db.PolicyPermissions); !ok {
 		return data
 	}
-	effectiveAdmin := perms.Admin
+	effectiveAdmin := false
 	if isAdmin, found := effectiveAdminFromContext(r); found {
 		effectiveAdmin = isAdmin
 	}

@@ -18,7 +18,7 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	canManage := a.canManageAnyDocumentalsModular(user)
-	isAdmin := a.hasPerm(perms, permAdmin)
+	isAdmin := a.effectiveAdminForUser(user.ID, perms)
 	canCreateLlibre := a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresCreate)
 	canImportLlibres := a.HasPermission(user.ID, permKeyDocumentalsLlibresImport, PermissionTarget{})
 	canExportLlibres := a.HasPermission(user.ID, permKeyDocumentalsLlibresExport, PermissionTarget{})
@@ -832,7 +832,7 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 	canModerate := false
 	if user != nil {
 		perms := a.getPermissionsForUser(user.ID)
-		isAdmin = a.hasPerm(perms, permAdmin)
+		isAdmin = a.effectiveAdminForUser(user.ID, perms)
 		canModerate = a.canModerateModular(user, perms)
 	}
 	canEditLlibre := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresEdit, target)

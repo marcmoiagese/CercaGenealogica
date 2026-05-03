@@ -2,7 +2,9 @@ package integration
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 	testcommon "github.com/marcmoiagese/CercaGenealogica/tests/common"
@@ -19,23 +21,24 @@ func TestSearchDocsAndAdminClosure(t *testing.T) {
 			}
 			defer database.Close()
 
-			paisID, err := database.CreatePais(&db.Pais{CodiISO2: "PP", CodiISO3: "PPA"})
+			paisID, err := ensureSearchIndexTestPais(database)
 			if err != nil {
 				t.Fatalf("no s'ha pogut crear pais: %v", err)
 			}
+			suffix := fmt.Sprintf("%s-%d", cfg.Label, time.Now().UnixNano())
 			nivellID, err := database.CreateNivell(&db.NivellAdministratiu{
-				PaisID:          paisID,
-				Nivel:           1,
-				NomNivell:       "Nivell prova",
-				TipusNivell:     "Regio",
-				Estat:           "actiu",
-				ModeracioEstat:  "publicat",
+				PaisID:         paisID,
+				Nivel:          1,
+				NomNivell:      "Nivell prova " + suffix,
+				TipusNivell:    "Regio",
+				Estat:          "actiu",
+				ModeracioEstat: "publicat",
 			})
 			if err != nil {
 				t.Fatalf("no s'ha pogut crear nivell: %v", err)
 			}
 			mun := &db.Municipi{
-				Nom:            "Municipi prova",
+				Nom:            "Municipi prova " + suffix,
 				Tipus:          "poble",
 				Estat:          "actiu",
 				ModeracioEstat: "publicat",
@@ -121,4 +124,17 @@ func TestSearchDocsAndAdminClosure(t *testing.T) {
 			}
 		})
 	}
+}
+
+func ensureSearchIndexTestPais(database db.DB) (int, error) {
+	paisos, err := database.ListPaisos()
+	if err != nil {
+		return 0, err
+	}
+	for _, pais := range paisos {
+		if pais.CodiISO2 == "PP" || pais.CodiISO3 == "PPA" {
+			return pais.ID, nil
+		}
+	}
+	return database.CreatePais(&db.Pais{CodiISO2: "PP", CodiISO3: "PPA"})
 }

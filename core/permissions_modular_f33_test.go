@@ -1634,6 +1634,93 @@ func TestF3315ConvertRegistreUsesDocumentalOrCreatePersonModular(t *testing.T) {
 	}
 }
 
+func TestF3316AdminUIFilesDoNotUseLocalLegacyAdminChecks(t *testing.T) {
+	patterns := []string{
+		"perms.Admin",
+		"hasPerm(perms, permAdmin",
+		"requirePermission(w, r, permAdmin",
+	}
+	for _, path := range []string{
+		"templates.go",
+		"dashboard_widgets.go",
+		"admin_arxius.go",
+		"admin_llibres.go",
+		"admin_moderacio.go",
+	} {
+		body, err := readF3316CoreSource(path)
+		if err != nil {
+			t.Fatalf("no s'ha pogut llegir %s: %v", path, err)
+		}
+		src := string(body)
+		for _, pattern := range patterns {
+			if strings.Contains(src, pattern) {
+				t.Fatalf("%s encara conte el patro legacy local %q", path, pattern)
+			}
+		}
+	}
+}
+
+func readF3316CoreSource(path string) ([]byte, error) {
+	for _, candidate := range []string{
+		filepath.Join("core", path),
+		filepath.Join("..", "core", path),
+		path,
+	} {
+		body, err := os.ReadFile(candidate)
+		if err == nil {
+			return body, nil
+		}
+	}
+	return nil, os.ErrNotExist
+}
+
+func TestF3316TemplateAdminFlagsUseEffectiveAdminContext(t *testing.T) {
+	app := &App{}
+	req := httptest.NewRequest("GET", "/admin", nil)
+	req = app.withPermissions(req, db.PolicyPermissions{Admin: true})
+	req = app.withPermissionKeys(req, map[string]bool{})
+	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	if got := data["IsAdmin"]; got == true {
+		t.Fatalf("perms.Admin local sense context efectiu no hauria d'activar IsAdmin, rebut %#v", got)
+	}
+
+	req = httptest.NewRequest("GET", "/admin", nil)
+	req = app.withPermissions(req, db.PolicyPermissions{})
+	req = app.withEffectiveAdmin(req, true)
+	req = app.withPermissionKeys(req, map[string]bool{})
+	data = injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	for _, key := range []string{"IsAdmin", "CanManageArxius", "CanManageUsers", "CanManagePolicies", "CanCreatePerson"} {
+		if got := data[key]; got != true {
+			t.Fatalf("effectiveAdmin hauria d'activar %s, rebut %#v", key, got)
+		}
+	}
+}
+
+func TestF3316DashboardAdminRoleUsesEffectiveAdminBridge(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	adminUserID := createF330User(t, database, "f33-16-dashboard-admin-flag")
+	adminPolicyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-16-dashboard-admin-flag",
+		Permisos:   `{"admin":true}`,
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica admin F33-16: %v", err)
+	}
+	if err := database.AddUserPolitica(adminUserID, adminPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin F33-16: %v", err)
+	}
+	if roles := app.dashboardUserRoleSet(adminUserID); !roles["admin"] {
+		t.Fatalf("dashboard hauria de marcar rol admin via effectiveAdminForUser")
+	}
+
+	plainUserID := createF330User(t, database, "f33-16-dashboard-plain")
+	if roles := app.dashboardUserRoleSet(plainUserID); roles["admin"] {
+		t.Fatalf("usuari no admin no hauria de rebre rol admin")
+	}
+}
+
 func assignF3315Policy(t *testing.T, database db.DB, userID int, name string, permKeys ...string) int {
 	t.Helper()
 	policyID, err := database.SavePolitica(&db.Politica{Nom: name, Permisos: "{}", Descripcio: ""})
