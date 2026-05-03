@@ -17,7 +17,7 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canManage := a.hasPerm(perms, permArxius)
+	canManage := a.canManageAnyDocumentalsModular(user)
 	isAdmin := a.hasPerm(perms, permAdmin)
 	canCreateLlibre := a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresCreate)
 	canImportLlibres := a.HasPermission(user.ID, permKeyDocumentalsLlibresImport, PermissionTarget{})
@@ -843,6 +843,7 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 	canExportCSV := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresExportCSV, target)
 	canMarkIndexed := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresMarkIndexed, target)
 	canRecalcIndex := user != nil && a.HasPermission(user.ID, permKeyDocumentalsLlibresRecalcIndex, target)
+	canManageLlibre := canEditLlibre || canDeleteLlibre || canIndexLlibre || canImportCSV || canExportCSV || canMarkIndexed || canRecalcIndex
 	markType := ""
 	markPublic := true
 	markOwn := false
@@ -858,12 +859,12 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if (user == nil || !a.CanManageArxius(user)) && llibre.ModeracioEstat != "publicat" {
+	if (user == nil || !canManageLlibre) && llibre.ModeracioEstat != "publicat" {
 		http.NotFound(w, r)
 		return
 	}
 	statusFilter := ""
-	if user == nil || !a.CanManageArxius(user) {
+	if user == nil || !canManageLlibre {
 		statusFilter = "publicat"
 	}
 	registres, _ := a.DB.ListTranscripcionsRaw(id, db.TranscripcioFilter{

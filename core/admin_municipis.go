@@ -149,7 +149,6 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriMunicipisView, ScopeMunicipi)
-	perms := a.getPermissionsForUser(user.ID)
 	if !scopeFilter.hasGlobal {
 		if scopeFilter.isEmpty() {
 			pagination := buildPagination(r, page, perPage, 0, "#page-stats-controls")
@@ -166,7 +165,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 				"LevelNamesByID":      map[int][]string{},
 				"LevelIDsByID":        map[int][]int{},
 				"BooksClassByID":      map[int]string{},
-				"CanManageArxius":     a.hasPerm(perms, permArxius),
+				"CanManageArxius":     a.canManageAnyDocumentalsModular(user),
 				"CanCreateMunicipi":   false,
 				"CreatePaisID":        0,
 				"CanEditMunicipi":     map[int]bool{},
@@ -325,7 +324,7 @@ func (a *App) AdminListMunicipis(w http.ResponseWriter, r *http.Request) {
 		"LevelNamesByID":      levelNamesByID,
 		"LevelIDsByID":        levelIDsByID,
 		"BooksClassByID":      booksClassByID,
-		"CanManageArxius":     a.hasPerm(perms, permArxius),
+		"CanManageArxius":     a.canManageAnyDocumentalsModular(user),
 		"CanCreateMunicipi":   canCreateMunicipi,
 		"CreatePaisID":        createPaisID,
 		"CanEditMunicipi":     canEditMunicipi,

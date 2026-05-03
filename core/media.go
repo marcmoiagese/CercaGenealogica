@@ -212,7 +212,7 @@ func (a *App) MediaLlibresSearchJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !perms.Admin && !perms.CanManageArchives && !a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresView) {
+	if !a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresView) {
 		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
 		return
 	}
@@ -236,13 +236,10 @@ func (a *App) MediaLlibresSearchJSON(w http.ResponseWriter, r *http.Request) {
 		MunicipiID:    municipiID,
 		Limit:         limit,
 	}
-	if !perms.Admin && !perms.CanManageArchives {
+	if !a.effectiveAdminForUser(user.ID, perms) {
 		filter.Status = "publicat"
 	}
 	scope := a.buildListScopeFilter(user.ID, permKeyDocumentalsLlibresView, ScopeLlibre)
-	if perms.Admin || perms.CanManageArchives {
-		scope.hasGlobal = true
-	}
 	if !scope.hasGlobal {
 		filter.AllowedLlibreIDs = scope.llibreIDs
 		filter.AllowedArxiuIDs = scope.arxiuIDs
@@ -309,9 +306,8 @@ func (a *App) MediaLlibrePaginesSuggestJSON(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
 	target := a.resolveLlibreTarget(llibreID)
-	if !perms.Admin && !perms.CanManageArchives && !a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) {
+	if !a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) {
 		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
 		return
 	}
@@ -493,8 +489,6 @@ func (a *App) mediaAlbumCreate(w http.ResponseWriter, r *http.Request, cfg media
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-
 	title := strings.TrimSpace(r.FormValue("title"))
 	desc := strings.TrimSpace(r.FormValue("description"))
 	albumType := normalizeMediaAlbumType(r.FormValue("album_type"))
@@ -512,7 +506,7 @@ func (a *App) mediaAlbumCreate(w http.ResponseWriter, r *http.Request, cfg media
 	}
 	if llibreID > 0 {
 		target := a.resolveLlibreTarget(llibreID)
-		if !perms.Admin && !perms.CanManageArchives && !a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) {
+		if !a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) {
 			a.renderMediaAlbumForm(w, r, user, cfg, title, albumType, sourceType, desc, llibreID, llibreLabel, T(resolveUserLang(r, user), "media.error.book_permission"))
 			return
 		}
@@ -575,7 +569,6 @@ func (a *App) mediaAlbumShow(w http.ResponseWriter, r *http.Request, cfg mediaCo
 		}
 		items = filtered
 	}
-	perms, _ := a.permissionsFromContext(r)
 	var linkedBook *db.Llibre
 	linkedBookLabel := ""
 	canViewBook := false
@@ -589,7 +582,7 @@ func (a *App) mediaAlbumShow(w http.ResponseWriter, r *http.Request, cfg mediaCo
 		}
 		if user != nil {
 			target := a.resolveLlibreTarget(int(album.LlibreID.Int64))
-			if perms.Admin || perms.CanManageArchives || a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) {
+			if a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) {
 				canViewBook = true
 			}
 		}
@@ -756,9 +749,8 @@ func (a *App) mediaAlbumPageLink(w http.ResponseWriter, r *http.Request, albumPu
 		http.Redirect(w, r, "/media/albums/"+album.PublicID, http.StatusSeeOther)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
 	target := a.resolveLlibreTarget(int(album.LlibreID.Int64))
-	if !perms.Admin && !perms.CanManageArchives && !a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) {
+	if !a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

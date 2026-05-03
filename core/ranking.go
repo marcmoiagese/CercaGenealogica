@@ -91,13 +91,13 @@ func (a *App) Ranking(w http.ResponseWriter, r *http.Request) {
 			Initial:       initial,
 			PreferredLang: u.PreferredLang,
 			Position:      currentIndex + 1,
-		PreferredCode: strings.ToUpper(strings.TrimSpace(u.PreferredLang)),
-	})
+			PreferredCode: strings.ToUpper(strings.TrimSpace(u.PreferredLang)),
+		})
 		currentIndex++
 	}
 	canManageArxius := false
 	if user != nil {
-		canManageArxius = a.hasPerm(perms, permArxius)
+		canManageArxius = a.canManageAnyDocumentalsModular(user)
 	}
 	RenderPrivateTemplateLang(w, r, "ranking.html", lang, map[string]interface{}{
 		"Ranking":         result,

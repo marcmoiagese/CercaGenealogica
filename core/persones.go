@@ -38,7 +38,7 @@ func (a *App) PersonaForm(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	canManageArxius := a.hasPerm(perms, permArxius)
+	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	id := 0
 	if r.URL.Path != "/persones/new" {
 		id = extractID(r.URL.Path)
@@ -321,7 +321,7 @@ func (a *App) renderPersonaFormError(w http.ResponseWriter, r *http.Request, id 
 		"BirthMunicipi":     birthMunicipiValue,
 		"FieldLinkable":     fieldLinkable,
 		"User":              user,
-		"CanManageArxius":   a.hasPerm(perms, permArxius),
+		"CanManageArxius":   a.canManageAnyDocumentalsModular(user),
 		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
 		"CanModerate":       a.canModeratePersonesPublic(user),
 	})
@@ -334,7 +334,7 @@ func (a *App) ListPersonesPublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canManageArxius := a.hasPerm(perms, permArxius)
+	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	persones, err := a.DB.ListPersones(db.PersonaFilter{Estat: "publicat", Limit: 500})
 	if err != nil {
 		Errorf("Error llistant persones: %v", err)
@@ -1014,7 +1014,7 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		"Anecdotes":              anecdotes,
 		"TipusOptions":           transcripcioTipusActe,
 		"User":                   user,
-		"CanManageArxius":        a.hasPerm(perms, permArxius),
+		"CanManageArxius":        a.canManageAnyDocumentalsModular(user),
 		"CanManagePolicies":      perms.CanManagePolicies || perms.Admin,
 		"CanModerate":            a.canModeratePersonesPublic(user),
 		"MarkType":               markType,
@@ -1177,7 +1177,7 @@ func (a *App) PersonaRegistres(w http.ResponseWriter, r *http.Request) {
 		"Registres":         views,
 		"TipusOptions":      transcripcioTipusActe,
 		"TipusSelected":     tipus,
-		"CanManageArxius":   a.hasPerm(perms, permArxius),
+		"CanManageArxius":   a.canManageAnyDocumentalsModular(user),
 		"CanManagePolicies": perms.CanManagePolicies || perms.Admin,
 		"CanModerate":       a.canModeratePersonesPublic(user),
 		"Tab":               "registres",

@@ -52,7 +52,7 @@ func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 	if user != nil {
 		perms = a.getPermissionsForUser(user.ID)
 	}
-	canManageArxius := user != nil && a.hasPerm(perms, permArxius)
+	canManageArxius := user != nil && a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := user != nil && (perms.CanManagePolicies || perms.Admin)
 	munTarget := a.resolveMunicipiTarget(mun.ID)
 	if user != nil && !a.HasPermission(user.ID, permKeyTerritoriMunicipisView, munTarget) && !a.HasPermission(user.ID, permKeyTerritoriMunicipisEdit, munTarget) {

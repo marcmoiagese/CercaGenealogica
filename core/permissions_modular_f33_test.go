@@ -1079,3 +1079,79 @@ func TestF3311RTemplateTerritoryFlagsUseModularKeys(t *testing.T) {
 		t.Fatalf("territori.municipis.edit hauria d'activar CanManageTerritory, rebut %#v", got)
 	}
 }
+
+func TestF3312LegacyCanManageArchivesDoesNotSetTemplateDocumentalFlags(t *testing.T) {
+	app := &App{}
+	req := httptest.NewRequest("GET", "/documentals", nil)
+	req = app.withPermissions(req, db.PolicyPermissions{CanManageArchives: true})
+	req = app.withEffectiveAdmin(req, false)
+	req = app.withPermissionKeys(req, map[string]bool{})
+
+	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	for _, key := range []string{"CanManageArxius", "CanViewArxius", "CanViewLlibres", "CanImportTemplates", "CanIndexRegistres", "CanBulkIndex"} {
+		if got := data[key]; got == true {
+			t.Fatalf("CanManageArchives legacy pur no hauria d'activar %s, rebut %#v", key, got)
+		}
+	}
+}
+
+func TestF3312TemplateDocumentalFlagsKeepAdminBridge(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-12-template-admin")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(userID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
+	}
+
+	perms := app.getPermissionsForUser(userID)
+	req := httptest.NewRequest("GET", "/documentals", nil)
+	req = app.withPermissions(req, perms)
+	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID, perms))
+	req = app.withPermissionKeys(req, app.permissionKeysForUser(userID))
+
+	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	for _, key := range []string{"CanManageArxius", "CanViewArxius", "CanViewLlibres", "CanImportTemplates", "CanIndexRegistres", "CanBulkIndex"} {
+		if got := data[key]; got != true {
+			t.Fatalf("admin global hauria d'activar %s via bridge modular, rebut %#v", key, got)
+		}
+	}
+}
+
+func TestF3312DocumentalScopedKeysStayInScope(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-12-documental-scoped")
+	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-12-documental", Permisos: "{}", Descripcio: ""})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica documental: %v", err)
+	}
+	grants := []db.PoliticaGrant{
+		{PoliticaID: policyID, PermKey: permKeyDocumentalsArxiusEdit, ScopeType: string(ScopeArxiu), ScopeID: sql.NullInt64{Int64: 12, Valid: true}},
+		{PoliticaID: policyID, PermKey: permKeyDocumentalsLlibresEdit, ScopeType: string(ScopeLlibre), ScopeID: sql.NullInt64{Int64: 34, Valid: true}},
+	}
+	for _, grant := range grants {
+		grant := grant
+		if _, err := database.SavePoliticaGrant(&grant); err != nil {
+			t.Fatalf("no s'ha pogut crear grant documental scoped: %v", err)
+		}
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica documental: %v", err)
+	}
+
+	user := &db.User{ID: userID}
+	if !app.CanManageArxius(user) {
+		t.Fatalf("grant documental modular hauria d'activar CanManageArxius helper")
+	}
+	if !app.HasPermission(userID, permKeyDocumentalsArxiusEdit, PermissionTarget{ArxiuID: intPtr(12)}) {
+		t.Fatalf("documentals.arxius.edit scoped hauria de permetre l'arxiu 12")
+	}
+	if app.HasPermission(userID, permKeyDocumentalsArxiusEdit, PermissionTarget{ArxiuID: intPtr(13)}) {
+		t.Fatalf("documentals.arxius.edit scoped no hauria de permetre l'arxiu 13")
+	}
+	if !app.HasPermission(userID, permKeyDocumentalsLlibresEdit, PermissionTarget{LlibreID: intPtr(34)}) {
+		t.Fatalf("documentals.llibres.edit scoped hauria de permetre el llibre 34")
+	}
+	if app.HasPermission(userID, permKeyDocumentalsLlibresEdit, PermissionTarget{LlibreID: intPtr(35)}) {
+		t.Fatalf("documentals.llibres.edit scoped no hauria de permetre el llibre 35")
+	}
+}

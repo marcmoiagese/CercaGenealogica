@@ -28,7 +28,6 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	canRebuildNivellStats := a.HasPermission(user.ID, permKeyTerritoriNivellsRebuild, PermissionTarget{})
 	scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriNivellsView, ScopePais)
 	paisos, _ := a.DB.ListPaisos()
@@ -112,7 +111,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 				"Filter":                filter,
 				"FilterValues":          filterValues,
 				"FilterOrder":           strings.Join(filterOrder, ","),
-				"CanManageArxius":       a.hasPerm(perms, permArxius),
+				"CanManageArxius":       a.canManageAnyDocumentalsModular(user),
 				"CanCreateNivell":       false,
 				"CanEditNivell":         map[int]bool{},
 				"ShowNivellActions":     false,
@@ -215,7 +214,7 @@ func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 		"Filter":                filter,
 		"FilterValues":          filterValues,
 		"FilterOrder":           strings.Join(filterOrder, ","),
-		"CanManageArxius":       a.hasPerm(perms, permArxius),
+		"CanManageArxius":       a.canManageAnyDocumentalsModular(user),
 		"CanCreateNivell":       canCreateNivell,
 		"CanEditNivell":         canEditNivell,
 		"ShowNivellActions":     showNivellActions,

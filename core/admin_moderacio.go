@@ -3441,7 +3441,7 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 	if encoded := pageValues.Encode(); encoded != "" {
 		pageBase += "?" + encoded
 	}
-	canManageArxius := a.hasPerm(perms, permArxius)
+	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	isAdmin := a.hasPerm(perms, permAdmin)
 	canBulk := a.canModeracioMassiva(user, perms)
 	msg := ""

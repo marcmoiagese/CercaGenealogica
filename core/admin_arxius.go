@@ -61,8 +61,43 @@ func (a *App) CanManageArxius(user *db.User) bool {
 	if user == nil {
 		return false
 	}
+	return a.canManageAnyDocumentalsModular(user)
+}
+
+func (a *App) canManageAnyDocumentalsModular(user *db.User) bool {
+	if user == nil {
+		return false
+	}
 	perms := a.getPermissionsForUser(user.ID)
-	return a.hasPerm(perms, permArxius)
+	if a.effectiveAdminForUser(user.ID, perms) {
+		return true
+	}
+	for _, key := range []string{
+		permKeyDocumentalsArxiusCreate,
+		permKeyDocumentalsArxiusEdit,
+		permKeyDocumentalsArxiusDelete,
+		permKeyDocumentalsArxiusImport,
+		permKeyDocumentalsArxiusExport,
+		permKeyDocumentalsLlibresCreate,
+		permKeyDocumentalsLlibresEdit,
+		permKeyDocumentalsLlibresDelete,
+		permKeyDocumentalsLlibresImport,
+		permKeyDocumentalsLlibresExport,
+		permKeyDocumentalsLlibresExportCSV,
+		permKeyDocumentalsLlibresImportCSV,
+		permKeyDocumentalsLlibresBulkIndex,
+		permKeyDocumentalsLlibresMarkIndexed,
+		permKeyDocumentalsLlibresRecalcIndex,
+		permKeyDocumentalsRegistresEdit,
+		permKeyDocumentalsRegistresEditInline,
+		permKeyDocumentalsRegistresLinkPerson,
+		permKeyDocumentalsRegistresConvertToPerson,
+	} {
+		if a.hasAnyPermissionKey(user.ID, key) {
+			return true
+		}
+	}
+	return false
 }
 
 // Llistat públic (lectura) d'arxius per a usuaris logats
@@ -73,7 +108,7 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	*r = *a.withPermissions(r, perms)
-	canManage := a.hasPerm(perms, permArxius)
+	canManage := a.canManageAnyDocumentalsModular(user)
 	isAdmin := a.hasPerm(perms, permAdmin)
 	canManageTerritory := a.canManageAnyTerritoryModular(user)
 	canManageEclesia := a.hasPerm(perms, permEclesia)
@@ -216,7 +251,6 @@ func (a *App) ShowArxiu(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	*r = *a.withPermissions(r, perms)
-	canManage := a.hasPerm(perms, permArxius)
 	id := extractID(r.URL.Path)
 	if id == 0 {
 		http.NotFound(w, r)
@@ -227,6 +261,8 @@ func (a *App) ShowArxiu(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	target := a.resolveArxiuTarget(id)
+	canManage := a.HasPermission(user.ID, permKeyDocumentalsArxiusEdit, target)
 	if !canManage && arxiu.ModeracioEstat != "publicat" {
 		http.NotFound(w, r)
 		return
@@ -280,7 +316,7 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canManage := a.hasPerm(perms, permArxius)
+	canManage := a.canManageAnyDocumentalsModular(user)
 	isAdmin := a.hasPerm(perms, permAdmin)
 	canManageTerritory := a.canManageAnyTerritoryModular(user)
 	canManageEclesia := a.hasPerm(perms, permEclesia)

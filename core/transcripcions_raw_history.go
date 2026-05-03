@@ -482,7 +482,7 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canManageArxius := a.hasPerm(perms, permArxius)
+	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := perms.CanManagePolicies || perms.Admin
 	canModerate := a.canModerateModular(user, perms)
 	canRevert := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
@@ -989,7 +989,7 @@ func (a *App) AdminRegistreStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canManageArxius := a.hasPerm(perms, permArxius)
+	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := perms.CanManagePolicies || perms.Admin
 	canModerate := a.canModerateModular(user, perms)
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)

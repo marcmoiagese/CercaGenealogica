@@ -69,7 +69,6 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	scopeFilter := a.buildListScopeFilter(user.ID, permKeyTerritoriEclesView, ScopeEcles)
 	createPaisID := filter.PaisID
 	canCreateEcles := false
@@ -88,7 +87,7 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 				"FilterValues":     filterValues,
 				"FilterOrder":      strings.Join(filterOrder, ","),
 				"Paisos":           []db.Pais{},
-				"CanManageArxius":  a.hasPerm(perms, permArxius),
+				"CanManageArxius":  a.canManageAnyDocumentalsModular(user),
 				"CanCreateEcles":   canCreateEcles,
 				"CreatePaisID":     createPaisID,
 				"CanImportEcles":   canImportEcles,
@@ -187,7 +186,7 @@ func (a *App) AdminListEclesiastic(w http.ResponseWriter, r *http.Request) {
 		"FilterValues":     filterValues,
 		"FilterOrder":      strings.Join(filterOrder, ","),
 		"Paisos":           paisos,
-		"CanManageArxius":  a.hasPerm(perms, permArxius),
+		"CanManageArxius":  a.canManageAnyDocumentalsModular(user),
 		"CanCreateEcles":   canCreateEcles,
 		"CreatePaisID":     createPaisID,
 		"CanImportEcles":   canImportEcles,

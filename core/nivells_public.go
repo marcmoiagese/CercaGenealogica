@@ -79,7 +79,7 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 
 	canViewMunicipis := user != nil && a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisView)
 	canViewLlibres := user != nil && a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresView)
-	canManageArxius := user != nil && a.hasPerm(perms, permArxius)
+	canManageArxius := user != nil && a.canManageAnyDocumentalsModular(user)
 	canEditNivell := a.canEditNivellPublic(user, nivellTarget)
 	editURL := fmt.Sprintf("/territori/nivells/%d/edit", nivell.ID)
 	if ret := strings.TrimSpace(currentRequestURL(r)); ret != "" {

@@ -534,8 +534,11 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	hasManageTerritoryKey := hasModularTerritoryManageKey(hasKey)
 	hasViewNivellsKey := hasModularNivellsViewKey(hasKey)
 	hasViewMunicipisKey := hasModularMunicipisViewKey(hasKey)
+	hasManageDocumentalsKey := hasModularDocumentalsManageKey(hasKey)
+	hasViewArxiusKey := hasModularArxiusViewKey(hasKey)
+	hasViewLlibresKey := hasModularLlibresViewKey(hasKey)
 	if _, found := m["CanManageArxius"]; !found {
-		m["CanManageArxius"] = effectiveAdmin || perms.CanManageArchives
+		m["CanManageArxius"] = effectiveAdmin || hasManageDocumentalsKey
 	}
 	if _, found := m["CanManageTerritory"]; !found {
 		m["CanManageTerritory"] = effectiveAdmin || hasManageTerritoryKey
@@ -571,9 +574,7 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		m["IsAdmin"] = effectiveAdmin
 	}
 	if _, found := m["CanViewArxius"]; !found {
-		m["CanViewArxius"] = effectiveAdmin || perms.CanManageArchives || hasKey(permKeyDocumentalsArxiusView) ||
-			hasKey(permKeyDocumentalsArxiusCreate) || hasKey(permKeyDocumentalsArxiusEdit) || hasKey(permKeyDocumentalsArxiusDelete) ||
-			hasKey(permKeyDocumentalsArxiusImport) || hasKey(permKeyDocumentalsArxiusExport)
+		m["CanViewArxius"] = effectiveAdmin || hasViewArxiusKey
 	}
 	if _, found := m["CanViewHome"]; !found {
 		m["CanViewHome"] = effectiveAdmin || hasKey(permKeyHomeView)
@@ -603,13 +604,7 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		m["CanViewEvents"] = effectiveAdmin || hasKey(permKeyEventsView)
 	}
 	if _, found := m["CanViewLlibres"]; !found {
-		m["CanViewLlibres"] = effectiveAdmin || perms.CanManageArchives || hasKey(permKeyDocumentalsLlibresView) ||
-			hasKey(permKeyDocumentalsLlibresCreate) || hasKey(permKeyDocumentalsLlibresEdit) || hasKey(permKeyDocumentalsLlibresDelete) ||
-			hasKey(permKeyDocumentalsLlibresImport) || hasKey(permKeyDocumentalsLlibresExport) || hasKey(permKeyDocumentalsLlibresExportCSV) ||
-			hasKey(permKeyDocumentalsLlibresImportCSV) || hasKey(permKeyDocumentalsLlibresViewRegistres) || hasKey(permKeyDocumentalsLlibresBulkIndex) ||
-			hasKey(permKeyDocumentalsLlibresMarkIndexed) || hasKey(permKeyDocumentalsLlibresRecalcIndex) ||
-			hasKey(permKeyDocumentalsRegistresEdit) || hasKey(permKeyDocumentalsRegistresEditInline) ||
-			hasKey(permKeyDocumentalsRegistresLinkPerson) || hasKey(permKeyDocumentalsRegistresConvertToPerson)
+		m["CanViewLlibres"] = effectiveAdmin || hasViewLlibresKey
 	}
 	if _, found := m["CanViewDocumentals"]; !found {
 		m["CanViewDocumentals"] = m["CanViewArxius"].(bool) || m["CanViewLlibres"].(bool)
@@ -619,15 +614,15 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 			hasKey(permKeyDocumentalsLlibresImportCSV) || hasKey(permKeyDocumentalsLlibresImport)
 	}
 	if _, found := m["CanImportTemplates"]; !found {
-		m["CanImportTemplates"] = effectiveAdmin || perms.CanManageArchives ||
+		m["CanImportTemplates"] = effectiveAdmin ||
 			hasKey(permKeyDocumentalsLlibresImportCSV) || hasKey(permKeyDocumentalsLlibresImport)
 	}
 	if _, found := m["CanIndexRegistres"]; !found {
-		m["CanIndexRegistres"] = effectiveAdmin || perms.CanManageArchives ||
+		m["CanIndexRegistres"] = effectiveAdmin ||
 			hasKey(permKeyDocumentalsRegistresEdit) || hasKey(permKeyDocumentalsRegistresEditInline)
 	}
 	if _, found := m["CanBulkIndex"]; !found {
-		m["CanBulkIndex"] = effectiveAdmin || perms.CanManageArchives || hasKey(permKeyDocumentalsLlibresBulkIndex)
+		m["CanBulkIndex"] = effectiveAdmin || hasKey(permKeyDocumentalsLlibresBulkIndex)
 	}
 	if _, found := m["CanViewNivells"]; !found {
 		m["CanViewNivells"] = effectiveAdmin || hasViewNivellsKey
@@ -670,6 +665,68 @@ func hasModularModerationKey(hasKey func(string) bool) bool {
 		hasKey(permKeyDocumentalsArxiusEdit) ||
 		hasKey(permKeyDocumentalsLlibresEdit) ||
 		hasKey(permKeyDocumentalsRegistresEdit)
+}
+
+func hasModularDocumentalsManageKey(hasKey func(string) bool) bool {
+	if hasKey == nil {
+		return false
+	}
+	return hasKey(permKeyDocumentalsArxiusCreate) ||
+		hasKey(permKeyDocumentalsArxiusEdit) ||
+		hasKey(permKeyDocumentalsArxiusDelete) ||
+		hasKey(permKeyDocumentalsArxiusImport) ||
+		hasKey(permKeyDocumentalsArxiusExport) ||
+		hasKey(permKeyDocumentalsLlibresCreate) ||
+		hasKey(permKeyDocumentalsLlibresEdit) ||
+		hasKey(permKeyDocumentalsLlibresDelete) ||
+		hasKey(permKeyDocumentalsLlibresImport) ||
+		hasKey(permKeyDocumentalsLlibresExport) ||
+		hasKey(permKeyDocumentalsLlibresExportCSV) ||
+		hasKey(permKeyDocumentalsLlibresImportCSV) ||
+		hasKey(permKeyDocumentalsLlibresBulkIndex) ||
+		hasKey(permKeyDocumentalsLlibresMarkIndexed) ||
+		hasKey(permKeyDocumentalsLlibresRecalcIndex) ||
+		hasKey(permKeyDocumentalsRegistresEdit) ||
+		hasKey(permKeyDocumentalsRegistresEditInline) ||
+		hasKey(permKeyDocumentalsRegistresLinkPerson) ||
+		hasKey(permKeyDocumentalsRegistresConvertToPerson)
+}
+
+func hasModularArxiusViewKey(hasKey func(string) bool) bool {
+	if hasKey == nil {
+		return false
+	}
+	return hasKey(permKeyDocumentalsArxiusView) || hasModularDocumentalsManageKey(func(key string) bool {
+		switch key {
+		case permKeyDocumentalsArxiusCreate, permKeyDocumentalsArxiusEdit, permKeyDocumentalsArxiusDelete,
+			permKeyDocumentalsArxiusImport, permKeyDocumentalsArxiusExport:
+			return hasKey(key)
+		default:
+			return false
+		}
+	})
+}
+
+func hasModularLlibresViewKey(hasKey func(string) bool) bool {
+	if hasKey == nil {
+		return false
+	}
+	return hasKey(permKeyDocumentalsLlibresView) ||
+		hasKey(permKeyDocumentalsLlibresCreate) ||
+		hasKey(permKeyDocumentalsLlibresEdit) ||
+		hasKey(permKeyDocumentalsLlibresDelete) ||
+		hasKey(permKeyDocumentalsLlibresImport) ||
+		hasKey(permKeyDocumentalsLlibresExport) ||
+		hasKey(permKeyDocumentalsLlibresExportCSV) ||
+		hasKey(permKeyDocumentalsLlibresImportCSV) ||
+		hasKey(permKeyDocumentalsLlibresViewRegistres) ||
+		hasKey(permKeyDocumentalsLlibresBulkIndex) ||
+		hasKey(permKeyDocumentalsLlibresMarkIndexed) ||
+		hasKey(permKeyDocumentalsLlibresRecalcIndex) ||
+		hasKey(permKeyDocumentalsRegistresEdit) ||
+		hasKey(permKeyDocumentalsRegistresEditInline) ||
+		hasKey(permKeyDocumentalsRegistresLinkPerson) ||
+		hasKey(permKeyDocumentalsRegistresConvertToPerson)
 }
 
 func hasModularTerritoryManageKey(hasKey func(string) bool) bool {

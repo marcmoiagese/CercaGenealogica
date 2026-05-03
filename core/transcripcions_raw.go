@@ -955,7 +955,7 @@ func (a *App) AdminListRegistresLlibre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canManageArxius := a.hasPerm(perms, permArxius)
+	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := perms.CanManagePolicies || perms.Admin
 	canModerate := a.canModerateModular(user, perms)
 	llibre, err := a.DB.GetLlibre(llibreID)
@@ -1493,7 +1493,7 @@ func (a *App) AdminNewRegistre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canManageArxius := a.hasPerm(perms, permArxius)
+	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := perms.CanManagePolicies || perms.Admin
 	canModerate := a.canModerateModular(user, perms)
 	llibre, err := a.DB.GetLlibre(llibreID)
@@ -1540,7 +1540,7 @@ func (a *App) AdminCreateRegistre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canManageArxius := a.hasPerm(perms, permArxius)
+	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := perms.CanManagePolicies || perms.Admin
 	canModerate := a.canModerateModular(user, perms)
 	llibre, err := a.DB.GetLlibre(llibreID)
@@ -1607,7 +1607,7 @@ func (a *App) AdminShowRegistre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canManageArxius := a.hasPerm(perms, permArxius)
+	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := perms.CanManagePolicies || perms.Admin
 	canModerate := a.canModerateModular(user, perms)
 	lang := ResolveLang(r)
@@ -1945,7 +1945,7 @@ func (a *App) AdminEditRegistre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canManageArxius := a.hasPerm(perms, permArxius)
+	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := perms.CanManagePolicies || perms.Admin
 	canModerate := a.canModerateModular(user, perms)
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
@@ -1991,7 +1991,7 @@ func (a *App) AdminUpdateRegistre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	perms := a.getPermissionsForUser(user.ID)
-	canManageArxius := a.hasPerm(perms, permArxius)
+	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := perms.CanManagePolicies || perms.Admin
 	canModerate := a.canModerateModular(user, perms)
 	beforePersones, _ := a.DB.ListTranscripcioPersones(id)

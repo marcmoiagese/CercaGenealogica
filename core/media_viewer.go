@@ -186,21 +186,21 @@ func (a *App) mediaItemView(w http.ResponseWriter, r *http.Request, cfg mediaCon
 	}
 
 	payload := map[string]interface{}{
-		"User":          user,
-		"Album":         album,
-		"Item":          item,
-		"AlbumItems":    items,
-		"CurrentIndex":  currentIndex,
-		"TotalItems":    len(items),
-		"PrevItemID":    prevItemID,
-		"NextItemID":    nextItemID,
-		"StatusMessage": message,
-		"GrantToken":    grantToken,
-		"IsOwner":       user != nil && album.OwnerUserID == user.ID,
-		"PageContext":   pageContext,
-		"CurrentURL":    r.URL.RequestURI(),
-		"IndexerConfig": indexerCfg,
-		"IndexerDraft":  indexerDraft,
+		"User":            user,
+		"Album":           album,
+		"Item":            item,
+		"AlbumItems":      items,
+		"CurrentIndex":    currentIndex,
+		"TotalItems":      len(items),
+		"PrevItemID":      prevItemID,
+		"NextItemID":      nextItemID,
+		"StatusMessage":   message,
+		"GrantToken":      grantToken,
+		"IsOwner":         user != nil && album.OwnerUserID == user.ID,
+		"PageContext":     pageContext,
+		"CurrentURL":      r.URL.RequestURI(),
+		"IndexerConfig":   indexerCfg,
+		"IndexerDraft":    indexerDraft,
 		"IndexerExisting": indexerExisting,
 	}
 	if user != nil {
@@ -366,9 +366,8 @@ func (a *App) buildMediaViewerPageContext(r *http.Request, user *db.User, album 
 	if user == nil || album == nil || item == nil || !album.LlibreID.Valid {
 		return nil
 	}
-	perms, _ := a.permissionsFromContext(r)
 	target := a.resolveLlibreTarget(int(album.LlibreID.Int64))
-	canViewBook := perms.Admin || perms.CanManageArchives || a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target)
+	canViewBook := a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target)
 	if !canViewBook {
 		return nil
 	}
@@ -550,12 +549,12 @@ func mediaViewerPageContextJSON(ctx *mediaViewerPageContext, lang string) map[st
 			"remaining": ctx.RemainingRegistres,
 		},
 		"permissions": map[string]interface{}{
-			"can_edit":        ctx.CanEditPage,
-			"can_index":       ctx.CanIndexPage,
+			"can_edit":         ctx.CanEditPage,
+			"can_index":        ctx.CanIndexPage,
 			"can_view_records": ctx.CanViewRegistres,
-			"can_inline_edit": ctx.CanEditRegistres,
-			"can_link":        ctx.CanLinkPages,
-			"can_view_book":   ctx.CanViewBook,
+			"can_inline_edit":  ctx.CanEditRegistres,
+			"can_link":         ctx.CanLinkPages,
+			"can_view_book":    ctx.CanViewBook,
 		},
 		"links": map[string]interface{}{
 			"registres": ctx.RegistresURL,
