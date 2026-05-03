@@ -534,6 +534,8 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	hasManageTerritoryKey := hasModularTerritoryManageKey(hasKey)
 	hasViewNivellsKey := hasModularNivellsViewKey(hasKey)
 	hasViewMunicipisKey := hasModularMunicipisViewKey(hasKey)
+	hasManageEclesiaKey := hasModularEclesiaManageKey(hasKey)
+	hasViewEclesiaKey := hasModularEclesiaViewKey(hasKey)
 	hasManageDocumentalsKey := hasModularDocumentalsManageKey(hasKey)
 	hasViewArxiusKey := hasModularArxiusViewKey(hasKey)
 	hasViewLlibresKey := hasModularLlibresViewKey(hasKey)
@@ -544,10 +546,10 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		m["CanManageTerritory"] = effectiveAdmin || hasManageTerritoryKey
 	}
 	if _, found := m["CanManageEclesia"]; !found {
-		m["CanManageEclesia"] = effectiveAdmin || perms.CanManageEclesia
+		m["CanManageEclesia"] = effectiveAdmin || hasManageEclesiaKey
 	}
 	if _, found := m["CanManageUsers"]; !found {
-		m["CanManageUsers"] = effectiveAdmin || perms.CanManageUsers || hasKey(permKeyAdminUsersManage)
+		m["CanManageUsers"] = effectiveAdmin || hasKey(permKeyAdminUsersManage)
 	}
 	if _, found := m["CanManagePolicies"]; !found {
 		m["CanManagePolicies"] = effectiveAdmin || hasKey(permKeyAdminPoliciesManage)
@@ -631,9 +633,7 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		m["CanViewMunicipis"] = effectiveAdmin || hasViewMunicipisKey
 	}
 	if _, found := m["CanViewEcles"]; !found {
-		m["CanViewEcles"] = effectiveAdmin || perms.CanManageEclesia ||
-			hasKey(permKeyTerritoriEclesView) || hasKey(permKeyTerritoriEclesCreate) || hasKey(permKeyTerritoriEclesEdit) ||
-			hasKey(permKeyTerritoriEclesImportJSON)
+		m["CanViewEcles"] = effectiveAdmin || hasViewEclesiaKey
 	}
 	if _, found := m["CanViewTerritory"]; !found {
 		m["CanViewTerritory"] = m["CanViewNivells"].(bool) || m["CanViewMunicipis"].(bool) || m["CanViewEcles"].(bool)
@@ -773,4 +773,21 @@ func hasModularMunicipisViewKey(hasKey func(string) bool) bool {
 		hasKey(permKeyTerritoriMunicipisAnecdotesSubmit) ||
 		hasKey(permKeyTerritoriMunicipisAnecdotesComment) ||
 		hasKey(permKeyTerritoriMunicipisAnecdotesModerate)
+}
+
+func hasModularEclesiaManageKey(hasKey func(string) bool) bool {
+	if hasKey == nil {
+		return false
+	}
+	return hasKey(permKeyTerritoriEclesCreate) ||
+		hasKey(permKeyTerritoriEclesEdit) ||
+		hasKey(permKeyTerritoriEclesImportJSON) ||
+		hasKey(permKeyAdminEclesImport)
+}
+
+func hasModularEclesiaViewKey(hasKey func(string) bool) bool {
+	if hasKey == nil {
+		return false
+	}
+	return hasKey(permKeyTerritoriEclesView) || hasModularEclesiaManageKey(hasKey)
 }

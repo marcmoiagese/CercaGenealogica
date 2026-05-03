@@ -864,6 +864,84 @@ func (a *App) canManagePoliciesModular(user *db.User) bool {
 	return false
 }
 
+func (a *App) canManageUsersModular(user *db.User) bool {
+	if user == nil || a.DB == nil {
+		return false
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	if a.effectiveAdminForUser(user.ID, perms) {
+		return true
+	}
+	return a.userHasAssignedModularGrant(user.ID, permKeyAdminUsersManage)
+}
+
+func (a *App) canManageEclesiaModular(user *db.User) bool {
+	if user == nil || a.DB == nil {
+		return false
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	if a.effectiveAdminForUser(user.ID, perms) {
+		return true
+	}
+	return a.userHasAssignedModularGrant(user.ID,
+		permKeyTerritoriEclesCreate,
+		permKeyTerritoriEclesEdit,
+		permKeyTerritoriEclesImportJSON,
+		permKeyAdminEclesImport,
+	)
+}
+
+func (a *App) canViewEclesiaModular(user *db.User) bool {
+	if user == nil || a.DB == nil {
+		return false
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	if a.effectiveAdminForUser(user.ID, perms) {
+		return true
+	}
+	return a.userHasAssignedModularGrant(user.ID,
+		permKeyTerritoriEclesView,
+		permKeyTerritoriEclesCreate,
+		permKeyTerritoriEclesEdit,
+		permKeyTerritoriEclesImportJSON,
+		permKeyAdminEclesImport,
+	)
+}
+
+func (a *App) userHasAssignedModularGrant(userID int, permKeys ...string) bool {
+	if a == nil || a.DB == nil || userID <= 0 || len(permKeys) == 0 {
+		return false
+	}
+	wanted := make(map[string]bool, len(permKeys))
+	for _, key := range permKeys {
+		key = strings.TrimSpace(key)
+		if key != "" {
+			wanted[key] = true
+		}
+	}
+	if len(wanted) == 0 {
+		return false
+	}
+	policies, err := a.DB.ListUserPolitiques(userID)
+	if err != nil {
+		Errorf("userHasAssignedModularGrant: error carregant politiques usuari=%d: %v", userID, err)
+		return false
+	}
+	for _, policy := range policies {
+		grants, err := a.DB.ListPoliticaGrants(policy.ID)
+		if err != nil {
+			Errorf("userHasAssignedModularGrant: error carregant grants politica=%d usuari=%d: %v", policy.ID, userID, err)
+			return false
+		}
+		for _, grant := range grants {
+			if wanted[strings.TrimSpace(grant.PermKey)] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (a *App) hasAnyPermissionKey(userID int, permKey string) bool {
 	snap, err := a.getPermissionSnapshot(userID)
 	if err != nil {

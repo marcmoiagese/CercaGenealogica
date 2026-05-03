@@ -1323,6 +1323,130 @@ func TestF3313PoliciesSuggestGuardsUseModularKey(t *testing.T) {
 	}
 }
 
+func TestF3314LegacyUsersAndEclesiaDoNotSetTemplateFlags(t *testing.T) {
+	app := &App{}
+	req := httptest.NewRequest("GET", "/admin", nil)
+	req = app.withPermissions(req, db.PolicyPermissions{CanManageUsers: true, CanManageEclesia: true})
+	req = app.withEffectiveAdmin(req, false)
+	req = app.withPermissionKeys(req, map[string]bool{})
+
+	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	if got := data["CanManageUsers"]; got == true {
+		t.Fatalf("CanManageUsers legacy pur no hauria d'activar el flag de template, rebut %#v", got)
+	}
+	if got := data["CanManageEclesia"]; got == true {
+		t.Fatalf("CanManageEclesia legacy pur no hauria d'activar el flag de template, rebut %#v", got)
+	}
+	if got := data["CanViewEcles"]; got == true {
+		t.Fatalf("CanManageEclesia legacy pur no hauria d'activar CanViewEcles, rebut %#v", got)
+	}
+}
+
+func TestF3314TemplateFlagsUseAdminAndModularKeys(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	adminUserID := createF330User(t, database, "f33-14-template-admin")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(adminUserID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin F33-14: %v", err)
+	}
+	adminPerms := app.getPermissionsForUser(adminUserID)
+	adminReq := httptest.NewRequest("GET", "/admin", nil)
+	adminReq = app.withPermissions(adminReq, adminPerms)
+	adminReq = app.withEffectiveAdmin(adminReq, app.effectiveAdminForUser(adminUserID, adminPerms))
+	adminReq = app.withPermissionKeys(adminReq, app.permissionKeysForUser(adminUserID))
+	adminData := injectPermsIfMissing(adminReq, map[string]interface{}{}).(map[string]interface{})
+	for _, key := range []string{"CanManageUsers", "CanManageEclesia", "CanViewEcles"} {
+		if got := adminData[key]; got != true {
+			t.Fatalf("admin global hauria d'activar %s via bridge, rebut %#v", key, got)
+		}
+	}
+
+	req := httptest.NewRequest("GET", "/admin", nil)
+	req = app.withPermissions(req, db.PolicyPermissions{})
+	req = app.withEffectiveAdmin(req, false)
+	req = app.withPermissionKeys(req, map[string]bool{
+		permKeyAdminUsersManage:         true,
+		permKeyTerritoriEclesEdit:       true,
+		permKeyTerritoriEclesView:       true,
+		permKeyTerritoriEclesImportJSON: true,
+	})
+	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	if got := data["CanManageUsers"]; got != true {
+		t.Fatalf("admin.users.manage hauria d'activar CanManageUsers, rebut %#v", got)
+	}
+	if got := data["CanManageEclesia"]; got != true {
+		t.Fatalf("territori.eclesiastic.edit hauria d'activar CanManageEclesia, rebut %#v", got)
+	}
+	if got := data["CanViewEcles"]; got != true {
+		t.Fatalf("claus eclesiastiques modulars haurien d'activar CanViewEcles, rebut %#v", got)
+	}
+}
+
+func TestF3314UsersAndEclesiaHelpersIgnoreLegacyPure(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	legacyUserID := createF330User(t, database, "f33-14-legacy-users-ecles")
+	legacyPolicyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-14-legacy-users-ecles",
+		Permisos:   `{"can_manage_users":true,"can_manage_eclesiastic":true}`,
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica legacy F33-14: %v", err)
+	}
+	if err := database.AddUserPolitica(legacyUserID, legacyPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica legacy F33-14: %v", err)
+	}
+	legacyUser := &db.User{ID: legacyUserID}
+	if app.canManageUsersModular(legacyUser) {
+		t.Fatalf("CanManageUsers legacy pur no hauria de passar canManageUsersModular")
+	}
+	if app.canManageEclesiaModular(legacyUser) {
+		t.Fatalf("CanManageEclesia legacy pur no hauria de passar canManageEclesiaModular")
+	}
+	if app.canViewEclesiaModular(legacyUser) {
+		t.Fatalf("CanManageEclesia legacy pur no hauria de passar canViewEclesiaModular")
+	}
+
+	modularUserID := createF330User(t, database, "f33-14-modular-users-ecles")
+	modularPolicyID, err := database.SavePolitica(&db.Politica{Nom: "f33-14-modular-users-ecles", Permisos: "{}", Descripcio: ""})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica modular F33-14: %v", err)
+	}
+	for _, grant := range []db.PoliticaGrant{
+		{PoliticaID: modularPolicyID, PermKey: permKeyAdminUsersManage, ScopeType: string(ScopeGlobal)},
+		{PoliticaID: modularPolicyID, PermKey: permKeyTerritoriEclesEdit, ScopeType: string(ScopeEcles), ScopeID: sql.NullInt64{Int64: 1, Valid: true}},
+	} {
+		if _, err := database.SavePoliticaGrant(&grant); err != nil {
+			t.Fatalf("no s'ha pogut crear grant modular F33-14 %s: %v", grant.PermKey, err)
+		}
+	}
+	if err := database.AddUserPolitica(modularUserID, modularPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica modular F33-14: %v", err)
+	}
+	modularUser := &db.User{ID: modularUserID}
+	if !app.canManageUsersModular(modularUser) {
+		t.Fatalf("admin.users.manage hauria de passar canManageUsersModular")
+	}
+	if !app.canManageEclesiaModular(modularUser) {
+		t.Fatalf("territori.eclesiastic.edit hauria de passar canManageEclesiaModular")
+	}
+	if !app.canViewEclesiaModular(modularUser) {
+		t.Fatalf("territori.eclesiastic.edit hauria de passar canViewEclesiaModular")
+	}
+
+	adminUserID := createF330User(t, database, "f33-14-helper-admin")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(adminUserID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin helper F33-14: %v", err)
+	}
+	adminUser := &db.User{ID: adminUserID}
+	if !app.canManageUsersModular(adminUser) || !app.canManageEclesiaModular(adminUser) || !app.canViewEclesiaModular(adminUser) {
+		t.Fatalf("admin global hauria d'activar els helpers F33-14")
+	}
+}
+
 func createF3313SessionCookie(t *testing.T, database db.DB, userID int, sessionID string) *http.Cookie {
 	t.Helper()
 	expiry := time.Now().Add(24 * time.Hour).Format(time.RFC3339)

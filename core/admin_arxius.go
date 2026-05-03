@@ -111,9 +111,9 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 	canManage := a.canManageAnyDocumentalsModular(user)
 	isAdmin := a.hasPerm(perms, permAdmin)
 	canManageTerritory := a.canManageAnyTerritoryModular(user)
-	canManageEclesia := a.hasPerm(perms, permEclesia)
+	canManageEclesia := a.canManageEclesiaModular(user)
 	canModerate := a.canModerateModular(user, perms)
-	canManageUsers := a.hasPerm(perms, permUsers)
+	canManageUsers := a.canManageUsersModular(user)
 	canManagePolicies := a.canManagePoliciesModular(user)
 	filter := db.ArxiuFilter{
 		Text:  strings.TrimSpace(r.URL.Query().Get("q")),
@@ -319,9 +319,9 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	canManage := a.canManageAnyDocumentalsModular(user)
 	isAdmin := a.hasPerm(perms, permAdmin)
 	canManageTerritory := a.canManageAnyTerritoryModular(user)
-	canManageEclesia := a.hasPerm(perms, permEclesia)
+	canManageEclesia := a.canManageEclesiaModular(user)
 	canModerate := a.canModerateModular(user, perms)
-	canManageUsers := a.hasPerm(perms, permUsers)
+	canManageUsers := a.canManageUsersModular(user)
 	canManagePolicies := a.canManagePoliciesModular(user)
 	canCreateArxiu := a.hasAnyPermissionKey(user.ID, permKeyDocumentalsArxiusCreate)
 	canImportArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusImport, PermissionTarget{})
