@@ -2520,7 +2520,7 @@ func (a *App) AdminConvertRegistreToPersona(w http.ResponseWriter, r *http.Reque
 		*r = *a.withPermissions(r, perms)
 	}
 	llibreTarget := a.resolveLlibreTarget(registre.LlibreID)
-	if !a.HasPermission(user.ID, permKeyDocumentalsRegistresConvertToPerson, llibreTarget) && !a.hasPerm(perms, permCreatePerson) {
+	if !a.HasPermission(user.ID, permKeyDocumentalsRegistresConvertToPerson, llibreTarget) && !a.canCreatePersonModular(user) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

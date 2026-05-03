@@ -32,9 +32,35 @@ func (a *App) requirePersonesView(w http.ResponseWriter, r *http.Request) (*db.U
 	return a.requirePermissionKeyAnyScope(w, r, permKeyPersonsView)
 }
 
+func (a *App) requireCreatePersonModular(w http.ResponseWriter, r *http.Request) (*db.User, bool) {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return nil, false
+	}
+	*r = *a.withUser(r, user)
+	perms, found := a.permissionsFromContext(r)
+	if !found {
+		perms = a.getPermissionsForUser(user.ID)
+		*r = *a.withPermissions(r, perms)
+	}
+	if _, found := effectiveAdminFromContext(r); !found {
+		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
+	}
+	*r = *a.ensureUnreadMessagesCount(r, user.ID)
+	if _, found := permissionKeysFromContext(r); !found {
+		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
+	}
+	if !a.canCreatePersonModular(user) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return user, false
+	}
+	return user, true
+}
+
 // Form per crear/editar persona (UI bàsica)
 func (a *App) PersonaForm(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permCreatePerson)
+	user, ok := a.requireCreatePersonModular(w, r)
 	if !ok {
 		return
 	}
@@ -50,7 +76,7 @@ func (a *App) PersonaForm(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		if p.CreatedBy.Valid && int(p.CreatedBy.Int64) != user.ID && !a.hasPerm(perms, func(pp db.PolicyPermissions) bool { return pp.CanEditAnyPerson }) {
+		if !a.canEditPersonaModular(user, *p) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -115,7 +141,7 @@ func (a *App) PersonaForm(w http.ResponseWriter, r *http.Request) {
 
 // Guarda persona des de formulari (crea pendent o marca pendent en edició)
 func (a *App) PersonaSave(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permCreatePerson)
+	user, ok := a.requireCreatePersonModular(w, r)
 	if !ok {
 		return
 	}
@@ -143,7 +169,7 @@ func (a *App) PersonaSave(w http.ResponseWriter, r *http.Request) {
 	}
 	if id > 0 {
 		if existent, _ := a.DB.GetPersona(id); existent != nil {
-			if existent.CreatedBy.Valid && int(existent.CreatedBy.Int64) != user.ID && !a.hasPerm(perms, func(pp db.PolicyPermissions) bool { return pp.CanEditAnyPerson }) {
+			if !a.canEditPersonaModular(user, *existent) {
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
@@ -356,7 +382,6 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 	if !ok || user == nil {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	lang := ResolveLang(r)
 	externalLinksNotice, externalLinksError := externalLinksFeedback(r, lang)
 	p, err := a.DB.GetPersona(id)
@@ -455,11 +480,7 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 	}
 	canEditPersona := false
 	if user != nil {
-		if perms.Admin || perms.CanEditAnyPerson {
-			canEditPersona = true
-		} else if p.CreatedBy.Valid && int(p.CreatedBy.Int64) == user.ID {
-			canEditPersona = true
-		}
+		canEditPersona = a.canEditPersonaModular(user, *p)
 	}
 	markType := ""
 	markPublic := true
@@ -854,7 +875,7 @@ func (a *App) PersonaDetall(w http.ResponseWriter, r *http.Request) {
 		fieldNeedsLink[key] = !fieldSources[key]
 	}
 	canLinkPersonaFields := false
-	if user != nil && canEditPersona && a.hasPerm(perms, permCreatePerson) && a.hasAnyPermissionKey(user.ID, permKeyDocumentalsRegistresLinkPerson) {
+	if user != nil && canEditPersona && a.canCreatePersonModular(user) && a.hasAnyPermissionKey(user.ID, permKeyDocumentalsRegistresLinkPerson) {
 		canLinkPersonaFields = true
 	}
 	userID := 0
@@ -1278,7 +1299,7 @@ func (a *App) PersonaAnecdoteCreate(w http.ResponseWriter, r *http.Request) {
 
 // Creació de persona: qualsevol usuari amb permís can_create_person. Es guarda en estat pendent.
 func (a *App) CreatePersona(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.requirePermission(w, r, permCreatePerson)
+	user, ok := a.requireCreatePersonModular(w, r)
 	if !ok {
 		return
 	}
@@ -1328,7 +1349,7 @@ func (a *App) CreatePersona(w http.ResponseWriter, r *http.Request) {
 
 // Edició de persona: es torna a estat pendent per revisió.
 func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permCreatePerson)
+	user, ok := a.requireCreatePersonModular(w, r)
 	if !ok {
 		return
 	}
@@ -1355,7 +1376,7 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 	dataNaixement := sql.NullString{String: strings.TrimSpace(req.DataNaixement), Valid: strings.TrimSpace(req.DataNaixement) != ""}
 	dataBateig := sql.NullString{String: strings.TrimSpace(req.DataBateig), Valid: strings.TrimSpace(req.DataBateig) != ""}
 	dataDefuncio := sql.NullString{String: strings.TrimSpace(req.DataDefuncio), Valid: strings.TrimSpace(req.DataDefuncio) != ""}
-	if existent.CreatedBy.Valid && int(existent.CreatedBy.Int64) != user.ID && !a.hasPerm(perms, func(pp db.PolicyPermissions) bool { return pp.CanEditAnyPerson }) {
+	if !a.canEditPersonaModular(user, *existent) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -1442,7 +1463,7 @@ func (a *App) UpdatePersona(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) PersonaLinkField(w http.ResponseWriter, r *http.Request) {
-	user, perms, ok := a.requirePermission(w, r, permCreatePerson)
+	user, ok := a.requireCreatePersonModular(w, r)
 	if !ok {
 		return
 	}
@@ -1481,7 +1502,7 @@ func (a *App) PersonaLinkField(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if persona.CreatedBy.Valid && int(persona.CreatedBy.Int64) != user.ID && !a.hasPerm(perms, func(pp db.PolicyPermissions) bool { return pp.CanEditAnyPerson }) {
+	if !a.canEditPersonaModular(user, *persona) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

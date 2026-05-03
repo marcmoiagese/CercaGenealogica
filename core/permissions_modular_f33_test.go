@@ -1,12 +1,17 @@
 package core
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -1445,6 +1450,316 @@ func TestF3314UsersAndEclesiaHelpersIgnoreLegacyPure(t *testing.T) {
 	if !app.canManageUsersModular(adminUser) || !app.canManageEclesiaModular(adminUser) || !app.canViewEclesiaModular(adminUser) {
 		t.Fatalf("admin global hauria d'activar els helpers F33-14")
 	}
+}
+
+func TestF3315LegacyCanCreatePersonDoesNotPassCreateGuard(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	legacyUserID := createF330User(t, database, "f33-15-legacy-create")
+	legacyPolicyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-15-legacy-create",
+		Permisos:   `{"can_create_person":true}`,
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica legacy create: %v", err)
+	}
+	if err := database.AddUserPolitica(legacyUserID, legacyPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica legacy create: %v", err)
+	}
+	legacySession := createF3313SessionCookie(t, database, legacyUserID, "sess_f33_15_legacy_create")
+	rr := runF3315CreatePersona(app, legacySession, "Legacy")
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("CanCreatePerson legacy pur esperava 403 a CreatePersona, rebut %d", rr.Code)
+	}
+	if app.canCreatePersonModular(&db.User{ID: legacyUserID}) {
+		t.Fatalf("CanCreatePerson legacy pur no hauria de passar canCreatePersonModular")
+	}
+
+	modularUserID := createF330User(t, database, "f33-15-modular-create")
+	assignF3315Policy(t, database, modularUserID, "f33-15-modular-create", permKeyPersonesCreate)
+	modularSession := createF3313SessionCookie(t, database, modularUserID, "sess_f33_15_modular_create")
+	rr = runF3315CreatePersona(app, modularSession, "Modular")
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("persones.create esperava 201 a CreatePersona, rebut %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	trustedUserID := createF330User(t, database, "f33-15-confiança-create")
+	trustedPolicyID := findF330PolicyID(t, database, "confiança")
+	if err := database.AddUserPolitica(trustedUserID, trustedPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica confiança: %v", err)
+	}
+	if !app.canCreatePersonModular(&db.User{ID: trustedUserID}) {
+		t.Fatalf("la politica confiança ha de conservar la capacitat de crear persones via default modular")
+	}
+
+	adminUserID := createF330User(t, database, "f33-15-admin-create")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(adminUserID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin create: %v", err)
+	}
+	adminSession := createF3313SessionCookie(t, database, adminUserID, "sess_f33_15_admin_create")
+	rr = runF3315CreatePersona(app, adminSession, "Admin")
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("admin global esperava 201 a CreatePersona, rebut %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestF3315EditAnyPersonUsesModularKey(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	ownerID := createF330User(t, database, "f33-15-owner")
+	assignF3315Policy(t, database, ownerID, "f33-15-owner-create", permKeyPersonesCreate)
+	ownerSession := createF3313SessionCookie(t, database, ownerID, "sess_f33_15_owner")
+	personaID, err := database.CreatePersona(&db.Persona{
+		Nom:            "Persona",
+		Cognom1:        "Propia",
+		ModeracioEstat: "pendent",
+		CreatedBy:      sql.NullInt64{Int64: int64(ownerID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear persona owner: %v", err)
+	}
+	rr := runF3315UpdatePersona(app, ownerSession, personaID, "Propia editada")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("usuari creador amb persones.create esperava 200 editant propia, rebut %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	legacyEditAnyID := createF330User(t, database, "f33-15-legacy-edit-any")
+	assignF3315Policy(t, database, legacyEditAnyID, "f33-15-legacy-edit-any-create", permKeyPersonesCreate)
+	legacyPolicyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-15-legacy-edit-any",
+		Permisos:   `{"can_edit_any_person":true}`,
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica legacy edit any: %v", err)
+	}
+	if err := database.AddUserPolitica(legacyEditAnyID, legacyPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica legacy edit any: %v", err)
+	}
+	legacySession := createF3313SessionCookie(t, database, legacyEditAnyID, "sess_f33_15_legacy_edit_any")
+	rr = runF3315UpdatePersona(app, legacySession, personaID, "Alien legacy")
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("CanEditAnyPerson legacy pur amb create modular esperava 403 editant aliena, rebut %d", rr.Code)
+	}
+	if app.canEditAnyPersonModular(&db.User{ID: legacyEditAnyID}) {
+		t.Fatalf("CanEditAnyPerson legacy pur no hauria de passar canEditAnyPersonModular")
+	}
+
+	modularEditAnyID := createF330User(t, database, "f33-15-modular-edit-any")
+	assignF3315Policy(t, database, modularEditAnyID, "f33-15-modular-edit-any", permKeyPersonesCreate, permKeyPersonesEditAny)
+	modularSession := createF3313SessionCookie(t, database, modularEditAnyID, "sess_f33_15_modular_edit_any")
+	rr = runF3315UpdatePersona(app, modularSession, personaID, "Alien modular")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("persones.edit.any esperava 200 editant aliena, rebut %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	adminUserID := createF330User(t, database, "f33-15-admin-edit-any")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(adminUserID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin edit any: %v", err)
+	}
+	adminSession := createF3313SessionCookie(t, database, adminUserID, "sess_f33_15_admin_edit_any")
+	rr = runF3315UpdatePersona(app, adminSession, personaID, "Alien admin")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("admin global esperava 200 editant aliena, rebut %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestF3315TemplatePersonFlagsUseModularKeys(t *testing.T) {
+	app := &App{}
+	req := httptest.NewRequest("GET", "/persones", nil)
+	req = app.withPermissions(req, db.PolicyPermissions{CanCreatePerson: true})
+	req = app.withEffectiveAdmin(req, false)
+	req = app.withPermissionKeys(req, map[string]bool{})
+	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	if got := data["CanCreatePerson"]; got == true {
+		t.Fatalf("CanCreatePerson legacy pur no hauria d'activar flag template, rebut %#v", got)
+	}
+	if got := data["CanViewPersones"]; got == true {
+		t.Fatalf("CanCreatePerson legacy pur no hauria d'activar CanViewPersones, rebut %#v", got)
+	}
+
+	req = httptest.NewRequest("GET", "/persones", nil)
+	req = app.withPermissions(req, db.PolicyPermissions{})
+	req = app.withEffectiveAdmin(req, false)
+	req = app.withPermissionKeys(req, map[string]bool{permKeyPersonesCreate: true})
+	data = injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	if got := data["CanCreatePerson"]; got != true {
+		t.Fatalf("persones.create hauria d'activar CanCreatePerson, rebut %#v", got)
+	}
+	if got := data["CanViewPersones"]; got != true {
+		t.Fatalf("persones.create hauria d'activar CanViewPersones, rebut %#v", got)
+	}
+}
+
+func TestF3315ConvertRegistreUsesDocumentalOrCreatePersonModular(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	registreID, rawPersonID := createF3315RawRegistre(t, database)
+
+	legacyUserID := createF330User(t, database, "f33-15-convert-legacy")
+	legacyPolicyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-15-convert-legacy",
+		Permisos:   `{"can_create_person":true}`,
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica legacy convert: %v", err)
+	}
+	if err := database.AddUserPolitica(legacyUserID, legacyPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica legacy convert: %v", err)
+	}
+	legacySession := createF3313SessionCookie(t, database, legacyUserID, "sess_f33_15_convert_legacy")
+	rr := runF3315ConvertRegistre(app, legacySession, registreID, rawPersonID)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("CanCreatePerson legacy pur esperava 403 convertint registre, rebut %d", rr.Code)
+	}
+
+	modularCreateID := createF330User(t, database, "f33-15-convert-create")
+	assignF3315Policy(t, database, modularCreateID, "f33-15-convert-create", permKeyPersonesCreate)
+	modularCreateSession := createF3313SessionCookie(t, database, modularCreateID, "sess_f33_15_convert_create")
+	rr = runF3315ConvertRegistre(app, modularCreateSession, registreID, rawPersonID)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("persones.create esperava 303 convertint registre, rebut %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	registreID, rawPersonID = createF3315RawRegistre(t, database)
+	documentalID := createF330User(t, database, "f33-15-convert-documental")
+	assignF3315Policy(t, database, documentalID, "f33-15-convert-documental", permKeyDocumentalsRegistresConvertToPerson)
+	documentalSession := createF3313SessionCookie(t, database, documentalID, "sess_f33_15_convert_documental")
+	rr = runF3315ConvertRegistre(app, documentalSession, registreID, rawPersonID)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("documentals.registres.convert_to_person esperava 303 convertint registre, rebut %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func assignF3315Policy(t *testing.T, database db.DB, userID int, name string, permKeys ...string) int {
+	t.Helper()
+	policyID, err := database.SavePolitica(&db.Politica{Nom: name, Permisos: "{}", Descripcio: ""})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica %s: %v", name, err)
+	}
+	for _, key := range permKeys {
+		if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+			PoliticaID: policyID,
+			PermKey:    key,
+			ScopeType:  string(ScopeGlobal),
+		}); err != nil {
+			t.Fatalf("no s'ha pogut crear grant %s: %v", key, err)
+		}
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica %s: %v", name, err)
+	}
+	return policyID
+}
+
+func runF3315CreatePersona(app *App, session *http.Cookie, nom string) *httptest.ResponseRecorder {
+	payload, _ := json.Marshal(map[string]string{"nom": nom, "cognom1": "Test", "municipi": "Vila"})
+	req := httptest.NewRequest(http.MethodPost, "/persones", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.CreatePersona(rr, req)
+	return rr
+}
+
+func runF3315UpdatePersona(app *App, session *http.Cookie, personaID int, ofici string) *httptest.ResponseRecorder {
+	payload, _ := json.Marshal(map[string]string{"nom": "Persona", "cognom1": "Test", "municipi": "Vila", "ofici": ofici})
+	req := httptest.NewRequest(http.MethodPost, "/persones/"+strconv.Itoa(personaID), bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.UpdatePersona(rr, req)
+	return rr
+}
+
+func createF3315RawRegistre(t *testing.T, database db.DB) (int, int) {
+	t.Helper()
+	llibreID := createF3315Llibre(t, database)
+	registreID, err := database.CreateTranscripcioRaw(&db.TranscripcioRaw{
+		LlibreID:       llibreID,
+		TipusActe:      "naixement",
+		DataActeText:   "1900-01-02",
+		ModeracioEstat: "pendent",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear registre raw F33-15: %v", err)
+	}
+	rawPersonID, err := database.CreateTranscripcioPersona(&db.TranscripcioPersonaRaw{
+		TranscripcioID: registreID,
+		Rol:            "nascut",
+		Nom:            "Infant",
+		Cognom1:        "Prova",
+		MunicipiText:   "Vila",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear persona raw F33-15: %v", err)
+	}
+	return registreID, rawPersonID
+}
+
+func createF3315Llibre(t *testing.T, database db.DB) int {
+	t.Helper()
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+	munID, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            "Municipi F33-15 " + suffix,
+		Tipus:          "municipi",
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear municipi F33-15: %v", err)
+	}
+	eclesID, err := database.CreateArquebisbat(&db.Arquebisbat{
+		Nom:            "Bisbat F33-15 " + suffix,
+		TipusEntitat:   "bisbat",
+		ModeracioEstat: "publicat",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear arquebisbat F33-15: %v", err)
+	}
+	arxiuID, err := database.CreateArxiu(&db.Arxiu{
+		Nom:                   "Arxiu F33-15 " + suffix,
+		Tipus:                 "parroquia",
+		Acces:                 "online",
+		MunicipiID:            sql.NullInt64{Int64: int64(munID), Valid: true},
+		EntitatEclesiasticaID: sql.NullInt64{Int64: int64(eclesID), Valid: true},
+		ModeracioEstat:        "publicat",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear arxiu F33-15: %v", err)
+	}
+	llibreID, err := database.CreateLlibre(&db.Llibre{
+		ArquebisbatID:  eclesID,
+		MunicipiID:     munID,
+		Titol:          "Llibre F33-15 " + suffix,
+		TipusLlibre:    "naixements",
+		ModeracioEstat: "publicat",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear llibre F33-15: %v", err)
+	}
+	if err := database.AddArxiuLlibre(arxiuID, llibreID, "", ""); err != nil {
+		t.Fatalf("no s'ha pogut vincular arxiu/llibre F33-15: %v", err)
+	}
+	return llibreID
+}
+
+func runF3315ConvertRegistre(app *App, session *http.Cookie, registreID, rawPersonID int) *httptest.ResponseRecorder {
+	csrf := "csrf_f33_15_" + strconv.Itoa(registreID)
+	form := url.Values{}
+	form.Set("csrf_token", csrf)
+	form.Set("raw_person_id", strconv.Itoa(rawPersonID))
+	form.Set("return_to", "/done")
+	req := httptest.NewRequest(http.MethodPost, "/documentals/registres/"+strconv.Itoa(registreID)+"/convert-persona", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	req.AddCookie(&http.Cookie{Name: "cg_csrf", Value: csrf})
+	rr := httptest.NewRecorder()
+	app.AdminConvertRegistreToPersona(rr, req)
+	return rr
 }
 
 func createF3313SessionCookie(t *testing.T, database db.DB, userID int, sessionID string) *http.Cookie {

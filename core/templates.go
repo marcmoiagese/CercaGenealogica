@@ -591,10 +591,10 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		m["CanViewRanking"] = effectiveAdmin || hasKey(permKeyRankingView)
 	}
 	if _, found := m["CanViewPersones"]; !found {
-		m["CanViewPersones"] = effectiveAdmin || perms.CanCreatePerson || hasKey(permKeyPersonsView)
+		m["CanViewPersones"] = effectiveAdmin || hasKey(permKeyPersonsView) || hasKey(permKeyPersonesCreate)
 	}
 	if _, found := m["CanCreatePerson"]; !found {
-		m["CanCreatePerson"] = effectiveAdmin || perms.CanCreatePerson
+		m["CanCreatePerson"] = effectiveAdmin || hasKey(permKeyPersonesCreate)
 	}
 	if _, found := m["CanViewCognoms"]; !found {
 		m["CanViewCognoms"] = effectiveAdmin || hasKey(permKeyCognomsView)

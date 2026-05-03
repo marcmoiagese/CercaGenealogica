@@ -40,6 +40,8 @@ const (
 	permKeySearchAdvancedView  = "search.advanced.view"
 	permKeyRankingView         = "ranking.view"
 	permKeyPersonsView         = "persons.view"
+	permKeyPersonesCreate      = "persones.create"
+	permKeyPersonesEditAny     = "persones.edit.any"
 	permKeyPersonesModerate    = "persones.moderate"
 	permKeyCognomsView         = "cognoms.view"
 	permKeyCognomsModerate     = "cognoms.moderate"
@@ -132,6 +134,8 @@ var permissionCatalogKeys = []string{
 	permKeySearchAdvancedView,
 	permKeyRankingView,
 	permKeyPersonsView,
+	permKeyPersonesCreate,
+	permKeyPersonesEditAny,
 	permKeyPersonesModerate,
 	permKeyCognomsView,
 	permKeyCognomsModerate,
@@ -227,7 +231,12 @@ func permissionCatalog() []string {
 
 func defaultPermKeysForPolicy(name string) []string {
 	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "usuari", "confianca", "confiança", "moderador":
+	case "confianca", "confiança":
+		keys := make([]string, 0, len(defaultUserPermissionKeys)+1)
+		keys = append(keys, defaultUserPermissionKeys...)
+		keys = append(keys, permKeyPersonesCreate)
+		return keys
+	case "usuari", "moderador":
 		keys := make([]string, len(defaultUserPermissionKeys))
 		copy(keys, defaultUserPermissionKeys)
 		return keys
@@ -875,6 +884,41 @@ func (a *App) canManageUsersModular(user *db.User) bool {
 	return a.userHasAssignedModularGrant(user.ID, permKeyAdminUsersManage)
 }
 
+func (a *App) canCreatePersonModular(user *db.User) bool {
+	if user == nil || a.DB == nil {
+		return false
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	if a.effectiveAdminForUser(user.ID, perms) {
+		return true
+	}
+	return a.userHasModularDefaultOrAssignedGrant(user.ID, permKeyPersonesCreate)
+}
+
+func (a *App) canEditAnyPersonModular(user *db.User) bool {
+	if user == nil || a.DB == nil {
+		return false
+	}
+	perms := a.getPermissionsForUser(user.ID)
+	if a.effectiveAdminForUser(user.ID, perms) {
+		return true
+	}
+	return a.userHasModularDefaultOrAssignedGrant(user.ID, permKeyPersonesEditAny)
+}
+
+func (a *App) canEditPersonaModular(user *db.User, persona db.Persona) bool {
+	if user == nil {
+		return false
+	}
+	if a.canEditAnyPersonModular(user) {
+		return true
+	}
+	if !a.canCreatePersonModular(user) {
+		return false
+	}
+	return !persona.CreatedBy.Valid || int(persona.CreatedBy.Int64) == user.ID
+}
+
 func (a *App) canManageEclesiaModular(user *db.User) bool {
 	if user == nil || a.DB == nil {
 		return false
@@ -906,6 +950,48 @@ func (a *App) canViewEclesiaModular(user *db.User) bool {
 		permKeyTerritoriEclesImportJSON,
 		permKeyAdminEclesImport,
 	)
+}
+
+func (a *App) userHasModularDefaultOrAssignedGrant(userID int, permKeys ...string) bool {
+	if a == nil || a.DB == nil || userID <= 0 || len(permKeys) == 0 {
+		return false
+	}
+	wanted := make(map[string]bool, len(permKeys))
+	for _, key := range permKeys {
+		key = strings.TrimSpace(key)
+		if key != "" {
+			wanted[key] = true
+		}
+	}
+	if len(wanted) == 0 {
+		return false
+	}
+	policies, err := a.DB.ListUserPolitiques(userID)
+	if err != nil {
+		Errorf("userHasModularDefaultOrAssignedGrant: error carregant politiques usuari=%d: %v", userID, err)
+		return false
+	}
+	for _, policy := range policies {
+		grants, err := a.DB.ListPoliticaGrants(policy.ID)
+		if err != nil {
+			Errorf("userHasModularDefaultOrAssignedGrant: error carregant grants politica=%d usuari=%d: %v", policy.ID, userID, err)
+			return false
+		}
+		for _, grant := range grants {
+			if wanted[strings.TrimSpace(grant.PermKey)] {
+				return true
+			}
+		}
+		if len(grants) > 0 {
+			continue
+		}
+		for _, key := range defaultPermKeysForPolicy(policy.Nom) {
+			if wanted[key] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (a *App) userHasAssignedModularGrant(userID int, permKeys ...string) bool {

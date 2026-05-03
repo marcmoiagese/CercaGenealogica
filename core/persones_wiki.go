@@ -38,12 +38,7 @@ func (a *App) PersonaWikiHistory(w http.ResponseWriter, r *http.Request) {
 	*r = *a.withPermissions(r, perms)
 	canModerate := a.canModerateWikiObject(user, perms, "persona", persona.ID)
 	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
-	canEditPersona := false
-	if perms.Admin || perms.CanEditAnyPerson {
-		canEditPersona = true
-	} else if persona.CreatedBy.Valid && int(persona.CreatedBy.Int64) == user.ID {
-		canEditPersona = true
-	}
+	canEditPersona := a.canEditPersonaModular(user, *persona)
 	if persona.ModeracioEstat != "publicat" && !(canModerate || canEditPersona) {
 		http.NotFound(w, r)
 		return
@@ -273,12 +268,7 @@ func (a *App) PersonaWikiStats(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	canEditPersona := false
-	if perms.Admin || perms.CanEditAnyPerson {
-		canEditPersona = true
-	} else if persona.CreatedBy.Valid && int(persona.CreatedBy.Int64) == user.ID {
-		canEditPersona = true
-	}
+	canEditPersona := a.canEditPersonaModular(user, *persona)
 	if persona.ModeracioEstat != "publicat" && !(canModerate || canEditPersona) {
 		http.NotFound(w, r)
 		return
@@ -344,12 +334,7 @@ func (a *App) PersonaWikiRevert(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	canEditPersona := false
-	if perms.Admin || perms.CanEditAnyPerson {
-		canEditPersona = true
-	} else if persona.CreatedBy.Valid && int(persona.CreatedBy.Int64) == user.ID {
-		canEditPersona = true
-	}
+	canEditPersona := a.canEditPersonaModular(user, *persona)
 	if persona.ModeracioEstat != "publicat" && !(canModerate || canEditPersona) {
 		http.NotFound(w, r)
 		return
@@ -454,12 +439,7 @@ func (a *App) PersonaWikiMark(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	canModerate := a.canModerateWikiObject(user, perms, "persona", persona.ID)
-	canEditPersona := false
-	if perms.Admin || perms.CanEditAnyPerson {
-		canEditPersona = true
-	} else if persona.CreatedBy.Valid && int(persona.CreatedBy.Int64) == user.ID {
-		canEditPersona = true
-	}
+	canEditPersona := a.canEditPersonaModular(user, *persona)
 	if persona.ModeracioEstat != "publicat" && !(canModerate || canEditPersona) {
 		http.NotFound(w, r)
 		return
@@ -534,12 +514,7 @@ func (a *App) PersonaWikiUnmark(w http.ResponseWriter, r *http.Request) {
 	}
 	perms := a.getPermissionsForUser(user.ID)
 	canModerate := a.canModerateWikiObject(user, perms, "persona", persona.ID)
-	canEditPersona := false
-	if perms.Admin || perms.CanEditAnyPerson {
-		canEditPersona = true
-	} else if persona.CreatedBy.Valid && int(persona.CreatedBy.Int64) == user.ID {
-		canEditPersona = true
-	}
+	canEditPersona := a.canEditPersonaModular(user, *persona)
 	if persona.ModeracioEstat != "publicat" && !(canModerate || canEditPersona) {
 		http.NotFound(w, r)
 		return
