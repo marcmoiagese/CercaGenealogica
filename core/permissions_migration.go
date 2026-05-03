@@ -8,6 +8,7 @@ import (
 )
 
 // EnsurePolicyGrants migrates legacy JSON policies into global grants when no grants exist.
+// It is an explicit migration/backfill path, not a runtime authorization path.
 func (a *App) EnsurePolicyGrants() error {
 	if a == nil || a.DB == nil {
 		return nil
@@ -49,7 +50,7 @@ func (a *App) ensurePolicyGrantsFromDocument(policyID int, doc policyDocument) e
 	if len(doc.Statement) > 0 {
 		return a.replacePolicyGrantsFromDocument(policyID, doc)
 	}
-	keys := legacyPermKeys(doc.PolicyPermissions)
+	keys := legacyPermKeysForMigrationOnly(doc.PolicyPermissions)
 	if len(keys) == 0 {
 		return nil
 	}
@@ -75,4 +76,33 @@ func (a *App) ensurePolicyGrantsFromDocument(policyID int, doc policyDocument) e
 		}
 	}
 	return nil
+}
+
+// legacyPermKeysForMigrationOnly maps old PolicyPermissions JSON to modular
+// grant keys for explicit migration/backfill only. Runtime authorization must
+// never call this helper; buildPermissionSnapshot must use real grants,
+// documented defaults, or the explicit policy-name admin contract.
+func legacyPermKeysForMigrationOnly(perms db.PolicyPermissions) []string {
+	if perms.Admin {
+		keys := make([]string, len(permissionCatalogKeys))
+		copy(keys, permissionCatalogKeys)
+		return keys
+	}
+	keys := []string{}
+	if perms.CanManageTerritory {
+		keys = append(keys, legacyTerritoryPermKeys...)
+	}
+	if perms.CanManageEclesia {
+		keys = append(keys, legacyEclesPermKeys...)
+	}
+	if perms.CanManageArchives {
+		keys = append(keys, legacyArchivePermKeys...)
+	}
+	if perms.CanManagePolicies {
+		keys = append(keys, legacyPolicyPermKeys...)
+	}
+	if perms.CanManageUsers {
+		keys = append(keys, legacyUserPermKeys...)
+	}
+	return keys
 }

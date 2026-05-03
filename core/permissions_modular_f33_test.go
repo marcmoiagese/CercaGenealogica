@@ -230,7 +230,7 @@ func TestF334MediaModerationKeyEnablesModerationUI(t *testing.T) {
 	}
 
 	perms := app.getPermissionsForUser(userID)
-	if app.hasPerm(perms, permModerate) {
+	if perms.Admin || perms.CanModerate {
 		t.Fatalf("el test necessita usuari sense permModerate legacy")
 	}
 	req := httptest.NewRequest("GET", "/admin/moderacio/media", nil)
@@ -274,7 +274,7 @@ func TestF334ScopedMunicipiModeratorDoesNotModerateOutsideScope(t *testing.T) {
 	}
 
 	perms := app.getPermissionsForUser(userID)
-	if app.hasPerm(perms, permModerate) {
+	if perms.Admin || perms.CanModerate {
 		t.Fatalf("el test necessita usuari sense permModerate legacy")
 	}
 	model := app.newModeracioScopeModel(&db.User{ID: userID}, perms, false)
@@ -336,7 +336,7 @@ func TestF336WikiModerationUsesScopedObjectTargets(t *testing.T) {
 
 	user := &db.User{ID: userID}
 	perms := app.getPermissionsForUser(userID)
-	if app.hasPerm(perms, permModerate) {
+	if perms.Admin || perms.CanModerate {
 		t.Fatalf("el test necessita usuari sense permModerate legacy")
 	}
 	if !app.canModerateWikiObject(user, perms, "municipi", 7) {
@@ -387,7 +387,7 @@ func TestF336WikiModerationUsesDomainGlobalKeys(t *testing.T) {
 
 	user := &db.User{ID: userID}
 	perms := app.getPermissionsForUser(userID)
-	if app.hasPerm(perms, permModerate) {
+	if perms.Admin || perms.CanModerate {
 		t.Fatalf("el test necessita usuari sense permModerate legacy")
 	}
 	for _, objectType := range []string{"persona", "cognom", "event_historic"} {
@@ -864,7 +864,7 @@ func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
 	}
 
 	perms := app.getPermissionsForUser(userID)
-	if app.hasPerm(perms, permAdmin) || app.hasPerm(perms, permPolicies) {
+	if perms.Admin || perms.CanManagePolicies {
 		t.Fatalf("el test necessita usuari sense permisos legacy admin/policies")
 	}
 	req := httptest.NewRequest("GET", "/admin/usuaris", nil)
@@ -973,7 +973,7 @@ func TestF3311PermTerritoryLegacyDoesNotGrantTerritoryOrArchivesUI(t *testing.T)
 	user := &db.User{ID: userID}
 	target := PermissionTarget{MunicipiID: intPtr(7)}
 
-	if app.hasPerm(perms, permTerritory) != true {
+	if !perms.CanManageTerritory {
 		t.Fatalf("el test necessita permTerritory legacy pur")
 	}
 	if app.canManageTerritoryTarget(user, target) {
@@ -1706,8 +1706,8 @@ func TestF3316TemplateAdminFlagsUseEffectiveAdminContext(t *testing.T) {
 func TestF3316DashboardAdminRoleUsesEffectiveAdminBridge(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 
-	adminUserID := createF330User(t, database, "f33-16-dashboard-admin-flag")
-	adminPolicyID, err := database.SavePolitica(&db.Politica{
+	legacyAdminUserID := createF330User(t, database, "f33-16-dashboard-admin-flag")
+	legacyAdminPolicyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "f33-16-dashboard-admin-flag",
 		Permisos:   `{"admin":true}`,
 		Descripcio: "",
@@ -1715,8 +1715,25 @@ func TestF3316DashboardAdminRoleUsesEffectiveAdminBridge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica admin F33-16: %v", err)
 	}
-	if err := database.AddUserPolitica(adminUserID, adminPolicyID); err != nil {
+	if err := database.AddUserPolitica(legacyAdminUserID, legacyAdminPolicyID); err != nil {
 		t.Fatalf("no s'ha pogut assignar politica admin F33-16: %v", err)
+	}
+	if roles := app.dashboardUserRoleSet(legacyAdminUserID); roles["admin"] {
+		t.Fatalf("dashboard no hauria de marcar rol admin per PolicyPermissions.Admin legacy")
+	}
+
+	adminUserID := createF330User(t, database, "f33-16-dashboard-admin-name")
+	adminPolicyID := findF330PolicyID(t, database, "admin")
+	if _, err := database.SavePolitica(&db.Politica{
+		ID:         adminPolicyID,
+		Nom:        "admin",
+		Permisos:   "{}",
+		Descripcio: "",
+	}); err != nil {
+		t.Fatalf("no s'ha pogut preparar politica admin F33-16: %v", err)
+	}
+	if err := database.AddUserPolitica(adminUserID, adminPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin per nom F33-16: %v", err)
 	}
 	if roles := app.dashboardUserRoleSet(adminUserID); !roles["admin"] {
 		t.Fatalf("dashboard hauria de marcar rol admin via effectiveAdminForUser")
@@ -1879,6 +1896,162 @@ func TestF3319KnownPolicyDefaultsAndImportWorkerLimitRemainExplicit(t *testing.T
 
 func f3319SnapshotHasGrant(snap permissionSnapshot, key string) bool {
 	return len(snap.grants[key]) > 0
+}
+
+func TestF3320BuildPermissionSnapshotDoesNotUseLegacyMigrationMapper(t *testing.T) {
+	body, err := readF3316CoreSource("permissions_modular.go")
+	if err != nil {
+		t.Fatalf("no s'ha pogut llegir permissions_modular.go: %v", err)
+	}
+	src := string(body)
+	fn := f3320FunctionSource(t, src, "func (a *App) buildPermissionSnapshot")
+	for _, pattern := range []string{
+		"legacyPermKeys",
+		"PolicyPermissions",
+		"perms.Admin",
+		"perms.CanManageTerritory",
+		"perms.CanManageEclesia",
+		"perms.CanManageArchives",
+		"perms.CanManagePolicies",
+		"perms.CanManageUsers",
+	} {
+		if strings.Contains(fn, pattern) {
+			t.Fatalf("buildPermissionSnapshot no hauria de contenir el patro legacy %q", pattern)
+		}
+	}
+}
+
+func TestF3320CoreHandlersDoNotUseLegacyPermissionHelpers(t *testing.T) {
+	root := f3320RepoRoot(t)
+	allowed := map[string]bool{
+		"core/permissions.go":                  true,
+		"core/permissions_modular.go":          true,
+		"core/permissions_migration.go":        true,
+		"core/permissions_modular_f33_test.go": true,
+	}
+	patterns := []string{
+		"hasPerm(",
+		"requirePermission(",
+		"permAdmin",
+		"permPolicies",
+		"permUsers",
+		"permEclesia",
+		"permArxius",
+		"permTerritory",
+		"permModerate",
+		"permCreatePerson",
+		"perms.Admin",
+		"perms.CanManagePolicies",
+		"perms.CanManageUsers",
+		"perms.CanManageEclesia",
+		"perms.CanManageArchives",
+		"perms.CanManageTerritory",
+		"perms.CanModerate",
+		"perms.CanCreatePerson",
+		"perms.CanEditAnyPerson",
+	}
+	var violations []string
+	if err := filepath.Walk(filepath.Join(root, "core"), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info == nil || info.IsDir() || !strings.HasSuffix(info.Name(), ".go") {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if allowed[rel] {
+			return nil
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		src := string(body)
+		for _, pattern := range patterns {
+			if strings.Contains(src, pattern) {
+				violations = append(violations, rel+" conte "+pattern)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("no s'ha pogut escanejar core: %v", err)
+	}
+	if len(violations) > 0 {
+		t.Fatalf("handlers/core no autoritzats amb patrons legacy: %s", strings.Join(violations, "; "))
+	}
+}
+
+func TestF3320LegacyPermissionHelpersAreRemovedOrMigrationOnly(t *testing.T) {
+	permissionsBody, err := readF3316CoreSource("permissions.go")
+	if err != nil {
+		t.Fatalf("no s'ha pogut llegir permissions.go: %v", err)
+	}
+	for _, pattern := range []string{
+		"func (a *App) hasPerm",
+		"func (a *App) requirePermission",
+		"func permAdmin",
+		"func permPolicies",
+		"func permUsers",
+		"func permEclesia",
+		"func permArxius",
+		"func permTerritory",
+		"func permModerate",
+		"func permCreatePerson",
+		"if perms.Admin",
+	} {
+		if strings.Contains(string(permissionsBody), pattern) {
+			t.Fatalf("permissions.go conserva helper/cami legacy %q", pattern)
+		}
+	}
+
+	migrationBody, err := readF3316CoreSource("permissions_migration.go")
+	if err != nil {
+		t.Fatalf("no s'ha pogut llegir permissions_migration.go: %v", err)
+	}
+	migrationSrc := string(migrationBody)
+	if !strings.Contains(migrationSrc, "legacyPermKeysForMigrationOnly") {
+		t.Fatalf("permissions_migration.go hauria d'encapsular el mapper legacy com a migration only")
+	}
+	if !strings.Contains(migrationSrc, "not a runtime authorization path") {
+		t.Fatalf("permissions_migration.go hauria de documentar que no es cami runtime")
+	}
+}
+
+func f3320FunctionSource(t *testing.T, src, signature string) string {
+	t.Helper()
+	start := strings.Index(src, signature)
+	if start < 0 {
+		t.Fatalf("no s'ha trobat la funcio %s", signature)
+	}
+	rest := src[start+len(signature):]
+	next := strings.Index(rest, "\nfunc ")
+	if next < 0 {
+		return src[start:]
+	}
+	return src[start : start+len(signature)+next]
+}
+
+func f3320RepoRoot(t *testing.T) string {
+	t.Helper()
+	start, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("no puc obtenir directori actual: %v", err)
+	}
+	root := start
+	for {
+		if _, err := os.Stat(filepath.Join(root, "go.mod")); err == nil {
+			return root
+		}
+		parent := filepath.Dir(root)
+		if parent == root {
+			t.Fatalf("no s'ha trobat go.mod a cap directori pare de %s", start)
+		}
+		root = parent
+	}
 }
 
 func TestF3317ImportTemplateEditUsesOwnerOrEffectiveAdmin(t *testing.T) {

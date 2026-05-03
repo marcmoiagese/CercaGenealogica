@@ -624,31 +624,6 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 	return snap, nil
 }
 
-func legacyPermKeys(perms db.PolicyPermissions) []string {
-	if perms.Admin {
-		keys := make([]string, len(permissionCatalogKeys))
-		copy(keys, permissionCatalogKeys)
-		return keys
-	}
-	keys := []string{}
-	if perms.CanManageTerritory {
-		keys = append(keys, legacyTerritoryPermKeys...)
-	}
-	if perms.CanManageEclesia {
-		keys = append(keys, legacyEclesPermKeys...)
-	}
-	if perms.CanManageArchives {
-		keys = append(keys, legacyArchivePermKeys...)
-	}
-	if perms.CanManagePolicies {
-		keys = append(keys, legacyPolicyPermKeys...)
-	}
-	if perms.CanManageUsers {
-		keys = append(keys, legacyUserPermKeys...)
-	}
-	return keys
-}
-
 func addGlobalGrant(store map[string][]compiledGrant, permKey string) {
 	addGrant(store, permKey, compiledGrant{scopeType: ScopeGlobal})
 }

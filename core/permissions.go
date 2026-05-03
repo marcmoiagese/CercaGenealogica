@@ -75,10 +75,7 @@ func effectiveAdminFromContext(r *http.Request) (bool, bool) {
 	return false, false
 }
 
-func (a *App) effectiveAdminForUser(userID int, perms db.PolicyPermissions) bool {
-	if perms.Admin {
-		return true
-	}
+func (a *App) effectiveAdminForUser(userID int, _ db.PolicyPermissions) bool {
 	if userID == 0 || a == nil {
 		return false
 	}
@@ -140,51 +137,6 @@ func (a *App) ensureUnreadMessagesCount(r *http.Request, userID int) *http.Reque
 		}
 	}
 	return a.withUnreadMessagesCount(r, count)
-}
-
-func (a *App) hasPerm(perms db.PolicyPermissions, check func(db.PolicyPermissions) bool) bool {
-	if perms.Admin {
-		return true
-	}
-	return check(perms)
-}
-
-func (a *App) requirePermission(w http.ResponseWriter, r *http.Request, check func(db.PolicyPermissions) bool) (*db.User, db.PolicyPermissions, bool) {
-	user, ok := a.VerificarSessio(r)
-	if !ok || user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return nil, db.PolicyPermissions{}, false
-	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
-	if _, found := effectiveAdminFromContext(r); !found {
-		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
-	}
-	*r = *a.ensureUnreadMessagesCount(r, user.ID)
-	if _, found := permissionKeysFromContext(r); !found {
-		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
-	}
-	if !a.hasPerm(perms, check) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return user, perms, false
-	}
-	return user, perms, true
-}
-
-// Helpers
-func permTerritory(p db.PolicyPermissions) bool { return p.CanManageTerritory }
-func permEclesia(p db.PolicyPermissions) bool   { return p.CanManageEclesia }
-func permArxius(p db.PolicyPermissions) bool    { return p.CanManageArchives }
-func permModerate(p db.PolicyPermissions) bool  { return p.CanModerate }
-func permPolicies(p db.PolicyPermissions) bool  { return p.CanManagePolicies }
-func permAdmin(p db.PolicyPermissions) bool     { return p.Admin }
-func permUsers(p db.PolicyPermissions) bool     { return p.CanManageUsers }
-func permCreatePerson(p db.PolicyPermissions) bool {
-	return p.CanCreatePerson || p.Admin
 }
 
 // RequireLogin is a minimal guard without any specific permission.
