@@ -41,9 +41,7 @@ func (a *App) CognomWikiHistory(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	*r = *a.withPermissions(r, perms)
-	canModerate := a.canModerateWikiObject(user, perms, "cognom", cognom.ID)
+	canModerate := a.canModerateWikiObject(user, "cognom", cognom.ID)
 	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 
 	changes, _ := a.DB.ListWikiChanges("cognom", cognomID)
@@ -332,8 +330,7 @@ func (a *App) CognomWikiRevert(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.canModerateWikiObject(user, perms, "cognom", cognom.ID)
+	canModerate := a.canModerateWikiObject(user, "cognom", cognom.ID)
 	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return

@@ -21,42 +21,42 @@ type TerritoriImportPlan struct {
 }
 
 type TerritoriImportPersistResult struct {
-	CountriesCreated int
-	LevelsTotal      int
-	LevelsCreated    int
-	LevelsSkipped    int
-	LevelsErrors     int
-	MunicipisTotal   int
-	MunicipisCreated int
-	MunicipisSkipped int
-	MunicipisErrors  int
-	ParentErrors     int
-	BulkModeLevels   string
+	CountriesCreated  int
+	LevelsTotal       int
+	LevelsCreated     int
+	LevelsSkipped     int
+	LevelsErrors      int
+	MunicipisTotal    int
+	MunicipisCreated  int
+	MunicipisSkipped  int
+	MunicipisErrors   int
+	ParentErrors      int
+	BulkModeLevels    string
 	BulkModeMunicipis string
 	BulkModeParents   string
 	Sidefx            TerritoriImportSidefxPlan
 }
 
 type TerritoriImportSidefxPlan struct {
-	UserID               int
-	AffectedMunicipiIDs  []int
-	AffectedLevelIDs     []int
-	PendingActivities    []db.UserActivity
-	ActivityCount        int
-	ClosureErrors        int
-	RebuildErrors        int
-	ActivityMode         string
+	UserID              int
+	AffectedMunicipiIDs []int
+	AffectedLevelIDs    []int
+	PendingActivities   []db.UserActivity
+	ActivityCount       int
+	ClosureErrors       int
+	RebuildErrors       int
+	ActivityMode        string
 }
 
 type TerritoriImportMetrics struct {
-	ParseDur                   time.Duration
-	PrepDur                    time.Duration
-	CountriesDur               time.Duration
-	LevelsBuildDur             time.Duration
-	LevelsPersistDur           time.Duration
-	MunicipisExistingLookupDur time.Duration
-	MunicipisBuildDur          time.Duration
-	MunicipisPersistDur        time.Duration
+	ParseDur                          time.Duration
+	PrepDur                           time.Duration
+	CountriesDur                      time.Duration
+	LevelsBuildDur                    time.Duration
+	LevelsPersistDur                  time.Duration
+	MunicipisExistingLookupDur        time.Duration
+	MunicipisBuildDur                 time.Duration
+	MunicipisPersistDur               time.Duration
 	ParentsBuildDur                   time.Duration
 	ParentsPersistDur                 time.Duration
 	SidefxClosureDur                  time.Duration

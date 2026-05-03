@@ -263,20 +263,20 @@ func (a *App) MessagesThread(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"ThreadID":      threadID,
-		"OtherUser":     otherUser,
-		"OtherLabel":    otherLabel,
-		"Messages":      messageViews,
-		"Threads":       threadViews,
-		"Folders":       folders,
-		"CurrentFolder": folderParam,
+		"ThreadID":          threadID,
+		"OtherUser":         otherUser,
+		"OtherLabel":        otherLabel,
+		"Messages":          messageViews,
+		"Threads":           threadViews,
+		"Folders":           folders,
+		"CurrentFolder":     folderParam,
 		"CurrentFolderName": folderName,
-		"FolderInboxToken": dmFolderInboxToken,
-		"CanSend":       canSend,
-		"SendBlocked":   sendBlocked,
-		"ViewerBlocked": viewerBlocked,
-		"Archived":      state.Archived,
-		"MessageMaxLen": dmMessageMaxLen,
+		"FolderInboxToken":  dmFolderInboxToken,
+		"CanSend":           canSend,
+		"SendBlocked":       sendBlocked,
+		"ViewerBlocked":     viewerBlocked,
+		"Archived":          state.Archived,
+		"MessageMaxLen":     dmMessageMaxLen,
 	}
 	if refreshUnread {
 		if count, err := a.DB.CountDMUnread(user.ID); err == nil {

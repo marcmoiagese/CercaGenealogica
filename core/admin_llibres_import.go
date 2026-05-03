@@ -251,7 +251,7 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 	seenFisic := map[string]map[string]struct{}{}
 
 	type llibreImportEntry struct {
-		llibre     db.Llibre
+		llibre      db.Llibre
 		codiDigital string
 		codiFisic   string
 		comboKey    string
@@ -363,7 +363,7 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 			ModeracioMotiu:    "",
 		}
 		entry := llibreImportEntry{
-			llibre:     llibre,
+			llibre:      llibre,
 			codiDigital: codiDigital,
 			codiFisic:   codiFisic,
 			comboKey:    comboKey,

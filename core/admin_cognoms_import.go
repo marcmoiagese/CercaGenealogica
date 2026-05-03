@@ -24,7 +24,7 @@ type cognomStatsKey struct {
 }
 
 func (a *App) AdminCognomsImport(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requireEffectiveAdminModular(w, r); !ok {
+	if _, ok := a.requireEffectiveAdminModular(w, r); !ok {
 		return
 	}
 	q := r.URL.Query()
@@ -52,7 +52,7 @@ func (a *App) AdminCognomsImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminCognomsImportRun(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requireEffectiveAdminModular(w, r); !ok {
+	if _, ok := a.requireEffectiveAdminModular(w, r); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -156,7 +156,7 @@ func (a *App) AdminCognomsImportRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminCognomsStatsRun(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requireEffectiveAdminModular(w, r); !ok {
+	if _, ok := a.requireEffectiveAdminModular(w, r); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {

@@ -34,9 +34,7 @@ func (a *App) PersonaWikiHistory(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	*r = *a.withPermissions(r, perms)
-	canModerate := a.canModerateWikiObject(user, perms, "persona", persona.ID)
+	canModerate := a.canModerateWikiObject(user, "persona", persona.ID)
 	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 	canEditPersona := a.canEditPersonaModular(user, *persona)
 	if persona.ModeracioEstat != "publicat" && !(canModerate || canEditPersona) {
@@ -262,8 +260,7 @@ func (a *App) PersonaWikiStats(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.canModerateWikiObject(user, perms, "persona", persona.ID)
+	canModerate := a.canModerateWikiObject(user, "persona", persona.ID)
 	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -328,8 +325,7 @@ func (a *App) PersonaWikiRevert(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.canModerateWikiObject(user, perms, "persona", persona.ID)
+	canModerate := a.canModerateWikiObject(user, "persona", persona.ID)
 	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -437,8 +433,7 @@ func (a *App) PersonaWikiMark(w http.ResponseWriter, r *http.Request) {
 	if !a.ensureWikiMarkAllowed(w, r, lang) {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.canModerateWikiObject(user, perms, "persona", persona.ID)
+	canModerate := a.canModerateWikiObject(user, "persona", persona.ID)
 	canEditPersona := a.canEditPersonaModular(user, *persona)
 	if persona.ModeracioEstat != "publicat" && !(canModerate || canEditPersona) {
 		http.NotFound(w, r)
@@ -512,8 +507,7 @@ func (a *App) PersonaWikiUnmark(w http.ResponseWriter, r *http.Request) {
 	if !a.ensureWikiMarkAllowed(w, r, lang) {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.canModerateWikiObject(user, perms, "persona", persona.ID)
+	canModerate := a.canModerateWikiObject(user, "persona", persona.ID)
 	canEditPersona := a.canEditPersonaModular(user, *persona)
 	if persona.ModeracioEstat != "publicat" && !(canModerate || canEditPersona) {
 		http.NotFound(w, r)

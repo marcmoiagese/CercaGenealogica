@@ -31,13 +31,13 @@ func (a *App) AdminControlModeracioSummaryAPI(w http.ResponseWriter, r *http.Req
 		http.NotFound(w, r)
 		return
 	}
-	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
+	user, canModerateAll, ok := a.requireModeracioUser(w, r)
 	if !ok {
 		return
 	}
 	filters, _ := parseModeracioFilters(r)
 	start := time.Now()
-	summary, mode, scopeMode, cacheHit, err := a.adminControlModeracioSummaryCached(filters, user, perms, canModerateAll)
+	summary, mode, scopeMode, cacheHit, err := a.adminControlModeracioSummaryCached(filters, user, canModerateAll)
 	if err != nil {
 		http.Error(w, "No s'ha pogut carregar el resum", http.StatusInternalServerError)
 		return
@@ -61,17 +61,17 @@ func (a *App) AdminControlModeracioSummaryAPI(w http.ResponseWriter, r *http.Req
 	}
 }
 
-func (a *App) adminControlModeracioSummaryCached(filters moderacioFilters, user *db.User, perms db.PolicyPermissions, canModerateAll bool) (moderacioSummary, string, string, bool, error) {
-	total, byType, scopeMode, cacheHit, err := a.adminControlModeracioPendingCountsCached(user, perms, canModerateAll)
+func (a *App) adminControlModeracioSummaryCached(filters moderacioFilters, user *db.User, canModerateAll bool) (moderacioSummary, string, string, bool, error) {
+	total, byType, scopeMode, cacheHit, err := a.adminControlModeracioPendingCountsCached(user, canModerateAll)
 	if err != nil {
 		return moderacioSummary{}, "", "", false, err
 	}
 	return buildModeracioSummaryFromCounts(filters, total, byType), moderacioSummaryMode(filters), scopeMode, cacheHit, nil
 }
 
-func (a *App) adminControlModeracioPendingCountsCached(user *db.User, perms db.PolicyPermissions, canModerateAll bool) (int, []adminControlPendingType, string, bool, error) {
+func (a *App) adminControlModeracioPendingCountsCached(user *db.User, canModerateAll bool) (int, []adminControlPendingType, string, bool, error) {
 	if !canModerateAll {
-		total, byType, err := a.adminPendingModerationCountsForUser(user, perms, canModerateAll)
+		total, byType, err := a.adminPendingModerationCountsForUser(user, canModerateAll)
 		return total, byType, "scoped", false, err
 	}
 	now := time.Now()
@@ -185,11 +185,11 @@ func moderacioSummaryMode(filters moderacioFilters) string {
 	return "light"
 }
 
-func (a *App) adminPendingModerationCountsForUser(user *db.User, perms db.PolicyPermissions, canModerateAll bool) (int, []adminControlPendingType, error) {
+func (a *App) adminPendingModerationCountsForUser(user *db.User, canModerateAll bool) (int, []adminControlPendingType, error) {
 	if canModerateAll {
 		return a.adminPendingModerationCounts()
 	}
-	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
+	scopeModel := a.newModeracioScopeModel(user, canModerateAll)
 	counts := map[string]int{}
 	if scopeModel.canModerateType("persona") {
 		if total, err := a.DB.CountPersones(db.PersonaFilter{Estat: "pendent"}); err != nil {
@@ -540,7 +540,7 @@ func (a *App) AdminControlModeracioJobStatus(w http.ResponseWriter, r *http.Requ
 		http.NotFound(w, r)
 		return
 	}
-	user, perms, isAdmin, ok := a.requireModeracioMassivaUser(w, r)
+	user, isAdmin, ok := a.requireModeracioMassivaUser(w, r)
 	if !ok {
 		return
 	}
@@ -572,7 +572,7 @@ func (a *App) AdminControlModeracioJobStatus(w http.ResponseWriter, r *http.Requ
 		http.NotFound(w, r)
 		return
 	}
-	if !isAdmin && !a.canModeracioMassiva(user, perms) {
+	if !isAdmin && !a.canModeracioMassiva(user) {
 		http.NotFound(w, r)
 		return
 	}

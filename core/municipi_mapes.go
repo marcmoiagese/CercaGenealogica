@@ -680,11 +680,7 @@ func (a *App) MunicipiMapesListPage(w http.ResponseWriter, r *http.Request) {
 	}
 	user, _ := a.VerificarSessio(r)
 	if user != nil {
-		*r = *a.withUser(r, user)
-		if _, found := a.permissionsFromContext(r); !found {
-			perms := a.getPermissionsForUser(user.ID)
-			*r = *a.withPermissions(r, perms)
-		}
+		*r = *a.withRuntimePermissionContext(r, user)
 	}
 	target := a.resolveMunicipiTarget(munID)
 	canCreate := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisMapesCreate, target)
@@ -728,11 +724,7 @@ func (a *App) MunicipiMapaViewPage(w http.ResponseWriter, r *http.Request) {
 	}
 	user, _ := a.VerificarSessio(r)
 	if user != nil {
-		*r = *a.withUser(r, user)
-		if _, found := a.permissionsFromContext(r); !found {
-			perms := a.getPermissionsForUser(user.ID)
-			*r = *a.withPermissions(r, perms)
-		}
+		*r = *a.withRuntimePermissionContext(r, user)
 	}
 	target := a.resolveMunicipiTarget(munID)
 	canViewAll := user != nil && a.HasPermission(user.ID, permKeyTerritoriMunicipisMapesView, target)
@@ -797,11 +789,7 @@ func (a *App) MunicipiMapaEditorPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	*r = *a.withUser(r, user)
-	if _, found := a.permissionsFromContext(r); !found {
-		perms := a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
+	*r = *a.withRuntimePermissionContext(r, user)
 	target := a.resolveMunicipiTarget(munID)
 	if !a.HasPermission(user.ID, permKeyTerritoriMunicipisMapesEdit, target) {
 		http.Error(w, "forbidden", http.StatusForbidden)

@@ -190,7 +190,7 @@ func moderacioBulkErrorText(result moderacioBulkJobResult) string {
 	return base + "; primer error " + context + ": " + sample.Message
 }
 
-func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *db.User, perms db.PolicyPermissions, bulkUserID int) (int, error) {
+func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *db.User, bulkUserID int) (int, error) {
 	if a == nil || a.DB == nil || user == nil {
 		return 0, fmt.Errorf("context bulk invàlid")
 	}
@@ -225,8 +225,8 @@ func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *d
 	if IsDebugEnabled() {
 		Debugf("moderacio bulk admin job row created job=%d actor=%d action=%s type=%s bulk_user_id=%d", jobID, user.ID, action, bulkType, bulkUserID)
 	}
-	canModerateAll := a.canModerateAllModular(user, perms)
-	snapshot, err := a.resolveModeracioBulkAllSnapshot(bulkType, user, perms, canModerateAll, bulkUserID)
+	canModerateAll := a.canModerateAllModular(user)
+	snapshot, err := a.resolveModeracioBulkAllSnapshot(bulkType, user, canModerateAll, bulkUserID)
 	if err != nil {
 		Errorf("moderacio bulk snapshot resolve failed job=%d actor=%d action=%s type=%s bulk_user_id=%d err=%v", jobID, user.ID, action, bulkType, bulkUserID, err)
 		resultJSON := mustMarshalModeracioBulkResult(moderacioBulkJobResult{
@@ -322,9 +322,9 @@ func (a *App) startModeracioBulkAdminJob(action, bulkType, motiu string, user *d
 	return jobID, nil
 }
 
-func (a *App) resolveModeracioBulkAllSnapshot(bulkType string, user *db.User, perms db.PolicyPermissions, canModerateAll bool, bulkUserID int) (moderacioBulkSnapshot, error) {
+func (a *App) resolveModeracioBulkAllSnapshot(bulkType string, user *db.User, canModerateAll bool, bulkUserID int) (moderacioBulkSnapshot, error) {
 	start := time.Now()
-	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
+	scopeModel := a.newModeracioScopeModel(user, canModerateAll)
 	scopeMode := "scoped"
 	if scopeModel.canModerateAll {
 		scopeMode = "global"

@@ -267,9 +267,9 @@ func (a *App) EspaiPersonalPeopleDataPage(w http.ResponseWriter, r *http.Request
 	}
 
 	RenderPrivateTemplate(w, r, "espai.html", map[string]interface{}{
-		"SpaceSection":               "persones_importades",
-		"EspaiPeopleData":            items,
-		"EspaiPeopleDataPager":       pager,
+		"SpaceSection":                "persones_importades",
+		"EspaiPeopleData":             items,
+		"EspaiPeopleDataPager":        pager,
 		"EspaiPeopleDataFilterValues": filterValues,
 		"EspaiPeopleDataFilterOrder":  strings.Join(filterOrder, ","),
 		"EspaiPeopleDataSort":         sortKey,

@@ -66,15 +66,15 @@ var treeMotherRoles = map[string]struct{}{
 }
 
 var treeSubjectRoles = map[string]struct{}{
-	"batejat":         {},
-	"baptizat":        {},
-	"infant":          {},
-	"infante":         {},
-	"baptism":         {},
-	"nascut":          {},
-	"nascuda":         {},
-	"nacido":          {},
-	"nacida":          {},
+	"batejat":          {},
+	"baptizat":         {},
+	"infant":           {},
+	"infante":          {},
+	"baptism":          {},
+	"nascut":           {},
+	"nascuda":          {},
+	"nacido":           {},
+	"nacida":           {},
 	"personaprincipal": {},
 }
 

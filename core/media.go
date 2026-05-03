@@ -184,10 +184,9 @@ func (a *App) MediaAlbumNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lang := resolveUserLang(r, user)
-	perms, _ := a.permissionsFromContext(r)
 	RenderPrivateTemplateLang(w, r, "media-albums-form.html", lang, map[string]interface{}{
 		"User":            user,
-		"AlbumTypes":      mediaAlbumTypeListForPerms(perms),
+		"AlbumTypes":      mediaAlbumTypeList(),
 		"SourceTypes":     mediaSourceTypeList(),
 		"FormTitle":       "",
 		"FormType":        "other",
@@ -211,7 +210,6 @@ func (a *App) MediaLlibresSearchJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
 	if !a.hasAnyPermissionKey(user.ID, permKeyDocumentalsLlibresView) {
 		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
 		return
@@ -236,7 +234,7 @@ func (a *App) MediaLlibresSearchJSON(w http.ResponseWriter, r *http.Request) {
 		MunicipiID:    municipiID,
 		Limit:         limit,
 	}
-	if !a.effectiveAdminForUser(user.ID, perms) {
+	if !a.effectiveAdminForUser(user.ID) {
 		filter.Status = "publicat"
 	}
 	scope := a.buildListScopeFilter(user.ID, permKeyDocumentalsLlibresView, ScopeLlibre)
@@ -1114,11 +1112,6 @@ func mediaAlbumTypeList() []string {
 	return []string{"book", "memorial", "photo", "other"}
 }
 
-func mediaAlbumTypeListForPerms(perms db.PolicyPermissions) []string {
-	_ = perms
-	return mediaAlbumTypeList()
-}
-
 func mediaSourceTypeList() []string {
 	return []string{"online", "offline_archive", "family_private", "other"}
 }
@@ -1203,7 +1196,6 @@ func extensionForMime(mime string) string {
 
 func (a *App) renderMediaAlbumForm(w http.ResponseWriter, r *http.Request, user *db.User, cfg mediaConfig, title, albumType, sourceType, desc string, llibreID int, llibreLabel, errMsg string) {
 	lang := resolveUserLang(r, user)
-	perms, _ := a.permissionsFromContext(r)
 	if llibreID > 0 && strings.TrimSpace(llibreLabel) == "" {
 		if llibre, err := a.DB.GetLlibre(llibreID); err == nil && llibre != nil {
 			llibreLabel = strings.TrimSpace(llibre.Titol)
@@ -1214,7 +1206,7 @@ func (a *App) renderMediaAlbumForm(w http.ResponseWriter, r *http.Request, user 
 	}
 	RenderPrivateTemplateLang(w, r, "media-albums-form.html", lang, map[string]interface{}{
 		"User":            user,
-		"AlbumTypes":      mediaAlbumTypeListForPerms(perms),
+		"AlbumTypes":      mediaAlbumTypeList(),
 		"SourceTypes":     mediaSourceTypeList(),
 		"FormTitle":       title,
 		"FormType":        albumType,

@@ -410,7 +410,6 @@ func (a *App) AdminImportRegistresView(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -427,7 +426,7 @@ func (a *App) AdminImportRegistresView(w http.ResponseWriter, r *http.Request) {
 		"User":              user,
 		"CanManageArxius":   a.canManageAnyDocumentalsModular(user),
 		"CanManagePolicies": a.canManagePoliciesModular(user),
-		"CanModerate":       a.canModerateModular(user, perms),
+		"CanModerate":       a.canModerateModular(user),
 	})
 }
 
@@ -464,8 +463,7 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 	case "template":
 		templateID := parseIntValue(r.FormValue("template_id"))
 		template, err := a.DB.GetCSVImportTemplate(templateID)
-		perms := a.getPermissionsForUser(user.ID)
-		if err != nil || template == nil || !a.canViewImportTemplate(user, perms, template) {
+		if err != nil || template == nil || !a.canViewImportTemplate(user, template) {
 			result.Failed = 1
 			result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "plantilla no trobada"})
 			break

@@ -20,23 +20,18 @@ type mapModerationItem struct {
 	ViewURL    string
 }
 
-func (a *App) requireMapModerationUser(w http.ResponseWriter, r *http.Request) (*db.User, db.PolicyPermissions, bool) {
+func (a *App) requireMapModerationUser(w http.ResponseWriter, r *http.Request) (*db.User, bool) {
 	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return nil, db.PolicyPermissions{}, false
+		return nil, false
 	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
+	*r = *a.withRuntimePermissionContext(r, user)
 	if !a.hasAnyPermissionKey(user.ID, permKeyTerritoriMunicipisMapesModerate) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
-		return user, perms, false
+		return user, false
 	}
-	return user, perms, true
+	return user, true
 }
 
 func (a *App) canModerateMap(user *db.User, munID int) bool {
@@ -52,7 +47,7 @@ func (a *App) AdminModeracioMapesList(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, _, ok := a.requireMapModerationUser(w, r)
+	user, ok := a.requireMapModerationUser(w, r)
 	if !ok {
 		return
 	}
@@ -159,7 +154,7 @@ func (a *App) AdminModeracioMapesApprove(w http.ResponseWriter, r *http.Request)
 		http.NotFound(w, r)
 		return
 	}
-	user, _, ok := a.requireMapModerationUser(w, r)
+	user, ok := a.requireMapModerationUser(w, r)
 	if !ok {
 		return
 	}
@@ -221,7 +216,7 @@ func (a *App) AdminModeracioMapesReject(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
-	user, _, ok := a.requireMapModerationUser(w, r)
+	user, ok := a.requireMapModerationUser(w, r)
 	if !ok {
 		return
 	}

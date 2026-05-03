@@ -68,8 +68,7 @@ func (a *App) canManageAnyDocumentalsModular(user *db.User) bool {
 	if user == nil {
 		return false
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	if a.effectiveAdminForUser(user.ID, perms) {
+	if a.effectiveAdminForUser(user.ID) {
 		return true
 	}
 	for _, key := range []string{
@@ -106,13 +105,11 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	*r = *a.withPermissions(r, perms)
 	canManage := a.canManageAnyDocumentalsModular(user)
-	isAdmin := a.effectiveAdminForUser(user.ID, perms)
+	isAdmin := a.effectiveAdminForUser(user.ID)
 	canManageTerritory := a.canManageAnyTerritoryModular(user)
 	canManageEclesia := a.canManageEclesiaModular(user)
-	canModerate := a.canModerateModular(user, perms)
+	canModerate := a.canModerateModular(user)
 	canManageUsers := a.canManageUsersModular(user)
 	canManagePolicies := a.canManagePoliciesModular(user)
 	filter := db.ArxiuFilter{
@@ -249,8 +246,6 @@ func (a *App) ShowArxiu(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	*r = *a.withPermissions(r, perms)
 	id := extractID(r.URL.Path)
 	if id == 0 {
 		http.NotFound(w, r)
@@ -315,12 +310,11 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	canManage := a.canManageAnyDocumentalsModular(user)
-	isAdmin := a.effectiveAdminForUser(user.ID, perms)
+	isAdmin := a.effectiveAdminForUser(user.ID)
 	canManageTerritory := a.canManageAnyTerritoryModular(user)
 	canManageEclesia := a.canManageEclesiaModular(user)
-	canModerate := a.canModerateModular(user, perms)
+	canModerate := a.canModerateModular(user)
 	canManageUsers := a.canManageUsersModular(user)
 	canManagePolicies := a.canManagePoliciesModular(user)
 	canCreateArxiu := a.hasAnyPermissionKey(user.ID, permKeyDocumentalsArxiusCreate)

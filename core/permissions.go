@@ -7,10 +7,6 @@ import (
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
-type permContextKey string
-
-const permissionsKey permContextKey = "permissions"
-
 type userContextKey string
 
 const userKey userContextKey = "user"
@@ -23,38 +19,7 @@ type effectiveAdminContextKey string
 
 const effectiveAdminKey effectiveAdminContextKey = "effective_admin"
 
-// PolicyPermissions is re-exported for convenience
-type PolicyPermissions = db.PolicyPermissions
-
 var adminPolicies = []string{"admin", "moderador", "confiança"}
-
-func (a *App) getPermissionsForUser(userID int) db.PolicyPermissions {
-	if userID == 0 || a.DB == nil {
-		return db.PolicyPermissions{}
-	}
-	perms, err := a.DB.GetEffectivePoliticaPerms(userID)
-	if err != nil {
-		Errorf("error carregant permisos per usuari %d: %v", userID, err)
-		return db.PolicyPermissions{}
-	}
-	if perms == (db.PolicyPermissions{}) {
-		Debugf("usuari %d sense polítiques assignades; permisos mínims", userID)
-	}
-	return perms
-}
-
-func (a *App) permissionsFromContext(r *http.Request) (db.PolicyPermissions, bool) {
-	if val := r.Context().Value(permissionsKey); val != nil {
-		if p, ok := val.(db.PolicyPermissions); ok {
-			return p, true
-		}
-	}
-	return db.PolicyPermissions{}, false
-}
-
-func (a *App) withPermissions(r *http.Request, perms db.PolicyPermissions) *http.Request {
-	return r.WithContext(context.WithValue(r.Context(), permissionsKey, perms))
-}
 
 func (a *App) withEffectiveAdmin(r *http.Request, isAdmin bool) *http.Request {
 	if r == nil {
@@ -75,7 +40,7 @@ func effectiveAdminFromContext(r *http.Request) (bool, bool) {
 	return false, false
 }
 
-func (a *App) effectiveAdminForUser(userID int, _ db.PolicyPermissions) bool {
+func (a *App) effectiveAdminForUser(userID int) bool {
 	if userID == 0 || a == nil {
 		return false
 	}
@@ -139,23 +104,26 @@ func (a *App) ensureUnreadMessagesCount(r *http.Request, userID int) *http.Reque
 	return a.withUnreadMessagesCount(r, count)
 }
 
+func (a *App) withRuntimePermissionContext(r *http.Request, user *db.User) *http.Request {
+	if r == nil || user == nil {
+		return r
+	}
+	r = a.withUser(r, user)
+	if _, found := effectiveAdminFromContext(r); !found {
+		r = a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID))
+	}
+	r = a.ensureUnreadMessagesCount(r, user.ID)
+	if _, found := permissionKeysFromContext(r); !found {
+		r = a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
+	}
+	return r
+}
+
 // RequireLogin is a minimal guard without any specific permission.
 func (a *App) RequireLogin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if user, ok := a.VerificarSessio(r); ok && user != nil {
-			*r = *a.withUser(r, user)
-			perms, found := a.permissionsFromContext(r)
-			if !found {
-				perms = a.getPermissionsForUser(user.ID)
-				*r = *a.withPermissions(r, perms)
-			}
-			if _, found := effectiveAdminFromContext(r); !found {
-				*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
-			}
-			*r = *a.ensureUnreadMessagesCount(r, user.ID)
-			if _, found := permissionKeysFromContext(r); !found {
-				*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
-			}
+			*r = *a.withRuntimePermissionContext(r, user)
 			next(w, r)
 			return
 		}

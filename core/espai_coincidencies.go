@@ -41,7 +41,7 @@ type espaiMatchReasonItem struct {
 }
 
 type espaiMatchReason struct {
-	Total int                   `json:"total"`
+	Total int                    `json:"total"`
 	Items []espaiMatchReasonItem `json:"items"`
 }
 

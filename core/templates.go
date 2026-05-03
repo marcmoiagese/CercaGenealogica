@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
 var Templates *template.Template
@@ -512,10 +510,6 @@ func coerceUint64(k interface{}) (uint64, bool) {
 func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	m, ok := data.(map[string]interface{})
 	if !ok {
-		return data
-	}
-	permsVal := r.Context().Value(permissionsKey)
-	if _, ok := permsVal.(db.PolicyPermissions); !ok {
 		return data
 	}
 	effectiveAdmin := false

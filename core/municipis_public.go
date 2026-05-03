@@ -22,9 +22,7 @@ type municipiCategoryView struct {
 func (a *App) MunicipiPublic(w http.ResponseWriter, r *http.Request) {
 	if user, logged := a.VerificarSessio(r); logged && user != nil {
 		*r = *a.withUser(r, user)
-		perms := a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
+		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID))
 		*r = *a.ensureUnreadMessagesCount(r, user.ID)
 		if _, found := permissionKeysFromContext(r); !found {
 			*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))

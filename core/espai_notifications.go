@@ -38,16 +38,16 @@ type espaiNotificationView struct {
 }
 
 type espaiNotificationPrefsView struct {
-	Freq          string
-	Types         map[string]bool
+	Freq           string
+	Types          map[string]bool
 	HasCustomTypes bool
 }
 
 type espaiOverviewCounts struct {
-	PendingMatches   int
-	SyncFailures     int
-	GroupConflicts   int
-	UnreadAlerts     int
+	PendingMatches int
+	SyncFailures   int
+	GroupConflicts int
+	UnreadAlerts   int
 }
 
 func (a *App) EspaiNotificationsRead(w http.ResponseWriter, r *http.Request) {
@@ -212,14 +212,14 @@ func (a *App) notifyEspaiMatches(ownerID, arbreID int, count int) {
 	}
 	dedupe := espaiNotifDedupeKey(espaiNotifKindMatches, arbreID, a.loadEspaiNotificationPrefs(ownerID).Freq)
 	_, _ = a.DB.CreateEspaiNotification(&db.EspaiNotification{
-		UserID:     ownerID,
-		Kind:       espaiNotifKindMatches,
-		Title:      sqlNullString(title),
-		Body:       sqlNullString(body),
-		URL:        sqlNullString("/espai/coincidencies"),
-		Status:     "unread",
-		TreeID:     sql.NullInt64{Int64: int64(arbreID), Valid: arbreID > 0},
-		DedupeKey:  sqlNullString(dedupe),
+		UserID:    ownerID,
+		Kind:      espaiNotifKindMatches,
+		Title:     sqlNullString(title),
+		Body:      sqlNullString(body),
+		URL:       sqlNullString("/espai/coincidencies"),
+		Status:    "unread",
+		TreeID:    sql.NullInt64{Int64: int64(arbreID), Valid: arbreID > 0},
+		DedupeKey: sqlNullString(dedupe),
 	})
 }
 

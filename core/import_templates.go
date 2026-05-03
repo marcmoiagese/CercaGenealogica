@@ -261,8 +261,7 @@ func (a *App) importTemplatesListPage(w http.ResponseWriter, r *http.Request, us
 		http.Error(w, "failed to load templates", http.StatusInternalServerError)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	items := a.buildImportTemplateEntries(rows, user, perms)
+	items := a.buildImportTemplateEntries(rows, user)
 	if scope == "public" {
 		items = filterPublicTemplateEntries(items, user.ID)
 	}
@@ -844,8 +843,7 @@ func (a *App) importTemplateEditForm(w http.ResponseWriter, r *http.Request, use
 		http.NotFound(w, r)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	if !a.canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, template) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -866,8 +864,7 @@ func (a *App) importTemplateUpdate(w http.ResponseWriter, r *http.Request, user 
 		http.NotFound(w, r)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	if !a.canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, template) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -917,8 +914,7 @@ func (a *App) importTemplateDelete(w http.ResponseWriter, r *http.Request, user 
 		http.NotFound(w, r)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	if !a.canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, template) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -943,8 +939,7 @@ func (a *App) importTemplateClone(w http.ResponseWriter, r *http.Request, user *
 		http.Error(w, "CSRF invalid", http.StatusBadRequest)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	if !a.canViewImportTemplate(user, perms, template) || template.Visibility != "public" {
+	if !a.canViewImportTemplate(user, template) || template.Visibility != "public" {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -971,8 +966,7 @@ func (a *App) importTemplateToggleVisibility(w http.ResponseWriter, r *http.Requ
 		http.NotFound(w, r)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	if !a.canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, template) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -1016,8 +1010,7 @@ func (a *App) importTemplatesListJSON(w http.ResponseWriter, r *http.Request, us
 		http.Error(w, "failed to load templates", http.StatusInternalServerError)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	items := a.buildImportTemplateEntries(rows, user, perms)
+	items := a.buildImportTemplateEntries(rows, user)
 	if scope == "public" {
 		items = filterPublicTemplateEntries(items, user.ID)
 	}
@@ -1045,8 +1038,7 @@ func (a *App) importTemplateGetJSON(w http.ResponseWriter, r *http.Request, user
 		http.NotFound(w, r)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	if !a.canViewImportTemplate(user, perms, template) {
+	if !a.canViewImportTemplate(user, template) {
 		http.NotFound(w, r)
 		return
 	}
@@ -1089,8 +1081,7 @@ func (a *App) importTemplateUpdateJSON(w http.ResponseWriter, r *http.Request, u
 		http.NotFound(w, r)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	if !a.canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, template) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -1119,8 +1110,7 @@ func (a *App) importTemplateDeleteJSON(w http.ResponseWriter, r *http.Request, u
 		http.NotFound(w, r)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	if !a.canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, template) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -1142,8 +1132,7 @@ func (a *App) importTemplateCloneJSON(w http.ResponseWriter, r *http.Request, us
 		http.NotFound(w, r)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	if !a.canViewImportTemplate(user, perms, template) || template.Visibility != "public" {
+	if !a.canViewImportTemplate(user, template) || template.Visibility != "public" {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -1175,8 +1164,7 @@ func (a *App) importTemplateToggleVisibilityJSON(w http.ResponseWriter, r *http.
 		http.NotFound(w, r)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	if !a.canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, template) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -1415,7 +1403,7 @@ func normalizeTemplateSeparator(val string) string {
 	}
 }
 
-func (a *App) buildImportTemplateEntries(rows []db.CSVImportTemplate, user *db.User, perms db.PolicyPermissions) []importTemplateListEntry {
+func (a *App) buildImportTemplateEntries(rows []db.CSVImportTemplate, user *db.User) []importTemplateListEntry {
 	items := make([]importTemplateListEntry, 0, len(rows))
 	for _, row := range rows {
 		ownerID := 0
@@ -1423,7 +1411,7 @@ func (a *App) buildImportTemplateEntries(rows []db.CSVImportTemplate, user *db.U
 			ownerID = int(row.OwnerUserID.Int64)
 		}
 		isOwner := user != nil && ownerID == user.ID
-		isAdmin := user != nil && a.effectiveAdminForUser(user.ID, perms)
+		isAdmin := user != nil && a.effectiveAdminForUser(user.ID)
 		canEdit := user != nil && (isAdmin || isOwner)
 		isPublic := strings.TrimSpace(strings.ToLower(row.Visibility)) == "public"
 		updatedAt := formatImportTemplateTime(row.UpdatedAt)
@@ -1461,11 +1449,11 @@ func filterPublicTemplateEntries(items []importTemplateListEntry, userID int) []
 	return filtered
 }
 
-func (a *App) canEditImportTemplate(user *db.User, perms db.PolicyPermissions, template *db.CSVImportTemplate) bool {
+func (a *App) canEditImportTemplate(user *db.User, template *db.CSVImportTemplate) bool {
 	if user == nil || template == nil {
 		return false
 	}
-	if a.effectiveAdminForUser(user.ID, perms) {
+	if a.effectiveAdminForUser(user.ID) {
 		return true
 	}
 	if template.OwnerUserID.Valid && int(template.OwnerUserID.Int64) == user.ID {
@@ -1474,14 +1462,14 @@ func (a *App) canEditImportTemplate(user *db.User, perms db.PolicyPermissions, t
 	return false
 }
 
-func (a *App) canViewImportTemplate(user *db.User, perms db.PolicyPermissions, template *db.CSVImportTemplate) bool {
+func (a *App) canViewImportTemplate(user *db.User, template *db.CSVImportTemplate) bool {
 	if template == nil {
 		return false
 	}
 	if template.Visibility == "public" {
 		return true
 	}
-	return a.canEditImportTemplate(user, perms, template)
+	return a.canEditImportTemplate(user, template)
 }
 
 func (a *App) uniqueCloneName(userID int, name string) string {

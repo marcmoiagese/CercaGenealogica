@@ -18,11 +18,11 @@ func (a *App) mediaUserRoles(r *http.Request, user *db.User) (bool, bool) {
 	return isAdmin, a.HasPermission(user.ID, permKeyMediaModerate, PermissionTarget{})
 }
 
-func (a *App) canModerateModular(user *db.User, perms db.PolicyPermissions) bool {
+func (a *App) canModerateModular(user *db.User) bool {
 	if user == nil {
 		return false
 	}
-	return a.newModeracioScopeModel(user, perms, false).canModerateAnything()
+	return a.newModeracioScopeModel(user, false).canModerateAnything()
 }
 
 func (a *App) requireMediaView(w http.ResponseWriter, r *http.Request) (*db.User, bool) {
@@ -44,12 +44,7 @@ func (a *App) mediaEnsureUser(r *http.Request) *db.User {
 	if !ok || user == nil {
 		return nil
 	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
+	*r = *a.withRuntimePermissionContext(r, user)
 	return user
 }
 

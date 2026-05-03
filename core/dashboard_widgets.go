@@ -461,12 +461,11 @@ func (a *App) dashboardUserRoleSet(userID int) map[string]bool {
 			}
 		}
 	}
-	perms := a.getPermissionsForUser(userID)
-	if a.effectiveAdminForUser(userID, perms) {
+	if a.effectiveAdminForUser(userID) {
 		roleSet["admin"] = true
 	}
 	if len(roleSet) == 0 {
-		if a.canModerateModular(&db.User{ID: userID}, perms) {
+		if a.canModerateModular(&db.User{ID: userID}) {
 			roleSet["moderador"] = true
 		}
 	}

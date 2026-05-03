@@ -481,10 +481,9 @@ func (a *App) AdminRegistreHistory(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := a.canManagePoliciesModular(user)
-	canModerate := a.canModerateModular(user, perms)
+	canModerate := a.canModerateModular(user)
 	canRevert := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
 	if llibre == nil {
@@ -988,10 +987,9 @@ func (a *App) AdminRegistreStats(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := a.canManagePoliciesModular(user)
-	canModerate := a.canModerateModular(user, perms)
+	canModerate := a.canModerateModular(user)
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
 	if llibre == nil {
 		llibre = &db.Llibre{TipusLlibre: registre.TipusActe}

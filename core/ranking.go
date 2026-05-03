@@ -22,14 +22,11 @@ type rankingRow struct {
 func (a *App) Ranking(w http.ResponseWriter, r *http.Request) {
 	lang := ResolveLang(r)
 	user, _ := a.VerificarSessio(r)
-	var perms db.PolicyPermissions
 	if user != nil {
-		perms = a.getPermissionsForUser(user.ID)
 		if !a.hasAnyPermissionKey(user.ID, permKeyRankingView) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		*r = *a.withPermissions(r, perms)
 	}
 	pageSize := 20
 	if szStr := r.URL.Query().Get("page_size"); szStr != "" {

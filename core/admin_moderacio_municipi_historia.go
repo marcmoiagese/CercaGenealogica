@@ -12,7 +12,7 @@ func (a *App) AdminModeracioHistoriaGeneralPreview(w http.ResponseWriter, r *htt
 		http.NotFound(w, r)
 		return
 	}
-	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
+	user, canModerateAll, ok := a.requireModeracioUser(w, r)
 	if !ok {
 		return
 	}
@@ -31,7 +31,7 @@ func (a *App) AdminModeracioHistoriaGeneralPreview(w http.ResponseWriter, r *htt
 		http.NotFound(w, r)
 		return
 	}
-	if !canModerateAll && !a.newModeracioScopeModel(user, perms, canModerateAll).canModerateItem("municipi_historia_general", versionID) {
+	if !canModerateAll && !a.newModeracioScopeModel(user, canModerateAll).canModerateItem("municipi_historia_general", versionID) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -66,7 +66,7 @@ func (a *App) AdminModeracioHistoriaFetPreview(w http.ResponseWriter, r *http.Re
 		http.NotFound(w, r)
 		return
 	}
-	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
+	user, canModerateAll, ok := a.requireModeracioUser(w, r)
 	if !ok {
 		return
 	}
@@ -85,7 +85,7 @@ func (a *App) AdminModeracioHistoriaFetPreview(w http.ResponseWriter, r *http.Re
 		http.NotFound(w, r)
 		return
 	}
-	if !canModerateAll && !a.newModeracioScopeModel(user, perms, canModerateAll).canModerateItem("municipi_historia_fet", versionID) {
+	if !canModerateAll && !a.newModeracioScopeModel(user, canModerateAll).canModerateItem("municipi_historia_fet", versionID) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -110,14 +110,14 @@ func (a *App) AdminModeracioHistoriaFetPreview(w http.ResponseWriter, r *http.Re
 	}
 	lang := resolveUserLang(r, user)
 	RenderPrivateTemplateLang(w, r, "admin-moderacio-historia-fet.html", lang, map[string]interface{}{
-		"User":         user,
-		"Municipi":     mun,
-		"Pending":      version,
-		"Current":      current,
-		"PendingDate":  pendingDate,
-		"CurrentDate":  currentDate,
-		"ObjectType":   "municipi_historia_fet",
-		"ReturnURL":    "/moderacio",
-		"HistoriaURL":  "/territori/municipis/" + strconv.Itoa(mun.ID) + "/historia",
+		"User":        user,
+		"Municipi":    mun,
+		"Pending":     version,
+		"Current":     current,
+		"PendingDate": pendingDate,
+		"CurrentDate": currentDate,
+		"ObjectType":  "municipi_historia_fet",
+		"ReturnURL":   "/moderacio",
+		"HistoriaURL": "/territori/municipis/" + strconv.Itoa(mun.ID) + "/historia",
 	})
 }

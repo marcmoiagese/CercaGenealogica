@@ -35,9 +35,7 @@ var nivellYearRegex = regexp.MustCompile(`\d{4}`)
 func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 	if user, logged := a.VerificarSessio(r); logged && user != nil {
 		*r = *a.withUser(r, user)
-		perms := a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
+		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID))
 		*r = *a.ensureUnreadMessagesCount(r, user.ID)
 		if _, found := permissionKeysFromContext(r); !found {
 			*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
@@ -60,10 +58,6 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := a.VerificarSessio(r)
-	perms := db.PolicyPermissions{}
-	if user != nil {
-		perms = a.getPermissionsForUser(user.ID)
-	}
 	nivellTarget := PermissionTarget{PaisID: intPtr(nivell.PaisID)}
 	if user != nil && !a.HasPermission(user.ID, permKeyTerritoriNivellsView, nivellTarget) && !a.HasPermission(user.ID, permKeyTerritoriNivellsEdit, nivellTarget) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -202,7 +196,7 @@ func (a *App) NivellPublic(w http.ResponseWriter, r *http.Request) {
 		"CanManageEclesia":   a.canManageEclesiaModular(user),
 		"CanManagePolicies":  a.canManagePoliciesModular(user),
 		"CanModerate":        canModerate,
-		"IsAdmin":            user != nil && a.effectiveAdminForUser(user.ID, perms),
+		"IsAdmin":            user != nil && a.effectiveAdminForUser(user.ID),
 	}
 	if user != nil {
 		RenderPrivateTemplate(w, r, "nivell-administratiu-perfil-pro.html", data)

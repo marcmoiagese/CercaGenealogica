@@ -954,10 +954,9 @@ func (a *App) AdminListRegistresLlibre(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := a.canManagePoliciesModular(user)
-	canModerate := a.canModerateModular(user, perms)
+	canModerate := a.canModerateModular(user)
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -1492,10 +1491,9 @@ func (a *App) AdminNewRegistre(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := a.canManagePoliciesModular(user)
-	canModerate := a.canModerateModular(user, perms)
+	canModerate := a.canModerateModular(user)
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -1539,10 +1537,9 @@ func (a *App) AdminCreateRegistre(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := a.canManagePoliciesModular(user)
-	canModerate := a.canModerateModular(user, perms)
+	canModerate := a.canModerateModular(user)
 	llibre, err := a.DB.GetLlibre(llibreID)
 	if err != nil || llibre == nil {
 		http.NotFound(w, r)
@@ -1606,10 +1603,9 @@ func (a *App) AdminShowRegistre(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := a.canManagePoliciesModular(user)
-	canModerate := a.canModerateModular(user, perms)
+	canModerate := a.canModerateModular(user)
 	lang := ResolveLang(r)
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
 	persones, _ := a.DB.ListTranscripcioPersones(id)
@@ -1944,10 +1940,9 @@ func (a *App) AdminEditRegistre(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := a.canManagePoliciesModular(user)
-	canModerate := a.canModerateModular(user, perms)
+	canModerate := a.canModerateModular(user)
 	llibre, _ := a.DB.GetLlibre(registre.LlibreID)
 	persones, _ := a.DB.ListTranscripcioPersones(id)
 	atributs, _ := a.DB.ListTranscripcioAtributs(id)
@@ -1990,10 +1985,9 @@ func (a *App) AdminUpdateRegistre(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
 	canManageArxius := a.canManageAnyDocumentalsModular(user)
 	canManagePolicies := a.canManagePoliciesModular(user)
-	canModerate := a.canModerateModular(user, perms)
+	canModerate := a.canModerateModular(user)
 	beforePersones, _ := a.DB.ListTranscripcioPersones(id)
 	beforeAtributs, _ := a.DB.ListTranscripcioAtributs(id)
 	returnURL := strings.TrimSpace(r.FormValue("return_to"))
@@ -2513,12 +2507,7 @@ func (a *App) AdminConvertRegistreToPersona(w http.ResponseWriter, r *http.Reque
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
+	*r = *a.withRuntimePermissionContext(r, user)
 	llibreTarget := a.resolveLlibreTarget(registre.LlibreID)
 	if !a.HasPermission(user.ID, permKeyDocumentalsRegistresConvertToPerson, llibreTarget) && !a.canCreatePersonModular(user) {
 		http.Error(w, "Forbidden", http.StatusForbidden)

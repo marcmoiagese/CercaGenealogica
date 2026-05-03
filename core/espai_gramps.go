@@ -709,10 +709,10 @@ func (a *App) createEspaiRelationIfMissing(relSet map[string]struct{}, arbreID, 
 		return 0
 	}
 	if _, err := a.DB.CreateEspaiRelacio(&db.EspaiRelacio{
-		ArbreID:         arbreID,
-		PersonaID:       fromID,
+		ArbreID:          arbreID,
+		PersonaID:        fromID,
 		RelatedPersonaID: toID,
-		RelationType:    relType,
+		RelationType:     relType,
 	}); err == nil {
 		relSet[key] = struct{}{}
 		return 1
@@ -847,8 +847,8 @@ func (a *App) newGrampsClient(baseURL, user, token string) *grampsClient {
 	user = strings.TrimSpace(user)
 	token = strings.TrimSpace(token)
 	return &grampsClient{
-		baseURL:  strings.TrimRight(baseURL, "/"),
-		user:     user,
+		baseURL: strings.TrimRight(baseURL, "/"),
+		user:    user,
 		password: func() string {
 			if user != "" {
 				return token
@@ -1263,10 +1263,10 @@ type grampsEvent struct {
 }
 
 type grampsFamily struct {
-	FatherID   string
-	MotherID   string
-	Children   []string
-	EventRefs  []grampsEventRef
+	FatherID  string
+	MotherID  string
+	Children  []string
+	EventRefs []grampsEventRef
 }
 
 func parseGrampsList(body []byte) ([]map[string]interface{}, error) {

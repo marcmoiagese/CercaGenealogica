@@ -42,14 +42,14 @@ type espaiGroupTreeView struct {
 }
 
 type espaiGroupChangeView struct {
-	ID        int
-	Action    string
-	ActorID   sql.NullInt64
-	ActorName string
-	Object    string
-	Payload   string
+	ID            int
+	Action        string
+	ActorID       sql.NullInt64
+	ActorName     string
+	Object        string
+	Payload       string
 	PayloadPretty string
-	CreatedAt sql.NullTime
+	CreatedAt     sql.NullTime
 }
 
 type espaiGroupPersonOption struct {
@@ -126,26 +126,26 @@ func (a *App) EspaiPersonalGrupsPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RenderPrivateTemplate(w, r, "espai.html", map[string]interface{}{
-		"SpaceSection":     "grups",
-		"SpaceState":       spaceState,
-		"GroupList":        groups,
-		"GroupSummaries":   summaries,
-		"SelectedGroup":    selected,
-		"SelectedMember":   member,
-		"GroupMembers":     memberViews,
-		"GroupTrees":       treeViews,
-		"GroupConflicts":   conflictViews,
-		"GroupChanges":     changeViews,
-		"SelectedChange":   selectedChange,
-		"AvailableTrees":   availableTrees,
-		"UploadError":      strings.TrimSpace(r.URL.Query().Get("error")),
-		"UploadNotice":     strings.TrimSpace(r.URL.Query().Get("notice")),
-		"ConflictFilter":   strings.TrimSpace(r.URL.Query().Get("conflict_status")),
-		"ChangeActor":      strings.TrimSpace(r.URL.Query().Get("actor_id")),
-		"ChangeAction":     strings.TrimSpace(r.URL.Query().Get("action")),
-		"ChangeFrom":       strings.TrimSpace(r.URL.Query().Get("from")),
-		"ChangeTo":         strings.TrimSpace(r.URL.Query().Get("to")),
-		"CurrentUserID":    user.ID,
+		"SpaceSection":   "grups",
+		"SpaceState":     spaceState,
+		"GroupList":      groups,
+		"GroupSummaries": summaries,
+		"SelectedGroup":  selected,
+		"SelectedMember": member,
+		"GroupMembers":   memberViews,
+		"GroupTrees":     treeViews,
+		"GroupConflicts": conflictViews,
+		"GroupChanges":   changeViews,
+		"SelectedChange": selectedChange,
+		"AvailableTrees": availableTrees,
+		"UploadError":    strings.TrimSpace(r.URL.Query().Get("error")),
+		"UploadNotice":   strings.TrimSpace(r.URL.Query().Get("notice")),
+		"ConflictFilter": strings.TrimSpace(r.URL.Query().Get("conflict_status")),
+		"ChangeActor":    strings.TrimSpace(r.URL.Query().Get("actor_id")),
+		"ChangeAction":   strings.TrimSpace(r.URL.Query().Get("action")),
+		"ChangeFrom":     strings.TrimSpace(r.URL.Query().Get("from")),
+		"ChangeTo":       strings.TrimSpace(r.URL.Query().Get("to")),
+		"CurrentUserID":  user.ID,
 	})
 }
 
@@ -669,14 +669,14 @@ func (a *App) buildGroupChangesView(groupID int, q url.Values) []espaiGroupChang
 			payloadPretty = prettyJSON(payload)
 		}
 		out = append(out, espaiGroupChangeView{
-			ID:        c.ID,
-			Action:    c.Action,
-			ActorID:   c.ActorID,
-			ActorName: actorName,
-			Object:    object,
-			Payload:   payload,
+			ID:            c.ID,
+			Action:        c.Action,
+			ActorID:       c.ActorID,
+			ActorName:     actorName,
+			Object:        object,
+			Payload:       payload,
 			PayloadPretty: payloadPretty,
-			CreatedAt: c.CreatedAt,
+			CreatedAt:     c.CreatedAt,
 		})
 	}
 	return out

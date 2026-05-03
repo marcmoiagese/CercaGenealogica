@@ -89,6 +89,18 @@ func findF330PolicyID(t *testing.T, database db.DB, name string) int {
 	return 0
 }
 
+func f3321LegacyPermissionsForUser(t *testing.T, app *App, userID int) db.PolicyPermissions {
+	t.Helper()
+	if app == nil || app.DB == nil || userID <= 0 {
+		return db.PolicyPermissions{}
+	}
+	perms, err := app.DB.GetEffectivePoliticaPerms(userID)
+	if err != nil {
+		t.Fatalf("no s'han pogut carregar permisos legacy de test per usuari %d: %v", userID, err)
+	}
+	return perms
+}
+
 func TestF330AdminPolicyNameIsEffectiveModularAdminForUI(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-admin-name")
@@ -119,13 +131,12 @@ func TestF330AdminPolicyNameIsEffectiveModularAdminForUI(t *testing.T) {
 		t.Fatalf("admin per politica admin hauria de tenir filtre global")
 	}
 
-	perms := app.getPermissionsForUser(userID)
+	perms := f3321LegacyPermissionsForUser(t, app, userID)
 	if perms.Admin {
 		t.Fatalf("el test necessita JSON legacy sense Admin=true per reproduir la incoherencia UI")
 	}
 	req := httptest.NewRequest("GET", "/territori/nivells", nil)
-	req = app.withPermissions(req, perms)
-	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID, perms))
+	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID))
 	req = app.withPermissionKeys(req, app.permissionKeysForUser(userID))
 	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
 	if got := data["IsAdmin"]; got != true {
@@ -195,7 +206,7 @@ func TestF330ScopedTerritoryUserDoesNotBecomeGlobalAdmin(t *testing.T) {
 		t.Fatalf("no s'ha pogut assignar politica scoped: %v", err)
 	}
 
-	if app.effectiveAdminForUser(userID, app.getPermissionsForUser(userID)) {
+	if app.effectiveAdminForUser(userID) {
 		t.Fatalf("un usuari territorial scoped no s'ha de convertir en admin global")
 	}
 	if app.HasPermission(userID, permKeyTerritoriNivellsEdit, PermissionTarget{PaisID: intPtr(8)}) {
@@ -229,20 +240,19 @@ func TestF334MediaModerationKeyEnablesModerationUI(t *testing.T) {
 		t.Fatalf("no s'ha pogut assignar politica media moderator: %v", err)
 	}
 
-	perms := app.getPermissionsForUser(userID)
+	perms := f3321LegacyPermissionsForUser(t, app, userID)
 	if perms.Admin || perms.CanModerate {
 		t.Fatalf("el test necessita usuari sense permModerate legacy")
 	}
 	req := httptest.NewRequest("GET", "/admin/moderacio/media", nil)
-	req = app.withPermissions(req, perms)
-	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID, perms))
+	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID))
 	req = app.withPermissionKeys(req, app.permissionKeysForUser(userID))
 	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
 	if got := data["CanModerate"]; got != true {
 		t.Fatalf("media.moderate modular hauria de mostrar moderacio al menu, rebut %#v", got)
 	}
 
-	model := app.newModeracioScopeModel(&db.User{ID: userID}, perms, false)
+	model := app.newModeracioScopeModel(&db.User{ID: userID}, false)
 	if !model.canModerateType("media_album") || !model.canModerateType("media_item") {
 		t.Fatalf("media.moderate hauria d'autoritzar tipus media_album i media_item")
 	}
@@ -273,11 +283,11 @@ func TestF334ScopedMunicipiModeratorDoesNotModerateOutsideScope(t *testing.T) {
 		t.Fatalf("no s'ha pogut assignar politica municipi scoped: %v", err)
 	}
 
-	perms := app.getPermissionsForUser(userID)
+	perms := f3321LegacyPermissionsForUser(t, app, userID)
 	if perms.Admin || perms.CanModerate {
 		t.Fatalf("el test necessita usuari sense permModerate legacy")
 	}
-	model := app.newModeracioScopeModel(&db.User{ID: userID}, perms, false)
+	model := app.newModeracioScopeModel(&db.User{ID: userID}, false)
 	if !model.canModerateType("municipi_mapa_version") {
 		t.Fatalf("grant scoped hauria d'habilitar el tipus municipi_mapa_version")
 	}
@@ -335,26 +345,26 @@ func TestF336WikiModerationUsesScopedObjectTargets(t *testing.T) {
 	}
 
 	user := &db.User{ID: userID}
-	perms := app.getPermissionsForUser(userID)
+	perms := f3321LegacyPermissionsForUser(t, app, userID)
 	if perms.Admin || perms.CanModerate {
 		t.Fatalf("el test necessita usuari sense permModerate legacy")
 	}
-	if !app.canModerateWikiObject(user, perms, "municipi", 7) {
+	if !app.canModerateWikiObject(user, "municipi", 7) {
 		t.Fatalf("territori.municipis.edit scoped hauria d'autoritzar wiki municipi dins ambit")
 	}
-	if app.canModerateWikiObject(user, perms, "municipi", 8) {
+	if app.canModerateWikiObject(user, "municipi", 8) {
 		t.Fatalf("territori.municipis.edit scoped no hauria d'autoritzar wiki municipi fora ambit")
 	}
-	if !app.canModerateWikiObject(user, perms, "arxiu", 11) {
+	if !app.canModerateWikiObject(user, "arxiu", 11) {
 		t.Fatalf("documentals.arxius.edit scoped hauria d'autoritzar wiki arxiu dins ambit")
 	}
-	if app.canModerateWikiObject(user, perms, "arxiu", 12) {
+	if app.canModerateWikiObject(user, "arxiu", 12) {
 		t.Fatalf("documentals.arxius.edit scoped no hauria d'autoritzar wiki arxiu fora ambit")
 	}
-	if !app.canModerateWikiObject(user, perms, "llibre", 13) {
+	if !app.canModerateWikiObject(user, "llibre", 13) {
 		t.Fatalf("documentals.llibres.edit scoped hauria d'autoritzar wiki llibre dins ambit")
 	}
-	if app.canModerateWikiObject(user, perms, "llibre", 14) {
+	if app.canModerateWikiObject(user, "llibre", 14) {
 		t.Fatalf("documentals.llibres.edit scoped no hauria d'autoritzar wiki llibre fora ambit")
 	}
 }
@@ -386,16 +396,16 @@ func TestF336WikiModerationUsesDomainGlobalKeys(t *testing.T) {
 	}
 
 	user := &db.User{ID: userID}
-	perms := app.getPermissionsForUser(userID)
+	perms := f3321LegacyPermissionsForUser(t, app, userID)
 	if perms.Admin || perms.CanModerate {
 		t.Fatalf("el test necessita usuari sense permModerate legacy")
 	}
 	for _, objectType := range []string{"persona", "cognom", "event_historic"} {
-		if !app.canModerateWikiObject(user, perms, objectType, 1) {
+		if !app.canModerateWikiObject(user, objectType, 1) {
 			t.Fatalf("key modular de domini hauria d'autoritzar wiki %s", objectType)
 		}
 	}
-	if app.canModerateWikiObject(user, perms, "municipi", 1) {
+	if app.canModerateWikiObject(user, "municipi", 1) {
 		t.Fatalf("keys globals de persona/cognom/event no han d'autoritzar municipi")
 	}
 }
@@ -403,10 +413,9 @@ func TestF336WikiModerationUsesDomainGlobalKeys(t *testing.T) {
 func TestF336RWikiModerationDoesNotUseLegacyPermModerateFallback(t *testing.T) {
 	app, _ := newF330PermissionsTestApp(t)
 	user := &db.User{ID: 9901}
-	perms := db.PolicyPermissions{CanModerate: true}
 
 	for _, objectType := range []string{"municipi", "arxiu", "llibre", "persona", "cognom", "event_historic"} {
-		if app.canModerateWikiObject(user, perms, objectType, 1) {
+		if app.canModerateWikiObject(user, objectType, 1) {
 			t.Fatalf("permModerate legacy pur no hauria d'autoritzar wiki %s", objectType)
 		}
 	}
@@ -421,11 +430,10 @@ func TestF336RWikiModerationKeepsAdminViaModularBridge(t *testing.T) {
 	}
 
 	user := &db.User{ID: userID}
-	perms := app.getPermissionsForUser(userID)
-	if !app.canModerateWikiObject(user, perms, "municipi", 123) {
+	if !app.canModerateWikiObject(user, "municipi", 123) {
 		t.Fatalf("admin global hauria d'autoritzar wiki municipi via pont modular")
 	}
-	if !app.canModerateWikiObject(user, perms, "persona", 123) {
+	if !app.canModerateWikiObject(user, "persona", 123) {
 		t.Fatalf("admin global hauria d'autoritzar wiki persona via pont modular")
 	}
 }
@@ -434,9 +442,8 @@ func TestF337LegacyPermModerateDoesNotGrantDocumentalOrMediaModeration(t *testin
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-7-legacy-moderate")
 	user := &db.User{ID: userID}
-	perms := db.PolicyPermissions{CanModerate: true}
 
-	if app.canModerateModular(user, perms) {
+	if app.canModerateModular(user) {
 		t.Fatalf("permModerate legacy pur no hauria d'obrir moderacio modular")
 	}
 	if isAdmin, isModerator := app.mediaUserRoles(httptest.NewRequest("GET", "/media/albums", nil), user); isAdmin || isModerator {
@@ -504,8 +511,7 @@ func TestF337DocumentalScopedModerationUsesRegistreKey(t *testing.T) {
 	}
 
 	user := &db.User{ID: userID}
-	perms := app.getPermissionsForUser(userID)
-	if !app.canModerateModular(user, perms) {
+	if !app.canModerateModular(user) {
 		t.Fatalf("documentals.registres.edit scoped hauria d'obrir moderacio modular")
 	}
 	if !app.HasPermission(userID, permKeyDocumentalsRegistresEdit, PermissionTarget{LlibreID: intPtr(11)}) {
@@ -520,7 +526,6 @@ func TestF338TerritoriPublicDoesNotUseLegacyPermModerate(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-8-legacy-moderate")
 	user := &db.User{ID: userID}
-	perms := db.PolicyPermissions{CanModerate: true, CanManageTerritory: true}
 	target := PermissionTarget{MunicipiID: intPtr(7)}
 
 	if app.canModerateMunicipiPublic(user, target) {
@@ -529,7 +534,7 @@ func TestF338TerritoriPublicDoesNotUseLegacyPermModerate(t *testing.T) {
 	if app.canEditMunicipiPublic(user, target) {
 		t.Fatalf("permTerritory legacy pur no hauria d'autoritzar edit/rebuild de municipi")
 	}
-	if app.canModerateModular(user, perms) {
+	if app.canModerateModular(user) {
 		t.Fatalf("permisos legacy purs no haurien d'obrir moderacio modular")
 	}
 }
@@ -591,7 +596,6 @@ func TestF339PersonesCognomsEventsDoNotUseLegacyPermModerate(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-9-legacy-moderate")
 	user := &db.User{ID: userID}
-	perms := db.PolicyPermissions{CanModerate: true, Admin: true}
 
 	if app.canModeratePersonesPublic(user) {
 		t.Fatalf("permModerate legacy pur no hauria d'autoritzar persones publiques")
@@ -602,7 +606,7 @@ func TestF339PersonesCognomsEventsDoNotUseLegacyPermModerate(t *testing.T) {
 	if app.canModerateEventHistoricPublic(user, 0) {
 		t.Fatalf("permModerate legacy pur no hauria d'autoritzar events historics publics")
 	}
-	if app.canModerateModular(user, perms) {
+	if app.canModerateModular(user) {
 		t.Fatalf("permisos legacy purs no haurien d'obrir moderacio modular")
 	}
 }
@@ -740,12 +744,11 @@ func TestF3310LegacyPermModerateDoesNotGrantResidualModeration(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-10-legacy-moderate")
 	user := &db.User{ID: userID}
-	perms := db.PolicyPermissions{CanModerate: true}
 
-	if app.canModerateAllModular(user, perms) {
+	if app.canModerateAllModular(user) {
 		t.Fatalf("permModerate legacy pur no hauria d'autoritzar canModerateAll residual")
 	}
-	if app.newModeracioScopeModel(user, perms, app.canModerateAllModular(user, perms)).canModerateAnything() {
+	if app.newModeracioScopeModel(user, app.canModerateAllModular(user)).canModerateAnything() {
 		t.Fatalf("permModerate legacy pur no hauria d'obrir moderacio residual")
 	}
 	if app.canModerateMap(user, 7) {
@@ -762,8 +765,7 @@ func TestF3310ResidualModerationKeepsAdminBridge(t *testing.T) {
 	}
 
 	user := &db.User{ID: userID}
-	perms := app.getPermissionsForUser(userID)
-	if !app.canModerateAllModular(user, perms) {
+	if !app.canModerateAllModular(user) {
 		t.Fatalf("admin global hauria de tenir canModerateAll via bridge modular")
 	}
 	if !app.canModerateMap(user, 7) {
@@ -799,8 +801,7 @@ func TestF3310GlobalModularGrantsCanModerateAllResidual(t *testing.T) {
 	}
 
 	user := &db.User{ID: userID}
-	perms := app.getPermissionsForUser(userID)
-	if !app.canModerateAllModular(user, perms) {
+	if !app.canModerateAllModular(user) {
 		t.Fatalf("grants globals de tots els tipus haurien d'autoritzar canModerateAll residual")
 	}
 }
@@ -834,8 +835,7 @@ func TestF3310MapModerationRespectsMunicipiScope(t *testing.T) {
 	if app.canModerateMap(user, blockedMunID) {
 		t.Fatalf("mapes scoped no hauria d'autoritzar un altre municipi")
 	}
-	perms := app.getPermissionsForUser(userID)
-	if app.canModerateAllModular(user, perms) {
+	if app.canModerateAllModular(user) {
 		t.Fatalf("mapes scoped no hauria de convertir-se en canModerateAll")
 	}
 }
@@ -863,13 +863,12 @@ func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
 		t.Fatalf("no s'ha pogut assignar politica platform: %v", err)
 	}
 
-	perms := app.getPermissionsForUser(userID)
+	perms := f3321LegacyPermissionsForUser(t, app, userID)
 	if perms.Admin || perms.CanManagePolicies {
 		t.Fatalf("el test necessita usuari sense permisos legacy admin/policies")
 	}
 	req := httptest.NewRequest("GET", "/admin/usuaris", nil)
-	req = app.withPermissions(req, perms)
-	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID, perms))
+	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID))
 	req = app.withPermissionKeys(req, app.permissionKeysForUser(userID))
 	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
 	if got := data["CanManageUsers"]; got != true {
@@ -889,7 +888,6 @@ func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
 func TestF3311LegacyCanModerateDoesNotSetGlobalTemplateFlag(t *testing.T) {
 	app := &App{}
 	req := httptest.NewRequest("GET", "/admin/moderacio", nil)
-	req = app.withPermissions(req, db.PolicyPermissions{CanModerate: true})
 	req = app.withEffectiveAdmin(req, false)
 	req = app.withPermissionKeys(req, map[string]bool{})
 
@@ -907,10 +905,8 @@ func TestF3311GlobalTemplateModerationKeepsAdminAndModularKeys(t *testing.T) {
 	if err := database.AddUserPolitica(adminUserID, adminID); err != nil {
 		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
 	}
-	adminPerms := app.getPermissionsForUser(adminUserID)
 	adminReq := httptest.NewRequest("GET", "/admin/moderacio", nil)
-	adminReq = app.withPermissions(adminReq, adminPerms)
-	adminReq = app.withEffectiveAdmin(adminReq, app.effectiveAdminForUser(adminUserID, adminPerms))
+	adminReq = app.withEffectiveAdmin(adminReq, app.effectiveAdminForUser(adminUserID))
 	adminReq = app.withPermissionKeys(adminReq, app.permissionKeysForUser(adminUserID))
 	adminData := injectPermsIfMissing(adminReq, map[string]interface{}{}).(map[string]interface{})
 	if got := adminData["CanModerate"]; got != true {
@@ -932,10 +928,8 @@ func TestF3311GlobalTemplateModerationKeepsAdminAndModularKeys(t *testing.T) {
 	if err := database.AddUserPolitica(moderatorUserID, policyID); err != nil {
 		t.Fatalf("no s'ha pogut assignar politica modular: %v", err)
 	}
-	moderatorPerms := app.getPermissionsForUser(moderatorUserID)
 	modReq := httptest.NewRequest("GET", "/admin/moderacio/media", nil)
-	modReq = app.withPermissions(modReq, moderatorPerms)
-	modReq = app.withEffectiveAdmin(modReq, app.effectiveAdminForUser(moderatorUserID, moderatorPerms))
+	modReq = app.withEffectiveAdmin(modReq, app.effectiveAdminForUser(moderatorUserID))
 	modReq = app.withPermissionKeys(modReq, app.permissionKeysForUser(moderatorUserID))
 	modData := injectPermsIfMissing(modReq, map[string]interface{}{}).(map[string]interface{})
 	if got := modData["CanModerate"]; got != true {
@@ -958,7 +952,7 @@ func TestF3311DashboardRoleSetDoesNotUseLegacyCanModerate(t *testing.T) {
 		t.Fatalf("no s'ha pogut assignar politica legacy: %v", err)
 	}
 
-	if app.getPermissionsForUser(userID).CanModerate != true {
+	if f3321LegacyPermissionsForUser(t, app, userID).CanModerate != true {
 		t.Fatalf("el test necessita CanModerate legacy a true")
 	}
 	if roles := app.dashboardUserRoleSet(userID); roles["moderador"] {
@@ -1018,7 +1012,6 @@ func TestF3311ModularTerritoryScopedKeepsAccessWithinScope(t *testing.T) {
 func TestF3311RLegacyCanManageTerritoryDoesNotSetTemplateTerritoryFlags(t *testing.T) {
 	app := &App{}
 	req := httptest.NewRequest("GET", "/territori", nil)
-	req = app.withPermissions(req, db.PolicyPermissions{CanManageTerritory: true})
 	req = app.withEffectiveAdmin(req, false)
 	req = app.withPermissionKeys(req, map[string]bool{})
 
@@ -1042,10 +1035,8 @@ func TestF3311RTemplateTerritoryFlagsKeepAdminBridge(t *testing.T) {
 		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
 	}
 
-	perms := app.getPermissionsForUser(userID)
 	req := httptest.NewRequest("GET", "/territori", nil)
-	req = app.withPermissions(req, perms)
-	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID, perms))
+	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID))
 	req = app.withPermissionKeys(req, app.permissionKeysForUser(userID))
 
 	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
@@ -1076,10 +1067,8 @@ func TestF3311RTemplateTerritoryFlagsUseModularKeys(t *testing.T) {
 		t.Fatalf("no s'ha pogut assignar politica territorial: %v", err)
 	}
 
-	perms := app.getPermissionsForUser(userID)
 	req := httptest.NewRequest("GET", "/territori", nil)
-	req = app.withPermissions(req, perms)
-	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID, perms))
+	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID))
 	req = app.withPermissionKeys(req, app.permissionKeysForUser(userID))
 
 	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
@@ -1097,7 +1086,6 @@ func TestF3311RTemplateTerritoryFlagsUseModularKeys(t *testing.T) {
 func TestF3312LegacyCanManageArchivesDoesNotSetTemplateDocumentalFlags(t *testing.T) {
 	app := &App{}
 	req := httptest.NewRequest("GET", "/documentals", nil)
-	req = app.withPermissions(req, db.PolicyPermissions{CanManageArchives: true})
 	req = app.withEffectiveAdmin(req, false)
 	req = app.withPermissionKeys(req, map[string]bool{})
 
@@ -1117,10 +1105,8 @@ func TestF3312TemplateDocumentalFlagsKeepAdminBridge(t *testing.T) {
 		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
 	}
 
-	perms := app.getPermissionsForUser(userID)
 	req := httptest.NewRequest("GET", "/documentals", nil)
-	req = app.withPermissions(req, perms)
-	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID, perms))
+	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID))
 	req = app.withPermissionKeys(req, app.permissionKeysForUser(userID))
 
 	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
@@ -1173,7 +1159,6 @@ func TestF3312DocumentalScopedKeysStayInScope(t *testing.T) {
 func TestF3313LegacyCanManagePoliciesDoesNotSetTemplateFlag(t *testing.T) {
 	app := &App{}
 	req := httptest.NewRequest("GET", "/persones", nil)
-	req = app.withPermissions(req, db.PolicyPermissions{CanManagePolicies: true})
 	req = app.withEffectiveAdmin(req, false)
 	req = app.withPermissionKeys(req, map[string]bool{})
 
@@ -1191,10 +1176,8 @@ func TestF3313TemplatePoliciesFlagUsesAdminBridgeAndModularKey(t *testing.T) {
 	if err := database.AddUserPolitica(adminUserID, adminID); err != nil {
 		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
 	}
-	adminPerms := app.getPermissionsForUser(adminUserID)
 	adminReq := httptest.NewRequest("GET", "/admin/politiques", nil)
-	adminReq = app.withPermissions(adminReq, adminPerms)
-	adminReq = app.withEffectiveAdmin(adminReq, app.effectiveAdminForUser(adminUserID, adminPerms))
+	adminReq = app.withEffectiveAdmin(adminReq, app.effectiveAdminForUser(adminUserID))
 	adminReq = app.withPermissionKeys(adminReq, app.permissionKeysForUser(adminUserID))
 	adminData := injectPermsIfMissing(adminReq, map[string]interface{}{}).(map[string]interface{})
 	if got := adminData["CanManagePolicies"]; got != true {
@@ -1216,10 +1199,8 @@ func TestF3313TemplatePoliciesFlagUsesAdminBridgeAndModularKey(t *testing.T) {
 	if err := database.AddUserPolitica(policyUserID, policyID); err != nil {
 		t.Fatalf("no s'ha pogut assignar politica modular policies: %v", err)
 	}
-	policyPerms := app.getPermissionsForUser(policyUserID)
 	policyReq := httptest.NewRequest("GET", "/admin/politiques", nil)
-	policyReq = app.withPermissions(policyReq, policyPerms)
-	policyReq = app.withEffectiveAdmin(policyReq, app.effectiveAdminForUser(policyUserID, policyPerms))
+	policyReq = app.withEffectiveAdmin(policyReq, app.effectiveAdminForUser(policyUserID))
 	policyReq = app.withPermissionKeys(policyReq, map[string]bool{permKeyAdminPoliciesManage: true})
 	policyData := injectPermsIfMissing(policyReq, map[string]interface{}{}).(map[string]interface{})
 	if got := policyData["CanManagePolicies"]; got != true {
@@ -1338,7 +1319,6 @@ func TestF3313PoliciesSuggestGuardsUseModularKey(t *testing.T) {
 func TestF3314LegacyUsersAndEclesiaDoNotSetTemplateFlags(t *testing.T) {
 	app := &App{}
 	req := httptest.NewRequest("GET", "/admin", nil)
-	req = app.withPermissions(req, db.PolicyPermissions{CanManageUsers: true, CanManageEclesia: true})
 	req = app.withEffectiveAdmin(req, false)
 	req = app.withPermissionKeys(req, map[string]bool{})
 
@@ -1362,10 +1342,8 @@ func TestF3314TemplateFlagsUseAdminAndModularKeys(t *testing.T) {
 	if err := database.AddUserPolitica(adminUserID, adminID); err != nil {
 		t.Fatalf("no s'ha pogut assignar politica admin F33-14: %v", err)
 	}
-	adminPerms := app.getPermissionsForUser(adminUserID)
 	adminReq := httptest.NewRequest("GET", "/admin", nil)
-	adminReq = app.withPermissions(adminReq, adminPerms)
-	adminReq = app.withEffectiveAdmin(adminReq, app.effectiveAdminForUser(adminUserID, adminPerms))
+	adminReq = app.withEffectiveAdmin(adminReq, app.effectiveAdminForUser(adminUserID))
 	adminReq = app.withPermissionKeys(adminReq, app.permissionKeysForUser(adminUserID))
 	adminData := injectPermsIfMissing(adminReq, map[string]interface{}{}).(map[string]interface{})
 	for _, key := range []string{"CanManageUsers", "CanManageEclesia", "CanViewEcles"} {
@@ -1375,7 +1353,6 @@ func TestF3314TemplateFlagsUseAdminAndModularKeys(t *testing.T) {
 	}
 
 	req := httptest.NewRequest("GET", "/admin", nil)
-	req = app.withPermissions(req, db.PolicyPermissions{})
 	req = app.withEffectiveAdmin(req, false)
 	req = app.withPermissionKeys(req, map[string]bool{
 		permKeyAdminUsersManage:         true,
@@ -1577,7 +1554,6 @@ func TestF3315EditAnyPersonUsesModularKey(t *testing.T) {
 func TestF3315TemplatePersonFlagsUseModularKeys(t *testing.T) {
 	app := &App{}
 	req := httptest.NewRequest("GET", "/persones", nil)
-	req = app.withPermissions(req, db.PolicyPermissions{CanCreatePerson: true})
 	req = app.withEffectiveAdmin(req, false)
 	req = app.withPermissionKeys(req, map[string]bool{})
 	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
@@ -1589,7 +1565,6 @@ func TestF3315TemplatePersonFlagsUseModularKeys(t *testing.T) {
 	}
 
 	req = httptest.NewRequest("GET", "/persones", nil)
-	req = app.withPermissions(req, db.PolicyPermissions{})
 	req = app.withEffectiveAdmin(req, false)
 	req = app.withPermissionKeys(req, map[string]bool{permKeyPersonesCreate: true})
 	data = injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
@@ -1684,7 +1659,6 @@ func readF3316CoreSource(path string) ([]byte, error) {
 func TestF3316TemplateAdminFlagsUseEffectiveAdminContext(t *testing.T) {
 	app := &App{}
 	req := httptest.NewRequest("GET", "/admin", nil)
-	req = app.withPermissions(req, db.PolicyPermissions{Admin: true})
 	req = app.withPermissionKeys(req, map[string]bool{})
 	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
 	if got := data["IsAdmin"]; got == true {
@@ -1692,7 +1666,6 @@ func TestF3316TemplateAdminFlagsUseEffectiveAdminContext(t *testing.T) {
 	}
 
 	req = httptest.NewRequest("GET", "/admin", nil)
-	req = app.withPermissions(req, db.PolicyPermissions{})
 	req = app.withEffectiveAdmin(req, true)
 	req = app.withPermissionKeys(req, map[string]bool{})
 	data = injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
@@ -2021,6 +1994,65 @@ func TestF3320LegacyPermissionHelpersAreRemovedOrMigrationOnly(t *testing.T) {
 	}
 }
 
+func TestF3321PolicyPermissionsRuntimePlumbingIsRemoved(t *testing.T) {
+	permissionsBody, err := readF3316CoreSource("permissions.go")
+	if err != nil {
+		t.Fatalf("no s'ha pogut llegir permissions.go: %v", err)
+	}
+	permissionsSrc := string(permissionsBody)
+	for _, pattern := range []string{
+		"PolicyPermissions",
+		"permissionsFromContext",
+		"withPermissions",
+		"getPermissionsForUser",
+		"GetEffectivePoliticaPerms",
+	} {
+		if strings.Contains(permissionsSrc, pattern) {
+			t.Fatalf("permissions.go conserva plumbing runtime legacy %q", pattern)
+		}
+	}
+
+	root := f3320RepoRoot(t)
+	allowed := map[string]bool{
+		"core/permissions_migration.go":        true,
+		"core/policies_document.go":            true,
+		"core/permissions_modular_f33_test.go": true,
+	}
+	var violations []string
+	if err := filepath.Walk(filepath.Join(root, "core"), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info == nil || info.IsDir() || !strings.HasSuffix(info.Name(), ".go") {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if allowed[rel] {
+			return nil
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		src := string(body)
+		for _, pattern := range []string{"permissionsFromContext", "withPermissions", "getPermissionsForUser"} {
+			if strings.Contains(src, pattern) {
+				violations = append(violations, rel+" conte "+pattern)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("no s'ha pogut escanejar core F33-21: %v", err)
+	}
+	if len(violations) > 0 {
+		t.Fatalf("plumbing runtime legacy detectat: %s", strings.Join(violations, "; "))
+	}
+}
+
 func f3320FunctionSource(t *testing.T, src, signature string) string {
 	t.Helper()
 	start := strings.Index(src, signature)
@@ -2081,32 +2113,30 @@ func TestF3317ImportTemplateEditUsesOwnerOrEffectiveAdmin(t *testing.T) {
 	}
 
 	owner := &db.User{ID: ownerID}
-	ownerPerms := app.getPermissionsForUser(ownerID)
-	if !app.canEditImportTemplate(owner, ownerPerms, template) {
+	if !app.canEditImportTemplate(owner, template) {
 		t.Fatalf("owner hauria de poder editar la seva plantilla")
 	}
 
 	other := &db.User{ID: otherID}
-	otherPerms := app.getPermissionsForUser(otherID)
-	if app.canEditImportTemplate(other, otherPerms, template) {
+	if app.canEditImportTemplate(other, template) {
 		t.Fatalf("usuari no owner i no admin no hauria de poder editar")
 	}
 
 	admin := &db.User{ID: adminID}
-	adminPerms := app.getPermissionsForUser(adminID)
+	adminPerms := f3321LegacyPermissionsForUser(t, app, adminID)
 	if adminPerms.Admin {
 		t.Fatalf("el test necessita admin efectiu per bridge, no per camp local Admin=true")
 	}
-	if !app.canEditImportTemplate(admin, adminPerms, template) {
+	if !app.canEditImportTemplate(admin, template) {
 		t.Fatalf("admin efectiu hauria de poder editar plantilla aliena")
 	}
 
 	rows := []db.CSVImportTemplate{*template}
-	items := app.buildImportTemplateEntries(rows, other, otherPerms)
+	items := app.buildImportTemplateEntries(rows, other)
 	if len(items) != 1 || items[0].CanEdit || items[0].CanDelete || items[0].CanToggle {
 		t.Fatalf("no-owner no-admin no hauria de veure accions d'edicio: %#v", items)
 	}
-	items = app.buildImportTemplateEntries(rows, admin, adminPerms)
+	items = app.buildImportTemplateEntries(rows, admin)
 	if len(items) != 1 || !items[0].CanEdit || !items[0].CanDelete || !items[0].CanToggle {
 		t.Fatalf("admin efectiu hauria de veure accions d'edicio: %#v", items)
 	}
@@ -2190,8 +2220,6 @@ func runF3317SimilarItems(t *testing.T, app *App, userID int, modelJSON string) 
 		t.Fatalf("no s'ha pogut preparar payload similar F33-17: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/import-templates/similar", bytes.NewReader(payload))
-	perms := app.getPermissionsForUser(userID)
-	req = app.withPermissions(req, perms)
 	rr := httptest.NewRecorder()
 	app.importTemplatesSimilarJSON(rr, req, &db.User{ID: userID})
 	if rr.Code != http.StatusOK {
@@ -2244,7 +2272,7 @@ func TestF3318CognomsAdminGuardsUseEffectiveAdminBridge(t *testing.T) {
 	if err := database.AddUserPolitica(adminUserID, adminPolicyID); err != nil {
 		t.Fatalf("no s'ha pogut assignar admin efectiu F33-18: %v", err)
 	}
-	perms := app.getPermissionsForUser(adminUserID)
+	perms := f3321LegacyPermissionsForUser(t, app, adminUserID)
 	if perms.Admin {
 		t.Fatalf("el test necessita admin efectiu pel bridge, no Admin=true local")
 	}

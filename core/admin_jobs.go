@@ -91,7 +91,7 @@ func (a *App) AdminJobsListPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, perms, isAdmin, ok := a.requireAdminJobViewer(w, r)
+	user, isAdmin, ok := a.requireAdminJobViewer(w, r)
 	if !ok {
 		return
 	}
@@ -178,7 +178,7 @@ func (a *App) AdminJobsListPage(w http.ResponseWriter, r *http.Request) {
 		"StatusOptions": adminJobStatusOptions(lang),
 		"CSRFToken":     token,
 		"IsAdmin":       isAdmin,
-		"CanBulkJobs":   !isAdmin && a.canModeracioMassiva(user, perms),
+		"CanBulkJobs":   !isAdmin && a.canModeracioMassiva(user),
 	})
 }
 
@@ -187,7 +187,7 @@ func (a *App) AdminJobsShowPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user, perms, isAdmin, ok := a.requireAdminJobViewer(w, r)
+	user, isAdmin, ok := a.requireAdminJobViewer(w, r)
 	if !ok {
 		return
 	}
@@ -214,7 +214,7 @@ func (a *App) AdminJobsShowPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !a.canViewAdminJob(user, perms, isAdmin, job) {
+	if !a.canViewAdminJob(user, isAdmin, job) {
 		http.NotFound(w, r)
 		return
 	}
@@ -268,7 +268,7 @@ func (a *App) AdminJobsDetailAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) adminJobsListAPI(w http.ResponseWriter, r *http.Request) {
-	user, perms, isAdmin, ok := a.requireAdminJobViewer(w, r)
+	user, isAdmin, ok := a.requireAdminJobViewer(w, r)
 	if !ok {
 		return
 	}
@@ -308,7 +308,7 @@ func (a *App) adminJobsListAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	payload := make([]map[string]interface{}, 0, len(jobs))
 	for _, job := range jobs {
-		if !a.canViewAdminJob(user, perms, isAdmin, &job) {
+		if !a.canViewAdminJob(user, isAdmin, &job) {
 			continue
 		}
 		payload = append(payload, adminJobAPIItem(job))
@@ -324,7 +324,7 @@ func (a *App) adminJobsListAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) adminJobsShowAPI(w http.ResponseWriter, r *http.Request, jobID int) {
-	user, perms, isAdmin, ok := a.requireAdminJobViewer(w, r)
+	user, isAdmin, ok := a.requireAdminJobViewer(w, r)
 	if !ok {
 		return
 	}
@@ -337,7 +337,7 @@ func (a *App) adminJobsShowAPI(w http.ResponseWriter, r *http.Request, jobID int
 		http.NotFound(w, r)
 		return
 	}
-	if !a.canViewAdminJob(user, perms, isAdmin, job) {
+	if !a.canViewAdminJob(user, isAdmin, job) {
 		http.NotFound(w, r)
 		return
 	}
@@ -764,34 +764,29 @@ func adminJobAge(job db.AdminJob) time.Duration {
 	return age
 }
 
-func (a *App) requireAdminJobViewer(w http.ResponseWriter, r *http.Request) (*db.User, db.PolicyPermissions, bool, bool) {
+func (a *App) requireAdminJobViewer(w http.ResponseWriter, r *http.Request) (*db.User, bool, bool) {
 	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return nil, db.PolicyPermissions{}, false, false
+		return nil, false, false
 	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
+	*r = *a.withRuntimePermissionContext(r, user)
 	canManageJobs := a.HasPermission(user.ID, permKeyAdminJobsManage, PermissionTarget{})
-	if canManageJobs || a.canModeracioMassiva(user, perms) {
-		return user, perms, canManageJobs, true
+	if canManageJobs || a.canModeracioMassiva(user) {
+		return user, canManageJobs, true
 	}
 	http.Error(w, "Forbidden", http.StatusForbidden)
-	return user, perms, canManageJobs, false
+	return user, canManageJobs, false
 }
 
-func (a *App) canViewAdminJob(user *db.User, perms db.PolicyPermissions, isAdmin bool, job *db.AdminJob) bool {
+func (a *App) canViewAdminJob(user *db.User, isAdmin bool, job *db.AdminJob) bool {
 	if job == nil {
 		return false
 	}
 	if isAdmin {
 		return true
 	}
-	if user == nil || !a.canModeracioMassiva(user, perms) {
+	if user == nil || !a.canModeracioMassiva(user) {
 		return false
 	}
 	return strings.TrimSpace(job.Kind) == adminJobKindModeracioBulk

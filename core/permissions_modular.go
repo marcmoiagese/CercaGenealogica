@@ -815,8 +815,7 @@ func (a *App) canManagePoliciesModular(user *db.User) bool {
 	if user == nil || a.DB == nil {
 		return false
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	if a.effectiveAdminForUser(user.ID, perms) {
+	if a.effectiveAdminForUser(user.ID) {
 		return true
 	}
 	policies, err := a.DB.ListUserPolitiques(user.ID)
@@ -843,8 +842,7 @@ func (a *App) canManageUsersModular(user *db.User) bool {
 	if user == nil || a.DB == nil {
 		return false
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	if a.effectiveAdminForUser(user.ID, perms) {
+	if a.effectiveAdminForUser(user.ID) {
 		return true
 	}
 	return a.userHasAssignedModularGrant(user.ID, permKeyAdminUsersManage)
@@ -854,8 +852,7 @@ func (a *App) canCreatePersonModular(user *db.User) bool {
 	if user == nil || a.DB == nil {
 		return false
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	if a.effectiveAdminForUser(user.ID, perms) {
+	if a.effectiveAdminForUser(user.ID) {
 		return true
 	}
 	return a.userHasModularDefaultOrAssignedGrant(user.ID, permKeyPersonesCreate)
@@ -865,8 +862,7 @@ func (a *App) canEditAnyPersonModular(user *db.User) bool {
 	if user == nil || a.DB == nil {
 		return false
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	if a.effectiveAdminForUser(user.ID, perms) {
+	if a.effectiveAdminForUser(user.ID) {
 		return true
 	}
 	return a.userHasModularDefaultOrAssignedGrant(user.ID, permKeyPersonesEditAny)
@@ -889,8 +885,7 @@ func (a *App) canManageEclesiaModular(user *db.User) bool {
 	if user == nil || a.DB == nil {
 		return false
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	if a.effectiveAdminForUser(user.ID, perms) {
+	if a.effectiveAdminForUser(user.ID) {
 		return true
 	}
 	return a.userHasAssignedModularGrant(user.ID,
@@ -905,8 +900,7 @@ func (a *App) canViewEclesiaModular(user *db.User) bool {
 	if user == nil || a.DB == nil {
 		return false
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	if a.effectiveAdminForUser(user.ID, perms) {
+	if a.effectiveAdminForUser(user.ID) {
 		return true
 	}
 	return a.userHasAssignedModularGrant(user.ID,
@@ -1195,19 +1189,7 @@ func (a *App) requirePermissionKey(w http.ResponseWriter, r *http.Request, permK
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return nil, false
 	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
-	if _, found := effectiveAdminFromContext(r); !found {
-		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
-	}
-	*r = *a.ensureUnreadMessagesCount(r, user.ID)
-	if _, found := permissionKeysFromContext(r); !found {
-		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
-	}
+	*r = *a.withRuntimePermissionContext(r, user)
 	if !a.HasPermission(user.ID, permKey, target) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return user, false
@@ -1221,19 +1203,7 @@ func (a *App) requireAnyPermissionKey(w http.ResponseWriter, r *http.Request, pe
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return nil, false
 	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
-	if _, found := effectiveAdminFromContext(r); !found {
-		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
-	}
-	*r = *a.ensureUnreadMessagesCount(r, user.ID)
-	if _, found := permissionKeysFromContext(r); !found {
-		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
-	}
+	*r = *a.withRuntimePermissionContext(r, user)
 	if len(permKeys) == 0 || !a.HasAnyPermission(user.ID, permKeys, target) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return user, false
@@ -1241,30 +1211,18 @@ func (a *App) requireAnyPermissionKey(w http.ResponseWriter, r *http.Request, pe
 	return user, true
 }
 
-func (a *App) requireEffectiveAdminModular(w http.ResponseWriter, r *http.Request) (*db.User, db.PolicyPermissions, bool) {
+func (a *App) requireEffectiveAdminModular(w http.ResponseWriter, r *http.Request) (*db.User, bool) {
 	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return nil, db.PolicyPermissions{}, false
+		return nil, false
 	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
-	if _, found := effectiveAdminFromContext(r); !found {
-		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
-	}
-	*r = *a.ensureUnreadMessagesCount(r, user.ID)
-	if _, found := permissionKeysFromContext(r); !found {
-		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
-	}
-	if !a.effectiveAdminForUser(user.ID, perms) {
+	*r = *a.withRuntimePermissionContext(r, user)
+	if !a.effectiveAdminForUser(user.ID) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
-		return user, perms, false
+		return user, false
 	}
-	return user, perms, true
+	return user, true
 }
 
 func (a *App) requirePermissionKeyIfLogged(w http.ResponseWriter, r *http.Request, permKey string) (*db.User, bool) {
@@ -1272,19 +1230,7 @@ func (a *App) requirePermissionKeyIfLogged(w http.ResponseWriter, r *http.Reques
 	if !ok || user == nil {
 		return nil, true
 	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
-	if _, found := effectiveAdminFromContext(r); !found {
-		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
-	}
-	*r = *a.ensureUnreadMessagesCount(r, user.ID)
-	if _, found := permissionKeysFromContext(r); !found {
-		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
-	}
+	*r = *a.withRuntimePermissionContext(r, user)
 	if permKey != "" && !a.hasAnyPermissionKey(user.ID, permKey) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return user, false
@@ -1298,19 +1244,7 @@ func (a *App) requirePermissionKeyAnyScope(w http.ResponseWriter, r *http.Reques
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return nil, false
 	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
-	if _, found := effectiveAdminFromContext(r); !found {
-		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
-	}
-	*r = *a.ensureUnreadMessagesCount(r, user.ID)
-	if _, found := permissionKeysFromContext(r); !found {
-		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
-	}
+	*r = *a.withRuntimePermissionContext(r, user)
 	if !a.hasAnyPermissionKey(user.ID, permKey) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return user, false

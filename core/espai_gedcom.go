@@ -41,13 +41,13 @@ type gedcomImportSummary struct {
 }
 
 type gedcomPerson struct {
-	ID         string
-	GivenName  string
-	Surname    string
-	Sex        string
-	BirthDate  string
-	DeathDate  string
-	FullName   string
+	ID        string
+	GivenName string
+	Surname   string
+	Sex       string
+	BirthDate string
+	DeathDate string
+	FullName  string
 }
 
 type gedcomFamily struct {
@@ -750,18 +750,18 @@ func (a *App) processGedcomImport(importRec *db.EspaiImport, path string) error 
 		wifeID := personIDs[fam.Wife]
 		if husbID > 0 && wifeID > 0 {
 			if _, err := a.DB.CreateEspaiRelacio(&db.EspaiRelacio{
-				ArbreID:      importRec.ArbreID,
-				PersonaID:    husbID,
+				ArbreID:          importRec.ArbreID,
+				PersonaID:        husbID,
 				RelatedPersonaID: wifeID,
-				RelationType: "spouse",
+				RelationType:     "spouse",
 			}); err == nil {
 				relationsCount++
 			}
 			if _, err := a.DB.CreateEspaiRelacio(&db.EspaiRelacio{
-				ArbreID:      importRec.ArbreID,
-				PersonaID:    wifeID,
+				ArbreID:          importRec.ArbreID,
+				PersonaID:        wifeID,
 				RelatedPersonaID: husbID,
-				RelationType: "spouse",
+				RelationType:     "spouse",
 			}); err == nil {
 				relationsCount++
 			}
@@ -773,20 +773,20 @@ func (a *App) processGedcomImport(importRec *db.EspaiImport, path string) error 
 			}
 			if husbID > 0 {
 				if _, err := a.DB.CreateEspaiRelacio(&db.EspaiRelacio{
-					ArbreID:      importRec.ArbreID,
-					PersonaID:    childID,
+					ArbreID:          importRec.ArbreID,
+					PersonaID:        childID,
 					RelatedPersonaID: husbID,
-					RelationType: "father",
+					RelationType:     "father",
 				}); err == nil {
 					relationsCount++
 				}
 			}
 			if wifeID > 0 {
 				if _, err := a.DB.CreateEspaiRelacio(&db.EspaiRelacio{
-					ArbreID:      importRec.ArbreID,
-					PersonaID:    childID,
+					ArbreID:          importRec.ArbreID,
+					PersonaID:        childID,
 					RelatedPersonaID: wifeID,
-					RelationType: "mother",
+					RelationType:     "mother",
 				}); err == nil {
 					relationsCount++
 				}

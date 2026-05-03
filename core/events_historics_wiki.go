@@ -31,7 +31,7 @@ func buildEventHistoricSnapshot(event *db.EventHistoric, impacts []db.EventHisto
 	return json.RawMessage(payload), nil
 }
 
-func (a *App) canViewEventHistoric(user *db.User, perms db.PolicyPermissions, event *db.EventHistoric) bool {
+func (a *App) canViewEventHistoric(user *db.User, event *db.EventHistoric) bool {
 	if event == nil {
 		return false
 	}
@@ -41,7 +41,7 @@ func (a *App) canViewEventHistoric(user *db.User, perms db.PolicyPermissions, ev
 	if user == nil {
 		return false
 	}
-	if a.canModerateWikiObject(user, perms, "event_historic", event.ID) {
+	if a.canModerateWikiObject(user, "event_historic", event.ID) {
 		return true
 	}
 	return event.CreatedBy.Valid && int(event.CreatedBy.Int64) == user.ID
@@ -72,14 +72,12 @@ func (a *App) EventHistoricWikiHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	*r = *a.withUser(r, user)
-	perms := a.getPermissionsForUser(user.ID)
-	*r = *a.withPermissions(r, perms)
-	if !a.canViewEventHistoric(user, perms, event) {
+	if !a.canViewEventHistoric(user, event) {
 		http.NotFound(w, r)
 		return
 	}
 	lang := resolveUserLang(r, user)
-	canModerate := a.canModerateWikiObject(user, perms, "event_historic", event.ID)
+	canModerate := a.canModerateWikiObject(user, "event_historic", event.ID)
 	canRevertPerm := a.hasAnyPermissionKey(user.ID, permKeyWikiRevert)
 	impacts, _ := a.DB.ListEventImpacts(event.ID)
 	currentSnapshot, _ := buildEventHistoricSnapshot(event, impacts)
@@ -296,9 +294,7 @@ func (a *App) EventHistoricWikiStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	*r = *a.withUser(r, user)
-	perms := a.getPermissionsForUser(user.ID)
-	*r = *a.withPermissions(r, perms)
-	if !a.canViewEventHistoric(user, perms, event) {
+	if !a.canViewEventHistoric(user, event) {
 		http.NotFound(w, r)
 		return
 	}
@@ -350,13 +346,12 @@ func (a *App) EventHistoricWikiRevert(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	canModerate := a.canModerateWikiObject(user, perms, "event_historic", event.ID)
+	canModerate := a.canModerateWikiObject(user, "event_historic", event.ID)
 	if !a.hasAnyPermissionKey(user.ID, permKeyWikiRevert) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	if !a.canViewEventHistoric(user, perms, event) {
+	if !a.canViewEventHistoric(user, event) {
 		http.NotFound(w, r)
 		return
 	}
@@ -460,8 +455,7 @@ func (a *App) EventHistoricWikiMark(w http.ResponseWriter, r *http.Request) {
 	if !a.ensureWikiMarkAllowed(w, r, lang) {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	if !a.canViewEventHistoric(user, perms, event) {
+	if !a.canViewEventHistoric(user, event) {
 		http.NotFound(w, r)
 		return
 	}
@@ -534,8 +528,7 @@ func (a *App) EventHistoricWikiUnmark(w http.ResponseWriter, r *http.Request) {
 	if !a.ensureWikiMarkAllowed(w, r, lang) {
 		return
 	}
-	perms := a.getPermissionsForUser(user.ID)
-	if !a.canViewEventHistoric(user, perms, event) {
+	if !a.canViewEventHistoric(user, event) {
 		http.NotFound(w, r)
 		return
 	}

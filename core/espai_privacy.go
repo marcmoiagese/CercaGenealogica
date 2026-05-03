@@ -36,17 +36,17 @@ type espaiPeoplePager struct {
 }
 
 type espaiTreeRowView struct {
-	ID             int
-	Name           string
-	Description    string
-	Visibility     string
-	PeopleCount    int
-	RelationsCount int
-	FamiliesCount  int
+	ID                  int
+	Name                string
+	Description         string
+	Visibility          string
+	PeopleCount         int
+	RelationsCount      int
+	FamiliesCount       int
 	GrampsIntegrationID int
-	SourceType     string
-	ImportStatus   string
-	ImportType     string
+	SourceType          string
+	ImportStatus        string
+	ImportType          string
 }
 
 type espaiTreeEditView struct {
@@ -218,24 +218,24 @@ func (a *App) EspaiPersonalOverviewPage(w http.ResponseWriter, r *http.Request) 
 	prefs := a.loadEspaiNotificationPrefs(user.ID)
 
 	RenderPrivateTemplate(w, r, "espai.html", map[string]interface{}{
-		"SpaceSection":      "overview",
-		"SpaceState":        spaceState,
-		"EspaiPeople":       people,
-		"EspaiPeoplePager":  peoplePager,
+		"SpaceSection":            "overview",
+		"SpaceState":              spaceState,
+		"EspaiPeople":             people,
+		"EspaiPeoplePager":        peoplePager,
 		"EspaiPeopleFilterValues": filterValues,
 		"EspaiPeopleFilterOrder":  strings.Join(filterOrder, ","),
-		"EspaiReturnTo":     r.URL.RequestURI(),
-		"EspaiNotifications": notifications,
+		"EspaiReturnTo":           r.URL.RequestURI(),
+		"EspaiNotifications":      notifications,
 		"EspaiNotificationUnread": unread,
-		"EspaiNotificationPrefs": prefs,
+		"EspaiNotificationPrefs":  prefs,
 		"EspaiOverviewCounts": espaiOverviewCounts{
 			PendingMatches: pendingMatches,
 			SyncFailures:   syncFailures,
 			GroupConflicts: groupConflicts,
 			UnreadAlerts:   unread,
 		},
-		"UploadError":       strings.TrimSpace(r.URL.Query().Get("error")),
-		"UploadNotice":      strings.TrimSpace(r.URL.Query().Get("notice")),
+		"UploadError":  strings.TrimSpace(r.URL.Query().Get("error")),
+		"UploadNotice": strings.TrimSpace(r.URL.Query().Get("notice")),
 	})
 }
 
@@ -351,8 +351,8 @@ func (a *App) EspaiPersonalTreesPage(w http.ResponseWriter, r *http.Request) {
 			}
 		} else if editTreeID == tree.ID {
 			editView = &espaiTreeEditView{
-				ID:   tree.ID,
-				Name: tree.Nom,
+				ID:       tree.ID,
+				Name:     tree.Nom,
 				CloseURL: closeURL,
 			}
 		}
@@ -363,17 +363,17 @@ func (a *App) EspaiPersonalTreesPage(w http.ResponseWriter, r *http.Request) {
 			importType = strings.ToLower(strings.TrimSpace(imp.ImportType))
 		}
 		rows = append(rows, espaiTreeRowView{
-			ID:             tree.ID,
-			Name:           tree.Nom,
-			Description:    desc,
-			Visibility:     visibility,
-			PeopleCount:    peopleCount,
-			RelationsCount: relationsCount,
-			FamiliesCount:  familiesCount,
+			ID:                  tree.ID,
+			Name:                tree.Nom,
+			Description:         desc,
+			Visibility:          visibility,
+			PeopleCount:         peopleCount,
+			RelationsCount:      relationsCount,
+			FamiliesCount:       familiesCount,
 			GrampsIntegrationID: grampsIntegrationID,
-			SourceType:     sourceType,
-			ImportStatus:   importStatus,
-			ImportType:     importType,
+			SourceType:          sourceType,
+			ImportStatus:        importStatus,
+			ImportType:          importType,
 		})
 	}
 
@@ -389,16 +389,16 @@ func (a *App) EspaiPersonalTreesPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RenderPrivateTemplate(w, r, "espai.html", map[string]interface{}{
-		"SpaceSection":       "trees",
-		"SpaceState":         spaceState,
-		"EspaiTreeRows":      rows,
-		"EspaiTreeEdit":      editView,
-		"EspaiTreeCount":     len(trees),
-		"EspaiTreeLimit":     treeLimit,
+		"SpaceSection":        "trees",
+		"SpaceState":          spaceState,
+		"EspaiTreeRows":       rows,
+		"EspaiTreeEdit":       editView,
+		"EspaiTreeCount":      len(trees),
+		"EspaiTreeLimit":      treeLimit,
 		"EspaiTreeLimitLabel": limitLabel,
-		"EspaiReturnTo":      r.URL.RequestURI(),
-		"UploadError":        strings.TrimSpace(r.URL.Query().Get("error")),
-		"UploadNotice":       strings.TrimSpace(r.URL.Query().Get("notice")),
+		"EspaiReturnTo":       r.URL.RequestURI(),
+		"UploadError":         strings.TrimSpace(r.URL.Query().Get("error")),
+		"UploadNotice":        strings.TrimSpace(r.URL.Query().Get("notice")),
 	})
 }
 
@@ -654,11 +654,11 @@ func (a *App) EspaiPublicArbreAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, map[string]interface{}{
-		"tree_id":       tree.ID,
-		"tree_name":     tree.Nom,
-		"root_person":   dataset.RootPersonID,
-		"familyData":    dataset.FamilyData,
-		"familyLinks":   dataset.FamilyLinks,
+		"tree_id":         tree.ID,
+		"tree_name":       tree.Nom,
+		"root_person":     dataset.RootPersonID,
+		"familyData":      dataset.FamilyData,
+		"familyLinks":     dataset.FamilyLinks,
 		"__DATASET_STATS": dataset.DatasetStats,
 	})
 }

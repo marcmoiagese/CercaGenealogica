@@ -38,19 +38,7 @@ func (a *App) requireCreatePersonModular(w http.ResponseWriter, r *http.Request)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return nil, false
 	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
-	if _, found := effectiveAdminFromContext(r); !found {
-		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
-	}
-	*r = *a.ensureUnreadMessagesCount(r, user.ID)
-	if _, found := permissionKeysFromContext(r); !found {
-		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
-	}
+	*r = *a.withRuntimePermissionContext(r, user)
 	if !a.canCreatePersonModular(user) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return user, false

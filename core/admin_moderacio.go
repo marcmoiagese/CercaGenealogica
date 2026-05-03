@@ -300,16 +300,14 @@ var moderacioTypeSpecs = map[string]moderacioTypeSpec{
 type moderacioScopeModel struct {
 	app            *App
 	user           *db.User
-	perms          db.PolicyPermissions
 	canModerateAll bool
 	permScopes     map[string]listScopeFilter
 }
 
-func (a *App) newModeracioScopeModel(user *db.User, perms db.PolicyPermissions, canModerateAll bool) *moderacioScopeModel {
+func (a *App) newModeracioScopeModel(user *db.User, canModerateAll bool) *moderacioScopeModel {
 	model := &moderacioScopeModel{
 		app:            a,
 		user:           user,
-		perms:          perms,
 		canModerateAll: canModerateAll,
 		permScopes:     map[string]listScopeFilter{},
 	}
@@ -557,11 +555,11 @@ func (m *moderacioScopeModel) canModerateAnything() bool {
 	return false
 }
 
-func (a *App) canModerateAllModular(user *db.User, perms db.PolicyPermissions) bool {
+func (a *App) canModerateAllModular(user *db.User) bool {
 	if user == nil {
 		return false
 	}
-	if a.effectiveAdminForUser(user.ID, perms) {
+	if a.effectiveAdminForUser(user.ID) {
 		return true
 	}
 	seen := map[string]bool{}
@@ -822,7 +820,7 @@ type moderacioBuildMetrics struct {
 	listBuildDur time.Duration
 }
 
-func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User, perms db.PolicyPermissions, canModerateAll bool, filters moderacioFilters, metrics *moderacioBuildMetrics) ([]moderacioItem, int, moderacioSummary, error) {
+func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User, canModerateAll bool, filters moderacioFilters, metrics *moderacioBuildMetrics) ([]moderacioItem, int, moderacioSummary, error) {
 	var items []moderacioItem
 	userCache := map[int]*db.User{}
 	autorFromID := func(id sql.NullInt64) (string, string, int) {
@@ -868,7 +866,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 	userQuery := strings.TrimSpace(filters.UserQuery)
 	userID := filters.UserID
 	now := time.Now()
-	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
+	scopeModel := a.newModeracioScopeModel(user, canModerateAll)
 	typeAllowed := func(objType string) bool {
 		if typeFilter != "" && typeFilter != "all" && typeFilter != objType {
 			return false
@@ -3301,79 +3299,69 @@ func shouldUseScopedCount(userIDs []int, createdAfter, createdBefore time.Time) 
 	return len(userIDs) == 0 && createdAfter.IsZero() && createdBefore.IsZero()
 }
 
-func (a *App) requireModeracioUser(w http.ResponseWriter, r *http.Request) (*db.User, db.PolicyPermissions, bool, bool) {
+func (a *App) requireModeracioUser(w http.ResponseWriter, r *http.Request) (*db.User, bool, bool) {
 	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return nil, db.PolicyPermissions{}, false, false
+		return nil, false, false
 	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
-	canModerateAll := a.canModerateAllModular(user, perms)
-	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
+	*r = *a.withRuntimePermissionContext(r, user)
+	canModerateAll := a.canModerateAllModular(user)
+	scopeModel := a.newModeracioScopeModel(user, canModerateAll)
 	if canModerateAll || scopeModel.canModerateAnything() {
-		return user, perms, canModerateAll, true
+		return user, canModerateAll, true
 	}
 	http.Error(w, "Forbidden", http.StatusForbidden)
-	return user, perms, false, false
+	return user, false, false
 }
 
-func (a *App) requireModeracioAnyTypeUser(w http.ResponseWriter, r *http.Request, objTypes ...string) (*db.User, db.PolicyPermissions, bool, bool) {
-	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
+func (a *App) requireModeracioAnyTypeUser(w http.ResponseWriter, r *http.Request, objTypes ...string) (*db.User, bool, bool) {
+	user, canModerateAll, ok := a.requireModeracioUser(w, r)
 	if !ok {
-		return nil, db.PolicyPermissions{}, false, false
+		return nil, false, false
 	}
 	if canModerateAll {
-		return user, perms, true, true
+		return user, true, true
 	}
-	scopeModel := a.newModeracioScopeModel(user, perms, false)
+	scopeModel := a.newModeracioScopeModel(user, false)
 	for _, objType := range objTypes {
 		if scopeModel.canModerateType(strings.TrimSpace(objType)) {
-			return user, perms, false, true
+			return user, false, true
 		}
 	}
 	http.Error(w, "Forbidden", http.StatusForbidden)
-	return user, perms, false, false
+	return user, false, false
 }
 
-func (a *App) canModeracioMassiva(user *db.User, perms db.PolicyPermissions) bool {
+func (a *App) canModeracioMassiva(user *db.User) bool {
 	if user == nil {
 		return false
 	}
-	if a.effectiveAdminForUser(user.ID, perms) {
+	if a.effectiveAdminForUser(user.ID) {
 		return true
 	}
 	return a.hasAnyPermissionKey(user.ID, permKeyModeracioMassiva)
 }
 
-func (a *App) requireModeracioMassivaUser(w http.ResponseWriter, r *http.Request) (*db.User, db.PolicyPermissions, bool, bool) {
+func (a *App) requireModeracioMassivaUser(w http.ResponseWriter, r *http.Request) (*db.User, bool, bool) {
 	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return nil, db.PolicyPermissions{}, false, false
+		return nil, false, false
 	}
-	*r = *a.withUser(r, user)
-	perms, found := a.permissionsFromContext(r)
-	if !found {
-		perms = a.getPermissionsForUser(user.ID)
-		*r = *a.withPermissions(r, perms)
-	}
-	isAdmin := a.effectiveAdminForUser(user.ID, perms)
+	*r = *a.withRuntimePermissionContext(r, user)
+	isAdmin := a.effectiveAdminForUser(user.ID)
 	if isAdmin || a.hasAnyPermissionKey(user.ID, permKeyModeracioMassiva) {
-		return user, perms, isAdmin, true
+		return user, isAdmin, true
 	}
 	http.Error(w, "Forbidden", http.StatusForbidden)
-	return user, perms, isAdmin, false
+	return user, isAdmin, false
 }
 
 // Llista de persones pendents de moderació
 func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 	handlerStart := time.Now()
-	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
+	user, canModerateAll, ok := a.requireModeracioUser(w, r)
 	if !ok {
 		return
 	}
@@ -3397,7 +3385,7 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 	filterStatus := filters.Status
 	filterAge := filters.AgeBucket
 	metrics := &moderacioBuildMetrics{}
-	pageItems, total, summary, err := a.buildModeracioItems(ResolveLang(r), page, perPage, user, perms, canModerateAll, filters, metrics)
+	pageItems, total, summary, err := a.buildModeracioItems(ResolveLang(r), page, perPage, user, canModerateAll, filters, metrics)
 	if err != nil {
 		http.Error(w, "No s'ha pogut carregar la moderació", http.StatusInternalServerError)
 		return
@@ -3442,8 +3430,8 @@ func (a *App) AdminModeracioList(w http.ResponseWriter, r *http.Request) {
 		pageBase += "?" + encoded
 	}
 	canManageArxius := a.canManageAnyDocumentalsModular(user)
-	isAdmin := a.effectiveAdminForUser(user.ID, perms)
-	canBulk := a.canModeracioMassiva(user, perms)
+	isAdmin := a.effectiveAdminForUser(user.ID)
+	canBulk := a.canModeracioMassiva(user)
 	msg := ""
 	okFlag := false
 	if r.URL.Query().Get("ok") != "" {
@@ -4256,7 +4244,7 @@ func (a *App) applyModeracioBulkRegistreDerivedSideEffects(states []moderacioBul
 	return metrics
 }
 
-func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, motiu string, user *db.User, perms db.PolicyPermissions, canModerateAll bool, bulkUserID int, update func(processed int, total int)) (moderacioBulkResult, moderacioBulkMetrics, error) {
+func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, motiu string, user *db.User, canModerateAll bool, bulkUserID int, update func(processed int, total int)) (moderacioBulkResult, moderacioBulkMetrics, error) {
 	if update == nil {
 		update = func(int, int) {}
 	}
@@ -4271,7 +4259,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 	applyMetrics := &moderacioApplyMetrics{}
 	perItemUsed := false
 	bulkUsed := false
-	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
+	scopeModel := a.newModeracioScopeModel(user, canModerateAll)
 	scopeMode := "scoped"
 	if scopeModel.canModerateAll {
 		scopeMode = "global"
@@ -4973,7 +4961,7 @@ func (a *App) logModeracioBulkExecution(action, scope, bulkType string, userID i
 
 // Accions massives de moderació
 func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
-	user, perms, _, ok := a.requireModeracioMassivaUser(w, r)
+	user, _, ok := a.requireModeracioMassivaUser(w, r)
 	if !ok {
 		return
 	}
@@ -5019,8 +5007,8 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	}
 	selected := r.Form["selected"]
 	motiu := strings.TrimSpace(r.FormValue("bulk_reason"))
-	canModerateAll := a.canModerateAllModular(user, perms)
-	scopeModel := a.newModeracioScopeModel(user, perms, canModerateAll)
+	canModerateAll := a.canModerateAllModular(user)
+	scopeModel := a.newModeracioScopeModel(user, canModerateAll)
 	async := strings.TrimSpace(r.FormValue("async")) == "1" || strings.Contains(r.Header.Get("Accept"), "application/json")
 	returnTo := strings.TrimSpace(r.FormValue("return_to"))
 	if returnTo == "" {
@@ -5028,7 +5016,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	}
 	if scope == "all" {
 		if async {
-			jobID, err := a.startModeracioBulkAdminJob(action, bulkType, motiu, user, perms, bulkUserID)
+			jobID, err := a.startModeracioBulkAdminJob(action, bulkType, motiu, user, bulkUserID)
 			if err != nil {
 				Errorf("moderacio bulk job create failed actor=%d action=%s scope=%s type=%s bulk_user_id=%d err=%v", user.ID, action, scope, bulkType, bulkUserID, err)
 				http.Error(w, "No s'ha pogut crear el job de moderacio massiva. Torna-ho a provar.", http.StatusInternalServerError)
@@ -5051,7 +5039,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		result, metrics, err := a.processModeracioBulkAll(r.Context(), action, bulkType, motiu, user, perms, canModerateAll, bulkUserID, nil)
+		result, metrics, err := a.processModeracioBulkAll(r.Context(), action, bulkType, motiu, user, canModerateAll, bulkUserID, nil)
 		auditStart := time.Now()
 		a.logAdminAudit(r, user.ID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
 			"action":       action,
@@ -5080,7 +5068,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 	filters, page, perPage := parseModeracioReturnTo(returnTo)
 	start := time.Now()
 	resolveStart := time.Now()
-	pageItems, _, _, err := a.buildModeracioItems(ResolveLang(r), page, perPage, user, perms, canModerateAll, filters, nil)
+	pageItems, _, _, err := a.buildModeracioItems(ResolveLang(r), page, perPage, user, canModerateAll, filters, nil)
 	if err != nil {
 		http.Redirect(w, r, moderacioReturnWithFlag(returnTo, "err"), http.StatusSeeOther)
 		return
@@ -5178,7 +5166,7 @@ func (a *App) AdminModeracioBulk(w http.ResponseWriter, r *http.Request) {
 
 // Aprovar persona
 func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
-	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
+	user, canModerateAll, ok := a.requireModeracioUser(w, r)
 	if !ok {
 		return
 	}
@@ -5200,7 +5188,7 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 	if returnTo == "" {
 		returnTo = "/moderacio"
 	}
-	if !canModerateAll && !a.newModeracioScopeModel(user, perms, canModerateAll).canModerateItem(objType, id) {
+	if !canModerateAll && !a.newModeracioScopeModel(user, canModerateAll).canModerateItem(objType, id) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -5223,7 +5211,7 @@ func (a *App) AdminModeracioAprovar(w http.ResponseWriter, r *http.Request) {
 
 // Rebutjar persona amb motiu
 func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
-	user, perms, canModerateAll, ok := a.requireModeracioUser(w, r)
+	user, canModerateAll, ok := a.requireModeracioUser(w, r)
 	if !ok {
 		return
 	}
@@ -5248,7 +5236,7 @@ func (a *App) AdminModeracioRebutjar(w http.ResponseWriter, r *http.Request) {
 	if returnTo == "" {
 		returnTo = "/moderacio"
 	}
-	if !canModerateAll && !a.newModeracioScopeModel(user, perms, canModerateAll).canModerateItem(objType, id) {
+	if !canModerateAll && !a.newModeracioScopeModel(user, canModerateAll).canModerateItem(objType, id) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

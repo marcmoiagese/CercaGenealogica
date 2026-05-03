@@ -59,8 +59,7 @@ func (a *App) importTemplatesSimilarJSON(w http.ResponseWriter, r *http.Request,
 		http.Error(w, "failed to load templates", http.StatusInternalServerError)
 		return
 	}
-	perms, _ := a.permissionsFromContext(r)
-	isAdmin := a.effectiveAdminForUser(user.ID, perms)
+	isAdmin := a.effectiveAdminForUser(user.ID)
 	similar := make([]templateSimilarity, 0, len(templates))
 	for _, tpl := range templates {
 		if tpl.ID == 0 {

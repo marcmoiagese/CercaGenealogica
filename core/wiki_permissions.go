@@ -2,11 +2,11 @@ package core
 
 import "github.com/marcmoiagese/CercaGenealogica/db"
 
-func (a *App) canModerateWikiObject(user *db.User, perms db.PolicyPermissions, objectType string, objectID int) bool {
+func (a *App) canModerateWikiObject(user *db.User, objectType string, objectID int) bool {
 	if user == nil {
 		return false
 	}
-	model := a.newModeracioScopeModel(user, perms, false)
+	model := a.newModeracioScopeModel(user, false)
 	changeType := wikiObjectTypeToModeracioType(objectType)
 	if changeType == "" {
 		return false
