@@ -1895,6 +1895,100 @@ func intFromJSONNumber(val interface{}) int {
 	}
 }
 
+func TestF3318CognomsAdminGuardsUseEffectiveAdminBridge(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	adminUserID := createF330User(t, database, "f33-18-cognoms-admin")
+	adminPolicyID := findF330PolicyID(t, database, "admin")
+	if _, err := database.SavePolitica(&db.Politica{
+		ID:         adminPolicyID,
+		Nom:        "admin",
+		Permisos:   "{}",
+		Descripcio: "",
+	}); err != nil {
+		t.Fatalf("no s'ha pogut preparar admin efectiu F33-18: %v", err)
+	}
+	if err := database.AddUserPolitica(adminUserID, adminPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar admin efectiu F33-18: %v", err)
+	}
+	perms := app.getPermissionsForUser(adminUserID)
+	if perms.Admin {
+		t.Fatalf("el test necessita admin efectiu pel bridge, no Admin=true local")
+	}
+	session := createF3313SessionCookie(t, database, adminUserID, "sess_f33_18_admin")
+
+	for _, tc := range []struct {
+		name string
+		run  func(*App, *http.Cookie) *httptest.ResponseRecorder
+	}{
+		{name: "import", run: runF3318AdminCognomsImport},
+		{name: "merge", run: runF3318AdminCognomsMerge},
+	} {
+		rr := tc.run(app, session)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("admin efectiu esperava 200 a %s, rebut %d body=%s", tc.name, rr.Code, rr.Body.String())
+		}
+	}
+}
+
+func TestF3318CognomsAdminGuardsBlockNonAdmin(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-18-cognoms-plain")
+	session := createF3313SessionCookie(t, database, userID, "sess_f33_18_plain")
+
+	for _, tc := range []struct {
+		name string
+		run  func(*App, *http.Cookie) *httptest.ResponseRecorder
+	}{
+		{name: "import", run: runF3318AdminCognomsImport},
+		{name: "merge", run: runF3318AdminCognomsMerge},
+	} {
+		rr := tc.run(app, session)
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("usuari no admin esperava 403 a %s, rebut %d", tc.name, rr.Code)
+		}
+	}
+}
+
+func TestF3318CognomsAdminFilesDoNotUseLegacyAdminGuard(t *testing.T) {
+	patterns := []string{
+		"perms.Admin",
+		"hasPerm(perms, permAdmin",
+		"requirePermission(w, r, permAdmin",
+	}
+	for _, path := range []string{
+		"admin_cognoms_import.go",
+		"admin_cognoms_merge.go",
+	} {
+		body, err := readF3316CoreSource(path)
+		if err != nil {
+			t.Fatalf("no s'ha pogut llegir %s: %v", path, err)
+		}
+		src := string(body)
+		for _, pattern := range patterns {
+			if strings.Contains(src, pattern) {
+				t.Fatalf("%s encara conte el patro legacy local %q", path, pattern)
+			}
+		}
+	}
+}
+
+func runF3318AdminCognomsImport(app *App, session *http.Cookie) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/admin/cognoms/import", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminCognomsImport(rr, req)
+	return rr
+}
+
+func runF3318AdminCognomsMerge(app *App, session *http.Cookie) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/admin/cognoms/merge", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminCognomsMerge(rr, req)
+	return rr
+}
+
 func assignF3315Policy(t *testing.T, database db.DB, userID int, name string, permKeys ...string) int {
 	t.Helper()
 	policyID, err := database.SavePolitica(&db.Politica{Nom: name, Permisos: "{}", Descripcio: ""})

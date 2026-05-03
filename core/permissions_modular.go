@@ -1275,6 +1275,32 @@ func (a *App) requireAnyPermissionKey(w http.ResponseWriter, r *http.Request, pe
 	return user, true
 }
 
+func (a *App) requireEffectiveAdminModular(w http.ResponseWriter, r *http.Request) (*db.User, db.PolicyPermissions, bool) {
+	user, ok := a.VerificarSessio(r)
+	if !ok || user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return nil, db.PolicyPermissions{}, false
+	}
+	*r = *a.withUser(r, user)
+	perms, found := a.permissionsFromContext(r)
+	if !found {
+		perms = a.getPermissionsForUser(user.ID)
+		*r = *a.withPermissions(r, perms)
+	}
+	if _, found := effectiveAdminFromContext(r); !found {
+		*r = *a.withEffectiveAdmin(r, a.effectiveAdminForUser(user.ID, perms))
+	}
+	*r = *a.ensureUnreadMessagesCount(r, user.ID)
+	if _, found := permissionKeysFromContext(r); !found {
+		*r = *a.withPermissionKeys(r, a.permissionKeysForUser(user.ID))
+	}
+	if !a.effectiveAdminForUser(user.ID, perms) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return user, perms, false
+	}
+	return user, perms, true
+}
+
 func (a *App) requirePermissionKeyIfLogged(w http.ResponseWriter, r *http.Request, permKey string) (*db.User, bool) {
 	user, ok := a.VerificarSessio(r)
 	if !ok || user == nil {

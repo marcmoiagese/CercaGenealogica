@@ -23,7 +23,7 @@ type cognomRedirectView struct {
 }
 
 func (a *App) AdminCognomsMerge(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, _, ok := a.requireEffectiveAdminModular(w, r); !ok {
 		return
 	}
 	if r.Method == http.MethodPost {
@@ -186,7 +186,7 @@ func (a *App) adminCognomsMergeSave(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminCognomsMergeDelete(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := a.requirePermission(w, r, permAdmin); !ok {
+	if _, _, ok := a.requireEffectiveAdminModular(w, r); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
