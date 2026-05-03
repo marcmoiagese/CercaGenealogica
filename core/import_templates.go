@@ -37,31 +37,31 @@ type importTemplateEditorView struct {
 }
 
 type importTemplateWizardColumn struct {
-	Index int
-	Name  string
-	Target string
+	Index     int
+	Name      string
+	Target    string
 	NameOrder string
 }
 
 type importTemplateWizardView struct {
-	Step           int
-	ColumnCount    int
-	Separator      string
-	SeparatorLabel string
-	Columns        []importTemplateWizardColumn
-	Name           string
-	Description    string
-	Visibility     string
-	RecordType     string
-	MainRole       string
-	NameOrder      string
-	DateFormat     string
-	QualityLabels  bool
-	QualityDubtos  string
-	QualityNoConsta string
+	Step             int
+	ColumnCount      int
+	Separator        string
+	SeparatorLabel   string
+	Columns          []importTemplateWizardColumn
+	Name             string
+	Description      string
+	Visibility       string
+	RecordType       string
+	MainRole         string
+	NameOrder        string
+	DateFormat       string
+	QualityLabels    bool
+	QualityDubtos    string
+	QualityNoConsta  string
 	QualityIncomplet string
 	QualityIllegible string
-	Error          string
+	Error            string
 }
 
 type importTemplatePayload struct {
@@ -267,10 +267,10 @@ func (a *App) importTemplatesListPage(w http.ResponseWriter, r *http.Request, us
 		items = filterPublicTemplateEntries(items, user.ID)
 	}
 	RenderPrivateTemplate(w, r, "import-templates-list.html", map[string]interface{}{
-		"Templates":  items,
+		"Templates":   items,
 		"ActiveScope": scope,
-		"Query":      query,
-		"Created":    created,
+		"Query":       query,
+		"Created":     created,
 	})
 }
 
@@ -297,16 +297,16 @@ func (a *App) importTemplateNewForm(w http.ResponseWriter, r *http.Request, user
 
 func (a *App) importTemplateWizardForm(w http.ResponseWriter, r *http.Request, user *db.User) {
 	view := importTemplateWizardView{
-		Step:           1,
-		ColumnCount:    0,
-		Separator:      ",",
-		SeparatorLabel: wizardSeparatorLabel(","),
-		Visibility:     "private",
-		RecordType:     "baptisme",
-		MainRole:       "batejat",
-		NameOrder:      "cognoms_first",
-		DateFormat:     "dd/mm",
-		QualityDubtos:  "?",
+		Step:            1,
+		ColumnCount:     0,
+		Separator:       ",",
+		SeparatorLabel:  wizardSeparatorLabel(","),
+		Visibility:      "private",
+		RecordType:      "baptisme",
+		MainRole:        "batejat",
+		NameOrder:       "cognoms_first",
+		DateFormat:      "dd/mm",
+		QualityDubtos:   "?",
 		QualityNoConsta: "¿",
 	}
 	a.renderImportTemplateWizard(w, r, view)
@@ -384,21 +384,21 @@ func (a *App) importTemplateWizardSubmit(w http.ResponseWriter, r *http.Request,
 		targets, targetErr := parseWizardColumnTargets(r, columnCount, recordType)
 		orders, orderErr := parseWizardColumnNameOrders(r, columnCount)
 		view := importTemplateWizardView{
-			Step:           2,
-			ColumnCount:    columnCount,
-			Separator:      sepRaw,
-			SeparatorLabel: wizardSeparatorLabel(sepRaw),
-			Columns:        buildWizardColumns(columnCount, names, targets, orders, normalizeWizardNameOrder(r.FormValue("name_order"))),
-			Name:           strings.TrimSpace(r.FormValue("template_name")),
-			Description:    strings.TrimSpace(r.FormValue("template_description")),
-			Visibility:     normalizeTemplateVisibility(r.FormValue("visibility")),
-			RecordType:     recordType,
-			MainRole:       strings.TrimSpace(r.FormValue("main_role")),
-			NameOrder:      normalizeWizardNameOrder(r.FormValue("name_order")),
-			DateFormat:     strings.TrimSpace(r.FormValue("date_format")),
-			QualityLabels:  strings.TrimSpace(r.FormValue("quality_labels")) == "1",
-			QualityDubtos:  strings.TrimSpace(r.FormValue("quality_dubtos")),
-			QualityNoConsta: strings.TrimSpace(r.FormValue("quality_no_consta")),
+			Step:             2,
+			ColumnCount:      columnCount,
+			Separator:        sepRaw,
+			SeparatorLabel:   wizardSeparatorLabel(sepRaw),
+			Columns:          buildWizardColumns(columnCount, names, targets, orders, normalizeWizardNameOrder(r.FormValue("name_order"))),
+			Name:             strings.TrimSpace(r.FormValue("template_name")),
+			Description:      strings.TrimSpace(r.FormValue("template_description")),
+			Visibility:       normalizeTemplateVisibility(r.FormValue("visibility")),
+			RecordType:       recordType,
+			MainRole:         strings.TrimSpace(r.FormValue("main_role")),
+			NameOrder:        normalizeWizardNameOrder(r.FormValue("name_order")),
+			DateFormat:       strings.TrimSpace(r.FormValue("date_format")),
+			QualityLabels:    strings.TrimSpace(r.FormValue("quality_labels")) == "1",
+			QualityDubtos:    strings.TrimSpace(r.FormValue("quality_dubtos")),
+			QualityNoConsta:  strings.TrimSpace(r.FormValue("quality_no_consta")),
 			QualityIncomplet: strings.TrimSpace(r.FormValue("quality_incomplet")),
 			QualityIllegible: strings.TrimSpace(r.FormValue("quality_illegible")),
 		}
@@ -450,21 +450,21 @@ func (a *App) importTemplateWizardSubmit(w http.ResponseWriter, r *http.Request,
 		targets, targetErr := parseWizardColumnTargets(r, columnCount, recordType)
 		orders, orderErr := parseWizardColumnNameOrders(r, columnCount)
 		view := importTemplateWizardView{
-			Step:           3,
-			ColumnCount:    columnCount,
-			Separator:      sepRaw,
-			SeparatorLabel: wizardSeparatorLabel(sepRaw),
-			Columns:        buildWizardColumns(columnCount, names, targets, orders, normalizeWizardNameOrder(r.FormValue("name_order"))),
-			Name:           strings.TrimSpace(r.FormValue("template_name")),
-			Description:    strings.TrimSpace(r.FormValue("template_description")),
-			Visibility:     normalizeTemplateVisibility(r.FormValue("visibility")),
-			RecordType:     recordType,
-			MainRole:       strings.TrimSpace(r.FormValue("main_role")),
-			NameOrder:      normalizeWizardNameOrder(r.FormValue("name_order")),
-			DateFormat:     strings.TrimSpace(r.FormValue("date_format")),
-			QualityLabels:  strings.TrimSpace(r.FormValue("quality_labels")) == "1",
-			QualityDubtos:  strings.TrimSpace(r.FormValue("quality_dubtos")),
-			QualityNoConsta: strings.TrimSpace(r.FormValue("quality_no_consta")),
+			Step:             3,
+			ColumnCount:      columnCount,
+			Separator:        sepRaw,
+			SeparatorLabel:   wizardSeparatorLabel(sepRaw),
+			Columns:          buildWizardColumns(columnCount, names, targets, orders, normalizeWizardNameOrder(r.FormValue("name_order"))),
+			Name:             strings.TrimSpace(r.FormValue("template_name")),
+			Description:      strings.TrimSpace(r.FormValue("template_description")),
+			Visibility:       normalizeTemplateVisibility(r.FormValue("visibility")),
+			RecordType:       recordType,
+			MainRole:         strings.TrimSpace(r.FormValue("main_role")),
+			NameOrder:        normalizeWizardNameOrder(r.FormValue("name_order")),
+			DateFormat:       strings.TrimSpace(r.FormValue("date_format")),
+			QualityLabels:    strings.TrimSpace(r.FormValue("quality_labels")) == "1",
+			QualityDubtos:    strings.TrimSpace(r.FormValue("quality_dubtos")),
+			QualityNoConsta:  strings.TrimSpace(r.FormValue("quality_no_consta")),
 			QualityIncomplet: strings.TrimSpace(r.FormValue("quality_incomplet")),
 			QualityIllegible: strings.TrimSpace(r.FormValue("quality_illegible")),
 		}
@@ -520,7 +520,7 @@ func (a *App) importTemplateWizardSubmit(w http.ResponseWriter, r *http.Request,
 		model["quality"] = map[string]interface{}{
 			"labels": view.QualityLabels,
 			"markers": map[string]interface{}{
-				"dubtos": view.QualityDubtos,
+				"dubtos":    view.QualityDubtos,
 				"no_consta": view.QualityNoConsta,
 				"incomplet": view.QualityIncomplet,
 				"illegible": view.QualityIllegible,
@@ -594,9 +594,9 @@ func buildWizardColumns(count int, names []string, kinds []string, orders []stri
 			order = defaultOrder
 		}
 		cols = append(cols, importTemplateWizardColumn{
-			Index: i,
-			Name:  name,
-			Target: target,
+			Index:     i,
+			Name:      name,
+			Target:    target,
 			NameOrder: order,
 		})
 	}
@@ -663,12 +663,12 @@ func parseWizardColumnNameOrders(r *http.Request, count int) ([]string, string) 
 		return nil, "Indica quantes columnes té el CSV."
 	}
 	allowed := map[string]bool{
-		"": true,
-		"cognoms_first": true,
-		"cognoms_first_maternal": true,
-		"nom_first": true,
+		"":                        true,
+		"cognoms_first":           true,
+		"cognoms_first_maternal":  true,
+		"nom_first":               true,
 		"nom_first_paternal_only": true,
-		"nom_first_maternal": true,
+		"nom_first_maternal":      true,
 	}
 	orders := make([]string, count)
 	for i := 1; i <= count; i++ {
@@ -745,16 +745,16 @@ func buildWizardColumnMapping(header string, target string, order string, view i
 		if selected == "" {
 			selected = view.NameOrder
 		}
-	switch selected {
-	case "nom_first":
-		transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_nom_marcmoia_v2"})
-	case "nom_first_paternal_only":
-		transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_nom_marcmoia_v2"})
-	case "nom_first_maternal":
-		transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_nom_marcmoia_v2_maternal_first"})
-	case "cognoms_first_maternal":
-		transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_cognoms_marcmoia_v2_maternal_first"})
-	default:
+		switch selected {
+		case "nom_first":
+			transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_nom_marcmoia_v2"})
+		case "nom_first_paternal_only":
+			transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_nom_marcmoia_v2"})
+		case "nom_first_maternal":
+			transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_nom_marcmoia_v2_maternal_first"})
+		case "cognoms_first_maternal":
+			transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_cognoms_marcmoia_v2_maternal_first"})
+		default:
 			transforms = append(transforms, map[string]interface{}{"name": "parse_person_from_cognoms_marcmoia_v2"})
 		}
 	}
@@ -845,7 +845,7 @@ func (a *App) importTemplateEditForm(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, perms, template) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -867,7 +867,7 @@ func (a *App) importTemplateUpdate(w http.ResponseWriter, r *http.Request, user 
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, perms, template) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -918,7 +918,7 @@ func (a *App) importTemplateDelete(w http.ResponseWriter, r *http.Request, user 
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, perms, template) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -944,7 +944,7 @@ func (a *App) importTemplateClone(w http.ResponseWriter, r *http.Request, user *
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !canViewImportTemplate(user, perms, template) || template.Visibility != "public" {
+	if !a.canViewImportTemplate(user, perms, template) || template.Visibility != "public" {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -972,7 +972,7 @@ func (a *App) importTemplateToggleVisibility(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, perms, template) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -1024,16 +1024,16 @@ func (a *App) importTemplatesListJSON(w http.ResponseWriter, r *http.Request, us
 	payload := make([]map[string]interface{}, 0, len(items))
 	for _, item := range items {
 		payload = append(payload, map[string]interface{}{
-			"id":           item.ID,
-			"name":         item.Name,
-			"description":  item.Description,
-			"visibility":   item.Visibility,
-			"is_public":    item.IsPublic,
-			"updated_at":   item.UpdatedAt,
-			"can_edit":     item.CanEdit,
-			"can_delete":   item.CanDelete,
-			"can_clone":    item.CanClone,
-			"can_toggle":   item.CanToggle,
+			"id":          item.ID,
+			"name":        item.Name,
+			"description": item.Description,
+			"visibility":  item.Visibility,
+			"is_public":   item.IsPublic,
+			"updated_at":  item.UpdatedAt,
+			"can_edit":    item.CanEdit,
+			"can_delete":  item.CanDelete,
+			"can_clone":   item.CanClone,
+			"can_toggle":  item.CanToggle,
 		})
 	}
 	writeJSON(w, map[string]interface{}{"items": payload})
@@ -1046,7 +1046,7 @@ func (a *App) importTemplateGetJSON(w http.ResponseWriter, r *http.Request, user
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !canViewImportTemplate(user, perms, template) {
+	if !a.canViewImportTemplate(user, perms, template) {
 		http.NotFound(w, r)
 		return
 	}
@@ -1090,7 +1090,7 @@ func (a *App) importTemplateUpdateJSON(w http.ResponseWriter, r *http.Request, u
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, perms, template) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -1120,7 +1120,7 @@ func (a *App) importTemplateDeleteJSON(w http.ResponseWriter, r *http.Request, u
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, perms, template) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -1143,7 +1143,7 @@ func (a *App) importTemplateCloneJSON(w http.ResponseWriter, r *http.Request, us
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !canViewImportTemplate(user, perms, template) || template.Visibility != "public" {
+	if !a.canViewImportTemplate(user, perms, template) || template.Visibility != "public" {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -1176,7 +1176,7 @@ func (a *App) importTemplateToggleVisibilityJSON(w http.ResponseWriter, r *http.
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !canEditImportTemplate(user, perms, template) {
+	if !a.canEditImportTemplate(user, perms, template) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -1352,9 +1352,9 @@ func defaultImportTemplateModel(lang string) map[string]interface{} {
 	}
 	return map[string]interface{}{
 		"metadata": map[string]interface{}{
-			"version": 1,
-			"kind":    "transcripcions_raw",
-			"locale":  locale,
+			"version":     1,
+			"kind":        "transcripcions_raw",
+			"locale":      locale,
 			"record_type": "baptisme",
 		},
 		"book_resolution": map[string]interface{}{
@@ -1374,8 +1374,8 @@ func defaultImportTemplateModel(lang string) map[string]interface{} {
 				"key_fields":  []interface{}{},
 			},
 			"merge_existing": map[string]interface{}{
-				"mode":              "none",
-				"principal_roles":   []interface{}{"batejat"},
+				"mode":                "none",
+				"principal_roles":     []interface{}{"batejat"},
 				"update_missing_only": true,
 				"add_missing_people":  true,
 				"add_missing_attrs":   true,
@@ -1423,7 +1423,8 @@ func (a *App) buildImportTemplateEntries(rows []db.CSVImportTemplate, user *db.U
 			ownerID = int(row.OwnerUserID.Int64)
 		}
 		isOwner := user != nil && ownerID == user.ID
-		canEdit := user != nil && (perms.Admin || isOwner)
+		isAdmin := user != nil && a.effectiveAdminForUser(user.ID, perms)
+		canEdit := user != nil && (isAdmin || isOwner)
 		isPublic := strings.TrimSpace(strings.ToLower(row.Visibility)) == "public"
 		updatedAt := formatImportTemplateTime(row.UpdatedAt)
 		items = append(items, importTemplateListEntry{
@@ -1460,11 +1461,11 @@ func filterPublicTemplateEntries(items []importTemplateListEntry, userID int) []
 	return filtered
 }
 
-func canEditImportTemplate(user *db.User, perms db.PolicyPermissions, template *db.CSVImportTemplate) bool {
+func (a *App) canEditImportTemplate(user *db.User, perms db.PolicyPermissions, template *db.CSVImportTemplate) bool {
 	if user == nil || template == nil {
 		return false
 	}
-	if perms.Admin {
+	if a.effectiveAdminForUser(user.ID, perms) {
 		return true
 	}
 	if template.OwnerUserID.Valid && int(template.OwnerUserID.Int64) == user.ID {
@@ -1473,14 +1474,14 @@ func canEditImportTemplate(user *db.User, perms db.PolicyPermissions, template *
 	return false
 }
 
-func canViewImportTemplate(user *db.User, perms db.PolicyPermissions, template *db.CSVImportTemplate) bool {
+func (a *App) canViewImportTemplate(user *db.User, perms db.PolicyPermissions, template *db.CSVImportTemplate) bool {
 	if template == nil {
 		return false
 	}
 	if template.Visibility == "public" {
 		return true
 	}
-	return canEditImportTemplate(user, perms, template)
+	return a.canEditImportTemplate(user, perms, template)
 }
 
 func (a *App) uniqueCloneName(userID int, name string) string {

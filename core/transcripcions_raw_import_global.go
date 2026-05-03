@@ -75,7 +75,7 @@ func (a *App) AdminImportRegistresGlobal(w http.ResponseWriter, r *http.Request)
 		templateID := parseIntValue(r.FormValue("template_id"))
 		template, err := a.DB.GetCSVImportTemplate(templateID)
 		perms := a.getPermissionsForUser(user.ID)
-		if err != nil || template == nil || !canViewImportTemplate(user, perms, template) {
+		if err != nil || template == nil || !a.canViewImportTemplate(user, perms, template) {
 			result.Failed = 1
 			result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "plantilla no trobada"})
 			break

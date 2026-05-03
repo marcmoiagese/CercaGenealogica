@@ -1721,6 +1721,180 @@ func TestF3316DashboardAdminRoleUsesEffectiveAdminBridge(t *testing.T) {
 	}
 }
 
+func TestF3317ImportTemplateEditUsesOwnerOrEffectiveAdmin(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	ownerID := createF330User(t, database, "f33-17-template-owner")
+	otherID := createF330User(t, database, "f33-17-template-other")
+	adminID := createF330User(t, database, "f33-17-template-admin")
+	adminPolicyID := findF330PolicyID(t, database, "admin")
+	if _, err := database.SavePolitica(&db.Politica{
+		ID:         adminPolicyID,
+		Nom:        "admin",
+		Permisos:   "{}",
+		Descripcio: "",
+	}); err != nil {
+		t.Fatalf("no s'ha pogut preparar admin efectiu F33-17: %v", err)
+	}
+	if err := database.AddUserPolitica(adminID, adminPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar admin efectiu F33-17: %v", err)
+	}
+
+	template := &db.CSVImportTemplate{
+		Name:        "F33-17 owner template",
+		OwnerUserID: sqlNullIntFromInt(ownerID),
+		Visibility:  "private",
+		ModelJSON:   `{"metadata":{"kind":"transcripcions_raw"},"mapping":{"columns":[]}}`,
+	}
+
+	owner := &db.User{ID: ownerID}
+	ownerPerms := app.getPermissionsForUser(ownerID)
+	if !app.canEditImportTemplate(owner, ownerPerms, template) {
+		t.Fatalf("owner hauria de poder editar la seva plantilla")
+	}
+
+	other := &db.User{ID: otherID}
+	otherPerms := app.getPermissionsForUser(otherID)
+	if app.canEditImportTemplate(other, otherPerms, template) {
+		t.Fatalf("usuari no owner i no admin no hauria de poder editar")
+	}
+
+	admin := &db.User{ID: adminID}
+	adminPerms := app.getPermissionsForUser(adminID)
+	if adminPerms.Admin {
+		t.Fatalf("el test necessita admin efectiu per bridge, no per camp local Admin=true")
+	}
+	if !app.canEditImportTemplate(admin, adminPerms, template) {
+		t.Fatalf("admin efectiu hauria de poder editar plantilla aliena")
+	}
+
+	rows := []db.CSVImportTemplate{*template}
+	items := app.buildImportTemplateEntries(rows, other, otherPerms)
+	if len(items) != 1 || items[0].CanEdit || items[0].CanDelete || items[0].CanToggle {
+		t.Fatalf("no-owner no-admin no hauria de veure accions d'edicio: %#v", items)
+	}
+	items = app.buildImportTemplateEntries(rows, admin, adminPerms)
+	if len(items) != 1 || !items[0].CanEdit || !items[0].CanDelete || !items[0].CanToggle {
+		t.Fatalf("admin efectiu hauria de veure accions d'edicio: %#v", items)
+	}
+}
+
+func TestF3317ImportTemplatesSimilarUsesOwnerOrEffectiveAdmin(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+
+	ownerID := createF330User(t, database, "f33-17-similar-owner")
+	otherID := createF330User(t, database, "f33-17-similar-other")
+	adminID := createF330User(t, database, "f33-17-similar-admin")
+	adminPolicyID := findF330PolicyID(t, database, "admin")
+	if _, err := database.SavePolitica(&db.Politica{
+		ID:         adminPolicyID,
+		Nom:        "admin",
+		Permisos:   "{}",
+		Descripcio: "",
+	}); err != nil {
+		t.Fatalf("no s'ha pogut preparar admin similar F33-17: %v", err)
+	}
+	if err := database.AddUserPolitica(adminID, adminPolicyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar admin similar F33-17: %v", err)
+	}
+
+	modelJSON := `{"metadata":{"kind":"transcripcions_raw"},"book_resolution":{"mode":"llibre_id"},"mapping":{"columns":[{"key":"nom","map_to":[{"target":"person.nom"}]}]}}`
+	templateID, err := database.CreateCSVImportTemplate(&db.CSVImportTemplate{
+		Name:        "F33-17 similar public",
+		OwnerUserID: sqlNullIntFromInt(ownerID),
+		Visibility:  "public",
+		ModelJSON:   modelJSON,
+		Signature:   db.ComputeTemplateSignature(modelJSON),
+	})
+	if err != nil || templateID <= 0 {
+		t.Fatalf("no s'ha pogut crear template similar F33-17: %v", err)
+	}
+
+	ownerItems := runF3317SimilarItems(t, app, ownerID, modelJSON)
+	if !f3317SimilarItemCanEdit(ownerItems, templateID) {
+		t.Fatalf("owner hauria de poder editar a similar JSON: %#v", ownerItems)
+	}
+	otherItems := runF3317SimilarItems(t, app, otherID, modelJSON)
+	if f3317SimilarItemCanEdit(otherItems, templateID) {
+		t.Fatalf("no-owner no-admin no hauria de poder editar a similar JSON: %#v", otherItems)
+	}
+	adminItems := runF3317SimilarItems(t, app, adminID, modelJSON)
+	if !f3317SimilarItemCanEdit(adminItems, templateID) {
+		t.Fatalf("admin efectiu hauria de poder editar a similar JSON: %#v", adminItems)
+	}
+}
+
+func TestF3317ImportTemplatesDoNotUseLocalLegacyAdminChecks(t *testing.T) {
+	patterns := []string{
+		"perms.Admin",
+		"hasPerm(perms, permAdmin",
+		"requirePermission(w, r, permAdmin",
+	}
+	for _, path := range []string{
+		"import_templates.go",
+		"import_templates_similar.go",
+	} {
+		body, err := readF3316CoreSource(path)
+		if err != nil {
+			t.Fatalf("no s'ha pogut llegir %s: %v", path, err)
+		}
+		src := string(body)
+		for _, pattern := range patterns {
+			if strings.Contains(src, pattern) {
+				t.Fatalf("%s encara conte el patro legacy local %q", path, pattern)
+			}
+		}
+	}
+}
+
+func runF3317SimilarItems(t *testing.T, app *App, userID int, modelJSON string) []map[string]interface{} {
+	t.Helper()
+	payload, err := json.Marshal(map[string]interface{}{
+		"model_json": modelJSON,
+		"limit":      10,
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut preparar payload similar F33-17: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/import-templates/similar", bytes.NewReader(payload))
+	perms := app.getPermissionsForUser(userID)
+	req = app.withPermissions(req, perms)
+	rr := httptest.NewRecorder()
+	app.importTemplatesSimilarJSON(rr, req, &db.User{ID: userID})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("similar JSON F33-17 status inesperat %d body=%s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Items []map[string]interface{} `json:"items"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("no s'ha pogut llegir resposta similar F33-17: %v", err)
+	}
+	return resp.Items
+}
+
+func f3317SimilarItemCanEdit(items []map[string]interface{}, id int) bool {
+	for _, item := range items {
+		if intFromJSONNumber(item["id"]) != id {
+			continue
+		}
+		canEdit, _ := item["can_edit"].(bool)
+		return canEdit
+	}
+	return false
+}
+
+func intFromJSONNumber(val interface{}) int {
+	switch v := val.(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	default:
+		return 0
+	}
+}
+
 func assignF3315Policy(t *testing.T, database db.DB, userID int, name string, permKeys ...string) int {
 	t.Helper()
 	policyID, err := database.SavePolitica(&db.Politica{Nom: name, Permisos: "{}", Descripcio: ""})

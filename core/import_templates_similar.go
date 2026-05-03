@@ -60,6 +60,7 @@ func (a *App) importTemplatesSimilarJSON(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
+	isAdmin := a.effectiveAdminForUser(user.ID, perms)
 	similar := make([]templateSimilarity, 0, len(templates))
 	for _, tpl := range templates {
 		if tpl.ID == 0 {
@@ -77,7 +78,7 @@ func (a *App) importTemplatesSimilarJSON(w http.ResponseWriter, r *http.Request,
 			ownerID = int(tpl.OwnerUserID.Int64)
 		}
 		isOwner := ownerID == user.ID
-		canEdit := perms.Admin || isOwner
+		canEdit := isAdmin || isOwner
 		canClone := strings.TrimSpace(strings.ToLower(tpl.Visibility)) == "public" && !isOwner
 		similar = append(similar, templateSimilarity{
 			ID:         tpl.ID,

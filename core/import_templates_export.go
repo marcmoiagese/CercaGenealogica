@@ -19,7 +19,7 @@ func (a *App) importTemplateExportCSV(w http.ResponseWriter, r *http.Request, us
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !canViewImportTemplate(user, perms, template) {
+	if !a.canViewImportTemplate(user, perms, template) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -59,7 +59,7 @@ func (a *App) importTemplateExportXLSX(w http.ResponseWriter, r *http.Request, u
 		return
 	}
 	perms, _ := a.permissionsFromContext(r)
-	if !canViewImportTemplate(user, perms, template) {
+	if !a.canViewImportTemplate(user, perms, template) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
