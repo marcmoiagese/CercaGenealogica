@@ -1257,6 +1257,15 @@ func TestF3313CanManagePoliciesModularIgnoresLegacyPure(t *testing.T) {
 func TestF3313PoliciesSuggestGuardsUseModularKey(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 
+	noPermUserID := createF330User(t, database, "f33-13-suggest-none")
+	noPermSession := createF3313SessionCookie(t, database, noPermUserID, "sess_f33_13_none")
+	for name, handler := range f3313SuggestHandlers(app) {
+		rr := runF3313SuggestHandler(handler, noPermSession)
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("%s sense permis esperava 403, rebut %d", name, rr.Code)
+		}
+	}
+
 	legacyUserID := createF330User(t, database, "f33-13-suggest-legacy")
 	legacyPolicyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "f33-13-suggest-legacy",
@@ -1299,6 +1308,19 @@ func TestF3313PoliciesSuggestGuardsUseModularKey(t *testing.T) {
 			t.Fatalf("%s amb admin.policies.manage no hauria de retornar 403", name)
 		}
 	}
+
+	adminUserID := createF330User(t, database, "f33-13-suggest-admin")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(adminUserID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin suggest: %v", err)
+	}
+	adminSession := createF3313SessionCookie(t, database, adminUserID, "sess_f33_13_admin")
+	for name, handler := range f3313SuggestHandlers(app) {
+		rr := runF3313SuggestHandler(handler, adminSession)
+		if rr.Code == http.StatusForbidden {
+			t.Fatalf("%s amb admin global no hauria de retornar 403", name)
+		}
+	}
 }
 
 func createF3313SessionCookie(t *testing.T, database db.DB, userID int, sessionID string) *http.Cookie {
@@ -1312,6 +1334,7 @@ func createF3313SessionCookie(t *testing.T, database db.DB, userID int, sessionI
 
 func f3313SuggestHandlers(app *App) map[string]func(http.ResponseWriter, *http.Request) {
 	return map[string]func(http.ResponseWriter, *http.Request){
+		"AdminPaisosSuggest":              app.AdminPaisosSuggest,
 		"AdminMunicipisSuggest":           app.AdminMunicipisSuggest,
 		"AdminNivellsSuggest":             app.AdminNivellsSuggest,
 		"AdminNivellAdministratiuSuggest": app.AdminNivellAdministratiuSuggest,
