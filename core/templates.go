@@ -531,11 +531,14 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		return permKeys[key]
 	}
 	hasModeracioKey := hasModularModerationKey(hasKey)
+	hasManageTerritoryKey := hasModularTerritoryManageKey(hasKey)
+	hasViewNivellsKey := hasModularNivellsViewKey(hasKey)
+	hasViewMunicipisKey := hasModularMunicipisViewKey(hasKey)
 	if _, found := m["CanManageArxius"]; !found {
 		m["CanManageArxius"] = effectiveAdmin || perms.CanManageArchives
 	}
 	if _, found := m["CanManageTerritory"]; !found {
-		m["CanManageTerritory"] = effectiveAdmin || perms.CanManageTerritory
+		m["CanManageTerritory"] = effectiveAdmin || hasManageTerritoryKey
 	}
 	if _, found := m["CanManageEclesia"]; !found {
 		m["CanManageEclesia"] = effectiveAdmin || perms.CanManageEclesia
@@ -627,20 +630,10 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		m["CanBulkIndex"] = effectiveAdmin || perms.CanManageArchives || hasKey(permKeyDocumentalsLlibresBulkIndex)
 	}
 	if _, found := m["CanViewNivells"]; !found {
-		m["CanViewNivells"] = effectiveAdmin || perms.CanManageTerritory ||
-			hasKey(permKeyTerritoriNivellsView) || hasKey(permKeyTerritoriNivellsCreate) || hasKey(permKeyTerritoriNivellsEdit) ||
-			hasKey(permKeyTerritoriNivellsRebuild)
+		m["CanViewNivells"] = effectiveAdmin || hasViewNivellsKey
 	}
 	if _, found := m["CanViewMunicipis"]; !found {
-		m["CanViewMunicipis"] = effectiveAdmin || perms.CanManageTerritory ||
-			hasKey(permKeyTerritoriMunicipisView) || hasKey(permKeyTerritoriMunicipisCreate) || hasKey(permKeyTerritoriMunicipisEdit) ||
-			hasKey(permKeyTerritoriMunicipisMapesView) || hasKey(permKeyTerritoriMunicipisMapesCreate) || hasKey(permKeyTerritoriMunicipisMapesEdit) ||
-			hasKey(permKeyTerritoriMunicipisMapesSubmit) || hasKey(permKeyTerritoriMunicipisMapesModerate) ||
-			hasKey(permKeyTerritoriMunicipisHistoriaCreate) || hasKey(permKeyTerritoriMunicipisHistoriaEdit) ||
-			hasKey(permKeyTerritoriMunicipisHistoriaSubmit) || hasKey(permKeyTerritoriMunicipisHistoriaModerate) ||
-			hasKey(permKeyTerritoriMunicipisAnecdotesCreate) || hasKey(permKeyTerritoriMunicipisAnecdotesEdit) ||
-			hasKey(permKeyTerritoriMunicipisAnecdotesSubmit) || hasKey(permKeyTerritoriMunicipisAnecdotesComment) ||
-			hasKey(permKeyTerritoriMunicipisAnecdotesModerate)
+		m["CanViewMunicipis"] = effectiveAdmin || hasViewMunicipisKey
 	}
 	if _, found := m["CanViewEcles"]; !found {
 		m["CanViewEcles"] = effectiveAdmin || perms.CanManageEclesia ||
@@ -677,4 +670,50 @@ func hasModularModerationKey(hasKey func(string) bool) bool {
 		hasKey(permKeyDocumentalsArxiusEdit) ||
 		hasKey(permKeyDocumentalsLlibresEdit) ||
 		hasKey(permKeyDocumentalsRegistresEdit)
+}
+
+func hasModularTerritoryManageKey(hasKey func(string) bool) bool {
+	if hasKey == nil {
+		return false
+	}
+	return hasKey(permKeyTerritoriPaisosCreate) ||
+		hasKey(permKeyTerritoriPaisosEdit) ||
+		hasKey(permKeyTerritoriNivellsCreate) ||
+		hasKey(permKeyTerritoriNivellsEdit) ||
+		hasKey(permKeyTerritoriNivellsRebuild) ||
+		hasKey(permKeyTerritoriMunicipisCreate) ||
+		hasKey(permKeyTerritoriMunicipisEdit)
+}
+
+func hasModularNivellsViewKey(hasKey func(string) bool) bool {
+	if hasKey == nil {
+		return false
+	}
+	return hasKey(permKeyTerritoriNivellsView) ||
+		hasKey(permKeyTerritoriNivellsCreate) ||
+		hasKey(permKeyTerritoriNivellsEdit) ||
+		hasKey(permKeyTerritoriNivellsRebuild)
+}
+
+func hasModularMunicipisViewKey(hasKey func(string) bool) bool {
+	if hasKey == nil {
+		return false
+	}
+	return hasKey(permKeyTerritoriMunicipisView) ||
+		hasKey(permKeyTerritoriMunicipisCreate) ||
+		hasKey(permKeyTerritoriMunicipisEdit) ||
+		hasKey(permKeyTerritoriMunicipisMapesView) ||
+		hasKey(permKeyTerritoriMunicipisMapesCreate) ||
+		hasKey(permKeyTerritoriMunicipisMapesEdit) ||
+		hasKey(permKeyTerritoriMunicipisMapesSubmit) ||
+		hasKey(permKeyTerritoriMunicipisMapesModerate) ||
+		hasKey(permKeyTerritoriMunicipisHistoriaCreate) ||
+		hasKey(permKeyTerritoriMunicipisHistoriaEdit) ||
+		hasKey(permKeyTerritoriMunicipisHistoriaSubmit) ||
+		hasKey(permKeyTerritoriMunicipisHistoriaModerate) ||
+		hasKey(permKeyTerritoriMunicipisAnecdotesCreate) ||
+		hasKey(permKeyTerritoriMunicipisAnecdotesEdit) ||
+		hasKey(permKeyTerritoriMunicipisAnecdotesSubmit) ||
+		hasKey(permKeyTerritoriMunicipisAnecdotesComment) ||
+		hasKey(permKeyTerritoriMunicipisAnecdotesModerate)
 }

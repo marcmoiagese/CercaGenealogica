@@ -1000,3 +1000,82 @@ func TestF3311ModularTerritoryScopedKeepsAccessWithinScope(t *testing.T) {
 		t.Fatalf("un grant territorial modular hauria de mantenir visible la UI territorial relacionada")
 	}
 }
+
+func TestF3311RLegacyCanManageTerritoryDoesNotSetTemplateTerritoryFlags(t *testing.T) {
+	app := &App{}
+	req := httptest.NewRequest("GET", "/territori", nil)
+	req = app.withPermissions(req, db.PolicyPermissions{CanManageTerritory: true})
+	req = app.withEffectiveAdmin(req, false)
+	req = app.withPermissionKeys(req, map[string]bool{})
+
+	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	if got := data["CanManageTerritory"]; got == true {
+		t.Fatalf("CanManageTerritory legacy pur no hauria d'activar CanManageTerritory, rebut %#v", got)
+	}
+	if got := data["CanViewNivells"]; got == true {
+		t.Fatalf("CanManageTerritory legacy pur no hauria d'activar CanViewNivells, rebut %#v", got)
+	}
+	if got := data["CanViewMunicipis"]; got == true {
+		t.Fatalf("CanManageTerritory legacy pur no hauria d'activar CanViewMunicipis, rebut %#v", got)
+	}
+}
+
+func TestF3311RTemplateTerritoryFlagsKeepAdminBridge(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-11r-template-admin")
+	adminID := findF330PolicyID(t, database, "admin")
+	if err := database.AddUserPolitica(userID, adminID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica admin: %v", err)
+	}
+
+	perms := app.getPermissionsForUser(userID)
+	req := httptest.NewRequest("GET", "/territori", nil)
+	req = app.withPermissions(req, perms)
+	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID, perms))
+	req = app.withPermissionKeys(req, app.permissionKeysForUser(userID))
+
+	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	for _, key := range []string{"CanManageTerritory", "CanViewNivells", "CanViewMunicipis"} {
+		if got := data[key]; got != true {
+			t.Fatalf("admin global hauria d'activar %s via bridge modular, rebut %#v", key, got)
+		}
+	}
+}
+
+func TestF3311RTemplateTerritoryFlagsUseModularKeys(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-11r-template-territory")
+	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-11r-territory", Permisos: "{}", Descripcio: ""})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica territorial: %v", err)
+	}
+	for _, permKey := range []string{permKeyTerritoriNivellsView, permKeyTerritoriMunicipisView, permKeyTerritoriMunicipisEdit} {
+		if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+			PoliticaID: policyID,
+			PermKey:    permKey,
+			ScopeType:  string(ScopeGlobal),
+		}); err != nil {
+			t.Fatalf("no s'ha pogut crear grant %s: %v", permKey, err)
+		}
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica territorial: %v", err)
+	}
+
+	perms := app.getPermissionsForUser(userID)
+	req := httptest.NewRequest("GET", "/territori", nil)
+	req = app.withPermissions(req, perms)
+	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID, perms))
+	req = app.withPermissionKeys(req, app.permissionKeysForUser(userID))
+
+	data := injectPermsIfMissing(req, map[string]interface{}{}).(map[string]interface{})
+	if got := data["CanViewNivells"]; got != true {
+		t.Fatalf("territori.nivells.view hauria d'activar CanViewNivells, rebut %#v", got)
+	}
+	if got := data["CanViewMunicipis"]; got != true {
+		t.Fatalf("territori.municipis.view hauria d'activar CanViewMunicipis, rebut %#v", got)
+	}
+	if got := data["CanManageTerritory"]; got != true {
+		t.Fatalf("territori.municipis.edit hauria d'activar CanManageTerritory, rebut %#v", got)
+	}
+}
