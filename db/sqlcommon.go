@@ -742,19 +742,19 @@ func (h sqlHelper) addUserPolitica(userID, politicaID int) error {
 		stmt = formatPlaceholders(h.style, `INSERT INTO usuaris_politiques (usuari_id, politica_id, data_assignacio) VALUES (?, ?, `+h.nowFun+`) ON DUPLICATE KEY UPDATE usuari_id=VALUES(usuari_id)`)
 	}
 	_, err := h.db.Exec(stmt, userID, politicaID)
-	if err == nil {
-		_ = h.bumpUserPermissionsVersion(userID)
+	if err != nil {
+		return err
 	}
-	return err
+	return h.bumpUserPermissionsVersion(userID)
 }
 
 func (h sqlHelper) removeUserPolitica(userID, politicaID int) error {
 	stmt := formatPlaceholders(h.style, `DELETE FROM usuaris_politiques WHERE usuari_id = ? AND politica_id = ?`)
 	_, err := h.db.Exec(stmt, userID, politicaID)
-	if err == nil {
-		_ = h.bumpUserPermissionsVersion(userID)
+	if err != nil {
+		return err
 	}
-	return err
+	return h.bumpUserPermissionsVersion(userID)
 }
 
 func (h sqlHelper) listGroupPolitiques(groupID int) ([]Politica, error) {
@@ -947,19 +947,19 @@ func (h sqlHelper) addUserGroup(userID, groupID int) error {
 		stmt = formatPlaceholders(h.style, `INSERT INTO usuaris_grups (usuari_id, grup_id, data_afegit) VALUES (?, ?, `+h.nowFun+`) ON DUPLICATE KEY UPDATE usuari_id=VALUES(usuari_id)`)
 	}
 	_, err := h.db.Exec(stmt, userID, groupID)
-	if err == nil {
-		_ = h.bumpUserPermissionsVersion(userID)
+	if err != nil {
+		return err
 	}
-	return err
+	return h.bumpUserPermissionsVersion(userID)
 }
 
 func (h sqlHelper) removeUserGroup(userID, groupID int) error {
 	stmt := formatPlaceholders(h.style, `DELETE FROM usuaris_grups WHERE usuari_id = ? AND grup_id = ?`)
 	_, err := h.db.Exec(stmt, userID, groupID)
-	if err == nil {
-		_ = h.bumpUserPermissionsVersion(userID)
+	if err != nil {
+		return err
 	}
-	return err
+	return h.bumpUserPermissionsVersion(userID)
 }
 
 // Persones (moderació bàsica)

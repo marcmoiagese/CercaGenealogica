@@ -2088,6 +2088,69 @@ func TestF3323RPolicyPermisosSchemaSQLAndUIAreRemoved(t *testing.T) {
 	}
 }
 
+func TestF3324GroupPolicyAndMembershipChangesInvalidateSnapshot(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-24-group-cache")
+	groupID, err := database.CreateGroup("f33-24-permission-group", "")
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear grup de permisos F33-24: %v", err)
+	}
+	policyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-24-group-policy",
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica F33-24: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: policyID,
+		PermKey:    permKeyAdminAuditView,
+		ScopeType:  string(ScopeGlobal),
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant F33-24: %v", err)
+	}
+	target := PermissionTarget{}
+	if app.HasPermission(userID, permKeyAdminAuditView, target) {
+		t.Fatalf("el test necessita cache inicial sense admin.audit.view")
+	}
+	if err := database.AddUserGroup(userID, groupID); err != nil {
+		t.Fatalf("no s'ha pogut afegir l'usuari al grup F33-24: %v", err)
+	}
+	if err := database.AddGroupPolitica(groupID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut afegir politica al grup F33-24: %v", err)
+	}
+	if err := database.BumpGroupPermissionsVersion(groupID); err != nil {
+		t.Fatalf("no s'ha pogut invalidar grup F33-24: %v", err)
+	}
+	if !app.HasPermission(userID, permKeyAdminAuditView, target) {
+		t.Fatalf("la politica del grup hauria de donar admin.audit.view")
+	}
+	if err := database.RemoveGroupPolitica(groupID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut retirar politica del grup F33-24: %v", err)
+	}
+	if err := database.BumpGroupPermissionsVersion(groupID); err != nil {
+		t.Fatalf("no s'ha pogut invalidar retirada de politica F33-24: %v", err)
+	}
+	if app.HasPermission(userID, permKeyAdminAuditView, target) {
+		t.Fatalf("retirar la politica del grup hauria d'invalidar el snapshot")
+	}
+	if err := database.AddGroupPolitica(groupID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut reassignar politica al grup F33-24: %v", err)
+	}
+	if err := database.BumpGroupPermissionsVersion(groupID); err != nil {
+		t.Fatalf("no s'ha pogut invalidar reassignacio de politica F33-24: %v", err)
+	}
+	if !app.HasPermission(userID, permKeyAdminAuditView, target) {
+		t.Fatalf("reassignar la politica del grup hauria de reconstruir el snapshot")
+	}
+	if err := database.RemoveUserGroup(userID, groupID); err != nil {
+		t.Fatalf("no s'ha pogut retirar l'usuari del grup F33-24: %v", err)
+	}
+	if app.HasPermission(userID, permKeyAdminAuditView, target) {
+		t.Fatalf("retirar l'usuari del grup hauria d'invalidar el snapshot")
+	}
+}
+
 func f3320FunctionSource(t *testing.T, src, signature string) string {
 	t.Helper()
 	start := strings.Index(src, signature)

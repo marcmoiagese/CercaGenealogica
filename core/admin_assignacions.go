@@ -1,13 +1,15 @@
 package core
 
 import (
-	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
+
+const adminAssignacionsPath = "/admin/politiques/assignacions"
 
 func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
@@ -29,15 +31,35 @@ func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request
 		userPerPage = 10
 	}
 	userOffset := (userPage - 1) * userPerPage
+	notice := adminAssignacionsNotice(r.FormValue("ok"))
+	errMsg := adminAssignacionsError(r.FormValue("err"))
 
-	politiques, _ := a.DB.ListPolitiques()
-	grups, _ := a.DB.ListGroups()
+	politiques, err := a.DB.ListPolitiques()
+	if err != nil {
+		Errorf("[admin_assignacions] list politiques: %v", err)
+		if errMsg == "" {
+			errMsg = "No s'han pogut carregar les politiques."
+		}
+	}
+	grups, err := a.DB.ListGroups()
+	if err != nil {
+		Errorf("[admin_assignacions] list groups: %v", err)
+		if errMsg == "" {
+			errMsg = "No s'han pogut carregar els grups de permisos."
+		}
+	}
 	userFilter := db.UserAdminFilter{
 		Query:  userQuery,
 		Limit:  userPerPage,
 		Offset: userOffset,
 	}
-	userRows, userTotal, _ := a.loadUsersAdmin(userFilter)
+	userRows, userTotal, err := a.loadUsersAdmin(userFilter)
+	if err != nil {
+		Errorf("[admin_assignacions] list users: %v", err)
+		if errMsg == "" {
+			errMsg = "No s'han pogut carregar els usuaris."
+		}
+	}
 	users := make([]adminUserRowView, 0, len(userRows))
 	for _, row := range userRows {
 		users = append(users, adminUserRowView{
@@ -55,19 +77,43 @@ func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request
 
 	var userPols []db.Politica
 	if userID > 0 {
-		userPols, _ = a.DB.ListUserPolitiques(userID)
+		userPols, err = a.DB.ListUserPolitiques(userID)
+		if err != nil {
+			Errorf("[admin_assignacions] list user politiques user_id=%d: %v", userID, err)
+			if errMsg == "" {
+				errMsg = "No s'han pogut carregar les politiques de l'usuari."
+			}
+		}
 	}
 	var groupPols []db.Politica
 	if groupID > 0 {
-		groupPols, _ = a.DB.ListGroupPolitiques(groupID)
+		groupPols, err = a.DB.ListGroupPolitiques(groupID)
+		if err != nil {
+			Errorf("[admin_assignacions] list group politiques group_id=%d: %v", groupID, err)
+			if errMsg == "" {
+				errMsg = "No s'han pogut carregar les politiques del grup."
+			}
+		}
 	}
 	var userGroups []db.Group
 	if userID > 0 {
-		userGroups, _ = a.DB.ListUserGroups(userID)
+		userGroups, err = a.DB.ListUserGroups(userID)
+		if err != nil {
+			Errorf("[admin_assignacions] list user groups user_id=%d: %v", userID, err)
+			if errMsg == "" {
+				errMsg = "No s'han pogut carregar els grups de permisos de l'usuari."
+			}
+		}
 	}
 	var groupMembers []db.UserAdminRow
 	if groupID > 0 {
-		groupMembers, _ = a.DB.ListGroupMembers(groupID)
+		groupMembers, err = a.DB.ListGroupMembers(groupID)
+		if err != nil {
+			Errorf("[admin_assignacions] list group members group_id=%d: %v", groupID, err)
+			if errMsg == "" {
+				errMsg = "No s'han pogut carregar els membres del grup de permisos."
+			}
+		}
 	}
 	var selectedUser *adminUserRowView
 	if userID > 0 {
@@ -91,6 +137,11 @@ func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request
 					LastLogin: formatDateTimeDisplay(rows[0].LastLogin),
 					Active:    rows[0].Active,
 					Banned:    rows[0].Banned,
+				}
+			} else if err != nil {
+				Errorf("[admin_assignacions] load selected user user_id=%d: %v", userID, err)
+				if errMsg == "" {
+					errMsg = "No s'ha pogut carregar l'usuari seleccionat."
 				}
 			}
 		}
@@ -125,9 +176,12 @@ func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request
 	userSelectValues.Del("ok")
 	userSelectValues.Del("err")
 	userSelectBase := userSelectValues.Encode()
+	currentValues := cloneValues(r.URL.Query())
+	currentValues.Del("ok")
+	currentValues.Del("err")
 	currentURL := r.URL.Path
-	if r.URL.RawQuery != "" {
-		currentURL += "?" + r.URL.RawQuery
+	if encoded := currentValues.Encode(); encoded != "" {
+		currentURL += "?" + encoded
 	}
 
 	RenderPrivateTemplate(w, r, "admin-politiques-assignacions.html", map[string]interface{}{
@@ -155,6 +209,8 @@ func (a *App) AdminAssignacionsPolitiques(w http.ResponseWriter, r *http.Request
 		"UserRangeStart":    userRangeStart,
 		"UserRangeEnd":      userRangeEnd,
 		"ReturnTo":          currentURL,
+		"Notice":            notice,
+		"Error":             errMsg,
 		"CanManageArxius":   true,
 		"CanManagePolicies": true,
 		"User":              user,
@@ -177,15 +233,16 @@ func (a *App) AdminCreateGroup(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("name"))
 	desc := strings.TrimSpace(r.FormValue("description"))
 	if name == "" {
-		http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), "/admin/politiques/assignacions"), http.StatusSeeOther)
+		a.redirectAdminAssignacions(w, r, 0, 0, "", "group_name_required")
 		return
 	}
 	groupID, err := a.DB.CreateGroup(name, desc)
 	if err != nil {
-		http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), "/admin/politiques/assignacions"), http.StatusSeeOther)
+		Errorf("[admin_assignacions] create group name=%q: %v", name, err)
+		a.redirectAdminAssignacions(w, r, 0, 0, "", "create_group_failed")
 		return
 	}
-	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?group_id=%d", groupID)), http.StatusSeeOther)
+	http.Redirect(w, r, adminAssignacionsRedirectURL(adminAssignacionsPath, 0, groupID, "group_created", ""), http.StatusSeeOther)
 }
 
 func (a *App) AdminAssignarUsuariGrup(w http.ResponseWriter, r *http.Request) {
@@ -203,10 +260,16 @@ func (a *App) AdminAssignarUsuariGrup(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	userID, _ := strconv.Atoi(r.FormValue("user_id"))
 	groupID, _ := strconv.Atoi(r.FormValue("group_id"))
-	if userID > 0 && groupID > 0 {
-		_ = a.DB.AddUserGroup(userID, groupID)
+	if userID <= 0 || groupID <= 0 {
+		a.redirectAdminAssignacions(w, r, userID, groupID, "", "invalid")
+		return
 	}
-	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?user_id=%d", userID)), http.StatusSeeOther)
+	if err := a.DB.AddUserGroup(userID, groupID); err != nil {
+		Errorf("[admin_assignacions] add user group user_id=%d group_id=%d: %v", userID, groupID, err)
+		a.redirectAdminAssignacions(w, r, userID, groupID, "", "add_user_group_failed")
+		return
+	}
+	a.redirectAdminAssignacions(w, r, userID, groupID, "user_group_added", "")
 }
 
 func (a *App) AdminTreureUsuariGrup(w http.ResponseWriter, r *http.Request) {
@@ -224,10 +287,16 @@ func (a *App) AdminTreureUsuariGrup(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	userID, _ := strconv.Atoi(r.FormValue("user_id"))
 	groupID, _ := strconv.Atoi(r.FormValue("group_id"))
-	if userID > 0 && groupID > 0 {
-		_ = a.DB.RemoveUserGroup(userID, groupID)
+	if userID <= 0 || groupID <= 0 {
+		a.redirectAdminAssignacions(w, r, userID, groupID, "", "invalid")
+		return
 	}
-	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?user_id=%d", userID)), http.StatusSeeOther)
+	if err := a.DB.RemoveUserGroup(userID, groupID); err != nil {
+		Errorf("[admin_assignacions] remove user group user_id=%d group_id=%d: %v", userID, groupID, err)
+		a.redirectAdminAssignacions(w, r, userID, groupID, "", "remove_user_group_failed")
+		return
+	}
+	a.redirectAdminAssignacions(w, r, userID, groupID, "user_group_removed", "")
 }
 
 func (a *App) AdminAssignarPoliticaUsuari(w http.ResponseWriter, r *http.Request) {
@@ -245,9 +314,16 @@ func (a *App) AdminAssignarPoliticaUsuari(w http.ResponseWriter, r *http.Request
 	_ = r.ParseForm()
 	userID, _ := strconv.Atoi(r.FormValue("user_id"))
 	polID, _ := strconv.Atoi(r.FormValue("politica_id"))
-	_ = a.DB.AddUserPolitica(userID, polID)
-	_ = a.DB.BumpUserPermissionsVersion(userID)
-	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?user_id=%d", userID)), http.StatusSeeOther)
+	if userID <= 0 || polID <= 0 {
+		a.redirectAdminAssignacions(w, r, userID, 0, "", "invalid")
+		return
+	}
+	if err := a.DB.AddUserPolitica(userID, polID); err != nil {
+		Errorf("[admin_assignacions] add user policy user_id=%d politica_id=%d: %v", userID, polID, err)
+		a.redirectAdminAssignacions(w, r, userID, 0, "", "add_user_policy_failed")
+		return
+	}
+	a.redirectAdminAssignacions(w, r, userID, 0, "user_policy_added", "")
 }
 
 func (a *App) AdminTreurePoliticaUsuari(w http.ResponseWriter, r *http.Request) {
@@ -265,9 +341,16 @@ func (a *App) AdminTreurePoliticaUsuari(w http.ResponseWriter, r *http.Request) 
 	_ = r.ParseForm()
 	userID, _ := strconv.Atoi(r.FormValue("user_id"))
 	polID, _ := strconv.Atoi(r.FormValue("politica_id"))
-	_ = a.DB.RemoveUserPolitica(userID, polID)
-	_ = a.DB.BumpUserPermissionsVersion(userID)
-	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?user_id=%d", userID)), http.StatusSeeOther)
+	if userID <= 0 || polID <= 0 {
+		a.redirectAdminAssignacions(w, r, userID, 0, "", "invalid")
+		return
+	}
+	if err := a.DB.RemoveUserPolitica(userID, polID); err != nil {
+		Errorf("[admin_assignacions] remove user policy user_id=%d politica_id=%d: %v", userID, polID, err)
+		a.redirectAdminAssignacions(w, r, userID, 0, "", "remove_user_policy_failed")
+		return
+	}
+	a.redirectAdminAssignacions(w, r, userID, 0, "user_policy_removed", "")
 }
 
 func (a *App) AdminAssignarPoliticaGrup(w http.ResponseWriter, r *http.Request) {
@@ -285,9 +368,21 @@ func (a *App) AdminAssignarPoliticaGrup(w http.ResponseWriter, r *http.Request) 
 	_ = r.ParseForm()
 	groupID, _ := strconv.Atoi(r.FormValue("group_id"))
 	polID, _ := strconv.Atoi(r.FormValue("politica_id"))
-	_ = a.DB.AddGroupPolitica(groupID, polID)
-	_ = a.DB.BumpGroupPermissionsVersion(groupID)
-	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?group_id=%d", groupID)), http.StatusSeeOther)
+	if groupID <= 0 || polID <= 0 {
+		a.redirectAdminAssignacions(w, r, 0, groupID, "", "invalid")
+		return
+	}
+	if err := a.DB.AddGroupPolitica(groupID, polID); err != nil {
+		Errorf("[admin_assignacions] add group policy group_id=%d politica_id=%d: %v", groupID, polID, err)
+		a.redirectAdminAssignacions(w, r, 0, groupID, "", "add_group_policy_failed")
+		return
+	}
+	if err := a.DB.BumpGroupPermissionsVersion(groupID); err != nil {
+		Errorf("[admin_assignacions] bump group permissions group_id=%d after add policy: %v", groupID, err)
+		a.redirectAdminAssignacions(w, r, 0, groupID, "", "bump_failed")
+		return
+	}
+	a.redirectAdminAssignacions(w, r, 0, groupID, "group_policy_added", "")
 }
 
 func (a *App) AdminTreurePoliticaGrup(w http.ResponseWriter, r *http.Request) {
@@ -305,7 +400,96 @@ func (a *App) AdminTreurePoliticaGrup(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	groupID, _ := strconv.Atoi(r.FormValue("group_id"))
 	polID, _ := strconv.Atoi(r.FormValue("politica_id"))
-	_ = a.DB.RemoveGroupPolitica(groupID, polID)
-	_ = a.DB.BumpGroupPermissionsVersion(groupID)
-	http.Redirect(w, r, safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/admin/politiques/assignacions?group_id=%d", groupID)), http.StatusSeeOther)
+	if groupID <= 0 || polID <= 0 {
+		a.redirectAdminAssignacions(w, r, 0, groupID, "", "invalid")
+		return
+	}
+	if err := a.DB.RemoveGroupPolitica(groupID, polID); err != nil {
+		Errorf("[admin_assignacions] remove group policy group_id=%d politica_id=%d: %v", groupID, polID, err)
+		a.redirectAdminAssignacions(w, r, 0, groupID, "", "remove_group_policy_failed")
+		return
+	}
+	if err := a.DB.BumpGroupPermissionsVersion(groupID); err != nil {
+		Errorf("[admin_assignacions] bump group permissions group_id=%d after remove policy: %v", groupID, err)
+		a.redirectAdminAssignacions(w, r, 0, groupID, "", "bump_failed")
+		return
+	}
+	a.redirectAdminAssignacions(w, r, 0, groupID, "group_policy_removed", "")
+}
+
+func (a *App) redirectAdminAssignacions(w http.ResponseWriter, r *http.Request, userID, groupID int, okCode, errCode string) {
+	http.Redirect(w, r, adminAssignacionsRedirectURL(r.FormValue("return_to"), userID, groupID, okCode, errCode), http.StatusSeeOther)
+}
+
+func adminAssignacionsRedirectURL(raw string, userID, groupID int, okCode, errCode string) string {
+	target := safeReturnTo(raw, adminAssignacionsPath)
+	u, err := url.Parse(target)
+	if err != nil || u.Path == "" {
+		u = &url.URL{Path: adminAssignacionsPath}
+	}
+	q := u.Query()
+	if userID > 0 {
+		q.Set("user_id", strconv.Itoa(userID))
+	}
+	if groupID > 0 {
+		q.Set("group_id", strconv.Itoa(groupID))
+	}
+	q.Del("ok")
+	q.Del("err")
+	if okCode != "" {
+		q.Set("ok", okCode)
+	}
+	if errCode != "" {
+		q.Set("err", errCode)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+func adminAssignacionsNotice(code string) string {
+	switch code {
+	case "group_created":
+		return "Grup de permisos creat."
+	case "user_group_added":
+		return "Usuari afegit al grup de permisos."
+	case "user_group_removed":
+		return "Usuari retirat del grup de permisos."
+	case "user_policy_added":
+		return "Politica assignada a l'usuari."
+	case "user_policy_removed":
+		return "Politica retirada de l'usuari."
+	case "group_policy_added":
+		return "Politica assignada al grup de permisos."
+	case "group_policy_removed":
+		return "Politica retirada del grup de permisos."
+	default:
+		return ""
+	}
+}
+
+func adminAssignacionsError(code string) string {
+	switch code {
+	case "invalid":
+		return "La peticio no es valida."
+	case "group_name_required":
+		return "Cal indicar el nom del grup de permisos."
+	case "create_group_failed":
+		return "No s'ha pogut crear el grup de permisos."
+	case "add_user_group_failed":
+		return "No s'ha pogut afegir l'usuari al grup de permisos."
+	case "remove_user_group_failed":
+		return "No s'ha pogut retirar l'usuari del grup de permisos."
+	case "add_user_policy_failed":
+		return "No s'ha pogut assignar la politica a l'usuari."
+	case "remove_user_policy_failed":
+		return "No s'ha pogut retirar la politica de l'usuari."
+	case "add_group_policy_failed":
+		return "No s'ha pogut assignar la politica al grup de permisos."
+	case "remove_group_policy_failed":
+		return "No s'ha pogut retirar la politica del grup de permisos."
+	case "bump_failed":
+		return "S'ha fet el canvi, pero no s'ha pogut invalidar la cache de permisos."
+	default:
+		return ""
+	}
 }
