@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS politiques (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL UNIQUE, -- admin, moderador, confiança, usuari
     descripcio TEXT,
-    permisos TEXT NOT NULL,  -- JSON o text amb els permisos específics
+    permisos TEXT NOT NULL,  -- Document JSON/config no autoritzatiu. Els permisos efectius viuen a politica_grants
     data_creacio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

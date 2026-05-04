@@ -271,28 +271,13 @@ func (h sqlHelper) tableExists(table string) bool {
 // Policies
 func (h sqlHelper) ensureDefaultPolicies() error {
 	h.ensurePermissionsSchema()
-	defaultPerms := map[string]PolicyPermissions{
-		"admin": {
-			Admin:              true,
-			CanManageUsers:     true,
-			CanManageTerritory: true,
-			CanManageEclesia:   true,
-			CanManageArchives:  true,
-			CanCreatePerson:    true,
-			CanEditAnyPerson:   true,
-			CanModerate:        true,
-			CanManagePolicies:  true,
-		},
-		"moderador": {
-			CanModerate: true,
-		},
-		"confiança": {
-			CanCreatePerson: true,
-		},
-		"usuari": {},
+	defaultPolicyDocs := map[string]string{
+		"admin":     "{}",
+		"moderador": "{}",
+		"confiança": "{}",
+		"usuari":    "{}",
 	}
-	for name, perms := range defaultPerms {
-		permsJSON, _ := json.Marshal(perms)
+	for name, permsJSON := range defaultPolicyDocs {
 		stmt := `INSERT INTO politiques (nom, descripcio, permisos, data_creacio) VALUES (?, ?, ?, ` + h.nowFun + `)`
 		if h.style == "postgres" {
 			stmt = formatPlaceholders(h.style, `INSERT INTO politiques (nom, descripcio, permisos, data_creacio) VALUES (?, ?, ?, `+h.nowFun+`) ON CONFLICT (nom) DO NOTHING`)
@@ -304,10 +289,10 @@ func (h sqlHelper) ensureDefaultPolicies() error {
 		if h.style != "postgres" {
 			stmt = formatPlaceholders(h.style, stmt)
 		}
-		_, _ = h.db.Exec(stmt, name, "", string(permsJSON))
+		_, _ = h.db.Exec(stmt, name, "", permsJSON)
 		// Update perms if entry already exists but empty
 		upd := formatPlaceholders(h.style, `UPDATE politiques SET permisos = ? WHERE nom = ? AND (permisos IS NULL OR permisos = '' OR permisos = '{}' )`)
-		_, _ = h.db.Exec(upd, string(permsJSON), name)
+		_, _ = h.db.Exec(upd, permsJSON, name)
 	}
 	var adminID int
 	_ = h.db.QueryRow(formatPlaceholders(h.style, "SELECT id FROM politiques WHERE nom = ?"), "admin").Scan(&adminID)

@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"sync"
@@ -595,11 +594,7 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 			snap.isAdmin = true
 		}
 		if strings.TrimSpace(policy.Permisos) != "" {
-			// Operational import tuning only: this value never creates permission grants.
-			var policyOptions struct {
-				ImportWorkerLimit int `json:"import_worker_limit,omitempty"`
-			}
-			if err := json.Unmarshal([]byte(policy.Permisos), &policyOptions); err == nil {
+			if policyOptions, err := parsePolicyRuntimeConfig(policy.Permisos); err == nil {
 				if policyOptions.ImportWorkerLimit > workerLimit {
 					workerLimit = policyOptions.ImportWorkerLimit
 				}

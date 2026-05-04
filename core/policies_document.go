@@ -13,9 +13,14 @@ import (
 const policyDocumentVersion = "2024-02-07"
 
 type policyDocument struct {
-	db.PolicyPermissions
+	policyRuntimeConfig
 	Version   string            `json:"Version,omitempty"`
 	Statement []policyStatement `json:"Statement,omitempty"`
+}
+
+type policyRuntimeConfig struct {
+	// Operational import tuning only. This field never grants permissions.
+	ImportWorkerLimit int `json:"import_worker_limit,omitempty"`
 }
 
 type policyStatement struct {
@@ -31,7 +36,7 @@ type policyStatementRaw struct {
 }
 
 type policyDocumentRaw struct {
-	db.PolicyPermissions
+	policyRuntimeConfig
 	Version   string               `json:"Version,omitempty"`
 	Statement []policyStatementRaw `json:"Statement,omitempty"`
 }
@@ -46,7 +51,7 @@ func parsePolicyDocument(raw string) (policyDocument, bool, error) {
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
 		return doc, false, err
 	}
-	doc.PolicyPermissions = parsed.PolicyPermissions
+	doc.policyRuntimeConfig = parsed.policyRuntimeConfig
 	if strings.TrimSpace(parsed.Version) != "" {
 		doc.Version = strings.TrimSpace(parsed.Version)
 	}
@@ -61,6 +66,11 @@ func parsePolicyDocument(raw string) (policyDocument, bool, error) {
 		}
 	}
 	return doc, hasStatements, nil
+}
+
+func parsePolicyRuntimeConfig(raw string) (policyRuntimeConfig, error) {
+	doc, _, err := parsePolicyDocument(raw)
+	return doc.policyRuntimeConfig, err
 }
 
 func normalizePolicyStatement(stmt policyStatementRaw) (policyStatement, bool, error) {
@@ -160,11 +170,11 @@ func policyStatementsFromGrants(grants []db.PoliticaGrant) []policyStatement {
 	return out
 }
 
-func policyDocumentFromGrants(perms db.PolicyPermissions, grants []db.PoliticaGrant, version string) policyDocument {
+func policyDocumentFromGrants(config policyRuntimeConfig, grants []db.PoliticaGrant, version string) policyDocument {
 	doc := policyDocument{
-		PolicyPermissions: perms,
-		Version:           strings.TrimSpace(version),
-		Statement:         policyStatementsFromGrants(grants),
+		policyRuntimeConfig: config,
+		Version:             strings.TrimSpace(version),
+		Statement:           policyStatementsFromGrants(grants),
 	}
 	if doc.Version == "" {
 		doc.Version = policyDocumentVersion

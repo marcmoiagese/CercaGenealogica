@@ -1546,19 +1546,6 @@ type PoliticaGrant struct {
 	IncludeChildren bool
 }
 
-type PolicyPermissions struct {
-	Admin              bool `json:"admin"`
-	CanManageUsers     bool `json:"can_manage_users"`
-	CanManageTerritory bool `json:"can_manage_territory"`
-	CanManageEclesia   bool `json:"can_manage_eclesiastic"`
-	CanManageArchives  bool `json:"can_manage_archives"`
-	CanCreatePerson    bool `json:"can_create_person"`
-	CanEditAnyPerson   bool `json:"can_edit_any_person"`
-	CanModerate        bool `json:"can_moderate"`
-	CanManagePolicies  bool `json:"can_manage_policies"`
-	ImportWorkerLimit  int  `json:"import_worker_limit,omitempty"`
-}
-
 type Group struct {
 	ID         int
 	Nom        string
