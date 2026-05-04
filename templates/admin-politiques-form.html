@@ -81,8 +81,8 @@
                                     <h4 style="margin:0 0 8px 0;font-size:13px;color:#1f2c4d">{{ t $.Lang .TitleKey }}</h4>
                                     <div class="llista-permisos">
                                         {{ range .Keys }}
-                                        <label class="checkbox-linia perm-grant-card {{ if index $.Data.GuiGrantState . }}actiu{{ end }}">
-                                            <input type="checkbox" name="grant_global" value="{{ . }}" {{ if index $.Data.GuiGrantState . }}checked{{ end }}>
+                                        <label class="checkbox-linia perm-grant-card {{ if index $.Data.GuiGrantState . }}actiu{{ end }}" data-perm-key="{{ . }}" data-scope-type="global" data-scope-id="" data-include-children="0">
+                                            <input type="checkbox" name="grant_global" value="{{ . }}" data-perm-key="{{ . }}" data-scope-type="global" data-scope-id="" data-include-children="0" {{ if index $.Data.GuiGrantState . }}checked{{ end }}>
                                             <span>{{ t $.Lang (printf "policies.grants.perm.%s" .) }}</span>
                                             <span class="perm-indicator" aria-hidden="true"></span>
                                         </label>
@@ -180,7 +180,7 @@
                                             <tbody>
                                                 {{ range .Data.Grants }}
                                                 {{ $scopeLabel := index $.Data.ScopeLabels .ScopeType }}
-                                                <tr>
+                                                <tr class="policy-grant-row" data-grant-id="{{ .ID }}" data-perm-key="{{ .PermKey }}" data-scope-type="{{ .ScopeType }}" data-scope-id="{{ if .ScopeIDValid }}{{ .ScopeID }}{{ end }}" data-include-children="{{ if .IncludeChildren }}1{{ else }}0{{ end }}">
                                                     {{ $permLabelKey := printf "policies.grants.perm.%s" .PermKey }}
                                                     {{ $permLabel := t $.Lang $permLabelKey }}
                                                     <td>
@@ -222,14 +222,17 @@
                             <p class="camp-helper">Aquest JSON es genera des de <code>politica_grants</code>. No es guarda com a document; en aplicar-lo substitueix els permisos granulars actuals d'aquesta politica.</p>
                             <div class="policy-json-warning">Aplicar JSON substituirà els permisos granulars actuals d'aquesta politica.</div>
                             {{ end }}
+                            <p class="camp-helper">El JSON es genera automaticament des dels permisos visuals. Si l'edites manualment, prem &laquo;Regenerar des de visual&raquo; per tornar a sincronitzar-lo.</p>
                             <div class="grup-camp">
                                 <label for="policy-json-editor">JSON modular</label>
                                 <textarea id="policy-json-editor" name="policy_json" form="policy-json-form" class="policy-json-editor" spellcheck="false">{{ .Data.PolicyJSON }}</textarea>
                             </div>
                             <div class="policy-json-tools">
                                 <button type="submit" class="boto-primari" form="policy-json-form">Aplicar JSON</button>
+                                <button type="button" class="boto-secundari" id="policy-json-regenerate">Regenerar des de visual</button>
                                 <button type="button" class="boto-secundari" id="policy-json-copy">Copiar</button>
                                 <button type="button" class="boto-secundari" id="policy-json-format">Formatar</button>
+                                <span class="camp-helper" id="policy-json-sync-status" aria-live="polite"></span>
                             </div>
                         </section>
                     </div>

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -30,6 +32,17 @@ func TestF3325RAdminNewPoliticaShowsInitialJSON(t *testing.T) {
 	body := rr.Body.String()
 	if !strings.Contains(body, `id="tab-json"`) || !strings.Contains(body, `/admin/politiques/json/apply`) {
 		t.Fatalf("alta nova no renderitza pestanya JSON: %s", body)
+	}
+	for _, want := range []string{
+		`id="policy-json-regenerate"`,
+		`Regenerar des de visual`,
+		`El JSON es genera automaticament des dels permisos visuals`,
+		`data-perm-key=`,
+		`data-scope-type="global"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("alta nova no renderitza contracte F33-25S %q", want)
+		}
 	}
 	raw := f3325TextareaValue(t, body, `id="policy-json-editor"`)
 	var payload struct {
@@ -98,6 +111,9 @@ func TestF3325AdminPoliticaJSONTabAndApply(t *testing.T) {
 	if !strings.Contains(body, `id="tab-json"`) || !strings.Contains(body, `/admin/politiques/json/apply`) {
 		t.Fatalf("la pestanya JSON no s'ha renderitzat: %s", body)
 	}
+	if !strings.Contains(body, `class="policy-grant-row"`) || !strings.Contains(body, `data-grant-id=`) || !strings.Contains(body, `data-include-children=`) {
+		t.Fatalf("la llista de grants no exposa metadata suficient per regenerar JSON: %s", body)
+	}
 	if strings.Contains(body, "Policy"+"Permissions") || strings.Contains(body, "politiques."+"permisos") {
 		t.Fatalf("la UI JSON no ha de renderitzar residus legacy")
 	}
@@ -132,6 +148,42 @@ func TestF3325AdminPoliticaJSONTabAndApply(t *testing.T) {
 	rr = f3325Post(app.AdminApplyPoliticaJSON, "/admin/politiques/json/apply", plainCookie, form, "csrf_f33_25_plain")
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("usuari sense admin.policies.manage hauria de rebre 403, got=%d", rr.Code)
+	}
+}
+
+func TestF3325SLiveSyncJSContract(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("static", "js", "admin-politiques-form.js"))
+	if err != nil {
+		t.Fatalf("no s'ha pogut llegir admin-politiques-form.js: %v", err)
+	}
+	js := string(raw)
+	for _, want := range []string{
+		"collectVisualPolicyJSON",
+		"collectGuidedGrants",
+		"collectExistingGrantRows",
+		"renderPolicyJSONFromVisualState",
+		"syncPolicyJSONFromVisualState",
+		`policyName.addEventListener("input"`,
+		`policyDescription.addEventListener("input"`,
+		`.perm-grant-card input[type="checkbox"]`,
+		"policy-json-regenerate",
+		"Regenerar des de visual",
+		"JSON.stringify",
+		"dataset.permKey",
+	} {
+		if !strings.Contains(js, want) {
+			t.Fatalf("JS F33-25S no conte %q", want)
+		}
+	}
+	for _, legacy := range []string{
+		"Policy" + "Permissions",
+		"per" + "misos",
+		"has" + "Perm",
+		"require" + "Permission",
+	} {
+		if strings.Contains(js, legacy) {
+			t.Fatalf("JS F33-25S referencia legacy %q", legacy)
+		}
 	}
 }
 
