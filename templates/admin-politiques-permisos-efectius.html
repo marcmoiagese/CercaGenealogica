@@ -1,0 +1,225 @@
+{{ define "admin-politiques-permisos-efectius.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>Permisos efectius</title>
+    {{ template "styles-private" . }}
+    <style>
+        .effective-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+        .effective-panel{background:#fff;border:1px solid #e6e8ef;border-radius:10px;padding:14px}
+        .effective-panel h2,.effective-panel h3{margin:0 0 10px}
+        .effective-filters{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+        .effective-filters .fila-camp{min-width:220px}
+        .effective-muted{color:#6b7280}
+        .effective-source{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+        .effective-table code{background:#f3f4f8;border-radius:6px;padding:2px 6px;font-size:12px}
+        .effective-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+        @media (min-width: 980px){.effective-grid.two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+    </style>
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header card-header-flex">
+                <h1>Visor de permisos efectius</h1>
+                <div class="effective-actions">
+                    <a class="boto-secundari" href="/admin/politiques/assignacions">Assignacions</a>
+                    <a class="boto-secundari" href="/admin/politiques">Politiques</a>
+                </div>
+            </header>
+            {{ if .Data.Error }}<div class="alert alert-error" role="alert">{{ .Data.Error }}</div>{{ end }}
+            <p class="camp-helper">Pantalla read-only de diagnostic funcional: mostra grants modulars finals i l'origen directe o heretat per grup.</p>
+
+            <div class="effective-panel">
+                <h2>Seleccionar objecte</h2>
+                <form class="effective-filters" method="get" action="/admin/politiques/permisos-efectius">
+                    <div class="fila-camp">
+                        <label for="user-q">Filtrar usuaris</label>
+                        <input id="user-q" type="text" name="user_q" value="{{ .Data.UserQuery }}" placeholder="usuari, nom, email o ID">
+                    </div>
+                    <div class="fila-camp">
+                        <label for="user-id">Usuari</label>
+                        <select id="user-id" name="user_id">
+                            <option value="">Selecciona usuari</option>
+                            {{ range .Data.Users }}
+                            <option value="{{ .ID }}" {{ if eq $.Data.UserID .ID }}selected{{ end }}>@{{ .Usuari }} - ID {{ .ID }}</option>
+                            {{ end }}
+                        </select>
+                    </div>
+                    <div class="fila-camp">
+                        <label for="group-id">Grup</label>
+                        <select id="group-id" name="group_id">
+                            <option value="">Selecciona grup</option>
+                            {{ range .Data.Groups }}
+                            <option value="{{ .ID }}" {{ if eq $.Data.GroupID .ID }}selected{{ end }}>{{ .Nom }} - ID {{ .ID }}</option>
+                            {{ end }}
+                        </select>
+                    </div>
+                    <div class="fila-camp">
+                        <button type="submit" class="boto-primari">Veure permisos</button>
+                    </div>
+                </form>
+                {{ if and (not .Data.UserID) (not .Data.GroupID) }}
+                <p class="effective-muted">Selecciona un usuari, un grup, o tots dos per veure els permisos efectius.</p>
+                {{ end }}
+            </div>
+
+            {{ if .Data.SelectedUser }}
+            <div class="effective-grid two">
+                <div class="effective-panel">
+                    <h2>Usuari seleccionat</h2>
+                    <p><strong>@{{ .Data.SelectedUser.Usuari }}</strong> <span class="effective-muted">ID {{ .Data.SelectedUser.ID }}</span></p>
+                    <p>{{ if or .Data.SelectedUser.Nom .Data.SelectedUser.Cognoms }}{{ .Data.SelectedUser.Nom }} {{ .Data.SelectedUser.Cognoms }}{{ else }}Sense nom informat{{ end }}</p>
+                    <p class="effective-muted">{{ .Data.SelectedUser.Email }}</p>
+                </div>
+                <div class="effective-panel">
+                    <h2>Politiques directes de l'usuari</h2>
+                    <ul class="llista-simple">
+                        {{ range .Data.DirectPolicies }}
+                        <li><a href="/admin/politiques/{{ .ID }}/edit">{{ .Nom }}</a> <span class="effective-muted">ID {{ .ID }}</span></li>
+                        {{ else }}
+                        <li class="effective-muted">Cap politica directa.</li>
+                        {{ end }}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="effective-panel">
+                <h2>Grups de permisos de l'usuari</h2>
+                <ul class="llista-simple">
+                    {{ range .Data.UserGroups }}
+                    <li><a href="/admin/politiques/permisos-efectius?user_id={{ $.Data.UserID }}&group_id={{ .ID }}">{{ .Nom }}</a> <span class="effective-muted">ID {{ .ID }}</span></li>
+                    {{ else }}
+                    <li class="effective-muted">Aquest usuari no pertany a cap grup de permisos.</li>
+                    {{ end }}
+                </ul>
+            </div>
+
+            <div class="effective-panel">
+                <h2>Politiques heretades per grup</h2>
+                {{ range .Data.InheritedPolicies }}
+                <h3>{{ .Group.Nom }} <span class="effective-muted">ID {{ .Group.ID }}</span></h3>
+                <ul class="llista-simple">
+                    {{ range .Policies }}
+                    <li><a href="/admin/politiques/{{ .ID }}/edit">{{ .Nom }}</a> <span class="effective-muted">ID {{ .ID }}</span></li>
+                    {{ else }}
+                    <li class="effective-muted">Aquest grup no aporta politiques.</li>
+                    {{ end }}
+                </ul>
+                {{ else }}
+                <p class="effective-muted">No hi ha politiques heretades.</p>
+                {{ end }}
+            </div>
+
+            <div class="effective-panel">
+                <h2>Grants efectius</h2>
+                <div class="taula-wrapper">
+                    <table class="taula effective-table">
+                        <thead>
+                            <tr>
+                                <th>source_type</th>
+                                <th>perm_key</th>
+                                <th>scope_type</th>
+                                <th>scope_id</th>
+                                <th>include_children</th>
+                                <th>policy_id</th>
+                                <th>group_id</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ range .Data.EffectiveGrants }}
+                            <tr>
+                                <td>
+                                    <div class="effective-source">
+                                        {{ if eq .SourceType "group" }}<span class="badge blau">group</span>{{ else }}<span class="badge verd">direct</span>{{ end }}
+                                    </div>
+                                </td>
+                                <td><code>{{ .PermKey }}</code></td>
+                                <td>{{ .ScopeType }}</td>
+                                <td>{{ if .ScopeIDValid }}{{ .ScopeID }}{{ else }}global{{ end }}</td>
+                                <td>{{ if .IncludeChildren }}true{{ else }}false{{ end }}</td>
+                                <td><a href="/admin/politiques/{{ .PolicyID }}/edit">{{ .PolicyName }}</a> <span class="effective-muted">#{{ .PolicyID }}</span></td>
+                                <td>{{ if .GroupID }}{{ .GroupName }} <span class="effective-muted">#{{ .GroupID }}</span>{{ else }}-{{ end }}</td>
+                            </tr>
+                            {{ else }}
+                            <tr><td colspan="7">No hi ha grants efectius per mostrar.</td></tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {{ end }}
+
+            {{ if .Data.GroupDetail }}
+            <div class="effective-panel">
+                <h2>Detall del grup</h2>
+                <p><strong>{{ .Data.GroupDetail.Group.Nom }}</strong> <span class="effective-muted">ID {{ .Data.GroupDetail.Group.ID }}</span></p>
+                {{ if .Data.GroupDetail.Group.Descripcio }}<p>{{ .Data.GroupDetail.Group.Descripcio }}</p>{{ end }}
+                <div class="effective-actions">
+                    <a class="boto-secundari" href="/admin/politiques/assignacions?group_id={{ .Data.GroupDetail.Group.ID }}">Gestionar assignacions del grup</a>
+                </div>
+            </div>
+
+            <div class="effective-grid two">
+                <div class="effective-panel">
+                    <h3>Membres del grup</h3>
+                    <ul class="llista-simple">
+                        {{ range .Data.GroupDetail.Members }}
+                        <li>@{{ .Usuari }} <span class="effective-muted">ID {{ .ID }}</span></li>
+                        {{ else }}
+                        <li class="effective-muted">Cap membre.</li>
+                        {{ end }}
+                    </ul>
+                </div>
+                <div class="effective-panel">
+                    <h3>Politiques del grup</h3>
+                    <ul class="llista-simple">
+                        {{ range .Data.GroupDetail.Policies }}
+                        <li><a href="/admin/politiques/{{ .ID }}/edit">{{ .Nom }}</a> <span class="effective-muted">ID {{ .ID }}</span></li>
+                        {{ else }}
+                        <li class="effective-muted">Cap politica assignada.</li>
+                        {{ end }}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="effective-panel">
+                <h3>Grants que aporta el grup</h3>
+                <div class="taula-wrapper">
+                    <table class="taula effective-table">
+                        <thead>
+                            <tr>
+                                <th>perm_key</th>
+                                <th>scope_type</th>
+                                <th>scope_id</th>
+                                <th>include_children</th>
+                                <th>policy_id</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ range .Data.GroupDetail.Grants }}
+                            <tr>
+                                <td><code>{{ .PermKey }}</code></td>
+                                <td>{{ .ScopeType }}</td>
+                                <td>{{ if .ScopeIDValid }}{{ .ScopeID }}{{ else }}global{{ end }}</td>
+                                <td>{{ if .IncludeChildren }}true{{ else }}false{{ end }}</td>
+                                <td><a href="/admin/politiques/{{ .PolicyID }}/edit">{{ .PolicyName }}</a> <span class="effective-muted">#{{ .PolicyID }}</span></td>
+                            </tr>
+                            {{ else }}
+                            <tr><td colspan="5">Aquest grup no aporta grants.</td></tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}
