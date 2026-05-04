@@ -432,6 +432,9 @@ func (d *PostgreSQL) GetPolitica(id int) (*Politica, error) {
 func (d *PostgreSQL) SavePolitica(p *Politica) (int, error) {
 	return d.help.savePolitica(p)
 }
+func (d *PostgreSQL) CreatePoliticaWithGrants(p *Politica, grants []PoliticaGrant) (int, error) {
+	return d.help.createPoliticaWithGrants(p, grants)
+}
 func (d *PostgreSQL) ListPoliticaGrants(politicaID int) ([]PoliticaGrant, error) {
 	return d.help.listPoliticaGrants(politicaID)
 }

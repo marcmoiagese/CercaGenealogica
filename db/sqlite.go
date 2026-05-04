@@ -457,6 +457,9 @@ func (d *SQLite) GetPolitica(id int) (*Politica, error) {
 func (d *SQLite) SavePolitica(p *Politica) (int, error) {
 	return d.help.savePolitica(p)
 }
+func (d *SQLite) CreatePoliticaWithGrants(p *Politica, grants []PoliticaGrant) (int, error) {
+	return d.help.createPoliticaWithGrants(p, grants)
+}
 func (d *SQLite) ListPoliticaGrants(politicaID int) ([]PoliticaGrant, error) {
 	return d.help.listPoliticaGrants(politicaID)
 }

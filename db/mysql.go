@@ -438,6 +438,9 @@ func (d *MySQL) GetPolitica(id int) (*Politica, error) {
 func (d *MySQL) SavePolitica(p *Politica) (int, error) {
 	return d.help.savePolitica(p)
 }
+func (d *MySQL) CreatePoliticaWithGrants(p *Politica, grants []PoliticaGrant) (int, error) {
+	return d.help.createPoliticaWithGrants(p, grants)
+}
 func (d *MySQL) ListPoliticaGrants(politicaID int) ([]PoliticaGrant, error) {
 	return d.help.listPoliticaGrants(politicaID)
 }

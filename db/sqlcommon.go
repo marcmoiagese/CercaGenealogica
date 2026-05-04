@@ -641,6 +641,58 @@ func (h sqlHelper) savePolitica(p *Politica) (int, error) {
 	return p.ID, err
 }
 
+func (h sqlHelper) createPoliticaWithGrants(p *Politica, grants []PoliticaGrant) (int, error) {
+	if p == nil {
+		return 0, fmt.Errorf("politica nil")
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return 0, h.wrapSQLError("politica_grants", "begin_create_politica_with_grants", "politiques", 0, err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				_ = h.wrapSQLError("politica_grants", "rollback_create_politica_with_grants", "politiques", 0, rollbackErr)
+			}
+		}
+	}()
+	stmt := `INSERT INTO politiques (nom, descripcio, data_creacio) VALUES (?, ?, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+	}
+	stmt = formatPlaceholders(h.style, stmt)
+	policyID := 0
+	if h.style == "postgres" {
+		if err := tx.QueryRow(stmt, p.Nom, p.Descripcio).Scan(&policyID); err != nil {
+			return 0, h.wrapSQLError("politica_grants", "insert_politica_with_grants_returning", "politiques", 0, err)
+		}
+	} else {
+		res, err := tx.Exec(stmt, p.Nom, p.Descripcio)
+		if err != nil {
+			return 0, h.wrapSQLError("politica_grants", "insert_politica_with_grants", "politiques", 0, err)
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			policyID = int(id)
+		}
+	}
+	if policyID <= 0 {
+		return 0, fmt.Errorf("politica id invalid")
+	}
+	insStmt := formatPlaceholders(h.style, `INSERT INTO politica_grants (politica_id, perm_key, scope_type, scope_id, include_children) VALUES (?, ?, ?, ?, ?)`)
+	for _, g := range grants {
+		if _, err := tx.Exec(insStmt, policyID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren); err != nil {
+			return 0, h.wrapSQLError("politica_grants", "insert_create_politica_grant", "politica_grants", policyID, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, h.wrapSQLError("politica_grants", "commit_create_politica_with_grants", "politiques", policyID, err)
+	}
+	committed = true
+	p.ID = policyID
+	return policyID, nil
+}
+
 func (h sqlHelper) listPoliticaGrants(politicaID int) ([]PoliticaGrant, error) {
 	query := `
         SELECT id, politica_id, perm_key, scope_type, scope_id, include_children

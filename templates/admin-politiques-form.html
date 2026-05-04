@@ -67,7 +67,7 @@
                         <div class="tabs-botons" role="tablist">
                             <button type="button" class="tab-boto {{ if or (eq $active "") (eq $active "gui") }}actiu{{ end }}" data-target="tab-gui">{{ t .Lang "policies.tab.gui" }}</button>
                             <button type="button" class="tab-boto {{ if eq $active "grants" }}actiu{{ end }}" data-target="tab-grants">{{ t .Lang "policies.tab.grants" }}</button>
-                            {{ if not .Data.IsNew }}<button type="button" class="tab-boto {{ if eq $active "json" }}actiu{{ end }}" data-target="tab-json">JSON</button>{{ end }}
+                            <button type="button" class="tab-boto {{ if eq $active "json" }}actiu{{ end }}" data-target="tab-json">JSON</button>
                         </div>
                     </div>
                     <p class="camp-helper">{{ t .Lang "policies.gui.helper" }}</p>
@@ -214,10 +214,14 @@
                             </div>
                             {{ end }}
                         </section>
-                        {{ if not .Data.IsNew }}
                         <section class="policy-tab tab-pane {{ if eq $active "json" }}actiu{{ end }}" id="tab-json">
+                            {{ if .Data.IsNew }}
+                            <p class="camp-helper">En una politica nova, aplicar JSON crearà la politica i els seus grants modulars. Si els camps Nom i Descripcio del formulari estan informats, tenen prioritat sobre <code>policy.name</code> i <code>policy.description</code>.</p>
+                            <div class="policy-json-warning">Aplicar JSON crearà una politica nova i els seus permisos granulars.</div>
+                            {{ else }}
                             <p class="camp-helper">Aquest JSON es genera des de <code>politica_grants</code>. No es guarda com a document; en aplicar-lo substitueix els permisos granulars actuals d'aquesta politica.</p>
                             <div class="policy-json-warning">Aplicar JSON substituirà els permisos granulars actuals d'aquesta politica.</div>
+                            {{ end }}
                             <div class="grup-camp">
                                 <label for="policy-json-editor">JSON modular</label>
                                 <textarea id="policy-json-editor" name="policy_json" form="policy-json-form" class="policy-json-editor" spellcheck="false">{{ .Data.PolicyJSON }}</textarea>
@@ -228,7 +232,6 @@
                                 <button type="button" class="boto-secundari" id="policy-json-format">Formatar</button>
                             </div>
                         </section>
-                        {{ end }}
                     </div>
                 </div>
                 <div class="accions-formulari">
@@ -247,11 +250,13 @@
                 <input type="hidden" name="politica_id" value="{{ .Data.Politica.ID }}">
                 <input type="hidden" name="grant_id" id="grant-delete-id" value="">
             </form>
+            {{ end }}
             <form method="POST" action="/admin/politiques/json/apply" id="policy-json-form">
                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                 <input type="hidden" name="politica_id" value="{{ .Data.Politica.ID }}">
+                <input type="hidden" name="nom" id="policy-json-name" value="{{ .Data.Politica.Nom }}">
+                <input type="hidden" name="descripcio" id="policy-json-description" value="{{ .Data.Politica.Descripcio }}">
             </form>
-            {{ end }}
         </section>
     </main>
     {{ template "footer" . }}

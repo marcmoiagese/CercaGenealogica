@@ -105,6 +105,7 @@ type DB interface {
 	ListPolitiques() ([]Politica, error)
 	GetPolitica(id int) (*Politica, error)
 	SavePolitica(p *Politica) (int, error)
+	CreatePoliticaWithGrants(p *Politica, grants []PoliticaGrant) (int, error)
 	ListPoliticaGrants(politicaID int) ([]PoliticaGrant, error)
 	SavePoliticaGrant(g *PoliticaGrant) (int, error)
 	DeletePoliticaGrant(id int) error

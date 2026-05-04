@@ -27,6 +27,17 @@
   const policyJSON = document.getElementById("policy-json-editor");
   const copyJSON = document.getElementById("policy-json-copy");
   const formatJSON = document.getElementById("policy-json-format");
+  const policyJSONForm = document.getElementById("policy-json-form");
+  const policyName = document.getElementById("nom");
+  const policyDescription = document.getElementById("descripcio");
+  const policyJSONName = document.getElementById("policy-json-name");
+  const policyJSONDescription = document.getElementById("policy-json-description");
+  if (policyJSONForm) {
+    policyJSONForm.addEventListener("submit", () => {
+      if (policyName && policyJSONName) policyJSONName.value = policyName.value || "";
+      if (policyDescription && policyJSONDescription) policyJSONDescription.value = policyDescription.value || "";
+    });
+  }
   if (copyJSON && policyJSON) {
     copyJSON.addEventListener("click", async () => {
       policyJSON.select();

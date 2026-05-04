@@ -405,6 +405,9 @@ func (f *fakeDB) SaveArquebisbatMunicipi(am *db.ArquebisbatMunicipi) (int, error
 func (f *fakeDB) ListPolitiques() ([]db.Politica, error)   { return nil, nil }
 func (f *fakeDB) GetPolitica(id int) (*db.Politica, error) { return nil, nil }
 func (f *fakeDB) SavePolitica(p *db.Politica) (int, error) { return 0, nil }
+func (f *fakeDB) CreatePoliticaWithGrants(p *db.Politica, grants []db.PoliticaGrant) (int, error) {
+	return 0, nil
+}
 func (f *fakeDB) ListPoliticaGrants(politicaID int) ([]db.PoliticaGrant, error) {
 	return nil, nil
 }
