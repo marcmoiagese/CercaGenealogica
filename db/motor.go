@@ -1649,6 +1649,87 @@ type NivellAdminFilter struct {
 	CreatedBefore  time.Time
 }
 
+type ReligioConfessio struct {
+	ID             int
+	Nom            string
+	PareID         sql.NullInt64
+	Descripcio     string
+	Estat          string
+	Observacions   string
+	ModeracioEstat string
+	CreatedAt      sql.NullTime
+	UpdatedAt      sql.NullTime
+}
+
+type ModelConfessional struct {
+	ID                 int
+	Nom                string
+	ReligioConfessioID sql.NullInt64
+	PaisID             sql.NullInt64
+	Descripcio         string
+	AnyInici           sql.NullInt64
+	AnyFi              sql.NullInt64
+	Estat              string
+	Observacions       string
+	ModeracioEstat     string
+	CreatedAt          sql.NullTime
+	UpdatedAt          sql.NullTime
+}
+
+type NivellConfessional struct {
+	ID                  int
+	ModelConfessionalID int
+	Ordre               int
+	NomNivell           string
+	NomPlural           string
+	TipusNivell         string
+	CodiOficial         string
+	ParentID            sql.NullInt64
+	AnyInici            sql.NullInt64
+	AnyFi               sql.NullInt64
+	Estat               string
+	Observacions        string
+	ModeracioEstat      string
+	CreatedAt           sql.NullTime
+	UpdatedAt           sql.NullTime
+}
+
+type EntitatReligiosa struct {
+	ID                   int
+	Nom                  string
+	ReligioConfessioID   sql.NullInt64
+	ModelConfessionalID  sql.NullInt64
+	NivellConfessionalID sql.NullInt64
+	PaisID               sql.NullInt64
+	ParentID             sql.NullInt64
+	TipusEntitat         string
+	TipusEspecific       string
+	AnyInici             sql.NullInt64
+	AnyFi                sql.NullInt64
+	Estat                string
+	Web                  string
+	WebWikipedia         string
+	Territori            string
+	Observacions         string
+	ModeracioEstat       string
+	CreatedAt            sql.NullTime
+	UpdatedAt            sql.NullTime
+}
+
+type EntitatReligiosaRelacio struct {
+	ID              int
+	EntitatOrigenID int
+	EntitatDestiID  int
+	TipusRelacio    string
+	AnyInici        sql.NullInt64
+	AnyFi           sql.NullInt64
+	FontID          sql.NullInt64
+	Observacions    string
+	ModeracioEstat  string
+	CreatedAt       sql.NullTime
+	UpdatedAt       sql.NullTime
+}
+
 type Municipi struct {
 	ID                    int
 	Nom                   string

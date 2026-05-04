@@ -595,6 +595,99 @@ CREATE TABLE IF NOT EXISTS noms_historics (
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS religio_confessio (
+    id SERIAL PRIMARY KEY,
+    nom TEXT NOT NULL,
+    pare_id INTEGER REFERENCES religio_confessio(id) ON DELETE SET NULL,
+    descripcio TEXT,
+    estat TEXT NOT NULL DEFAULT 'actiu' CHECK(estat IN ('actiu', 'inactiu')),
+    observacions TEXT,
+    moderation_status TEXT NOT NULL DEFAULT 'pendent' CHECK(moderation_status IN ('pendent','publicat','rebutjat')),
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_religio_confessio_pare ON religio_confessio(pare_id);
+
+CREATE TABLE IF NOT EXISTS model_confessional (
+    id SERIAL PRIMARY KEY,
+    nom TEXT NOT NULL,
+    religio_confessio_id INTEGER REFERENCES religio_confessio(id) ON DELETE SET NULL,
+    pais_id INTEGER REFERENCES paisos(id) ON DELETE SET NULL,
+    descripcio TEXT,
+    any_inici INTEGER,
+    any_fi INTEGER,
+    estat TEXT NOT NULL DEFAULT 'actiu' CHECK(estat IN ('actiu', 'inactiu', 'historic')),
+    observacions TEXT,
+    moderation_status TEXT NOT NULL DEFAULT 'pendent' CHECK(moderation_status IN ('pendent','publicat','rebutjat')),
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_model_confessional_religio ON model_confessional(religio_confessio_id);
+CREATE INDEX IF NOT EXISTS idx_model_confessional_pais ON model_confessional(pais_id);
+
+CREATE TABLE IF NOT EXISTS nivell_confessional (
+    id SERIAL PRIMARY KEY,
+    model_confessional_id INTEGER NOT NULL REFERENCES model_confessional(id) ON DELETE CASCADE,
+    ordre INTEGER NOT NULL,
+    nom_nivell TEXT NOT NULL,
+    nom_plural TEXT,
+    tipus_nivell TEXT,
+    codi_oficial TEXT,
+    parent_id INTEGER REFERENCES nivell_confessional(id) ON DELETE SET NULL,
+    any_inici INTEGER,
+    any_fi INTEGER,
+    estat TEXT NOT NULL DEFAULT 'actiu' CHECK(estat IN ('actiu', 'inactiu', 'historic')),
+    observacions TEXT,
+    moderation_status TEXT NOT NULL DEFAULT 'pendent' CHECK(moderation_status IN ('pendent','publicat','rebutjat')),
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_nivell_confessional_model ON nivell_confessional(model_confessional_id);
+CREATE INDEX IF NOT EXISTS idx_nivell_confessional_parent ON nivell_confessional(parent_id);
+
+CREATE TABLE IF NOT EXISTS entitat_religiosa (
+    id SERIAL PRIMARY KEY,
+    nom TEXT NOT NULL,
+    religio_confessio_id INTEGER REFERENCES religio_confessio(id) ON DELETE SET NULL,
+    model_confessional_id INTEGER REFERENCES model_confessional(id) ON DELETE SET NULL,
+    nivell_confessional_id INTEGER REFERENCES nivell_confessional(id) ON DELETE SET NULL,
+    pais_id INTEGER REFERENCES paisos(id) ON DELETE SET NULL,
+    parent_id INTEGER REFERENCES entitat_religiosa(id) ON DELETE SET NULL,
+    tipus_entitat TEXT,
+    tipus_especific TEXT,
+    any_inici INTEGER,
+    any_fi INTEGER,
+    estat TEXT NOT NULL DEFAULT 'actiu' CHECK(estat IN ('actiu', 'inactiu', 'historic')),
+    web TEXT,
+    web_wikipedia TEXT,
+    territori TEXT,
+    observacions TEXT,
+    moderation_status TEXT NOT NULL DEFAULT 'pendent' CHECK(moderation_status IN ('pendent','publicat','rebutjat')),
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_religio ON entitat_religiosa(religio_confessio_id);
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_model ON entitat_religiosa(model_confessional_id);
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_nivell ON entitat_religiosa(nivell_confessional_id);
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_parent ON entitat_religiosa(parent_id);
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_pais ON entitat_religiosa(pais_id);
+
+CREATE TABLE IF NOT EXISTS entitat_religiosa_relacio (
+    id SERIAL PRIMARY KEY,
+    entitat_origen_id INTEGER NOT NULL REFERENCES entitat_religiosa(id) ON DELETE CASCADE,
+    entitat_desti_id INTEGER NOT NULL REFERENCES entitat_religiosa(id) ON DELETE CASCADE,
+    tipus_relacio TEXT NOT NULL,
+    any_inici INTEGER,
+    any_fi INTEGER,
+    font_id INTEGER,
+    observacions TEXT,
+    moderation_status TEXT NOT NULL DEFAULT 'pendent' CHECK(moderation_status IN ('pendent','publicat','rebutjat')),
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_relacio_origen ON entitat_religiosa_relacio(entitat_origen_id);
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_relacio_desti ON entitat_religiosa_relacio(entitat_desti_id);
+
 CREATE TABLE IF NOT EXISTS arquebisbats (
     id SERIAL PRIMARY KEY,
     nom TEXT NOT NULL UNIQUE,

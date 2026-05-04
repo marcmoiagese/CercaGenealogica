@@ -652,6 +652,111 @@ CREATE TABLE IF NOT EXISTS noms_historics (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS religio_confessio (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nom VARCHAR(255) NOT NULL,
+    pare_id INT UNSIGNED NULL,
+    descripcio TEXT,
+    estat ENUM('actiu', 'inactiu') NOT NULL DEFAULT 'actiu',
+    observacions TEXT,
+    moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'pendent',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (pare_id) REFERENCES religio_confessio(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_religio_confessio_pare ON religio_confessio(pare_id);
+
+CREATE TABLE IF NOT EXISTS model_confessional (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nom VARCHAR(255) NOT NULL,
+    religio_confessio_id INT UNSIGNED NULL,
+    pais_id INT UNSIGNED NULL,
+    descripcio TEXT,
+    any_inici SMALLINT,
+    any_fi SMALLINT,
+    estat ENUM('actiu', 'inactiu', 'historic') NOT NULL DEFAULT 'actiu',
+    observacions TEXT,
+    moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'pendent',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (religio_confessio_id) REFERENCES religio_confessio(id) ON DELETE SET NULL,
+    FOREIGN KEY (pais_id) REFERENCES paisos(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_model_confessional_religio ON model_confessional(religio_confessio_id);
+CREATE INDEX idx_model_confessional_pais ON model_confessional(pais_id);
+
+CREATE TABLE IF NOT EXISTS nivell_confessional (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    model_confessional_id INT UNSIGNED NOT NULL,
+    ordre INT NOT NULL,
+    nom_nivell VARCHAR(255) NOT NULL,
+    nom_plural VARCHAR(255),
+    tipus_nivell VARCHAR(100),
+    codi_oficial VARCHAR(100),
+    parent_id INT UNSIGNED NULL,
+    any_inici SMALLINT,
+    any_fi SMALLINT,
+    estat ENUM('actiu', 'inactiu', 'historic') NOT NULL DEFAULT 'actiu',
+    observacions TEXT,
+    moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'pendent',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (model_confessional_id) REFERENCES model_confessional(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_id) REFERENCES nivell_confessional(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_nivell_confessional_model ON nivell_confessional(model_confessional_id);
+CREATE INDEX idx_nivell_confessional_parent ON nivell_confessional(parent_id);
+
+CREATE TABLE IF NOT EXISTS entitat_religiosa (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nom VARCHAR(255) NOT NULL,
+    religio_confessio_id INT UNSIGNED NULL,
+    model_confessional_id INT UNSIGNED NULL,
+    nivell_confessional_id INT UNSIGNED NULL,
+    pais_id INT UNSIGNED NULL,
+    parent_id INT UNSIGNED NULL,
+    tipus_entitat VARCHAR(100),
+    tipus_especific VARCHAR(100),
+    any_inici SMALLINT,
+    any_fi SMALLINT,
+    estat ENUM('actiu', 'inactiu', 'historic') NOT NULL DEFAULT 'actiu',
+    web VARCHAR(255),
+    web_wikipedia VARCHAR(255),
+    territori TEXT,
+    observacions TEXT,
+    moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'pendent',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (religio_confessio_id) REFERENCES religio_confessio(id) ON DELETE SET NULL,
+    FOREIGN KEY (model_confessional_id) REFERENCES model_confessional(id) ON DELETE SET NULL,
+    FOREIGN KEY (nivell_confessional_id) REFERENCES nivell_confessional(id) ON DELETE SET NULL,
+    FOREIGN KEY (pais_id) REFERENCES paisos(id) ON DELETE SET NULL,
+    FOREIGN KEY (parent_id) REFERENCES entitat_religiosa(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_entitat_religiosa_religio ON entitat_religiosa(religio_confessio_id);
+CREATE INDEX idx_entitat_religiosa_model ON entitat_religiosa(model_confessional_id);
+CREATE INDEX idx_entitat_religiosa_nivell ON entitat_religiosa(nivell_confessional_id);
+CREATE INDEX idx_entitat_religiosa_parent ON entitat_religiosa(parent_id);
+CREATE INDEX idx_entitat_religiosa_pais ON entitat_religiosa(pais_id);
+
+CREATE TABLE IF NOT EXISTS entitat_religiosa_relacio (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    entitat_origen_id INT UNSIGNED NOT NULL,
+    entitat_desti_id INT UNSIGNED NOT NULL,
+    tipus_relacio VARCHAR(100) NOT NULL,
+    any_inici SMALLINT,
+    any_fi SMALLINT,
+    font_id INT UNSIGNED NULL,
+    observacions TEXT,
+    moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'pendent',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (entitat_origen_id) REFERENCES entitat_religiosa(id) ON DELETE CASCADE,
+    FOREIGN KEY (entitat_desti_id) REFERENCES entitat_religiosa(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX idx_entitat_religiosa_relacio_origen ON entitat_religiosa_relacio(entitat_origen_id);
+CREATE INDEX idx_entitat_religiosa_relacio_desti ON entitat_religiosa_relacio(entitat_desti_id);
+
 CREATE TABLE IF NOT EXISTS arquebisbats (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nom VARCHAR(255) NOT NULL UNIQUE,
