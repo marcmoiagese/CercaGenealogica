@@ -182,7 +182,6 @@ CREATE TABLE IF NOT EXISTS politiques (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nom VARCHAR(255) NOT NULL UNIQUE,
     descripcio TEXT,
-    permisos TEXT NOT NULL,  -- Document JSON/config no autoritzatiu. Els permisos efectius viuen a politica_grants
     data_creacio DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_politiques_nom (nom)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

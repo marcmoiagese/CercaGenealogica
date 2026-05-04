@@ -1534,7 +1534,6 @@ type Politica struct {
 	ID         int
 	Nom        string
 	Descripcio string
-	Permisos   string
 }
 
 type PoliticaGrant struct {

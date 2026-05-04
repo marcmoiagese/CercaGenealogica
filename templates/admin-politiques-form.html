@@ -60,32 +60,13 @@
                     <div class="policy-tabs">
                         <div class="tabs-botons" role="tablist">
                             <button type="button" class="tab-boto {{ if or (eq $active "") (eq $active "gui") }}actiu{{ end }}" data-target="tab-gui">{{ t .Lang "policies.tab.gui" }}</button>
-                            <button type="button" class="tab-boto {{ if eq $active "json" }}actiu{{ end }}" data-target="tab-json">{{ t .Lang "policies.tab.json" }}</button>
                             <button type="button" class="tab-boto {{ if eq $active "grants" }}actiu{{ end }}" data-target="tab-grants">{{ t .Lang "policies.tab.grants" }}</button>
                         </div>
                     </div>
                     <p class="camp-helper">{{ t .Lang "policies.gui.helper" }}</p>
                     <div class="tabs-contingut">
                         <section class="policy-tab tab-pane {{ if or (eq $active "") (eq $active "gui") }}actiu{{ end }}" id="tab-gui">
-                            <div class="llista-permisos">
-                                {{ $perms := list "admin" "can_manage_users" "can_manage_territory" "can_manage_eclesiastic" "can_manage_archives" "can_create_person" "can_edit_any_person" "can_moderate" "can_manage_policies" }}
-                                {{ range $perms }}
-                                <label class="checkbox-linia perm-card" data-perm="{{ . }}">
-                                    <input type="checkbox" id="perm-{{ . }}" data-perm="{{ . }}">
-                                    <span>
-                                        {{ t $.Lang (printf "policies.perm.%s" .) }}
-                                        <small class="permis-hint">{{ t $.Lang (printf "policies.perm.desc.%s" .) }}</small>
-                                    </span>
-                                    <span class="perm-indicator" aria-hidden="true"></span>
-                                </label>
-                                {{ end }}
-                            </div>
-                            <div class="grup-camp" style="margin-top:16px">
-                                <label for="perm-import-worker-limit">{{ t .Lang "policies.import_workers.label" }}</label>
-                                <input type="number" id="perm-import-worker-limit" min="1" step="1" placeholder="1">
-                                <small class="camp-helper">{{ t .Lang "policies.import_workers.help" }}</small>
-                            </div>
-                            <div style="margin-top:18px">
+                            <div>
                                 <h3 style="margin:0 0 6px 0">{{ t .Lang "policies.gui.modular.title" }}</h3>
                                 <p class="camp-helper">{{ t .Lang "policies.gui.modular.helper" }}</p>
                                 {{ range .Data.GuiGrantGroups }}
@@ -103,10 +84,6 @@
                                 </div>
                                 {{ end }}
                             </div>
-                        </section>
-                        <section class="policy-tab tab-pane {{ if eq $active "json" }}actiu{{ end }}" id="tab-json">
-                            <textarea id="permisos" name="permisos" rows="10" placeholder='{"admin":true,...}'>{{ .Data.Politica.Permisos }}</textarea>
-                            <small>{{ t .Lang "policies.permissions.help" }}</small>
                         </section>
                         <section class="policy-tab tab-pane {{ if eq $active "grants" }}actiu{{ end }}" id="tab-grants">
                             <p class="camp-helper">{{ t .Lang "policies.grants.helper" }}</p>

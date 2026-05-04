@@ -375,9 +375,8 @@ type compiledGrant struct {
 }
 
 type permissionSnapshot struct {
-	isAdmin           bool
-	importWorkerLimit int
-	grants            map[string][]compiledGrant
+	isAdmin bool
+	grants  map[string][]compiledGrant
 }
 
 type permKeysContextKey string
@@ -433,20 +432,10 @@ func (a *App) permissionKeysForUser(userID int) map[string]bool {
 	return keys
 }
 
-func (a *App) importWorkerLimitForUser(userID int) int {
+func (a *App) espaiImportConcurrencyLimitForUser(userID int) int {
 	defaultLimit := parseIntDefault(a.Config["ESP_IMPORT_WORKER_DEFAULT"], 1)
 	if defaultLimit <= 0 {
 		defaultLimit = 1
-	}
-	if userID == 0 || a == nil {
-		return defaultLimit
-	}
-	snap, err := a.getPermissionSnapshot(userID)
-	if err != nil {
-		return defaultLimit
-	}
-	if snap.importWorkerLimit > 0 {
-		return snap.importWorkerLimit
 	}
 	return defaultLimit
 }
@@ -565,7 +554,6 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 	snap := permissionSnapshot{
 		grants: make(map[string][]compiledGrant),
 	}
-	workerLimit := 0
 	policies, err := a.DB.ListUserPolitiques(userID)
 	if err != nil {
 		return snap, err
@@ -593,13 +581,6 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 			// Admin remains an explicit policy-name contract; legacy JSON flags do not grant modular permissions.
 			snap.isAdmin = true
 		}
-		if strings.TrimSpace(policy.Permisos) != "" {
-			if policyOptions, err := parsePolicyRuntimeConfig(policy.Permisos); err == nil {
-				if policyOptions.ImportWorkerLimit > workerLimit {
-					workerLimit = policyOptions.ImportWorkerLimit
-				}
-			}
-		}
 		grants, err := a.DB.ListPoliticaGrants(policy.ID)
 		if err != nil {
 			return snap, err
@@ -616,7 +597,6 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 			}
 		}
 	}
-	snap.importWorkerLimit = workerLimit
 	return snap, nil
 }
 

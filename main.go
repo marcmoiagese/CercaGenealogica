@@ -57,9 +57,6 @@ func main() {
 	app := core.NewApp(configMap, dbInstance)
 	core.SetPlatformSettingsStore(dbInstance)
 	core.SetMaintenanceStore(dbInstance)
-	if err := app.EnsurePolicyGrants(); err != nil {
-		log.Printf("[permissions] error assegurant grants per polítiques: %v", err)
-	}
 	if err := app.EnsureSystemImportTemplates(); err != nil {
 		log.Printf("[import-templates] error assegurant plantilles system: %v", err)
 	}

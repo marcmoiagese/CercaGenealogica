@@ -97,7 +97,6 @@ func createTestPolicy(t *testing.T, database db.DB, name string) int {
 	pol := &db.Politica{
 		Nom:        name,
 		Descripcio: "",
-		Permisos:   "{}",
 	}
 	id, err := database.SavePolitica(pol)
 	if err != nil {

@@ -189,7 +189,6 @@ CREATE TABLE IF NOT EXISTS politiques (
     id SERIAL PRIMARY KEY,
     nom TEXT NOT NULL UNIQUE,
     descripcio TEXT,
-    permisos TEXT NOT NULL, -- Document JSON/config no autoritzatiu. Els permisos efectius viuen a politica_grants
     data_creacio TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

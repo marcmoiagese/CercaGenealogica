@@ -15,7 +15,6 @@ func createF335PlatformUser(t *testing.T, database db.DB, username string, permK
 	user := createTestUser(t, database, username+"_"+strconv.FormatInt(time.Now().UnixNano(), 10))
 	policyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "policy_" + username,
-		Permisos:   "{}",
 		Descripcio: "",
 	})
 	if err != nil {

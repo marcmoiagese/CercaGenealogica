@@ -265,8 +265,6 @@ func scopeLabelKeyMap() map[string]string {
 
 func normalizePolicyTab(val string) string {
 	switch strings.ToLower(strings.TrimSpace(val)) {
-	case "json":
-		return "json"
 	case "grants":
 		return "grants"
 	case "gui":
@@ -298,11 +296,7 @@ func (a *App) politicaFormData(r *http.Request, pol *db.Politica, isNew bool, ac
 					guiGrantState[g.PermKey] = true
 				}
 			}
-			pol.Permisos = policyJSONForForm(pol.Permisos, rows)
 		}
-	}
-	if pol.Permisos == "" {
-		pol.Permisos = policyJSONForForm(pol.Permisos, nil)
 	}
 	if grantForm != nil && grantForm.ScopeID > 0 && strings.TrimSpace(grantForm.ScopeLabel) == "" {
 		labeler := newGrantScopeLabeler(a, lang)
@@ -389,39 +383,18 @@ func (a *App) AdminSavePolitica(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(r.FormValue("id"))
 	name := strings.TrimSpace(r.FormValue("nom"))
 	desc := strings.TrimSpace(r.FormValue("descripcio"))
-	permsRaw := strings.TrimSpace(r.FormValue("permisos"))
 	activeTab := normalizePolicyTab(r.FormValue("active_tab"))
 
 	if name == "" {
-		pol := &db.Politica{ID: id, Nom: name, Descripcio: desc, Permisos: permsRaw}
+		pol := &db.Politica{ID: id, Nom: name, Descripcio: desc}
 		RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, id == 0, "gui", "El nom és obligatori", nil))
 		return
 	}
 
-	// Validar JSON de permisos
-	if permsRaw == "" {
-		permsRaw = "{}"
-	}
-	doc, _, err := parsePolicyDocument(permsRaw)
-	if err != nil {
-		pol := &db.Politica{ID: id, Nom: name, Descripcio: desc, Permisos: permsRaw}
-		RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, id == 0, "json", "JSON de permisos invàlid", nil))
-		return
-	}
-	if activeTab == "json" {
-		if _, err := policyGrantsFromDocument(doc); err != nil {
-			pol := &db.Politica{ID: id, Nom: name, Descripcio: desc, Permisos: permsRaw}
-			RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, id == 0, "json", "JSON de permisos invàlid", nil))
-			return
-		}
-	}
-	// Re-marshal per guardar net
-	permsClean, _ := policyDocumentJSON(doc)
 	p := &db.Politica{
 		ID:         id,
 		Nom:        name,
 		Descripcio: desc,
-		Permisos:   permsClean,
 	}
 	savedID, err := a.DB.SavePolitica(p)
 	if err != nil {
@@ -431,24 +404,12 @@ func (a *App) AdminSavePolitica(w http.ResponseWriter, r *http.Request) {
 	if savedID > 0 {
 		p.ID = savedID
 	}
-	if activeTab == "json" {
-		if err := a.replacePolicyGrantsFromDocument(p.ID, doc); err != nil {
-			pol := &db.Politica{ID: p.ID, Nom: name, Descripcio: desc, Permisos: permsRaw}
-			RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, false, "json", "JSON de permisos invàlid", nil))
-			return
-		}
-	} else if err := a.ensurePolicyGrantsFromDocument(p.ID, doc); err != nil {
-		Errorf("No s'han pogut crear grants per la politica %d: %v", p.ID, err)
-	}
 	if activeTab == "gui" {
 		guiKeys := guiGrantKeySet(guiGrantGroups())
 		selectedGuiKeys := extractGuiGrantSelection(r, guiKeys)
 		if err := a.syncPolicyGlobalGrants(p.ID, guiKeys, selectedGuiKeys); err != nil {
 			Errorf("No s'han pogut sincronitzar grants GUI per la politica %d: %v", p.ID, err)
 		}
-	}
-	if err := a.refreshPolicyPermsJSON(p.ID); err != nil {
-		Errorf("No s'ha pogut reconstruir el JSON de permisos per la politica %d: %v", p.ID, err)
 	}
 	_ = a.DB.BumpPermissionSnapshotVersion(p.ID)
 	http.Redirect(w, r, "/admin/politiques", http.StatusSeeOther)
@@ -606,9 +567,6 @@ func (a *App) AdminSavePoliticaGrant(w http.ResponseWriter, r *http.Request) {
 		RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, false, "grants", "No s'ha pogut desar el grant", grantForm))
 		return
 	}
-	if err := a.refreshPolicyPermsJSON(politicaID); err != nil {
-		Errorf("No s'ha pogut reconstruir el JSON de permisos per la politica %d: %v", politicaID, err)
-	}
 	_ = a.DB.BumpPermissionSnapshotVersion(politicaID)
 	http.Redirect(w, r, fmt.Sprintf("/admin/politiques/%d/edit?tab=grants", politicaID), http.StatusSeeOther)
 }
@@ -656,9 +614,6 @@ func (a *App) AdminDeletePoliticaGrant(w http.ResponseWriter, r *http.Request) {
 	if err := a.DB.DeletePoliticaGrant(grantID); err != nil {
 		RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, false, "grants", "No s'ha pogut eliminar el grant", nil))
 		return
-	}
-	if err := a.refreshPolicyPermsJSON(politicaID); err != nil {
-		Errorf("No s'ha pogut reconstruir el JSON de permisos per la politica %d: %v", politicaID, err)
 	}
 	_ = a.DB.BumpPermissionSnapshotVersion(politicaID)
 	http.Redirect(w, r, fmt.Sprintf("/admin/politiques/%d/edit?tab=grants", politicaID), http.StatusSeeOther)

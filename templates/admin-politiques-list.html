@@ -5,11 +5,6 @@
     <meta charset="UTF-8">
     <title>{{ t .Lang "policies.title" }}</title>
     {{ template "styles-private" . }}
-    <style>
-        .perms-badges{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-        .perms-pill{background:#eef2ff;border:1px solid #d8ddf0;padding:4px 8px;border-radius:8px;font-size:12px;color:#27304a}
-        .code-fallback{font-size:12px;color:#666}
-    </style>
 </head>
 <body>
     {{ template "header-private" . }}
@@ -27,7 +22,6 @@
                             <th>ID</th>
                             <th>{{ t .Lang "policies.name" }}</th>
                             <th>{{ t .Lang "policies.desc" }}</th>
-                            <th>{{ t .Lang "policies.permissions" }}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -37,15 +31,10 @@
                             <td>{{ .ID }}</td>
                             <td>{{ .Nom }}</td>
                             <td>{{ .Descripcio }}</td>
-                            <td>
-                                <div class="perms-badges" data-perms='{{ js .Permisos }}'>
-                                    <span class="code-fallback"><code>{{ .Permisos }}</code></span>
-                                </div>
-                            </td>
                             <td><a class="boto-secundari" href="/admin/politiques/{{ .ID }}/edit">{{ t $.Lang "policies.action.edit" }}</a></td>
                         </tr>
                         {{ else }}
-                        <tr><td colspan="5">{{ t .Lang "common.empty" }}</td></tr>
+                        <tr><td colspan="4">{{ t .Lang "common.empty" }}</td></tr>
                         {{ end }}
                     </tbody>
                 </table>
@@ -54,20 +43,6 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
-    <script type="application/json" id="policy-perm-labels">
-    {
-        "admin": {{ toJsonJS (t .Lang "policies.perm.admin") }},
-        "can_manage_users": {{ toJsonJS (t .Lang "policies.perm.can_manage_users") }},
-        "can_manage_territory": {{ toJsonJS (t .Lang "policies.perm.can_manage_territory") }},
-        "can_manage_eclesiastic": {{ toJsonJS (t .Lang "policies.perm.can_manage_eclesiastic") }},
-        "can_manage_archives": {{ toJsonJS (t .Lang "policies.perm.can_manage_archives") }},
-        "can_create_person": {{ toJsonJS (t .Lang "policies.perm.can_create_person") }},
-        "can_edit_any_person": {{ toJsonJS (t .Lang "policies.perm.can_edit_any_person") }},
-        "can_moderate": {{ toJsonJS (t .Lang "policies.perm.can_moderate") }},
-        "can_manage_policies": {{ toJsonJS (t .Lang "policies.perm.can_manage_policies") }}
-    }
-    </script>
-    <script src="/static/js/admin-politiques-list.js"></script>
 </body>
 </html>
 {{ end }}

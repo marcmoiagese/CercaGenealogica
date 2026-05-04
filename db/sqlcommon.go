@@ -271,28 +271,20 @@ func (h sqlHelper) tableExists(table string) bool {
 // Policies
 func (h sqlHelper) ensureDefaultPolicies() error {
 	h.ensurePermissionsSchema()
-	defaultPolicyDocs := map[string]string{
-		"admin":     "{}",
-		"moderador": "{}",
-		"confiança": "{}",
-		"usuari":    "{}",
-	}
-	for name, permsJSON := range defaultPolicyDocs {
-		stmt := `INSERT INTO politiques (nom, descripcio, permisos, data_creacio) VALUES (?, ?, ?, ` + h.nowFun + `)`
+	defaultPolicyNames := []string{"admin", "moderador", "confiança", "usuari"}
+	for _, name := range defaultPolicyNames {
+		stmt := `INSERT INTO politiques (nom, descripcio, data_creacio) VALUES (?, ?, ` + h.nowFun + `)`
 		if h.style == "postgres" {
-			stmt = formatPlaceholders(h.style, `INSERT INTO politiques (nom, descripcio, permisos, data_creacio) VALUES (?, ?, ?, `+h.nowFun+`) ON CONFLICT (nom) DO NOTHING`)
+			stmt = formatPlaceholders(h.style, `INSERT INTO politiques (nom, descripcio, data_creacio) VALUES (?, ?, `+h.nowFun+`) ON CONFLICT (nom) DO NOTHING`)
 		} else if h.style == "mysql" {
-			stmt += " ON DUPLICATE KEY UPDATE permisos=VALUES(permisos), descripcio=VALUES(descripcio)"
+			stmt += " ON DUPLICATE KEY UPDATE descripcio=VALUES(descripcio)"
 		} else { // sqlite
 			stmt += " ON CONFLICT(nom) DO NOTHING"
 		}
 		if h.style != "postgres" {
 			stmt = formatPlaceholders(h.style, stmt)
 		}
-		_, _ = h.db.Exec(stmt, name, "", permsJSON)
-		// Update perms if entry already exists but empty
-		upd := formatPlaceholders(h.style, `UPDATE politiques SET permisos = ? WHERE nom = ? AND (permisos IS NULL OR permisos = '' OR permisos = '{}' )`)
-		_, _ = h.db.Exec(upd, permsJSON, name)
+		_, _ = h.db.Exec(stmt, name, "")
 	}
 	var adminID int
 	_ = h.db.QueryRow(formatPlaceholders(h.style, "SELECT id FROM politiques WHERE nom = ?"), "admin").Scan(&adminID)
@@ -596,7 +588,7 @@ func (h sqlHelper) userHasAnyPolicy(userID int, policies []string) (bool, error)
 }
 
 func (h sqlHelper) listPolitiques() ([]Politica, error) {
-	rows, err := h.db.Query(`SELECT id, nom, descripcio, permisos FROM politiques ORDER BY nom`)
+	rows, err := h.db.Query(`SELECT id, nom, descripcio FROM politiques ORDER BY nom`)
 	if err != nil {
 		return nil, err
 	}
@@ -604,7 +596,7 @@ func (h sqlHelper) listPolitiques() ([]Politica, error) {
 	var res []Politica
 	for rows.Next() {
 		var p Politica
-		if err := rows.Scan(&p.ID, &p.Nom, &p.Descripcio, &p.Permisos); err != nil {
+		if err := rows.Scan(&p.ID, &p.Nom, &p.Descripcio); err != nil {
 			return nil, err
 		}
 		res = append(res, p)
@@ -613,9 +605,9 @@ func (h sqlHelper) listPolitiques() ([]Politica, error) {
 }
 
 func (h sqlHelper) getPolitica(id int) (*Politica, error) {
-	row := h.db.QueryRow(`SELECT id, nom, descripcio, permisos FROM politiques WHERE id = ?`, id)
+	row := h.db.QueryRow(`SELECT id, nom, descripcio FROM politiques WHERE id = ?`, id)
 	p := &Politica{}
-	if err := row.Scan(&p.ID, &p.Nom, &p.Descripcio, &p.Permisos); err != nil {
+	if err := row.Scan(&p.ID, &p.Nom, &p.Descripcio); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -623,18 +615,18 @@ func (h sqlHelper) getPolitica(id int) (*Politica, error) {
 
 func (h sqlHelper) savePolitica(p *Politica) (int, error) {
 	if p.ID == 0 {
-		stmt := `INSERT INTO politiques (nom, descripcio, permisos, data_creacio) VALUES (?, ?, ?, ` + h.nowFun + `)`
+		stmt := `INSERT INTO politiques (nom, descripcio, data_creacio) VALUES (?, ?, ` + h.nowFun + `)`
 		if h.style == "postgres" {
 			stmt += " RETURNING id"
 		}
 		stmt = formatPlaceholders(h.style, stmt)
 		if h.style == "postgres" {
-			if err := h.db.QueryRow(stmt, p.Nom, p.Descripcio, p.Permisos).Scan(&p.ID); err != nil {
+			if err := h.db.QueryRow(stmt, p.Nom, p.Descripcio).Scan(&p.ID); err != nil {
 				return 0, err
 			}
 			return p.ID, nil
 		}
-		res, err := h.db.Exec(stmt, p.Nom, p.Descripcio, p.Permisos)
+		res, err := h.db.Exec(stmt, p.Nom, p.Descripcio)
 		if err != nil {
 			return 0, err
 		}
@@ -643,9 +635,9 @@ func (h sqlHelper) savePolitica(p *Politica) (int, error) {
 		}
 		return p.ID, nil
 	}
-	stmt := `UPDATE politiques SET nom=?, descripcio=?, permisos=? WHERE id = ?`
+	stmt := `UPDATE politiques SET nom=?, descripcio=? WHERE id = ?`
 	stmt = formatPlaceholders(h.style, stmt)
-	_, err := h.db.Exec(stmt, p.Nom, p.Descripcio, p.Permisos, p.ID)
+	_, err := h.db.Exec(stmt, p.Nom, p.Descripcio, p.ID)
 	return p.ID, err
 }
 
@@ -722,7 +714,7 @@ func (h sqlHelper) deletePoliticaGrant(id int) error {
 
 func (h sqlHelper) listUserPolitiques(userID int) ([]Politica, error) {
 	query := `
-        SELECT p.id, p.nom, p.descripcio, p.permisos
+        SELECT p.id, p.nom, p.descripcio
         FROM usuaris_politiques up
         INNER JOIN politiques p ON p.id = up.politica_id
         WHERE up.usuari_id = ?
@@ -736,7 +728,7 @@ func (h sqlHelper) listUserPolitiques(userID int) ([]Politica, error) {
 	var res []Politica
 	for rows.Next() {
 		var p Politica
-		if err := rows.Scan(&p.ID, &p.Nom, &p.Descripcio, &p.Permisos); err != nil {
+		if err := rows.Scan(&p.ID, &p.Nom, &p.Descripcio); err != nil {
 			return nil, err
 		}
 		res = append(res, p)
@@ -767,7 +759,7 @@ func (h sqlHelper) removeUserPolitica(userID, politicaID int) error {
 
 func (h sqlHelper) listGroupPolitiques(groupID int) ([]Politica, error) {
 	query := `
-        SELECT p.id, p.nom, p.descripcio, p.permisos
+        SELECT p.id, p.nom, p.descripcio
         FROM grups_politiques gp
         INNER JOIN politiques p ON p.id = gp.politica_id
         WHERE gp.grup_id = ?
@@ -781,7 +773,7 @@ func (h sqlHelper) listGroupPolitiques(groupID int) ([]Politica, error) {
 	var res []Politica
 	for rows.Next() {
 		var p Politica
-		if err := rows.Scan(&p.ID, &p.Nom, &p.Descripcio, &p.Permisos); err != nil {
+		if err := rows.Scan(&p.ID, &p.Nom, &p.Descripcio); err != nil {
 			return nil, err
 		}
 		res = append(res, p)

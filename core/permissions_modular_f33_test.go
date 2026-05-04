@@ -89,58 +89,6 @@ func findF330PolicyID(t *testing.T, database db.DB, name string) int {
 	return 0
 }
 
-type f33LegacyJSONFlags map[string]bool
-
-func (f f33LegacyJSONFlags) has(key string) bool {
-	return f[key]
-}
-
-func f3321LegacyJSONFlagsForUser(t *testing.T, app *App, userID int) f33LegacyJSONFlags {
-	t.Helper()
-	if app == nil || app.DB == nil || userID <= 0 {
-		return f33LegacyJSONFlags{}
-	}
-	policies, err := app.DB.ListUserPolitiques(userID)
-	if err != nil {
-		t.Fatalf("no s'han pogut carregar politiques directes de test per usuari %d: %v", userID, err)
-	}
-	groups, err := app.DB.ListUserGroups(userID)
-	if err != nil {
-		t.Fatalf("no s'han pogut carregar grups de test per usuari %d: %v", userID, err)
-	}
-	for _, group := range groups {
-		groupPolicies, err := app.DB.ListGroupPolitiques(group.ID)
-		if err != nil {
-			t.Fatalf("no s'han pogut carregar politiques de grup %d: %v", group.ID, err)
-		}
-		policies = append(policies, groupPolicies...)
-	}
-	flags := f33LegacyJSONFlags{}
-	for _, policy := range policies {
-		var raw map[string]json.RawMessage
-		if err := json.Unmarshal([]byte(policy.Permisos), &raw); err != nil {
-			continue
-		}
-		for _, key := range []string{
-			"admin",
-			"can_manage_users",
-			"can_manage_territory",
-			"can_manage_eclesiastic",
-			"can_manage_archives",
-			"can_create_person",
-			"can_edit_any_person",
-			"can_moderate",
-			"can_manage_policies",
-		} {
-			var enabled bool
-			if err := json.Unmarshal(raw[key], &enabled); err == nil && enabled {
-				flags[key] = true
-			}
-		}
-	}
-	return flags
-}
-
 func TestF330AdminPolicyNameIsEffectiveModularAdminForUI(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-admin-name")
@@ -149,7 +97,6 @@ func TestF330AdminPolicyNameIsEffectiveModularAdminForUI(t *testing.T) {
 	if _, err := database.SavePolitica(&db.Politica{
 		ID:         adminID,
 		Nom:        "admin",
-		Permisos:   "{}",
 		Descripcio: "",
 	}); err != nil {
 		t.Fatalf("no s'ha pogut simular admin legacy sense flag JSON: %v", err)
@@ -171,10 +118,6 @@ func TestF330AdminPolicyNameIsEffectiveModularAdminForUI(t *testing.T) {
 		t.Fatalf("admin per politica admin hauria de tenir filtre global")
 	}
 
-	perms := f3321LegacyJSONFlagsForUser(t, app, userID)
-	if perms.has("admin") {
-		t.Fatalf("el test necessita JSON legacy sense Admin=true per reproduir la incoherencia UI")
-	}
 	req := httptest.NewRequest("GET", "/territori/nivells", nil)
 	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID))
 	req = app.withPermissionKeys(req, app.permissionKeysForUser(userID))
@@ -195,7 +138,6 @@ func TestF3319LegacyJSONAdminFlagDoesNotGrantSnapshotAdmin(t *testing.T) {
 	userID := createF330User(t, database, "f33-admin-flag")
 	policy := &db.Politica{
 		Nom:        "admin-json",
-		Permisos:   `{"admin":true}`,
 		Descripcio: "",
 	}
 	policyID, err := database.SavePolitica(policy)
@@ -226,7 +168,6 @@ func TestF330ScopedTerritoryUserDoesNotBecomeGlobalAdmin(t *testing.T) {
 	userID := createF330User(t, database, "f33-scoped")
 	policy := &db.Politica{
 		Nom:        "territori-scoped",
-		Permisos:   "{}",
 		Descripcio: "",
 	}
 	policyID, err := database.SavePolitica(policy)
@@ -262,7 +203,6 @@ func TestF334MediaModerationKeyEnablesModerationUI(t *testing.T) {
 	userID := createF330User(t, database, "f33-4-media-moderator")
 	policy := &db.Politica{
 		Nom:        "media-moderator",
-		Permisos:   "{}",
 		Descripcio: "",
 	}
 	policyID, err := database.SavePolitica(policy)
@@ -278,11 +218,6 @@ func TestF334MediaModerationKeyEnablesModerationUI(t *testing.T) {
 	}
 	if err := database.AddUserPolitica(userID, policyID); err != nil {
 		t.Fatalf("no s'ha pogut assignar politica media moderator: %v", err)
-	}
-
-	perms := f3321LegacyJSONFlagsForUser(t, app, userID)
-	if perms.has("admin") || perms.has("can_moderate") {
-		t.Fatalf("el test necessita usuari sense permModerate legacy")
 	}
 	req := httptest.NewRequest("GET", "/admin/moderacio/media", nil)
 	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID))
@@ -303,7 +238,6 @@ func TestF334ScopedMunicipiModeratorDoesNotModerateOutsideScope(t *testing.T) {
 	userID := createF330User(t, database, "f33-4-municipi-scoped")
 	policy := &db.Politica{
 		Nom:        "municipi-moderator-scoped",
-		Permisos:   "{}",
 		Descripcio: "",
 	}
 	policyID, err := database.SavePolitica(policy)
@@ -322,11 +256,6 @@ func TestF334ScopedMunicipiModeratorDoesNotModerateOutsideScope(t *testing.T) {
 	if err := database.AddUserPolitica(userID, policyID); err != nil {
 		t.Fatalf("no s'ha pogut assignar politica municipi scoped: %v", err)
 	}
-
-	perms := f3321LegacyJSONFlagsForUser(t, app, userID)
-	if perms.has("admin") || perms.has("can_moderate") {
-		t.Fatalf("el test necessita usuari sense permModerate legacy")
-	}
 	model := app.newModeracioScopeModel(&db.User{ID: userID}, false)
 	if !model.canModerateType("municipi_mapa_version") {
 		t.Fatalf("grant scoped hauria d'habilitar el tipus municipi_mapa_version")
@@ -344,7 +273,6 @@ func TestF336WikiModerationUsesScopedObjectTargets(t *testing.T) {
 	userID := createF330User(t, database, "f33-6-wiki-scoped")
 	policy := &db.Politica{
 		Nom:        "wiki-scoped-moderator",
-		Permisos:   "{}",
 		Descripcio: "",
 	}
 	policyID, err := database.SavePolitica(policy)
@@ -385,10 +313,6 @@ func TestF336WikiModerationUsesScopedObjectTargets(t *testing.T) {
 	}
 
 	user := &db.User{ID: userID}
-	perms := f3321LegacyJSONFlagsForUser(t, app, userID)
-	if perms.has("admin") || perms.has("can_moderate") {
-		t.Fatalf("el test necessita usuari sense permModerate legacy")
-	}
 	if !app.canModerateWikiObject(user, "municipi", 7) {
 		t.Fatalf("territori.municipis.edit scoped hauria d'autoritzar wiki municipi dins ambit")
 	}
@@ -414,7 +338,6 @@ func TestF336WikiModerationUsesDomainGlobalKeys(t *testing.T) {
 	userID := createF330User(t, database, "f33-6-wiki-domain")
 	policy := &db.Politica{
 		Nom:        "wiki-domain-moderator",
-		Permisos:   "{}",
 		Descripcio: "",
 	}
 	policyID, err := database.SavePolitica(policy)
@@ -436,10 +359,6 @@ func TestF336WikiModerationUsesDomainGlobalKeys(t *testing.T) {
 	}
 
 	user := &db.User{ID: userID}
-	perms := f3321LegacyJSONFlagsForUser(t, app, userID)
-	if perms.has("admin") || perms.has("can_moderate") {
-		t.Fatalf("el test necessita usuari sense permModerate legacy")
-	}
 	for _, objectType := range []string{"persona", "cognom", "event_historic"} {
 		if !app.canModerateWikiObject(user, objectType, 1) {
 			t.Fatalf("key modular de domini hauria d'autoritzar wiki %s", objectType)
@@ -494,7 +413,7 @@ func TestF337LegacyPermModerateDoesNotGrantDocumentalOrMediaModeration(t *testin
 func TestF337MediaModerationUsesMediaModerateKeyAndAdminBridge(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-7-media-moderator")
-	policy := &db.Politica{Nom: "f33-7-media", Permisos: "{}", Descripcio: ""}
+	policy := &db.Politica{Nom: "f33-7-media", Descripcio: ""}
 	policyID, err := database.SavePolitica(policy)
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica media: %v", err)
@@ -533,7 +452,7 @@ func TestF337MediaModerationUsesMediaModerateKeyAndAdminBridge(t *testing.T) {
 func TestF337DocumentalScopedModerationUsesRegistreKey(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-7-registre-scoped")
-	policy := &db.Politica{Nom: "f33-7-registre", Permisos: "{}", Descripcio: ""}
+	policy := &db.Politica{Nom: "f33-7-registre", Descripcio: ""}
 	policyID, err := database.SavePolitica(policy)
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica registre: %v", err)
@@ -555,7 +474,7 @@ func TestF337DocumentalScopedModerationUsesRegistreKey(t *testing.T) {
 		t.Fatalf("documentals.registres.edit scoped hauria d'obrir moderacio modular")
 	}
 	if !app.HasPermission(userID, permKeyDocumentalsRegistresEdit, PermissionTarget{LlibreID: intPtr(11)}) {
-		t.Fatalf("grant scoped de registre hauria d'autoritzar el llibre permès")
+		t.Fatalf("grant scoped de registre hauria d'autoritzar el llibre permÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨s")
 	}
 	if app.HasPermission(userID, permKeyDocumentalsRegistresEdit, PermissionTarget{LlibreID: intPtr(12)}) {
 		t.Fatalf("grant scoped de registre no hauria d'autoritzar un altre llibre")
@@ -582,7 +501,7 @@ func TestF338TerritoriPublicDoesNotUseLegacyPermModerate(t *testing.T) {
 func TestF338TerritoriPublicScopedModerationStaysInsideMunicipi(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-8-historia-scoped")
-	policy := &db.Politica{Nom: "f33-8-historia", Permisos: "{}", Descripcio: ""}
+	policy := &db.Politica{Nom: "f33-8-historia", Descripcio: ""}
 	policyID, err := database.SavePolitica(policy)
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica historia: %v", err)
@@ -654,7 +573,7 @@ func TestF339PersonesCognomsEventsDoNotUseLegacyPermModerate(t *testing.T) {
 func TestF339DomainGlobalKeysEnablePublicModeration(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-9-domain-global")
-	policy := &db.Politica{Nom: "f33-9-domain-global", Permisos: "{}", Descripcio: ""}
+	policy := &db.Politica{Nom: "f33-9-domain-global", Descripcio: ""}
 	policyID, err := database.SavePolitica(policy)
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica: %v", err)
@@ -691,7 +610,7 @@ func TestF339EventHistoricScopedModerationUsesImpactTarget(t *testing.T) {
 	blockedMunID := createF339Municipi(t, database, "blocked")
 	allowedEventID := createF339EventWithImpact(t, database, userID, allowedMunID)
 	blockedEventID := createF339EventWithImpact(t, database, userID, blockedMunID)
-	policy := &db.Politica{Nom: "f33-9-event-scoped", Permisos: "{}", Descripcio: ""}
+	policy := &db.Politica{Nom: "f33-9-event-scoped", Descripcio: ""}
 	policyID, err := database.SavePolitica(policy)
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica events scoped: %v", err)
@@ -816,7 +735,7 @@ func TestF3310ResidualModerationKeepsAdminBridge(t *testing.T) {
 func TestF3310GlobalModularGrantsCanModerateAllResidual(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-10-global-modular")
-	policy := &db.Politica{Nom: "f33-10-all-moderation", Permisos: "{}", Descripcio: ""}
+	policy := &db.Politica{Nom: "f33-10-all-moderation", Descripcio: ""}
 	policyID, err := database.SavePolitica(policy)
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica global: %v", err)
@@ -851,7 +770,7 @@ func TestF3310MapModerationRespectsMunicipiScope(t *testing.T) {
 	userID := createF330User(t, database, "f33-10-mapes-scoped")
 	allowedMunID := createF339Municipi(t, database, "mapes-allowed")
 	blockedMunID := createF339Municipi(t, database, "mapes-blocked")
-	policy := &db.Politica{Nom: "f33-10-mapes-scoped", Permisos: "{}", Descripcio: ""}
+	policy := &db.Politica{Nom: "f33-10-mapes-scoped", Descripcio: ""}
 	policyID, err := database.SavePolitica(policy)
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica mapes scoped: %v", err)
@@ -885,7 +804,6 @@ func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
 	userID := createF330User(t, database, "f33-5-platform-user")
 	policy := &db.Politica{
 		Nom:        "platform-users",
-		Permisos:   "{}",
 		Descripcio: "",
 	}
 	policyID, err := database.SavePolitica(policy)
@@ -901,11 +819,6 @@ func TestF335AdminPlatformKeysDriveMenuFlags(t *testing.T) {
 	}
 	if err := database.AddUserPolitica(userID, policyID); err != nil {
 		t.Fatalf("no s'ha pogut assignar politica platform: %v", err)
-	}
-
-	perms := f3321LegacyJSONFlagsForUser(t, app, userID)
-	if perms.has("admin") || perms.has("can_manage_policies") {
-		t.Fatalf("el test necessita usuari sense permisos legacy admin/policies")
 	}
 	req := httptest.NewRequest("GET", "/admin/usuaris", nil)
 	req = app.withEffectiveAdmin(req, app.effectiveAdminForUser(userID))
@@ -954,7 +867,7 @@ func TestF3311GlobalTemplateModerationKeepsAdminAndModularKeys(t *testing.T) {
 	}
 
 	moderatorUserID := createF330User(t, database, "f33-11-template-modular")
-	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-11-media-moderator", Permisos: "{}", Descripcio: ""})
+	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-11-media-moderator", Descripcio: ""})
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica modular: %v", err)
 	}
@@ -982,7 +895,6 @@ func TestF3311DashboardRoleSetDoesNotUseLegacyCanModerate(t *testing.T) {
 	userID := createF330User(t, database, "f33-11-dashboard-legacy")
 	policyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "",
-		Permisos:   `{"can_moderate":true}`,
 		Descripcio: "legacy moderate only",
 	})
 	if err != nil {
@@ -990,10 +902,6 @@ func TestF3311DashboardRoleSetDoesNotUseLegacyCanModerate(t *testing.T) {
 	}
 	if err := database.AddUserPolitica(userID, policyID); err != nil {
 		t.Fatalf("no s'ha pogut assignar politica legacy: %v", err)
-	}
-
-	if !f3321LegacyJSONFlagsForUser(t, app, userID).has("can_moderate") {
-		t.Fatalf("el test necessita CanModerate legacy a true")
 	}
 	if roles := app.dashboardUserRoleSet(userID); roles["moderador"] {
 		t.Fatalf("dashboard no hauria d'afegir rol moderador per CanModerate legacy pur: %#v", roles)
@@ -1017,7 +925,7 @@ func TestF3311PermTerritoryLegacyDoesNotGrantTerritoryOrArchivesUI(t *testing.T)
 func TestF3311ModularTerritoryScopedKeepsAccessWithinScope(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-11-territory-scoped")
-	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-11-territory", Permisos: "{}", Descripcio: ""})
+	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-11-territory", Descripcio: ""})
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica territorial: %v", err)
 	}
@@ -1086,7 +994,7 @@ func TestF3311RTemplateTerritoryFlagsKeepAdminBridge(t *testing.T) {
 func TestF3311RTemplateTerritoryFlagsUseModularKeys(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-11r-template-territory")
-	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-11r-territory", Permisos: "{}", Descripcio: ""})
+	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-11r-territory", Descripcio: ""})
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica territorial: %v", err)
 	}
@@ -1156,7 +1064,7 @@ func TestF3312TemplateDocumentalFlagsKeepAdminBridge(t *testing.T) {
 func TestF3312DocumentalScopedKeysStayInScope(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 	userID := createF330User(t, database, "f33-12-documental-scoped")
-	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-12-documental", Permisos: "{}", Descripcio: ""})
+	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-12-documental", Descripcio: ""})
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica documental: %v", err)
 	}
@@ -1221,7 +1129,7 @@ func TestF3313TemplatePoliciesFlagUsesAdminBridgeAndModularKey(t *testing.T) {
 	}
 
 	policyUserID := createF330User(t, database, "f33-13-template-policy")
-	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-13-policy-manage", Permisos: "{}", Descripcio: ""})
+	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-13-policy-manage", Descripcio: ""})
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica modular policies: %v", err)
 	}
@@ -1250,7 +1158,6 @@ func TestF3313CanManagePoliciesModularIgnoresLegacyPure(t *testing.T) {
 	legacyUserID := createF330User(t, database, "f33-13-legacy-policies")
 	legacyPolicyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "f33-13-legacy-policies",
-		Permisos:   `{"can_manage_policies":true}`,
 		Descripcio: "",
 	})
 	if err != nil {
@@ -1264,7 +1171,7 @@ func TestF3313CanManagePoliciesModularIgnoresLegacyPure(t *testing.T) {
 	}
 
 	modularUserID := createF330User(t, database, "f33-13-modular-policies")
-	modularPolicyID, err := database.SavePolitica(&db.Politica{Nom: "f33-13-modular-policies", Permisos: "{}", Descripcio: ""})
+	modularPolicyID, err := database.SavePolitica(&db.Politica{Nom: "f33-13-modular-policies", Descripcio: ""})
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica modular policies: %v", err)
 	}
@@ -1298,7 +1205,6 @@ func TestF3313PoliciesSuggestGuardsUseModularKey(t *testing.T) {
 	legacyUserID := createF330User(t, database, "f33-13-suggest-legacy")
 	legacyPolicyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "f33-13-suggest-legacy",
-		Permisos:   `{"can_manage_policies":true}`,
 		Descripcio: "",
 	})
 	if err != nil {
@@ -1316,7 +1222,7 @@ func TestF3313PoliciesSuggestGuardsUseModularKey(t *testing.T) {
 	}
 
 	modularUserID := createF330User(t, database, "f33-13-suggest-modular")
-	modularPolicyID, err := database.SavePolitica(&db.Politica{Nom: "f33-13-suggest-modular", Permisos: "{}", Descripcio: ""})
+	modularPolicyID, err := database.SavePolitica(&db.Politica{Nom: "f33-13-suggest-modular", Descripcio: ""})
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica modular suggest: %v", err)
 	}
@@ -1414,7 +1320,6 @@ func TestF3314UsersAndEclesiaHelpersIgnoreLegacyPure(t *testing.T) {
 	legacyUserID := createF330User(t, database, "f33-14-legacy-users-ecles")
 	legacyPolicyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "f33-14-legacy-users-ecles",
-		Permisos:   `{"can_manage_users":true,"can_manage_eclesiastic":true}`,
 		Descripcio: "",
 	})
 	if err != nil {
@@ -1435,7 +1340,7 @@ func TestF3314UsersAndEclesiaHelpersIgnoreLegacyPure(t *testing.T) {
 	}
 
 	modularUserID := createF330User(t, database, "f33-14-modular-users-ecles")
-	modularPolicyID, err := database.SavePolitica(&db.Politica{Nom: "f33-14-modular-users-ecles", Permisos: "{}", Descripcio: ""})
+	modularPolicyID, err := database.SavePolitica(&db.Politica{Nom: "f33-14-modular-users-ecles", Descripcio: ""})
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica modular F33-14: %v", err)
 	}
@@ -1478,7 +1383,6 @@ func TestF3315LegacyCanCreatePersonDoesNotPassCreateGuard(t *testing.T) {
 	legacyUserID := createF330User(t, database, "f33-15-legacy-create")
 	legacyPolicyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "f33-15-legacy-create",
-		Permisos:   `{"can_create_person":true}`,
 		Descripcio: "",
 	})
 	if err != nil {
@@ -1504,15 +1408,17 @@ func TestF3315LegacyCanCreatePersonDoesNotPassCreateGuard(t *testing.T) {
 		t.Fatalf("persones.create esperava 201 a CreatePersona, rebut %d body=%s", rr.Code, rr.Body.String())
 	}
 
-	trustedUserID := createF330User(t, database, "f33-15-confiança-create")
-	trustedPolicyID := findF330PolicyID(t, database, "confiança")
+	trustedUserID := createF330User(t, database, "f33-15-confianca-create")
+	trustedPolicyID, err := database.SavePolitica(&db.Politica{Nom: "confianca", Descripcio: ""})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica confianca: %v", err)
+	}
 	if err := database.AddUserPolitica(trustedUserID, trustedPolicyID); err != nil {
-		t.Fatalf("no s'ha pogut assignar politica confiança: %v", err)
+		t.Fatalf("no s'ha pogut assignar politica confianca: %v", err)
 	}
 	if !app.canCreatePersonModular(&db.User{ID: trustedUserID}) {
-		t.Fatalf("la politica confiança ha de conservar la capacitat de crear persones via default modular")
+		t.Fatalf("la politica confianca ha de conservar la capacitat de crear persones via default modular")
 	}
-
 	adminUserID := createF330User(t, database, "f33-15-admin-create")
 	adminID := findF330PolicyID(t, database, "admin")
 	if err := database.AddUserPolitica(adminUserID, adminID); err != nil {
@@ -1549,7 +1455,6 @@ func TestF3315EditAnyPersonUsesModularKey(t *testing.T) {
 	assignF3315Policy(t, database, legacyEditAnyID, "f33-15-legacy-edit-any-create", permKeyPersonesCreate)
 	legacyPolicyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "f33-15-legacy-edit-any",
-		Permisos:   `{"can_edit_any_person":true}`,
 		Descripcio: "",
 	})
 	if err != nil {
@@ -1619,7 +1524,6 @@ func TestF3315ConvertRegistreUsesDocumentalOrCreatePersonModular(t *testing.T) {
 	legacyUserID := createF330User(t, database, "f33-15-convert-legacy")
 	legacyPolicyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "f33-15-convert-legacy",
-		Permisos:   `{"can_create_person":true}`,
 		Descripcio: "",
 	})
 	if err != nil {
@@ -1654,9 +1558,9 @@ func TestF3315ConvertRegistreUsesDocumentalOrCreatePersonModular(t *testing.T) {
 
 func TestF3316AdminUIFilesDoNotUseLocalLegacyAdminChecks(t *testing.T) {
 	patterns := []string{
-		"perms.Admin",
-		"hasPerm(perms, permAdmin",
-		"requirePermission(w, r, permAdmin",
+		"perms." + "Admin",
+		"has" + "Perm(perms, permAdmin",
+		"require" + "Permission(w, r, permAdmin",
 	}
 	for _, path := range []string{
 		"templates.go",
@@ -1718,7 +1622,6 @@ func TestF3316DashboardAdminRoleUsesEffectiveAdminBridge(t *testing.T) {
 	legacyAdminUserID := createF330User(t, database, "f33-16-dashboard-admin-flag")
 	legacyAdminPolicyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "f33-16-dashboard-admin-flag",
-		Permisos:   `{"admin":true}`,
 		Descripcio: "",
 	})
 	if err != nil {
@@ -1736,7 +1639,6 @@ func TestF3316DashboardAdminRoleUsesEffectiveAdminBridge(t *testing.T) {
 	if _, err := database.SavePolitica(&db.Politica{
 		ID:         adminPolicyID,
 		Nom:        "admin",
-		Permisos:   "{}",
 		Descripcio: "",
 	}); err != nil {
 		t.Fatalf("no s'ha pogut preparar politica admin F33-16: %v", err)
@@ -1759,7 +1661,6 @@ func TestF3319LegacyJSONFlagsDoNotGrantSnapshotPermissions(t *testing.T) {
 	userID := createF330User(t, database, "f33-19-legacy-full")
 	policyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "f33-19-legacy-full",
-		Permisos:   `{"admin":true,"can_manage_territory":true,"can_manage_archives":true,"can_manage_policies":true,"can_manage_users":true,"can_manage_eclesiastic":true}`,
 		Descripcio: "",
 	})
 	if err != nil {
@@ -1802,7 +1703,6 @@ func TestF3319RealModularGrantAndAdminPolicyStillWork(t *testing.T) {
 	if _, err := database.SavePolitica(&db.Politica{
 		ID:         adminPolicyID,
 		Nom:        "admin",
-		Permisos:   `{"admin":false}`,
 		Descripcio: "",
 	}); err != nil {
 		t.Fatalf("no s'ha pogut preparar politica admin F33-19: %v", err)
@@ -1824,7 +1724,6 @@ func TestF3319RealModularGrantAndAdminPolicyStillWork(t *testing.T) {
 	grantUserID := createF330User(t, database, "f33-19-real-grant")
 	grantPolicyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "f33-19-real-grant",
-		Permisos:   `{"can_manage_policies":false}`,
 		Descripcio: "",
 	})
 	if err != nil {
@@ -1852,17 +1751,12 @@ func TestF3319RealModularGrantAndAdminPolicyStillWork(t *testing.T) {
 	}
 }
 
-func TestF3319KnownPolicyDefaultsAndImportWorkerLimitRemainExplicit(t *testing.T) {
+func TestF3319KnownPolicyDefaultsRemainExplicit(t *testing.T) {
 	app, database := newF330PermissionsTestApp(t)
 
 	defaultUserID := createF330User(t, database, "f33-19-default-policy")
-	defaultPolicyID := findF330PolicyID(t, database, "confiança")
-	if _, err := database.SavePolitica(&db.Politica{
-		ID:         defaultPolicyID,
-		Nom:        "confiança",
-		Permisos:   `{"can_manage_users":true}`,
-		Descripcio: "",
-	}); err != nil {
+	defaultPolicyID, err := database.SavePolitica(&db.Politica{Nom: "confianca", Descripcio: ""})
+	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica default F33-19: %v", err)
 	}
 	if err := database.AddUserPolitica(defaultUserID, defaultPolicyID); err != nil {
@@ -1873,36 +1767,12 @@ func TestF3319KnownPolicyDefaultsAndImportWorkerLimitRemainExplicit(t *testing.T
 		t.Fatalf("no s'ha pogut construir snapshot default F33-19: %v", err)
 	}
 	if !f3319SnapshotHasGrant(defaultSnap, permKeyPersonesCreate) {
-		t.Fatalf("la politica confiança hauria de conservar els defaults modulars explícits")
+		t.Fatalf("la politica confianca hauria de conservar els defaults modulars explicits")
 	}
 	if f3319SnapshotHasGrant(defaultSnap, permKeyAdminUsersManage) {
-		t.Fatalf("el JSON legacy no hauria d'afegir admin.users.manage als defaults explícits")
-	}
-
-	limitUserID := createF330User(t, database, "f33-19-import-limit")
-	limitPolicyID, err := database.SavePolitica(&db.Politica{
-		Nom:        "f33-19-import-limit",
-		Permisos:   `{"import_worker_limit":7,"can_manage_users":true}`,
-		Descripcio: "",
-	})
-	if err != nil {
-		t.Fatalf("no s'ha pogut crear politica import limit F33-19: %v", err)
-	}
-	if err := database.AddUserPolitica(limitUserID, limitPolicyID); err != nil {
-		t.Fatalf("no s'ha pogut assignar politica import limit F33-19: %v", err)
-	}
-	limitSnap, err := app.buildPermissionSnapshot(limitUserID)
-	if err != nil {
-		t.Fatalf("no s'ha pogut construir snapshot import limit F33-19: %v", err)
-	}
-	if limitSnap.importWorkerLimit != 7 {
-		t.Fatalf("import_worker_limit hauria de conservar-se com opcio operativa, rebut %d", limitSnap.importWorkerLimit)
-	}
-	if f3319SnapshotHasGrant(limitSnap, permKeyAdminUsersManage) {
-		t.Fatalf("import_worker_limit no hauria d'arrossegar permisos legacy al snapshot")
+		t.Fatalf("una politica coneguda no hauria d'afegir admin.users.manage als defaults explicits")
 	}
 }
-
 func f3319SnapshotHasGrant(snap permissionSnapshot, key string) bool {
 	return len(snap.grants[key]) > 0
 }
@@ -1917,12 +1787,12 @@ func TestF3320BuildPermissionSnapshotDoesNotUseLegacyMigrationMapper(t *testing.
 	for _, pattern := range []string{
 		"legacyPermKeys",
 		"Policy" + "Permissions",
-		"perms.Admin",
-		"perms.CanManageTerritory",
-		"perms.CanManageEclesia",
-		"perms.CanManageArchives",
-		"perms.CanManagePolicies",
-		"perms.CanManageUsers",
+		"perms." + "Admin",
+		"perms." + "CanManageTerritory",
+		"perms." + "CanManageEclesia",
+		"perms." + "CanManageArchives",
+		"perms." + "CanManagePolicies",
+		"perms." + "CanManageUsers",
 	} {
 		if strings.Contains(fn, pattern) {
 			t.Fatalf("buildPermissionSnapshot no hauria de contenir el patro legacy %q", pattern)
@@ -1938,8 +1808,8 @@ func TestF3320CoreHandlersDoNotUseLegacyPermissionHelpers(t *testing.T) {
 		"core/permissions_modular_f33_test.go": true,
 	}
 	patterns := []string{
-		"hasPerm(",
-		"requirePermission(",
+		"has" + "Perm(",
+		"require" + "Permission(",
 		"permAdmin",
 		"permPolicies",
 		"permUsers",
@@ -1948,15 +1818,15 @@ func TestF3320CoreHandlersDoNotUseLegacyPermissionHelpers(t *testing.T) {
 		"permTerritory",
 		"permModerate",
 		"permCreatePerson",
-		"perms.Admin",
-		"perms.CanManagePolicies",
-		"perms.CanManageUsers",
-		"perms.CanManageEclesia",
-		"perms.CanManageArchives",
-		"perms.CanManageTerritory",
-		"perms.CanModerate",
-		"perms.CanCreatePerson",
-		"perms.CanEditAnyPerson",
+		"perms." + "Admin",
+		"perms." + "CanManagePolicies",
+		"perms." + "CanManageUsers",
+		"perms." + "CanManageEclesia",
+		"perms." + "CanManageArchives",
+		"perms." + "CanManageTerritory",
+		"perms." + "CanModerate",
+		"perms." + "CanCreatePerson",
+		"perms." + "CanEditAnyPerson",
 	}
 	var violations []string
 	if err := filepath.Walk(filepath.Join(root, "core"), func(path string, info os.FileInfo, err error) error {
@@ -2009,20 +1879,17 @@ func TestF3320LegacyPermissionHelpersAreRemovedOrMigrationOnly(t *testing.T) {
 		"func permTerritory",
 		"func permModerate",
 		"func permCreatePerson",
-		"if perms.Admin",
+		"if perms." + "Admin",
 	} {
 		if strings.Contains(string(permissionsBody), pattern) {
 			t.Fatalf("permissions.go conserva helper/cami legacy %q", pattern)
 		}
 	}
 
-	migrationBody, err := readF3316CoreSource("permissions_migration.go")
-	if err != nil {
-		t.Fatalf("no s'ha pogut llegir permissions_migration.go: %v", err)
-	}
-	migrationSrc := string(migrationBody)
-	if strings.Contains(migrationSrc, "legacyPermKeys") || strings.Contains(migrationSrc, "Policy"+"Permissions") {
-		t.Fatalf("permissions_migration.go no hauria de conservar mapper/model legacy")
+	root := f3320RepoRoot(t)
+	legacyMigration := "permissions_" + "migration.go"
+	if _, err := os.Stat(filepath.Join(root, "core", legacyMigration)); !os.IsNotExist(err) {
+		t.Fatalf("%s hauria d'estar eliminat, err=%v", legacyMigration, err)
 	}
 }
 
@@ -2044,7 +1911,6 @@ func TestF3321LegacyPermissionRuntimePlumbingIsRemoved(t *testing.T) {
 
 	root := f3320RepoRoot(t)
 	allowed := map[string]bool{
-		"core/policies_document.go":            true,
 		"core/permissions_modular_f33_test.go": true,
 	}
 	var violations []string
@@ -2113,7 +1979,6 @@ func TestF3322PolicyGrantChangesInvalidateModularSnapshotCache(t *testing.T) {
 	userID := createF330User(t, database, "f33-22-cache")
 	policyID, err := database.SavePolitica(&db.Politica{
 		Nom:        "f33-22-cache-policy",
-		Permisos:   "{}",
 		Descripcio: "",
 	})
 	if err != nil {
@@ -2139,39 +2004,11 @@ func TestF3322PolicyGrantChangesInvalidateModularSnapshotCache(t *testing.T) {
 	}
 }
 
-func TestF3322ImportWorkerLimitIsOperationalOnly(t *testing.T) {
-	app, database := newF330PermissionsTestApp(t)
-	userID := createF330User(t, database, "f33-22-worker-limit")
-	policyID, err := database.SavePolitica(&db.Politica{
-		Nom:        "f33-22-worker-limit-policy",
-		Permisos:   `{"import_worker_limit":5,"can_manage_policies":true}`,
-		Descripcio: "",
-	})
-	if err != nil {
-		t.Fatalf("no s'ha pogut crear politica F33-22 worker limit: %v", err)
-	}
-	if err := database.AddUserPolitica(userID, policyID); err != nil {
-		t.Fatalf("no s'ha pogut assignar politica F33-22 worker limit: %v", err)
-	}
-	snap, err := app.buildPermissionSnapshot(userID)
-	if err != nil {
-		t.Fatalf("no s'ha pogut construir snapshot F33-22 worker limit: %v", err)
-	}
-	if snap.importWorkerLimit != 5 {
-		t.Fatalf("import_worker_limit hauria de ser configuracio operativa, rebut %d", snap.importWorkerLimit)
-	}
-	if f3319SnapshotHasGrant(snap, permKeyAdminPoliciesManage) {
-		t.Fatalf("ImportWorkerLimit i JSON legacy no haurien de concedir permisos modulars")
-	}
-}
-
 func TestF3323LegacyPermissionModelAndLegacyMapperAreRemoved(t *testing.T) {
 	root := f3320RepoRoot(t)
 	for _, rel := range []string{
 		"db/motor.go",
 		"db/sqlcommon.go",
-		"core/policies_document.go",
-		"core/permissions_migration.go",
 	} {
 		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 		if err != nil {
@@ -2190,30 +2027,16 @@ func TestF3323LegacyPermissionModelAndLegacyMapperAreRemoved(t *testing.T) {
 			}
 		}
 	}
-}
-
-func TestF3323PolicyRuntimeConfigDoesNotGrantPermissions(t *testing.T) {
-	doc, hasStatements, err := parsePolicyDocument(`{"import_worker_limit":4,"can_manage_users":true}`)
-	if err != nil {
-		t.Fatalf("parsePolicyDocument ha fallat: %v", err)
-	}
-	if hasStatements {
-		t.Fatalf("legacy JSON sense Statement no hauria de crear statements modulars")
-	}
-	if doc.ImportWorkerLimit != 4 {
-		t.Fatalf("import_worker_limit hauria de quedar com config operativa, rebut %d", doc.ImportWorkerLimit)
-	}
-	grants, err := policyGrantsFromDocument(doc)
-	if err != nil {
-		t.Fatalf("policyGrantsFromDocument ha fallat: %v", err)
-	}
-	if len(grants) != 0 {
-		t.Fatalf("config operativa i flags legacy no haurien de crear grants: %#v", grants)
+	for _, rel := range []string{"core/policies_" + "document.go", "core/permissions_" + "migration.go"} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); !os.IsNotExist(err) {
+			t.Fatalf("%s hauria d'estar eliminat, err=%v", rel, err)
+		}
 	}
 }
 
-func TestF3323PolicyPermisosSchemaIsLegacyDocumentOnly(t *testing.T) {
+func TestF3323RPolicyPermisosSchemaSQLAndUIAreRemoved(t *testing.T) {
 	root := f3320RepoRoot(t)
+	legacyColumn := "per" + "misos"
 	for _, rel := range []string{"db/SQLite.sql", "db/PostgreSQL.sql", "db/MySQL.sql"} {
 		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 		if err != nil {
@@ -2223,8 +2046,44 @@ func TestF3323PolicyPermisosSchemaIsLegacyDocumentOnly(t *testing.T) {
 		if !strings.Contains(src, "politica_grants") {
 			t.Fatalf("%s hauria de conservar schema modular politica_grants", rel)
 		}
-		if !strings.Contains(src, "permisos") {
-			t.Fatalf("%s conserva temporalment permisos com document/config fins a migracio schema explicita", rel)
+		if strings.Contains(src, legacyColumn+" TEXT") || strings.Contains(src, "politiques."+legacyColumn) {
+			t.Fatalf("%s conserva columna legacy permisos", rel)
+		}
+	}
+	scans := map[string][]string{
+		"db/sqlcommon.go": {
+			"SELECT id, nom, descripcio, " + legacyColumn,
+			"INSERT INTO politiques (nom, descripcio, " + legacyColumn,
+			"UPDATE politiques SET nom=?, descripcio=?, " + legacyColumn,
+			"p." + legacyColumn,
+			legacyColumn + " =",
+		},
+		"core/admin_politiques.go": {
+			"FormValue(\"" + legacyColumn + "\")",
+			"JSON de " + legacyColumn,
+			"refreshPolicyPermsJSON",
+			"parse" + "Policy" + "Document",
+		},
+		"templates/admin-politiques-form.html": {
+			"name=\"" + legacyColumn + "\"",
+			"id=\"" + legacyColumn + "\"",
+			"tab-json",
+		},
+		"templates/admin-politiques-list.html": {
+			"." + "Perm" + "isos",
+			"data-perms",
+		},
+	}
+	for rel, patterns := range scans {
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("no s'ha pogut llegir %s: %v", rel, err)
+		}
+		src := string(body)
+		for _, pattern := range patterns {
+			if strings.Contains(src, pattern) {
+				t.Fatalf("%s conserva residu legacy de politica JSON: %q", rel, pattern)
+			}
 		}
 	}
 }
@@ -2272,7 +2131,6 @@ func TestF3317ImportTemplateEditUsesOwnerOrEffectiveAdmin(t *testing.T) {
 	if _, err := database.SavePolitica(&db.Politica{
 		ID:         adminPolicyID,
 		Nom:        "admin",
-		Permisos:   "{}",
 		Descripcio: "",
 	}); err != nil {
 		t.Fatalf("no s'ha pogut preparar admin efectiu F33-17: %v", err)
@@ -2299,10 +2157,6 @@ func TestF3317ImportTemplateEditUsesOwnerOrEffectiveAdmin(t *testing.T) {
 	}
 
 	admin := &db.User{ID: adminID}
-	adminPerms := f3321LegacyJSONFlagsForUser(t, app, adminID)
-	if adminPerms.has("admin") {
-		t.Fatalf("el test necessita admin efectiu per bridge, no per camp local Admin=true")
-	}
 	if !app.canEditImportTemplate(admin, template) {
 		t.Fatalf("admin efectiu hauria de poder editar plantilla aliena")
 	}
@@ -2328,7 +2182,6 @@ func TestF3317ImportTemplatesSimilarUsesOwnerOrEffectiveAdmin(t *testing.T) {
 	if _, err := database.SavePolitica(&db.Politica{
 		ID:         adminPolicyID,
 		Nom:        "admin",
-		Permisos:   "{}",
 		Descripcio: "",
 	}); err != nil {
 		t.Fatalf("no s'ha pogut preparar admin similar F33-17: %v", err)
@@ -2365,9 +2218,9 @@ func TestF3317ImportTemplatesSimilarUsesOwnerOrEffectiveAdmin(t *testing.T) {
 
 func TestF3317ImportTemplatesDoNotUseLocalLegacyAdminChecks(t *testing.T) {
 	patterns := []string{
-		"perms.Admin",
-		"hasPerm(perms, permAdmin",
-		"requirePermission(w, r, permAdmin",
+		"perms." + "Admin",
+		"has" + "Perm(perms, permAdmin",
+		"require" + "Permission(w, r, permAdmin",
 	}
 	for _, path := range []string{
 		"import_templates.go",
@@ -2440,17 +2293,12 @@ func TestF3318CognomsAdminGuardsUseEffectiveAdminBridge(t *testing.T) {
 	if _, err := database.SavePolitica(&db.Politica{
 		ID:         adminPolicyID,
 		Nom:        "admin",
-		Permisos:   "{}",
 		Descripcio: "",
 	}); err != nil {
 		t.Fatalf("no s'ha pogut preparar admin efectiu F33-18: %v", err)
 	}
 	if err := database.AddUserPolitica(adminUserID, adminPolicyID); err != nil {
 		t.Fatalf("no s'ha pogut assignar admin efectiu F33-18: %v", err)
-	}
-	perms := f3321LegacyJSONFlagsForUser(t, app, adminUserID)
-	if perms.has("admin") {
-		t.Fatalf("el test necessita admin efectiu pel bridge, no Admin=true local")
 	}
 	session := createF3313SessionCookie(t, database, adminUserID, "sess_f33_18_admin")
 
@@ -2489,9 +2337,9 @@ func TestF3318CognomsAdminGuardsBlockNonAdmin(t *testing.T) {
 
 func TestF3318CognomsAdminFilesDoNotUseLegacyAdminGuard(t *testing.T) {
 	patterns := []string{
-		"perms.Admin",
-		"hasPerm(perms, permAdmin",
-		"requirePermission(w, r, permAdmin",
+		"perms." + "Admin",
+		"has" + "Perm(perms, permAdmin",
+		"require" + "Permission(w, r, permAdmin",
 	}
 	for _, path := range []string{
 		"admin_cognoms_import.go",
@@ -2528,7 +2376,7 @@ func runF3318AdminCognomsMerge(app *App, session *http.Cookie) *httptest.Respons
 
 func assignF3315Policy(t *testing.T, database db.DB, userID int, name string, permKeys ...string) int {
 	t.Helper()
-	policyID, err := database.SavePolitica(&db.Politica{Nom: name, Permisos: "{}", Descripcio: ""})
+	policyID, err := database.SavePolitica(&db.Politica{Nom: name, Descripcio: ""})
 	if err != nil {
 		t.Fatalf("no s'ha pogut crear politica %s: %v", name, err)
 	}

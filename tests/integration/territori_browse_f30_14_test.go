@@ -74,7 +74,7 @@ func createBrowseTestMunicipiWithOptions(t *testing.T, database db.DB, createdBy
 
 func createScopedPolicyWithGrant(t *testing.T, database db.DB, policyName, permKey string, scopeType core.ScopeType, scopeID int, includeChildren bool) int {
 	t.Helper()
-	pol := &db.Politica{Nom: policyName, Permisos: "{}"}
+	pol := &db.Politica{Nom: policyName}
 	policyID, err := database.SavePolitica(pol)
 	if err != nil {
 		t.Fatalf("SavePolitica %s ha fallat: %v", policyName, err)

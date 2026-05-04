@@ -1,79 +1,6 @@
 (() => {
-  const permKeys = [
-    "admin",
-    "can_manage_users",
-    "can_manage_territory",
-    "can_manage_eclesiastic",
-    "can_manage_archives",
-    "can_create_person",
-    "can_edit_any_person",
-    "can_moderate",
-    "can_manage_policies",
-  ];
-  const textarea = document.getElementById("permisos");
-  const workerInput = document.getElementById("perm-import-worker-limit");
-  const workerKey = "import_worker_limit";
   const activeTabInput = document.getElementById("policy-active-tab");
 
-  if (!textarea) {
-    return;
-  }
-
-  const parsePerms = () => {
-    try {
-      const parsed = JSON.parse(textarea.value || "{}");
-      return parsed && typeof parsed === "object" ? parsed : {};
-    } catch (_) {
-      return {};
-    }
-  };
-
-  const syncChecks = (perms) => {
-    permKeys.forEach((k) => {
-      const cb = document.getElementById(`perm-${k}`);
-      const card = document.querySelector(`.perm-card[data-perm="${k}"]`);
-      if (cb) {
-        const val = !!perms[k];
-        cb.checked = val;
-        if (card) {
-          card.classList.toggle("actiu", val);
-        }
-      }
-    });
-    if (workerInput) {
-      const val = Number(perms[workerKey] || 0);
-      workerInput.value = val > 0 ? String(val) : "";
-    }
-  };
-
-  const syncJSON = () => {
-    const obj = parsePerms();
-    permKeys.forEach((k) => {
-      const cb = document.getElementById(`perm-${k}`);
-      const card = document.querySelector(`.perm-card[data-perm="${k}"]`);
-      if (cb && cb.checked) obj[k] = true;
-      if (cb && !cb.checked && obj && Object.prototype.hasOwnProperty.call(obj, k)) delete obj[k];
-      if (card) card.classList.toggle("actiu", cb && cb.checked);
-    });
-    if (workerInput) {
-      const val = parseInt(workerInput.value, 10);
-      if (Number.isFinite(val) && val > 0) {
-        obj[workerKey] = val;
-      } else if (obj && Object.prototype.hasOwnProperty.call(obj, workerKey)) {
-        delete obj[workerKey];
-      }
-    }
-    textarea.value = JSON.stringify(obj, null, 2);
-  };
-
-  syncChecks(parsePerms());
-  permKeys.forEach((k) => {
-    const cb = document.getElementById(`perm-${k}`);
-    if (cb) cb.addEventListener("change", syncJSON);
-  });
-  if (workerInput) {
-    workerInput.addEventListener("input", syncJSON);
-  }
   document.querySelectorAll('.perm-grant-card input[type="checkbox"]').forEach((cb) => {
     const card = cb.closest(".perm-grant-card");
     if (!card) return;
@@ -90,24 +17,11 @@
       const target = document.getElementById(btn.dataset.target);
       if (target) target.classList.add("actiu");
       if (activeTabInput) {
-        if (btn.dataset.target === "tab-json") activeTabInput.value = "json";
-        else if (btn.dataset.target === "tab-grants") activeTabInput.value = "grants";
+        if (btn.dataset.target === "tab-grants") activeTabInput.value = "grants";
         else activeTabInput.value = "gui";
-      }
-      if (btn.dataset.target === "tab-json") {
-        syncJSON();
-      } else if (btn.dataset.target === "tab-gui") {
-        syncChecks(parsePerms());
       }
     });
   });
-
-  const policyForm = document.getElementById("policy-form");
-  if (policyForm)
-    policyForm.addEventListener("submit", () => {
-      if (activeTabInput && activeTabInput.value !== "gui") return;
-      syncJSON();
-    });
 
   const grantForm = document.getElementById("grant-form");
   if (grantForm) {

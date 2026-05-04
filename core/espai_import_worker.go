@@ -72,7 +72,7 @@ func (a *App) dispatchEspaiImports(cfg espaiImportWorkerConfig) {
 		return
 	}
 	for _, imp := range imports {
-		limit := a.importWorkerLimitForUser(imp.OwnerUserID)
+		limit := a.espaiImportConcurrencyLimitForUser(imp.OwnerUserID)
 		if !espaiImportWorker.tryStart(imp.OwnerUserID, imp.ID, limit) {
 			continue
 		}
