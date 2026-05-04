@@ -441,6 +441,9 @@ func (d *PostgreSQL) SavePoliticaGrant(g *PoliticaGrant) (int, error) {
 func (d *PostgreSQL) DeletePoliticaGrant(id int) error {
 	return d.help.deletePoliticaGrant(id)
 }
+func (d *PostgreSQL) ReplacePoliticaGrants(politicaID int, grants []PoliticaGrant) error {
+	return d.help.replacePoliticaGrants(politicaID, grants)
+}
 func (d *PostgreSQL) ListUserPolitiques(userID int) ([]Politica, error) {
 	return d.help.listUserPolitiques(userID)
 }

@@ -2067,7 +2067,6 @@ func TestF3323RPolicyPermisosSchemaSQLAndUIAreRemoved(t *testing.T) {
 		"templates/admin-politiques-form.html": {
 			"name=\"" + legacyColumn + "\"",
 			"id=\"" + legacyColumn + "\"",
-			"tab-json",
 		},
 		"templates/admin-politiques-list.html": {
 			"." + "Perm" + "isos",
@@ -2148,6 +2147,90 @@ func TestF3324GroupPolicyAndMembershipChangesInvalidateSnapshot(t *testing.T) {
 	}
 	if app.HasPermission(userID, permKeyAdminAuditView, target) {
 		t.Fatalf("retirar l'usuari del grup hauria d'invalidar el snapshot")
+	}
+}
+
+func TestF3325PolicyModularJSONExportIsDeterministic(t *testing.T) {
+	scopeID := 12
+	pol := &db.Politica{ID: 7, Nom: "f33-25-json", Descripcio: "export"}
+	out := exportPolicyModularJSON(pol, []db.PoliticaGrant{
+		{PoliticaID: 7, PermKey: permKeyTerritoriMunicipisEdit, ScopeType: string(ScopeMunicipi), ScopeID: sql.NullInt64{Int64: int64(scopeID), Valid: true}, IncludeChildren: true},
+		{PoliticaID: 7, PermKey: permKeyAdminAuditView, ScopeType: string(ScopeGlobal), ScopeID: sql.NullInt64{}, IncludeChildren: false},
+	})
+	if !strings.Contains(out, `"version": 1`) || !strings.Contains(out, `"name": "f33-25-json"`) {
+		t.Fatalf("export JSON no conte capcalera esperada: %s", out)
+	}
+	first := strings.Index(out, permKeyAdminAuditView)
+	second := strings.Index(out, permKeyTerritoriMunicipisEdit)
+	if first < 0 || second < 0 || first > second {
+		t.Fatalf("export JSON no ordena grants deterministicament: %s", out)
+	}
+	if strings.Contains(out, "Policy"+"Permissions") || strings.Contains(out, "per"+"misos") {
+		t.Fatalf("export JSON no ha d'incloure camps legacy: %s", out)
+	}
+}
+
+func TestF3325PolicyModularJSONValidationRejectsUnsafeInput(t *testing.T) {
+	valid := `{"version":1,"policy":{"name":"x","description":""},"grants":[{"perm_key":"admin.audit.view","scope_type":"global","scope_id":null,"include_children":false}]}`
+	if _, err := parsePolicyModularJSON(valid, 1); err != nil {
+		t.Fatalf("JSON valid rebutjat: %v", err)
+	}
+	cases := []string{
+		`{"version":2,"policy":{"name":"x","description":""},"grants":[]}`,
+		`{"version":1,"policy":{"name":"x","description":""},"grants":[{"perm_key":"desconegut","scope_type":"global","scope_id":null,"include_children":false}]}`,
+		`{"version":1,"policy":{"name":"x","description":""},"grants":[{"perm_key":"admin.audit.view","scope_type":"misteri","scope_id":1,"include_children":false}]}`,
+		`{"version":1,"policy":{"name":"x","description":""},"grants":[{"perm_key":"admin.audit.view","scope_type":"municipi","scope_id":null,"include_children":false}]}`,
+		`{"version":1,"policy":{"name":"x","description":""},"grants":[{"perm_key":"admin.audit.view","scope_type":"global","scope_id":null,"include_children":false},{"perm_key":"admin.audit.view","scope_type":"global","scope_id":null,"include_children":false}]}`,
+		`{"version":1,"policy":{"name":"x","description":""},"permisos":{},"grants":[]}`,
+		`{"version":1,"policy":{"name":"x","description":"","Admin":true},"grants":[]}`,
+	}
+	for _, input := range cases {
+		if _, err := parsePolicyModularJSON(input, 1); err == nil {
+			t.Fatalf("JSON invalid acceptat: %s", input)
+		}
+	}
+}
+
+func TestF3325ApplyPolicyJSONReplacesGrantsAndInvalidatesSnapshot(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-25-json-user")
+	policyID, err := database.SavePolitica(&db.Politica{Nom: "f33-25-json-policy", Descripcio: ""})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica F33-25: %v", err)
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica F33-25: %v", err)
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID: policyID,
+		PermKey:    permKeyAdminAuditView,
+		ScopeType:  string(ScopeGlobal),
+	}); err != nil {
+		t.Fatalf("no s'ha pogut crear grant inicial F33-25: %v", err)
+	}
+	if !app.HasPermission(userID, permKeyAdminAuditView, PermissionTarget{}) {
+		t.Fatalf("grant inicial hauria d'autoritzar admin.audit.view")
+	}
+	input := `{"version":1,"policy":{"name":"f33-25-json-policy","description":""},"grants":[{"perm_key":"admin.jobs.manage","scope_type":"global","scope_id":null,"include_children":false}]}`
+	grants, err := parsePolicyModularJSON(input, policyID)
+	if err != nil {
+		t.Fatalf("JSON F33-25 invalid: %v", err)
+	}
+	if err := database.ReplacePoliticaGrants(policyID, grants); err != nil {
+		t.Fatalf("ReplacePoliticaGrants ha fallat: %v", err)
+	}
+	if app.HasPermission(userID, permKeyAdminAuditView, PermissionTarget{}) {
+		t.Fatalf("aplicar JSON hauria d'haver retirat admin.audit.view")
+	}
+	if !app.HasPermission(userID, permKeyAdminJobsManage, PermissionTarget{}) {
+		t.Fatalf("aplicar JSON hauria d'haver afegit admin.jobs.manage")
+	}
+	rows, err := database.ListPoliticaGrants(policyID)
+	if err != nil {
+		t.Fatalf("no s'han pogut llistar grants F33-25: %v", err)
+	}
+	if len(rows) != 1 || rows[0].PermKey != permKeyAdminJobsManage {
+		t.Fatalf("ReplacePoliticaGrants no ha substituit grants: %#v", rows)
 	}
 }
 

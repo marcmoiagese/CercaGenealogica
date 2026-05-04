@@ -447,6 +447,9 @@ func (d *MySQL) SavePoliticaGrant(g *PoliticaGrant) (int, error) {
 func (d *MySQL) DeletePoliticaGrant(id int) error {
 	return d.help.deletePoliticaGrant(id)
 }
+func (d *MySQL) ReplacePoliticaGrants(politicaID int, grants []PoliticaGrant) error {
+	return d.help.replacePoliticaGrants(politicaID, grants)
+}
 func (d *MySQL) ListUserPolitiques(userID int) ([]Politica, error) {
 	return d.help.listUserPolitiques(userID)
 }

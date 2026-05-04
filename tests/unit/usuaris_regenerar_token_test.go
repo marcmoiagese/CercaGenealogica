@@ -408,8 +408,11 @@ func (f *fakeDB) SavePolitica(p *db.Politica) (int, error) { return 0, nil }
 func (f *fakeDB) ListPoliticaGrants(politicaID int) ([]db.PoliticaGrant, error) {
 	return nil, nil
 }
-func (f *fakeDB) SavePoliticaGrant(g *db.PoliticaGrant) (int, error)     { return 0, nil }
-func (f *fakeDB) DeletePoliticaGrant(id int) error                       { return nil }
+func (f *fakeDB) SavePoliticaGrant(g *db.PoliticaGrant) (int, error) { return 0, nil }
+func (f *fakeDB) DeletePoliticaGrant(id int) error                   { return nil }
+func (f *fakeDB) ReplacePoliticaGrants(politicaID int, grants []db.PoliticaGrant) error {
+	return nil
+}
 func (f *fakeDB) ListUserPolitiques(userID int) ([]db.Politica, error)   { return nil, nil }
 func (f *fakeDB) AddUserPolitica(userID, politicaID int) error           { return nil }
 func (f *fakeDB) RemoveUserPolitica(userID, politicaID int) error        { return nil }

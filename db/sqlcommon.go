@@ -650,7 +650,7 @@ func (h sqlHelper) listPoliticaGrants(politicaID int) ([]PoliticaGrant, error) {
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, politicaID)
 	if err != nil {
-		return nil, err
+		return nil, h.wrapSQLError("politica_grants", "query_list_politica_grants", "politica_grants", politicaID, err)
 	}
 	defer rows.Close()
 	var res []PoliticaGrant
@@ -658,10 +658,13 @@ func (h sqlHelper) listPoliticaGrants(politicaID int) ([]PoliticaGrant, error) {
 		var g PoliticaGrant
 		var includeRaw interface{}
 		if err := rows.Scan(&g.ID, &g.PoliticaID, &g.PermKey, &g.ScopeType, &g.ScopeID, &includeRaw); err != nil {
-			return nil, err
+			return nil, h.wrapSQLError("politica_grants", "scan_list_politica_grants", "politica_grants", politicaID, err)
 		}
 		g.IncludeChildren = parseBoolValue(includeRaw)
 		res = append(res, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, h.wrapSQLError("politica_grants", "rows_list_politica_grants", "politica_grants", politicaID, err)
 	}
 	return res, nil
 }
@@ -674,19 +677,23 @@ func (h sqlHelper) savePoliticaGrant(g *PoliticaGrant) (int, error) {
 		if h.style == "postgres" {
 			stmt += " RETURNING id"
 			if err := h.db.QueryRow(stmt, g.PoliticaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren).Scan(&g.ID); err != nil {
+				return 0, h.wrapSQLError("politica_grants", "insert_returning_politica_grant", "politica_grants", g.PoliticaID, err)
+			}
+			if err := h.bumpPermissionSnapshotVersion(g.PoliticaID); err != nil {
 				return 0, err
 			}
-			_ = h.bumpPermissionSnapshotVersion(g.PoliticaID)
 			return g.ID, nil
 		}
 		res, err := h.db.Exec(stmt, g.PoliticaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren)
 		if err != nil {
-			return 0, err
+			return 0, h.wrapSQLError("politica_grants", "insert_politica_grant", "politica_grants", g.PoliticaID, err)
 		}
 		if id, err := res.LastInsertId(); err == nil {
 			g.ID = int(id)
 		}
-		_ = h.bumpPermissionSnapshotVersion(g.PoliticaID)
+		if err := h.bumpPermissionSnapshotVersion(g.PoliticaID); err != nil {
+			return 0, err
+		}
 		return g.ID, nil
 	}
 	stmt := `UPDATE politica_grants
@@ -694,22 +701,74 @@ func (h sqlHelper) savePoliticaGrant(g *PoliticaGrant) (int, error) {
              WHERE id = ?`
 	stmt = formatPlaceholders(h.style, stmt)
 	_, err := h.db.Exec(stmt, g.PoliticaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren, g.ID)
-	if err == nil {
-		_ = h.bumpPermissionSnapshotVersion(g.PoliticaID)
+	if err != nil {
+		return g.ID, h.wrapSQLError("politica_grants", "update_politica_grant", "politica_grants", g.PoliticaID, err)
 	}
-	return g.ID, err
+	if err := h.bumpPermissionSnapshotVersion(g.PoliticaID); err != nil {
+		return g.ID, err
+	}
+	return g.ID, nil
 }
 
 func (h sqlHelper) deletePoliticaGrant(id int) error {
 	policyID := 0
 	lookup := formatPlaceholders(h.style, `SELECT politica_id FROM politica_grants WHERE id = ?`)
-	_ = h.db.QueryRow(lookup, id).Scan(&policyID)
+	if err := h.db.QueryRow(lookup, id).Scan(&policyID); err != nil && err != sql.ErrNoRows {
+		return h.wrapSQLError("politica_grants", "lookup_delete_politica_grant", "politica_grants", id, err)
+	}
 	stmt := formatPlaceholders(h.style, `DELETE FROM politica_grants WHERE id = ?`)
 	_, err := h.db.Exec(stmt, id)
-	if err == nil && policyID > 0 {
-		_ = h.bumpPermissionSnapshotVersion(policyID)
+	if err != nil {
+		return h.wrapSQLError("politica_grants", "delete_politica_grant", "politica_grants", id, err)
 	}
-	return err
+	if policyID > 0 {
+		return h.bumpPermissionSnapshotVersion(policyID)
+	}
+	return nil
+}
+
+func (h sqlHelper) replacePoliticaGrants(politicaID int, grants []PoliticaGrant) error {
+	tx, err := h.db.Begin()
+	if err != nil {
+		return h.wrapSQLError("politica_grants", "begin_replace_politica_grants", "politica_grants", politicaID, err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				_ = h.wrapSQLError("politica_grants", "rollback_replace_politica_grants", "politica_grants", politicaID, rollbackErr)
+			}
+		}
+	}()
+	delStmt := formatPlaceholders(h.style, `DELETE FROM politica_grants WHERE politica_id = ?`)
+	if _, err := tx.Exec(delStmt, politicaID); err != nil {
+		return h.wrapSQLError("politica_grants", "delete_existing_politica_grants", "politica_grants", politicaID, err)
+	}
+	insStmt := formatPlaceholders(h.style, `INSERT INTO politica_grants (politica_id, perm_key, scope_type, scope_id, include_children) VALUES (?, ?, ?, ?, ?)`)
+	for _, g := range grants {
+		if _, err := tx.Exec(insStmt, politicaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren); err != nil {
+			return h.wrapSQLError("politica_grants", "insert_replacement_politica_grant", "politica_grants", politicaID, err)
+		}
+	}
+	bumpStmt := `
+        UPDATE usuaris
+        SET permissions_version = COALESCE(permissions_version, 0) + 1
+        WHERE id IN (SELECT usuari_id FROM usuaris_politiques WHERE politica_id = ?)
+           OR id IN (
+                SELECT ug.usuari_id
+                FROM usuaris_grups ug
+                INNER JOIN grups_politiques gp ON gp.grup_id = ug.grup_id
+                WHERE gp.politica_id = ?
+           )`
+	bumpStmt = formatPlaceholders(h.style, bumpStmt)
+	if _, err := tx.Exec(bumpStmt, politicaID, politicaID); err != nil {
+		return h.wrapSQLError("politica_grants", "bump_replace_politica_grants", "usuaris", politicaID, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return h.wrapSQLError("politica_grants", "commit_replace_politica_grants", "politica_grants", politicaID, err)
+	}
+	committed = true
+	return nil
 }
 
 func (h sqlHelper) listUserPolitiques(userID int) ([]Politica, error) {

@@ -18,10 +18,34 @@
       if (target) target.classList.add("actiu");
       if (activeTabInput) {
         if (btn.dataset.target === "tab-grants") activeTabInput.value = "grants";
+        else if (btn.dataset.target === "tab-json") activeTabInput.value = "json";
         else activeTabInput.value = "gui";
       }
     });
   });
+
+  const policyJSON = document.getElementById("policy-json-editor");
+  const copyJSON = document.getElementById("policy-json-copy");
+  const formatJSON = document.getElementById("policy-json-format");
+  if (copyJSON && policyJSON) {
+    copyJSON.addEventListener("click", async () => {
+      policyJSON.select();
+      try {
+        await navigator.clipboard.writeText(policyJSON.value);
+      } catch (_) {
+        document.execCommand("copy");
+      }
+    });
+  }
+  if (formatJSON && policyJSON) {
+    formatJSON.addEventListener("click", () => {
+      try {
+        policyJSON.value = JSON.stringify(JSON.parse(policyJSON.value), null, 2);
+      } catch (_) {
+        policyJSON.focus();
+      }
+    });
+  }
 
   const grantForm = document.getElementById("grant-form");
   if (grantForm) {

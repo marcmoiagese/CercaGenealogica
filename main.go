@@ -804,6 +804,7 @@ func main() {
 	http.HandleFunc("/admin/politiques/save", applyMiddleware(app.AdminSavePolitica, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/politiques/grants/save", applyMiddleware(app.AdminSavePoliticaGrant, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/politiques/grants/delete", applyMiddleware(app.AdminDeletePoliticaGrant, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/politiques/json/apply", applyMiddleware(app.AdminApplyPoliticaJSON, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/politiques/assignacions", applyMiddleware(app.AdminAssignacionsPolitiques, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/politiques/grups/create", applyMiddleware(app.AdminCreateGroup, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/politiques/grups/assignar-usuari", applyMiddleware(app.AdminAssignarUsuariGrup, core.BlockIPs, core.RateLimit))

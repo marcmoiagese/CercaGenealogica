@@ -28,6 +28,9 @@
         .grant-list .taula code{background:#f3f4f8;border-radius:6px;padding:2px 6px;font-size:12px}
         .grants-card .suggest-field{position:relative}
         .grants-card .resultats-cerca{max-height:220px;overflow:auto}
+        .policy-json-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+        .policy-json-editor{width:100%;min-height:420px;font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;font-size:13px;line-height:1.45}
+        .policy-json-warning{border:1px solid #f0c36d;background:#fff7e6;color:#6b4d00;border-radius:8px;padding:10px;margin:8px 0}
         @media (min-width: 900px){.grants-grid{grid-template-columns:minmax(260px,320px) 1fr;align-items:start}}
     </style>
 </head>
@@ -41,6 +44,9 @@
             </header>
             {{ if .Data.Error }}
             <div class="alert alert-error">{{ .Data.Error }}</div>
+            {{ end }}
+            {{ if .Data.Notice }}
+            <div class="alert alert-success">{{ .Data.Notice }}</div>
             {{ end }}
             <form method="POST" action="/admin/politiques/save" class="formulari-admin" id="policy-form">
                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
@@ -61,6 +67,7 @@
                         <div class="tabs-botons" role="tablist">
                             <button type="button" class="tab-boto {{ if or (eq $active "") (eq $active "gui") }}actiu{{ end }}" data-target="tab-gui">{{ t .Lang "policies.tab.gui" }}</button>
                             <button type="button" class="tab-boto {{ if eq $active "grants" }}actiu{{ end }}" data-target="tab-grants">{{ t .Lang "policies.tab.grants" }}</button>
+                            {{ if not .Data.IsNew }}<button type="button" class="tab-boto {{ if eq $active "json" }}actiu{{ end }}" data-target="tab-json">JSON</button>{{ end }}
                         </div>
                     </div>
                     <p class="camp-helper">{{ t .Lang "policies.gui.helper" }}</p>
@@ -207,6 +214,21 @@
                             </div>
                             {{ end }}
                         </section>
+                        {{ if not .Data.IsNew }}
+                        <section class="policy-tab tab-pane {{ if eq $active "json" }}actiu{{ end }}" id="tab-json">
+                            <p class="camp-helper">Aquest JSON es genera des de <code>politica_grants</code>. No es guarda com a document; en aplicar-lo substitueix els permisos granulars actuals d'aquesta politica.</p>
+                            <div class="policy-json-warning">Aplicar JSON substituirà els permisos granulars actuals d'aquesta politica.</div>
+                            <div class="grup-camp">
+                                <label for="policy-json-editor">JSON modular</label>
+                                <textarea id="policy-json-editor" name="policy_json" form="policy-json-form" class="policy-json-editor" spellcheck="false">{{ .Data.PolicyJSON }}</textarea>
+                            </div>
+                            <div class="policy-json-tools">
+                                <button type="submit" class="boto-primari" form="policy-json-form">Aplicar JSON</button>
+                                <button type="button" class="boto-secundari" id="policy-json-copy">Copiar</button>
+                                <button type="button" class="boto-secundari" id="policy-json-format">Formatar</button>
+                            </div>
+                        </section>
+                        {{ end }}
                     </div>
                 </div>
                 <div class="accions-formulari">
@@ -224,6 +246,10 @@
                 <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                 <input type="hidden" name="politica_id" value="{{ .Data.Politica.ID }}">
                 <input type="hidden" name="grant_id" id="grant-delete-id" value="">
+            </form>
+            <form method="POST" action="/admin/politiques/json/apply" id="policy-json-form">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
+                <input type="hidden" name="politica_id" value="{{ .Data.Politica.ID }}">
             </form>
             {{ end }}
         </section>

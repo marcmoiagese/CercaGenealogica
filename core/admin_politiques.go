@@ -1,9 +1,12 @@
 package core
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -32,6 +35,24 @@ type politicaGrantForm struct {
 type policyGuiGrantGroup struct {
 	TitleKey string
 	Keys     []string
+}
+
+type policyModularJSON struct {
+	Version int                     `json:"version"`
+	Policy  policyModularJSONMeta   `json:"policy"`
+	Grants  []policyModularJSONItem `json:"grants"`
+}
+
+type policyModularJSONMeta struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type policyModularJSONItem struct {
+	PermKey         string `json:"perm_key"`
+	ScopeType       string `json:"scope_type"`
+	ScopeID         *int   `json:"scope_id"`
+	IncludeChildren bool   `json:"include_children"`
 }
 
 func guiGrantGroups() []policyGuiGrantGroup {
@@ -252,6 +273,127 @@ func buildGrantViews(grants []db.PoliticaGrant, labeler *grantScopeLabeler) []po
 	return res
 }
 
+func exportPolicyModularJSON(pol *db.Politica, grants []db.PoliticaGrant) string {
+	if pol == nil {
+		pol = &db.Politica{}
+	}
+	items := make([]policyModularJSONItem, 0, len(grants))
+	for _, g := range grants {
+		item := policyModularJSONItem{
+			PermKey:         strings.TrimSpace(g.PermKey),
+			ScopeType:       strings.TrimSpace(g.ScopeType),
+			IncludeChildren: g.IncludeChildren,
+		}
+		if g.ScopeID.Valid {
+			scopeID := int(g.ScopeID.Int64)
+			item.ScopeID = &scopeID
+		}
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].PermKey != items[j].PermKey {
+			return items[i].PermKey < items[j].PermKey
+		}
+		if items[i].ScopeType != items[j].ScopeType {
+			return items[i].ScopeType < items[j].ScopeType
+		}
+		iID, jID := 0, 0
+		if items[i].ScopeID != nil {
+			iID = *items[i].ScopeID
+		}
+		if items[j].ScopeID != nil {
+			jID = *items[j].ScopeID
+		}
+		if iID != jID {
+			return iID < jID
+		}
+		return !items[i].IncludeChildren && items[j].IncludeChildren
+	})
+	doc := policyModularJSON{
+		Version: 1,
+		Policy: policyModularJSONMeta{
+			Name:        pol.Nom,
+			Description: pol.Descripcio,
+		},
+		Grants: items,
+	}
+	out, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return "{\n  \"version\": 1,\n  \"policy\": {\"name\": \"\", \"description\": \"\"},\n  \"grants\": []\n}"
+	}
+	return string(out)
+}
+
+func parsePolicyModularJSON(input string, politicaID int) ([]db.PoliticaGrant, error) {
+	raw := strings.TrimSpace(input)
+	if raw == "" {
+		return nil, fmt.Errorf("JSON buit")
+	}
+	for _, legacy := range []string{"per" + "misos", "Policy" + "Permissions", "Policy" + "Document", "CanManageUsers", "CanManagePolicies", "CanModerate", "Admin"} {
+		if strings.Contains(raw, legacy) {
+			return nil, fmt.Errorf("camp legacy no acceptat: %s", legacy)
+		}
+	}
+	dec := json.NewDecoder(bytes.NewReader([]byte(raw)))
+	dec.DisallowUnknownFields()
+	var doc policyModularJSON
+	if err := dec.Decode(&doc); err != nil {
+		return nil, fmt.Errorf("JSON invalid: %w", err)
+	}
+	var extra interface{}
+	if err := dec.Decode(&extra); err == nil {
+		return nil, fmt.Errorf("JSON invalid: contingut extra")
+	}
+	if doc.Version != 1 {
+		return nil, fmt.Errorf("version ha de ser 1")
+	}
+	if doc.Grants == nil {
+		return nil, fmt.Errorf("grants ha de ser un array")
+	}
+	grants := make([]db.PoliticaGrant, 0, len(doc.Grants))
+	seen := map[string]bool{}
+	for i, item := range doc.Grants {
+		permKey := strings.TrimSpace(item.PermKey)
+		if permKey == "" {
+			return nil, fmt.Errorf("grants[%d].perm_key es obligatori", i)
+		}
+		if !isKnownPermissionKey(permKey) {
+			return nil, fmt.Errorf("grants[%d].perm_key desconegut: %s", i, permKey)
+		}
+		scopeType, ok := parseScopeType(item.ScopeType)
+		if !ok {
+			return nil, fmt.Errorf("grants[%d].scope_type invalid: %s", i, item.ScopeType)
+		}
+		grant := db.PoliticaGrant{
+			PoliticaID:      politicaID,
+			PermKey:         permKey,
+			ScopeType:       string(scopeType),
+			IncludeChildren: item.IncludeChildren,
+		}
+		scopeID := 0
+		if item.ScopeID != nil {
+			scopeID = *item.ScopeID
+		}
+		if scopeType == ScopeGlobal {
+			if scopeID != 0 {
+				return nil, fmt.Errorf("grants[%d].scope_id ha de ser null o 0 per global", i)
+			}
+		} else {
+			if scopeID <= 0 {
+				return nil, fmt.Errorf("grants[%d].scope_id es obligatori per scope_type %s", i, scopeType)
+			}
+			grant.ScopeID = sql.NullInt64{Int64: int64(scopeID), Valid: true}
+		}
+		key := fmt.Sprintf("%s|%s|%d|%t", grant.PermKey, grant.ScopeType, scopeID, grant.IncludeChildren)
+		if seen[key] {
+			return nil, fmt.Errorf("grant duplicat a grants[%d]", i)
+		}
+		seen[key] = true
+		grants = append(grants, grant)
+	}
+	return grants, nil
+}
+
 func scopeLabelKeyMap() map[string]string {
 	labels := map[string]string{}
 	for _, opt := range scopeOptions() {
@@ -267,6 +409,8 @@ func normalizePolicyTab(val string) string {
 	switch strings.ToLower(strings.TrimSpace(val)) {
 	case "grants":
 		return "grants"
+	case "json":
+		return "json"
 	case "gui":
 		return "gui"
 	default:
@@ -283,9 +427,11 @@ func (a *App) politicaFormData(r *http.Request, pol *db.Politica, isNew bool, ac
 	guiGroups := guiGrantGroups()
 	guiKeySet := guiGrantKeySet(guiGroups)
 	grants := []politicaGrantView{}
+	var grantRows []db.PoliticaGrant
 	guiGrantState := map[string]bool{}
 	if !isNew && pol.ID > 0 && a.DB != nil {
 		if rows, err := a.DB.ListPoliticaGrants(pol.ID); err == nil {
+			grantRows = rows
 			labeler := newGrantScopeLabeler(a, lang)
 			grants = buildGrantViews(rows, labeler)
 			for _, g := range rows {
@@ -295,6 +441,11 @@ func (a *App) politicaFormData(r *http.Request, pol *db.Politica, isNew bool, ac
 				if guiKeySet[g.PermKey] {
 					guiGrantState[g.PermKey] = true
 				}
+			}
+		} else {
+			Errorf("No s'han pogut carregar grants de politica %d: %v", pol.ID, err)
+			if errMsg == "" {
+				errMsg = "No s'han pogut carregar els grants de la politica"
 			}
 		}
 	}
@@ -312,6 +463,7 @@ func (a *App) politicaFormData(r *http.Request, pol *db.Politica, isNew bool, ac
 		"ScopeLabels":       scopeLabelKeyMap(),
 		"GuiGrantGroups":    guiGroups,
 		"GuiGrantState":     guiGrantState,
+		"PolicyJSON":        exportPolicyModularJSON(pol, grantRows),
 		"CanManageArxius":   true,
 		"CanManagePolicies": true,
 	}
@@ -364,6 +516,9 @@ func (a *App) AdminEditPolitica(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := a.politicaFormData(r, pol, false, r.URL.Query().Get("tab"), "", nil)
+	if r.URL.Query().Get("ok") == "json_applied" {
+		data["Notice"] = "JSON modular aplicat correctament"
+	}
 	data["User"] = user
 	RenderPrivateTemplate(w, r, "admin-politiques-form.html", data)
 }
@@ -411,7 +566,9 @@ func (a *App) AdminSavePolitica(w http.ResponseWriter, r *http.Request) {
 			Errorf("No s'han pogut sincronitzar grants GUI per la politica %d: %v", p.ID, err)
 		}
 	}
-	_ = a.DB.BumpPermissionSnapshotVersion(p.ID)
+	if err := a.DB.BumpPermissionSnapshotVersion(p.ID); err != nil {
+		Errorf("No s'ha pogut invalidar snapshot de politica %d: %v", p.ID, err)
+	}
 	http.Redirect(w, r, "/admin/politiques", http.StatusSeeOther)
 }
 
@@ -564,10 +721,10 @@ func (a *App) AdminSavePoliticaGrant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := a.DB.SavePoliticaGrant(grant); err != nil {
+		Errorf("No s'ha pogut desar grant politica=%d grant=%d: %v", politicaID, grantID, err)
 		RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, false, "grants", "No s'ha pogut desar el grant", grantForm))
 		return
 	}
-	_ = a.DB.BumpPermissionSnapshotVersion(politicaID)
 	http.Redirect(w, r, fmt.Sprintf("/admin/politiques/%d/edit?tab=grants", politicaID), http.StatusSeeOther)
 }
 
@@ -612,9 +769,49 @@ func (a *App) AdminDeletePoliticaGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.DB.DeletePoliticaGrant(grantID); err != nil {
+		Errorf("No s'ha pogut eliminar grant politica=%d grant=%d: %v", politicaID, grantID, err)
 		RenderPrivateTemplate(w, r, "admin-politiques-form.html", a.politicaFormData(r, pol, false, "grants", "No s'ha pogut eliminar el grant", nil))
 		return
 	}
-	_ = a.DB.BumpPermissionSnapshotVersion(politicaID)
 	http.Redirect(w, r, fmt.Sprintf("/admin/politiques/%d/edit?tab=grants", politicaID), http.StatusSeeOther)
+}
+
+func (a *App) AdminApplyPoliticaJSON(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requirePermissionKey(w, r, permKeyAdminPoliciesManage, PermissionTarget{}); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invalid", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Formulari invalid", http.StatusBadRequest)
+		return
+	}
+	politicaID, _ := strconv.Atoi(r.FormValue("politica_id"))
+	pol, err := a.DB.GetPolitica(politicaID)
+	if err != nil || pol == nil {
+		http.NotFound(w, r)
+		return
+	}
+	input := r.FormValue("policy_json")
+	grants, err := parsePolicyModularJSON(input, politicaID)
+	if err != nil {
+		data := a.politicaFormData(r, pol, false, "json", err.Error(), nil)
+		data["PolicyJSON"] = input
+		RenderPrivateTemplate(w, r, "admin-politiques-form.html", data)
+		return
+	}
+	if err := a.DB.ReplacePoliticaGrants(politicaID, grants); err != nil {
+		Errorf("No s'ha pogut aplicar JSON modular politica=%d: %v", politicaID, err)
+		data := a.politicaFormData(r, pol, false, "json", "No s'ha pogut aplicar el JSON modular", nil)
+		data["PolicyJSON"] = input
+		RenderPrivateTemplate(w, r, "admin-politiques-form.html", data)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/admin/politiques/%d/edit?tab=json&ok=json_applied", politicaID), http.StatusSeeOther)
 }
