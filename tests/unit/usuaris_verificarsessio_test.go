@@ -261,13 +261,10 @@ func (f *fakeDBVerificar) RemoveUserPolitica(userID, politicaID int) error      
 func (f *fakeDBVerificar) ListGroupPolitiques(groupID int) ([]db.Politica, error) { return nil, nil }
 func (f *fakeDBVerificar) AddGroupPolitica(groupID, politicaID int) error         { return nil }
 func (f *fakeDBVerificar) RemoveGroupPolitica(groupID, politicaID int) error      { return nil }
-func (f *fakeDBVerificar) GetEffectivePoliticaPerms(userID int) (db.PolicyPermissions, error) {
-	return db.PolicyPermissions{}, nil
-}
-func (f *fakeDBVerificar) GetUserPermissionsVersion(userID int) (int, error) { return 0, nil }
-func (f *fakeDBVerificar) BumpUserPermissionsVersion(userID int) error       { return nil }
-func (f *fakeDBVerificar) BumpGroupPermissionsVersion(groupID int) error     { return nil }
-func (f *fakeDBVerificar) BumpPolicyPermissionsVersion(politicaID int) error { return nil }
+func (f *fakeDBVerificar) GetUserPermissionsVersion(userID int) (int, error)      { return 0, nil }
+func (f *fakeDBVerificar) BumpUserPermissionsVersion(userID int) error            { return nil }
+func (f *fakeDBVerificar) BumpGroupPermissionsVersion(groupID int) error          { return nil }
+func (f *fakeDBVerificar) BumpPermissionSnapshotVersion(politicaID int) error     { return nil }
 
 // Punts i activitat (no-op)
 func (f *fakeDBVerificar) ListPointsRules() ([]db.PointsRule, error) { return nil, nil }

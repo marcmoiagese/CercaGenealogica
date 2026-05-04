@@ -450,7 +450,7 @@ func (a *App) AdminSavePolitica(w http.ResponseWriter, r *http.Request) {
 	if err := a.refreshPolicyPermsJSON(p.ID); err != nil {
 		Errorf("No s'ha pogut reconstruir el JSON de permisos per la politica %d: %v", p.ID, err)
 	}
-	_ = a.DB.BumpPolicyPermissionsVersion(p.ID)
+	_ = a.DB.BumpPermissionSnapshotVersion(p.ID)
 	http.Redirect(w, r, "/admin/politiques", http.StatusSeeOther)
 }
 
@@ -609,7 +609,7 @@ func (a *App) AdminSavePoliticaGrant(w http.ResponseWriter, r *http.Request) {
 	if err := a.refreshPolicyPermsJSON(politicaID); err != nil {
 		Errorf("No s'ha pogut reconstruir el JSON de permisos per la politica %d: %v", politicaID, err)
 	}
-	_ = a.DB.BumpPolicyPermissionsVersion(politicaID)
+	_ = a.DB.BumpPermissionSnapshotVersion(politicaID)
 	http.Redirect(w, r, fmt.Sprintf("/admin/politiques/%d/edit?tab=grants", politicaID), http.StatusSeeOther)
 }
 
@@ -660,6 +660,6 @@ func (a *App) AdminDeletePoliticaGrant(w http.ResponseWriter, r *http.Request) {
 	if err := a.refreshPolicyPermsJSON(politicaID); err != nil {
 		Errorf("No s'ha pogut reconstruir el JSON de permisos per la politica %d: %v", politicaID, err)
 	}
-	_ = a.DB.BumpPolicyPermissionsVersion(politicaID)
+	_ = a.DB.BumpPermissionSnapshotVersion(politicaID)
 	http.Redirect(w, r, fmt.Sprintf("/admin/politiques/%d/edit?tab=grants", politicaID), http.StatusSeeOther)
 }

@@ -94,11 +94,47 @@ func f3321LegacyPermissionsForUser(t *testing.T, app *App, userID int) db.Policy
 	if app == nil || app.DB == nil || userID <= 0 {
 		return db.PolicyPermissions{}
 	}
-	perms, err := app.DB.GetEffectivePoliticaPerms(userID)
+	policies, err := app.DB.ListUserPolitiques(userID)
 	if err != nil {
-		t.Fatalf("no s'han pogut carregar permisos legacy de test per usuari %d: %v", userID, err)
+		t.Fatalf("no s'han pogut carregar politiques directes de test per usuari %d: %v", userID, err)
+	}
+	groups, err := app.DB.ListUserGroups(userID)
+	if err != nil {
+		t.Fatalf("no s'han pogut carregar grups de test per usuari %d: %v", userID, err)
+	}
+	for _, group := range groups {
+		groupPolicies, err := app.DB.ListGroupPolitiques(group.ID)
+		if err != nil {
+			t.Fatalf("no s'han pogut carregar politiques de grup %d: %v", group.ID, err)
+		}
+		policies = append(policies, groupPolicies...)
+	}
+	perms := db.PolicyPermissions{}
+	for _, policy := range policies {
+		var doc policyDocument
+		if err := json.Unmarshal([]byte(policy.Permisos), &doc); err == nil {
+			perms = f3321MergeLegacyPermissions(perms, doc.PolicyPermissions)
+			continue
+		}
+		var legacy db.PolicyPermissions
+		if err := json.Unmarshal([]byte(policy.Permisos), &legacy); err == nil {
+			perms = f3321MergeLegacyPermissions(perms, legacy)
+		}
 	}
 	return perms
+}
+
+func f3321MergeLegacyPermissions(base, add db.PolicyPermissions) db.PolicyPermissions {
+	base.Admin = base.Admin || add.Admin
+	base.CanManageUsers = base.CanManageUsers || add.CanManageUsers
+	base.CanManageTerritory = base.CanManageTerritory || add.CanManageTerritory
+	base.CanManageEclesia = base.CanManageEclesia || add.CanManageEclesia
+	base.CanManageArchives = base.CanManageArchives || add.CanManageArchives
+	base.CanCreatePerson = base.CanCreatePerson || add.CanCreatePerson
+	base.CanEditAnyPerson = base.CanEditAnyPerson || add.CanEditAnyPerson
+	base.CanModerate = base.CanModerate || add.CanModerate
+	base.CanManagePolicies = base.CanManagePolicies || add.CanManagePolicies
+	return base
 }
 
 func TestF330AdminPolicyNameIsEffectiveModularAdminForUI(t *testing.T) {
@@ -2005,7 +2041,6 @@ func TestF3321PolicyPermissionsRuntimePlumbingIsRemoved(t *testing.T) {
 		"permissionsFromContext",
 		"withPermissions",
 		"getPermissionsForUser",
-		"GetEffectivePoliticaPerms",
 	} {
 		if strings.Contains(permissionsSrc, pattern) {
 			t.Fatalf("permissions.go conserva plumbing runtime legacy %q", pattern)
@@ -2050,6 +2085,89 @@ func TestF3321PolicyPermissionsRuntimePlumbingIsRemoved(t *testing.T) {
 	}
 	if len(violations) > 0 {
 		t.Fatalf("plumbing runtime legacy detectat: %s", strings.Join(violations, "; "))
+	}
+}
+
+func TestF3322DBLegacyEffectivePermissionsAPIIsRemoved(t *testing.T) {
+	root := f3320RepoRoot(t)
+	legacyEffective := "Get" + "EffectivePoliticaPerms"
+	legacyBump := "Bump" + "PolicyPermissionsVersion"
+	legacyHelper := "get" + "EffectivePoliticaPerms"
+	files := []string{
+		"db/motor.go",
+		"db/sqlcommon.go",
+		"db/sqlite.go",
+		"db/mysql.go",
+		"db/postgres.go",
+	}
+	for _, rel := range files {
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("no s'ha pogut llegir %s: %v", rel, err)
+		}
+		src := string(body)
+		for _, pattern := range []string{legacyEffective, legacyBump, legacyHelper} {
+			if strings.Contains(src, pattern) {
+				t.Fatalf("%s conserva API legacy de permisos %q", rel, pattern)
+			}
+		}
+	}
+}
+
+func TestF3322PolicyGrantChangesInvalidateModularSnapshotCache(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-22-cache")
+	policyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-22-cache-policy",
+		Permisos:   "{}",
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica F33-22: %v", err)
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica F33-22: %v", err)
+	}
+	target := PermissionTarget{}
+	if app.HasPermission(userID, permKeyAdminAuditView, target) {
+		t.Fatalf("el test necessita cache inicial sense admin.audit.view")
+	}
+	if _, err := database.SavePoliticaGrant(&db.PoliticaGrant{
+		PoliticaID:      policyID,
+		PermKey:         permKeyAdminAuditView,
+		ScopeType:       string(ScopeGlobal),
+		IncludeChildren: false,
+	}); err != nil {
+		t.Fatalf("no s'ha pogut desar grant F33-22: %v", err)
+	}
+	if !app.HasPermission(userID, permKeyAdminAuditView, target) {
+		t.Fatalf("el canvi de grant modular hauria d'invalidar snapshot/cache via permissions_version")
+	}
+}
+
+func TestF3322ImportWorkerLimitIsOperationalOnly(t *testing.T) {
+	app, database := newF330PermissionsTestApp(t)
+	userID := createF330User(t, database, "f33-22-worker-limit")
+	policyID, err := database.SavePolitica(&db.Politica{
+		Nom:        "f33-22-worker-limit-policy",
+		Permisos:   `{"import_worker_limit":5,"can_manage_policies":true}`,
+		Descripcio: "",
+	})
+	if err != nil {
+		t.Fatalf("no s'ha pogut crear politica F33-22 worker limit: %v", err)
+	}
+	if err := database.AddUserPolitica(userID, policyID); err != nil {
+		t.Fatalf("no s'ha pogut assignar politica F33-22 worker limit: %v", err)
+	}
+	snap, err := app.buildPermissionSnapshot(userID)
+	if err != nil {
+		t.Fatalf("no s'ha pogut construir snapshot F33-22 worker limit: %v", err)
+	}
+	if snap.importWorkerLimit != 5 {
+		t.Fatalf("import_worker_limit hauria de ser configuracio operativa, rebut %d", snap.importWorkerLimit)
+	}
+	if f3319SnapshotHasGrant(snap, permKeyAdminPoliciesManage) {
+		t.Fatalf("ImportWorkerLimit i JSON legacy no haurien de concedir permisos modulars")
 	}
 }
 

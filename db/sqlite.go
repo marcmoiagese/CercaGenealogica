@@ -487,9 +487,6 @@ func (d *SQLite) RemoveGroupPolitica(groupID, politicaID int) error {
 func (d *SQLite) ListUserGroups(userID int) ([]Group, error) {
 	return d.help.listUserGroups(userID)
 }
-func (d *SQLite) GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error) {
-	return d.help.getEffectivePoliticaPerms(userID)
-}
 func (d *SQLite) GetUserPermissionsVersion(userID int) (int, error) {
 	return d.help.getUserPermissionsVersion(userID)
 }
@@ -501,8 +498,8 @@ func (d *SQLite) BumpGroupPermissionsVersion(groupID int) error {
 	return d.help.bumpGroupPermissionsVersion(groupID)
 }
 
-func (d *SQLite) BumpPolicyPermissionsVersion(politicaID int) error {
-	return d.help.bumpPolicyPermissionsVersion(politicaID)
+func (d *SQLite) BumpPermissionSnapshotVersion(politicaID int) error {
+	return d.help.bumpPermissionSnapshotVersion(politicaID)
 }
 
 // Persones (moderació)

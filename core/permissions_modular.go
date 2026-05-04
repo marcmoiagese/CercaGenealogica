@@ -595,6 +595,7 @@ func (a *App) buildPermissionSnapshot(userID int) (permissionSnapshot, error) {
 			snap.isAdmin = true
 		}
 		if strings.TrimSpace(policy.Permisos) != "" {
+			// Operational import tuning only: this value never creates permission grants.
 			var policyOptions struct {
 				ImportWorkerLimit int `json:"import_worker_limit,omitempty"`
 			}

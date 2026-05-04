@@ -459,9 +459,6 @@ func (d *PostgreSQL) AddGroupPolitica(groupID, politicaID int) error {
 func (d *PostgreSQL) RemoveGroupPolitica(groupID, politicaID int) error {
 	return d.help.removeGroupPolitica(groupID, politicaID)
 }
-func (d *PostgreSQL) GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error) {
-	return d.help.getEffectivePoliticaPerms(userID)
-}
 func (d *PostgreSQL) GetUserPermissionsVersion(userID int) (int, error) {
 	return d.help.getUserPermissionsVersion(userID)
 }
@@ -473,8 +470,8 @@ func (d *PostgreSQL) BumpGroupPermissionsVersion(groupID int) error {
 	return d.help.bumpGroupPermissionsVersion(groupID)
 }
 
-func (d *PostgreSQL) BumpPolicyPermissionsVersion(politicaID int) error {
-	return d.help.bumpPolicyPermissionsVersion(politicaID)
+func (d *PostgreSQL) BumpPermissionSnapshotVersion(politicaID int) error {
+	return d.help.bumpPermissionSnapshotVersion(politicaID)
 }
 
 // Persones (moderació)

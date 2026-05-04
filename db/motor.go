@@ -114,11 +114,10 @@ type DB interface {
 	ListGroupPolitiques(groupID int) ([]Politica, error)
 	AddGroupPolitica(groupID, politicaID int) error
 	RemoveGroupPolitica(groupID, politicaID int) error
-	GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error)
 	GetUserPermissionsVersion(userID int) (int, error)
 	BumpUserPermissionsVersion(userID int) error
 	BumpGroupPermissionsVersion(groupID int) error
-	BumpPolicyPermissionsVersion(politicaID int) error
+	BumpPermissionSnapshotVersion(politicaID int) error
 	EnsureDefaultPointsRules() error
 	EnsureDefaultAchievements() error
 	// Punts i activitat

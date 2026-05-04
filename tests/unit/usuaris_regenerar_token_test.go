@@ -416,16 +416,13 @@ func (f *fakeDB) RemoveUserPolitica(userID, politicaID int) error        { retur
 func (f *fakeDB) ListGroupPolitiques(groupID int) ([]db.Politica, error) { return nil, nil }
 func (f *fakeDB) AddGroupPolitica(groupID, politicaID int) error         { return nil }
 func (f *fakeDB) RemoveGroupPolitica(groupID, politicaID int) error      { return nil }
-func (f *fakeDB) GetEffectivePoliticaPerms(userID int) (db.PolicyPermissions, error) {
-	return db.PolicyPermissions{}, nil
-}
-func (f *fakeDB) GetUserPermissionsVersion(userID int) (int, error) { return 0, nil }
-func (f *fakeDB) BumpUserPermissionsVersion(userID int) error       { return nil }
-func (f *fakeDB) BumpGroupPermissionsVersion(groupID int) error     { return nil }
-func (f *fakeDB) BumpPolicyPermissionsVersion(politicaID int) error { return nil }
-func (f *fakeDB) ListUsersAdmin() ([]db.UserAdminRow, error)        { return nil, nil }
-func (f *fakeDB) SetUserActive(userID int, active bool) error       { return nil }
-func (f *fakeDB) SetUserBanned(userID int, banned bool) error       { return nil }
+func (f *fakeDB) GetUserPermissionsVersion(userID int) (int, error)      { return 0, nil }
+func (f *fakeDB) BumpUserPermissionsVersion(userID int) error            { return nil }
+func (f *fakeDB) BumpGroupPermissionsVersion(groupID int) error          { return nil }
+func (f *fakeDB) BumpPermissionSnapshotVersion(politicaID int) error     { return nil }
+func (f *fakeDB) ListUsersAdmin() ([]db.UserAdminRow, error)             { return nil, nil }
+func (f *fakeDB) SetUserActive(userID int, active bool) error            { return nil }
+func (f *fakeDB) SetUserBanned(userID int, banned bool) error            { return nil }
 
 // Punts i activitat (no-op)
 func (f *fakeDB) ListPointsRules() ([]db.PointsRule, error) { return nil, nil }

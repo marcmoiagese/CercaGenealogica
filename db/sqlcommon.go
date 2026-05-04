@@ -699,7 +699,7 @@ func (h sqlHelper) savePoliticaGrant(g *PoliticaGrant) (int, error) {
 			if err := h.db.QueryRow(stmt, g.PoliticaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren).Scan(&g.ID); err != nil {
 				return 0, err
 			}
-			_ = h.bumpPolicyPermissionsVersion(g.PoliticaID)
+			_ = h.bumpPermissionSnapshotVersion(g.PoliticaID)
 			return g.ID, nil
 		}
 		res, err := h.db.Exec(stmt, g.PoliticaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren)
@@ -709,7 +709,7 @@ func (h sqlHelper) savePoliticaGrant(g *PoliticaGrant) (int, error) {
 		if id, err := res.LastInsertId(); err == nil {
 			g.ID = int(id)
 		}
-		_ = h.bumpPolicyPermissionsVersion(g.PoliticaID)
+		_ = h.bumpPermissionSnapshotVersion(g.PoliticaID)
 		return g.ID, nil
 	}
 	stmt := `UPDATE politica_grants
@@ -718,7 +718,7 @@ func (h sqlHelper) savePoliticaGrant(g *PoliticaGrant) (int, error) {
 	stmt = formatPlaceholders(h.style, stmt)
 	_, err := h.db.Exec(stmt, g.PoliticaID, g.PermKey, g.ScopeType, g.ScopeID, g.IncludeChildren, g.ID)
 	if err == nil {
-		_ = h.bumpPolicyPermissionsVersion(g.PoliticaID)
+		_ = h.bumpPermissionSnapshotVersion(g.PoliticaID)
 	}
 	return g.ID, err
 }
@@ -730,7 +730,7 @@ func (h sqlHelper) deletePoliticaGrant(id int) error {
 	stmt := formatPlaceholders(h.style, `DELETE FROM politica_grants WHERE id = ?`)
 	_, err := h.db.Exec(stmt, id)
 	if err == nil && policyID > 0 {
-		_ = h.bumpPolicyPermissionsVersion(policyID)
+		_ = h.bumpPermissionSnapshotVersion(policyID)
 	}
 	return err
 }
@@ -843,7 +843,7 @@ func (h sqlHelper) bumpGroupPermissionsVersion(groupID int) error {
 	return err
 }
 
-func (h sqlHelper) bumpPolicyPermissionsVersion(politicaID int) error {
+func (h sqlHelper) bumpPermissionSnapshotVersion(politicaID int) error {
 	if politicaID <= 0 {
 		return nil
 	}
@@ -983,49 +983,6 @@ func (h sqlHelper) removeUserGroup(userID, groupID int) error {
 		_ = h.bumpUserPermissionsVersion(userID)
 	}
 	return err
-}
-
-func (h sqlHelper) getEffectivePoliticaPerms(userID int) (PolicyPermissions, error) {
-	combined := PolicyPermissions{}
-	// Direct policies
-	userPolicies, err := h.listUserPolitiques(userID)
-	if err != nil {
-		return combined, err
-	}
-	// Group policies
-	groupRows, err := h.listUserGroups(userID)
-	if err != nil {
-		return combined, err
-	}
-	groupPolicies := []Politica{}
-	for _, g := range groupRows {
-		ps, err := h.listGroupPolitiques(g.ID)
-		if err == nil {
-			groupPolicies = append(groupPolicies, ps...)
-		}
-	}
-	all := append(userPolicies, groupPolicies...)
-	for _, p := range all {
-		var perms PolicyPermissions
-		if err := json.Unmarshal([]byte(p.Permisos), &perms); err != nil {
-			continue
-		}
-		combined = combinePermissions(combined, perms)
-	}
-	return combined, nil
-}
-
-func combinePermissions(base, add PolicyPermissions) PolicyPermissions {
-	base.Admin = base.Admin || add.Admin
-	base.CanManageUsers = base.CanManageUsers || add.CanManageUsers
-	base.CanManageTerritory = base.CanManageTerritory || add.CanManageTerritory
-	base.CanManageEclesia = base.CanManageEclesia || add.CanManageEclesia
-	base.CanManageArchives = base.CanManageArchives || add.CanManageArchives
-	base.CanCreatePerson = base.CanCreatePerson || add.CanCreatePerson
-	base.CanEditAnyPerson = base.CanEditAnyPerson || add.CanEditAnyPerson
-	base.CanModerate = base.CanModerate || add.CanModerate
-	base.CanManagePolicies = base.CanManagePolicies || add.CanManagePolicies
-	return base
 }
 
 // Persones (moderació bàsica)

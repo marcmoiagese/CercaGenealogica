@@ -465,9 +465,6 @@ func (d *MySQL) AddGroupPolitica(groupID, politicaID int) error {
 func (d *MySQL) RemoveGroupPolitica(groupID, politicaID int) error {
 	return d.help.removeGroupPolitica(groupID, politicaID)
 }
-func (d *MySQL) GetEffectivePoliticaPerms(userID int) (PolicyPermissions, error) {
-	return d.help.getEffectivePoliticaPerms(userID)
-}
 func (d *MySQL) GetUserPermissionsVersion(userID int) (int, error) {
 	return d.help.getUserPermissionsVersion(userID)
 }
@@ -479,8 +476,8 @@ func (d *MySQL) BumpGroupPermissionsVersion(groupID int) error {
 	return d.help.bumpGroupPermissionsVersion(groupID)
 }
 
-func (d *MySQL) BumpPolicyPermissionsVersion(politicaID int) error {
-	return d.help.bumpPolicyPermissionsVersion(politicaID)
+func (d *MySQL) BumpPermissionSnapshotVersion(politicaID int) error {
+	return d.help.bumpPermissionSnapshotVersion(politicaID)
 }
 
 // Persones (moderació)

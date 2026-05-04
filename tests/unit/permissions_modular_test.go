@@ -258,7 +258,7 @@ func TestPermissionsVersionBumps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no s'ha pogut obtenir permissions_version: %v", err)
 	}
-	if err := database.BumpPolicyPermissionsVersion(policyID); err != nil {
+	if err := database.BumpPermissionSnapshotVersion(policyID); err != nil {
 		t.Fatalf("no s'ha pogut fer bump de política: %v", err)
 	}
 	after, err := database.GetUserPermissionsVersion(userID)
