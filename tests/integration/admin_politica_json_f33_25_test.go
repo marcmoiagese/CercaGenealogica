@@ -80,6 +80,81 @@ func TestF3325RAdminCreatePoliticaFromJSON(t *testing.T) {
 	}
 }
 
+func TestF3326AdminNewPoliticaGrantsBuilderIsAvailable(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f33_26_new_grants_builder.sqlite3")
+	_ = createTestUser(t, database, "f33_26_seed_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	_, adminCookie := createF335PlatformUser(t, database, "f33_26_admin_new_grants", "admin.policies.manage")
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/politiques/new?tab=grants", nil)
+	req.AddCookie(adminCookie)
+	rr := httptest.NewRecorder()
+	app.AdminNewPolitica(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET new Grants status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if strings.Contains(body, "policies.grants.save_first") || strings.Contains(body, "Desa la politica abans") {
+		t.Fatalf("alta nova no hauria d'obligar a desar abans d'afegir grants: %s", body)
+	}
+	for _, want := range []string{
+		`id="policy-grant-builder"`,
+		`id="grant-perm-key"`,
+		`name="perm_key"`,
+		`id="grant-scope-type-ui"`,
+		`name="scope_type_ui"`,
+		`id="grant-scope-type"`,
+		`name="scope_type"`,
+		`id="grant-scope-id"`,
+		`name="scope_id"`,
+		`id="grant-include-children"`,
+		`name="include_children"`,
+		`id="policy-grants-list"`,
+		`data-perm-key=`,
+		`data-scope-type="municipi"`,
+		`data-api-municipi="/api/territori/municipis/suggest"`,
+		`Inclou els elements descendents`,
+		`El boto Desar nomes desa Nom i Descripcio`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("alta nova Grants no conte contracte F33-26 %q", want)
+		}
+	}
+}
+
+func TestF3326AdminCreateScopedPoliticaFromJSON(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f33_26_create_scoped_json.sqlite3")
+	_ = createTestUser(t, database, "f33_26_create_seed_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	_, adminCookie := createF335PlatformUser(t, database, "f33_26_create_admin_json", "admin.policies.manage")
+
+	form := url.Values{}
+	form.Set("policy_json", `{"version":1,"policy":{"name":"f33_26_scoped_from_builder","description":"scoped"},"grants":[{"perm_key":"territori.municipis.edit","scope_type":"municipi","scope_id":123,"include_children":false},{"perm_key":"territori.municipis.edit","scope_type":"nivell","scope_id":7,"include_children":true}]}`)
+	rr := f3325Post(app.AdminApplyPoliticaJSON, "/admin/politiques/json/apply", adminCookie, form, "csrf_f33_26_create")
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("crear politica scoped redirect inesperat status=%d location=%s body=%s", rr.Code, rr.Header().Get("Location"), rr.Body.String())
+	}
+	policyID := f3325PolicyIDByName(t, database, "f33_26_scoped_from_builder")
+	rows, err := database.ListPoliticaGrants(policyID)
+	if err != nil {
+		t.Fatalf("no s'han pogut llistar grants scoped F33-26: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("crear scoped des de JSON hauria d'inserir 2 grants: %#v", rows)
+	}
+	seenMunicipi := false
+	seenNivellChildren := false
+	for _, row := range rows {
+		if row.PermKey == "territori.municipis.edit" && row.ScopeType == "municipi" && row.ScopeID.Valid && row.ScopeID.Int64 == 123 && !row.IncludeChildren {
+			seenMunicipi = true
+		}
+		if row.PermKey == "territori.municipis.edit" && row.ScopeType == "nivell" && row.ScopeID.Valid && row.ScopeID.Int64 == 7 && row.IncludeChildren {
+			seenNivellChildren = true
+		}
+	}
+	if !seenMunicipi || !seenNivellChildren {
+		t.Fatalf("grants scoped F33-26 inesperats: %#v", rows)
+	}
+}
+
 func TestF3325AdminPoliticaJSONTabAndApply(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f33_25_admin_politica_json.sqlite3")
 	_ = createTestUser(t, database, "f33_25_seed_"+strconv.FormatInt(time.Now().UnixNano(), 10))
@@ -161,6 +236,11 @@ func TestF3325SLiveSyncJSContract(t *testing.T) {
 		"collectVisualPolicyJSON",
 		"collectGuidedGrants",
 		"collectExistingGrantRows",
+		"upsertGrantRow",
+		"renderGrantRow",
+		"grant-remove",
+		"policy-grants-list",
+		"duplicateRow",
 		"renderPolicyJSONFromVisualState",
 		"syncPolicyJSONFromVisualState",
 		`policyName.addEventListener("input"`,
@@ -170,6 +250,10 @@ func TestF3325SLiveSyncJSContract(t *testing.T) {
 		"Regenerar des de visual",
 		"JSON.stringify",
 		"dataset.permKey",
+		"include_children",
+		"scope_type",
+		"scope_id",
+		".sort(sortGrants)",
 	} {
 		if !strings.Contains(js, want) {
 			t.Fatalf("JS F33-25S no conte %q", want)

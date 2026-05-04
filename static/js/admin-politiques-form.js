@@ -37,8 +37,11 @@
   const policyDescription = document.getElementById("descripcio");
   const policyJSONName = document.getElementById("policy-json-name");
   const policyJSONDescription = document.getElementById("policy-json-description");
+  const grantBuilder = document.getElementById("policy-grant-builder");
+  const grantListBody = document.getElementById("policy-grants-list");
   let manualJSONEdit = false;
   let internalJSONUpdate = false;
+  let clientGrantCounter = 1;
 
   const updatePolicyHiddenFields = () => {
     if (policyName && policyJSONName) policyJSONName.value = policyName.value || "";
@@ -117,6 +120,7 @@
     const guidedKeys = guidedGlobalKeys();
     const editedGrantID = currentGrantFormGrantID();
     document.querySelectorAll(".policy-grant-row").forEach((row) => {
+      if (row.classList.contains("policy-grants-empty")) return;
       if (editedGrantID && row.dataset.grantId === editedGrantID) return;
       if ((row.dataset.scopeType || "global") === "global" && guidedKeys.has(row.dataset.permKey || "")) return;
       const grant = grantFromDataset(row.dataset);
@@ -143,8 +147,6 @@
   function collectVisualPolicyJSON() {
     const grantsByKey = new Map();
     const grants = collectExistingGrantRows().concat(collectGuidedGrants());
-    const draftGrant = collectGranularDraftGrant();
-    if (draftGrant) grants.push(draftGrant);
     grants.forEach((grant) => {
       grantsByKey.set(grantKey(grant), grant);
     });
@@ -215,7 +217,7 @@
   }
 
   const grantForm = document.getElementById("grant-form");
-  if (grantForm) {
+  if (grantBuilder || grantForm) {
     const grantId = document.getElementById("grant-id");
     const grantPerm = document.getElementById("grant-perm-key");
     const grantScopeTypeUI = document.getElementById("grant-scope-type-ui");
@@ -226,15 +228,13 @@
     const grantInclude = document.getElementById("grant-include-children");
     const grantSubmit = document.getElementById("grant-submit");
     const grantCancel = document.getElementById("grant-cancel");
-    const deleteForm = document.getElementById("grant-delete-form");
-    const deleteId = document.getElementById("grant-delete-id");
     const labelAdd = grantSubmit ? grantSubmit.dataset.labelAdd || grantSubmit.textContent : "";
     const labelUpdate = grantSubmit ? grantSubmit.dataset.labelUpdate || grantSubmit.textContent : "";
     let lastScopeType = grantScopeTypeUI ? grantScopeTypeUI.value : "global";
 
     const normalizeScopeTypeForUI = (value) => {
       const raw = (value || "").toLowerCase();
-      if (raw === "provincia" || raw === "comarca" || raw === "municipi" || raw === "nivell") {
+      if (raw === "provincia" || raw === "comarca" || raw === "nivell") {
         return "nivell";
       }
       return raw || "global";
@@ -245,6 +245,7 @@
           global: "",
           pais: grantScopeSearch.dataset.apiPais || "",
           nivell: grantScopeSearch.dataset.apiNivell || "",
+          municipi: grantScopeSearch.dataset.apiMunicipi || "",
           entitat_eclesiastica: grantScopeSearch.dataset.apiEntitatEclesiastica || "",
           arxiu: grantScopeSearch.dataset.apiArxiu || "",
           llibre: grantScopeSearch.dataset.apiLlibre || "",
@@ -255,6 +256,7 @@
           global: "",
           pais: grantScopeSearch.dataset.placeholderPais || "",
           nivell: grantScopeSearch.dataset.placeholderNivell || "",
+          municipi: grantScopeSearch.dataset.placeholderMunicipi || "",
           entitat_eclesiastica: grantScopeSearch.dataset.placeholderEntitatEclesiastica || "",
           arxiu: grantScopeSearch.dataset.placeholderArxiu || "",
           llibre: grantScopeSearch.dataset.placeholderLlibre || "",
@@ -266,7 +268,6 @@
       const isGlobal = grantScopeTypeUI.value === "global";
       grantScopeRow.classList.toggle("is-hidden", isGlobal);
       grantScopeId.disabled = isGlobal;
-      if (grantInclude) grantInclude.disabled = isGlobal;
       if (grantScopeSearch) {
         grantScopeSearch.disabled = isGlobal;
         grantScopeSearch.dataset.api = scopeApis[grantScopeTypeUI.value] || "";
@@ -299,6 +300,142 @@
       syncPolicyJSONFromVisualState();
     };
 
+    const emptyGrantState = {
+      id: "",
+      permKey: "",
+      scopeType: "global",
+      scopeId: "",
+      scopeLabel: "",
+      includeChildren: false,
+    };
+
+    const textFromSelect = (select) => {
+      if (!select || select.selectedIndex < 0) return "";
+      const opt = select.options[select.selectedIndex];
+      return opt ? (opt.textContent || "").trim() : "";
+    };
+
+    const scopeLabelForGrant = (grant) => {
+      if (grant.scope_type === "global") return textFromSelect(grantScopeTypeUI) || "global";
+      if (grantScopeTypeUI && grantScopeTypeUI.value === grant.scope_type) return textFromSelect(grantScopeTypeUI) || grant.scope_type;
+      const opt = grantScopeTypeUI ? Array.from(grantScopeTypeUI.options).find((o) => o.value === grant.scope_type) : null;
+      return opt ? (opt.textContent || "").trim() : grant.scope_type;
+    };
+
+    const removeEmptyGrantRow = () => {
+      if (!grantListBody) return;
+      grantListBody.querySelectorAll(".policy-grants-empty").forEach((row) => row.remove());
+    };
+
+    const ensureEmptyGrantRow = () => {
+      if (!grantListBody || grantListBody.querySelector(".policy-grant-row")) return;
+      const row = document.createElement("tr");
+      row.className = "policy-grants-empty";
+      const cell = document.createElement("td");
+      cell.colSpan = 5;
+      cell.textContent = "Sense grants";
+      row.appendChild(cell);
+      grantListBody.appendChild(row);
+    };
+
+    const bindGrantRowActions = (row) => {
+      const edit = row.querySelector(".grant-edit");
+      const remove = row.querySelector(".grant-remove");
+      if (edit) {
+        edit.addEventListener("click", () => {
+          setGrantState({
+            id: row.dataset.grantId || "",
+            permKey: row.dataset.permKey || "",
+            scopeType: row.dataset.scopeType || "global",
+            scopeId: row.dataset.scopeId || "",
+            scopeLabel: row.dataset.scopeLabel || "",
+            includeChildren: row.dataset.includeChildren === "1",
+          });
+        });
+      }
+      if (remove) {
+        remove.addEventListener("click", () => {
+          row.remove();
+          ensureEmptyGrantRow();
+          syncPolicyJSONFromVisualState();
+        });
+      }
+    };
+
+    const renderGrantRow = (grant, grantID) => {
+      const row = document.createElement("tr");
+      row.className = "policy-grant-row";
+      row.dataset.grantId = grantID || `client-${clientGrantCounter++}`;
+      row.dataset.permKey = grant.perm_key;
+      row.dataset.scopeType = grant.scope_type;
+      row.dataset.scopeId = grant.scope_id === null ? "" : String(grant.scope_id);
+      row.dataset.includeChildren = grant.include_children ? "1" : "0";
+      row.dataset.scopeLabel = grant.scope_type === "global" ? "" : grantScopeSearch ? grantScopeSearch.value || "" : "";
+
+      const permCell = document.createElement("td");
+      const permLabel = textFromSelect(grantPerm);
+      if (permLabel && permLabel !== grant.perm_key) {
+        const span = document.createElement("span");
+        span.title = grant.perm_key;
+        span.textContent = permLabel;
+        permCell.appendChild(span);
+      } else {
+        const code = document.createElement("code");
+        code.textContent = grant.perm_key;
+        permCell.appendChild(code);
+      }
+
+      const scopeCell = document.createElement("td");
+      scopeCell.textContent = scopeLabelForGrant(grant);
+
+      const idCell = document.createElement("td");
+      idCell.textContent = grant.scope_id === null ? "-" : row.dataset.scopeLabel ? `${row.dataset.scopeLabel} #${grant.scope_id}` : String(grant.scope_id);
+
+      const includeCell = document.createElement("td");
+      includeCell.textContent = grant.include_children ? "Si" : "No";
+
+      const actionsCell = document.createElement("td");
+      const actions = document.createElement("div");
+      actions.className = "grant-actions";
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "boto-secundari grant-edit";
+      edit.textContent = "Editar";
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "boto-secundari grant-remove";
+      remove.textContent = "Eliminar";
+      actions.appendChild(edit);
+      actions.appendChild(remove);
+      actionsCell.appendChild(actions);
+
+      row.appendChild(permCell);
+      row.appendChild(scopeCell);
+      row.appendChild(idCell);
+      row.appendChild(includeCell);
+      row.appendChild(actionsCell);
+      bindGrantRowActions(row);
+      return row;
+    };
+
+    const upsertGrantRow = (grant) => {
+      if (!grantListBody) return;
+      removeEmptyGrantRow();
+      const currentID = grantId ? grantId.value || "" : "";
+      const currentKey = grantKey(grant);
+      const rows = Array.from(grantListBody.querySelectorAll(".policy-grant-row"));
+      const currentRow = currentID ? rows.find((row) => row.dataset.grantId === currentID) : null;
+      const duplicateRow = rows.find((row) => {
+        const existing = grantFromDataset(row.dataset);
+        return existing && grantKey(existing) === currentKey && row !== currentRow;
+      });
+      if (duplicateRow) duplicateRow.remove();
+      const newRow = renderGrantRow(grant, currentID || "");
+      if (currentRow) currentRow.replaceWith(newRow);
+      else grantListBody.appendChild(newRow);
+      ensureEmptyGrantRow();
+    };
+
     setGrantState(initialState);
     lastScopeType = grantScopeTypeUI ? grantScopeTypeUI.value : "global";
     if (grantScopeTypeUI)
@@ -320,6 +457,19 @@
       field.addEventListener("change", () => syncPolicyJSONFromVisualState());
     });
     if (grantCancel) grantCancel.addEventListener("click", () => setGrantState(initialState));
+    if (grantSubmit) {
+      grantSubmit.addEventListener("click", () => {
+        const grant = collectGranularDraftGrant();
+        if (!grant) {
+          if (grantPerm && !grantPerm.value) grantPerm.focus();
+          else if (grantScopeId) grantScopeId.focus();
+          return;
+        }
+        upsertGrantRow(grant);
+        setGrantState(emptyGrantState);
+        syncPolicyJSONFromVisualState();
+      });
+    }
 
     document.querySelectorAll(".grant-edit").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -335,13 +485,7 @@
       });
     });
 
-    document.querySelectorAll(".grant-delete").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        if (!deleteForm || !deleteId) return;
-        deleteId.value = btn.dataset.grantId || "";
-        if (deleteForm.requestSubmit) deleteForm.requestSubmit();
-        else deleteForm.submit();
-      });
-    });
+    document.querySelectorAll(".policy-grant-row").forEach(bindGrantRowActions);
+    ensureEmptyGrantRow();
   }
 })();

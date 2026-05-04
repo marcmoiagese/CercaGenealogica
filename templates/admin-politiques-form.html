@@ -28,6 +28,7 @@
         .grant-list .taula code{background:#f3f4f8;border-radius:6px;padding:2px 6px;font-size:12px}
         .grants-card .suggest-field{position:relative}
         .grants-card .resultats-cerca{max-height:220px;overflow:auto}
+        .policy-grant-builder-note{margin-top:8px}
         .policy-json-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
         .policy-json-editor{width:100%;min-height:420px;font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;font-size:13px;line-height:1.45}
         .policy-json-warning{border:1px solid #f0c36d;background:#fff7e6;color:#6b4d00;border-radius:8px;padding:10px;margin:8px 0}
@@ -94,32 +95,30 @@
                         </section>
                         <section class="policy-tab tab-pane {{ if eq $active "grants" }}actiu{{ end }}" id="tab-grants">
                             <p class="camp-helper">{{ t .Lang "policies.grants.helper" }}</p>
-                            {{ if .Data.IsNew }}
-                            <div class="camp-helper">{{ t .Lang "policies.grants.save_first" }}</div>
-                            {{ else }}
                             {{ $grant := .Data.GrantForm }}
                             <div class="grants-grid">
-                                <div class="grants-card">
+                                <div class="grants-card policy-grant-builder" id="policy-grant-builder" data-mode="{{ if .Data.IsNew }}new{{ else }}edit{{ end }}">
                                     <div class="grup-camp">
                                         <label for="grant-perm-key">{{ t .Lang "policies.grants.perm_key" }}</label>
-                                        <select id="grant-perm-key" name="perm_key" form="grant-form" required>
+                                        <select id="grant-perm-key" name="perm_key" form="grant-form" data-field="perm_key" required>
                                             <option value="">—</option>
                                             {{ range .Data.PermissionCatalog }}
                                             {{ $labelKey := printf "policies.grants.perm.%s" . }}
                                             {{ $label := t $.Lang $labelKey }}
-                                            <option value="{{ . }}" {{ if and $grant (eq $grant.PermKey .) }}selected{{ end }}>{{ if eq $label $labelKey }}{{ . }}{{ else }}{{ $label }}{{ end }}</option>
+                                            <option value="{{ . }}" data-perm-key="{{ . }}" {{ if and $grant (eq $grant.PermKey .) }}selected{{ end }}>{{ if eq $label $labelKey }}{{ . }}{{ else }}{{ $label }}{{ end }}</option>
                                             {{ end }}
                                         </select>
                                     </div>
                                     <div class="grup-camp">
                                         <label for="grant-scope-type-ui">{{ t .Lang "policies.grants.scope_type" }}</label>
-                                        <select id="grant-scope-type-ui" name="scope_type_ui" form="grant-form" required>
-                                            <option value="global" {{ if and $grant (eq $grant.ScopeType "global") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.global" }}</option>
-                                            <option value="pais" {{ if and $grant (eq $grant.ScopeType "pais") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.pais" }}</option>
-                                            <option value="nivell" {{ if and $grant (or (eq $grant.ScopeType "nivell") (eq $grant.ScopeType "provincia") (eq $grant.ScopeType "comarca") (eq $grant.ScopeType "municipi")) }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.nivell" }}</option>
-                                            <option value="entitat_eclesiastica" {{ if and $grant (eq $grant.ScopeType "entitat_eclesiastica") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.entitat_eclesiastica" }}</option>
-                                            <option value="arxiu" {{ if and $grant (eq $grant.ScopeType "arxiu") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.arxiu" }}</option>
-                                            <option value="llibre" {{ if and $grant (eq $grant.ScopeType "llibre") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.llibre" }}</option>
+                                        <select id="grant-scope-type-ui" name="scope_type_ui" form="grant-form" data-field="scope_type_ui" required>
+                                            <option value="global" data-scope-type="global" {{ if and $grant (eq $grant.ScopeType "global") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.global" }}</option>
+                                            <option value="pais" data-scope-type="pais" {{ if and $grant (eq $grant.ScopeType "pais") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.pais" }}</option>
+                                            <option value="nivell" data-scope-type="nivell" {{ if and $grant (or (eq $grant.ScopeType "nivell") (eq $grant.ScopeType "provincia") (eq $grant.ScopeType "comarca")) }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.nivell" }}</option>
+                                            <option value="municipi" data-scope-type="municipi" {{ if and $grant (eq $grant.ScopeType "municipi") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.municipi" }}</option>
+                                            <option value="entitat_eclesiastica" data-scope-type="entitat_eclesiastica" {{ if and $grant (eq $grant.ScopeType "entitat_eclesiastica") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.entitat_eclesiastica" }}</option>
+                                            <option value="arxiu" data-scope-type="arxiu" {{ if and $grant (eq $grant.ScopeType "arxiu") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.arxiu" }}</option>
+                                            <option value="llibre" data-scope-type="llibre" {{ if and $grant (eq $grant.ScopeType "llibre") }}selected{{ end }}>{{ t $.Lang "policies.grants.scope.llibre" }}</option>
                                         </select>
                                         <input type="hidden" id="grant-scope-type" name="scope_type" form="grant-form" value="{{ if $grant }}{{ $grant.ScopeType }}{{ else }}global{{ end }}">
                                     </div>
@@ -135,11 +134,13 @@
                                                 data-api="/api/territori/paisos/suggest"
                                                 data-api-pais="/api/territori/paisos/suggest"
                                                 data-api-nivell="/api/territori/nivell-admin/suggest"
+                                                data-api-municipi="/api/territori/municipis/suggest"
                                                 data-api-entitat-eclesiastica="/api/territori/eclesiastic/suggest"
                                                 data-api-arxiu="/api/documentals/arxius/suggest"
                                                 data-api-llibre="/api/documentals/llibres/suggest"
                                                 data-placeholder-pais="{{ t .Lang "policies.grants.search.placeholder.pais" }}"
                                                 data-placeholder-nivell="{{ t .Lang "policies.grants.search.placeholder.nivell" }}"
+                                                data-placeholder-municipi="{{ t .Lang "municipis.search.placeholder" }}"
                                                 data-placeholder-entitat-eclesiastica="{{ t .Lang "policies.grants.search.placeholder.ecles" }}"
                                                 data-placeholder-arxiu="{{ t .Lang "policies.grants.search.placeholder.arxiu" }}"
                                                 data-placeholder-llibre="{{ t .Lang "policies.grants.search.placeholder.llibre" }}"
@@ -148,7 +149,7 @@
                                                 data-suggestions="grant-scope-suggestions"
                                                 data-empty-label="{{ t .Lang "common.empty" }}"
                                                 data-suggest="1">
-                                            <input type="hidden" id="grant-scope-id" name="scope_id" form="grant-form" value="{{ if and $grant (gt $grant.ScopeID 0) }}{{ $grant.ScopeID }}{{ end }}">
+                                            <input type="number" min="1" step="1" id="grant-scope-id" name="scope_id" form="grant-form" data-field="scope_id" value="{{ if and $grant (gt $grant.ScopeID 0) }}{{ $grant.ScopeID }}{{ end }}">
                                             <ul id="grant-scope-suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "common.suggestions" }}"></ul>
                                         </div>
                                         <small class="camp-helper">{{ t .Lang "policies.grants.scope_id.helper" }}</small>
@@ -158,11 +159,13 @@
                                             <input type="checkbox" id="grant-include-children" name="include_children" form="grant-form" value="1" {{ if and $grant $grant.IncludeChildren }}checked{{ end }}>
                                             {{ t .Lang "policies.grants.include_children" }}
                                         </label>
+                                        <small class="camp-helper">Inclou els elements descendents quan el scope es jerarquic.</small>
                                     </div>
                                     <div class="accions-formulari grant-actions">
-                                        <button type="submit" class="boto-primari" form="grant-form" id="grant-submit" data-label-add="{{ t .Lang "policies.grants.add" }}" data-label-update="{{ t .Lang "policies.grants.update" }}">{{ t .Lang "policies.grants.add" }}</button>
+                                        <button type="button" class="boto-primari" id="grant-submit" data-label-add="{{ t .Lang "policies.grants.add" }}" data-label-update="{{ t .Lang "policies.grants.update" }}">{{ t .Lang "policies.grants.add" }}</button>
                                         <button type="button" class="boto-secundari" id="grant-cancel" style="display:none">{{ t .Lang "policies.grants.cancel_edit" }}</button>
                                     </div>
+                                    <p class="camp-helper policy-grant-builder-note">Els grants d'aquesta llista es guarden aplicant el JSON modular. El boto Desar nomes desa Nom i Descripcio.</p>
                                 </div>
                                 <div class="grants-card grant-list">
                                     <h3>{{ t .Lang "policies.grants.list" }}</h3>
@@ -177,10 +180,10 @@
                                                     <th></th>
                                                 </tr>
                                             </thead>
-                                            <tbody>
+                                            <tbody id="policy-grants-list">
                                                 {{ range .Data.Grants }}
                                                 {{ $scopeLabel := index $.Data.ScopeLabels .ScopeType }}
-                                                <tr class="policy-grant-row" data-grant-id="{{ .ID }}" data-perm-key="{{ .PermKey }}" data-scope-type="{{ .ScopeType }}" data-scope-id="{{ if .ScopeIDValid }}{{ .ScopeID }}{{ end }}" data-include-children="{{ if .IncludeChildren }}1{{ else }}0{{ end }}">
+                                                <tr class="policy-grant-row" data-grant-id="{{ .ID }}" data-perm-key="{{ .PermKey }}" data-scope-type="{{ .ScopeType }}" data-scope-id="{{ if .ScopeIDValid }}{{ .ScopeID }}{{ end }}" data-include-children="{{ if .IncludeChildren }}1{{ else }}0{{ end }}" data-scope-label="{{ .ScopeLabel }}">
                                                     {{ $permLabelKey := printf "policies.grants.perm.%s" .PermKey }}
                                                     {{ $permLabel := t $.Lang $permLabelKey }}
                                                     <td>
@@ -200,19 +203,18 @@
                                                     <td>
                                                         <div class="grant-actions">
                                                             <button type="button" class="boto-secundari grant-edit" data-grant-id="{{ .ID }}" data-perm-key="{{ .PermKey }}" data-scope-type="{{ .ScopeType }}" data-scope-id="{{ if .ScopeIDValid }}{{ .ScopeID }}{{ end }}" data-scope-label="{{ .ScopeLabel }}" data-include-children="{{ if .IncludeChildren }}1{{ else }}0{{ end }}">{{ t $.Lang "common.edit" }}</button>
-                                                            <button type="button" class="boto-secundari grant-delete" data-grant-id="{{ .ID }}">{{ t $.Lang "policies.grants.delete" }}</button>
+                                                            <button type="button" class="boto-secundari grant-remove" data-grant-id="{{ .ID }}">{{ t $.Lang "policies.grants.delete" }}</button>
                                                         </div>
                                                     </td>
                                                 </tr>
                                                 {{ else }}
-                                                <tr><td colspan="5">{{ t .Lang "policies.grants.empty" }}</td></tr>
+                                                <tr class="policy-grants-empty"><td colspan="5">{{ t .Lang "policies.grants.empty" }}</td></tr>
                                                 {{ end }}
                                             </tbody>
                                         </table>
                                     </div>
                                 </div>
                             </div>
-                            {{ end }}
                         </section>
                         <section class="policy-tab tab-pane {{ if eq $active "json" }}actiu{{ end }}" id="tab-json">
                             {{ if .Data.IsNew }}
