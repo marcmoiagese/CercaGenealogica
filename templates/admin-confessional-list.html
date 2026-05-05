@@ -25,25 +25,25 @@
                 <h1>{{ .Data.Section.Title }}</h1>
                 {{ if and .Data.CanCreate (ne .Data.Section.Kind "religio") (ne .Data.Section.Kind "nivell") }}
                 <div class="card-actions">
-                    <a class="boto-primari" href="/territori/confessional/{{ .Data.Section.Slug }}/new">{{ .Data.Section.NewLabel }}</a>
+                    <a class="boto-primari" href="/confessional/{{ .Data.Section.Slug }}/new">{{ .Data.Section.NewLabel }}</a>
                 </div>
                 {{ end }}
             </header>
             <nav class="confessional-tabs" aria-label="Seccions confessionals">
                 {{ if or .Data.CanViewConfessionalReligions .Data.IsAdmin }}
-                <a href="/territori/confessional/religions" {{ if eq .Data.Section.Slug "religions" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.catalog_religions" }}</a>
+                <a href="/confessional/religions" {{ if eq .Data.Section.Slug "religions" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.catalog_religions" }}</a>
                 {{ end }}
                 {{ if or .Data.CanViewConfessionalNivells .Data.IsAdmin }}
-                <a href="/territori/confessional/nivells" {{ if eq .Data.Section.Slug "nivells" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.catalog_levels" }}</a>
+                <a href="/confessional/nivells" {{ if eq .Data.Section.Slug "nivells" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.catalog_levels" }}</a>
                 {{ end }}
                 {{ if or .Data.CanViewConfessionalEntitats .Data.IsAdmin }}
-                <a href="/territori/confessional/entitats" {{ if eq .Data.Section.Slug "entitats" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.entities" }}</a>
+                <a href="/confessional/entitats" {{ if eq .Data.Section.Slug "entitats" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.entities" }}</a>
                 {{ end }}
                 {{ if or .Data.CanViewConfessionalRelacionsEntitats .Data.IsAdmin }}
-                <a href="/territori/confessional/relacions-entitats" {{ if eq .Data.Section.Slug "relacions-entitats" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.entity_relations" }}</a>
+                <a href="/confessional/relacions-entitats" {{ if eq .Data.Section.Slug "relacions-entitats" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.entity_relations" }}</a>
                 {{ end }}
                 {{ if or .Data.CanViewConfessionalMunicipisEntitats .Data.IsAdmin }}
-                <a href="/territori/confessional/municipis-entitats" {{ if eq .Data.Section.Slug "municipis-entitats" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.territorial_relations" }}</a>
+                <a href="/confessional/municipis-entitats" {{ if eq .Data.Section.Slug "municipis-entitats" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.territorial_relations" }}</a>
                 {{ end }}
             </nav>
             {{ if eq .Data.Notice "saved" }}<div class="alert alert-success">Registre desat.</div>{{ end }}
@@ -84,9 +84,9 @@
                         <td>{{ .Estat }}</td>
                         {{ if or $.Data.CanEdit $.Data.CanDelete }}
                         <td class="confessional-actions">
-                            {{ if $.Data.CanEdit }}<a class="boto-secundari" href="/territori/confessional/models/{{ .ID }}/edit">Edita</a>{{ end }}
+                            {{ if $.Data.CanEdit }}<a class="boto-secundari" href="/confessional/models/{{ .ID }}/edit">Edita</a>{{ end }}
                             {{ if $.Data.CanDelete }}
-                            <form method="post" action="/territori/confessional/delete">
+                            <form method="post" action="/confessional/delete">
                                 <input type="hidden" name="kind" value="model">
                                 <input type="hidden" name="id" value="{{ .ID }}">
                                 <button type="submit" class="boto-secundari">Elimina</button>
@@ -135,9 +135,9 @@
                         <td>{{ .ModeracioEstat }}</td>
                         {{ if or $.Data.CanEdit $.Data.CanDelete }}
                         <td class="confessional-actions">
-                            {{ if $.Data.CanEdit }}<a class="boto-secundari" href="/territori/confessional/entitats/{{ .ID }}/edit">Edita</a>{{ end }}
+                            {{ if $.Data.CanEdit }}<a class="boto-secundari" href="/confessional/entitats/{{ .ID }}/edit">Edita</a>{{ end }}
                             {{ if $.Data.CanDelete }}
-                            <form method="post" action="/territori/confessional/delete">
+                            <form method="post" action="/confessional/delete">
                                 <input type="hidden" name="kind" value="entitat">
                                 <input type="hidden" name="id" value="{{ .ID }}">
                                 <button type="submit" class="boto-secundari">Elimina</button>
@@ -166,9 +166,9 @@
                         <td>{{ .ModeracioEstat }}</td>
                         {{ if or $.Data.CanEdit $.Data.CanDelete }}
                         <td class="confessional-actions">
-                            {{ if $.Data.CanEdit }}<a class="boto-secundari" href="/territori/confessional/relacions-entitats/{{ .ID }}/edit">{{ t $.Lang "confessional.action.edit" }}</a>{{ end }}
+                            {{ if $.Data.CanEdit }}<a class="boto-secundari" href="/confessional/relacions-entitats/{{ .ID }}/edit">{{ t $.Lang "confessional.action.edit" }}</a>{{ end }}
                             {{ if $.Data.CanDelete }}
-                            <form method="post" action="/territori/confessional/delete">
+                            <form method="post" action="/confessional/delete">
                                 <input type="hidden" name="kind" value="rel_ent">
                                 <input type="hidden" name="id" value="{{ .ID }}">
                                 <button type="submit" class="boto-secundari">{{ t $.Lang "confessional.action.delete" }}</button>
@@ -198,9 +198,9 @@
                         <td>{{ .ModeracioEstat }}</td>
                         {{ if or $.Data.CanEdit $.Data.CanDelete }}
                         <td class="confessional-actions">
-                            {{ if $.Data.CanEdit }}<a class="boto-secundari" href="/territori/confessional/municipis-entitats/{{ .ID }}/edit">Edita</a>{{ end }}
+                            {{ if $.Data.CanEdit }}<a class="boto-secundari" href="/confessional/municipis-entitats/{{ .ID }}/edit">Edita</a>{{ end }}
                             {{ if $.Data.CanDelete }}
-                            <form method="post" action="/territori/confessional/delete">
+                            <form method="post" action="/confessional/delete">
                                 <input type="hidden" name="kind" value="relacio">
                                 <input type="hidden" name="id" value="{{ .ID }}">
                                 <button type="submit" class="boto-secundari">Elimina</button>

@@ -622,6 +622,9 @@ type DB interface {
 	ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error)
 	SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error)
 
+	// Legacy confessional base catalogs. F35-3W keeps religions/confessions
+	// and levels as static code catalogs in core/confessional_catalog.go; these
+	// DB methods remain only for historical rows and compatibility tests.
 	ListReligioConfessions() ([]ReligioConfessio, error)
 	GetReligioConfessio(id int) (*ReligioConfessio, error)
 	SaveReligioConfessio(r *ReligioConfessio) (int, error)
@@ -630,6 +633,7 @@ type DB interface {
 	GetModelConfessional(id int) (*ModelConfessional, error)
 	SaveModelConfessional(m *ModelConfessional) (int, error)
 	DeleteModelConfessional(id int) error
+	// Legacy level catalog rows; not used by the active confessional UI.
 	ListNivellsConfessionals() ([]NivellConfessional, error)
 	GetNivellConfessional(id int) (*NivellConfessional, error)
 	SaveNivellConfessional(n *NivellConfessional) (int, error)

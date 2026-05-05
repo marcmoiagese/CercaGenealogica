@@ -15,18 +15,21 @@ func TestF353RConfessionalRoutesMenuAndPermissionsAreSeparated(t *testing.T) {
 	permsBody := readProjectFileF353R(t, root, "core/permissions_modular.go")
 
 	for _, route := range []string{
-		"/territori/confessional/religions",
-		"/territori/confessional/nivells",
-		"/territori/confessional/entitats",
-		"/territori/confessional/relacions-entitats",
-		"/territori/confessional/municipis-entitats",
+		"/confessional/religions",
+		"/confessional/nivells",
+		"/confessional/entitats",
+		"/confessional/relacions-entitats",
+		"/confessional/municipis-entitats",
 	} {
 		if !strings.Contains(menuBody, route) && !strings.Contains(mainBody, route) {
 			t.Fatalf("falta ruta confessional separada %s", route)
 		}
 	}
-	if !strings.Contains(handlerBody, "http.Redirect(w, r, \"/territori/confessional/entitats\"") {
-		t.Fatalf("/territori/confessional ha de redirigir a una seccio, no renderitzar la pantalla agregada")
+	if !strings.Contains(handlerBody, "http.Redirect(w, r, \"/confessional/entitats\"") {
+		t.Fatalf("/confessional ha de redirigir a una seccio, no renderitzar la pantalla agregada")
+	}
+	if !strings.Contains(mainBody, "/territori/confessional") || !strings.Contains(mainBody, "compatibilitat historica") {
+		t.Fatalf("les rutes antigues /territori/confessional han de quedar documentades com compatibilitat")
 	}
 	if strings.Contains(menuBody, "Model religios/confessional</a>") {
 		t.Fatalf("el menu no ha de conservar l'enllac unic agregat antic")

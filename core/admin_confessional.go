@@ -43,7 +43,7 @@ var confessionalSections = map[string]confessionalSection{
 }
 
 func (a *App) AdminConfessionalList(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/territori/confessional/entitats", http.StatusSeeOther)
+	http.Redirect(w, r, "/confessional/entitats", http.StatusSeeOther)
 }
 
 func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Request) {
@@ -56,14 +56,29 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	religions, _ := a.DB.ListReligioConfessions()
-	models, _ := a.DB.ListModelsConfessionals()
-	nivells, _ := a.DB.ListNivellsConfessionals()
-	entitats, _ := a.DB.ListEntitatsReligioses()
-	relacions, _ := a.DB.ListMunicipiEntitatsReligioses(0)
-	relEntitats, _ := a.DB.ListEntitatReligiosaRelacions()
-	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
-	paisos, _ := a.DB.ListPaisos()
+	var religions []db.ReligioConfessio
+	var models []db.ModelConfessional
+	var nivells []db.NivellConfessional
+	var entitats []db.EntitatReligiosa
+	var relacions []db.MunicipiEntitatReligiosa
+	var relEntitats []db.EntitatReligiosaRelacio
+	var municipis []db.MunicipiRow
+	var paisos []db.Pais
+	switch section.Kind {
+	case "model":
+		religions, _ = a.DB.ListReligioConfessions()
+		models, _ = a.DB.ListModelsConfessionals()
+		paisos, _ = a.DB.ListPaisos()
+	case "entitat":
+		entitats, _ = a.DB.ListEntitatsReligioses()
+	case "rel_ent":
+		entitats, _ = a.DB.ListEntitatsReligioses()
+		relEntitats, _ = a.DB.ListEntitatReligiosaRelacions()
+	case "relacio":
+		entitats, _ = a.DB.ListEntitatsReligioses()
+		relacions, _ = a.DB.ListMunicipiEntitatsReligioses(0)
+		municipis, _ = a.DB.ListMunicipis(db.MunicipiFilter{})
+	}
 	canCreate := a.HasPermission(user.ID, section.CreatePerm, PermissionTarget{})
 	if section.Kind == "religio" || section.Kind == "nivell" {
 		canCreate = false
@@ -127,12 +142,8 @@ func (a *App) AdminNewConfessional(w http.ResponseWriter, r *http.Request) {
 	}
 	data := confessionalFormData{Kind: kind, IsNew: true, ReturnURL: firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("return_to")), confessionalSectionURL(section, ""))}
 	switch kind {
-	case "religio":
-		data.Religio = &db.ReligioConfessio{Estat: "actiu", ModeracioEstat: "pendent"}
 	case "model":
 		data.Model = &db.ModelConfessional{Estat: "actiu", ModeracioEstat: "pendent"}
-	case "nivell":
-		data.Nivell = &db.NivellConfessional{Ordre: 1, Estat: "actiu", ModeracioEstat: "pendent"}
 	case "entitat":
 		data.Entitat = &db.EntitatReligiosa{Estat: "actiu", ModeracioEstat: "pendent"}
 	case "relacio":
@@ -169,12 +180,8 @@ func (a *App) AdminEditConfessional(w http.ResponseWriter, r *http.Request) {
 	data := confessionalFormData{Kind: kind, ReturnURL: strings.TrimSpace(r.URL.Query().Get("return_to"))}
 	var err error
 	switch kind {
-	case "religio":
-		data.Religio, err = a.DB.GetReligioConfessio(id)
 	case "model":
 		data.Model, err = a.DB.GetModelConfessional(id)
-	case "nivell":
-		data.Nivell, err = a.DB.GetNivellConfessional(id)
 	case "entitat":
 		data.Entitat, err = a.DB.GetEntitatReligiosa(id)
 	case "relacio":
@@ -191,7 +198,7 @@ func (a *App) AdminEditConfessional(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/territori/confessional", http.StatusSeeOther)
+		http.Redirect(w, r, "/confessional", http.StatusSeeOther)
 		return
 	}
 	id, _ := strconv.Atoi(r.FormValue("id"))
@@ -237,7 +244,7 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) AdminDeleteConfessional(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/territori/confessional", http.StatusSeeOther)
+		http.Redirect(w, r, "/confessional", http.StatusSeeOther)
 		return
 	}
 	kind := confessionalKind(r.FormValue("kind"))
@@ -260,12 +267,8 @@ func (a *App) AdminDeleteConfessional(w http.ResponseWriter, r *http.Request) {
 	}
 	var err error
 	switch kind {
-	case "religio":
-		err = a.DB.DeleteReligioConfessio(id)
 	case "model":
 		err = a.DB.DeleteModelConfessional(id)
-	case "nivell":
-		err = a.DB.DeleteNivellConfessional(id)
 	case "entitat":
 		err = a.DB.DeleteEntitatReligiosa(id)
 	case "relacio":
@@ -285,12 +288,23 @@ func (a *App) AdminDeleteConfessional(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, user *db.User, data confessionalFormData) {
-	allReligions, _ := a.DB.ListReligioConfessions()
-	models, _ := a.DB.ListModelsConfessionals()
-	allEntitats, _ := a.DB.ListEntitatsReligioses()
-	entitats := publishedEntitatsReligioses(allEntitats)
-	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
-	paisos, _ := a.DB.ListPaisos()
+	var allReligions []db.ReligioConfessio
+	var models []db.ModelConfessional
+	var allEntitats []db.EntitatReligiosa
+	var municipis []db.MunicipiRow
+	var paisos []db.Pais
+	switch data.Kind {
+	case "model":
+		allReligions, _ = a.DB.ListReligioConfessions()
+		paisos, _ = a.DB.ListPaisos()
+	case "relacio":
+		allEntitats, _ = a.DB.ListEntitatsReligioses()
+		municipis, _ = a.DB.ListMunicipis(db.MunicipiFilter{})
+	case "rel_ent":
+		allEntitats, _ = a.DB.ListEntitatsReligioses()
+	case "entitat":
+		paisos, _ = a.DB.ListPaisos()
+	}
 	nuclis := a.compatibleNucliRows(municipis, selectedRelacioMunicipiID(data.Relacio))
 	RenderPrivateTemplate(w, r, "admin-confessional-form.html", map[string]interface{}{
 		"Section":             confessionalSectionMust(data.Kind),
@@ -301,7 +315,7 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 		"Nivells":             ListConfessionalLevelCatalog(),
 		"SelectableNivells":   ListConfessionalLevelCatalog(),
 		"Entitats":            allEntitats,
-		"SelectableEntitats":  entitats,
+		"SelectableEntitats":  publishedEntitatsReligioses(allEntitats),
 		"Municipis":           municipis,
 		"Nuclis":              nuclis,
 		"Paisos":              paisos,
@@ -315,25 +329,6 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confe
 	estat := normalizeConfessionalEstat(r.FormValue("estat"))
 	status := a.confessionalModerationStatusForSave(kind, id)
 	switch kind {
-	case "religio":
-		item := &db.ReligioConfessio{
-			ID:             id,
-			Codi:           normalizeConfessionalCode(r.FormValue("codi")),
-			Nom:            strings.TrimSpace(r.FormValue("nom")),
-			PareID:         sqlNullInt(r.FormValue("pare_id")),
-			Categoria:      normalizeReligioCategoria(r.FormValue("categoria")),
-			Descripcio:     strings.TrimSpace(r.FormValue("descripcio")),
-			Estat:          normalizeReligioEstat(r.FormValue("estat")),
-			Observacions:   strings.TrimSpace(r.FormValue("observacions")),
-			ModeracioEstat: status,
-		}
-		data.Religio = item
-		if item.Nom == "" {
-			return data, "El nom es obligatori."
-		}
-		if item.PareID.Valid && item.ID != 0 && item.PareID.Int64 == int64(item.ID) {
-			return data, "La religio/confessio no pot ser pare de si mateixa."
-		}
 	case "model":
 		item := &db.ModelConfessional{
 			ID:                 id,
@@ -350,44 +345,6 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confe
 		data.Model = item
 		if item.Nom == "" {
 			return data, "El nom es obligatori."
-		}
-	case "nivell":
-		ordre, _ := strconv.Atoi(r.FormValue("ordre"))
-		modelID, _ := strconv.Atoi(r.FormValue("model_confessional_id"))
-		item := &db.NivellConfessional{
-			ID:                  id,
-			ModelConfessionalID: modelID,
-			ReligioConfessioID:  sqlNullInt(r.FormValue("religio_confessio_id")),
-			Codi:                normalizeConfessionalCode(r.FormValue("codi")),
-			Ordre:               ordre,
-			NomNivell:           strings.TrimSpace(r.FormValue("nom_nivell")),
-			NomPlural:           strings.TrimSpace(r.FormValue("nom_plural")),
-			TipusNivell:         strings.TrimSpace(r.FormValue("tipus_nivell")),
-			Categoria:           normalizeNivellConfessionalCategoria(r.FormValue("categoria")),
-			CodiOficial:         strings.TrimSpace(r.FormValue("codi_oficial")),
-			PotTenirTerritori:   true,
-			PotTenirFills:       true,
-			PotVincularMunicipi: true,
-			PotSuggerirImports:  true,
-			ParentID:            sqlNullInt(r.FormValue("parent_id")),
-			AnyInici:            sqlNullInt(r.FormValue("any_inici")),
-			AnyFi:               sqlNullInt(r.FormValue("any_fi")),
-			Estat:               estat,
-			Observacions:        strings.TrimSpace(r.FormValue("observacions")),
-			ModeracioEstat:      status,
-		}
-		data.Nivell = item
-		if !item.ReligioConfessioID.Valid && item.ModelConfessionalID == 0 {
-			return data, "Cal indicar la religio/confessio."
-		}
-		if item.Ordre <= 0 {
-			return data, "L'ordre ha de ser positiu."
-		}
-		if item.NomNivell == "" {
-			return data, "El nom del nivell es obligatori."
-		}
-		if item.ParentID.Valid && item.ID != 0 && item.ParentID.Int64 == int64(item.ID) {
-			return data, "El nivell no pot ser pare de si mateix."
 		}
 	case "entitat":
 		item := &db.EntitatReligiosa{
@@ -544,16 +501,8 @@ func (a *App) confessionalModerationStatusForSave(kind string, id int) string {
 	}
 	var status string
 	switch kind {
-	case "religio":
-		if item, err := a.DB.GetReligioConfessio(id); err == nil && item != nil {
-			status = item.ModeracioEstat
-		}
 	case "model":
 		if item, err := a.DB.GetModelConfessional(id); err == nil && item != nil {
-			status = item.ModeracioEstat
-		}
-	case "nivell":
-		if item, err := a.DB.GetNivellConfessional(id); err == nil && item != nil {
 			status = item.ModeracioEstat
 		}
 	case "entitat":
@@ -574,14 +523,8 @@ func (a *App) confessionalModerationStatusForSave(kind string, id int) string {
 
 func (a *App) saveConfessionalData(kind string, data confessionalFormData) error {
 	switch kind {
-	case "religio":
-		_, err := a.DB.SaveReligioConfessio(data.Religio)
-		return err
 	case "model":
 		_, err := a.DB.SaveModelConfessional(data.Model)
-		return err
-	case "nivell":
-		_, err := a.DB.SaveNivellConfessional(data.Nivell)
 		return err
 	case "entitat":
 		_, err := a.DB.SaveEntitatReligiosa(data.Entitat)
@@ -638,7 +581,7 @@ func confessionalSectionFromPath(path string) (confessionalSection, bool) {
 }
 
 func confessionalSectionURL(section confessionalSection, query string) string {
-	url := "/territori/confessional/" + section.Slug
+	url := "/confessional/" + section.Slug
 	query = strings.TrimSpace(query)
 	if query != "" {
 		url += "?" + query

@@ -98,19 +98,19 @@
             </div>
             <ul>
                 {{ if or (index .Data "CanViewConfessionalReligions") (index .Data "IsAdmin") }}
-                <li class="menu-opcio"><a href="/territori/confessional/religions">{{ t .Lang "confessional.menu.catalog_religions" }}</a></li>
+                <li class="menu-opcio"><a href="/confessional/religions">{{ t .Lang "confessional.menu.catalog_religions" }}</a></li>
                 {{ end }}
                 {{ if or (index .Data "CanViewConfessionalNivells") (index .Data "IsAdmin") }}
-                <li class="menu-opcio"><a href="/territori/confessional/nivells">{{ t .Lang "confessional.menu.catalog_levels" }}</a></li>
+                <li class="menu-opcio"><a href="/confessional/nivells">{{ t .Lang "confessional.menu.catalog_levels" }}</a></li>
                 {{ end }}
                 {{ if or (index .Data "CanViewConfessionalEntitats") (index .Data "IsAdmin") }}
-                <li class="menu-opcio"><a href="/territori/confessional/entitats">{{ t .Lang "confessional.menu.entities" }}</a></li>
+                <li class="menu-opcio"><a href="/confessional/entitats">{{ t .Lang "confessional.menu.entities" }}</a></li>
                 {{ end }}
                 {{ if or (index .Data "CanViewConfessionalRelacionsEntitats") (index .Data "IsAdmin") }}
-                <li class="menu-opcio"><a href="/territori/confessional/relacions-entitats">{{ t .Lang "confessional.menu.entity_relations" }}</a></li>
+                <li class="menu-opcio"><a href="/confessional/relacions-entitats">{{ t .Lang "confessional.menu.entity_relations" }}</a></li>
                 {{ end }}
                 {{ if or (index .Data "CanViewConfessionalMunicipisEntitats") (index .Data "IsAdmin") }}
-                <li class="menu-opcio"><a href="/territori/confessional/municipis-entitats">{{ t .Lang "confessional.menu.territorial_relations" }}</a></li>
+                <li class="menu-opcio"><a href="/confessional/municipis-entitats">{{ t .Lang "confessional.menu.territorial_relations" }}</a></li>
                 {{ end }}
             </ul>
         </div>

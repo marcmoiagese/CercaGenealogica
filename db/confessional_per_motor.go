@@ -143,6 +143,8 @@ func postgresConfessionalQueries() confessionalQueries {
 	return q
 }
 
+// Legacy religion/confession row access. The active base catalog is the static
+// code catalog in core/confessional_catalog.go, not religio_confessio rows.
 func sqliteListReligioConfessions(d *SQLite) ([]ReligioConfessio, error) {
 	return listReligioConfessions(d.Conn, sqliteConfessionalQueries())
 }
@@ -217,6 +219,8 @@ func mysqlDeleteModelConfessional(d *MySQL, id int) error {
 	return deleteModelConfessional(d.Conn, mysqlConfessionalQueries(), id)
 }
 
+// Legacy level row access. Active selectors and catalog screens use the static
+// code catalog, not nivell_confessional rows.
 func sqliteListNivellsConfessionals(d *SQLite) ([]NivellConfessional, error) {
 	return listNivellsConfessionals(d.Conn, sqliteConfessionalQueries())
 }

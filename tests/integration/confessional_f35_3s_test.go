@@ -28,11 +28,11 @@ func TestF353SConfessionalMenuIsTopLevelAndTerritoryStaysClean(t *testing.T) {
 		t.Fatalf("Territori encara conte entrades confessionals")
 	}
 	for _, route := range []string{
-		"/territori/confessional/religions",
-		"/territori/confessional/nivells",
-		"/territori/confessional/entitats",
-		"/territori/confessional/relacions-entitats",
-		"/territori/confessional/municipis-entitats",
+		"/confessional/religions",
+		"/confessional/nivells",
+		"/confessional/entitats",
+		"/confessional/relacions-entitats",
+		"/confessional/municipis-entitats",
 	} {
 		if !strings.Contains(menuBody, route) {
 			t.Fatalf("falta ruta al menu confessional: %s", route)
@@ -62,8 +62,8 @@ func TestF353SConfessionalCRUDCannotPublishDirectly(t *testing.T) {
 	if strings.Contains(handlerBody, `r.FormValue("moderation_status")`) {
 		t.Fatalf("el POST confessional no ha de llegir moderation_status manipulat")
 	}
-	if got := strings.Count(handlerBody, `ModeracioEstat: "pendent"`); got < 5 {
-		t.Fatalf("les altes confessionals han de quedar pendents; defaults detectats=%d", got)
+	if got := strings.Count(handlerBody, `ModeracioEstat: "pendent"`); got < 4 {
+		t.Fatalf("les altes confessionals actives han de quedar pendents; defaults detectats=%d", got)
 	}
 	if !strings.Contains(handlerBody, "confessionalModerationStatusForSave(kind, id)") {
 		t.Fatalf("el guardat ha de calcular l'estat de moderacio al servidor")

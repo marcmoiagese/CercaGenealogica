@@ -17,11 +17,11 @@ import (
 func TestEspaiGedcomUploadCreatesImport(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := map[string]string{
-		"DB_ENGINE":     "sqlite",
-		"DB_PATH":       filepath.Join(tmpDir, "test_f25_gedcom.sqlite3"),
-		"RECREADB":      "true",
-		"LOG_LEVEL":     "silent",
-		"GEDCOM_ROOT":   filepath.Join(tmpDir, "gedcom"),
+		"DB_ENGINE":            "sqlite",
+		"DB_PATH":              filepath.Join(tmpDir, "test_f25_gedcom.sqlite3"),
+		"RECREADB":             "true",
+		"LOG_LEVEL":            "silent",
+		"GEDCOM_ROOT":          filepath.Join(tmpDir, "gedcom"),
 		"GEDCOM_MAX_UPLOAD_MB": "5",
 	}
 	app, database := newTestAppForConfig(t, cfg)
@@ -78,11 +78,11 @@ func TestEspaiGedcomUploadCreatesImport(t *testing.T) {
 func TestEspaiGrampsConnectAndSync(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := map[string]string{
-		"DB_ENGINE":     "sqlite",
-		"DB_PATH":       filepath.Join(tmpDir, "test_f25_gramps.sqlite3"),
-		"RECREADB":      "true",
-		"LOG_LEVEL":     "silent",
-		"ESP_GRAMPS_SECRET": "test-secret",
+		"DB_ENGINE":                       "sqlite",
+		"DB_PATH":                         filepath.Join(tmpDir, "test_f25_gramps.sqlite3"),
+		"RECREADB":                        "true",
+		"LOG_LEVEL":                       "silent",
+		"ESP_GRAMPS_SECRET":               "test-secret",
 		"ESP_GRAMPS_HTTP_TIMEOUT_SECONDS": "2",
 	}
 	app, database := newTestAppForConfig(t, cfg)

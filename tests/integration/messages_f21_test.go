@@ -18,11 +18,11 @@ import (
 func newTestAppWithMail(t *testing.T, dbFileName string) (*core.App, db.DB) {
 	t.Helper()
 	cfg := map[string]string{
-		"DB_ENGINE":    "sqlite",
-		"DB_PATH":      filepath.Join(t.TempDir(), dbFileName),
-		"RECREADB":     "true",
-		"LOG_LEVEL":    "silent",
-		"MAIL_ENABLED": "true",
+		"DB_ENGINE":       "sqlite",
+		"DB_PATH":         filepath.Join(t.TempDir(), dbFileName),
+		"RECREADB":        "true",
+		"LOG_LEVEL":       "silent",
+		"MAIL_ENABLED":    "true",
 		"PUBLIC_BASE_URL": "http://localhost:8080",
 	}
 	return newTestAppForConfig(t, cfg)

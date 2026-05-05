@@ -33,8 +33,8 @@ func createPolicyWithGrant(t *testing.T, database db.DB, name, permKey string) i
 	t.Helper()
 
 	policy := &db.Politica{
-		Nom:         name,
-		Descripcio:  "test policy",
+		Nom:        name,
+		Descripcio: "test policy",
 	}
 	policyID, err := database.SavePolitica(policy)
 	if err != nil {

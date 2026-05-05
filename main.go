@@ -780,11 +780,9 @@ func main() {
 	})
 	http.HandleFunc("/territori/eclesiastic/save", applyMiddleware(app.AdminSaveEclesiastic, core.BlockIPs, core.RateLimit))
 
-	// Model religios/confessional
-	http.HandleFunc("/territori/confessional", applyMiddleware(app.AdminConfessionalList, core.BlockIPs, core.RateLimit))
-	http.HandleFunc("/territori/confessional/save", applyMiddleware(app.AdminSaveConfessional, core.BlockIPs, core.RateLimit))
-	http.HandleFunc("/territori/confessional/delete", applyMiddleware(app.AdminDeleteConfessional, core.BlockIPs, core.RateLimit))
-	http.HandleFunc("/territori/confessional/", func(w http.ResponseWriter, r *http.Request) {
+	// Modul religios/confessional. Les rutes canoniques son /confessional/*;
+	// /territori/confessional/* es conserva com a compatibilitat historica.
+	confessionalRouter := func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/new"):
 			applyMiddleware(app.AdminNewConfessional, core.BlockIPs, core.RateLimit)(w, r)
@@ -793,7 +791,15 @@ func main() {
 		default:
 			applyMiddleware(app.AdminConfessionalSectionList, core.BlockIPs, core.RateLimit)(w, r)
 		}
-	})
+	}
+	http.HandleFunc("/confessional", applyMiddleware(app.AdminConfessionalList, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/confessional/save", applyMiddleware(app.AdminSaveConfessional, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/confessional/delete", applyMiddleware(app.AdminDeleteConfessional, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/confessional/", confessionalRouter)
+	http.HandleFunc("/territori/confessional", applyMiddleware(app.AdminConfessionalList, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/territori/confessional/save", applyMiddleware(app.AdminSaveConfessional, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/territori/confessional/delete", applyMiddleware(app.AdminDeleteConfessional, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/territori/confessional/", confessionalRouter)
 
 	// Polítiques / permisos
 	http.HandleFunc("/admin/politiques", func(w http.ResponseWriter, r *http.Request) {

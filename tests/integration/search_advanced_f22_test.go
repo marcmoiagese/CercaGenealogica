@@ -28,13 +28,13 @@ func TestAdvancedSearchFiltersAndFuzzy(t *testing.T) {
 				t.Fatalf("CreatePais ha fallat: %v", err)
 			}
 			nivellID, err := database.CreateNivell(&db.NivellAdministratiu{
-				PaisID:          paisID,
-				Nivel:           1,
-				NomNivell:       "Nivell Test",
-				TipusNivell:     "Regio",
-				Estat:           "actiu",
-				ModeracioEstat:  "publicat",
-				CreatedBy:       sql.NullInt64{Int64: int64(user.ID), Valid: true},
+				PaisID:         paisID,
+				Nivel:          1,
+				NomNivell:      "Nivell Test",
+				TipusNivell:    "Regio",
+				Estat:          "actiu",
+				ModeracioEstat: "publicat",
+				CreatedBy:      sql.NullInt64{Int64: int64(user.ID), Valid: true},
 			})
 			if err != nil {
 				t.Fatalf("CreateNivell ha fallat: %v", err)

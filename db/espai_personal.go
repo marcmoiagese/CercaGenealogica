@@ -104,29 +104,29 @@ type EspaiPrivacyAudit struct {
 }
 
 type EspaiRelacio struct {
-	ID              int
-	ArbreID         int
-	PersonaID       int
+	ID               int
+	ArbreID          int
+	PersonaID        int
 	RelatedPersonaID int
-	RelationType    string
-	Notes           sql.NullString
-	CreatedAt       sql.NullTime
-	UpdatedAt       sql.NullTime
+	RelationType     string
+	Notes            sql.NullString
+	CreatedAt        sql.NullTime
+	UpdatedAt        sql.NullTime
 }
 
 type EspaiEvent struct {
-	ID            int
-	ArbreID       int
-	PersonaID     int
-	ExternalID    sql.NullString
-	EventType     string
-	EventRole     sql.NullString
-	EventDate     sql.NullString
-	EventPlace    sql.NullString
-	Description   sql.NullString
-	Source        sql.NullString
-	CreatedAt     sql.NullTime
-	UpdatedAt     sql.NullTime
+	ID          int
+	ArbreID     int
+	PersonaID   int
+	ExternalID  sql.NullString
+	EventType   string
+	EventRole   sql.NullString
+	EventDate   sql.NullString
+	EventPlace  sql.NullString
+	Description sql.NullString
+	Source      sql.NullString
+	CreatedAt   sql.NullTime
+	UpdatedAt   sql.NullTime
 }
 
 type EspaiCoincidencia struct {
@@ -242,12 +242,12 @@ type EspaiGrupConflicte struct {
 }
 
 type EspaiGrupCanvi struct {
-	ID         int
-	GrupID     int
-	ActorID    sql.NullInt64
-	Action     string
-	ObjectType sql.NullString
-	ObjectID   sql.NullInt64
+	ID          int
+	GrupID      int
+	ActorID     sql.NullInt64
+	Action      string
+	ObjectType  sql.NullString
+	ObjectID    sql.NullInt64
 	PayloadJSON sql.NullString
-	CreatedAt  sql.NullTime
+	CreatedAt   sql.NullTime
 }

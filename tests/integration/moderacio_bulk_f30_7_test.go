@@ -32,14 +32,14 @@ func createPublicPersona(t *testing.T, database db.DB, userID int, name string) 
 func createPendingMediaAlbum(t *testing.T, database db.DB, userID int, title string) int {
 	t.Helper()
 	album := &db.MediaAlbum{
-		PublicID:         fmt.Sprintf("album-%d", time.Now().UnixNano()),
-		Title:            title,
-		Description:      "",
-		AlbumType:        "photo",
-		OwnerUserID:      userID,
-		LlibreID:         sql.NullInt64{},
-		ModerationStatus: "pending",
-		Visibility:       "private",
+		PublicID:          fmt.Sprintf("album-%d", time.Now().UnixNano()),
+		Title:             title,
+		Description:       "",
+		AlbumType:         "photo",
+		OwnerUserID:       userID,
+		LlibreID:          sql.NullInt64{},
+		ModerationStatus:  "pending",
+		Visibility:        "private",
 		RestrictedGroupID: sql.NullInt64{},
 		AccessPolicyID:    sql.NullInt64{},
 		CreditCost:        0,

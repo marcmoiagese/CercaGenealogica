@@ -15,7 +15,7 @@
                 <h1>{{ if .Data.Form.IsNew }}{{ .Data.Section.NewLabel }}{{ else }}Edita {{ .Data.Section.Title }}{{ end }}</h1>
             </header>
             {{ if .Data.Form.Error }}<div class="alert alert-error">{{ .Data.Form.Error }}</div>{{ end }}
-            <form method="post" action="/territori/confessional/save">
+            <form method="post" action="/confessional/save">
                 <input type="hidden" name="kind" value="{{ .Data.Form.Kind }}">
                 <input type="hidden" name="return_to" value="{{ .Data.Form.ReturnURL }}">
 
@@ -301,7 +301,7 @@
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">Desa</button>
-                    <a class="boto-secundari" href="{{ if .Data.Form.ReturnURL }}{{ .Data.Form.ReturnURL }}{{ else }}/territori/confessional/{{ .Data.Section.Slug }}{{ end }}">Cancel.la</a>
+                    <a class="boto-secundari" href="{{ if .Data.Form.ReturnURL }}{{ .Data.Form.ReturnURL }}{{ else }}/confessional/{{ .Data.Section.Slug }}{{ end }}">Cancel.la</a>
                 </div>
             </form>
         </section>

@@ -88,7 +88,7 @@ func TestModeracioSummaryRespectsScope(t *testing.T) {
 	}
 
 	var payload struct {
-		Ok           bool `json:"ok"`
+		Ok           bool   `json:"ok"`
 		SummaryScope string `json:"summary_scope"`
 		Summary      struct {
 			Total  int `json:"total"`
