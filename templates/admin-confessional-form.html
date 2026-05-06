@@ -1,0 +1,263 @@
+{{ define "admin-confessional-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>Model religios/confessional</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ if .Data.Form.IsNew }}Nou registre confessional{{ else }}Edita registre confessional{{ end }}</h1>
+            </header>
+            {{ if .Data.Form.Error }}<div class="alert alert-error">{{ .Data.Form.Error }}</div>{{ end }}
+            <form method="post" action="/territori/confessional/save">
+                <input type="hidden" name="kind" value="{{ .Data.Form.Kind }}">
+                <input type="hidden" name="return_to" value="{{ .Data.Form.ReturnURL }}">
+
+                {{ if eq .Data.Form.Kind "religio" }}
+                <input type="hidden" name="id" value="{{ .Data.Form.Religio.ID }}">
+                <div class="grup-camp">
+                    <label for="nom">Nom</label>
+                    <input id="nom" name="nom" type="text" value="{{ .Data.Form.Religio.Nom }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="pare_id">Pare</label>
+                    <select id="pare_id" name="pare_id">
+                        <option value="">Sense pare</option>
+                        {{ range .Data.Religions }}
+                        {{ if ne .ID $.Data.Form.Religio.ID }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Form.Religio.PareID.Valid (eq .ID (int $.Data.Form.Religio.PareID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="descripcio">Descripcio</label>
+                    <textarea id="descripcio" name="descripcio">{{ .Data.Form.Religio.Descripcio }}</textarea>
+                </div>
+                {{ template "confessional-common-state" dict "Item" .Data.Form.Religio }}
+                <div class="grup-camp">
+                    <label for="observacions">Observacions</label>
+                    <textarea id="observacions" name="observacions">{{ .Data.Form.Religio.Observacions }}</textarea>
+                </div>
+                {{ end }}
+
+                {{ if eq .Data.Form.Kind "model" }}
+                <input type="hidden" name="id" value="{{ .Data.Form.Model.ID }}">
+                <div class="grup-camp">
+                    <label for="nom">Nom</label>
+                    <input id="nom" name="nom" type="text" value="{{ .Data.Form.Model.Nom }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="religio_confessio_id">Religio/confessio</label>
+                    <select id="religio_confessio_id" name="religio_confessio_id">
+                        <option value="">Sense religio/confessio</option>
+                        {{ range .Data.Religions }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Form.Model.ReligioConfessioID.Valid (eq .ID (int $.Data.Form.Model.ReligioConfessioID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="pais_id">Pais</label>
+                    <select id="pais_id" name="pais_id">
+                        <option value="">Sense pais</option>
+                        {{ range .Data.Paisos }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Form.Model.PaisID.Valid (eq .ID (int $.Data.Form.Model.PaisID.Int64)) }}selected{{ end }}>{{ .CodiISO3 }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="descripcio">Descripcio</label>
+                    <textarea id="descripcio" name="descripcio">{{ .Data.Form.Model.Descripcio }}</textarea>
+                </div>
+                {{ template "confessional-years" dict "Item" .Data.Form.Model }}
+                {{ template "confessional-common-state" dict "Item" .Data.Form.Model }}
+                <div class="grup-camp">
+                    <label for="observacions">Observacions</label>
+                    <textarea id="observacions" name="observacions">{{ .Data.Form.Model.Observacions }}</textarea>
+                </div>
+                {{ end }}
+
+                {{ if eq .Data.Form.Kind "nivell" }}
+                <input type="hidden" name="id" value="{{ .Data.Form.Nivell.ID }}">
+                <div class="grup-camp">
+                    <label for="model_confessional_id">Model confessional</label>
+                    <select id="model_confessional_id" name="model_confessional_id" required>
+                        <option value="">Selecciona model</option>
+                        {{ range .Data.Models }}
+                        <option value="{{ .ID }}" {{ if eq .ID $.Data.Form.Nivell.ModelConfessionalID }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="ordre">Ordre</label>
+                    <input id="ordre" name="ordre" type="number" min="1" value="{{ .Data.Form.Nivell.Ordre }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="nom_nivell">Nom del nivell</label>
+                    <input id="nom_nivell" name="nom_nivell" type="text" value="{{ .Data.Form.Nivell.NomNivell }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="nom_plural">Nom plural</label>
+                    <input id="nom_plural" name="nom_plural" type="text" value="{{ .Data.Form.Nivell.NomPlural }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="tipus_nivell">Tipus</label>
+                    <input id="tipus_nivell" name="tipus_nivell" type="text" value="{{ .Data.Form.Nivell.TipusNivell }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="codi_oficial">Codi oficial</label>
+                    <input id="codi_oficial" name="codi_oficial" type="text" value="{{ .Data.Form.Nivell.CodiOficial }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="parent_id">Pare</label>
+                    <select id="parent_id" name="parent_id">
+                        <option value="">Sense pare</option>
+                        {{ range .Data.Nivells }}
+                        {{ if ne .ID $.Data.Form.Nivell.ID }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Form.Nivell.ParentID.Valid (eq .ID (int $.Data.Form.Nivell.ParentID.Int64)) }}selected{{ end }}>{{ .NomNivell }}</option>
+                        {{ end }}
+                        {{ end }}
+                    </select>
+                </div>
+                {{ template "confessional-years" dict "Item" .Data.Form.Nivell }}
+                {{ template "confessional-common-state" dict "Item" .Data.Form.Nivell }}
+                <div class="grup-camp">
+                    <label for="observacions">Observacions</label>
+                    <textarea id="observacions" name="observacions">{{ .Data.Form.Nivell.Observacions }}</textarea>
+                </div>
+                {{ end }}
+
+                {{ if eq .Data.Form.Kind "entitat" }}
+                <input type="hidden" name="id" value="{{ .Data.Form.Entitat.ID }}">
+                <div class="grup-camp">
+                    <label for="nom">Nom</label>
+                    <input id="nom" name="nom" type="text" value="{{ .Data.Form.Entitat.Nom }}" required>
+                </div>
+                <div class="grup-camp">
+                    <label for="religio_confessio_id">Religio/confessio</label>
+                    <select id="religio_confessio_id" name="religio_confessio_id">
+                        <option value="">Sense religio/confessio</option>
+                        {{ range .Data.Religions }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Form.Entitat.ReligioConfessioID.Valid (eq .ID (int $.Data.Form.Entitat.ReligioConfessioID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="model_confessional_id">Model confessional</label>
+                    <select id="model_confessional_id" name="model_confessional_id">
+                        <option value="">Sense model</option>
+                        {{ range .Data.Models }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Form.Entitat.ModelConfessionalID.Valid (eq .ID (int $.Data.Form.Entitat.ModelConfessionalID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="nivell_confessional_id">Nivell confessional</label>
+                    <select id="nivell_confessional_id" name="nivell_confessional_id">
+                        <option value="">Sense nivell</option>
+                        {{ range .Data.Nivells }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Form.Entitat.NivellConfessionalID.Valid (eq .ID (int $.Data.Form.Entitat.NivellConfessionalID.Int64)) }}selected{{ end }}>{{ .NomNivell }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="pais_id">Pais</label>
+                    <select id="pais_id" name="pais_id">
+                        <option value="">Sense pais</option>
+                        {{ range .Data.Paisos }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Form.Entitat.PaisID.Valid (eq .ID (int $.Data.Form.Entitat.PaisID.Int64)) }}selected{{ end }}>{{ .CodiISO3 }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="parent_id">Pare</label>
+                    <select id="parent_id" name="parent_id">
+                        <option value="">Sense pare</option>
+                        {{ range .Data.Entitats }}
+                        {{ if ne .ID $.Data.Form.Entitat.ID }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Form.Entitat.ParentID.Valid (eq .ID (int $.Data.Form.Entitat.ParentID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="tipus_entitat">Tipus entitat</label>
+                    <input id="tipus_entitat" name="tipus_entitat" type="text" value="{{ .Data.Form.Entitat.TipusEntitat }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="tipus_especific">Tipus especific</label>
+                    <input id="tipus_especific" name="tipus_especific" type="text" value="{{ .Data.Form.Entitat.TipusEspecific }}">
+                </div>
+                {{ template "confessional-years" dict "Item" .Data.Form.Entitat }}
+                {{ template "confessional-common-state" dict "Item" .Data.Form.Entitat }}
+                <div class="grup-camp">
+                    <label for="web">Web</label>
+                    <input id="web" name="web" type="text" value="{{ .Data.Form.Entitat.Web }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="web_wikipedia">Wikipedia</label>
+                    <input id="web_wikipedia" name="web_wikipedia" type="text" value="{{ .Data.Form.Entitat.WebWikipedia }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="territori">Territori</label>
+                    <textarea id="territori" name="territori">{{ .Data.Form.Entitat.Territori }}</textarea>
+                </div>
+                <div class="grup-camp">
+                    <label for="observacions">Observacions</label>
+                    <textarea id="observacions" name="observacions">{{ .Data.Form.Entitat.Observacions }}</textarea>
+                </div>
+                {{ end }}
+
+                <div class="grup-camp">
+                    <label for="moderation_status">Moderacio</label>
+                    {{ $status := "" }}
+                    {{ if .Data.Form.Religio }}{{ $status = .Data.Form.Religio.ModeracioEstat }}{{ end }}
+                    {{ if .Data.Form.Model }}{{ $status = .Data.Form.Model.ModeracioEstat }}{{ end }}
+                    {{ if .Data.Form.Nivell }}{{ $status = .Data.Form.Nivell.ModeracioEstat }}{{ end }}
+                    {{ if .Data.Form.Entitat }}{{ $status = .Data.Form.Entitat.ModeracioEstat }}{{ end }}
+                    <select id="moderation_status" name="moderation_status">
+                        <option value="publicat" {{ if eq $status "publicat" }}selected{{ end }}>Publicat</option>
+                        <option value="pendent" {{ if eq $status "pendent" }}selected{{ end }}>Pendent</option>
+                        <option value="rebutjat" {{ if eq $status "rebutjat" }}selected{{ end }}>Rebutjat</option>
+                    </select>
+                </div>
+                <div class="form-accio">
+                    <button type="submit" class="boto-primari">Desa</button>
+                    <a class="boto-secundari" href="{{ if .Data.Form.ReturnURL }}{{ .Data.Form.ReturnURL }}{{ else }}/territori/confessional{{ end }}">Cancel.la</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}
+
+{{ define "confessional-years" }}
+<div class="grup-camp">
+    <label for="any_inici">Any inici</label>
+    <input id="any_inici" name="any_inici" type="number" value="{{ if .Item.AnyInici.Valid }}{{ .Item.AnyInici.Int64 }}{{ end }}">
+</div>
+<div class="grup-camp">
+    <label for="any_fi">Any fi</label>
+    <input id="any_fi" name="any_fi" type="number" value="{{ if .Item.AnyFi.Valid }}{{ .Item.AnyFi.Int64 }}{{ end }}">
+</div>
+{{ end }}
+
+{{ define "confessional-common-state" }}
+<div class="grup-camp">
+    <label for="estat">Estat</label>
+    <select id="estat" name="estat">
+        <option value="actiu" {{ if eq .Item.Estat "actiu" }}selected{{ end }}>Actiu</option>
+        <option value="inactiu" {{ if eq .Item.Estat "inactiu" }}selected{{ end }}>Inactiu</option>
+        <option value="historic" {{ if eq .Item.Estat "historic" }}selected{{ end }}>Historic</option>
+    </select>
+</div>
+{{ end }}

@@ -830,6 +830,55 @@ func (d *SQLite) UpdateArquebisbat(ae *Arquebisbat) error {
 func (d *SQLite) UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateArquebisbatModeracio(id, estat, motiu, moderatorID)
 }
+
+func (d *SQLite) ListReligioConfessions() ([]ReligioConfessio, error) {
+	return d.help.listReligioConfessions()
+}
+func (d *SQLite) GetReligioConfessio(id int) (*ReligioConfessio, error) {
+	return d.help.getReligioConfessio(id)
+}
+func (d *SQLite) SaveReligioConfessio(r *ReligioConfessio) (int, error) {
+	return d.help.saveReligioConfessio(r)
+}
+func (d *SQLite) DeleteReligioConfessio(id int) error {
+	return d.help.deleteReligioConfessio(id)
+}
+func (d *SQLite) ListModelsConfessionals() ([]ModelConfessional, error) {
+	return d.help.listModelsConfessionals()
+}
+func (d *SQLite) GetModelConfessional(id int) (*ModelConfessional, error) {
+	return d.help.getModelConfessional(id)
+}
+func (d *SQLite) SaveModelConfessional(m *ModelConfessional) (int, error) {
+	return d.help.saveModelConfessional(m)
+}
+func (d *SQLite) DeleteModelConfessional(id int) error {
+	return d.help.deleteModelConfessional(id)
+}
+func (d *SQLite) ListNivellsConfessionals() ([]NivellConfessional, error) {
+	return d.help.listNivellsConfessionals()
+}
+func (d *SQLite) GetNivellConfessional(id int) (*NivellConfessional, error) {
+	return d.help.getNivellConfessional(id)
+}
+func (d *SQLite) SaveNivellConfessional(n *NivellConfessional) (int, error) {
+	return d.help.saveNivellConfessional(n)
+}
+func (d *SQLite) DeleteNivellConfessional(id int) error {
+	return d.help.deleteNivellConfessional(id)
+}
+func (d *SQLite) ListEntitatsReligioses() ([]EntitatReligiosa, error) {
+	return d.help.listEntitatsReligioses()
+}
+func (d *SQLite) GetEntitatReligiosa(id int) (*EntitatReligiosa, error) {
+	return d.help.getEntitatReligiosa(id)
+}
+func (d *SQLite) SaveEntitatReligiosa(e *EntitatReligiosa) (int, error) {
+	return d.help.saveEntitatReligiosa(e)
+}
+func (d *SQLite) DeleteEntitatReligiosa(id int) error {
+	return d.help.deleteEntitatReligiosa(id)
+}
 func (d *SQLite) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
 }

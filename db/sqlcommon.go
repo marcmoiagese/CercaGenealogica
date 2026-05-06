@@ -3800,6 +3800,342 @@ func (h sqlHelper) saveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error)
 	return am.ID, err
 }
 
+func (h sqlHelper) countRows(table, where string, args ...interface{}) (int, error) {
+	query := "SELECT COUNT(*) FROM " + table + " WHERE " + where
+	query = formatPlaceholders(h.style, query)
+	var total int
+	if err := h.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, h.wrapSQLError("confessional", "count_"+table, table, 0, err)
+	}
+	return total, nil
+}
+
+func (h sqlHelper) ensureNoConfessionalRefs(object string, id int, refs ...struct {
+	table string
+	where string
+}) error {
+	for _, ref := range refs {
+		total, err := h.countRows(ref.table, ref.where, id)
+		if err != nil {
+			return err
+		}
+		if total > 0 {
+			return fmt.Errorf("%w: %s %d referenced by %s", ErrUnsafeDelete, object, id, ref.table)
+		}
+	}
+	return nil
+}
+
+func (h sqlHelper) listReligioConfessions() ([]ReligioConfessio, error) {
+	rows, err := h.db.Query(`SELECT id, nom, pare_id, COALESCE(descripcio, ''), estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM religio_confessio ORDER BY nom`)
+	if err != nil {
+		return nil, h.wrapSQLError("confessional", "list_religio_confessio", "religio_confessio", 0, err)
+	}
+	defer rows.Close()
+	var res []ReligioConfessio
+	for rows.Next() {
+		var r ReligioConfessio
+		if err := rows.Scan(&r.ID, &r.Nom, &r.PareID, &r.Descripcio, &r.Estat, &r.Observacions, &r.ModeracioEstat, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			return nil, h.wrapSQLError("confessional", "scan_religio_confessio", "religio_confessio", 0, err)
+		}
+		res = append(res, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, h.wrapSQLError("confessional", "rows_religio_confessio", "religio_confessio", 0, err)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getReligioConfessio(id int) (*ReligioConfessio, error) {
+	query := formatPlaceholders(h.style, `SELECT id, nom, pare_id, COALESCE(descripcio, ''), estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM religio_confessio WHERE id = ?`)
+	var r ReligioConfessio
+	if err := h.db.QueryRow(query, id).Scan(&r.ID, &r.Nom, &r.PareID, &r.Descripcio, &r.Estat, &r.Observacions, &r.ModeracioEstat, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		if err != sql.ErrNoRows {
+			return nil, h.wrapSQLError("confessional", "get_religio_confessio", "religio_confessio", id, err)
+		}
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (h sqlHelper) saveReligioConfessio(r *ReligioConfessio) (int, error) {
+	if r.ID == 0 {
+		query := `INSERT INTO religio_confessio (nom, pare_id, descripcio, estat, observacions, moderation_status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			query += ` RETURNING id`
+		}
+		query = formatPlaceholders(h.style, query)
+		args := []interface{}{r.Nom, r.PareID, r.Descripcio, r.Estat, r.Observacions, r.ModeracioEstat}
+		if h.style == "postgres" {
+			if err := h.db.QueryRow(query, args...).Scan(&r.ID); err != nil {
+				return 0, h.wrapSQLError("confessional", "create_religio_confessio", "religio_confessio", 0, err)
+			}
+			return r.ID, nil
+		}
+		res, err := h.db.Exec(query, args...)
+		if err != nil {
+			return 0, h.wrapSQLError("confessional", "create_religio_confessio", "religio_confessio", 0, err)
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			r.ID = int(id)
+		}
+		return r.ID, nil
+	}
+	query := formatPlaceholders(h.style, `UPDATE religio_confessio SET nom=?, pare_id=?, descripcio=?, estat=?, observacions=?, moderation_status=?, updated_at=`+h.nowFun+` WHERE id=?`)
+	if _, err := h.db.Exec(query, r.Nom, r.PareID, r.Descripcio, r.Estat, r.Observacions, r.ModeracioEstat, r.ID); err != nil {
+		return 0, h.wrapSQLError("confessional", "update_religio_confessio", "religio_confessio", r.ID, err)
+	}
+	return r.ID, nil
+}
+
+func (h sqlHelper) deleteReligioConfessio(id int) error {
+	if err := h.ensureNoConfessionalRefs("religio_confessio", id,
+		struct{ table, where string }{"religio_confessio", "pare_id = ?"},
+		struct{ table, where string }{"model_confessional", "religio_confessio_id = ?"},
+		struct{ table, where string }{"entitat_religiosa", "religio_confessio_id = ?"},
+	); err != nil {
+		return err
+	}
+	stmt := formatPlaceholders(h.style, `DELETE FROM religio_confessio WHERE id = ?`)
+	if _, err := h.db.Exec(stmt, id); err != nil {
+		return h.wrapSQLError("confessional", "delete_religio_confessio", "religio_confessio", id, err)
+	}
+	return nil
+}
+
+func (h sqlHelper) listModelsConfessionals() ([]ModelConfessional, error) {
+	rows, err := h.db.Query(`SELECT id, nom, religio_confessio_id, pais_id, COALESCE(descripcio, ''), any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM model_confessional ORDER BY nom`)
+	if err != nil {
+		return nil, h.wrapSQLError("confessional", "list_model_confessional", "model_confessional", 0, err)
+	}
+	defer rows.Close()
+	var res []ModelConfessional
+	for rows.Next() {
+		var m ModelConfessional
+		if err := rows.Scan(&m.ID, &m.Nom, &m.ReligioConfessioID, &m.PaisID, &m.Descripcio, &m.AnyInici, &m.AnyFi, &m.Estat, &m.Observacions, &m.ModeracioEstat, &m.CreatedAt, &m.UpdatedAt); err != nil {
+			return nil, h.wrapSQLError("confessional", "scan_model_confessional", "model_confessional", 0, err)
+		}
+		res = append(res, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, h.wrapSQLError("confessional", "rows_model_confessional", "model_confessional", 0, err)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getModelConfessional(id int) (*ModelConfessional, error) {
+	query := formatPlaceholders(h.style, `SELECT id, nom, religio_confessio_id, pais_id, COALESCE(descripcio, ''), any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM model_confessional WHERE id = ?`)
+	var m ModelConfessional
+	if err := h.db.QueryRow(query, id).Scan(&m.ID, &m.Nom, &m.ReligioConfessioID, &m.PaisID, &m.Descripcio, &m.AnyInici, &m.AnyFi, &m.Estat, &m.Observacions, &m.ModeracioEstat, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		if err != sql.ErrNoRows {
+			return nil, h.wrapSQLError("confessional", "get_model_confessional", "model_confessional", id, err)
+		}
+		return nil, err
+	}
+	return &m, nil
+}
+
+func (h sqlHelper) saveModelConfessional(m *ModelConfessional) (int, error) {
+	if m.ID == 0 {
+		query := `INSERT INTO model_confessional (nom, religio_confessio_id, pais_id, descripcio, any_inici, any_fi, estat, observacions, moderation_status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			query += ` RETURNING id`
+		}
+		query = formatPlaceholders(h.style, query)
+		args := []interface{}{m.Nom, m.ReligioConfessioID, m.PaisID, m.Descripcio, m.AnyInici, m.AnyFi, m.Estat, m.Observacions, m.ModeracioEstat}
+		if h.style == "postgres" {
+			if err := h.db.QueryRow(query, args...).Scan(&m.ID); err != nil {
+				return 0, h.wrapSQLError("confessional", "create_model_confessional", "model_confessional", 0, err)
+			}
+			return m.ID, nil
+		}
+		res, err := h.db.Exec(query, args...)
+		if err != nil {
+			return 0, h.wrapSQLError("confessional", "create_model_confessional", "model_confessional", 0, err)
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			m.ID = int(id)
+		}
+		return m.ID, nil
+	}
+	query := formatPlaceholders(h.style, `UPDATE model_confessional SET nom=?, religio_confessio_id=?, pais_id=?, descripcio=?, any_inici=?, any_fi=?, estat=?, observacions=?, moderation_status=?, updated_at=`+h.nowFun+` WHERE id=?`)
+	if _, err := h.db.Exec(query, m.Nom, m.ReligioConfessioID, m.PaisID, m.Descripcio, m.AnyInici, m.AnyFi, m.Estat, m.Observacions, m.ModeracioEstat, m.ID); err != nil {
+		return 0, h.wrapSQLError("confessional", "update_model_confessional", "model_confessional", m.ID, err)
+	}
+	return m.ID, nil
+}
+
+func (h sqlHelper) deleteModelConfessional(id int) error {
+	if err := h.ensureNoConfessionalRefs("model_confessional", id,
+		struct{ table, where string }{"nivell_confessional", "model_confessional_id = ?"},
+		struct{ table, where string }{"entitat_religiosa", "model_confessional_id = ?"},
+	); err != nil {
+		return err
+	}
+	stmt := formatPlaceholders(h.style, `DELETE FROM model_confessional WHERE id = ?`)
+	if _, err := h.db.Exec(stmt, id); err != nil {
+		return h.wrapSQLError("confessional", "delete_model_confessional", "model_confessional", id, err)
+	}
+	return nil
+}
+
+func (h sqlHelper) listNivellsConfessionals() ([]NivellConfessional, error) {
+	rows, err := h.db.Query(`SELECT id, model_confessional_id, ordre, nom_nivell, COALESCE(nom_plural, ''), COALESCE(tipus_nivell, ''), COALESCE(codi_oficial, ''), parent_id, any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM nivell_confessional ORDER BY model_confessional_id, ordre, nom_nivell`)
+	if err != nil {
+		return nil, h.wrapSQLError("confessional", "list_nivell_confessional", "nivell_confessional", 0, err)
+	}
+	defer rows.Close()
+	var res []NivellConfessional
+	for rows.Next() {
+		var n NivellConfessional
+		if err := rows.Scan(&n.ID, &n.ModelConfessionalID, &n.Ordre, &n.NomNivell, &n.NomPlural, &n.TipusNivell, &n.CodiOficial, &n.ParentID, &n.AnyInici, &n.AnyFi, &n.Estat, &n.Observacions, &n.ModeracioEstat, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			return nil, h.wrapSQLError("confessional", "scan_nivell_confessional", "nivell_confessional", 0, err)
+		}
+		res = append(res, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, h.wrapSQLError("confessional", "rows_nivell_confessional", "nivell_confessional", 0, err)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getNivellConfessional(id int) (*NivellConfessional, error) {
+	query := formatPlaceholders(h.style, `SELECT id, model_confessional_id, ordre, nom_nivell, COALESCE(nom_plural, ''), COALESCE(tipus_nivell, ''), COALESCE(codi_oficial, ''), parent_id, any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM nivell_confessional WHERE id = ?`)
+	var n NivellConfessional
+	if err := h.db.QueryRow(query, id).Scan(&n.ID, &n.ModelConfessionalID, &n.Ordre, &n.NomNivell, &n.NomPlural, &n.TipusNivell, &n.CodiOficial, &n.ParentID, &n.AnyInici, &n.AnyFi, &n.Estat, &n.Observacions, &n.ModeracioEstat, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		if err != sql.ErrNoRows {
+			return nil, h.wrapSQLError("confessional", "get_nivell_confessional", "nivell_confessional", id, err)
+		}
+		return nil, err
+	}
+	return &n, nil
+}
+
+func (h sqlHelper) saveNivellConfessional(n *NivellConfessional) (int, error) {
+	if n.ID == 0 {
+		query := `INSERT INTO nivell_confessional (model_confessional_id, ordre, nom_nivell, nom_plural, tipus_nivell, codi_oficial, parent_id, any_inici, any_fi, estat, observacions, moderation_status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			query += ` RETURNING id`
+		}
+		query = formatPlaceholders(h.style, query)
+		args := []interface{}{n.ModelConfessionalID, n.Ordre, n.NomNivell, n.NomPlural, n.TipusNivell, n.CodiOficial, n.ParentID, n.AnyInici, n.AnyFi, n.Estat, n.Observacions, n.ModeracioEstat}
+		if h.style == "postgres" {
+			if err := h.db.QueryRow(query, args...).Scan(&n.ID); err != nil {
+				return 0, h.wrapSQLError("confessional", "create_nivell_confessional", "nivell_confessional", 0, err)
+			}
+			return n.ID, nil
+		}
+		res, err := h.db.Exec(query, args...)
+		if err != nil {
+			return 0, h.wrapSQLError("confessional", "create_nivell_confessional", "nivell_confessional", 0, err)
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			n.ID = int(id)
+		}
+		return n.ID, nil
+	}
+	query := formatPlaceholders(h.style, `UPDATE nivell_confessional SET model_confessional_id=?, ordre=?, nom_nivell=?, nom_plural=?, tipus_nivell=?, codi_oficial=?, parent_id=?, any_inici=?, any_fi=?, estat=?, observacions=?, moderation_status=?, updated_at=`+h.nowFun+` WHERE id=?`)
+	if _, err := h.db.Exec(query, n.ModelConfessionalID, n.Ordre, n.NomNivell, n.NomPlural, n.TipusNivell, n.CodiOficial, n.ParentID, n.AnyInici, n.AnyFi, n.Estat, n.Observacions, n.ModeracioEstat, n.ID); err != nil {
+		return 0, h.wrapSQLError("confessional", "update_nivell_confessional", "nivell_confessional", n.ID, err)
+	}
+	return n.ID, nil
+}
+
+func (h sqlHelper) deleteNivellConfessional(id int) error {
+	if err := h.ensureNoConfessionalRefs("nivell_confessional", id,
+		struct{ table, where string }{"nivell_confessional", "parent_id = ?"},
+		struct{ table, where string }{"entitat_religiosa", "nivell_confessional_id = ?"},
+	); err != nil {
+		return err
+	}
+	stmt := formatPlaceholders(h.style, `DELETE FROM nivell_confessional WHERE id = ?`)
+	if _, err := h.db.Exec(stmt, id); err != nil {
+		return h.wrapSQLError("confessional", "delete_nivell_confessional", "nivell_confessional", id, err)
+	}
+	return nil
+}
+
+func (h sqlHelper) listEntitatsReligioses() ([]EntitatReligiosa, error) {
+	rows, err := h.db.Query(`SELECT id, nom, religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, COALESCE(tipus_entitat, ''), COALESCE(tipus_especific, ''), any_inici, any_fi, estat, COALESCE(web, ''), COALESCE(web_wikipedia, ''), COALESCE(territori, ''), COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa ORDER BY nom`)
+	if err != nil {
+		return nil, h.wrapSQLError("confessional", "list_entitat_religiosa", "entitat_religiosa", 0, err)
+	}
+	defer rows.Close()
+	var res []EntitatReligiosa
+	for rows.Next() {
+		var e EntitatReligiosa
+		if err := rows.Scan(&e.ID, &e.Nom, &e.ReligioConfessioID, &e.ModelConfessionalID, &e.NivellConfessionalID, &e.PaisID, &e.ParentID, &e.TipusEntitat, &e.TipusEspecific, &e.AnyInici, &e.AnyFi, &e.Estat, &e.Web, &e.WebWikipedia, &e.Territori, &e.Observacions, &e.ModeracioEstat, &e.CreatedAt, &e.UpdatedAt); err != nil {
+			return nil, h.wrapSQLError("confessional", "scan_entitat_religiosa", "entitat_religiosa", 0, err)
+		}
+		res = append(res, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, h.wrapSQLError("confessional", "rows_entitat_religiosa", "entitat_religiosa", 0, err)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getEntitatReligiosa(id int) (*EntitatReligiosa, error) {
+	query := formatPlaceholders(h.style, `SELECT id, nom, religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, COALESCE(tipus_entitat, ''), COALESCE(tipus_especific, ''), any_inici, any_fi, estat, COALESCE(web, ''), COALESCE(web_wikipedia, ''), COALESCE(territori, ''), COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa WHERE id = ?`)
+	var e EntitatReligiosa
+	if err := h.db.QueryRow(query, id).Scan(&e.ID, &e.Nom, &e.ReligioConfessioID, &e.ModelConfessionalID, &e.NivellConfessionalID, &e.PaisID, &e.ParentID, &e.TipusEntitat, &e.TipusEspecific, &e.AnyInici, &e.AnyFi, &e.Estat, &e.Web, &e.WebWikipedia, &e.Territori, &e.Observacions, &e.ModeracioEstat, &e.CreatedAt, &e.UpdatedAt); err != nil {
+		if err != sql.ErrNoRows {
+			return nil, h.wrapSQLError("confessional", "get_entitat_religiosa", "entitat_religiosa", id, err)
+		}
+		return nil, err
+	}
+	return &e, nil
+}
+
+func (h sqlHelper) saveEntitatReligiosa(e *EntitatReligiosa) (int, error) {
+	if e.ID == 0 {
+		query := `INSERT INTO entitat_religiosa (nom, religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, tipus_entitat, tipus_especific, any_inici, any_fi, estat, web, web_wikipedia, territori, observacions, moderation_status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			query += ` RETURNING id`
+		}
+		query = formatPlaceholders(h.style, query)
+		args := []interface{}{e.Nom, e.ReligioConfessioID, e.ModelConfessionalID, e.NivellConfessionalID, e.PaisID, e.ParentID, e.TipusEntitat, e.TipusEspecific, e.AnyInici, e.AnyFi, e.Estat, e.Web, e.WebWikipedia, e.Territori, e.Observacions, e.ModeracioEstat}
+		if h.style == "postgres" {
+			if err := h.db.QueryRow(query, args...).Scan(&e.ID); err != nil {
+				return 0, h.wrapSQLError("confessional", "create_entitat_religiosa", "entitat_religiosa", 0, err)
+			}
+			return e.ID, nil
+		}
+		res, err := h.db.Exec(query, args...)
+		if err != nil {
+			return 0, h.wrapSQLError("confessional", "create_entitat_religiosa", "entitat_religiosa", 0, err)
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			e.ID = int(id)
+		}
+		return e.ID, nil
+	}
+	query := formatPlaceholders(h.style, `UPDATE entitat_religiosa SET nom=?, religio_confessio_id=?, model_confessional_id=?, nivell_confessional_id=?, pais_id=?, parent_id=?, tipus_entitat=?, tipus_especific=?, any_inici=?, any_fi=?, estat=?, web=?, web_wikipedia=?, territori=?, observacions=?, moderation_status=?, updated_at=`+h.nowFun+` WHERE id=?`)
+	if _, err := h.db.Exec(query, e.Nom, e.ReligioConfessioID, e.ModelConfessionalID, e.NivellConfessionalID, e.PaisID, e.ParentID, e.TipusEntitat, e.TipusEspecific, e.AnyInici, e.AnyFi, e.Estat, e.Web, e.WebWikipedia, e.Territori, e.Observacions, e.ModeracioEstat, e.ID); err != nil {
+		return 0, h.wrapSQLError("confessional", "update_entitat_religiosa", "entitat_religiosa", e.ID, err)
+	}
+	return e.ID, nil
+}
+
+func (h sqlHelper) deleteEntitatReligiosa(id int) error {
+	if err := h.ensureNoConfessionalRefs("entitat_religiosa", id,
+		struct{ table, where string }{"entitat_religiosa", "parent_id = ?"},
+		struct{ table, where string }{"entitat_religiosa_relacio", "entitat_origen_id = ?"},
+		struct{ table, where string }{"entitat_religiosa_relacio", "entitat_desti_id = ?"},
+	); err != nil {
+		return err
+	}
+	stmt := formatPlaceholders(h.style, `DELETE FROM entitat_religiosa WHERE id = ?`)
+	if _, err := h.db.Exec(stmt, id); err != nil {
+		return h.wrapSQLError("confessional", "delete_entitat_religiosa", "entitat_religiosa", id, err)
+	}
+	return nil
+}
+
 func (h sqlHelper) ensurePermissionsSchema() {
 	h.ensureUserExtraColumns()
 	h.ensurePersonaExtraColumns()

@@ -3,11 +3,14 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 )
+
+var ErrUnsafeDelete = errors.New("unsafe delete")
 
 type DB interface {
 	Engine() string
@@ -617,6 +620,23 @@ type DB interface {
 	UpdateArquebisbat(ae *Arquebisbat) error
 	ListArquebisbatMunicipis(munID int) ([]ArquebisbatMunicipi, error)
 	SaveArquebisbatMunicipi(am *ArquebisbatMunicipi) (int, error)
+
+	ListReligioConfessions() ([]ReligioConfessio, error)
+	GetReligioConfessio(id int) (*ReligioConfessio, error)
+	SaveReligioConfessio(r *ReligioConfessio) (int, error)
+	DeleteReligioConfessio(id int) error
+	ListModelsConfessionals() ([]ModelConfessional, error)
+	GetModelConfessional(id int) (*ModelConfessional, error)
+	SaveModelConfessional(m *ModelConfessional) (int, error)
+	DeleteModelConfessional(id int) error
+	ListNivellsConfessionals() ([]NivellConfessional, error)
+	GetNivellConfessional(id int) (*NivellConfessional, error)
+	SaveNivellConfessional(n *NivellConfessional) (int, error)
+	DeleteNivellConfessional(id int) error
+	ListEntitatsReligioses() ([]EntitatReligiosa, error)
+	GetEntitatReligiosa(id int) (*EntitatReligiosa, error)
+	SaveEntitatReligiosa(e *EntitatReligiosa) (int, error)
+	DeleteEntitatReligiosa(id int) error
 }
 
 // Tipus comú d'usuari al paquet `db`

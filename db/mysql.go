@@ -803,6 +803,55 @@ func (d *MySQL) UpdateArquebisbat(ae *Arquebisbat) error {
 func (d *MySQL) UpdateArquebisbatModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateArquebisbatModeracio(id, estat, motiu, moderatorID)
 }
+
+func (d *MySQL) ListReligioConfessions() ([]ReligioConfessio, error) {
+	return d.help.listReligioConfessions()
+}
+func (d *MySQL) GetReligioConfessio(id int) (*ReligioConfessio, error) {
+	return d.help.getReligioConfessio(id)
+}
+func (d *MySQL) SaveReligioConfessio(r *ReligioConfessio) (int, error) {
+	return d.help.saveReligioConfessio(r)
+}
+func (d *MySQL) DeleteReligioConfessio(id int) error {
+	return d.help.deleteReligioConfessio(id)
+}
+func (d *MySQL) ListModelsConfessionals() ([]ModelConfessional, error) {
+	return d.help.listModelsConfessionals()
+}
+func (d *MySQL) GetModelConfessional(id int) (*ModelConfessional, error) {
+	return d.help.getModelConfessional(id)
+}
+func (d *MySQL) SaveModelConfessional(m *ModelConfessional) (int, error) {
+	return d.help.saveModelConfessional(m)
+}
+func (d *MySQL) DeleteModelConfessional(id int) error {
+	return d.help.deleteModelConfessional(id)
+}
+func (d *MySQL) ListNivellsConfessionals() ([]NivellConfessional, error) {
+	return d.help.listNivellsConfessionals()
+}
+func (d *MySQL) GetNivellConfessional(id int) (*NivellConfessional, error) {
+	return d.help.getNivellConfessional(id)
+}
+func (d *MySQL) SaveNivellConfessional(n *NivellConfessional) (int, error) {
+	return d.help.saveNivellConfessional(n)
+}
+func (d *MySQL) DeleteNivellConfessional(id int) error {
+	return d.help.deleteNivellConfessional(id)
+}
+func (d *MySQL) ListEntitatsReligioses() ([]EntitatReligiosa, error) {
+	return d.help.listEntitatsReligioses()
+}
+func (d *MySQL) GetEntitatReligiosa(id int) (*EntitatReligiosa, error) {
+	return d.help.getEntitatReligiosa(id)
+}
+func (d *MySQL) SaveEntitatReligiosa(e *EntitatReligiosa) (int, error) {
+	return d.help.saveEntitatReligiosa(e)
+}
+func (d *MySQL) DeleteEntitatReligiosa(id int) error {
+	return d.help.deleteEntitatReligiosa(id)
+}
 func (d *MySQL) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
 }

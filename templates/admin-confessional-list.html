@@ -1,0 +1,147 @@
+{{ define "admin-confessional-list.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>Model religios/confessional</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <h1>Model religios/confessional</h1>
+                {{ if .Data.CanCreate }}
+                <div class="card-actions">
+                    <a class="boto-primari" href="/territori/confessional/new?kind=religio">Nova religio/confessio</a>
+                    <a class="boto-secundari" href="/territori/confessional/new?kind=model">Nou model</a>
+                    <a class="boto-secundari" href="/territori/confessional/new?kind=nivell">Nou nivell</a>
+                    <a class="boto-secundari" href="/territori/confessional/new?kind=entitat">Nova entitat</a>
+                </div>
+                {{ end }}
+            </header>
+            {{ if eq .Data.Notice "saved" }}<div class="alert alert-success">Registre desat.</div>{{ end }}
+            {{ if eq .Data.Notice "deleted" }}<div class="alert alert-success">Registre eliminat.</div>{{ end }}
+            {{ if eq .Data.Error "unsafe_delete" }}<div class="alert alert-error">No es pot eliminar perque te registres relacionats.</div>{{ end }}
+            {{ if eq .Data.Error "delete" }}<div class="alert alert-error">No s'ha pogut eliminar el registre.</div>{{ end }}
+
+            <h2>Religions i confessions</h2>
+            <table class="taula">
+                <thead><tr><th>Nom</th><th>Pare</th><th>Estat</th><th>Moderacio</th>{{ if .Data.CanEdit }}<th>Accions</th>{{ end }}</tr></thead>
+                <tbody>
+                    {{ range .Data.Religions }}
+                    <tr>
+                        <td>{{ .Nom }}</td>
+                        <td>{{ if .PareID.Valid }}{{ index $.Data.ReligionLabels (int .PareID.Int64) }}{{ end }}</td>
+                        <td>{{ .Estat }}</td>
+                        <td>{{ .ModeracioEstat }}</td>
+                        {{ if $.Data.CanEdit }}
+                        <td>
+                            <a href="/territori/confessional/religio/{{ .ID }}/edit">Edita</a>
+                            <form method="post" action="/territori/confessional/delete" style="display:inline">
+                                <input type="hidden" name="kind" value="religio">
+                                <input type="hidden" name="id" value="{{ .ID }}">
+                                <button type="submit" class="boto-secundari">Elimina</button>
+                            </form>
+                        </td>
+                        {{ end }}
+                    </tr>
+                    {{ else }}
+                    <tr><td colspan="{{ if $.Data.CanEdit }}5{{ else }}4{{ end }}">No hi ha registres.</td></tr>
+                    {{ end }}
+                </tbody>
+            </table>
+
+            <h2>Models confessionals</h2>
+            <table class="taula">
+                <thead><tr><th>Nom</th><th>Religio/confessio</th><th>Pais</th><th>Anys</th><th>Estat</th>{{ if .Data.CanEdit }}<th>Accions</th>{{ end }}</tr></thead>
+                <tbody>
+                    {{ range .Data.Models }}
+                    <tr>
+                        <td>{{ .Nom }}</td>
+                        <td>{{ if .ReligioConfessioID.Valid }}{{ index $.Data.ReligionLabels (int .ReligioConfessioID.Int64) }}{{ end }}</td>
+                        <td>{{ if .PaisID.Valid }}{{ index $.Data.PaisLabels (int .PaisID.Int64) }}{{ end }}</td>
+                        <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
+                        <td>{{ .Estat }}</td>
+                        {{ if $.Data.CanEdit }}
+                        <td>
+                            <a href="/territori/confessional/model/{{ .ID }}/edit">Edita</a>
+                            <form method="post" action="/territori/confessional/delete" style="display:inline">
+                                <input type="hidden" name="kind" value="model">
+                                <input type="hidden" name="id" value="{{ .ID }}">
+                                <button type="submit" class="boto-secundari">Elimina</button>
+                            </form>
+                        </td>
+                        {{ end }}
+                    </tr>
+                    {{ else }}
+                    <tr><td colspan="{{ if $.Data.CanEdit }}6{{ else }}5{{ end }}">No hi ha registres.</td></tr>
+                    {{ end }}
+                </tbody>
+            </table>
+
+            <h2>Nivells confessionals</h2>
+            <table class="taula">
+                <thead><tr><th>Ordre</th><th>Nom</th><th>Model</th><th>Pare</th><th>Estat</th>{{ if .Data.CanEdit }}<th>Accions</th>{{ end }}</tr></thead>
+                <tbody>
+                    {{ range .Data.Nivells }}
+                    <tr>
+                        <td>{{ .Ordre }}</td>
+                        <td>{{ .NomNivell }}</td>
+                        <td>{{ index $.Data.ModelLabels .ModelConfessionalID }}</td>
+                        <td>{{ if .ParentID.Valid }}{{ index $.Data.NivellLabels (int .ParentID.Int64) }}{{ end }}</td>
+                        <td>{{ .Estat }}</td>
+                        {{ if $.Data.CanEdit }}
+                        <td>
+                            <a href="/territori/confessional/nivell/{{ .ID }}/edit">Edita</a>
+                            <form method="post" action="/territori/confessional/delete" style="display:inline">
+                                <input type="hidden" name="kind" value="nivell">
+                                <input type="hidden" name="id" value="{{ .ID }}">
+                                <button type="submit" class="boto-secundari">Elimina</button>
+                            </form>
+                        </td>
+                        {{ end }}
+                    </tr>
+                    {{ else }}
+                    <tr><td colspan="{{ if $.Data.CanEdit }}6{{ else }}5{{ end }}">No hi ha registres.</td></tr>
+                    {{ end }}
+                </tbody>
+            </table>
+
+            <h2>Entitats religioses</h2>
+            <table class="taula">
+                <thead><tr><th>Nom</th><th>Tipus</th><th>Religio/confessio</th><th>Model</th><th>Nivell</th><th>Pare</th>{{ if .Data.CanEdit }}<th>Accions</th>{{ end }}</tr></thead>
+                <tbody>
+                    {{ range .Data.Entitats }}
+                    <tr>
+                        <td>{{ .Nom }}</td>
+                        <td>{{ .TipusEntitat }}</td>
+                        <td>{{ if .ReligioConfessioID.Valid }}{{ index $.Data.ReligionLabels (int .ReligioConfessioID.Int64) }}{{ end }}</td>
+                        <td>{{ if .ModelConfessionalID.Valid }}{{ index $.Data.ModelLabels (int .ModelConfessionalID.Int64) }}{{ end }}</td>
+                        <td>{{ if .NivellConfessionalID.Valid }}{{ index $.Data.NivellLabels (int .NivellConfessionalID.Int64) }}{{ end }}</td>
+                        <td>{{ if .ParentID.Valid }}{{ index $.Data.EntitatLabels (int .ParentID.Int64) }}{{ end }}</td>
+                        {{ if $.Data.CanEdit }}
+                        <td>
+                            <a href="/territori/confessional/entitat/{{ .ID }}/edit">Edita</a>
+                            <form method="post" action="/territori/confessional/delete" style="display:inline">
+                                <input type="hidden" name="kind" value="entitat">
+                                <input type="hidden" name="id" value="{{ .ID }}">
+                                <button type="submit" class="boto-secundari">Elimina</button>
+                            </form>
+                        </td>
+                        {{ end }}
+                    </tr>
+                    {{ else }}
+                    <tr><td colspan="{{ if $.Data.CanEdit }}7{{ else }}6{{ end }}">No hi ha registres.</td></tr>
+                    {{ end }}
+                </tbody>
+            </table>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

@@ -780,6 +780,13 @@ func main() {
 	})
 	http.HandleFunc("/territori/eclesiastic/save", applyMiddleware(app.AdminSaveEclesiastic, core.BlockIPs, core.RateLimit))
 
+	// Model religios/confessional
+	http.HandleFunc("/territori/confessional", applyMiddleware(app.AdminConfessionalList, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/territori/confessional/new", applyMiddleware(app.AdminNewConfessional, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/territori/confessional/save", applyMiddleware(app.AdminSaveConfessional, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/territori/confessional/delete", applyMiddleware(app.AdminDeleteConfessional, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/territori/confessional/", applyMiddleware(app.AdminEditConfessional, core.BlockIPs, core.RateLimit))
+
 	// Polítiques / permisos
 	http.HandleFunc("/admin/politiques", func(w http.ResponseWriter, r *http.Request) {
 		switch {
