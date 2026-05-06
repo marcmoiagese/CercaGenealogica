@@ -270,31 +270,34 @@ type moderacioTypeSpec struct {
 }
 
 var moderacioTypeSpecs = map[string]moderacioTypeSpec{
-	"persona":                   {Key: "persona", PermKey: permKeyPersonesModerate, ListScope: ScopeGlobal},
-	"arxiu":                     {Key: "arxiu", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
-	"llibre":                    {Key: "llibre", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
-	"nivell":                    {Key: "nivell", PermKey: permKeyTerritoriNivellsEdit, ListScope: ScopePais},
-	"municipi":                  {Key: "municipi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
-	"eclesiastic":               {Key: "eclesiastic", PermKey: permKeyTerritoriEclesEdit, ListScope: ScopeEcles},
-	"municipi_mapa_version":     {Key: "municipi_mapa_version", PermKey: permKeyTerritoriMunicipisMapesModerate, ListScope: ScopeMunicipi},
-	"municipi_historia_general": {Key: "municipi_historia_general", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
-	"municipi_historia_fet":     {Key: "municipi_historia_fet", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
-	"municipi_anecdota_version": {Key: "municipi_anecdota_version", PermKey: permKeyTerritoriMunicipisAnecdotesModerate, ListScope: ScopeMunicipi},
-	"event_historic":            {Key: "event_historic", PermKey: permKeyEventsModerate, ListScope: ScopeGlobal},
-	"registre":                  {Key: "registre", PermKey: permKeyDocumentalsRegistresEdit, ListScope: ScopeLlibre},
-	"registre_canvi":            {Key: "registre_canvi", PermKey: permKeyDocumentalsRegistresEdit, ListScope: ScopeLlibre},
-	"cognom_variant":            {Key: "cognom_variant", PermKey: permKeyCognomsModerate, ListScope: ScopeGlobal},
-	"cognom_referencia":         {Key: "cognom_referencia", PermKey: permKeyCognomsModerate, ListScope: ScopeGlobal},
-	"cognom_merge":              {Key: "cognom_merge", PermKey: permKeyCognomsModerate, ListScope: ScopeGlobal},
-	"media_album":               {Key: "media_album", PermKey: permKeyMediaModerate, ListScope: ScopeGlobal},
-	"media_item":                {Key: "media_item", PermKey: permKeyMediaModerate, ListScope: ScopeGlobal},
-	"external_link":             {Key: "external_link", PermKey: permKeyAdminExternalLinksModerate, ListScope: ScopeGlobal},
-	"municipi_canvi":            {Key: "municipi_canvi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
-	"arxiu_canvi":               {Key: "arxiu_canvi", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
-	"llibre_canvi":              {Key: "llibre_canvi", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
-	"persona_canvi":             {Key: "persona_canvi", PermKey: permKeyPersonesModerate, ListScope: ScopeGlobal},
-	"cognom_canvi":              {Key: "cognom_canvi", PermKey: permKeyCognomsModerate, ListScope: ScopeGlobal},
-	"event_historic_canvi":      {Key: "event_historic_canvi", PermKey: permKeyEventsModerate, ListScope: ScopeGlobal},
+	"persona":                    {Key: "persona", PermKey: permKeyPersonesModerate, ListScope: ScopeGlobal},
+	"arxiu":                      {Key: "arxiu", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
+	"llibre":                     {Key: "llibre", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
+	"nivell":                     {Key: "nivell", PermKey: permKeyTerritoriNivellsEdit, ListScope: ScopePais},
+	"municipi":                   {Key: "municipi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
+	"eclesiastic":                {Key: "eclesiastic", PermKey: permKeyTerritoriEclesEdit, ListScope: ScopeEcles},
+	"entitat_religiosa":          {Key: "entitat_religiosa", PermKey: permKeyTerritoriConfessionalEntitatsEdit, ListScope: ScopeGlobal},
+	"entitat_religiosa_relacio":  {Key: "entitat_religiosa_relacio", PermKey: permKeyTerritoriConfessionalRelacionsEntitatsEdit, ListScope: ScopeGlobal},
+	"municipi_entitat_religiosa": {Key: "municipi_entitat_religiosa", PermKey: permKeyTerritoriConfessionalMunicipisEntitatsEdit, ListScope: ScopeGlobal},
+	"municipi_mapa_version":      {Key: "municipi_mapa_version", PermKey: permKeyTerritoriMunicipisMapesModerate, ListScope: ScopeMunicipi},
+	"municipi_historia_general":  {Key: "municipi_historia_general", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
+	"municipi_historia_fet":      {Key: "municipi_historia_fet", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
+	"municipi_anecdota_version":  {Key: "municipi_anecdota_version", PermKey: permKeyTerritoriMunicipisAnecdotesModerate, ListScope: ScopeMunicipi},
+	"event_historic":             {Key: "event_historic", PermKey: permKeyEventsModerate, ListScope: ScopeGlobal},
+	"registre":                   {Key: "registre", PermKey: permKeyDocumentalsRegistresEdit, ListScope: ScopeLlibre},
+	"registre_canvi":             {Key: "registre_canvi", PermKey: permKeyDocumentalsRegistresEdit, ListScope: ScopeLlibre},
+	"cognom_variant":             {Key: "cognom_variant", PermKey: permKeyCognomsModerate, ListScope: ScopeGlobal},
+	"cognom_referencia":          {Key: "cognom_referencia", PermKey: permKeyCognomsModerate, ListScope: ScopeGlobal},
+	"cognom_merge":               {Key: "cognom_merge", PermKey: permKeyCognomsModerate, ListScope: ScopeGlobal},
+	"media_album":                {Key: "media_album", PermKey: permKeyMediaModerate, ListScope: ScopeGlobal},
+	"media_item":                 {Key: "media_item", PermKey: permKeyMediaModerate, ListScope: ScopeGlobal},
+	"external_link":              {Key: "external_link", PermKey: permKeyAdminExternalLinksModerate, ListScope: ScopeGlobal},
+	"municipi_canvi":             {Key: "municipi_canvi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
+	"arxiu_canvi":                {Key: "arxiu_canvi", PermKey: permKeyDocumentalsArxiusEdit, ListScope: ScopeArxiu},
+	"llibre_canvi":               {Key: "llibre_canvi", PermKey: permKeyDocumentalsLlibresEdit, ListScope: ScopeLlibre},
+	"persona_canvi":              {Key: "persona_canvi", PermKey: permKeyPersonesModerate, ListScope: ScopeGlobal},
+	"cognom_canvi":               {Key: "cognom_canvi", PermKey: permKeyCognomsModerate, ListScope: ScopeGlobal},
+	"event_historic_canvi":       {Key: "event_historic_canvi", PermKey: permKeyEventsModerate, ListScope: ScopeGlobal},
 }
 
 type moderacioScopeModel struct {
@@ -454,6 +457,12 @@ func (m *moderacioScopeModel) canModerateItem(objType string, id int) bool {
 		return m.app.HasPermission(m.user.ID, permKeyTerritoriMunicipisEdit, target)
 	case "eclesiastic":
 		return m.app.HasPermission(m.user.ID, permKeyTerritoriEclesEdit, PermissionTarget{EclesID: intPtr(id)})
+	case "entitat_religiosa":
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriConfessionalEntitatsEdit, PermissionTarget{})
+	case "entitat_religiosa_relacio":
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriConfessionalRelacionsEntitatsEdit, PermissionTarget{})
+	case "municipi_entitat_religiosa":
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriConfessionalMunicipisEntitatsEdit, PermissionTarget{})
 	case "municipi_historia_general":
 		munID, err := m.app.DB.ResolveMunicipiIDByHistoriaGeneralVersionID(id)
 		if err != nil || munID <= 0 {
@@ -659,6 +668,9 @@ var moderacioBulkAllowedTypes = []string{
 	"nivell",
 	"municipi",
 	"eclesiastic",
+	"entitat_religiosa",
+	"entitat_religiosa_relacio",
+	"municipi_entitat_religiosa",
 	"municipi_mapa_version",
 	"municipi_historia_general",
 	"municipi_historia_fet",
@@ -811,6 +823,12 @@ func externalLinkStatusFromModeracio(status string) string {
 	default:
 		return status
 	}
+}
+
+type confessionalModeracioFilter struct {
+	Status        string
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
 }
 
 type moderacioBuildMetrics struct {
@@ -993,6 +1011,11 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		CreatedAfter:  createdAfter,
 		CreatedBefore: createdBefore,
 	}
+	confessionalFilter := confessionalModeracioFilter{
+		Status:        status,
+		CreatedAfter:  createdAfter,
+		CreatedBefore: createdBefore,
+	}
 
 	cognomVariantFilter := db.CognomVariantFilter{
 		Status:        status,
@@ -1083,6 +1106,27 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 			return nil, 0, moderacioSummary{}, err
 		} else if total > 0 {
 			typeCounts["eclesiastic"] = total
+		}
+	}
+	if typeAllowed("entitat_religiosa") && len(userIDs) == 0 && userQuery == "" {
+		if total, err := a.countModeracioConfessionalEntitats(confessionalFilter); err != nil {
+			return nil, 0, moderacioSummary{}, err
+		} else if total > 0 {
+			typeCounts["entitat_religiosa"] = total
+		}
+	}
+	if typeAllowed("entitat_religiosa_relacio") && len(userIDs) == 0 && userQuery == "" {
+		if total, err := a.countModeracioConfessionalRelacionsEntitats(confessionalFilter); err != nil {
+			return nil, 0, moderacioSummary{}, err
+		} else if total > 0 {
+			typeCounts["entitat_religiosa_relacio"] = total
+		}
+	}
+	if typeAllowed("municipi_entitat_religiosa") && len(userIDs) == 0 && userQuery == "" {
+		if total, err := a.countModeracioConfessionalRelacionsTerritorials(confessionalFilter); err != nil {
+			return nil, 0, moderacioSummary{}, err
+		} else if total > 0 {
+			typeCounts["municipi_entitat_religiosa"] = total
 		}
 	}
 	if typeAllowed("media_album") && !skipMedia {
@@ -1263,6 +1307,9 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		"nivell",
 		"municipi",
 		"eclesiastic",
+		"entitat_religiosa",
+		"entitat_religiosa_relacio",
+		"municipi_entitat_religiosa",
 		"media_album",
 		"media_item",
 		"municipi_mapa_version",
@@ -1316,6 +1363,12 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 			fetched, err = a.listModeracioMunicipis(municipiFilter, offset, limit, autorFromID, metrics)
 		case "eclesiastic":
 			fetched, err = a.listModeracioEclesiastics(eclesFilter, offset, limit, autorFromID, metrics)
+		case "entitat_religiosa":
+			fetched, err = a.listModeracioConfessionalEntitats(confessionalFilter, offset, limit, metrics)
+		case "entitat_religiosa_relacio":
+			fetched, err = a.listModeracioConfessionalRelacionsEntitats(confessionalFilter, offset, limit, metrics)
+		case "municipi_entitat_religiosa":
+			fetched, err = a.listModeracioConfessionalRelacionsTerritorials(confessionalFilter, offset, limit, metrics)
 		case "media_album":
 			if !skipMedia {
 				fetched, err = a.listModeracioMediaAlbums(mediaFilter, offset, limit, autorFromID, metrics)
@@ -1654,6 +1707,272 @@ func (a *App) listModeracioEclesiastics(filter db.ArquebisbatFilter, offset, lim
 		metrics.listBuildDur += time.Since(buildStart)
 	}
 	return items, nil
+}
+
+func (a *App) countModeracioConfessionalEntitats(filter confessionalModeracioFilter) (int, error) {
+	rows, err := a.DB.ListEntitatsReligioses()
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	for _, row := range rows {
+		if matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, filter) {
+			total++
+		}
+	}
+	return total, nil
+}
+
+func (a *App) countModeracioConfessionalRelacionsEntitats(filter confessionalModeracioFilter) (int, error) {
+	rows, err := a.DB.ListEntitatReligiosaRelacions()
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	for _, row := range rows {
+		if matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, filter) {
+			total++
+		}
+	}
+	return total, nil
+}
+
+func (a *App) countModeracioConfessionalRelacionsTerritorials(filter confessionalModeracioFilter) (int, error) {
+	rows, err := a.DB.ListMunicipiEntitatsReligioses(0)
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	for _, row := range rows {
+		if matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, filter) {
+			total++
+		}
+	}
+	return total, nil
+}
+
+func (a *App) listModeracioConfessionalEntitats(filter confessionalModeracioFilter, offset, limit int, metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
+	if limit <= 0 {
+		return []moderacioItem{}, nil
+	}
+	fetchStart := time.Now()
+	rows, err := a.DB.ListEntitatsReligioses()
+	if metrics != nil {
+		metrics.listFetchDur += time.Since(fetchStart)
+	}
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return confessionalCreatedAfter(rows[i].CreatedAt, rows[i].ID, rows[j].CreatedAt, rows[j].ID)
+	})
+	buildStart := time.Now()
+	religionLabels := confessionalReligionCatalogLabels()
+	levelLabels := confessionalLevelCatalogLabels()
+	items := make([]moderacioItem, 0, limit)
+	seen := 0
+	for _, row := range rows {
+		if !matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, filter) {
+			continue
+		}
+		if seen < offset {
+			seen++
+			continue
+		}
+		if len(items) >= limit {
+			break
+		}
+		created, createdAt := confessionalCreated(row.CreatedAt)
+		contextParts := []string{}
+		if label := strings.TrimSpace(religionLabels[row.ReligioConfessioCodi]); label != "" {
+			contextParts = append(contextParts, label)
+		}
+		if label := strings.TrimSpace(levelLabels[row.NivellConfessionalCodi]); label != "" {
+			contextParts = append(contextParts, label)
+		}
+		context := strings.Join(contextParts, " - ")
+		if row.Codi != "" {
+			context = strings.TrimSpace(strings.Join([]string{context, row.Codi}, " | "))
+		}
+		items = append(items, moderacioItem{
+			ID:        row.ID,
+			Type:      "entitat_religiosa",
+			Nom:       row.Nom,
+			Context:   context,
+			Autor:     "-",
+			Created:   created,
+			CreatedAt: createdAt,
+			EditURL:   fmt.Sprintf("/confessional/entitats/%d/edit?return_to=/moderacio", row.ID),
+			Status:    row.ModeracioEstat,
+		})
+		seen++
+	}
+	if metrics != nil {
+		metrics.listBuildDur += time.Since(buildStart)
+	}
+	return items, nil
+}
+
+func (a *App) listModeracioConfessionalRelacionsEntitats(filter confessionalModeracioFilter, offset, limit int, metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
+	if limit <= 0 {
+		return []moderacioItem{}, nil
+	}
+	fetchStart := time.Now()
+	rows, err := a.DB.ListEntitatReligiosaRelacions()
+	if metrics != nil {
+		metrics.listFetchDur += time.Since(fetchStart)
+	}
+	if err != nil {
+		return nil, err
+	}
+	entitats, err := a.DB.ListEntitatsReligioses()
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return confessionalCreatedAfter(rows[i].CreatedAt, rows[i].ID, rows[j].CreatedAt, rows[j].ID)
+	})
+	buildStart := time.Now()
+	entitatLabels := entitatReligiosaLabels(entitats)
+	items := make([]moderacioItem, 0, limit)
+	seen := 0
+	for _, row := range rows {
+		if !matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, filter) {
+			continue
+		}
+		if seen < offset {
+			seen++
+			continue
+		}
+		if len(items) >= limit {
+			break
+		}
+		created, createdAt := confessionalCreated(row.CreatedAt)
+		origin := confessionalLabel(entitatLabels, row.EntitatOrigenID)
+		dest := confessionalLabel(entitatLabels, row.EntitatDestiID)
+		items = append(items, moderacioItem{
+			ID:        row.ID,
+			Type:      "entitat_religiosa_relacio",
+			Nom:       strings.TrimSpace(origin + " -> " + dest),
+			Context:   row.TipusRelacio,
+			Autor:     "-",
+			Created:   created,
+			CreatedAt: createdAt,
+			EditURL:   fmt.Sprintf("/confessional/relacions-entitats/%d/edit?return_to=/moderacio", row.ID),
+			Status:    row.ModeracioEstat,
+		})
+		seen++
+	}
+	if metrics != nil {
+		metrics.listBuildDur += time.Since(buildStart)
+	}
+	return items, nil
+}
+
+func (a *App) listModeracioConfessionalRelacionsTerritorials(filter confessionalModeracioFilter, offset, limit int, metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
+	if limit <= 0 {
+		return []moderacioItem{}, nil
+	}
+	fetchStart := time.Now()
+	rows, err := a.DB.ListMunicipiEntitatsReligioses(0)
+	if metrics != nil {
+		metrics.listFetchDur += time.Since(fetchStart)
+	}
+	if err != nil {
+		return nil, err
+	}
+	entitats, err := a.DB.ListEntitatsReligioses()
+	if err != nil {
+		return nil, err
+	}
+	municipis, err := a.DB.ListMunicipis(db.MunicipiFilter{})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return confessionalCreatedAfter(rows[i].CreatedAt, rows[i].ID, rows[j].CreatedAt, rows[j].ID)
+	})
+	buildStart := time.Now()
+	entitatLabels := entitatReligiosaLabels(entitats)
+	municipiLabels := municipiLabels(municipis)
+	items := make([]moderacioItem, 0, limit)
+	seen := 0
+	for _, row := range rows {
+		if !matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, filter) {
+			continue
+		}
+		if seen < offset {
+			seen++
+			continue
+		}
+		if len(items) >= limit {
+			break
+		}
+		created, createdAt := confessionalCreated(row.CreatedAt)
+		municipi := confessionalLabel(municipiLabels, row.MunicipiID)
+		if row.NucliID.Valid {
+			municipi = strings.TrimSpace(municipi + " / " + confessionalLabel(municipiLabels, int(row.NucliID.Int64)))
+		}
+		entitat := confessionalLabel(entitatLabels, row.EntitatReligiosaID)
+		items = append(items, moderacioItem{
+			ID:        row.ID,
+			Type:      "municipi_entitat_religiosa",
+			Nom:       strings.TrimSpace(municipi + " -> " + entitat),
+			Context:   row.TipusRelacio,
+			Autor:     "-",
+			Created:   created,
+			CreatedAt: createdAt,
+			EditURL:   fmt.Sprintf("/confessional/municipis-entitats/%d/edit?return_to=/moderacio", row.ID),
+			Status:    row.ModeracioEstat,
+		})
+		seen++
+	}
+	if metrics != nil {
+		metrics.listBuildDur += time.Since(buildStart)
+	}
+	return items, nil
+}
+
+func matchConfessionalModeracio(status string, created sql.NullTime, filter confessionalModeracioFilter) bool {
+	if filter.Status != "" && filter.Status != "all" && status != filter.Status {
+		return false
+	}
+	if !filter.CreatedAfter.IsZero() || !filter.CreatedBefore.IsZero() {
+		if !created.Valid {
+			return false
+		}
+		if !filter.CreatedAfter.IsZero() && created.Time.Before(filter.CreatedAfter) {
+			return false
+		}
+		if !filter.CreatedBefore.IsZero() && !created.Time.Before(filter.CreatedBefore) {
+			return false
+		}
+	}
+	return true
+}
+
+func confessionalCreated(created sql.NullTime) (string, time.Time) {
+	if !created.Valid {
+		return "", time.Time{}
+	}
+	return created.Time.Format("2006-01-02 15:04"), created.Time
+}
+
+func confessionalCreatedAfter(left sql.NullTime, leftID int, right sql.NullTime, rightID int) bool {
+	if left.Valid && right.Valid && !left.Time.Equal(right.Time) {
+		return left.Time.After(right.Time)
+	}
+	if left.Valid != right.Valid {
+		return left.Valid
+	}
+	return leftID > rightID
+}
+
+func confessionalLabel(labels map[int]string, id int) string {
+	if label := strings.TrimSpace(labels[id]); label != "" {
+		return label
+	}
+	return "#" + strconv.Itoa(id)
 }
 
 func (a *App) listModeracioMediaAlbums(filter db.MediaModeracioFilter, offset, limit int, autorFromID func(sql.NullInt64) (string, string, int), metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
@@ -5285,6 +5604,12 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.DB.UpdateNivellModeracio(id, estat, motiu, moderatorID)
 	case "eclesiastic":
 		return a.DB.UpdateArquebisbatModeracio(id, estat, motiu, moderatorID)
+	case "entitat_religiosa":
+		return a.DB.UpdateEntitatReligiosaModeracio(id, estat, motiu, moderatorID)
+	case "entitat_religiosa_relacio":
+		return a.DB.UpdateEntitatReligiosaRelacioModeracio(id, estat, motiu, moderatorID)
+	case "municipi_entitat_religiosa":
+		return a.DB.UpdateMunicipiEntitatReligiosaModeracio(id, estat, motiu, moderatorID)
 	case "registre":
 		action := ""
 		switch estat {

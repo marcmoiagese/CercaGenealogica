@@ -155,6 +155,21 @@ func (a *App) adminPendingModerationCounts() (int, []adminControlPendingType, er
 	} else {
 		counts["eclesiastic"] = total
 	}
+	if total, err := a.countModeracioConfessionalEntitats(confessionalModeracioFilter{Status: "pendent"}); err != nil {
+		return 0, nil, err
+	} else {
+		counts["entitat_religiosa"] = total
+	}
+	if total, err := a.countModeracioConfessionalRelacionsEntitats(confessionalModeracioFilter{Status: "pendent"}); err != nil {
+		return 0, nil, err
+	} else {
+		counts["entitat_religiosa_relacio"] = total
+	}
+	if total, err := a.countModeracioConfessionalRelacionsTerritorials(confessionalModeracioFilter{Status: "pendent"}); err != nil {
+		return 0, nil, err
+	} else {
+		counts["municipi_entitat_religiosa"] = total
+	}
 	if total, err := a.DB.CountMunicipiMapaVersionsScoped(db.MunicipiMapaVersionFilter{Status: "pendent"}, db.MunicipiScopeFilter{}); err != nil {
 		return 0, nil, err
 	} else {

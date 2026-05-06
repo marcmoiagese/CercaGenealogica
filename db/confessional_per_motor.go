@@ -26,11 +26,12 @@ type confessionalQueries struct {
 	updateNivell string
 	deleteNivell string
 
-	listEntitats  string
-	getEntitat    string
-	insertEntitat string
-	updateEntitat string
-	deleteEntitat string
+	listEntitats           string
+	getEntitat             string
+	insertEntitat          string
+	updateEntitat          string
+	deleteEntitat          string
+	updateEntitatModeracio string
 
 	listRelacionsAll        string
 	listRelacionsByMunicipi string
@@ -38,51 +39,56 @@ type confessionalQueries struct {
 	insertRelacio           string
 	updateRelacio           string
 	deleteRelacio           string
+	updateRelacioModeracio  string
 
-	listEntitatRelacions   string
-	getEntitatRelacio      string
-	insertEntitatRelacio   string
-	updateEntitatRelacio   string
-	deleteEntitatRelacio   string
-	entitatRelacioCycleSQL string
-	returningID            bool
+	listEntitatRelacions          string
+	getEntitatRelacio             string
+	insertEntitatRelacio          string
+	updateEntitatRelacio          string
+	deleteEntitatRelacio          string
+	updateEntitatRelacioModeracio string
+	entitatRelacioCycleSQL        string
+	returningID                   bool
 }
 
 func sqliteConfessionalQueries() confessionalQueries {
 	return confessionalQueries{
-		engine:                  "sqlite",
-		listReligions:           `SELECT id, COALESCE(codi, ''), nom, pare_id, COALESCE(categoria, ''), COALESCE(system_key, ''), system_managed, COALESCE(descripcio, ''), estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM religio_confessio ORDER BY system_managed DESC, nom`,
-		getReligion:             `SELECT id, COALESCE(codi, ''), nom, pare_id, COALESCE(categoria, ''), COALESCE(system_key, ''), system_managed, COALESCE(descripcio, ''), estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM religio_confessio WHERE id = ?`,
-		insertReligion:          `INSERT INTO religio_confessio (codi, nom, pare_id, categoria, system_key, system_managed, descripcio, estat, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-		updateReligion:          `UPDATE religio_confessio SET codi=?, nom=?, pare_id=?, categoria=?, system_key=?, system_managed=?, descripcio=?, estat=?, observacions=?, moderation_status=?, updated_at=datetime('now') WHERE id=?`,
-		deleteReligion:          `DELETE FROM religio_confessio WHERE id = ?`,
-		listModels:              `SELECT id, COALESCE(codi, ''), nom, religio_confessio_id, COALESCE(system_key, ''), system_managed, pais_id, COALESCE(descripcio, ''), any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM model_confessional ORDER BY system_managed DESC, nom`,
-		getModel:                `SELECT id, COALESCE(codi, ''), nom, religio_confessio_id, COALESCE(system_key, ''), system_managed, pais_id, COALESCE(descripcio, ''), any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM model_confessional WHERE id = ?`,
-		insertModel:             `INSERT INTO model_confessional (codi, nom, religio_confessio_id, system_key, system_managed, pais_id, descripcio, any_inici, any_fi, estat, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-		updateModel:             `UPDATE model_confessional SET codi=?, nom=?, religio_confessio_id=?, system_key=?, system_managed=?, pais_id=?, descripcio=?, any_inici=?, any_fi=?, estat=?, observacions=?, moderation_status=?, updated_at=datetime('now') WHERE id=?`,
-		deleteModel:             `DELETE FROM model_confessional WHERE id = ?`,
-		listNivells:             `SELECT id, COALESCE(model_confessional_id, 0), religio_confessio_id, COALESCE(codi, ''), ordre, nom_nivell, COALESCE(nom_plural, ''), COALESCE(tipus_nivell, ''), COALESCE(categoria, ''), COALESCE(codi_oficial, ''), pot_tenir_territori, pot_tenir_fills, pot_vincular_municipi, pot_ser_suggerit_imports, COALESCE(system_key, ''), system_managed, parent_id, any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM nivell_confessional ORDER BY system_managed DESC, COALESCE(model_confessional_id, 0), religio_confessio_id, ordre, nom_nivell`,
-		getNivell:               `SELECT id, COALESCE(model_confessional_id, 0), religio_confessio_id, COALESCE(codi, ''), ordre, nom_nivell, COALESCE(nom_plural, ''), COALESCE(tipus_nivell, ''), COALESCE(categoria, ''), COALESCE(codi_oficial, ''), pot_tenir_territori, pot_tenir_fills, pot_vincular_municipi, pot_ser_suggerit_imports, COALESCE(system_key, ''), system_managed, parent_id, any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM nivell_confessional WHERE id = ?`,
-		insertNivell:            `INSERT INTO nivell_confessional (model_confessional_id, religio_confessio_id, codi, ordre, nom_nivell, nom_plural, tipus_nivell, categoria, codi_oficial, pot_tenir_territori, pot_tenir_fills, pot_vincular_municipi, pot_ser_suggerit_imports, system_key, system_managed, parent_id, any_inici, any_fi, estat, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-		updateNivell:            `UPDATE nivell_confessional SET model_confessional_id=?, religio_confessio_id=?, codi=?, ordre=?, nom_nivell=?, nom_plural=?, tipus_nivell=?, categoria=?, codi_oficial=?, pot_tenir_territori=?, pot_tenir_fills=?, pot_vincular_municipi=?, pot_ser_suggerit_imports=?, system_key=?, system_managed=?, parent_id=?, any_inici=?, any_fi=?, estat=?, observacions=?, moderation_status=?, updated_at=datetime('now') WHERE id=?`,
-		deleteNivell:            `DELETE FROM nivell_confessional WHERE id = ?`,
-		listEntitats:            `SELECT id, COALESCE(codi, ''), nom, COALESCE(religio_confessio_codi, ''), COALESCE(nivell_confessional_codi, ''), religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, COALESCE(tipus_entitat, ''), COALESCE(tipus_especific, ''), any_inici, any_fi, estat, COALESCE(web, ''), COALESCE(web_wikipedia, ''), COALESCE(territori, ''), COALESCE(descripcio, ''), COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa ORDER BY nom`,
-		getEntitat:              `SELECT id, COALESCE(codi, ''), nom, COALESCE(religio_confessio_codi, ''), COALESCE(nivell_confessional_codi, ''), religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, COALESCE(tipus_entitat, ''), COALESCE(tipus_especific, ''), any_inici, any_fi, estat, COALESCE(web, ''), COALESCE(web_wikipedia, ''), COALESCE(territori, ''), COALESCE(descripcio, ''), COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa WHERE id = ?`,
-		insertEntitat:           `INSERT INTO entitat_religiosa (codi, nom, religio_confessio_codi, nivell_confessional_codi, religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, tipus_entitat, tipus_especific, any_inici, any_fi, estat, web, web_wikipedia, territori, descripcio, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-		updateEntitat:           `UPDATE entitat_religiosa SET codi=?, nom=?, religio_confessio_codi=?, nivell_confessional_codi=?, religio_confessio_id=?, model_confessional_id=?, nivell_confessional_id=?, pais_id=?, parent_id=?, tipus_entitat=?, tipus_especific=?, any_inici=?, any_fi=?, estat=?, web=?, web_wikipedia=?, territori=?, descripcio=?, observacions=?, moderation_status=?, updated_at=datetime('now') WHERE id=?`,
-		deleteEntitat:           `DELETE FROM entitat_religiosa WHERE id = ?`,
-		listRelacionsAll:        `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa ORDER BY municipi_id, nucli_id, any_inici, id`,
-		listRelacionsByMunicipi: `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa WHERE municipi_id = ? ORDER BY municipi_id, nucli_id, any_inici, id`,
-		getRelacio:              `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa WHERE id = ?`,
-		insertRelacio:           `INSERT INTO municipi_entitat_religiosa (municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-		updateRelacio:           `UPDATE municipi_entitat_religiosa SET municipi_id=?, nucli_id=?, entitat_religiosa_id=?, tipus_relacio=?, any_inici=?, any_fi=?, observacions=?, moderation_status=?, updated_at=datetime('now') WHERE id=?`,
-		deleteRelacio:           `DELETE FROM municipi_entitat_religiosa WHERE id = ?`,
-		listEntitatRelacions:    `SELECT id, entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa_relacio ORDER BY entitat_origen_id, entitat_desti_id, any_inici, id`,
-		getEntitatRelacio:       `SELECT id, entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa_relacio WHERE id = ?`,
-		insertEntitatRelacio:    `INSERT INTO entitat_religiosa_relacio (entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-		updateEntitatRelacio:    `UPDATE entitat_religiosa_relacio SET entitat_origen_id=?, entitat_desti_id=?, tipus_relacio=?, any_inici=?, any_fi=?, font_id=?, observacions=?, moderation_status=?, updated_at=datetime('now') WHERE id=?`,
-		deleteEntitatRelacio:    `DELETE FROM entitat_religiosa_relacio WHERE id = ?`,
-		entitatRelacioCycleSQL:  `WITH RECURSIVE chain(id) AS (SELECT entitat_desti_id FROM entitat_religiosa_relacio WHERE entitat_origen_id = ? AND id <> ? UNION SELECT r.entitat_desti_id FROM entitat_religiosa_relacio r JOIN chain c ON r.entitat_origen_id = c.id WHERE r.id <> ?) SELECT 1 FROM chain WHERE id = ? LIMIT 1`,
+		engine:                        "sqlite",
+		listReligions:                 `SELECT id, COALESCE(codi, ''), nom, pare_id, COALESCE(categoria, ''), COALESCE(system_key, ''), system_managed, COALESCE(descripcio, ''), estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM religio_confessio ORDER BY system_managed DESC, nom`,
+		getReligion:                   `SELECT id, COALESCE(codi, ''), nom, pare_id, COALESCE(categoria, ''), COALESCE(system_key, ''), system_managed, COALESCE(descripcio, ''), estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM religio_confessio WHERE id = ?`,
+		insertReligion:                `INSERT INTO religio_confessio (codi, nom, pare_id, categoria, system_key, system_managed, descripcio, estat, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		updateReligion:                `UPDATE religio_confessio SET codi=?, nom=?, pare_id=?, categoria=?, system_key=?, system_managed=?, descripcio=?, estat=?, observacions=?, moderation_status=?, updated_at=datetime('now') WHERE id=?`,
+		deleteReligion:                `DELETE FROM religio_confessio WHERE id = ?`,
+		listModels:                    `SELECT id, COALESCE(codi, ''), nom, religio_confessio_id, COALESCE(system_key, ''), system_managed, pais_id, COALESCE(descripcio, ''), any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM model_confessional ORDER BY system_managed DESC, nom`,
+		getModel:                      `SELECT id, COALESCE(codi, ''), nom, religio_confessio_id, COALESCE(system_key, ''), system_managed, pais_id, COALESCE(descripcio, ''), any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM model_confessional WHERE id = ?`,
+		insertModel:                   `INSERT INTO model_confessional (codi, nom, religio_confessio_id, system_key, system_managed, pais_id, descripcio, any_inici, any_fi, estat, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		updateModel:                   `UPDATE model_confessional SET codi=?, nom=?, religio_confessio_id=?, system_key=?, system_managed=?, pais_id=?, descripcio=?, any_inici=?, any_fi=?, estat=?, observacions=?, moderation_status=?, updated_at=datetime('now') WHERE id=?`,
+		deleteModel:                   `DELETE FROM model_confessional WHERE id = ?`,
+		listNivells:                   `SELECT id, COALESCE(model_confessional_id, 0), religio_confessio_id, COALESCE(codi, ''), ordre, nom_nivell, COALESCE(nom_plural, ''), COALESCE(tipus_nivell, ''), COALESCE(categoria, ''), COALESCE(codi_oficial, ''), pot_tenir_territori, pot_tenir_fills, pot_vincular_municipi, pot_ser_suggerit_imports, COALESCE(system_key, ''), system_managed, parent_id, any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM nivell_confessional ORDER BY system_managed DESC, COALESCE(model_confessional_id, 0), religio_confessio_id, ordre, nom_nivell`,
+		getNivell:                     `SELECT id, COALESCE(model_confessional_id, 0), religio_confessio_id, COALESCE(codi, ''), ordre, nom_nivell, COALESCE(nom_plural, ''), COALESCE(tipus_nivell, ''), COALESCE(categoria, ''), COALESCE(codi_oficial, ''), pot_tenir_territori, pot_tenir_fills, pot_vincular_municipi, pot_ser_suggerit_imports, COALESCE(system_key, ''), system_managed, parent_id, any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM nivell_confessional WHERE id = ?`,
+		insertNivell:                  `INSERT INTO nivell_confessional (model_confessional_id, religio_confessio_id, codi, ordre, nom_nivell, nom_plural, tipus_nivell, categoria, codi_oficial, pot_tenir_territori, pot_tenir_fills, pot_vincular_municipi, pot_ser_suggerit_imports, system_key, system_managed, parent_id, any_inici, any_fi, estat, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		updateNivell:                  `UPDATE nivell_confessional SET model_confessional_id=?, religio_confessio_id=?, codi=?, ordre=?, nom_nivell=?, nom_plural=?, tipus_nivell=?, categoria=?, codi_oficial=?, pot_tenir_territori=?, pot_tenir_fills=?, pot_vincular_municipi=?, pot_ser_suggerit_imports=?, system_key=?, system_managed=?, parent_id=?, any_inici=?, any_fi=?, estat=?, observacions=?, moderation_status=?, updated_at=datetime('now') WHERE id=?`,
+		deleteNivell:                  `DELETE FROM nivell_confessional WHERE id = ?`,
+		listEntitats:                  `SELECT id, COALESCE(codi, ''), nom, COALESCE(religio_confessio_codi, ''), COALESCE(nivell_confessional_codi, ''), religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, COALESCE(tipus_entitat, ''), COALESCE(tipus_especific, ''), any_inici, any_fi, estat, COALESCE(web, ''), COALESCE(web_wikipedia, ''), COALESCE(territori, ''), COALESCE(descripcio, ''), COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa ORDER BY nom`,
+		getEntitat:                    `SELECT id, COALESCE(codi, ''), nom, COALESCE(religio_confessio_codi, ''), COALESCE(nivell_confessional_codi, ''), religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, COALESCE(tipus_entitat, ''), COALESCE(tipus_especific, ''), any_inici, any_fi, estat, COALESCE(web, ''), COALESCE(web_wikipedia, ''), COALESCE(territori, ''), COALESCE(descripcio, ''), COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa WHERE id = ?`,
+		insertEntitat:                 `INSERT INTO entitat_religiosa (codi, nom, religio_confessio_codi, nivell_confessional_codi, religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, tipus_entitat, tipus_especific, any_inici, any_fi, estat, web, web_wikipedia, territori, descripcio, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		updateEntitat:                 `UPDATE entitat_religiosa SET codi=?, nom=?, religio_confessio_codi=?, nivell_confessional_codi=?, religio_confessio_id=?, model_confessional_id=?, nivell_confessional_id=?, pais_id=?, parent_id=?, tipus_entitat=?, tipus_especific=?, any_inici=?, any_fi=?, estat=?, web=?, web_wikipedia=?, territori=?, descripcio=?, observacions=?, moderation_status=?, updated_at=datetime('now') WHERE id=?`,
+		deleteEntitat:                 `DELETE FROM entitat_religiosa WHERE id = ?`,
+		updateEntitatModeracio:        `UPDATE entitat_religiosa SET moderation_status=?, updated_at=datetime('now') WHERE id=?`,
+		listRelacionsAll:              `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa ORDER BY municipi_id, nucli_id, any_inici, id`,
+		listRelacionsByMunicipi:       `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa WHERE municipi_id = ? ORDER BY municipi_id, nucli_id, any_inici, id`,
+		getRelacio:                    `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa WHERE id = ?`,
+		insertRelacio:                 `INSERT INTO municipi_entitat_religiosa (municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		updateRelacio:                 `UPDATE municipi_entitat_religiosa SET municipi_id=?, nucli_id=?, entitat_religiosa_id=?, tipus_relacio=?, any_inici=?, any_fi=?, observacions=?, moderation_status=?, updated_at=datetime('now') WHERE id=?`,
+		deleteRelacio:                 `DELETE FROM municipi_entitat_religiosa WHERE id = ?`,
+		updateRelacioModeracio:        `UPDATE municipi_entitat_religiosa SET moderation_status=?, updated_at=datetime('now') WHERE id=?`,
+		listEntitatRelacions:          `SELECT id, entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa_relacio ORDER BY entitat_origen_id, entitat_desti_id, any_inici, id`,
+		getEntitatRelacio:             `SELECT id, entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa_relacio WHERE id = ?`,
+		insertEntitatRelacio:          `INSERT INTO entitat_religiosa_relacio (entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		updateEntitatRelacio:          `UPDATE entitat_religiosa_relacio SET entitat_origen_id=?, entitat_desti_id=?, tipus_relacio=?, any_inici=?, any_fi=?, font_id=?, observacions=?, moderation_status=?, updated_at=datetime('now') WHERE id=?`,
+		deleteEntitatRelacio:          `DELETE FROM entitat_religiosa_relacio WHERE id = ?`,
+		updateEntitatRelacioModeracio: `UPDATE entitat_religiosa_relacio SET moderation_status=?, updated_at=datetime('now') WHERE id=?`,
+		entitatRelacioCycleSQL:        `WITH RECURSIVE chain(id) AS (SELECT entitat_desti_id FROM entitat_religiosa_relacio WHERE entitat_origen_id = ? AND id <> ? UNION SELECT r.entitat_desti_id FROM entitat_religiosa_relacio r JOIN chain c ON r.entitat_origen_id = c.id WHERE r.id <> ?) SELECT 1 FROM chain WHERE id = ? LIMIT 1`,
 	}
 }
 
@@ -97,48 +103,54 @@ func mysqlConfessionalQueries() confessionalQueries {
 	q.updateNivell = `UPDATE nivell_confessional SET model_confessional_id=?, religio_confessio_id=?, codi=?, ordre=?, nom_nivell=?, nom_plural=?, tipus_nivell=?, categoria=?, codi_oficial=?, pot_tenir_territori=?, pot_tenir_fills=?, pot_vincular_municipi=?, pot_ser_suggerit_imports=?, system_key=?, system_managed=?, parent_id=?, any_inici=?, any_fi=?, estat=?, observacions=?, moderation_status=?, updated_at=NOW() WHERE id=?`
 	q.insertEntitat = `INSERT INTO entitat_religiosa (codi, nom, religio_confessio_codi, nivell_confessional_codi, religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, tipus_entitat, tipus_especific, any_inici, any_fi, estat, web, web_wikipedia, territori, descripcio, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`
 	q.updateEntitat = `UPDATE entitat_religiosa SET codi=?, nom=?, religio_confessio_codi=?, nivell_confessional_codi=?, religio_confessio_id=?, model_confessional_id=?, nivell_confessional_id=?, pais_id=?, parent_id=?, tipus_entitat=?, tipus_especific=?, any_inici=?, any_fi=?, estat=?, web=?, web_wikipedia=?, territori=?, descripcio=?, observacions=?, moderation_status=?, updated_at=NOW() WHERE id=?`
+	q.updateEntitatModeracio = `UPDATE entitat_religiosa SET moderation_status=?, updated_at=NOW() WHERE id=?`
 	q.insertRelacio = `INSERT INTO municipi_entitat_religiosa (municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`
 	q.updateRelacio = `UPDATE municipi_entitat_religiosa SET municipi_id=?, nucli_id=?, entitat_religiosa_id=?, tipus_relacio=?, any_inici=?, any_fi=?, observacions=?, moderation_status=?, updated_at=NOW() WHERE id=?`
+	q.updateRelacioModeracio = `UPDATE municipi_entitat_religiosa SET moderation_status=?, updated_at=NOW() WHERE id=?`
 	q.insertEntitatRelacio = `INSERT INTO entitat_religiosa_relacio (entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, observacions, moderation_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`
 	q.updateEntitatRelacio = `UPDATE entitat_religiosa_relacio SET entitat_origen_id=?, entitat_desti_id=?, tipus_relacio=?, any_inici=?, any_fi=?, font_id=?, observacions=?, moderation_status=?, updated_at=NOW() WHERE id=?`
+	q.updateEntitatRelacioModeracio = `UPDATE entitat_religiosa_relacio SET moderation_status=?, updated_at=NOW() WHERE id=?`
 	return q
 }
 
 func postgresConfessionalQueries() confessionalQueries {
 	q := confessionalQueries{
 		engine: "postgres", returningID: true,
-		listReligions:           `SELECT id, COALESCE(codi, ''), nom, pare_id, COALESCE(categoria, ''), COALESCE(system_key, ''), system_managed, COALESCE(descripcio, ''), estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM religio_confessio ORDER BY system_managed DESC, nom`,
-		getReligion:             `SELECT id, COALESCE(codi, ''), nom, pare_id, COALESCE(categoria, ''), COALESCE(system_key, ''), system_managed, COALESCE(descripcio, ''), estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM religio_confessio WHERE id = $1`,
-		insertReligion:          `INSERT INTO religio_confessio (codi, nom, pare_id, categoria, system_key, system_managed, descripcio, estat, observacions, moderation_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()) RETURNING id`,
-		updateReligion:          `UPDATE religio_confessio SET codi=$1, nom=$2, pare_id=$3, categoria=$4, system_key=$5, system_managed=$6, descripcio=$7, estat=$8, observacions=$9, moderation_status=$10, updated_at=NOW() WHERE id=$11`,
-		deleteReligion:          `DELETE FROM religio_confessio WHERE id = $1`,
-		listModels:              `SELECT id, COALESCE(codi, ''), nom, religio_confessio_id, COALESCE(system_key, ''), system_managed, pais_id, COALESCE(descripcio, ''), any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM model_confessional ORDER BY system_managed DESC, nom`,
-		getModel:                `SELECT id, COALESCE(codi, ''), nom, religio_confessio_id, COALESCE(system_key, ''), system_managed, pais_id, COALESCE(descripcio, ''), any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM model_confessional WHERE id = $1`,
-		insertModel:             `INSERT INTO model_confessional (codi, nom, religio_confessio_id, system_key, system_managed, pais_id, descripcio, any_inici, any_fi, estat, observacions, moderation_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW()) RETURNING id`,
-		updateModel:             `UPDATE model_confessional SET codi=$1, nom=$2, religio_confessio_id=$3, system_key=$4, system_managed=$5, pais_id=$6, descripcio=$7, any_inici=$8, any_fi=$9, estat=$10, observacions=$11, moderation_status=$12, updated_at=NOW() WHERE id=$13`,
-		deleteModel:             `DELETE FROM model_confessional WHERE id = $1`,
-		listNivells:             `SELECT id, COALESCE(model_confessional_id, 0), religio_confessio_id, COALESCE(codi, ''), ordre, nom_nivell, COALESCE(nom_plural, ''), COALESCE(tipus_nivell, ''), COALESCE(categoria, ''), COALESCE(codi_oficial, ''), pot_tenir_territori, pot_tenir_fills, pot_vincular_municipi, pot_ser_suggerit_imports, COALESCE(system_key, ''), system_managed, parent_id, any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM nivell_confessional ORDER BY system_managed DESC, COALESCE(model_confessional_id, 0), religio_confessio_id, ordre, nom_nivell`,
-		getNivell:               `SELECT id, COALESCE(model_confessional_id, 0), religio_confessio_id, COALESCE(codi, ''), ordre, nom_nivell, COALESCE(nom_plural, ''), COALESCE(tipus_nivell, ''), COALESCE(categoria, ''), COALESCE(codi_oficial, ''), pot_tenir_territori, pot_tenir_fills, pot_vincular_municipi, pot_ser_suggerit_imports, COALESCE(system_key, ''), system_managed, parent_id, any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM nivell_confessional WHERE id = $1`,
-		insertNivell:            `INSERT INTO nivell_confessional (model_confessional_id, religio_confessio_id, codi, ordre, nom_nivell, nom_plural, tipus_nivell, categoria, codi_oficial, pot_tenir_territori, pot_tenir_fills, pot_vincular_municipi, pot_ser_suggerit_imports, system_key, system_managed, parent_id, any_inici, any_fi, estat, observacions, moderation_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW(), NOW()) RETURNING id`,
-		updateNivell:            `UPDATE nivell_confessional SET model_confessional_id=$1, religio_confessio_id=$2, codi=$3, ordre=$4, nom_nivell=$5, nom_plural=$6, tipus_nivell=$7, categoria=$8, codi_oficial=$9, pot_tenir_territori=$10, pot_tenir_fills=$11, pot_vincular_municipi=$12, pot_ser_suggerit_imports=$13, system_key=$14, system_managed=$15, parent_id=$16, any_inici=$17, any_fi=$18, estat=$19, observacions=$20, moderation_status=$21, updated_at=NOW() WHERE id=$22`,
-		deleteNivell:            `DELETE FROM nivell_confessional WHERE id = $1`,
-		listEntitats:            `SELECT id, COALESCE(codi, ''), nom, COALESCE(religio_confessio_codi, ''), COALESCE(nivell_confessional_codi, ''), religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, COALESCE(tipus_entitat, ''), COALESCE(tipus_especific, ''), any_inici, any_fi, estat, COALESCE(web, ''), COALESCE(web_wikipedia, ''), COALESCE(territori, ''), COALESCE(descripcio, ''), COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa ORDER BY nom`,
-		getEntitat:              `SELECT id, COALESCE(codi, ''), nom, COALESCE(religio_confessio_codi, ''), COALESCE(nivell_confessional_codi, ''), religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, COALESCE(tipus_entitat, ''), COALESCE(tipus_especific, ''), any_inici, any_fi, estat, COALESCE(web, ''), COALESCE(web_wikipedia, ''), COALESCE(territori, ''), COALESCE(descripcio, ''), COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa WHERE id = $1`,
-		insertEntitat:           `INSERT INTO entitat_religiosa (codi, nom, religio_confessio_codi, nivell_confessional_codi, religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, tipus_entitat, tipus_especific, any_inici, any_fi, estat, web, web_wikipedia, territori, descripcio, observacions, moderation_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), NOW()) RETURNING id`,
-		updateEntitat:           `UPDATE entitat_religiosa SET codi=$1, nom=$2, religio_confessio_codi=$3, nivell_confessional_codi=$4, religio_confessio_id=$5, model_confessional_id=$6, nivell_confessional_id=$7, pais_id=$8, parent_id=$9, tipus_entitat=$10, tipus_especific=$11, any_inici=$12, any_fi=$13, estat=$14, web=$15, web_wikipedia=$16, territori=$17, descripcio=$18, observacions=$19, moderation_status=$20, updated_at=NOW() WHERE id=$21`,
-		deleteEntitat:           `DELETE FROM entitat_religiosa WHERE id = $1`,
-		listRelacionsAll:        `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa ORDER BY municipi_id, nucli_id, any_inici, id`,
-		listRelacionsByMunicipi: `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa WHERE municipi_id = $1 ORDER BY municipi_id, nucli_id, any_inici, id`,
-		getRelacio:              `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa WHERE id = $1`,
-		insertRelacio:           `INSERT INTO municipi_entitat_religiosa (municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, observacions, moderation_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id`,
-		updateRelacio:           `UPDATE municipi_entitat_religiosa SET municipi_id=$1, nucli_id=$2, entitat_religiosa_id=$3, tipus_relacio=$4, any_inici=$5, any_fi=$6, observacions=$7, moderation_status=$8, updated_at=NOW() WHERE id=$9`,
-		deleteRelacio:           `DELETE FROM municipi_entitat_religiosa WHERE id = $1`,
-		listEntitatRelacions:    `SELECT id, entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa_relacio ORDER BY entitat_origen_id, entitat_desti_id, any_inici, id`,
-		getEntitatRelacio:       `SELECT id, entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa_relacio WHERE id = $1`,
-		insertEntitatRelacio:    `INSERT INTO entitat_religiosa_relacio (entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, observacions, moderation_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id`,
-		updateEntitatRelacio:    `UPDATE entitat_religiosa_relacio SET entitat_origen_id=$1, entitat_desti_id=$2, tipus_relacio=$3, any_inici=$4, any_fi=$5, font_id=$6, observacions=$7, moderation_status=$8, updated_at=NOW() WHERE id=$9`,
-		deleteEntitatRelacio:    `DELETE FROM entitat_religiosa_relacio WHERE id = $1`,
-		entitatRelacioCycleSQL:  `WITH RECURSIVE chain(id) AS (SELECT entitat_desti_id FROM entitat_religiosa_relacio WHERE entitat_origen_id = $1 AND id <> $2 UNION SELECT r.entitat_desti_id FROM entitat_religiosa_relacio r JOIN chain c ON r.entitat_origen_id = c.id WHERE r.id <> $2) SELECT 1 FROM chain WHERE id = $3 LIMIT 1`,
+		listReligions:                 `SELECT id, COALESCE(codi, ''), nom, pare_id, COALESCE(categoria, ''), COALESCE(system_key, ''), system_managed, COALESCE(descripcio, ''), estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM religio_confessio ORDER BY system_managed DESC, nom`,
+		getReligion:                   `SELECT id, COALESCE(codi, ''), nom, pare_id, COALESCE(categoria, ''), COALESCE(system_key, ''), system_managed, COALESCE(descripcio, ''), estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM religio_confessio WHERE id = $1`,
+		insertReligion:                `INSERT INTO religio_confessio (codi, nom, pare_id, categoria, system_key, system_managed, descripcio, estat, observacions, moderation_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()) RETURNING id`,
+		updateReligion:                `UPDATE religio_confessio SET codi=$1, nom=$2, pare_id=$3, categoria=$4, system_key=$5, system_managed=$6, descripcio=$7, estat=$8, observacions=$9, moderation_status=$10, updated_at=NOW() WHERE id=$11`,
+		deleteReligion:                `DELETE FROM religio_confessio WHERE id = $1`,
+		listModels:                    `SELECT id, COALESCE(codi, ''), nom, religio_confessio_id, COALESCE(system_key, ''), system_managed, pais_id, COALESCE(descripcio, ''), any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM model_confessional ORDER BY system_managed DESC, nom`,
+		getModel:                      `SELECT id, COALESCE(codi, ''), nom, religio_confessio_id, COALESCE(system_key, ''), system_managed, pais_id, COALESCE(descripcio, ''), any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM model_confessional WHERE id = $1`,
+		insertModel:                   `INSERT INTO model_confessional (codi, nom, religio_confessio_id, system_key, system_managed, pais_id, descripcio, any_inici, any_fi, estat, observacions, moderation_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW()) RETURNING id`,
+		updateModel:                   `UPDATE model_confessional SET codi=$1, nom=$2, religio_confessio_id=$3, system_key=$4, system_managed=$5, pais_id=$6, descripcio=$7, any_inici=$8, any_fi=$9, estat=$10, observacions=$11, moderation_status=$12, updated_at=NOW() WHERE id=$13`,
+		deleteModel:                   `DELETE FROM model_confessional WHERE id = $1`,
+		listNivells:                   `SELECT id, COALESCE(model_confessional_id, 0), religio_confessio_id, COALESCE(codi, ''), ordre, nom_nivell, COALESCE(nom_plural, ''), COALESCE(tipus_nivell, ''), COALESCE(categoria, ''), COALESCE(codi_oficial, ''), pot_tenir_territori, pot_tenir_fills, pot_vincular_municipi, pot_ser_suggerit_imports, COALESCE(system_key, ''), system_managed, parent_id, any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM nivell_confessional ORDER BY system_managed DESC, COALESCE(model_confessional_id, 0), religio_confessio_id, ordre, nom_nivell`,
+		getNivell:                     `SELECT id, COALESCE(model_confessional_id, 0), religio_confessio_id, COALESCE(codi, ''), ordre, nom_nivell, COALESCE(nom_plural, ''), COALESCE(tipus_nivell, ''), COALESCE(categoria, ''), COALESCE(codi_oficial, ''), pot_tenir_territori, pot_tenir_fills, pot_vincular_municipi, pot_ser_suggerit_imports, COALESCE(system_key, ''), system_managed, parent_id, any_inici, any_fi, estat, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM nivell_confessional WHERE id = $1`,
+		insertNivell:                  `INSERT INTO nivell_confessional (model_confessional_id, religio_confessio_id, codi, ordre, nom_nivell, nom_plural, tipus_nivell, categoria, codi_oficial, pot_tenir_territori, pot_tenir_fills, pot_vincular_municipi, pot_ser_suggerit_imports, system_key, system_managed, parent_id, any_inici, any_fi, estat, observacions, moderation_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW(), NOW()) RETURNING id`,
+		updateNivell:                  `UPDATE nivell_confessional SET model_confessional_id=$1, religio_confessio_id=$2, codi=$3, ordre=$4, nom_nivell=$5, nom_plural=$6, tipus_nivell=$7, categoria=$8, codi_oficial=$9, pot_tenir_territori=$10, pot_tenir_fills=$11, pot_vincular_municipi=$12, pot_ser_suggerit_imports=$13, system_key=$14, system_managed=$15, parent_id=$16, any_inici=$17, any_fi=$18, estat=$19, observacions=$20, moderation_status=$21, updated_at=NOW() WHERE id=$22`,
+		deleteNivell:                  `DELETE FROM nivell_confessional WHERE id = $1`,
+		listEntitats:                  `SELECT id, COALESCE(codi, ''), nom, COALESCE(religio_confessio_codi, ''), COALESCE(nivell_confessional_codi, ''), religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, COALESCE(tipus_entitat, ''), COALESCE(tipus_especific, ''), any_inici, any_fi, estat, COALESCE(web, ''), COALESCE(web_wikipedia, ''), COALESCE(territori, ''), COALESCE(descripcio, ''), COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa ORDER BY nom`,
+		getEntitat:                    `SELECT id, COALESCE(codi, ''), nom, COALESCE(religio_confessio_codi, ''), COALESCE(nivell_confessional_codi, ''), religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, COALESCE(tipus_entitat, ''), COALESCE(tipus_especific, ''), any_inici, any_fi, estat, COALESCE(web, ''), COALESCE(web_wikipedia, ''), COALESCE(territori, ''), COALESCE(descripcio, ''), COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa WHERE id = $1`,
+		insertEntitat:                 `INSERT INTO entitat_religiosa (codi, nom, religio_confessio_codi, nivell_confessional_codi, religio_confessio_id, model_confessional_id, nivell_confessional_id, pais_id, parent_id, tipus_entitat, tipus_especific, any_inici, any_fi, estat, web, web_wikipedia, territori, descripcio, observacions, moderation_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), NOW()) RETURNING id`,
+		updateEntitat:                 `UPDATE entitat_religiosa SET codi=$1, nom=$2, religio_confessio_codi=$3, nivell_confessional_codi=$4, religio_confessio_id=$5, model_confessional_id=$6, nivell_confessional_id=$7, pais_id=$8, parent_id=$9, tipus_entitat=$10, tipus_especific=$11, any_inici=$12, any_fi=$13, estat=$14, web=$15, web_wikipedia=$16, territori=$17, descripcio=$18, observacions=$19, moderation_status=$20, updated_at=NOW() WHERE id=$21`,
+		deleteEntitat:                 `DELETE FROM entitat_religiosa WHERE id = $1`,
+		updateEntitatModeracio:        `UPDATE entitat_religiosa SET moderation_status=$1, updated_at=NOW() WHERE id=$2`,
+		listRelacionsAll:              `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa ORDER BY municipi_id, nucli_id, any_inici, id`,
+		listRelacionsByMunicipi:       `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa WHERE municipi_id = $1 ORDER BY municipi_id, nucli_id, any_inici, id`,
+		getRelacio:                    `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa WHERE id = $1`,
+		insertRelacio:                 `INSERT INTO municipi_entitat_religiosa (municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, observacions, moderation_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id`,
+		updateRelacio:                 `UPDATE municipi_entitat_religiosa SET municipi_id=$1, nucli_id=$2, entitat_religiosa_id=$3, tipus_relacio=$4, any_inici=$5, any_fi=$6, observacions=$7, moderation_status=$8, updated_at=NOW() WHERE id=$9`,
+		deleteRelacio:                 `DELETE FROM municipi_entitat_religiosa WHERE id = $1`,
+		updateRelacioModeracio:        `UPDATE municipi_entitat_religiosa SET moderation_status=$1, updated_at=NOW() WHERE id=$2`,
+		listEntitatRelacions:          `SELECT id, entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa_relacio ORDER BY entitat_origen_id, entitat_desti_id, any_inici, id`,
+		getEntitatRelacio:             `SELECT id, entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM entitat_religiosa_relacio WHERE id = $1`,
+		insertEntitatRelacio:          `INSERT INTO entitat_religiosa_relacio (entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, observacions, moderation_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id`,
+		updateEntitatRelacio:          `UPDATE entitat_religiosa_relacio SET entitat_origen_id=$1, entitat_desti_id=$2, tipus_relacio=$3, any_inici=$4, any_fi=$5, font_id=$6, observacions=$7, moderation_status=$8, updated_at=NOW() WHERE id=$9`,
+		deleteEntitatRelacio:          `DELETE FROM entitat_religiosa_relacio WHERE id = $1`,
+		updateEntitatRelacioModeracio: `UPDATE entitat_religiosa_relacio SET moderation_status=$1, updated_at=NOW() WHERE id=$2`,
+		entitatRelacioCycleSQL:        `WITH RECURSIVE chain(id) AS (SELECT entitat_desti_id FROM entitat_religiosa_relacio WHERE entitat_origen_id = $1 AND id <> $2 UNION SELECT r.entitat_desti_id FROM entitat_religiosa_relacio r JOIN chain c ON r.entitat_origen_id = c.id WHERE r.id <> $2) SELECT 1 FROM chain WHERE id = $3 LIMIT 1`,
 	}
 	return q
 }
@@ -285,6 +297,18 @@ func postgresSaveEntitatReligiosa(d *PostgreSQL, e *EntitatReligiosa) (int, erro
 func mysqlSaveEntitatReligiosa(d *MySQL, e *EntitatReligiosa) (int, error) {
 	return saveEntitatReligiosa(d.Conn, mysqlConfessionalQueries(), e)
 }
+func sqliteUpdateEntitatReligiosaModeracio(d *SQLite, id int, estat string) error {
+	q := sqliteConfessionalQueries()
+	return updateConfessionalModeracio(d.Conn, q, "update_entitat_religiosa_moderacio", "entitat_religiosa", q.updateEntitatModeracio, id, estat)
+}
+func postgresUpdateEntitatReligiosaModeracio(d *PostgreSQL, id int, estat string) error {
+	q := postgresConfessionalQueries()
+	return updateConfessionalModeracio(d.Conn, q, "update_entitat_religiosa_moderacio", "entitat_religiosa", q.updateEntitatModeracio, id, estat)
+}
+func mysqlUpdateEntitatReligiosaModeracio(d *MySQL, id int, estat string) error {
+	q := mysqlConfessionalQueries()
+	return updateConfessionalModeracio(d.Conn, q, "update_entitat_religiosa_moderacio", "entitat_religiosa", q.updateEntitatModeracio, id, estat)
+}
 func sqliteDeleteEntitatReligiosa(d *SQLite, id int) error {
 	return deleteEntitatReligiosa(d.Conn, sqliteConfessionalQueries(), id)
 }
@@ -321,6 +345,18 @@ func postgresSaveMunicipiEntitatReligiosa(d *PostgreSQL, rel *MunicipiEntitatRel
 }
 func mysqlSaveMunicipiEntitatReligiosa(d *MySQL, rel *MunicipiEntitatReligiosa) (int, error) {
 	return saveMunicipiEntitatReligiosa(d.Conn, mysqlConfessionalQueries(), rel)
+}
+func sqliteUpdateMunicipiEntitatReligiosaModeracio(d *SQLite, id int, estat string) error {
+	q := sqliteConfessionalQueries()
+	return updateConfessionalModeracio(d.Conn, q, "update_municipi_entitat_religiosa_moderacio", "municipi_entitat_religiosa", q.updateRelacioModeracio, id, estat)
+}
+func postgresUpdateMunicipiEntitatReligiosaModeracio(d *PostgreSQL, id int, estat string) error {
+	q := postgresConfessionalQueries()
+	return updateConfessionalModeracio(d.Conn, q, "update_municipi_entitat_religiosa_moderacio", "municipi_entitat_religiosa", q.updateRelacioModeracio, id, estat)
+}
+func mysqlUpdateMunicipiEntitatReligiosaModeracio(d *MySQL, id int, estat string) error {
+	q := mysqlConfessionalQueries()
+	return updateConfessionalModeracio(d.Conn, q, "update_municipi_entitat_religiosa_moderacio", "municipi_entitat_religiosa", q.updateRelacioModeracio, id, estat)
 }
 func sqliteDeleteMunicipiEntitatReligiosa(d *SQLite, id int) error {
 	return execDelete(d.Conn, sqliteConfessionalQueries(), "delete_municipi_entitat_religiosa", "municipi_entitat_religiosa", id, sqliteConfessionalQueries().deleteRelacio)
@@ -359,6 +395,18 @@ func postgresSaveEntitatReligiosaRelacio(d *PostgreSQL, rel *EntitatReligiosaRel
 func mysqlSaveEntitatReligiosaRelacio(d *MySQL, rel *EntitatReligiosaRelacio) (int, error) {
 	return saveEntitatReligiosaRelacio(d.Conn, mysqlConfessionalQueries(), rel)
 }
+func sqliteUpdateEntitatReligiosaRelacioModeracio(d *SQLite, id int, estat string) error {
+	q := sqliteConfessionalQueries()
+	return updateConfessionalModeracio(d.Conn, q, "update_entitat_religiosa_relacio_moderacio", "entitat_religiosa_relacio", q.updateEntitatRelacioModeracio, id, estat)
+}
+func postgresUpdateEntitatReligiosaRelacioModeracio(d *PostgreSQL, id int, estat string) error {
+	q := postgresConfessionalQueries()
+	return updateConfessionalModeracio(d.Conn, q, "update_entitat_religiosa_relacio_moderacio", "entitat_religiosa_relacio", q.updateEntitatRelacioModeracio, id, estat)
+}
+func mysqlUpdateEntitatReligiosaRelacioModeracio(d *MySQL, id int, estat string) error {
+	q := mysqlConfessionalQueries()
+	return updateConfessionalModeracio(d.Conn, q, "update_entitat_religiosa_relacio_moderacio", "entitat_religiosa_relacio", q.updateEntitatRelacioModeracio, id, estat)
+}
 func sqliteDeleteEntitatReligiosaRelacio(d *SQLite, id int) error {
 	return execDelete(d.Conn, sqliteConfessionalQueries(), "delete_entitat_religiosa_relacio", "entitat_religiosa_relacio", id, sqliteConfessionalQueries().deleteEntitatRelacio)
 }
@@ -371,6 +419,13 @@ func mysqlDeleteEntitatReligiosaRelacio(d *MySQL, id int) error {
 
 func confessionalWrap(q confessionalQueries, op, object string, id int, err error) error {
 	return WrapSQLError(SQLErrorContext{Engine: q.engine, Component: "confessional", Op: op, Object: object, ObjectID: id}, err)
+}
+
+func updateConfessionalModeracio(conn *sql.DB, q confessionalQueries, op, object, stmt string, id int, estat string) error {
+	if _, err := conn.Exec(stmt, estat, id); err != nil {
+		return confessionalWrap(q, op, object, id, err)
+	}
+	return nil
 }
 
 func scanReligion(row interface{ Scan(...interface{}) error }) (*ReligioConfessio, error) {

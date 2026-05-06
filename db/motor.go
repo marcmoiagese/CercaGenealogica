@@ -642,14 +642,17 @@ type DB interface {
 	GetEntitatReligiosa(id int) (*EntitatReligiosa, error)
 	SaveEntitatReligiosa(e *EntitatReligiosa) (int, error)
 	DeleteEntitatReligiosa(id int) error
+	UpdateEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error
 	ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error)
 	GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error)
 	SaveMunicipiEntitatReligiosa(rel *MunicipiEntitatReligiosa) (int, error)
 	DeleteMunicipiEntitatReligiosa(id int) error
+	UpdateMunicipiEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error
 	ListEntitatReligiosaRelacions() ([]EntitatReligiosaRelacio, error)
 	GetEntitatReligiosaRelacio(id int) (*EntitatReligiosaRelacio, error)
 	SaveEntitatReligiosaRelacio(rel *EntitatReligiosaRelacio) (int, error)
 	DeleteEntitatReligiosaRelacio(id int) error
+	UpdateEntitatReligiosaRelacioModeracio(id int, estat, motiu string, moderatorID int) error
 }
 
 // Tipus comú d'usuari al paquet `db`

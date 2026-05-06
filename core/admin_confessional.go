@@ -74,13 +74,18 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 		models, _ = a.DB.ListModelsConfessionals()
 		paisos, _ = a.DB.ListPaisos()
 	case "entitat":
-		entitats, _ = a.DB.ListEntitatsReligioses()
+		allEntitats, _ := a.DB.ListEntitatsReligioses()
+		entitats = publishedEntitatsReligioses(allEntitats)
 	case "rel_ent":
-		entitats, _ = a.DB.ListEntitatsReligioses()
-		relEntitats, _ = a.DB.ListEntitatReligiosaRelacions()
+		allEntitats, _ := a.DB.ListEntitatsReligioses()
+		allRelEntitats, _ := a.DB.ListEntitatReligiosaRelacions()
+		entitats = publishedEntitatsReligioses(allEntitats)
+		relEntitats = publishedEntitatReligiosaRelacions(allRelEntitats)
 	case "relacio":
-		entitats, _ = a.DB.ListEntitatsReligioses()
-		relacions, _ = a.DB.ListMunicipiEntitatsReligioses(0)
+		allEntitats, _ := a.DB.ListEntitatsReligioses()
+		allRelacions, _ := a.DB.ListMunicipiEntitatsReligioses(0)
+		entitats = publishedEntitatsReligioses(allEntitats)
+		relacions = publishedMunicipiEntitatsReligioses(allRelacions)
 		municipis, _ = a.DB.ListMunicipis(db.MunicipiFilter{})
 	}
 	canCreate := a.HasPermission(user.ID, section.CreatePerm, PermissionTarget{})
@@ -693,6 +698,26 @@ func publishedEntitatsReligioses(items []db.EntitatReligiosa) []db.EntitatReligi
 	out := make([]db.EntitatReligiosa, 0, len(items))
 	for _, item := range items {
 		if item.ModeracioEstat == "publicat" && item.Estat == "actiu" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func publishedEntitatReligiosaRelacions(items []db.EntitatReligiosaRelacio) []db.EntitatReligiosaRelacio {
+	out := make([]db.EntitatReligiosaRelacio, 0, len(items))
+	for _, item := range items {
+		if item.ModeracioEstat == "publicat" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func publishedMunicipiEntitatsReligioses(items []db.MunicipiEntitatReligiosa) []db.MunicipiEntitatReligiosa {
+	out := make([]db.MunicipiEntitatReligiosa, 0, len(items))
+	for _, item := range items {
+		if item.ModeracioEstat == "publicat" {
 			out = append(out, item)
 		}
 	}

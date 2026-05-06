@@ -253,6 +253,27 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, canModerateAll 
 			counts["eclesiastic"] = total
 		}
 	}
+	if scopeModel.canModerateType("entitat_religiosa") {
+		if total, err := a.countModeracioConfessionalEntitats(confessionalModeracioFilter{Status: "pendent"}); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["entitat_religiosa"] = total
+		}
+	}
+	if scopeModel.canModerateType("entitat_religiosa_relacio") {
+		if total, err := a.countModeracioConfessionalRelacionsEntitats(confessionalModeracioFilter{Status: "pendent"}); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["entitat_religiosa_relacio"] = total
+		}
+	}
+	if scopeModel.canModerateType("municipi_entitat_religiosa") {
+		if total, err := a.countModeracioConfessionalRelacionsTerritorials(confessionalModeracioFilter{Status: "pendent"}); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["municipi_entitat_religiosa"] = total
+		}
+	}
 	if scopeModel.canModerateType("municipi_mapa_version") {
 		scope, ok := scopeModel.scopeFilterForType("municipi_mapa_version")
 		if ok && (scope.hasGlobal || !scope.isEmpty()) {

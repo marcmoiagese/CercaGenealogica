@@ -470,6 +470,60 @@ func (a *App) resolveModeracioBulkAllSnapshot(bulkType string, user *db.User, ca
 			for _, row := range rows {
 				addTarget(objType, row.ID)
 			}
+		case "entitat_religiosa":
+			if !scopeModel.canModerateType("entitat_religiosa") {
+				continue
+			}
+			rows, err := a.DB.ListEntitatsReligioses()
+			if err != nil {
+				return moderacioBulkSnapshot{}, err
+			}
+			for _, row := range rows {
+				if row.ModeracioEstat != "pendent" {
+					continue
+				}
+				candidates++
+				if bulkUserID > 0 {
+					continue
+				}
+				addTarget(objType, row.ID)
+			}
+		case "entitat_religiosa_relacio":
+			if !scopeModel.canModerateType("entitat_religiosa_relacio") {
+				continue
+			}
+			rows, err := a.DB.ListEntitatReligiosaRelacions()
+			if err != nil {
+				return moderacioBulkSnapshot{}, err
+			}
+			for _, row := range rows {
+				if row.ModeracioEstat != "pendent" {
+					continue
+				}
+				candidates++
+				if bulkUserID > 0 {
+					continue
+				}
+				addTarget(objType, row.ID)
+			}
+		case "municipi_entitat_religiosa":
+			if !scopeModel.canModerateType("municipi_entitat_religiosa") {
+				continue
+			}
+			rows, err := a.DB.ListMunicipiEntitatsReligioses(0)
+			if err != nil {
+				return moderacioBulkSnapshot{}, err
+			}
+			for _, row := range rows {
+				if row.ModeracioEstat != "pendent" {
+					continue
+				}
+				candidates++
+				if bulkUserID > 0 {
+					continue
+				}
+				addTarget(objType, row.ID)
+			}
 		case "municipi_mapa_version":
 			rows, err := a.DB.ListMunicipiMapaVersions(db.MunicipiMapaVersionFilter{Status: "pendent"})
 			if err != nil {
