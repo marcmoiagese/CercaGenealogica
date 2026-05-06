@@ -90,19 +90,13 @@
             </ul>
         </div>
         {{ end }}
-        {{ if and .Data (or (index .Data "CanViewConfessional") (index .Data "IsAdmin") ) }}
+        {{ if and .Data (or (index .Data "CanViewConfessionalEntitats") (index .Data "CanViewConfessionalRelacionsEntitats") (index .Data "CanViewConfessionalMunicipisEntitats") (index .Data "IsAdmin") ) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-layer-group"></i>
                 <h3>{{ t .Lang "confessional.menu.section" }}</h3>
             </div>
             <ul>
-                {{ if or (index .Data "CanViewConfessionalReligions") (index .Data "IsAdmin") }}
-                <li class="menu-opcio"><a href="/confessional/religions">{{ t .Lang "confessional.menu.catalog_religions" }}</a></li>
-                {{ end }}
-                {{ if or (index .Data "CanViewConfessionalNivells") (index .Data "IsAdmin") }}
-                <li class="menu-opcio"><a href="/confessional/nivells">{{ t .Lang "confessional.menu.catalog_levels" }}</a></li>
-                {{ end }}
                 {{ if or (index .Data "CanViewConfessionalEntitats") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/confessional/entitats">{{ t .Lang "confessional.menu.entities" }}</a></li>
                 {{ end }}

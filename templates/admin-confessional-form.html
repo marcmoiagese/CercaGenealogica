@@ -178,7 +178,7 @@
                     <select id="nivell_confessional_codi" name="nivell_confessional_codi" required>
                         <option value="">{{ t .Lang "confessional.select.level" }}</option>
                         {{ range .Data.SelectableNivells }}
-                        <option value="{{ .Code }}" {{ if eq $.Data.Form.Entitat.NivellConfessionalCodi .Code }}selected{{ end }}>{{ .CanonicalName }}</option>
+                        <option value="{{ .Code }}" data-religion-code="{{ .ReligionCode }}" {{ if eq $.Data.Form.Entitat.NivellConfessionalCodi .Code }}selected{{ end }}>{{ .CanonicalName }}</option>
                         {{ end }}
                     </select>
                 </div>
@@ -308,6 +308,33 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    {{ if eq .Data.Form.Kind "entitat" }}
+    <script>
+        (function () {
+            var religion = document.getElementById("religio_confessio_codi");
+            var level = document.getElementById("nivell_confessional_codi");
+            if (!religion || !level) {
+                return;
+            }
+            function syncConfessionalLevels() {
+                var selectedReligion = religion.value;
+                Array.prototype.forEach.call(level.options, function (option) {
+                    if (!option.value) {
+                        return;
+                    }
+                    var matchesReligion = !selectedReligion || option.getAttribute("data-religion-code") === selectedReligion;
+                    option.hidden = !matchesReligion;
+                    option.disabled = !matchesReligion;
+                });
+                if (level.selectedOptions.length > 0 && level.selectedOptions[0].disabled) {
+                    level.value = "";
+                }
+            }
+            religion.addEventListener("change", syncConfessionalLevels);
+            syncConfessionalLevels();
+        })();
+    </script>
+    {{ end }}
 </body>
 </html>
 {{ end }}

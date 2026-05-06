@@ -22,7 +22,7 @@ func TestF353WStaticCatalogHasNoActiveDBCRUDFlow(t *testing.T) {
 	dbConfessionalBody := readProjectFileF353W(t, root, "db/confessional_per_motor.go")
 
 	for _, token := range []string{
-		`if kind == "religio" || kind == "nivell"`,
+		"confessionalCatalogSection(kind)",
 		"ListConfessionalReligionCatalog()",
 		"ListConfessionalLevelCatalog()",
 		"ReligionCatalogLabels",
@@ -58,9 +58,17 @@ func TestF353WStaticCatalogHasNoActiveDBCRUDFlow(t *testing.T) {
 			t.Fatalf("la UI conserva ruta o accio CRUD base legacy: %s", forbidden)
 		}
 	}
-	for _, token := range []string{
+	for _, forbidden := range []string{
 		`href="/confessional/religions"`,
 		`href="/confessional/nivells"`,
+		`confessional.menu.catalog_religions`,
+		`confessional.menu.catalog_levels`,
+	} {
+		if strings.Contains(listBody+menuBody, forbidden) {
+			t.Fatalf("la UI no ha de mostrar pantalla de cataleg base: %s", forbidden)
+		}
+	}
+	for _, token := range []string{
 		`href="/confessional/entitats"`,
 		`action="/confessional/save"`,
 		`action="/confessional/delete"`,

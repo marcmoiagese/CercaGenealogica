@@ -164,14 +164,10 @@ func TestF353UConfessionalUIUsesPublishedCatalogsAndI18N(t *testing.T) {
 		}
 	}
 	for _, token := range []string{
-		"confessional.menu.catalog_religions",
-		"confessional.menu.catalog_levels",
 		"confessional.menu.entities",
 		"confessional.menu.entity_relations",
 		"confessional.menu.territorial_relations",
 		"confessional.col.code",
-		"confessional.col.category",
-		"confessional.col.flags",
 	} {
 		if !strings.Contains(menuBody+listBody+formBody, token) {
 			t.Fatalf("falta clau i18n confessional a templates: %s", token)

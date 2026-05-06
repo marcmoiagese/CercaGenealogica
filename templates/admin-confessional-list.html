@@ -23,19 +23,13 @@
         <section class="card">
             <header class="card-header amb-accio">
                 <h1>{{ .Data.Section.Title }}</h1>
-                {{ if and .Data.CanCreate (ne .Data.Section.Kind "religio") (ne .Data.Section.Kind "nivell") }}
+                {{ if .Data.CanCreate }}
                 <div class="card-actions">
                     <a class="boto-primari" href="/confessional/{{ .Data.Section.Slug }}/new">{{ .Data.Section.NewLabel }}</a>
                 </div>
                 {{ end }}
             </header>
             <nav class="confessional-tabs" aria-label="Seccions confessionals">
-                {{ if or .Data.CanViewConfessionalReligions .Data.IsAdmin }}
-                <a href="/confessional/religions" {{ if eq .Data.Section.Slug "religions" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.catalog_religions" }}</a>
-                {{ end }}
-                {{ if or .Data.CanViewConfessionalNivells .Data.IsAdmin }}
-                <a href="/confessional/nivells" {{ if eq .Data.Section.Slug "nivells" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.catalog_levels" }}</a>
-                {{ end }}
                 {{ if or .Data.CanViewConfessionalEntitats .Data.IsAdmin }}
                 <a href="/confessional/entitats" {{ if eq .Data.Section.Slug "entitats" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.entities" }}</a>
                 {{ end }}
@@ -52,25 +46,6 @@
             {{ if eq .Data.Error "delete" }}<div class="alert alert-error">No s'ha pogut eliminar el registre.</div>{{ end }}
             <div class="taula-resultats">
                 <div class="taula-container">
-            {{ if eq .Data.Section.Kind "religio" }}
-            <table class="taula taula-registres">
-                <thead><tr><th>{{ t .Lang "confessional.col.code" }}</th><th>{{ t .Lang "confessional.col.name" }}</th><th>{{ t .Lang "confessional.col.category" }}</th><th>{{ t .Lang "confessional.col.parent" }}</th><th>{{ t .Lang "confessional.col.status" }}</th>{{ if or .Data.CanEdit .Data.CanDelete }}<th>{{ t .Lang "confessional.col.actions" }}</th>{{ end }}</tr></thead>
-                <tbody>
-                    {{ range .Data.ReligionCatalog }}
-                    <tr>
-                        <td>{{ .Code }}</td>
-                        <td>{{ .CanonicalName }}</td>
-                        <td>{{ t $.Lang (printf "confessional.religion.category.%s" .CategoryCode) }}</td>
-                        <td>{{ if .ParentCode }}{{ index $.Data.ReligionCatalogLabels .ParentCode }}{{ end }}</td>
-                        <td>{{ if .Active }}{{ t $.Lang "confessional.status.system_active" }}{{ else }}{{ t $.Lang "confessional.status.inactive" }}{{ end }}</td>
-                    </tr>
-                    {{ else }}
-                    <tr><td class="confessional-empty" colspan="5">{{ t $.Lang "confessional.empty" }}</td></tr>
-                    {{ end }}
-                </tbody>
-            </table>
-            {{ end }}
-
             {{ if eq .Data.Section.Kind "model" }}
             <table class="taula taula-registres">
                 <thead><tr><th>Nom</th><th>Religio/confessio</th><th>Pais</th><th>Anys</th><th>Estat</th>{{ if or .Data.CanEdit .Data.CanDelete }}<th>Accions</th>{{ end }}</tr></thead>
@@ -97,26 +72,6 @@
                     </tr>
                     {{ else }}
                     <tr><td class="confessional-empty" colspan="{{ if or $.Data.CanEdit $.Data.CanDelete }}6{{ else }}5{{ end }}">No hi ha registres.</td></tr>
-                    {{ end }}
-                </tbody>
-            </table>
-            {{ end }}
-
-            {{ if eq .Data.Section.Kind "nivell" }}
-            <table class="taula taula-registres">
-                <thead><tr><th>{{ t .Lang "confessional.col.order" }}</th><th>{{ t .Lang "confessional.col.code" }}</th><th>{{ t .Lang "confessional.col.name" }}</th><th>{{ t .Lang "confessional.col.religion" }}</th><th>{{ t .Lang "confessional.col.category" }}</th><th>{{ t .Lang "confessional.col.flags" }}</th></tr></thead>
-                <tbody>
-                    {{ range .Data.LevelCatalog }}
-                    <tr>
-                        <td>{{ .Order }}</td>
-                        <td>{{ .Code }}</td>
-                        <td>{{ .CanonicalName }}</td>
-                        <td>{{ index $.Data.ReligionCatalogLabels .ReligionCode }}</td>
-                        <td>{{ t $.Lang (printf "confessional.level.category.%s" .CategoryCode) }}</td>
-                        <td>{{ if .CanHaveTerritory }}{{ t $.Lang "confessional.flag.territory" }} {{ end }}{{ if .CanHaveChildren }}{{ t $.Lang "confessional.flag.children" }} {{ end }}{{ if .CanLinkMunicipi }}{{ t $.Lang "confessional.flag.municipi" }}{{ end }}</td>
-                    </tr>
-                    {{ else }}
-                    <tr><td class="confessional-empty" colspan="6">{{ t $.Lang "confessional.empty" }}</td></tr>
                     {{ end }}
                 </tbody>
             </table>

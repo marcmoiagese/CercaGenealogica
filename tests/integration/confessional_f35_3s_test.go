@@ -28,14 +28,17 @@ func TestF353SConfessionalMenuIsTopLevelAndTerritoryStaysClean(t *testing.T) {
 		t.Fatalf("Territori encara conte entrades confessionals")
 	}
 	for _, route := range []string{
-		"/confessional/religions",
-		"/confessional/nivells",
 		"/confessional/entitats",
 		"/confessional/relacions-entitats",
 		"/confessional/municipis-entitats",
 	} {
 		if !strings.Contains(menuBody, route) {
 			t.Fatalf("falta ruta al menu confessional: %s", route)
+		}
+	}
+	for _, route := range []string{"/confessional/religions", "/confessional/nivells"} {
+		if strings.Contains(menuBody, route) {
+			t.Fatalf("el menu confessional no ha de mostrar el cataleg base: %s", route)
 		}
 	}
 	territoryManageStart := strings.Index(templatesBody, "func hasModularTerritoryManageKey")

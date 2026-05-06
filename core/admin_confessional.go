@@ -52,6 +52,10 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 		http.NotFound(w, r)
 		return
 	}
+	if confessionalCatalogSection(section.Kind) {
+		http.Redirect(w, r, "/confessional/entitats", http.StatusSeeOther)
+		return
+	}
 	user, ok := a.requirePermissionKey(w, r, section.ViewPerm, PermissionTarget{})
 	if !ok {
 		return
@@ -80,17 +84,10 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 		municipis, _ = a.DB.ListMunicipis(db.MunicipiFilter{})
 	}
 	canCreate := a.HasPermission(user.ID, section.CreatePerm, PermissionTarget{})
-	if section.Kind == "religio" || section.Kind == "nivell" {
-		canCreate = false
-	}
 	canEdit := a.HasPermission(user.ID, section.EditPerm, PermissionTarget{})
 	canDelete := a.HasPermission(user.ID, section.DeletePerm, PermissionTarget{})
 	RenderPrivateTemplate(w, r, "admin-confessional-list.html", map[string]interface{}{
 		"Section":               section,
-		"ReligionCatalog":       ListConfessionalReligionCatalog(),
-		"LevelCatalog":          ListConfessionalLevelCatalog(),
-		"ReligionCategories":    ListConfessionalReligionCategories(),
-		"LevelCategories":       ListConfessionalLevelCategories(),
 		"Religions":             religions,
 		"Models":                models,
 		"Nivells":               nivells,
@@ -136,7 +133,7 @@ func (a *App) AdminNewConfessional(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if kind == "religio" || kind == "nivell" {
+	if confessionalCatalogSection(kind) {
 		http.NotFound(w, r)
 		return
 	}
@@ -173,7 +170,7 @@ func (a *App) AdminEditConfessional(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if kind == "religio" || kind == "nivell" {
+	if confessionalCatalogSection(kind) {
 		http.NotFound(w, r)
 		return
 	}
@@ -220,7 +217,7 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if kind == "religio" || kind == "nivell" {
+	if confessionalCatalogSection(kind) {
 		http.NotFound(w, r)
 		return
 	}
@@ -261,7 +258,7 @@ func (a *App) AdminDeleteConfessional(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.requirePermissionKey(w, r, section.DeletePerm, PermissionTarget{}); !ok {
 		return
 	}
-	if kind == "religio" || kind == "nivell" {
+	if confessionalCatalogSection(kind) {
 		http.NotFound(w, r)
 		return
 	}
@@ -552,6 +549,10 @@ func confessionalKind(raw string) string {
 func confessionalSectionByKind(kind string) (confessionalSection, bool) {
 	section, ok := confessionalSections[confessionalKind(kind)]
 	return section, ok
+}
+
+func confessionalCatalogSection(kind string) bool {
+	return kind == "religio" || kind == "nivell"
 }
 
 func confessionalSectionMust(kind string) confessionalSection {

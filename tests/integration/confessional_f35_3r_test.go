@@ -15,8 +15,6 @@ func TestF353RConfessionalRoutesMenuAndPermissionsAreSeparated(t *testing.T) {
 	permsBody := readProjectFileF353R(t, root, "core/permissions_modular.go")
 
 	for _, route := range []string{
-		"/confessional/religions",
-		"/confessional/nivells",
 		"/confessional/entitats",
 		"/confessional/relacions-entitats",
 		"/confessional/municipis-entitats",
