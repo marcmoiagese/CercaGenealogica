@@ -1,0 +1,104 @@
+{{ define "admin-confessional-entity-show.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ .Data.Entitat.Nom }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/registres-taula.css">
+    <style>
+        .fitxa-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+        .fitxa-field { border-bottom: 1px solid #e5e7eb; padding: 8px 0; }
+        .fitxa-field strong { display: block; color: #475467; font-size: .9rem; }
+        .confessional-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .pending-note { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; color: #9a3412; margin: 12px 0; padding: 10px 12px; }
+    </style>
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal taula-ample">
+        <section class="card">
+            <header class="card-header amb-accio">
+                <div>
+                    <h1>{{ .Data.Entitat.Nom }}</h1>
+                    <p class="muted">{{ .Data.Entitat.Codi }}</p>
+                </div>
+                <div class="confessional-actions">
+                    <a class="boto-secundari" href="/confessional/entitats">{{ t .Lang "wiki.history.back" }}</a>
+                    <a class="boto-secundari" href="/confessional/entitats/{{ .Data.Entitat.ID }}/history">{{ t .Lang "confessional.profile.history" }}</a>
+                    {{ if .Data.CanEdit }}<a class="boto-primari" href="/confessional/entitats/{{ .Data.Entitat.ID }}/edit?return_to=/confessional/entitats/{{ .Data.Entitat.ID }}">{{ t .Lang "confessional.action.edit" }}</a>{{ end }}
+                    {{ if .Data.CanDelete }}
+                    <form method="post" action="/confessional/delete">
+                        <input type="hidden" name="kind" value="entitat">
+                        <input type="hidden" name="id" value="{{ .Data.Entitat.ID }}">
+                        <button type="submit" class="boto-secundari">{{ t .Lang "confessional.action.delete" }}</button>
+                    </form>
+                    {{ end }}
+                </div>
+            </header>
+            {{ if eq .Data.Notice "pending" }}<div class="alert alert-success">{{ t .Lang "confessional.profile.pending_created" }}</div>{{ end }}
+            {{ if .Data.HasPendingChanges }}<div class="pending-note">{{ t .Lang "confessional.profile.pending_changes" }}</div>{{ end }}
+            <div class="fitxa-grid">
+                <div class="fitxa-field"><strong>{{ t .Lang "confessional.col.religion" }}</strong>{{ index .Data.ReligionCatalogLabels .Data.Entitat.ReligioConfessioCodi }}</div>
+                <div class="fitxa-field"><strong>{{ t .Lang "confessional.col.level" }}</strong>{{ index .Data.LevelCatalogLabels .Data.Entitat.NivellConfessionalCodi }}</div>
+                <div class="fitxa-field"><strong>{{ t .Lang "confessional.profile.country" }}</strong>{{ if .Data.Entitat.PaisID.Valid }}{{ index .Data.PaisLabels (int .Data.Entitat.PaisID.Int64) }}{{ else }}-{{ end }}</div>
+                <div class="fitxa-field"><strong>{{ t .Lang "confessional.col.years" }}</strong>{{ if .Data.Entitat.AnyInici.Valid }}{{ .Data.Entitat.AnyInici.Int64 }}{{ end }}{{ if and .Data.Entitat.AnyInici.Valid .Data.Entitat.AnyFi.Valid }} - {{ end }}{{ if .Data.Entitat.AnyFi.Valid }}{{ .Data.Entitat.AnyFi.Int64 }}{{ end }}</div>
+                <div class="fitxa-field"><strong>{{ t .Lang "confessional.col.status" }}</strong>{{ .Data.Entitat.Estat }}</div>
+                <div class="fitxa-field"><strong>{{ t .Lang "moderation.status" }}</strong>{{ .Data.Entitat.ModeracioEstat }}</div>
+                <div class="fitxa-field"><strong>{{ t .Lang "confessional.profile.creator" }}</strong>{{ .Data.Creator }}</div>
+                <div class="fitxa-field"><strong>{{ t .Lang "confessional.profile.updater" }}</strong>{{ .Data.Updater }}</div>
+                <div class="fitxa-field"><strong>{{ t .Lang "confessional.profile.moderator" }}</strong>{{ .Data.Moderator }}</div>
+                <div class="fitxa-field"><strong>{{ t .Lang "confessional.profile.created_at" }}</strong>{{ if .Data.Entitat.CreatedAt.Valid }}{{ .Data.Entitat.CreatedAt.Time.Format "02/01/2006 15:04" }}{{ else }}-{{ end }}</div>
+                <div class="fitxa-field"><strong>{{ t .Lang "confessional.profile.updated_at" }}</strong>{{ if .Data.Entitat.UpdatedAt.Valid }}{{ .Data.Entitat.UpdatedAt.Time.Format "02/01/2006 15:04" }}{{ else }}-{{ end }}</div>
+                <div class="fitxa-field"><strong>{{ t .Lang "confessional.profile.moderated_at" }}</strong>{{ if .Data.Entitat.ModeratedAt.Valid }}{{ .Data.Entitat.ModeratedAt.Time.Format "02/01/2006 15:04" }}{{ else }}-{{ end }}</div>
+            </div>
+        </section>
+
+        <section class="card">
+            <header class="card-header"><h2>{{ t .Lang "confessional.profile.details" }}</h2></header>
+            <p><strong>Web:</strong> {{ if .Data.Entitat.Web }}<a href="{{ .Data.Entitat.Web }}">{{ .Data.Entitat.Web }}</a>{{ else }}-{{ end }}</p>
+            <p><strong>Wikipedia:</strong> {{ if .Data.Entitat.WebWikipedia }}<a href="{{ .Data.Entitat.WebWikipedia }}">{{ .Data.Entitat.WebWikipedia }}</a>{{ else }}-{{ end }}</p>
+            <p><strong>{{ t .Lang "confessional.profile.description" }}:</strong> {{ if .Data.Entitat.Descripcio }}{{ .Data.Entitat.Descripcio }}{{ else }}-{{ end }}</p>
+            <p><strong>{{ t .Lang "confessional.profile.notes" }}:</strong> {{ if .Data.Entitat.Observacions }}{{ .Data.Entitat.Observacions }}{{ else }}-{{ end }}</p>
+            {{ if .Data.Entitat.ModeracioMotiu }}<p><strong>{{ t .Lang "confessional.profile.moderation_reason" }}:</strong> {{ .Data.Entitat.ModeracioMotiu }}</p>{{ end }}
+        </section>
+
+        <section class="card">
+            <header class="card-header"><h2>{{ t .Lang "confessional.profile.entity_relations" }}</h2></header>
+            <div class="taula-wrapper">
+                <table class="taula"><thead><tr><th>{{ t .Lang "confessional.col.parent_entity" }}</th><th>{{ t .Lang "confessional.col.child_entity" }}</th><th>{{ t .Lang "confessional.col.type" }}</th><th>{{ t .Lang "confessional.col.status" }}</th></tr></thead><tbody>
+                {{ range .Data.RelacionsEntitat }}
+                <tr><td>{{ index $.Data.EntitatLabels .EntitatOrigenID }}</td><td>{{ index $.Data.EntitatLabels .EntitatDestiID }}</td><td>{{ .TipusRelacio }}</td><td>{{ .ModeracioEstat }}</td></tr>
+                {{ else }}<tr><td colspan="4">-</td></tr>{{ end }}
+                </tbody></table>
+            </div>
+        </section>
+
+        <section class="card">
+            <header class="card-header"><h2>{{ t .Lang "confessional.profile.territorial_relations" }}</h2></header>
+            <div class="taula-wrapper">
+                <table class="taula"><thead><tr><th>Municipi</th><th>Nucli</th><th>{{ t .Lang "confessional.col.type" }}</th><th>{{ t .Lang "confessional.col.status" }}</th></tr></thead><tbody>
+                {{ range .Data.RelacionsTerritori }}
+                <tr><td>{{ index $.Data.MunicipiLabels .MunicipiID }}</td><td>{{ if .NucliID.Valid }}{{ index $.Data.MunicipiLabels (int .NucliID.Int64) }}{{ else }}-{{ end }}</td><td>{{ .TipusRelacio }}</td><td>{{ .ModeracioEstat }}</td></tr>
+                {{ else }}<tr><td colspan="4">-</td></tr>{{ end }}
+                </tbody></table>
+            </div>
+        </section>
+
+        <section class="card">
+            <header class="card-header"><h2>{{ t .Lang "confessional.profile.history" }}</h2></header>
+            <div class="taula-wrapper">
+                <table class="taula"><thead><tr><th>ID</th><th>{{ t .Lang "wiki.history.change" }}</th><th>{{ t .Lang "moderation.status" }}</th><th>{{ t .Lang "wiki.history.date" }}</th></tr></thead><tbody>
+                {{ range .Data.WikiChanges }}
+                <tr><td><a href="/confessional/entitats/{{ $.Data.Entitat.ID }}/history?view={{ .ID }}">{{ .ID }}</a></td><td>{{ .ChangeType }}</td><td>{{ .ModeracioEstat }}</td><td>{{ .ChangedAt.Format "02/01/2006 15:04" }}</td></tr>
+                {{ else }}<tr><td colspan="4">{{ t .Lang "wiki.history.no_changes" }}</td></tr>{{ end }}
+                </tbody></table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

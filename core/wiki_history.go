@@ -281,7 +281,7 @@ func shouldSkipWikiKey(key string) bool {
 		base = base[:idx]
 	}
 	switch base {
-	case "ID", "CreatedBy", "ModeracioEstat", "ModeracioMotiu", "ModeratedBy", "ModeratedAt":
+	case "ID", "CreatedBy", "UpdatedBy", "ModeracioEstat", "ModeracioMotiu", "ModeratedBy", "ModeratedAt":
 		return true
 	default:
 		return false
@@ -410,6 +410,27 @@ func (a *App) applyWikiCognomChange(change *db.WikiChange, motiu string, moderat
 	}
 	cognom.ID = change.ObjectID
 	return a.DB.UpdateCognom(&cognom)
+}
+
+func (a *App) applyWikiEntitatReligiosaChange(change *db.WikiChange, motiu string, moderatorID int) error {
+	_, after := parseWikiChangeMeta(change.Metadata)
+	if len(after) == 0 {
+		return fmt.Errorf("canvi sense dades")
+	}
+	var entitat db.EntitatReligiosa
+	if err := unmarshalWikiSnapshot(after, &entitat); err != nil {
+		return err
+	}
+	entitat.ID = change.ObjectID
+	entitat.ModeracioEstat = "publicat"
+	entitat.ModeracioMotiu = motiu
+	entitat.ModeratedBy = sqlNullIntFromInt(moderatorID)
+	entitat.ModeratedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	if change.ChangedBy.Valid {
+		entitat.UpdatedBy = change.ChangedBy
+	}
+	_, err := a.DB.SaveEntitatReligiosa(&entitat)
+	return err
 }
 
 func extractWikiArxiuID(metadata string) int {

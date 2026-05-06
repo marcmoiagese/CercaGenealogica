@@ -1,0 +1,239 @@
+package integration
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/marcmoiagese/CercaGenealogica/db"
+)
+
+func TestF353ZConfessionalAuthorshipAndModerationMetadata(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_3z_authorship.sqlite3")
+	author, authorSession := f353ZAdminUserSession(t, database, "author")
+	moderator, moderatorSession := f353ZAdminUserSession(t, database, "moderator")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	name := "Entitat F35-3Z autoria " + suffix
+	form := f353ZEntityForm(name, "f35_3z_auth_"+suffix, 0)
+	rr := f353ZPostConfessionalRedirect(t, app.AdminSaveConfessional, authorSession, form)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("create status=%d", rr.Code)
+	}
+	entitat := f353ZFindEntitatByName(t, database, name)
+	if entitat.ModeracioEstat != "pendent" {
+		t.Fatalf("new status=%q, want pendent", entitat.ModeracioEstat)
+	}
+	if !entitat.CreatedBy.Valid || int(entitat.CreatedBy.Int64) != author.ID {
+		t.Fatalf("created_by=%v, want author %d", entitat.CreatedBy, author.ID)
+	}
+
+	body := f353YGet(t, app.AdminModeracioList, "/moderacio?type=entitat_religiosa", moderatorSession)
+	if !strings.Contains(body, name) || !strings.Contains(body, author.Usuari) {
+		t.Fatalf("/moderacio ha de mostrar nom i autor; body=%s", body)
+	}
+
+	f353YPostModeracio(t, app.AdminModeracioAprovar, moderatorSession, entitat.ID, "entitat_religiosa", "aprovar", "")
+	approved, err := database.GetEntitatReligiosa(entitat.ID)
+	if err != nil {
+		t.Fatalf("GetEntitatReligiosa approved: %v", err)
+	}
+	if approved.ModeracioEstat != "publicat" || !approved.CreatedBy.Valid || int(approved.CreatedBy.Int64) != author.ID {
+		t.Fatalf("approved metadata unexpected: %+v", approved)
+	}
+	if !approved.ModeratedBy.Valid || int(approved.ModeratedBy.Int64) != moderator.ID || !approved.ModeratedAt.Valid {
+		t.Fatalf("moderation metadata missing: moderated_by=%v moderated_at=%v", approved.ModeratedBy, approved.ModeratedAt)
+	}
+
+	rejectedName := "Entitat F35-3Z rebutjada " + suffix
+	_ = f353ZPostConfessionalRedirect(t, app.AdminSaveConfessional, authorSession, f353ZEntityForm(rejectedName, "f35_3z_rej_"+suffix, 0))
+	rejected := f353ZFindEntitatByName(t, database, rejectedName)
+	f353YPostModeracio(t, app.AdminModeracioRebutjar, moderatorSession, rejected.ID, "entitat_religiosa", "rebutjar", "duplicada")
+	rejectedAfter, err := database.GetEntitatReligiosa(rejected.ID)
+	if err != nil {
+		t.Fatalf("GetEntitatReligiosa rejected: %v", err)
+	}
+	if rejectedAfter.ModeracioEstat != "rebutjat" || rejectedAfter.ModeracioMotiu != "duplicada" {
+		t.Fatalf("reject metadata unexpected: %+v", rejectedAfter)
+	}
+	if !rejectedAfter.CreatedBy.Valid || int(rejectedAfter.CreatedBy.Int64) != author.ID {
+		t.Fatalf("reject lost author: %+v", rejectedAfter.CreatedBy)
+	}
+}
+
+func TestF353ZPublishedEntityEditCreatesWikiProposal(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_3z_wiki_edit.sqlite3")
+	editor, editorSession := f353ZAdminUserSession(t, database, "editor")
+	_, moderatorSession := f353ZAdminUserSession(t, database, "moderator")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+	id := f353YCreateEntitat(t, database, "Entitat F35-3Z publicada "+suffix, "publicat")
+
+	newName := "Entitat F35-3Z proposada " + suffix
+	form := f353ZEntityForm(newName, "f35_3z_pub_"+suffix, id)
+	rr := f353ZPostConfessionalRedirect(t, app.AdminSaveConfessional, editorSession, form)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("edit status=%d", rr.Code)
+	}
+	current, err := database.GetEntitatReligiosa(id)
+	if err != nil {
+		t.Fatalf("GetEntitatReligiosa current: %v", err)
+	}
+	if current.Nom == newName {
+		t.Fatalf("l'edicio publicada no ha de sobreescriure directament")
+	}
+	changes, err := database.ListWikiChanges("entitat_religiosa", id)
+	if err != nil {
+		t.Fatalf("ListWikiChanges: %v", err)
+	}
+	if len(changes) != 1 || changes[0].ModeracioEstat != "pendent" {
+		t.Fatalf("wiki changes unexpected: %+v", changes)
+	}
+	if !changes[0].ChangedBy.Valid || int(changes[0].ChangedBy.Int64) != editor.ID {
+		t.Fatalf("changed_by=%v, want editor", changes[0].ChangedBy)
+	}
+	var meta struct {
+		After json.RawMessage `json:"after"`
+	}
+	if err := json.Unmarshal([]byte(changes[0].Metadata), &meta); err != nil || !strings.Contains(string(meta.After), newName) {
+		t.Fatalf("metadata after missing proposed name: err=%v metadata=%s", err, changes[0].Metadata)
+	}
+	body := f353YGet(t, app.AdminModeracioList, "/moderacio?type=entitat_religiosa_canvi", moderatorSession)
+	if !strings.Contains(body, newName) && !strings.Contains(body, "entitat_religiosa") {
+		t.Fatalf("/moderacio ha de mostrar la proposta wiki, body=%s", body)
+	}
+	f353YPostModeracio(t, app.AdminModeracioAprovar, moderatorSession, changes[0].ID, "entitat_religiosa_canvi", "aprovar", "")
+	approved, err := database.GetEntitatReligiosa(id)
+	if err != nil {
+		t.Fatalf("GetEntitatReligiosa approved change: %v", err)
+	}
+	if approved.Nom != newName {
+		t.Fatalf("approved name=%q, want %q", approved.Nom, newName)
+	}
+
+	rejectName := "Entitat F35-3Z rebutjar canvi " + suffix
+	_ = f353ZPostConfessionalRedirect(t, app.AdminSaveConfessional, editorSession, f353ZEntityForm(rejectName, "f35_3z_pub_"+suffix, id))
+	changes, _ = database.ListWikiChanges("entitat_religiosa", id)
+	last := changes[0]
+	for _, ch := range changes {
+		if ch.ID > last.ID {
+			last = ch
+		}
+	}
+	f353YPostModeracio(t, app.AdminModeracioRebutjar, moderatorSession, last.ID, "entitat_religiosa_canvi", "rebutjar", "no valid")
+	unchanged, _ := database.GetEntitatReligiosa(id)
+	if unchanged.Nom != newName {
+		t.Fatalf("rejected proposal must not change published row: got=%q want=%q", unchanged.Nom, newName)
+	}
+}
+
+func TestF353ZEntityProfileShowsRelationsAndHistory(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_3z_profile.sqlite3")
+	user, session := f353ZAdminUserSession(t, database, "profile")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+	parentID := f353YCreateEntitat(t, database, "Diocesi F35-3Z "+suffix, "publicat")
+	childID := f353YCreateEntitat(t, database, "Parroquia F35-3Z "+suffix, "publicat")
+	municipiID := f353YCreateMunicipi(t, database, "Municipi F35-3Z "+suffix)
+	_, err := database.SaveEntitatReligiosaRelacio(&db.EntitatReligiosaRelacio{
+		EntitatOrigenID: parentID,
+		EntitatDestiID:  childID,
+		TipusRelacio:    "jerarquia_f35_3z",
+		ModeracioEstat:  "publicat",
+		CreatedBy:       sql.NullInt64{Int64: int64(user.ID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("SaveEntitatReligiosaRelacio: %v", err)
+	}
+	_, err = database.SaveMunicipiEntitatReligiosa(&db.MunicipiEntitatReligiosa{
+		MunicipiID:         municipiID,
+		EntitatReligiosaID: childID,
+		TipusRelacio:       "territorial_f35_3z",
+		ModeracioEstat:     "publicat",
+		CreatedBy:          sql.NullInt64{Int64: int64(user.ID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("SaveMunicipiEntitatReligiosa: %v", err)
+	}
+	_, err = database.CreateWikiChange(&db.WikiChange{
+		ObjectType:     "entitat_religiosa",
+		ObjectID:       childID,
+		ChangeType:     "update",
+		FieldKey:       "Nom",
+		OldValue:       "old",
+		NewValue:       "new",
+		ModeracioEstat: "pendent",
+		ChangedBy:      sql.NullInt64{Int64: int64(user.ID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("CreateWikiChange: %v", err)
+	}
+
+	listBody := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats", session)
+	if !strings.Contains(listBody, "/confessional/entitats/"+strconv.Itoa(childID)) {
+		t.Fatalf("el llistat ha d'enllacar a la fitxa")
+	}
+	profileBody := f353YGet(t, app.AdminConfessionalEntityShow, "/confessional/entitats/"+strconv.Itoa(childID), session)
+	for _, want := range []string{"Parroquia F35-3Z", "jerarquia_f35_3z", "territorial_f35_3z", user.Usuari, "pending"} {
+		if !strings.Contains(profileBody, want) {
+			t.Fatalf("profile missing %q; body=%s", want, profileBody)
+		}
+	}
+	historyBody := f353YGet(t, app.EntitatReligiosaWikiHistory, "/confessional/entitats/"+strconv.Itoa(childID)+"/history", session)
+	if !strings.Contains(historyBody, "Parroquia F35-3Z") || !strings.Contains(historyBody, user.Usuari) {
+		t.Fatalf("history missing entity/user; body=%s", historyBody)
+	}
+}
+
+func f353ZAdminUserSession(t *testing.T, database db.DB, label string) (*db.User, *http.Cookie) {
+	t.Helper()
+	user := createTestUser(t, database, "f35_3z_"+label+"_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	assignPolicyByName(t, database, user.ID, "admin")
+	return user, createSessionCookie(t, database, user.ID, "sess_f35_3z_"+label+"_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+}
+
+func f353ZEntityForm(name, code string, id int) url.Values {
+	form := url.Values{}
+	form.Set("kind", "entitat")
+	if id > 0 {
+		form.Set("id", strconv.Itoa(id))
+	}
+	form.Set("nom", name)
+	form.Set("codi", code)
+	form.Set("religio_confessio_codi", "catolicisme_ritu_llati")
+	form.Set("nivell_confessional_codi", "parroquia")
+	form.Set("estat", "actiu")
+	return form
+}
+
+func f353ZPostConfessionalRedirect(t *testing.T, handler http.HandlerFunc, session *http.Cookie, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/confessional/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("POST confessional status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	return rr
+}
+
+func f353ZFindEntitatByName(t *testing.T, database db.DB, name string) db.EntitatReligiosa {
+	t.Helper()
+	items, err := database.ListEntitatsReligioses()
+	if err != nil {
+		t.Fatalf("ListEntitatsReligioses: %v", err)
+	}
+	for _, item := range items {
+		if item.Nom == name {
+			return item
+		}
+	}
+	t.Fatalf("entitat %q not found", name)
+	return db.EntitatReligiosa{}
+}

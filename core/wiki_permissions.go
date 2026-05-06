@@ -31,6 +31,8 @@ func wikiObjectTypeToModeracioType(objectType string) string {
 		return "cognom_canvi"
 	case "event_historic":
 		return "event_historic_canvi"
+	case "entitat_religiosa":
+		return "entitat_religiosa_canvi"
 	default:
 		return ""
 	}

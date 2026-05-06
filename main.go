@@ -784,10 +784,14 @@ func main() {
 	// /territori/confessional/* es conserva com a compatibilitat historica.
 	confessionalRouter := func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case strings.Contains(r.URL.Path, "/confessional/entitats/") && strings.HasSuffix(r.URL.Path, "/history"):
+			applyMiddleware(app.EntitatReligiosaWikiHistory, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/new"):
 			applyMiddleware(app.AdminNewConfessional, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/edit"):
 			applyMiddleware(app.AdminEditConfessional, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/confessional/entitats/"):
+			applyMiddleware(app.AdminConfessionalEntityShow, core.BlockIPs, core.RateLimit)(w, r)
 		default:
 			applyMiddleware(app.AdminConfessionalSectionList, core.BlockIPs, core.RateLimit)(w, r)
 		}

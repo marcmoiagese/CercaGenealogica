@@ -701,11 +701,21 @@ CREATE TABLE IF NOT EXISTS entitat_religiosa (
     descripcio TEXT,
     observacions TEXT,
     moderation_status TEXT NOT NULL DEFAULT 'pendent' CHECK(moderation_status IN ('pendent','publicat','rebutjat')),
+    moderation_notes TEXT,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ALTER TABLE entitat_religiosa ADD COLUMN religio_confessio_codi TEXT;
 ALTER TABLE entitat_religiosa ADD COLUMN nivell_confessional_codi TEXT;
+ALTER TABLE entitat_religiosa ADD COLUMN moderation_notes TEXT;
+ALTER TABLE entitat_religiosa ADD COLUMN created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
+ALTER TABLE entitat_religiosa ADD COLUMN updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
+ALTER TABLE entitat_religiosa ADD COLUMN moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
+ALTER TABLE entitat_religiosa ADD COLUMN moderated_at TIMESTAMP;
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_codi ON entitat_religiosa(codi);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_religio_codi ON entitat_religiosa(religio_confessio_codi);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_nivell_codi ON entitat_religiosa(nivell_confessional_codi);
@@ -714,6 +724,8 @@ CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_model ON entitat_religiosa(mode
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_nivell ON entitat_religiosa(nivell_confessional_id);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_parent ON entitat_religiosa(parent_id);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_pais ON entitat_religiosa(pais_id);
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_created_by ON entitat_religiosa(created_by);
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_moderated_by ON entitat_religiosa(moderated_by);
 
 CREATE TABLE IF NOT EXISTS municipi_entitat_religiosa (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -725,12 +737,23 @@ CREATE TABLE IF NOT EXISTS municipi_entitat_religiosa (
     any_fi INTEGER,
     observacions TEXT,
     moderation_status TEXT NOT NULL DEFAULT 'publicat' CHECK(moderation_status IN ('pendent','publicat','rebutjat')),
+    moderation_notes TEXT,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE municipi_entitat_religiosa ADD COLUMN moderation_notes TEXT;
+ALTER TABLE municipi_entitat_religiosa ADD COLUMN created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
+ALTER TABLE municipi_entitat_religiosa ADD COLUMN updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
+ALTER TABLE municipi_entitat_religiosa ADD COLUMN moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
+ALTER TABLE municipi_entitat_religiosa ADD COLUMN moderated_at TIMESTAMP;
 CREATE INDEX IF NOT EXISTS idx_municipi_entitat_religiosa_municipi ON municipi_entitat_religiosa(municipi_id);
 CREATE INDEX IF NOT EXISTS idx_municipi_entitat_religiosa_nucli ON municipi_entitat_religiosa(nucli_id);
 CREATE INDEX IF NOT EXISTS idx_municipi_entitat_religiosa_entitat ON municipi_entitat_religiosa(entitat_religiosa_id);
+CREATE INDEX IF NOT EXISTS idx_municipi_entitat_religiosa_created_by ON municipi_entitat_religiosa(created_by);
 
 CREATE TABLE IF NOT EXISTS entitat_religiosa_relacio (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -742,11 +765,22 @@ CREATE TABLE IF NOT EXISTS entitat_religiosa_relacio (
     font_id INTEGER,
     observacions TEXT,
     moderation_status TEXT NOT NULL DEFAULT 'pendent' CHECK(moderation_status IN ('pendent','publicat','rebutjat')),
+    moderation_notes TEXT,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE entitat_religiosa_relacio ADD COLUMN moderation_notes TEXT;
+ALTER TABLE entitat_religiosa_relacio ADD COLUMN created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
+ALTER TABLE entitat_religiosa_relacio ADD COLUMN updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
+ALTER TABLE entitat_religiosa_relacio ADD COLUMN moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
+ALTER TABLE entitat_religiosa_relacio ADD COLUMN moderated_at TIMESTAMP;
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_relacio_origen ON entitat_religiosa_relacio(entitat_origen_id);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_relacio_desti ON entitat_religiosa_relacio(entitat_desti_id);
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_relacio_created_by ON entitat_religiosa_relacio(created_by);
 
 CREATE TABLE IF NOT EXISTS arquebisbats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1185,7 +1219,7 @@ CREATE INDEX IF NOT EXISTS idx_transcripcions_raw_canvis_changed_by
 
 CREATE TABLE IF NOT EXISTS wiki_marques (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic')),
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic','entitat_religiosa')),
   object_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL REFERENCES usuaris(id) ON DELETE CASCADE,
   tipus TEXT NOT NULL CHECK(tipus IN ('consanguini','politic','interes')),
@@ -1200,7 +1234,7 @@ CREATE INDEX IF NOT EXISTS idx_wiki_marques_user
   ON wiki_marques(user_id);
 
 CREATE TABLE IF NOT EXISTS wiki_marks_stats (
-  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic')),
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic','entitat_religiosa')),
   object_id INTEGER NOT NULL,
   tipus TEXT NOT NULL CHECK(tipus IN ('consanguini','politic','interes')),
   public_count INTEGER NOT NULL DEFAULT 0,
@@ -1212,7 +1246,7 @@ CREATE INDEX IF NOT EXISTS idx_wiki_marks_stats_object
 
 CREATE TABLE IF NOT EXISTS wiki_canvis (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic')),
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic','entitat_religiosa')),
   object_id INTEGER NOT NULL,
   change_type TEXT NOT NULL,
   field_key TEXT NOT NULL,
@@ -1234,7 +1268,7 @@ CREATE INDEX IF NOT EXISTS idx_wiki_canvis_status_changed
 CREATE TABLE IF NOT EXISTS wiki_pending_queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   change_id INTEGER NOT NULL UNIQUE REFERENCES wiki_canvis(id) ON DELETE CASCADE,
-  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic')),
+  object_type TEXT NOT NULL CHECK(object_type IN ('municipi','arxiu','llibre','persona','cognom','event_historic','entitat_religiosa')),
   object_id INTEGER NOT NULL,
   changed_at TIMESTAMP NOT NULL,
   changed_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,

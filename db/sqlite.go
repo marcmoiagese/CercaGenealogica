@@ -880,7 +880,7 @@ func (d *SQLite) DeleteEntitatReligiosa(id int) error {
 	return sqliteDeleteEntitatReligiosa(d, id)
 }
 func (d *SQLite) UpdateEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error {
-	return sqliteUpdateEntitatReligiosaModeracio(d, id, estat)
+	return sqliteUpdateEntitatReligiosaModeracio(d, id, estat, motiu, moderatorID)
 }
 func (d *SQLite) ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
 	return sqliteListMunicipiEntitatsReligioses(d, municipiID)
@@ -895,7 +895,7 @@ func (d *SQLite) DeleteMunicipiEntitatReligiosa(id int) error {
 	return sqliteDeleteMunicipiEntitatReligiosa(d, id)
 }
 func (d *SQLite) UpdateMunicipiEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error {
-	return sqliteUpdateMunicipiEntitatReligiosaModeracio(d, id, estat)
+	return sqliteUpdateMunicipiEntitatReligiosaModeracio(d, id, estat, motiu, moderatorID)
 }
 func (d *SQLite) ListEntitatReligiosaRelacions() ([]EntitatReligiosaRelacio, error) {
 	return sqliteListEntitatReligiosaRelacions(d)
@@ -910,7 +910,7 @@ func (d *SQLite) DeleteEntitatReligiosaRelacio(id int) error {
 	return sqliteDeleteEntitatReligiosaRelacio(d, id)
 }
 func (d *SQLite) UpdateEntitatReligiosaRelacioModeracio(id int, estat, motiu string, moderatorID int) error {
-	return sqliteUpdateEntitatReligiosaRelacioModeracio(d, id, estat)
+	return sqliteUpdateEntitatReligiosaRelacioModeracio(d, id, estat, motiu, moderatorID)
 }
 func (d *SQLite) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)

@@ -52,7 +52,7 @@
                 <tbody>
                     {{ range .Data.Models }}
                     <tr>
-                        <td>{{ .Nom }}</td>
+                        <td><a href="/confessional/entitats/{{ .ID }}">{{ .Nom }}</a></td>
                         <td>{{ if .ReligioConfessioID.Valid }}{{ index $.Data.ReligionLabels (int .ReligioConfessioID.Int64) }}{{ end }}</td>
                         <td>{{ if .PaisID.Valid }}{{ index $.Data.PaisLabels (int .PaisID.Int64) }}{{ end }}</td>
                         <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
@@ -90,6 +90,7 @@
                         <td>{{ .ModeracioEstat }}</td>
                         {{ if or $.Data.CanEdit $.Data.CanDelete }}
                         <td class="confessional-actions">
+                            <a class="boto-secundari" href="/confessional/entitats/{{ .ID }}">{{ t $.Lang "confessional.action.view" }}</a>
                             {{ if $.Data.CanEdit }}<a class="boto-secundari" href="/confessional/entitats/{{ .ID }}/edit">Edita</a>{{ end }}
                             {{ if $.Data.CanDelete }}
                             <form method="post" action="/confessional/delete">

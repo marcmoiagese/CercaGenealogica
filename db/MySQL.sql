@@ -664,6 +664,11 @@ CREATE TABLE IF NOT EXISTS religio_confessio (
     estat ENUM('actiu', 'inactiu') NOT NULL DEFAULT 'actiu',
     observacions TEXT,
     moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'pendent',
+    moderation_notes TEXT,
+    created_by INT UNSIGNED NULL,
+    updated_by INT UNSIGNED NULL,
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (pare_id) REFERENCES religio_confessio(id) ON DELETE SET NULL
@@ -753,16 +758,29 @@ CREATE TABLE IF NOT EXISTS entitat_religiosa (
     descripcio TEXT,
     observacions TEXT,
     moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'pendent',
+    moderation_notes TEXT,
+    created_by INT UNSIGNED NULL,
+    updated_by INT UNSIGNED NULL,
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (religio_confessio_id) REFERENCES religio_confessio(id) ON DELETE SET NULL,
     FOREIGN KEY (model_confessional_id) REFERENCES model_confessional(id) ON DELETE SET NULL,
     FOREIGN KEY (nivell_confessional_id) REFERENCES nivell_confessional(id) ON DELETE SET NULL,
     FOREIGN KEY (pais_id) REFERENCES paisos(id) ON DELETE SET NULL,
-    FOREIGN KEY (parent_id) REFERENCES entitat_religiosa(id) ON DELETE SET NULL
+    FOREIGN KEY (parent_id) REFERENCES entitat_religiosa(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (updated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ALTER TABLE entitat_religiosa ADD COLUMN religio_confessio_codi VARCHAR(120);
 ALTER TABLE entitat_religiosa ADD COLUMN nivell_confessional_codi VARCHAR(120);
+ALTER TABLE entitat_religiosa ADD COLUMN moderation_notes TEXT;
+ALTER TABLE entitat_religiosa ADD COLUMN created_by INT UNSIGNED NULL;
+ALTER TABLE entitat_religiosa ADD COLUMN updated_by INT UNSIGNED NULL;
+ALTER TABLE entitat_religiosa ADD COLUMN moderated_by INT UNSIGNED NULL;
+ALTER TABLE entitat_religiosa ADD COLUMN moderated_at DATETIME;
 CREATE INDEX idx_entitat_religiosa_codi ON entitat_religiosa(codi);
 CREATE INDEX idx_entitat_religiosa_religio_codi ON entitat_religiosa(religio_confessio_codi);
 CREATE INDEX idx_entitat_religiosa_nivell_codi ON entitat_religiosa(nivell_confessional_codi);
@@ -771,6 +789,8 @@ CREATE INDEX idx_entitat_religiosa_model ON entitat_religiosa(model_confessional
 CREATE INDEX idx_entitat_religiosa_nivell ON entitat_religiosa(nivell_confessional_id);
 CREATE INDEX idx_entitat_religiosa_parent ON entitat_religiosa(parent_id);
 CREATE INDEX idx_entitat_religiosa_pais ON entitat_religiosa(pais_id);
+CREATE INDEX idx_entitat_religiosa_created_by ON entitat_religiosa(created_by);
+CREATE INDEX idx_entitat_religiosa_moderated_by ON entitat_religiosa(moderated_by);
 
 CREATE TABLE IF NOT EXISTS municipi_entitat_religiosa (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -782,15 +802,29 @@ CREATE TABLE IF NOT EXISTS municipi_entitat_religiosa (
     any_fi SMALLINT,
     observacions TEXT,
     moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'publicat',
+    moderation_notes TEXT,
+    created_by INT UNSIGNED NULL,
+    updated_by INT UNSIGNED NULL,
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_municipi_entitat_religiosa_municipi (municipi_id),
     INDEX idx_municipi_entitat_religiosa_nucli (nucli_id),
     INDEX idx_municipi_entitat_religiosa_entitat (entitat_religiosa_id),
+    INDEX idx_municipi_entitat_religiosa_created_by (created_by),
     FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE,
     FOREIGN KEY (nucli_id) REFERENCES municipis(id) ON DELETE SET NULL,
-    FOREIGN KEY (entitat_religiosa_id) REFERENCES entitat_religiosa(id) ON DELETE CASCADE
+    FOREIGN KEY (entitat_religiosa_id) REFERENCES entitat_religiosa(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (updated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+ALTER TABLE municipi_entitat_religiosa ADD COLUMN moderation_notes TEXT;
+ALTER TABLE municipi_entitat_religiosa ADD COLUMN created_by INT UNSIGNED NULL;
+ALTER TABLE municipi_entitat_religiosa ADD COLUMN updated_by INT UNSIGNED NULL;
+ALTER TABLE municipi_entitat_religiosa ADD COLUMN moderated_by INT UNSIGNED NULL;
+ALTER TABLE municipi_entitat_religiosa ADD COLUMN moderated_at DATETIME;
 
 CREATE TABLE IF NOT EXISTS entitat_religiosa_relacio (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -802,13 +836,27 @@ CREATE TABLE IF NOT EXISTS entitat_religiosa_relacio (
     font_id INT UNSIGNED NULL,
     observacions TEXT,
     moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'pendent',
+    moderation_notes TEXT,
+    created_by INT UNSIGNED NULL,
+    updated_by INT UNSIGNED NULL,
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (entitat_origen_id) REFERENCES entitat_religiosa(id) ON DELETE CASCADE,
-    FOREIGN KEY (entitat_desti_id) REFERENCES entitat_religiosa(id) ON DELETE CASCADE
+    FOREIGN KEY (entitat_desti_id) REFERENCES entitat_religiosa(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (updated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+ALTER TABLE entitat_religiosa_relacio ADD COLUMN moderation_notes TEXT;
+ALTER TABLE entitat_religiosa_relacio ADD COLUMN created_by INT UNSIGNED NULL;
+ALTER TABLE entitat_religiosa_relacio ADD COLUMN updated_by INT UNSIGNED NULL;
+ALTER TABLE entitat_religiosa_relacio ADD COLUMN moderated_by INT UNSIGNED NULL;
+ALTER TABLE entitat_religiosa_relacio ADD COLUMN moderated_at DATETIME;
 CREATE INDEX idx_entitat_religiosa_relacio_origen ON entitat_religiosa_relacio(entitat_origen_id);
 CREATE INDEX idx_entitat_religiosa_relacio_desti ON entitat_religiosa_relacio(entitat_desti_id);
+CREATE INDEX idx_entitat_religiosa_relacio_created_by ON entitat_religiosa_relacio(created_by);
 
 CREATE TABLE IF NOT EXISTS arquebisbats (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,

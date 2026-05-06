@@ -277,6 +277,7 @@ var moderacioTypeSpecs = map[string]moderacioTypeSpec{
 	"municipi":                   {Key: "municipi", PermKey: permKeyTerritoriMunicipisEdit, ListScope: ScopeMunicipi},
 	"eclesiastic":                {Key: "eclesiastic", PermKey: permKeyTerritoriEclesEdit, ListScope: ScopeEcles},
 	"entitat_religiosa":          {Key: "entitat_religiosa", PermKey: permKeyTerritoriConfessionalEntitatsEdit, ListScope: ScopeGlobal},
+	"entitat_religiosa_canvi":    {Key: "entitat_religiosa_canvi", PermKey: permKeyTerritoriConfessionalEntitatsEdit, ListScope: ScopeGlobal},
 	"entitat_religiosa_relacio":  {Key: "entitat_religiosa_relacio", PermKey: permKeyTerritoriConfessionalRelacionsEntitatsEdit, ListScope: ScopeGlobal},
 	"municipi_entitat_religiosa": {Key: "municipi_entitat_religiosa", PermKey: permKeyTerritoriConfessionalMunicipisEntitatsEdit, ListScope: ScopeGlobal},
 	"municipi_mapa_version":      {Key: "municipi_mapa_version", PermKey: permKeyTerritoriMunicipisMapesModerate, ListScope: ScopeMunicipi},
@@ -424,6 +425,14 @@ func (m *moderacioScopeModel) canModerateWikiChange(change db.WikiChange, objTyp
 			return false
 		}
 		return m.canModerateType("event_historic_canvi")
+	case "entitat_religiosa_canvi":
+		if change.ObjectType != "entitat_religiosa" {
+			return false
+		}
+		if !m.canModerateType("entitat_religiosa_canvi") {
+			return false
+		}
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriConfessionalEntitatsEdit, PermissionTarget{})
 	default:
 		return false
 	}
@@ -515,7 +524,7 @@ func (m *moderacioScopeModel) canModerateItem(objType string, id int) bool {
 			return false
 		}
 		return m.canModerateWikiChange(*change, objType)
-	case "persona_canvi", "cognom_canvi", "event_historic_canvi":
+	case "persona_canvi", "cognom_canvi", "event_historic_canvi", "entitat_religiosa_canvi":
 		change, err := m.app.DB.GetWikiChange(id)
 		if err != nil || change == nil {
 			return false
@@ -690,6 +699,7 @@ var moderacioBulkAllowedTypes = []string{
 	"persona_canvi",
 	"cognom_canvi",
 	"event_historic_canvi",
+	"entitat_religiosa_canvi",
 }
 
 func isValidModeracioBulkAction(action string) bool {
@@ -827,6 +837,7 @@ func externalLinkStatusFromModeracio(status string) string {
 
 type confessionalModeracioFilter struct {
 	Status        string
+	CreatedByIDs  []int
 	CreatedAfter  time.Time
 	CreatedBefore time.Time
 }
@@ -1013,6 +1024,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 	}
 	confessionalFilter := confessionalModeracioFilter{
 		Status:        status,
+		CreatedByIDs:  userIDs,
 		CreatedAfter:  createdAfter,
 		CreatedBefore: createdBefore,
 	}
@@ -1108,21 +1120,21 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 			typeCounts["eclesiastic"] = total
 		}
 	}
-	if typeAllowed("entitat_religiosa") && len(userIDs) == 0 && userQuery == "" {
+	if typeAllowed("entitat_religiosa") {
 		if total, err := a.countModeracioConfessionalEntitats(confessionalFilter); err != nil {
 			return nil, 0, moderacioSummary{}, err
 		} else if total > 0 {
 			typeCounts["entitat_religiosa"] = total
 		}
 	}
-	if typeAllowed("entitat_religiosa_relacio") && len(userIDs) == 0 && userQuery == "" {
+	if typeAllowed("entitat_religiosa_relacio") {
 		if total, err := a.countModeracioConfessionalRelacionsEntitats(confessionalFilter); err != nil {
 			return nil, 0, moderacioSummary{}, err
 		} else if total > 0 {
 			typeCounts["entitat_religiosa_relacio"] = total
 		}
 	}
-	if typeAllowed("municipi_entitat_religiosa") && len(userIDs) == 0 && userQuery == "" {
+	if typeAllowed("municipi_entitat_religiosa") {
 		if total, err := a.countModeracioConfessionalRelacionsTerritorials(confessionalFilter); err != nil {
 			return nil, 0, moderacioSummary{}, err
 		} else if total > 0 {
@@ -1235,7 +1247,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		}
 	}
 
-	needsWikiChanges := typeAllowed("municipi_canvi") || typeAllowed("arxiu_canvi") || typeAllowed("llibre_canvi") || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi")
+	needsWikiChanges := typeAllowed("municipi_canvi") || typeAllowed("arxiu_canvi") || typeAllowed("llibre_canvi") || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi") || typeAllowed("entitat_religiosa_canvi")
 	if needsWikiChanges && pendingOnly {
 		wikiCounts, err := a.countModeracioWikiChanges(userIDs, createdAfter, createdBefore, scopeModel, canModerateAll, typeAllowed)
 		if err != nil {
@@ -1327,7 +1339,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 	}
 
 	wikiTotal := 0
-	for _, key := range []string{"municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi"} {
+	for _, key := range []string{"municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi", "entitat_religiosa_canvi"} {
 		wikiTotal += typeCounts[key]
 	}
 
@@ -1364,11 +1376,11 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		case "eclesiastic":
 			fetched, err = a.listModeracioEclesiastics(eclesFilter, offset, limit, autorFromID, metrics)
 		case "entitat_religiosa":
-			fetched, err = a.listModeracioConfessionalEntitats(confessionalFilter, offset, limit, metrics)
+			fetched, err = a.listModeracioConfessionalEntitats(confessionalFilter, offset, limit, autorFromID, metrics)
 		case "entitat_religiosa_relacio":
-			fetched, err = a.listModeracioConfessionalRelacionsEntitats(confessionalFilter, offset, limit, metrics)
+			fetched, err = a.listModeracioConfessionalRelacionsEntitats(confessionalFilter, offset, limit, autorFromID, metrics)
 		case "municipi_entitat_religiosa":
-			fetched, err = a.listModeracioConfessionalRelacionsTerritorials(confessionalFilter, offset, limit, metrics)
+			fetched, err = a.listModeracioConfessionalRelacionsTerritorials(confessionalFilter, offset, limit, autorFromID, metrics)
 		case "media_album":
 			if !skipMedia {
 				fetched, err = a.listModeracioMediaAlbums(mediaFilter, offset, limit, autorFromID, metrics)
@@ -1716,7 +1728,7 @@ func (a *App) countModeracioConfessionalEntitats(filter confessionalModeracioFil
 	}
 	total := 0
 	for _, row := range rows {
-		if matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, filter) {
+		if matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, row.CreatedBy, filter) {
 			total++
 		}
 	}
@@ -1730,7 +1742,7 @@ func (a *App) countModeracioConfessionalRelacionsEntitats(filter confessionalMod
 	}
 	total := 0
 	for _, row := range rows {
-		if matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, filter) {
+		if matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, row.CreatedBy, filter) {
 			total++
 		}
 	}
@@ -1744,14 +1756,14 @@ func (a *App) countModeracioConfessionalRelacionsTerritorials(filter confessiona
 	}
 	total := 0
 	for _, row := range rows {
-		if matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, filter) {
+		if matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, row.CreatedBy, filter) {
 			total++
 		}
 	}
 	return total, nil
 }
 
-func (a *App) listModeracioConfessionalEntitats(filter confessionalModeracioFilter, offset, limit int, metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
+func (a *App) listModeracioConfessionalEntitats(filter confessionalModeracioFilter, offset, limit int, autorFromID func(sql.NullInt64) (string, string, int), metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
 	if limit <= 0 {
 		return []moderacioItem{}, nil
 	}
@@ -1772,7 +1784,7 @@ func (a *App) listModeracioConfessionalEntitats(filter confessionalModeracioFilt
 	items := make([]moderacioItem, 0, limit)
 	seen := 0
 	for _, row := range rows {
-		if !matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, filter) {
+		if !matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, row.CreatedBy, filter) {
 			continue
 		}
 		if seen < offset {
@@ -1783,6 +1795,7 @@ func (a *App) listModeracioConfessionalEntitats(filter confessionalModeracioFilt
 			break
 		}
 		created, createdAt := confessionalCreated(row.CreatedAt)
+		autorNom, autorURL, autorID := autorFromID(row.CreatedBy)
 		contextParts := []string{}
 		if label := strings.TrimSpace(religionLabels[row.ReligioConfessioCodi]); label != "" {
 			contextParts = append(contextParts, label)
@@ -1799,7 +1812,9 @@ func (a *App) listModeracioConfessionalEntitats(filter confessionalModeracioFilt
 			Type:      "entitat_religiosa",
 			Nom:       row.Nom,
 			Context:   context,
-			Autor:     "-",
+			Autor:     autorNom,
+			AutorURL:  autorURL,
+			AutorID:   autorID,
 			Created:   created,
 			CreatedAt: createdAt,
 			EditURL:   fmt.Sprintf("/confessional/entitats/%d/edit?return_to=/moderacio", row.ID),
@@ -1813,7 +1828,7 @@ func (a *App) listModeracioConfessionalEntitats(filter confessionalModeracioFilt
 	return items, nil
 }
 
-func (a *App) listModeracioConfessionalRelacionsEntitats(filter confessionalModeracioFilter, offset, limit int, metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
+func (a *App) listModeracioConfessionalRelacionsEntitats(filter confessionalModeracioFilter, offset, limit int, autorFromID func(sql.NullInt64) (string, string, int), metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
 	if limit <= 0 {
 		return []moderacioItem{}, nil
 	}
@@ -1837,7 +1852,7 @@ func (a *App) listModeracioConfessionalRelacionsEntitats(filter confessionalMode
 	items := make([]moderacioItem, 0, limit)
 	seen := 0
 	for _, row := range rows {
-		if !matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, filter) {
+		if !matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, row.CreatedBy, filter) {
 			continue
 		}
 		if seen < offset {
@@ -1848,6 +1863,7 @@ func (a *App) listModeracioConfessionalRelacionsEntitats(filter confessionalMode
 			break
 		}
 		created, createdAt := confessionalCreated(row.CreatedAt)
+		autorNom, autorURL, autorID := autorFromID(row.CreatedBy)
 		origin := confessionalLabel(entitatLabels, row.EntitatOrigenID)
 		dest := confessionalLabel(entitatLabels, row.EntitatDestiID)
 		items = append(items, moderacioItem{
@@ -1855,7 +1871,9 @@ func (a *App) listModeracioConfessionalRelacionsEntitats(filter confessionalMode
 			Type:      "entitat_religiosa_relacio",
 			Nom:       strings.TrimSpace(origin + " -> " + dest),
 			Context:   row.TipusRelacio,
-			Autor:     "-",
+			Autor:     autorNom,
+			AutorURL:  autorURL,
+			AutorID:   autorID,
 			Created:   created,
 			CreatedAt: createdAt,
 			EditURL:   fmt.Sprintf("/confessional/relacions-entitats/%d/edit?return_to=/moderacio", row.ID),
@@ -1869,7 +1887,7 @@ func (a *App) listModeracioConfessionalRelacionsEntitats(filter confessionalMode
 	return items, nil
 }
 
-func (a *App) listModeracioConfessionalRelacionsTerritorials(filter confessionalModeracioFilter, offset, limit int, metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
+func (a *App) listModeracioConfessionalRelacionsTerritorials(filter confessionalModeracioFilter, offset, limit int, autorFromID func(sql.NullInt64) (string, string, int), metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
 	if limit <= 0 {
 		return []moderacioItem{}, nil
 	}
@@ -1898,7 +1916,7 @@ func (a *App) listModeracioConfessionalRelacionsTerritorials(filter confessional
 	items := make([]moderacioItem, 0, limit)
 	seen := 0
 	for _, row := range rows {
-		if !matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, filter) {
+		if !matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, row.CreatedBy, filter) {
 			continue
 		}
 		if seen < offset {
@@ -1909,6 +1927,7 @@ func (a *App) listModeracioConfessionalRelacionsTerritorials(filter confessional
 			break
 		}
 		created, createdAt := confessionalCreated(row.CreatedAt)
+		autorNom, autorURL, autorID := autorFromID(row.CreatedBy)
 		municipi := confessionalLabel(municipiLabels, row.MunicipiID)
 		if row.NucliID.Valid {
 			municipi = strings.TrimSpace(municipi + " / " + confessionalLabel(municipiLabels, int(row.NucliID.Int64)))
@@ -1919,7 +1938,9 @@ func (a *App) listModeracioConfessionalRelacionsTerritorials(filter confessional
 			Type:      "municipi_entitat_religiosa",
 			Nom:       strings.TrimSpace(municipi + " -> " + entitat),
 			Context:   row.TipusRelacio,
-			Autor:     "-",
+			Autor:     autorNom,
+			AutorURL:  autorURL,
+			AutorID:   autorID,
 			Created:   created,
 			CreatedAt: createdAt,
 			EditURL:   fmt.Sprintf("/confessional/municipis-entitats/%d/edit?return_to=/moderacio", row.ID),
@@ -1933,8 +1954,11 @@ func (a *App) listModeracioConfessionalRelacionsTerritorials(filter confessional
 	return items, nil
 }
 
-func matchConfessionalModeracio(status string, created sql.NullTime, filter confessionalModeracioFilter) bool {
+func matchConfessionalModeracio(status string, created sql.NullTime, createdBy sql.NullInt64, filter confessionalModeracioFilter) bool {
 	if filter.Status != "" && filter.Status != "all" && status != filter.Status {
+		return false
+	}
+	if len(filter.CreatedByIDs) > 0 && (!createdBy.Valid || !intSliceContains(filter.CreatedByIDs, int(createdBy.Int64))) {
 		return false
 	}
 	if !filter.CreatedAfter.IsZero() || !filter.CreatedBefore.IsZero() {
@@ -2998,13 +3022,13 @@ func (a *App) countModeracioWikiChanges(userIDs []int, createdAfter, createdBefo
 	if typeAllowed == nil {
 		return counts, nil
 	}
-	needs := typeAllowed("municipi_canvi") || typeAllowed("arxiu_canvi") || typeAllowed("llibre_canvi") || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi")
+	needs := typeAllowed("municipi_canvi") || typeAllowed("arxiu_canvi") || typeAllowed("llibre_canvi") || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi") || typeAllowed("entitat_religiosa_canvi")
 	if !needs {
 		return counts, nil
 	}
 	if shouldUseScopedCount(userIDs, createdAfter, createdBefore) {
 		rawCounts := map[string]int{}
-		if canModerateAll || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi") {
+		if canModerateAll || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi") || typeAllowed("entitat_religiosa_canvi") {
 			var err error
 			rawCounts, err = a.DB.CountWikiPendingChangesByType()
 			if err != nil {
@@ -3520,7 +3544,7 @@ func (a *App) countModeracioByAgeBucket(filters moderacioFilters, scopeModel *mo
 			total += count
 		}
 	}
-	needsWikiChanges := typeAllowed("municipi_canvi") || typeAllowed("arxiu_canvi") || typeAllowed("llibre_canvi") || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi")
+	needsWikiChanges := typeAllowed("municipi_canvi") || typeAllowed("arxiu_canvi") || typeAllowed("llibre_canvi") || typeAllowed("persona_canvi") || typeAllowed("cognom_canvi") || typeAllowed("event_historic_canvi") || typeAllowed("entitat_religiosa_canvi")
 	if needsWikiChanges && pendingOnly {
 		if counts, err := a.countModeracioWikiChanges(userIDs, createdAfter, createdBefore, scopeModel, canModerateAll, typeAllowed); err == nil {
 			for _, count := range counts {
@@ -4656,7 +4680,7 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 	needsWikiChanges := false
 	for _, t := range types {
 		switch t {
-		case "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi":
+		case "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi", "entitat_religiosa_canvi":
 			needsWikiChanges = true
 		}
 		if needsWikiChanges {
@@ -5647,6 +5671,8 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.moderateWikiChange(id, "cognom", estat, motiu, moderatorID)
 	case "event_historic_canvi":
 		return a.moderateWikiChange(id, "event_historic", estat, motiu, moderatorID)
+	case "entitat_religiosa_canvi":
+		return a.moderateWikiChange(id, "entitat_religiosa", estat, motiu, moderatorID)
 	case "municipi_historia_general":
 		return a.DB.SetMunicipiHistoriaGeneralStatus(id, estat, motiu, &moderatorID)
 	case "municipi_historia_fet":
@@ -5935,6 +5961,8 @@ func (a *App) moderateWikiChange(changeID int, objectType string, estat, motiu s
 		return a.applyWikiCognomChange(change, motiu, moderatorID)
 	case "event_historic":
 		return a.applyWikiEventHistoricChange(change, motiu, moderatorID)
+	case "entitat_religiosa":
+		return a.applyWikiEntitatReligiosaChange(change, motiu, moderatorID)
 	default:
 		return fmt.Errorf("tipus desconegut")
 	}

@@ -9,12 +9,13 @@ import (
 )
 
 var wikiObjectTypes = map[string]struct{}{
-	"municipi":       {},
-	"arxiu":          {},
-	"llibre":         {},
-	"persona":        {},
-	"cognom":         {},
-	"event_historic": {},
+	"municipi":          {},
+	"arxiu":             {},
+	"llibre":            {},
+	"persona":           {},
+	"cognom":            {},
+	"event_historic":    {},
+	"entitat_religiosa": {},
 }
 
 func isValidWikiObjectType(objectType string) bool {

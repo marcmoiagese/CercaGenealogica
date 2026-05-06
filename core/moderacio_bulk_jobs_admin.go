@@ -362,7 +362,7 @@ func (a *App) resolveModeracioBulkAllSnapshot(bulkType string, user *db.User, ca
 	needsWikiChanges := false
 	for _, t := range types {
 		switch t {
-		case "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi":
+		case "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi", "entitat_religiosa_canvi":
 			needsWikiChanges = true
 		}
 		if needsWikiChanges {
@@ -652,7 +652,7 @@ func (a *App) resolveModeracioBulkAllSnapshot(bulkType string, user *db.User, ca
 			for _, row := range rows {
 				addTarget(objType, row.ID)
 			}
-		case "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi":
+		case "municipi_canvi", "arxiu_canvi", "llibre_canvi", "persona_canvi", "cognom_canvi", "event_historic_canvi", "entitat_religiosa_canvi":
 			ids := wikiPendingByType[objType]
 			candidates += len(ids)
 			for _, id := range ids {

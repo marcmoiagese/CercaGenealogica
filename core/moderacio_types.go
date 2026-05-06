@@ -7,12 +7,13 @@ import (
 )
 
 var moderacioWikiTypeMap = map[string]string{
-	"municipi":       "municipi_canvi",
-	"arxiu":          "arxiu_canvi",
-	"llibre":         "llibre_canvi",
-	"persona":        "persona_canvi",
-	"cognom":         "cognom_canvi",
-	"event_historic": "event_historic_canvi",
+	"municipi":          "municipi_canvi",
+	"arxiu":             "arxiu_canvi",
+	"llibre":            "llibre_canvi",
+	"persona":           "persona_canvi",
+	"cognom":            "cognom_canvi",
+	"event_historic":    "event_historic_canvi",
+	"entitat_religiosa": "entitat_religiosa_canvi",
 }
 
 func resolveWikiChangeModeracioType(change db.WikiChange) string {

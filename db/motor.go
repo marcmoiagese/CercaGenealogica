@@ -1768,6 +1768,11 @@ type EntitatReligiosa struct {
 	Descripcio             string
 	Observacions           string
 	ModeracioEstat         string
+	ModeracioMotiu         string
+	CreatedBy              sql.NullInt64
+	UpdatedBy              sql.NullInt64
+	ModeratedBy            sql.NullInt64
+	ModeratedAt            sql.NullTime
 	CreatedAt              sql.NullTime
 	UpdatedAt              sql.NullTime
 }
@@ -1782,6 +1787,11 @@ type EntitatReligiosaRelacio struct {
 	FontID          sql.NullInt64
 	Observacions    string
 	ModeracioEstat  string
+	ModeracioMotiu  string
+	CreatedBy       sql.NullInt64
+	UpdatedBy       sql.NullInt64
+	ModeratedBy     sql.NullInt64
+	ModeratedAt     sql.NullTime
 	CreatedAt       sql.NullTime
 	UpdatedAt       sql.NullTime
 }
@@ -1796,6 +1806,11 @@ type MunicipiEntitatReligiosa struct {
 	AnyFi              sql.NullInt64
 	Observacions       string
 	ModeracioEstat     string
+	ModeracioMotiu     string
+	CreatedBy          sql.NullInt64
+	UpdatedBy          sql.NullInt64
+	ModeratedBy        sql.NullInt64
+	ModeratedAt        sql.NullTime
 	CreatedAt          sql.NullTime
 	UpdatedAt          sql.NullTime
 }

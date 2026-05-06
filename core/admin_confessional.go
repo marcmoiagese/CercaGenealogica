@@ -1,7 +1,10 @@
 package core
 
 import (
+	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -232,6 +235,25 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 		a.renderConfessionalForm(w, r, user, data)
 		return
 	}
+	if err := a.applyConfessionalAuthorship(kind, id, user.ID, &data); err != nil {
+		data.Error = "No s'ha pogut preparar l'autoria del registre confessional."
+		a.renderConfessionalForm(w, r, user, data)
+		return
+	}
+	if kind == "entitat" && id > 0 {
+		if proposed, err := a.createEntitatReligiosaWikiProposal(data.Entitat, user.ID); err != nil {
+			data.Error = "No s'ha pogut crear la proposta de canvi."
+			a.renderConfessionalForm(w, r, user, data)
+			return
+		} else if proposed {
+			returnURL := data.ReturnURL
+			if returnURL == "" {
+				returnURL = fmt.Sprintf("/confessional/entitats/%d?notice=pending", id)
+			}
+			http.Redirect(w, r, returnURL, http.StatusSeeOther)
+			return
+		}
+	}
 	if err := a.saveConfessionalData(kind, data); err != nil {
 		data.Error = "No s'ha pogut desar el registre confessional."
 		a.renderConfessionalForm(w, r, user, data)
@@ -242,6 +264,172 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 		returnURL = confessionalSectionURL(section, "notice=saved")
 	}
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
+}
+
+func (a *App) AdminConfessionalEntityShow(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriConfessionalEntitatsView, PermissionTarget{})
+	if !ok {
+		return
+	}
+	id := extractID(r.URL.Path)
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	entitat, err := a.DB.GetEntitatReligiosa(id)
+	if err != nil || entitat == nil {
+		http.NotFound(w, r)
+		return
+	}
+	canModerate := a.canModerateWikiObject(user, "entitat_religiosa", id)
+	canEdit := a.HasPermission(user.ID, permKeyTerritoriConfessionalEntitatsEdit, PermissionTarget{})
+	canDelete := a.HasPermission(user.ID, permKeyTerritoriConfessionalEntitatsDelete, PermissionTarget{})
+	if entitat.ModeracioEstat != "publicat" && !(canEdit || canModerate) {
+		http.NotFound(w, r)
+		return
+	}
+
+	allEntitats, _ := a.DB.ListEntitatsReligioses()
+	allRelEnt, _ := a.DB.ListEntitatReligiosaRelacions()
+	allRelTerr, _ := a.DB.ListMunicipiEntitatsReligioses(0)
+	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
+	paisos, _ := a.DB.ListPaisos()
+	changes, _ := a.DB.ListWikiChanges("entitat_religiosa", id)
+	visibleChanges := filterVisibleWikiChanges(changes, user.ID, canModerate)
+
+	relsEntitat := make([]db.EntitatReligiosaRelacio, 0)
+	for _, rel := range allRelEnt {
+		if rel.EntitatOrigenID == id || rel.EntitatDestiID == id {
+			if rel.ModeracioEstat == "publicat" || canModerate {
+				relsEntitat = append(relsEntitat, rel)
+			}
+		}
+	}
+	relsTerritori := make([]db.MunicipiEntitatReligiosa, 0)
+	for _, rel := range allRelTerr {
+		if rel.EntitatReligiosaID == id && (rel.ModeracioEstat == "publicat" || canModerate) {
+			relsTerritori = append(relsTerritori, rel)
+		}
+	}
+	hasPending := entitat.ModeracioEstat == "pendent"
+	for _, ch := range changes {
+		if ch.ModeracioEstat == "pendent" {
+			hasPending = true
+			break
+		}
+	}
+
+	RenderPrivateTemplate(w, r, "admin-confessional-entity-show.html", map[string]interface{}{
+		"Entitat":               entitat,
+		"EntitatLabels":         entitatReligiosaLabels(allEntitats),
+		"ReligionCatalogLabels": confessionalReligionCatalogLabels(),
+		"LevelCatalogLabels":    confessionalLevelCatalogLabels(),
+		"PaisLabels":            paisLabels(paisos),
+		"MunicipiLabels":        municipiLabels(municipis),
+		"RelacionsEntitat":      relsEntitat,
+		"RelacionsTerritori":    relsTerritori,
+		"WikiChanges":           visibleChanges,
+		"HasPendingChanges":     hasPending,
+		"CanEdit":               canEdit,
+		"CanDelete":             canDelete,
+		"CanModerate":           canModerate,
+		"Creator":               a.confessionalUserLabel(entitat.CreatedBy),
+		"Updater":               a.confessionalUserLabel(entitat.UpdatedBy),
+		"Moderator":             a.confessionalUserLabel(entitat.ModeratedBy),
+		"Notice":                strings.TrimSpace(r.URL.Query().Get("notice")),
+		"User":                  user,
+	})
+}
+
+func (a *App) confessionalUserLabel(id sql.NullInt64) string {
+	if !id.Valid || id.Int64 <= 0 {
+		return "-"
+	}
+	u, err := a.DB.GetUserByID(int(id.Int64))
+	if err != nil || u == nil {
+		return fmt.Sprintf("#%d", id.Int64)
+	}
+	label := strings.TrimSpace(u.Usuari)
+	if label == "" {
+		label = strings.TrimSpace(strings.TrimSpace(u.Name) + " " + strings.TrimSpace(u.Surname))
+	}
+	if label == "" {
+		label = fmt.Sprintf("#%d", u.ID)
+	}
+	return label
+}
+
+func (a *App) EntitatReligiosaWikiHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriConfessionalEntitatsView, PermissionTarget{})
+	if !ok {
+		return
+	}
+	id := extractID(r.URL.Path)
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	entitat, err := a.DB.GetEntitatReligiosa(id)
+	if err != nil || entitat == nil {
+		http.NotFound(w, r)
+		return
+	}
+	canModerate := a.canModerateWikiObject(user, "entitat_religiosa", id)
+	if entitat.ModeracioEstat != "publicat" && !canModerate {
+		http.NotFound(w, r)
+		return
+	}
+	changes, _ := a.DB.ListWikiChanges("entitat_religiosa", id)
+	changes = filterVisibleWikiChanges(changes, user.ID, canModerate)
+	totalChanges := len(changes)
+	history := make([]wikiHistoryItem, 0, len(changes))
+	for idx, ch := range changes {
+		changedByID := 0
+		if ch.ChangedBy.Valid {
+			changedByID = int(ch.ChangedBy.Int64)
+		}
+		moderatedBy := ""
+		if ch.ModeratedBy.Valid {
+			moderatedBy = a.confessionalUserLabel(ch.ModeratedBy)
+		}
+		changedAt := ""
+		if !ch.ChangedAt.IsZero() {
+			changedAt = ch.ChangedAt.Format("02/01/2006 15:04")
+		}
+		moderatedAt := ""
+		if ch.ModeratedAt.Valid {
+			moderatedAt = ch.ModeratedAt.Time.Format("02/01/2006 15:04")
+		}
+		before, after := parseWikiChangeMeta(ch.Metadata)
+		history = append(history, wikiHistoryItem{
+			ID:             ch.ID,
+			Seq:            totalChanges - idx,
+			ChangeType:     ch.ChangeType,
+			FieldKey:       ch.FieldKey,
+			OldValue:       ch.OldValue,
+			NewValue:       ch.NewValue,
+			ChangedAt:      changedAt,
+			ChangedBy:      a.confessionalUserLabel(sql.NullInt64{Int64: int64(changedByID), Valid: changedByID > 0}),
+			ChangedByID:    changedByID,
+			ModeratedBy:    moderatedBy,
+			ModeratedAt:    moderatedAt,
+			ModeracioEstat: ch.ModeracioEstat,
+			HasSnapshot:    len(before) > 0 || len(after) > 0,
+			CanRevert:      false,
+		})
+	}
+	RenderPrivateTemplate(w, r, "wiki-history.html", map[string]interface{}{
+		"Title":      entitat.Nom,
+		"BackURL":    fmt.Sprintf("/confessional/entitats/%d", id),
+		"HistoryURL": fmt.Sprintf("/confessional/entitats/%d/history", id),
+		"RevertURL":  "",
+		"History":    history,
+		"User":       user,
+	})
 }
 
 func (a *App) AdminDeleteConfessional(w http.ResponseWriter, r *http.Request) {
@@ -540,6 +728,115 @@ func (a *App) saveConfessionalData(kind string, data confessionalFormData) error
 	default:
 		return errors.New("tipus confessional no valid")
 	}
+}
+
+func (a *App) applyConfessionalAuthorship(kind string, id, userID int, data *confessionalFormData) error {
+	author := sqlNullIntFromInt(userID)
+	switch kind {
+	case "entitat":
+		if data.Entitat == nil {
+			return nil
+		}
+		data.Entitat.UpdatedBy = author
+		if id == 0 {
+			data.Entitat.CreatedBy = author
+			return nil
+		}
+		current, err := a.DB.GetEntitatReligiosa(id)
+		if err != nil || current == nil {
+			return err
+		}
+		data.Entitat.CreatedBy = current.CreatedBy
+		data.Entitat.ModeratedBy = current.ModeratedBy
+		data.Entitat.ModeratedAt = current.ModeratedAt
+		data.Entitat.ModeracioMotiu = current.ModeracioMotiu
+	case "relacio":
+		if data.Relacio == nil {
+			return nil
+		}
+		data.Relacio.UpdatedBy = author
+		if id == 0 {
+			data.Relacio.CreatedBy = author
+			return nil
+		}
+		current, err := a.DB.GetMunicipiEntitatReligiosa(id)
+		if err != nil || current == nil {
+			return err
+		}
+		data.Relacio.CreatedBy = current.CreatedBy
+		data.Relacio.ModeratedBy = current.ModeratedBy
+		data.Relacio.ModeratedAt = current.ModeratedAt
+		data.Relacio.ModeracioMotiu = current.ModeracioMotiu
+	case "rel_ent":
+		if data.RelEnt == nil {
+			return nil
+		}
+		data.RelEnt.UpdatedBy = author
+		if id == 0 {
+			data.RelEnt.CreatedBy = author
+			return nil
+		}
+		current, err := a.DB.GetEntitatReligiosaRelacio(id)
+		if err != nil || current == nil {
+			return err
+		}
+		data.RelEnt.CreatedBy = current.CreatedBy
+		data.RelEnt.ModeratedBy = current.ModeratedBy
+		data.RelEnt.ModeratedAt = current.ModeratedAt
+		data.RelEnt.ModeracioMotiu = current.ModeracioMotiu
+	}
+	return nil
+}
+
+func (a *App) createEntitatReligiosaWikiProposal(after *db.EntitatReligiosa, userID int) (bool, error) {
+	if after == nil || after.ID == 0 {
+		return false, nil
+	}
+	before, err := a.DB.GetEntitatReligiosa(after.ID)
+	if err != nil || before == nil {
+		return false, err
+	}
+	if before.ModeracioEstat != "publicat" {
+		return false, nil
+	}
+	next := *after
+	next.ID = before.ID
+	next.CreatedBy = before.CreatedBy
+	next.ModeracioEstat = "publicat"
+	next.ModeracioMotiu = before.ModeracioMotiu
+	next.ModeratedBy = before.ModeratedBy
+	next.ModeratedAt = before.ModeratedAt
+	if !next.UpdatedBy.Valid {
+		next.UpdatedBy = sqlNullIntFromInt(userID)
+	}
+	beforeJSON, err := json.Marshal(before)
+	if err != nil {
+		return false, err
+	}
+	afterJSON, err := json.Marshal(next)
+	if err != nil {
+		return false, err
+	}
+	metadata, err := buildWikiChangeMetadata(beforeJSON, afterJSON, 0)
+	if err != nil {
+		return false, err
+	}
+	_, err = a.createWikiChange(&db.WikiChange{
+		ObjectType:     "entitat_religiosa",
+		ObjectID:       before.ID,
+		ChangeType:     "update",
+		FieldKey:       "*",
+		OldValue:       before.Nom,
+		NewValue:       next.Nom,
+		Metadata:       metadata,
+		ModeracioEstat: "pendent",
+		ModeracioMotiu: "",
+		ChangedBy:      sqlNullIntFromInt(userID),
+	})
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func confessionalKind(raw string) string {
