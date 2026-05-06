@@ -637,6 +637,10 @@ type DB interface {
 	GetEntitatReligiosa(id int) (*EntitatReligiosa, error)
 	SaveEntitatReligiosa(e *EntitatReligiosa) (int, error)
 	DeleteEntitatReligiosa(id int) error
+	ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error)
+	GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error)
+	SaveMunicipiEntitatReligiosa(rel *MunicipiEntitatReligiosa) (int, error)
+	DeleteMunicipiEntitatReligiosa(id int) error
 }
 
 // Tipus comú d'usuari al paquet `db`
@@ -1748,6 +1752,20 @@ type EntitatReligiosaRelacio struct {
 	ModeracioEstat  string
 	CreatedAt       sql.NullTime
 	UpdatedAt       sql.NullTime
+}
+
+type MunicipiEntitatReligiosa struct {
+	ID                 int
+	MunicipiID         int
+	NucliID            sql.NullInt64
+	EntitatReligiosaID int
+	TipusRelacio       string
+	AnyInici           sql.NullInt64
+	AnyFi              sql.NullInt64
+	Observacions       string
+	ModeracioEstat     string
+	CreatedAt          sql.NullTime
+	UpdatedAt          sql.NullTime
 }
 
 type Municipi struct {

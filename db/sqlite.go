@@ -879,6 +879,18 @@ func (d *SQLite) SaveEntitatReligiosa(e *EntitatReligiosa) (int, error) {
 func (d *SQLite) DeleteEntitatReligiosa(id int) error {
 	return d.help.deleteEntitatReligiosa(id)
 }
+func (d *SQLite) ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
+	return d.help.listMunicipiEntitatsReligioses(municipiID)
+}
+func (d *SQLite) GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error) {
+	return d.help.getMunicipiEntitatReligiosa(id)
+}
+func (d *SQLite) SaveMunicipiEntitatReligiosa(rel *MunicipiEntitatReligiosa) (int, error) {
+	return d.help.saveMunicipiEntitatReligiosa(rel)
+}
+func (d *SQLite) DeleteMunicipiEntitatReligiosa(id int) error {
+	return d.help.deleteMunicipiEntitatReligiosa(id)
+}
 func (d *SQLite) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
 }

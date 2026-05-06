@@ -683,6 +683,23 @@ CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_nivell ON entitat_religiosa(niv
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_parent ON entitat_religiosa(parent_id);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_pais ON entitat_religiosa(pais_id);
 
+CREATE TABLE IF NOT EXISTS municipi_entitat_religiosa (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
+    nucli_id INTEGER REFERENCES municipis(id) ON DELETE SET NULL,
+    entitat_religiosa_id INTEGER NOT NULL REFERENCES entitat_religiosa(id) ON DELETE CASCADE,
+    tipus_relacio TEXT NOT NULL DEFAULT 'principal',
+    any_inici INTEGER,
+    any_fi INTEGER,
+    observacions TEXT,
+    moderation_status TEXT NOT NULL DEFAULT 'publicat' CHECK(moderation_status IN ('pendent','publicat','rebutjat')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_municipi_entitat_religiosa_municipi ON municipi_entitat_religiosa(municipi_id);
+CREATE INDEX IF NOT EXISTS idx_municipi_entitat_religiosa_nucli ON municipi_entitat_religiosa(nucli_id);
+CREATE INDEX IF NOT EXISTS idx_municipi_entitat_religiosa_entitat ON municipi_entitat_religiosa(entitat_religiosa_id);
+
 CREATE TABLE IF NOT EXISTS entitat_religiosa_relacio (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     entitat_origen_id INTEGER NOT NULL REFERENCES entitat_religiosa(id) ON DELETE CASCADE,

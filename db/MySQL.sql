@@ -739,6 +739,26 @@ CREATE INDEX idx_entitat_religiosa_nivell ON entitat_religiosa(nivell_confession
 CREATE INDEX idx_entitat_religiosa_parent ON entitat_religiosa(parent_id);
 CREATE INDEX idx_entitat_religiosa_pais ON entitat_religiosa(pais_id);
 
+CREATE TABLE IF NOT EXISTS municipi_entitat_religiosa (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    municipi_id INT UNSIGNED NOT NULL,
+    nucli_id INT UNSIGNED NULL,
+    entitat_religiosa_id INT UNSIGNED NOT NULL,
+    tipus_relacio VARCHAR(100) NOT NULL DEFAULT 'principal',
+    any_inici SMALLINT,
+    any_fi SMALLINT,
+    observacions TEXT,
+    moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'publicat',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_municipi_entitat_religiosa_municipi (municipi_id),
+    INDEX idx_municipi_entitat_religiosa_nucli (nucli_id),
+    INDEX idx_municipi_entitat_religiosa_entitat (entitat_religiosa_id),
+    FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE CASCADE,
+    FOREIGN KEY (nucli_id) REFERENCES municipis(id) ON DELETE SET NULL,
+    FOREIGN KEY (entitat_religiosa_id) REFERENCES entitat_religiosa(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS entitat_religiosa_relacio (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     entitat_origen_id INT UNSIGNED NOT NULL,

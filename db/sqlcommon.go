@@ -4124,6 +4124,7 @@ func (h sqlHelper) saveEntitatReligiosa(e *EntitatReligiosa) (int, error) {
 func (h sqlHelper) deleteEntitatReligiosa(id int) error {
 	if err := h.ensureNoConfessionalRefs("entitat_religiosa", id,
 		struct{ table, where string }{"entitat_religiosa", "parent_id = ?"},
+		struct{ table, where string }{"municipi_entitat_religiosa", "entitat_religiosa_id = ?"},
 		struct{ table, where string }{"entitat_religiosa_relacio", "entitat_origen_id = ?"},
 		struct{ table, where string }{"entitat_religiosa_relacio", "entitat_desti_id = ?"},
 	); err != nil {
@@ -4132,6 +4133,89 @@ func (h sqlHelper) deleteEntitatReligiosa(id int) error {
 	stmt := formatPlaceholders(h.style, `DELETE FROM entitat_religiosa WHERE id = ?`)
 	if _, err := h.db.Exec(stmt, id); err != nil {
 		return h.wrapSQLError("confessional", "delete_entitat_religiosa", "entitat_religiosa", id, err)
+	}
+	return nil
+}
+
+func (h sqlHelper) listMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
+	where := "1=1"
+	args := []interface{}{}
+	if municipiID > 0 {
+		where += " AND mer.municipi_id = ?"
+		args = append(args, municipiID)
+	}
+	query := `SELECT mer.id, mer.municipi_id, mer.nucli_id, mer.entitat_religiosa_id, mer.tipus_relacio,
+		mer.any_inici, mer.any_fi, COALESCE(mer.observacions, ''), mer.moderation_status, mer.created_at, mer.updated_at
+		FROM municipi_entitat_religiosa mer
+		WHERE ` + where + `
+		ORDER BY mer.municipi_id, mer.nucli_id, mer.any_inici, mer.id`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, h.wrapSQLError("confessional", "list_municipi_entitat_religiosa", "municipi_entitat_religiosa", municipiID, err)
+	}
+	defer rows.Close()
+	var res []MunicipiEntitatReligiosa
+	for rows.Next() {
+		var rel MunicipiEntitatReligiosa
+		if err := rows.Scan(&rel.ID, &rel.MunicipiID, &rel.NucliID, &rel.EntitatReligiosaID, &rel.TipusRelacio, &rel.AnyInici, &rel.AnyFi, &rel.Observacions, &rel.ModeracioEstat, &rel.CreatedAt, &rel.UpdatedAt); err != nil {
+			return nil, h.wrapSQLError("confessional", "scan_municipi_entitat_religiosa", "municipi_entitat_religiosa", municipiID, err)
+		}
+		res = append(res, rel)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, h.wrapSQLError("confessional", "rows_municipi_entitat_religiosa", "municipi_entitat_religiosa", municipiID, err)
+	}
+	return res, nil
+}
+
+func (h sqlHelper) getMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error) {
+	query := formatPlaceholders(h.style, `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, created_at, updated_at FROM municipi_entitat_religiosa WHERE id = ?`)
+	var rel MunicipiEntitatReligiosa
+	if err := h.db.QueryRow(query, id).Scan(&rel.ID, &rel.MunicipiID, &rel.NucliID, &rel.EntitatReligiosaID, &rel.TipusRelacio, &rel.AnyInici, &rel.AnyFi, &rel.Observacions, &rel.ModeracioEstat, &rel.CreatedAt, &rel.UpdatedAt); err != nil {
+		if err != sql.ErrNoRows {
+			return nil, h.wrapSQLError("confessional", "get_municipi_entitat_religiosa", "municipi_entitat_religiosa", id, err)
+		}
+		return nil, err
+	}
+	return &rel, nil
+}
+
+func (h sqlHelper) saveMunicipiEntitatReligiosa(rel *MunicipiEntitatReligiosa) (int, error) {
+	if rel.ID == 0 {
+		query := `INSERT INTO municipi_entitat_religiosa (municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, observacions, moderation_status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+		if h.style == "postgres" {
+			query += ` RETURNING id`
+		}
+		query = formatPlaceholders(h.style, query)
+		args := []interface{}{rel.MunicipiID, rel.NucliID, rel.EntitatReligiosaID, rel.TipusRelacio, rel.AnyInici, rel.AnyFi, rel.Observacions, rel.ModeracioEstat}
+		if h.style == "postgres" {
+			if err := h.db.QueryRow(query, args...).Scan(&rel.ID); err != nil {
+				return 0, h.wrapSQLError("confessional", "create_municipi_entitat_religiosa", "municipi_entitat_religiosa", 0, err)
+			}
+			return rel.ID, nil
+		}
+		res, err := h.db.Exec(query, args...)
+		if err != nil {
+			return 0, h.wrapSQLError("confessional", "create_municipi_entitat_religiosa", "municipi_entitat_religiosa", 0, err)
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			rel.ID = int(id)
+		}
+		return rel.ID, nil
+	}
+	query := formatPlaceholders(h.style, `UPDATE municipi_entitat_religiosa SET municipi_id=?, nucli_id=?, entitat_religiosa_id=?, tipus_relacio=?, any_inici=?, any_fi=?, observacions=?, moderation_status=?, updated_at=`+h.nowFun+` WHERE id=?`)
+	if _, err := h.db.Exec(query, rel.MunicipiID, rel.NucliID, rel.EntitatReligiosaID, rel.TipusRelacio, rel.AnyInici, rel.AnyFi, rel.Observacions, rel.ModeracioEstat, rel.ID); err != nil {
+		return 0, h.wrapSQLError("confessional", "update_municipi_entitat_religiosa", "municipi_entitat_religiosa", rel.ID, err)
+	}
+	return rel.ID, nil
+}
+
+func (h sqlHelper) deleteMunicipiEntitatReligiosa(id int) error {
+	stmt := formatPlaceholders(h.style, `DELETE FROM municipi_entitat_religiosa WHERE id = ?`)
+	if _, err := h.db.Exec(stmt, id); err != nil {
+		return h.wrapSQLError("confessional", "delete_municipi_entitat_religiosa", "municipi_entitat_religiosa", id, err)
 	}
 	return nil
 }

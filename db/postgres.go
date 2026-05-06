@@ -1206,6 +1206,18 @@ func (d *PostgreSQL) SaveEntitatReligiosa(e *EntitatReligiosa) (int, error) {
 func (d *PostgreSQL) DeleteEntitatReligiosa(id int) error {
 	return d.help.deleteEntitatReligiosa(id)
 }
+func (d *PostgreSQL) ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
+	return d.help.listMunicipiEntitatsReligioses(municipiID)
+}
+func (d *PostgreSQL) GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error) {
+	return d.help.getMunicipiEntitatReligiosa(id)
+}
+func (d *PostgreSQL) SaveMunicipiEntitatReligiosa(rel *MunicipiEntitatReligiosa) (int, error) {
+	return d.help.saveMunicipiEntitatReligiosa(rel)
+}
+func (d *PostgreSQL) DeleteMunicipiEntitatReligiosa(id int) error {
+	return d.help.deleteMunicipiEntitatReligiosa(id)
+}
 func (d *PostgreSQL) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
 }

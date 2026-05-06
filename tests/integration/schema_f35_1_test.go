@@ -153,7 +153,6 @@ func TestF351SchemaReligiosConfessionalSQLFilesAligned(t *testing.T) {
 			}
 		}
 		if strings.Contains(src, "llibre_entitat_"+"religiosa") ||
-			strings.Contains(src, "municipi_entitat_"+"religiosa") ||
 			strings.Contains(src, "arxiu_"+"entitat") {
 			t.Fatalf("%s introdueix relacio fora d'abast", rel)
 		}

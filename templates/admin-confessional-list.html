@@ -19,6 +19,7 @@
                     <a class="boto-secundari" href="/territori/confessional/new?kind=model">Nou model</a>
                     <a class="boto-secundari" href="/territori/confessional/new?kind=nivell">Nou nivell</a>
                     <a class="boto-secundari" href="/territori/confessional/new?kind=entitat">Nova entitat</a>
+                    <a class="boto-secundari" href="/territori/confessional/new?kind=relacio">Nova relacio territorial</a>
                 </div>
                 {{ end }}
             </header>
@@ -127,6 +128,35 @@
                             <a href="/territori/confessional/entitat/{{ .ID }}/edit">Edita</a>
                             <form method="post" action="/territori/confessional/delete" style="display:inline">
                                 <input type="hidden" name="kind" value="entitat">
+                                <input type="hidden" name="id" value="{{ .ID }}">
+                                <button type="submit" class="boto-secundari">Elimina</button>
+                            </form>
+                        </td>
+                        {{ end }}
+                    </tr>
+                    {{ else }}
+                    <tr><td colspan="{{ if $.Data.CanEdit }}7{{ else }}6{{ end }}">No hi ha registres.</td></tr>
+                    {{ end }}
+                </tbody>
+            </table>
+
+            <h2>Relacions municipi/nucli - entitat religiosa</h2>
+            <table class="taula">
+                <thead><tr><th>Municipi</th><th>Nucli</th><th>Entitat religiosa</th><th>Tipus</th><th>Anys</th><th>Moderacio</th>{{ if .Data.CanEdit }}<th>Accions</th>{{ end }}</tr></thead>
+                <tbody>
+                    {{ range .Data.Relacions }}
+                    <tr>
+                        <td>{{ index $.Data.MunicipiLabels .MunicipiID }}</td>
+                        <td>{{ if .NucliID.Valid }}{{ index $.Data.MunicipiLabels (int .NucliID.Int64) }}{{ end }}</td>
+                        <td>{{ index $.Data.EntitatLabels .EntitatReligiosaID }}</td>
+                        <td>{{ .TipusRelacio }}</td>
+                        <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
+                        <td>{{ .ModeracioEstat }}</td>
+                        {{ if $.Data.CanEdit }}
+                        <td>
+                            <a href="/territori/confessional/relacio/{{ .ID }}/edit">Edita</a>
+                            <form method="post" action="/territori/confessional/delete" style="display:inline">
+                                <input type="hidden" name="kind" value="relacio">
                                 <input type="hidden" name="id" value="{{ .ID }}">
                                 <button type="submit" class="boto-secundari">Elimina</button>
                             </form>

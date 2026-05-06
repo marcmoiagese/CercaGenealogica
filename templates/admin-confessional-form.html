@@ -214,6 +214,50 @@
                 </div>
                 {{ end }}
 
+                {{ if eq .Data.Form.Kind "relacio" }}
+                <input type="hidden" name="id" value="{{ .Data.Form.Relacio.ID }}">
+                <div class="grup-camp">
+                    <label for="municipi_id">Municipi</label>
+                    <select id="municipi_id" name="municipi_id" required>
+                        <option value="">Selecciona municipi</option>
+                        {{ range .Data.Municipis }}
+                        <option value="{{ .ID }}" {{ if eq .ID $.Data.Form.Relacio.MunicipiID }}selected{{ end }}>{{ .Nom }}{{ if .Tipus }} ({{ .Tipus }}){{ end }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="nucli_id">Nucli</label>
+                    <select id="nucli_id" name="nucli_id">
+                        <option value="">Sense nucli especific</option>
+                        {{ range .Data.Municipis }}
+                        <option value="{{ .ID }}" {{ if and $.Data.Form.Relacio.NucliID.Valid (eq .ID (int $.Data.Form.Relacio.NucliID.Int64)) }}selected{{ end }}>{{ .Nom }}{{ if .Tipus }} ({{ .Tipus }}){{ end }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="entitat_religiosa_id">Entitat religiosa</label>
+                    <select id="entitat_religiosa_id" name="entitat_religiosa_id" required>
+                        <option value="">Selecciona entitat</option>
+                        {{ range .Data.Entitats }}
+                        <option value="{{ .ID }}" {{ if eq .ID $.Data.Form.Relacio.EntitatReligiosaID }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="tipus_relacio">Tipus de relacio</label>
+                    <select id="tipus_relacio" name="tipus_relacio">
+                        {{ range $opt := (list "principal" "parroquia" "bisbat" "arxiprestat" "historica" "altres") }}
+                        <option value="{{ $opt }}" {{ if eq $.Data.Form.Relacio.TipusRelacio $opt }}selected{{ end }}>{{ $opt }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                {{ template "confessional-years" dict "Item" .Data.Form.Relacio }}
+                <div class="grup-camp">
+                    <label for="observacions">Observacions</label>
+                    <textarea id="observacions" name="observacions">{{ .Data.Form.Relacio.Observacions }}</textarea>
+                </div>
+                {{ end }}
+
                 <div class="grup-camp">
                     <label for="moderation_status">Moderacio</label>
                     {{ $status := "" }}
@@ -221,6 +265,7 @@
                     {{ if .Data.Form.Model }}{{ $status = .Data.Form.Model.ModeracioEstat }}{{ end }}
                     {{ if .Data.Form.Nivell }}{{ $status = .Data.Form.Nivell.ModeracioEstat }}{{ end }}
                     {{ if .Data.Form.Entitat }}{{ $status = .Data.Form.Entitat.ModeracioEstat }}{{ end }}
+                    {{ if .Data.Form.Relacio }}{{ $status = .Data.Form.Relacio.ModeracioEstat }}{{ end }}
                     <select id="moderation_status" name="moderation_status">
                         <option value="publicat" {{ if eq $status "publicat" }}selected{{ end }}>Publicat</option>
                         <option value="pendent" {{ if eq $status "pendent" }}selected{{ end }}>Pendent</option>
