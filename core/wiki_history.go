@@ -80,6 +80,49 @@ func buildWikiChangeMetadata(beforeJSON, afterJSON json.RawMessage, sourceChange
 	return string(payload), nil
 }
 
+func (a *App) ensureInitialWikiVersion(objectType string, objectID int, snapshot interface{}, changedBy sql.NullInt64, moderatedBy int) error {
+	if a == nil || a.DB == nil {
+		return fmt.Errorf("db no disponible")
+	}
+	objectType = strings.TrimSpace(objectType)
+	if !isValidWikiObjectType(objectType) {
+		return fmt.Errorf("tipus wiki invalid")
+	}
+	if objectID <= 0 || snapshot == nil {
+		return fmt.Errorf("objecte wiki invalid")
+	}
+	changes, err := a.DB.ListWikiChanges(objectType, objectID)
+	if err != nil {
+		return err
+	}
+	for _, change := range changes {
+		if change.ModeracioEstat == "publicat" {
+			return nil
+		}
+	}
+	afterJSON, err := json.Marshal(snapshot)
+	if err != nil {
+		return err
+	}
+	metadata, err := buildWikiChangeMetadata(nil, afterJSON, 0)
+	if err != nil {
+		return err
+	}
+	_, err = a.createWikiChange(&db.WikiChange{
+		ObjectType:     objectType,
+		ObjectID:       objectID,
+		ChangeType:     "create",
+		FieldKey:       "*",
+		Metadata:       metadata,
+		ModeracioEstat: "publicat",
+		ModeracioMotiu: "",
+		ChangedBy:      changedBy,
+		ModeratedBy:    sqlNullIntFromInt(moderatedBy),
+		ModeratedAt:    sql.NullTime{Time: time.Now(), Valid: moderatedBy > 0},
+	})
+	return err
+}
+
 func unmarshalWikiSnapshot(raw json.RawMessage, dest interface{}) error {
 	if len(raw) == 0 {
 		return fmt.Errorf("snapshot buit")

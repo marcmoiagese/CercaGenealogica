@@ -67,6 +67,88 @@ func TestF353ZConfessionalAuthorshipAndModerationMetadata(t *testing.T) {
 	}
 }
 
+func TestF353Z4EntitatInitialWikiVersionLifecycle(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_3z4_initial_wiki.sqlite3")
+	author, authorSession := f353ZAdminUserSession(t, database, "z4_author")
+	moderator, moderatorSession := f353ZAdminUserSession(t, database, "z4_moderator")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	name := "Entitat F35-3Z4 inicial " + suffix
+	_ = f353ZPostConfessionalRedirect(t, app.AdminSaveConfessional, authorSession, f353ZEntityForm(name, "f35_3z4_init_"+suffix, 0))
+	entitat := f353ZFindEntitatByName(t, database, name)
+	if got := f353Z4PublishedWikiCount(t, database, entitat.ID); got != 0 {
+		t.Fatalf("l'entitat pendent no ha de tenir historial publicat, got=%d", got)
+	}
+
+	f353YPostModeracio(t, app.AdminModeracioAprovar, moderatorSession, entitat.ID, "entitat_religiosa", "aprovar", "")
+	published := f353Z4PublishedWikiChanges(t, database, entitat.ID)
+	if len(published) != 1 {
+		t.Fatalf("la primera publicacio ha de crear v1, got=%d changes=%+v", len(published), published)
+	}
+	initial := published[0]
+	if initial.ChangeType != "create" || initial.FieldKey != "*" || initial.ModeracioEstat != "publicat" {
+		t.Fatalf("v1 inesperada: %+v", initial)
+	}
+	if !initial.ChangedBy.Valid || int(initial.ChangedBy.Int64) != author.ID {
+		t.Fatalf("v1 changed_by=%v, want author %d", initial.ChangedBy, author.ID)
+	}
+	if !initial.ModeratedBy.Valid || int(initial.ModeratedBy.Int64) != moderator.ID || !initial.ModeratedAt.Valid {
+		t.Fatalf("v1 moderation metadata missing: %+v", initial)
+	}
+	var meta struct {
+		After json.RawMessage `json:"after"`
+	}
+	if err := json.Unmarshal([]byte(initial.Metadata), &meta); err != nil || !strings.Contains(string(meta.After), name) {
+		t.Fatalf("v1 metadata after missing entity: err=%v metadata=%s", err, initial.Metadata)
+	}
+
+	f353YPostModeracio(t, app.AdminModeracioAprovar, moderatorSession, entitat.ID, "entitat_religiosa", "aprovar", "")
+	if got := f353Z4PublishedWikiCount(t, database, entitat.ID); got != 1 {
+		t.Fatalf("aprovar dues vegades no ha de duplicar v1, got=%d", got)
+	}
+	historyBody := f353YGet(t, app.EntitatReligiosaWikiHistory, "/confessional/entitats/"+strconv.Itoa(entitat.ID)+"/history", authorSession)
+	if !strings.Contains(historyBody, "#1") || !strings.Contains(historyBody, "create") {
+		t.Fatalf("historial ha de mostrar la versio inicial #1, body=%s", historyBody)
+	}
+
+	newName := "Entitat F35-3Z4 versio 2 " + suffix
+	_ = f353ZPostConfessionalRedirect(t, app.AdminSaveConfessional, authorSession, f353ZEntityForm(newName, "f35_3z4_init_"+suffix, entitat.ID))
+	current, err := database.GetEntitatReligiosa(entitat.ID)
+	if err != nil {
+		t.Fatalf("GetEntitatReligiosa current: %v", err)
+	}
+	if current.Nom == newName {
+		t.Fatalf("la proposta pendent no ha de sobreescriure la fitxa publicada")
+	}
+	pending := f353Z4LatestPendingWikiChange(t, database, entitat.ID)
+	f353YPostModeracio(t, app.AdminModeracioAprovar, moderatorSession, pending.ID, "entitat_religiosa_canvi", "aprovar", "")
+	approved, err := database.GetEntitatReligiosa(entitat.ID)
+	if err != nil {
+		t.Fatalf("GetEntitatReligiosa approved v2: %v", err)
+	}
+	if approved.Nom != newName {
+		t.Fatalf("approved name=%q, want %q", approved.Nom, newName)
+	}
+	if got := f353Z4PublishedWikiCount(t, database, entitat.ID); got != 2 {
+		t.Fatalf("aprovar proposta ha de crear v2, got=%d", got)
+	}
+
+	rejectName := "Entitat F35-3Z4 rebutjada " + suffix
+	_ = f353ZPostConfessionalRedirect(t, app.AdminSaveConfessional, authorSession, f353ZEntityForm(rejectName, "f35_3z4_init_"+suffix, entitat.ID))
+	rejected := f353Z4LatestPendingWikiChange(t, database, entitat.ID)
+	f353YPostModeracio(t, app.AdminModeracioRebutjar, moderatorSession, rejected.ID, "entitat_religiosa_canvi", "rebutjar", "descartada")
+	unchanged, err := database.GetEntitatReligiosa(entitat.ID)
+	if err != nil {
+		t.Fatalf("GetEntitatReligiosa rejected proposal: %v", err)
+	}
+	if unchanged.Nom != newName {
+		t.Fatalf("rebutjar proposta no ha de canviar el publicat, got=%q want=%q", unchanged.Nom, newName)
+	}
+	if got := f353Z4PublishedWikiCount(t, database, entitat.ID); got != 2 {
+		t.Fatalf("rebutjar proposta no ha de crear versio publicada, got=%d", got)
+	}
+}
+
 func TestF353ZPublishedEntityEditCreatesWikiProposal(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f35_3z_wiki_edit.sqlite3")
 	editor, editorSession := f353ZAdminUserSession(t, database, "editor")
@@ -236,4 +318,39 @@ func f353ZFindEntitatByName(t *testing.T, database db.DB, name string) db.Entita
 	}
 	t.Fatalf("entitat %q not found", name)
 	return db.EntitatReligiosa{}
+}
+
+func f353Z4PublishedWikiChanges(t *testing.T, database db.DB, entitatID int) []db.WikiChange {
+	t.Helper()
+	changes, err := database.ListWikiChanges("entitat_religiosa", entitatID)
+	if err != nil {
+		t.Fatalf("ListWikiChanges entitat=%d: %v", entitatID, err)
+	}
+	published := make([]db.WikiChange, 0, len(changes))
+	for _, ch := range changes {
+		if ch.ModeracioEstat == "publicat" {
+			published = append(published, ch)
+		}
+	}
+	return published
+}
+
+func f353Z4PublishedWikiCount(t *testing.T, database db.DB, entitatID int) int {
+	t.Helper()
+	return len(f353Z4PublishedWikiChanges(t, database, entitatID))
+}
+
+func f353Z4LatestPendingWikiChange(t *testing.T, database db.DB, entitatID int) db.WikiChange {
+	t.Helper()
+	changes, err := database.ListWikiChanges("entitat_religiosa", entitatID)
+	if err != nil {
+		t.Fatalf("ListWikiChanges entitat=%d: %v", entitatID, err)
+	}
+	for _, ch := range changes {
+		if ch.ModeracioEstat == "pendent" {
+			return ch
+		}
+	}
+	t.Fatalf("no pending wiki change for entitat=%d; changes=%+v", entitatID, changes)
+	return db.WikiChange{}
 }

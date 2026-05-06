@@ -5629,7 +5629,20 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 	case "eclesiastic":
 		return a.DB.UpdateArquebisbatModeracio(id, estat, motiu, moderatorID)
 	case "entitat_religiosa":
-		return a.DB.UpdateEntitatReligiosaModeracio(id, estat, motiu, moderatorID)
+		before, _ := a.DB.GetEntitatReligiosa(id)
+		if err := a.DB.UpdateEntitatReligiosaModeracio(id, estat, motiu, moderatorID); err != nil {
+			return err
+		}
+		if estat == "publicat" && before != nil && before.ModeracioEstat != "publicat" {
+			after, err := a.DB.GetEntitatReligiosa(id)
+			if err != nil {
+				return err
+			}
+			if after != nil {
+				return a.ensureInitialWikiVersion("entitat_religiosa", id, after, after.CreatedBy, moderatorID)
+			}
+		}
+		return nil
 	case "entitat_religiosa_relacio":
 		return a.DB.UpdateEntitatReligiosaRelacioModeracio(id, estat, motiu, moderatorID)
 	case "municipi_entitat_religiosa":
