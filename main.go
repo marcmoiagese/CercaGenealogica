@@ -60,6 +60,9 @@ func main() {
 	if err := app.EnsureSystemImportTemplates(); err != nil {
 		log.Printf("[import-templates] error assegurant plantilles system: %v", err)
 	}
+	if err := app.EnsureSystemConfessionalCatalogs(); err != nil {
+		log.Printf("[confessional] error assegurant catalegs system: %v", err)
+	}
 	app.StartEspaiGrampsSyncWorker()
 	app.StartEspaiImportWorker()
 	defer app.Close()

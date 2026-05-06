@@ -16,22 +16,22 @@ func TestF353RConfessionalRoutesMenuAndPermissionsAreSeparated(t *testing.T) {
 
 	for _, route := range []string{
 		"/territori/confessional/religions",
-		"/territori/confessional/models",
 		"/territori/confessional/nivells",
 		"/territori/confessional/entitats",
+		"/territori/confessional/relacions-entitats",
 		"/territori/confessional/municipis-entitats",
 	} {
 		if !strings.Contains(menuBody, route) && !strings.Contains(mainBody, route) {
 			t.Fatalf("falta ruta confessional separada %s", route)
 		}
 	}
-	if !strings.Contains(handlerBody, "http.Redirect(w, r, \"/territori/confessional/religions\"") {
+	if !strings.Contains(handlerBody, "http.Redirect(w, r, \"/territori/confessional/entitats\"") {
 		t.Fatalf("/territori/confessional ha de redirigir a una seccio, no renderitzar la pantalla agregada")
 	}
 	if strings.Contains(menuBody, "Model religios/confessional</a>") {
 		t.Fatalf("el menu no ha de conservar l'enllac unic agregat antic")
 	}
-	if !strings.Contains(menuBody, "Religios/confessional") {
+	if !strings.Contains(menuBody, "confessional.menu.section") {
 		t.Fatalf("falta submenu Religios/confessional")
 	}
 	for _, key := range []string{
@@ -51,6 +51,10 @@ func TestF353RConfessionalRoutesMenuAndPermissionsAreSeparated(t *testing.T) {
 		"territori.confessional.entitats.create",
 		"territori.confessional.entitats.edit",
 		"territori.confessional.entitats.delete",
+		"territori.confessional.relacions_entitats.view",
+		"territori.confessional.relacions_entitats.create",
+		"territori.confessional.relacions_entitats.edit",
+		"territori.confessional.relacions_entitats.delete",
 		"territori.confessional.municipis_entitats.view",
 		"territori.confessional.municipis_entitats.create",
 		"territori.confessional.municipis_entitats.edit",

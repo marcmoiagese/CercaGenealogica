@@ -864,6 +864,18 @@ func (d *MySQL) SaveMunicipiEntitatReligiosa(rel *MunicipiEntitatReligiosa) (int
 func (d *MySQL) DeleteMunicipiEntitatReligiosa(id int) error {
 	return mysqlDeleteMunicipiEntitatReligiosa(d, id)
 }
+func (d *MySQL) ListEntitatReligiosaRelacions() ([]EntitatReligiosaRelacio, error) {
+	return mysqlListEntitatReligiosaRelacions(d)
+}
+func (d *MySQL) GetEntitatReligiosaRelacio(id int) (*EntitatReligiosaRelacio, error) {
+	return mysqlGetEntitatReligiosaRelacio(d, id)
+}
+func (d *MySQL) SaveEntitatReligiosaRelacio(rel *EntitatReligiosaRelacio) (int, error) {
+	return mysqlSaveEntitatReligiosaRelacio(d, rel)
+}
+func (d *MySQL) DeleteEntitatReligiosaRelacio(id int) error {
+	return mysqlDeleteEntitatReligiosaRelacio(d, id)
+}
 func (d *MySQL) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
 }

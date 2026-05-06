@@ -1,6 +1,7 @@
 package core
 
 import (
+	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
@@ -19,6 +20,7 @@ type confessionalFormData struct {
 	Nivell    *db.NivellConfessional
 	Entitat   *db.EntitatReligiosa
 	Relacio   *db.MunicipiEntitatReligiosa
+	RelEnt    *db.EntitatReligiosaRelacio
 }
 
 type confessionalSection struct {
@@ -37,11 +39,12 @@ var confessionalSections = map[string]confessionalSection{
 	"model":   {Kind: "model", Slug: "models", Title: "Models confessionals", NewLabel: "Nou model", ViewPerm: permKeyTerritoriConfessionalModelsView, CreatePerm: permKeyTerritoriConfessionalModelsCreate, EditPerm: permKeyTerritoriConfessionalModelsEdit, DeletePerm: permKeyTerritoriConfessionalModelsDelete},
 	"nivell":  {Kind: "nivell", Slug: "nivells", Title: "Nivells confessionals", NewLabel: "Nou nivell", ViewPerm: permKeyTerritoriConfessionalNivellsView, CreatePerm: permKeyTerritoriConfessionalNivellsCreate, EditPerm: permKeyTerritoriConfessionalNivellsEdit, DeletePerm: permKeyTerritoriConfessionalNivellsDelete},
 	"entitat": {Kind: "entitat", Slug: "entitats", Title: "Entitats religioses", NewLabel: "Nova entitat", ViewPerm: permKeyTerritoriConfessionalEntitatsView, CreatePerm: permKeyTerritoriConfessionalEntitatsCreate, EditPerm: permKeyTerritoriConfessionalEntitatsEdit, DeletePerm: permKeyTerritoriConfessionalEntitatsDelete},
+	"rel_ent": {Kind: "rel_ent", Slug: "relacions-entitats", Title: "Relacions entre entitats religioses", NewLabel: "Nova relacio entre entitats", ViewPerm: permKeyTerritoriConfessionalRelacionsEntitatsView, CreatePerm: permKeyTerritoriConfessionalRelacionsEntitatsCreate, EditPerm: permKeyTerritoriConfessionalRelacionsEntitatsEdit, DeletePerm: permKeyTerritoriConfessionalRelacionsEntitatsDelete},
 	"relacio": {Kind: "relacio", Slug: "municipis-entitats", Title: "Relacions municipi/nucli - entitat religiosa", NewLabel: "Nova relacio territorial", ViewPerm: permKeyTerritoriConfessionalMunicipisEntitatsView, CreatePerm: permKeyTerritoriConfessionalMunicipisEntitatsCreate, EditPerm: permKeyTerritoriConfessionalMunicipisEntitatsEdit, DeletePerm: permKeyTerritoriConfessionalMunicipisEntitatsDelete},
 }
 
 func (a *App) AdminConfessionalList(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/territori/confessional/religions", http.StatusSeeOther)
+	http.Redirect(w, r, "/territori/confessional/entitats", http.StatusSeeOther)
 }
 
 func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +62,7 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 	nivells, _ := a.DB.ListNivellsConfessionals()
 	entitats, _ := a.DB.ListEntitatsReligioses()
 	relacions, _ := a.DB.ListMunicipiEntitatsReligioses(0)
+	relEntitats, _ := a.DB.ListEntitatReligiosaRelacions()
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	paisos, _ := a.DB.ListPaisos()
 	canCreate := a.HasPermission(user.ID, section.CreatePerm, PermissionTarget{})
@@ -71,6 +75,7 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 		"Nivells":         nivells,
 		"Entitats":        entitats,
 		"Relacions":       relacions,
+		"RelEntitats":     relEntitats,
 		"Municipis":       municipis,
 		"Paisos":          paisos,
 		"CanCreate":       canCreate,
@@ -120,6 +125,8 @@ func (a *App) AdminNewConfessional(w http.ResponseWriter, r *http.Request) {
 		data.Entitat = &db.EntitatReligiosa{Estat: "actiu", ModeracioEstat: "pendent"}
 	case "relacio":
 		data.Relacio = &db.MunicipiEntitatReligiosa{TipusRelacio: "principal", ModeracioEstat: "pendent"}
+	case "rel_ent":
+		data.RelEnt = &db.EntitatReligiosaRelacio{TipusRelacio: "jerarquia", ModeracioEstat: "pendent"}
 	}
 	a.renderConfessionalForm(w, r, user, data)
 }
@@ -156,6 +163,8 @@ func (a *App) AdminEditConfessional(w http.ResponseWriter, r *http.Request) {
 		data.Entitat, err = a.DB.GetEntitatReligiosa(id)
 	case "relacio":
 		data.Relacio, err = a.DB.GetMunicipiEntitatReligiosa(id)
+	case "rel_ent":
+		data.RelEnt, err = a.DB.GetEntitatReligiosaRelacio(id)
 	}
 	if err != nil {
 		http.NotFound(w, r)
@@ -237,6 +246,8 @@ func (a *App) AdminDeleteConfessional(w http.ResponseWriter, r *http.Request) {
 		err = a.DB.DeleteEntitatReligiosa(id)
 	case "relacio":
 		err = a.DB.DeleteMunicipiEntitatReligiosa(id)
+	case "rel_ent":
+		err = a.DB.DeleteEntitatReligiosaRelacio(id)
 	}
 	if err != nil {
 		msg := "delete"
@@ -250,25 +261,31 @@ func (a *App) AdminDeleteConfessional(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, user *db.User, data confessionalFormData) {
-	religions, _ := a.DB.ListReligioConfessions()
+	allReligions, _ := a.DB.ListReligioConfessions()
 	models, _ := a.DB.ListModelsConfessionals()
-	nivells, _ := a.DB.ListNivellsConfessionals()
-	entitats, _ := a.DB.ListEntitatsReligioses()
+	allNivells, _ := a.DB.ListNivellsConfessionals()
+	allEntitats, _ := a.DB.ListEntitatsReligioses()
+	religions := publishedReligioConfessions(allReligions)
+	nivells := publishedNivellsConfessionals(allNivells)
+	entitats := publishedEntitatsReligioses(allEntitats)
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	paisos, _ := a.DB.ListPaisos()
 	nuclis := a.compatibleNucliRows(municipis, selectedRelacioMunicipiID(data.Relacio))
 	RenderPrivateTemplate(w, r, "admin-confessional-form.html", map[string]interface{}{
-		"Section":         confessionalSectionMust(data.Kind),
-		"Form":            data,
-		"Religions":       religions,
-		"Models":          models,
-		"Nivells":         nivells,
-		"Entitats":        entitats,
-		"Municipis":       municipis,
-		"Nuclis":          nuclis,
-		"Paisos":          paisos,
-		"CanManageArxius": a.canManageAnyDocumentalsModular(user),
-		"User":            user,
+		"Section":             confessionalSectionMust(data.Kind),
+		"Form":                data,
+		"Religions":           allReligions,
+		"SelectableReligions": religions,
+		"Models":              models,
+		"Nivells":             allNivells,
+		"SelectableNivells":   nivells,
+		"Entitats":            allEntitats,
+		"SelectableEntitats":  entitats,
+		"Municipis":           municipis,
+		"Nuclis":              nuclis,
+		"Paisos":              paisos,
+		"CanManageArxius":     a.canManageAnyDocumentalsModular(user),
+		"User":                user,
 	})
 }
 
@@ -280,8 +297,10 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confe
 	case "religio":
 		item := &db.ReligioConfessio{
 			ID:             id,
+			Codi:           normalizeConfessionalCode(r.FormValue("codi")),
 			Nom:            strings.TrimSpace(r.FormValue("nom")),
 			PareID:         sqlNullInt(r.FormValue("pare_id")),
+			Categoria:      normalizeReligioCategoria(r.FormValue("categoria")),
 			Descripcio:     strings.TrimSpace(r.FormValue("descripcio")),
 			Estat:          normalizeReligioEstat(r.FormValue("estat")),
 			Observacions:   strings.TrimSpace(r.FormValue("observacions")),
@@ -317,11 +336,18 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confe
 		item := &db.NivellConfessional{
 			ID:                  id,
 			ModelConfessionalID: modelID,
+			ReligioConfessioID:  sqlNullInt(r.FormValue("religio_confessio_id")),
+			Codi:                normalizeConfessionalCode(r.FormValue("codi")),
 			Ordre:               ordre,
 			NomNivell:           strings.TrimSpace(r.FormValue("nom_nivell")),
 			NomPlural:           strings.TrimSpace(r.FormValue("nom_plural")),
 			TipusNivell:         strings.TrimSpace(r.FormValue("tipus_nivell")),
+			Categoria:           normalizeNivellConfessionalCategoria(r.FormValue("categoria")),
 			CodiOficial:         strings.TrimSpace(r.FormValue("codi_oficial")),
+			PotTenirTerritori:   true,
+			PotTenirFills:       true,
+			PotVincularMunicipi: true,
+			PotSuggerirImports:  true,
 			ParentID:            sqlNullInt(r.FormValue("parent_id")),
 			AnyInici:            sqlNullInt(r.FormValue("any_inici")),
 			AnyFi:               sqlNullInt(r.FormValue("any_fi")),
@@ -330,8 +356,8 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confe
 			ModeracioEstat:      status,
 		}
 		data.Nivell = item
-		if item.ModelConfessionalID == 0 {
-			return data, "Cal indicar el model confessional."
+		if !item.ReligioConfessioID.Valid && item.ModelConfessionalID == 0 {
+			return data, "Cal indicar la religio/confessio."
 		}
 		if item.Ordre <= 0 {
 			return data, "L'ordre ha de ser positiu."
@@ -345,20 +371,17 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confe
 	case "entitat":
 		item := &db.EntitatReligiosa{
 			ID:                   id,
+			Codi:                 normalizeConfessionalCode(r.FormValue("codi")),
 			Nom:                  strings.TrimSpace(r.FormValue("nom")),
 			ReligioConfessioID:   sqlNullInt(r.FormValue("religio_confessio_id")),
-			ModelConfessionalID:  sqlNullInt(r.FormValue("model_confessional_id")),
 			NivellConfessionalID: sqlNullInt(r.FormValue("nivell_confessional_id")),
 			PaisID:               sqlNullInt(r.FormValue("pais_id")),
-			ParentID:             sqlNullInt(r.FormValue("parent_id")),
-			TipusEntitat:         strings.TrimSpace(r.FormValue("tipus_entitat")),
-			TipusEspecific:       strings.TrimSpace(r.FormValue("tipus_especific")),
 			AnyInici:             sqlNullInt(r.FormValue("any_inici")),
 			AnyFi:                sqlNullInt(r.FormValue("any_fi")),
 			Estat:                estat,
 			Web:                  strings.TrimSpace(r.FormValue("web")),
 			WebWikipedia:         strings.TrimSpace(r.FormValue("web_wikipedia")),
-			Territori:            strings.TrimSpace(r.FormValue("territori")),
+			Descripcio:           strings.TrimSpace(r.FormValue("descripcio")),
 			Observacions:         strings.TrimSpace(r.FormValue("observacions")),
 			ModeracioEstat:       status,
 		}
@@ -366,8 +389,20 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confe
 		if item.Nom == "" {
 			return data, "El nom es obligatori."
 		}
-		if item.ParentID.Valid && item.ID != 0 && item.ParentID.Int64 == int64(item.ID) {
-			return data, "L'entitat no pot ser pare de si mateixa."
+		if item.Codi == "" {
+			return data, "El codi es obligatori."
+		}
+		if !item.ReligioConfessioID.Valid {
+			return data, "Cal indicar la religio/confessio."
+		}
+		if !item.NivellConfessionalID.Valid {
+			return data, "Cal indicar el nivell confessional."
+		}
+		if !a.confessionalCatalogItemIsPublished("religio", int(item.ReligioConfessioID.Int64)) {
+			return data, "La religio/confessio indicada no esta publicada."
+		}
+		if !a.confessionalCatalogItemIsPublished("nivell", int(item.NivellConfessionalID.Int64)) {
+			return data, "El nivell confessional indicat no esta publicat."
 		}
 	case "relacio":
 		municipiID, _ := strconv.Atoi(r.FormValue("municipi_id"))
@@ -377,7 +412,7 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confe
 			MunicipiID:         municipiID,
 			NucliID:            sqlNullInt(r.FormValue("nucli_id")),
 			EntitatReligiosaID: entitatID,
-			TipusRelacio:       normalizeRelacioTipus(r.FormValue("tipus_relacio")),
+			TipusRelacio:       strings.TrimSpace(r.FormValue("tipus_relacio")),
 			AnyInici:           sqlNullInt(r.FormValue("any_inici")),
 			AnyFi:              sqlNullInt(r.FormValue("any_fi")),
 			Observacions:       strings.TrimSpace(r.FormValue("observacions")),
@@ -405,8 +440,52 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confe
 		if item.EntitatReligiosaID == 0 {
 			return data, "Cal indicar l'entitat religiosa."
 		}
-		if _, err := a.DB.GetEntitatReligiosa(item.EntitatReligiosaID); err != nil {
+		entitat, err := a.DB.GetEntitatReligiosa(item.EntitatReligiosaID)
+		if err != nil || entitat == nil {
 			return data, "L'entitat religiosa indicada no existeix."
+		}
+		if entitat.ModeracioEstat != "publicat" {
+			return data, "L'entitat religiosa indicada no esta publicada."
+		}
+		if item.TipusRelacio == "" {
+			item.TipusRelacio = a.suggestConfessionalRelationType(entitat.NivellConfessionalID)
+		}
+	case "rel_ent":
+		origenID, _ := strconv.Atoi(r.FormValue("entitat_origen_id"))
+		destiID, _ := strconv.Atoi(r.FormValue("entitat_desti_id"))
+		item := &db.EntitatReligiosaRelacio{
+			ID:              id,
+			EntitatOrigenID: origenID,
+			EntitatDestiID:  destiID,
+			TipusRelacio:    firstNonEmpty(strings.TrimSpace(r.FormValue("tipus_relacio")), "jerarquia"),
+			AnyInici:        sqlNullInt(r.FormValue("any_inici")),
+			AnyFi:           sqlNullInt(r.FormValue("any_fi")),
+			Observacions:    strings.TrimSpace(r.FormValue("observacions")),
+			ModeracioEstat:  status,
+		}
+		data.RelEnt = item
+		if item.EntitatOrigenID == 0 {
+			return data, "Cal indicar l'entitat pare."
+		}
+		if item.EntitatDestiID == 0 {
+			return data, "Cal indicar l'entitat filla."
+		}
+		if item.EntitatOrigenID == item.EntitatDestiID {
+			return data, "L'entitat pare i la filla no poden ser la mateixa."
+		}
+		parent, err := a.DB.GetEntitatReligiosa(item.EntitatOrigenID)
+		if err != nil || parent == nil {
+			return data, "L'entitat pare indicada no existeix."
+		}
+		child, err := a.DB.GetEntitatReligiosa(item.EntitatDestiID)
+		if err != nil || child == nil {
+			return data, "L'entitat filla indicada no existeix."
+		}
+		if parent.ModeracioEstat != "publicat" || child.ModeracioEstat != "publicat" {
+			return data, "Les entitats de la relacio han d'estar publicades."
+		}
+		if parent.ReligioConfessioID.Valid && child.ReligioConfessioID.Valid && parent.ReligioConfessioID.Int64 != child.ReligioConfessioID.Int64 {
+			return data, "Les entitats de la relacio han de compartir religio/confessio."
 		}
 	}
 	return data, ""
@@ -463,6 +542,10 @@ func (a *App) confessionalModerationStatusForSave(kind string, id int) string {
 		if item, err := a.DB.GetMunicipiEntitatReligiosa(id); err == nil && item != nil {
 			status = item.ModeracioEstat
 		}
+	case "rel_ent":
+		if item, err := a.DB.GetEntitatReligiosaRelacio(id); err == nil && item != nil {
+			status = item.ModeracioEstat
+		}
 	}
 	return normalizeModerationStatus(status)
 }
@@ -484,6 +567,9 @@ func (a *App) saveConfessionalData(kind string, data confessionalFormData) error
 	case "relacio":
 		_, err := a.DB.SaveMunicipiEntitatReligiosa(data.Relacio)
 		return err
+	case "rel_ent":
+		_, err := a.DB.SaveEntitatReligiosaRelacio(data.RelEnt)
+		return err
 	default:
 		return errors.New("tipus confessional no valid")
 	}
@@ -491,7 +577,7 @@ func (a *App) saveConfessionalData(kind string, data confessionalFormData) error
 
 func confessionalKind(raw string) string {
 	switch strings.TrimSpace(raw) {
-	case "religio", "model", "nivell", "entitat", "relacio":
+	case "religio", "model", "nivell", "entitat", "relacio", "rel_ent":
 		return strings.TrimSpace(raw)
 	default:
 		return ""
@@ -562,6 +648,32 @@ func normalizeReligioEstat(raw string) string {
 	return "actiu"
 }
 
+func normalizeConfessionalCode(raw string) string {
+	code := strings.ToLower(strings.TrimSpace(raw))
+	replacer := strings.NewReplacer(" ", "_", "-", "_", ".", "_", "/", "_")
+	code = replacer.Replace(code)
+	code = strings.Trim(code, "_")
+	return code
+}
+
+func normalizeReligioCategoria(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "religio", "branca", "confessio", "ritus", "tradicio":
+		return strings.TrimSpace(raw)
+	default:
+		return "religio"
+	}
+}
+
+func normalizeNivellConfessionalCategoria(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "govern_universal", "coordinacio", "territorial_major", "territorial_intermedi", "territorial_local", "unitat_pastoral", "lloc_de_culte", "comunitat_religiosa", "pelegrinatge", "llinatge_comunitat", "no_territorial":
+		return strings.TrimSpace(raw)
+	default:
+		return "no_territorial"
+	}
+}
+
 func normalizeConfessionalEstat(raw string) string {
 	switch strings.TrimSpace(raw) {
 	case "inactiu", "historic":
@@ -589,6 +701,63 @@ func normalizeRelacioTipus(raw string) string {
 	default:
 		return "principal"
 	}
+}
+
+func publishedReligioConfessions(items []db.ReligioConfessio) []db.ReligioConfessio {
+	out := make([]db.ReligioConfessio, 0, len(items))
+	for _, item := range items {
+		if item.ModeracioEstat == "publicat" && item.Estat == "actiu" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func publishedNivellsConfessionals(items []db.NivellConfessional) []db.NivellConfessional {
+	out := make([]db.NivellConfessional, 0, len(items))
+	for _, item := range items {
+		if item.ModeracioEstat == "publicat" && item.Estat == "actiu" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func publishedEntitatsReligioses(items []db.EntitatReligiosa) []db.EntitatReligiosa {
+	out := make([]db.EntitatReligiosa, 0, len(items))
+	for _, item := range items {
+		if item.ModeracioEstat == "publicat" && item.Estat == "actiu" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func (a *App) confessionalCatalogItemIsPublished(kind string, id int) bool {
+	switch kind {
+	case "religio":
+		item, err := a.DB.GetReligioConfessio(id)
+		return err == nil && item != nil && item.ModeracioEstat == "publicat" && item.Estat == "actiu"
+	case "nivell":
+		item, err := a.DB.GetNivellConfessional(id)
+		return err == nil && item != nil && item.ModeracioEstat == "publicat" && item.Estat == "actiu"
+	default:
+		return false
+	}
+}
+
+func (a *App) suggestConfessionalRelationType(nivellID sql.NullInt64) string {
+	if !nivellID.Valid {
+		return "relacio"
+	}
+	nivell, err := a.DB.GetNivellConfessional(int(nivellID.Int64))
+	if err != nil || nivell == nil {
+		return "relacio"
+	}
+	if nivell.Codi != "" {
+		return nivell.Codi
+	}
+	return normalizeConfessionalCode(nivell.NomNivell)
 }
 
 func religioLabels(items []db.ReligioConfessio) map[int]string {

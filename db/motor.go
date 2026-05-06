@@ -11,6 +11,7 @@ import (
 )
 
 var ErrUnsafeDelete = errors.New("unsafe delete")
+var ErrInvalidReference = errors.New("invalid reference")
 
 type DB interface {
 	Engine() string
@@ -641,6 +642,10 @@ type DB interface {
 	GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error)
 	SaveMunicipiEntitatReligiosa(rel *MunicipiEntitatReligiosa) (int, error)
 	DeleteMunicipiEntitatReligiosa(id int) error
+	ListEntitatReligiosaRelacions() ([]EntitatReligiosaRelacio, error)
+	GetEntitatReligiosaRelacio(id int) (*EntitatReligiosaRelacio, error)
+	SaveEntitatReligiosaRelacio(rel *EntitatReligiosaRelacio) (int, error)
+	DeleteEntitatReligiosaRelacio(id int) error
 }
 
 // Tipus comú d'usuari al paquet `db`
@@ -1675,8 +1680,12 @@ type NivellAdminFilter struct {
 
 type ReligioConfessio struct {
 	ID             int
+	Codi           string
 	Nom            string
 	PareID         sql.NullInt64
+	Categoria      string
+	SystemKey      string
+	SystemManaged  bool
 	Descripcio     string
 	Estat          string
 	Observacions   string
@@ -1687,8 +1696,11 @@ type ReligioConfessio struct {
 
 type ModelConfessional struct {
 	ID                 int
+	Codi               string
 	Nom                string
 	ReligioConfessioID sql.NullInt64
+	SystemKey          string
+	SystemManaged      bool
 	PaisID             sql.NullInt64
 	Descripcio         string
 	AnyInici           sql.NullInt64
@@ -1703,11 +1715,20 @@ type ModelConfessional struct {
 type NivellConfessional struct {
 	ID                  int
 	ModelConfessionalID int
+	ReligioConfessioID  sql.NullInt64
+	Codi                string
 	Ordre               int
 	NomNivell           string
 	NomPlural           string
 	TipusNivell         string
+	Categoria           string
 	CodiOficial         string
+	PotTenirTerritori   bool
+	PotTenirFills       bool
+	PotVincularMunicipi bool
+	PotSuggerirImports  bool
+	SystemKey           string
+	SystemManaged       bool
 	ParentID            sql.NullInt64
 	AnyInici            sql.NullInt64
 	AnyFi               sql.NullInt64
@@ -1720,6 +1741,7 @@ type NivellConfessional struct {
 
 type EntitatReligiosa struct {
 	ID                   int
+	Codi                 string
 	Nom                  string
 	ReligioConfessioID   sql.NullInt64
 	ModelConfessionalID  sql.NullInt64
@@ -1734,6 +1756,7 @@ type EntitatReligiosa struct {
 	Web                  string
 	WebWikipedia         string
 	Territori            string
+	Descripcio           string
 	Observacions         string
 	ModeracioEstat       string
 	CreatedAt            sql.NullTime

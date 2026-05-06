@@ -644,6 +644,9 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	if _, found := m["CanViewConfessionalEntitats"]; !found {
 		m["CanViewConfessionalEntitats"] = effectiveAdmin || hasModularConfessionalEntitatsViewKey(hasKey)
 	}
+	if _, found := m["CanViewConfessionalRelacionsEntitats"]; !found {
+		m["CanViewConfessionalRelacionsEntitats"] = effectiveAdmin || hasModularConfessionalRelacionsEntitatsViewKey(hasKey)
+	}
 	if _, found := m["CanViewConfessionalMunicipisEntitats"]; !found {
 		m["CanViewConfessionalMunicipisEntitats"] = effectiveAdmin || hasModularConfessionalMunicipisEntitatsViewKey(hasKey)
 	}
@@ -678,6 +681,7 @@ func hasModularModerationKey(hasKey func(string) bool) bool {
 		hasKey(permKeyTerritoriConfessionalModelsEdit) ||
 		hasKey(permKeyTerritoriConfessionalNivellsEdit) ||
 		hasKey(permKeyTerritoriConfessionalEntitatsEdit) ||
+		hasKey(permKeyTerritoriConfessionalRelacionsEntitatsEdit) ||
 		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsEdit) ||
 		hasKey(permKeyDocumentalsArxiusEdit) ||
 		hasKey(permKeyDocumentalsLlibresEdit) ||
@@ -825,6 +829,9 @@ func hasModularConfessionalManageKey(hasKey func(string) bool) bool {
 		hasKey(permKeyTerritoriConfessionalEntitatsCreate) ||
 		hasKey(permKeyTerritoriConfessionalEntitatsEdit) ||
 		hasKey(permKeyTerritoriConfessionalEntitatsDelete) ||
+		hasKey(permKeyTerritoriConfessionalRelacionsEntitatsCreate) ||
+		hasKey(permKeyTerritoriConfessionalRelacionsEntitatsEdit) ||
+		hasKey(permKeyTerritoriConfessionalRelacionsEntitatsDelete) ||
 		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsCreate) ||
 		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsEdit) ||
 		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsDelete)
@@ -838,6 +845,7 @@ func hasModularConfessionalViewKey(hasKey func(string) bool) bool {
 		hasModularConfessionalModelsViewKey(hasKey) ||
 		hasModularConfessionalNivellsViewKey(hasKey) ||
 		hasModularConfessionalEntitatsViewKey(hasKey) ||
+		hasModularConfessionalRelacionsEntitatsViewKey(hasKey) ||
 		hasModularConfessionalMunicipisEntitatsViewKey(hasKey)
 }
 
@@ -867,6 +875,13 @@ func hasModularConfessionalEntitatsViewKey(hasKey func(string) bool) bool {
 		hasKey(permKeyTerritoriConfessionalEntitatsCreate) ||
 		hasKey(permKeyTerritoriConfessionalEntitatsEdit) ||
 		hasKey(permKeyTerritoriConfessionalEntitatsDelete))
+}
+
+func hasModularConfessionalRelacionsEntitatsViewKey(hasKey func(string) bool) bool {
+	return hasKey != nil && (hasKey(permKeyTerritoriConfessionalRelacionsEntitatsView) ||
+		hasKey(permKeyTerritoriConfessionalRelacionsEntitatsCreate) ||
+		hasKey(permKeyTerritoriConfessionalRelacionsEntitatsEdit) ||
+		hasKey(permKeyTerritoriConfessionalRelacionsEntitatsDelete))
 }
 
 func hasModularConfessionalMunicipisEntitatsViewKey(hasKey func(string) bool) bool {

@@ -86,7 +86,7 @@ func TestF353MunicipiEntitatReligiosaSQLFilesAligned(t *testing.T) {
 }
 
 func TestF353MunicipiEntitatReligiosaCRUDMultiDB(t *testing.T) {
-	for _, env := range newAppsForAllDBs(t) {
+	for _, env := range newConfessionalAppsForAllDBs(t) {
 		t.Run(env.Label, func(t *testing.T) {
 			suffix := fmt.Sprintf("%d", time.Now().UnixNano())
 			municipiID, err := env.DB.CreateMunicipi(&db.Municipi{

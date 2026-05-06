@@ -27,16 +27,16 @@ func TestF351SchemaReligiosConfessionalSQLite(t *testing.T) {
 
 	expectedColumns := map[string][]string{
 		"religio_confessio": {
-			"id", "nom", "pare_id", "descripcio", "estat", "observacions", "moderation_status", "created_at", "updated_at",
+			"id", "codi", "nom", "pare_id", "categoria", "system_key", "system_managed", "descripcio", "estat", "observacions", "moderation_status", "created_at", "updated_at",
 		},
 		"model_confessional": {
-			"id", "nom", "religio_confessio_id", "pais_id", "descripcio", "any_inici", "any_fi", "estat", "observacions", "moderation_status", "created_at", "updated_at",
+			"id", "codi", "nom", "religio_confessio_id", "system_key", "system_managed", "pais_id", "descripcio", "any_inici", "any_fi", "estat", "observacions", "moderation_status", "created_at", "updated_at",
 		},
 		"nivell_confessional": {
-			"id", "model_confessional_id", "ordre", "nom_nivell", "nom_plural", "tipus_nivell", "codi_oficial", "parent_id", "any_inici", "any_fi", "estat", "observacions", "moderation_status", "created_at", "updated_at",
+			"id", "model_confessional_id", "religio_confessio_id", "codi", "ordre", "nom_nivell", "nom_plural", "tipus_nivell", "categoria", "codi_oficial", "pot_tenir_territori", "pot_tenir_fills", "pot_vincular_municipi", "pot_ser_suggerit_imports", "system_key", "system_managed", "parent_id", "any_inici", "any_fi", "estat", "observacions", "moderation_status", "created_at", "updated_at",
 		},
 		"entitat_religiosa": {
-			"id", "nom", "religio_confessio_id", "model_confessional_id", "nivell_confessional_id", "pais_id", "parent_id", "tipus_entitat", "tipus_especific", "any_inici", "any_fi", "estat", "web", "web_wikipedia", "territori", "observacions", "moderation_status", "created_at", "updated_at",
+			"id", "codi", "nom", "religio_confessio_id", "model_confessional_id", "nivell_confessional_id", "pais_id", "parent_id", "tipus_entitat", "tipus_especific", "any_inici", "any_fi", "estat", "web", "web_wikipedia", "territori", "descripcio", "observacions", "moderation_status", "created_at", "updated_at",
 		},
 		"entitat_religiosa_relacio": {
 			"id", "entitat_origen_id", "entitat_desti_id", "tipus_relacio", "any_inici", "any_fi", "font_id", "observacions", "moderation_status", "created_at", "updated_at",
@@ -52,11 +52,19 @@ func TestF351SchemaReligiosConfessionalSQLite(t *testing.T) {
 	}
 
 	for _, idx := range []string{
+		"idx_religio_confessio_codi",
 		"idx_religio_confessio_pare",
+		"idx_religio_confessio_system_key",
+		"idx_model_confessional_codi",
 		"idx_model_confessional_religio",
 		"idx_model_confessional_pais",
+		"idx_model_confessional_system_key",
 		"idx_nivell_confessional_model",
+		"idx_nivell_confessional_religio",
+		"idx_nivell_confessional_codi",
 		"idx_nivell_confessional_parent",
+		"idx_nivell_confessional_system_key",
+		"idx_entitat_religiosa_codi",
 		"idx_entitat_religiosa_religio",
 		"idx_entitat_religiosa_model",
 		"idx_entitat_religiosa_nivell",
@@ -73,7 +81,7 @@ func TestF351SchemaReligiosConfessionalSQLite(t *testing.T) {
 	expectedFKs := map[string][]string{
 		"religio_confessio":         {"pare_id->religio_confessio"},
 		"model_confessional":        {"religio_confessio_id->religio_confessio", "pais_id->paisos"},
-		"nivell_confessional":       {"model_confessional_id->model_confessional", "parent_id->nivell_confessional"},
+		"nivell_confessional":       {"model_confessional_id->model_confessional", "religio_confessio_id->religio_confessio", "parent_id->nivell_confessional"},
 		"entitat_religiosa":         {"religio_confessio_id->religio_confessio", "model_confessional_id->model_confessional", "nivell_confessional_id->nivell_confessional", "pais_id->paisos", "parent_id->entitat_religiosa"},
 		"entitat_religiosa_relacio": {"entitat_origen_id->entitat_religiosa", "entitat_desti_id->entitat_religiosa"},
 	}
@@ -110,11 +118,19 @@ func TestF351SchemaReligiosConfessionalSQLFilesAligned(t *testing.T) {
 		"entitat_religiosa_relacio",
 	}
 	indexes := []string{
+		"idx_religio_confessio_codi",
 		"idx_religio_confessio_pare",
+		"idx_religio_confessio_system_key",
+		"idx_model_confessional_codi",
 		"idx_model_confessional_religio",
 		"idx_model_confessional_pais",
+		"idx_model_confessional_system_key",
 		"idx_nivell_confessional_model",
+		"idx_nivell_confessional_religio",
+		"idx_nivell_confessional_codi",
 		"idx_nivell_confessional_parent",
+		"idx_nivell_confessional_system_key",
+		"idx_entitat_religiosa_codi",
 		"idx_entitat_religiosa_religio",
 		"idx_entitat_religiosa_model",
 		"idx_entitat_religiosa_nivell",

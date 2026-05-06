@@ -16,7 +16,7 @@ func TestF353SConfessionalMenuIsTopLevelAndTerritoryStaysClean(t *testing.T) {
 	if territoryStart == -1 {
 		t.Fatalf("falta la seccio Territori al menu")
 	}
-	confessionalStart := strings.Index(menuBody, "<h3>Religios/confessional</h3>")
+	confessionalStart := strings.Index(menuBody, "confessional.menu.section")
 	if confessionalStart == -1 {
 		t.Fatalf("falta Religios/confessional com a seccio principal")
 	}
@@ -24,14 +24,14 @@ func TestF353SConfessionalMenuIsTopLevelAndTerritoryStaysClean(t *testing.T) {
 		t.Fatalf("Religios/confessional no queda separat despres de Territori")
 	}
 	territoryBlock := menuBody[territoryStart:confessionalStart]
-	if strings.Contains(territoryBlock, "Religios/confessional") || strings.Contains(territoryBlock, "/territori/confessional/") {
+	if strings.Contains(territoryBlock, "confessional.menu.section") || strings.Contains(territoryBlock, "/territori/confessional/") {
 		t.Fatalf("Territori encara conte entrades confessionals")
 	}
 	for _, route := range []string{
 		"/territori/confessional/religions",
-		"/territori/confessional/models",
 		"/territori/confessional/nivells",
 		"/territori/confessional/entitats",
+		"/territori/confessional/relacions-entitats",
 		"/territori/confessional/municipis-entitats",
 	} {
 		if !strings.Contains(menuBody, route) {
@@ -76,7 +76,7 @@ func TestF353SConfessionalRelationNucliIsFilteredAndValidated(t *testing.T) {
 	formBody := readProjectFileF353S(t, root, "templates/admin-confessional-form.html")
 
 	for _, token := range []string{
-		`"Nuclis":          nuclis`,
+		`"Nuclis":`,
 		"compatibleNucliRows",
 		"full.MunicipiID.Int64 != int64(municipiID)",
 		"nucli.MunicipiID.Int64 != int64(item.MunicipiID)",

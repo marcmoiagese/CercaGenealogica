@@ -11,7 +11,7 @@ import (
 )
 
 func TestF352ConfessionalCRUDMultiDB(t *testing.T) {
-	for _, env := range newAppsForAllDBs(t) {
+	for _, env := range newConfessionalAppsForAllDBs(t) {
 		t.Run(env.Label, func(t *testing.T) {
 			suffix := fmt.Sprintf("%d", time.Now().UnixNano())
 			religio := &db.ReligioConfessio{

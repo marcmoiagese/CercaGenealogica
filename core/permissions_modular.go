@@ -95,6 +95,10 @@ const (
 	permKeyTerritoriConfessionalEntitatsCreate          = "territori.confessional.entitats.create"
 	permKeyTerritoriConfessionalEntitatsEdit            = "territori.confessional.entitats.edit"
 	permKeyTerritoriConfessionalEntitatsDelete          = "territori.confessional.entitats.delete"
+	permKeyTerritoriConfessionalRelacionsEntitatsView   = "territori.confessional.relacions_entitats.view"
+	permKeyTerritoriConfessionalRelacionsEntitatsCreate = "territori.confessional.relacions_entitats.create"
+	permKeyTerritoriConfessionalRelacionsEntitatsEdit   = "territori.confessional.relacions_entitats.edit"
+	permKeyTerritoriConfessionalRelacionsEntitatsDelete = "territori.confessional.relacions_entitats.delete"
 	permKeyTerritoriConfessionalMunicipisEntitatsView   = "territori.confessional.municipis_entitats.view"
 	permKeyTerritoriConfessionalMunicipisEntitatsCreate = "territori.confessional.municipis_entitats.create"
 	permKeyTerritoriConfessionalMunicipisEntitatsEdit   = "territori.confessional.municipis_entitats.edit"
@@ -208,6 +212,10 @@ var permissionCatalogKeys = []string{
 	permKeyTerritoriConfessionalEntitatsCreate,
 	permKeyTerritoriConfessionalEntitatsEdit,
 	permKeyTerritoriConfessionalEntitatsDelete,
+	permKeyTerritoriConfessionalRelacionsEntitatsView,
+	permKeyTerritoriConfessionalRelacionsEntitatsCreate,
+	permKeyTerritoriConfessionalRelacionsEntitatsEdit,
+	permKeyTerritoriConfessionalRelacionsEntitatsDelete,
 	permKeyTerritoriConfessionalMunicipisEntitatsView,
 	permKeyTerritoriConfessionalMunicipisEntitatsCreate,
 	permKeyTerritoriConfessionalMunicipisEntitatsEdit,

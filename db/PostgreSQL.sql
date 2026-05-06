@@ -597,8 +597,12 @@ CREATE TABLE IF NOT EXISTS noms_historics (
 
 CREATE TABLE IF NOT EXISTS religio_confessio (
     id SERIAL PRIMARY KEY,
+    codi TEXT UNIQUE,
     nom TEXT NOT NULL,
     pare_id INTEGER REFERENCES religio_confessio(id) ON DELETE SET NULL,
+    categoria TEXT NOT NULL DEFAULT 'religio',
+    system_key TEXT UNIQUE,
+    system_managed BOOLEAN NOT NULL DEFAULT FALSE,
     descripcio TEXT,
     estat TEXT NOT NULL DEFAULT 'actiu' CHECK(estat IN ('actiu', 'inactiu')),
     observacions TEXT,
@@ -606,12 +610,17 @@ CREATE TABLE IF NOT EXISTS religio_confessio (
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_religio_confessio_codi ON religio_confessio(codi);
 CREATE INDEX IF NOT EXISTS idx_religio_confessio_pare ON religio_confessio(pare_id);
+CREATE INDEX IF NOT EXISTS idx_religio_confessio_system_key ON religio_confessio(system_key);
 
 CREATE TABLE IF NOT EXISTS model_confessional (
     id SERIAL PRIMARY KEY,
+    codi TEXT UNIQUE,
     nom TEXT NOT NULL,
     religio_confessio_id INTEGER REFERENCES religio_confessio(id) ON DELETE SET NULL,
+    system_key TEXT UNIQUE,
+    system_managed BOOLEAN NOT NULL DEFAULT FALSE,
     pais_id INTEGER REFERENCES paisos(id) ON DELETE SET NULL,
     descripcio TEXT,
     any_inici INTEGER,
@@ -622,17 +631,28 @@ CREATE TABLE IF NOT EXISTS model_confessional (
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_model_confessional_codi ON model_confessional(codi);
 CREATE INDEX IF NOT EXISTS idx_model_confessional_religio ON model_confessional(religio_confessio_id);
 CREATE INDEX IF NOT EXISTS idx_model_confessional_pais ON model_confessional(pais_id);
+CREATE INDEX IF NOT EXISTS idx_model_confessional_system_key ON model_confessional(system_key);
 
 CREATE TABLE IF NOT EXISTS nivell_confessional (
     id SERIAL PRIMARY KEY,
-    model_confessional_id INTEGER NOT NULL REFERENCES model_confessional(id) ON DELETE CASCADE,
+    model_confessional_id INTEGER REFERENCES model_confessional(id) ON DELETE SET NULL,
+    religio_confessio_id INTEGER REFERENCES religio_confessio(id) ON DELETE SET NULL,
+    codi TEXT UNIQUE,
     ordre INTEGER NOT NULL,
     nom_nivell TEXT NOT NULL,
     nom_plural TEXT,
     tipus_nivell TEXT,
+    categoria TEXT NOT NULL DEFAULT 'no_territorial',
     codi_oficial TEXT,
+    pot_tenir_territori BOOLEAN NOT NULL DEFAULT TRUE,
+    pot_tenir_fills BOOLEAN NOT NULL DEFAULT TRUE,
+    pot_vincular_municipi BOOLEAN NOT NULL DEFAULT TRUE,
+    pot_ser_suggerit_imports BOOLEAN NOT NULL DEFAULT TRUE,
+    system_key TEXT UNIQUE,
+    system_managed BOOLEAN NOT NULL DEFAULT FALSE,
     parent_id INTEGER REFERENCES nivell_confessional(id) ON DELETE SET NULL,
     any_inici INTEGER,
     any_fi INTEGER,
@@ -642,11 +662,15 @@ CREATE TABLE IF NOT EXISTS nivell_confessional (
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_nivell_confessional_codi ON nivell_confessional(codi);
+CREATE INDEX IF NOT EXISTS idx_nivell_confessional_religio ON nivell_confessional(religio_confessio_id);
 CREATE INDEX IF NOT EXISTS idx_nivell_confessional_model ON nivell_confessional(model_confessional_id);
 CREATE INDEX IF NOT EXISTS idx_nivell_confessional_parent ON nivell_confessional(parent_id);
+CREATE INDEX IF NOT EXISTS idx_nivell_confessional_system_key ON nivell_confessional(system_key);
 
 CREATE TABLE IF NOT EXISTS entitat_religiosa (
     id SERIAL PRIMARY KEY,
+    codi TEXT UNIQUE,
     nom TEXT NOT NULL,
     religio_confessio_id INTEGER REFERENCES religio_confessio(id) ON DELETE SET NULL,
     model_confessional_id INTEGER REFERENCES model_confessional(id) ON DELETE SET NULL,
@@ -661,11 +685,13 @@ CREATE TABLE IF NOT EXISTS entitat_religiosa (
     web TEXT,
     web_wikipedia TEXT,
     territori TEXT,
+    descripcio TEXT,
     observacions TEXT,
     moderation_status TEXT NOT NULL DEFAULT 'pendent' CHECK(moderation_status IN ('pendent','publicat','rebutjat')),
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_codi ON entitat_religiosa(codi);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_religio ON entitat_religiosa(religio_confessio_id);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_model ON entitat_religiosa(model_confessional_id);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_nivell ON entitat_religiosa(nivell_confessional_id);
