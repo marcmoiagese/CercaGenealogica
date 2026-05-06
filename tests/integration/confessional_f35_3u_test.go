@@ -130,7 +130,7 @@ func TestF353UConfessionalUIUsesPublishedCatalogsAndI18N(t *testing.T) {
 		"SelectableNivells",
 		"SelectableEntitats",
 		"publishedEntitatsReligioses",
-		"no esta publicat",
+		"confessional.error.level_incompatible",
 		"confessionalModerationStatusForSave(kind, id)",
 		"suggestConfessionalRelationType",
 		"RelEnt",

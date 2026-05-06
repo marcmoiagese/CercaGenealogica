@@ -3531,5 +3531,10 @@
   "confessional.level.arxiprestat_vicariat_forani": "Arxiprestat / Vicariat forani",
   "confessional.level.unitat_pastoral": "Unitat pastorala",
   "confessional.level.parroquia": "Parroquia",
-  "confessional.level.lloc_de_culte": "Luòc de culte"
+  "confessional.level.lloc_de_culte": "Luòc de culte",
+  "confessional.error.religion_unknown": "La religion/confession indicada existis pas dins lo catalòg.",
+  "confessional.error.level_unknown": "Lo nivèl/division indicat existis pas dins lo catalòg.",
+  "confessional.error.level_incompatible": "Lo nivèl/division seleccionat es pas compatible amb la religion/confession indicada.",
+  "confessional.help.levels.choose_religion": "Selecciona d'en primièr una religion/confession concreta per veire los nivèls/divisions disponibles.",
+  "confessional.help.levels.none_for_religion": "Aquesta religion/confession a pas de nivèls/divisions definits dins lo catalòg."
 }

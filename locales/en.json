@@ -3573,5 +3573,10 @@
   "confessional.level.arxiprestat_vicariat_forani": "Deanery / Forane vicariate",
   "confessional.level.unitat_pastoral": "Pastoral unit",
   "confessional.level.parroquia": "Parish",
-  "confessional.level.lloc_de_culte": "Place of worship"
+  "confessional.level.lloc_de_culte": "Place of worship",
+  "confessional.error.religion_unknown": "The selected religion/confession does not exist in the catalog.",
+  "confessional.error.level_unknown": "The selected level/division does not exist in the catalog.",
+  "confessional.error.level_incompatible": "The selected level/division is not compatible with the selected religion/confession.",
+  "confessional.help.levels.choose_religion": "Select a specific religion/confession first to see the available levels/divisions.",
+  "confessional.help.levels.none_for_religion": "This religion/confession has no levels/divisions defined in the catalog."
 }

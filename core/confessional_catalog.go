@@ -65,7 +65,7 @@ func ListConfessionalLevelsByReligionCode(code string) []ConfessionalLevelCatalo
 	code = normalizeCatalogCode(code)
 	out := []ConfessionalLevelCatalogItem{}
 	for _, item := range confessionalLevelCatalog {
-		if item.ReligionCode == code {
+		if item.Active && item.ReligionCode == code {
 			out = append(out, item)
 		}
 	}
@@ -80,6 +80,13 @@ func GetConfessionalLevelCatalogByCode(code string) (ConfessionalLevelCatalogIte
 		}
 	}
 	return ConfessionalLevelCatalogItem{}, false
+}
+
+func ConfessionalLevelCompatibleWithReligion(religionCode, levelCode string) (ConfessionalReligionCatalogItem, ConfessionalLevelCatalogItem, bool, bool, bool) {
+	religion, religionOK := GetConfessionalReligionCatalogByCode(religionCode)
+	level, levelOK := GetConfessionalLevelCatalogByCode(levelCode)
+	compatible := religionOK && levelOK && religion.Active && level.Active && level.ReligionCode == religion.Code
+	return religion, level, religionOK && religion.Active, levelOK && level.Active, compatible
 }
 
 func ListConfessionalReligionCategories() []ConfessionalCategoryCatalogItem {

@@ -230,7 +230,8 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data, errMsg := a.parseConfessionalForm(kind, id, r)
+	lang := ResolveLangForUser(r, user.PreferredLang)
+	data, errMsg := a.parseConfessionalForm(kind, id, r, lang)
 	if errMsg != "" {
 		data.Error = errMsg
 		a.renderConfessionalForm(w, r, user, data)
@@ -526,6 +527,12 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 	case "entitat":
 		allEntitats, _ = a.DB.ListEntitatsReligioses()
 		paisos, _ = a.DB.ListPaisos()
+		if data.Entitat != nil && data.Entitat.NivellConfessionalCodi != "" {
+			_, _, _, _, compatible := ConfessionalLevelCompatibleWithReligion(data.Entitat.ReligioConfessioCodi, data.Entitat.NivellConfessionalCodi)
+			if !compatible {
+				data.Entitat.NivellConfessionalCodi = ""
+			}
+		}
 	}
 	nuclis := a.compatibleNucliRows(municipis, selectedRelacioMunicipiID(data.Relacio))
 	lang := ResolveLangForUser(r, user.PreferredLang)
@@ -549,7 +556,7 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 	})
 }
 
-func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confessionalFormData, string) {
+func (a *App) parseConfessionalForm(kind string, id int, r *http.Request, lang string) (confessionalFormData, string) {
 	data := confessionalFormData{Kind: kind, IsNew: id == 0, ReturnURL: strings.TrimSpace(r.FormValue("return_to"))}
 	estat := normalizeConfessionalEstat(r.FormValue("estat"))
 	status := a.confessionalModerationStatusForSave(kind, id)
@@ -602,12 +609,15 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confe
 		if item.NivellConfessionalCodi == "" {
 			return data, "Cal indicar el nivell confessional."
 		}
-		if _, ok := GetConfessionalReligionCatalogByCode(item.ReligioConfessioCodi); !ok {
-			return data, "La religio/confessio indicada no esta publicada."
+		_, _, religionOK, levelOK, compatible := ConfessionalLevelCompatibleWithReligion(item.ReligioConfessioCodi, item.NivellConfessionalCodi)
+		if !religionOK {
+			return data, T(lang, "confessional.error.religion_unknown")
 		}
-		level, ok := GetConfessionalLevelCatalogByCode(item.NivellConfessionalCodi)
-		if !ok || level.ReligionCode != item.ReligioConfessioCodi {
-			return data, "El nivell confessional indicat no esta publicat."
+		if !levelOK {
+			return data, T(lang, "confessional.error.level_unknown")
+		}
+		if !compatible {
+			return data, T(lang, "confessional.error.level_incompatible")
 		}
 		if item.ParentID.Valid {
 			if id > 0 && item.ParentID.Int64 == int64(id) {
