@@ -2,11 +2,15 @@ package integration
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/marcmoiagese/CercaGenealogica/core"
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
@@ -109,6 +113,7 @@ func TestF353Z5ConfessionalLevelMessagesAndClientSyncAreI18N(t *testing.T) {
 	handlerBody := readProjectFileF353U(t, root, "core/admin_confessional.go")
 	catalogBody := readProjectFileF353U(t, root, "core/confessional_catalog.go")
 	formBody := readProjectFileF353U(t, root, "templates/admin-confessional-form.html")
+	staticBody := readProjectFileF353U(t, root, "static/js/confessional-form.js")
 
 	for _, token := range []string{
 		"ConfessionalLevelCompatibleWithReligion",
@@ -122,13 +127,20 @@ func TestF353Z5ConfessionalLevelMessagesAndClientSyncAreI18N(t *testing.T) {
 	}
 	for _, token := range []string{
 		`data-religion-code`,
-		`level.disabled = visibleLevels === 0`,
-		`form.addEventListener("submit"`,
+		`/static/js/confessional-form.js`,
 		`confessional.help.levels.choose_religion`,
 		`confessional.help.levels.none_for_religion`,
 	} {
 		if !strings.Contains(formBody, token) {
-			t.Fatalf("falta sincronitzacio client-side F35-3Z5: %s", token)
+			t.Fatalf("falta contracte DOM/template F35-3Z5: %s", token)
+		}
+	}
+	for _, token := range []string{
+		`level.disabled = visibleLevels === 0`,
+		`form.addEventListener("submit"`,
+	} {
+		if !strings.Contains(staticBody, token) {
+			t.Fatalf("falta sincronitzacio client-side F35-3Z5 al JS static: %s", token)
 		}
 	}
 
@@ -149,6 +161,68 @@ func TestF353Z5ConfessionalLevelMessagesAndClientSyncAreI18N(t *testing.T) {
 				t.Fatalf("%s no defineix %s", rel, key)
 			}
 		}
+	}
+}
+
+func TestF353Z6ConfessionalSelectorScriptIsExternalAndCSPCompatible(t *testing.T) {
+	root := findProjectRoot(t)
+	formBody := readProjectFileF353U(t, root, "templates/admin-confessional-form.html")
+	staticBody := readProjectFileF353U(t, root, "static/js/confessional-form.js")
+	webserverBody := readProjectFileF353U(t, root, "core/webserver.go")
+
+	if strings.Contains(formBody, "<script>\n") || strings.Contains(formBody, "syncConfessionalLevels()") || strings.Contains(formBody, `form.addEventListener("submit"`) {
+		t.Fatalf("el template no ha de contenir JS inline de filtratge confessional")
+	}
+	for _, handler := range []string{"onchange=", "onclick=", "oninput=", "onsubmit="} {
+		if strings.Contains(formBody, handler) {
+			t.Fatalf("el template no ha de contenir handler inline %s", handler)
+		}
+	}
+	if !strings.Contains(formBody, `<script src="/static/js/confessional-form.js"></script>`) {
+		t.Fatalf("el formulari d'entitat ha de carregar confessional-form.js com a script extern")
+	}
+	for _, token := range []string{
+		`document.getElementById("religio_confessio_codi")`,
+		`document.getElementById("nivell_confessional_codi")`,
+		`getAttribute("data-religion-code")`,
+		`level.disabled = visibleLevels === 0`,
+		`event.preventDefault()`,
+	} {
+		if !strings.Contains(staticBody, token) {
+			t.Fatalf("static/js/confessional-form.js no conte %s", token)
+		}
+	}
+	if strings.Contains(staticBody, "Selecciona ") || strings.Contains(staticBody, "This religion") {
+		t.Fatalf("el JS static no ha de hardcodejar textos visibles")
+	}
+	scriptSrc := ""
+	if start := strings.Index(webserverBody, "script-src"); start >= 0 {
+		scriptSrc = webserverBody[start:]
+		if end := strings.Index(scriptSrc, ";"); end >= 0 {
+			scriptSrc = scriptSrc[:end]
+		}
+	}
+	if scriptSrc == "" || strings.Contains(scriptSrc, "unsafe-inline") {
+		t.Fatalf("la CSP no ha d'afegir unsafe-inline a script-src; directiva=%q", scriptSrc)
+	}
+
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("no puc fer chdir a l'arrel del projecte (%s): %v", root, err)
+	}
+	if oldWd != "" {
+		t.Cleanup(func() {
+			_ = os.Chdir(oldWd)
+		})
+	}
+	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/static/js/confessional-form.js", nil)
+	rr := httptest.NewRecorder()
+	core.ServeStatic(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("ServeStatic confessional-form.js status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "syncConfessionalLevels") {
+		t.Fatalf("ServeStatic no ha retornat el JS confessional esperat")
 	}
 }
 

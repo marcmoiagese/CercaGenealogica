@@ -14,6 +14,7 @@ func TestF353XConfessionalCatalogIsHiddenFromNavigation(t *testing.T) {
 	handlerBody := readProjectFileF353X(t, root, "core/admin_confessional.go")
 	listBody := readProjectFileF353X(t, root, "templates/admin-confessional-list.html")
 	formBody := readProjectFileF353X(t, root, "templates/admin-confessional-form.html")
+	staticFormBody := readProjectFileF353X(t, root, "static/js/confessional-form.js")
 	menuBody := readProjectFileF353X(t, root, "templates/layouts/menu-private.html")
 	catalogBody := readProjectFileF353X(t, root, "core/confessional_catalog.go")
 
@@ -44,11 +45,14 @@ func TestF353XConfessionalCatalogIsHiddenFromNavigation(t *testing.T) {
 		`name="religio_confessio_codi"`,
 		`name="nivell_confessional_codi"`,
 		`data-religion-code="{{ .ReligionCode }}"`,
-		`syncConfessionalLevels`,
+		`/static/js/confessional-form.js`,
 	} {
 		if !strings.Contains(formBody, token) {
 			t.Fatalf("el formulari d'entitats ha de conservar selectors de cataleg: %s", token)
 		}
+	}
+	if !strings.Contains(staticFormBody, `syncConfessionalLevels`) {
+		t.Fatalf("el filtratge dinamic de nivells ha de viure al JS static")
 	}
 	for _, token := range []string{
 		"ListConfessionalReligionCatalog",
