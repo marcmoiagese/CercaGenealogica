@@ -101,12 +101,12 @@ func TestF353Z2ProfileOptionsAndSplitRelations(t *testing.T) {
 	}
 
 	body := f353YGet(t, app.AdminConfessionalEntityShow, "/confessional/entitats/"+strconv.Itoa(childID), session)
-	for _, want := range []string{"opcions-dropdown", "dropdownOpcions", "/history", "Entitats superiors", "Entitats inferiors", "Parroquia", "Lloc de culte"} {
+	for _, want := range []string{"opcions-dropdown", "botoOpcions", "dropdownOpcions", "/static/js/persona.js", "/history", "Entitats superiors", "Entitats inferiors", "Parroquia", "Lloc de culte"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("profile missing %q; body=%s", want, body)
 		}
 	}
-	for _, banned := range []string{"wiki.history.no_changes", "history?view=", "<th>ID</th>"} {
+	for _, banned := range []string{"dropdownOpcionsBtn", "wiki.history.no_changes", "history?view=", "<th>ID</th>"} {
 		if strings.Contains(body, banned) {
 			t.Fatalf("profile should not contain embedded history marker %q; body=%s", banned, body)
 		}

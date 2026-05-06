@@ -30,17 +30,19 @@
                     <p class="muted">{{ .Data.Entitat.Codi }}</p>
                     <p><a href="/confessional/entitats">{{ t .Lang "wiki.history.back" }}</a></p>
                 </div>
-                <div class="opcions-dropdown">
-                    <button type="button" class="boto-opcions" id="dropdownOpcionsBtn" aria-expanded="false" aria-controls="dropdownOpcions">{{ t .Lang "confessional.action.options" }} <span aria-hidden="true">v</span></button>
+                <div class="opcions-dropdown muni-opcions">
+                    <button class="boto-opcions" id="botoOpcions">
+                        <i class="fas fa-cog"></i> {{ t .Lang "confessional.action.options" }} <i class="fas fa-chevron-down"></i>
+                    </button>
                     <ul class="dropdown-opcions" id="dropdownOpcions">
-                        <li><a href="/confessional/entitats/{{ .Data.Entitat.ID }}/history">{{ t .Lang "confessional.profile.history" }}</a></li>
-                        {{ if .Data.CanEdit }}<li><a href="/confessional/entitats/{{ .Data.Entitat.ID }}/edit?return_to=/confessional/entitats/{{ .Data.Entitat.ID }}">{{ t .Lang "confessional.action.edit" }}</a></li>{{ end }}
+                        <li><a href="/confessional/entitats/{{ .Data.Entitat.ID }}/history"><i class="fas fa-clock-rotate-left"></i> {{ t .Lang "confessional.profile.history" }}</a></li>
+                        {{ if .Data.CanEdit }}<li><a href="/confessional/entitats/{{ .Data.Entitat.ID }}/edit?return_to=/confessional/entitats/{{ .Data.Entitat.ID }}"><i class="fas fa-pen"></i> {{ t .Lang "confessional.action.edit" }}</a></li>{{ end }}
                         {{ if .Data.CanDelete }}
                         <li>
                             <form method="post" action="/confessional/delete">
                                 <input type="hidden" name="kind" value="entitat">
                                 <input type="hidden" name="id" value="{{ .Data.Entitat.ID }}">
-                                <button type="submit">{{ t .Lang "confessional.action.delete" }}</button>
+                                <button type="submit"><i class="fas fa-trash"></i> {{ t .Lang "confessional.action.delete" }}</button>
                             </form>
                         </li>
                         {{ end }}
@@ -109,25 +111,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
-    <script>
-        (function () {
-            var button = document.getElementById("dropdownOpcionsBtn");
-            var menu = document.getElementById("dropdownOpcions");
-            if (!button || !menu) {
-                return;
-            }
-            button.addEventListener("click", function (event) {
-                event.stopPropagation();
-                var open = menu.style.display === "block";
-                menu.style.display = open ? "none" : "block";
-                button.setAttribute("aria-expanded", open ? "false" : "true");
-            });
-            document.addEventListener("click", function () {
-                menu.style.display = "none";
-                button.setAttribute("aria-expanded", "false");
-            });
-        })();
-    </script>
+    <script src="/static/js/persona.js"></script>
 </body>
 </html>
 {{ end }}
