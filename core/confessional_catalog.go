@@ -15,6 +15,7 @@ type ConfessionalReligionCatalogItem struct {
 type ConfessionalLevelCatalogItem struct {
 	Code                 string
 	CanonicalName        string
+	I18nKey              string
 	ReligionCode         string
 	CategoryCode         string
 	Order                int

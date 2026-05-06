@@ -12,7 +12,7 @@
     <main class="contingut-principal">
         <section class="card">
             <header class="card-header">
-                <h1>{{ if .Data.Form.IsNew }}{{ .Data.Section.NewLabel }}{{ else }}Edita {{ .Data.Section.Title }}{{ end }}</h1>
+                <h1>{{ if .Data.Form.IsNew }}{{ .Data.Section.NewLabel }}{{ else }}{{ t .Lang "confessional.form.title.edit" }} {{ .Data.Section.Title }}{{ end }}</h1>
             </header>
             {{ if .Data.Form.Error }}<div class="alert alert-error">{{ .Data.Form.Error }}</div>{{ end }}
             <form method="post" action="/confessional/save">
@@ -26,7 +26,7 @@
                     <input id="codi" name="codi" type="text" value="{{ .Data.Form.Religio.Codi }}">
                 </div>
                 <div class="grup-camp">
-                    <label for="nom">Nom</label>
+                    <label for="nom">{{ t .Lang "confessional.field.name" }}</label>
                     <input id="nom" name="nom" type="text" value="{{ .Data.Form.Religio.Nom }}" required>
                 </div>
                 <div class="grup-camp">
@@ -52,7 +52,7 @@
                     <label for="descripcio">Descripcio</label>
                     <textarea id="descripcio" name="descripcio">{{ .Data.Form.Religio.Descripcio }}</textarea>
                 </div>
-                {{ template "confessional-common-state" dict "Item" .Data.Form.Religio }}
+                {{ template "confessional-common-state" dict "Item" .Data.Form.Religio "Lang" .Lang }}
                 <div class="grup-camp">
                     <label for="observacions">Observacions</label>
                     <textarea id="observacions" name="observacions">{{ .Data.Form.Religio.Observacions }}</textarea>
@@ -87,8 +87,8 @@
                     <label for="descripcio">Descripcio</label>
                     <textarea id="descripcio" name="descripcio">{{ .Data.Form.Model.Descripcio }}</textarea>
                 </div>
-                {{ template "confessional-years" dict "Item" .Data.Form.Model }}
-                {{ template "confessional-common-state" dict "Item" .Data.Form.Model }}
+                {{ template "confessional-years" dict "Item" .Data.Form.Model "Lang" .Lang }}
+                {{ template "confessional-common-state" dict "Item" .Data.Form.Model "Lang" .Lang }}
                 <div class="grup-camp">
                     <label for="observacions">Observacions</label>
                     <textarea id="observacions" name="observacions">{{ .Data.Form.Model.Observacions }}</textarea>
@@ -146,8 +146,8 @@
                         {{ end }}
                     </select>
                 </div>
-                {{ template "confessional-years" dict "Item" .Data.Form.Nivell }}
-                {{ template "confessional-common-state" dict "Item" .Data.Form.Nivell }}
+                {{ template "confessional-years" dict "Item" .Data.Form.Nivell "Lang" .Lang }}
+                {{ template "confessional-common-state" dict "Item" .Data.Form.Nivell "Lang" .Lang }}
                 <div class="grup-camp">
                     <label for="observacions">Observacions</label>
                     <textarea id="observacions" name="observacions">{{ .Data.Form.Nivell.Observacions }}</textarea>
@@ -165,48 +165,59 @@
                     <input id="nom" name="nom" type="text" value="{{ .Data.Form.Entitat.Nom }}" required>
                 </div>
                 <div class="grup-camp">
-                    <label for="religio_confessio_codi">Religio/confessio</label>
+                    <label for="religio_confessio_codi">{{ t .Lang "confessional.field.religion" }}</label>
                     <select id="religio_confessio_codi" name="religio_confessio_codi" required>
                         <option value="">{{ t .Lang "confessional.select.religion" }}</option>
                         {{ range .Data.SelectableReligions }}
-                        <option value="{{ .Code }}" {{ if eq $.Data.Form.Entitat.ReligioConfessioCodi .Code }}selected{{ end }}>{{ .CanonicalName }}</option>
+                        <option value="{{ .Code }}" {{ if eq $.Data.Form.Entitat.ReligioConfessioCodi .Code }}selected{{ end }}>{{ index $.Data.ReligionCatalogLabels .Code }}</option>
                         {{ end }}
                     </select>
                 </div>
                 <div class="grup-camp">
-                    <label for="nivell_confessional_codi">Nivell confessional</label>
+                    <label for="nivell_confessional_codi">{{ t .Lang "confessional.field.level" }}</label>
                     <select id="nivell_confessional_codi" name="nivell_confessional_codi" required>
                         <option value="">{{ t .Lang "confessional.select.level" }}</option>
                         {{ range .Data.SelectableNivells }}
-                        <option value="{{ .Code }}" data-religion-code="{{ .ReligionCode }}" {{ if eq $.Data.Form.Entitat.NivellConfessionalCodi .Code }}selected{{ end }}>{{ .CanonicalName }}</option>
+                        <option value="{{ .Code }}" data-religion-code="{{ .ReligionCode }}" {{ if eq $.Data.Form.Entitat.NivellConfessionalCodi .Code }}selected{{ end }}>{{ index $.Data.LevelCatalogLabels .Code }}</option>
                         {{ end }}
                     </select>
                 </div>
                 <div class="grup-camp">
-                    <label for="pais_id">Pais</label>
+                    <label for="parent_id">{{ t .Lang "confessional.field.parent_entity_optional" }}</label>
+                    <select id="parent_id" name="parent_id">
+                        <option value="">{{ t .Lang "confessional.select.parent_entity.none" }}</option>
+                        {{ range .Data.SelectableEntitats }}
+                        {{ if ne .ID $.Data.Form.Entitat.ID }}
+                        <option value="{{ .ID }}" data-religion-code="{{ .ReligioConfessioCodi }}" {{ if and $.Data.Form.Entitat.ParentID.Valid (eq .ID (int $.Data.Form.Entitat.ParentID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="pais_id">{{ t .Lang "confessional.field.country" }}</label>
                     <select id="pais_id" name="pais_id">
-                        <option value="">Sense pais</option>
+                        <option value="">{{ t .Lang "confessional.select.country.none" }}</option>
                         {{ range .Data.Paisos }}
                         <option value="{{ .ID }}" {{ if and $.Data.Form.Entitat.PaisID.Valid (eq .ID (int $.Data.Form.Entitat.PaisID.Int64)) }}selected{{ end }}>{{ .CodiISO3 }}</option>
                         {{ end }}
                     </select>
                 </div>
-                {{ template "confessional-years" dict "Item" .Data.Form.Entitat }}
-                {{ template "confessional-common-state" dict "Item" .Data.Form.Entitat }}
+                {{ template "confessional-years" dict "Item" .Data.Form.Entitat "Lang" .Lang }}
+                {{ template "confessional-common-state" dict "Item" .Data.Form.Entitat "Lang" .Lang }}
                 <div class="grup-camp">
-                    <label for="web">Web</label>
+                    <label for="web">{{ t .Lang "confessional.field.web" }}</label>
                     <input id="web" name="web" type="text" value="{{ .Data.Form.Entitat.Web }}">
                 </div>
                 <div class="grup-camp">
-                    <label for="web_wikipedia">Wikipedia</label>
+                    <label for="web_wikipedia">{{ t .Lang "confessional.field.wikipedia" }}</label>
                     <input id="web_wikipedia" name="web_wikipedia" type="text" value="{{ .Data.Form.Entitat.WebWikipedia }}">
                 </div>
                 <div class="grup-camp">
-                    <label for="descripcio">Descripcio</label>
+                    <label for="descripcio">{{ t .Lang "confessional.field.description" }}</label>
                     <textarea id="descripcio" name="descripcio">{{ .Data.Form.Entitat.Descripcio }}</textarea>
                 </div>
                 <div class="grup-camp">
-                    <label for="observacions">Observacions</label>
+                    <label for="observacions">{{ t .Lang "confessional.field.notes" }}</label>
                     <textarea id="observacions" name="observacions">{{ .Data.Form.Entitat.Observacions }}</textarea>
                 </div>
                 {{ end }}
@@ -214,45 +225,45 @@
                 {{ if eq .Data.Form.Kind "relacio" }}
                 <input type="hidden" name="id" value="{{ .Data.Form.Relacio.ID }}">
                 <div class="grup-camp">
-                    <label for="municipi_id">Municipi</label>
+                    <label for="municipi_id">{{ t .Lang "confessional.field.municipi" }}</label>
                     <select id="municipi_id" name="municipi_id" required>
-                        <option value="">Selecciona municipi</option>
+                        <option value="">{{ t .Lang "confessional.select.municipi" }}</option>
                         {{ range .Data.Municipis }}
                         <option value="{{ .ID }}" {{ if eq .ID $.Data.Form.Relacio.MunicipiID }}selected{{ end }}>{{ .Nom }}{{ if .Tipus }} ({{ .Tipus }}){{ end }}</option>
                         {{ end }}
                     </select>
                 </div>
                 <div class="grup-camp">
-                    <label for="nucli_id">Nucli</label>
+                    <label for="nucli_id">{{ t .Lang "confessional.field.nucli" }}</label>
                     <select id="nucli_id" name="nucli_id">
-                        <option value="">Sense nucli</option>
+                        <option value="">{{ t .Lang "confessional.select.nucli.none" }}</option>
                         {{ range .Data.Nuclis }}
                         <option value="{{ .ID }}" {{ if and $.Data.Form.Relacio.NucliID.Valid (eq .ID (int $.Data.Form.Relacio.NucliID.Int64)) }}selected{{ end }}>{{ .Nom }}{{ if .Tipus }} ({{ .Tipus }}){{ end }}</option>
                         {{ else }}
                         {{ if .Data.Form.Relacio.MunicipiID }}
-                        <option value="" disabled>Sense nucli</option>
+                        <option value="" disabled>{{ t .Lang "confessional.select.nucli.none" }}</option>
                         {{ else }}
-                        <option value="" disabled>Selecciona municipi</option>
+                        <option value="" disabled>{{ t .Lang "confessional.select.nucli.choose_municipi" }}</option>
                         {{ end }}
                         {{ end }}
                     </select>
                 </div>
                 <div class="grup-camp">
-                    <label for="entitat_religiosa_id">Entitat religiosa</label>
+                    <label for="entitat_religiosa_id">{{ t .Lang "confessional.field.religious_entity" }}</label>
                     <select id="entitat_religiosa_id" name="entitat_religiosa_id" required>
-                        <option value="">Selecciona entitat</option>
+                        <option value="">{{ t .Lang "confessional.select.entity" }}</option>
                         {{ range .Data.SelectableEntitats }}
                         <option value="{{ .ID }}" {{ if eq .ID $.Data.Form.Relacio.EntitatReligiosaID }}selected{{ end }}>{{ .Nom }}</option>
                         {{ end }}
                     </select>
                 </div>
                 <div class="grup-camp">
-                    <label for="tipus_relacio">Tipus de relacio</label>
-                    <input id="tipus_relacio" name="tipus_relacio" type="text" value="{{ .Data.Form.Relacio.TipusRelacio }}" placeholder="{{ t .Lang "confessional.type.suggested" }}">
+                    <label>{{ t .Lang "confessional.field.relation_type" }}</label>
+                    <p class="muted">{{ t .Lang "confessional.type.deduced_from_entity_level" }}</p>
                 </div>
-                {{ template "confessional-years" dict "Item" .Data.Form.Relacio }}
+                {{ template "confessional-years" dict "Item" .Data.Form.Relacio "Lang" .Lang }}
                 <div class="grup-camp">
-                    <label for="observacions">Observacions</label>
+                    <label for="observacions">{{ t .Lang "confessional.field.notes" }}</label>
                     <textarea id="observacions" name="observacions">{{ .Data.Form.Relacio.Observacions }}</textarea>
                 </div>
                 {{ end }}
@@ -278,30 +289,18 @@
                     </select>
                 </div>
                 <div class="grup-camp">
-                    <label for="tipus_relacio">Tipus de relacio</label>
-                    <input id="tipus_relacio" name="tipus_relacio" type="text" value="{{ .Data.Form.RelEnt.TipusRelacio }}">
+                    <label>{{ t .Lang "confessional.field.relation_type" }}</label>
+                    <p class="muted">{{ t .Lang "confessional.type.deduced_from_child_level" }}</p>
                 </div>
-                {{ template "confessional-years" dict "Item" .Data.Form.RelEnt }}
+                {{ template "confessional-years" dict "Item" .Data.Form.RelEnt "Lang" .Lang }}
                 <div class="grup-camp">
-                    <label for="observacions">Observacions</label>
+                    <label for="observacions">{{ t .Lang "confessional.field.notes" }}</label>
                     <textarea id="observacions" name="observacions">{{ .Data.Form.RelEnt.Observacions }}</textarea>
                 </div>
                 {{ end }}
-
-                <div class="grup-camp">
-                    <label>Moderacio</label>
-                    {{ $status := "" }}
-                    {{ if .Data.Form.Religio }}{{ $status = .Data.Form.Religio.ModeracioEstat }}{{ end }}
-                    {{ if .Data.Form.Model }}{{ $status = .Data.Form.Model.ModeracioEstat }}{{ end }}
-                    {{ if .Data.Form.Nivell }}{{ $status = .Data.Form.Nivell.ModeracioEstat }}{{ end }}
-                    {{ if .Data.Form.Entitat }}{{ $status = .Data.Form.Entitat.ModeracioEstat }}{{ end }}
-                    {{ if .Data.Form.Relacio }}{{ $status = .Data.Form.Relacio.ModeracioEstat }}{{ end }}
-                    {{ if .Data.Form.RelEnt }}{{ $status = .Data.Form.RelEnt.ModeracioEstat }}{{ end }}
-                    <span class="estat-moderacio">{{ if $status }}{{ $status }}{{ else }}pendent{{ end }}</span>
-                </div>
                 <div class="form-accio">
-                    <button type="submit" class="boto-primari">Desa</button>
-                    <a class="boto-secundari" href="{{ if .Data.Form.ReturnURL }}{{ .Data.Form.ReturnURL }}{{ else }}/confessional/{{ .Data.Section.Slug }}{{ end }}">Cancel.la</a>
+                    <button type="submit" class="boto-primari">{{ t .Lang "confessional.action.save" }}</button>
+                    <a class="boto-secundari" href="{{ if .Data.Form.ReturnURL }}{{ .Data.Form.ReturnURL }}{{ else }}/confessional/{{ .Data.Section.Slug }}{{ end }}">{{ t .Lang "confessional.action.cancel" }}</a>
                 </div>
             </form>
         </section>
@@ -313,6 +312,7 @@
         (function () {
             var religion = document.getElementById("religio_confessio_codi");
             var level = document.getElementById("nivell_confessional_codi");
+            var parent = document.getElementById("parent_id");
             if (!religion || !level) {
                 return;
             }
@@ -329,6 +329,19 @@
                 if (level.selectedOptions.length > 0 && level.selectedOptions[0].disabled) {
                     level.value = "";
                 }
+                if (parent) {
+                    Array.prototype.forEach.call(parent.options, function (option) {
+                        if (!option.value) {
+                            return;
+                        }
+                        var matchesParentReligion = !selectedReligion || option.getAttribute("data-religion-code") === selectedReligion;
+                        option.hidden = !matchesParentReligion;
+                        option.disabled = !matchesParentReligion;
+                    });
+                    if (parent.selectedOptions.length > 0 && parent.selectedOptions[0].disabled) {
+                        parent.value = "";
+                    }
+                }
             }
             religion.addEventListener("change", syncConfessionalLevels);
             syncConfessionalLevels();
@@ -341,22 +354,22 @@
 
 {{ define "confessional-years" }}
 <div class="grup-camp">
-    <label for="any_inici">Any inici</label>
+    <label for="any_inici">{{ t .Lang "confessional.field.year_start" }}</label>
     <input id="any_inici" name="any_inici" type="number" value="{{ if .Item.AnyInici.Valid }}{{ .Item.AnyInici.Int64 }}{{ end }}">
 </div>
 <div class="grup-camp">
-    <label for="any_fi">Any fi</label>
+    <label for="any_fi">{{ t .Lang "confessional.field.year_end" }}</label>
     <input id="any_fi" name="any_fi" type="number" value="{{ if .Item.AnyFi.Valid }}{{ .Item.AnyFi.Int64 }}{{ end }}">
 </div>
 {{ end }}
 
 {{ define "confessional-common-state" }}
 <div class="grup-camp">
-    <label for="estat">Estat</label>
+    <label for="estat">{{ t .Lang "confessional.field.state" }}</label>
     <select id="estat" name="estat">
-        <option value="actiu" {{ if eq .Item.Estat "actiu" }}selected{{ end }}>Actiu</option>
-        <option value="inactiu" {{ if eq .Item.Estat "inactiu" }}selected{{ end }}>Inactiu</option>
-        <option value="historic" {{ if eq .Item.Estat "historic" }}selected{{ end }}>Historic</option>
+        <option value="actiu" {{ if eq .Item.Estat "actiu" }}selected{{ end }}>{{ t .Lang "confessional.status.actiu" }}</option>
+        <option value="inactiu" {{ if eq .Item.Estat "inactiu" }}selected{{ end }}>{{ t .Lang "confessional.status.inactiu" }}</option>
+        <option value="historic" {{ if eq .Item.Estat "historic" }}selected{{ end }}>{{ t .Lang "confessional.status.historic" }}</option>
     </select>
 </div>
 {{ end }}

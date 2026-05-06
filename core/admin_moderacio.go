@@ -1779,8 +1779,8 @@ func (a *App) listModeracioConfessionalEntitats(filter confessionalModeracioFilt
 		return confessionalCreatedAfter(rows[i].CreatedAt, rows[i].ID, rows[j].CreatedAt, rows[j].ID)
 	})
 	buildStart := time.Now()
-	religionLabels := confessionalReligionCatalogLabels()
-	levelLabels := confessionalLevelCatalogLabels()
+	religionLabels := confessionalReligionCatalogLabels(defaultLang)
+	levelLabels := confessionalLevelCatalogLabels(defaultLang)
 	items := make([]moderacioItem, 0, limit)
 	seen := 0
 	for _, row := range rows {
