@@ -648,7 +648,7 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		m["CanViewConfessionalMunicipisEntitats"] = effectiveAdmin || hasModularConfessionalMunicipisEntitatsViewKey(hasKey)
 	}
 	if _, found := m["CanViewTerritory"]; !found {
-		m["CanViewTerritory"] = m["CanViewNivells"].(bool) || m["CanViewMunicipis"].(bool) || m["CanViewEcles"].(bool) || m["CanViewConfessional"].(bool)
+		m["CanViewTerritory"] = m["CanViewNivells"].(bool) || m["CanViewMunicipis"].(bool) || m["CanViewEcles"].(bool)
 	}
 	if _, found := m["UnreadMessagesCount"]; !found {
 		if count, ok := unreadMessagesCountFromContext(r); ok {
@@ -756,8 +756,7 @@ func hasModularTerritoryManageKey(hasKey func(string) bool) bool {
 		hasKey(permKeyTerritoriNivellsEdit) ||
 		hasKey(permKeyTerritoriNivellsRebuild) ||
 		hasKey(permKeyTerritoriMunicipisCreate) ||
-		hasKey(permKeyTerritoriMunicipisEdit) ||
-		hasModularConfessionalManageKey(hasKey)
+		hasKey(permKeyTerritoriMunicipisEdit)
 }
 
 func hasModularNivellsViewKey(hasKey func(string) bool) bool {

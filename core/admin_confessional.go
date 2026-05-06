@@ -111,15 +111,15 @@ func (a *App) AdminNewConfessional(w http.ResponseWriter, r *http.Request) {
 	data := confessionalFormData{Kind: kind, IsNew: true, ReturnURL: firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("return_to")), confessionalSectionURL(section, ""))}
 	switch kind {
 	case "religio":
-		data.Religio = &db.ReligioConfessio{Estat: "actiu", ModeracioEstat: "publicat"}
+		data.Religio = &db.ReligioConfessio{Estat: "actiu", ModeracioEstat: "pendent"}
 	case "model":
-		data.Model = &db.ModelConfessional{Estat: "actiu", ModeracioEstat: "publicat"}
+		data.Model = &db.ModelConfessional{Estat: "actiu", ModeracioEstat: "pendent"}
 	case "nivell":
-		data.Nivell = &db.NivellConfessional{Ordre: 1, Estat: "actiu", ModeracioEstat: "publicat"}
+		data.Nivell = &db.NivellConfessional{Ordre: 1, Estat: "actiu", ModeracioEstat: "pendent"}
 	case "entitat":
-		data.Entitat = &db.EntitatReligiosa{Estat: "actiu", ModeracioEstat: "publicat"}
+		data.Entitat = &db.EntitatReligiosa{Estat: "actiu", ModeracioEstat: "pendent"}
 	case "relacio":
-		data.Relacio = &db.MunicipiEntitatReligiosa{TipusRelacio: "principal", ModeracioEstat: "publicat"}
+		data.Relacio = &db.MunicipiEntitatReligiosa{TipusRelacio: "principal", ModeracioEstat: "pendent"}
 	}
 	a.renderConfessionalForm(w, r, user, data)
 }
@@ -256,6 +256,7 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 	entitats, _ := a.DB.ListEntitatsReligioses()
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	paisos, _ := a.DB.ListPaisos()
+	nuclis := a.compatibleNucliRows(municipis, selectedRelacioMunicipiID(data.Relacio))
 	RenderPrivateTemplate(w, r, "admin-confessional-form.html", map[string]interface{}{
 		"Section":         confessionalSectionMust(data.Kind),
 		"Form":            data,
@@ -264,6 +265,7 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 		"Nivells":         nivells,
 		"Entitats":        entitats,
 		"Municipis":       municipis,
+		"Nuclis":          nuclis,
 		"Paisos":          paisos,
 		"CanManageArxius": a.canManageAnyDocumentalsModular(user),
 		"User":            user,
@@ -273,7 +275,7 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confessionalFormData, string) {
 	data := confessionalFormData{Kind: kind, IsNew: id == 0, ReturnURL: strings.TrimSpace(r.FormValue("return_to"))}
 	estat := normalizeConfessionalEstat(r.FormValue("estat"))
-	status := normalizeModerationStatus(r.FormValue("moderation_status"))
+	status := a.confessionalModerationStatusForSave(kind, id)
 	switch kind {
 	case "religio":
 		item := &db.ReligioConfessio{
@@ -396,6 +398,9 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confe
 			if err != nil || nucli == nil {
 				return data, "El nucli indicat no existeix."
 			}
+			if !nucli.MunicipiID.Valid || nucli.MunicipiID.Int64 != int64(item.MunicipiID) {
+				return data, "El nucli indicat no pertany al municipi seleccionat."
+			}
 		}
 		if item.EntitatReligiosaID == 0 {
 			return data, "Cal indicar l'entitat religiosa."
@@ -405,6 +410,61 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request) (confe
 		}
 	}
 	return data, ""
+}
+
+func selectedRelacioMunicipiID(rel *db.MunicipiEntitatReligiosa) int {
+	if rel == nil {
+		return 0
+	}
+	return rel.MunicipiID
+}
+
+func (a *App) compatibleNucliRows(municipis []db.MunicipiRow, municipiID int) []db.MunicipiRow {
+	if municipiID == 0 {
+		return nil
+	}
+	nuclis := make([]db.MunicipiRow, 0)
+	for _, row := range municipis {
+		if row.ID == municipiID {
+			continue
+		}
+		full, err := a.DB.GetMunicipi(row.ID)
+		if err != nil || full == nil || !full.MunicipiID.Valid || full.MunicipiID.Int64 != int64(municipiID) {
+			continue
+		}
+		nuclis = append(nuclis, row)
+	}
+	return nuclis
+}
+
+func (a *App) confessionalModerationStatusForSave(kind string, id int) string {
+	if id == 0 {
+		return "pendent"
+	}
+	var status string
+	switch kind {
+	case "religio":
+		if item, err := a.DB.GetReligioConfessio(id); err == nil && item != nil {
+			status = item.ModeracioEstat
+		}
+	case "model":
+		if item, err := a.DB.GetModelConfessional(id); err == nil && item != nil {
+			status = item.ModeracioEstat
+		}
+	case "nivell":
+		if item, err := a.DB.GetNivellConfessional(id); err == nil && item != nil {
+			status = item.ModeracioEstat
+		}
+	case "entitat":
+		if item, err := a.DB.GetEntitatReligiosa(id); err == nil && item != nil {
+			status = item.ModeracioEstat
+		}
+	case "relacio":
+		if item, err := a.DB.GetMunicipiEntitatReligiosa(id); err == nil && item != nil {
+			status = item.ModeracioEstat
+		}
+	}
+	return normalizeModerationStatus(status)
 }
 
 func (a *App) saveConfessionalData(kind string, data confessionalFormData) error {
@@ -513,10 +573,12 @@ func normalizeConfessionalEstat(raw string) string {
 
 func normalizeModerationStatus(raw string) string {
 	switch strings.TrimSpace(raw) {
+	case "publicat":
+		return "publicat"
 	case "pendent", "rebutjat":
 		return strings.TrimSpace(raw)
 	default:
-		return "publicat"
+		return "pendent"
 	}
 }
 

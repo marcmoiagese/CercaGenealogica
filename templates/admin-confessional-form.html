@@ -228,9 +228,15 @@
                 <div class="grup-camp">
                     <label for="nucli_id">Nucli</label>
                     <select id="nucli_id" name="nucli_id">
-                        <option value="">Sense nucli especific</option>
-                        {{ range .Data.Municipis }}
+                        <option value="">Sense nucli</option>
+                        {{ range .Data.Nuclis }}
                         <option value="{{ .ID }}" {{ if and $.Data.Form.Relacio.NucliID.Valid (eq .ID (int $.Data.Form.Relacio.NucliID.Int64)) }}selected{{ end }}>{{ .Nom }}{{ if .Tipus }} ({{ .Tipus }}){{ end }}</option>
+                        {{ else }}
+                        {{ if .Data.Form.Relacio.MunicipiID }}
+                        <option value="" disabled>Sense nucli</option>
+                        {{ else }}
+                        <option value="" disabled>Selecciona municipi</option>
+                        {{ end }}
                         {{ end }}
                     </select>
                 </div>
@@ -259,18 +265,14 @@
                 {{ end }}
 
                 <div class="grup-camp">
-                    <label for="moderation_status">Moderacio</label>
+                    <label>Moderacio</label>
                     {{ $status := "" }}
                     {{ if .Data.Form.Religio }}{{ $status = .Data.Form.Religio.ModeracioEstat }}{{ end }}
                     {{ if .Data.Form.Model }}{{ $status = .Data.Form.Model.ModeracioEstat }}{{ end }}
                     {{ if .Data.Form.Nivell }}{{ $status = .Data.Form.Nivell.ModeracioEstat }}{{ end }}
                     {{ if .Data.Form.Entitat }}{{ $status = .Data.Form.Entitat.ModeracioEstat }}{{ end }}
                     {{ if .Data.Form.Relacio }}{{ $status = .Data.Form.Relacio.ModeracioEstat }}{{ end }}
-                    <select id="moderation_status" name="moderation_status">
-                        <option value="publicat" {{ if eq $status "publicat" }}selected{{ end }}>Publicat</option>
-                        <option value="pendent" {{ if eq $status "pendent" }}selected{{ end }}>Pendent</option>
-                        <option value="rebutjat" {{ if eq $status "rebutjat" }}selected{{ end }}>Rebutjat</option>
-                    </select>
+                    <span class="estat-moderacio">{{ if $status }}{{ $status }}{{ else }}pendent{{ end }}</span>
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">Desa</button>

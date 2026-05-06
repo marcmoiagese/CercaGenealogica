@@ -87,27 +87,30 @@
                 {{ if or (index .Data "CanViewEcles") (index .Data "CanManageEclesia") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/territori/eclesiastic"><i class="fas fa-church"></i> {{ t .Lang "admin.menu.ecles" }}</a></li>
                 {{ end }}
-                {{ if or (index .Data "CanViewConfessional") (index .Data "IsAdmin") }}
-                <li class="menu-opcio">
-                    <span class="menu-link-text"><i class="fas fa-layer-group"></i> Religios/confessional</span>
-                    <ul>
-                        {{ if or (index .Data "CanViewConfessionalReligions") (index .Data "IsAdmin") }}
-                        <li class="menu-opcio"><a href="/territori/confessional/religions">Religions/confessions</a></li>
-                        {{ end }}
-                        {{ if or (index .Data "CanViewConfessionalModels") (index .Data "IsAdmin") }}
-                        <li class="menu-opcio"><a href="/territori/confessional/models">Models confessionals</a></li>
-                        {{ end }}
-                        {{ if or (index .Data "CanViewConfessionalNivells") (index .Data "IsAdmin") }}
-                        <li class="menu-opcio"><a href="/territori/confessional/nivells">Nivells confessionals</a></li>
-                        {{ end }}
-                        {{ if or (index .Data "CanViewConfessionalEntitats") (index .Data "IsAdmin") }}
-                        <li class="menu-opcio"><a href="/territori/confessional/entitats">Entitats religioses</a></li>
-                        {{ end }}
-                        {{ if or (index .Data "CanViewConfessionalMunicipisEntitats") (index .Data "IsAdmin") }}
-                        <li class="menu-opcio"><a href="/territori/confessional/municipis-entitats">Relacions municipi/nucli</a></li>
-                        {{ end }}
-                    </ul>
-                </li>
+            </ul>
+        </div>
+        {{ end }}
+        {{ if and .Data (or (index .Data "CanViewConfessional") (index .Data "IsAdmin") ) }}
+        <div class="menu-seccio">
+            <div class="menu-titol">
+                <i class="fas fa-layer-group"></i>
+                <h3>Religios/confessional</h3>
+            </div>
+            <ul>
+                {{ if or (index .Data "CanViewConfessionalReligions") (index .Data "IsAdmin") }}
+                <li class="menu-opcio"><a href="/territori/confessional/religions">Religions/confessions</a></li>
+                {{ end }}
+                {{ if or (index .Data "CanViewConfessionalModels") (index .Data "IsAdmin") }}
+                <li class="menu-opcio"><a href="/territori/confessional/models">Models confessionals</a></li>
+                {{ end }}
+                {{ if or (index .Data "CanViewConfessionalNivells") (index .Data "IsAdmin") }}
+                <li class="menu-opcio"><a href="/territori/confessional/nivells">Nivells confessionals</a></li>
+                {{ end }}
+                {{ if or (index .Data "CanViewConfessionalEntitats") (index .Data "IsAdmin") }}
+                <li class="menu-opcio"><a href="/territori/confessional/entitats">Entitats religioses</a></li>
+                {{ end }}
+                {{ if or (index .Data "CanViewConfessionalMunicipisEntitats") (index .Data "IsAdmin") }}
+                <li class="menu-opcio"><a href="/territori/confessional/municipis-entitats">Relacions municipi/nucli</a></li>
                 {{ end }}
             </ul>
         </div>
