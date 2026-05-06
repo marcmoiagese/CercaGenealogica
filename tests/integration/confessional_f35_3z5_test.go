@@ -35,7 +35,7 @@ func TestF353Z5ConfessionalEntityFormFiltersLevelsByReligion(t *testing.T) {
 	if !strings.Contains(catholicSantaOption, `data-religion-code="catolicisme_ritu_llati"`) || !strings.Contains(catholicSantaOption, "selected") {
 		t.Fatalf("el formulari catolic ha de permetre Santa Seu; option=%s body=%s", catholicSantaOption, catholicBody)
 	}
-	if !strings.Contains(catholicBody, "Provincia eclesiastica") || !strings.Contains(catholicBody, "Arxiprestat / Vicariat forani") || !strings.Contains(catholicBody, "Parroquia") {
+	if !strings.Contains(catholicBody, "Província eclesiàstica") || !strings.Contains(catholicBody, "Arxiprestat / Vicariat forani") || !strings.Contains(catholicBody, "Parròquia") {
 		t.Fatalf("el formulari catolic ha de mostrar nivells compatibles principals; body=%s", catholicBody)
 	}
 

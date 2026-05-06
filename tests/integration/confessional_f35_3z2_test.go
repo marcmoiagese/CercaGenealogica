@@ -20,7 +20,7 @@ func TestF353Z2ConfessionalFormsUseProfileLabelsAndHideModeration(t *testing.T) 
 	f353Z2CreateEntitat(t, database, parentName, "f35_3z2_parent_form", "bisbat_diocesi", "publicat")
 
 	entityBody := f353YGet(t, app.AdminNewConfessional, "/confessional/entitats/new", session)
-	for _, want := range []string{"Entitat pare opcional", "Parroquia", parentName} {
+	for _, want := range []string{"Entitat pare opcional", "Parròquia", parentName} {
 		if !strings.Contains(entityBody, want) {
 			t.Fatalf("entity form missing %q; body=%s", want, entityBody)
 		}

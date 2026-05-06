@@ -540,7 +540,7 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 		"Section":               confessionalSectionMust(data.Kind),
 		"Form":                  data,
 		"Religions":             allReligions,
-		"SelectableReligions":   ListConfessionalReligionCatalog(),
+		"SelectableReligions":   ListSelectableConfessionalReligionCatalog(),
 		"Models":                models,
 		"Nivells":               ListConfessionalLevelCatalog(),
 		"SelectableNivells":     ListConfessionalLevelCatalog(),
@@ -1152,7 +1152,7 @@ func religioLabels(items []db.ReligioConfessio) map[int]string {
 func confessionalReligionCatalogLabels(lang string) map[string]string {
 	labels := map[string]string{}
 	for _, item := range ListConfessionalReligionCatalog() {
-		labels[item.Code] = confessionalCatalogLabel(lang, "confessional.religion."+item.Code, item.CanonicalName)
+		labels[item.Code] = ConfessionalReligionLabel(item, lang)
 	}
 	return labels
 }
@@ -1160,21 +1160,9 @@ func confessionalReligionCatalogLabels(lang string) map[string]string {
 func confessionalLevelCatalogLabels(lang string) map[string]string {
 	labels := map[string]string{}
 	for _, item := range ListConfessionalLevelCatalog() {
-		key := strings.TrimSpace(item.I18nKey)
-		if key == "" {
-			key = "confessional.level." + item.Code
-		}
-		labels[item.Code] = confessionalCatalogLabel(lang, key, item.CanonicalName)
+		labels[item.Code] = ConfessionalLevelLabel(item, lang)
 	}
 	return labels
-}
-
-func confessionalCatalogLabel(lang, key, fallback string) string {
-	label := strings.TrimSpace(T(lang, key))
-	if label == "" || label == key {
-		return fallback
-	}
-	return label
 }
 
 func modelLabels(items []db.ModelConfessional) map[int]string {

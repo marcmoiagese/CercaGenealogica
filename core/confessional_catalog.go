@@ -3,13 +3,15 @@ package core
 import "strings"
 
 type ConfessionalReligionCatalogItem struct {
-	Code          string
-	CanonicalName string
-	ParentCode    string
-	CategoryCode  string
-	Active        bool
-	SystemManaged bool
-	Order         int
+	Code              string
+	CanonicalName     string
+	I18nKey           string
+	ParentCode        string
+	CategoryCode      string
+	CanCreateEntities bool
+	Active            bool
+	SystemManaged     bool
+	Order             int
 }
 
 type ConfessionalLevelCatalogItem struct {
@@ -43,6 +45,19 @@ func ListConfessionalReligionCatalog() []ConfessionalReligionCatalogItem {
 	items := make([]ConfessionalReligionCatalogItem, len(confessionalReligionCatalog))
 	copy(items, confessionalReligionCatalog)
 	return items
+}
+
+func ListSelectableConfessionalReligionCatalog() []ConfessionalReligionCatalogItem {
+	out := []ConfessionalReligionCatalogItem{}
+	for _, item := range confessionalReligionCatalog {
+		if !item.Active {
+			continue
+		}
+		if item.CanCreateEntities || len(ListConfessionalLevelsByReligionCode(item.Code)) > 0 {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func GetConfessionalReligionCatalogByCode(code string) (ConfessionalReligionCatalogItem, bool) {
@@ -89,6 +104,40 @@ func ConfessionalLevelCompatibleWithReligion(religionCode, levelCode string) (Co
 	return religion, level, religionOK && religion.Active, levelOK && level.Active, compatible
 }
 
+func ConfessionalReligionLabel(item ConfessionalReligionCatalogItem, lang string) string {
+	key := strings.TrimSpace(item.I18nKey)
+	if key == "" {
+		key = "confessional.religion." + item.Code
+	}
+	return confessionalCatalogLabel(lang, key, item.CanonicalName)
+}
+
+func ConfessionalLevelLabel(item ConfessionalLevelCatalogItem, lang string) string {
+	key := strings.TrimSpace(item.I18nKey)
+	if key == "" {
+		key = "confessional.level." + item.Code
+	}
+	return confessionalCatalogLabel(lang, key, item.CanonicalName)
+}
+
+func ConfessionalCategoryLabel(code, lang string) string {
+	code = normalizeCatalogCode(code)
+	for _, item := range append(ListConfessionalReligionCategories(), ListConfessionalLevelCategories()...) {
+		if item.Code == code {
+			return confessionalCatalogLabel(lang, item.I18nKey, code)
+		}
+	}
+	return code
+}
+
+func confessionalCatalogLabel(lang, key, fallback string) string {
+	label := strings.TrimSpace(T(lang, key))
+	if label == "" || label == key {
+		return fallback
+	}
+	return label
+}
+
 func ListConfessionalReligionCategories() []ConfessionalCategoryCatalogItem {
 	return []ConfessionalCategoryCatalogItem{
 		{Code: "religio", I18nKey: "confessional.religion.category.religio"},
@@ -126,11 +175,11 @@ var confessionalReligionCatalog = []ConfessionalReligionCatalogItem{
 	{Code: "catolicisme_ritus_orientals", CanonicalName: "Catolicisme - Ritus orientals", ParentCode: "catolicisme", CategoryCode: "ritus", Active: true, SystemManaged: true, Order: 4},
 	{Code: "ortodoxia", CanonicalName: "Ortodoxia", ParentCode: "cristianisme", CategoryCode: "confessio", Active: true, SystemManaged: true, Order: 5},
 	{Code: "protestantisme", CanonicalName: "Protestantisme", ParentCode: "cristianisme", CategoryCode: "confessio", Active: true, SystemManaged: true, Order: 6},
-	{Code: "luteranisme", CanonicalName: "Luteranisme", ParentCode: "protestantisme", CategoryCode: "confessio", Active: true, SystemManaged: true, Order: 7},
-	{Code: "calvinisme_reformats", CanonicalName: "Calvinisme / Reformats", ParentCode: "protestantisme", CategoryCode: "confessio", Active: true, SystemManaged: true, Order: 8},
+	{Code: "luteranisme", CanonicalName: "Esglésies luteranes", ParentCode: "protestantisme", CategoryCode: "confessio", Active: true, SystemManaged: true, Order: 7},
+	{Code: "calvinisme_reformats", CanonicalName: "Calvinisme / Esglésies reformades", ParentCode: "protestantisme", CategoryCode: "confessio", Active: true, SystemManaged: true, Order: 8},
 	{Code: "anglicanisme", CanonicalName: "Anglicanisme", ParentCode: "protestantisme", CategoryCode: "confessio", Active: true, SystemManaged: true, Order: 9},
-	{Code: "metodisme", CanonicalName: "Metodisme", ParentCode: "protestantisme", CategoryCode: "confessio", Active: true, SystemManaged: true, Order: 10},
-	{Code: "baptisme", CanonicalName: "Baptisme", ParentCode: "protestantisme", CategoryCode: "confessio", Active: true, SystemManaged: true, Order: 11},
+	{Code: "metodisme", CanonicalName: "Esglésies metodistes", ParentCode: "protestantisme", CategoryCode: "confessio", Active: true, SystemManaged: true, Order: 10},
+	{Code: "esglesies_baptistes", CanonicalName: "Esglésies baptistes", ParentCode: "protestantisme", CategoryCode: "confessio", Active: true, SystemManaged: true, Order: 11},
 	{Code: "islam", CanonicalName: "Islam", CategoryCode: "religio", Active: true, SystemManaged: true, Order: 12},
 	{Code: "sunnisme", CanonicalName: "Sunnisme", ParentCode: "islam", CategoryCode: "branca", Active: true, SystemManaged: true, Order: 13},
 	{Code: "xiisme", CanonicalName: "Xiisme", ParentCode: "islam", CategoryCode: "branca", Active: true, SystemManaged: true, Order: 14},
@@ -139,14 +188,14 @@ var confessionalReligionCatalog = []ConfessionalReligionCatalogItem{
 	{Code: "budisme", CanonicalName: "Budisme", CategoryCode: "religio", Active: true, SystemManaged: true, Order: 17},
 	{Code: "theravada", CanonicalName: "Theravada", ParentCode: "budisme", CategoryCode: "tradicio", Active: true, SystemManaged: true, Order: 18},
 	{Code: "mahayana", CanonicalName: "Mahayana", ParentCode: "budisme", CategoryCode: "tradicio", Active: true, SystemManaged: true, Order: 19},
-	{Code: "vajrayana_budisme_tibeta", CanonicalName: "Vajrayana / Budisme tibeta", ParentCode: "budisme", CategoryCode: "tradicio", Active: true, SystemManaged: true, Order: 20},
+	{Code: "vajrayana_budisme_tibeta", CanonicalName: "Vajrayana / Budisme tibetà", ParentCode: "budisme", CategoryCode: "tradicio", Active: true, SystemManaged: true, Order: 20},
 	{Code: "taoisme", CanonicalName: "Taoisme", CategoryCode: "religio", Active: true, SystemManaged: true, Order: 21},
 	{Code: "confucianisme", CanonicalName: "Confucianisme", CategoryCode: "religio", Active: true, SystemManaged: true, Order: 22},
 	{Code: "sintoisme", CanonicalName: "Sintoisme", CategoryCode: "religio", Active: true, SystemManaged: true, Order: 23},
 	{Code: "zoroastrisme", CanonicalName: "Zoroastrisme", CategoryCode: "religio", Active: true, SystemManaged: true, Order: 24},
 	{Code: "jainisme", CanonicalName: "Jainisme", CategoryCode: "religio", Active: true, SystemManaged: true, Order: 25},
 	{Code: "sikhisme", CanonicalName: "Sikhisme", CategoryCode: "religio", Active: true, SystemManaged: true, Order: 26},
-	{Code: "fe_bahai", CanonicalName: "Fe Bahai", CategoryCode: "religio", Active: true, SystemManaged: true, Order: 27},
+	{Code: "fe_bahai", CanonicalName: "Fe bahá'í", CategoryCode: "religio", Active: true, SystemManaged: true, Order: 27},
 	{Code: "religions_tradicionals_africanes", CanonicalName: "Religions tradicionals africanes", CategoryCode: "religio", Active: true, SystemManaged: true, Order: 28},
 	{Code: "neopaganisme_modern", CanonicalName: "Neopaganisme modern", CategoryCode: "religio", Active: true, SystemManaged: true, Order: 29},
 }
