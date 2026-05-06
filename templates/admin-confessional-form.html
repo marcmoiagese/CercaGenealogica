@@ -3,7 +3,7 @@
 <html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>Model religios/confessional</title>
+    <title>{{ .Data.Section.Title }}</title>
     {{ template "styles-private" . }}
 </head>
 <body>
@@ -12,7 +12,7 @@
     <main class="contingut-principal">
         <section class="card">
             <header class="card-header">
-                <h1>{{ if .Data.Form.IsNew }}Nou registre confessional{{ else }}Edita registre confessional{{ end }}</h1>
+                <h1>{{ if .Data.Form.IsNew }}{{ .Data.Section.NewLabel }}{{ else }}Edita {{ .Data.Section.Title }}{{ end }}</h1>
             </header>
             {{ if .Data.Form.Error }}<div class="alert alert-error">{{ .Data.Form.Error }}</div>{{ end }}
             <form method="post" action="/territori/confessional/save">
@@ -274,7 +274,7 @@
                 </div>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">Desa</button>
-                    <a class="boto-secundari" href="{{ if .Data.Form.ReturnURL }}{{ .Data.Form.ReturnURL }}{{ else }}/territori/confessional{{ end }}">Cancel.la</a>
+                    <a class="boto-secundari" href="{{ if .Data.Form.ReturnURL }}{{ .Data.Form.ReturnURL }}{{ else }}/territori/confessional/{{ .Data.Section.Slug }}{{ end }}">Cancel.la</a>
                 </div>
             </form>
         </section>

@@ -3,7 +3,7 @@
 <html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>Model religios/confessional</title>
+    <title>{{ .Data.Section.Title }}</title>
     {{ template "styles-private" . }}
 </head>
 <body>
@@ -12,25 +12,28 @@
     <main class="contingut-principal">
         <section class="card">
             <header class="card-header amb-accio">
-                <h1>Model religios/confessional</h1>
+                <h1>{{ .Data.Section.Title }}</h1>
                 {{ if .Data.CanCreate }}
                 <div class="card-actions">
-                    <a class="boto-primari" href="/territori/confessional/new?kind=religio">Nova religio/confessio</a>
-                    <a class="boto-secundari" href="/territori/confessional/new?kind=model">Nou model</a>
-                    <a class="boto-secundari" href="/territori/confessional/new?kind=nivell">Nou nivell</a>
-                    <a class="boto-secundari" href="/territori/confessional/new?kind=entitat">Nova entitat</a>
-                    <a class="boto-secundari" href="/territori/confessional/new?kind=relacio">Nova relacio territorial</a>
+                    <a class="boto-primari" href="/territori/confessional/{{ .Data.Section.Slug }}/new">{{ .Data.Section.NewLabel }}</a>
                 </div>
                 {{ end }}
             </header>
+            <nav class="tabs">
+                <a href="/territori/confessional/religions" {{ if eq .Data.Section.Slug "religions" }}class="active"{{ end }}>Religions/confessions</a>
+                <a href="/territori/confessional/models" {{ if eq .Data.Section.Slug "models" }}class="active"{{ end }}>Models confessionals</a>
+                <a href="/territori/confessional/nivells" {{ if eq .Data.Section.Slug "nivells" }}class="active"{{ end }}>Nivells confessionals</a>
+                <a href="/territori/confessional/entitats" {{ if eq .Data.Section.Slug "entitats" }}class="active"{{ end }}>Entitats religioses</a>
+                <a href="/territori/confessional/municipis-entitats" {{ if eq .Data.Section.Slug "municipis-entitats" }}class="active"{{ end }}>Relacions municipi/nucli</a>
+            </nav>
             {{ if eq .Data.Notice "saved" }}<div class="alert alert-success">Registre desat.</div>{{ end }}
             {{ if eq .Data.Notice "deleted" }}<div class="alert alert-success">Registre eliminat.</div>{{ end }}
             {{ if eq .Data.Error "unsafe_delete" }}<div class="alert alert-error">No es pot eliminar perque te registres relacionats.</div>{{ end }}
             {{ if eq .Data.Error "delete" }}<div class="alert alert-error">No s'ha pogut eliminar el registre.</div>{{ end }}
 
-            <h2>Religions i confessions</h2>
+            {{ if eq .Data.Section.Kind "religio" }}
             <table class="taula">
-                <thead><tr><th>Nom</th><th>Pare</th><th>Estat</th><th>Moderacio</th>{{ if .Data.CanEdit }}<th>Accions</th>{{ end }}</tr></thead>
+                <thead><tr><th>Nom</th><th>Pare</th><th>Estat</th><th>Moderacio</th>{{ if or .Data.CanEdit .Data.CanDelete }}<th>Accions</th>{{ end }}</tr></thead>
                 <tbody>
                     {{ range .Data.Religions }}
                     <tr>
@@ -38,26 +41,29 @@
                         <td>{{ if .PareID.Valid }}{{ index $.Data.ReligionLabels (int .PareID.Int64) }}{{ end }}</td>
                         <td>{{ .Estat }}</td>
                         <td>{{ .ModeracioEstat }}</td>
-                        {{ if $.Data.CanEdit }}
+                        {{ if or $.Data.CanEdit $.Data.CanDelete }}
                         <td>
-                            <a href="/territori/confessional/religio/{{ .ID }}/edit">Edita</a>
+                            {{ if $.Data.CanEdit }}<a href="/territori/confessional/religions/{{ .ID }}/edit">Edita</a>{{ end }}
+                            {{ if $.Data.CanDelete }}
                             <form method="post" action="/territori/confessional/delete" style="display:inline">
                                 <input type="hidden" name="kind" value="religio">
                                 <input type="hidden" name="id" value="{{ .ID }}">
                                 <button type="submit" class="boto-secundari">Elimina</button>
                             </form>
+                            {{ end }}
                         </td>
                         {{ end }}
                     </tr>
                     {{ else }}
-                    <tr><td colspan="{{ if $.Data.CanEdit }}5{{ else }}4{{ end }}">No hi ha registres.</td></tr>
+                    <tr><td colspan="{{ if or $.Data.CanEdit $.Data.CanDelete }}5{{ else }}4{{ end }}">No hi ha registres.</td></tr>
                     {{ end }}
                 </tbody>
             </table>
+            {{ end }}
 
-            <h2>Models confessionals</h2>
+            {{ if eq .Data.Section.Kind "model" }}
             <table class="taula">
-                <thead><tr><th>Nom</th><th>Religio/confessio</th><th>Pais</th><th>Anys</th><th>Estat</th>{{ if .Data.CanEdit }}<th>Accions</th>{{ end }}</tr></thead>
+                <thead><tr><th>Nom</th><th>Religio/confessio</th><th>Pais</th><th>Anys</th><th>Estat</th>{{ if or .Data.CanEdit .Data.CanDelete }}<th>Accions</th>{{ end }}</tr></thead>
                 <tbody>
                     {{ range .Data.Models }}
                     <tr>
@@ -66,26 +72,29 @@
                         <td>{{ if .PaisID.Valid }}{{ index $.Data.PaisLabels (int .PaisID.Int64) }}{{ end }}</td>
                         <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
                         <td>{{ .Estat }}</td>
-                        {{ if $.Data.CanEdit }}
+                        {{ if or $.Data.CanEdit $.Data.CanDelete }}
                         <td>
-                            <a href="/territori/confessional/model/{{ .ID }}/edit">Edita</a>
+                            {{ if $.Data.CanEdit }}<a href="/territori/confessional/models/{{ .ID }}/edit">Edita</a>{{ end }}
+                            {{ if $.Data.CanDelete }}
                             <form method="post" action="/territori/confessional/delete" style="display:inline">
                                 <input type="hidden" name="kind" value="model">
                                 <input type="hidden" name="id" value="{{ .ID }}">
                                 <button type="submit" class="boto-secundari">Elimina</button>
                             </form>
+                            {{ end }}
                         </td>
                         {{ end }}
                     </tr>
                     {{ else }}
-                    <tr><td colspan="{{ if $.Data.CanEdit }}6{{ else }}5{{ end }}">No hi ha registres.</td></tr>
+                    <tr><td colspan="{{ if or $.Data.CanEdit $.Data.CanDelete }}6{{ else }}5{{ end }}">No hi ha registres.</td></tr>
                     {{ end }}
                 </tbody>
             </table>
+            {{ end }}
 
-            <h2>Nivells confessionals</h2>
+            {{ if eq .Data.Section.Kind "nivell" }}
             <table class="taula">
-                <thead><tr><th>Ordre</th><th>Nom</th><th>Model</th><th>Pare</th><th>Estat</th>{{ if .Data.CanEdit }}<th>Accions</th>{{ end }}</tr></thead>
+                <thead><tr><th>Ordre</th><th>Nom</th><th>Model</th><th>Pare</th><th>Estat</th>{{ if or .Data.CanEdit .Data.CanDelete }}<th>Accions</th>{{ end }}</tr></thead>
                 <tbody>
                     {{ range .Data.Nivells }}
                     <tr>
@@ -94,26 +103,29 @@
                         <td>{{ index $.Data.ModelLabels .ModelConfessionalID }}</td>
                         <td>{{ if .ParentID.Valid }}{{ index $.Data.NivellLabels (int .ParentID.Int64) }}{{ end }}</td>
                         <td>{{ .Estat }}</td>
-                        {{ if $.Data.CanEdit }}
+                        {{ if or $.Data.CanEdit $.Data.CanDelete }}
                         <td>
-                            <a href="/territori/confessional/nivell/{{ .ID }}/edit">Edita</a>
+                            {{ if $.Data.CanEdit }}<a href="/territori/confessional/nivells/{{ .ID }}/edit">Edita</a>{{ end }}
+                            {{ if $.Data.CanDelete }}
                             <form method="post" action="/territori/confessional/delete" style="display:inline">
                                 <input type="hidden" name="kind" value="nivell">
                                 <input type="hidden" name="id" value="{{ .ID }}">
                                 <button type="submit" class="boto-secundari">Elimina</button>
                             </form>
+                            {{ end }}
                         </td>
                         {{ end }}
                     </tr>
                     {{ else }}
-                    <tr><td colspan="{{ if $.Data.CanEdit }}6{{ else }}5{{ end }}">No hi ha registres.</td></tr>
+                    <tr><td colspan="{{ if or $.Data.CanEdit $.Data.CanDelete }}6{{ else }}5{{ end }}">No hi ha registres.</td></tr>
                     {{ end }}
                 </tbody>
             </table>
+            {{ end }}
 
-            <h2>Entitats religioses</h2>
+            {{ if eq .Data.Section.Kind "entitat" }}
             <table class="taula">
-                <thead><tr><th>Nom</th><th>Tipus</th><th>Religio/confessio</th><th>Model</th><th>Nivell</th><th>Pare</th>{{ if .Data.CanEdit }}<th>Accions</th>{{ end }}</tr></thead>
+                <thead><tr><th>Nom</th><th>Tipus</th><th>Religio/confessio</th><th>Model</th><th>Nivell</th><th>Pare</th>{{ if or .Data.CanEdit .Data.CanDelete }}<th>Accions</th>{{ end }}</tr></thead>
                 <tbody>
                     {{ range .Data.Entitats }}
                     <tr>
@@ -123,26 +135,29 @@
                         <td>{{ if .ModelConfessionalID.Valid }}{{ index $.Data.ModelLabels (int .ModelConfessionalID.Int64) }}{{ end }}</td>
                         <td>{{ if .NivellConfessionalID.Valid }}{{ index $.Data.NivellLabels (int .NivellConfessionalID.Int64) }}{{ end }}</td>
                         <td>{{ if .ParentID.Valid }}{{ index $.Data.EntitatLabels (int .ParentID.Int64) }}{{ end }}</td>
-                        {{ if $.Data.CanEdit }}
+                        {{ if or $.Data.CanEdit $.Data.CanDelete }}
                         <td>
-                            <a href="/territori/confessional/entitat/{{ .ID }}/edit">Edita</a>
+                            {{ if $.Data.CanEdit }}<a href="/territori/confessional/entitats/{{ .ID }}/edit">Edita</a>{{ end }}
+                            {{ if $.Data.CanDelete }}
                             <form method="post" action="/territori/confessional/delete" style="display:inline">
                                 <input type="hidden" name="kind" value="entitat">
                                 <input type="hidden" name="id" value="{{ .ID }}">
                                 <button type="submit" class="boto-secundari">Elimina</button>
                             </form>
+                            {{ end }}
                         </td>
                         {{ end }}
                     </tr>
                     {{ else }}
-                    <tr><td colspan="{{ if $.Data.CanEdit }}7{{ else }}6{{ end }}">No hi ha registres.</td></tr>
+                    <tr><td colspan="{{ if or $.Data.CanEdit $.Data.CanDelete }}7{{ else }}6{{ end }}">No hi ha registres.</td></tr>
                     {{ end }}
                 </tbody>
             </table>
+            {{ end }}
 
-            <h2>Relacions municipi/nucli - entitat religiosa</h2>
+            {{ if eq .Data.Section.Kind "relacio" }}
             <table class="taula">
-                <thead><tr><th>Municipi</th><th>Nucli</th><th>Entitat religiosa</th><th>Tipus</th><th>Anys</th><th>Moderacio</th>{{ if .Data.CanEdit }}<th>Accions</th>{{ end }}</tr></thead>
+                <thead><tr><th>Municipi</th><th>Nucli</th><th>Entitat religiosa</th><th>Tipus</th><th>Anys</th><th>Moderacio</th>{{ if or .Data.CanEdit .Data.CanDelete }}<th>Accions</th>{{ end }}</tr></thead>
                 <tbody>
                     {{ range .Data.Relacions }}
                     <tr>
@@ -152,22 +167,25 @@
                         <td>{{ .TipusRelacio }}</td>
                         <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
                         <td>{{ .ModeracioEstat }}</td>
-                        {{ if $.Data.CanEdit }}
+                        {{ if or $.Data.CanEdit $.Data.CanDelete }}
                         <td>
-                            <a href="/territori/confessional/relacio/{{ .ID }}/edit">Edita</a>
+                            {{ if $.Data.CanEdit }}<a href="/territori/confessional/municipis-entitats/{{ .ID }}/edit">Edita</a>{{ end }}
+                            {{ if $.Data.CanDelete }}
                             <form method="post" action="/territori/confessional/delete" style="display:inline">
                                 <input type="hidden" name="kind" value="relacio">
                                 <input type="hidden" name="id" value="{{ .ID }}">
                                 <button type="submit" class="boto-secundari">Elimina</button>
                             </form>
+                            {{ end }}
                         </td>
                         {{ end }}
                     </tr>
                     {{ else }}
-                    <tr><td colspan="{{ if $.Data.CanEdit }}7{{ else }}6{{ end }}">No hi ha registres.</td></tr>
+                    <tr><td colspan="{{ if or $.Data.CanEdit $.Data.CanDelete }}7{{ else }}6{{ end }}">No hi ha registres.</td></tr>
                     {{ end }}
                 </tbody>
             </table>
+            {{ end }}
         </section>
     </main>
     {{ template "footer" . }}

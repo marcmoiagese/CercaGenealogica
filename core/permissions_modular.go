@@ -51,34 +51,54 @@ const (
 	permKeyEventsModerate      = "events.moderate"
 	permKeyWikiRevert          = "wiki.revert"
 
-	permKeyTerritoriPaisosView                 = "territori.paisos.view"
-	permKeyTerritoriPaisosCreate               = "territori.paisos.create"
-	permKeyTerritoriPaisosEdit                 = "territori.paisos.edit"
-	permKeyTerritoriNivellsView                = "territori.nivells.view"
-	permKeyTerritoriNivellsCreate              = "territori.nivells.create"
-	permKeyTerritoriNivellsEdit                = "territori.nivells.edit"
-	permKeyTerritoriNivellsRebuild             = "territori.nivells.rebuild"
-	permKeyTerritoriMunicipisView              = "territori.municipis.view"
-	permKeyTerritoriMunicipisCreate            = "territori.municipis.create"
-	permKeyTerritoriMunicipisEdit              = "territori.municipis.edit"
-	permKeyTerritoriMunicipisMapesView         = "municipis.mapes.view"
-	permKeyTerritoriMunicipisMapesCreate       = "municipis.mapes.create"
-	permKeyTerritoriMunicipisMapesEdit         = "municipis.mapes.edit"
-	permKeyTerritoriMunicipisMapesSubmit       = "municipis.mapes.submit"
-	permKeyTerritoriMunicipisMapesModerate     = "municipis.mapes.moderate"
-	permKeyTerritoriMunicipisHistoriaCreate    = "municipis.historia.create"
-	permKeyTerritoriMunicipisHistoriaEdit      = "municipis.historia.edit"
-	permKeyTerritoriMunicipisHistoriaSubmit    = "municipis.historia.submit"
-	permKeyTerritoriMunicipisHistoriaModerate  = "municipis.historia.moderate"
-	permKeyTerritoriMunicipisAnecdotesCreate   = "municipis.anecdotes.create"
-	permKeyTerritoriMunicipisAnecdotesEdit     = "municipis.anecdotes.edit"
-	permKeyTerritoriMunicipisAnecdotesSubmit   = "municipis.anecdotes.submit"
-	permKeyTerritoriMunicipisAnecdotesComment  = "municipis.anecdotes.comment"
-	permKeyTerritoriMunicipisAnecdotesModerate = "municipis.anecdotes.moderate"
-	permKeyTerritoriEclesView                  = "territori.eclesiastic.view"
-	permKeyTerritoriEclesCreate                = "territori.eclesiastic.create"
-	permKeyTerritoriEclesEdit                  = "territori.eclesiastic.edit"
-	permKeyTerritoriEclesImportJSON            = "territori.eclesiastic.import_json"
+	permKeyTerritoriPaisosView                          = "territori.paisos.view"
+	permKeyTerritoriPaisosCreate                        = "territori.paisos.create"
+	permKeyTerritoriPaisosEdit                          = "territori.paisos.edit"
+	permKeyTerritoriNivellsView                         = "territori.nivells.view"
+	permKeyTerritoriNivellsCreate                       = "territori.nivells.create"
+	permKeyTerritoriNivellsEdit                         = "territori.nivells.edit"
+	permKeyTerritoriNivellsRebuild                      = "territori.nivells.rebuild"
+	permKeyTerritoriMunicipisView                       = "territori.municipis.view"
+	permKeyTerritoriMunicipisCreate                     = "territori.municipis.create"
+	permKeyTerritoriMunicipisEdit                       = "territori.municipis.edit"
+	permKeyTerritoriMunicipisMapesView                  = "municipis.mapes.view"
+	permKeyTerritoriMunicipisMapesCreate                = "municipis.mapes.create"
+	permKeyTerritoriMunicipisMapesEdit                  = "municipis.mapes.edit"
+	permKeyTerritoriMunicipisMapesSubmit                = "municipis.mapes.submit"
+	permKeyTerritoriMunicipisMapesModerate              = "municipis.mapes.moderate"
+	permKeyTerritoriMunicipisHistoriaCreate             = "municipis.historia.create"
+	permKeyTerritoriMunicipisHistoriaEdit               = "municipis.historia.edit"
+	permKeyTerritoriMunicipisHistoriaSubmit             = "municipis.historia.submit"
+	permKeyTerritoriMunicipisHistoriaModerate           = "municipis.historia.moderate"
+	permKeyTerritoriMunicipisAnecdotesCreate            = "municipis.anecdotes.create"
+	permKeyTerritoriMunicipisAnecdotesEdit              = "municipis.anecdotes.edit"
+	permKeyTerritoriMunicipisAnecdotesSubmit            = "municipis.anecdotes.submit"
+	permKeyTerritoriMunicipisAnecdotesComment           = "municipis.anecdotes.comment"
+	permKeyTerritoriMunicipisAnecdotesModerate          = "municipis.anecdotes.moderate"
+	permKeyTerritoriEclesView                           = "territori.eclesiastic.view"
+	permKeyTerritoriEclesCreate                         = "territori.eclesiastic.create"
+	permKeyTerritoriEclesEdit                           = "territori.eclesiastic.edit"
+	permKeyTerritoriEclesImportJSON                     = "territori.eclesiastic.import_json"
+	permKeyTerritoriConfessionalReligionsView           = "territori.confessional.religions.view"
+	permKeyTerritoriConfessionalReligionsCreate         = "territori.confessional.religions.create"
+	permKeyTerritoriConfessionalReligionsEdit           = "territori.confessional.religions.edit"
+	permKeyTerritoriConfessionalReligionsDelete         = "territori.confessional.religions.delete"
+	permKeyTerritoriConfessionalModelsView              = "territori.confessional.models.view"
+	permKeyTerritoriConfessionalModelsCreate            = "territori.confessional.models.create"
+	permKeyTerritoriConfessionalModelsEdit              = "territori.confessional.models.edit"
+	permKeyTerritoriConfessionalModelsDelete            = "territori.confessional.models.delete"
+	permKeyTerritoriConfessionalNivellsView             = "territori.confessional.nivells.view"
+	permKeyTerritoriConfessionalNivellsCreate           = "territori.confessional.nivells.create"
+	permKeyTerritoriConfessionalNivellsEdit             = "territori.confessional.nivells.edit"
+	permKeyTerritoriConfessionalNivellsDelete           = "territori.confessional.nivells.delete"
+	permKeyTerritoriConfessionalEntitatsView            = "territori.confessional.entitats.view"
+	permKeyTerritoriConfessionalEntitatsCreate          = "territori.confessional.entitats.create"
+	permKeyTerritoriConfessionalEntitatsEdit            = "territori.confessional.entitats.edit"
+	permKeyTerritoriConfessionalEntitatsDelete          = "territori.confessional.entitats.delete"
+	permKeyTerritoriConfessionalMunicipisEntitatsView   = "territori.confessional.municipis_entitats.view"
+	permKeyTerritoriConfessionalMunicipisEntitatsCreate = "territori.confessional.municipis_entitats.create"
+	permKeyTerritoriConfessionalMunicipisEntitatsEdit   = "territori.confessional.municipis_entitats.edit"
+	permKeyTerritoriConfessionalMunicipisEntitatsDelete = "territori.confessional.municipis_entitats.delete"
 
 	permKeyDocumentalsArxiusView   = "documentals.arxius.view"
 	permKeyDocumentalsArxiusCreate = "documentals.arxius.create"
@@ -172,6 +192,26 @@ var permissionCatalogKeys = []string{
 	permKeyTerritoriEclesCreate,
 	permKeyTerritoriEclesEdit,
 	permKeyTerritoriEclesImportJSON,
+	permKeyTerritoriConfessionalReligionsView,
+	permKeyTerritoriConfessionalReligionsCreate,
+	permKeyTerritoriConfessionalReligionsEdit,
+	permKeyTerritoriConfessionalReligionsDelete,
+	permKeyTerritoriConfessionalModelsView,
+	permKeyTerritoriConfessionalModelsCreate,
+	permKeyTerritoriConfessionalModelsEdit,
+	permKeyTerritoriConfessionalModelsDelete,
+	permKeyTerritoriConfessionalNivellsView,
+	permKeyTerritoriConfessionalNivellsCreate,
+	permKeyTerritoriConfessionalNivellsEdit,
+	permKeyTerritoriConfessionalNivellsDelete,
+	permKeyTerritoriConfessionalEntitatsView,
+	permKeyTerritoriConfessionalEntitatsCreate,
+	permKeyTerritoriConfessionalEntitatsEdit,
+	permKeyTerritoriConfessionalEntitatsDelete,
+	permKeyTerritoriConfessionalMunicipisEntitatsView,
+	permKeyTerritoriConfessionalMunicipisEntitatsCreate,
+	permKeyTerritoriConfessionalMunicipisEntitatsEdit,
+	permKeyTerritoriConfessionalMunicipisEntitatsDelete,
 	permKeyDocumentalsArxiusView,
 	permKeyDocumentalsArxiusCreate,
 	permKeyDocumentalsArxiusEdit,

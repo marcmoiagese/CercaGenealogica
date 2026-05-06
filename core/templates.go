@@ -529,6 +529,7 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	hasViewMunicipisKey := hasModularMunicipisViewKey(hasKey)
 	hasManageEclesiaKey := hasModularEclesiaManageKey(hasKey)
 	hasViewEclesiaKey := hasModularEclesiaViewKey(hasKey)
+	hasViewConfessionalKey := hasModularConfessionalViewKey(hasKey)
 	hasManageDocumentalsKey := hasModularDocumentalsManageKey(hasKey)
 	hasViewArxiusKey := hasModularArxiusViewKey(hasKey)
 	hasViewLlibresKey := hasModularLlibresViewKey(hasKey)
@@ -628,8 +629,26 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	if _, found := m["CanViewEcles"]; !found {
 		m["CanViewEcles"] = effectiveAdmin || hasViewEclesiaKey
 	}
+	if _, found := m["CanViewConfessional"]; !found {
+		m["CanViewConfessional"] = effectiveAdmin || hasViewConfessionalKey
+	}
+	if _, found := m["CanViewConfessionalReligions"]; !found {
+		m["CanViewConfessionalReligions"] = effectiveAdmin || hasModularConfessionalReligionsViewKey(hasKey)
+	}
+	if _, found := m["CanViewConfessionalModels"]; !found {
+		m["CanViewConfessionalModels"] = effectiveAdmin || hasModularConfessionalModelsViewKey(hasKey)
+	}
+	if _, found := m["CanViewConfessionalNivells"]; !found {
+		m["CanViewConfessionalNivells"] = effectiveAdmin || hasModularConfessionalNivellsViewKey(hasKey)
+	}
+	if _, found := m["CanViewConfessionalEntitats"]; !found {
+		m["CanViewConfessionalEntitats"] = effectiveAdmin || hasModularConfessionalEntitatsViewKey(hasKey)
+	}
+	if _, found := m["CanViewConfessionalMunicipisEntitats"]; !found {
+		m["CanViewConfessionalMunicipisEntitats"] = effectiveAdmin || hasModularConfessionalMunicipisEntitatsViewKey(hasKey)
+	}
 	if _, found := m["CanViewTerritory"]; !found {
-		m["CanViewTerritory"] = m["CanViewNivells"].(bool) || m["CanViewMunicipis"].(bool) || m["CanViewEcles"].(bool)
+		m["CanViewTerritory"] = m["CanViewNivells"].(bool) || m["CanViewMunicipis"].(bool) || m["CanViewEcles"].(bool) || m["CanViewConfessional"].(bool)
 	}
 	if _, found := m["UnreadMessagesCount"]; !found {
 		if count, ok := unreadMessagesCountFromContext(r); ok {
@@ -655,6 +674,11 @@ func hasModularModerationKey(hasKey func(string) bool) bool {
 		hasKey(permKeyTerritoriMunicipisEdit) ||
 		hasKey(permKeyTerritoriNivellsEdit) ||
 		hasKey(permKeyTerritoriEclesEdit) ||
+		hasKey(permKeyTerritoriConfessionalReligionsEdit) ||
+		hasKey(permKeyTerritoriConfessionalModelsEdit) ||
+		hasKey(permKeyTerritoriConfessionalNivellsEdit) ||
+		hasKey(permKeyTerritoriConfessionalEntitatsEdit) ||
+		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsEdit) ||
 		hasKey(permKeyDocumentalsArxiusEdit) ||
 		hasKey(permKeyDocumentalsLlibresEdit) ||
 		hasKey(permKeyDocumentalsRegistresEdit)
@@ -732,7 +756,8 @@ func hasModularTerritoryManageKey(hasKey func(string) bool) bool {
 		hasKey(permKeyTerritoriNivellsEdit) ||
 		hasKey(permKeyTerritoriNivellsRebuild) ||
 		hasKey(permKeyTerritoriMunicipisCreate) ||
-		hasKey(permKeyTerritoriMunicipisEdit)
+		hasKey(permKeyTerritoriMunicipisEdit) ||
+		hasModularConfessionalManageKey(hasKey)
 }
 
 func hasModularNivellsViewKey(hasKey func(string) bool) bool {
@@ -783,4 +808,71 @@ func hasModularEclesiaViewKey(hasKey func(string) bool) bool {
 		return false
 	}
 	return hasKey(permKeyTerritoriEclesView) || hasModularEclesiaManageKey(hasKey)
+}
+
+func hasModularConfessionalManageKey(hasKey func(string) bool) bool {
+	if hasKey == nil {
+		return false
+	}
+	return hasKey(permKeyTerritoriConfessionalReligionsCreate) ||
+		hasKey(permKeyTerritoriConfessionalReligionsEdit) ||
+		hasKey(permKeyTerritoriConfessionalReligionsDelete) ||
+		hasKey(permKeyTerritoriConfessionalModelsCreate) ||
+		hasKey(permKeyTerritoriConfessionalModelsEdit) ||
+		hasKey(permKeyTerritoriConfessionalModelsDelete) ||
+		hasKey(permKeyTerritoriConfessionalNivellsCreate) ||
+		hasKey(permKeyTerritoriConfessionalNivellsEdit) ||
+		hasKey(permKeyTerritoriConfessionalNivellsDelete) ||
+		hasKey(permKeyTerritoriConfessionalEntitatsCreate) ||
+		hasKey(permKeyTerritoriConfessionalEntitatsEdit) ||
+		hasKey(permKeyTerritoriConfessionalEntitatsDelete) ||
+		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsCreate) ||
+		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsEdit) ||
+		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsDelete)
+}
+
+func hasModularConfessionalViewKey(hasKey func(string) bool) bool {
+	if hasKey == nil {
+		return false
+	}
+	return hasModularConfessionalReligionsViewKey(hasKey) ||
+		hasModularConfessionalModelsViewKey(hasKey) ||
+		hasModularConfessionalNivellsViewKey(hasKey) ||
+		hasModularConfessionalEntitatsViewKey(hasKey) ||
+		hasModularConfessionalMunicipisEntitatsViewKey(hasKey)
+}
+
+func hasModularConfessionalReligionsViewKey(hasKey func(string) bool) bool {
+	return hasKey != nil && (hasKey(permKeyTerritoriConfessionalReligionsView) ||
+		hasKey(permKeyTerritoriConfessionalReligionsCreate) ||
+		hasKey(permKeyTerritoriConfessionalReligionsEdit) ||
+		hasKey(permKeyTerritoriConfessionalReligionsDelete))
+}
+
+func hasModularConfessionalModelsViewKey(hasKey func(string) bool) bool {
+	return hasKey != nil && (hasKey(permKeyTerritoriConfessionalModelsView) ||
+		hasKey(permKeyTerritoriConfessionalModelsCreate) ||
+		hasKey(permKeyTerritoriConfessionalModelsEdit) ||
+		hasKey(permKeyTerritoriConfessionalModelsDelete))
+}
+
+func hasModularConfessionalNivellsViewKey(hasKey func(string) bool) bool {
+	return hasKey != nil && (hasKey(permKeyTerritoriConfessionalNivellsView) ||
+		hasKey(permKeyTerritoriConfessionalNivellsCreate) ||
+		hasKey(permKeyTerritoriConfessionalNivellsEdit) ||
+		hasKey(permKeyTerritoriConfessionalNivellsDelete))
+}
+
+func hasModularConfessionalEntitatsViewKey(hasKey func(string) bool) bool {
+	return hasKey != nil && (hasKey(permKeyTerritoriConfessionalEntitatsView) ||
+		hasKey(permKeyTerritoriConfessionalEntitatsCreate) ||
+		hasKey(permKeyTerritoriConfessionalEntitatsEdit) ||
+		hasKey(permKeyTerritoriConfessionalEntitatsDelete))
+}
+
+func hasModularConfessionalMunicipisEntitatsViewKey(hasKey func(string) bool) bool {
+	return hasKey != nil && (hasKey(permKeyTerritoriConfessionalMunicipisEntitatsView) ||
+		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsCreate) ||
+		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsEdit) ||
+		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsDelete))
 }

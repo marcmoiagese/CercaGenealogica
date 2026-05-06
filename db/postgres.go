@@ -1159,64 +1159,64 @@ func (d *PostgreSQL) UpdateArquebisbatModeracio(id int, estat, motiu string, mod
 }
 
 func (d *PostgreSQL) ListReligioConfessions() ([]ReligioConfessio, error) {
-	return d.help.listReligioConfessions()
+	return postgresListReligioConfessions(d)
 }
 func (d *PostgreSQL) GetReligioConfessio(id int) (*ReligioConfessio, error) {
-	return d.help.getReligioConfessio(id)
+	return postgresGetReligioConfessio(d, id)
 }
 func (d *PostgreSQL) SaveReligioConfessio(r *ReligioConfessio) (int, error) {
-	return d.help.saveReligioConfessio(r)
+	return postgresSaveReligioConfessio(d, r)
 }
 func (d *PostgreSQL) DeleteReligioConfessio(id int) error {
-	return d.help.deleteReligioConfessio(id)
+	return postgresDeleteReligioConfessio(d, id)
 }
 func (d *PostgreSQL) ListModelsConfessionals() ([]ModelConfessional, error) {
-	return d.help.listModelsConfessionals()
+	return postgresListModelsConfessionals(d)
 }
 func (d *PostgreSQL) GetModelConfessional(id int) (*ModelConfessional, error) {
-	return d.help.getModelConfessional(id)
+	return postgresGetModelConfessional(d, id)
 }
 func (d *PostgreSQL) SaveModelConfessional(m *ModelConfessional) (int, error) {
-	return d.help.saveModelConfessional(m)
+	return postgresSaveModelConfessional(d, m)
 }
 func (d *PostgreSQL) DeleteModelConfessional(id int) error {
-	return d.help.deleteModelConfessional(id)
+	return postgresDeleteModelConfessional(d, id)
 }
 func (d *PostgreSQL) ListNivellsConfessionals() ([]NivellConfessional, error) {
-	return d.help.listNivellsConfessionals()
+	return postgresListNivellsConfessionals(d)
 }
 func (d *PostgreSQL) GetNivellConfessional(id int) (*NivellConfessional, error) {
-	return d.help.getNivellConfessional(id)
+	return postgresGetNivellConfessional(d, id)
 }
 func (d *PostgreSQL) SaveNivellConfessional(n *NivellConfessional) (int, error) {
-	return d.help.saveNivellConfessional(n)
+	return postgresSaveNivellConfessional(d, n)
 }
 func (d *PostgreSQL) DeleteNivellConfessional(id int) error {
-	return d.help.deleteNivellConfessional(id)
+	return postgresDeleteNivellConfessional(d, id)
 }
 func (d *PostgreSQL) ListEntitatsReligioses() ([]EntitatReligiosa, error) {
-	return d.help.listEntitatsReligioses()
+	return postgresListEntitatsReligioses(d)
 }
 func (d *PostgreSQL) GetEntitatReligiosa(id int) (*EntitatReligiosa, error) {
-	return d.help.getEntitatReligiosa(id)
+	return postgresGetEntitatReligiosa(d, id)
 }
 func (d *PostgreSQL) SaveEntitatReligiosa(e *EntitatReligiosa) (int, error) {
-	return d.help.saveEntitatReligiosa(e)
+	return postgresSaveEntitatReligiosa(d, e)
 }
 func (d *PostgreSQL) DeleteEntitatReligiosa(id int) error {
-	return d.help.deleteEntitatReligiosa(id)
+	return postgresDeleteEntitatReligiosa(d, id)
 }
 func (d *PostgreSQL) ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
-	return d.help.listMunicipiEntitatsReligioses(municipiID)
+	return postgresListMunicipiEntitatsReligioses(d, municipiID)
 }
 func (d *PostgreSQL) GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error) {
-	return d.help.getMunicipiEntitatReligiosa(id)
+	return postgresGetMunicipiEntitatReligiosa(d, id)
 }
 func (d *PostgreSQL) SaveMunicipiEntitatReligiosa(rel *MunicipiEntitatReligiosa) (int, error) {
-	return d.help.saveMunicipiEntitatReligiosa(rel)
+	return postgresSaveMunicipiEntitatReligiosa(d, rel)
 }
 func (d *PostgreSQL) DeleteMunicipiEntitatReligiosa(id int) error {
-	return d.help.deleteMunicipiEntitatReligiosa(id)
+	return postgresDeleteMunicipiEntitatReligiosa(d, id)
 }
 func (d *PostgreSQL) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)

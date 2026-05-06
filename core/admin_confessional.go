@@ -21,8 +21,36 @@ type confessionalFormData struct {
 	Relacio   *db.MunicipiEntitatReligiosa
 }
 
+type confessionalSection struct {
+	Kind       string
+	Slug       string
+	Title      string
+	NewLabel   string
+	ViewPerm   string
+	CreatePerm string
+	EditPerm   string
+	DeletePerm string
+}
+
+var confessionalSections = map[string]confessionalSection{
+	"religio": {Kind: "religio", Slug: "religions", Title: "Religions/confessions", NewLabel: "Nova religio/confessio", ViewPerm: permKeyTerritoriConfessionalReligionsView, CreatePerm: permKeyTerritoriConfessionalReligionsCreate, EditPerm: permKeyTerritoriConfessionalReligionsEdit, DeletePerm: permKeyTerritoriConfessionalReligionsDelete},
+	"model":   {Kind: "model", Slug: "models", Title: "Models confessionals", NewLabel: "Nou model", ViewPerm: permKeyTerritoriConfessionalModelsView, CreatePerm: permKeyTerritoriConfessionalModelsCreate, EditPerm: permKeyTerritoriConfessionalModelsEdit, DeletePerm: permKeyTerritoriConfessionalModelsDelete},
+	"nivell":  {Kind: "nivell", Slug: "nivells", Title: "Nivells confessionals", NewLabel: "Nou nivell", ViewPerm: permKeyTerritoriConfessionalNivellsView, CreatePerm: permKeyTerritoriConfessionalNivellsCreate, EditPerm: permKeyTerritoriConfessionalNivellsEdit, DeletePerm: permKeyTerritoriConfessionalNivellsDelete},
+	"entitat": {Kind: "entitat", Slug: "entitats", Title: "Entitats religioses", NewLabel: "Nova entitat", ViewPerm: permKeyTerritoriConfessionalEntitatsView, CreatePerm: permKeyTerritoriConfessionalEntitatsCreate, EditPerm: permKeyTerritoriConfessionalEntitatsEdit, DeletePerm: permKeyTerritoriConfessionalEntitatsDelete},
+	"relacio": {Kind: "relacio", Slug: "municipis-entitats", Title: "Relacions municipi/nucli - entitat religiosa", NewLabel: "Nova relacio territorial", ViewPerm: permKeyTerritoriConfessionalMunicipisEntitatsView, CreatePerm: permKeyTerritoriConfessionalMunicipisEntitatsCreate, EditPerm: permKeyTerritoriConfessionalMunicipisEntitatsEdit, DeletePerm: permKeyTerritoriConfessionalMunicipisEntitatsDelete},
+}
+
 func (a *App) AdminConfessionalList(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requirePermissionKeyAnyScope(w, r, permKeyTerritoriEclesView)
+	http.Redirect(w, r, "/territori/confessional/religions", http.StatusSeeOther)
+}
+
+func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Request) {
+	section, okSection := confessionalSectionFromPath(r.URL.Path)
+	if !okSection {
+		http.NotFound(w, r)
+		return
+	}
+	user, ok := a.requirePermissionKey(w, r, section.ViewPerm, PermissionTarget{})
 	if !ok {
 		return
 	}
@@ -33,9 +61,11 @@ func (a *App) AdminConfessionalList(w http.ResponseWriter, r *http.Request) {
 	relacions, _ := a.DB.ListMunicipiEntitatsReligioses(0)
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	paisos, _ := a.DB.ListPaisos()
-	canCreate := a.HasPermission(user.ID, permKeyTerritoriEclesCreate, PermissionTarget{})
-	canEdit := a.HasPermission(user.ID, permKeyTerritoriEclesEdit, PermissionTarget{})
+	canCreate := a.HasPermission(user.ID, section.CreatePerm, PermissionTarget{})
+	canEdit := a.HasPermission(user.ID, section.EditPerm, PermissionTarget{})
+	canDelete := a.HasPermission(user.ID, section.DeletePerm, PermissionTarget{})
 	RenderPrivateTemplate(w, r, "admin-confessional-list.html", map[string]interface{}{
+		"Section":         section,
 		"Religions":       religions,
 		"Models":          models,
 		"Nivells":         nivells,
@@ -45,6 +75,7 @@ func (a *App) AdminConfessionalList(w http.ResponseWriter, r *http.Request) {
 		"Paisos":          paisos,
 		"CanCreate":       canCreate,
 		"CanEdit":         canEdit,
+		"CanDelete":       canDelete,
 		"Notice":          strings.TrimSpace(r.URL.Query().Get("notice")),
 		"Error":           strings.TrimSpace(r.URL.Query().Get("error")),
 		"ReligionLabels":  religioLabels(religions),
@@ -59,16 +90,25 @@ func (a *App) AdminConfessionalList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminNewConfessional(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriEclesCreate, PermissionTarget{})
+	section, okSection := confessionalSectionFromPath(r.URL.Path)
+	if !okSection {
+		kind := confessionalKind(r.URL.Query().Get("kind"))
+		section, okSection = confessionalSectionByKind(kind)
+	}
+	if !okSection {
+		http.NotFound(w, r)
+		return
+	}
+	user, ok := a.requirePermissionKey(w, r, section.CreatePerm, PermissionTarget{})
 	if !ok {
 		return
 	}
-	kind := confessionalKind(r.URL.Query().Get("kind"))
+	kind := section.Kind
 	if kind == "" {
 		http.NotFound(w, r)
 		return
 	}
-	data := confessionalFormData{Kind: kind, IsNew: true, ReturnURL: strings.TrimSpace(r.URL.Query().Get("return_to"))}
+	data := confessionalFormData{Kind: kind, IsNew: true, ReturnURL: firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("return_to")), confessionalSectionURL(section, ""))}
 	switch kind {
 	case "religio":
 		data.Religio = &db.ReligioConfessio{Estat: "actiu", ModeracioEstat: "publicat"}
@@ -85,7 +125,16 @@ func (a *App) AdminNewConfessional(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) AdminEditConfessional(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriEclesEdit, PermissionTarget{})
+	section, okSection := confessionalSectionFromPath(r.URL.Path)
+	if !okSection {
+		kind, _ := extractConfessionalPath(r.URL.Path)
+		section, okSection = confessionalSectionByKind(kind)
+		if !okSection {
+			http.NotFound(w, r)
+			return
+		}
+	}
+	user, ok := a.requirePermissionKey(w, r, section.EditPerm, PermissionTarget{})
 	if !ok {
 		return
 	}
@@ -121,17 +170,22 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := strconv.Atoi(r.FormValue("id"))
-	permKey := permKeyTerritoriEclesCreate
-	if id != 0 {
-		permKey = permKeyTerritoriEclesEdit
-	}
-	user, ok := a.requirePermissionKey(w, r, permKey, PermissionTarget{})
-	if !ok {
-		return
-	}
 	kind := confessionalKind(r.FormValue("kind"))
 	if kind == "" {
 		http.NotFound(w, r)
+		return
+	}
+	section, okSection := confessionalSectionByKind(kind)
+	if !okSection {
+		http.NotFound(w, r)
+		return
+	}
+	permKey := section.CreatePerm
+	if id != 0 {
+		permKey = section.EditPerm
+	}
+	user, ok := a.requirePermissionKey(w, r, permKey, PermissionTarget{})
+	if !ok {
 		return
 	}
 	data, errMsg := a.parseConfessionalForm(kind, id, r)
@@ -147,7 +201,7 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 	}
 	returnURL := data.ReturnURL
 	if returnURL == "" {
-		returnURL = "/territori/confessional?notice=saved"
+		returnURL = confessionalSectionURL(section, "notice=saved")
 	}
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
 }
@@ -157,13 +211,18 @@ func (a *App) AdminDeleteConfessional(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/territori/confessional", http.StatusSeeOther)
 		return
 	}
-	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriEclesEdit, PermissionTarget{}); !ok {
-		return
-	}
 	kind := confessionalKind(r.FormValue("kind"))
 	id, _ := strconv.Atoi(r.FormValue("id"))
 	if kind == "" || id == 0 {
 		http.NotFound(w, r)
+		return
+	}
+	section, okSection := confessionalSectionByKind(kind)
+	if !okSection {
+		http.NotFound(w, r)
+		return
+	}
+	if _, ok := a.requirePermissionKey(w, r, section.DeletePerm, PermissionTarget{}); !ok {
 		return
 	}
 	var err error
@@ -184,10 +243,10 @@ func (a *App) AdminDeleteConfessional(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, db.ErrUnsafeDelete) {
 			msg = "unsafe_delete"
 		}
-		http.Redirect(w, r, "/territori/confessional?error="+msg, http.StatusSeeOther)
+		http.Redirect(w, r, confessionalSectionURL(section, "error="+msg), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/territori/confessional?notice=deleted", http.StatusSeeOther)
+	http.Redirect(w, r, confessionalSectionURL(section, "notice=deleted"), http.StatusSeeOther)
 }
 
 func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, user *db.User, data confessionalFormData) {
@@ -198,6 +257,7 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	paisos, _ := a.DB.ListPaisos()
 	RenderPrivateTemplate(w, r, "admin-confessional-form.html", map[string]interface{}{
+		"Section":         confessionalSectionMust(data.Kind),
 		"Form":            data,
 		"Religions":       religions,
 		"Models":          models,
@@ -378,11 +438,55 @@ func confessionalKind(raw string) string {
 	}
 }
 
+func confessionalSectionByKind(kind string) (confessionalSection, bool) {
+	section, ok := confessionalSections[confessionalKind(kind)]
+	return section, ok
+}
+
+func confessionalSectionMust(kind string) confessionalSection {
+	section, _ := confessionalSectionByKind(kind)
+	return section
+}
+
+func confessionalSectionFromSlug(slug string) (confessionalSection, bool) {
+	slug = strings.Trim(strings.TrimSpace(slug), "/")
+	for _, section := range confessionalSections {
+		if section.Slug == slug {
+			return section, true
+		}
+	}
+	return confessionalSection{}, false
+}
+
+func confessionalSectionFromPath(path string) (confessionalSection, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i := 0; i+1 < len(parts); i++ {
+		if parts[i] != "confessional" {
+			continue
+		}
+		return confessionalSectionFromSlug(parts[i+1])
+	}
+	return confessionalSection{}, false
+}
+
+func confessionalSectionURL(section confessionalSection, query string) string {
+	url := "/territori/confessional/" + section.Slug
+	query = strings.TrimSpace(query)
+	if query != "" {
+		url += "?" + query
+	}
+	return url
+}
+
 func extractConfessionalPath(path string) (string, int) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	for i := 0; i+2 < len(parts); i++ {
 		if parts[i] != "confessional" {
 			continue
+		}
+		if section, ok := confessionalSectionFromSlug(parts[i+1]); ok {
+			id, _ := strconv.Atoi(parts[i+2])
+			return section.Kind, id
 		}
 		kind := confessionalKind(parts[i+1])
 		id, _ := strconv.Atoi(parts[i+2])

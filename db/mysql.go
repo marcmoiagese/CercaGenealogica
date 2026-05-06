@@ -805,64 +805,64 @@ func (d *MySQL) UpdateArquebisbatModeracio(id int, estat, motiu string, moderato
 }
 
 func (d *MySQL) ListReligioConfessions() ([]ReligioConfessio, error) {
-	return d.help.listReligioConfessions()
+	return mysqlListReligioConfessions(d)
 }
 func (d *MySQL) GetReligioConfessio(id int) (*ReligioConfessio, error) {
-	return d.help.getReligioConfessio(id)
+	return mysqlGetReligioConfessio(d, id)
 }
 func (d *MySQL) SaveReligioConfessio(r *ReligioConfessio) (int, error) {
-	return d.help.saveReligioConfessio(r)
+	return mysqlSaveReligioConfessio(d, r)
 }
 func (d *MySQL) DeleteReligioConfessio(id int) error {
-	return d.help.deleteReligioConfessio(id)
+	return mysqlDeleteReligioConfessio(d, id)
 }
 func (d *MySQL) ListModelsConfessionals() ([]ModelConfessional, error) {
-	return d.help.listModelsConfessionals()
+	return mysqlListModelsConfessionals(d)
 }
 func (d *MySQL) GetModelConfessional(id int) (*ModelConfessional, error) {
-	return d.help.getModelConfessional(id)
+	return mysqlGetModelConfessional(d, id)
 }
 func (d *MySQL) SaveModelConfessional(m *ModelConfessional) (int, error) {
-	return d.help.saveModelConfessional(m)
+	return mysqlSaveModelConfessional(d, m)
 }
 func (d *MySQL) DeleteModelConfessional(id int) error {
-	return d.help.deleteModelConfessional(id)
+	return mysqlDeleteModelConfessional(d, id)
 }
 func (d *MySQL) ListNivellsConfessionals() ([]NivellConfessional, error) {
-	return d.help.listNivellsConfessionals()
+	return mysqlListNivellsConfessionals(d)
 }
 func (d *MySQL) GetNivellConfessional(id int) (*NivellConfessional, error) {
-	return d.help.getNivellConfessional(id)
+	return mysqlGetNivellConfessional(d, id)
 }
 func (d *MySQL) SaveNivellConfessional(n *NivellConfessional) (int, error) {
-	return d.help.saveNivellConfessional(n)
+	return mysqlSaveNivellConfessional(d, n)
 }
 func (d *MySQL) DeleteNivellConfessional(id int) error {
-	return d.help.deleteNivellConfessional(id)
+	return mysqlDeleteNivellConfessional(d, id)
 }
 func (d *MySQL) ListEntitatsReligioses() ([]EntitatReligiosa, error) {
-	return d.help.listEntitatsReligioses()
+	return mysqlListEntitatsReligioses(d)
 }
 func (d *MySQL) GetEntitatReligiosa(id int) (*EntitatReligiosa, error) {
-	return d.help.getEntitatReligiosa(id)
+	return mysqlGetEntitatReligiosa(d, id)
 }
 func (d *MySQL) SaveEntitatReligiosa(e *EntitatReligiosa) (int, error) {
-	return d.help.saveEntitatReligiosa(e)
+	return mysqlSaveEntitatReligiosa(d, e)
 }
 func (d *MySQL) DeleteEntitatReligiosa(id int) error {
-	return d.help.deleteEntitatReligiosa(id)
+	return mysqlDeleteEntitatReligiosa(d, id)
 }
 func (d *MySQL) ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
-	return d.help.listMunicipiEntitatsReligioses(municipiID)
+	return mysqlListMunicipiEntitatsReligioses(d, municipiID)
 }
 func (d *MySQL) GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error) {
-	return d.help.getMunicipiEntitatReligiosa(id)
+	return mysqlGetMunicipiEntitatReligiosa(d, id)
 }
 func (d *MySQL) SaveMunicipiEntitatReligiosa(rel *MunicipiEntitatReligiosa) (int, error) {
-	return d.help.saveMunicipiEntitatReligiosa(rel)
+	return mysqlSaveMunicipiEntitatReligiosa(d, rel)
 }
 func (d *MySQL) DeleteMunicipiEntitatReligiosa(id int) error {
-	return d.help.deleteMunicipiEntitatReligiosa(id)
+	return mysqlDeleteMunicipiEntitatReligiosa(d, id)
 }
 func (d *MySQL) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)

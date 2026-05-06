@@ -832,64 +832,64 @@ func (d *SQLite) UpdateArquebisbatModeracio(id int, estat, motiu string, moderat
 }
 
 func (d *SQLite) ListReligioConfessions() ([]ReligioConfessio, error) {
-	return d.help.listReligioConfessions()
+	return sqliteListReligioConfessions(d)
 }
 func (d *SQLite) GetReligioConfessio(id int) (*ReligioConfessio, error) {
-	return d.help.getReligioConfessio(id)
+	return sqliteGetReligioConfessio(d, id)
 }
 func (d *SQLite) SaveReligioConfessio(r *ReligioConfessio) (int, error) {
-	return d.help.saveReligioConfessio(r)
+	return sqliteSaveReligioConfessio(d, r)
 }
 func (d *SQLite) DeleteReligioConfessio(id int) error {
-	return d.help.deleteReligioConfessio(id)
+	return sqliteDeleteReligioConfessio(d, id)
 }
 func (d *SQLite) ListModelsConfessionals() ([]ModelConfessional, error) {
-	return d.help.listModelsConfessionals()
+	return sqliteListModelsConfessionals(d)
 }
 func (d *SQLite) GetModelConfessional(id int) (*ModelConfessional, error) {
-	return d.help.getModelConfessional(id)
+	return sqliteGetModelConfessional(d, id)
 }
 func (d *SQLite) SaveModelConfessional(m *ModelConfessional) (int, error) {
-	return d.help.saveModelConfessional(m)
+	return sqliteSaveModelConfessional(d, m)
 }
 func (d *SQLite) DeleteModelConfessional(id int) error {
-	return d.help.deleteModelConfessional(id)
+	return sqliteDeleteModelConfessional(d, id)
 }
 func (d *SQLite) ListNivellsConfessionals() ([]NivellConfessional, error) {
-	return d.help.listNivellsConfessionals()
+	return sqliteListNivellsConfessionals(d)
 }
 func (d *SQLite) GetNivellConfessional(id int) (*NivellConfessional, error) {
-	return d.help.getNivellConfessional(id)
+	return sqliteGetNivellConfessional(d, id)
 }
 func (d *SQLite) SaveNivellConfessional(n *NivellConfessional) (int, error) {
-	return d.help.saveNivellConfessional(n)
+	return sqliteSaveNivellConfessional(d, n)
 }
 func (d *SQLite) DeleteNivellConfessional(id int) error {
-	return d.help.deleteNivellConfessional(id)
+	return sqliteDeleteNivellConfessional(d, id)
 }
 func (d *SQLite) ListEntitatsReligioses() ([]EntitatReligiosa, error) {
-	return d.help.listEntitatsReligioses()
+	return sqliteListEntitatsReligioses(d)
 }
 func (d *SQLite) GetEntitatReligiosa(id int) (*EntitatReligiosa, error) {
-	return d.help.getEntitatReligiosa(id)
+	return sqliteGetEntitatReligiosa(d, id)
 }
 func (d *SQLite) SaveEntitatReligiosa(e *EntitatReligiosa) (int, error) {
-	return d.help.saveEntitatReligiosa(e)
+	return sqliteSaveEntitatReligiosa(d, e)
 }
 func (d *SQLite) DeleteEntitatReligiosa(id int) error {
-	return d.help.deleteEntitatReligiosa(id)
+	return sqliteDeleteEntitatReligiosa(d, id)
 }
 func (d *SQLite) ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
-	return d.help.listMunicipiEntitatsReligioses(municipiID)
+	return sqliteListMunicipiEntitatsReligioses(d, municipiID)
 }
 func (d *SQLite) GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error) {
-	return d.help.getMunicipiEntitatReligiosa(id)
+	return sqliteGetMunicipiEntitatReligiosa(d, id)
 }
 func (d *SQLite) SaveMunicipiEntitatReligiosa(rel *MunicipiEntitatReligiosa) (int, error) {
-	return d.help.saveMunicipiEntitatReligiosa(rel)
+	return sqliteSaveMunicipiEntitatReligiosa(d, rel)
 }
 func (d *SQLite) DeleteMunicipiEntitatReligiosa(id int) error {
-	return d.help.deleteMunicipiEntitatReligiosa(id)
+	return sqliteDeleteMunicipiEntitatReligiosa(d, id)
 }
 func (d *SQLite) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
