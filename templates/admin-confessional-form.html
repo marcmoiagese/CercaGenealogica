@@ -179,7 +179,7 @@
                         <option value="">{{ t .Lang "confessional.select.level" }}</option>
                         {{ range .Data.SelectableNivells }}
                         {{ $matchesReligion := and $.Data.Form.Entitat.ReligioConfessioCodi (eq .ReligionCode $.Data.Form.Entitat.ReligioConfessioCodi) }}
-                        <option value="{{ .Code }}" data-religion-code="{{ .ReligionCode }}" {{ if not $matchesReligion }}hidden disabled{{ end }} {{ if and $matchesReligion (eq $.Data.Form.Entitat.NivellConfessionalCodi .Code) }}selected{{ end }}>{{ index $.Data.LevelCatalogLabels .Code }}</option>
+                        <option value="{{ .Code }}" data-religion-code="{{ .ReligionCode }}" data-parent-level-codes="{{ index $.Data.ParentLevelCodesCSV .Code }}" {{ if not $matchesReligion }}hidden disabled{{ end }} {{ if and $matchesReligion (eq $.Data.Form.Entitat.NivellConfessionalCodi .Code) }}selected{{ end }}>{{ index $.Data.LevelCatalogLabels .Code }}</option>
                         {{ end }}
                     </select>
                     <p id="nivell_confessional_help" class="muted" data-empty="{{ t .Lang "confessional.help.levels.choose_religion" }}" data-none="{{ t .Lang "confessional.help.levels.none_for_religion" }}">{{ t .Lang "confessional.help.levels.choose_religion" }}</p>
@@ -190,10 +190,12 @@
                         <option value="">{{ t .Lang "confessional.select.parent_entity.none" }}</option>
                         {{ range .Data.SelectableEntitats }}
                         {{ if ne .ID $.Data.Form.Entitat.ID }}
-                        <option value="{{ .ID }}" data-religion-code="{{ .ReligioConfessioCodi }}" {{ if and $.Data.Form.Entitat.ParentID.Valid (eq .ID (int $.Data.Form.Entitat.ParentID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ $parentAllowed := index $.Data.ParentOptionAllowed .ID }}
+                        <option value="{{ .ID }}" data-religion-code="{{ .ReligioConfessioCodi }}" data-level-code="{{ .NivellConfessionalCodi }}" data-can-have-children="{{ index $.Data.LevelCanHaveChildren .NivellConfessionalCodi }}" {{ if not $parentAllowed }}hidden disabled{{ end }} {{ if and $parentAllowed $.Data.Form.Entitat.ParentID.Valid (eq .ID (int $.Data.Form.Entitat.ParentID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
                         {{ end }}
                         {{ end }}
                     </select>
+                    <p id="parent_id_help" class="muted" data-empty="{{ t .Lang "confessional.help.parents.choose_level" }}" data-none="{{ t .Lang "confessional.help.parents.none" }}">{{ t .Lang "confessional.help.parents.choose_level" }}</p>
                 </div>
                 <div class="grup-camp">
                     <label for="pais_id">{{ t .Lang "confessional.field.country" }}</label>
@@ -255,7 +257,7 @@
                     <select id="entitat_religiosa_id" name="entitat_religiosa_id" required>
                         <option value="">{{ t .Lang "confessional.select.entity" }}</option>
                         {{ range .Data.SelectableEntitats }}
-                        <option value="{{ .ID }}" {{ if eq .ID $.Data.Form.Relacio.EntitatReligiosaID }}selected{{ end }}>{{ .Nom }}</option>
+                        <option value="{{ .ID }}" data-religion-code="{{ .ReligioConfessioCodi }}" data-level-code="{{ .NivellConfessionalCodi }}" {{ if eq .ID $.Data.Form.Relacio.EntitatReligiosaID }}selected{{ end }}>{{ .Nom }}</option>
                         {{ end }}
                     </select>
                 </div>

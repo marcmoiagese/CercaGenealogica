@@ -7,6 +7,73 @@
       return;
     }
 
+    function allowedParentLevelCodes(selectedLevel) {
+      if (!selectedLevel) {
+        return [];
+      }
+      var raw = selectedLevel.getAttribute("data-parent-level-codes") || "";
+      if (raw === "*") {
+        return ["*"];
+      }
+      return raw.split(",").filter(function (code) {
+        return !!code;
+      });
+    }
+
+    function parentLevelAllowed(option, selectedReligion, selectedLevel) {
+      if (!option.value || !selectedReligion || !selectedLevel) {
+        return false;
+      }
+      if (option.getAttribute("data-religion-code") !== selectedReligion) {
+        return false;
+      }
+      if (option.getAttribute("data-can-have-children") !== "true") {
+        return false;
+      }
+      var parentLevel = option.getAttribute("data-level-code") || "";
+      var allowedLevels = allowedParentLevelCodes(selectedLevel);
+      if (allowedLevels.indexOf("*") >= 0) {
+        return !!parentLevel;
+      }
+      return allowedLevels.indexOf(parentLevel) >= 0;
+    }
+
+    function syncConfessionalParents() {
+      if (!parent) {
+        return;
+      }
+      var selectedReligion = religion.value;
+      var selectedLevel = level.selectedOptions.length > 0 && !level.selectedOptions[0].disabled ? level.selectedOptions[0] : null;
+      var visibleParents = 0;
+
+      Array.prototype.forEach.call(parent.options, function (option) {
+        if (!option.value) {
+          return;
+        }
+        var allowed = parentLevelAllowed(option, selectedReligion, selectedLevel);
+        option.hidden = !allowed;
+        option.disabled = !allowed;
+        if (allowed) {
+          visibleParents += 1;
+        }
+      });
+
+      if (parent.selectedOptions.length > 0 && parent.selectedOptions[0].disabled) {
+        parent.value = "";
+      }
+
+      var help = document.getElementById("parent_id_help");
+      if (help) {
+        if (!selectedReligion || !selectedLevel) {
+          help.textContent = help.getAttribute("data-empty") || "";
+        } else if (visibleParents === 0) {
+          help.textContent = help.getAttribute("data-none") || "";
+        } else {
+          help.textContent = "";
+        }
+      }
+    }
+
     function syncConfessionalLevels() {
       var selectedReligion = religion.value;
       var visibleLevels = 0;
@@ -41,17 +108,7 @@
       }
 
       if (parent) {
-        Array.prototype.forEach.call(parent.options, function (option) {
-          if (!option.value) {
-            return;
-          }
-          var matchesParentReligion = !selectedReligion || option.getAttribute("data-religion-code") === selectedReligion;
-          option.hidden = !matchesParentReligion;
-          option.disabled = !matchesParentReligion;
-        });
-        if (parent.selectedOptions.length > 0 && parent.selectedOptions[0].disabled) {
-          parent.value = "";
-        }
+        syncConfessionalParents();
       }
     }
 
@@ -68,6 +125,7 @@
     }
 
     religion.addEventListener("change", syncConfessionalLevels);
+    level.addEventListener("change", syncConfessionalParents);
     syncConfessionalLevels();
   }
 

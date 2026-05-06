@@ -36,6 +36,18 @@ type confessionalSection struct {
 	DeletePerm string
 }
 
+type confessionalEntityListFilter struct {
+	ReligionCode string
+	LevelCode    string
+	ParentID     int
+	Text         string
+	Status       string
+	Page         int
+	PerPage      int
+	Total        int
+	TotalPages   int
+}
+
 var confessionalSections = map[string]confessionalSection{
 	"religio": {Kind: "religio", Slug: "religions", Title: "Religions/confessions", NewLabel: "Nova religio/confessio", ViewPerm: permKeyTerritoriConfessionalReligionsView, CreatePerm: permKeyTerritoriConfessionalReligionsCreate, EditPerm: permKeyTerritoriConfessionalReligionsEdit, DeletePerm: permKeyTerritoriConfessionalReligionsDelete},
 	"model":   {Kind: "model", Slug: "models", Title: "Models confessionals", NewLabel: "Nou model", ViewPerm: permKeyTerritoriConfessionalModelsView, CreatePerm: permKeyTerritoriConfessionalModelsCreate, EditPerm: permKeyTerritoriConfessionalModelsEdit, DeletePerm: permKeyTerritoriConfessionalModelsDelete},
@@ -44,6 +56,8 @@ var confessionalSections = map[string]confessionalSection{
 	"rel_ent": {Kind: "rel_ent", Slug: "relacions-entitats", Title: "Relacions entre entitats religioses", NewLabel: "Nova relacio entre entitats", ViewPerm: permKeyTerritoriConfessionalRelacionsEntitatsView, CreatePerm: permKeyTerritoriConfessionalRelacionsEntitatsCreate, EditPerm: permKeyTerritoriConfessionalRelacionsEntitatsEdit, DeletePerm: permKeyTerritoriConfessionalRelacionsEntitatsDelete},
 	"relacio": {Kind: "relacio", Slug: "municipis-entitats", Title: "Relacions municipi/nucli - entitat religiosa", NewLabel: "Nova relacio territorial", ViewPerm: permKeyTerritoriConfessionalMunicipisEntitatsView, CreatePerm: permKeyTerritoriConfessionalMunicipisEntitatsCreate, EditPerm: permKeyTerritoriConfessionalMunicipisEntitatsEdit, DeletePerm: permKeyTerritoriConfessionalMunicipisEntitatsDelete},
 }
+
+var errConfessionalParentLevelIncompatible = errors.New("confessional parent level incompatible")
 
 func (a *App) AdminConfessionalList(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/confessional/entitats", http.StatusSeeOther)
@@ -71,6 +85,8 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 	var relEntitats []db.EntitatReligiosaRelacio
 	var municipis []db.MunicipiRow
 	var paisos []db.Pais
+	listFilter := parseConfessionalEntityListFilter(r)
+	parentOptions := []db.EntitatReligiosa{}
 	switch section.Kind {
 	case "model":
 		religions, _ = a.DB.ListReligioConfessions()
@@ -78,7 +94,10 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 		paisos, _ = a.DB.ListPaisos()
 	case "entitat":
 		allEntitats, _ := a.DB.ListEntitatsReligioses()
-		entitats = publishedEntitatsReligioses(allEntitats)
+		allRelEntitats, _ := a.DB.ListEntitatReligiosaRelacions()
+		parentOptions = publishedEntitatsReligioses(allEntitats)
+		entitats = filterConfessionalEntitats(allEntitats, allRelEntitats, &listFilter)
+		relEntitats = publishedEntitatReligiosaRelacions(allRelEntitats)
 	case "rel_ent":
 		allEntitats, _ := a.DB.ListEntitatsReligioses()
 		allRelEntitats, _ := a.DB.ListEntitatReligiosaRelacions()
@@ -103,8 +122,13 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 		"Entitats":              entitats,
 		"Relacions":             relacions,
 		"RelEntitats":           relEntitats,
+		"Filter":                listFilter,
+		"ParentOptions":         parentOptions,
 		"Municipis":             municipis,
 		"Paisos":                paisos,
+		"SelectableReligions":   ListSelectableConfessionalReligionCatalog(),
+		"SelectableNivells":     ListConfessionalLevelCatalog(),
+		"LevelCanHaveChildren":  confessionalLevelCanHaveChildrenMap(),
 		"CanCreate":             canCreate,
 		"CanEdit":               canEdit,
 		"CanDelete":             canDelete,
@@ -536,6 +560,7 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 	}
 	nuclis := a.compatibleNucliRows(municipis, selectedRelacioMunicipiID(data.Relacio))
 	lang := ResolveLangForUser(r, user.PreferredLang)
+	selectableEntitats := publishedEntitatsReligioses(allEntitats)
 	RenderPrivateTemplate(w, r, "admin-confessional-form.html", map[string]interface{}{
 		"Section":               confessionalSectionMust(data.Kind),
 		"Form":                  data,
@@ -547,7 +572,10 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 		"ReligionCatalogLabels": confessionalReligionCatalogLabels(lang),
 		"LevelCatalogLabels":    confessionalLevelCatalogLabels(lang),
 		"Entitats":              allEntitats,
-		"SelectableEntitats":    publishedEntitatsReligioses(allEntitats),
+		"SelectableEntitats":    selectableEntitats,
+		"ParentOptionAllowed":   confessionalParentOptionAllowedMap(selectableEntitats, data.Entitat),
+		"ParentLevelCodesCSV":   confessionalParentLevelCodesCSVMap(),
+		"LevelCanHaveChildren":  confessionalLevelCanHaveChildrenMap(),
 		"Municipis":             municipis,
 		"Nuclis":                nuclis,
 		"Paisos":                paisos,
@@ -634,7 +662,7 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request, lang s
 				return data, "L'entitat pare ha de compartir religio/confessio."
 			}
 			if err := validateConfessionalEntityRelation(parent, item); err != nil {
-				return data, err.Error()
+				return data, confessionalRelationErrorMessage(lang, err)
 			}
 		}
 	case "relacio":
@@ -719,7 +747,7 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request, lang s
 			return data, "Les entitats de la relacio han de compartir religio/confessio."
 		}
 		if err := validateConfessionalEntityRelation(parent, child); err != nil {
-			return data, err.Error()
+			return data, confessionalRelationErrorMessage(lang, err)
 		}
 		item.TipusRelacio = suggestConfessionalRelationType(child.NivellConfessionalCodi)
 	}
@@ -749,6 +777,141 @@ func (a *App) compatibleNucliRows(municipis []db.MunicipiRow, municipiID int) []
 		nuclis = append(nuclis, row)
 	}
 	return nuclis
+}
+
+func parseConfessionalEntityListFilter(r *http.Request) confessionalEntityListFilter {
+	q := r.URL.Query()
+	filter := confessionalEntityListFilter{
+		ReligionCode: normalizeCatalogCode(q.Get("religio_confessio_codi")),
+		LevelCode:    normalizeCatalogCode(q.Get("nivell_confessional_codi")),
+		Text:         normalizeConfessionalSearchText(q.Get("q")),
+		Status:       "publicat",
+		Page:         parsePositiveIntDefault(q.Get("page"), 1, 1, 100000),
+		PerPage:      parsePositiveIntDefault(q.Get("per_page"), 50, 1, 100),
+	}
+	if _, ok := GetConfessionalReligionCatalogByCode(filter.ReligionCode); filter.ReligionCode != "" && !ok {
+		filter.ReligionCode = ""
+	}
+	if _, ok := GetConfessionalLevelCatalogByCode(filter.LevelCode); filter.LevelCode != "" && !ok {
+		filter.LevelCode = ""
+	}
+	if filter.ReligionCode != "" && filter.LevelCode != "" {
+		_, _, _, _, compatible := ConfessionalLevelCompatibleWithReligion(filter.ReligionCode, filter.LevelCode)
+		if !compatible {
+			filter.LevelCode = ""
+		}
+	}
+	filter.ParentID = parsePositiveIntDefault(q.Get("parent_id"), 0, 0, 1000000000)
+	return filter
+}
+
+func normalizeConfessionalSearchText(raw string) string {
+	text := strings.TrimSpace(raw)
+	runes := []rune(text)
+	if len(runes) > 80 {
+		text = string(runes[:80])
+	}
+	return text
+}
+
+func parsePositiveIntDefault(raw string, fallback, min, max int) int {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return fallback
+	}
+	if n < min {
+		return fallback
+	}
+	if n > max {
+		return max
+	}
+	return n
+}
+
+func filterConfessionalEntitats(all []db.EntitatReligiosa, rels []db.EntitatReligiosaRelacio, filter *confessionalEntityListFilter) []db.EntitatReligiosa {
+	publishedParentIDs := map[int]bool{}
+	for _, rel := range rels {
+		if rel.ModeracioEstat == "publicat" && rel.EntitatOrigenID == filter.ParentID {
+			publishedParentIDs[rel.EntitatDestiID] = true
+		}
+	}
+	needle := strings.ToLower(filter.Text)
+	out := make([]db.EntitatReligiosa, 0, len(all))
+	for _, item := range all {
+		if item.ModeracioEstat != filter.Status {
+			continue
+		}
+		if filter.ReligionCode != "" && item.ReligioConfessioCodi != filter.ReligionCode {
+			continue
+		}
+		if filter.LevelCode != "" && item.NivellConfessionalCodi != filter.LevelCode {
+			continue
+		}
+		if filter.ParentID > 0 && !publishedParentIDs[item.ID] {
+			continue
+		}
+		if needle != "" {
+			name := strings.ToLower(item.Nom)
+			code := strings.ToLower(item.Codi)
+			if !strings.Contains(name, needle) && !strings.Contains(code, needle) {
+				continue
+			}
+		}
+		out = append(out, item)
+	}
+	filter.Total = len(out)
+	filter.TotalPages = 1
+	if filter.PerPage > 0 {
+		filter.TotalPages = (filter.Total + filter.PerPage - 1) / filter.PerPage
+		if filter.TotalPages == 0 {
+			filter.TotalPages = 1
+		}
+	}
+	if filter.Page > filter.TotalPages {
+		filter.Page = filter.TotalPages
+	}
+	start := (filter.Page - 1) * filter.PerPage
+	if start >= len(out) {
+		return []db.EntitatReligiosa{}
+	}
+	end := start + filter.PerPage
+	if end > len(out) {
+		end = len(out)
+	}
+	return out[start:end]
+}
+
+func confessionalParentOptionAllowedMap(candidates []db.EntitatReligiosa, child *db.EntitatReligiosa) map[int]bool {
+	out := map[int]bool{}
+	if child == nil || child.ReligioConfessioCodi == "" || child.NivellConfessionalCodi == "" {
+		return out
+	}
+	for _, parent := range candidates {
+		if child.ID != 0 && parent.ID == child.ID {
+			continue
+		}
+		parentCopy := parent
+		if validateConfessionalEntityRelation(&parentCopy, child) == nil {
+			out[parent.ID] = true
+		}
+	}
+	return out
+}
+
+func confessionalParentLevelCodesCSVMap() map[string]string {
+	out := map[string]string{}
+	for _, level := range ListConfessionalLevelCatalog() {
+		out[level.Code] = ConfessionalAllowedParentLevelCodesCSV(level)
+	}
+	return out
+}
+
+func confessionalLevelCanHaveChildrenMap() map[string]bool {
+	out := map[string]bool{}
+	for _, level := range ListConfessionalLevelCatalog() {
+		out[level.Code] = level.CanHaveChildren
+	}
+	return out
 }
 
 func (a *App) confessionalModerationStatusForSave(kind string, id int) string {
@@ -838,8 +1001,18 @@ func validateConfessionalEntityRelation(parent, child *db.EntitatReligiosa) erro
 		if parentLevel.ReligionCode != "" && childLevel.ReligionCode != "" && parentLevel.ReligionCode != childLevel.ReligionCode {
 			return errors.New("Els nivells de la relacio han de pertanyer a la mateixa religio/confessio.")
 		}
+		if !ConfessionalParentLevelCompatible(parentLevel.Code, childLevel.Code) {
+			return errConfessionalParentLevelIncompatible
+		}
 	}
 	return nil
+}
+
+func confessionalRelationErrorMessage(lang string, err error) string {
+	if errors.Is(err, errConfessionalParentLevelIncompatible) {
+		return T(lang, "confessional.error.parent_level_incompatible")
+	}
+	return err.Error()
 }
 
 func (a *App) applyConfessionalAuthorship(kind string, id, userID int, data *confessionalFormData) error {

@@ -14,6 +14,9 @@
         .confessional-actions form { display: inline; margin: 0; }
         .confessional-actions .boto-secundari, .confessional-actions .boto-primari { padding: 5px 8px; }
         .confessional-empty { color: #667085; text-align: center; }
+        .confessional-filters { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 0 0 16px; }
+        .confessional-filter-actions { align-items: end; display: flex; gap: 8px; }
+        .confessional-results { color: #667085; margin: 0 0 10px; }
     </style>
 </head>
 <body>
@@ -78,6 +81,54 @@
             {{ end }}
 
             {{ if eq .Data.Section.Kind "entitat" }}
+            <form class="confessional-filters" method="get" action="/confessional/entitats">
+                <div class="grup-camp">
+                    <label for="confessional-q">{{ t .Lang "confessional.filter.search" }}</label>
+                    <input id="confessional-q" type="text" name="q" maxlength="80" value="{{ .Data.Filter.Text }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="confessional-religion">{{ t .Lang "confessional.filter.religion" }}</label>
+                    <select id="confessional-religion" name="religio_confessio_codi">
+                        <option value="">{{ t .Lang "confessional.filter.all_religions" }}</option>
+                        {{ range .Data.SelectableReligions }}
+                        <option value="{{ .Code }}" {{ if eq $.Data.Filter.ReligionCode .Code }}selected{{ end }}>{{ index $.Data.ReligionCatalogLabels .Code }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="confessional-level">{{ t .Lang "confessional.filter.level" }}</label>
+                    <select id="confessional-level" name="nivell_confessional_codi">
+                        <option value="">{{ t .Lang "confessional.filter.all_levels" }}</option>
+                        {{ range .Data.SelectableNivells }}
+                        <option value="{{ .Code }}" data-religion-code="{{ .ReligionCode }}" {{ if eq $.Data.Filter.LevelCode .Code }}selected{{ end }}>{{ index $.Data.LevelCatalogLabels .Code }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="confessional-parent">{{ t .Lang "confessional.filter.parent" }}</label>
+                    <select id="confessional-parent" name="parent_id">
+                        <option value="">{{ t .Lang "confessional.filter.all_parents" }}</option>
+                        {{ range .Data.ParentOptions }}
+                        <option value="{{ .ID }}" {{ if eq $.Data.Filter.ParentID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="confessional-status">{{ t .Lang "confessional.filter.status" }}</label>
+                    <select id="confessional-status" name="status">
+                        <option value="publicat" selected>{{ t .Lang "confessional.filter.status_publicat" }}</option>
+                    </select>
+                </div>
+                <div class="grup-camp">
+                    <label for="confessional-per-page">{{ t .Lang "confessional.filter.per_page" }}</label>
+                    <input id="confessional-per-page" type="number" name="per_page" min="1" max="100" value="{{ .Data.Filter.PerPage }}">
+                </div>
+                <div class="confessional-filter-actions">
+                    <button class="boto-primari" type="submit">{{ t .Lang "confessional.filter.apply" }}</button>
+                    <a class="boto-secundari" href="/confessional/entitats">{{ t .Lang "confessional.filter.clear" }}</a>
+                </div>
+            </form>
+            <p class="confessional-results">{{ t .Lang "confessional.filter.results" }}: {{ .Data.Filter.Total }} · {{ t .Lang "confessional.filter.page" }} {{ .Data.Filter.Page }}/{{ .Data.Filter.TotalPages }}</p>
             <table class="taula taula-registres">
                 <thead><tr><th>{{ t .Lang "confessional.col.code" }}</th><th>{{ t .Lang "confessional.col.name" }}</th><th>{{ t .Lang "confessional.col.religion" }}</th><th>{{ t .Lang "confessional.col.level" }}</th><th>{{ t .Lang "confessional.col.status" }}</th>{{ if or .Data.CanEdit .Data.CanDelete }}<th>{{ t .Lang "confessional.col.actions" }}</th>{{ end }}</tr></thead>
                 <tbody>

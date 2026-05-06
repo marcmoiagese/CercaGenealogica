@@ -15,19 +15,20 @@ type ConfessionalReligionCatalogItem struct {
 }
 
 type ConfessionalLevelCatalogItem struct {
-	Code                 string
-	CanonicalName        string
-	I18nKey              string
-	ReligionCode         string
-	CategoryCode         string
-	Order                int
-	ParentCode           string
-	CanHaveTerritory     bool
-	CanHaveChildren      bool
-	CanLinkMunicipi      bool
-	CanSuggestForImports bool
-	Active               bool
-	SystemManaged        bool
+	Code                    string
+	CanonicalName           string
+	I18nKey                 string
+	ReligionCode            string
+	CategoryCode            string
+	Order                   int
+	ParentCode              string
+	AllowedParentLevelCodes []string
+	CanHaveTerritory        bool
+	CanHaveChildren         bool
+	CanLinkMunicipi         bool
+	CanSuggestForImports    bool
+	Active                  bool
+	SystemManaged           bool
 }
 
 type ConfessionalCategoryCatalogItem struct {
@@ -102,6 +103,33 @@ func ConfessionalLevelCompatibleWithReligion(religionCode, levelCode string) (Co
 	level, levelOK := GetConfessionalLevelCatalogByCode(levelCode)
 	compatible := religionOK && levelOK && religion.Active && level.Active && level.ReligionCode == religion.Code
 	return religion, level, religionOK && religion.Active, levelOK && level.Active, compatible
+}
+
+func ConfessionalParentLevelCompatible(parentLevelCode, childLevelCode string) bool {
+	parent, parentOK := GetConfessionalLevelCatalogByCode(parentLevelCode)
+	child, childOK := GetConfessionalLevelCatalogByCode(childLevelCode)
+	if !parentOK || !childOK || !parent.Active || !child.Active || !parent.CanHaveChildren {
+		return false
+	}
+	if parent.ReligionCode != "" && child.ReligionCode != "" && parent.ReligionCode != child.ReligionCode {
+		return false
+	}
+	if child.AllowedParentLevelCodes != nil {
+		for _, code := range child.AllowedParentLevelCodes {
+			if code == parent.Code {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
+func ConfessionalAllowedParentLevelCodesCSV(item ConfessionalLevelCatalogItem) string {
+	if item.AllowedParentLevelCodes == nil {
+		return "*"
+	}
+	return strings.Join(item.AllowedParentLevelCodes, ",")
 }
 
 func ConfessionalReligionLabel(item ConfessionalReligionCatalogItem, lang string) string {
@@ -201,21 +229,21 @@ var confessionalReligionCatalog = []ConfessionalReligionCatalogItem{
 }
 
 var confessionalLevelCatalog = []ConfessionalLevelCatalogItem{
-	{Code: "santa_seu", CanonicalName: "Santa Seu", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "govern_universal", Order: 1, CanHaveTerritory: true, CanHaveChildren: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "provincia_eclesiastica", CanonicalName: "Provincia eclesiastica", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_major", Order: 2, CanHaveTerritory: true, CanHaveChildren: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "arquebisbat_arxidiocesi", CanonicalName: "Arquebisbat / Arxidiocesi", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_major", Order: 3, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "bisbat_diocesi", CanonicalName: "Bisbat / Diocesi", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_major", Order: 4, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "prelatura_territorial", CanonicalName: "Prelatura territorial", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_major", Order: 5, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "abadia_territorial", CanonicalName: "Abadia territorial", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_major", Order: 6, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "vicariat_apostolic", CanonicalName: "Vicariat apostolic", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_major", Order: 7, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "vicariat_territorial_zona_pastoral", CanonicalName: "Vicariat territorial / Zona pastoral", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_intermedi", Order: 8, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "arxiprestat_vicariat_forani", CanonicalName: "Arxiprestat / Vicariat forani", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_intermedi", Order: 9, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "unitat_pastoral", CanonicalName: "Unitat pastoral", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "unitat_pastoral", Order: 10, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "parroquia", CanonicalName: "Parroquia", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_local", Order: 11, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "esglesia_filial", CanonicalName: "Esglesia filial", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "lloc_de_culte", Order: 12, CanHaveTerritory: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "lloc_de_culte", CanonicalName: "Lloc de culte", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "lloc_de_culte", Order: 13, CanHaveTerritory: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "capella_ermita_santuari", CanonicalName: "Capella / Ermita / Santuari", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "lloc_de_culte", Order: 14, CanHaveTerritory: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
-	{Code: "monestir_comunitat_religiosa", CanonicalName: "Monestir / Comunitat religiosa", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "comunitat_religiosa", Order: 15, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "santa_seu", CanonicalName: "Santa Seu", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "govern_universal", Order: 1, AllowedParentLevelCodes: []string{}, CanHaveTerritory: true, CanHaveChildren: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "provincia_eclesiastica", CanonicalName: "Provincia eclesiastica", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_major", Order: 2, AllowedParentLevelCodes: []string{"santa_seu"}, CanHaveTerritory: true, CanHaveChildren: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "arquebisbat_arxidiocesi", CanonicalName: "Arquebisbat / Arxidiocesi", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_major", Order: 3, AllowedParentLevelCodes: []string{"provincia_eclesiastica", "santa_seu"}, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "bisbat_diocesi", CanonicalName: "Bisbat / Diocesi", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_major", Order: 4, AllowedParentLevelCodes: []string{"provincia_eclesiastica", "arquebisbat_arxidiocesi", "santa_seu"}, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "prelatura_territorial", CanonicalName: "Prelatura territorial", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_major", Order: 5, AllowedParentLevelCodes: []string{"provincia_eclesiastica", "arquebisbat_arxidiocesi", "santa_seu"}, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "abadia_territorial", CanonicalName: "Abadia territorial", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_major", Order: 6, AllowedParentLevelCodes: []string{"provincia_eclesiastica", "arquebisbat_arxidiocesi", "santa_seu"}, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "vicariat_apostolic", CanonicalName: "Vicariat apostolic", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_major", Order: 7, AllowedParentLevelCodes: []string{"provincia_eclesiastica", "arquebisbat_arxidiocesi", "santa_seu"}, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "vicariat_territorial_zona_pastoral", CanonicalName: "Vicariat territorial / Zona pastoral", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_intermedi", Order: 8, AllowedParentLevelCodes: []string{"arquebisbat_arxidiocesi", "bisbat_diocesi"}, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "arxiprestat_vicariat_forani", CanonicalName: "Arxiprestat / Vicariat forani", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_intermedi", Order: 9, AllowedParentLevelCodes: []string{"arquebisbat_arxidiocesi", "bisbat_diocesi"}, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "unitat_pastoral", CanonicalName: "Unitat pastoral", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "unitat_pastoral", Order: 10, AllowedParentLevelCodes: []string{"arxiprestat_vicariat_forani", "bisbat_diocesi", "arquebisbat_arxidiocesi"}, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "parroquia", CanonicalName: "Parroquia", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "territorial_local", Order: 11, AllowedParentLevelCodes: []string{"unitat_pastoral", "arxiprestat_vicariat_forani", "bisbat_diocesi", "arquebisbat_arxidiocesi"}, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "esglesia_filial", CanonicalName: "Esglesia filial", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "lloc_de_culte", Order: 12, AllowedParentLevelCodes: []string{"parroquia"}, CanHaveTerritory: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "lloc_de_culte", CanonicalName: "Lloc de culte", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "lloc_de_culte", Order: 13, AllowedParentLevelCodes: []string{"parroquia"}, CanHaveTerritory: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "capella_ermita_santuari", CanonicalName: "Capella / Ermita / Santuari", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "lloc_de_culte", Order: 14, AllowedParentLevelCodes: []string{"parroquia", "lloc_de_culte"}, CanHaveTerritory: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
+	{Code: "monestir_comunitat_religiosa", CanonicalName: "Monestir / Comunitat religiosa", ReligionCode: "catolicisme_ritu_llati", CategoryCode: "comunitat_religiosa", Order: 15, AllowedParentLevelCodes: []string{"bisbat_diocesi", "arquebisbat_arxidiocesi", "santa_seu"}, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
 	{Code: "ortodoxia_autocefalia", CanonicalName: "Autocefalia", ReligionCode: "ortodoxia", CategoryCode: "govern_universal", Order: 1, CanHaveTerritory: true, CanHaveChildren: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
 	{Code: "ortodoxia_patriarcat", CanonicalName: "Patriarcat", ReligionCode: "ortodoxia", CategoryCode: "territorial_major", Order: 2, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
 	{Code: "ortodoxia_exarcat", CanonicalName: "Exarcat", ReligionCode: "ortodoxia", CategoryCode: "territorial_major", Order: 3, CanHaveTerritory: true, CanHaveChildren: true, CanLinkMunicipi: true, CanSuggestForImports: true, Active: true, SystemManaged: true},
