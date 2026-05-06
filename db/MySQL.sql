@@ -776,11 +776,6 @@ CREATE TABLE IF NOT EXISTS entitat_religiosa (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ALTER TABLE entitat_religiosa ADD COLUMN religio_confessio_codi VARCHAR(120);
 ALTER TABLE entitat_religiosa ADD COLUMN nivell_confessional_codi VARCHAR(120);
-ALTER TABLE entitat_religiosa ADD COLUMN moderation_notes TEXT;
-ALTER TABLE entitat_religiosa ADD COLUMN created_by INT UNSIGNED NULL;
-ALTER TABLE entitat_religiosa ADD COLUMN updated_by INT UNSIGNED NULL;
-ALTER TABLE entitat_religiosa ADD COLUMN moderated_by INT UNSIGNED NULL;
-ALTER TABLE entitat_religiosa ADD COLUMN moderated_at DATETIME;
 CREATE INDEX idx_entitat_religiosa_codi ON entitat_religiosa(codi);
 CREATE INDEX idx_entitat_religiosa_religio_codi ON entitat_religiosa(religio_confessio_codi);
 CREATE INDEX idx_entitat_religiosa_nivell_codi ON entitat_religiosa(nivell_confessional_codi);
@@ -820,11 +815,6 @@ CREATE TABLE IF NOT EXISTS municipi_entitat_religiosa (
     FOREIGN KEY (updated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-ALTER TABLE municipi_entitat_religiosa ADD COLUMN moderation_notes TEXT;
-ALTER TABLE municipi_entitat_religiosa ADD COLUMN created_by INT UNSIGNED NULL;
-ALTER TABLE municipi_entitat_religiosa ADD COLUMN updated_by INT UNSIGNED NULL;
-ALTER TABLE municipi_entitat_religiosa ADD COLUMN moderated_by INT UNSIGNED NULL;
-ALTER TABLE municipi_entitat_religiosa ADD COLUMN moderated_at DATETIME;
 
 CREATE TABLE IF NOT EXISTS entitat_religiosa_relacio (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -849,11 +839,6 @@ CREATE TABLE IF NOT EXISTS entitat_religiosa_relacio (
     FOREIGN KEY (updated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-ALTER TABLE entitat_religiosa_relacio ADD COLUMN moderation_notes TEXT;
-ALTER TABLE entitat_religiosa_relacio ADD COLUMN created_by INT UNSIGNED NULL;
-ALTER TABLE entitat_religiosa_relacio ADD COLUMN updated_by INT UNSIGNED NULL;
-ALTER TABLE entitat_religiosa_relacio ADD COLUMN moderated_by INT UNSIGNED NULL;
-ALTER TABLE entitat_religiosa_relacio ADD COLUMN moderated_at DATETIME;
 CREATE INDEX idx_entitat_religiosa_relacio_origen ON entitat_religiosa_relacio(entitat_origen_id);
 CREATE INDEX idx_entitat_religiosa_relacio_desti ON entitat_religiosa_relacio(entitat_desti_id);
 CREATE INDEX idx_entitat_religiosa_relacio_created_by ON entitat_religiosa_relacio(created_by);

@@ -700,11 +700,6 @@ CREATE TABLE IF NOT EXISTS entitat_religiosa (
 );
 ALTER TABLE entitat_religiosa ADD COLUMN IF NOT EXISTS religio_confessio_codi TEXT;
 ALTER TABLE entitat_religiosa ADD COLUMN IF NOT EXISTS nivell_confessional_codi TEXT;
-ALTER TABLE entitat_religiosa ADD COLUMN IF NOT EXISTS moderation_notes TEXT;
-ALTER TABLE entitat_religiosa ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
-ALTER TABLE entitat_religiosa ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
-ALTER TABLE entitat_religiosa ADD COLUMN IF NOT EXISTS moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
-ALTER TABLE entitat_religiosa ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMP WITHOUT TIME ZONE;
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_codi ON entitat_religiosa(codi);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_religio_codi ON entitat_religiosa(religio_confessio_codi);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_nivell_codi ON entitat_religiosa(nivell_confessional_codi);
@@ -734,11 +729,6 @@ CREATE TABLE IF NOT EXISTS municipi_entitat_religiosa (
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-ALTER TABLE municipi_entitat_religiosa ADD COLUMN IF NOT EXISTS moderation_notes TEXT;
-ALTER TABLE municipi_entitat_religiosa ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
-ALTER TABLE municipi_entitat_religiosa ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
-ALTER TABLE municipi_entitat_religiosa ADD COLUMN IF NOT EXISTS moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
-ALTER TABLE municipi_entitat_religiosa ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMP WITHOUT TIME ZONE;
 CREATE INDEX IF NOT EXISTS idx_municipi_entitat_religiosa_municipi ON municipi_entitat_religiosa(municipi_id);
 CREATE INDEX IF NOT EXISTS idx_municipi_entitat_religiosa_nucli ON municipi_entitat_religiosa(nucli_id);
 CREATE INDEX IF NOT EXISTS idx_municipi_entitat_religiosa_entitat ON municipi_entitat_religiosa(entitat_religiosa_id);
@@ -762,11 +752,6 @@ CREATE TABLE IF NOT EXISTS entitat_religiosa_relacio (
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-ALTER TABLE entitat_religiosa_relacio ADD COLUMN IF NOT EXISTS moderation_notes TEXT;
-ALTER TABLE entitat_religiosa_relacio ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
-ALTER TABLE entitat_religiosa_relacio ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
-ALTER TABLE entitat_religiosa_relacio ADD COLUMN IF NOT EXISTS moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL;
-ALTER TABLE entitat_religiosa_relacio ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMP WITHOUT TIME ZONE;
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_relacio_origen ON entitat_religiosa_relacio(entitat_origen_id);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_relacio_desti ON entitat_religiosa_relacio(entitat_desti_id);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_relacio_created_by ON entitat_religiosa_relacio(created_by);

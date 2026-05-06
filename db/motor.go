@@ -2918,6 +2918,16 @@ func applyDatabaseFromSQL(sqlFile, engine string, db DB, reset bool) error {
 			continue
 		}
 
+		if engine == "sqlite" {
+			skip, err := shouldSkipExistingSQLiteAddColumn(db, q)
+			if err != nil {
+				return fmt.Errorf("error comprovant columna SQLite abans d'ALTER: %w", err)
+			}
+			if skip {
+				continue
+			}
+		}
+
 		if _, err := db.Exec(q); err != nil {
 			if engine == "mysql" {
 				handled, fixErr := handleMySQLMissingIndexColumn(db, q, err)
@@ -2937,6 +2947,11 @@ func applyDatabaseFromSQL(sqlFile, engine string, db DB, reset bool) error {
 				snip = snip[:120] + " ..."
 			}
 			return fmt.Errorf("error executant '%s': %w", snip, err)
+		}
+		if table, ok := confessionalAuthorshipCreateTable(q); ok {
+			if err := ensureConfessionalAuthorshipColumns(engine, db, table); err != nil {
+				return fmt.Errorf("error assegurant autoria confessional a %s (%s): %w", table, engine, err)
+			}
 		}
 	}
 
@@ -3146,6 +3161,149 @@ func shouldIgnoreSQLError(engine, stmt string, err error) bool {
 		return true
 	}
 	return false
+}
+
+type schemaColumn struct {
+	Name string
+	Def  map[string]string
+}
+
+var confessionalAuthorshipColumns = map[string][]schemaColumn{
+	"entitat_religiosa": {
+		{Name: "moderation_notes", Def: map[string]string{"sqlite": "TEXT", "postgres": "TEXT", "mysql": "TEXT"}},
+		{Name: "created_by", Def: map[string]string{"sqlite": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "postgres": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "mysql": "INT UNSIGNED NULL"}},
+		{Name: "updated_by", Def: map[string]string{"sqlite": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "postgres": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "mysql": "INT UNSIGNED NULL"}},
+		{Name: "moderated_by", Def: map[string]string{"sqlite": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "postgres": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "mysql": "INT UNSIGNED NULL"}},
+		{Name: "moderated_at", Def: map[string]string{"sqlite": "TIMESTAMP", "postgres": "TIMESTAMP WITHOUT TIME ZONE", "mysql": "DATETIME"}},
+	},
+	"municipi_entitat_religiosa": {
+		{Name: "moderation_notes", Def: map[string]string{"sqlite": "TEXT", "postgres": "TEXT", "mysql": "TEXT"}},
+		{Name: "created_by", Def: map[string]string{"sqlite": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "postgres": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "mysql": "INT UNSIGNED NULL"}},
+		{Name: "updated_by", Def: map[string]string{"sqlite": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "postgres": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "mysql": "INT UNSIGNED NULL"}},
+		{Name: "moderated_by", Def: map[string]string{"sqlite": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "postgres": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "mysql": "INT UNSIGNED NULL"}},
+		{Name: "moderated_at", Def: map[string]string{"sqlite": "TIMESTAMP", "postgres": "TIMESTAMP WITHOUT TIME ZONE", "mysql": "DATETIME"}},
+	},
+	"entitat_religiosa_relacio": {
+		{Name: "moderation_notes", Def: map[string]string{"sqlite": "TEXT", "postgres": "TEXT", "mysql": "TEXT"}},
+		{Name: "created_by", Def: map[string]string{"sqlite": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "postgres": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "mysql": "INT UNSIGNED NULL"}},
+		{Name: "updated_by", Def: map[string]string{"sqlite": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "postgres": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "mysql": "INT UNSIGNED NULL"}},
+		{Name: "moderated_by", Def: map[string]string{"sqlite": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "postgres": "INTEGER REFERENCES usuaris(id) ON DELETE SET NULL", "mysql": "INT UNSIGNED NULL"}},
+		{Name: "moderated_at", Def: map[string]string{"sqlite": "TIMESTAMP", "postgres": "TIMESTAMP WITHOUT TIME ZONE", "mysql": "DATETIME"}},
+	},
+}
+
+func confessionalAuthorshipCreateTable(stmt string) (string, bool) {
+	low := strings.ToLower(strings.TrimSpace(stmt))
+	const prefix = "create table if not exists "
+	if !strings.HasPrefix(low, prefix) {
+		return "", false
+	}
+	rest := strings.TrimSpace(low[len(prefix):])
+	if idx := strings.IndexAny(rest, " ("); idx >= 0 {
+		rest = rest[:idx]
+	}
+	table := cleanSQLIdent(rest)
+	_, ok := confessionalAuthorshipColumns[table]
+	return table, ok
+}
+
+func ensureConfessionalAuthorshipColumns(engine string, db DB, table string) error {
+	columns, ok := confessionalAuthorshipColumns[table]
+	if !ok {
+		return nil
+	}
+	for _, column := range columns {
+		exists, err := schemaColumnExists(engine, db, table, column.Name)
+		if err != nil {
+			return err
+		}
+		if exists {
+			continue
+		}
+		def := column.Def[engine]
+		if def == "" {
+			return fmt.Errorf("definicio de columna no definida per %s.%s a %s", table, column.Name, engine)
+		}
+		stmt := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", quoteIdent(engine, table), quoteIdent(engine, column.Name), def)
+		if _, err := db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func shouldSkipExistingSQLiteAddColumn(db DB, stmt string) (bool, error) {
+	table, column, ok := parseAlterTableAddColumn(stmt)
+	if !ok {
+		return false, nil
+	}
+	exists, err := schemaColumnExists("sqlite", db, table, column)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+func parseAlterTableAddColumn(stmt string) (string, string, bool) {
+	fields := strings.Fields(strings.TrimSpace(stmt))
+	if len(fields) < 6 {
+		return "", "", false
+	}
+	if !strings.EqualFold(fields[0], "ALTER") || !strings.EqualFold(fields[1], "TABLE") {
+		return "", "", false
+	}
+	if !strings.EqualFold(fields[3], "ADD") || !strings.EqualFold(fields[4], "COLUMN") {
+		return "", "", false
+	}
+	table := cleanSQLIdent(fields[2])
+	column := cleanSQLIdent(fields[5])
+	if table == "" || column == "" {
+		return "", "", false
+	}
+	return table, column, true
+}
+
+func schemaColumnExists(engine string, db DB, table, column string) (bool, error) {
+	switch engine {
+	case "sqlite":
+		rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", quoteIdent(engine, table)))
+		if err != nil {
+			return false, err
+		}
+		for _, row := range rows {
+			if strings.EqualFold(stringFromRowValue(rowValueByKey(row, "name")), column) {
+				return true, nil
+			}
+		}
+		return false, nil
+	case "postgres":
+		q := fmt.Sprintf("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = %s AND column_name = %s", sqlLiteral(table), sqlLiteral(column))
+		rows, err := db.Query(q)
+		if err != nil {
+			return false, err
+		}
+		return len(rows) > 0, nil
+	case "mysql":
+		q := fmt.Sprintf("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = %s AND column_name = %s", sqlLiteral(table), sqlLiteral(column))
+		rows, err := db.Query(q)
+		if err != nil {
+			return false, err
+		}
+		return len(rows) > 0, nil
+	default:
+		return false, fmt.Errorf("motor no suportat per comprovar columnes: %s", engine)
+	}
+}
+
+func cleanSQLIdent(ident string) string {
+	ident = strings.TrimSpace(ident)
+	ident = strings.TrimRight(ident, ",;(")
+	ident = strings.Trim(ident, "`\"")
+	return ident
+}
+
+func sqlLiteral(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
 
 func quoteIdent(engine, ident string) string {
