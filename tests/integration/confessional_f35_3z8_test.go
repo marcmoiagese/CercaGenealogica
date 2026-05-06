@@ -207,7 +207,7 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 		t.Fatalf("no s'ha de reintroduir JS inline al formulari confessional")
 	}
 	for _, token := range []string{
-		`confessional.filter.search`,
+		`confessional.hierarchy.search.label`,
 		`confessional.filter.religion`,
 		`confessional.filter.level`,
 		`confessional.filter.parent`,

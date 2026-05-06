@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -40,12 +41,31 @@ type confessionalEntityListFilter struct {
 	ReligionCode string
 	LevelCode    string
 	ParentID     int
+	ParentMode   string
 	Text         string
 	Status       string
+	Sort         string
+	SortDir      string
 	Page         int
 	PerPage      int
 	Total        int
 	TotalPages   int
+}
+
+type confessionalHierarchyPathItem struct {
+	ID    int
+	Name  string
+	Level string
+}
+
+type confessionalHierarchyRow struct {
+	Entitat        db.EntitatReligiosa
+	ParentID       int
+	ParentName     string
+	Path           []confessionalHierarchyPathItem
+	ChildCount     int
+	TerritoryCount int
+	Depth          int
 }
 
 var confessionalSections = map[string]confessionalSection{
@@ -81,12 +101,15 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 	var models []db.ModelConfessional
 	var nivells []db.NivellConfessional
 	var entitats []db.EntitatReligiosa
+	var hierarchyRows []confessionalHierarchyRow
 	var relacions []db.MunicipiEntitatReligiosa
 	var relEntitats []db.EntitatReligiosaRelacio
 	var municipis []db.MunicipiRow
 	var paisos []db.Pais
 	listFilter := parseConfessionalEntityListFilter(r)
 	parentOptions := []db.EntitatReligiosa{}
+	var parentPath []confessionalHierarchyPathItem
+	lang := ResolveLangForUser(r, user.PreferredLang)
 	switch section.Kind {
 	case "model":
 		religions, _ = a.DB.ListReligioConfessions()
@@ -95,8 +118,12 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 	case "entitat":
 		allEntitats, _ := a.DB.ListEntitatsReligioses()
 		allRelEntitats, _ := a.DB.ListEntitatReligiosaRelacions()
-		parentOptions = publishedEntitatsReligioses(allEntitats)
-		entitats = filterConfessionalEntitats(allEntitats, allRelEntitats, &listFilter)
+		allRelacions, _ := a.DB.ListMunicipiEntitatsReligioses(0)
+		publishedEntitats := publishedEntitatsReligioses(allEntitats)
+		publishedRelEntitats := publishedEntitatReligiosaRelacions(allRelEntitats)
+		parentOptions = confessionalHierarchyParentOptions(publishedEntitats, &listFilter)
+		hierarchyRows, parentPath = filterConfessionalHierarchyRows(publishedEntitats, publishedRelEntitats, publishedMunicipiEntitatsReligioses(allRelacions), &listFilter, lang)
+		entitats = confessionalRowsToEntitats(hierarchyRows)
 		relEntitats = publishedEntitatReligiosaRelacions(allRelEntitats)
 	case "rel_ent":
 		allEntitats, _ := a.DB.ListEntitatsReligioses()
@@ -113,21 +140,23 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 	canCreate := a.HasPermission(user.ID, section.CreatePerm, PermissionTarget{})
 	canEdit := a.HasPermission(user.ID, section.EditPerm, PermissionTarget{})
 	canDelete := a.HasPermission(user.ID, section.DeletePerm, PermissionTarget{})
-	lang := ResolveLangForUser(r, user.PreferredLang)
 	RenderPrivateTemplate(w, r, "admin-confessional-list.html", map[string]interface{}{
 		"Section":               section,
 		"Religions":             religions,
 		"Models":                models,
 		"Nivells":               nivells,
 		"Entitats":              entitats,
+		"HierarchyRows":         hierarchyRows,
 		"Relacions":             relacions,
 		"RelEntitats":           relEntitats,
 		"Filter":                listFilter,
 		"ParentOptions":         parentOptions,
+		"ParentPath":            parentPath,
 		"Municipis":             municipis,
 		"Paisos":                paisos,
 		"SelectableReligions":   ListSelectableConfessionalReligionCatalog(),
 		"SelectableNivells":     ListConfessionalLevelCatalog(),
+		"ParentLevelCodesCSV":   confessionalParentLevelCodesCSVMap(),
 		"LevelCanHaveChildren":  confessionalLevelCanHaveChildrenMap(),
 		"CanCreate":             canCreate,
 		"CanEdit":               canEdit,
@@ -784,8 +813,11 @@ func parseConfessionalEntityListFilter(r *http.Request) confessionalEntityListFi
 	filter := confessionalEntityListFilter{
 		ReligionCode: normalizeCatalogCode(q.Get("religio_confessio_codi")),
 		LevelCode:    normalizeCatalogCode(q.Get("nivell_confessional_codi")),
+		ParentMode:   normalizeConfessionalParentMode(q.Get("parent_mode")),
 		Text:         normalizeConfessionalSearchText(q.Get("q")),
 		Status:       "publicat",
+		Sort:         normalizeConfessionalHierarchySort(q.Get("sort")),
+		SortDir:      normalizeConfessionalSortDir(q.Get("dir")),
 		Page:         parsePositiveIntDefault(q.Get("page"), 1, 1, 100000),
 		PerPage:      parsePositiveIntDefault(q.Get("per_page"), 50, 1, 100),
 	}
@@ -803,6 +835,31 @@ func parseConfessionalEntityListFilter(r *http.Request) confessionalEntityListFi
 	}
 	filter.ParentID = parsePositiveIntDefault(q.Get("parent_id"), 0, 0, 1000000000)
 	return filter
+}
+
+func normalizeConfessionalParentMode(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "descendants":
+		return "descendants"
+	default:
+		return "direct"
+	}
+}
+
+func normalizeConfessionalHierarchySort(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "code", "level", "children":
+		return strings.TrimSpace(raw)
+	default:
+		return "path"
+	}
+}
+
+func normalizeConfessionalSortDir(raw string) string {
+	if strings.EqualFold(strings.TrimSpace(raw), "desc") {
+		return "desc"
+	}
+	return "asc"
 }
 
 func normalizeConfessionalSearchText(raw string) string {
@@ -879,6 +936,246 @@ func filterConfessionalEntitats(all []db.EntitatReligiosa, rels []db.EntitatReli
 		end = len(out)
 	}
 	return out[start:end]
+}
+
+func filterConfessionalHierarchyRows(all []db.EntitatReligiosa, rels []db.EntitatReligiosaRelacio, territorials []db.MunicipiEntitatReligiosa, filter *confessionalEntityListFilter, lang string) ([]confessionalHierarchyRow, []confessionalHierarchyPathItem) {
+	byID, parentByChild, childrenByParent := confessionalHierarchyMaps(all, rels)
+	childCounts := map[int]int{}
+	for parentID, children := range childrenByParent {
+		childCounts[parentID] = len(children)
+	}
+	territoryCounts := map[int]int{}
+	for _, rel := range territorials {
+		territoryCounts[rel.EntitatReligiosaID]++
+	}
+	parentPath := []confessionalHierarchyPathItem{}
+	if filter.ParentID > 0 {
+		if parent, ok := byID[filter.ParentID]; ok {
+			parentPath = confessionalEntityPath(parent.ID, byID, parentByChild, lang)
+		}
+	}
+	descendants := map[int]bool{}
+	if filter.ParentID > 0 && filter.ParentMode == "descendants" {
+		descendants = confessionalDescendantSet(filter.ParentID, childrenByParent)
+	}
+
+	rows := make([]confessionalHierarchyRow, 0, len(all))
+	needle := normalizeConfessionalSearchComparable(filter.Text)
+	for _, item := range all {
+		if item.ModeracioEstat != "publicat" {
+			continue
+		}
+		parentID := parentByChild[item.ID]
+		if filter.ReligionCode != "" && item.ReligioConfessioCodi != filter.ReligionCode {
+			continue
+		}
+		if filter.LevelCode != "" && item.NivellConfessionalCodi != filter.LevelCode {
+			continue
+		}
+		if filter.ParentID > 0 {
+			if filter.ParentMode == "descendants" {
+				if !descendants[item.ID] {
+					continue
+				}
+			} else if parentID != filter.ParentID {
+				continue
+			}
+		} else if needle == "" && filter.LevelCode == "" && parentID != 0 {
+			continue
+		}
+		path := confessionalEntityPath(item.ID, byID, parentByChild, lang)
+		if needle != "" && !confessionalHierarchyMatchesText(item, path, needle) {
+			continue
+		}
+		parentName := ""
+		if parentID > 0 {
+			if parent, ok := byID[parentID]; ok {
+				parentName = parent.Nom
+			}
+		}
+		rows = append(rows, confessionalHierarchyRow{
+			Entitat:        item,
+			ParentID:       parentID,
+			ParentName:     parentName,
+			Path:           path,
+			ChildCount:     childCounts[item.ID],
+			TerritoryCount: territoryCounts[item.ID],
+			Depth:          len(path) - 1,
+		})
+	}
+	sortConfessionalHierarchyRows(rows, filter)
+	filter.Total = len(rows)
+	filter.TotalPages = 1
+	if filter.PerPage > 0 {
+		filter.TotalPages = (filter.Total + filter.PerPage - 1) / filter.PerPage
+		if filter.TotalPages == 0 {
+			filter.TotalPages = 1
+		}
+	}
+	if filter.Page > filter.TotalPages {
+		filter.Page = filter.TotalPages
+	}
+	start := (filter.Page - 1) * filter.PerPage
+	if start >= len(rows) {
+		return []confessionalHierarchyRow{}, parentPath
+	}
+	end := start + filter.PerPage
+	if end > len(rows) {
+		end = len(rows)
+	}
+	return rows[start:end], parentPath
+}
+
+func confessionalHierarchyMaps(all []db.EntitatReligiosa, rels []db.EntitatReligiosaRelacio) (map[int]db.EntitatReligiosa, map[int]int, map[int][]int) {
+	byID := make(map[int]db.EntitatReligiosa, len(all))
+	for _, item := range all {
+		byID[item.ID] = item
+	}
+	parentByChild := map[int]int{}
+	childrenByParent := map[int][]int{}
+	for _, rel := range rels {
+		if rel.ModeracioEstat != "publicat" {
+			continue
+		}
+		if _, ok := byID[rel.EntitatOrigenID]; !ok {
+			continue
+		}
+		if _, ok := byID[rel.EntitatDestiID]; !ok {
+			continue
+		}
+		if _, exists := parentByChild[rel.EntitatDestiID]; exists {
+			continue
+		}
+		parentByChild[rel.EntitatDestiID] = rel.EntitatOrigenID
+		childrenByParent[rel.EntitatOrigenID] = append(childrenByParent[rel.EntitatOrigenID], rel.EntitatDestiID)
+	}
+	return byID, parentByChild, childrenByParent
+}
+
+func confessionalEntityPath(id int, byID map[int]db.EntitatReligiosa, parentByChild map[int]int, lang string) []confessionalHierarchyPathItem {
+	path := []confessionalHierarchyPathItem{}
+	seen := map[int]bool{}
+	current := id
+	for current > 0 {
+		if seen[current] {
+			break
+		}
+		seen[current] = true
+		item, ok := byID[current]
+		if !ok {
+			break
+		}
+		levelLabel := item.NivellConfessionalCodi
+		if level, ok := GetConfessionalLevelCatalogByCode(item.NivellConfessionalCodi); ok {
+			levelLabel = ConfessionalLevelLabel(level, lang)
+		}
+		path = append([]confessionalHierarchyPathItem{{ID: item.ID, Name: item.Nom, Level: levelLabel}}, path...)
+		current = parentByChild[current]
+	}
+	return path
+}
+
+func confessionalDescendantSet(parentID int, childrenByParent map[int][]int) map[int]bool {
+	out := map[int]bool{}
+	stack := append([]int{}, childrenByParent[parentID]...)
+	for len(stack) > 0 {
+		id := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if out[id] {
+			continue
+		}
+		out[id] = true
+		stack = append(stack, childrenByParent[id]...)
+	}
+	return out
+}
+
+func normalizeConfessionalSearchComparable(raw string) string {
+	replacer := strings.NewReplacer(":", " ", ";", " ", ",", " ", ".", " ", "'", " ", "\"", " ")
+	return strings.Join(strings.Fields(strings.ToLower(replacer.Replace(raw))), " ")
+}
+
+func confessionalHierarchyMatchesText(item db.EntitatReligiosa, path []confessionalHierarchyPathItem, needle string) bool {
+	if needle == "" {
+		return true
+	}
+	hayParts := []string{item.Nom, item.Codi}
+	for _, part := range path {
+		hayParts = append(hayParts, part.Name, part.Level)
+	}
+	hay := normalizeConfessionalSearchComparable(strings.Join(hayParts, " "))
+	for _, token := range strings.Fields(needle) {
+		if !strings.Contains(hay, token) {
+			return false
+		}
+	}
+	return true
+}
+
+func sortConfessionalHierarchyRows(rows []confessionalHierarchyRow, filter *confessionalEntityListFilter) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		a, b := rows[i], rows[j]
+		cmp := 0
+		switch filter.Sort {
+		case "code":
+			cmp = strings.Compare(strings.ToLower(a.Entitat.Codi), strings.ToLower(b.Entitat.Codi))
+		case "level":
+			cmp = strings.Compare(strings.ToLower(a.Entitat.NivellConfessionalCodi), strings.ToLower(b.Entitat.NivellConfessionalCodi))
+		case "children":
+			cmp = a.ChildCount - b.ChildCount
+		default:
+			cmp = strings.Compare(strings.ToLower(confessionalPathSortKey(a.Path)), strings.ToLower(confessionalPathSortKey(b.Path)))
+		}
+		if cmp == 0 {
+			cmp = strings.Compare(strings.ToLower(a.Entitat.Nom), strings.ToLower(b.Entitat.Nom))
+		}
+		if filter.SortDir == "desc" {
+			return cmp > 0
+		}
+		return cmp < 0
+	})
+}
+
+func confessionalPathSortKey(path []confessionalHierarchyPathItem) string {
+	parts := make([]string, 0, len(path))
+	for _, item := range path {
+		parts = append(parts, item.Name)
+	}
+	return strings.Join(parts, " / ")
+}
+
+func confessionalHierarchyParentOptions(all []db.EntitatReligiosa, filter *confessionalEntityListFilter) []db.EntitatReligiosa {
+	out := make([]db.EntitatReligiosa, 0, len(all))
+	for _, item := range all {
+		if item.ModeracioEstat != "publicat" {
+			continue
+		}
+		if filter.ReligionCode != "" && item.ReligioConfessioCodi != filter.ReligionCode {
+			continue
+		}
+		if filter.LevelCode != "" && !ConfessionalParentLevelCompatible(item.NivellConfessionalCodi, filter.LevelCode) {
+			continue
+		}
+		if filter.LevelCode == "" {
+			level, ok := GetConfessionalLevelCatalogByCode(item.NivellConfessionalCodi)
+			if !ok || !level.CanHaveChildren {
+				continue
+			}
+		}
+		out = append(out, item)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return strings.ToLower(out[i].Nom) < strings.ToLower(out[j].Nom)
+	})
+	return out
+}
+
+func confessionalRowsToEntitats(rows []confessionalHierarchyRow) []db.EntitatReligiosa {
+	out := make([]db.EntitatReligiosa, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.Entitat)
+	}
+	return out
 }
 
 func confessionalParentOptionAllowedMap(candidates []db.EntitatReligiosa, child *db.EntitatReligiosa) map[int]bool {
