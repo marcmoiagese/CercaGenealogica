@@ -191,7 +191,8 @@
                         {{ range .Data.SelectableEntitats }}
                         {{ if ne .ID $.Data.Form.Entitat.ID }}
                         {{ $parentAllowed := index $.Data.ParentOptionAllowed .ID }}
-                        <option value="{{ .ID }}" data-religion-code="{{ .ReligioConfessioCodi }}" data-level-code="{{ .NivellConfessionalCodi }}" data-can-have-children="{{ index $.Data.LevelCanHaveChildren .NivellConfessionalCodi }}" {{ if not $parentAllowed }}hidden disabled{{ end }} {{ if and $parentAllowed $.Data.Form.Entitat.ParentID.Valid (eq .ID (int $.Data.Form.Entitat.ParentID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                        {{ $isSelectedParent := and $.Data.Form.Entitat.ParentID.Valid (eq .ID (int $.Data.Form.Entitat.ParentID.Int64)) }}
+                        <option value="{{ .ID }}" data-religion-code="{{ .ReligioConfessioCodi }}" data-level-code="{{ .NivellConfessionalCodi }}" data-can-have-children="{{ index $.Data.LevelCanHaveChildren .NivellConfessionalCodi }}" {{ if and (not $parentAllowed) (not $isSelectedParent) }}hidden disabled{{ end }} {{ if $isSelectedParent }}selected{{ end }}>{{ .Nom }}</option>
                         {{ end }}
                         {{ end }}
                     </select>

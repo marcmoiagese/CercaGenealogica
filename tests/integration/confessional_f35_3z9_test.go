@@ -27,42 +27,43 @@ func TestF353Z9ConfessionalHierarchyNavigationAndSearch(t *testing.T) {
 
 	rootBody := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats", session)
 	for _, token := range []string{
-		`id="confessional-hierarchy-filters"`,
-		`id="confessionalHierarchyTable"`,
-		`/static/js/confessional-hierarchy.js`,
+		`id="nivellsFilterForm"`,
+		`id="nivellsTable"`,
+		`/static/js/nivells-taula.js`,
 		"Arquebisbat de Tarragona F35-3Z9 " + suffix,
 	} {
 		if !strings.Contains(rootBody, token) {
 			t.Fatalf("vista arrel jerarquica no conte %q; body=%s", token, rootBody)
 		}
 	}
-	if strings.Contains(rootBody, `class="confessional-filters"`) || strings.Contains(rootBody, `id="confessional-status"`) {
-		t.Fatalf("la vista Z9 no ha de conservar el formulari rigid Z8; body=%s", rootBody)
+	if strings.Contains(rootBody, `class="municipis-browse"`) || strings.Contains(rootBody, `id="confessional-q"`) || strings.Contains(rootBody, `/static/js/confessional-hierarchy.js`) {
+		t.Fatalf("la gestio d'entitats no ha de ser una pantalla tipus municipis; body=%s", rootBody)
 	}
 
-	branchBody := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats?parent_id="+strconv.Itoa(archID)+"&parent_mode=descendants", session)
+	branchBody := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats?parent_id="+strconv.Itoa(archID), session)
 	for _, token := range []string{
 		"Cami actual",
 		"Arquebisbat de Tarragona F35-3Z9 " + suffix,
 		"Arxiprestat de la Conca F35-3Z9 " + suffix,
-		"Unitat Pastoral Arbeca F35-3Z9 " + suffix,
-		"Parroquia de Sant Jaume Apostol d&#39;Arbeca F35-3Z9 " + suffix,
 		"Relacions territorials",
 	} {
 		if !strings.Contains(branchBody, token) {
 			t.Fatalf("la branca jerarquica no mostra %q; body=%s", token, branchBody)
 		}
 	}
+	if strings.Contains(branchBody, `href="/confessional/entitats/`+strconv.Itoa(unitID)+`">Unitat Pastoral Arbeca F35-3Z9 `+suffix) {
+		t.Fatalf("la gestio jerarquica ha de mostrar filles directes del pare seleccionat, no descendents globals; body=%s", branchBody)
+	}
 	if strings.Contains(branchBody, "Parroquia pendent Arbeca F35-3Z9 "+suffix) {
 		t.Fatalf("les entitats pendents no han d'apareixer a la vista normal; body=%s", branchBody)
 	}
 
-	searchBody := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats?q=Arbeca%3A", session)
+	searchBody := f353YGet(t, app.AdminConfessionalNavigation, "/confessional/navegacio?q=Arbeca%3A", session)
 	if !strings.Contains(searchBody, "Parroquia de Sant Jaume Apostol d&#39;Arbeca F35-3Z9 "+suffix) || !strings.Contains(searchBody, "Unitat Pastoral Arbeca F35-3Z9 "+suffix) {
-		t.Fatalf("la cerca global per text ha de trobar entitats sense preseleccionar context; body=%s", searchBody)
+		t.Fatalf("la navegacio separada ha de cercar entitats sense preseleccionar context; body=%s", searchBody)
 	}
 
-	levelBody := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats?nivell_confessional_codi=parroquia&q=Arbeca", session)
+	levelBody := f353YGet(t, app.AdminConfessionalNavigation, "/confessional/navegacio?nivell_confessional_codi=parroquia&q=Arbeca", session)
 	if !strings.Contains(levelBody, "Parroquia de Sant Jaume Apostol d&#39;Arbeca F35-3Z9 "+suffix) || strings.Contains(levelBody, `<td><a href="/confessional/entitats/`+strconv.Itoa(unitID)+`">Unitat Pastoral Arbeca F35-3Z9 `+suffix) {
 		t.Fatalf("el filtre per nivell parroquia ha de limitar resultats; body=%s", levelBody)
 	}
@@ -75,12 +76,11 @@ func TestF353Z9ConfessionalHierarchyGetParamsAreValidated(t *testing.T) {
 	rootID := f353Z8SaveEntity(t, database, "z9_sec_root_"+suffix, "Santa Seu segura F35-3Z9 "+suffix, "santa_seu", "publicat")
 	_ = rootID
 
-	body := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats?religio_confessio_codi=nope&nivell_confessional_codi=nope&parent_id=abc&q=%3Cscript%3Ealert(1)%3C%2Fscript%3E&sort=nom%3BDROP&dir=DROP&per_page=1000", session)
+	body := f353YGet(t, app.AdminConfessionalNavigation, "/confessional/navegacio?religio_confessio_codi=nope&nivell_confessional_codi=nope&parent_id=abc&q=%3Cscript%3Ealert(1)%3C%2Fscript%3E&sort=nom%3BDROP&dir=DROP&per_page=1000", session)
 	for _, token := range []string{
-		`value="path" selected`,
-		`value="asc" selected`,
+		`name="sort" value="path"`,
+		`name="dir" value="asc"`,
 		`name="per_page" value="100"`,
-		"Santa Seu segura F35-3Z9 " + suffix,
 	} {
 		if !strings.Contains(body, token) {
 			t.Fatalf("parametres GET manipulats no s'han normalitzat com s'esperava (%q); body=%s", token, body)
@@ -94,6 +94,7 @@ func TestF353Z9ConfessionalHierarchyGetParamsAreValidated(t *testing.T) {
 func TestF353Z9ConfessionalHierarchyI18NAndCSPContract(t *testing.T) {
 	root := findProjectRoot(t)
 	listBody := readProjectFileF353U(t, root, "templates/admin-confessional-list.html")
+	navBody := readProjectFileF353U(t, root, "templates/admin-confessional-navegacio.html")
 	jsBody := readProjectFileF353U(t, root, "static/js/confessional-hierarchy.js")
 	handlerBody := readProjectFileF353U(t, root, "core/admin_confessional.go")
 
@@ -108,17 +109,26 @@ func TestF353Z9ConfessionalHierarchyI18NAndCSPContract(t *testing.T) {
 		}
 	}
 	for _, token := range []string{
-		`confessional.hierarchy.search.label`,
+		`confessional.management.parent_context`,
+		`/static/js/nivells-taula.js`,
+		`id="nivellsTable"`,
+	} {
+		if !strings.Contains(listBody, token) {
+			t.Fatalf("falta contracte template gestio Z9/Z10: %s", token)
+		}
+	}
+	for _, token := range []string{
+		`confessional.navigation.search.label`,
 		`confessional.hierarchy.path`,
 		`confessional.hierarchy.scope.descendants`,
 		`/static/js/confessional-hierarchy.js`,
 	} {
-		if !strings.Contains(listBody, token) {
-			t.Fatalf("falta contracte template Z9: %s", token)
+		if !strings.Contains(navBody, token) {
+			t.Fatalf("falta contracte template navegacio Z9/Z10: %s", token)
 		}
 	}
-	if strings.Contains(listBody, "<script>\n") || strings.Contains(listBody, "onchange=") || strings.Contains(listBody, "onclick=") {
-		t.Fatalf("la vista jerarquica confessional no ha de tenir JS inline")
+	if strings.Contains(listBody, "<script>\n") || strings.Contains(navBody, "<script>\n") || strings.Contains(listBody, "onchange=") || strings.Contains(navBody, "onchange=") || strings.Contains(listBody, "onclick=") || strings.Contains(navBody, "onclick=") {
+		t.Fatalf("les vistes confessionals no han de tenir JS inline")
 	}
 	for _, token := range []string{
 		`data-submit-form`,
@@ -134,6 +144,8 @@ func TestF353Z9ConfessionalHierarchyI18NAndCSPContract(t *testing.T) {
 		for _, key := range []string{
 			"confessional.hierarchy.search.label",
 			"confessional.hierarchy.search.placeholder",
+			"confessional.navigation.title",
+			"confessional.menu.navigation",
 			"confessional.hierarchy.root",
 			"confessional.hierarchy.path",
 			"confessional.hierarchy.children",

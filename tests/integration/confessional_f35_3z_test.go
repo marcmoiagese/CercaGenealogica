@@ -255,9 +255,9 @@ func TestF353ZEntityProfileShowsRelationsAndHistory(t *testing.T) {
 		t.Fatalf("CreateWikiChange: %v", err)
 	}
 
-	listBody := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats?q=Parroquia%20F35-3Z", session)
+	listBody := f353YGet(t, app.AdminConfessionalNavigation, "/confessional/navegacio?q=Parroquia%20F35-3Z", session)
 	if !strings.Contains(listBody, "/confessional/entitats/"+strconv.Itoa(childID)) {
-		t.Fatalf("la cerca global del llistat ha d'enllacar a la fitxa")
+		t.Fatalf("la cerca global de la navegacio ha d'enllacar a la fitxa")
 	}
 	profileBody := f353YGet(t, app.AdminConfessionalEntityShow, "/confessional/entitats/"+strconv.Itoa(childID), session)
 	for _, want := range []string{"Parroquia F35-3Z", "jerarquia_f35_3z", "territorial_f35_3z", user.Usuari, "pending"} {

@@ -99,6 +99,7 @@
             <ul>
                 {{ if or (index .Data "CanViewConfessionalEntitats") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/confessional/entitats">{{ t .Lang "confessional.menu.entities" }}</a></li>
+                <li class="menu-opcio"><a href="/confessional/navegacio">{{ t .Lang "confessional.menu.navigation" }}</a></li>
                 {{ end }}
                 {{ if or (index .Data "CanViewConfessionalRelacionsEntitats") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/confessional/relacions-entitats">{{ t .Lang "confessional.menu.entity_relations" }}</a></li>

@@ -144,10 +144,9 @@ func TestF353Z8EntityListFiltersPublishedHierarchySafely(t *testing.T) {
 	path := "/confessional/entitats?religio_confessio_codi=catolicisme_ritu_llati&nivell_confessional_codi=parroquia&parent_id=" + strconv.Itoa(parentID) + "&q=visible&status=pendent&sort=nom%3BDROP&dir=desc&per_page=1000"
 	body := f353YGet(t, app.AdminConfessionalSectionList, path, session)
 	for _, token := range []string{
-		"Cerca",
-		"Publicat",
+		`id="nivellsTable"`,
+		"Context pare",
 		"Parroquia visible F35-3Z8 " + suffix,
-		"Resultats",
 	} {
 		if !strings.Contains(body, token) {
 			t.Fatalf("el llistat filtrat no conte %q; body=%s", token, body)
@@ -171,6 +170,7 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 	root := findProjectRoot(t)
 	formBody := readProjectFileF353U(t, root, "templates/admin-confessional-form.html")
 	listBody := readProjectFileF353U(t, root, "templates/admin-confessional-list.html")
+	navBody := readProjectFileF353U(t, root, "templates/admin-confessional-navegacio.html")
 	staticBody := readProjectFileF353U(t, root, "static/js/confessional-form.js")
 	handlerBody := readProjectFileF353U(t, root, "core/admin_confessional.go")
 
@@ -207,14 +207,21 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 		t.Fatalf("no s'ha de reintroduir JS inline al formulari confessional")
 	}
 	for _, token := range []string{
-		`confessional.hierarchy.search.label`,
-		`confessional.filter.religion`,
-		`confessional.filter.level`,
-		`confessional.filter.parent`,
-		`confessional.filter.status_publicat`,
+		`confessional.management.parent_context`,
+		`confessional.management.new_child`,
 	} {
 		if !strings.Contains(listBody, token) {
-			t.Fatalf("falta filtre i18n al llistat F35-3Z8: %s", token)
+			t.Fatalf("falta contracte de gestio al llistat F35-3Z8/Z10: %s", token)
+		}
+	}
+	for _, token := range []string{
+		`confessional.navigation.search.label`,
+		`confessional.filter.religion`,
+		`confessional.filter.level`,
+		`confessional.navigation.parent`,
+	} {
+		if !strings.Contains(navBody, token) {
+			t.Fatalf("falta filtre i18n a la navegacio F35-3Z8/Z10: %s", token)
 		}
 	}
 	for _, lang := range []string{"cat", "en", "oc"} {
