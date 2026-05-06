@@ -23,7 +23,7 @@
         <section class="card">
             <header class="card-header amb-accio">
                 <h1>{{ .Data.Section.Title }}</h1>
-                {{ if .Data.CanCreate }}
+                {{ if and .Data.CanCreate (ne .Data.Section.Kind "religio") (ne .Data.Section.Kind "nivell") }}
                 <div class="card-actions">
                     <a class="boto-primari" href="/territori/confessional/{{ .Data.Section.Slug }}/new">{{ .Data.Section.NewLabel }}</a>
                 </div>
@@ -56,28 +56,16 @@
             <table class="taula taula-registres">
                 <thead><tr><th>{{ t .Lang "confessional.col.code" }}</th><th>{{ t .Lang "confessional.col.name" }}</th><th>{{ t .Lang "confessional.col.category" }}</th><th>{{ t .Lang "confessional.col.parent" }}</th><th>{{ t .Lang "confessional.col.status" }}</th>{{ if or .Data.CanEdit .Data.CanDelete }}<th>{{ t .Lang "confessional.col.actions" }}</th>{{ end }}</tr></thead>
                 <tbody>
-                    {{ range .Data.Religions }}
+                    {{ range .Data.ReligionCatalog }}
                     <tr>
-                        <td>{{ .Codi }}</td>
-                        <td>{{ .Nom }}</td>
-                        <td>{{ t $.Lang (printf "confessional.religion.category.%s" .Categoria) }}</td>
-                        <td>{{ if .PareID.Valid }}{{ index $.Data.ReligionLabels (int .PareID.Int64) }}{{ end }}</td>
-                        <td>{{ .Estat }}</td>
-                        {{ if or $.Data.CanEdit $.Data.CanDelete }}
-                        <td class="confessional-actions">
-                            {{ if $.Data.CanEdit }}<a class="boto-secundari" href="/territori/confessional/religions/{{ .ID }}/edit">Edita</a>{{ end }}
-                            {{ if $.Data.CanDelete }}
-                            <form method="post" action="/territori/confessional/delete">
-                                <input type="hidden" name="kind" value="religio">
-                                <input type="hidden" name="id" value="{{ .ID }}">
-                                <button type="submit" class="boto-secundari">Elimina</button>
-                            </form>
-                            {{ end }}
-                        </td>
-                        {{ end }}
+                        <td>{{ .Code }}</td>
+                        <td>{{ .CanonicalName }}</td>
+                        <td>{{ t $.Lang (printf "confessional.religion.category.%s" .CategoryCode) }}</td>
+                        <td>{{ if .ParentCode }}{{ index $.Data.ReligionCatalogLabels .ParentCode }}{{ end }}</td>
+                        <td>{{ if .Active }}{{ t $.Lang "confessional.status.system_active" }}{{ else }}{{ t $.Lang "confessional.status.inactive" }}{{ end }}</td>
                     </tr>
                     {{ else }}
-                    <tr><td class="confessional-empty" colspan="{{ if or $.Data.CanEdit $.Data.CanDelete }}6{{ else }}5{{ end }}">{{ t $.Lang "confessional.empty" }}</td></tr>
+                    <tr><td class="confessional-empty" colspan="5">{{ t $.Lang "confessional.empty" }}</td></tr>
                     {{ end }}
                 </tbody>
             </table>
@@ -116,30 +104,19 @@
 
             {{ if eq .Data.Section.Kind "nivell" }}
             <table class="taula taula-registres">
-                <thead><tr><th>{{ t .Lang "confessional.col.order" }}</th><th>{{ t .Lang "confessional.col.code" }}</th><th>{{ t .Lang "confessional.col.name" }}</th><th>{{ t .Lang "confessional.col.religion" }}</th><th>{{ t .Lang "confessional.col.category" }}</th>{{ if or .Data.CanEdit .Data.CanDelete }}<th>{{ t .Lang "confessional.col.actions" }}</th>{{ end }}</tr></thead>
+                <thead><tr><th>{{ t .Lang "confessional.col.order" }}</th><th>{{ t .Lang "confessional.col.code" }}</th><th>{{ t .Lang "confessional.col.name" }}</th><th>{{ t .Lang "confessional.col.religion" }}</th><th>{{ t .Lang "confessional.col.category" }}</th><th>{{ t .Lang "confessional.col.flags" }}</th></tr></thead>
                 <tbody>
-                    {{ range .Data.Nivells }}
+                    {{ range .Data.LevelCatalog }}
                     <tr>
-                        <td>{{ .Ordre }}</td>
-                        <td>{{ .Codi }}</td>
-                        <td>{{ .NomNivell }}</td>
-                        <td>{{ if .ReligioConfessioID.Valid }}{{ index $.Data.ReligionLabels (int .ReligioConfessioID.Int64) }}{{ end }}</td>
-                        <td>{{ t $.Lang (printf "confessional.level.category.%s" .Categoria) }}</td>
-                        {{ if or $.Data.CanEdit $.Data.CanDelete }}
-                        <td class="confessional-actions">
-                            {{ if $.Data.CanEdit }}<a class="boto-secundari" href="/territori/confessional/nivells/{{ .ID }}/edit">Edita</a>{{ end }}
-                            {{ if $.Data.CanDelete }}
-                            <form method="post" action="/territori/confessional/delete">
-                                <input type="hidden" name="kind" value="nivell">
-                                <input type="hidden" name="id" value="{{ .ID }}">
-                                <button type="submit" class="boto-secundari">Elimina</button>
-                            </form>
-                            {{ end }}
-                        </td>
-                        {{ end }}
+                        <td>{{ .Order }}</td>
+                        <td>{{ .Code }}</td>
+                        <td>{{ .CanonicalName }}</td>
+                        <td>{{ index $.Data.ReligionCatalogLabels .ReligionCode }}</td>
+                        <td>{{ t $.Lang (printf "confessional.level.category.%s" .CategoryCode) }}</td>
+                        <td>{{ if .CanHaveTerritory }}{{ t $.Lang "confessional.flag.territory" }} {{ end }}{{ if .CanHaveChildren }}{{ t $.Lang "confessional.flag.children" }} {{ end }}{{ if .CanLinkMunicipi }}{{ t $.Lang "confessional.flag.municipi" }}{{ end }}</td>
                     </tr>
                     {{ else }}
-                    <tr><td class="confessional-empty" colspan="{{ if or $.Data.CanEdit $.Data.CanDelete }}6{{ else }}5{{ end }}">{{ t $.Lang "confessional.empty" }}</td></tr>
+                    <tr><td class="confessional-empty" colspan="6">{{ t $.Lang "confessional.empty" }}</td></tr>
                     {{ end }}
                 </tbody>
             </table>
@@ -153,8 +130,8 @@
                     <tr>
                         <td>{{ .Codi }}</td>
                         <td>{{ .Nom }}</td>
-                        <td>{{ if .ReligioConfessioID.Valid }}{{ index $.Data.ReligionLabels (int .ReligioConfessioID.Int64) }}{{ end }}</td>
-                        <td>{{ if .NivellConfessionalID.Valid }}{{ index $.Data.NivellLabels (int .NivellConfessionalID.Int64) }}{{ end }}</td>
+                        <td>{{ index $.Data.ReligionCatalogLabels .ReligioConfessioCodi }}</td>
+                        <td>{{ index $.Data.LevelCatalogLabels .NivellConfessionalCodi }}</td>
                         <td>{{ .ModeracioEstat }}</td>
                         {{ if or $.Data.CanEdit $.Data.CanDelete }}
                         <td class="confessional-actions">

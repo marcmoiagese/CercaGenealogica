@@ -618,6 +618,8 @@ CREATE TABLE IF NOT EXISTS model_confessional (
     id SERIAL PRIMARY KEY,
     codi TEXT UNIQUE,
     nom TEXT NOT NULL,
+    religio_confessio_codi TEXT,
+    nivell_confessional_codi TEXT,
     religio_confessio_id INTEGER REFERENCES religio_confessio(id) ON DELETE SET NULL,
     system_key TEXT UNIQUE,
     system_managed BOOLEAN NOT NULL DEFAULT FALSE,
@@ -691,7 +693,11 @@ CREATE TABLE IF NOT EXISTS entitat_religiosa (
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE entitat_religiosa ADD COLUMN IF NOT EXISTS religio_confessio_codi TEXT;
+ALTER TABLE entitat_religiosa ADD COLUMN IF NOT EXISTS nivell_confessional_codi TEXT;
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_codi ON entitat_religiosa(codi);
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_religio_codi ON entitat_religiosa(religio_confessio_codi);
+CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_nivell_codi ON entitat_religiosa(nivell_confessional_codi);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_religio ON entitat_religiosa(religio_confessio_id);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_model ON entitat_religiosa(model_confessional_id);
 CREATE INDEX IF NOT EXISTS idx_entitat_religiosa_nivell ON entitat_religiosa(nivell_confessional_id);

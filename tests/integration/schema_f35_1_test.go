@@ -36,7 +36,7 @@ func TestF351SchemaReligiosConfessionalSQLite(t *testing.T) {
 			"id", "model_confessional_id", "religio_confessio_id", "codi", "ordre", "nom_nivell", "nom_plural", "tipus_nivell", "categoria", "codi_oficial", "pot_tenir_territori", "pot_tenir_fills", "pot_vincular_municipi", "pot_ser_suggerit_imports", "system_key", "system_managed", "parent_id", "any_inici", "any_fi", "estat", "observacions", "moderation_status", "created_at", "updated_at",
 		},
 		"entitat_religiosa": {
-			"id", "codi", "nom", "religio_confessio_id", "model_confessional_id", "nivell_confessional_id", "pais_id", "parent_id", "tipus_entitat", "tipus_especific", "any_inici", "any_fi", "estat", "web", "web_wikipedia", "territori", "descripcio", "observacions", "moderation_status", "created_at", "updated_at",
+			"id", "codi", "nom", "religio_confessio_codi", "nivell_confessional_codi", "religio_confessio_id", "model_confessional_id", "nivell_confessional_id", "pais_id", "parent_id", "tipus_entitat", "tipus_especific", "any_inici", "any_fi", "estat", "web", "web_wikipedia", "territori", "descripcio", "observacions", "moderation_status", "created_at", "updated_at",
 		},
 		"entitat_religiosa_relacio": {
 			"id", "entitat_origen_id", "entitat_desti_id", "tipus_relacio", "any_inici", "any_fi", "font_id", "observacions", "moderation_status", "created_at", "updated_at",
@@ -65,6 +65,8 @@ func TestF351SchemaReligiosConfessionalSQLite(t *testing.T) {
 		"idx_nivell_confessional_parent",
 		"idx_nivell_confessional_system_key",
 		"idx_entitat_religiosa_codi",
+		"idx_entitat_religiosa_religio_codi",
+		"idx_entitat_religiosa_nivell_codi",
 		"idx_entitat_religiosa_religio",
 		"idx_entitat_religiosa_model",
 		"idx_entitat_religiosa_nivell",
@@ -131,6 +133,8 @@ func TestF351SchemaReligiosConfessionalSQLFilesAligned(t *testing.T) {
 		"idx_nivell_confessional_parent",
 		"idx_nivell_confessional_system_key",
 		"idx_entitat_religiosa_codi",
+		"idx_entitat_religiosa_religio_codi",
+		"idx_entitat_religiosa_nivell_codi",
 		"idx_entitat_religiosa_religio",
 		"idx_entitat_religiosa_model",
 		"idx_entitat_religiosa_nivell",

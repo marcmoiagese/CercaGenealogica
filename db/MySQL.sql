@@ -735,6 +735,8 @@ CREATE TABLE IF NOT EXISTS entitat_religiosa (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     codi VARCHAR(120) UNIQUE,
     nom VARCHAR(255) NOT NULL,
+    religio_confessio_codi VARCHAR(120),
+    nivell_confessional_codi VARCHAR(120),
     religio_confessio_id INT UNSIGNED NULL,
     model_confessional_id INT UNSIGNED NULL,
     nivell_confessional_id INT UNSIGNED NULL,
@@ -759,7 +761,11 @@ CREATE TABLE IF NOT EXISTS entitat_religiosa (
     FOREIGN KEY (pais_id) REFERENCES paisos(id) ON DELETE SET NULL,
     FOREIGN KEY (parent_id) REFERENCES entitat_religiosa(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+ALTER TABLE entitat_religiosa ADD COLUMN religio_confessio_codi VARCHAR(120);
+ALTER TABLE entitat_religiosa ADD COLUMN nivell_confessional_codi VARCHAR(120);
 CREATE INDEX idx_entitat_religiosa_codi ON entitat_religiosa(codi);
+CREATE INDEX idx_entitat_religiosa_religio_codi ON entitat_religiosa(religio_confessio_codi);
+CREATE INDEX idx_entitat_religiosa_nivell_codi ON entitat_religiosa(nivell_confessional_codi);
 CREATE INDEX idx_entitat_religiosa_religio ON entitat_religiosa(religio_confessio_id);
 CREATE INDEX idx_entitat_religiosa_model ON entitat_religiosa(model_confessional_id);
 CREATE INDEX idx_entitat_religiosa_nivell ON entitat_religiosa(nivell_confessional_id);

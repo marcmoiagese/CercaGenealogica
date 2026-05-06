@@ -1740,27 +1740,29 @@ type NivellConfessional struct {
 }
 
 type EntitatReligiosa struct {
-	ID                   int
-	Codi                 string
-	Nom                  string
-	ReligioConfessioID   sql.NullInt64
-	ModelConfessionalID  sql.NullInt64
-	NivellConfessionalID sql.NullInt64
-	PaisID               sql.NullInt64
-	ParentID             sql.NullInt64
-	TipusEntitat         string
-	TipusEspecific       string
-	AnyInici             sql.NullInt64
-	AnyFi                sql.NullInt64
-	Estat                string
-	Web                  string
-	WebWikipedia         string
-	Territori            string
-	Descripcio           string
-	Observacions         string
-	ModeracioEstat       string
-	CreatedAt            sql.NullTime
-	UpdatedAt            sql.NullTime
+	ID                     int
+	Codi                   string
+	Nom                    string
+	ReligioConfessioCodi   string
+	NivellConfessionalCodi string
+	ReligioConfessioID     sql.NullInt64
+	ModelConfessionalID    sql.NullInt64
+	NivellConfessionalID   sql.NullInt64
+	PaisID                 sql.NullInt64
+	ParentID               sql.NullInt64
+	TipusEntitat           string
+	TipusEspecific         string
+	AnyInici               sql.NullInt64
+	AnyFi                  sql.NullInt64
+	Estat                  string
+	Web                    string
+	WebWikipedia           string
+	Territori              string
+	Descripcio             string
+	Observacions           string
+	ModeracioEstat         string
+	CreatedAt              sql.NullTime
+	UpdatedAt              sql.NullTime
 }
 
 type EntitatReligiosaRelacio struct {
@@ -3098,6 +3100,9 @@ func shouldIgnoreSQLError(engine, stmt string, err error) bool {
 	low := strings.ToLower(strings.TrimSpace(stmt))
 	switch engine {
 	case "mysql":
+		if strings.HasPrefix(low, "alter table") && strings.Contains(err.Error(), "Duplicate column name") {
+			return true
+		}
 		if !strings.Contains(err.Error(), "Duplicate key name") {
 			return false
 		}
@@ -3114,6 +3119,9 @@ func shouldIgnoreSQLError(engine, stmt string, err error) bool {
 		if strings.Contains(low, "create extension") && strings.Contains(strings.ToLower(err.Error()), "already exists") {
 			return true
 		}
+	}
+	if engine == "sqlite" && strings.HasPrefix(low, "alter table") && strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+		return true
 	}
 	return false
 }

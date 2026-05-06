@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"os"
@@ -26,47 +25,47 @@ func TestF353USystemCatalogAndSimplifiedEntityFlowMultiDB(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ListReligioConfessions: %v", err)
 			}
-			cristianisme := f353UFindReligion(t, religions, "cristianisme")
-			catolicisme := f353UFindReligion(t, religions, "catolicisme")
-			llati := f353UFindReligion(t, religions, "catolicisme_ritu_llati")
-			if !cristianisme.SystemManaged || cristianisme.ModeracioEstat != "publicat" || cristianisme.Categoria != "religio" {
-				t.Fatalf("cristianisme system incorrecte: %+v", cristianisme)
-			}
-			if !catolicisme.PareID.Valid || int(catolicisme.PareID.Int64) != cristianisme.ID {
-				t.Fatalf("catolicisme no penja de cristianisme: %+v", catolicisme)
-			}
-			if !llati.PareID.Valid || int(llati.PareID.Int64) != catolicisme.ID {
-				t.Fatalf("ritu llati no penja de catolicisme: %+v", llati)
+			if len(religions) != 0 {
+				t.Fatalf("EnsureSystemConfessionalCatalogs no ha de sembrar religions a DB: %+v", religions)
 			}
 
 			nivells, err := env.DB.ListNivellsConfessionals()
 			if err != nil {
 				t.Fatalf("ListNivellsConfessionals: %v", err)
 			}
-			parroquia := f353UFindLevel(t, nivells, "parroquia")
-			diocesi := f353UFindLevel(t, nivells, "bisbat_diocesi")
-			if !parroquia.SystemManaged || parroquia.ModeracioEstat != "publicat" || parroquia.ModelConfessionalID != 0 {
-				t.Fatalf("parroquia ha de ser cataleg system sense model obligatori: %+v", parroquia)
+			if len(nivells) != 0 {
+				t.Fatalf("EnsureSystemConfessionalCatalogs no ha de sembrar nivells a DB: %+v", nivells)
 			}
-			if !parroquia.ReligioConfessioID.Valid || int(parroquia.ReligioConfessioID.Int64) != llati.ID {
-				t.Fatalf("parroquia no esta associada al ritu llati: %+v", parroquia)
+
+			cristianisme, ok := core.GetConfessionalReligionCatalogByCode("cristianisme")
+			if !ok || !cristianisme.SystemManaged || !cristianisme.Active || cristianisme.CategoryCode != "religio" {
+				t.Fatalf("cristianisme no existeix com a cataleg de codi: %+v", cristianisme)
 			}
-			if !parroquia.PotVincularMunicipi || !parroquia.PotSuggerirImports {
-				t.Fatalf("parroquia ha de poder vincular municipis i imports: %+v", parroquia)
+			catolicisme, ok := core.GetConfessionalReligionCatalogByCode("catolicisme")
+			if !ok || catolicisme.ParentCode != "cristianisme" {
+				t.Fatalf("catolicisme no penja de cristianisme al cataleg de codi: %+v", catolicisme)
 			}
-			if diocesi.ModelConfessionalID != 0 || diocesi.Categoria == "" {
-				t.Fatalf("diocesi ha de conservar categoria i model tecnic opcional: %+v", diocesi)
+			if _, ok := core.GetConfessionalReligionCatalogByCode("catolicisme_ritu_llati"); !ok {
+				t.Fatalf("catolicisme_ritu_llati no existeix al cataleg de codi")
+			}
+			parroquia, ok := core.GetConfessionalLevelCatalogByCode("parroquia")
+			if !ok || parroquia.ReligionCode != "catolicisme_ritu_llati" || !parroquia.CanLinkMunicipi {
+				t.Fatalf("parroquia no existeix correctament al cataleg de codi: %+v", parroquia)
+			}
+			diocesi, ok := core.GetConfessionalLevelCatalogByCode("bisbat_diocesi")
+			if !ok || diocesi.CategoryCode == "" {
+				t.Fatalf("diocesi no existeix correctament al cataleg de codi: %+v", diocesi)
 			}
 
 			suffix := time.Now().Format("150405.000000000")
 			entitatID, err := env.DB.SaveEntitatReligiosa(&db.EntitatReligiosa{
-				Codi:                 "entitat_f35_3u_" + suffix,
-				Nom:                  "Parroquia F35-3U " + suffix,
-				ReligioConfessioID:   sql.NullInt64{Int64: int64(llati.ID), Valid: true},
-				NivellConfessionalID: sql.NullInt64{Int64: int64(parroquia.ID), Valid: true},
-				Estat:                "actiu",
-				Descripcio:           "flux simplificat sense model confessional",
-				ModeracioEstat:       "publicat",
+				Codi:                   "entitat_f35_3u_" + suffix,
+				Nom:                    "Parroquia F35-3U " + suffix,
+				ReligioConfessioCodi:   "catolicisme_ritu_llati",
+				NivellConfessionalCodi: "parroquia",
+				Estat:                  "actiu",
+				Descripcio:             "flux simplificat sense model confessional",
+				ModeracioEstat:         "publicat",
 			})
 			if err != nil {
 				t.Fatalf("SaveEntitatReligiosa sense model: %v", err)
@@ -78,14 +77,17 @@ func TestF353USystemCatalogAndSimplifiedEntityFlowMultiDB(t *testing.T) {
 			if gotEntitat.ModelConfessionalID.Valid {
 				t.Fatalf("l'entitat del flux normal no ha de requerir model_confessional: %+v", gotEntitat)
 			}
+			if gotEntitat.ReligioConfessioCodi != "catolicisme_ritu_llati" || gotEntitat.NivellConfessionalCodi != "parroquia" {
+				t.Fatalf("l'entitat ha de persistir codis del cataleg: %+v", gotEntitat)
+			}
 
 			parentID, err := env.DB.SaveEntitatReligiosa(&db.EntitatReligiosa{
-				Codi:                 "diocesi_f35_3u_" + suffix,
-				Nom:                  "Diocesi F35-3U " + suffix,
-				ReligioConfessioID:   sql.NullInt64{Int64: int64(llati.ID), Valid: true},
-				NivellConfessionalID: sql.NullInt64{Int64: int64(diocesi.ID), Valid: true},
-				Estat:                "actiu",
-				ModeracioEstat:       "publicat",
+				Codi:                   "diocesi_f35_3u_" + suffix,
+				Nom:                    "Diocesi F35-3U " + suffix,
+				ReligioConfessioCodi:   "catolicisme_ritu_llati",
+				NivellConfessionalCodi: "bisbat_diocesi",
+				Estat:                  "actiu",
+				ModeracioEstat:         "publicat",
 			})
 			if err != nil {
 				t.Fatalf("SaveEntitatReligiosa parent: %v", err)
@@ -127,13 +129,13 @@ func TestF353UConfessionalUIUsesPublishedCatalogsAndI18N(t *testing.T) {
 		"SelectableReligions",
 		"SelectableNivells",
 		"SelectableEntitats",
-		"publishedReligioConfessions",
-		"publishedNivellsConfessionals",
 		"publishedEntitatsReligioses",
 		"no esta publicat",
 		"confessionalModerationStatusForSave(kind, id)",
 		"suggestConfessionalRelationType",
 		"RelEnt",
+		"ListConfessionalReligionCatalog",
+		"ListConfessionalLevelCatalog",
 	} {
 		if !strings.Contains(handlerBody, token) {
 			t.Fatalf("falta control F35-3U al handler: %s", token)
@@ -152,6 +154,16 @@ func TestF353UConfessionalUIUsesPublishedCatalogsAndI18N(t *testing.T) {
 		}
 	}
 	for _, token := range []string{
+		`name="religio_confessio_codi"`,
+		`name="nivell_confessional_codi"`,
+		`ListConfessionalReligionCatalog()`,
+		`ListConfessionalLevelCatalog()`,
+	} {
+		if !strings.Contains(formBody+handlerBody, token) {
+			t.Fatalf("el flux d'entitat ha d'usar codis/catalog de codi: %s", token)
+		}
+	}
+	for _, token := range []string{
 		"confessional.menu.catalog_religions",
 		"confessional.menu.catalog_levels",
 		"confessional.menu.entities",
@@ -159,6 +171,7 @@ func TestF353UConfessionalUIUsesPublishedCatalogsAndI18N(t *testing.T) {
 		"confessional.menu.territorial_relations",
 		"confessional.col.code",
 		"confessional.col.category",
+		"confessional.col.flags",
 	} {
 		if !strings.Contains(menuBody+listBody+formBody, token) {
 			t.Fatalf("falta clau i18n confessional a templates: %s", token)
@@ -205,6 +218,56 @@ func TestF353UConfessionalUIUsesPublishedCatalogsAndI18N(t *testing.T) {
 				t.Fatalf("%s no defineix %s", rel, key)
 			}
 		}
+	}
+}
+
+func TestF353VConfessionalCatalogIsStaticAndNotSeeded(t *testing.T) {
+	root := findProjectRoot(t)
+	mainBody := readProjectFileF353U(t, root, "main.go")
+	catalogBody := readProjectFileF353U(t, root, "core/confessional_catalog.go")
+	handlerBody := readProjectFileF353U(t, root, "core/admin_confessional.go")
+	listBody := readProjectFileF353U(t, root, "templates/admin-confessional-list.html")
+
+	for _, forbidden := range []string{
+		"app.EnsureSystemConfessionalCatalogs()",
+		"ensureSystemReligioConfessions",
+		"ensureSystemNivellsConfessionals",
+		"SaveReligioConfessio",
+		"SaveNivellConfessional",
+	} {
+		if strings.Contains(mainBody+catalogBody, forbidden) {
+			t.Fatalf("F35-3V no ha de sembrar cataleg base a DB: %s", forbidden)
+		}
+	}
+	for _, token := range []string{
+		"type ConfessionalReligionCatalogItem struct",
+		"type ConfessionalLevelCatalogItem struct",
+		"ListConfessionalReligionCatalog",
+		"GetConfessionalReligionCatalogByCode",
+		"ListConfessionalLevelCatalog",
+		"ListConfessionalLevelsByReligionCode",
+		"GetConfessionalLevelCatalogByCode",
+		"ListConfessionalLevelCategories",
+	} {
+		if !strings.Contains(catalogBody, token) {
+			t.Fatalf("falta API de cataleg estatic: %s", token)
+		}
+	}
+	for _, token := range []string{
+		"ReligionCatalog",
+		"LevelCatalog",
+		"ReligionCatalogLabels",
+		"LevelCatalogLabels",
+	} {
+		if !strings.Contains(handlerBody+listBody, token) {
+			t.Fatalf("la UI ha de llegir cataleg de codi: %s", token)
+		}
+	}
+	if strings.Contains(listBody, `/territori/confessional/religions/{{ .ID }}/edit`) ||
+		strings.Contains(listBody, `/territori/confessional/nivells/{{ .ID }}/edit`) ||
+		strings.Contains(listBody, `name="kind" value="religio"`) ||
+		strings.Contains(listBody, `name="kind" value="nivell"`) {
+		t.Fatalf("les pantalles de cataleg base no han de mostrar accions CRUD destructives")
 	}
 }
 

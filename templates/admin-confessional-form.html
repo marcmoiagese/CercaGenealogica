@@ -165,20 +165,20 @@
                     <input id="nom" name="nom" type="text" value="{{ .Data.Form.Entitat.Nom }}" required>
                 </div>
                 <div class="grup-camp">
-                    <label for="religio_confessio_id">Religio/confessio</label>
-                    <select id="religio_confessio_id" name="religio_confessio_id" required>
+                    <label for="religio_confessio_codi">Religio/confessio</label>
+                    <select id="religio_confessio_codi" name="religio_confessio_codi" required>
                         <option value="">{{ t .Lang "confessional.select.religion" }}</option>
                         {{ range .Data.SelectableReligions }}
-                        <option value="{{ .ID }}" {{ if and $.Data.Form.Entitat.ReligioConfessioID.Valid (eq .ID (int $.Data.Form.Entitat.ReligioConfessioID.Int64)) }}selected{{ end }}>{{ .Nom }}</option>
+                        <option value="{{ .Code }}" {{ if eq $.Data.Form.Entitat.ReligioConfessioCodi .Code }}selected{{ end }}>{{ .CanonicalName }}</option>
                         {{ end }}
                     </select>
                 </div>
                 <div class="grup-camp">
-                    <label for="nivell_confessional_id">Nivell confessional</label>
-                    <select id="nivell_confessional_id" name="nivell_confessional_id" required>
+                    <label for="nivell_confessional_codi">Nivell confessional</label>
+                    <select id="nivell_confessional_codi" name="nivell_confessional_codi" required>
                         <option value="">{{ t .Lang "confessional.select.level" }}</option>
                         {{ range .Data.SelectableNivells }}
-                        <option value="{{ .ID }}" {{ if and $.Data.Form.Entitat.NivellConfessionalID.Valid (eq .ID (int $.Data.Form.Entitat.NivellConfessionalID.Int64)) }}selected{{ end }}>{{ .NomNivell }}</option>
+                        <option value="{{ .Code }}" {{ if eq $.Data.Form.Entitat.NivellConfessionalCodi .Code }}selected{{ end }}>{{ .CanonicalName }}</option>
                         {{ end }}
                     </select>
                 </div>
