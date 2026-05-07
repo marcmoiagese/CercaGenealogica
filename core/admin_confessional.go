@@ -350,10 +350,24 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 		a.renderConfessionalForm(w, r, user, data)
 		return
 	}
-	if kind == "entitat" && id == 0 && data.Entitat != nil && data.Entitat.ParentID.Valid && !a.HasPermission(user.ID, permKeyTerritoriConfessionalRelacionsEntitatsCreate, PermissionTarget{}) {
-		data.Error = "No tens permis per crear la relacio jerarquica."
-		a.renderConfessionalForm(w, r, user, data)
-		return
+	needsParentRelation := false
+	if kind == "entitat" && data.Entitat != nil && data.Entitat.ParentID.Valid {
+		if id == 0 {
+			needsParentRelation = true
+		} else {
+			var err error
+			needsParentRelation, err = a.needsConfessionalParentRelation(int(data.Entitat.ParentID.Int64), id)
+			if err != nil {
+				data.Error = "No s'ha pogut comprovar la relacio jerarquica."
+				a.renderConfessionalForm(w, r, user, data)
+				return
+			}
+		}
+		if needsParentRelation && !a.HasPermission(user.ID, permKeyTerritoriConfessionalRelacionsEntitatsCreate, PermissionTarget{}) {
+			data.Error = "No tens permis per crear la relacio jerarquica."
+			a.renderConfessionalForm(w, r, user, data)
+			return
+		}
 	}
 	if kind == "entitat" && id > 0 {
 		if proposed, err := a.createEntitatReligiosaWikiProposal(data.Entitat, user.ID); err != nil {
@@ -361,6 +375,13 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 			a.renderConfessionalForm(w, r, user, data)
 			return
 		} else if proposed {
+			if needsParentRelation {
+				if err := a.createConfessionalParentRelation(data.Entitat, id, user.ID); err != nil {
+					data.Error = "No s'ha pogut crear la relacio jerarquica."
+					a.renderConfessionalForm(w, r, user, data)
+					return
+				}
+			}
 			returnURL := data.ReturnURL
 			if returnURL == "" {
 				returnURL = fmt.Sprintf("/confessional/entitats/%d?notice=pending", id)
@@ -375,7 +396,7 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 		a.renderConfessionalForm(w, r, user, data)
 		return
 	}
-	if kind == "entitat" && id == 0 && data.Entitat != nil && data.Entitat.ParentID.Valid {
+	if kind == "entitat" && data.Entitat != nil && data.Entitat.ParentID.Valid && (id == 0 || needsParentRelation) {
 		if err := a.createConfessionalParentRelation(data.Entitat, savedID, user.ID); err != nil {
 			data.Error = "No s'ha pogut crear la relacio jerarquica."
 			a.renderConfessionalForm(w, r, user, data)
@@ -1353,6 +1374,13 @@ func (a *App) createConfessionalParentRelation(entitat *db.EntitatReligiosa, chi
 	if entitat == nil || childID == 0 || !entitat.ParentID.Valid {
 		return nil
 	}
+	needsRelation, err := a.needsConfessionalParentRelation(int(entitat.ParentID.Int64), childID)
+	if err != nil {
+		return err
+	}
+	if !needsRelation {
+		return nil
+	}
 	parent, err := a.DB.GetEntitatReligiosa(int(entitat.ParentID.Int64))
 	if err != nil || parent == nil {
 		if err != nil {
@@ -1374,6 +1402,22 @@ func (a *App) createConfessionalParentRelation(entitat *db.EntitatReligiosa, chi
 		UpdatedBy:       sqlNullIntFromInt(userID),
 	})
 	return err
+}
+
+func (a *App) needsConfessionalParentRelation(parentID, childID int) (bool, error) {
+	if parentID <= 0 || childID <= 0 {
+		return false, nil
+	}
+	rels, err := a.DB.ListEntitatReligiosaRelacions()
+	if err != nil {
+		return false, err
+	}
+	for _, rel := range rels {
+		if rel.EntitatOrigenID == parentID && rel.EntitatDestiID == childID && rel.ModeracioEstat != "rebutjat" {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func validateConfessionalEntityRelation(parent, child *db.EntitatReligiosa) error {
