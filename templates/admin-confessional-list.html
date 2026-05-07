@@ -7,9 +7,6 @@
     {{ template "styles-private" . }}
     <link rel="stylesheet" href="/static/css/registres-taula.css">
     <style>
-        .confessional-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 20px; }
-        .confessional-tabs a { border: 1px solid #d0d7de; border-radius: 6px; color: #243447; padding: 8px 10px; text-decoration: none; }
-        .confessional-tabs a.active { background: #243447; border-color: #243447; color: #fff; }
         .confessional-actions { align-items: center; display: flex; gap: 8px; }
         .confessional-actions form { display: inline; margin: 0; }
         .confessional-actions .boto-secundari, .confessional-actions .boto-primari { padding: 5px 8px; }
@@ -39,18 +36,6 @@
                 </div>
                 {{ end }}
             </header>
-            <nav class="confessional-tabs" aria-label="Seccions confessionals">
-                {{ if or .Data.CanViewConfessionalEntitats .Data.IsAdmin }}
-                <a href="/confessional/entitats" {{ if eq .Data.Section.Slug "entitats" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.entities" }}</a>
-                <a href="/confessional/navegacio">{{ t .Lang "confessional.menu.navigation" }}</a>
-                {{ end }}
-                {{ if or .Data.CanViewConfessionalRelacionsEntitats .Data.IsAdmin }}
-                <a href="/confessional/relacions-entitats" {{ if eq .Data.Section.Slug "relacions-entitats" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.entity_relations" }}</a>
-                {{ end }}
-                {{ if or .Data.CanViewConfessionalMunicipisEntitats .Data.IsAdmin }}
-                <a href="/confessional/municipis-entitats" {{ if eq .Data.Section.Slug "municipis-entitats" }}class="active"{{ end }}>{{ t .Lang "confessional.menu.territorial_relations" }}</a>
-                {{ end }}
-            </nav>
             {{ if eq .Data.Notice "saved" }}<div class="alert alert-success">Registre desat.</div>{{ end }}
             {{ if eq .Data.Notice "deleted" }}<div class="alert alert-success">Registre eliminat.</div>{{ end }}
             {{ if eq .Data.Error "unsafe_delete" }}<div class="alert alert-error">No es pot eliminar perque te registres relacionats.</div>{{ end }}

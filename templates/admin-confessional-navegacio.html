@@ -8,9 +8,6 @@
     <link rel="stylesheet" href="/static/css/registres-taula.css">
     <link rel="stylesheet" href="/static/css/territori-municipis-browse.css">
     <style>
-        .confessional-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 20px; }
-        .confessional-tabs a { border: 1px solid #d0d7de; border-radius: 6px; color: #243447; padding: 8px 10px; text-decoration: none; }
-        .confessional-tabs a.active { background: #243447; border-color: #243447; color: #fff; }
         .confessional-path { color: #475467; font-size: .92rem; line-height: 1.4; margin: 0 0 12px; }
         .confessional-path ol, .confessional-path-list { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 4px 0 0; padding: 0; }
         .confessional-path li:not(:last-child)::after, .confessional-path-list li:not(:last-child)::after { content: ">"; margin-left: 4px; color: #98a2b3; }
@@ -27,18 +24,6 @@
             <header class="card-header municipis-header">
                 <h1>{{ t .Lang "confessional.navigation.title" }}</h1>
             </header>
-            <nav class="confessional-tabs" aria-label="{{ t .Lang "confessional.menu.section" }}">
-                {{ if or .Data.CanViewConfessionalEntitats .Data.IsAdmin }}
-                <a href="/confessional/entitats">{{ t .Lang "confessional.menu.entities" }}</a>
-                <a href="/confessional/navegacio" class="active">{{ t .Lang "confessional.menu.navigation" }}</a>
-                {{ end }}
-                {{ if or .Data.CanViewConfessionalRelacionsEntitats .Data.IsAdmin }}
-                <a href="/confessional/relacions-entitats">{{ t .Lang "confessional.menu.entity_relations" }}</a>
-                {{ end }}
-                {{ if or .Data.CanViewConfessionalMunicipisEntitats .Data.IsAdmin }}
-                <a href="/confessional/municipis-entitats">{{ t .Lang "confessional.menu.territorial_relations" }}</a>
-                {{ end }}
-            </nav>
 
             <div class="cerca-avancada">
                 <label for="confessional-q">{{ t .Lang "confessional.navigation.search.label" }}</label>

@@ -104,7 +104,6 @@ func TestF353SConfessionalListUsesAdminTableLayout(t *testing.T) {
 	for _, token := range []string{
 		`/static/css/registres-taula.css`,
 		`class="contingut-principal taula-ample"`,
-		`class="confessional-tabs"`,
 		`class="taula-resultats"`,
 		`class="taula-container"`,
 		`class="taula taula-registres"`,
