@@ -18,10 +18,18 @@ plantilla-temporal/
 data/*
 .github/
 
-# Playwright
+# Playwright / Node
 node_modules/
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
-/playwright/.auth/
+test-results/
+playwright-report/
+blob-report/
+
+# Playwright auth/session state
+tests/e2e/.auth/
+
+# Local Playwright generated files
+.playwright/
+.cache/ms-playwright/
+
+# Local backups
+*.bak

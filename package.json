@@ -1,17 +1,15 @@
 {
-  "name": "cercagenealogica3",
-  "version": "1.0.0",
-  "description": "Aplicació web en **Go** per a **recerca i col·laboració genealògica**, centrada en la **indexació de documentació històrica** (llibres, pàgines i registres) i la seva **vinculació amb persones**.",
-  "main": "index.js",
-  "directories": {
-    "test": "tests"
+  "name": "cercagenealogica-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report"
   },
-  "scripts": {},
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
-    "@types/node": "^25.6.0"
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^25.9.2"
   }
 }
