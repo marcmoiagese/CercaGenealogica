@@ -415,6 +415,8 @@ func (a *App) AdminConfessionalEntityShow(w http.ResponseWriter, r *http.Request
 	allEntitats, _ := a.DB.ListEntitatsReligioses()
 	allRelEnt, _ := a.DB.ListEntitatReligiosaRelacions()
 	allRelTerr, _ := a.DB.ListMunicipiEntitatsReligioses(0)
+	relacionsArxius, _ := a.DB.ListArxiuEntitatsReligioses(0, id, "publicat")
+	arxius, _ := a.DB.ListArxius(db.ArxiuFilter{Status: "publicat", Limit: -1})
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	paisos, _ := a.DB.ListPaisos()
 	changes, _ := a.DB.ListWikiChanges("entitat_religiosa", id)
@@ -459,25 +461,31 @@ func (a *App) AdminConfessionalEntityShow(w http.ResponseWriter, r *http.Request
 		}
 	}
 	RenderPrivateTemplate(w, r, "admin-confessional-entity-show.html", map[string]interface{}{
-		"Entitat":               entitat,
-		"EntitatLabels":         entitatReligiosaLabels(allEntitats),
-		"ReligionCatalogLabels": confessionalReligionCatalogLabels(lang),
-		"LevelCatalogLabels":    confessionalLevelCatalogLabels(lang),
-		"RelationTypeLabels":    relationTypeLabels,
-		"PaisLabels":            paisLabels(paisos),
-		"MunicipiLabels":        municipiLabels(municipis),
-		"RelacionsSuperiors":    relsSuperiors,
-		"RelacionsInferiors":    relsInferiors,
-		"RelacionsTerritori":    relsTerritori,
-		"HasPendingChanges":     hasPending,
-		"CanEdit":               canEdit,
-		"CanDelete":             canDelete,
-		"CanModerate":           canModerate,
-		"Creator":               a.confessionalUserLabel(entitat.CreatedBy),
-		"Updater":               a.confessionalUserLabel(entitat.UpdatedBy),
-		"Moderator":             a.confessionalUserLabel(entitat.ModeratedBy),
-		"Notice":                strings.TrimSpace(r.URL.Query().Get("notice")),
-		"User":                  user,
+		"Entitat":                         entitat,
+		"EntitatLabels":                   entitatReligiosaLabels(allEntitats),
+		"ReligionCatalogLabels":           confessionalReligionCatalogLabels(lang),
+		"LevelCatalogLabels":              confessionalLevelCatalogLabels(lang),
+		"RelationTypeLabels":              relationTypeLabels,
+		"PaisLabels":                      paisLabels(paisos),
+		"MunicipiLabels":                  municipiLabels(municipis),
+		"RelacionsSuperiors":              relsSuperiors,
+		"RelacionsInferiors":              relsInferiors,
+		"RelacionsTerritori":              relsTerritori,
+		"RelacionsArxius":                 relacionsArxius,
+		"ArxiuLabels":                     arxiuLabels(arxius),
+		"ArxiuEntitatReligiosaTypeLabels": arxiuEntitatReligiosaTypeLabels(lang),
+		"HasPendingChanges":               hasPending,
+		"CanEdit":                         canEdit,
+		"CanDelete":                       canDelete,
+		"CanCreateArxiuEntitatReligiosa":  a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsCreate, PermissionTarget{}),
+		"CanEditArxiuEntitatReligiosa":    a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsEdit, PermissionTarget{}),
+		"CanDeleteArxiuEntitatReligiosa":  a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsDelete, PermissionTarget{}),
+		"CanModerate":                     canModerate,
+		"Creator":                         a.confessionalUserLabel(entitat.CreatedBy),
+		"Updater":                         a.confessionalUserLabel(entitat.UpdatedBy),
+		"Moderator":                       a.confessionalUserLabel(entitat.ModeratedBy),
+		"Notice":                          strings.TrimSpace(r.URL.Query().Get("notice")),
+		"User":                            user,
 	})
 }
 

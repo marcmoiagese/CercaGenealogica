@@ -172,8 +172,7 @@ func TestF351SchemaReligiosConfessionalSQLFilesAligned(t *testing.T) {
 				t.Fatalf("%s ha perdut element fora d'abast %q", rel, legacy)
 			}
 		}
-		if strings.Contains(src, "llibre_entitat_"+"religiosa") ||
-			strings.Contains(src, "arxiu_"+"entitat") {
+		if strings.Contains(src, "llibre_entitat_"+"religiosa") {
 			t.Fatalf("%s introdueix relacio fora d'abast", rel)
 		}
 	}

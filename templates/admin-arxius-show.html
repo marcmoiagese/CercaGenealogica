@@ -151,6 +151,51 @@
             </aside>
 
             <section class="tabs">
+                <section class="card">
+                    <div class="card-header" style="margin-bottom:0.65rem;">
+                        <h2 style="font-size:1.2rem;"><i class="fas fa-place-of-worship"></i> {{ t .Lang "confessional.archive_relation.archive_section" }}</h2>
+                        {{ if .Data.CanCreateArxiuEntitatReligiosa }}
+                        <a class="boto-primari" href="/documentals/arxius/{{ .Data.Arxiu.ID }}/entitats-religioses/new?return_to=/documentals/arxius/{{ .Data.Arxiu.ID }}"><i class="fas fa-plus"></i> {{ t .Lang "confessional.archive_relation.add" }}</a>
+                        {{ end }}
+                    </div>
+                    <div class="taula-wrapper">
+                        <table class="taula">
+                            <thead>
+                                <tr>
+                                    <th>{{ t .Lang "confessional.archive_relation.field.entity" }}</th>
+                                    <th>{{ t .Lang "confessional.col.religion" }}</th>
+                                    <th>{{ t .Lang "confessional.col.level" }}</th>
+                                    <th>{{ t .Lang "confessional.archive_relation.field.type" }}</th>
+                                    <th>{{ t .Lang "confessional.col.years" }}</th>
+                                    <th>{{ t .Lang "confessional.archive_relation.field.notes" }}</th>
+                                    {{ if or .Data.CanEditArxiuEntitatReligiosa .Data.CanDeleteArxiuEntitatReligiosa }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{ range .Data.RelacionsReligioses }}
+                                {{ $ent := index $.Data.EntitatsReligiosesByID .EntitatReligiosaID }}
+                                <tr>
+                                    <td><a href="/confessional/entitats/{{ .EntitatReligiosaID }}">{{ index $.Data.EntitatReligiosaLabels .EntitatReligiosaID }}</a></td>
+                                    <td>{{ index $.Data.ReligionCatalogLabels $ent.ReligioConfessioCodi }}</td>
+                                    <td>{{ index $.Data.LevelCatalogLabels $ent.NivellConfessionalCodi }}</td>
+                                    <td>{{ index $.Data.ArxiuEntitatReligiosaTypeLabels .TipusRelacio }}</td>
+                                    <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
+                                    <td>{{ if .Observacions }}{{ .Observacions }}{{ else }}-{{ end }}</td>
+                                    {{ if or $.Data.CanEditArxiuEntitatReligiosa $.Data.CanDeleteArxiuEntitatReligiosa }}
+                                    <td>
+                                        {{ if $.Data.CanEditArxiuEntitatReligiosa }}<a class="boto-secundari" href="/documentals/arxius/entitats-religioses/{{ .ID }}/edit?return_to=/documentals/arxius/{{ $.Data.Arxiu.ID }}">{{ t $.Lang "confessional.action.edit" }}</a>{{ end }}
+                                        {{ if $.Data.CanDeleteArxiuEntitatReligiosa }}<form method="post" action="/documentals/arxius/entitats-religioses/{{ .ID }}/delete" style="display:inline;"><button class="boto-perill" type="submit">{{ t $.Lang "confessional.action.delete" }}</button></form>{{ end }}
+                                    </td>
+                                    {{ end }}
+                                </tr>
+                                {{ else }}
+                                <tr><td colspan="{{ if or .Data.CanEditArxiuEntitatReligiosa .Data.CanDeleteArxiuEntitatReligiosa }}7{{ else }}6{{ end }}">-</td></tr>
+                                {{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
                 <div class="tablist" role="tablist" aria-label="Seccions de l'arxiu">
                     <button class="tab" role="tab" aria-selected="true" data-tab="llibres"><i class="fas fa-book"></i> Llibres</button>
                     <button class="tab" role="tab" aria-selected="false" data-tab="municipis"><i class="fas fa-map-marker-alt"></i> Municipis</button>

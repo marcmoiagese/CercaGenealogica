@@ -280,6 +280,7 @@ var moderacioTypeSpecs = map[string]moderacioTypeSpec{
 	"entitat_religiosa_canvi":    {Key: "entitat_religiosa_canvi", PermKey: permKeyTerritoriConfessionalEntitatsEdit, ListScope: ScopeGlobal},
 	"entitat_religiosa_relacio":  {Key: "entitat_religiosa_relacio", PermKey: permKeyTerritoriConfessionalRelacionsEntitatsEdit, ListScope: ScopeGlobal},
 	"municipi_entitat_religiosa": {Key: "municipi_entitat_religiosa", PermKey: permKeyTerritoriConfessionalMunicipisEntitatsEdit, ListScope: ScopeGlobal},
+	"arxiu_entitat_religiosa":    {Key: "arxiu_entitat_religiosa", PermKey: permKeyTerritoriConfessionalArxiusEntitatsEdit, ListScope: ScopeGlobal},
 	"municipi_mapa_version":      {Key: "municipi_mapa_version", PermKey: permKeyTerritoriMunicipisMapesModerate, ListScope: ScopeMunicipi},
 	"municipi_historia_general":  {Key: "municipi_historia_general", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
 	"municipi_historia_fet":      {Key: "municipi_historia_fet", PermKey: permKeyTerritoriMunicipisHistoriaModerate, ListScope: ScopeMunicipi},
@@ -472,6 +473,8 @@ func (m *moderacioScopeModel) canModerateItem(objType string, id int) bool {
 		return m.app.HasPermission(m.user.ID, permKeyTerritoriConfessionalRelacionsEntitatsEdit, PermissionTarget{})
 	case "municipi_entitat_religiosa":
 		return m.app.HasPermission(m.user.ID, permKeyTerritoriConfessionalMunicipisEntitatsEdit, PermissionTarget{})
+	case "arxiu_entitat_religiosa":
+		return m.app.HasPermission(m.user.ID, permKeyTerritoriConfessionalArxiusEntitatsEdit, PermissionTarget{})
 	case "municipi_historia_general":
 		munID, err := m.app.DB.ResolveMunicipiIDByHistoriaGeneralVersionID(id)
 		if err != nil || munID <= 0 {
@@ -680,6 +683,7 @@ var moderacioBulkAllowedTypes = []string{
 	"entitat_religiosa",
 	"entitat_religiosa_relacio",
 	"municipi_entitat_religiosa",
+	"arxiu_entitat_religiosa",
 	"municipi_mapa_version",
 	"municipi_historia_general",
 	"municipi_historia_fet",
@@ -1141,6 +1145,13 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 			typeCounts["municipi_entitat_religiosa"] = total
 		}
 	}
+	if typeAllowed("arxiu_entitat_religiosa") {
+		if total, err := a.countModeracioArxiuEntitatsReligioses(confessionalFilter); err != nil {
+			return nil, 0, moderacioSummary{}, err
+		} else if total > 0 {
+			typeCounts["arxiu_entitat_religiosa"] = total
+		}
+	}
 	if typeAllowed("media_album") && !skipMedia {
 		if total, err := a.DB.CountMediaAlbumsModeracio(mediaFilter); err != nil {
 			return nil, 0, moderacioSummary{}, err
@@ -1322,6 +1333,7 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 		"entitat_religiosa",
 		"entitat_religiosa_relacio",
 		"municipi_entitat_religiosa",
+		"arxiu_entitat_religiosa",
 		"media_album",
 		"media_item",
 		"municipi_mapa_version",
@@ -1381,6 +1393,8 @@ func (a *App) buildModeracioItems(lang string, page, perPage int, user *db.User,
 			fetched, err = a.listModeracioConfessionalRelacionsEntitats(confessionalFilter, offset, limit, autorFromID, metrics)
 		case "municipi_entitat_religiosa":
 			fetched, err = a.listModeracioConfessionalRelacionsTerritorials(confessionalFilter, offset, limit, autorFromID, metrics)
+		case "arxiu_entitat_religiosa":
+			fetched, err = a.listModeracioArxiuEntitatsReligioses(confessionalFilter, offset, limit, autorFromID, metrics)
 		case "media_album":
 			if !skipMedia {
 				fetched, err = a.listModeracioMediaAlbums(mediaFilter, offset, limit, autorFromID, metrics)
@@ -1763,6 +1777,20 @@ func (a *App) countModeracioConfessionalRelacionsTerritorials(filter confessiona
 	return total, nil
 }
 
+func (a *App) countModeracioArxiuEntitatsReligioses(filter confessionalModeracioFilter) (int, error) {
+	rows, err := a.DB.ListArxiuEntitatsReligioses(0, 0, "")
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	for _, row := range rows {
+		if matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, row.CreatedBy, filter) {
+			total++
+		}
+	}
+	return total, nil
+}
+
 func (a *App) listModeracioConfessionalEntitats(filter confessionalModeracioFilter, offset, limit int, autorFromID func(sql.NullInt64) (string, string, int), metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
 	if limit <= 0 {
 		return []moderacioItem{}, nil
@@ -1944,6 +1972,69 @@ func (a *App) listModeracioConfessionalRelacionsTerritorials(filter confessional
 			Created:   created,
 			CreatedAt: createdAt,
 			EditURL:   fmt.Sprintf("/confessional/municipis-entitats/%d/edit?return_to=/moderacio", row.ID),
+			Status:    row.ModeracioEstat,
+		})
+		seen++
+	}
+	if metrics != nil {
+		metrics.listBuildDur += time.Since(buildStart)
+	}
+	return items, nil
+}
+
+func (a *App) listModeracioArxiuEntitatsReligioses(filter confessionalModeracioFilter, offset, limit int, autorFromID func(sql.NullInt64) (string, string, int), metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
+	if limit <= 0 {
+		return []moderacioItem{}, nil
+	}
+	fetchStart := time.Now()
+	rows, err := a.DB.ListArxiuEntitatsReligioses(0, 0, "")
+	if metrics != nil {
+		metrics.listFetchDur += time.Since(fetchStart)
+	}
+	if err != nil {
+		return nil, err
+	}
+	entitats, err := a.DB.ListEntitatsReligioses()
+	if err != nil {
+		return nil, err
+	}
+	arxius, err := a.DB.ListArxius(db.ArxiuFilter{Limit: -1})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return confessionalCreatedAfter(rows[i].CreatedAt, rows[i].ID, rows[j].CreatedAt, rows[j].ID)
+	})
+	buildStart := time.Now()
+	entitatLabels := entitatReligiosaLabels(entitats)
+	arxiuLabels := arxiuLabels(arxius)
+	typeLabels := arxiuEntitatReligiosaTypeLabels(defaultLang)
+	items := make([]moderacioItem, 0, limit)
+	seen := 0
+	for _, row := range rows {
+		if !matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, row.CreatedBy, filter) {
+			continue
+		}
+		if seen < offset {
+			seen++
+			continue
+		}
+		if len(items) >= limit {
+			break
+		}
+		created, createdAt := confessionalCreated(row.CreatedAt)
+		autorNom, autorURL, autorID := autorFromID(row.CreatedBy)
+		items = append(items, moderacioItem{
+			ID:        row.ID,
+			Type:      "arxiu_entitat_religiosa",
+			Nom:       strings.TrimSpace(confessionalLabel(arxiuLabels, row.ArxiuID) + " -> " + confessionalLabel(entitatLabels, row.EntitatReligiosaID)),
+			Context:   typeLabels[row.TipusRelacio],
+			Autor:     autorNom,
+			AutorURL:  autorURL,
+			AutorID:   autorID,
+			Created:   created,
+			CreatedAt: createdAt,
+			EditURL:   fmt.Sprintf("/documentals/arxius/entitats-religioses/%d/edit?return_to=/moderacio", row.ID),
 			Status:    row.ModeracioEstat,
 		})
 		seen++
@@ -5647,6 +5738,8 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.DB.UpdateEntitatReligiosaRelacioModeracio(id, estat, motiu, moderatorID)
 	case "municipi_entitat_religiosa":
 		return a.DB.UpdateMunicipiEntitatReligiosaModeracio(id, estat, motiu, moderatorID)
+	case "arxiu_entitat_religiosa":
+		return a.DB.UpdateArxiuEntitatReligiosaModeracio(id, estat, motiu, moderatorID)
 	case "registre":
 		action := ""
 		switch estat {

@@ -274,6 +274,13 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, canModerateAll 
 			counts["municipi_entitat_religiosa"] = total
 		}
 	}
+	if scopeModel.canModerateType("arxiu_entitat_religiosa") {
+		if total, err := a.countModeracioArxiuEntitatsReligioses(confessionalModeracioFilter{Status: "pendent"}); err != nil {
+			return 0, nil, err
+		} else if total > 0 {
+			counts["arxiu_entitat_religiosa"] = total
+		}
+	}
 	if scopeModel.canModerateType("municipi_mapa_version") {
 		scope, ok := scopeModel.scopeFilterForType("municipi_mapa_version")
 		if ok && (scope.hasGlobal || !scope.isEmpty()) {
@@ -522,6 +529,10 @@ func (a *App) adminPendingModerationCountsForUser(user *db.User, canModerateAll 
 		"nivell",
 		"municipi",
 		"eclesiastic",
+		"entitat_religiosa",
+		"entitat_religiosa_relacio",
+		"municipi_entitat_religiosa",
+		"arxiu_entitat_religiosa",
 		"municipi_mapa_version",
 		"cognom_variant",
 		"cognom_referencia",

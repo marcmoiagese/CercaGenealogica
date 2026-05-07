@@ -263,20 +263,31 @@ func (a *App) ShowArxiu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	llibres, _ := a.DB.ListArxiuLlibres(id)
+	relacionsReligioses, _ := a.DB.ListArxiuEntitatsReligioses(id, 0, "publicat")
+	entitatsReligioses, _ := a.DB.ListEntitatsReligioses()
 	entNom := a.loadEntitatNom(arxiu)
 	munNom := a.loadMunicipiNom(arxiu)
 	lang := ResolveLang(r)
 	arxiuPro := a.buildArxiuProData(lang, arxiu, entNom, munNom, llibres, nil, nil, false)
 	RenderPrivateTemplate(w, r, "admin-arxius-show.html", map[string]interface{}{
-		"Arxiu":           arxiu,
-		"Llibres":         llibres,
-		"EntitatNom":      entNom,
-		"MunicipiNom":     munNom,
-		"ArxiuProData":    arxiuPro,
-		"DonacionsClicks": 0,
-		"CanManageArxius": canManage,
-		"ArxiusBasePath":  "/arxius",
-		"User":            user,
+		"Arxiu":                           arxiu,
+		"Llibres":                         llibres,
+		"EntitatNom":                      entNom,
+		"MunicipiNom":                     munNom,
+		"ArxiuProData":                    arxiuPro,
+		"RelacionsReligioses":             relacionsReligioses,
+		"EntitatReligiosaLabels":          entitatReligiosaLabels(entitatsReligioses),
+		"ReligionCatalogLabels":           confessionalReligionCatalogLabels(lang),
+		"LevelCatalogLabels":              confessionalLevelCatalogLabels(lang),
+		"ArxiuEntitatReligiosaTypeLabels": arxiuEntitatReligiosaTypeLabels(lang),
+		"EntitatsReligiosesByID":          entitatsReligiosesByID(entitatsReligioses),
+		"CanCreateArxiuEntitatReligiosa":  a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsCreate, target),
+		"CanEditArxiuEntitatReligiosa":    a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsEdit, target),
+		"CanDeleteArxiuEntitatReligiosa":  a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsDelete, target),
+		"DonacionsClicks":                 0,
+		"CanManageArxius":                 canManage,
+		"ArxiusBasePath":                  "/arxius",
+		"User":                            user,
 	})
 }
 
@@ -773,6 +784,8 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	llibres, _ := a.DB.ListArxiuLlibres(id)
+	relacionsReligioses, _ := a.DB.ListArxiuEntitatsReligioses(id, 0, "publicat")
+	entitatsReligioses, _ := a.DB.ListEntitatsReligioses()
 	canEditArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusEdit, target)
 	canDeleteArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusDelete, target)
 	canCreateLlibre := a.HasPermission(user.ID, permKeyDocumentalsLlibresCreate, target)
@@ -813,24 +826,33 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 	lang := ResolveLang(r)
 	arxiuPro := a.buildArxiuProData(lang, arxiu, entNom, munNom, llibres, canEditLlibre, canViewLlibre, showLlibreActions)
 	RenderPrivateTemplate(w, r, "admin-arxius-show.html", map[string]interface{}{
-		"Arxiu":             arxiu,
-		"Llibres":           llibres,
-		"EntitatNom":        entNom,
-		"MunicipiNom":       munNom,
-		"ArxiuProData":      arxiuPro,
-		"DonacionsClicks":   donacionsClicks,
-		"MarkType":          markType,
-		"MarkPublic":        markPublic,
-		"MarkOwn":           markOwn,
-		"CanManageArxius":   true,
-		"CanEditArxiu":      canEditArxiu,
-		"CanDeleteArxiu":    canDeleteArxiu,
-		"CanCreateLlibre":   canCreateLlibre,
-		"CanEditLlibre":     canEditLlibre,
-		"CanViewLlibre":     canViewLlibre,
-		"ShowLlibreActions": showLlibreActions,
-		"ArxiusBasePath":    "/documentals/arxius",
-		"User":              user,
+		"Arxiu":                           arxiu,
+		"Llibres":                         llibres,
+		"EntitatNom":                      entNom,
+		"MunicipiNom":                     munNom,
+		"ArxiuProData":                    arxiuPro,
+		"RelacionsReligioses":             relacionsReligioses,
+		"EntitatReligiosaLabels":          entitatReligiosaLabels(entitatsReligioses),
+		"ReligionCatalogLabels":           confessionalReligionCatalogLabels(lang),
+		"LevelCatalogLabels":              confessionalLevelCatalogLabels(lang),
+		"ArxiuEntitatReligiosaTypeLabels": arxiuEntitatReligiosaTypeLabels(lang),
+		"EntitatsReligiosesByID":          entitatsReligiosesByID(entitatsReligioses),
+		"DonacionsClicks":                 donacionsClicks,
+		"MarkType":                        markType,
+		"MarkPublic":                      markPublic,
+		"MarkOwn":                         markOwn,
+		"CanManageArxius":                 true,
+		"CanEditArxiu":                    canEditArxiu,
+		"CanDeleteArxiu":                  canDeleteArxiu,
+		"CanCreateLlibre":                 canCreateLlibre,
+		"CanCreateArxiuEntitatReligiosa":  a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsCreate, target),
+		"CanEditArxiuEntitatReligiosa":    a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsEdit, target),
+		"CanDeleteArxiuEntitatReligiosa":  a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsDelete, target),
+		"CanEditLlibre":                   canEditLlibre,
+		"CanViewLlibre":                   canViewLlibre,
+		"ShowLlibreActions":               showLlibreActions,
+		"ArxiusBasePath":                  "/documentals/arxius",
+		"User":                            user,
 	})
 }
 

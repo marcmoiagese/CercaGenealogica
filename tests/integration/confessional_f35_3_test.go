@@ -76,7 +76,6 @@ func TestF353MunicipiEntitatReligiosaSQLFilesAligned(t *testing.T) {
 		}
 		for _, forbidden := range []string{
 			"llibre_entitat_" + "religiosa",
-			"arxiu_" + "entitat",
 		} {
 			if strings.Contains(src, forbidden) {
 				t.Fatalf("%s introdueix relacio fora d'abast %s", rel, forbidden)

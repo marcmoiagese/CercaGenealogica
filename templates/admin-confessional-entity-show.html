@@ -108,6 +108,44 @@
                 </tbody></table>
             </div>
         </section>
+
+        <section class="card">
+            <header class="card-header amb-accio">
+                <h2>{{ t .Lang "confessional.archive_relation.entity_section" }}</h2>
+                {{ if .Data.CanCreateArxiuEntitatReligiosa }}
+                <a class="boto-primari" href="/confessional/entitats/{{ .Data.Entitat.ID }}/arxius/new?return_to=/confessional/entitats/{{ .Data.Entitat.ID }}"><i class="fas fa-plus"></i> {{ t .Lang "confessional.archive_relation.add" }}</a>
+                {{ end }}
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "confessional.archive_relation.field.archive" }}</th>
+                            <th>{{ t .Lang "confessional.archive_relation.field.type" }}</th>
+                            <th>{{ t .Lang "confessional.col.years" }}</th>
+                            <th>{{ t .Lang "confessional.archive_relation.field.notes" }}</th>
+                            {{ if or .Data.CanEditArxiuEntitatReligiosa .Data.CanDeleteArxiuEntitatReligiosa }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.RelacionsArxius }}
+                        <tr>
+                            <td><a href="/documentals/arxius/{{ .ArxiuID }}">{{ index $.Data.ArxiuLabels .ArxiuID }}</a></td>
+                            <td>{{ index $.Data.ArxiuEntitatReligiosaTypeLabels .TipusRelacio }}</td>
+                            <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
+                            <td>{{ if .Observacions }}{{ .Observacions }}{{ else }}-{{ end }}</td>
+                            {{ if or $.Data.CanEditArxiuEntitatReligiosa $.Data.CanDeleteArxiuEntitatReligiosa }}
+                            <td>
+                                {{ if $.Data.CanEditArxiuEntitatReligiosa }}<a class="boto-secundari" href="/documentals/arxius/entitats-religioses/{{ .ID }}/edit?return_to=/confessional/entitats/{{ $.Data.Entitat.ID }}">{{ t $.Lang "confessional.action.edit" }}</a>{{ end }}
+                                {{ if $.Data.CanDeleteArxiuEntitatReligiosa }}<form method="post" action="/documentals/arxius/entitats-religioses/{{ .ID }}/delete" style="display:inline;"><button class="boto-perill" type="submit">{{ t $.Lang "confessional.action.delete" }}</button></form>{{ end }}
+                            </td>
+                            {{ end }}
+                        </tr>
+                        {{ else }}<tr><td colspan="{{ if or .Data.CanEditArxiuEntitatReligiosa .Data.CanDeleteArxiuEntitatReligiosa }}5{{ else }}4{{ end }}">-</td></tr>{{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}

@@ -894,6 +894,30 @@ CREATE TABLE IF NOT EXISTS arxius_donacions_clicks (
 CREATE INDEX IF NOT EXISTS idx_arxiu_donacions_clicks_arxiu ON arxius_donacions_clicks(arxiu_id);
 CREATE INDEX IF NOT EXISTS idx_arxiu_donacions_clicks_created ON arxius_donacions_clicks(created_at);
 
+CREATE TABLE IF NOT EXISTS arxiu_entitat_religiosa (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    arxiu_id INTEGER NOT NULL REFERENCES arxius(id) ON DELETE CASCADE,
+    entitat_religiosa_id INTEGER NOT NULL REFERENCES entitat_religiosa(id) ON DELETE CASCADE,
+    tipus_relacio TEXT NOT NULL,
+    any_inici INTEGER,
+    any_fi INTEGER,
+    observacions TEXT,
+    estat TEXT NOT NULL DEFAULT 'actiu' CHECK(estat IN ('actiu','historic')),
+    moderation_status TEXT NOT NULL DEFAULT 'pendent' CHECK(moderation_status IN ('pendent','publicat','rebutjat')),
+    moderation_notes TEXT,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(arxiu_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi)
+);
+CREATE INDEX IF NOT EXISTS idx_arxiu_entitat_religiosa_arxiu ON arxiu_entitat_religiosa(arxiu_id);
+CREATE INDEX IF NOT EXISTS idx_arxiu_entitat_religiosa_entitat ON arxiu_entitat_religiosa(entitat_religiosa_id);
+CREATE INDEX IF NOT EXISTS idx_arxiu_entitat_religiosa_moderacio ON arxiu_entitat_religiosa(moderation_status);
+CREATE INDEX IF NOT EXISTS idx_arxiu_entitat_religiosa_tipus ON arxiu_entitat_religiosa(tipus_relacio);
+
 CREATE TABLE IF NOT EXISTS arxius_llibres (
   arxiu_id INTEGER NOT NULL REFERENCES arxius(id) ON DELETE CASCADE,
   llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,

@@ -75,14 +75,15 @@ type moderacioBulkSnapshot struct {
 }
 
 var moderacioBulkSimpleTypes = map[string]bool{
-	"arxiu":             true,
-	"llibre":            true,
-	"nivell":            true,
-	"municipi":          true,
-	"eclesiastic":       true,
-	"cognom_variant":    true,
-	"cognom_referencia": true,
-	"event_historic":    true,
+	"arxiu":                   true,
+	"llibre":                  true,
+	"nivell":                  true,
+	"municipi":                true,
+	"eclesiastic":             true,
+	"cognom_variant":          true,
+	"cognom_referencia":       true,
+	"event_historic":          true,
+	"arxiu_entitat_religiosa": true,
 }
 
 const moderacioBulkErrorSampleLimit = 8
@@ -518,6 +519,21 @@ func (a *App) resolveModeracioBulkAllSnapshot(bulkType string, user *db.User, ca
 				if row.ModeracioEstat != "pendent" {
 					continue
 				}
+				candidates++
+				if bulkUserID > 0 {
+					continue
+				}
+				addTarget(objType, row.ID)
+			}
+		case "arxiu_entitat_religiosa":
+			if !scopeModel.canModerateType("arxiu_entitat_religiosa") {
+				continue
+			}
+			rows, err := a.DB.ListArxiuEntitatsReligioses(0, 0, "pendent")
+			if err != nil {
+				return moderacioBulkSnapshot{}, err
+			}
+			for _, row := range rows {
 				candidates++
 				if bulkUserID > 0 {
 					continue

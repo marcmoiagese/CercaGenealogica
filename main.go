@@ -788,6 +788,8 @@ func main() {
 			applyMiddleware(app.AdminConfessionalNavigation, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/confessional/entitats/") && strings.HasSuffix(r.URL.Path, "/history"):
 			applyMiddleware(app.EntitatReligiosaWikiHistory, core.BlockIPs, core.RateLimit)(w, r)
+		case strings.Contains(r.URL.Path, "/confessional/entitats/") && strings.HasSuffix(r.URL.Path, "/arxius/new"):
+			applyMiddleware(app.AdminNewArxiuEntitatReligiosaFromEntitat, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/new"):
 			applyMiddleware(app.AdminNewConfessional, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/edit"):
@@ -974,6 +976,14 @@ func main() {
 	http.HandleFunc("/documentals/arxius/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(path, "/entitats-religioses/save"):
+			applyMiddleware(app.AdminSaveArxiuEntitatReligiosa, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/entitats-religioses/new"):
+			applyMiddleware(app.AdminNewArxiuEntitatReligiosaFromArxiu, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.Contains(path, "/entitats-religioses/") && strings.HasSuffix(path, "/edit"):
+			applyMiddleware(app.AdminEditArxiuEntitatReligiosa, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.Contains(path, "/entitats-religioses/") && strings.HasSuffix(path, "/delete"):
+			applyMiddleware(app.AdminDeleteArxiuEntitatReligiosa, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodGet && strings.HasSuffix(path, "/historial"):
 			applyMiddleware(app.ArxiuWikiHistory, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodGet && strings.HasSuffix(path, "/estadistiques"):

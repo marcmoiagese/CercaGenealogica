@@ -1,0 +1,98 @@
+{{ define "admin-arxiu-entitat-religiosa-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "confessional.archive_relation.form.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "confessional.archive_relation.form.title" }}</h1>
+            </header>
+            {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
+            <form method="post" action="/documentals/arxius/entitats-religioses/save">
+                <input type="hidden" name="id" value="{{ .Data.Relacio.ID }}">
+                <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
+                <input type="hidden" name="from_arxiu_id" value="{{ .Data.FromArxiuID }}">
+                <input type="hidden" name="from_entitat_religiosa_id" value="{{ .Data.FromEntitatReligiosaID }}">
+
+                <div class="grup-camp">
+                    <label for="arxiu_id">{{ t .Lang "confessional.archive_relation.field.archive" }}</label>
+                    {{ if gt .Data.FromArxiuID 0 }}
+                        <input type="hidden" name="arxiu_id" value="{{ .Data.FromArxiuID }}">
+                        <input class="input-text" value="{{ index .Data.ArxiuLabels .Data.FromArxiuID }}" disabled>
+                    {{ else }}
+                        <select id="arxiu_id" name="arxiu_id" required>
+                            <option value="">{{ t .Lang "common.select" }}</option>
+                            {{ range .Data.Arxius }}
+                            <option value="{{ .ID }}" {{ if eq $.Data.Relacio.ArxiuID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                            {{ end }}
+                        </select>
+                    {{ end }}
+                </div>
+
+                <div class="grup-camp">
+                    <label for="entitat_religiosa_id">{{ t .Lang "confessional.archive_relation.field.entity" }}</label>
+                    {{ if gt .Data.FromEntitatReligiosaID 0 }}
+                        <input type="hidden" name="entitat_religiosa_id" value="{{ .Data.FromEntitatReligiosaID }}">
+                        <input class="input-text" value="{{ index .Data.EntitatOptionLabels .Data.FromEntitatReligiosaID }}" disabled>
+                    {{ else }}
+                        <select id="entitat_religiosa_id" name="entitat_religiosa_id" required>
+                            <option value="">{{ t .Lang "common.select" }}</option>
+                            {{ range .Data.Entitats }}
+                            <option value="{{ .ID }}" {{ if eq $.Data.Relacio.EntitatReligiosaID .ID }}selected{{ end }}>{{ index $.Data.EntitatOptionLabels .ID }}</option>
+                            {{ end }}
+                        </select>
+                    {{ end }}
+                </div>
+
+                <div class="grup-camp">
+                    <label for="tipus_relacio">{{ t .Lang "confessional.archive_relation.field.type" }}</label>
+                    <select id="tipus_relacio" name="tipus_relacio" required>
+                        {{ range .Data.RelacioTypes }}
+                        <option value="{{ .Code }}" {{ if eq $.Data.Relacio.TipusRelacio .Code }}selected{{ end }}>{{ index $.Data.TypeLabels .Code }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+
+                <div class="grid-dos">
+                    <div class="grup-camp">
+                        <label for="any_inici">{{ t .Lang "confessional.archive_relation.field.start_year" }}</label>
+                        <input id="any_inici" name="any_inici" type="number" value="{{ if .Data.Relacio.AnyInici.Valid }}{{ .Data.Relacio.AnyInici.Int64 }}{{ end }}">
+                    </div>
+                    <div class="grup-camp">
+                        <label for="any_fi">{{ t .Lang "confessional.archive_relation.field.end_year" }}</label>
+                        <input id="any_fi" name="any_fi" type="number" value="{{ if .Data.Relacio.AnyFi.Valid }}{{ .Data.Relacio.AnyFi.Int64 }}{{ end }}">
+                    </div>
+                </div>
+
+                <div class="grup-camp">
+                    <label for="estat">{{ t .Lang "confessional.archive_relation.field.state" }}</label>
+                    <select id="estat" name="estat">
+                        <option value="actiu" {{ if eq .Data.Relacio.Estat "actiu" }}selected{{ end }}>{{ t .Lang "confessional.status.actiu" }}</option>
+                        <option value="historic" {{ if eq .Data.Relacio.Estat "historic" }}selected{{ end }}>{{ t .Lang "confessional.status.historic" }}</option>
+                    </select>
+                </div>
+
+                <div class="grup-camp">
+                    <label for="observacions">{{ t .Lang "confessional.archive_relation.field.notes" }}</label>
+                    <textarea id="observacions" name="observacions" rows="4">{{ .Data.Relacio.Observacions }}</textarea>
+                </div>
+
+                <div class="form-accio">
+                    <button class="boto-primari" type="submit">{{ t .Lang "common.save" }}</button>
+                    <a class="boto-secundari" href="{{ if .Data.ReturnURL }}{{ .Data.ReturnURL }}{{ else }}{{ if gt .Data.Relacio.ArxiuID 0 }}/documentals/arxius/{{ .Data.Relacio.ArxiuID }}{{ else }}/confessional/entitats/{{ .Data.Relacio.EntitatReligiosaID }}{{ end }}{{ end }}">{{ t .Lang "archives.form.cancel" }}</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

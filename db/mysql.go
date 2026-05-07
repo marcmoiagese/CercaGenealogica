@@ -885,6 +885,21 @@ func (d *MySQL) DeleteEntitatReligiosaRelacio(id int) error {
 func (d *MySQL) UpdateEntitatReligiosaRelacioModeracio(id int, estat, motiu string, moderatorID int) error {
 	return mysqlUpdateEntitatReligiosaRelacioModeracio(d, id, estat, motiu, moderatorID)
 }
+func (d *MySQL) ListArxiuEntitatsReligioses(arxiuID int, entitatReligiosaID int, status string) ([]ArxiuEntitatReligiosa, error) {
+	return mysqlListArxiuEntitatsReligioses(d, arxiuID, entitatReligiosaID, status)
+}
+func (d *MySQL) GetArxiuEntitatReligiosa(id int) (*ArxiuEntitatReligiosa, error) {
+	return mysqlGetArxiuEntitatReligiosa(d, id)
+}
+func (d *MySQL) SaveArxiuEntitatReligiosa(rel *ArxiuEntitatReligiosa) (int, error) {
+	return mysqlSaveArxiuEntitatReligiosa(d, rel)
+}
+func (d *MySQL) DeleteArxiuEntitatReligiosa(id int) error {
+	return mysqlDeleteArxiuEntitatReligiosa(d, id)
+}
+func (d *MySQL) UpdateArxiuEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error {
+	return mysqlUpdateArxiuEntitatReligiosaModeracio(d, id, estat, motiu, moderatorID)
+}
 func (d *MySQL) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
 }
