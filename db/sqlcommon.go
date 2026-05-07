@@ -2233,8 +2233,6 @@ func (h sqlHelper) bulkUpdateModeracioSimple(objectType, estat, motiu string, mo
 		args = []interface{}{estat, strings.TrimSpace(motiu), moderatorID, now}
 	case "event_historic":
 		stmt = `UPDATE events_historics SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE moderation_status = 'pendent'`
-	case "arxiu_entitat_religiosa":
-		stmt = `UPDATE arxiu_entitat_religiosa SET moderation_status = ?, moderation_notes = ?, moderated_by = ?, moderated_at = ?, updated_at = ? WHERE moderation_status = 'pendent'`
 	default:
 		return 0, fmt.Errorf("bulk moderacio no suportat: %s", objectType)
 	}

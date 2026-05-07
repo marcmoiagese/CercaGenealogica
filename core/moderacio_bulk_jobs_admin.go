@@ -75,15 +75,14 @@ type moderacioBulkSnapshot struct {
 }
 
 var moderacioBulkSimpleTypes = map[string]bool{
-	"arxiu":                   true,
-	"llibre":                  true,
-	"nivell":                  true,
-	"municipi":                true,
-	"eclesiastic":             true,
-	"cognom_variant":          true,
-	"cognom_referencia":       true,
-	"event_historic":          true,
-	"arxiu_entitat_religiosa": true,
+	"arxiu":             true,
+	"llibre":            true,
+	"nivell":            true,
+	"municipi":          true,
+	"eclesiastic":       true,
+	"cognom_variant":    true,
+	"cognom_referencia": true,
+	"event_historic":    true,
 }
 
 const moderacioBulkErrorSampleLimit = 8

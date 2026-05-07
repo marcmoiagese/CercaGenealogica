@@ -84,6 +84,66 @@ func TestF354ArxiuEntitatReligiosaSQLFilesAligned(t *testing.T) {
 	}
 }
 
+func TestF354RArxiuEntitatReligiosaDBIsSeparatedPerMotor(t *testing.T) {
+	root := findProjectRoot(t)
+	sqlcommon := readProjectFileF354(t, root, "db/sqlcommon.go")
+	for _, forbidden := range []string{
+		"arxiu_entitat_religiosa",
+		"ArxiuEntitatReligiosa",
+		"ListArxiuEntitatsReligioses",
+		"SaveArxiuEntitatReligiosa",
+		"UpdateModeracioArxiuEntitatReligiosa",
+		"UpdateArxiuEntitatReligiosaModeracio",
+	} {
+		if strings.Contains(sqlcommon, forbidden) {
+			t.Fatalf("db/sqlcommon.go no ha de contenir referencia F35-4 %q", forbidden)
+		}
+	}
+
+	body := readProjectFileF354(t, root, "db/arxiu_entitat_religiosa_per_motor.go")
+	for _, required := range []string{
+		"func sqliteListArxiuEntitatsReligioses(",
+		"func sqliteGetArxiuEntitatReligiosa(",
+		"func sqliteSaveArxiuEntitatReligiosa(",
+		"func sqliteDeleteArxiuEntitatReligiosa(",
+		"func sqliteUpdateArxiuEntitatReligiosaModeracio(",
+		"func postgresListArxiuEntitatsReligioses(",
+		"func postgresGetArxiuEntitatReligiosa(",
+		"func postgresSaveArxiuEntitatReligiosa(",
+		"func postgresDeleteArxiuEntitatReligiosa(",
+		"func postgresUpdateArxiuEntitatReligiosaModeracio(",
+		"func mysqlListArxiuEntitatsReligioses(",
+		"func mysqlGetArxiuEntitatReligiosa(",
+		"func mysqlSaveArxiuEntitatReligiosa(",
+		"func mysqlDeleteArxiuEntitatReligiosa(",
+		"func mysqlUpdateArxiuEntitatReligiosaModeracio(",
+		"arxiu_id = ?",
+		"entitat_religiosa_id = ?",
+		"moderation_status = ?",
+		"arxiu_id = $1",
+		"entitat_religiosa_id = $2",
+		"moderation_status = $3",
+	} {
+		if !strings.Contains(body, required) {
+			t.Fatalf("falta contracte DB per motor F35-4R: %s", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"formatPlaceholders",
+		"type arxiuEntitatReligiosaQueries",
+		"func listArxiuEntitatsReligioses(",
+		"func getArxiuEntitatReligiosa(",
+		"func saveArxiuEntitatReligiosa(",
+		"func deleteArxiuEntitatReligiosa(",
+		"func updateArxiuEntitatReligiosaModeracio(",
+		"strings.Join",
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("db/arxiu_entitat_religiosa_per_motor.go conserva helper comu prohibit: %s", forbidden)
+		}
+	}
+}
+
 func TestF354ArxiuEntitatReligiosaModerationAndProfiles(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f35_4_arxiu_entitat_flow.sqlite3")
 	session := f353YAdminSession(t, database, "arxiu_entitat")
@@ -233,4 +293,13 @@ func f354PostArxiuEntitat(t *testing.T, handler http.HandlerFunc, session *http.
 		t.Fatalf("POST arxiu_entitat_religiosa status=%d body=%s", rr.Code, rr.Body.String())
 	}
 	return rr.Body.String()
+}
+
+func readProjectFileF354(t *testing.T, root, rel string) string {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil {
+		t.Fatalf("no s'ha pogut llegir %s: %v", rel, err)
+	}
+	return string(body)
 }
