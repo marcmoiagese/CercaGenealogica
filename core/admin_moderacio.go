@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -1754,8 +1755,16 @@ func (a *App) countModeracioConfessionalRelacionsEntitats(filter confessionalMod
 	if err != nil {
 		return 0, err
 	}
+	entitats, err := a.DB.ListEntitatsReligioses()
+	if err != nil {
+		return 0, err
+	}
+	byID := confessionalEntitatsByID(entitats)
 	total := 0
 	for _, row := range rows {
+		if a.isInitialPendingConfessionalParentRelation(row, byID) {
+			continue
+		}
 		if matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, row.CreatedBy, filter) {
 			total++
 		}
@@ -1803,12 +1812,18 @@ func (a *App) listModeracioConfessionalEntitats(filter confessionalModeracioFilt
 	if err != nil {
 		return nil, err
 	}
+	rels, err := a.DB.ListEntitatReligiosaRelacions()
+	if err != nil {
+		return nil, err
+	}
 	sort.Slice(rows, func(i, j int) bool {
 		return confessionalCreatedAfter(rows[i].CreatedAt, rows[i].ID, rows[j].CreatedAt, rows[j].ID)
 	})
 	buildStart := time.Now()
 	religionLabels := confessionalReligionCatalogLabels(defaultLang)
 	levelLabels := confessionalLevelCatalogLabels(defaultLang)
+	entitatLabels := entitatReligiosaLabels(rows)
+	dependentByChild, duplicateDependentChildren := a.initialPendingConfessionalParentRelations(rows, rels)
 	items := make([]moderacioItem, 0, limit)
 	seen := 0
 	for _, row := range rows {
@@ -1834,6 +1849,28 @@ func (a *App) listModeracioConfessionalEntitats(filter confessionalModeracioFilt
 		context := strings.Join(contextParts, " - ")
 		if row.Codi != "" {
 			context = strings.TrimSpace(strings.Join([]string{context, row.Codi}, " | "))
+		}
+		if rel, ok := dependentByChild[row.ID]; ok {
+			parent := confessionalLabel(entitatLabels, rel.EntitatOrigenID)
+			dependentParts := []string{}
+			if parent != "" {
+				dependentParts = append(dependentParts, "Pare proposat: "+parent)
+			}
+			if rel.TipusRelacio != "" {
+				dependentParts = append(dependentParts, "Tipus de relacio: "+rel.TipusRelacio)
+			}
+			if label := strings.TrimSpace(levelLabels[row.NivellConfessionalCodi]); label != "" {
+				dependentParts = append(dependentParts, "Nivell/divisio: "+label)
+			}
+			if label := strings.TrimSpace(religionLabels[row.ReligioConfessioCodi]); label != "" {
+				dependentParts = append(dependentParts, "Religio/confessio: "+label)
+			}
+			if len(dependentParts) > 0 {
+				context = strings.TrimSpace(strings.Join([]string{context, strings.Join(dependentParts, " | ")}, " | "))
+			}
+		} else if duplicateDependentChildren[row.ID] {
+			Errorf("Moderacio confessional entitat=%d te multiples relacions pare/filla inicials pendents", row.ID)
+			context = strings.TrimSpace(strings.Join([]string{context, "AVIS: multiples relacions pare/filla inicials pendents"}, " | "))
 		}
 		items = append(items, moderacioItem{
 			ID:        row.ID,
@@ -1877,9 +1914,13 @@ func (a *App) listModeracioConfessionalRelacionsEntitats(filter confessionalMode
 	})
 	buildStart := time.Now()
 	entitatLabels := entitatReligiosaLabels(entitats)
+	entitatsByID := confessionalEntitatsByID(entitats)
 	items := make([]moderacioItem, 0, limit)
 	seen := 0
 	for _, row := range rows {
+		if a.isInitialPendingConfessionalParentRelation(row, entitatsByID) {
+			continue
+		}
 		if !matchConfessionalModeracio(row.ModeracioEstat, row.CreatedAt, row.CreatedBy, filter) {
 			continue
 		}
@@ -1913,6 +1954,137 @@ func (a *App) listModeracioConfessionalRelacionsEntitats(filter confessionalMode
 		metrics.listBuildDur += time.Since(buildStart)
 	}
 	return items, nil
+}
+
+func confessionalEntitatsByID(rows []db.EntitatReligiosa) map[int]db.EntitatReligiosa {
+	byID := map[int]db.EntitatReligiosa{}
+	for _, row := range rows {
+		byID[row.ID] = row
+	}
+	return byID
+}
+
+func (a *App) isInitialPendingConfessionalParentRelation(rel db.EntitatReligiosaRelacio, entitatsByID map[int]db.EntitatReligiosa) bool {
+	if rel.ModeracioEstat != "pendent" {
+		return false
+	}
+	child, ok := entitatsByID[rel.EntitatDestiID]
+	if !ok {
+		return false
+	}
+	return child.ModeracioEstat == "pendent"
+}
+
+func (a *App) initialPendingConfessionalParentRelations(entitats []db.EntitatReligiosa, rels []db.EntitatReligiosaRelacio) (map[int]db.EntitatReligiosaRelacio, map[int]bool) {
+	byID := confessionalEntitatsByID(entitats)
+	byChild := map[int]db.EntitatReligiosaRelacio{}
+	duplicates := map[int]bool{}
+	for _, rel := range rels {
+		if !a.isInitialPendingConfessionalParentRelation(rel, byID) {
+			continue
+		}
+		if _, exists := byChild[rel.EntitatDestiID]; exists {
+			duplicates[rel.EntitatDestiID] = true
+			delete(byChild, rel.EntitatDestiID)
+			continue
+		}
+		if !duplicates[rel.EntitatDestiID] {
+			byChild[rel.EntitatDestiID] = rel
+		}
+	}
+	return byChild, duplicates
+}
+
+func (a *App) initialPendingConfessionalParentRelationForChild(childID int) (*db.EntitatReligiosaRelacio, bool, error) {
+	entitats, err := a.DB.ListEntitatsReligioses()
+	if err != nil {
+		return nil, false, err
+	}
+	rels, err := a.DB.ListEntitatReligiosaRelacions()
+	if err != nil {
+		return nil, false, err
+	}
+	byChild, duplicates := a.initialPendingConfessionalParentRelations(entitats, rels)
+	if duplicates[childID] {
+		Errorf("Moderacio confessional entitat=%d bloquejada per multiples relacions pare/filla inicials pendents", childID)
+		return nil, true, nil
+	}
+	if rel, ok := byChild[childID]; ok {
+		return &rel, false, nil
+	}
+	return nil, false, nil
+}
+
+func (a *App) validateInitialConfessionalParentRelationForModeration(rel *db.EntitatReligiosaRelacio, child *db.EntitatReligiosa) error {
+	if rel == nil || child == nil {
+		return nil
+	}
+	if rel.ModeracioEstat != "pendent" {
+		return errors.New("la relacio pare/filla inicial ja no esta pendent")
+	}
+	if child.ModeracioEstat != "pendent" {
+		return errors.New("la filla ja no esta pendent")
+	}
+	parent, err := a.DB.GetEntitatReligiosa(rel.EntitatOrigenID)
+	if err != nil {
+		return err
+	}
+	if parent == nil {
+		return errors.New("l'entitat pare no existeix")
+	}
+	if parent.ModeracioEstat != "publicat" {
+		return errors.New("l'entitat pare ja no esta publicada")
+	}
+	if rel.EntitatDestiID != child.ID {
+		return errors.New("la relacio dependent no apunta a la filla esperada")
+	}
+	if err := validateConfessionalEntityRelation(parent, child); err != nil {
+		return err
+	}
+	rels, err := a.DB.ListEntitatReligiosaRelacions()
+	if err != nil {
+		return err
+	}
+	for _, other := range rels {
+		if other.ID == rel.ID || other.ModeracioEstat == "rebutjat" {
+			continue
+		}
+		if other.EntitatDestiID == child.ID {
+			return errors.New("l'entitat filla ja te una altra relacio pare/filla no rebutjada")
+		}
+	}
+	if confessionalRelationWouldCreateCycle(rel.EntitatOrigenID, child.ID, rels, rel.ID) {
+		return errors.New("la relacio pare/filla crearia un cicle")
+	}
+	return nil
+}
+
+func confessionalRelationWouldCreateCycle(parentID, childID int, rels []db.EntitatReligiosaRelacio, ignoreRelID int) bool {
+	if parentID <= 0 || childID <= 0 {
+		return false
+	}
+	childrenByParent := map[int][]int{}
+	for _, rel := range rels {
+		if rel.ID == ignoreRelID || rel.ModeracioEstat == "rebutjat" {
+			continue
+		}
+		childrenByParent[rel.EntitatOrigenID] = append(childrenByParent[rel.EntitatOrigenID], rel.EntitatDestiID)
+	}
+	seen := map[int]bool{}
+	stack := append([]int{}, childrenByParent[childID]...)
+	for len(stack) > 0 {
+		id := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if id == parentID {
+			return true
+		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		stack = append(stack, childrenByParent[id]...)
+	}
+	return false
 }
 
 func (a *App) listModeracioConfessionalRelacionsTerritorials(filter confessionalModeracioFilter, offset, limit int, autorFromID func(sql.NullInt64) (string, string, int), metrics *moderacioBuildMetrics) ([]moderacioItem, error) {
@@ -5721,6 +5893,24 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.DB.UpdateArquebisbatModeracio(id, estat, motiu, moderatorID)
 	case "entitat_religiosa":
 		before, _ := a.DB.GetEntitatReligiosa(id)
+		var dependentRel *db.EntitatReligiosaRelacio
+		var duplicateDependent bool
+		if before != nil && before.ModeracioEstat == "pendent" {
+			rel, duplicate, err := a.initialPendingConfessionalParentRelationForChild(id)
+			if err != nil {
+				return err
+			}
+			dependentRel = rel
+			duplicateDependent = duplicate
+			if duplicateDependent {
+				return errors.New("l'entitat te multiples relacions pare/filla inicials pendents")
+			}
+			if estat == "publicat" && dependentRel != nil {
+				if err := a.validateInitialConfessionalParentRelationForModeration(dependentRel, before); err != nil {
+					return err
+				}
+			}
+		}
 		if err := a.DB.UpdateEntitatReligiosaModeracio(id, estat, motiu, moderatorID); err != nil {
 			return err
 		}
@@ -5730,7 +5920,14 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 				return err
 			}
 			if after != nil {
-				return a.ensureInitialWikiVersion("entitat_religiosa", id, after, after.CreatedBy, moderatorID)
+				if err := a.ensureInitialWikiVersion("entitat_religiosa", id, after, after.CreatedBy, moderatorID); err != nil {
+					return err
+				}
+			}
+		}
+		if dependentRel != nil && (estat == "publicat" || estat == "rebutjat") {
+			if err := a.DB.UpdateEntitatReligiosaRelacioModeracio(dependentRel.ID, estat, motiu, moderatorID); err != nil {
+				return err
 			}
 		}
 		return nil
