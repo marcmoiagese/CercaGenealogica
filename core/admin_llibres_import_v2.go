@@ -493,6 +493,8 @@ func (a *App) importSingleLlibreV2(r *http.Request, user *db.User, record llibre
 			return nil
 		}
 		diag.ExistingBooks++
+		_ = matchType
+		return nil
 	} else {
 		updated := mergePendingLlibreFromImportV2(llibre, record, municipiID, user.ID)
 		if updated {
@@ -651,18 +653,6 @@ func (a *App) resolveLlibreIDsByStableRefsV2(record llibreImportRecordV2) ([]int
 				args: []interface{}{source, externalCode},
 			})
 		}
-	}
-	if externalID := strings.TrimSpace(record.ExternalID); externalID != "" {
-		queries = append(queries, queryDef{
-			sql:  `SELECT id FROM llibres WHERE external_id = ?`,
-			args: []interface{}{externalID},
-		})
-	}
-	if externalCode := strings.TrimSpace(record.ExternalCode); externalCode != "" {
-		queries = append(queries, queryDef{
-			sql:  `SELECT id FROM llibres WHERE external_code = ?`,
-			args: []interface{}{externalCode},
-		})
 	}
 	for _, q := range queries {
 		rows, err := a.DB.Query(formatSQLForDB(a.DB, q.sql), q.args...)
@@ -1003,27 +993,206 @@ func (a *App) applyLlibreImportV2Pages(llibreID int, pages []llibreImportPageV2)
 }
 
 func (a *App) llibreImportV2NeedsPublishedChange(existing *db.Llibre, record llibreImportRecordV2, archives []llibreImportResolvedArchiveV2) bool {
-	desired := buildLlibreImportV2Record(record, existing.MunicipiID, 0)
-	if existing.Codi != desired.Codi || existing.SourceSystem != desired.SourceSystem || existing.ExternalID != desired.ExternalID || existing.ExternalCode != desired.ExternalCode || existing.Titol != desired.Titol || existing.NomEsglesia != desired.NomEsglesia || existing.TipusLlibre != desired.TipusLlibre || existing.Cronologia != desired.Cronologia {
+	if a.llibreImportV2NeedsPublishedBookFieldChange(existing, record) {
 		return true
 	}
-	rels, err := a.currentLlibreArxiuLinks(existing.ID)
-	if err != nil {
+	if changed, err := a.llibreImportV2NeedsPublishedArchiveLinkChange(existing, archives); err != nil || changed {
 		return true
 	}
-	for _, archive := range archives {
-		found := false
-		for _, rel := range rels {
-			if rel.ArxiuID == archive.DB.ID {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return true
-		}
+	if changed, err := a.llibreImportV2NeedsPublishedURLChange(existing.ID, record.URLs, archives); err != nil || changed {
+		return true
+	}
+	if changed, err := a.llibreImportV2NeedsPublishedPageChange(existing.ID, record.PageEntries); err != nil || changed {
+		return true
 	}
 	return false
+}
+
+func (a *App) llibreImportV2NeedsPublishedBookFieldChange(existing *db.Llibre, record llibreImportRecordV2) bool {
+	desired := buildLlibreImportV2Record(record, existing.MunicipiID, 0)
+	return existing.Codi != desired.Codi ||
+		existing.CodiDigital != desired.CodiDigital ||
+		existing.CodiFisic != desired.CodiFisic ||
+		existing.SourceSystem != desired.SourceSystem ||
+		existing.ExternalID != desired.ExternalID ||
+		existing.ExternalCode != desired.ExternalCode ||
+		existing.Titol != desired.Titol ||
+		existing.NomEsglesia != desired.NomEsglesia ||
+		existing.TipusLlibre != desired.TipusLlibre ||
+		existing.Cronologia != desired.Cronologia ||
+		existing.Volum != desired.Volum ||
+		existing.Abat != desired.Abat ||
+		existing.Contingut != desired.Contingut ||
+		existing.Llengua != desired.Llengua ||
+		existing.Requeriments != desired.Requeriments ||
+		existing.UnitatCatalogacio != desired.UnitatCatalogacio ||
+		existing.UnitatInstalacio != desired.UnitatInstalacio ||
+		existing.Pagines != desired.Pagines ||
+		existing.URLBase != desired.URLBase ||
+		existing.URLImatgePrefix != desired.URLImatgePrefix ||
+		existing.Pagina != desired.Pagina ||
+		existing.IndexacioCompleta != desired.IndexacioCompleta
+}
+
+func (a *App) llibreImportV2NeedsPublishedArchiveLinkChange(existing *db.Llibre, archives []llibreImportResolvedArchiveV2) (bool, error) {
+	current, err := a.currentLlibreArxiuLinks(existing.ID)
+	if err != nil {
+		return false, err
+	}
+	desired, err := a.buildDesiredLlibreImportV2ArchiveLinks(existing, archives, 0)
+	if err != nil {
+		return false, err
+	}
+	return !llibreImportV2ArchiveLinksEqual(current, desired), nil
+}
+
+func (a *App) buildDesiredLlibreImportV2ArchiveLinks(llibre *db.Llibre, archives []llibreImportResolvedArchiveV2, userID int) ([]db.ArxiuLlibreLink, error) {
+	existing, err := a.currentLlibreArxiuLinks(llibre.ID)
+	if err != nil {
+		return nil, err
+	}
+	currentByArchive := map[int]db.ArxiuLlibreLink{}
+	for _, link := range existing {
+		currentByArchive[link.ArxiuID] = link
+	}
+	desiredLinks := make([]db.ArxiuLlibreLink, 0, len(archives))
+	for _, archive := range archives {
+		current, exists := currentByArchive[archive.DB.ID]
+		link := current
+		if !exists {
+			link = db.ArxiuLlibreLink{
+				ArxiuID:  archive.DB.ID,
+				LlibreID: llibre.ID,
+			}
+			if userID > 0 {
+				link.CreatedBy = sqlNullIntFromInt(userID)
+			}
+		}
+		link.LlibreID = llibre.ID
+		link.TipusRelacio = strings.TrimSpace(archive.Ref.RelationType)
+		link.Signatura = strings.TrimSpace(archive.Ref.Signatura)
+		link.URLOverride = strings.TrimSpace(archive.Ref.URLOverride)
+		link.SourceSystem = strings.TrimSpace(archive.Ref.SourceSystem)
+		link.ExternalID = strings.TrimSpace(archive.Ref.ExternalID)
+		link.ExternalCode = strings.TrimSpace(archive.Ref.ExternalCode)
+		link.Notes = strings.TrimSpace(archive.Ref.Notes)
+		link.Principal = archive.Ref.Principal
+		link.PreferitVisualitzacio = archive.Ref.PreferredDisplay
+		link.Estat = "actiu"
+		link.ModeracioEstat = llibre.ModeracioEstat
+		if userID > 0 {
+			link.UpdatedBy = sqlNullIntFromInt(userID)
+		}
+		desiredLinks = append(desiredLinks, link)
+	}
+	merged := append(existing[:0:0], existing...)
+	for _, link := range desiredLinks {
+		merged = append(merged, link)
+	}
+	return normalizeLlibreArxiuLinks(merged), nil
+}
+
+func llibreImportV2ArchiveLinksEqual(aLinks, bLinks []db.ArxiuLlibreLink) bool {
+	left := normalizeLlibreArxiuLinks(append([]db.ArxiuLlibreLink(nil), aLinks...))
+	right := normalizeLlibreArxiuLinks(append([]db.ArxiuLlibreLink(nil), bLinks...))
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if !llibreImportV2ArchiveLinkEqual(left[i], right[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func llibreImportV2ArchiveLinkEqual(a, b db.ArxiuLlibreLink) bool {
+	return a.ArxiuID == b.ArxiuID &&
+		a.LlibreID == b.LlibreID &&
+		strings.TrimSpace(a.TipusRelacio) == strings.TrimSpace(b.TipusRelacio) &&
+		a.Principal == b.Principal &&
+		a.PreferitVisualitzacio == b.PreferitVisualitzacio &&
+		strings.TrimSpace(a.Signatura) == strings.TrimSpace(b.Signatura) &&
+		strings.TrimSpace(a.URLOverride) == strings.TrimSpace(b.URLOverride) &&
+		strings.TrimSpace(a.SourceSystem) == strings.TrimSpace(b.SourceSystem) &&
+		strings.TrimSpace(a.ExternalID) == strings.TrimSpace(b.ExternalID) &&
+		strings.TrimSpace(a.ExternalCode) == strings.TrimSpace(b.ExternalCode) &&
+		strings.TrimSpace(a.Notes) == strings.TrimSpace(b.Notes) &&
+		strings.TrimSpace(a.Estat) == strings.TrimSpace(b.Estat) &&
+		strings.TrimSpace(a.ModeracioEstat) == strings.TrimSpace(b.ModeracioEstat)
+}
+
+func (a *App) llibreImportV2NeedsPublishedURLChange(llibreID int, urls []llibreImportURLRefV2, archives []llibreImportResolvedArchiveV2) (bool, error) {
+	if len(urls) == 0 {
+		return false, nil
+	}
+	existing, err := a.DB.ListLlibreURLs(llibreID)
+	if err != nil {
+		return false, err
+	}
+	archiveCodeToID := map[string]int{}
+	archiveNameToID := map[string]int{}
+	for _, archive := range archives {
+		if archive.Ref.ArchiveCode != "" {
+			archiveCodeToID[normalizeKey(archive.Ref.ArchiveCode)] = archive.DB.ID
+		}
+		if archive.Ref.ArchiveName != "" {
+			archiveNameToID[normalizeKey(archive.Ref.ArchiveName)] = archive.DB.ID
+		}
+		archiveCodeToID[normalizeKey(archive.DB.Codi)] = archive.DB.ID
+		archiveNameToID[normalizeKey(archive.DB.Nom)] = archive.DB.ID
+	}
+	seen := map[string]struct{}{}
+	for _, row := range existing {
+		seen[llibreImportURLKey(llibreID, row)] = struct{}{}
+	}
+	for _, link := range urls {
+		if link.URL == "" || !(strings.HasPrefix(link.URL, "http://") || strings.HasPrefix(link.URL, "https://")) {
+			continue
+		}
+		arxiuID := sql.NullInt64{}
+		if link.ArchiveCode != "" {
+			id, ok := archiveCodeToID[normalizeKey(link.ArchiveCode)]
+			if !ok {
+				continue
+			}
+			arxiuID = sql.NullInt64{Int64: int64(id), Valid: true}
+		} else if link.ArchiveName != "" {
+			id, ok := archiveNameToID[normalizeKey(link.ArchiveName)]
+			if !ok {
+				continue
+			}
+			arxiuID = sql.NullInt64{Int64: int64(id), Valid: true}
+		}
+		row := db.LlibreURL{
+			LlibreID:    llibreID,
+			ArxiuID:     arxiuID,
+			URL:         strings.TrimSpace(link.URL),
+			Tipus:       sqlNullString(link.Type),
+			Descripcio:  sqlNullString(link.Description),
+			LlibreRefID: sql.NullInt64{},
+		}
+		if _, ok := seen[llibreImportURLKey(llibreID, row)]; !ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (a *App) llibreImportV2NeedsPublishedPageChange(llibreID int, pages []llibreImportPageV2) (bool, error) {
+	for _, page := range pages {
+		if page.PageNumber <= 0 {
+			continue
+		}
+		existing, err := a.DB.GetLlibrePaginaByNum(llibreID, page.PageNumber)
+		if err != nil {
+			return false, err
+		}
+		if existing == nil {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func buildLlibresImportV2ErrorDetail(record llibreImportRecordV2, reason string) string {

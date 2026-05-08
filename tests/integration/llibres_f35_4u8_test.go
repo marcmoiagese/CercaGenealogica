@@ -399,6 +399,195 @@ func TestF354U8ImportV2PublishedExistingBookDoesNotDirectlyUpdate(t *testing.T) 
 	}
 }
 
+func TestF354U8ImportV2PublishedExistingBookRejectsNewURL(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u8_published_new_url.sqlite3")
+	_, municipiID := seedF354U7BookTerritory(t, database, "U8PublishedURL")
+	arxiuID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u8_pub_url_archive", "Arxiu Publicat URL U8", 0)
+	llibreID := createF354U7Book(t, database, admin.ID, municipiID, 0, "f35_4u8_published_url_book", "Llibre Publicat URL U8")
+	publishF354U7Book(t, database, llibreID)
+	seedF354U8PublishedArchiveLink(t, database, llibreID, arxiuID, "custodia_original", true, true, "", "", "")
+
+	payload := map[string]interface{}{
+		"schema": "cercagenealogica.llibres.v2",
+		"items": map[string]interface{}{
+			"llibres": []map[string]interface{}{{
+				"code":         "f35_4u8_published_url_book",
+				"title":        "Llibre Publicat URL U8",
+				"book_type":    "baptismes",
+				"chronology":   "1900-1905",
+				"municipality": map[string]interface{}{"name": "Municipi F35-4U7 U8PublishedURL", "country_iso2": "ES"},
+				"archives":     []map[string]interface{}{{"archive_code": "f35_4u8_pub_url_archive", "principal": true, "preferred_display": true, "relation_type": "custodia_original"}},
+				"urls":         []map[string]interface{}{{"url": "https://example.test/published/new-url", "type": "font", "archive_code": "f35_4u8_pub_url_archive"}},
+			}},
+		},
+	}
+
+	postF354U8Import(t, app.AdminLlibresImportRun, session, payload)
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM llibres_urls WHERE llibre_id = ?", llibreID); got != 0 {
+		t.Fatalf("no s'ha de crear cap URL nova en llibre publicat, got %d", got)
+	}
+	assertF354U8PublishedBlocked(t, database, "f35_4u8_published_url_book")
+}
+
+func TestF354U8ImportV2PublishedExistingBookRejectsNewPage(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u8_published_new_page.sqlite3")
+	_, municipiID := seedF354U7BookTerritory(t, database, "U8PublishedPage")
+	arxiuID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u8_pub_page_archive", "Arxiu Publicat Page U8", 0)
+	llibreID := createF354U7Book(t, database, admin.ID, municipiID, 0, "f35_4u8_published_page_book", "Llibre Publicat Page U8")
+	publishF354U7Book(t, database, llibreID)
+	seedF354U8PublishedArchiveLink(t, database, llibreID, arxiuID, "custodia_original", true, true, "", "", "")
+
+	payload := map[string]interface{}{
+		"schema": "cercagenealogica.llibres.v2",
+		"items": map[string]interface{}{
+			"llibres": []map[string]interface{}{{
+				"code":         "f35_4u8_published_page_book",
+				"title":        "Llibre Publicat Page U8",
+				"book_type":    "baptismes",
+				"chronology":   "1900-1905",
+				"municipality": map[string]interface{}{"name": "Municipi F35-4U7 U8PublishedPage", "country_iso2": "ES"},
+				"archives":     []map[string]interface{}{{"archive_code": "f35_4u8_pub_page_archive", "principal": true, "preferred_display": true, "relation_type": "custodia_original"}},
+				"pages":        []map[string]interface{}{{"page_number": 1, "canonical_label": "f. 1r"}},
+			}},
+		},
+	}
+
+	postF354U8Import(t, app.AdminLlibresImportRun, session, payload)
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM llibre_pagines WHERE llibre_id = ?", llibreID); got != 0 {
+		t.Fatalf("no s'ha de crear cap pagina nova en llibre publicat, got %d", got)
+	}
+	assertF354U8PublishedBlocked(t, database, "f35_4u8_published_page_book")
+}
+
+func TestF354U8ImportV2PublishedExistingBookRejectsNewArchiveLink(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u8_published_new_archive.sqlite3")
+	_, municipiID := seedF354U7BookTerritory(t, database, "U8PublishedArchive")
+	arxiuAID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u8_pub_archive_a", "Arxiu Publicat A U8", 0)
+	arxiuBID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u8_pub_archive_b", "Arxiu Publicat B U8", 0)
+	llibreID := createF354U7Book(t, database, admin.ID, municipiID, 0, "f35_4u8_published_archive_book", "Llibre Publicat Archive U8")
+	publishF354U7Book(t, database, llibreID)
+	seedF354U8PublishedArchiveLink(t, database, llibreID, arxiuAID, "custodia_original", true, true, "", "", "")
+
+	payload := map[string]interface{}{
+		"schema": "cercagenealogica.llibres.v2",
+		"items": map[string]interface{}{
+			"llibres": []map[string]interface{}{{
+				"code":         "f35_4u8_published_archive_book",
+				"title":        "Llibre Publicat Archive U8",
+				"book_type":    "baptismes",
+				"chronology":   "1900-1905",
+				"municipality": map[string]interface{}{"name": "Municipi F35-4U7 U8PublishedArchive", "country_iso2": "ES"},
+				"archives": []map[string]interface{}{
+					{"archive_code": "f35_4u8_pub_archive_a", "principal": true, "preferred_display": true, "relation_type": "custodia_original"},
+					{"archive_code": "f35_4u8_pub_archive_b", "principal": false, "preferred_display": false, "relation_type": "copia_digital"},
+				},
+			}},
+		},
+	}
+
+	postF354U8Import(t, app.AdminLlibresImportRun, session, payload)
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxius_llibres WHERE llibre_id = ? AND arxiu_id = ?", llibreID, arxiuBID); got != 0 {
+		t.Fatalf("no s'ha de crear cap relacio nova en llibre publicat, got %d", got)
+	}
+	assertF354U8PublishedBlocked(t, database, "f35_4u8_published_archive_book")
+}
+
+func TestF354U8ImportV2PublishedExistingBookRejectsArchiveLinkMetadataChange(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u8_published_link_meta.sqlite3")
+	_, municipiID := seedF354U7BookTerritory(t, database, "U8PublishedMeta")
+	arxiuID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u8_pub_meta_archive", "Arxiu Publicat Meta U8", 0)
+	llibreID := createF354U7Book(t, database, admin.ID, municipiID, 0, "f35_4u8_published_meta_book", "Llibre Publicat Meta U8")
+	publishF354U7Book(t, database, llibreID)
+	seedF354U8PublishedArchiveLink(t, database, llibreID, arxiuID, "custodia_original", true, true, "ahat", "", "A-1")
+
+	payload := map[string]interface{}{
+		"schema": "cercagenealogica.llibres.v2",
+		"items": map[string]interface{}{
+			"llibres": []map[string]interface{}{{
+				"code":         "f35_4u8_published_meta_book",
+				"title":        "Llibre Publicat Meta U8",
+				"book_type":    "baptismes",
+				"chronology":   "1900-1905",
+				"municipality": map[string]interface{}{"name": "Municipi F35-4U7 U8PublishedMeta", "country_iso2": "ES"},
+				"archives": []map[string]interface{}{
+					{"archive_code": "f35_4u8_pub_meta_archive", "principal": false, "preferred_display": false, "relation_type": "copia_digital", "source_system": "familysearch", "external_code": "FS-1"},
+				},
+			}},
+		},
+	}
+
+	postF354U8Import(t, app.AdminLlibresImportRun, session, payload)
+	rels, err := database.ListLlibreArxius(llibreID)
+	if err != nil {
+		t.Fatalf("ListLlibreArxius: %v", err)
+	}
+	if len(rels) != 1 {
+		t.Fatalf("s'esperava 1 relacio existent, got %d", len(rels))
+	}
+	rel := rels[0]
+	if !rel.Principal || !rel.PreferitVisualitzacio || strings.TrimSpace(rel.TipusRelacio) != "custodia_original" || strings.TrimSpace(rel.SourceSystem.String) != "ahat" || strings.TrimSpace(rel.ExternalCode.String) != "A-1" {
+		t.Fatalf("la relacio publicada no s'ha de mutar, got %+v", rel)
+	}
+	assertF354U8PublishedBlocked(t, database, "f35_4u8_published_meta_book")
+}
+
+func TestF354U8ImportV2PublishedExistingBookNoOpReal(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u8_published_noop.sqlite3")
+	_, municipiID := seedF354U7BookTerritory(t, database, "U8PublishedNoop")
+	arxiuID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u8_pub_noop_archive", "Arxiu Publicat Noop U8", 0)
+	llibreID := createF354U7Book(t, database, admin.ID, municipiID, 0, "f35_4u8_published_noop_book", "Llibre Publicat Noop U8")
+	if _, err := database.Query("UPDATE llibres SET tipus_llibre = ?, cronologia = ? WHERE id = ?", "baptismes", "1900-1905", llibreID); err != nil {
+		t.Fatalf("UPDATE llibre noop: %v", err)
+	}
+	publishF354U7Book(t, database, llibreID)
+	seedF354U8PublishedArchiveLink(t, database, llibreID, arxiuID, "custodia_original", true, true, "ahat", "", "A-1")
+	if err := database.AddLlibreURL(&db.LlibreURL{
+		LlibreID:  llibreID,
+		ArxiuID:   sql.NullInt64{Int64: int64(arxiuID), Valid: true},
+		URL:       "https://example.test/published/noop",
+		Tipus:     sql.NullString{String: "font", Valid: true},
+		CreatedBy: sql.NullInt64{Int64: int64(admin.ID), Valid: true},
+	}); err != nil {
+		t.Fatalf("AddLlibreURL noop: %v", err)
+	}
+	if _, err := database.SaveLlibrePagina(&db.LlibrePagina{LlibreID: llibreID, NumPagina: 1, Estat: "pendent", Notes: "f. 1r"}); err != nil {
+		t.Fatalf("SaveLlibrePagina noop: %v", err)
+	}
+
+	payload := map[string]interface{}{
+		"schema": "cercagenealogica.llibres.v2",
+		"items": map[string]interface{}{
+			"llibres": []map[string]interface{}{{
+				"code":         "f35_4u8_published_noop_book",
+				"title":        "Llibre Publicat Noop U8",
+				"book_type":    "baptismes",
+				"chronology":   "1900-1905",
+				"municipality": map[string]interface{}{"name": "Municipi F35-4U7 U8PublishedNoop", "country_iso2": "ES"},
+				"archives": []map[string]interface{}{
+					{"archive_code": "f35_4u8_pub_noop_archive", "principal": true, "preferred_display": true, "relation_type": "custodia_original", "source_system": "ahat", "external_code": "A-1"},
+				},
+				"urls":  []map[string]interface{}{{"url": "https://example.test/published/noop", "type": "font", "archive_code": "f35_4u8_pub_noop_archive"}},
+				"pages": []map[string]interface{}{{"page_number": 1, "canonical_label": "f. 1r"}},
+			}},
+		},
+	}
+
+	postF354U8Import(t, app.AdminLlibresImportRun, session, payload)
+	result := latestF354U8ImportResult(t, database)
+	if asJSONInt(result["errors_total"]) != 0 || asJSONInt(result["existing_books"]) != 1 || asJSONInt(result["created_archive_links"]) != 0 || asJSONInt(result["created_urls"]) != 0 || asJSONInt(result["created_pages"]) != 0 {
+		t.Fatalf("el llibre publicat no-op ha de quedar com existing sense canvis, got %+v", result)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxius_llibres WHERE llibre_id = ?", llibreID); got != 1 {
+		t.Fatalf("no-op no ha de duplicar relacions, got %d", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM llibres_urls WHERE llibre_id = ?", llibreID); got != 1 {
+		t.Fatalf("no-op no ha de duplicar URLs, got %d", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM llibre_pagines WHERE llibre_id = ?", llibreID); got != 1 {
+		t.Fatalf("no-op no ha de duplicar pagines, got %d", got)
+	}
+}
+
 func TestF354U8ImportV2FallbackAmbiguityIsDiagnostic(t *testing.T) {
 	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u8_ambiguous.sqlite3")
 	_, municipiID := seedF354U7BookTerritory(t, database, "U8Amb")
@@ -427,6 +616,80 @@ func TestF354U8ImportV2FallbackAmbiguityIsDiagnostic(t *testing.T) {
 	errorsByReason, _ := result["errors_by_reason"].(map[string]interface{})
 	if asJSONInt(errorsByReason["book_duplicate_ambiguous"]) != 1 {
 		t.Fatalf("esperava book_duplicate_ambiguous=1, got %+v", errorsByReason)
+	}
+}
+
+func TestF354U8ImportV2ExternalCodeWithoutSourceSystemDoesNotChooseRandomBook(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u8_external_code_no_source.sqlite3")
+	_, municipiID := seedF354U7BookTerritory(t, database, "U8ExternalCode")
+	createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u8_ext_archive", "Arxiu Ext U8", 0)
+	llibreAID := createF354U7Book(t, database, admin.ID, municipiID, 0, "", "Llibre Ext Ambiguous")
+	llibreBID := createF354U7Book(t, database, admin.ID, municipiID, 0, "", "Llibre Ext Ambiguous")
+	if _, err := database.Query("UPDATE llibres SET tipus_llibre = ?, cronologia = ?, source_system = ?, external_code = ? WHERE id = ?", "baptismes", "1900-1905", "ahat", "EXT-COLLIDE", llibreAID); err != nil {
+		t.Fatalf("UPDATE llibre A ext code: %v", err)
+	}
+	if _, err := database.Query("UPDATE llibres SET tipus_llibre = ?, cronologia = ?, source_system = ?, external_code = ? WHERE id = ?", "baptismes", "1900-1905", "familysearch", "EXT-COLLIDE", llibreBID); err != nil {
+		t.Fatalf("UPDATE llibre B ext code: %v", err)
+	}
+
+	payload := map[string]interface{}{
+		"schema": "cercagenealogica.llibres.v2",
+		"items": map[string]interface{}{
+			"llibres": []map[string]interface{}{{
+				"title":         "Llibre Ext Ambiguous",
+				"book_type":     "baptismes",
+				"chronology":    "1900-1905",
+				"external_code": "EXT-COLLIDE",
+				"municipality":  map[string]interface{}{"name": "Municipi F35-4U7 U8ExternalCode", "country_iso2": "ES"},
+				"archives":      []map[string]interface{}{{"archive_code": "f35_4u8_ext_archive"}},
+			}},
+		},
+	}
+
+	postF354U8Import(t, app.AdminLlibresImportRun, session, payload)
+	result := latestF354U8ImportResult(t, database)
+	errorsByReason, _ := result["errors_by_reason"].(map[string]interface{})
+	if asJSONInt(errorsByReason["book_duplicate_ambiguous"]) != 1 {
+		t.Fatalf("esperava book_duplicate_ambiguous=1 quan external_code no te source_system segur, got %+v", errorsByReason)
+	}
+}
+
+func seedF354U8PublishedArchiveLink(t *testing.T, database db.DB, llibreID, arxiuID int, relationType string, principal, preferred bool, sourceSystem, externalID, externalCode string) {
+	t.Helper()
+	saveLink := requireF354U7LinkSaver(t, database)
+	if err := saveLink(&db.ArxiuLlibreLink{
+		ArxiuID:               arxiuID,
+		LlibreID:              llibreID,
+		TipusRelacio:          relationType,
+		Principal:             principal,
+		PreferitVisualitzacio: preferred,
+		SourceSystem:          sourceSystem,
+		ExternalID:            externalID,
+		ExternalCode:          externalCode,
+		Estat:                 "actiu",
+		ModeracioEstat:        "publicat",
+	}); err != nil {
+		t.Fatalf("seed published archive link: %v", err)
+	}
+}
+
+func assertF354U8PublishedBlocked(t *testing.T, database db.DB, label string) {
+	t.Helper()
+	result := latestF354U8ImportResult(t, database)
+	errorsByReason, _ := result["errors_by_reason"].(map[string]interface{})
+	if asJSONInt(errorsByReason["published_book_requires_moderated_change"]) != 1 {
+		t.Fatalf("esperava published_book_requires_moderated_change=1, got %+v", errorsByReason)
+	}
+	firstErrors, _ := result["first_errors"].([]interface{})
+	found := false
+	for _, item := range firstErrors {
+		if strings.Contains(asString(item), label) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("first_errors ha d'incloure %q, got %v", label, firstErrors)
 	}
 }
 
