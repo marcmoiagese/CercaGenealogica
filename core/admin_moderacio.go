@@ -78,6 +78,20 @@ type moderacioBulkMetrics struct {
 	Revalidated bool
 }
 
+type moderacioBulkConfessionalHierarchyItemError struct {
+	ObjectType string
+	ObjectID   int
+	Err        error
+}
+
+type moderacioBulkConfessionalHierarchyResult struct {
+	SuccessByType    map[string][]int
+	ProcessedTargets int
+	UpdatedTargets   int
+	SkippedTargets   int
+	Errors           []moderacioBulkConfessionalHierarchyItemError
+}
+
 type moderacioBulkRegistreItemError struct {
 	ID  int
 	Err error
@@ -2057,6 +2071,244 @@ func (a *App) validateInitialConfessionalParentRelationForModeration(rel *db.Ent
 		return errors.New("la relacio pare/filla crearia un cicle")
 	}
 	return nil
+}
+
+func (a *App) applyModeracioBulkConfessionalHierarchyApprove(entityTargetIDs, relationTargetIDs []int, moderatorID int) (moderacioBulkConfessionalHierarchyResult, error) {
+	result := moderacioBulkConfessionalHierarchyResult{
+		SuccessByType: map[string][]int{},
+		Errors:        make([]moderacioBulkConfessionalHierarchyItemError, 0),
+	}
+	if len(entityTargetIDs) == 0 && len(relationTargetIDs) == 0 {
+		return result, nil
+	}
+
+	entitats, err := a.DB.ListEntitatsReligioses()
+	if err != nil {
+		return result, err
+	}
+	rels, err := a.DB.ListEntitatReligiosaRelacions()
+	if err != nil {
+		return result, err
+	}
+
+	entitatsByID := confessionalEntitatsByID(entitats)
+	relsByID := make(map[int]db.EntitatReligiosaRelacio, len(rels))
+	targetEntitySet := make(map[int]struct{}, len(entityTargetIDs))
+	targetRelationSet := make(map[int]struct{}, len(relationTargetIDs))
+	relationDone := make(map[int]struct{}, len(relationTargetIDs))
+	initialRelationIDsByChild := map[int][]int{}
+	initialByChild, duplicateChildren := a.initialPendingConfessionalParentRelations(entitats, rels)
+
+	for _, id := range entityTargetIDs {
+		if id > 0 {
+			targetEntitySet[id] = struct{}{}
+		}
+	}
+	for _, id := range relationTargetIDs {
+		if id > 0 {
+			targetRelationSet[id] = struct{}{}
+		}
+	}
+	for _, rel := range rels {
+		relsByID[rel.ID] = rel
+		if a.isInitialPendingConfessionalParentRelation(rel, entitatsByID) {
+			initialRelationIDsByChild[rel.EntitatDestiID] = append(initialRelationIDsByChild[rel.EntitatDestiID], rel.ID)
+		}
+	}
+
+	appendSuccess := func(objType string, id int) {
+		if objType == "" || id <= 0 {
+			return
+		}
+		result.SuccessByType[objType] = append(result.SuccessByType[objType], id)
+	}
+	recordError := func(objType string, id int, err error) {
+		if err == nil || objType == "" || id <= 0 {
+			return
+		}
+		result.Errors = append(result.Errors, moderacioBulkConfessionalHierarchyItemError{
+			ObjectType: objType,
+			ObjectID:   id,
+			Err:        err,
+		})
+		result.ProcessedTargets++
+	}
+	recordSuccess := func(objType string, id int) {
+		if objType == "" || id <= 0 {
+			return
+		}
+		appendSuccess(objType, id)
+		result.ProcessedTargets++
+		result.UpdatedTargets++
+	}
+	consumeDependentRelation := func(childID int, err error, success bool) {
+		for _, relID := range initialRelationIDsByChild[childID] {
+			if _, targeted := targetRelationSet[relID]; !targeted {
+				continue
+			}
+			if _, done := relationDone[relID]; done {
+				continue
+			}
+			relationDone[relID] = struct{}{}
+			if success {
+				recordSuccess("entitat_religiosa_relacio", relID)
+				continue
+			}
+			recordError("entitat_religiosa_relacio", relID, err)
+		}
+	}
+
+	sort.Ints(entityTargetIDs)
+	sort.Ints(relationTargetIDs)
+
+	for _, entityID := range entityTargetIDs {
+		if duplicateChildren[entityID] {
+			err := errors.New("l'entitat te multiples relacions pare/filla inicials pendents")
+			recordError("entitat_religiosa", entityID, err)
+			consumeDependentRelation(entityID, err, false)
+		}
+	}
+
+	remaining := make(map[int]struct{}, len(entityTargetIDs))
+	for _, entityID := range entityTargetIDs {
+		if entityID > 0 {
+			if !duplicateChildren[entityID] {
+				remaining[entityID] = struct{}{}
+			}
+		}
+	}
+
+	for {
+		progressed := false
+		for _, entityID := range entityTargetIDs {
+			if _, pending := remaining[entityID]; !pending {
+				continue
+			}
+			entity, ok := entitatsByID[entityID]
+			if !ok {
+				err := errors.New("l'entitat pendent ja no existeix")
+				recordError("entitat_religiosa", entityID, err)
+				delete(remaining, entityID)
+				progressed = true
+				continue
+			}
+			dependentRel, hasDependentRel := initialByChild[entityID]
+			if hasDependentRel {
+				parent, ok := entitatsByID[dependentRel.EntitatOrigenID]
+				if !ok {
+					err := errors.New("l'entitat pare no existeix")
+					recordError("entitat_religiosa", entityID, err)
+					consumeDependentRelation(entityID, err, false)
+					delete(remaining, entityID)
+					progressed = true
+					continue
+				}
+				if parent.ModeracioEstat != "publicat" {
+					if _, parentPending := remaining[parent.ID]; parentPending {
+						continue
+					}
+					if _, parentTargeted := targetEntitySet[parent.ID]; parentTargeted && parent.ModeracioEstat == "pendent" {
+						continue
+					}
+					err := errors.New("l'entitat pare no esta publicada ni aprovada en aquest bulk")
+					recordError("entitat_religiosa", entityID, err)
+					consumeDependentRelation(entityID, err, false)
+					delete(remaining, entityID)
+					progressed = true
+					continue
+				}
+			}
+
+			var applyErr error
+			before := entity
+			if hasDependentRel {
+				if applyErr = a.updateConfessionalEntityWithInitialParentRelation(entityID, "publicat", "", moderatorID, &dependentRel); applyErr == nil {
+					dependentRel.ModeracioEstat = "publicat"
+					relsByID[dependentRel.ID] = dependentRel
+				}
+			} else {
+				applyErr = a.updateConfessionalEntityModerationOnly(entityID, "publicat", "", moderatorID, &before)
+			}
+			if applyErr != nil {
+				recordError("entitat_religiosa", entityID, applyErr)
+				if hasDependentRel {
+					consumeDependentRelation(entityID, applyErr, false)
+				}
+				delete(remaining, entityID)
+				progressed = true
+				continue
+			}
+
+			entity.ModeracioEstat = "publicat"
+			entitatsByID[entityID] = entity
+			recordSuccess("entitat_religiosa", entityID)
+			if hasDependentRel {
+				appendSuccess("entitat_religiosa_relacio", dependentRel.ID)
+				consumeDependentRelation(entityID, nil, true)
+			}
+			delete(remaining, entityID)
+			progressed = true
+		}
+		if !progressed {
+			break
+		}
+	}
+
+	for _, entityID := range entityTargetIDs {
+		if _, pending := remaining[entityID]; !pending {
+			continue
+		}
+		err := errors.New("l'entitat pendent no es pot aprovar per dependències jerarquiques no resoltes")
+		if rel, ok := initialByChild[entityID]; ok {
+			if parent, parentOK := entitatsByID[rel.EntitatOrigenID]; !parentOK {
+				err = errors.New("l'entitat pare no existeix")
+			} else if parent.ModeracioEstat != "publicat" {
+				err = errors.New("l'entitat pare no esta publicada ni aprovada en aquest bulk")
+			}
+		}
+		recordError("entitat_religiosa", entityID, err)
+		consumeDependentRelation(entityID, err, false)
+		delete(remaining, entityID)
+	}
+
+	for _, relationID := range relationTargetIDs {
+		if _, done := relationDone[relationID]; done {
+			continue
+		}
+		relationDone[relationID] = struct{}{}
+		rel, ok := relsByID[relationID]
+		if !ok {
+			recordError("entitat_religiosa_relacio", relationID, errors.New("la relacio pendent ja no existeix"))
+			continue
+		}
+		parent, parentOK := entitatsByID[rel.EntitatOrigenID]
+		if !parentOK {
+			recordError("entitat_religiosa_relacio", relationID, errors.New("l'entitat pare no existeix"))
+			continue
+		}
+		child, childOK := entitatsByID[rel.EntitatDestiID]
+		if !childOK {
+			recordError("entitat_religiosa_relacio", relationID, errors.New("l'entitat filla no existeix"))
+			continue
+		}
+		if parent.ModeracioEstat != "publicat" {
+			recordError("entitat_religiosa_relacio", relationID, errors.New("l'entitat pare no esta publicada"))
+			continue
+		}
+		if child.ModeracioEstat != "publicat" {
+			recordError("entitat_religiosa_relacio", relationID, errors.New("l'entitat filla no esta publicada"))
+			continue
+		}
+		if err := a.DB.UpdateEntitatReligiosaRelacioModeracio(relationID, "publicat", "", moderatorID); err != nil {
+			recordError("entitat_religiosa_relacio", relationID, err)
+			continue
+		}
+		rel.ModeracioEstat = "publicat"
+		relsByID[relationID] = rel
+		recordSuccess("entitat_religiosa_relacio", relationID)
+	}
+
+	return result, nil
 }
 
 func confessionalRelationWouldCreateCycle(parentID, childID int, rels []db.EntitatReligiosaRelacio, ignoreRelID int) bool {
@@ -4926,6 +5178,8 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 	}
 
 	wikiPendingByType := map[string][]int{}
+	confBulkEntityIDs := make([]int, 0)
+	confBulkRelationIDs := make([]int, 0)
 	types := allowedTypes
 	if bulkType != "" && bulkType != "all" {
 		if !allowedMap[bulkType] {
@@ -5159,6 +5413,94 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				skipped += len(ids) - updated
 			}
 			applyActivitiesBulk(objType, ids)
+		case "entitat_religiosa":
+			resolveStart = time.Now()
+			rows, err := a.DB.ListEntitatsReligioses()
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				if row.ModeracioEstat == "pendent" {
+					ids = append(ids, row.ID)
+				}
+			}
+			updateCandidates(len(ids))
+			updateTotal(len(ids))
+			if len(ids) == 0 {
+				break
+			}
+			if action == "approve" {
+				confBulkEntityIDs = append(confBulkEntityIDs, ids...)
+				break
+			}
+			for _, id := range ids {
+				apply(objType, id)
+			}
+		case "entitat_religiosa_relacio":
+			resolveStart = time.Now()
+			rows, err := a.DB.ListEntitatReligiosaRelacions()
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				if row.ModeracioEstat == "pendent" {
+					ids = append(ids, row.ID)
+				}
+			}
+			updateCandidates(len(ids))
+			updateTotal(len(ids))
+			if len(ids) == 0 {
+				break
+			}
+			if action == "approve" {
+				confBulkRelationIDs = append(confBulkRelationIDs, ids...)
+				break
+			}
+			for _, id := range ids {
+				apply(objType, id)
+			}
+		case "municipi_entitat_religiosa":
+			resolveStart = time.Now()
+			rows, err := a.DB.ListMunicipiEntitatsReligioses(0)
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				if row.ModeracioEstat == "pendent" {
+					ids = append(ids, row.ID)
+				}
+			}
+			updateCandidates(len(ids))
+			updateTotal(len(ids))
+			for _, id := range ids {
+				apply(objType, id)
+			}
+		case "arxiu_entitat_religiosa":
+			resolveStart = time.Now()
+			rows, err := a.DB.ListArxiuEntitatsReligioses(0, 0, "pendent")
+			resolveDur += time.Since(resolveStart)
+			if err != nil {
+				errCount++
+				break
+			}
+			ids := make([]int, 0, len(rows))
+			for _, row := range rows {
+				ids = append(ids, row.ID)
+			}
+			updateCandidates(len(ids))
+			updateTotal(len(ids))
+			for _, id := range ids {
+				apply(objType, id)
+			}
 		case "municipi_mapa_version":
 			resolveStart = time.Now()
 			rows, err := a.DB.ListMunicipiMapaVersions(db.MunicipiMapaVersionFilter{Status: "pendent"})
@@ -5504,6 +5846,37 @@ func (a *App) processModeracioBulkAll(ctx context.Context, action, bulkType, mot
 				}
 			}
 			for range ids {
+				processed++
+				update(processed, total)
+			}
+		}
+	}
+	if action == "approve" && (len(confBulkEntityIDs) > 0 || len(confBulkRelationIDs) > 0) {
+		stepStart := time.Now()
+		hierarchyResult, err := a.applyModeracioBulkConfessionalHierarchyApprove(confBulkEntityIDs, confBulkRelationIDs, user.ID)
+		updateDur += time.Since(stepStart)
+		if err != nil {
+			Errorf("Moderacio massiva %s confessional jerarquia ha fallat: %v", action, err)
+			errCount++
+		} else {
+			if len(hierarchyResult.SuccessByType) > 0 {
+				perItemUsed = true
+			}
+			for objType, ids := range hierarchyResult.SuccessByType {
+				if len(ids) == 0 {
+					continue
+				}
+				if err := a.applyModeracioActivitiesBulk(ctx, action, objType, ids, motiu, user.ID, applyMetrics); err != nil {
+					Errorf("Moderacio massiva %s activitats %s bulk ha fallat: %v", action, objType, err)
+					errCount++
+				}
+			}
+			for _, itemErr := range hierarchyResult.Errors {
+				Errorf("Moderacio massiva %s %s:%d ha fallat: %v", action, itemErr.ObjectType, itemErr.ObjectID, itemErr.Err)
+				errCount++
+			}
+			skipped += hierarchyResult.SkippedTargets
+			for i := 0; i < hierarchyResult.ProcessedTargets; i++ {
 				processed++
 				update(processed, total)
 			}

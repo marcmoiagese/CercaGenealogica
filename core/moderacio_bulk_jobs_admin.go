@@ -785,6 +785,30 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 		result.ActivityMs = durationMillis(activityDur)
 		result.TotalMs = durationMillis(time.Since(start))
 	}
+	if action == "approve" && (len(grouped["entitat_religiosa"]) > 0 || len(grouped["entitat_religiosa_relacio"]) > 0) {
+		stepStart := time.Now()
+		hierarchyResult, err := a.applyModeracioBulkConfessionalHierarchyApprove(grouped["entitat_religiosa"], grouped["entitat_religiosa_relacio"], actorID)
+		updateDur += time.Since(stepStart)
+		if err != nil {
+			errCount += recordModeracioBulkWorkerError(jobID, actorID, errorCollector, &result, adminJobPhaseApplyingChanges, "apply_confessional_hierarchy", "entitat_religiosa", 0, err)
+		} else {
+			for objType, ids := range hierarchyResult.SuccessByType {
+				if len(ids) == 0 {
+					continue
+				}
+				successByType[objType] = append(successByType[objType], ids...)
+			}
+			for _, itemErr := range hierarchyResult.Errors {
+				errCount += recordModeracioBulkWorkerError(jobID, actorID, errorCollector, &result, adminJobPhaseApplyingChanges, "apply_confessional_hierarchy", itemErr.ObjectType, itemErr.ObjectID, itemErr.Err)
+			}
+			processed += hierarchyResult.ProcessedTargets
+			updated += hierarchyResult.UpdatedTargets
+			skipped += hierarchyResult.SkippedTargets
+			grouped["entitat_religiosa"] = nil
+			grouped["entitat_religiosa_relacio"] = nil
+		}
+		flushProgress()
+	}
 	for _, objType := range order {
 		ids := grouped[objType]
 		if len(ids) == 0 {
