@@ -262,8 +262,38 @@ func (a *App) AdminNewConfessional(w http.ResponseWriter, r *http.Request) {
 		}
 	case "relacio":
 		data.Relacio = &db.MunicipiEntitatReligiosa{TipusRelacio: "principal", ModeracioEstat: "pendent"}
+		if municipiID := parsePositiveIntDefault(r.URL.Query().Get("municipi_id"), 0, 0, 1000000000); municipiID > 0 {
+			if municipi, err := a.DB.GetMunicipi(municipiID); err == nil && municipi != nil {
+				data.Relacio.MunicipiID = municipiID
+			}
+		}
+		if nucliID := parsePositiveIntDefault(r.URL.Query().Get("nucli_id"), 0, 0, 1000000000); nucliID > 0 {
+			if nucli, err := a.DB.GetMunicipi(nucliID); err == nil && nucli != nil {
+				if data.Relacio.MunicipiID == 0 && nucli.MunicipiID.Valid {
+					data.Relacio.MunicipiID = int(nucli.MunicipiID.Int64)
+				}
+				if nucli.MunicipiID.Valid && int(nucli.MunicipiID.Int64) == data.Relacio.MunicipiID {
+					data.Relacio.NucliID = sql.NullInt64{Int64: int64(nucliID), Valid: true}
+				}
+			}
+		}
+		if entitatID := parsePositiveIntDefault(r.URL.Query().Get("entitat_religiosa_id"), 0, 0, 1000000000); entitatID > 0 {
+			if entitat, err := a.DB.GetEntitatReligiosa(entitatID); err == nil && entitat != nil && entitat.ModeracioEstat == "publicat" {
+				data.Relacio.EntitatReligiosaID = entitatID
+			}
+		}
 	case "rel_ent":
 		data.RelEnt = &db.EntitatReligiosaRelacio{ModeracioEstat: "pendent"}
+		if parentID := parsePositiveIntDefault(r.URL.Query().Get("parent_id"), 0, 0, 1000000000); parentID > 0 {
+			if parent, err := a.DB.GetEntitatReligiosa(parentID); err == nil && parent != nil && parent.ModeracioEstat == "publicat" {
+				data.RelEnt.EntitatOrigenID = parentID
+			}
+		}
+		if childID := parsePositiveIntDefault(r.URL.Query().Get("child_id"), 0, 0, 1000000000); childID > 0 {
+			if child, err := a.DB.GetEntitatReligiosa(childID); err == nil && child != nil && child.ModeracioEstat == "publicat" {
+				data.RelEnt.EntitatDestiID = childID
+			}
+		}
 	}
 	a.renderConfessionalForm(w, r, user, data)
 }

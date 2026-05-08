@@ -69,6 +69,8 @@ func TestF354SDiagnosticRouteMenuAndLocaleFiles(t *testing.T) {
 			`"confessional.diagnostic.title"`,
 			`"confessional.diagnostic.type.missing_parent"`,
 			`"confessional.diagnostic.summary.published_entities"`,
+			`"confessional.diagnostic.col.actions"`,
+			`"confessional.diagnostic.action.view_entity"`,
 		} {
 			if !strings.Contains(body, token) {
 				t.Fatalf("%s no conté la clau i18n F35-4S %q", rel, token)
@@ -234,8 +236,8 @@ func TestF354S1DiagnosticI18NKeysAreCompleteCleanAndConsistent(t *testing.T) {
 	}
 
 	keys := f354S1DiagnosticLocaleKeys(locales["cat"])
-	if len(keys) != 62 {
-		t.Fatalf("s'esperaven 62 claus i18n F35-4S, got=%d", len(keys))
+	if len(keys) != 79 {
+		t.Fatalf("s'esperaven 79 claus i18n F35-4S/F35-4T, got=%d", len(keys))
 	}
 
 	placeholderRE := regexp.MustCompile(`%[sd]`)
@@ -288,16 +290,154 @@ func TestF354S1DiagnosticI18NKeysAreCompleteCleanAndConsistent(t *testing.T) {
 			t.Fatalf("%s conserva el valor catala degradat %q", key, badValue)
 		}
 	}
+
+	for _, key := range []string{
+		"confessional.diagnostic.col.actions",
+		"confessional.diagnostic.action.view_entity",
+		"confessional.diagnostic.action.edit_entity",
+		"confessional.diagnostic.action.assign_parent",
+		"confessional.diagnostic.action.view_parent_entity",
+		"confessional.diagnostic.action.view_child_entity",
+		"confessional.diagnostic.action.view_primary_entity",
+		"confessional.diagnostic.action.view_possible_duplicate",
+		"confessional.diagnostic.action.view_detected_parents",
+		"confessional.diagnostic.action.relate_municipality",
+		"confessional.diagnostic.action.relate_entity",
+		"confessional.diagnostic.action.view_archive",
+		"confessional.diagnostic.action.view_municipality",
+		"confessional.diagnostic.action.view_moderation",
+		"confessional.diagnostic.action.view_relations",
+		"confessional.diagnostic.action.review_relations",
+		"confessional.diagnostic.action.compare_manually",
+	} {
+		for _, lang := range []string{"cat", "en", "oc"} {
+			if strings.TrimSpace(locales[lang][key]) == "" {
+				t.Fatalf("falta %s a locales/%s.json", key, lang)
+			}
+		}
+	}
 }
 
 func f354S1DiagnosticLocaleKeys(values map[string]string) []string {
-	keys := make([]string, 0, 62)
+	keys := make([]string, 0, 79)
 	for key := range values {
 		if key == "confessional.menu.diagnostic" || strings.HasPrefix(key, "confessional.diagnostic.") {
 			keys = append(keys, key)
 		}
 	}
 	return keys
+}
+
+func TestF354TDiagnosticActionsRespectPermissionsAndSafeURLs(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4t_actions.sqlite3")
+	adminSession := f353YAdminSession(t, database, "f35_4t_actions_admin")
+	limitedUser, limitedSession := createF335PlatformUser(t, database, "f35_4t_actions_limited", "territori.confessional.diagnostic.view")
+	assignPolicyToUser(t, database, limitedUser.ID, createPolicyWithGrant(t, database, "f35_4t_limited_entitats_view", "territori.confessional.entitats.view"))
+	assignPolicyToUser(t, database, limitedUser.ID, createPolicyWithGrant(t, database, "f35_4t_limited_arxius_view", "documentals.arxius.view"))
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	rootID := f354SSaveEntitat(t, database, "f35_4t_root_"+suffix, "Santa Seu F35-4T "+suffix, "catolicisme_ritu_llati", "santa_seu", "publicat")
+	diocesiID := f354SSaveEntitat(t, database, "f35_4t_dioc_"+suffix, "Bisbat F35-4T "+suffix, "catolicisme_ritu_llati", "bisbat_diocesi", "publicat")
+	f354SSaveEntitatRelacio(t, database, rootID, diocesiID, "bisbat_diocesi", "publicat")
+
+	missingParentID := f354SSaveEntitat(t, database, "f35_4t_orphan_"+suffix, "Parroquia orfena F35-4T "+suffix, "catolicisme_ritu_llati", "parroquia", "publicat")
+	localWithoutTerritoryID := f354SSaveEntitat(t, database, "f35_4t_local_"+suffix, "Parroquia local F35-4T "+suffix, "catolicisme_ritu_llati", "parroquia", "publicat")
+	uncoveredMunicipiID := f353YCreateMunicipi(t, database, "Municipi sense entitat F35-4T "+suffix)
+	archiveNoContextID := f354SCreateArxiu(t, database, "Arxiu Parroquial F35-4T "+suffix, uncoveredMunicipiID)
+	dupA := f354SSaveEntitat(t, database, "f35_4t_dup_a_"+suffix, "Seu duplicada F35-4T "+suffix, "catolicisme_ritu_llati", "santa_seu", "publicat")
+	dupB := f354SSaveEntitat(t, database, "f35_4t_dup_b_"+suffix, "Seu duplicada F35-4T "+suffix, "catolicisme_ritu_llati", "santa_seu", "publicat")
+
+	adminRR := f354SDiagnosticGET(app.AdminConfessionalDiagnostic, "/confessional/diagnostic", adminSession)
+	if adminRR.Code != http.StatusOK {
+		t.Fatalf("diagnostic admin status=%d body=%s", adminRR.Code, adminRR.Body.String())
+	}
+	adminBody := adminRR.Body.String()
+	for _, token := range []string{
+		"Accions",
+		"/confessional/entitats/" + strconv.Itoa(missingParentID),
+		"/confessional/relacions-entitats/new?child_id=" + strconv.Itoa(missingParentID),
+		"return_to=%2Fconfessional%2Fdiagnostic",
+		"/confessional/municipis-entitats/new?entitat_religiosa_id=" + strconv.Itoa(localWithoutTerritoryID),
+		"/confessional/municipis-entitats/new?municipi_id=" + strconv.Itoa(uncoveredMunicipiID),
+		"/documentals/arxius/" + strconv.Itoa(archiveNoContextID) + "/entitats-religioses/new?return_to=%2Fconfessional%2Fdiagnostic",
+		"/confessional/entitats/" + strconv.Itoa(dupA),
+		"/confessional/entitats/" + strconv.Itoa(dupB),
+		strings.ReplaceAll("/confessional/entitats?q=Seu+duplicada+F35-4T+"+suffix, "+", "&#43;"),
+	} {
+		if !strings.Contains(adminBody, token) {
+			t.Fatalf("diagnostic admin no mostra l'accio/url %q; body=%s", token, adminBody)
+		}
+	}
+	if strings.Contains(adminBody, "child_id=<") || strings.Contains(adminBody, "entitat_religiosa_id=<") {
+		t.Fatalf("les URLs d'accio no han de contenir text sense escapar: %s", adminBody)
+	}
+
+	limitedRR := f354SDiagnosticGET(app.AdminConfessionalDiagnostic, "/confessional/diagnostic", limitedSession)
+	if limitedRR.Code != http.StatusOK {
+		t.Fatalf("diagnostic limitat status=%d body=%s", limitedRR.Code, limitedRR.Body.String())
+	}
+	limitedBody := limitedRR.Body.String()
+	if !strings.Contains(limitedBody, "/confessional/entitats/"+strconv.Itoa(missingParentID)) {
+		t.Fatalf("l'usuari limitat ha de veure l'accio de veure entitat; body=%s", limitedBody)
+	}
+	for _, forbidden := range []string{
+		"/confessional/relacions-entitats/new?child_id=" + strconv.Itoa(missingParentID),
+		"/confessional/municipis-entitats/new?entitat_religiosa_id=" + strconv.Itoa(localWithoutTerritoryID),
+		"/confessional/municipis-entitats/new?municipi_id=" + strconv.Itoa(uncoveredMunicipiID),
+		"/documentals/arxius/" + strconv.Itoa(archiveNoContextID) + "/entitats-religioses/new?return_to=%2Fconfessional%2Fdiagnostic",
+	} {
+		if strings.Contains(limitedBody, forbidden) {
+			t.Fatalf("l'usuari limitat no ha de veure l'accio %q; body=%s", forbidden, limitedBody)
+		}
+	}
+}
+
+func TestF354TPrefillQueryParamsPopulateFormsSafely(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4t_prefill.sqlite3")
+	session := f353YAdminSession(t, database, "f35_4t_prefill")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	parentID := f354SSaveEntitat(t, database, "f35_4t_parent_"+suffix, "Bisbat prefill F35-4T "+suffix, "catolicisme_ritu_llati", "bisbat_diocesi", "publicat")
+	childID := f354SSaveEntitat(t, database, "f35_4t_child_"+suffix, "Parroquia prefill F35-4T "+suffix, "catolicisme_ritu_llati", "parroquia", "publicat")
+	municipiID := f353YCreateMunicipi(t, database, "Municipi prefill F35-4T "+suffix)
+
+	relEntReq := httptest.NewRequest(http.MethodGet, "/confessional/relacions-entitats/new?parent_id="+strconv.Itoa(parentID)+"&child_id="+strconv.Itoa(childID)+"&return_to=%2Fconfessional%2Fdiagnostic", nil)
+	relEntReq.Header.Set("Accept-Language", "ca")
+	relEntReq.AddCookie(session)
+	relEntRR := httptest.NewRecorder()
+	app.AdminNewConfessional(relEntRR, relEntReq)
+	if relEntRR.Code != http.StatusOK {
+		t.Fatalf("prefill rel_ent status=%d body=%s", relEntRR.Code, relEntRR.Body.String())
+	}
+	relEntBody := relEntRR.Body.String()
+	for _, token := range []string{
+		`name="return_to" value="/confessional/diagnostic"`,
+		`option value="` + strconv.Itoa(parentID) + `" selected`,
+		`option value="` + strconv.Itoa(childID) + `" selected`,
+	} {
+		if !strings.Contains(relEntBody, token) {
+			t.Fatalf("prefill rel_ent no conte %q; body=%s", token, relEntBody)
+		}
+	}
+
+	relacioReq := httptest.NewRequest(http.MethodGet, "/confessional/municipis-entitats/new?municipi_id="+strconv.Itoa(municipiID)+"&entitat_religiosa_id="+strconv.Itoa(childID)+"&return_to=%2Fconfessional%2Fdiagnostic", nil)
+	relacioReq.Header.Set("Accept-Language", "ca")
+	relacioReq.AddCookie(session)
+	relacioRR := httptest.NewRecorder()
+	app.AdminNewConfessional(relacioRR, relacioReq)
+	if relacioRR.Code != http.StatusOK {
+		t.Fatalf("prefill relacio status=%d body=%s", relacioRR.Code, relacioRR.Body.String())
+	}
+	relacioBody := relacioRR.Body.String()
+	for _, token := range []string{
+		`name="return_to" value="/confessional/diagnostic"`,
+		`option value="` + strconv.Itoa(municipiID) + `" selected`,
+		`option value="` + strconv.Itoa(childID) + `" data-religion-code="catolicisme_ritu_llati" data-level-code="parroquia" selected`,
+	} {
+		if !strings.Contains(relacioBody, token) {
+			t.Fatalf("prefill relacio no conte %q; body=%s", token, relacioBody)
+		}
+	}
 }
 
 func f354SDiagnosticGET(handler http.HandlerFunc, path string, session *http.Cookie) *httptest.ResponseRecorder {

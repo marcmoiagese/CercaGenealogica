@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -58,6 +59,25 @@ type confessionalDiagnosticAlert struct {
 	ContextURL    string
 	ReligionCode  string
 	LevelCode     string
+	Actions       []confessionalDiagnosticAction
+
+	SubjectEntityID    int
+	SecondaryEntityID  int
+	RelationID         int
+	MunicipiID         int
+	NucliID            int
+	ArxiuID            int
+	RelatedEntityIDs   []int
+	RelatedRelationIDs []int
+}
+
+type confessionalDiagnosticAction struct {
+	Label              string
+	URL                string
+	Variant            string
+	Description        string
+	PermissionKey      string
+	RequiresPermission bool
 }
 
 type confessionalDiagnosticCoverageRow struct {
@@ -95,6 +115,10 @@ func (a *App) AdminConfessionalDiagnostic(w http.ResponseWriter, r *http.Request
 
 	lang := ResolveLangForUser(r, user.PreferredLang)
 	filter := parseConfessionalDiagnosticFilter(r)
+	currentURL := strings.TrimSpace(r.URL.RequestURI())
+	if currentURL == "" {
+		currentURL = "/confessional/diagnostic"
+	}
 
 	allEntitats, _ := a.DB.ListEntitatsReligioses()
 	allRelacionsEntitats, _ := a.DB.ListEntitatReligiosaRelacions()
@@ -109,7 +133,7 @@ func (a *App) AdminConfessionalDiagnostic(w http.ResponseWriter, r *http.Request
 	publishedRelacionsArxiu := publishedArxiuEntitatsReligiosesForDiagnostic(allRelacionsArxiu)
 	publishedMunicipis := publishedMunicipisForDiagnostic(allMunicipis)
 
-	diagnostic := a.buildConfessionalDiagnostic(lang, filter, allEntitats, publishedEntitats, allRelacionsEntitats, publishedRelacionsEntitats, allRelacionsTerritori, publishedRelacionsTerritori, allRelacionsArxiu, publishedRelacionsArxiu, publishedMunicipis, allArxius)
+	diagnostic := a.buildConfessionalDiagnostic(lang, user, currentURL, filter, allEntitats, publishedEntitats, allRelacionsEntitats, publishedRelacionsEntitats, allRelacionsTerritori, publishedRelacionsTerritori, allRelacionsArxiu, publishedRelacionsArxiu, publishedMunicipis, allArxius)
 	diagnostic.Filter = filter
 	diagnostic.SelectableReligions = ListSelectableConfessionalReligionCatalog()
 	diagnostic.SelectableNivells = ListConfessionalLevelCatalog()
@@ -207,7 +231,7 @@ func confessionalDiagnosticTypeOptions(lang string) []confessionalDiagnosticOpti
 	return options
 }
 
-func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagnosticFilter, allEntitats, publishedEntitats []db.EntitatReligiosa, allRelacionsEntitats, publishedRelacionsEntitats []db.EntitatReligiosaRelacio, allRelacionsTerritori, publishedRelacionsTerritori []db.MunicipiEntitatReligiosa, allRelacionsArxiu, publishedRelacionsArxiu []db.ArxiuEntitatReligiosa, publishedMunicipis []db.MunicipiRow, publishedArxius []db.ArxiuWithCount) confessionalDiagnosticPageData {
+func (a *App) buildConfessionalDiagnostic(lang string, user *db.User, returnTo string, filter confessionalDiagnosticFilter, allEntitats, publishedEntitats []db.EntitatReligiosa, allRelacionsEntitats, publishedRelacionsEntitats []db.EntitatReligiosaRelacio, allRelacionsTerritori, publishedRelacionsTerritori []db.MunicipiEntitatReligiosa, allRelacionsArxiu, publishedRelacionsArxiu []db.ArxiuEntitatReligiosa, publishedMunicipis []db.MunicipiRow, publishedArxius []db.ArxiuWithCount) confessionalDiagnosticPageData {
 	entitatsByID := confessionalEntitatsByID(allEntitats)
 	publishedEntitatsByID := confessionalEntitatsByID(publishedEntitats)
 	religionLabels := confessionalReligionCatalogLabels(lang)
@@ -244,13 +268,14 @@ func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagno
 		parents := publishedParentsByChild[entity.ID]
 		if len(parents) == 0 {
 			alert := confessionalDiagnosticAlert{
-				Type:         confDiagnosticTypeMissingParent,
-				TypeLabel:    T(lang, "confessional.diagnostic.type."+confDiagnosticTypeMissingParent),
-				Subject:      entity.Nom,
-				SubjectURL:   fmt.Sprintf("/confessional/entitats/%d", entity.ID),
-				ReligionCode: entity.ReligioConfessioCodi,
-				LevelCode:    entity.NivellConfessionalCodi,
-				Context:      strings.TrimSpace(strings.Join([]string{religionLabels[entity.ReligioConfessioCodi], levelLabels[entity.NivellConfessionalCodi]}, " · ")),
+				Type:            confDiagnosticTypeMissingParent,
+				TypeLabel:       T(lang, "confessional.diagnostic.type."+confDiagnosticTypeMissingParent),
+				Subject:         entity.Nom,
+				SubjectURL:      fmt.Sprintf("/confessional/entitats/%d", entity.ID),
+				SubjectEntityID: entity.ID,
+				ReligionCode:    entity.ReligioConfessioCodi,
+				LevelCode:       entity.NivellConfessionalCodi,
+				Context:         strings.TrimSpace(strings.Join([]string{religionLabels[entity.ReligioConfessioCodi], levelLabels[entity.NivellConfessionalCodi]}, " · ")),
 			}
 			switch {
 			case levelOK && len(level.AllowedParentLevelCodes) > 0:
@@ -275,15 +300,18 @@ func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagno
 				}
 			}
 			alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-				Severity:     confDiagnosticSeverityCritical,
-				Type:         confDiagnosticTypeMultipleParents,
-				TypeLabel:    T(lang, "confessional.diagnostic.type."+confDiagnosticTypeMultipleParents),
-				Description:  fmt.Sprintf(T(lang, "confessional.diagnostic.message.multiple_parents"), strings.Join(parentNames, ", ")),
-				Subject:      entity.Nom,
-				SubjectURL:   fmt.Sprintf("/confessional/entitats/%d", entity.ID),
-				Context:      strings.TrimSpace(strings.Join(parentNames, ", ")),
-				ReligionCode: entity.ReligioConfessioCodi,
-				LevelCode:    entity.NivellConfessionalCodi,
+				Severity:           confDiagnosticSeverityCritical,
+				Type:               confDiagnosticTypeMultipleParents,
+				TypeLabel:          T(lang, "confessional.diagnostic.type."+confDiagnosticTypeMultipleParents),
+				Description:        fmt.Sprintf(T(lang, "confessional.diagnostic.message.multiple_parents"), strings.Join(parentNames, ", ")),
+				Subject:            entity.Nom,
+				SubjectURL:         fmt.Sprintf("/confessional/entitats/%d", entity.ID),
+				SubjectEntityID:    entity.ID,
+				Context:            strings.TrimSpace(strings.Join(parentNames, ", ")),
+				ReligionCode:       entity.ReligioConfessioCodi,
+				LevelCode:          entity.NivellConfessionalCodi,
+				RelatedEntityIDs:   confessionalDiagnosticRelationOriginIDs(parents),
+				RelatedRelationIDs: confessionalDiagnosticRelationIDs(parents),
 			}))
 		}
 		if confessionalDiagnosticIsLocalTerritorialEntity(entity) && len(publishedTerritoriByEntitat[entity.ID]) == 0 {
@@ -300,16 +328,17 @@ func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagno
 				context = fmt.Sprintf("%s · %s: %s", parentName, T(lang, "confessional.diagnostic.context.inferred_municipality"), inferredMunicipi)
 			}
 			alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-				Severity:     confDiagnosticSeverityWarning,
-				Type:         confDiagnosticTypeLocalEntityWithoutTerritory,
-				TypeLabel:    T(lang, "confessional.diagnostic.type."+confDiagnosticTypeLocalEntityWithoutTerritory),
-				Description:  description,
-				Subject:      entity.Nom,
-				SubjectURL:   fmt.Sprintf("/confessional/entitats/%d", entity.ID),
-				Context:      context,
-				ContextURL:   fmt.Sprintf("/confessional/municipis-entitats/new?return_to=/confessional/entitats/%d", entity.ID),
-				ReligionCode: entity.ReligioConfessioCodi,
-				LevelCode:    entity.NivellConfessionalCodi,
+				Severity:        confDiagnosticSeverityWarning,
+				Type:            confDiagnosticTypeLocalEntityWithoutTerritory,
+				TypeLabel:       T(lang, "confessional.diagnostic.type."+confDiagnosticTypeLocalEntityWithoutTerritory),
+				Description:     description,
+				Subject:         entity.Nom,
+				SubjectURL:      fmt.Sprintf("/confessional/entitats/%d", entity.ID),
+				Context:         context,
+				ContextURL:      fmt.Sprintf("/confessional/municipis-entitats/new?return_to=/confessional/entitats/%d", entity.ID),
+				ReligionCode:    entity.ReligioConfessioCodi,
+				LevelCode:       entity.NivellConfessionalCodi,
+				SubjectEntityID: entity.ID,
 			}))
 		}
 	}
@@ -365,15 +394,18 @@ func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagno
 			levelCode = parent.NivellConfessionalCodi
 		}
 		alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-			Severity:     confDiagnosticSeverityCritical,
-			Type:         confDiagnosticTypeIncompatibleRelation,
-			TypeLabel:    T(lang, "confessional.diagnostic.type."+confDiagnosticTypeIncompatibleRelation),
-			Description:  strings.Join(uniqueConfessionalDiagnosticStrings(issues), "; "),
-			Subject:      subject,
-			SubjectURL:   subjectURL,
-			Context:      rel.TipusRelacio,
-			ReligionCode: religionCode,
-			LevelCode:    levelCode,
+			Severity:          confDiagnosticSeverityCritical,
+			Type:              confDiagnosticTypeIncompatibleRelation,
+			TypeLabel:         T(lang, "confessional.diagnostic.type."+confDiagnosticTypeIncompatibleRelation),
+			Description:       strings.Join(uniqueConfessionalDiagnosticStrings(issues), "; "),
+			Subject:           subject,
+			SubjectURL:        subjectURL,
+			Context:           rel.TipusRelacio,
+			ReligionCode:      religionCode,
+			LevelCode:         levelCode,
+			SubjectEntityID:   rel.EntitatDestiID,
+			SecondaryEntityID: rel.EntitatOrigenID,
+			RelationID:        rel.ID,
 		}))
 	}
 
@@ -384,14 +416,15 @@ func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagno
 			continue
 		}
 		alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-			Severity:     confDiagnosticSeverityCritical,
-			Type:         confDiagnosticTypePendingRelationInconsistent,
-			TypeLabel:    T(lang, "confessional.diagnostic.type."+confDiagnosticTypePendingRelationInconsistent),
-			Description:  T(lang, "confessional.diagnostic.message.pending_relation.duplicate"),
-			Subject:      child.Nom,
-			SubjectURL:   fmt.Sprintf("/confessional/entitats/%d", child.ID),
-			ReligionCode: child.ReligioConfessioCodi,
-			LevelCode:    child.NivellConfessionalCodi,
+			Severity:        confDiagnosticSeverityCritical,
+			Type:            confDiagnosticTypePendingRelationInconsistent,
+			TypeLabel:       T(lang, "confessional.diagnostic.type."+confDiagnosticTypePendingRelationInconsistent),
+			Description:     T(lang, "confessional.diagnostic.message.pending_relation.duplicate"),
+			Subject:         child.Nom,
+			SubjectURL:      fmt.Sprintf("/confessional/entitats/%d", child.ID),
+			ReligionCode:    child.ReligioConfessioCodi,
+			LevelCode:       child.NivellConfessionalCodi,
+			SubjectEntityID: child.ID,
 		}))
 	}
 
@@ -403,15 +436,18 @@ func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagno
 		}
 		if rel.ModeracioEstat == "publicat" && childOK && child.ModeracioEstat == "rebutjat" {
 			alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-				Severity:     confDiagnosticSeverityCritical,
-				Type:         confDiagnosticTypePendingRelationInconsistent,
-				TypeLabel:    T(lang, "confessional.diagnostic.type."+confDiagnosticTypePendingRelationInconsistent),
-				Description:  T(lang, "confessional.diagnostic.message.pending_relation.published_rejected_child"),
-				Subject:      confessionalDiagnosticEntityLabel(child, childOK, rel.EntitatDestiID),
-				SubjectURL:   fmt.Sprintf("/confessional/entitats/%d", rel.EntitatDestiID),
-				Context:      confessionalDiagnosticEntityLabel(parent, parentOK, rel.EntitatOrigenID),
-				ReligionCode: child.ReligioConfessioCodi,
-				LevelCode:    child.NivellConfessionalCodi,
+				Severity:          confDiagnosticSeverityCritical,
+				Type:              confDiagnosticTypePendingRelationInconsistent,
+				TypeLabel:         T(lang, "confessional.diagnostic.type."+confDiagnosticTypePendingRelationInconsistent),
+				Description:       T(lang, "confessional.diagnostic.message.pending_relation.published_rejected_child"),
+				Subject:           confessionalDiagnosticEntityLabel(child, childOK, rel.EntitatDestiID),
+				SubjectURL:        fmt.Sprintf("/confessional/entitats/%d", rel.EntitatDestiID),
+				Context:           confessionalDiagnosticEntityLabel(parent, parentOK, rel.EntitatOrigenID),
+				ReligionCode:      child.ReligioConfessioCodi,
+				LevelCode:         child.NivellConfessionalCodi,
+				SubjectEntityID:   rel.EntitatDestiID,
+				SecondaryEntityID: rel.EntitatOrigenID,
+				RelationID:        rel.ID,
 			}))
 		}
 		if rel.ModeracioEstat != "pendent" || !childOK {
@@ -419,44 +455,53 @@ func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagno
 		}
 		if child.ModeracioEstat == "publicat" {
 			alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-				Severity:     confDiagnosticSeverityCritical,
-				Type:         confDiagnosticTypePendingRelationInconsistent,
-				TypeLabel:    T(lang, "confessional.diagnostic.type."+confDiagnosticTypePendingRelationInconsistent),
-				Description:  T(lang, "confessional.diagnostic.message.pending_relation.child_published"),
-				Subject:      child.Nom,
-				SubjectURL:   fmt.Sprintf("/confessional/entitats/%d", child.ID),
-				Context:      confessionalDiagnosticEntityLabel(parent, parentOK, rel.EntitatOrigenID),
-				ReligionCode: child.ReligioConfessioCodi,
-				LevelCode:    child.NivellConfessionalCodi,
+				Severity:          confDiagnosticSeverityCritical,
+				Type:              confDiagnosticTypePendingRelationInconsistent,
+				TypeLabel:         T(lang, "confessional.diagnostic.type."+confDiagnosticTypePendingRelationInconsistent),
+				Description:       T(lang, "confessional.diagnostic.message.pending_relation.child_published"),
+				Subject:           child.Nom,
+				SubjectURL:        fmt.Sprintf("/confessional/entitats/%d", child.ID),
+				Context:           confessionalDiagnosticEntityLabel(parent, parentOK, rel.EntitatOrigenID),
+				ReligionCode:      child.ReligioConfessioCodi,
+				LevelCode:         child.NivellConfessionalCodi,
+				SubjectEntityID:   child.ID,
+				SecondaryEntityID: rel.EntitatOrigenID,
+				RelationID:        rel.ID,
 			}))
 			continue
 		}
 		if child.ModeracioEstat == "rebutjat" {
 			alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-				Severity:     confDiagnosticSeverityCritical,
-				Type:         confDiagnosticTypePendingRelationInconsistent,
-				TypeLabel:    T(lang, "confessional.diagnostic.type."+confDiagnosticTypePendingRelationInconsistent),
-				Description:  T(lang, "confessional.diagnostic.message.pending_relation.child_rejected"),
-				Subject:      child.Nom,
-				SubjectURL:   fmt.Sprintf("/confessional/entitats/%d", child.ID),
-				Context:      confessionalDiagnosticEntityLabel(parent, parentOK, rel.EntitatOrigenID),
-				ReligionCode: child.ReligioConfessioCodi,
-				LevelCode:    child.NivellConfessionalCodi,
+				Severity:          confDiagnosticSeverityCritical,
+				Type:              confDiagnosticTypePendingRelationInconsistent,
+				TypeLabel:         T(lang, "confessional.diagnostic.type."+confDiagnosticTypePendingRelationInconsistent),
+				Description:       T(lang, "confessional.diagnostic.message.pending_relation.child_rejected"),
+				Subject:           child.Nom,
+				SubjectURL:        fmt.Sprintf("/confessional/entitats/%d", child.ID),
+				Context:           confessionalDiagnosticEntityLabel(parent, parentOK, rel.EntitatOrigenID),
+				ReligionCode:      child.ReligioConfessioCodi,
+				LevelCode:         child.NivellConfessionalCodi,
+				SubjectEntityID:   child.ID,
+				SecondaryEntityID: rel.EntitatOrigenID,
+				RelationID:        rel.ID,
 			}))
 			continue
 		}
 		if hiddenRel, ok := dependentByChild[child.ID]; ok && hiddenRel.ID == rel.ID {
 			if err := a.validateInitialConfessionalParentRelationForModeration(&rel, &child); err != nil {
 				alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-					Severity:     confDiagnosticSeverityCritical,
-					Type:         confDiagnosticTypePendingRelationInconsistent,
-					TypeLabel:    T(lang, "confessional.diagnostic.type."+confDiagnosticTypePendingRelationInconsistent),
-					Description:  fmt.Sprintf(T(lang, "confessional.diagnostic.message.pending_relation.hidden_invalid"), err.Error()),
-					Subject:      child.Nom,
-					SubjectURL:   fmt.Sprintf("/confessional/entitats/%d", child.ID),
-					Context:      confessionalDiagnosticEntityLabel(parent, parentOK, rel.EntitatOrigenID),
-					ReligionCode: child.ReligioConfessioCodi,
-					LevelCode:    child.NivellConfessionalCodi,
+					Severity:          confDiagnosticSeverityCritical,
+					Type:              confDiagnosticTypePendingRelationInconsistent,
+					TypeLabel:         T(lang, "confessional.diagnostic.type."+confDiagnosticTypePendingRelationInconsistent),
+					Description:       fmt.Sprintf(T(lang, "confessional.diagnostic.message.pending_relation.hidden_invalid"), err.Error()),
+					Subject:           child.Nom,
+					SubjectURL:        fmt.Sprintf("/confessional/entitats/%d", child.ID),
+					Context:           confessionalDiagnosticEntityLabel(parent, parentOK, rel.EntitatOrigenID),
+					ReligionCode:      child.ReligioConfessioCodi,
+					LevelCode:         child.NivellConfessionalCodi,
+					SubjectEntityID:   child.ID,
+					SecondaryEntityID: rel.EntitatOrigenID,
+					RelationID:        rel.ID,
 				}))
 			}
 		}
@@ -482,6 +527,7 @@ func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagno
 			SubjectURL:  "/confessional/municipis-entitats",
 			Context:     municipi.Tipus,
 			ContextURL:  "/confessional/municipis-entitats",
+			MunicipiID:  municipi.ID,
 		}))
 	}
 
@@ -504,6 +550,7 @@ func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagno
 				SubjectURL:  fmt.Sprintf("/documentals/arxius/%d", arxiu.ID),
 				Context:     T(lang, "confessional.diagnostic.context.no_religious_relation"),
 				ContextURL:  fmt.Sprintf("/documentals/arxius/%d", arxiu.ID),
+				ArxiuID:     arxiu.ID,
 			}))
 			continue
 		}
@@ -518,28 +565,34 @@ func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagno
 			}
 			if !hasLocal && confessionalDiagnosticArchiveRelationsMatchScope(filter, rels, publishedEntitatsByID) {
 				alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-					Severity:    confDiagnosticSeverityWarning,
-					Type:        confDiagnosticTypeArchiveContextAmbiguous,
-					TypeLabel:   T(lang, "confessional.diagnostic.type."+confDiagnosticTypeArchiveContextAmbiguous),
-					Description: T(lang, "confessional.diagnostic.message.archive_local_context_missing"),
-					Subject:     name,
-					SubjectURL:  fmt.Sprintf("/documentals/arxius/%d", arxiu.ID),
-					Context:     confessionalDiagnosticArchiveRelationSummary(rels, publishedEntitatsByID),
-					ContextURL:  fmt.Sprintf("/documentals/arxius/%d", arxiu.ID),
+					Severity:           confDiagnosticSeverityWarning,
+					Type:               confDiagnosticTypeArchiveContextAmbiguous,
+					TypeLabel:          T(lang, "confessional.diagnostic.type."+confDiagnosticTypeArchiveContextAmbiguous),
+					Description:        T(lang, "confessional.diagnostic.message.archive_local_context_missing"),
+					Subject:            name,
+					SubjectURL:         fmt.Sprintf("/documentals/arxius/%d", arxiu.ID),
+					Context:            confessionalDiagnosticArchiveRelationSummary(rels, publishedEntitatsByID),
+					ContextURL:         fmt.Sprintf("/documentals/arxius/%d", arxiu.ID),
+					ArxiuID:            arxiu.ID,
+					RelatedEntityIDs:   confessionalDiagnosticArchiveEntityIDs(rels),
+					RelatedRelationIDs: confessionalDiagnosticArchiveRelationIDs(rels),
 				}))
 			}
 		}
 
 		if confessionalDiagnosticArchiveRelationIsAmbiguous(rels) && confessionalDiagnosticArchiveRelationsMatchScope(filter, rels, publishedEntitatsByID) {
 			alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-				Severity:    confDiagnosticSeverityWarning,
-				Type:        confDiagnosticTypeArchiveContextAmbiguous,
-				TypeLabel:   T(lang, "confessional.diagnostic.type."+confDiagnosticTypeArchiveContextAmbiguous),
-				Description: T(lang, "confessional.diagnostic.message.archive_context_ambiguous"),
-				Subject:     name,
-				SubjectURL:  fmt.Sprintf("/documentals/arxius/%d", arxiu.ID),
-				Context:     confessionalDiagnosticArchiveRelationSummary(rels, publishedEntitatsByID),
-				ContextURL:  fmt.Sprintf("/documentals/arxius/%d", arxiu.ID),
+				Severity:           confDiagnosticSeverityWarning,
+				Type:               confDiagnosticTypeArchiveContextAmbiguous,
+				TypeLabel:          T(lang, "confessional.diagnostic.type."+confDiagnosticTypeArchiveContextAmbiguous),
+				Description:        T(lang, "confessional.diagnostic.message.archive_context_ambiguous"),
+				Subject:            name,
+				SubjectURL:         fmt.Sprintf("/documentals/arxius/%d", arxiu.ID),
+				Context:            confessionalDiagnosticArchiveRelationSummary(rels, publishedEntitatsByID),
+				ContextURL:         fmt.Sprintf("/documentals/arxius/%d", arxiu.ID),
+				ArxiuID:            arxiu.ID,
+				RelatedEntityIDs:   confessionalDiagnosticArchiveEntityIDs(rels),
+				RelatedRelationIDs: confessionalDiagnosticArchiveRelationIDs(rels),
 			}))
 		}
 	}
@@ -557,6 +610,9 @@ func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagno
 		}
 		return alerts[i].Subject < alerts[j].Subject
 	})
+	for i := range alerts {
+		alerts[i].Actions = a.confessionalDiagnosticActionsForAlert(lang, user, alerts[i], returnTo)
+	}
 
 	filteredAlerts := make([]confessionalDiagnosticAlert, 0, len(alerts))
 	for _, alert := range alerts {
@@ -614,6 +670,265 @@ func (a *App) buildConfessionalDiagnostic(lang string, filter confessionalDiagno
 		Alerts:       filteredAlerts,
 		CoverageRows: coverageRows,
 	}
+}
+
+func (a *App) confessionalDiagnosticActionsForAlert(lang string, user *db.User, alert confessionalDiagnosticAlert, returnTo string) []confessionalDiagnosticAction {
+	actions := make([]confessionalDiagnosticAction, 0, 8)
+	add := func(labelKey, actionURL, variant, description, permKey string) {
+		actionURL = strings.TrimSpace(actionURL)
+		if actionURL == "" || !a.confessionalDiagnosticActionAllowed(user, alert, permKey) {
+			return
+		}
+		actions = append(actions, confessionalDiagnosticAction{
+			Label:              T(lang, labelKey),
+			URL:                actionURL,
+			Variant:            strings.TrimSpace(variant),
+			Description:        strings.TrimSpace(description),
+			PermissionKey:      permKey,
+			RequiresPermission: strings.TrimSpace(permKey) != "",
+		})
+	}
+
+	switch alert.Type {
+	case confDiagnosticTypeMissingParent:
+		add("confessional.diagnostic.action.view_entity", confessionalDiagnosticEntityURL(alert.SubjectEntityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		add("confessional.diagnostic.action.edit_entity", confessionalDiagnosticEntityEditURL(alert.SubjectEntityID, returnTo), "secondary", "", permKeyTerritoriConfessionalEntitatsEdit)
+		add("confessional.diagnostic.action.assign_parent", confessionalDiagnosticNewEntityRelationURL(0, alert.SubjectEntityID, returnTo), "primary", "", permKeyTerritoriConfessionalRelacionsEntitatsCreate)
+	case confDiagnosticTypeIncompatibleRelation:
+		add("confessional.diagnostic.action.view_child_entity", confessionalDiagnosticEntityURL(alert.SubjectEntityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		add("confessional.diagnostic.action.view_parent_entity", confessionalDiagnosticEntityURL(alert.SecondaryEntityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		add("confessional.diagnostic.action.view_relations", confessionalDiagnosticEntityURL(alert.SubjectEntityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		add("confessional.diagnostic.action.review_relations", confessionalDiagnosticEntityRelationEditURL(alert.RelationID, returnTo), "secondary", "", permKeyTerritoriConfessionalRelacionsEntitatsEdit)
+	case confDiagnosticTypeMultipleParents:
+		add("confessional.diagnostic.action.view_entity", confessionalDiagnosticEntityURL(alert.SubjectEntityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		add("confessional.diagnostic.action.view_detected_parents", confessionalDiagnosticEntityURL(alert.SubjectEntityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		add("confessional.diagnostic.action.view_relations", confessionalDiagnosticEntityURL(alert.SubjectEntityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		for _, relationID := range alert.RelatedRelationIDs {
+			add("confessional.diagnostic.action.review_relations", confessionalDiagnosticEntityRelationEditURL(relationID, returnTo), "secondary", "", permKeyTerritoriConfessionalRelacionsEntitatsEdit)
+		}
+	case confDiagnosticTypePendingRelationInconsistent:
+		add("confessional.diagnostic.action.view_entity", confessionalDiagnosticEntityURL(alert.SubjectEntityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		add("confessional.diagnostic.action.view_moderation", confessionalDiagnosticModerationURL("entitat_religiosa_relacio"), "secondary", "", permKeyTerritoriConfessionalRelacionsEntitatsEdit)
+		add("confessional.diagnostic.action.view_relations", confessionalDiagnosticEntityURL(alert.SubjectEntityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		add("confessional.diagnostic.action.review_relations", confessionalDiagnosticEntityRelationEditURL(alert.RelationID, returnTo), "secondary", "", permKeyTerritoriConfessionalRelacionsEntitatsEdit)
+		for _, relationID := range alert.RelatedRelationIDs {
+			add("confessional.diagnostic.action.review_relations", confessionalDiagnosticEntityRelationEditURL(relationID, returnTo), "secondary", "", permKeyTerritoriConfessionalRelacionsEntitatsEdit)
+		}
+	case confDiagnosticTypeLocalEntityWithoutTerritory:
+		add("confessional.diagnostic.action.view_entity", confessionalDiagnosticEntityURL(alert.SubjectEntityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		add("confessional.diagnostic.action.relate_municipality", confessionalDiagnosticNewTerritorialRelationURL(0, 0, alert.SubjectEntityID, returnTo), "primary", "", permKeyTerritoriConfessionalMunicipisEntitatsCreate)
+	case confDiagnosticTypeMunicipalityWithoutLocalUnit:
+		add("confessional.diagnostic.action.relate_entity", confessionalDiagnosticNewTerritorialRelationURL(alert.MunicipiID, 0, 0, returnTo), "primary", "", permKeyTerritoriConfessionalMunicipisEntitatsCreate)
+		add("confessional.diagnostic.action.view_relations", "/confessional/municipis-entitats", "secondary", "", permKeyTerritoriConfessionalMunicipisEntitatsView)
+		add("confessional.diagnostic.action.view_municipality", confessionalDiagnosticMunicipiURL(alert.MunicipiID), "secondary", "", "")
+	case confDiagnosticTypeArchiveWithoutContext:
+		add("confessional.diagnostic.action.view_archive", confessionalDiagnosticArchiveURL(alert.ArxiuID), "secondary", "", permKeyDocumentalsArxiusView)
+		add("confessional.diagnostic.action.relate_entity", confessionalDiagnosticNewArchiveRelationURL(alert.ArxiuID, returnTo), "primary", "", permKeyTerritoriConfessionalArxiusEntitatsCreate)
+	case confDiagnosticTypeArchiveContextAmbiguous:
+		add("confessional.diagnostic.action.view_archive", confessionalDiagnosticArchiveURL(alert.ArxiuID), "secondary", "", permKeyDocumentalsArxiusView)
+		add("confessional.diagnostic.action.view_relations", confessionalDiagnosticArchiveURL(alert.ArxiuID), "secondary", "", permKeyDocumentalsArxiusView)
+		for _, relationID := range alert.RelatedRelationIDs {
+			add("confessional.diagnostic.action.review_relations", confessionalDiagnosticArchiveRelationEditURL(relationID, returnTo), "secondary", "", permKeyTerritoriConfessionalArxiusEntitatsEdit)
+		}
+	case confDiagnosticTypePossibleDuplicate:
+		add("confessional.diagnostic.action.view_primary_entity", confessionalDiagnosticEntityURL(alert.SubjectEntityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		for _, entityID := range alert.RelatedEntityIDs {
+			add("confessional.diagnostic.action.view_possible_duplicate", confessionalDiagnosticEntityURL(entityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		}
+		add("confessional.diagnostic.action.compare_manually", confessionalDiagnosticEntityCompareURL(alert.Subject), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+		add("confessional.diagnostic.action.view_relations", confessionalDiagnosticEntityURL(alert.SubjectEntityID), "secondary", "", permKeyTerritoriConfessionalEntitatsView)
+	}
+
+	return confessionalDiagnosticUniqueActions(actions)
+}
+
+func (a *App) confessionalDiagnosticActionAllowed(user *db.User, alert confessionalDiagnosticAlert, permKey string) bool {
+	if strings.TrimSpace(permKey) == "" {
+		return true
+	}
+	if user == nil {
+		return false
+	}
+	switch permKey {
+	case permKeyDocumentalsArxiusView:
+		if alert.ArxiuID <= 0 {
+			return false
+		}
+		return a.HasPermission(user.ID, permKey, a.resolveArxiuTarget(alert.ArxiuID))
+	case permKeyTerritoriConfessionalArxiusEntitatsCreate, permKeyTerritoriConfessionalArxiusEntitatsEdit, permKeyTerritoriConfessionalArxiusEntitatsDelete:
+		if alert.ArxiuID <= 0 {
+			return false
+		}
+		return a.HasPermission(user.ID, permKey, a.resolveArxiuTarget(alert.ArxiuID))
+	default:
+		return a.HasPermission(user.ID, permKey, PermissionTarget{})
+	}
+}
+
+func confessionalDiagnosticUniqueActions(actions []confessionalDiagnosticAction) []confessionalDiagnosticAction {
+	seen := map[string]bool{}
+	out := make([]confessionalDiagnosticAction, 0, len(actions))
+	for _, action := range actions {
+		key := action.Label + "|" + action.URL
+		if strings.TrimSpace(action.URL) == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, action)
+	}
+	return out
+}
+
+func confessionalDiagnosticEntityURL(entityID int) string {
+	if entityID <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("/confessional/entitats/%d", entityID)
+}
+
+func confessionalDiagnosticEntityEditURL(entityID int, returnTo string) string {
+	if entityID <= 0 {
+		return ""
+	}
+	return confessionalDiagnosticURLWithParams(fmt.Sprintf("/confessional/entitats/%d/edit", entityID), map[string]int{}, returnTo, "")
+}
+
+func confessionalDiagnosticEntityRelationEditURL(relationID int, returnTo string) string {
+	if relationID <= 0 {
+		return ""
+	}
+	return confessionalDiagnosticURLWithParams(fmt.Sprintf("/confessional/relacions-entitats/%d/edit", relationID), map[string]int{}, returnTo, "")
+}
+
+func confessionalDiagnosticArchiveRelationEditURL(relationID int, returnTo string) string {
+	if relationID <= 0 {
+		return ""
+	}
+	return confessionalDiagnosticURLWithParams(fmt.Sprintf("/documentals/arxius/entitats-religioses/%d/edit", relationID), map[string]int{}, returnTo, "")
+}
+
+func confessionalDiagnosticNewEntityRelationURL(parentID, childID int, returnTo string) string {
+	return confessionalDiagnosticURLWithParams("/confessional/relacions-entitats/new", map[string]int{
+		"parent_id": parentID,
+		"child_id":  childID,
+	}, returnTo, "")
+}
+
+func confessionalDiagnosticNewTerritorialRelationURL(municipiID, nucliID, entitatID int, returnTo string) string {
+	return confessionalDiagnosticURLWithParams("/confessional/municipis-entitats/new", map[string]int{
+		"municipi_id":          municipiID,
+		"nucli_id":             nucliID,
+		"entitat_religiosa_id": entitatID,
+	}, returnTo, "")
+}
+
+func confessionalDiagnosticArchiveURL(arxiuID int) string {
+	if arxiuID <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("/documentals/arxius/%d", arxiuID)
+}
+
+func confessionalDiagnosticNewArchiveRelationURL(arxiuID int, returnTo string) string {
+	if arxiuID <= 0 {
+		return ""
+	}
+	return confessionalDiagnosticURLWithParams(fmt.Sprintf("/documentals/arxius/%d/entitats-religioses/new", arxiuID), map[string]int{}, returnTo, "")
+}
+
+func confessionalDiagnosticMunicipiURL(municipiID int) string {
+	if municipiID <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("/territori/municipis/%d", municipiID)
+}
+
+func confessionalDiagnosticModerationURL(objType string) string {
+	values := url.Values{}
+	if strings.TrimSpace(objType) != "" {
+		values.Set("type", strings.TrimSpace(objType))
+	}
+	return "/moderacio?" + values.Encode()
+}
+
+func confessionalDiagnosticEntityCompareURL(subject string) string {
+	query := strings.TrimSpace(subject)
+	if query == "" {
+		return "/confessional/entitats"
+	}
+	values := url.Values{}
+	values.Set("q", query)
+	return "/confessional/entitats?" + values.Encode()
+}
+
+func confessionalDiagnosticURLWithParams(path string, numericParams map[string]int, returnTo string, rawQuery string) string {
+	values := url.Values{}
+	for key, value := range numericParams {
+		if value > 0 {
+			values.Set(key, strconv.Itoa(value))
+		}
+	}
+	if strings.TrimSpace(returnTo) != "" {
+		values.Set("return_to", strings.TrimSpace(returnTo))
+	}
+	if strings.TrimSpace(rawQuery) != "" {
+		values.Set("q", strings.TrimSpace(rawQuery))
+	}
+	encoded := values.Encode()
+	if encoded == "" {
+		return path
+	}
+	return path + "?" + encoded
+}
+
+func confessionalDiagnosticRelationIDs(rels []db.EntitatReligiosaRelacio) []int {
+	out := make([]int, 0, len(rels))
+	for _, rel := range rels {
+		if rel.ID > 0 {
+			out = append(out, rel.ID)
+		}
+	}
+	return out
+}
+
+func confessionalDiagnosticRelationOriginIDs(rels []db.EntitatReligiosaRelacio) []int {
+	out := make([]int, 0, len(rels))
+	for _, rel := range rels {
+		if rel.EntitatOrigenID > 0 {
+			out = append(out, rel.EntitatOrigenID)
+		}
+	}
+	return out
+}
+
+func confessionalDiagnosticArchiveRelationIDs(rels []db.ArxiuEntitatReligiosa) []int {
+	out := make([]int, 0, len(rels))
+	for _, rel := range rels {
+		if rel.ID > 0 {
+			out = append(out, rel.ID)
+		}
+	}
+	return out
+}
+
+func confessionalDiagnosticArchiveEntityIDs(rels []db.ArxiuEntitatReligiosa) []int {
+	out := make([]int, 0, len(rels))
+	for _, rel := range rels {
+		if rel.EntitatReligiosaID > 0 {
+			out = append(out, rel.EntitatReligiosaID)
+		}
+	}
+	return out
+}
+
+func confessionalDiagnosticEntityIDs(items []db.EntitatReligiosa) []int {
+	out := make([]int, 0, len(items))
+	for _, item := range items {
+		if item.ID > 0 {
+			out = append(out, item.ID)
+		}
+	}
+	return out
 }
 
 func publishedArxiuEntitatsReligiosesForDiagnostic(items []db.ArxiuEntitatReligiosa) []db.ArxiuEntitatReligiosa {
@@ -824,15 +1139,17 @@ func confessionalDiagnosticDuplicateAlerts(lang string, filter confessionalDiagn
 			continue
 		}
 		alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-			Severity:     confDiagnosticSeverityWarning,
-			Type:         confDiagnosticTypePossibleDuplicate,
-			TypeLabel:    T(lang, "confessional.diagnostic.type."+confDiagnosticTypePossibleDuplicate),
-			Description:  fmt.Sprintf(T(lang, "confessional.diagnostic.message.duplicate.code"), strings.Join(confessionalDiagnosticEntityNames(group), ", ")),
-			Subject:      code,
-			SubjectURL:   fmt.Sprintf("/confessional/entitats/%d", group[0].ID),
-			Context:      religionLabels[group[0].ReligioConfessioCodi],
-			ReligionCode: group[0].ReligioConfessioCodi,
-			LevelCode:    group[0].NivellConfessionalCodi,
+			Severity:         confDiagnosticSeverityWarning,
+			Type:             confDiagnosticTypePossibleDuplicate,
+			TypeLabel:        T(lang, "confessional.diagnostic.type."+confDiagnosticTypePossibleDuplicate),
+			Description:      fmt.Sprintf(T(lang, "confessional.diagnostic.message.duplicate.code"), strings.Join(confessionalDiagnosticEntityNames(group), ", ")),
+			Subject:          code,
+			SubjectURL:       fmt.Sprintf("/confessional/entitats/%d", group[0].ID),
+			Context:          religionLabels[group[0].ReligioConfessioCodi],
+			ReligionCode:     group[0].ReligioConfessioCodi,
+			LevelCode:        group[0].NivellConfessionalCodi,
+			SubjectEntityID:  group[0].ID,
+			RelatedEntityIDs: confessionalDiagnosticEntityIDs(group[1:]),
 		}))
 	}
 	for _, group := range byName {
@@ -840,15 +1157,17 @@ func confessionalDiagnosticDuplicateAlerts(lang string, filter confessionalDiagn
 			continue
 		}
 		alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-			Severity:     confDiagnosticSeverityWarning,
-			Type:         confDiagnosticTypePossibleDuplicate,
-			TypeLabel:    T(lang, "confessional.diagnostic.type."+confDiagnosticTypePossibleDuplicate),
-			Description:  fmt.Sprintf(T(lang, "confessional.diagnostic.message.duplicate.name"), strings.Join(confessionalDiagnosticEntityNames(group), ", ")),
-			Subject:      group[0].Nom,
-			SubjectURL:   fmt.Sprintf("/confessional/entitats/%d", group[0].ID),
-			Context:      religionLabels[group[0].ReligioConfessioCodi],
-			ReligionCode: group[0].ReligioConfessioCodi,
-			LevelCode:    group[0].NivellConfessionalCodi,
+			Severity:         confDiagnosticSeverityWarning,
+			Type:             confDiagnosticTypePossibleDuplicate,
+			TypeLabel:        T(lang, "confessional.diagnostic.type."+confDiagnosticTypePossibleDuplicate),
+			Description:      fmt.Sprintf(T(lang, "confessional.diagnostic.message.duplicate.name"), strings.Join(confessionalDiagnosticEntityNames(group), ", ")),
+			Subject:          group[0].Nom,
+			SubjectURL:       fmt.Sprintf("/confessional/entitats/%d", group[0].ID),
+			Context:          religionLabels[group[0].ReligioConfessioCodi],
+			ReligionCode:     group[0].ReligioConfessioCodi,
+			LevelCode:        group[0].NivellConfessionalCodi,
+			SubjectEntityID:  group[0].ID,
+			RelatedEntityIDs: confessionalDiagnosticEntityIDs(group[1:]),
 		}))
 	}
 	for _, group := range byLooseName {
@@ -856,15 +1175,17 @@ func confessionalDiagnosticDuplicateAlerts(lang string, filter confessionalDiagn
 			continue
 		}
 		alerts = append(alerts, decorateConfessionalDiagnosticAlert(lang, confessionalDiagnosticAlert{
-			Severity:     confDiagnosticSeverityWarning,
-			Type:         confDiagnosticTypePossibleDuplicate,
-			TypeLabel:    T(lang, "confessional.diagnostic.type."+confDiagnosticTypePossibleDuplicate),
-			Description:  fmt.Sprintf(T(lang, "confessional.diagnostic.message.duplicate.similar"), strings.Join(confessionalDiagnosticEntityNames(group), ", ")),
-			Subject:      group[0].Nom,
-			SubjectURL:   fmt.Sprintf("/confessional/entitats/%d", group[0].ID),
-			Context:      religionLabels[group[0].ReligioConfessioCodi],
-			ReligionCode: group[0].ReligioConfessioCodi,
-			LevelCode:    group[0].NivellConfessionalCodi,
+			Severity:         confDiagnosticSeverityWarning,
+			Type:             confDiagnosticTypePossibleDuplicate,
+			TypeLabel:        T(lang, "confessional.diagnostic.type."+confDiagnosticTypePossibleDuplicate),
+			Description:      fmt.Sprintf(T(lang, "confessional.diagnostic.message.duplicate.similar"), strings.Join(confessionalDiagnosticEntityNames(group), ", ")),
+			Subject:          group[0].Nom,
+			SubjectURL:       fmt.Sprintf("/confessional/entitats/%d", group[0].ID),
+			Context:          religionLabels[group[0].ReligioConfessioCodi],
+			ReligionCode:     group[0].ReligioConfessioCodi,
+			LevelCode:        group[0].NivellConfessionalCodi,
+			SubjectEntityID:  group[0].ID,
+			RelatedEntityIDs: confessionalDiagnosticEntityIDs(group[1:]),
 		}))
 	}
 	return alerts

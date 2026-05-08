@@ -23,6 +23,10 @@
         .diagnostic-link-list { color: #667085; line-height: 1.45; }
         .diagnostic-link-list a { color: inherit; }
         .diagnostic-table td { vertical-align: top; }
+        .diagnostic-action-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .diagnostic-action-list .boto-secundari,
+        .diagnostic-action-list .boto-primari { white-space: nowrap; }
+        .diagnostic-action-empty { color: #98a2b3; }
     </style>
 </head>
 <body>
@@ -128,6 +132,7 @@
                             <th>{{ t .Lang "confessional.diagnostic.col.description" }}</th>
                             <th>{{ t .Lang "confessional.diagnostic.col.subject" }}</th>
                             <th>{{ t .Lang "confessional.diagnostic.col.context" }}</th>
+                            <th>{{ t .Lang "confessional.diagnostic.col.actions" }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -138,9 +143,20 @@
                             <td>{{ .Description }}</td>
                             <td class="diagnostic-link-list">{{ if .SubjectURL }}<a href="{{ .SubjectURL }}">{{ .Subject }}</a>{{ else }}{{ .Subject }}{{ end }}</td>
                             <td class="diagnostic-link-list">{{ if .ContextURL }}<a href="{{ .ContextURL }}">{{ .Context }}</a>{{ else if .Context }}{{ .Context }}{{ else }}-{{ end }}</td>
+                            <td>
+                                {{ if .Actions }}
+                                <div class="diagnostic-action-list">
+                                    {{ range .Actions }}
+                                    <a class="{{ if eq .Variant "primary" }}boto-primari{{ else }}boto-secundari{{ end }}" href="{{ .URL }}">{{ .Label }}</a>
+                                    {{ end }}
+                                </div>
+                                {{ else }}
+                                <span class="diagnostic-action-empty">-</span>
+                                {{ end }}
+                            </td>
                         </tr>
                         {{ else }}
-                        <tr><td colspan="5" class="empty-cell">{{ t .Lang "confessional.diagnostic.empty" }}</td></tr>
+                        <tr><td colspan="6" class="empty-cell">{{ t .Lang "confessional.diagnostic.empty" }}</td></tr>
                         {{ end }}
                     </tbody>
                 </table>
