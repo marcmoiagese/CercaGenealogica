@@ -1209,6 +1209,12 @@ func (d *PostgreSQL) DeleteEntitatReligiosa(id int) error {
 func (d *PostgreSQL) UpdateEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return postgresUpdateEntitatReligiosaModeracio(d, id, estat, motiu, moderatorID)
 }
+func (d *PostgreSQL) ApproveEntitatReligiosaWithInitialParentTx(entityID, relationID int, motiu string, moderatorID int) error {
+	return postgresApproveEntitatReligiosaWithInitialParentTx(d, entityID, relationID, motiu, moderatorID)
+}
+func (d *PostgreSQL) RejectEntitatReligiosaWithInitialParentTx(entityID, relationID int, motiu string, moderatorID int) error {
+	return postgresRejectEntitatReligiosaWithInitialParentTx(d, entityID, relationID, motiu, moderatorID)
+}
 func (d *PostgreSQL) ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
 	return postgresListMunicipiEntitatsReligioses(d, municipiID)
 }

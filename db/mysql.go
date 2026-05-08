@@ -855,6 +855,12 @@ func (d *MySQL) DeleteEntitatReligiosa(id int) error {
 func (d *MySQL) UpdateEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return mysqlUpdateEntitatReligiosaModeracio(d, id, estat, motiu, moderatorID)
 }
+func (d *MySQL) ApproveEntitatReligiosaWithInitialParentTx(entityID, relationID int, motiu string, moderatorID int) error {
+	return mysqlApproveEntitatReligiosaWithInitialParentTx(d, entityID, relationID, motiu, moderatorID)
+}
+func (d *MySQL) RejectEntitatReligiosaWithInitialParentTx(entityID, relationID int, motiu string, moderatorID int) error {
+	return mysqlRejectEntitatReligiosaWithInitialParentTx(d, entityID, relationID, motiu, moderatorID)
+}
 func (d *MySQL) ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
 	return mysqlListMunicipiEntitatsReligioses(d, municipiID)
 }

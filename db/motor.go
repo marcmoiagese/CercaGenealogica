@@ -643,6 +643,8 @@ type DB interface {
 	SaveEntitatReligiosa(e *EntitatReligiosa) (int, error)
 	DeleteEntitatReligiosa(id int) error
 	UpdateEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error
+	ApproveEntitatReligiosaWithInitialParentTx(entityID, relationID int, motiu string, moderatorID int) error
+	RejectEntitatReligiosaWithInitialParentTx(entityID, relationID int, motiu string, moderatorID int) error
 	ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error)
 	GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error)
 	SaveMunicipiEntitatReligiosa(rel *MunicipiEntitatReligiosa) (int, error)

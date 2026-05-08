@@ -882,6 +882,12 @@ func (d *SQLite) DeleteEntitatReligiosa(id int) error {
 func (d *SQLite) UpdateEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return sqliteUpdateEntitatReligiosaModeracio(d, id, estat, motiu, moderatorID)
 }
+func (d *SQLite) ApproveEntitatReligiosaWithInitialParentTx(entityID, relationID int, motiu string, moderatorID int) error {
+	return sqliteApproveEntitatReligiosaWithInitialParentTx(d, entityID, relationID, motiu, moderatorID)
+}
+func (d *SQLite) RejectEntitatReligiosaWithInitialParentTx(entityID, relationID int, motiu string, moderatorID int) error {
+	return sqliteRejectEntitatReligiosaWithInitialParentTx(d, entityID, relationID, motiu, moderatorID)
+}
 func (d *SQLite) ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
 	return sqliteListMunicipiEntitatsReligioses(d, municipiID)
 }

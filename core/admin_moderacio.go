@@ -5912,7 +5912,7 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 			}
 		}
 		if dependentRel != nil && (estat == "publicat" || estat == "rebutjat") {
-			return a.updateConfessionalEntityWithInitialParentRelation(id, estat, motiu, moderatorID, before, dependentRel)
+			return a.updateConfessionalEntityWithInitialParentRelation(id, estat, motiu, moderatorID, dependentRel)
 		}
 		return a.updateConfessionalEntityModerationOnly(id, estat, motiu, moderatorID, before)
 	case "entitat_religiosa_relacio":
@@ -6022,58 +6022,18 @@ func (a *App) updateConfessionalEntityModerationOnly(id int, estat, motiu string
 	return nil
 }
 
-func (a *App) updateConfessionalEntityWithInitialParentRelation(id int, estat, motiu string, moderatorID int, before *db.EntitatReligiosa, dependentRel *db.EntitatReligiosaRelacio) error {
-	if before == nil || dependentRel == nil {
-		return a.updateConfessionalEntityModerationOnly(id, estat, motiu, moderatorID, before)
+func (a *App) updateConfessionalEntityWithInitialParentRelation(id int, estat, motiu string, moderatorID int, dependentRel *db.EntitatReligiosaRelacio) error {
+	if dependentRel == nil {
+		return fmt.Errorf("falta la relacio pare/filla inicial dependent")
 	}
-	if err := a.DB.UpdateEntitatReligiosaRelacioModeracio(dependentRel.ID, estat, motiu, moderatorID); err != nil {
-		return err
+	switch estat {
+	case "publicat":
+		return a.DB.ApproveEntitatReligiosaWithInitialParentTx(id, dependentRel.ID, motiu, moderatorID)
+	case "rebutjat":
+		return a.DB.RejectEntitatReligiosaWithInitialParentTx(id, dependentRel.ID, motiu, moderatorID)
+	default:
+		return fmt.Errorf("estat desconegut")
 	}
-	if err := a.DB.UpdateEntitatReligiosaModeracio(id, estat, motiu, moderatorID); err != nil {
-		a.rollbackInitialConfessionalParentRelation(dependentRel, "update_entitat_religiosa_failed")
-		return err
-	}
-	if estat == "publicat" && before.ModeracioEstat != "publicat" {
-		after, err := a.DB.GetEntitatReligiosa(id)
-		if err != nil {
-			a.rollbackConfessionalEntityModeration(before, "get_entitat_after_publish_failed")
-			a.rollbackInitialConfessionalParentRelation(dependentRel, "get_entitat_after_publish_failed")
-			return err
-		}
-		if after != nil {
-			if err := a.ensureInitialWikiVersion("entitat_religiosa", id, after, after.CreatedBy, moderatorID); err != nil {
-				a.rollbackConfessionalEntityModeration(before, "ensure_initial_wiki_failed")
-				a.rollbackInitialConfessionalParentRelation(dependentRel, "ensure_initial_wiki_failed")
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (a *App) rollbackInitialConfessionalParentRelation(rel *db.EntitatReligiosaRelacio, reason string) {
-	if rel == nil {
-		return
-	}
-	if err := a.DB.UpdateEntitatReligiosaRelacioModeracio(rel.ID, rel.ModeracioEstat, rel.ModeracioMotiu, confessionalModeratedByInt(rel.ModeratedBy)); err != nil {
-		Errorf("Moderacio confessional rollback relacio inicial rel=%d reason=%s ha fallat: %v", rel.ID, reason, err)
-	}
-}
-
-func (a *App) rollbackConfessionalEntityModeration(before *db.EntitatReligiosa, reason string) {
-	if before == nil {
-		return
-	}
-	if err := a.DB.UpdateEntitatReligiosaModeracio(before.ID, before.ModeracioEstat, before.ModeracioMotiu, confessionalModeratedByInt(before.ModeratedBy)); err != nil {
-		Errorf("Moderacio confessional rollback entitat=%d reason=%s ha fallat: %v", before.ID, reason, err)
-	}
-}
-
-func confessionalModeratedByInt(value sql.NullInt64) int {
-	if !value.Valid {
-		return 0
-	}
-	return int(value.Int64)
 }
 
 func (a *App) moderateMapaVersion(id int, estat, notes string, moderatorID int) error {
