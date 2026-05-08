@@ -607,6 +607,8 @@ type DB interface {
 	ResolveMunicipisByNames(names []string) ([]MunicipiResolveRow, error)
 	ResolveArquebisbatsByNames(names []string) ([]ArquebisbatResolveRow, error)
 	ResolveArxiusByNames(names []string) ([]ArxiuResolveRow, error)
+	ResolveArxiusByCodes(codes []string) ([]ArxiuResolveRow, error)
+	ResolveEntitatsReligiosesByCodes(codes []string) ([]EntitatReligiosaResolveRow, error)
 	UpdateMunicipi(m *Municipi) error
 	ListCodisPostals(municipiID int) ([]CodiPostal, error)
 	SaveCodiPostal(cp *CodiPostal) (int, error)
@@ -1964,8 +1966,17 @@ type ArquebisbatResolveRow struct {
 
 type ArxiuResolveRow struct {
 	ID         int
+	Codi       string
 	Nom        string
 	MunicipiID sql.NullInt64
+}
+
+type EntitatReligiosaResolveRow struct {
+	ID                     int
+	Codi                   string
+	Nom                    string
+	ReligioConfessioCodi   string
+	NivellConfessionalCodi string
 }
 
 type MunicipiFilter struct {
@@ -2141,6 +2152,7 @@ type EmailChange struct {
 // Arxius
 type Arxiu struct {
 	ID                    int
+	Codi                  string
 	Nom                   string
 	Tipus                 string
 	MunicipiID            sql.NullInt64

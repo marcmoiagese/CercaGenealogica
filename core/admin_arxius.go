@@ -566,6 +566,7 @@ func parseArxiuForm(r *http.Request) *db.Arxiu {
 		acceptaDonacions = false
 	}
 	return &db.Arxiu{
+		Codi:                  strings.TrimSpace(r.FormValue("codi")),
 		Nom:                   strings.TrimSpace(r.FormValue("nom")),
 		Tipus:                 strings.TrimSpace(r.FormValue("tipus")),
 		Acces:                 strings.TrimSpace(r.FormValue("acces")),

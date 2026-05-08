@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,6 +37,73 @@ type arxiuExportRecord struct {
 	EntitatNom       string `json:"entitat_nom,omitempty"`
 }
 
+type arxiusExportPayloadV2 struct {
+	Schema     string              `json:"schema"`
+	ExportedAt string              `json:"exported_at"`
+	Source     arxiusExportSource  `json:"source"`
+	Items      arxiusExportItemsV2 `json:"items"`
+}
+
+type arxiusExportSource struct {
+	App    string `json:"app"`
+	Module string `json:"module"`
+}
+
+type arxiusExportItemsV2 struct {
+	Arxius []arxiuExportRecordV2 `json:"arxius"`
+}
+
+type arxiuExportRecordV2 struct {
+	Code                string                      `json:"code,omitempty"`
+	Name                string                      `json:"name"`
+	Type                string                      `json:"type,omitempty"`
+	Access              string                      `json:"access,omitempty"`
+	Address             string                      `json:"address,omitempty"`
+	Location            string                      `json:"location,omitempty"`
+	What3Words          string                      `json:"what3words,omitempty"`
+	Web                 string                      `json:"web,omitempty"`
+	Notes               string                      `json:"notes,omitempty"`
+	AcceptsDonations    bool                        `json:"accepts_donations,omitempty"`
+	DonationsURL        string                      `json:"donations_url,omitempty"`
+	Municipality        *arxiuExportMunicipalityV2  `json:"municipality,omitempty"`
+	ReligiousEntityRefs []arxiuReligiousEntityRefV2 `json:"religious_entity_refs,omitempty"`
+	Legacy              *arxiuExportLegacyV2        `json:"legacy,omitempty"`
+}
+
+type arxiuExportMunicipalityV2 struct {
+	Name        string `json:"name"`
+	CountryISO2 string `json:"country_iso2,omitempty"`
+}
+
+type arxiuExportLegacyV2 struct {
+	OldID      int    `json:"old_id,omitempty"`
+	EntitatNom string `json:"entitat_nom,omitempty"`
+}
+
+type arxiuReligiousEntityRefV2 struct {
+	EntityCode       string `json:"entity_code"`
+	ReligionCode     string `json:"religion_code,omitempty"`
+	LevelCode        string `json:"level_code,omitempty"`
+	RelationType     string `json:"relation_type,omitempty"`
+	State            string `json:"state,omitempty"`
+	ModerationStatus string `json:"moderation_status,omitempty"`
+	AnyInici         *int   `json:"any_inici,omitempty"`
+	AnyFi            *int   `json:"any_fi,omitempty"`
+	Observations     string `json:"observations,omitempty"`
+	EntityID         int    `json:"-"`
+}
+
+type arxiusImportEnvelope struct {
+	Schema string `json:"schema"`
+}
+
+type preparedArxiuImportItem struct {
+	Archive      db.Arxiu
+	CodeKey      string
+	NameKey      string
+	RelationRefs []arxiuReligiousEntityRefV2
+}
+
 func (a *App) AdminArxiusImport(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
@@ -50,33 +118,77 @@ func (a *App) AdminArxiusExport(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	payload := arxiusExportPayload{
-		Version:    3,
+	entitatsReligioses, _ := a.DB.ListEntitatsReligioses()
+	entitatsByID := make(map[int]db.EntitatReligiosa, len(entitatsReligioses))
+	for _, entitat := range entitatsReligioses {
+		entitatsByID[entitat.ID] = entitat
+	}
+	payload := arxiusExportPayloadV2{
+		Schema:     "cercagenealogica.arxius.v2",
 		ExportedAt: time.Now().Format(time.RFC3339),
+		Source: arxiusExportSource{
+			App:    "CercaGenealogica",
+			Module: "arxius",
+		},
 	}
 	for _, row := range arxius {
 		var iso2 string
+		var municipality *arxiuExportMunicipalityV2
 		if row.MunicipiNom.Valid && row.MunicipiID.Valid {
 			if mun, err := a.DB.GetMunicipi(int(row.MunicipiID.Int64)); err == nil && mun != nil {
 				iso2 = municipiISO2(mun, levelISO)
+				municipality = &arxiuExportMunicipalityV2{
+					Name:        row.MunicipiNom.String,
+					CountryISO2: iso2,
+				}
 			}
 		}
-		payload.Arxius = append(payload.Arxius, arxiuExportRecord{
-			ID:               row.ID,
-			Nom:              row.Nom,
-			Tipus:            row.Tipus,
-			Acces:            row.Acces,
-			Adreca:           row.Adreca,
-			Ubicacio:         row.Ubicacio,
+		record := arxiuExportRecordV2{
+			Code:             strings.TrimSpace(row.Codi),
+			Name:             row.Nom,
+			Type:             row.Tipus,
+			Access:           row.Acces,
+			Address:          row.Adreca,
+			Location:         row.Ubicacio,
 			What3Words:       row.What3Words,
 			Web:              row.Web,
 			Notes:            row.Notes,
-			AcceptaDonacions: row.AcceptaDonacions,
-			DonacionsURL:     row.DonacionsURL,
-			MunicipiNom:      row.MunicipiNom.String,
-			MunicipiPaisISO2: iso2,
-			EntitatNom:       row.EntitatNom.String,
-		})
+			AcceptsDonations: row.AcceptaDonacions,
+			DonationsURL:     row.DonacionsURL,
+			Municipality:     municipality,
+			Legacy: &arxiuExportLegacyV2{
+				OldID:      row.ID,
+				EntitatNom: row.EntitatNom.String,
+			},
+		}
+		relacions, err := a.DB.ListArxiuEntitatsReligioses(row.ID, 0, "")
+		if err == nil {
+			for _, rel := range relacions {
+				entitat, ok := entitatsByID[rel.EntitatReligiosaID]
+				if !ok || strings.TrimSpace(entitat.Codi) == "" {
+					continue
+				}
+				ref := arxiuReligiousEntityRefV2{
+					EntityCode:       strings.TrimSpace(entitat.Codi),
+					ReligionCode:     strings.TrimSpace(entitat.ReligioConfessioCodi),
+					LevelCode:        strings.TrimSpace(entitat.NivellConfessionalCodi),
+					RelationType:     strings.TrimSpace(rel.TipusRelacio),
+					State:            strings.TrimSpace(rel.Estat),
+					ModerationStatus: strings.TrimSpace(rel.ModeracioEstat),
+					Observations:     strings.TrimSpace(rel.Observacions),
+				}
+				if rel.AnyInici.Valid {
+					value := int(rel.AnyInici.Int64)
+					ref.AnyInici = &value
+				}
+				if rel.AnyFi.Valid {
+					value := int(rel.AnyFi.Int64)
+					ref.AnyFi = &value
+				}
+				record.ReligiousEntityRefs = append(record.ReligiousEntityRefs, ref)
+			}
+		}
+		payload.Items.Arxius = append(payload.Items.Arxius, record)
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=arxius-export.json")
@@ -114,10 +226,16 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	var payload arxiusExportPayload
-	if err := json.NewDecoder(file).Decode(&payload); err != nil {
+	rawPayload, err := io.ReadAll(file)
+	if err != nil {
 		a.logAdminImportRun(r, "arxius", adminImportStatusError, user.ID)
-		http.Redirect(w, r, "/admin/arxius/import?err=1", http.StatusSeeOther)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
+		return
+	}
+	importFormat, legacyPayload, v2Payload, err := decodeArxiusImportPayload(rawPayload)
+	if err != nil {
+		a.logAdminImportRun(r, "arxius", adminImportStatusError, user.ID)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
 	}
 	engine := territoriImportEngineName(a.DB)
@@ -141,8 +259,8 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	activityRuleArxiu := resolveActivityRule(ruleArxiuCreate)
-	pendingActivities := make([]db.UserActivity, 0, len(payload.Arxius))
-	addActivity := func(rule activityRule, objectID int) {
+	pendingActivities := make([]db.UserActivity, 0, 16)
+	addActivity := func(rule activityRule, objectType string, objectID int) {
 		if objectID <= 0 {
 			return
 		}
@@ -150,7 +268,7 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 			UserID:     user.ID,
 			RuleID:     rule.ruleID,
 			Action:     "crear",
-			ObjectType: "arxiu",
+			ObjectType: objectType,
 			ObjectID:   sql.NullInt64{Int64: int64(objectID), Valid: true},
 			Points:     rule.points,
 			Status:     "pendent",
@@ -159,97 +277,33 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 	}
 	activityCount := 0
 
-	total := len(payload.Arxius)
-	created, skipped, errors, duplicates := 0, 0, 0, 0
-
+	total, relationRequested := 0, 0
+	created, skipped, errors, duplicates, relationsCreated := 0, 0, 0, 0, 0
 	prepStart := time.Now()
-	entMap, entNameMap, entMode, entKeys := a.arxiuEntitatNameMapsForPayload(payload.Arxius)
-	munMap, munNameMap, munMode, munKeys := a.arxiuMunicipiNameMapsForPayload(payload.Arxius)
-	existingByName, _, existingMode, existingKeys := a.arxiuExistingMapsForPayload(payload.Arxius)
-	prepDuration := time.Since(prepStart)
-
-	resolveStart := time.Now()
-	seenPayload := map[string]struct{}{}
-	toInsert := make([]db.Arxiu, 0, len(payload.Arxius))
-	for _, row := range payload.Arxius {
-		nameKey := normalizeKey(row.Nom)
-		if nameKey == "" {
-			skipped++
-			duplicates++
-			continue
+	resolveSummary := ""
+	prepared := make([]preparedArxiuImportItem, 0)
+	switch importFormat {
+	case "v2":
+		total = len(v2Payload.Items.Arxius)
+		for _, row := range v2Payload.Items.Arxius {
+			relationRequested += len(row.ReligiousEntityRefs)
 		}
-		hasMunicipi := strings.TrimSpace(row.MunicipiNom) != ""
-		munID := 0
-		if hasMunicipi {
-			iso2 := strings.ToUpper(strings.TrimSpace(row.MunicipiPaisISO2))
-			key := normalizeKey(row.MunicipiNom, iso2)
-			if key != "" {
-				munID = munMap[key]
-			}
-			if munID == 0 {
-				munID = munNameMap[normalizeKey(row.MunicipiNom)]
-			}
-			if munID == 0 {
-				errors++
-				Errorf("Arxius import: municipi no trobat (%s, %s) per arxiu %s", row.MunicipiNom, row.MunicipiPaisISO2, row.Nom)
-				continue
-			}
-		}
-		entID := 0
-		if strings.TrimSpace(row.EntitatNom) != "" {
-			entID = entNameMap[normalizeKey(row.EntitatNom)]
-			if entID == 0 {
-				entID = entMap[normalizeKey(row.EntitatNom, row.Tipus)]
-			}
-		}
-		key := arxiuImportKey(nameKey, munID)
-		if _, ok := seenPayload[key]; ok {
-			skipped++
-			duplicates++
-			continue
-		}
-		seenPayload[key] = struct{}{}
-		if _, ok := existingByName[nameKey]; ok {
-			skipped++
-			continue
-		}
-		arxiu := db.Arxiu{
-			Nom:              row.Nom,
-			Tipus:            row.Tipus,
-			Acces:            row.Acces,
-			Adreca:           row.Adreca,
-			Ubicacio:         row.Ubicacio,
-			What3Words:       row.What3Words,
-			Web:              row.Web,
-			Notes:            row.Notes,
-			AcceptaDonacions: row.AcceptaDonacions && strings.TrimSpace(row.DonacionsURL) != "",
-			DonacionsURL:     strings.TrimSpace(row.DonacionsURL),
-			CreatedBy:        sqlNullIntFromInt(user.ID),
-			ModeracioEstat:   "pendent",
-			ModeratedBy:      sql.NullInt64{},
-			ModeratedAt:      sql.NullTime{},
-			ModeracioMotiu:   "",
-		}
-		if munID > 0 {
-			arxiu.MunicipiID = sql.NullInt64{Int64: int64(munID), Valid: true}
-		}
-		if entID > 0 {
-			arxiu.EntitatEclesiasticaID = sql.NullInt64{Int64: int64(entID), Valid: true}
-		}
-		toInsert = append(toInsert, arxiu)
+		prepared, resolveSummary, skipped, errors, duplicates = a.prepareArxiusV2Import(v2Payload.Items.Arxius, user.ID)
+	default:
+		total = len(legacyPayload.Arxius)
+		prepared, resolveSummary, skipped, errors, duplicates = a.prepareArxiusLegacyImport(legacyPayload.Arxius, user.ID)
 	}
-	resolveDuration := time.Since(resolveStart)
+	prepDuration := time.Since(prepStart)
+	resolveDuration := prepDuration
 
 	insertStart := time.Now()
 	bulkMode := "generic"
+	createdArchiveIDs := make([]int, len(prepared))
+	toInsert := make([]db.Arxiu, 0, len(prepared))
+	for _, item := range prepared {
+		toInsert = append(toInsert, item.Archive)
+	}
 	if len(toInsert) > 0 {
-		applyInserted := func(ids []int) {
-			for _, id := range ids {
-				created++
-				activityCount++
-				addActivity(activityRuleArxiu, id)
-			}
-		}
 		var ids []int
 		var err error
 		bulkAttempted := false
@@ -261,7 +315,7 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if err == nil && len(ids) == len(toInsert) {
-			applyInserted(ids)
+			copy(createdArchiveIDs, ids)
 		} else {
 			if err != nil && bulkAttempted {
 				Errorf("Arxius import: bulk insert fallit (%s): %v", bulkMode, err)
@@ -275,13 +329,64 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 					Errorf("Arxius import: error creant arxiu %s: %v", arxiu.Nom, err)
 					continue
 				}
-				created++
-				activityCount++
-				addActivity(activityRuleArxiu, newID)
+				createdArchiveIDs[i] = newID
 			}
 		}
 	}
+	adminTargets := make([]db.AdminJobTarget, 0, len(prepared)*2)
+	for idx, id := range createdArchiveIDs {
+		if id <= 0 {
+			continue
+		}
+		prepared[idx].Archive.ID = id
+		created++
+		activityCount++
+		addActivity(activityRuleArxiu, "arxiu", id)
+		adminTargets = append(adminTargets, db.AdminJobTarget{ObjectType: "arxiu", ObjectID: id})
+	}
 	insertDuration := time.Since(insertStart)
+
+	relationsStart := time.Now()
+	if importFormat == "v2" {
+		for idx, item := range prepared {
+			arxiuID := createdArchiveIDs[idx]
+			if arxiuID <= 0 || len(item.RelationRefs) == 0 {
+				continue
+			}
+			seenRelations := map[string]struct{}{}
+			for _, ref := range item.RelationRefs {
+				key := arxiuReligiousRefKey(ref)
+				if key == "" {
+					continue
+				}
+				if _, exists := seenRelations[key]; exists {
+					continue
+				}
+				seenRelations[key] = struct{}{}
+				rel, ok := a.buildPendingArxiuEntitatReligiosaFromRef(arxiuID, user.ID, ref)
+				if !ok {
+					errors++
+					Errorf("Arxius import v2: entitat religiosa no trobada per codi %q (arxiu %s)", ref.EntityCode, item.Archive.Nom)
+					continue
+				}
+				if a.arxiuReligiousRelationExists(rel) {
+					skipped++
+					continue
+				}
+				relID, err := a.DB.SaveArxiuEntitatReligiosa(rel)
+				if err != nil {
+					errors++
+					Errorf("Arxius import v2: error creant relacio arxiu-entitat per arxiu %s: %v", item.Archive.Nom, err)
+					continue
+				}
+				relationsCreated++
+				activityCount++
+				addActivity(activityRuleArxiu, "arxiu_entitat_religiosa", relID)
+				adminTargets = append(adminTargets, db.AdminJobTarget{ObjectType: "arxiu_entitat_religiosa", ObjectID: relID})
+			}
+		}
+	}
+	relationsDuration := time.Since(relationsStart)
 
 	activityStart := time.Now()
 	activityMode := "bulk"
@@ -308,19 +413,22 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 		a.logAntiAbuseSignals(user.ID, now)
 	}
 	totalDuration := time.Since(start)
-	resolveSummary := fmt.Sprintf("mun=%s:%d ent=%s:%d arxius=%s:%d", munMode, munKeys, entMode, entKeys, existingMode, existingKeys)
-	Infof("Arxius import: engine=%s mode=%s arxius=%d resolve=%s activity=%s prep=%s resolve_dur=%s insert_dur=%s activity_dur=%s totals=%d created=%d skipped=%d duplicates=%d errors=%d duration=%s",
+	Infof("Arxius import: engine=%s format=%s mode=%s arxius=%d rels=%d resolve=%s activity=%s prep=%s resolve_dur=%s insert_dur=%s rel_dur=%s activity_dur=%s totals=%d created=%d rel_created=%d skipped=%d duplicates=%d errors=%d duration=%s",
 		engine,
+		importFormat,
 		bulkMode,
 		total,
+		relationRequested,
 		resolveSummary,
 		activityMode,
 		prepDuration.String(),
 		resolveDuration.String(),
 		insertDuration.String(),
+		relationsDuration.String(),
 		activityDuration.String(),
 		total,
 		created,
+		relationsCreated,
 		skipped,
 		duplicates,
 		errors,
@@ -337,13 +445,387 @@ func (a *App) AdminArxiusImportRun(w http.ResponseWriter, r *http.Request) {
 	status := adminImportStatusOK
 	if errors > 0 {
 		status = adminImportStatusError
+		redirect = withQueryParams(returnTo, map[string]string{
+			"import":         "1",
+			"err":            "1",
+			"arxius_total":   strconv.Itoa(total),
+			"arxius_created": strconv.Itoa(created),
+			"arxius_skipped": strconv.Itoa(skipped),
+			"arxius_errors":  strconv.Itoa(errors),
+		})
 	}
-	a.logAdminImportRun(r, "arxius", status, user.ID)
+	a.logAdminImportRunDetailed(r, "arxius", status, user.ID, &adminImportJobDetail{
+		Payload: map[string]interface{}{
+			"import_type":         "arxius",
+			"import_format":       importFormat,
+			"archives_requested":  total,
+			"relations_requested": relationRequested,
+		},
+		Result: map[string]interface{}{
+			"status":             status,
+			"archives_created":   created,
+			"relations_created":  relationsCreated,
+			"skipped":            skipped,
+			"duplicates":         duplicates,
+			"errors":             errors,
+			"activity_count":     activityCount,
+			"admin_target_count": len(adminTargets),
+		},
+		Targets:       adminTargets,
+		ProgressTotal: maxInt(total+relationRequested, 1),
+		ProgressDone:  len(adminTargets),
+		StartedAt:     start,
+		FinishedAt:    time.Now(),
+	})
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
 
 type arxiusBulkInserter interface {
 	BulkInsertArxius(ctx context.Context, rows []db.Arxiu) ([]int, string, error)
+}
+
+func decodeArxiusImportPayload(raw []byte) (string, arxiusExportPayload, arxiusExportPayloadV2, error) {
+	var envelope arxiusImportEnvelope
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return "", arxiusExportPayload{}, arxiusExportPayloadV2{}, err
+	}
+	if strings.TrimSpace(envelope.Schema) == "cercagenealogica.arxius.v2" {
+		var payload arxiusExportPayloadV2
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return "", arxiusExportPayload{}, arxiusExportPayloadV2{}, err
+		}
+		return "v2", arxiusExportPayload{}, payload, nil
+	}
+	var payload arxiusExportPayload
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return "", arxiusExportPayload{}, arxiusExportPayloadV2{}, err
+	}
+	return "legacy", payload, arxiusExportPayloadV2{}, nil
+}
+
+func (a *App) prepareArxiusLegacyImport(records []arxiuExportRecord, userID int) ([]preparedArxiuImportItem, string, int, int, int) {
+	entMap, entNameMap, entMode, entKeys := a.arxiuEntitatNameMapsForPayload(records)
+	munMap, munNameMap, munMode, munKeys := a.arxiuMunicipiNameMapsForPayload(records)
+	existingByName, _, existingMode, existingKeys := a.arxiuExistingMapsForPayload(records)
+	resolveSummary := fmt.Sprintf("mun=%s:%d ent_legacy=%s:%d arxius_nom=%s:%d", munMode, munKeys, entMode, entKeys, existingMode, existingKeys)
+	prepared := make([]preparedArxiuImportItem, 0, len(records))
+	seenPayload := map[string]struct{}{}
+	skipped, errors, duplicates := 0, 0, 0
+	for _, row := range records {
+		nameKey := normalizeKey(row.Nom)
+		if nameKey == "" {
+			skipped++
+			duplicates++
+			continue
+		}
+		munID, ok := resolveLegacyArxiuMunicipi(row, munMap, munNameMap)
+		if !ok {
+			errors++
+			Errorf("Arxius import: municipi no trobat (%s, %s) per arxiu %s", row.MunicipiNom, row.MunicipiPaisISO2, row.Nom)
+			continue
+		}
+		entID := 0
+		if strings.TrimSpace(row.EntitatNom) != "" {
+			entID = entNameMap[normalizeKey(row.EntitatNom)]
+			if entID == 0 {
+				entID = entMap[normalizeKey(row.EntitatNom, row.Tipus)]
+			}
+		}
+		key := arxiuImportKey(nameKey, munID)
+		if _, ok := seenPayload[key]; ok {
+			skipped++
+			duplicates++
+			continue
+		}
+		seenPayload[key] = struct{}{}
+		if _, ok := existingByName[nameKey]; ok {
+			skipped++
+			continue
+		}
+		arxiu := buildPendingImportedArxiu(userID)
+		arxiu.Nom = row.Nom
+		arxiu.Tipus = row.Tipus
+		arxiu.Acces = row.Acces
+		arxiu.Adreca = row.Adreca
+		arxiu.Ubicacio = row.Ubicacio
+		arxiu.What3Words = row.What3Words
+		arxiu.Web = row.Web
+		arxiu.Notes = row.Notes
+		arxiu.AcceptaDonacions = row.AcceptaDonacions && strings.TrimSpace(row.DonacionsURL) != ""
+		arxiu.DonacionsURL = strings.TrimSpace(row.DonacionsURL)
+		if munID > 0 {
+			arxiu.MunicipiID = sql.NullInt64{Int64: int64(munID), Valid: true}
+		}
+		if entID > 0 {
+			arxiu.EntitatEclesiasticaID = sql.NullInt64{Int64: int64(entID), Valid: true}
+		}
+		prepared = append(prepared, preparedArxiuImportItem{
+			Archive: arxiu,
+			NameKey: nameKey,
+		})
+	}
+	return prepared, resolveSummary, skipped, errors, duplicates
+}
+
+func (a *App) prepareArxiusV2Import(records []arxiuExportRecordV2, userID int) ([]preparedArxiuImportItem, string, int, int, int) {
+	legacyMirror := make([]arxiuExportRecord, 0, len(records))
+	codesSet := map[string]struct{}{}
+	entityCodesSet := map[string]struct{}{}
+	for _, row := range records {
+		legacyRow := arxiuExportRecord{
+			Nom:   row.Name,
+			Tipus: row.Type,
+		}
+		if row.Municipality != nil {
+			legacyRow.MunicipiNom = row.Municipality.Name
+			legacyRow.MunicipiPaisISO2 = row.Municipality.CountryISO2
+		}
+		if row.Legacy != nil {
+			legacyRow.EntitatNom = row.Legacy.EntitatNom
+		}
+		legacyMirror = append(legacyMirror, legacyRow)
+		if code := normalizeConfessionalCode(row.Code); code != "" {
+			codesSet[code] = struct{}{}
+		}
+		for _, ref := range row.ReligiousEntityRefs {
+			if code := normalizeConfessionalCode(ref.EntityCode); code != "" {
+				entityCodesSet[code] = struct{}{}
+			}
+		}
+	}
+	entMap, entNameMap, entMode, entKeys := a.arxiuEntitatNameMapsForPayload(legacyMirror)
+	munMap, munNameMap, munMode, munKeys := a.arxiuMunicipiNameMapsForPayload(legacyMirror)
+	existingByName, _, existingMode, existingKeys := a.arxiuExistingMapsForPayload(legacyMirror)
+	existingByCode := map[string]db.ArxiuResolveRow{}
+	if len(codesSet) > 0 {
+		codes := make([]string, 0, len(codesSet))
+		for code := range codesSet {
+			codes = append(codes, code)
+		}
+		if rows, err := a.DB.ResolveArxiusByCodes(codes); err == nil {
+			for _, row := range rows {
+				if key := normalizeConfessionalCode(row.Codi); key != "" {
+					existingByCode[key] = row
+				}
+			}
+		} else {
+			Errorf("Arxius import v2: resolucio arxius per codi fallida: %v", err)
+		}
+	}
+	entityByCode := map[string]db.EntitatReligiosaResolveRow{}
+	if len(entityCodesSet) > 0 {
+		codes := make([]string, 0, len(entityCodesSet))
+		for code := range entityCodesSet {
+			codes = append(codes, code)
+		}
+		if rows, err := a.DB.ResolveEntitatsReligiosesByCodes(codes); err == nil {
+			for _, row := range rows {
+				if key := normalizeConfessionalCode(row.Codi); key != "" {
+					entityByCode[key] = row
+				}
+			}
+		} else {
+			Errorf("Arxius import v2: resolucio entitats religioses per codi fallida: %v", err)
+		}
+	}
+	resolveSummary := fmt.Sprintf("mun=%s:%d ent_legacy=%s:%d arxius_nom=%s:%d arxius_codi=%d entitats_codi=%d", munMode, munKeys, entMode, entKeys, existingMode, existingKeys, len(existingByCode), len(entityByCode))
+	prepared := make([]preparedArxiuImportItem, 0, len(records))
+	seenPayload := map[string]struct{}{}
+	skipped, errors, duplicates := 0, 0, 0
+	for _, row := range records {
+		nameKey := normalizeKey(row.Name)
+		if nameKey == "" {
+			skipped++
+			duplicates++
+			continue
+		}
+		codeKey := normalizeConfessionalCode(row.Code)
+		if codeKey == "" {
+			codeKey = normalizeConfessionalCode(row.Name)
+		}
+		munID := 0
+		if row.Municipality != nil {
+			var ok bool
+			legacyRow := arxiuExportRecord{
+				MunicipiNom:      row.Municipality.Name,
+				MunicipiPaisISO2: row.Municipality.CountryISO2,
+			}
+			munID, ok = resolveLegacyArxiuMunicipi(legacyRow, munMap, munNameMap)
+			if !ok {
+				errors++
+				Errorf("Arxius import v2: municipi no trobat (%s, %s) per arxiu %s", row.Municipality.Name, row.Municipality.CountryISO2, row.Name)
+				continue
+			}
+		}
+		payloadKey := codeKey
+		if payloadKey == "" {
+			payloadKey = arxiuImportKey(nameKey, munID)
+		}
+		if _, ok := seenPayload[payloadKey]; ok {
+			skipped++
+			duplicates++
+			continue
+		}
+		seenPayload[payloadKey] = struct{}{}
+		if codeKey != "" {
+			if _, ok := existingByCode[codeKey]; ok {
+				skipped++
+				continue
+			}
+		} else if _, ok := existingByName[nameKey]; ok {
+			skipped++
+			continue
+		}
+		if _, ok := existingByName[nameKey]; ok && strings.TrimSpace(row.Code) == "" {
+			skipped++
+			continue
+		}
+		entitatLegacyID := 0
+		if row.Legacy != nil && strings.TrimSpace(row.Legacy.EntitatNom) != "" {
+			entitatLegacyID = entNameMap[normalizeKey(row.Legacy.EntitatNom)]
+			if entitatLegacyID == 0 {
+				entitatLegacyID = entMap[normalizeKey(row.Legacy.EntitatNom, row.Type)]
+			}
+		}
+		refs := make([]arxiuReligiousEntityRefV2, 0, len(row.ReligiousEntityRefs))
+		missingEntity := false
+		for _, ref := range row.ReligiousEntityRefs {
+			code := normalizeConfessionalCode(ref.EntityCode)
+			entity, ok := entityByCode[code]
+			if code == "" || !ok {
+				errors++
+				missingEntity = true
+				Errorf("Arxius import v2: entitat religiosa no trobada per codi %q (arxiu %s)", ref.EntityCode, row.Name)
+				break
+			}
+			ref.EntityCode = code
+			ref.EntityID = entity.ID
+			refs = append(refs, ref)
+		}
+		if missingEntity {
+			continue
+		}
+		arxiu := buildPendingImportedArxiu(userID)
+		arxiu.Codi = codeKey
+		arxiu.Nom = row.Name
+		arxiu.Tipus = row.Type
+		arxiu.Acces = row.Access
+		arxiu.Adreca = row.Address
+		arxiu.Ubicacio = row.Location
+		arxiu.What3Words = row.What3Words
+		arxiu.Web = row.Web
+		arxiu.Notes = row.Notes
+		arxiu.AcceptaDonacions = row.AcceptsDonations && strings.TrimSpace(row.DonationsURL) != ""
+		arxiu.DonacionsURL = strings.TrimSpace(row.DonationsURL)
+		if munID > 0 {
+			arxiu.MunicipiID = sql.NullInt64{Int64: int64(munID), Valid: true}
+		}
+		if entitatLegacyID > 0 {
+			arxiu.EntitatEclesiasticaID = sql.NullInt64{Int64: int64(entitatLegacyID), Valid: true}
+		}
+		prepared = append(prepared, preparedArxiuImportItem{
+			Archive:      arxiu,
+			CodeKey:      codeKey,
+			NameKey:      nameKey,
+			RelationRefs: refs,
+		})
+	}
+	return prepared, resolveSummary, skipped, errors, duplicates
+}
+
+func buildPendingImportedArxiu(userID int) db.Arxiu {
+	return db.Arxiu{
+		CreatedBy:      sqlNullIntFromInt(userID),
+		ModeracioEstat: "pendent",
+		ModeratedBy:    sql.NullInt64{},
+		ModeratedAt:    sql.NullTime{},
+		ModeracioMotiu: "",
+	}
+}
+
+func resolveLegacyArxiuMunicipi(row arxiuExportRecord, munMap, munNameMap map[string]int) (int, bool) {
+	if strings.TrimSpace(row.MunicipiNom) == "" {
+		return 0, true
+	}
+	iso2 := strings.ToUpper(strings.TrimSpace(row.MunicipiPaisISO2))
+	key := normalizeKey(row.MunicipiNom, iso2)
+	if key != "" {
+		if munID := munMap[key]; munID > 0 {
+			return munID, true
+		}
+	}
+	munID := munNameMap[normalizeKey(row.MunicipiNom)]
+	return munID, munID > 0
+}
+
+func arxiuReligiousRefKey(ref arxiuReligiousEntityRefV2) string {
+	code := normalizeConfessionalCode(ref.EntityCode)
+	if code == "" {
+		return ""
+	}
+	parts := []string{
+		code,
+		strings.TrimSpace(ref.RelationType),
+		fmt.Sprintf("%d", derefInt(ref.AnyInici)),
+		fmt.Sprintf("%d", derefInt(ref.AnyFi)),
+	}
+	return strings.Join(parts, "|")
+}
+
+func derefInt(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func (a *App) buildPendingArxiuEntitatReligiosaFromRef(arxiuID, userID int, ref arxiuReligiousEntityRefV2) (*db.ArxiuEntitatReligiosa, bool) {
+	if ref.EntityID <= 0 {
+		return nil, false
+	}
+	author := sqlNullIntFromInt(userID)
+	rel := &db.ArxiuEntitatReligiosa{
+		ArxiuID:            arxiuID,
+		EntitatReligiosaID: ref.EntityID,
+		TipusRelacio:       strings.TrimSpace(ref.RelationType),
+		Estat:              normalizeArxiuEntitatReligiosaEstat(ref.State),
+		ModeracioEstat:     "pendent",
+		ModeracioMotiu:     "",
+		CreatedBy:          author,
+		UpdatedBy:          author,
+		ModeratedBy:        sql.NullInt64{},
+		ModeratedAt:        sql.NullTime{},
+		Observacions:       strings.TrimSpace(ref.Observations),
+	}
+	if rel.TipusRelacio == "" {
+		rel.TipusRelacio = "arxiu_institucional"
+	}
+	if ref.AnyInici != nil {
+		rel.AnyInici = sql.NullInt64{Int64: int64(*ref.AnyInici), Valid: true}
+	}
+	if ref.AnyFi != nil {
+		rel.AnyFi = sql.NullInt64{Int64: int64(*ref.AnyFi), Valid: true}
+	}
+	return rel, true
+}
+
+func (a *App) arxiuReligiousRelationExists(rel *db.ArxiuEntitatReligiosa) bool {
+	if rel == nil {
+		return false
+	}
+	rows, err := a.DB.ListArxiuEntitatsReligioses(rel.ArxiuID, rel.EntitatReligiosaID, "")
+	if err != nil {
+		return false
+	}
+	for _, row := range rows {
+		if row.ModeracioEstat == "rebutjat" {
+			continue
+		}
+		if row.TipusRelacio == rel.TipusRelacio && nullIntEqual(row.AnyInici, rel.AnyInici) && nullIntEqual(row.AnyFi, rel.AnyFi) {
+			return true
+		}
+	}
+	return false
 }
 
 func arxiuImportKey(nameKey string, municipiID int) string {

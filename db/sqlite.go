@@ -646,6 +646,12 @@ func (d *SQLite) ResolveArquebisbatsByNames(names []string) ([]ArquebisbatResolv
 func (d *SQLite) ResolveArxiusByNames(names []string) ([]ArxiuResolveRow, error) {
 	return d.help.resolveArxiusByNames(names)
 }
+func (d *SQLite) ResolveArxiusByCodes(codes []string) ([]ArxiuResolveRow, error) {
+	return d.help.resolveArxiusByCodes(codes)
+}
+func (d *SQLite) ResolveEntitatsReligiosesByCodes(codes []string) ([]EntitatReligiosaResolveRow, error) {
+	return d.help.resolveEntitatsReligiosesByCodes(codes)
+}
 
 func (d *SQLite) BulkInsertNivells(ctx context.Context, rows []NivellAdministratiu) ([]int, string, error) {
 	if len(rows) == 0 {

@@ -11,6 +11,7 @@ func buildBulkInsertArxius(style, nowFun string, rows []Arxiu) (string, []interf
 		return "", nil
 	}
 	cols := []string{
+		"codi",
 		"nom",
 		"tipus",
 		"municipi_id",
@@ -32,10 +33,11 @@ func buildBulkInsertArxius(style, nowFun string, rows []Arxiu) (string, []interf
 		"updated_at",
 	}
 	values := make([]string, 0, len(rows))
-	args := make([]interface{}, 0, len(rows)*17)
+	args := make([]interface{}, 0, len(rows)*18)
 	for _, a := range rows {
-		values = append(values, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+nowFun+", "+nowFun+")")
+		values = append(values, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+nowFun+", "+nowFun+")")
 		args = append(args,
+			nullStringOrNil(a.Codi),
 			a.Nom,
 			a.Tipus,
 			a.MunicipiID,

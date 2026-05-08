@@ -624,6 +624,12 @@ func (d *MySQL) ResolveArquebisbatsByNames(names []string) ([]ArquebisbatResolve
 func (d *MySQL) ResolveArxiusByNames(names []string) ([]ArxiuResolveRow, error) {
 	return d.help.resolveArxiusByNames(names)
 }
+func (d *MySQL) ResolveArxiusByCodes(codes []string) ([]ArxiuResolveRow, error) {
+	return d.help.resolveArxiusByCodes(codes)
+}
+func (d *MySQL) ResolveEntitatsReligiosesByCodes(codes []string) ([]EntitatReligiosaResolveRow, error) {
+	return d.help.resolveEntitatsReligiosesByCodes(codes)
+}
 func (d *MySQL) BulkInsertNivells(ctx context.Context, rows []NivellAdministratiu) ([]int, string, error) {
 	if len(rows) == 0 {
 		return nil, "mysql-batch", nil

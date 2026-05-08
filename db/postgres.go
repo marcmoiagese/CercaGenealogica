@@ -709,6 +709,12 @@ func (d *PostgreSQL) ResolveArquebisbatsByNames(names []string) ([]ArquebisbatRe
 func (d *PostgreSQL) ResolveArxiusByNames(names []string) ([]ArxiuResolveRow, error) {
 	return d.help.resolveArxiusByNames(names)
 }
+func (d *PostgreSQL) ResolveArxiusByCodes(codes []string) ([]ArxiuResolveRow, error) {
+	return d.help.resolveArxiusByCodes(codes)
+}
+func (d *PostgreSQL) ResolveEntitatsReligiosesByCodes(codes []string) ([]EntitatReligiosaResolveRow, error) {
+	return d.help.resolveEntitatsReligiosesByCodes(codes)
+}
 func (d *PostgreSQL) BulkInsertNivells(ctx context.Context, rows []NivellAdministratiu) ([]int, string, error) {
 	if len(rows) == 0 {
 		return nil, "postgres-copy", nil
@@ -1373,6 +1379,7 @@ func (d *PostgreSQL) BulkInsertArxius(ctx context.Context, rows []Arxiu) ([]int,
 	_, err = tx.ExecContext(ctx, `
         CREATE TEMP TABLE tmp_arxius_import (
             import_seq INTEGER,
+            codi TEXT,
             nom TEXT,
             tipus TEXT,
             municipi_id INTEGER,
@@ -1396,6 +1403,7 @@ func (d *PostgreSQL) BulkInsertArxius(ctx context.Context, rows []Arxiu) ([]int,
 	}
 	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("tmp_arxius_import",
 		"import_seq",
+		"codi",
 		"nom",
 		"tipus",
 		"municipi_id",
@@ -1420,6 +1428,7 @@ func (d *PostgreSQL) BulkInsertArxius(ctx context.Context, rows []Arxiu) ([]int,
 	for i, a := range rows {
 		if _, err := stmt.Exec(
 			i,
+			nullStringOrNil(a.Codi),
 			a.Nom,
 			a.Tipus,
 			a.MunicipiID,
@@ -1451,12 +1460,12 @@ func (d *PostgreSQL) BulkInsertArxius(ctx context.Context, rows []Arxiu) ([]int,
 	}
 	rowsRes, err := tx.QueryContext(ctx, `
         INSERT INTO arxius (
-            nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, what3words, web, acces,
+            codi, nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, what3words, web, acces,
             notes, accepta_donacions, donacions_url, created_by, moderation_status, moderated_by, moderated_at,
             moderation_notes, created_at, updated_at
         )
         SELECT
-            nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, what3words, web, acces,
+            codi, nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, what3words, web, acces,
             notes, accepta_donacions, donacions_url, created_by, moderation_status, moderated_by, moderated_at,
             moderation_notes, NOW(), NOW()
         FROM tmp_arxius_import

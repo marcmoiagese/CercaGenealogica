@@ -3258,7 +3258,7 @@ func (h sqlHelper) resolveArxiusByNames(names []string) ([]ArxiuResolveRow, erro
 	}
 	placeholders := buildInPlaceholders(h.style, len(args))
 	query := `
-        SELECT id, nom, municipi_id
+        SELECT id, COALESCE(codi, ''), nom, municipi_id
         FROM arxius
         WHERE LOWER(nom) IN (` + placeholders + `)`
 	query = formatPlaceholders(h.style, query)
@@ -3270,7 +3270,88 @@ func (h sqlHelper) resolveArxiusByNames(names []string) ([]ArxiuResolveRow, erro
 	var res []ArxiuResolveRow
 	for rows.Next() {
 		var row ArxiuResolveRow
-		if err := rows.Scan(&row.ID, &row.Nom, &row.MunicipiID); err != nil {
+		if err := rows.Scan(&row.ID, &row.Codi, &row.Nom, &row.MunicipiID); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (h sqlHelper) resolveArxiusByCodes(codes []string) ([]ArxiuResolveRow, error) {
+	if len(codes) == 0 {
+		return nil, nil
+	}
+	h.ensureArxiuExtraColumns()
+	args := make([]interface{}, 0, len(codes))
+	for _, code := range codes {
+		code = strings.ToLower(strings.TrimSpace(code))
+		if code == "" {
+			continue
+		}
+		args = append(args, code)
+	}
+	if len(args) == 0 {
+		return nil, nil
+	}
+	placeholders := buildInPlaceholders(h.style, len(args))
+	query := `
+        SELECT id, COALESCE(codi, ''), nom, municipi_id
+        FROM arxius
+        WHERE LOWER(COALESCE(codi, '')) IN (` + placeholders + `)`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []ArxiuResolveRow
+	for rows.Next() {
+		var row ArxiuResolveRow
+		if err := rows.Scan(&row.ID, &row.Codi, &row.Nom, &row.MunicipiID); err != nil {
+			return nil, err
+		}
+		res = append(res, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (h sqlHelper) resolveEntitatsReligiosesByCodes(codes []string) ([]EntitatReligiosaResolveRow, error) {
+	if len(codes) == 0 {
+		return nil, nil
+	}
+	args := make([]interface{}, 0, len(codes))
+	for _, code := range codes {
+		code = strings.ToLower(strings.TrimSpace(code))
+		if code == "" {
+			continue
+		}
+		args = append(args, code)
+	}
+	if len(args) == 0 {
+		return nil, nil
+	}
+	placeholders := buildInPlaceholders(h.style, len(args))
+	query := `
+        SELECT id, COALESCE(codi, ''), nom, COALESCE(religio_confessio_codi, ''), COALESCE(nivell_confessional_codi, '')
+        FROM entitat_religiosa
+        WHERE LOWER(COALESCE(codi, '')) IN (` + placeholders + `)`
+	query = formatPlaceholders(h.style, query)
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []EntitatReligiosaResolveRow
+	for rows.Next() {
+		var row EntitatReligiosaResolveRow
+		if err := rows.Scan(&row.ID, &row.Codi, &row.Nom, &row.ReligioConfessioCodi, &row.NivellConfessionalCodi); err != nil {
 			return nil, err
 		}
 		res = append(res, row)
@@ -4755,14 +4836,26 @@ func (h sqlHelper) ensureArxiuExtraColumns() {
 	stmts := []string{}
 	switch h.style {
 	case "mysql":
+		if !h.columnExists("arxius", "codi") {
+			stmts = append(stmts, "ALTER TABLE arxius ADD COLUMN codi VARCHAR(191) NULL")
+			stmts = append(stmts, "CREATE UNIQUE INDEX idx_arxius_codi ON arxius(codi)")
+		}
 		if !h.columnExists("arxius", "what3words") {
 			stmts = append(stmts, "ALTER TABLE arxius ADD COLUMN what3words VARCHAR(255)")
 		}
 	case "postgres":
+		if !h.columnExists("arxius", "codi") {
+			stmts = append(stmts, "ALTER TABLE arxius ADD COLUMN IF NOT EXISTS codi TEXT")
+			stmts = append(stmts, "CREATE UNIQUE INDEX IF NOT EXISTS idx_arxius_codi ON arxius(codi)")
+		}
 		if !h.columnExists("arxius", "what3words") {
 			stmts = append(stmts, "ALTER TABLE arxius ADD COLUMN IF NOT EXISTS what3words TEXT")
 		}
 	default: // sqlite
+		if !h.columnExists("arxius", "codi") {
+			stmts = append(stmts, "ALTER TABLE arxius ADD COLUMN codi TEXT")
+			stmts = append(stmts, "CREATE UNIQUE INDEX IF NOT EXISTS idx_arxius_codi ON arxius(codi)")
+		}
 		if !h.columnExists("arxius", "what3words") {
 			stmts = append(stmts, "ALTER TABLE arxius ADD COLUMN what3words TEXT")
 		}
@@ -6781,8 +6874,8 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 	args := []interface{}{}
 	clauses := []string{"1=1"}
 	if filter.Text != "" {
-		clauses = append(clauses, "a.nom LIKE ?")
-		args = append(args, "%"+filter.Text+"%")
+		clauses = append(clauses, "(a.nom LIKE ? OR COALESCE(a.codi, '') LIKE ?)")
+		args = append(args, "%"+filter.Text+"%", "%"+filter.Text+"%")
 	}
 	if filter.Tipus != "" {
 		clauses = append(clauses, "a.tipus = ?")
@@ -6877,7 +6970,7 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 		offset = filter.Offset
 	}
 	query := `
-        SELECT a.id, a.nom, a.tipus, a.municipi_id, a.entitat_eclesiastica_id, a.adreca, a.ubicacio, COALESCE(a.what3words, ''), a.web, a.acces, a.notes, a.accepta_donacions, COALESCE(a.donacions_url, ''),
+        SELECT a.id, COALESCE(a.codi, ''), a.nom, a.tipus, a.municipi_id, a.entitat_eclesiastica_id, a.adreca, a.ubicacio, COALESCE(a.what3words, ''), a.web, a.acces, a.notes, a.accepta_donacions, COALESCE(a.donacions_url, ''),
                a.created_by, a.moderation_status, a.moderated_by, a.moderated_at, a.moderation_notes, a.created_at,
                m.nom as municipi_nom, ae.nom as entitat_nom,
                COALESCE(cnt.total, 0) AS llibres
@@ -6903,7 +6996,7 @@ func (h sqlHelper) listArxius(filter ArxiuFilter) ([]ArxiuWithCount, error) {
 	var res []ArxiuWithCount
 	for rows.Next() {
 		var a ArxiuWithCount
-		if err := rows.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.What3Words, &a.Web, &a.Acces, &a.Notes, &a.AcceptaDonacions, &a.DonacionsURL,
+		if err := rows.Scan(&a.ID, &a.Codi, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.What3Words, &a.Web, &a.Acces, &a.Notes, &a.AcceptaDonacions, &a.DonacionsURL,
 			&a.CreatedBy, &a.ModeracioEstat, &a.ModeratedBy, &a.ModeratedAt, &a.ModeracioMotiu, &a.CreatedAt,
 			&a.MunicipiNom, &a.EntitatNom, &a.Llibres); err != nil {
 			return nil, err
@@ -6918,8 +7011,8 @@ func (h sqlHelper) countArxius(filter ArxiuFilter) (int, error) {
 	args := []interface{}{}
 	clauses := []string{"1=1"}
 	if filter.Text != "" {
-		clauses = append(clauses, "a.nom LIKE ?")
-		args = append(args, "%"+filter.Text+"%")
+		clauses = append(clauses, "(a.nom LIKE ? OR COALESCE(a.codi, '') LIKE ?)")
+		args = append(args, "%"+filter.Text+"%", "%"+filter.Text+"%")
 	}
 	if filter.Tipus != "" {
 		clauses = append(clauses, "a.tipus = ?")
@@ -7014,12 +7107,12 @@ func (h sqlHelper) countPaisos() (int, error) {
 func (h sqlHelper) getArxiu(id int) (*Arxiu, error) {
 	h.ensureArxiuExtraColumns()
 	query := formatPlaceholders(h.style, `
-        SELECT id, nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, COALESCE(what3words, ''), web, acces, notes, accepta_donacions, COALESCE(donacions_url, ''),
+        SELECT id, COALESCE(codi, ''), nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, COALESCE(what3words, ''), web, acces, notes, accepta_donacions, COALESCE(donacions_url, ''),
                created_by, moderation_status, moderated_by, moderated_at, moderation_notes
         FROM arxius WHERE id = ?`)
 	row := h.db.QueryRow(query, id)
 	var a Arxiu
-	if err := row.Scan(&a.ID, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.What3Words, &a.Web, &a.Acces, &a.Notes, &a.AcceptaDonacions, &a.DonacionsURL,
+	if err := row.Scan(&a.ID, &a.Codi, &a.Nom, &a.Tipus, &a.MunicipiID, &a.EntitatEclesiasticaID, &a.Adreca, &a.Ubicacio, &a.What3Words, &a.Web, &a.Acces, &a.Notes, &a.AcceptaDonacions, &a.DonacionsURL,
 		&a.CreatedBy, &a.ModeracioEstat, &a.ModeratedBy, &a.ModeratedAt, &a.ModeracioMotiu); err != nil {
 		return nil, err
 	}
@@ -7028,11 +7121,11 @@ func (h sqlHelper) getArxiu(id int) (*Arxiu, error) {
 
 func (h sqlHelper) createArxiu(a *Arxiu) (int, error) {
 	h.ensureArxiuExtraColumns()
-	args := []interface{}{a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.What3Words, a.Web, a.Acces, a.Notes, a.AcceptaDonacions, a.DonacionsURL, a.CreatedBy, a.ModeracioEstat, a.ModeratedBy, a.ModeratedAt, a.ModeracioMotiu}
+	args := []interface{}{nullStringOrNil(a.Codi), a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.What3Words, a.Web, a.Acces, a.Notes, a.AcceptaDonacions, a.DonacionsURL, a.CreatedBy, a.ModeracioEstat, a.ModeratedBy, a.ModeratedAt, a.ModeracioMotiu}
 	if h.style == "postgres" {
 		query := `
-            INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, what3words, web, acces, notes, accepta_donacions, donacions_url, created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)
+            INSERT INTO arxius (codi, nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, what3words, web, acces, notes, accepta_donacions, donacions_url, created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)
             RETURNING id`
 		query = formatPlaceholders(h.style, query)
 		if err := h.db.QueryRow(query, args...).Scan(&a.ID); err != nil {
@@ -7042,8 +7135,8 @@ func (h sqlHelper) createArxiu(a *Arxiu) (int, error) {
 	}
 
 	query := `
-        INSERT INTO arxius (nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, what3words, web, acces, notes, accepta_donacions, donacions_url, created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+        INSERT INTO arxius (codi, nom, tipus, municipi_id, entitat_eclesiastica_id, adreca, ubicacio, what3words, web, acces, notes, accepta_donacions, donacions_url, created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	query = formatPlaceholders(h.style, query)
 	res, err := h.db.Exec(query, args...)
 	if err != nil {
@@ -7059,12 +7152,19 @@ func (h sqlHelper) updateArxiu(a *Arxiu) error {
 	h.ensureArxiuExtraColumns()
 	query := `
         UPDATE arxius
-        SET nom = ?, tipus = ?, municipi_id = ?, entitat_eclesiastica_id = ?, adreca = ?, ubicacio = ?, what3words = ?, web = ?, acces = ?, notes = ?, accepta_donacions = ?, donacions_url = ?,
+        SET codi = ?, nom = ?, tipus = ?, municipi_id = ?, entitat_eclesiastica_id = ?, adreca = ?, ubicacio = ?, what3words = ?, web = ?, acces = ?, notes = ?, accepta_donacions = ?, donacions_url = ?,
             moderation_status = ?, moderated_by = ?, moderated_at = ?, moderation_notes = ?, updated_at = ` + h.nowFun + `
         WHERE id = ?`
 	query = formatPlaceholders(h.style, query)
-	_, err := h.db.Exec(query, a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.What3Words, a.Web, a.Acces, a.Notes, a.AcceptaDonacions, a.DonacionsURL, a.ModeracioEstat, a.ModeratedBy, a.ModeratedAt, a.ModeracioMotiu, a.ID)
+	_, err := h.db.Exec(query, nullStringOrNil(a.Codi), a.Nom, a.Tipus, a.MunicipiID, a.EntitatEclesiasticaID, a.Adreca, a.Ubicacio, a.What3Words, a.Web, a.Acces, a.Notes, a.AcceptaDonacions, a.DonacionsURL, a.ModeracioEstat, a.ModeratedBy, a.ModeratedAt, a.ModeracioMotiu, a.ID)
 	return err
+}
+
+func nullStringOrNil(v string) interface{} {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	return strings.TrimSpace(v)
 }
 
 func (h sqlHelper) deleteArxiu(id int) error {

@@ -858,6 +858,7 @@ CREATE TABLE IF NOT EXISTS llibres (
 
 CREATE TABLE IF NOT EXISTS arxius (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codi TEXT,
     nom TEXT NOT NULL UNIQUE,
     tipus TEXT,                 -- parroquia, arxiu_diocesa, portal_digital, etc.
 
@@ -883,6 +884,7 @@ CREATE TABLE IF NOT EXISTS arxius (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_arxius_codi ON arxius(codi);
 
 CREATE TABLE IF NOT EXISTS arxius_donacions_clicks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

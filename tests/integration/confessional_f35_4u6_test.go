@@ -1,0 +1,479 @@
+package integration
+
+import (
+	"bytes"
+	"database/sql"
+	"encoding/json"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/marcmoiagese/CercaGenealogica/core"
+	"github.com/marcmoiagese/CercaGenealogica/db"
+)
+
+func TestF354U6ArxiusV2ImportCreatesPendingArchiveWithoutReligiousRelation(t *testing.T) {
+	app, database, admin, session := setupF354U6ArxiusAdmin(t, "test_f35_4u6_import_no_relation.sqlite3")
+	_, municipiID, _ := seedF354U6ArxiuTerritory(t, database)
+
+	payload := []byte(`{
+  "schema": "cercagenealogica.arxius.v2",
+  "exported_at": "2026-06-16T12:00:00Z",
+  "source": { "app": "CercaGenealogica", "module": "arxius" },
+  "items": {
+    "arxius": [
+      {
+        "code": "f35_4u6_arxiu_sense_relacio",
+        "name": "Arxiu F35-4U6 Sense Relacio",
+        "type": "privat",
+        "access": "online",
+        "municipality": {
+          "name": "Municipi F35-4U6",
+          "country_iso2": "ES"
+        },
+        "web": "https://example.test/f35-4u6/no-rel",
+        "notes": "Import v2 sense relacio"
+      }
+    ]
+  }
+}`)
+
+	rr := postF354U6ArxiusImport(t, app, session, payload)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("import v2 sense relacio status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if location := rr.Header().Get("Location"); !strings.Contains(location, "arxius_created=1") {
+		t.Fatalf("redirect import v2 sense relacio sense resum esperat: %s", location)
+	}
+
+	rows, err := database.Query("SELECT id, codi, municipi_id, moderation_status, moderated_by, moderated_at FROM arxius WHERE nom = ?", "Arxiu F35-4U6 Sense Relacio")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("no s'ha pogut llegir l'arxiu v2 creat: err=%v rows=%d", err, len(rows))
+	}
+	if got := strings.TrimSpace(asString(rows[0]["codi"])); got != "f35_4u6_arxiu_sense_relacio" {
+		t.Fatalf("codi estable inesperat: %q", got)
+	}
+	if got := parseCountValue(t, rows[0]["municipi_id"]); got != municipiID {
+		t.Fatalf("municipi_id inesperat: got=%d want=%d", got, municipiID)
+	}
+	if got := strings.TrimSpace(asString(rows[0]["moderation_status"])); got != "pendent" {
+		t.Fatalf("arxiu importat ha d'entrar pendent, got %q", got)
+	}
+	if strings.TrimSpace(asString(rows[0]["moderated_by"])) != "" || strings.TrimSpace(asString(rows[0]["moderated_at"])) != "" {
+		t.Fatalf("arxiu importat no ha de tenir moderated_by/moderated_at")
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxiu_entitat_religiosa"); got != 0 {
+		t.Fatalf("no s'hauria de crear cap relacio confessional, got %d", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM admin_import_runs WHERE import_type = ? AND status = 'ok'", "arxius"); got != 1 {
+		t.Fatalf("s'esperava 1 admin_import_runs arxius ok, got %d", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM usuaris_activitat WHERE usuari_id = ? AND estat = 'pendent' AND detalls = 'import' AND objecte_tipus = 'arxiu'", admin.ID); got != 1 {
+		t.Fatalf("s'esperava 1 activitat pendent d'import d'arxiu, got %d", got)
+	}
+}
+
+func TestF354U6ArxiusV2ImportCreatesPendingArchiveAndConfessionalRelation(t *testing.T) {
+	app, database, admin, session := setupF354U6ArxiusAdmin(t, "test_f35_4u6_import_with_relation.sqlite3")
+	seedF354U6ArxiuTerritory(t, database)
+	if _, err := database.SaveEntitatReligiosa(&db.EntitatReligiosa{
+		Codi:                   "f35_4u6_entitat_publicada",
+		Nom:                    "Parroquia F35-4U6 Publicada",
+		ReligioConfessioCodi:   "catolicisme_ritu_llati",
+		NivellConfessionalCodi: "parroquia",
+		Estat:                  "actiu",
+		ModeracioEstat:         "publicat",
+	}); err != nil {
+		t.Fatalf("SaveEntitatReligiosa: %v", err)
+	}
+
+	payload := []byte(`{
+  "schema": "cercagenealogica.arxius.v2",
+  "exported_at": "2026-06-16T12:30:00Z",
+  "source": { "app": "CercaGenealogica", "module": "arxius" },
+  "items": {
+    "arxius": [
+      {
+        "code": "f35_4u6_arxiu_amb_relacio",
+        "name": "Arxiu F35-4U6 Amb Relacio",
+        "type": "arxiu_comarcal",
+        "access": "presencial",
+        "municipality": {
+          "name": "Municipi F35-4U6",
+          "country_iso2": "ES"
+        },
+        "religious_entity_refs": [
+          {
+            "entity_code": "f35_4u6_entitat_publicada",
+            "religion_code": "catolicisme_ritu_llati",
+            "level_code": "parroquia",
+            "relation_type": "custodia_documentacio",
+            "state": "actiu",
+            "moderation_status": "publicat"
+          }
+        ]
+      }
+    ]
+  }
+}`)
+
+	rr := postF354U6ArxiusImport(t, app, session, payload)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("import v2 amb relacio status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	arxiuRows, err := database.Query("SELECT id, codi, moderation_status, moderated_by, moderated_at FROM arxius WHERE codi = ?", "f35_4u6_arxiu_amb_relacio")
+	if err != nil || len(arxiuRows) != 1 {
+		t.Fatalf("no s'ha pogut llegir l'arxiu importat amb relacio: err=%v rows=%d", err, len(arxiuRows))
+	}
+	arxiuID := parseCountValue(t, arxiuRows[0]["id"])
+	if got := strings.TrimSpace(asString(arxiuRows[0]["moderation_status"])); got != "pendent" {
+		t.Fatalf("arxiu v2 amb relacio ha d'entrar pendent, got %q", got)
+	}
+	if strings.TrimSpace(asString(arxiuRows[0]["moderated_by"])) != "" || strings.TrimSpace(asString(arxiuRows[0]["moderated_at"])) != "" {
+		t.Fatalf("arxiu v2 amb relacio no ha de quedar moderat")
+	}
+
+	relRows, err := database.Query("SELECT moderation_status, moderated_by, moderated_at, tipus_relacio FROM arxiu_entitat_religiosa WHERE arxiu_id = ?", arxiuID)
+	if err != nil || len(relRows) != 1 {
+		t.Fatalf("no s'ha pogut llegir la relacio arxiu-entitat creada: err=%v rows=%d", err, len(relRows))
+	}
+	if got := strings.TrimSpace(asString(relRows[0]["moderation_status"])); got != "pendent" {
+		t.Fatalf("la relacio arxiu-entitat importada ha d'entrar pendent, got %q", got)
+	}
+	if strings.TrimSpace(asString(relRows[0]["moderated_by"])) != "" || strings.TrimSpace(asString(relRows[0]["moderated_at"])) != "" {
+		t.Fatalf("la relacio arxiu-entitat importada no ha de quedar moderada")
+	}
+	if got := strings.TrimSpace(asString(relRows[0]["tipus_relacio"])); got != "custodia_documentacio" {
+		t.Fatalf("tipus_relacio inesperat: %q", got)
+	}
+
+	jobRows, err := database.Query("SELECT id, status, payload_json, result_json FROM admin_jobs WHERE kind = ? ORDER BY id DESC LIMIT 1", "admin_import")
+	if err != nil || len(jobRows) != 1 {
+		t.Fatalf("no s'ha pogut llegir l'admin job d'import d'arxius: err=%v rows=%d", err, len(jobRows))
+	}
+	jobID := parseCountValue(t, jobRows[0]["id"])
+	if got := strings.TrimSpace(asString(jobRows[0]["status"])); got != "done" {
+		t.Fatalf("l'admin job d'import d'arxius ha d'acabar done, got %q", got)
+	}
+	for _, token := range []string{`"import_type":"arxius"`, `"import_format":"v2"`, `"archives_requested":1`, `"relations_requested":1`} {
+		if !strings.Contains(asString(jobRows[0]["payload_json"]), token) {
+			t.Fatalf("payload admin job sense token %q: %s", token, asString(jobRows[0]["payload_json"]))
+		}
+	}
+	for _, token := range []string{`"archives_created":1`, `"relations_created":1`, `"activity_count":2`, `"admin_target_count":2`} {
+		if !strings.Contains(asString(jobRows[0]["result_json"]), token) {
+			t.Fatalf("result admin job sense token %q: %s", token, asString(jobRows[0]["result_json"]))
+		}
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM admin_job_targets WHERE job_id = ?", jobID); got != 2 {
+		t.Fatalf("s'esperaven 2 admin_job_targets, got %d", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM usuaris_activitat WHERE usuari_id = ? AND estat = 'pendent' AND detalls = 'import' AND objecte_tipus IN ('arxiu','arxiu_entitat_religiosa')", admin.ID); got != 2 {
+		t.Fatalf("s'esperaven 2 activitats pendents d'import, got %d", got)
+	}
+}
+
+func TestF354U6ArxiusV2ImportFailsWhenReligiousEntityCodeMissing(t *testing.T) {
+	app, database, _, session := setupF354U6ArxiusAdmin(t, "test_f35_4u6_missing_entity.sqlite3")
+	seedF354U6ArxiuTerritory(t, database)
+
+	payload := []byte(`{
+  "schema": "cercagenealogica.arxius.v2",
+  "exported_at": "2026-06-16T13:00:00Z",
+  "source": { "app": "CercaGenealogica", "module": "arxius" },
+  "items": {
+    "arxius": [
+      {
+        "code": "f35_4u6_arxiu_missing_entity",
+        "name": "Arxiu F35-4U6 Missing Entity",
+        "type": "estatal",
+        "municipality": {
+          "name": "Municipi F35-4U6",
+          "country_iso2": "ES"
+        },
+        "religious_entity_refs": [
+          {
+            "entity_code": "f35_4u6_entitat_inexistent",
+            "relation_type": "arxiu_institucional",
+            "moderation_status": "publicat"
+          }
+        ]
+      }
+    ]
+  }
+}`)
+
+	rr := postF354U6ArxiusImport(t, app, session, payload)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("import v2 amb entitat religiosa inexistent status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	location := rr.Header().Get("Location")
+	if !strings.Contains(location, "err=1") || !strings.Contains(location, "arxius_errors=1") {
+		t.Fatalf("la resposta ha d'indicar error clar, location=%s", location)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxius WHERE codi = ?", "f35_4u6_arxiu_missing_entity"); got != 0 {
+		t.Fatalf("no s'hauria de crear l'arxiu quan falta l'entitat religiosa, got %d", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxiu_entitat_religiosa"); got != 0 {
+		t.Fatalf("no s'hauria de crear cap relacio orfe, got %d", got)
+	}
+}
+
+func TestF354U6ArxiusV2ExportIncludesSchemaCodeAndOptionalReligiousRefs(t *testing.T) {
+	app, database, _, session := setupF354U6ArxiusAdmin(t, "test_f35_4u6_export_v2.sqlite3")
+	_, municipiID, _ := seedF354U6ArxiuTerritory(t, database)
+
+	arxiuSenseRel := &db.Arxiu{
+		Codi:           "f35_4u6_export_sense_relacio",
+		Nom:            "Arxiu F35-4U6 Export Sense Relacio",
+		Tipus:          "familysearch",
+		MunicipiID:     sql.NullInt64{Int64: int64(municipiID), Valid: true},
+		Acces:          "online",
+		Web:            "https://example.test/f35-4u6/export/no-rel",
+		ModeracioEstat: "pendent",
+	}
+	if _, err := database.CreateArxiu(arxiuSenseRel); err != nil {
+		t.Fatalf("CreateArxiu sense relacio: %v", err)
+	}
+	arxiuAmbRel := &db.Arxiu{
+		Codi:           "f35_4u6_export_amb_relacio",
+		Nom:            "Arxiu F35-4U6 Export Amb Relacio",
+		Tipus:          "arxiu_diocesa",
+		MunicipiID:     sql.NullInt64{Int64: int64(municipiID), Valid: true},
+		Acces:          "mixt",
+		Web:            "https://example.test/f35-4u6/export/with-rel",
+		ModeracioEstat: "pendent",
+	}
+	arxiuAmbRelID, err := database.CreateArxiu(arxiuAmbRel)
+	if err != nil {
+		t.Fatalf("CreateArxiu amb relacio: %v", err)
+	}
+	entitatID, err := database.SaveEntitatReligiosa(&db.EntitatReligiosa{
+		Codi:                   "f35_4u6_export_entitat",
+		Nom:                    "Entitat Religiosa Export F35-4U6",
+		ReligioConfessioCodi:   "catolicisme_ritu_llati",
+		NivellConfessionalCodi: "bisbat_diocesi",
+		Estat:                  "actiu",
+		ModeracioEstat:         "publicat",
+	})
+	if err != nil {
+		t.Fatalf("SaveEntitatReligiosa export: %v", err)
+	}
+	if _, err := database.SaveArxiuEntitatReligiosa(&db.ArxiuEntitatReligiosa{
+		ArxiuID:            arxiuAmbRelID,
+		EntitatReligiosaID: entitatID,
+		TipusRelacio:       "arxiu_institucional",
+		Estat:              "actiu",
+		ModeracioEstat:     "pendent",
+	}); err != nil {
+		t.Fatalf("SaveArxiuEntitatReligiosa export: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/arxius/export", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminArxiusExport(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminArxiusExport status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var exported struct {
+		Schema string `json:"schema"`
+		Items  struct {
+			Arxius []struct {
+				Code   string `json:"code"`
+				Name   string `json:"name"`
+				Legacy struct {
+					OldID int `json:"old_id"`
+				} `json:"legacy"`
+				ReligiousEntityRefs []struct {
+					EntityCode string `json:"entity_code"`
+				} `json:"religious_entity_refs"`
+			} `json:"arxius"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &exported); err != nil {
+		t.Fatalf("json export v2 invalid: %v", err)
+	}
+	if exported.Schema != "cercagenealogica.arxius.v2" {
+		t.Fatalf("schema export inesperat: %q", exported.Schema)
+	}
+	records := map[string]struct {
+		OldID int
+		Refs  int
+	}{}
+	for _, row := range exported.Items.Arxius {
+		records[row.Code] = struct {
+			OldID int
+			Refs  int
+		}{
+			OldID: row.Legacy.OldID,
+			Refs:  len(row.ReligiousEntityRefs),
+		}
+	}
+	if got, ok := records["f35_4u6_export_sense_relacio"]; !ok || got.OldID <= 0 || got.Refs != 0 {
+		t.Fatalf("export v2 ha d'incloure arxiu sense relacio amb code i sense refs: %+v", got)
+	}
+	if got, ok := records["f35_4u6_export_amb_relacio"]; !ok || got.OldID <= 0 || got.Refs != 1 {
+		t.Fatalf("export v2 ha d'incloure arxiu amb relacio i 1 ref: %+v", got)
+	}
+}
+
+func setupF354U6ArxiusAdmin(t *testing.T, dbName string) (*core.App, db.DB, *db.User, *http.Cookie) {
+	t.Helper()
+	app, database := newTestAppForLogin(t, dbName)
+	admin := createTestUser(t, database, "f35_4u6_admin_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	policy := createPolicyWithGrant(t, database, "f35_4u6_arxius_import_"+strconv.FormatInt(time.Now().UnixNano(), 10), "documentals.arxius.import")
+	addGrantToPolicy(t, database, policy, "documentals.arxius.export")
+	assignPolicyToUser(t, database, admin.ID, policy)
+	session := createSessionCookie(t, database, admin.ID, "sess_f35_4u6_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	return app, database, admin, session
+}
+
+func seedF354U6ArxiuTerritory(t *testing.T, database db.DB) (int, int, int) {
+	t.Helper()
+	pais := &db.Pais{CodiISO2: "ES", CodiISO3: "ESP", CodiPaisNum: "724"}
+	paisID, err := database.CreatePais(pais)
+	if err != nil {
+		t.Fatalf("CreatePais: %v", err)
+	}
+	nivell := &db.NivellAdministratiu{
+		PaisID:         paisID,
+		Nivel:          1,
+		NomNivell:      "Pais Test F35-4U6",
+		TipusNivell:    "pais",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	}
+	nivellID, err := database.CreateNivell(nivell)
+	if err != nil {
+		t.Fatalf("CreateNivell: %v", err)
+	}
+	mun := &db.Municipi{
+		Nom:            "Municipi F35-4U6",
+		Tipus:          "municipi",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	}
+	mun.NivellAdministratiuID[0] = sql.NullInt64{Int64: int64(nivellID), Valid: true}
+	municipiID, err := database.CreateMunicipi(mun)
+	if err != nil {
+		t.Fatalf("CreateMunicipi: %v", err)
+	}
+	entitat := &db.Arquebisbat{
+		Nom:            "Bisbat F35-4U6",
+		TipusEntitat:   "bisbat",
+		PaisID:         sql.NullInt64{Int64: int64(paisID), Valid: true},
+		ModeracioEstat: "pendent",
+	}
+	entitatID, err := database.CreateArquebisbat(entitat)
+	if err != nil {
+		t.Fatalf("CreateArquebisbat: %v", err)
+	}
+	return paisID, municipiID, entitatID
+}
+
+func postF354U6ArxiusImport(t *testing.T, app *core.App, session *http.Cookie, payload []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	csrfToken := "csrf_f35_4u6_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	_ = writer.WriteField("csrf_token", csrfToken)
+	part, err := writer.CreateFormFile("import_file", "arxius-v2.json")
+	if err != nil {
+		t.Fatalf("CreateFormFile: %v", err)
+	}
+	if _, err := io.Copy(part, bytes.NewReader(payload)); err != nil {
+		t.Fatalf("io.Copy payload: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("writer.Close: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/admin/arxius/import/run", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.AddCookie(session)
+	req.AddCookie(csrfCookie(csrfToken))
+	rr := httptest.NewRecorder()
+	app.AdminArxiusImportRun(rr, req)
+	return rr
+}
+
+func TestF354U6LegacyArxiusImportStillWorks(t *testing.T) {
+	app, database, admin, session := setupF354U6ArxiusAdmin(t, "test_f35_4u6_legacy_still_works.sqlite3")
+	seedF354U6LegacyFixtureTerritory(t, database)
+
+	projectRoot := findProjectRoot(t)
+	fixturePath := filepath.Join(projectRoot, "tests", "fixtures", "arxius_export_sample.json")
+	payload, err := os.ReadFile(fixturePath)
+	if err != nil {
+		t.Fatalf("ReadFile fixture legacy: %v", err)
+	}
+	rr := postF354U6ArxiusImport(t, app, session, payload)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("import legacy status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxius"); got != 1 {
+		t.Fatalf("legacy import ha de continuar creant 1 arxiu, got %d", got)
+	}
+	rows, err := database.Query("SELECT codi, entitat_eclesiastica_id, moderation_status FROM arxius WHERE nom = ?", "Arxiu Test A")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("no s'ha pogut llegir l'arxiu legacy importat: err=%v rows=%d", err, len(rows))
+	}
+	if strings.TrimSpace(asString(rows[0]["moderation_status"])) != "pendent" {
+		t.Fatalf("legacy import ha de continuar entrant pendent")
+	}
+	if parseCountValue(t, rows[0]["entitat_eclesiastica_id"]) == 0 {
+		t.Fatalf("legacy import ha de continuar resolent l'entitat eclesiastica opcional")
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM usuaris_activitat WHERE usuari_id = ? AND estat = 'pendent' AND detalls = 'import' AND objecte_tipus = 'arxiu'", admin.ID); got != 1 {
+		t.Fatalf("legacy import ha de continuar creant activitat pendent, got %d", got)
+	}
+}
+
+func seedF354U6LegacyFixtureTerritory(t *testing.T, database db.DB) {
+	t.Helper()
+	pais := &db.Pais{CodiISO2: "ES", CodiISO3: "ESP", CodiPaisNum: "724"}
+	paisID, err := database.CreatePais(pais)
+	if err != nil {
+		t.Fatalf("CreatePais legacy: %v", err)
+	}
+	nivell := &db.NivellAdministratiu{
+		PaisID:         paisID,
+		Nivel:          1,
+		NomNivell:      "Pais Test Legacy F35-4U6",
+		TipusNivell:    "pais",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	}
+	nivellID, err := database.CreateNivell(nivell)
+	if err != nil {
+		t.Fatalf("CreateNivell legacy: %v", err)
+	}
+	mun := &db.Municipi{
+		Nom:            "Municipi Test",
+		Tipus:          "municipi",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	}
+	mun.NivellAdministratiuID[0] = sql.NullInt64{Int64: int64(nivellID), Valid: true}
+	if _, err := database.CreateMunicipi(mun); err != nil {
+		t.Fatalf("CreateMunicipi legacy: %v", err)
+	}
+	entitat := &db.Arquebisbat{
+		Nom:            "Bisbat Test",
+		TipusEntitat:   "bisbat",
+		PaisID:         sql.NullInt64{Int64: int64(paisID), Valid: true},
+		ModeracioEstat: "pendent",
+	}
+	if _, err := database.CreateArquebisbat(entitat); err != nil {
+		t.Fatalf("CreateArquebisbat legacy: %v", err)
+	}
+}

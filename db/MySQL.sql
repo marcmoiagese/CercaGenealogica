@@ -1138,6 +1138,7 @@ CREATE TABLE IF NOT EXISTS achievements_showcase (
 
 CREATE TABLE IF NOT EXISTS arxius (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  codi VARCHAR(191) NULL,
   nom VARCHAR(255) NOT NULL UNIQUE,
   tipus VARCHAR(50),
   municipi_id INT UNSIGNED NULL,
@@ -1155,6 +1156,7 @@ CREATE TABLE IF NOT EXISTS arxius (
   moderated_by INT UNSIGNED NULL,
   moderated_at DATETIME,
   moderation_notes TEXT,
+  UNIQUE KEY idx_arxius_codi (codi),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (municipi_id) REFERENCES municipis(id) ON DELETE SET NULL,
