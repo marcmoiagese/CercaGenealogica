@@ -1893,14 +1893,18 @@ type ConfessionalImportArchiveCreate struct {
 }
 
 type ConfessionalImportTxResult struct {
-	EntitiesCreated  int
-	EntitiesSkipped  int
-	HierarchyCreated int
-	HierarchySkipped int
-	TerritoryCreated int
-	TerritorySkipped int
-	ArchiveCreated   int
-	ArchiveSkipped   int
+	EntitiesCreated      int
+	EntitiesSkipped      int
+	CreatedEntityIDs     map[string]int
+	HierarchyCreated     int
+	HierarchySkipped     int
+	CreatedHierarchyKeys []string
+	TerritoryCreated     int
+	TerritorySkipped     int
+	CreatedTerritoryKeys []string
+	ArchiveCreated       int
+	ArchiveSkipped       int
+	CreatedArchiveKeys   []string
 }
 
 type Municipi struct {

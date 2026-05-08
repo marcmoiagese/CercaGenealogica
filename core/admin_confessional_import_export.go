@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -404,6 +405,7 @@ func (a *App) AdminConfessionalImportApply(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
+	startedAt := time.Now()
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -435,12 +437,57 @@ func (a *App) AdminConfessionalImportApply(w http.ResponseWriter, r *http.Reques
 		a.renderConfessionalImportExportResult(w, r, user, plan.View, "")
 		return
 	}
+	jobPayload := map[string]interface{}{
+		"import_type":           "confessional",
+		"schema":                confessionalImportExportSchema,
+		"include_non_published": plan.View.IncludeNonPublished,
+		"entities_requested":    len(plan.EntityCreates),
+		"hierarchy_requested":   len(plan.HierarchyCreates),
+		"territory_requested":   len(plan.TerritoryCreates),
+		"archive_requested":     len(plan.ArchiveCreates),
+	}
 	txResult, err := a.DB.ApplyConfessionalImportPlanTx(a.confessionalImportTxPlan(plan, user.ID))
 	if err != nil {
+		a.logAdminImportRunDetailed(r, "confessional", adminImportStatusError, user.ID, &adminImportJobDetail{
+			Payload:    jobPayload,
+			Result:     map[string]interface{}{"status": adminImportStatusError, "error": err.Error()},
+			StartedAt:  startedAt,
+			FinishedAt: time.Now(),
+		})
 		errMsg := T(ResolveLang(r), "confessional.io.error.apply_rolled_back")
 		a.renderConfessionalImportExportResult(w, r, user, plan.View, errMsg+": "+err.Error())
 		return
 	}
+	sidefx := a.runConfessionalImportApplySidefx(r.Context(), plan, txResult, user.ID)
+	status := adminImportStatusOK
+	if len(sidefx.Errors) > 0 {
+		status = adminImportStatusError
+	}
+	a.logAdminImportRunDetailed(r, "confessional", status, user.ID, &adminImportJobDetail{
+		Payload: jobPayload,
+		Result: map[string]interface{}{
+			"status":             status,
+			"entities_created":   txResult.EntitiesCreated,
+			"entities_skipped":   txResult.EntitiesSkipped,
+			"hierarchy_created":  txResult.HierarchyCreated,
+			"hierarchy_skipped":  txResult.HierarchySkipped,
+			"territory_created":  txResult.TerritoryCreated,
+			"territory_skipped":  txResult.TerritorySkipped,
+			"archive_created":    txResult.ArchiveCreated,
+			"archive_skipped":    txResult.ArchiveSkipped,
+			"wiki_created":       sidefx.WikiCreated,
+			"activity_count":     sidefx.ActivityCount,
+			"activity_mode":      sidefx.ActivityMode,
+			"admin_target_count": len(sidefx.Targets),
+			"sidefx_error_count": len(sidefx.Errors),
+			"sidefx_errors":      sidefx.Errors,
+		},
+		Targets:       sidefx.Targets,
+		ProgressTotal: len(sidefx.Targets),
+		ProgressDone:  len(sidefx.Targets),
+		StartedAt:     startedAt,
+		FinishedAt:    time.Now(),
+	})
 
 	http.Redirect(w, r, withQueryParams("/admin/import-export?tab=confessional&subtab=confessional-import", map[string]string{
 		"import":                   "1",
@@ -457,6 +504,160 @@ func (a *App) AdminConfessionalImportApply(w http.ResponseWriter, r *http.Reques
 		"conf_archive_created":     strconv.Itoa(txResult.ArchiveCreated),
 		"conf_archive_skipped":     strconv.Itoa(txResult.ArchiveSkipped),
 	}), http.StatusSeeOther)
+}
+
+type confessionalImportApplySidefxResult struct {
+	WikiCreated   int
+	ActivityCount int
+	ActivityMode  string
+	Targets       []db.AdminJobTarget
+	Errors        []string
+}
+
+func (a *App) runConfessionalImportApplySidefx(ctx context.Context, plan *confessionalImportPlan, txResult *db.ConfessionalImportTxResult, userID int) confessionalImportApplySidefxResult {
+	result := confessionalImportApplySidefxResult{ActivityMode: "none"}
+	if a == nil || a.DB == nil || plan == nil || txResult == nil {
+		return result
+	}
+	entities, hierarchy, territory, archiveRelations, err := a.resolveCreatedConfessionalImportObjects(txResult)
+	if err != nil {
+		result.Errors = append(result.Errors, err.Error())
+	}
+	for _, entity := range entities {
+		result.Targets = append(result.Targets, db.AdminJobTarget{ObjectType: "entitat_religiosa", ObjectID: entity.ID})
+		if entity.ModeracioEstat != "publicat" {
+			continue
+		}
+		if err := a.ensureInitialWikiVersion("entitat_religiosa", entity.ID, entity, entity.CreatedBy, userID); err != nil {
+			result.Errors = append(result.Errors, err.Error())
+			continue
+		}
+		result.WikiCreated++
+	}
+	for _, rel := range hierarchy {
+		result.Targets = append(result.Targets, db.AdminJobTarget{ObjectType: "entitat_religiosa_relacio", ObjectID: rel.ID})
+	}
+	for _, rel := range territory {
+		result.Targets = append(result.Targets, db.AdminJobTarget{ObjectType: "municipi_entitat_religiosa", ObjectID: rel.ID})
+	}
+	for _, rel := range archiveRelations {
+		result.Targets = append(result.Targets, db.AdminJobTarget{ObjectType: "arxiu_entitat_religiosa", ObjectID: rel.ID})
+	}
+	activities := make([]db.UserActivity, 0, len(result.Targets))
+	for _, target := range result.Targets {
+		activities = append(activities, db.UserActivity{
+			UserID:     userID,
+			Action:     "crear",
+			ObjectType: target.ObjectType,
+			ObjectID:   sql.NullInt64{Int64: int64(target.ObjectID), Valid: target.ObjectID > 0},
+			Points:     0,
+			Status:     "pendent",
+			Details:    "import",
+		})
+	}
+	result.ActivityCount = len(activities)
+	if len(activities) == 0 {
+		return result
+	}
+	mode, err := a.DB.BulkInsertUserActivities(ctx, activities)
+	if err != nil {
+		result.Errors = append(result.Errors, err.Error())
+		result.ActivityMode = "generic"
+		for i := range activities {
+			act := activities[i]
+			if _, insertErr := a.DB.InsertUserActivity(&act); insertErr != nil {
+				result.Errors = append(result.Errors, insertErr.Error())
+			}
+		}
+	} else if mode != "" {
+		result.ActivityMode = mode
+	} else {
+		result.ActivityMode = "bulk"
+	}
+	now := time.Now()
+	a.EvaluateAchievementsForUser(context.Background(), userID, AchievementTrigger{CreatedAt: now})
+	a.logAntiAbuseSignals(userID, now)
+	return result
+}
+
+func (a *App) resolveCreatedConfessionalImportObjects(txResult *db.ConfessionalImportTxResult) ([]db.EntitatReligiosa, []db.EntitatReligiosaRelacio, []db.MunicipiEntitatReligiosa, []db.ArxiuEntitatReligiosa, error) {
+	if a == nil || a.DB == nil || txResult == nil {
+		return nil, nil, nil, nil, fmt.Errorf("context d'import confessional invàlid")
+	}
+	allEntities, err := a.DB.ListEntitatsReligioses()
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	entityByID := make(map[int]db.EntitatReligiosa, len(allEntities))
+	entityKeyByID := make(map[int]string, len(allEntities))
+	for _, entity := range allEntities {
+		entityByID[entity.ID] = entity
+		entityKeyByID[entity.ID] = confImportEntityKey(entity.Codi, entity.ReligioConfessioCodi, entity.NivellConfessionalCodi)
+	}
+	createdEntities := make([]db.EntitatReligiosa, 0, len(txResult.CreatedEntityIDs))
+	for _, id := range txResult.CreatedEntityIDs {
+		entity, ok := entityByID[id]
+		if !ok {
+			return nil, nil, nil, nil, fmt.Errorf("entitat importada no trobada després del commit (%d)", id)
+		}
+		createdEntities = append(createdEntities, entity)
+	}
+	allHierarchy, err := a.DB.ListEntitatReligiosaRelacions()
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	hierarchyByKey := make(map[string]db.EntitatReligiosaRelacio, len(allHierarchy))
+	for _, rel := range allHierarchy {
+		parentKey := entityKeyByID[rel.EntitatOrigenID]
+		childKey := entityKeyByID[rel.EntitatDestiID]
+		if parentKey == "" || childKey == "" {
+			continue
+		}
+		hierarchyByKey[confImportHierarchyKey(parentKey, childKey, rel.TipusRelacio, rel.AnyInici, rel.AnyFi)] = rel
+	}
+	createdHierarchy := make([]db.EntitatReligiosaRelacio, 0, len(txResult.CreatedHierarchyKeys))
+	for _, key := range txResult.CreatedHierarchyKeys {
+		if rel, ok := hierarchyByKey[key]; ok {
+			createdHierarchy = append(createdHierarchy, rel)
+		}
+	}
+	allTerritory, err := a.DB.ListMunicipiEntitatsReligioses(0)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	territoryByKey := make(map[string]db.MunicipiEntitatReligiosa, len(allTerritory))
+	for _, rel := range allTerritory {
+		entityKey := entityKeyByID[rel.EntitatReligiosaID]
+		if entityKey == "" {
+			continue
+		}
+		territoryByKey[confImportTerritoryKey(entityKey, rel.MunicipiID, rel.NucliID, rel.TipusRelacio, rel.AnyInici, rel.AnyFi)] = rel
+	}
+	createdTerritory := make([]db.MunicipiEntitatReligiosa, 0, len(txResult.CreatedTerritoryKeys))
+	for _, key := range txResult.CreatedTerritoryKeys {
+		if rel, ok := territoryByKey[key]; ok {
+			createdTerritory = append(createdTerritory, rel)
+		}
+	}
+	allArchive, err := a.DB.ListArxiuEntitatsReligioses(0, 0, "")
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	archiveByKey := make(map[string]db.ArxiuEntitatReligiosa, len(allArchive))
+	for _, rel := range allArchive {
+		entityKey := entityKeyByID[rel.EntitatReligiosaID]
+		if entityKey == "" {
+			continue
+		}
+		archiveByKey[confImportArchiveKey(entityKey, rel.ArxiuID, rel.TipusRelacio, rel.AnyInici, rel.AnyFi)] = rel
+	}
+	createdArchive := make([]db.ArxiuEntitatReligiosa, 0, len(txResult.CreatedArchiveKeys))
+	for _, key := range txResult.CreatedArchiveKeys {
+		if rel, ok := archiveByKey[key]; ok {
+			createdArchive = append(createdArchive, rel)
+		}
+	}
+	return createdEntities, createdHierarchy, createdTerritory, createdArchive, nil
 }
 
 func (a *App) confessionalImportTxPlan(plan *confessionalImportPlan, userID int) *db.ConfessionalImportTxPlan {
@@ -1161,6 +1362,33 @@ func confessionalEntityDiff(existing, imported db.EntitatReligiosa) string {
 		diff = append(diff, "moderacio")
 	}
 	return strings.Join(diff, ", ")
+}
+
+func confImportEntityKey(code, religionCode, levelCode string) string {
+	return strings.Join([]string{
+		strings.TrimSpace(code),
+		strings.TrimSpace(religionCode),
+		strings.TrimSpace(levelCode),
+	}, "|")
+}
+
+func confImportHierarchyKey(parentKey, childKey, relationType string, startsYear, endsYear sql.NullInt64) string {
+	return strings.Join([]string{parentKey, childKey, strings.TrimSpace(relationType), confImportNullIntKey(startsYear), confImportNullIntKey(endsYear)}, "|")
+}
+
+func confImportTerritoryKey(entityKey string, municipiID int, nucliID sql.NullInt64, relationType string, startsYear, endsYear sql.NullInt64) string {
+	return strings.Join([]string{entityKey, strconv.Itoa(municipiID), confImportNullIntKey(nucliID), strings.TrimSpace(relationType), confImportNullIntKey(startsYear), confImportNullIntKey(endsYear)}, "|")
+}
+
+func confImportArchiveKey(entityKey string, arxiuID int, relationType string, startsYear, endsYear sql.NullInt64) string {
+	return strings.Join([]string{entityKey, strconv.Itoa(arxiuID), strings.TrimSpace(relationType), confImportNullIntKey(startsYear), confImportNullIntKey(endsYear)}, "|")
+}
+
+func confImportNullIntKey(v sql.NullInt64) string {
+	if !v.Valid {
+		return ""
+	}
+	return strconv.FormatInt(v.Int64, 10)
 }
 
 func confessionalGraphReachable(graph map[string]map[string]bool, start, target string) bool {

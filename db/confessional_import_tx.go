@@ -205,7 +205,12 @@ func confessionalApplyImportPlanTx(ops confessionalImportTxOps, plan *Confession
 		archiveSet[confImportArchiveKey(entityKey, rel.ArxiuID, rel.TipusRelacio, rel.AnyInici, rel.AnyFi)] = true
 	}
 
-	result := &ConfessionalImportTxResult{}
+	result := &ConfessionalImportTxResult{
+		CreatedEntityIDs:     map[string]int{},
+		CreatedHierarchyKeys: []string{},
+		CreatedTerritoryKeys: []string{},
+		CreatedArchiveKeys:   []string{},
+	}
 	for _, item := range plan.EntityCreates {
 		code := strings.TrimSpace(item.Entity.Codi)
 		existing, exists := entityByCode[code]
@@ -230,6 +235,7 @@ func confessionalApplyImportPlanTx(ops confessionalImportTxOps, plan *Confession
 		entityByCode[code] = entity
 		entityKeyByID[newID] = item.RefKey
 		result.EntitiesCreated++
+		result.CreatedEntityIDs[item.RefKey] = newID
 	}
 	if err := confessionalImportRunTestHook(ConfessionalImportTxStageAfterEntities); err != nil {
 		return nil, fmt.Errorf("rollback complet: %w", err)
@@ -272,6 +278,7 @@ func confessionalApplyImportPlanTx(ops confessionalImportTxOps, plan *Confession
 		}
 		hierarchySet[key] = true
 		result.HierarchyCreated++
+		result.CreatedHierarchyKeys = append(result.CreatedHierarchyKeys, key)
 	}
 	if err := confessionalImportRunTestHook(ConfessionalImportTxStageAfterHierarchy); err != nil {
 		return nil, fmt.Errorf("rollback complet: %w", err)
@@ -323,6 +330,7 @@ func confessionalApplyImportPlanTx(ops confessionalImportTxOps, plan *Confession
 		}
 		territorySet[key] = true
 		result.TerritoryCreated++
+		result.CreatedTerritoryKeys = append(result.CreatedTerritoryKeys, key)
 	}
 	if err := confessionalImportRunTestHook(ConfessionalImportTxStageAfterTerritory); err != nil {
 		return nil, fmt.Errorf("rollback complet: %w", err)
@@ -369,6 +377,7 @@ func confessionalApplyImportPlanTx(ops confessionalImportTxOps, plan *Confession
 		}
 		archiveSet[key] = true
 		result.ArchiveCreated++
+		result.CreatedArchiveKeys = append(result.CreatedArchiveKeys, key)
 	}
 
 	if err := tx.Commit(); err != nil {
