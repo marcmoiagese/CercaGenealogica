@@ -114,8 +114,8 @@ func (a *App) adminImportExportPageData(r *http.Request, user *db.User) map[stri
 		"ConfessionalArchiveCreated":     parseIntQuery(q.Get("conf_archive_created")),
 		"ConfessionalArchiveSkipped":     parseIntQuery(q.Get("conf_archive_skipped")),
 	}
-	data["ConfessionalExportReligions"] = confessionalExportReligionOptions(ResolveLang(r))
-	data["ConfessionalExportLevels"] = confessionalExportLevelOptions(ResolveLang(r))
+	data["ConfessionalExportReligions"] = a.confessionalExportReligionOptions(ResolveLang(r))
+	data["ConfessionalExportLevels"] = a.confessionalExportLevelOptions(ResolveLang(r))
 
 	data["TerritoriImportRun"] = q.Get("import") == "1" && activeTab == "territori" && territoriSubtab == "territori-import"
 	if activeTab == "territori" {
@@ -179,10 +179,26 @@ func (a *App) adminImportExportPageData(r *http.Request, user *db.User) map[stri
 	return data
 }
 
-func confessionalExportReligionOptions(lang string) []confessionalExportCatalogOption {
-	items := ListSelectableConfessionalReligionCatalog()
-	out := make([]confessionalExportCatalogOption, 0, len(items))
-	for _, item := range items {
+func (a *App) confessionalExportReligionOptions(lang string) []confessionalExportCatalogOption {
+	entities, err := a.DB.ListEntitatsReligioses()
+	if err != nil {
+		return []confessionalExportCatalogOption{}
+	}
+	seen := map[string]struct{}{}
+	out := make([]confessionalExportCatalogOption, 0)
+	for _, entity := range entities {
+		code := normalizeCatalogCode(entity.ReligioConfessioCodi)
+		if code == "" {
+			continue
+		}
+		if _, exists := seen[code]; exists {
+			continue
+		}
+		item, ok := GetConfessionalReligionCatalogByCode(code)
+		if !ok || !item.Active {
+			continue
+		}
+		seen[code] = struct{}{}
 		out = append(out, confessionalExportCatalogOption{
 			Code:    item.Code,
 			Label:   ConfessionalReligionLabel(item, lang),
@@ -198,13 +214,26 @@ func confessionalExportReligionOptions(lang string) []confessionalExportCatalogO
 	return out
 }
 
-func confessionalExportLevelOptions(lang string) []confessionalExportCatalogOption {
-	items := ListConfessionalLevelCatalog()
-	out := make([]confessionalExportCatalogOption, 0, len(items))
-	for _, item := range items {
-		if !item.Active {
+func (a *App) confessionalExportLevelOptions(lang string) []confessionalExportCatalogOption {
+	entities, err := a.DB.ListEntitatsReligioses()
+	if err != nil {
+		return []confessionalExportCatalogOption{}
+	}
+	seen := map[string]struct{}{}
+	out := make([]confessionalExportCatalogOption, 0)
+	for _, entity := range entities {
+		code := normalizeCatalogCode(entity.NivellConfessionalCodi)
+		if code == "" {
 			continue
 		}
+		if _, exists := seen[code]; exists {
+			continue
+		}
+		item, ok := GetConfessionalLevelCatalogByCode(code)
+		if !ok || !item.Active {
+			continue
+		}
+		seen[code] = struct{}{}
 		contextParts := []string{}
 		if religion, ok := GetConfessionalReligionCatalogByCode(item.ReligionCode); ok {
 			contextParts = append(contextParts, ConfessionalReligionLabel(religion, lang))

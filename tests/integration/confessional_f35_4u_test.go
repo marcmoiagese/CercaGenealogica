@@ -116,6 +116,8 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 	policyID := createPolicyWithGrant(t, database, "f35_4u2_ui", "territori.confessional.import_export.export")
 	addGrantToPolicy(t, database, policyID, "territori.confessional.import_export.view")
 	assignPolicyToUser(t, database, user.ID, policyID)
+	f354SSaveEntitat(t, database, "f35_4u2_bisbat_"+time.Now().Format("150405000000000"), "Bisbat F35-4U2", "catolicisme_ritu_llati", "bisbat_diocesi", "publicat")
+	f354SSaveEntitat(t, database, "f35_4u2_parroquia_"+time.Now().Format("150405000000000"), "Parroquia F35-4U2", "catolicisme_ritu_llati", "parroquia", "publicat")
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/import-export?tab=confessional&subtab=confessional-export", nil)
 	req.AddCookie(session)
@@ -292,6 +294,135 @@ func TestF354U3ConfessionalAutocompleteAssetsAndAliasSubtabWork(t *testing.T) {
 	assertNoInvalidCSSUnits(t, readProjectFileF354S(t, root, "static/css/admin-import-export.css"), "static/css/admin-import-export.css")
 	assertAdminImportExportInitialVisibility(t, body)
 	assertConfessionalExportTabContract(t, body)
+}
+
+func TestF354U4ConfessionalExportSelectorsStayEmptyWithoutRealEntities(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u4_empty.sqlite3")
+
+	user := createTestUser(t, database, "f35_4u4_empty_"+time.Now().Format("150405000000000"))
+	session := createSessionCookie(t, database, user.ID, "sess_f35_4u4_empty_"+time.Now().Format("150405000000000"))
+	policyID := createPolicyWithGrant(t, database, "f35_4u4_empty", "territori.confessional.import_export.export")
+	addGrantToPolicy(t, database, policyID, "territori.confessional.import_export.import")
+	addGrantToPolicy(t, database, policyID, "territori.confessional.import_export.view")
+	assignPolicyToUser(t, database, user.ID, policyID)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/import-export?tab=confessional&subtab=confessional-export", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminImportExport(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminImportExport F35-4U4 empty status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `data-confessional-export-form`) {
+		t.Fatalf("el formulari export confessional ha d'existir sense entitats reals; body=%s", body)
+	}
+	if got := extractSuggestOptionsFromContainer(t, body, "conf-export-religion-options"); len(got) != 0 {
+		t.Fatalf("sense entitats reals el selector d'export de religions ha de quedar buit, got=%v", got)
+	}
+	if got := extractSuggestOptionsFromContainer(t, body, "conf-export-level-options"); len(got) != 0 {
+		t.Fatalf("sense entitats reals el selector d'export de nivells ha de quedar buit, got=%v", got)
+	}
+	for _, token := range []string{
+		`data-confessional-import-form`,
+		`/admin/confessional/import/dry-run`,
+		`id="conf-import-include-non-published"`,
+	} {
+		if !strings.Contains(body, token) {
+			t.Fatalf("la pestanya d'import ha de continuar intacta; falta %q body=%s", token, body)
+		}
+	}
+}
+
+func TestF354U4ConfessionalExportSelectorsUseOnlySingleEntityData(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u4_single.sqlite3")
+
+	user := createTestUser(t, database, "f35_4u4_single_"+time.Now().Format("150405000000000"))
+	session := createSessionCookie(t, database, user.ID, "sess_f35_4u4_single_"+time.Now().Format("150405000000000"))
+	policyID := createPolicyWithGrant(t, database, "f35_4u4_single", "territori.confessional.import_export.export")
+	addGrantToPolicy(t, database, policyID, "territori.confessional.import_export.view")
+	assignPolicyToUser(t, database, user.ID, policyID)
+	f354SSaveEntitat(t, database, "f35_4u4_single_entity_"+time.Now().Format("150405000000000"), "Parroquia F35-4U4", "catolicisme_ritu_llati", "parroquia", "publicat")
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/import-export?tab=confessional&subtab=confessional-export", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminImportExport(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminImportExport F35-4U4 single status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+
+	religions := extractSuggestOptionsFromContainer(t, body, "conf-export-religion-options")
+	if len(religions) != 1 || religions[0].Code != "catolicisme_ritu_llati" {
+		t.Fatalf("amb una sola entitat religiosa l'export ha de mostrar nomes la seva religio real, got=%v", religions)
+	}
+	levels := extractSuggestOptionsFromContainer(t, body, "conf-export-level-options")
+	if len(levels) != 1 || levels[0].Code != "parroquia" || levels[0].ReligionCode != "catolicisme_ritu_llati" {
+		t.Fatalf("amb una sola entitat religiosa l'export ha de mostrar nomes el seu nivell real, got=%v", levels)
+	}
+	if strings.Contains(body, `data-code="anglicanisme"`) || strings.Contains(body, `data-code="bisbat_diocesi"`) {
+		t.Fatalf("l'export no ha de mostrar opcions sense dades reals; body=%s", body)
+	}
+}
+
+func TestF354U4ConfessionalExportSelectorsUseOnlyRealReligions(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u4_religions.sqlite3")
+
+	user := createTestUser(t, database, "f35_4u4_religions_"+time.Now().Format("150405000000000"))
+	session := createSessionCookie(t, database, user.ID, "sess_f35_4u4_religions_"+time.Now().Format("150405000000000"))
+	policyID := createPolicyWithGrant(t, database, "f35_4u4_religions", "territori.confessional.import_export.export")
+	addGrantToPolicy(t, database, policyID, "territori.confessional.import_export.view")
+	assignPolicyToUser(t, database, user.ID, policyID)
+	f354SSaveEntitat(t, database, "f35_4u4_religions_cat_"+time.Now().Format("150405000000000"), "Bisbat F35-4U4", "catolicisme_ritu_llati", "bisbat_diocesi", "publicat")
+	f354SSaveEntitat(t, database, "f35_4u4_religions_ort_"+time.Now().Format("150405000000000"), "Parroquia Ortodoxa F35-4U4", "ortodoxia", "ortodoxia_parroquia", "publicat")
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/import-export?tab=confessional&subtab=confessional-export", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminImportExport(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminImportExport F35-4U4 religions status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	religions := extractSuggestOptionsFromContainer(t, rr.Body.String(), "conf-export-religion-options")
+	if !hasSuggestCode(religions, "catolicisme_ritu_llati") || !hasSuggestCode(religions, "ortodoxia") {
+		t.Fatalf("l'export ha de llistar nomes religions amb entitats reals, got=%v", religions)
+	}
+	if hasSuggestCode(religions, "anglicanisme") || hasSuggestCode(religions, "budisme") {
+		t.Fatalf("l'export no ha de llistar religions sense entitats reals, got=%v", religions)
+	}
+}
+
+func TestF354U4ConfessionalExportLevelsKeepOnlyRealCompatibleOptions(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u4_levels.sqlite3")
+
+	user := createTestUser(t, database, "f35_4u4_levels_"+time.Now().Format("150405000000000"))
+	session := createSessionCookie(t, database, user.ID, "sess_f35_4u4_levels_"+time.Now().Format("150405000000000"))
+	policyID := createPolicyWithGrant(t, database, "f35_4u4_levels", "territori.confessional.import_export.export")
+	addGrantToPolicy(t, database, policyID, "territori.confessional.import_export.view")
+	assignPolicyToUser(t, database, user.ID, policyID)
+	f354SSaveEntitat(t, database, "f35_4u4_levels_bisbat_"+time.Now().Format("150405000000000"), "Bisbat F35-4U4", "catolicisme_ritu_llati", "bisbat_diocesi", "publicat")
+	f354SSaveEntitat(t, database, "f35_4u4_levels_parroquia_"+time.Now().Format("150405000000000"), "Parroquia F35-4U4", "catolicisme_ritu_llati", "parroquia", "publicat")
+	f354SSaveEntitat(t, database, "f35_4u4_levels_ort_"+time.Now().Format("150405000000000"), "Parroquia Ortodoxa F35-4U4", "ortodoxia", "ortodoxia_parroquia", "publicat")
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/import-export?tab=confessional&subtab=confessional-export", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminImportExport(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminImportExport F35-4U4 levels status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	levels := extractSuggestOptionsFromContainer(t, rr.Body.String(), "conf-export-level-options")
+	if !hasSuggestOption(levels, "bisbat_diocesi", "catolicisme_ritu_llati") ||
+		!hasSuggestOption(levels, "parroquia", "catolicisme_ritu_llati") ||
+		!hasSuggestOption(levels, "ortodoxia_parroquia", "ortodoxia") {
+		t.Fatalf("els nivells exportables han de sortir de dades reals amb religio compatible, got=%v", levels)
+	}
+	if hasSuggestCode(levels, "arxiprestat_vicariat_forani") || hasSuggestCode(levels, "ortodoxia_metropolia") {
+		t.Fatalf("els nivells sense entitats reals no han d'apareixer, got=%v", levels)
+	}
 }
 
 func TestF354U3ConfessionalExportOnlyDefaultsVisible(t *testing.T) {
@@ -931,6 +1062,61 @@ func findConfEntityByCode(all []db.EntitatReligiosa, code string) *db.EntitatRel
 func hasHierarchyRelation(all []db.EntitatReligiosaRelacio, parentID, childID int) bool {
 	for _, item := range all {
 		if item.ModeracioEstat == "publicat" && item.EntitatOrigenID == parentID && item.EntitatDestiID == childID {
+			return true
+		}
+	}
+	return false
+}
+
+type suggestOption struct {
+	Code         string
+	Label        string
+	Context      string
+	ReligionCode string
+}
+
+func extractSuggestOptionsFromContainer(t *testing.T, body, containerID string) []suggestOption {
+	t.Helper()
+	re := regexp.MustCompile(`(?s)<div id="` + regexp.QuoteMeta(containerID) + `"[^>]*>(.*?)</div>`)
+	match := re.FindStringSubmatch(body)
+	if len(match) != 2 {
+		t.Fatalf("no s'ha trobat el contenidor %s", containerID)
+	}
+	tagRe := regexp.MustCompile(`(?s)<span[^>]*data-suggest-option[^>]*></span>`)
+	tags := tagRe.FindAllString(match[1], -1)
+	out := make([]suggestOption, 0, len(tags))
+	for _, tag := range tags {
+		out = append(out, suggestOption{
+			Code:         extractHTMLAttr(tag, "data-code"),
+			Label:        extractHTMLAttr(tag, "data-label"),
+			Context:      extractHTMLAttr(tag, "data-context"),
+			ReligionCode: extractHTMLAttr(tag, "data-religion-code"),
+		})
+	}
+	return out
+}
+
+func extractHTMLAttr(tag, attr string) string {
+	re := regexp.MustCompile(attr + `="([^"]*)"`)
+	match := re.FindStringSubmatch(tag)
+	if len(match) != 2 {
+		return ""
+	}
+	return html.UnescapeString(match[1])
+}
+
+func hasSuggestCode(options []suggestOption, code string) bool {
+	for _, option := range options {
+		if option.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+func hasSuggestOption(options []suggestOption, code, religionCode string) bool {
+	for _, option := range options {
+		if option.Code == code && option.ReligionCode == religionCode {
 			return true
 		}
 	}
