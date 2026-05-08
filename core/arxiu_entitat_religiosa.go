@@ -15,6 +15,8 @@ type arxiuEntitatReligiosaType struct {
 	Key  string
 }
 
+const arxiuEntitatReligiosaDeleteRequestMarker = "__delete_requested__"
+
 type arxiuEntitatReligiosaFormData struct {
 	Relacio                *db.ArxiuEntitatReligiosa
 	Arxius                 []db.ArxiuWithCount
@@ -126,20 +128,37 @@ func (a *App) AdminSaveArxiuEntitatReligiosa(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	id, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("id")))
-	rel := parseArxiuEntitatReligiosaForm(r)
-	rel.ID = id
-	target := a.resolveArxiuTarget(rel.ArxiuID)
-	perm := permKeyTerritoriConfessionalArxiusEntitatsCreate
-	if id > 0 {
-		perm = permKeyTerritoriConfessionalArxiusEntitatsEdit
-	}
-	user, ok := a.requirePermissionKey(w, r, perm, target)
-	if !ok {
-		return
-	}
 	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	fromArxiuID := parsePositiveIntDefault(r.FormValue("from_arxiu_id"), 0, 0, 1000000000)
 	fromEntitatID := parsePositiveIntDefault(r.FormValue("from_entitat_religiosa_id"), 0, 0, 1000000000)
+	var (
+		current *db.ArxiuEntitatReligiosa
+		user    *db.User
+		ok      bool
+	)
+	if id > 0 {
+		current, _ = a.DB.GetArxiuEntitatReligiosa(id)
+		if current == nil {
+			http.NotFound(w, r)
+			return
+		}
+		user, ok = a.requirePermissionKey(w, r, permKeyTerritoriConfessionalArxiusEntitatsEdit, a.resolveArxiuTarget(current.ArxiuID))
+		if !ok {
+			return
+		}
+	} else {
+		preview := parseArxiuEntitatReligiosaForm(r)
+		user, ok = a.requirePermissionKey(w, r, permKeyTerritoriConfessionalArxiusEntitatsCreate, a.resolveArxiuTarget(preview.ArxiuID))
+		if !ok {
+			return
+		}
+	}
+	rel := parseArxiuEntitatReligiosaForm(r)
+	rel.ID = id
+	if current != nil && rel.ArxiuID != current.ArxiuID && !a.canModerateModular(user) {
+		a.renderArxiuEntitatReligiosaForm(w, r, user, rel, false, fromArxiuID, fromEntitatID, T(ResolveLangForUser(r, user.PreferredLang), "confessional.archive_relation.error.move_restricted"), returnURL)
+		return
+	}
 	if errMsg := a.validateArxiuEntitatReligiosa(rel); errMsg != "" {
 		a.renderArxiuEntitatReligiosaForm(w, r, user, rel, id == 0, fromArxiuID, fromEntitatID, errMsg, returnURL)
 		return
@@ -152,7 +171,7 @@ func (a *App) AdminSaveArxiuEntitatReligiosa(w http.ResponseWriter, r *http.Requ
 	rel.ModeratedAt = sql.NullTime{}
 	if id == 0 {
 		rel.CreatedBy = author
-	} else if current, err := a.DB.GetArxiuEntitatReligiosa(id); err == nil && current != nil {
+	} else if current != nil {
 		if current.ModeracioEstat == "publicat" && !a.canModerateModular(user) {
 			a.renderArxiuEntitatReligiosaForm(w, r, user, rel, false, fromArxiuID, fromEntitatID, T(ResolveLangForUser(r, user.PreferredLang), "confessional.archive_relation.error.published_edit_restricted"), returnURL)
 			return
@@ -184,8 +203,28 @@ func (a *App) AdminDeleteArxiuEntitatReligiosa(w http.ResponseWriter, r *http.Re
 		return
 	}
 	target := a.resolveArxiuTarget(rel.ArxiuID)
-	if _, ok := a.requirePermissionKey(w, r, permKeyTerritoriConfessionalArxiusEntitatsDelete, target); !ok {
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriConfessionalArxiusEntitatsDelete, target)
+	if !ok {
 		return
+	}
+	if rel.ModeracioEstat == "publicat" || arxiuEntitatReligiosaDeleteRequested(rel) {
+		if !arxiuEntitatReligiosaDeleteRequested(rel) {
+			rel.UpdatedBy = sqlNullIntFromInt(user.ID)
+			rel.ModeracioEstat = "pendent"
+			rel.ModeracioMotiu = arxiuEntitatReligiosaDeleteRequestMarker
+			rel.ModeratedBy = sql.NullInt64{}
+			rel.ModeratedAt = sql.NullTime{}
+			if _, err := a.DB.SaveArxiuEntitatReligiosa(rel); err == nil {
+				_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuUpdate, "editar", "arxiu_entitat_religiosa", &rel.ID, "pendent", nil, arxiuEntitatReligiosaDeleteRequestMarker)
+			}
+		}
+		http.Redirect(w, r, fmt.Sprintf("/documentals/arxius/%d?notice=relation-delete-pending", rel.ArxiuID), http.StatusSeeOther)
+		return
+	}
+	if acts, err := a.DB.ListActivityByObject("arxiu_entitat_religiosa", id, "pendent"); err == nil {
+		for _, act := range acts {
+			_ = a.DB.UpdateUserActivityStatus(act.ID, "anulat", &user.ID)
+		}
 	}
 	_ = a.DB.DeleteArxiuEntitatReligiosa(id)
 	http.Redirect(w, r, fmt.Sprintf("/documentals/arxius/%d", rel.ArxiuID), http.StatusSeeOther)
@@ -307,6 +346,13 @@ func normalizeArxiuEntitatReligiosaEstat(raw string) string {
 		return "historic"
 	}
 	return "actiu"
+}
+
+func arxiuEntitatReligiosaDeleteRequested(rel *db.ArxiuEntitatReligiosa) bool {
+	if rel == nil {
+		return false
+	}
+	return strings.TrimSpace(rel.ModeracioMotiu) == arxiuEntitatReligiosaDeleteRequestMarker
 }
 
 func nullIntEqual(a, b sql.NullInt64) bool {

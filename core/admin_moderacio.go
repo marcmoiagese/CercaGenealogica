@@ -5920,6 +5920,15 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 	case "municipi_entitat_religiosa":
 		return a.DB.UpdateMunicipiEntitatReligiosaModeracio(id, estat, motiu, moderatorID)
 	case "arxiu_entitat_religiosa":
+		before, _ := a.DB.GetArxiuEntitatReligiosa(id)
+		if arxiuEntitatReligiosaDeleteRequested(before) {
+			if estat == "publicat" {
+				return a.DB.DeleteArxiuEntitatReligiosa(id)
+			}
+			if estat == "rebutjat" {
+				return a.DB.UpdateArxiuEntitatReligiosaModeracio(id, "publicat", "", moderatorID)
+			}
+		}
 		return a.DB.UpdateArxiuEntitatReligiosaModeracio(id, estat, motiu, moderatorID)
 	case "registre":
 		action := ""

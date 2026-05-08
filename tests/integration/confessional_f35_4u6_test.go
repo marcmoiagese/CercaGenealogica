@@ -483,6 +483,88 @@ func TestF354U6ArxiuEditFormShowsLegacyFieldAndOptionalConfessionalSection(t *te
 	}
 }
 
+func TestF354U6ArchiveRelationTemplatesUseLocaleKeysAndNoInlineDeleteStyle(t *testing.T) {
+	root := findProjectRoot(t)
+	formBody, err := os.ReadFile(filepath.Join(root, "templates", "admin-arxius-form.html"))
+	if err != nil {
+		t.Fatalf("ReadFile admin-arxius-form.html: %v", err)
+	}
+	formSrc := string(formBody)
+	for _, required := range []string{
+		`archives.form.code`,
+		`archives.type.estatal`,
+		`archives.type.privat`,
+		`archives.type.familiar`,
+		`archives.type.familysearch`,
+		`confessional.archive_relation.archive_save_first`,
+		`confessional.archive_relation.archive_optional_hint`,
+	} {
+		if !strings.Contains(formSrc, required) {
+			t.Fatalf("la plantilla d'arxiu ha d'usar clau i18n %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		`>Codi<`,
+		`>Estatal<`,
+		`>Privat<`,
+		`>Familiar<`,
+		`>FamilySearch<`,
+		`Desa primer l'arxiu`,
+		`Aquesta secció és opcional`,
+	} {
+		if strings.Contains(formSrc, forbidden) {
+			t.Fatalf("la plantilla d'arxiu no ha de conservar literal hardcoded %q", forbidden)
+		}
+	}
+
+	for _, rel := range []string{
+		filepath.Join(root, "templates", "admin-arxius-show.html"),
+		filepath.Join(root, "templates", "admin-confessional-entity-show.html"),
+	} {
+		body, err := os.ReadFile(rel)
+		if err != nil {
+			t.Fatalf("ReadFile %s: %v", rel, err)
+		}
+		src := string(body)
+		if strings.Contains(src, `/documentals/arxius/entitats-religioses/{{ .ID }}/delete" style="display:inline;"`) {
+			t.Fatalf("%s no ha de tenir style inline al formulari de baixa de relacio", rel)
+		}
+		if !strings.Contains(src, `/documentals/arxius/entitats-religioses/{{ .ID }}/delete" class="inline-form"`) {
+			t.Fatalf("%s ha d'usar class inline-form al formulari de baixa de relacio", rel)
+		}
+		for _, forbidden := range []string{`onclick=`, `oninput=`, `onsubmit=`, `javascript:`} {
+			if strings.Contains(src, forbidden) {
+				t.Fatalf("%s no ha d'afegir %q a la UI de relacions d'arxiu", rel, forbidden)
+			}
+		}
+	}
+
+	for _, localeRel := range []string{
+		filepath.Join(root, "locales", "cat.json"),
+		filepath.Join(root, "locales", "en.json"),
+		filepath.Join(root, "locales", "oc.json"),
+	} {
+		body, err := os.ReadFile(localeRel)
+		if err != nil {
+			t.Fatalf("ReadFile %s: %v", localeRel, err)
+		}
+		src := string(body)
+		for _, key := range []string{
+			`"archives.form.code"`,
+			`"archives.type.estatal"`,
+			`"archives.type.privat"`,
+			`"archives.type.familiar"`,
+			`"archives.type.familysearch"`,
+			`"confessional.archive_relation.archive_save_first"`,
+			`"confessional.archive_relation.archive_optional_hint"`,
+		} {
+			if !strings.Contains(src, key) {
+				t.Fatalf("%s ha de contenir la clau locale %s", localeRel, key)
+			}
+		}
+	}
+}
+
 func TestF354U6ArxiuUpdateWithoutReligiousRelationStaysValid(t *testing.T) {
 	app, database, _, session := setupF354U6ArxiusUIAdmin(t, "test_f35_4u6_update_without_relation.sqlite3")
 	municipiID := f353YCreateMunicipi(t, database, "Municipi Arxiu Sense Relacio UI F35-4U6")
@@ -605,6 +687,111 @@ func TestF354U6ManualArchiveRelationCreateUsesEntitatReligiosaAndStaysPending(t 
 	}
 }
 
+func TestF354U6PublishedArchiveRelationDeleteNeedsModerationInsteadOfHardDelete(t *testing.T) {
+	app, database, admin, session := setupF354U6ArxiusUIAdmin(t, "test_f35_4u6_delete_published.sqlite3")
+	arxiuID := f354CreateArxiu(t, database, "Arxiu Delete Published F35-4U6")
+	entitatID := f353YCreateEntitat(t, database, "Entitat Delete Published F35-4U6", "publicat")
+	relID, err := database.SaveArxiuEntitatReligiosa(&db.ArxiuEntitatReligiosa{
+		ArxiuID:            arxiuID,
+		EntitatReligiosaID: entitatID,
+		TipusRelacio:       "arxiu_institucional",
+		Estat:              "actiu",
+		ModeracioEstat:     "publicat",
+		CreatedBy:          sql.NullInt64{Int64: int64(admin.ID), Valid: true},
+		UpdatedBy:          sql.NullInt64{Int64: int64(admin.ID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("SaveArxiuEntitatReligiosa publicada: %v", err)
+	}
+
+	rr := f354U6DeleteArchiveRelation(t, app, session, relID)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("el delete publicat ha de redirigir, got=%d body=%s", rr.Code, rr.Body.String())
+	}
+	rows, err := database.Query("SELECT moderation_status, moderation_notes FROM arxiu_entitat_religiosa WHERE id = ?", relID)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("la relacio publicada no s'ha d'eliminar fisicament abans de moderacio: err=%v rows=%d", err, len(rows))
+	}
+	if got := strings.TrimSpace(asString(rows[0]["moderation_status"])); got != "pendent" {
+		t.Fatalf("la baixa publicada ha de quedar pendent, got %q", got)
+	}
+	if got := strings.TrimSpace(asString(rows[0]["moderation_notes"])); got != "__delete_requested__" {
+		t.Fatalf("la baixa publicada ha de marcar-se com delete request, got %q", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM usuaris_activitat WHERE usuari_id = ? AND estat = 'pendent' AND objecte_tipus = 'arxiu_entitat_religiosa' AND objecte_id = ?", admin.ID, relID); got != 1 {
+		t.Fatalf("la baixa publicada ha de crear activitat pendent, got %d", got)
+	}
+
+	f353YPostModeracio(t, app.AdminModeracioAprovar, session, relID, "arxiu_entitat_religiosa", "aprovar", "")
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxiu_entitat_religiosa WHERE id = ?", relID); got != 0 {
+		t.Fatalf("aprovar la baixa publicada ha d'eliminar la relacio, got %d", got)
+	}
+}
+
+func TestF354U6PendingArchiveRelationDeleteCancelsProposalWithoutHardDeleteFlow(t *testing.T) {
+	app, database, admin, session := setupF354U6ArxiusUIAdmin(t, "test_f35_4u6_delete_pending.sqlite3")
+	arxiuID := f354CreateArxiu(t, database, "Arxiu Delete Pending F35-4U6")
+	entitatID := f353YCreateEntitat(t, database, "Entitat Delete Pending F35-4U6", "publicat")
+	relID, err := database.SaveArxiuEntitatReligiosa(&db.ArxiuEntitatReligiosa{
+		ArxiuID:            arxiuID,
+		EntitatReligiosaID: entitatID,
+		TipusRelacio:       "context_religios",
+		Estat:              "actiu",
+		ModeracioEstat:     "pendent",
+		CreatedBy:          sql.NullInt64{Int64: int64(admin.ID), Valid: true},
+		UpdatedBy:          sql.NullInt64{Int64: int64(admin.ID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("SaveArxiuEntitatReligiosa pendent: %v", err)
+	}
+	if _, err := database.InsertUserActivity(&db.UserActivity{
+		UserID:     admin.ID,
+		Action:     "crear",
+		ObjectType: "arxiu_entitat_religiosa",
+		ObjectID:   sql.NullInt64{Int64: int64(relID), Valid: true},
+		Status:     "pendent",
+		Details:    "test",
+		CreatedAt:  time.Now(),
+	}); err != nil {
+		t.Fatalf("InsertUserActivity pending relation: %v", err)
+	}
+
+	rr := f354U6DeleteArchiveRelation(t, app, session, relID)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("el delete pendent ha de redirigir, got=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxiu_entitat_religiosa WHERE id = ?", relID); got != 0 {
+		t.Fatalf("la proposta pendent s'ha de poder cancel·lar fisicament, got %d", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM usuaris_activitat WHERE usuari_id = ? AND objecte_tipus = 'arxiu_entitat_religiosa' AND objecte_id = ? AND estat = 'anulat'", admin.ID, relID); got == 0 {
+		t.Fatalf("cancel·lar la proposta pendent ha d'anul·lar l'activitat pendent")
+	}
+}
+
+func TestF354U6ArchiveRelationEditLoadsCurrentTargetBeforeApplyingChanges(t *testing.T) {
+	root := findProjectRoot(t)
+	body, err := os.ReadFile(filepath.Join(root, "core", "arxiu_entitat_religiosa.go"))
+	if err != nil {
+		t.Fatalf("ReadFile arxiu_entitat_religiosa.go: %v", err)
+	}
+	src := string(body)
+	currentLoad := `current, _ = a.DB.GetArxiuEntitatReligiosa(id)`
+	currentPerm := `a.requirePermissionKey(w, r, permKeyTerritoriConfessionalArxiusEntitatsEdit, a.resolveArxiuTarget(current.ArxiuID))`
+	parseForm := `rel := parseArxiuEntitatReligiosaForm(r)`
+	moveGuard := `if current != nil && rel.ArxiuID != current.ArxiuID && !a.canModerateModular(user) {`
+	for _, token := range []string{currentLoad, currentPerm, parseForm, moveGuard} {
+		if !strings.Contains(src, token) {
+			t.Fatalf("falta contracte de seguretat F35-4U6 al handler: %s", token)
+		}
+	}
+	if strings.Index(src, currentLoad) > strings.Index(src, parseForm) {
+		t.Fatalf("el handler ha de carregar la relacio existent abans de parsejar el formulari")
+	}
+	if strings.Index(src, currentPerm) > strings.Index(src, parseForm) {
+		t.Fatalf("el handler ha de validar permisos sobre el target real abans d'aplicar canvis")
+	}
+}
+
 func seedF354U6LegacyFixtureTerritory(t *testing.T, database db.DB) {
 	t.Helper()
 	pais := &db.Pais{CodiISO2: "ES", CodiISO3: "ESP", CodiPaisNum: "724"}
@@ -661,4 +848,13 @@ func setupF354U6ArxiusUIAdmin(t *testing.T, dbName string) (*core.App, db.DB, *d
 	assignPolicyToUser(t, database, admin.ID, policy)
 	session := createSessionCookie(t, database, admin.ID, "sess_f35_4u6_ui_"+strconv.FormatInt(time.Now().UnixNano(), 10))
 	return app, database, admin, session
+}
+
+func f354U6DeleteArchiveRelation(t *testing.T, app *core.App, session *http.Cookie, relID int) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/documentals/arxius/entitats-religioses/"+strconv.Itoa(relID)+"/delete", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminDeleteArxiuEntitatReligiosa(rr, req)
+	return rr
 }

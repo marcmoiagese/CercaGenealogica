@@ -66,7 +66,7 @@
                     </a>
                     {{ end }}
                     {{ if $.Data.CanDeleteArxiu }}
-                    <form method="post" action="{{ $manageBase }}/{{ .Data.Arxiu.ID }}/delete" style="display:inline;" data-confirm-message="{{ t .Lang "archives.confirm.delete" }}">
+                    <form method="post" action="{{ $manageBase }}/{{ .Data.Arxiu.ID }}/delete" class="inline-form" data-confirm-message="{{ t .Lang "archives.confirm.delete" }}">
                         <button type="submit" class="boto-perill"><i class="fas fa-trash"></i> {{ t .Lang "archives.action.delete" }}</button>
                     </form>
                     {{ end }}
@@ -186,7 +186,7 @@
                                     {{ if or $.Data.CanEditArxiuEntitatReligiosa $.Data.CanDeleteArxiuEntitatReligiosa }}
                                     <td>
                                         {{ if $.Data.CanEditArxiuEntitatReligiosa }}<a class="boto-secundari" href="/documentals/arxius/entitats-religioses/{{ .ID }}/edit?return_to=/documentals/arxius/{{ $.Data.Arxiu.ID }}">{{ t $.Lang "confessional.action.edit" }}</a>{{ end }}
-                                        {{ if $.Data.CanDeleteArxiuEntitatReligiosa }}<form method="post" action="/documentals/arxius/entitats-religioses/{{ .ID }}/delete" style="display:inline;"><button class="boto-perill" type="submit">{{ t $.Lang "confessional.action.delete" }}</button></form>{{ end }}
+                                        {{ if $.Data.CanDeleteArxiuEntitatReligiosa }}<form method="post" action="/documentals/arxius/entitats-religioses/{{ .ID }}/delete" class="inline-form"><button class="boto-perill" type="submit">{{ t $.Lang "confessional.action.delete" }}</button></form>{{ end }}
                                     </td>
                                     {{ end }}
                                 </tr>
