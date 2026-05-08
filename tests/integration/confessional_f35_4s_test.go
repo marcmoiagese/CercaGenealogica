@@ -239,6 +239,7 @@ func TestF354S1DiagnosticI18NKeysAreCompleteCleanAndConsistent(t *testing.T) {
 	}
 
 	placeholderRE := regexp.MustCompile(`%[sd]`)
+	ocBrokenWordQuestionRE := regexp.MustCompile(`\pL\?\pL|\pL\?(?:\P{L}|$)|(?:^|\P{L})\?\pL`)
 	mojibake := []string{"Ãƒ", "Ã‚", "Ã¢", "ï¿½"}
 	for _, key := range keys {
 		catValue := locales["cat"][key]
@@ -255,6 +256,9 @@ func TestF354S1DiagnosticI18NKeysAreCompleteCleanAndConsistent(t *testing.T) {
 				if strings.Contains(value, bad) {
 					t.Fatalf("%s a locales/%s.json conte mojibake %q: %q", key, lang, bad, value)
 				}
+			}
+			if lang == "oc" && ocBrokenWordQuestionRE.MatchString(value) {
+				t.Fatalf("%s a locales/oc.json conte '?' dins una paraula: %q", key, value)
 			}
 			placeholders := placeholderRE.FindAllString(value, -1)
 			if strings.Join(placeholders, "|") != strings.Join(catPlaceholders, "|") {
@@ -274,6 +278,7 @@ func TestF354S1DiagnosticI18NKeysAreCompleteCleanAndConsistent(t *testing.T) {
 		"confessional.diagnostic.type.pending_relation_inconsistent": "Relacio pendent incoherent",
 		"confessional.diagnostic.col.description":                    "Descripcio",
 		"confessional.diagnostic.coverage.title":                     "Cobertura per religio/confessio",
+		"confessional.diagnostic.context.inferred_municipality":      "Municipi deduible",
 		"confessional.diagnostic.message.issue.self_relation":        "La relacio apunta a la mateixa entitat.",
 		"confessional.diagnostic.message.pending_relation.duplicate": "La filla pendent te multiples relacions inicials pendents.",
 		"confessional.diagnostic.message.archive_without_context":    "L'arxiu sembla religios pero no te cap relacio religiosa publicada.",

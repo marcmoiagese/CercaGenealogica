@@ -3535,7 +3535,7 @@
   "confessional.diagnostic.message.missing_parent.optional": "El nivell %s no té una regla ferma de pare publicat.",
   "confessional.diagnostic.message.multiple_parents": "S'han detectat múltiples entitats pare publicades: %s",
   "confessional.diagnostic.message.local_entity_without_territory": "La unitat local de nivell %s no té cap relació territorial publicada.",
-  "confessional.diagnostic.context.inferred_municipality": "Municipi deduible",
+  "confessional.diagnostic.context.inferred_municipality": "Municipi deduïble",
   "confessional.diagnostic.message.issue.parent_missing": "L'entitat pare no existeix.",
   "confessional.diagnostic.message.issue.child_missing": "L'entitat filla no existeix.",
   "confessional.diagnostic.message.issue.parent_unpublished": "L'entitat pare no està publicada.",
