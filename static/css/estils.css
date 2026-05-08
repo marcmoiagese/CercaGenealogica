@@ -697,8 +697,119 @@ body {
     padding: 0;
 }
 
+.io-tabs .tabs-botons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 14px 0;
+}
+
+.io-tabs .tab-boto {
+    background: #f6f8fb;
+    border: 1px solid #dfe3ec;
+    border-radius: 10px;
+    color: #1f2c4d;
+    cursor: pointer;
+    font-weight: 600;
+    padding: 8px 14px;
+    transition: all 0.15s ease;
+}
+
+.io-tabs .tab-boto.actiu {
+    background: #e9edfb;
+    border-color: #bcc8f4;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 2px 6px rgba(0, 0, 0, 0.05);
+    color: #1f2c4d;
+}
+
+.io-tabs .tab-pane {
+    display: none;
+}
+
+.io-tabs .tab-pane.actiu {
+    display: block;
+}
+
+.io-subtabs {
+    margin-top: 8px;
+}
+
+.io-subtabs .tabs-botons {
+    margin: 0 0 10px 0;
+}
+
 .confessional-export-form {
     gap: 18px;
+}
+
+.confessional-import-form {
+    gap: 18px;
+}
+
+.confessional-import-layout {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr);
+}
+
+.confessional-import-panel {
+    background: #f8fafc;
+    border: 1px solid #dfe3ec;
+    border-radius: 8px;
+    padding: 14px;
+}
+
+.confessional-import-uploader .file-uploader__drop {
+    min-height: 150px;
+}
+
+.confessional-import-options {
+    display: grid;
+    gap: 10px;
+}
+
+.confessional-import-option {
+    min-height: 88px;
+}
+
+.confessional-import-actions {
+    justify-content: flex-start;
+    margin-top: 18px;
+}
+
+.confessional-import-results {
+    background: #f8fafc;
+    border: 1px solid #dfe3ec;
+    border-radius: 8px;
+    display: grid;
+    gap: 14px;
+    margin-top: 16px;
+    padding: 16px;
+}
+
+.confessional-import-results h3 {
+    margin: 0;
+}
+
+.confessional-import-alert {
+    margin: 0;
+}
+
+.confessional-import-summary {
+    background: #fff;
+    border: 1px solid #e4e7ec;
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.confessional-import-apply {
+    border-top: 1px solid #e4e7ec;
+    padding-top: 14px;
+}
+
+.confessional-import-completed {
+    background: #f5fbf7;
+    border-color: #cfe8d7;
 }
 
 .confessional-export-options {
@@ -807,7 +918,22 @@ body {
     left: 0;
     right: 0;
     top: calc(100% + 4px);
-    z-index: 20;
+    z-index: 40;
+}
+
+.confessional-suggest-options {
+    display: none;
+}
+
+.confessional-local-suggest .resultats-cerca li {
+    display: grid;
+    gap: 3px;
+}
+
+@media (max-width: 820px) {
+    .confessional-import-layout {
+        grid-template-columns: 1fr;
+    }
 }
 
 .taula-wrapper {

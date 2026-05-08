@@ -6,15 +6,6 @@
     <title>{{ t .Lang "admin.io.title" }}</title>
     {{ template "styles-private" . }}
     {{ template "styles-file-uploader" . }}
-    <style>
-        .io-tabs .tabs-botons{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px 0}
-        .io-tabs .tab-boto{background:#f6f8fb;border:1px solid #dfe3ec;color:#1f2c4d;padding:8px 14px;border-radius:10px;font-weight:600;cursor:pointer;transition:all .15s ease}
-        .io-tabs .tab-boto.actiu{background:#e9edfb;border-color:#bcc8f4;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6),0 2px 6px rgba(0,0,0,0.05);color:#1f2c4d}
-        .io-tabs .tab-pane{display:none}
-        .io-tabs .tab-pane.actiu{display:block}
-        .io-subtabs{margin-top:8px}
-        .io-subtabs .tabs-botons{margin:0 0 10px 0}
-    </style>
 </head>
 <body>
     {{ template "header-private" . }}
@@ -359,40 +350,51 @@
                                         {{ if .Data.ConfessionalMsg }}
                                         <div class="alert alert-error">{{ .Data.ConfessionalMsg }}</div>
                                         {{ end }}
-                                        <form class="form-vertical" method="post" action="/admin/confessional/import/dry-run" enctype="multipart/form-data">
+                                        <form class="form-vertical confessional-import-form" method="post" action="/admin/confessional/import/dry-run" enctype="multipart/form-data" data-confessional-import-form>
                                             <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
-                                            <div class="grup-camp">
-                                                <label for="confessional-file">{{ t .Lang "confessional.io.import.file" }}</label>
-                                                <div class="file-uploader">
-                                                    <input id="confessional-file" type="file" name="import_file" accept="application/json" required>
-                                                    <label class="file-uploader__drop" for="confessional-file">
-                                                        <span class="file-uploader__icon"><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i></span>
-                                                        <span class="file-uploader__text">
-                                                            <span class="file-uploader__title">{{ t .Lang "common.file_uploader.title" }}</span>
-                                                            <span class="file-uploader__meta">{{ t .Lang "common.file_uploader.meta" }}</span>
-                                                        </span>
-                                                    </label>
-                                                    <div class="file-uploader__selected" data-empty="{{ t .Lang "common.file_uploader.empty" }}" data-multiple="{{ t .Lang "common.file_uploader.multiple" }}">{{ t .Lang "common.file_uploader.empty" }}</div>
+                                            <p class="muted">{{ t .Lang "confessional.io.import.description" }}</p>
+                                            <div class="confessional-import-layout">
+                                                <section class="confessional-import-panel">
+                                                    <div class="grup-camp">
+                                                        <label for="confessional-file">{{ t .Lang "confessional.io.import.file" }}</label>
+                                                        <div class="file-uploader confessional-import-uploader">
+                                                            <input id="confessional-file" type="file" name="import_file" accept="application/json" required>
+                                                            <label class="file-uploader__drop" for="confessional-file">
+                                                                <span class="file-uploader__icon"><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i></span>
+                                                                <span class="file-uploader__text">
+                                                                    <span class="file-uploader__title">{{ t .Lang "common.file_uploader.title" }}</span>
+                                                                    <span class="file-uploader__meta">{{ t .Lang "common.file_uploader.meta" }}</span>
+                                                                </span>
+                                                            </label>
+                                                            <div class="file-uploader__selected" data-empty="{{ t .Lang "common.file_uploader.empty" }}" data-multiple="{{ t .Lang "common.file_uploader.multiple" }}">{{ t .Lang "common.file_uploader.empty" }}</div>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="grup-camp checkbox-linia">
-                                                <label>
-                                                    <input type="checkbox" name="include_non_published" value="1" {{ if .Data.ConfessionalDryRun.IncludeNonPublished }}checked{{ end }}>
-                                                    {{ t .Lang "confessional.io.import.include_non_published" }}
-                                                </label>
-                                            </div>
-                                            <div class="form-accio">
-                                                <button type="submit" class="boto-primari">
-                                                    <i class="fas fa-vial"></i>
-                                                    <span>{{ t .Lang "confessional.io.import.dry_run" }}</span>
-                                                </button>
+                                                <section class="confessional-import-panel">
+                                                    <div class="confessional-import-options">
+                                                        <label class="confessional-export-option confessional-import-option" for="conf-import-include-non-published">
+                                                            <input id="conf-import-include-non-published" type="checkbox" name="include_non_published" value="1" {{ if .Data.ConfessionalDryRun.IncludeNonPublished }}checked{{ end }}>
+                                                            <span class="confessional-export-option__body">
+                                                                <span class="confessional-export-option__title">{{ t .Lang "confessional.io.import.include_non_published" }}</span>
+                                                                <span class="confessional-export-option__desc">{{ t .Lang "confessional.io.export.include_non_published_desc" }}</span>
+                                                            </span>
+                                                        </label>
+                                                    </div>
+                                                    <div class="form-accio confessional-import-actions">
+                                                        <button type="submit" class="boto-primari">
+                                                            <i class="fas fa-vial"></i>
+                                                            <span>{{ t .Lang "confessional.io.import.dry_run" }}</span>
+                                                        </button>
+                                                    </div>
+                                                </section>
                                             </div>
                                         </form>
 
                                         {{ if .Data.ConfessionalDryRunAvailable }}
+                                        <section class="confessional-import-results">
                                         <h3>{{ t .Lang "confessional.io.summary.title" }}</h3>
                                         {{ if .Data.ConfessionalDryRun.Errors }}
-                                        <div class="alert alert-error">
+                                        <div class="alert alert-error confessional-import-alert">
                                             <strong>{{ t .Lang "confessional.io.summary.errors" }}</strong>
                                             <ul>
                                                 {{ range .Data.ConfessionalDryRun.Errors }}
@@ -402,7 +404,7 @@
                                         </div>
                                         {{ end }}
                                         {{ if .Data.ConfessionalDryRun.Warnings }}
-                                        <div class="alert alert-warning">
+                                        <div class="alert alert-warning confessional-import-alert">
                                             <strong>{{ t .Lang "confessional.io.summary.warnings" }}</strong>
                                             <ul>
                                                 {{ range .Data.ConfessionalDryRun.Warnings }}
@@ -412,7 +414,7 @@
                                         </div>
                                         {{ end }}
                                         {{ if .Data.ConfessionalDryRun.Conflicts }}
-                                        <div class="alert alert-warning">
+                                        <div class="alert alert-warning confessional-import-alert">
                                             <strong>{{ t .Lang "confessional.io.summary.conflicts" }}</strong>
                                             <ul>
                                                 {{ range .Data.ConfessionalDryRun.Conflicts }}
@@ -421,7 +423,7 @@
                                             </ul>
                                         </div>
                                         {{ end }}
-                                        <div class="taula-wrapper">
+                                        <div class="taula-wrapper confessional-import-summary">
                                             <table class="taula">
                                                 <tbody>
                                                     <tr><th>{{ t .Lang "confessional.io.summary.entities_to_create" }}</th><td>{{ .Data.ConfessionalDryRun.EntityCreateCount }}</td></tr>
@@ -436,7 +438,7 @@
                                             </table>
                                         </div>
                                         {{ if .Data.ConfessionalDryRun.CanApply }}
-                                        <form class="form-vertical" method="post" action="/admin/confessional/import/apply">
+                                        <form class="form-vertical confessional-import-apply" method="post" action="/admin/confessional/import/apply">
                                             <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                                             <input type="hidden" name="include_non_published" value="{{ if .Data.ConfessionalDryRun.IncludeNonPublished }}1{{ else }}0{{ end }}">
                                             <textarea name="payload_b64" hidden>{{ .Data.ConfessionalDryRun.PayloadB64 }}</textarea>
@@ -448,11 +450,13 @@
                                             </div>
                                         </form>
                                         {{ end }}
+                                        </section>
                                         {{ end }}
 
                                         {{ if .Data.ConfessionalImportRun }}
+                                        <section class="confessional-import-results confessional-import-completed">
                                         <h3>{{ t .Lang "confessional.io.summary.completed" }}</h3>
-                                        <div class="taula-wrapper">
+                                        <div class="taula-wrapper confessional-import-summary">
                                             <table class="taula">
                                                 <tbody>
                                                     <tr><th>{{ t .Lang "confessional.io.summary.entities_total" }}</th><td>{{ .Data.ConfessionalEntitiesTotal }}</td></tr>
@@ -470,6 +474,7 @@
                                                 </tbody>
                                             </table>
                                         </div>
+                                        </section>
                                         {{ end }}
                                     </section>
                                     {{ end }}
@@ -515,6 +520,10 @@
                                                            type="text"
                                                            autocomplete="off"
                                                            placeholder="{{ t .Lang "confessional.io.export.religion_placeholder" }}"
+                                                           role="combobox"
+                                                           aria-autocomplete="list"
+                                                           aria-expanded="false"
+                                                           aria-controls="conf-export-religion-suggestions"
                                                            data-local-suggest="1"
                                                            data-hidden="conf-export-religion"
                                                            data-options="conf-export-religion-options"
@@ -525,7 +534,7 @@
                                                     <input id="conf-export-religion" type="hidden" name="religio_confessio_codi" value="">
                                                     <div id="conf-export-religion-selected" class="confessional-selected-value">{{ t .Lang "confessional.io.export.all_religions" }}</div>
                                                     <button id="conf-export-religion-clear" class="confessional-suggest-clear" type="button">{{ t .Lang "confessional.io.export.clear_selection" }}</button>
-                                                    <ul id="conf-export-religion-suggestions" class="resultats-cerca confessional-suggestions"></ul>
+                                                    <ul id="conf-export-religion-suggestions" class="resultats-cerca confessional-suggestions" role="listbox" aria-label="{{ t .Lang "confessional.io.export.religion" }}"></ul>
                                                     <div id="conf-export-religion-options" class="confessional-suggest-options" hidden>
                                                         {{ range .Data.ConfessionalExportReligions }}
                                                         <span data-suggest-option data-code="{{ .Code }}" data-label="{{ .Label }}" data-context="{{ .Context }}"></span>
@@ -538,6 +547,10 @@
                                                            type="text"
                                                            autocomplete="off"
                                                            placeholder="{{ t .Lang "confessional.io.export.level_placeholder" }}"
+                                                           role="combobox"
+                                                           aria-autocomplete="list"
+                                                           aria-expanded="false"
+                                                           aria-controls="conf-export-level-suggestions"
                                                            data-local-suggest="1"
                                                            data-hidden="conf-export-level"
                                                            data-options="conf-export-level-options"
@@ -549,7 +562,7 @@
                                                     <input id="conf-export-level" type="hidden" name="nivell_confessional_codi" value="">
                                                     <div id="conf-export-level-selected" class="confessional-selected-value">{{ t .Lang "confessional.io.export.all_levels" }}</div>
                                                     <button id="conf-export-level-clear" class="confessional-suggest-clear" type="button">{{ t .Lang "confessional.io.export.clear_selection" }}</button>
-                                                    <ul id="conf-export-level-suggestions" class="resultats-cerca confessional-suggestions"></ul>
+                                                    <ul id="conf-export-level-suggestions" class="resultats-cerca confessional-suggestions" role="listbox" aria-label="{{ t .Lang "confessional.io.export.level" }}"></ul>
                                                     <div id="conf-export-level-options" class="confessional-suggest-options" hidden>
                                                         {{ range .Data.ConfessionalExportLevels }}
                                                         <span data-suggest-option data-code="{{ .Code }}" data-label="{{ .Label }}" data-context="{{ .Context }}" data-religion-code="{{ .ReligionCode }}"></span>
@@ -774,7 +787,7 @@
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
     {{ template "scripts-file-uploader" . }}
-    <script src="/static/js/admin-import-export.js"></script>
+    <script src="/static/js/admin-import-export.js?v=2"></script>
     <script src="/static/js/arxiu-form-suggest.js"></script>
 </body>
 </html>

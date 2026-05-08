@@ -750,6 +750,7 @@
   "confessional.io.title": "Religious/confessional map",
   "confessional.io.description": "Export and import religious entities, hierarchy, territorial links, and archive-entity links using portable keys across environments.",
   "confessional.io.import.file": "Religious/confessional map JSON file",
+  "confessional.io.import.description": "Upload a JSON export of the religious/confessional map, review the dry-run, and apply it only when the summary looks consistent.",
   "confessional.io.import.include_non_published": "Include non-published statuses",
   "confessional.io.import.dry_run": "Dry-run",
   "confessional.io.import.apply": "Apply import",

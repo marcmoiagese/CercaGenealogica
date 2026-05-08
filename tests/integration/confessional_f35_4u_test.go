@@ -83,6 +83,7 @@ func TestF354UImportExportUITabPermissionsAndI18N(t *testing.T) {
 		for _, key := range []string{
 			"admin.io.tab.confessional",
 			"confessional.io.title",
+			"confessional.io.import.description",
 			"confessional.io.import.dry_run",
 			"confessional.io.import.apply",
 			"confessional.io.export.all_religions",
@@ -127,9 +128,12 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 	for _, token := range []string{
 		`data-confessional-export-form`,
 		`class="form-vertical confessional-export-form"`,
+		`<script src="/static/js/admin-import-export.js?v=2"></script>`,
 		`class="confessional-export-options"`,
 		`class="confessional-export-option" for="conf-export-include-hierarchy"`,
 		`id="conf-export-religion-search"`,
+		`role="combobox"`,
+		`aria-controls="conf-export-religion-suggestions"`,
 		`data-local-suggest="1"`,
 		`data-hidden="conf-export-religion"`,
 		`type="hidden" name="religio_confessio_codi"`,
@@ -140,6 +144,12 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 		`data-religion-filter-hidden="conf-export-religion"`,
 		`data-code="parroquia"`,
 		`data-religion-code="catolicisme_ritu_llati"`,
+		`role="listbox"`,
+		`data-confessional-import-form`,
+		`class="form-vertical confessional-import-form"`,
+		`class="confessional-import-layout"`,
+		`class="confessional-import-panel"`,
+		`class="confessional-export-option confessional-import-option" for="conf-import-include-non-published"`,
 		`Totes les religions/confessions`,
 		`Tots els nivells/divisions`,
 	} {
@@ -154,11 +164,27 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 		`onclick=`,
 		`onchange=`,
 		`oninput=`,
+		`onkeyup=`,
+		`onfocus=`,
+		`onblur=`,
 		`onsubmit=`,
+		`javascript:`,
+		`style=`,
+		`<style>`,
+		`class="grup-camp checkbox-linia"`,
 	} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("la UI F35-4U2 no ha de contenir %q; body=%s", forbidden, body)
 		}
+	}
+
+	religionOptions := regexp.MustCompile(`(?s)<div id="conf-export-religion-options"[^>]*>(.*?)</div>`).FindStringSubmatch(body)
+	if len(religionOptions) != 2 || !strings.Contains(religionOptions[1], `data-suggest-option`) {
+		t.Fatalf("el contenidor d'opcions de religio no pot quedar buit; body=%s", body)
+	}
+	levelOptions := regexp.MustCompile(`(?s)<div id="conf-export-level-options"[^>]*>(.*?)</div>`).FindStringSubmatch(body)
+	if len(levelOptions) != 2 || !strings.Contains(levelOptions[1], `data-suggest-option`) {
+		t.Fatalf("el contenidor d'opcions de nivell no pot quedar buit; body=%s", body)
 	}
 
 	root := findProjectRoot(t)
@@ -166,6 +192,9 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 	jsBody := readProjectFileF354S(t, root, "static/js/admin-import-export.js")
 	templateBody := readProjectFileF354S(t, root, "templates/admin-import-export.html")
 	for _, token := range []string{
+		`.io-tabs .tab-boto`,
+		`.confessional-import-form`,
+		`.confessional-import-layout`,
 		`.confessional-export-options`,
 		`.confessional-export-option`,
 		`.confessional-selected-value.has-selection`,
@@ -177,6 +206,8 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 	}
 	for _, token := range []string{
 		`[data-local-suggest='1']`,
+		`aria-expanded`,
+		`mousedown`,
 		`religionFilterHidden`,
 		`form.querySelectorAll("[data-local-suggest='1']")`,
 	} {
@@ -184,8 +215,47 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 			t.Fatalf("falta JS F35-4U2 %q", token)
 		}
 	}
-	if strings.Contains(templateBody, "confessional-tabs") || strings.Contains(templateBody, "onclick=") {
-		t.Fatalf("la plantilla F35-4U2 no ha de reintroduir tabs legacy ni JS inline")
+	if strings.Contains(templateBody, "confessional-tabs") || strings.Contains(templateBody, "onclick=") || strings.Contains(templateBody, "<style>") {
+		t.Fatalf("la plantilla F35-4U2 no ha de reintroduir tabs legacy ni inline")
+	}
+}
+
+func TestF354U3ConfessionalAutocompleteAssetsAndAliasSubtabWork(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u3_ui.sqlite3")
+
+	user := createTestUser(t, database, "f35_4u3_ui_"+time.Now().Format("150405000000000"))
+	session := createSessionCookie(t, database, user.ID, "sess_f35_4u3_ui_"+time.Now().Format("150405000000000"))
+	policyID := createPolicyWithGrant(t, database, "f35_4u3_ui", "territori.confessional.import_export.export")
+	addGrantToPolicy(t, database, policyID, "territori.confessional.import_export.import")
+	addGrantToPolicy(t, database, policyID, "territori.confessional.import_export.view")
+	assignPolicyToUser(t, database, user.ID, policyID)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/import-export?tab=confessional&confessional_subtab=confessional-export", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminImportExport(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminImportExport F35-4U3 status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `id="tab-confessional-export" class="tab-pane actiu"`) {
+		t.Fatalf("confessional_subtab ha d'activar el panell export; body=%s", body)
+	}
+	if !strings.Contains(body, `<script src="/static/js/admin-import-export.js?v=2"></script>`) {
+		t.Fatalf("la resposta ha de carregar el JS extern d'admin import/export; body=%s", body)
+	}
+
+	staticReq := httptest.NewRequest(http.MethodGet, "http://localhost:8080/static/js/admin-import-export.js", nil)
+	staticRR := httptest.NewRecorder()
+	core.ServeStatic(staticRR, staticReq)
+	if staticRR.Code != http.StatusOK {
+		t.Fatalf("ServeStatic del JS F35-4U3 ha de retornar 200, got %d", staticRR.Code)
+	}
+	jsServed := staticRR.Body.String()
+	for _, token := range []string{`setupLocalSuggest`, `aria-expanded`, `mousedown`} {
+		if !strings.Contains(jsServed, token) {
+			t.Fatalf("el fitxer JS servit ha de contenir %q", token)
+		}
 	}
 }
 
@@ -269,6 +339,22 @@ func TestF354U2ConfessionalExportRejectsInvalidCatalogFilters(t *testing.T) {
 	app.AdminConfessionalExport(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("nivell incompatible ha de retornar 400, got=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/admin/confessional/export?religio_confessio_codi=cat", nil)
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.AdminConfessionalExport(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("filtre religio parcial ha de retornar 400, got=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/admin/confessional/export?religio_confessio_codi=catolicisme_ritu_llati&nivell_confessional_codi=arxiprestat_vicariat_forani", nil)
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.AdminConfessionalExport(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("codis reals del cataleg han de ser acceptats, got=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

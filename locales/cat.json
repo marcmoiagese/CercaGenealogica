@@ -750,6 +750,7 @@
   "confessional.io.title": "Mapa religiós/confessional",
   "confessional.io.description": "Exporta i importa entitats religioses, relacions jeràrquiques, territorials i arxiu-entitat amb claus portables entre entorns.",
   "confessional.io.import.file": "Fitxer JSON del mapa religiós/confessional",
+  "confessional.io.import.description": "Carrega un export JSON del mapa religiós/confessional, revisa el dry-run i aplica només quan el resum sigui coherent.",
   "confessional.io.import.include_non_published": "Incloure estats no publicats",
   "confessional.io.import.dry_run": "Dry-run",
   "confessional.io.import.apply": "Aplicar importació",

@@ -66,6 +66,9 @@ func (a *App) adminImportExportPageData(r *http.Request, user *db.User) map[stri
 		"llibres":      canLlibresImport || canLlibresExport,
 	})
 	requestedSubtab := strings.TrimSpace(r.URL.Query().Get("subtab"))
+	if requestedSubtab == "" && activeTab != "" {
+		requestedSubtab = strings.TrimSpace(r.URL.Query().Get(activeTab + "_subtab"))
+	}
 	territoriSubtab := resolveImportExportSubtab("territori", requestedSubtab, canTerritoriImport, canTerritoriExport)
 	eclesSubtab := resolveImportExportSubtab("eclesiastic", requestedSubtab, canEclesImport, canEclesExport)
 	confessionalSubtab := resolveImportExportSubtab("confessional", requestedSubtab, canConfessionalImport, canConfessionalExport)

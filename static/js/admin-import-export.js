@@ -47,6 +47,7 @@
         var noResults = input.dataset.emptyLabel || "No results";
         var activeIndex = -1;
         var currentItems = [];
+        var instanceID = input.id || hidden.id || "local-suggest";
 
         function religionFilterValue() {
             var filterID = input.dataset.religionFilterHidden || "";
@@ -73,13 +74,20 @@
         function clearSuggestions() {
             suggestions.innerHTML = "";
             suggestions.classList.remove("is-open");
+            input.setAttribute("aria-expanded", "false");
+            input.removeAttribute("aria-activedescendant");
             activeIndex = -1;
             currentItems = [];
         }
 
         function setActive(index) {
             Array.from(suggestions.querySelectorAll("li[data-index]")).forEach(function (node, idx) {
-                node.classList.toggle("is-active", idx === index);
+                var active = idx === index;
+                node.classList.toggle("is-active", active);
+                node.setAttribute("aria-selected", active ? "true" : "false");
+                if (active) {
+                    input.setAttribute("aria-activedescendant", node.id);
+                }
             });
             activeIndex = index;
         }
@@ -100,14 +108,19 @@
             if (!items.length) {
                 var empty = document.createElement("li");
                 empty.className = "suggestion-empty";
+                empty.setAttribute("aria-disabled", "true");
                 empty.textContent = noResults;
                 suggestions.appendChild(empty);
                 suggestions.classList.add("is-open");
+                input.setAttribute("aria-expanded", "true");
                 return;
             }
             items.forEach(function (item, index) {
                 var li = document.createElement("li");
+                li.id = instanceID + "-option-" + index;
                 li.dataset.index = String(index);
+                li.setAttribute("role", "option");
+                li.setAttribute("aria-selected", "false");
                 var title = document.createElement("span");
                 title.className = "suggestion-title";
                 title.textContent = item.label;
@@ -118,36 +131,48 @@
                     context.textContent = item.context;
                     li.appendChild(context);
                 }
-                li.addEventListener("click", function () {
+                li.addEventListener("mousedown", function (event) {
+                    event.preventDefault();
                     setSelection(item);
                 });
                 suggestions.appendChild(li);
             });
             suggestions.classList.add("is-open");
+            input.setAttribute("aria-expanded", "true");
         }
 
         function clearSelection() {
             setSelection(null);
         }
 
-        input.addEventListener("focus", function () {
+        function openSuggestions() {
             render(matchingOptions(input.value));
+        }
+
+        input.addEventListener("focus", function () {
+            openSuggestions();
+        });
+        input.addEventListener("click", function () {
+            openSuggestions();
         });
         input.addEventListener("input", function () {
             hidden.value = "";
             selected.textContent = emptyText;
             selected.classList.remove("has-selection");
             hidden.dispatchEvent(new Event("change", { bubbles: true }));
-            render(matchingOptions(input.value));
+            openSuggestions();
         });
         input.addEventListener("keydown", function (event) {
-            if (!suggestions.classList.contains("is-open")) {
-                return;
-            }
             if (event.key === "ArrowDown") {
+                if (!suggestions.classList.contains("is-open")) {
+                    openSuggestions();
+                }
                 event.preventDefault();
                 setActive(Math.min(activeIndex + 1, currentItems.length - 1));
             } else if (event.key === "ArrowUp") {
+                if (!suggestions.classList.contains("is-open")) {
+                    openSuggestions();
+                }
                 event.preventDefault();
                 setActive(Math.max(activeIndex - 1, 0));
             } else if (event.key === "Enter" && currentItems.length) {
@@ -169,7 +194,7 @@
         if (clearButton) {
             clearButton.addEventListener("click", clearSelection);
         }
-        document.addEventListener("click", function (event) {
+        document.addEventListener("mousedown", function (event) {
             if (event.target === input || suggestions.contains(event.target)) {
                 return;
             }
@@ -188,6 +213,10 @@
                     clearSelection();
                 }
             });
+        }
+
+        if (hidden.value) {
+            hidden.dispatchEvent(new Event("change", { bubbles: true }));
         }
     }
 
