@@ -866,6 +866,47 @@ body {
     font-size: 0.9rem;
 }
 
+.diagnostic-action-list .boto-primari,
+.diagnostic-action-list .boto-secundari {
+    border: 1px solid transparent;
+    color: #fff;
+}
+
+.diagnostic-action-list .boto-primari,
+.diagnostic-action-list .boto-primari:visited {
+    background-color: #155eef;
+    border-color: #155eef;
+    color: #fff;
+}
+
+.diagnostic-action-list .boto-primari:hover,
+.diagnostic-action-list .boto-primari:focus-visible {
+    background-color: #004eeb;
+    border-color: #004eeb;
+    color: #fff;
+}
+
+.diagnostic-action-list .boto-secundari,
+.diagnostic-action-list .boto-secundari:visited {
+    background-color: #344054;
+    border-color: #344054;
+    color: #fff;
+}
+
+.diagnostic-action-list .boto-secundari:hover,
+.diagnostic-action-list .boto-secundari:focus-visible {
+    background-color: #1d2939;
+    border-color: #1d2939;
+    color: #fff;
+}
+
+.diagnostic-action-list .boto-primari:focus-visible,
+.diagnostic-action-list .boto-secundari:focus-visible {
+    box-shadow: 0 0 0 3px rgba(21, 94, 239, 0.24);
+    outline: 2px solid #f9fafb;
+    outline-offset: 2px;
+}
+
 .inline-form {
     display: inline-flex;
     margin-left: 0.4rem;

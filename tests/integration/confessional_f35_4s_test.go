@@ -392,6 +392,44 @@ func TestF354TDiagnosticActionsRespectPermissionsAndSafeURLs(t *testing.T) {
 	}
 }
 
+func TestF354T1DiagnosticActionButtonsHaveReadableScopedStyles(t *testing.T) {
+	root := findProjectRoot(t)
+	cssBody := readProjectFileF354S(t, root, "static/css/estils.css")
+	templateBody := readProjectFileF354S(t, root, "templates/admin-confessional-diagnostic.html")
+
+	for _, token := range []string{
+		`.diagnostic-action-list .boto-primari`,
+		`.diagnostic-action-list .boto-secundari`,
+		`color: #fff;`,
+		`:focus-visible`,
+		`outline: 2px solid #f9fafb;`,
+	} {
+		if !strings.Contains(cssBody, token) {
+			t.Fatalf("falta estil F35-4T1 de contrast/focus per accions diagnòstic: %q", token)
+		}
+	}
+	for _, token := range []string{
+		`diagnostic-action-list`,
+		`boto-primari`,
+		`boto-secundari`,
+	} {
+		if !strings.Contains(templateBody, token) {
+			t.Fatalf("la plantilla diagnòstic ha de conservar classes d'acció F35-4T1: %q", token)
+		}
+	}
+	for _, forbidden := range []string{
+		`confessional-tabs`,
+		`onclick=`,
+		`onchange=`,
+		`oninput=`,
+		`onsubmit=`,
+	} {
+		if strings.Contains(templateBody, forbidden) {
+			t.Fatalf("F35-4T1 no ha de reintroduir JS inline ni tabs legacy: %q", forbidden)
+		}
+	}
+}
+
 func TestF354TPrefillQueryParamsPopulateFormsSafely(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f35_4t_prefill.sqlite3")
 	session := f353YAdminSession(t, database, "f35_4t_prefill")
