@@ -19,7 +19,7 @@ func TestF354U1ApplyTransactionalAndReimportIdempotent(t *testing.T) {
 	csrfToken, csrfCookie := extractCSRFContextFromImportExport(t, targetApp, targetSession)
 
 	dryRunBody := f354U1DryRun(t, targetApp, targetDB, targetSession, csrfCookie, csrfToken, exportedJSON)
-	if len(filterPublishedConfEntitats(f354U1ListEntitats(t, targetDB))) != 0 {
+	if len(f354U1ListEntitats(t, targetDB)) != 0 {
 		t.Fatalf("el dry-run F35-4U1 no ha de persistir cap entitat")
 	}
 
@@ -27,16 +27,16 @@ func TestF354U1ApplyTransactionalAndReimportIdempotent(t *testing.T) {
 	if applyRR.Code != http.StatusSeeOther {
 		t.Fatalf("apply F35-4U1 status=%d body=%s", applyRR.Code, applyRR.Body.String())
 	}
-	if len(filterPublishedConfEntitats(f354U1ListEntitats(t, targetDB))) != 2 {
+	if len(f354U1ListEntitats(t, targetDB)) != 2 {
 		t.Fatalf("la primera aplicacio F35-4U1 ha de crear 2 entitats")
 	}
-	if len(filterPublishedConfHierarchy(f354U1ListHierarchy(t, targetDB))) != 1 {
+	if len(f354U1ListHierarchy(t, targetDB)) != 1 {
 		t.Fatalf("la primera aplicacio F35-4U1 ha de crear 1 relacio jerarquica")
 	}
-	if len(filterPublishedConfTerritory(f354U1ListTerritory(t, targetDB))) != 1 {
+	if len(f354U1ListTerritory(t, targetDB)) != 1 {
 		t.Fatalf("la primera aplicacio F35-4U1 ha de crear 1 relacio territorial")
 	}
-	if len(filterPublishedConfArchive(f354U1ListArchive(t, targetDB))) != 1 {
+	if len(f354U1ListArchive(t, targetDB)) != 1 {
 		t.Fatalf("la primera aplicacio F35-4U1 ha de crear 1 relacio arxiu-entitat")
 	}
 
@@ -44,16 +44,16 @@ func TestF354U1ApplyTransactionalAndReimportIdempotent(t *testing.T) {
 	if applyRR.Code != http.StatusSeeOther {
 		t.Fatalf("reapply F35-4U1 status=%d body=%s", applyRR.Code, applyRR.Body.String())
 	}
-	if len(filterPublishedConfEntitats(f354U1ListEntitats(t, targetDB))) != 2 {
+	if len(f354U1ListEntitats(t, targetDB)) != 2 {
 		t.Fatalf("el reimport F35-4U1 no ha de duplicar entitats")
 	}
-	if len(filterPublishedConfHierarchy(f354U1ListHierarchy(t, targetDB))) != 1 {
+	if len(f354U1ListHierarchy(t, targetDB)) != 1 {
 		t.Fatalf("el reimport F35-4U1 no ha de duplicar relacions jerarquiques")
 	}
-	if len(filterPublishedConfTerritory(f354U1ListTerritory(t, targetDB))) != 1 {
+	if len(f354U1ListTerritory(t, targetDB)) != 1 {
 		t.Fatalf("el reimport F35-4U1 no ha de duplicar relacions territorials")
 	}
-	if len(filterPublishedConfArchive(f354U1ListArchive(t, targetDB))) != 1 {
+	if len(f354U1ListArchive(t, targetDB)) != 1 {
 		t.Fatalf("el reimport F35-4U1 no ha de duplicar relacions arxiu-entitat")
 	}
 }
@@ -232,16 +232,16 @@ func f354U1Apply(t *testing.T, app *core.App, session, csrfCookie *http.Cookie, 
 
 func f354U1AssertNoImportedConfessionalData(t *testing.T, database db.DB) {
 	t.Helper()
-	if got := len(filterPublishedConfEntitats(f354U1ListEntitats(t, database))); got != 0 {
+	if got := len(f354U1ListEntitats(t, database)); got != 0 {
 		t.Fatalf("despres del rollback no hi ha d'haver entitats importades, got %d", got)
 	}
-	if got := len(filterPublishedConfHierarchy(f354U1ListHierarchy(t, database))); got != 0 {
+	if got := len(f354U1ListHierarchy(t, database)); got != 0 {
 		t.Fatalf("despres del rollback no hi ha d'haver relacions jerarquiques importades, got %d", got)
 	}
-	if got := len(filterPublishedConfTerritory(f354U1ListTerritory(t, database))); got != 0 {
+	if got := len(f354U1ListTerritory(t, database)); got != 0 {
 		t.Fatalf("despres del rollback no hi ha d'haver relacions territorials importades, got %d", got)
 	}
-	if got := len(filterPublishedConfArchive(f354U1ListArchive(t, database))); got != 0 {
+	if got := len(f354U1ListArchive(t, database)); got != 0 {
 		t.Fatalf("despres del rollback no hi ha d'haver relacions arxiu-entitat importades, got %d", got)
 	}
 }

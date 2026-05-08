@@ -525,14 +525,6 @@ func (a *App) runConfessionalImportApplySidefx(ctx context.Context, plan *confes
 	}
 	for _, entity := range entities {
 		result.Targets = append(result.Targets, db.AdminJobTarget{ObjectType: "entitat_religiosa", ObjectID: entity.ID})
-		if entity.ModeracioEstat != "publicat" {
-			continue
-		}
-		if err := a.ensureInitialWikiVersion("entitat_religiosa", entity.ID, entity, entity.CreatedBy, userID); err != nil {
-			result.Errors = append(result.Errors, err.Error())
-			continue
-		}
-		result.WikiCreated++
 	}
 	for _, rel := range hierarchy {
 		result.Targets = append(result.Targets, db.AdminJobTarget{ObjectType: "entitat_religiosa_relacio", ObjectID: rel.ID})
@@ -676,10 +668,9 @@ func (a *App) confessionalImportTxPlan(plan *confessionalImportPlan, userID int)
 		entity := item.Entity
 		entity.CreatedBy = sqlNullIntFromInt(userID)
 		entity.UpdatedBy = sqlNullIntFromInt(userID)
-		if entity.ModeracioEstat == "publicat" {
-			entity.ModeratedBy = sqlNullIntFromInt(userID)
-			entity.ModeratedAt = sql.NullTime{Time: time.Now(), Valid: true}
-		}
+		entity.ModeracioEstat = normalizeConfessionalImportCreateStatus(entity.ModeracioEstat)
+		entity.ModeratedBy = sql.NullInt64{}
+		entity.ModeratedAt = sql.NullTime{}
 		out.EntityCreates = append(out.EntityCreates, db.ConfessionalImportEntityCreate{
 			RefKey: item.RefKey,
 			Entity: entity,
@@ -687,12 +678,15 @@ func (a *App) confessionalImportTxPlan(plan *confessionalImportPlan, userID int)
 		})
 	}
 	for _, item := range plan.HierarchyCreates {
+		item.Status = normalizeConfessionalImportCreateStatus(item.Status)
 		out.HierarchyCreates = append(out.HierarchyCreates, db.ConfessionalImportHierarchyCreate(item))
 	}
 	for _, item := range plan.TerritoryCreates {
+		item.Status = normalizeConfessionalImportCreateStatus(item.Status)
 		out.TerritoryCreates = append(out.TerritoryCreates, db.ConfessionalImportTerritoryCreate(item))
 	}
 	for _, item := range plan.ArchiveCreates {
+		item.Status = normalizeConfessionalImportCreateStatus(item.Status)
 		out.ArchiveCreates = append(out.ArchiveCreates, db.ConfessionalImportArchiveCreate(item))
 	}
 	return out
@@ -786,13 +780,7 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 			continue
 		}
 		payloadEntities[refKey] = item
-		status := strings.TrimSpace(item.ModerationStatus)
-		if status == "" {
-			status = "publicat"
-		}
-		if !includeNonPublished && status != "publicat" {
-			status = "publicat"
-		}
+		status := normalizeConfessionalImportCreateStatus(strings.TrimSpace(item.ModerationStatus))
 		state := strings.TrimSpace(item.State)
 		if state == "" {
 			state = "actiu"
@@ -919,10 +907,7 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 			hierarchyGraph[parentKey] = map[string]bool{}
 		}
 		hierarchyGraph[parentKey][childKey] = true
-		status := strings.TrimSpace(rel.ModerationStatus)
-		if status == "" {
-			status = "publicat"
-		}
+		status := normalizeConfessionalImportCreateStatus(strings.TrimSpace(rel.ModerationStatus))
 		plan.HierarchyCreates = append(plan.HierarchyCreates, confessionalImportHierarchyCreate{
 			ParentRefKey: parentKey,
 			ChildRefKey:  childKey,
@@ -991,10 +976,7 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 			plan.View.TerritoryExisting = append(plan.View.TerritoryExisting, label)
 			continue
 		}
-		status := strings.TrimSpace(rel.ModerationStatus)
-		if status == "" {
-			status = "publicat"
-		}
+		status := normalizeConfessionalImportCreateStatus(strings.TrimSpace(rel.ModerationStatus))
 		plan.TerritoryCreates = append(plan.TerritoryCreates, confessionalImportTerritoryCreate{
 			EntityRefKey: entityKey,
 			MunicipiID:   municipiID,
@@ -1050,10 +1032,7 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 			plan.View.ArchiveExisting = append(plan.View.ArchiveExisting, label)
 			continue
 		}
-		status := strings.TrimSpace(rel.ModerationStatus)
-		if status == "" {
-			status = "publicat"
-		}
+		status := normalizeConfessionalImportCreateStatus(strings.TrimSpace(rel.ModerationStatus))
 		state := strings.TrimSpace(rel.State)
 		if state == "" {
 			state = "actiu"
@@ -1389,6 +1368,10 @@ func confImportNullIntKey(v sql.NullInt64) string {
 		return ""
 	}
 	return strconv.FormatInt(v.Int64, 10)
+}
+
+func normalizeConfessionalImportCreateStatus(_ string) string {
+	return "pendent"
 }
 
 func confessionalGraphReachable(graph map[string]map[string]bool, start, target string) bool {
