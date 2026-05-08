@@ -147,6 +147,7 @@ func TestF354RArxiuEntitatReligiosaDBIsSeparatedPerMotor(t *testing.T) {
 func TestF354ArxiuEntitatReligiosaModerationAndProfiles(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f35_4_arxiu_entitat_flow.sqlite3")
 	session := f353YAdminSession(t, database, "arxiu_entitat")
+	viewerSession := f354ArxiuEntitatViewerSession(t, database, "arxiu_entitat_viewer")
 	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
 
 	arxiuID := f354CreateArxiu(t, database, "Arxiu F35-4 "+suffix)
@@ -169,11 +170,11 @@ func TestF354ArxiuEntitatReligiosaModerationAndProfiles(t *testing.T) {
 	if list, err := database.ListArxiuEntitatsReligioses(arxiuID, 0, "publicat"); err != nil || len(list) != 0 {
 		t.Fatalf("relacio pendent no s'ha de llistar com a publicada: list=%v err=%v", list, err)
 	}
-	arxiuPendingBody := f354Get(t, app.AdminShowArxiu, "/documentals/arxius/"+strconv.Itoa(arxiuID), session)
+	arxiuPendingBody := f354Get(t, app.AdminShowArxiu, "/documentals/arxius/"+strconv.Itoa(arxiuID), viewerSession)
 	if strings.Contains(arxiuPendingBody, "Parroquia F35-4 "+suffix) {
 		t.Fatalf("la relacio pendent no ha d'apareixer al perfil d'arxiu")
 	}
-	entitatPendingBody := f354Get(t, app.AdminConfessionalEntityShow, "/confessional/entitats/"+strconv.Itoa(entitatID), session)
+	entitatPendingBody := f354Get(t, app.AdminConfessionalEntityShow, "/confessional/entitats/"+strconv.Itoa(entitatID), viewerSession)
 	if strings.Contains(entitatPendingBody, "Arxiu F35-4 "+suffix) {
 		t.Fatalf("la relacio pendent no ha d'apareixer al perfil d'entitat religiosa")
 	}
@@ -293,6 +294,15 @@ func f354PostArxiuEntitat(t *testing.T, handler http.HandlerFunc, session *http.
 		t.Fatalf("POST arxiu_entitat_religiosa status=%d body=%s", rr.Code, rr.Body.String())
 	}
 	return rr.Body.String()
+}
+
+func f354ArxiuEntitatViewerSession(t *testing.T, database db.DB, label string) *http.Cookie {
+	t.Helper()
+	viewer := createTestUser(t, database, "f35_4_viewer_"+label+"_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	policy := createPolicyWithGrant(t, database, "f35_4_viewer_policy_"+label+"_"+strconv.FormatInt(time.Now().UnixNano(), 10), "documentals.arxius.view")
+	addGrantToPolicy(t, database, policy, "territori.confessional.entitats.view")
+	assignPolicyToUser(t, database, viewer.ID, policy)
+	return createSessionCookie(t, database, viewer.ID, "sess_f35_4_viewer_"+label+"_"+strconv.FormatInt(time.Now().UnixNano(), 10))
 }
 
 func readProjectFileF354(t *testing.T, root, rel string) string {

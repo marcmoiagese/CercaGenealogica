@@ -5,7 +5,7 @@
         return;
     }
     var toggle = function () {
-        wrap.style.display = cb.checked ? "" : "none";
+        wrap.hidden = !cb.checked;
     };
     cb.addEventListener("change", toggle);
     toggle();

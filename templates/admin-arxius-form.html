@@ -18,15 +18,26 @@
             <form method="post" action="{{ if .Data.IsNew }}/documentals/arxius{{ else }}/documentals/arxius/{{ .Data.Arxiu.ID }}{{ end }}">
                 <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
                 <div class="grup-camp">
+                    <label for="codi">Codi</label>
+                    <input type="text" id="codi" name="codi" value="{{ .Data.Arxiu.Codi }}" autocomplete="off">
+                </div>
+                <div class="grup-camp">
                     <label for="nom">{{ t .Lang "archives.form.name" }}</label>
                     <input type="text" id="nom" name="nom" value="{{ .Data.Arxiu.Nom }}" required>
                 </div>
                 <div class="grup-camp">
                     <label for="tipus">{{ t .Lang "archives.form.type" }}</label>
                     <select id="tipus" name="tipus">
-                        {{ range $opt := (list "parroquia" "arxiu_diocesa" "arxiu_capitular" "arxiu_comarcal" "portal_digital" "altre") }}
-                        <option value="{{ $opt }}" {{ if eq $.Data.Arxiu.Tipus $opt }}selected{{ end }}>{{ t $.Lang (printf "archives.type.%s" $opt) }}</option>
-                        {{ end }}
+                        <option value="parroquia" {{ if eq .Data.Arxiu.Tipus "parroquia" }}selected{{ end }}>{{ t .Lang "archives.type.parroquia" }}</option>
+                        <option value="arxiu_diocesa" {{ if eq .Data.Arxiu.Tipus "arxiu_diocesa" }}selected{{ end }}>{{ t .Lang "archives.type.arxiu_diocesa" }}</option>
+                        <option value="arxiu_capitular" {{ if eq .Data.Arxiu.Tipus "arxiu_capitular" }}selected{{ end }}>{{ t .Lang "archives.type.arxiu_capitular" }}</option>
+                        <option value="arxiu_comarcal" {{ if eq .Data.Arxiu.Tipus "arxiu_comarcal" }}selected{{ end }}>{{ t .Lang "archives.type.arxiu_comarcal" }}</option>
+                        <option value="estatal" {{ if eq .Data.Arxiu.Tipus "estatal" }}selected{{ end }}>Estatal</option>
+                        <option value="privat" {{ if eq .Data.Arxiu.Tipus "privat" }}selected{{ end }}>Privat</option>
+                        <option value="familiar" {{ if eq .Data.Arxiu.Tipus "familiar" }}selected{{ end }}>Familiar</option>
+                        <option value="familysearch" {{ if eq .Data.Arxiu.Tipus "familysearch" }}selected{{ end }}>FamilySearch</option>
+                        <option value="portal_digital" {{ if eq .Data.Arxiu.Tipus "portal_digital" }}selected{{ end }}>{{ t .Lang "archives.type.portal_digital" }}</option>
+                        <option value="altre" {{ if eq .Data.Arxiu.Tipus "altre" }}selected{{ end }}>{{ t .Lang "archives.type.altre" }}</option>
                     </select>
                 </div>
                 <div class="grup-camp">
@@ -98,7 +109,7 @@
                         <span class="checkbox-text">{{ t .Lang "archives.form.donations.enable" }}</span>
                     </label>
                 </div>
-                <div class="grup-camp" id="donacionsUrlWrap" {{ if not .Data.Arxiu.AcceptaDonacions }}style="display:none;"{{ end }}>
+                <div class="grup-camp" id="donacionsUrlWrap" {{ if not .Data.Arxiu.AcceptaDonacions }}hidden{{ end }}>
                     <label for="donacions_url">{{ t .Lang "archives.form.donations.url" }}</label>
                     <input type="url" id="donacions_url" name="donacions_url" value="{{ .Data.Arxiu.DonacionsURL }}" placeholder="https://">
                 </div>
@@ -111,6 +122,57 @@
                     <a class="boto-secundari" href="{{ if .Data.ReturnURL }}{{ .Data.ReturnURL }}{{ else }}{{ if .Data.IsNew }}/documentals/arxius{{ else }}/documentals/arxius/{{ .Data.Arxiu.ID }}{{ end }}{{ end }}">{{ t .Lang "archives.form.cancel" }}</a>
                 </div>
             </form>
+        </section>
+        <section class="card">
+            <div class="card-header">
+                <h2>{{ t .Lang "confessional.archive_relation.archive_section" }}</h2>
+                {{ if and (not .Data.IsNew) .Data.CanCreateArxiuEntitatReligiosa }}
+                <a class="boto-primari" href="/documentals/arxius/{{ .Data.Arxiu.ID }}/entitats-religioses/new?return_to=/documentals/arxius/{{ .Data.Arxiu.ID }}/edit">{{ t .Lang "confessional.archive_relation.add" }}</a>
+                {{ end }}
+            </div>
+            {{ if .Data.IsNew }}
+            <p>Desa primer l'arxiu si vols afegir-hi relacions opcionals amb entitats religioses.</p>
+            {{ else }}
+            <p>Aquesta secció és opcional i gestiona les relacions noves amb entitats religioses sense substituir el camp legacy d'entitat eclesiàstica.</p>
+            <div class="taula-wrapper">
+                <table class="taula">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "confessional.archive_relation.field.entity" }}</th>
+                            <th>{{ t .Lang "confessional.col.religion" }}</th>
+                            <th>{{ t .Lang "confessional.col.level" }}</th>
+                            <th>{{ t .Lang "confessional.archive_relation.field.type" }}</th>
+                            <th>{{ t .Lang "confessional.col.years" }}</th>
+                            <th>{{ t .Lang "confessional.archive_relation.field.notes" }}</th>
+                            <th>{{ t .Lang "moderation.status" }}</th>
+                            {{ if or .Data.CanEditArxiuEntitatReligiosa .Data.CanDeleteArxiuEntitatReligiosa }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.RelacionsReligioses }}
+                        {{ $ent := index $.Data.EntitatsReligiosesByID .EntitatReligiosaID }}
+                        <tr>
+                            <td><a href="/confessional/entitats/{{ .EntitatReligiosaID }}">{{ index $.Data.EntitatReligiosaLabels .EntitatReligiosaID }}</a></td>
+                            <td>{{ index $.Data.ReligionCatalogLabels $ent.ReligioConfessioCodi }}</td>
+                            <td>{{ index $.Data.LevelCatalogLabels $ent.NivellConfessionalCodi }}</td>
+                            <td>{{ index $.Data.ArxiuEntitatReligiosaTypeLabels .TipusRelacio }}</td>
+                            <td>{{ if .AnyInici.Valid }}{{ .AnyInici.Int64 }}{{ end }}{{ if and .AnyInici.Valid .AnyFi.Valid }} - {{ end }}{{ if .AnyFi.Valid }}{{ .AnyFi.Int64 }}{{ end }}</td>
+                            <td>{{ if .Observacions }}{{ .Observacions }}{{ else }}-{{ end }}</td>
+                            <td>{{ if .ModeracioEstat }}{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}{{ else }}-{{ end }}</td>
+                            {{ if or $.Data.CanEditArxiuEntitatReligiosa $.Data.CanDeleteArxiuEntitatReligiosa }}
+                            <td>
+                                {{ if $.Data.CanEditArxiuEntitatReligiosa }}<a class="boto-secundari" href="/documentals/arxius/entitats-religioses/{{ .ID }}/edit?return_to=/documentals/arxius/{{ $.Data.Arxiu.ID }}/edit">{{ t $.Lang "confessional.action.edit" }}</a>{{ end }}
+                                {{ if $.Data.CanDeleteArxiuEntitatReligiosa }}<form method="post" action="/documentals/arxius/entitats-religioses/{{ .ID }}/delete"><button class="boto-perill" type="submit">{{ t $.Lang "confessional.action.delete" }}</button></form>{{ end }}
+                            </td>
+                            {{ end }}
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="{{ if or .Data.CanEditArxiuEntitatReligiosa .Data.CanDeleteArxiuEntitatReligiosa }}8{{ else }}7{{ end }}">-</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+            {{ end }}
         </section>
     </main>
     {{ template "footer" . }}

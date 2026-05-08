@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -438,6 +439,172 @@ func TestF354U6LegacyArxiusImportStillWorks(t *testing.T) {
 	}
 }
 
+func TestF354U6ArxiuEditFormShowsLegacyFieldAndOptionalConfessionalSection(t *testing.T) {
+	app, database, admin, session := setupF354U6ArxiusUIAdmin(t, "test_f35_4u6_edit_form.sqlite3")
+	arxiuID := f354CreateArxiu(t, database, "Arxiu UI F35-4U6")
+	entitatID, err := database.SaveEntitatReligiosa(&db.EntitatReligiosa{
+		Codi:                   "f35_4u6_ui_entity",
+		Nom:                    "Entitat Religiosa UI F35-4U6",
+		ReligioConfessioCodi:   "catolicisme_ritu_llati",
+		NivellConfessionalCodi: "parroquia",
+		Estat:                  "actiu",
+		ModeracioEstat:         "publicat",
+	})
+	if err != nil {
+		t.Fatalf("SaveEntitatReligiosa UI: %v", err)
+	}
+	if _, err := database.SaveArxiuEntitatReligiosa(&db.ArxiuEntitatReligiosa{
+		ArxiuID:            arxiuID,
+		EntitatReligiosaID: entitatID,
+		TipusRelacio:       "arxiu_institucional",
+		Estat:              "actiu",
+		ModeracioEstat:     "pendent",
+		CreatedBy:          sql.NullInt64{Int64: int64(admin.ID), Valid: true},
+		UpdatedBy:          sql.NullInt64{Int64: int64(admin.ID), Valid: true},
+	}); err != nil {
+		t.Fatalf("SaveArxiuEntitatReligiosa UI: %v", err)
+	}
+
+	body := f354Get(t, app.AdminEditArxiu, "/documentals/arxius/"+strconv.Itoa(arxiuID)+"/edit", session)
+	if !strings.Contains(body, `name="entitat_eclesiastica_id"`) {
+		t.Fatalf("la pantalla d'edicio ha de mantenir el camp legacy entitat_eclesiastica_id, body=%s", body)
+	}
+	if !strings.Contains(body, `name="codi"`) {
+		t.Fatalf("la pantalla d'edicio ha d'exposar el codi estable, body=%s", body)
+	}
+	if !strings.Contains(body, "Entitats religioses relacionades") {
+		t.Fatalf("falta la seccio separada de relacions confessionals opcionals, body=%s", body)
+	}
+	if !strings.Contains(body, "/documentals/arxius/"+strconv.Itoa(arxiuID)+"/entitats-religioses/new?return_to=/documentals/arxius/"+strconv.Itoa(arxiuID)+"/edit") {
+		t.Fatalf("la seccio ha d'enllacar al formulari nou de relacio amb retorn a l'edicio, body=%s", body)
+	}
+	if !strings.Contains(body, "Entitat Religiosa UI F35-4U6") || !strings.Contains(body, "Pendent") {
+		t.Fatalf("la seccio ha de mostrar la relacio existent i el seu estat de moderacio, body=%s", body)
+	}
+}
+
+func TestF354U6ArxiuUpdateWithoutReligiousRelationStaysValid(t *testing.T) {
+	app, database, _, session := setupF354U6ArxiusUIAdmin(t, "test_f35_4u6_update_without_relation.sqlite3")
+	municipiID := f353YCreateMunicipi(t, database, "Municipi Arxiu Sense Relacio UI F35-4U6")
+	arxiuID, err := database.CreateArxiu(&db.Arxiu{
+		Nom:            "Arxiu Sense Relacio UI F35-4U6",
+		Tipus:          "parroquia",
+		Acces:          "online",
+		MunicipiID:     sql.NullInt64{Int64: int64(municipiID), Valid: true},
+		ModeracioEstat: "pendent",
+	})
+	if err != nil {
+		t.Fatalf("CreateArxiu pendent UI: %v", err)
+	}
+	arxiu, err := database.GetArxiu(arxiuID)
+	if err != nil || arxiu == nil {
+		t.Fatalf("GetArxiu: %v", err)
+	}
+
+	form := url.Values{}
+	form.Set("codi", "f35_4u6_ui_sense_relacio")
+	form.Set("nom", arxiu.Nom)
+	form.Set("tipus", "privat")
+	form.Set("acces", "online")
+	form.Set("municipi_id", strconv.FormatInt(arxiu.MunicipiID.Int64, 10))
+	form.Set("entitat_eclesiastica_id", "")
+	form.Set("adreca", "")
+	form.Set("ubicacio", "")
+	form.Set("what3words", "")
+	form.Set("web", "")
+	form.Set("notes", "sense relacio opcional")
+	req := httptest.NewRequest(http.MethodPost, "/documentals/arxius/"+strconv.Itoa(arxiuID), strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminUpdateArxiu(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("AdminUpdateArxiu sense relacio ha de redirigir, status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxiu_entitat_religiosa WHERE arxiu_id = ?", arxiuID); got != 0 {
+		t.Fatalf("actualitzar un arxiu sense relacio no ha de crear relacions buides, got %d", got)
+	}
+	rows, err := database.Query("SELECT codi, moderation_status FROM arxius WHERE id = ?", arxiuID)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("Query arxiu actualitzat: err=%v rows=%d", err, len(rows))
+	}
+	if got := strings.TrimSpace(asString(rows[0]["codi"])); got != "f35_4u6_ui_sense_relacio" {
+		t.Fatalf("codi estable no desat a l'edicio: %q", got)
+	}
+}
+
+func TestF354U6ManualArchiveRelationCreateUsesEntitatReligiosaAndStaysPending(t *testing.T) {
+	app, database, admin, session := setupF354U6ArxiusUIAdmin(t, "test_f35_4u6_manual_relation.sqlite3")
+	paisID, _, _ := seedF354U6ArxiuTerritory(t, database)
+	arxiuID := f354CreateArxiu(t, database, "Arxiu Manual Relacio F35-4U6")
+	if _, err := database.CreateArquebisbat(&db.Arquebisbat{
+		Nom:            "Arquebisbat Legacy No Selector F35-4U6",
+		TipusEntitat:   "bisbat",
+		PaisID:         sql.NullInt64{Int64: int64(paisID), Valid: true},
+		ModeracioEstat: "publicat",
+	}); err != nil {
+		t.Fatalf("CreateArquebisbat legacy selector: %v", err)
+	}
+	entitatID, err := database.SaveEntitatReligiosa(&db.EntitatReligiosa{
+		Codi:                   "f35_4u6_manual_entity",
+		Nom:                    "Entitat Religiosa Selector F35-4U6",
+		ReligioConfessioCodi:   "catolicisme_ritu_llati",
+		NivellConfessionalCodi: "parroquia",
+		Estat:                  "actiu",
+		ModeracioEstat:         "publicat",
+	})
+	if err != nil {
+		t.Fatalf("SaveEntitatReligiosa manual: %v", err)
+	}
+
+	newBody := f354Get(t, app.AdminNewArxiuEntitatReligiosaFromArxiu, "/documentals/arxius/"+strconv.Itoa(arxiuID)+"/entitats-religioses/new", session)
+	if !strings.Contains(newBody, "Entitat Religiosa Selector F35-4U6") {
+		t.Fatalf("el selector nou ha de mostrar entitats del model entitat_religiosa, body=%s", newBody)
+	}
+	if strings.Contains(newBody, "Arquebisbat Legacy No Selector F35-4U6") {
+		t.Fatalf("el selector nou no ha de reutilitzar arquebisbats legacy, body=%s", newBody)
+	}
+
+	form := url.Values{}
+	form.Set("arxiu_id", strconv.Itoa(arxiuID))
+	form.Set("entitat_religiosa_id", strconv.Itoa(entitatID))
+	form.Set("tipus_relacio", "custodia_documentacio")
+	form.Set("observacions", "Alta manual F35-4U6")
+	form.Set("estat", "actiu")
+	req := httptest.NewRequest(http.MethodPost, "/documentals/arxius/entitats-religioses/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminSaveArxiuEntitatReligiosa(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("l'alta manual de relacio ha de redirigir en exit, status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rows, err := database.Query("SELECT id, moderation_status, moderated_by, moderated_at, created_by, updated_by FROM arxiu_entitat_religiosa WHERE arxiu_id = ? AND entitat_religiosa_id = ?", arxiuID, entitatID)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("Query relacio manual creada: err=%v rows=%d", err, len(rows))
+	}
+	relID := parseCountValue(t, rows[0]["id"])
+	if got := strings.TrimSpace(asString(rows[0]["moderation_status"])); got != "pendent" {
+		t.Fatalf("relacio manual ha d'entrar pendent, got %q", got)
+	}
+	if strings.TrimSpace(asString(rows[0]["moderated_by"])) != "" || strings.TrimSpace(asString(rows[0]["moderated_at"])) != "" {
+		t.Fatalf("relacio manual no ha de quedar moderada directament")
+	}
+	if got := parseCountValue(t, rows[0]["created_by"]); got != admin.ID {
+		t.Fatalf("created_by inesperat: got=%d want=%d", got, admin.ID)
+	}
+	if got := parseCountValue(t, rows[0]["updated_by"]); got != admin.ID {
+		t.Fatalf("updated_by inesperat: got=%d want=%d", got, admin.ID)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM usuaris_activitat WHERE usuari_id = ? AND estat = 'pendent' AND objecte_tipus = 'arxiu_entitat_religiosa' AND objecte_id = ?", admin.ID, relID); got != 1 {
+		t.Fatalf("la relacio manual ha d'apareixer com a activitat pendent, got %d", got)
+	}
+	if moderacioBody := f353YGet(t, app.AdminModeracioList, "/moderacio?type=arxiu_entitat_religiosa", session); !strings.Contains(moderacioBody, "Entitat Religiosa Selector F35-4U6") {
+		t.Fatalf("la relacio manual ha d'apareixer a moderacio, body=%s", moderacioBody)
+	}
+}
+
 func seedF354U6LegacyFixtureTerritory(t *testing.T, database db.DB) {
 	t.Helper()
 	pais := &db.Pais{CodiISO2: "ES", CodiISO3: "ESP", CodiPaisNum: "724"}
@@ -476,4 +643,22 @@ func seedF354U6LegacyFixtureTerritory(t *testing.T, database db.DB) {
 	if _, err := database.CreateArquebisbat(entitat); err != nil {
 		t.Fatalf("CreateArquebisbat legacy: %v", err)
 	}
+}
+
+func setupF354U6ArxiusUIAdmin(t *testing.T, dbName string) (*core.App, db.DB, *db.User, *http.Cookie) {
+	t.Helper()
+	app, database := newTestAppForLogin(t, dbName)
+	admin := createTestUser(t, database, "f35_4u6_ui_admin_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	policy := createPolicyWithGrant(t, database, "f35_4u6_ui_policy_"+strconv.FormatInt(time.Now().UnixNano(), 10), "documentals.arxius.view")
+	for _, grant := range []string{
+		"documentals.arxius.edit",
+		"territori.confessional.arxius_entitats.create",
+		"territori.confessional.arxius_entitats.edit",
+		"territori.confessional.arxius_entitats.delete",
+	} {
+		addGrantToPolicy(t, database, policy, grant)
+	}
+	assignPolicyToUser(t, database, admin.ID, policy)
+	session := createSessionCookie(t, database, admin.ID, "sess_f35_4u6_ui_"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	return app, database, admin, session
 }

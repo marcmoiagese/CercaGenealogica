@@ -585,15 +585,44 @@ func parseArxiuForm(r *http.Request) *db.Arxiu {
 func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.Arxiu, isNew bool, errMsg string, user *db.User, returnURL string) {
 	municipiLabel := a.loadMunicipiNom(arxiu)
 	entitatLabel := a.loadEntitatNom(arxiu)
+	lang := ResolveLangForUser(r, user.PreferredLang)
+	target := PermissionTarget{}
+	if arxiu != nil && arxiu.ID > 0 {
+		target = a.resolveArxiuTarget(arxiu.ID)
+	}
+	canCreateRel := a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsCreate, target)
+	canEditRel := a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsEdit, target)
+	canDeleteRel := a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsDelete, target)
+	canManageRel := canCreateRel || canEditRel || canDeleteRel || a.canModerateModular(user)
+	relationStatus := "publicat"
+	if canManageRel {
+		relationStatus = ""
+	}
+	relacionsReligioses := []db.ArxiuEntitatReligiosa{}
+	entitatsReligioses := []db.EntitatReligiosa{}
+	if arxiu != nil && arxiu.ID > 0 {
+		relacionsReligioses, _ = a.DB.ListArxiuEntitatsReligioses(arxiu.ID, 0, relationStatus)
+		entitatsReligioses, _ = a.DB.ListEntitatsReligioses()
+	}
 	RenderPrivateTemplate(w, r, "admin-arxius-form.html", map[string]interface{}{
-		"Arxiu":           arxiu,
-		"IsNew":           isNew,
-		"Error":           errMsg,
-		"ReturnURL":       returnURL,
-		"CanManageArxius": true,
-		"MunicipiLabel":   municipiLabel,
-		"EntitatLabel":    entitatLabel,
-		"User":            user,
+		"Arxiu":                           arxiu,
+		"IsNew":                           isNew,
+		"Error":                           errMsg,
+		"ReturnURL":                       returnURL,
+		"CanManageArxius":                 true,
+		"MunicipiLabel":                   municipiLabel,
+		"EntitatLabel":                    entitatLabel,
+		"RelacionsReligioses":             relacionsReligioses,
+		"EntitatReligiosaLabels":          entitatReligiosaLabels(entitatsReligioses),
+		"ReligionCatalogLabels":           confessionalReligionCatalogLabels(lang),
+		"LevelCatalogLabels":              confessionalLevelCatalogLabels(lang),
+		"ArxiuEntitatReligiosaTypeLabels": arxiuEntitatReligiosaTypeLabels(lang),
+		"EntitatsReligiosesByID":          entitatsReligiosesByID(entitatsReligioses),
+		"CanCreateArxiuEntitatReligiosa":  canCreateRel,
+		"CanEditArxiuEntitatReligiosa":    canEditRel,
+		"CanDeleteArxiuEntitatReligiosa":  canDeleteRel,
+		"CanManageArxiuEntitatReligiosa":  canManageRel,
+		"User":                            user,
 	})
 }
 
@@ -785,7 +814,11 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	llibres, _ := a.DB.ListArxiuLlibres(id)
-	relacionsReligioses, _ := a.DB.ListArxiuEntitatsReligioses(id, 0, "publicat")
+	relationStatus := "publicat"
+	if a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsCreate, target) || a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsEdit, target) || a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsDelete, target) || a.canModerateModular(user) {
+		relationStatus = ""
+	}
+	relacionsReligioses, _ := a.DB.ListArxiuEntitatsReligioses(id, 0, relationStatus)
 	entitatsReligioses, _ := a.DB.ListEntitatsReligioses()
 	canEditArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusEdit, target)
 	canDeleteArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusDelete, target)
