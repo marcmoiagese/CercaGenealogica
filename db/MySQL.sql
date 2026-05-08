@@ -900,8 +900,12 @@ CREATE TABLE IF NOT EXISTS llibres (
     arquevisbat_id INT UNSIGNED NULL,
     municipi_id INT UNSIGNED NOT NULL,
     nom_esglesia VARCHAR(255),
+    codi VARCHAR(120),
     codi_digital VARCHAR(50),
     codi_fisic VARCHAR(50),
+    source_system VARCHAR(80),
+    external_id VARCHAR(120),
+    external_code VARCHAR(120),
     titol VARCHAR(255),
     tipus_llibre VARCHAR(50),
     cronologia VARCHAR(255),
@@ -930,6 +934,9 @@ CREATE TABLE IF NOT EXISTS llibres (
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE INDEX idx_llibres_codi ON llibres(codi);
+CREATE INDEX idx_llibres_source_external_id ON llibres(source_system, external_id);
+CREATE INDEX idx_llibres_source_external_code ON llibres(source_system, external_code);
 CREATE INDEX idx_llibres_municipi ON llibres(municipi_id);
 
 CREATE TABLE IF NOT EXISTS llibres_indexacio_stats (

@@ -1573,8 +1573,12 @@ func (d *PostgreSQL) BulkInsertLlibres(ctx context.Context, rows []Llibre) ([]in
             arquevisbat_id INTEGER,
             municipi_id INTEGER,
             nom_esglesia TEXT,
+            codi TEXT,
             codi_digital TEXT,
             codi_fisic TEXT,
+            source_system TEXT,
+            external_id TEXT,
+            external_code TEXT,
             titol TEXT,
             tipus_llibre TEXT,
             cronologia TEXT,
@@ -1604,8 +1608,12 @@ func (d *PostgreSQL) BulkInsertLlibres(ctx context.Context, rows []Llibre) ([]in
 		"arquevisbat_id",
 		"municipi_id",
 		"nom_esglesia",
+		"codi",
 		"codi_digital",
 		"codi_fisic",
+		"source_system",
+		"external_id",
+		"external_code",
 		"titol",
 		"tipus_llibre",
 		"cronologia",
@@ -1640,8 +1648,12 @@ func (d *PostgreSQL) BulkInsertLlibres(ctx context.Context, rows []Llibre) ([]in
 			arquebisbat,
 			l.MunicipiID,
 			l.NomEsglesia,
+			l.Codi,
 			l.CodiDigital,
 			l.CodiFisic,
+			l.SourceSystem,
+			l.ExternalID,
+			l.ExternalCode,
 			l.Titol,
 			l.TipusLlibre,
 			l.Cronologia,
@@ -1676,13 +1688,13 @@ func (d *PostgreSQL) BulkInsertLlibres(ctx context.Context, rows []Llibre) ([]in
 	}
 	rowsRes, err := tx.QueryContext(ctx, `
         INSERT INTO llibres (
-            arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic, titol, tipus_llibre, cronologia,
+            arquevisbat_id, municipi_id, nom_esglesia, codi, codi_digital, codi_fisic, source_system, external_id, external_code, titol, tipus_llibre, cronologia,
             volum, abat, contingut, llengua, requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines,
             url_base, url_imatge_prefix, pagina, indexacio_completa, created_by, moderation_status, moderated_by,
             moderated_at, moderation_notes, created_at, updated_at
         )
         SELECT
-            arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic, titol, tipus_llibre, cronologia,
+            arquevisbat_id, municipi_id, nom_esglesia, codi, codi_digital, codi_fisic, source_system, external_id, external_code, titol, tipus_llibre, cronologia,
             volum, abat, contingut, llengua, requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines,
             url_base, url_imatge_prefix, pagina, indexacio_completa, created_by, moderation_status, moderated_by,
             moderated_at, moderation_notes, NOW(), NOW()
@@ -1906,6 +1918,12 @@ func (d *PostgreSQL) ResolveLlibresByCodes(municipiID int, tipus, cronologia str
 		return nil, err
 	}
 	return res, nil
+}
+func (d *PostgreSQL) ResolveLlibreByStableRef(ref LlibreStableRef) (*Llibre, error) {
+	return d.help.ResolveLlibreByStableRef(ref)
+}
+func (d *PostgreSQL) ListLlibreDocumentaryContexts(llibreID int) ([]LlibreDocumentaryContext, error) {
+	return postgresListLlibreDocumentaryContexts(d, llibreID)
 }
 
 func (d *PostgreSQL) ResolveLlibresByPayload(rows []LlibreResolveCandidate) ([]LlibreResolveMatch, error) {

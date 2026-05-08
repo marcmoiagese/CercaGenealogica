@@ -1207,6 +1207,12 @@ func (d *SQLite) HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigit
 func (d *SQLite) ResolveLlibresByCodes(municipiID int, tipus, cronologia string, codiDigitals, codiFisics []string) ([]LlibreResolveRow, error) {
 	return d.help.resolveLlibresByCodes(municipiID, tipus, cronologia, codiDigitals, codiFisics)
 }
+func (d *SQLite) ResolveLlibreByStableRef(ref LlibreStableRef) (*Llibre, error) {
+	return d.help.ResolveLlibreByStableRef(ref)
+}
+func (d *SQLite) ListLlibreDocumentaryContexts(llibreID int) ([]LlibreDocumentaryContext, error) {
+	return sqliteListLlibreDocumentaryContexts(d, llibreID)
+}
 func (d *SQLite) GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error) {
 	return d.help.getLlibresIndexacioStats(ids)
 }

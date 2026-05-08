@@ -7513,8 +7513,8 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 		args = append(args, allowedArgs...)
 	}
 	query := `
-        SELECT l.id, COALESCE(l.arquevisbat_id, 0), l.municipi_id, l.nom_esglesia, l.codi_digital, l.codi_fisic,
-               l.titol, l.tipus_llibre, l.cronologia, l.volum, l.abat, l.contingut, l.llengua,
+        SELECT l.id, COALESCE(l.arquevisbat_id, 0), l.municipi_id, l.nom_esglesia, l.codi, l.codi_digital, l.codi_fisic,
+               l.source_system, l.external_id, l.external_code, l.titol, l.tipus_llibre, l.cronologia, l.volum, l.abat, l.contingut, l.llengua,
                l.requeriments_tecnics, l.unitat_catalogacio, l.unitat_instalacio, l.pagines,
                l.url_base, l.url_imatge_prefix, l.pagina, l.indexacio_completa,
                l.created_by, l.moderation_status, l.moderated_by, l.moderated_at, l.moderation_notes, l.created_at,
@@ -7543,8 +7543,8 @@ func (h sqlHelper) listLlibres(filter LlibreFilter) ([]LlibreRow, error) {
 	for rows.Next() {
 		var lr LlibreRow
 		if err := rows.Scan(
-			&lr.ID, &lr.ArquebisbatID, &lr.MunicipiID, &lr.NomEsglesia, &lr.CodiDigital, &lr.CodiFisic,
-			&lr.Titol, &lr.TipusLlibre, &lr.Cronologia, &lr.Volum, &lr.Abat, &lr.Contingut, &lr.Llengua,
+			&lr.ID, &lr.ArquebisbatID, &lr.MunicipiID, &lr.NomEsglesia, &lr.Codi, &lr.CodiDigital, &lr.CodiFisic,
+			&lr.SourceSystem, &lr.ExternalID, &lr.ExternalCode, &lr.Titol, &lr.TipusLlibre, &lr.Cronologia, &lr.Volum, &lr.Abat, &lr.Contingut, &lr.Llengua,
 			&lr.Requeriments, &lr.UnitatCatalogacio, &lr.UnitatInstalacio, &lr.Pagines,
 			&lr.URLBase, &lr.URLImatgePrefix, &lr.Pagina, &lr.IndexacioCompleta,
 			&lr.CreatedBy, &lr.ModeracioEstat, &lr.ModeratedBy, &lr.ModeratedAt, &lr.ModeracioMotiu, &lr.CreatedAt,
@@ -7682,8 +7682,8 @@ func (h sqlHelper) countIndexedRegistres(status string) (int, error) {
 
 func (h sqlHelper) getLlibre(id int) (*Llibre, error) {
 	query := `
-        SELECT id, COALESCE(arquevisbat_id, 0), municipi_id, nom_esglesia, codi_digital, codi_fisic,
-               titol, tipus_llibre, cronologia, volum, abat, contingut, llengua,
+        SELECT id, COALESCE(arquevisbat_id, 0), municipi_id, nom_esglesia, codi, codi_digital, codi_fisic,
+               source_system, external_id, external_code, titol, tipus_llibre, cronologia, volum, abat, contingut, llengua,
                requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines,
                url_base, url_imatge_prefix, pagina, indexacio_completa,
                created_by, moderation_status, moderated_by, moderated_at, moderation_notes
@@ -7692,8 +7692,8 @@ func (h sqlHelper) getLlibre(id int) (*Llibre, error) {
 	row := h.db.QueryRow(query, id)
 	var l Llibre
 	if err := row.Scan(
-		&l.ID, &l.ArquebisbatID, &l.MunicipiID, &l.NomEsglesia, &l.CodiDigital, &l.CodiFisic,
-		&l.Titol, &l.TipusLlibre, &l.Cronologia, &l.Volum, &l.Abat, &l.Contingut, &l.Llengua,
+		&l.ID, &l.ArquebisbatID, &l.MunicipiID, &l.NomEsglesia, &l.Codi, &l.CodiDigital, &l.CodiFisic,
+		&l.SourceSystem, &l.ExternalID, &l.ExternalCode, &l.Titol, &l.TipusLlibre, &l.Cronologia, &l.Volum, &l.Abat, &l.Contingut, &l.Llengua,
 		&l.Requeriments, &l.UnitatCatalogacio, &l.UnitatInstalacio, &l.Pagines,
 		&l.URLBase, &l.URLImatgePrefix, &l.Pagina, &l.IndexacioCompleta,
 		&l.CreatedBy, &l.ModeracioEstat, &l.ModeratedBy, &l.ModeratedAt, &l.ModeracioMotiu,
@@ -7718,8 +7718,8 @@ func (h sqlHelper) getLlibresByIDs(ids []int) (map[int]*Llibre, error) {
 		chunk := ids[start:end]
 		placeholders := strings.TrimRight(strings.Repeat("?,", len(chunk)), ",")
 		query := `
-        SELECT id, COALESCE(arquevisbat_id, 0), municipi_id, nom_esglesia, codi_digital, codi_fisic,
-               titol, tipus_llibre, cronologia, volum, abat, contingut, llengua,
+        SELECT id, COALESCE(arquevisbat_id, 0), municipi_id, nom_esglesia, codi, codi_digital, codi_fisic,
+               source_system, external_id, external_code, titol, tipus_llibre, cronologia, volum, abat, contingut, llengua,
                requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines,
                url_base, url_imatge_prefix, pagina, indexacio_completa,
                created_by, moderation_status, moderated_by, moderated_at, moderation_notes
@@ -7737,8 +7737,8 @@ func (h sqlHelper) getLlibresByIDs(ids []int) (map[int]*Llibre, error) {
 		for rows.Next() {
 			var l Llibre
 			if err := rows.Scan(
-				&l.ID, &l.ArquebisbatID, &l.MunicipiID, &l.NomEsglesia, &l.CodiDigital, &l.CodiFisic,
-				&l.Titol, &l.TipusLlibre, &l.Cronologia, &l.Volum, &l.Abat, &l.Contingut, &l.Llengua,
+				&l.ID, &l.ArquebisbatID, &l.MunicipiID, &l.NomEsglesia, &l.Codi, &l.CodiDigital, &l.CodiFisic,
+				&l.SourceSystem, &l.ExternalID, &l.ExternalCode, &l.Titol, &l.TipusLlibre, &l.Cronologia, &l.Volum, &l.Abat, &l.Contingut, &l.Llengua,
 				&l.Requeriments, &l.UnitatCatalogacio, &l.UnitatInstalacio, &l.Pagines,
 				&l.URLBase, &l.URLImatgePrefix, &l.Pagina, &l.IndexacioCompleta,
 				&l.CreatedBy, &l.ModeracioEstat, &l.ModeratedBy, &l.ModeratedAt, &l.ModeracioMotiu,
@@ -7761,10 +7761,10 @@ func (h sqlHelper) getLlibresByIDs(ids []int) (map[int]*Llibre, error) {
 func (h sqlHelper) createLlibre(l *Llibre) (int, error) {
 	query := `
         INSERT INTO llibres
-            (arquevisbat_id, municipi_id, nom_esglesia, codi_digital, codi_fisic, titol, tipus_llibre, cronologia, volum, abat, contingut, llengua,
+            (arquevisbat_id, municipi_id, nom_esglesia, codi, codi_digital, codi_fisic, source_system, external_id, external_code, titol, tipus_llibre, cronologia, volum, abat, contingut, llengua,
              requeriments_tecnics, unitat_catalogacio, unitat_instalacio, pagines, url_base, url_imatge_prefix, pagina, indexacio_completa,
              created_by, moderation_status, moderated_by, moderated_at, moderation_notes, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` + h.nowFun + `, ` + h.nowFun + `)`
 	if h.style == "postgres" {
 		query += ` RETURNING id`
 	}
@@ -7774,7 +7774,7 @@ func (h sqlHelper) createLlibre(l *Llibre) (int, error) {
 		arquebisbatArg = nil
 	}
 	args := []interface{}{
-		arquebisbatArg, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.TipusLlibre, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
+		arquebisbatArg, l.MunicipiID, l.NomEsglesia, l.Codi, l.CodiDigital, l.CodiFisic, l.SourceSystem, l.ExternalID, l.ExternalCode, l.Titol, l.TipusLlibre, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
 		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina, l.IndexacioCompleta,
 		l.CreatedBy, l.ModeracioEstat, l.ModeratedBy, l.ModeratedAt, l.ModeracioMotiu,
 	}
@@ -7797,7 +7797,7 @@ func (h sqlHelper) createLlibre(l *Llibre) (int, error) {
 func (h sqlHelper) updateLlibre(l *Llibre) error {
 	query := `
         UPDATE llibres
-        SET arquevisbat_id=?, municipi_id=?, nom_esglesia=?, codi_digital=?, codi_fisic=?, titol=?, tipus_llibre=?, cronologia=?, volum=?, abat=?, contingut=?, llengua=?,
+        SET arquevisbat_id=?, municipi_id=?, nom_esglesia=?, codi=?, codi_digital=?, codi_fisic=?, source_system=?, external_id=?, external_code=?, titol=?, tipus_llibre=?, cronologia=?, volum=?, abat=?, contingut=?, llengua=?,
             requeriments_tecnics=?, unitat_catalogacio=?, unitat_instalacio=?, pagines=?, url_base=?, url_imatge_prefix=?, pagina=?, indexacio_completa=?,
             moderation_status=?, moderated_by=?, moderated_at=?, moderation_notes=?, updated_at=` + h.nowFun + `
         WHERE id = ?`
@@ -7807,7 +7807,7 @@ func (h sqlHelper) updateLlibre(l *Llibre) error {
 		arquebisbatArg = nil
 	}
 	_, err := h.db.Exec(query,
-		arquebisbatArg, l.MunicipiID, l.NomEsglesia, l.CodiDigital, l.CodiFisic, l.Titol, l.TipusLlibre, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
+		arquebisbatArg, l.MunicipiID, l.NomEsglesia, l.Codi, l.CodiDigital, l.CodiFisic, l.SourceSystem, l.ExternalID, l.ExternalCode, l.Titol, l.TipusLlibre, l.Cronologia, l.Volum, l.Abat, l.Contingut, l.Llengua,
 		l.Requeriments, l.UnitatCatalogacio, l.UnitatInstalacio, l.Pagines, l.URLBase, l.URLImatgePrefix, l.Pagina, l.IndexacioCompleta,
 		l.ModeracioEstat, l.ModeratedBy, l.ModeratedAt, l.ModeracioMotiu, l.ID)
 	return err
@@ -7905,6 +7905,51 @@ func (h sqlHelper) hasLlibreDuplicate(municipiID int, tipus, cronologia, codiDig
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func (h sqlHelper) ResolveLlibreByStableRef(ref LlibreStableRef) (*Llibre, error) {
+	clauses := make([]string, 0, 5)
+	args := make([]interface{}, 0, 6)
+	if code := strings.TrimSpace(ref.Codi); code != "" {
+		clauses = append(clauses, "codi = ?")
+		args = append(args, code)
+	}
+	if source := strings.TrimSpace(ref.SourceSystem); source != "" {
+		if externalID := strings.TrimSpace(ref.ExternalID); externalID != "" {
+			clauses = append(clauses, "(source_system = ? AND external_id = ?)")
+			args = append(args, source, externalID)
+		}
+		if externalCode := strings.TrimSpace(ref.ExternalCode); externalCode != "" {
+			clauses = append(clauses, "(source_system = ? AND external_code = ?)")
+			args = append(args, source, externalCode)
+		}
+	}
+	if externalID := strings.TrimSpace(ref.ExternalID); externalID != "" {
+		clauses = append(clauses, "external_id = ?")
+		args = append(args, externalID)
+	}
+	if externalCode := strings.TrimSpace(ref.ExternalCode); externalCode != "" {
+		clauses = append(clauses, "external_code = ?")
+		args = append(args, externalCode)
+	}
+	if len(clauses) == 0 {
+		return nil, nil
+	}
+	query := `
+        SELECT id
+        FROM llibres
+        WHERE ` + strings.Join(clauses, " OR ") + `
+        ORDER BY id
+        LIMIT 1`
+	query = formatPlaceholders(h.style, query)
+	var id int
+	if err := h.db.QueryRow(query, args...).Scan(&id); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return h.getLlibre(id)
 }
 
 func (h sqlHelper) resolveLlibresByCodes(municipiID int, tipus, cronologia string, codiDigitals, codiFisics []string) ([]LlibreResolveRow, error) {

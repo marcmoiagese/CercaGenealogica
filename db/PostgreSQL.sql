@@ -806,8 +806,12 @@ CREATE TABLE IF NOT EXISTS llibres (
     arquevisbat_id INTEGER REFERENCES arquebisbats(id) ON DELETE SET NULL,
     municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE RESTRICT,
     nom_esglesia TEXT,
+    codi TEXT,
     codi_digital TEXT,
     codi_fisic TEXT,
+    source_system TEXT,
+    external_id TEXT,
+    external_code TEXT,
     titol TEXT,
     tipus_llibre TEXT,
     cronologia TEXT,
@@ -832,6 +836,9 @@ CREATE TABLE IF NOT EXISTS llibres (
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX IF NOT EXISTS idx_llibres_codi ON llibres(codi);
+CREATE INDEX IF NOT EXISTS idx_llibres_source_external_id ON llibres(source_system, external_id);
+CREATE INDEX IF NOT EXISTS idx_llibres_source_external_code ON llibres(source_system, external_code);
 CREATE INDEX IF NOT EXISTS idx_llibres_municipi ON llibres(municipi_id);
 
 CREATE TABLE IF NOT EXISTS llibres_indexacio_stats (

@@ -133,7 +133,7 @@ func (a *App) loadLlibreTargetFast(llibreID int) (PermissionTarget, bool) {
 	}
 	query := `
         SELECT l.municipi_id AS municipi_id,
-               l.arquevisbat_id AS ecles_id,
+               COALESCE(l.arquevisbat_id, ax.entitat_eclesiastica_id) AS ecles_id,
                m.nivell_administratiu_id_3 AS provincia_id,
                m.nivell_administratiu_id_4 AS comarca_id,
                na1.pais_id AS pais_id,
@@ -142,6 +142,7 @@ func (a *App) loadLlibreTargetFast(llibreID int) (PermissionTarget, bool) {
         LEFT JOIN municipis m ON m.id = l.municipi_id
         LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
         LEFT JOIN arxius_llibres al ON al.llibre_id = l.id
+        LEFT JOIN arxius ax ON ax.id = al.arxiu_id
         WHERE l.id = ?`
 	query = formatSQLForDB(a.DB, query)
 	rows, err := a.DB.Query(query, llibreID)

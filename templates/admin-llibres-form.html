@@ -26,7 +26,7 @@
                         <option value="{{ .ID }}" {{ if eq $.Data.SelectedArxiuID .ID }}selected{{ end }}>{{ .Nom }}</option>
                         {{ end }}
                     </select>
-                    <p class="camp-helper">{{ t .Lang "books.form.archive.helper" }}</p>
+                    <p class="camp-helper">{{ t .Lang "books.form.documentary_base.helper" }}</p>
                 </div>
                 <div class="grup-camp">
                     <label for="arquevisbat_id">{{ t .Lang "books.form.entity" }}</label>
@@ -36,6 +36,7 @@
                         <option value="{{ .ID }}" {{ if eq $.Data.Llibre.ArquebisbatID .ID }}selected{{ end }}>{{ .Nom }}</option>
                         {{ end }}
                     </select>
+                    <p class="camp-helper">{{ t .Lang "books.form.entity.helper" }}</p>
                 </div>
                 <div class="grup-camp">
                     <label for="municipi_id">{{ t .Lang "books.form.municipi" }}</label>
@@ -64,12 +65,28 @@
                     <input id="nom_esglesia" name="nom_esglesia" type="text" value="{{ .Data.Llibre.NomEsglesia }}">
                 </div>
                 <div class="grup-camp">
+                    <label for="codi">{{ t .Lang "books.form.code.stable" }}</label>
+                    <input id="codi" name="codi" type="text" value="{{ .Data.Llibre.Codi }}">
+                </div>
+                <div class="grup-camp">
                     <label for="codi_digital">{{ t .Lang "books.form.code.digital" }}</label>
                     <input id="codi_digital" name="codi_digital" type="text" value="{{ .Data.Llibre.CodiDigital }}">
                 </div>
                 <div class="grup-camp">
                     <label for="codi_fisic">{{ t .Lang "books.form.code.physical" }}</label>
                     <input id="codi_fisic" name="codi_fisic" type="text" value="{{ .Data.Llibre.CodiFisic }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="source_system">{{ t .Lang "books.form.external_source" }}</label>
+                    <input id="source_system" name="source_system" type="text" value="{{ .Data.Llibre.SourceSystem }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="external_id">{{ t .Lang "books.form.external_id" }}</label>
+                    <input id="external_id" name="external_id" type="text" value="{{ .Data.Llibre.ExternalID }}">
+                </div>
+                <div class="grup-camp">
+                    <label for="external_code">{{ t .Lang "books.form.external_code" }}</label>
+                    <input id="external_code" name="external_code" type="text" value="{{ .Data.Llibre.ExternalCode }}">
                 </div>
                 <div class="grup-camp">
                     <label for="cronologia">{{ t .Lang "books.form.chrono" }}</label>

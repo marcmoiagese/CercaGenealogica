@@ -511,8 +511,12 @@ func parseLlibreForm(r *http.Request) *db.Llibre {
 		ArquebisbatID:     arquevisbatID,
 		MunicipiID:        municipiID,
 		NomEsglesia:       strings.TrimSpace(r.FormValue("nom_esglesia")),
+		Codi:              strings.TrimSpace(r.FormValue("codi")),
 		CodiDigital:       strings.TrimSpace(r.FormValue("codi_digital")),
 		CodiFisic:         strings.TrimSpace(r.FormValue("codi_fisic")),
+		SourceSystem:      strings.TrimSpace(r.FormValue("source_system")),
+		ExternalID:        strings.TrimSpace(r.FormValue("external_id")),
+		ExternalCode:      strings.TrimSpace(r.FormValue("external_code")),
 		Titol:             strings.TrimSpace(r.FormValue("titol")),
 		TipusLlibre:       strings.TrimSpace(r.FormValue("tipus_llibre")),
 		Cronologia:        strings.TrimSpace(r.FormValue("cronologia")),
@@ -541,10 +545,7 @@ func (a *App) validateLlibre(l *db.Llibre, arxiuID int) string {
 	} else if mun == nil {
 		return "El municipi seleccionat no existeix."
 	}
-	if !isCivilBookType(l.TipusLlibre) {
-		if l.ArquebisbatID == 0 {
-			return "Cal indicar l'entitat eclesiastica."
-		}
+	if l.ArquebisbatID > 0 {
 		if ent, err := a.DB.GetArquebisbat(l.ArquebisbatID); err != nil {
 			Errorf("Error validant entitat eclesiastica del llibre: %v", err)
 			return "No s'ha pogut validar l'entitat eclesiastica."
@@ -585,6 +586,31 @@ func isCivilBookType(tipus string) bool {
 	default:
 		return false
 	}
+}
+
+type llibreReligiousContextView struct {
+	Code string
+	Name string
+}
+
+func (a *App) deriveLlibreReligiousContext(llibreID int) llibreReligiousContextView {
+	contexts, err := a.DB.ListLlibreDocumentaryContexts(llibreID)
+	if err != nil {
+		return llibreReligiousContextView{}
+	}
+	for _, ctx := range contexts {
+		if !ctx.ReligiousEntityID.Valid {
+			continue
+		}
+		if strings.TrimSpace(ctx.RelationModerationStatus.String) != "" && strings.TrimSpace(ctx.RelationModerationStatus.String) != "publicat" {
+			continue
+		}
+		return llibreReligiousContextView{
+			Code: strings.TrimSpace(ctx.ReligiousEntityCode.String),
+			Name: strings.TrimSpace(ctx.ReligiousEntityName.String),
+		}
+	}
+	return llibreReligiousContextView{}
 }
 
 func (a *App) renderLlibreForm(w http.ResponseWriter, r *http.Request, l *db.Llibre, isNew bool, errMsg string, returnURL string, selectedArxiu int) {
@@ -1113,6 +1139,10 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 			entityName = ae.Nom
 		}
 	}
+	derivedReligiousContext := a.deriveLlibreReligiousContext(id)
+	if entityName == "" {
+		entityName = derivedReligiousContext.Name
+	}
 	municipiName := ""
 	if llibre.MunicipiID > 0 {
 		if m, err := a.DB.GetMunicipi(llibre.MunicipiID); err == nil && m != nil {
@@ -1174,6 +1204,7 @@ func (a *App) AdminShowLlibre(w http.ResponseWriter, r *http.Request) {
 	RenderPrivateTemplate(w, r, "admin-llibres-show.html", map[string]interface{}{
 		"Llibre":              llibre,
 		"LlibreEntityName":    entityName,
+		"LlibreReligiousCode": derivedReligiousContext.Code,
 		"LlibreMunicipiName":  municipiName,
 		"LlibreCronologia":    formatCronologiaDisplay(llibre.Cronologia),
 		"Arxius":              arxius,

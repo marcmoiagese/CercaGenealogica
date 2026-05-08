@@ -17,8 +17,12 @@ func buildBulkInsertLlibres(style, nowFun string, rows []Llibre) (string, []inte
 		"arquevisbat_id",
 		"municipi_id",
 		"nom_esglesia",
+		"codi",
 		"codi_digital",
 		"codi_fisic",
+		"source_system",
+		"external_id",
+		"external_code",
 		"titol",
 		"tipus_llibre",
 		"cronologia",
@@ -43,9 +47,9 @@ func buildBulkInsertLlibres(style, nowFun string, rows []Llibre) (string, []inte
 		"updated_at",
 	}
 	values := make([]string, 0, len(rows))
-	args := make([]interface{}, 0, len(rows)*25)
+	args := make([]interface{}, 0, len(rows)*29)
 	for _, l := range rows {
-		values = append(values, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+nowFun+", "+nowFun+")")
+		values = append(values, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+nowFun+", "+nowFun+")")
 		arquebisbatArg := interface{}(l.ArquebisbatID)
 		if l.ArquebisbatID == 0 {
 			arquebisbatArg = nil
@@ -58,8 +62,12 @@ func buildBulkInsertLlibres(style, nowFun string, rows []Llibre) (string, []inte
 			arquebisbatArg,
 			l.MunicipiID,
 			l.NomEsglesia,
+			l.Codi,
 			l.CodiDigital,
 			l.CodiFisic,
+			l.SourceSystem,
+			l.ExternalID,
+			l.ExternalCode,
 			l.Titol,
 			l.TipusLlibre,
 			l.Cronologia,

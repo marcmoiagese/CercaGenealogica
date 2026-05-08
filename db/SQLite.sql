@@ -820,8 +820,12 @@ CREATE TABLE IF NOT EXISTS llibres (
     municipi_id INTEGER NOT NULL,
     nom_esglesia TEXT,                     -- ex: "Sant Jaume Apòstol"
     -- Codi identificador únic (de cada sistema)
+    codi TEXT,
     codi_digital TEXT,                    -- ex: "0000013893" (Tarragona)
     codi_fisic TEXT,                      -- ex: "UD: 05 / UI: 423" (Urgell)
+    source_system TEXT,
+    external_id TEXT,
+    external_code TEXT,
     -- Metadades del llibre
     titol TEXT,
     tipus_llibre TEXT,
@@ -1875,6 +1879,9 @@ CREATE INDEX IF NOT EXISTS idx_nom_municipi ON municipis(nom);
 CREATE INDEX IF NOT EXISTS idx_tipus_nivell ON nivells_administratius(tipus_nivell);
 
 --CREATE INDEX IF NOT EXISTS idx_llibres_arquevisbat ON llibres(arquevisbat_id);
+CREATE INDEX IF NOT EXISTS idx_llibres_codi ON llibres(codi);
+CREATE INDEX IF NOT EXISTS idx_llibres_source_external_id ON llibres(source_system, external_id);
+CREATE INDEX IF NOT EXISTS idx_llibres_source_external_code ON llibres(source_system, external_code);
 CREATE INDEX IF NOT EXISTS idx_llibres_municipi ON llibres(municipi_id);
 
 -- Índex compost per millorar la cerca de duplicats i cerques combinades

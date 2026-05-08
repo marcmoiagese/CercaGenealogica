@@ -1178,6 +1178,12 @@ func (d *MySQL) HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigita
 func (d *MySQL) ResolveLlibresByCodes(municipiID int, tipus, cronologia string, codiDigitals, codiFisics []string) ([]LlibreResolveRow, error) {
 	return d.help.resolveLlibresByCodes(municipiID, tipus, cronologia, codiDigitals, codiFisics)
 }
+func (d *MySQL) ResolveLlibreByStableRef(ref LlibreStableRef) (*Llibre, error) {
+	return d.help.ResolveLlibreByStableRef(ref)
+}
+func (d *MySQL) ListLlibreDocumentaryContexts(llibreID int) ([]LlibreDocumentaryContext, error) {
+	return mysqlListLlibreDocumentaryContexts(d, llibreID)
+}
 func (d *MySQL) GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error) {
 	return d.help.getLlibresIndexacioStats(ids)
 }

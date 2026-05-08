@@ -379,6 +379,8 @@ type DB interface {
 	UpdateLlibre(l *Llibre) error
 	HasLlibreDuplicate(municipiID int, tipus, cronologia, codiDigital, codiFisic string, excludeID int) (bool, error)
 	ResolveLlibresByCodes(municipiID int, tipus, cronologia string, codiDigitals, codiFisics []string) ([]LlibreResolveRow, error)
+	ResolveLlibreByStableRef(ref LlibreStableRef) (*Llibre, error)
+	ListLlibreDocumentaryContexts(llibreID int) ([]LlibreDocumentaryContext, error)
 	GetLlibresIndexacioStats(ids []int) (map[int]LlibreIndexacioStats, error)
 	UpsertLlibreIndexacioStats(stats *LlibreIndexacioStats) error
 	ListLlibrePagines(llibreID int) ([]LlibrePagina, error)
@@ -2250,8 +2252,12 @@ type Llibre struct {
 	ArquebisbatID     int
 	MunicipiID        int
 	NomEsglesia       string
+	Codi              string
 	CodiDigital       string
 	CodiFisic         string
+	SourceSystem      string
+	ExternalID        string
+	ExternalCode      string
 	Titol             string
 	TipusLlibre       string
 	Cronologia        string
@@ -2289,6 +2295,13 @@ type LlibreResolveCandidate struct {
 	CodiFisic   string
 }
 
+type LlibreStableRef struct {
+	Codi         string
+	SourceSystem string
+	ExternalID   string
+	ExternalCode string
+}
+
 type LlibreResolveMatch struct {
 	ID          int
 	MunicipiID  int
@@ -2302,6 +2315,22 @@ type LlibreRow struct {
 	Llibre
 	ArquebisbatNom sql.NullString
 	MunicipiNom    sql.NullString
+}
+
+type LlibreDocumentaryContext struct {
+	ArxiuID                  int
+	ArxiuCode                sql.NullString
+	ArxiuNom                 sql.NullString
+	Signatura                sql.NullString
+	URLOverride              sql.NullString
+	ReligiousEntityID        sql.NullInt64
+	ReligiousEntityCode      sql.NullString
+	ReligiousEntityName      sql.NullString
+	ReligionCode             sql.NullString
+	LevelCode                sql.NullString
+	RelationType             sql.NullString
+	RelationState            sql.NullString
+	RelationModerationStatus sql.NullString
 }
 
 type LlibreIndexacioStats struct {
