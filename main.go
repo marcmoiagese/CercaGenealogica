@@ -914,6 +914,10 @@ func main() {
 	// Entitats eclesiàstiques import/export
 	http.HandleFunc("/admin/eclesiastic/import/run", applyMiddleware(app.AdminEclesiasticImportRun, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/eclesiastic/export", applyMiddleware(app.AdminEclesiasticExport, core.BlockIPs, core.RateLimit))
+	// Mapa religiós/confessional import/export
+	http.HandleFunc("/admin/confessional/import/dry-run", applyMiddleware(app.AdminConfessionalImportDryRun, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/confessional/import/apply", applyMiddleware(app.AdminConfessionalImportApply, core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/admin/confessional/export", applyMiddleware(app.AdminConfessionalExport, core.BlockIPs, core.RateLimit))
 	// Arxius import/export
 	http.HandleFunc("/admin/arxius/import/run", applyMiddleware(app.AdminArxiusImportRun, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/admin/arxius/export", applyMiddleware(app.AdminArxiusExport, core.BlockIPs, core.RateLimit))
