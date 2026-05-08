@@ -1,10 +1,12 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -351,8 +353,19 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
+	rawPayload, err := io.ReadAll(file)
+	if err != nil {
+		a.logAdminImportRun(r, "llibres", adminImportStatusError, user.ID)
+		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
+		return
+	}
+	if detectLlibresImportSchema(rawPayload) == "cercagenealogica.llibres.v2" {
+		a.runLlibresImportV2(w, r, user, returnTo, rawPayload, start)
+		return
+	}
+
 	var payload llibresExportPayload
-	if err := json.NewDecoder(file).Decode(&payload); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(rawPayload)).Decode(&payload); err != nil {
 		a.logAdminImportRun(r, "llibres", adminImportStatusError, user.ID)
 		http.Redirect(w, r, withQueryParams(returnTo, map[string]string{"err": "1"}), http.StatusSeeOther)
 		return
