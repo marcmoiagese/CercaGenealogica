@@ -340,7 +340,7 @@
                                     </button>
                                     {{ end }}
                                     {{ if .Data.CanConfessionalExport }}
-                                    <button type="button" class="tab-boto {{ if eq .Data.ConfessionalSubtab "confessional-export" }}actiu{{ end }}" data-tab="confessional-export" role="tab" aria-selected="{{ if eq .Data.ConfessionalSubtab "confessional-export" }}true{{ else }}false{{ end }}" aria-controls="tab-confessional-export">
+                                    <button type="button" class="tab-boto {{ if eq .Data.ConfessionalSubtab "confessional-export" }}actiu{{ end }}" data-tab="confessional-export" data-confessional-export-tab="confessional-export" role="tab" aria-selected="{{ if eq .Data.ConfessionalSubtab "confessional-export" }}true{{ else }}false{{ end }}" aria-controls="tab-confessional-export">
                                         {{ t .Lang "admin.io.subtab.export" }}
                                     </button>
                                     {{ end }}
@@ -370,7 +370,7 @@
                                                             <div class="file-uploader__selected" data-empty="{{ t .Lang "common.file_uploader.empty" }}" data-multiple="{{ t .Lang "common.file_uploader.multiple" }}">{{ t .Lang "common.file_uploader.empty" }}</div>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                </section>
                                                 <section class="confessional-import-panel">
                                                     <div class="confessional-import-options">
                                                         <label class="confessional-export-option confessional-import-option" for="conf-import-include-non-published">
@@ -480,7 +480,7 @@
                                     </section>
                                     {{ end }}
                                     {{ if .Data.CanConfessionalExport }}
-                                    <section id="tab-confessional-export" class="tab-pane {{ if eq .Data.ConfessionalSubtab "confessional-export" }}actiu{{ end }}" data-tab-panel="confessional-export" role="tabpanel" {{ if ne .Data.ConfessionalSubtab "confessional-export" }}hidden{{ end }}>
+                                    <section id="tab-confessional-export" class="tab-pane {{ if eq .Data.ConfessionalSubtab "confessional-export" }}actiu{{ end }}" data-tab-panel="confessional-export" data-confessional-export-panel="confessional-export" role="tabpanel" {{ if ne .Data.ConfessionalSubtab "confessional-export" }}hidden{{ end }}>
                                         <form class="form-vertical confessional-export-form" method="get" action="/admin/confessional/export" data-confessional-export-form>
                                             <p class="muted">{{ t .Lang "confessional.io.export.description" }}</p>
                                             <fieldset class="confessional-export-options">

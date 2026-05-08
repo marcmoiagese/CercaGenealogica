@@ -127,6 +127,8 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 	body := rr.Body.String()
 	for _, token := range []string{
 		`data-confessional-export-form`,
+		`data-confessional-export-tab="confessional-export"`,
+		`data-confessional-export-panel="confessional-export"`,
 		`class="form-vertical confessional-export-form"`,
 		`<link rel="stylesheet" href="/static/css/admin-import-export.css?v=1">`,
 		`<script src="/static/js/admin-import-export.js?v=3"></script>`,
@@ -224,6 +226,7 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 	if strings.Contains(templateBody, "confessional-tabs") || strings.Contains(templateBody, "onclick=") || strings.Contains(templateBody, "<style>") {
 		t.Fatalf("la plantilla F35-4U2 no ha de reintroduir tabs legacy ni inline")
 	}
+	assertConfessionalExportTabContract(t, body)
 }
 
 func TestF354U3ConfessionalAutocompleteAssetsAndAliasSubtabWork(t *testing.T) {
@@ -244,12 +247,11 @@ func TestF354U3ConfessionalAutocompleteAssetsAndAliasSubtabWork(t *testing.T) {
 		t.Fatalf("AdminImportExport F35-4U3 status=%d body=%s", rr.Code, rr.Body.String())
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, `id="tab-confessional-export" class="tab-pane actiu" data-tab-panel="confessional-export" role="tabpanel"`) ||
-		strings.Contains(body, `id="tab-confessional-export" class="tab-pane actiu" data-tab-panel="confessional-export" role="tabpanel" hidden`) {
+	if !regexp.MustCompile(`id="tab-confessional-export" class="tab-pane actiu"[^>]*data-tab-panel="confessional-export"[^>]*role="tabpanel"`).MatchString(body) ||
+		regexp.MustCompile(`id="tab-confessional-export" class="tab-pane actiu"[^>]*hidden`).MatchString(body) {
 		t.Fatalf("confessional_subtab ha d'activar el panell export; body=%s", body)
 	}
-	if !strings.Contains(body, `id="tab-confessional-import" class="tab-pane " data-tab-panel="confessional-import" role="tabpanel" hidden`) &&
-		!strings.Contains(body, `id="tab-confessional-import" class="tab-pane" data-tab-panel="confessional-import" role="tabpanel" hidden`) {
+	if !regexp.MustCompile(`id="tab-confessional-import" class="tab-pane[^"]*"[^>]*data-tab-panel="confessional-import"[^>]*role="tabpanel"[^>]*hidden`).MatchString(body) {
 		t.Fatalf("el subpanell import confessional inactiu ha de renderitzar hidden; body=%s", body)
 	}
 	if !strings.Contains(body, `<script src="/static/js/admin-import-export.js?v=3"></script>`) {
@@ -289,6 +291,43 @@ func TestF354U3ConfessionalAutocompleteAssetsAndAliasSubtabWork(t *testing.T) {
 	assertNoInvalidCSSUnits(t, readProjectFileF354S(t, root, "static/css/estils.css"), "static/css/estils.css")
 	assertNoInvalidCSSUnits(t, readProjectFileF354S(t, root, "static/css/admin-import-export.css"), "static/css/admin-import-export.css")
 	assertAdminImportExportInitialVisibility(t, body)
+	assertConfessionalExportTabContract(t, body)
+}
+
+func TestF354U3ConfessionalExportOnlyDefaultsVisible(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/admin/import-export?tab=confessional", nil)
+	rr := httptest.NewRecorder()
+	core.RenderPrivateTemplate(rr, req, "admin-import-export.html", map[string]interface{}{
+		"User":                        &db.User{Usuari: "f35_4u3_export_only"},
+		"ActiveTab":                   "confessional",
+		"ConfessionalSubtab":          "confessional-export",
+		"CanConfessionalView":         true,
+		"CanConfessionalImport":       false,
+		"CanConfessionalExport":       true,
+		"ConfessionalExportLevels":    []map[string]string{},
+		"ConfessionalExportReligions": []map[string]string{},
+		"CanTerritoriImport":          false,
+		"CanTerritoriExport":          false,
+		"CanEclesImport":              false,
+		"CanEclesExport":              false,
+		"CanArxiusImport":             false,
+		"CanArxiusExport":             false,
+		"CanLlibresImport":            false,
+		"CanLlibresExport":            false,
+	})
+	body := rr.Body.String()
+	if !strings.Contains(body, `data-confessional-export-tab="confessional-export"`) {
+		t.Fatalf("ha d'existir el boto export confessional; body=%s", body)
+	}
+	if !regexp.MustCompile(`data-confessional-export-tab="confessional-export"[^>]*role="tab"[^>]*aria-selected="true"`).MatchString(body) {
+		t.Fatalf("exportar ha de quedar actiu per defecte quan nomes hi ha export; body=%s", body)
+	}
+	if !regexp.MustCompile(`data-confessional-export-panel="confessional-export"[^>]*role="tabpanel"`).MatchString(body) ||
+		regexp.MustCompile(`data-confessional-export-panel="confessional-export"[^>]*hidden`).MatchString(body) {
+		t.Fatalf("el panell export confessional no pot quedar hidden en mode nomes export; body=%s", body)
+	}
+	assertConfessionalExportFormContents(t, body)
+	assertConfessionalExportTabContract(t, body)
 }
 
 func TestF354UExportUsesPortableStableReferences(t *testing.T) {
@@ -727,21 +766,67 @@ func assertNoInvalidCSSUnits(t *testing.T, body, path string) {
 	}
 }
 
+func assertConfessionalExportTabContract(t *testing.T, body string) {
+	t.Helper()
+	buttonMatch := regexp.MustCompile(`data-confessional-export-tab="([^"]+)"`).FindStringSubmatch(body)
+	panelMatch := regexp.MustCompile(`data-confessional-export-panel="([^"]+)"`).FindStringSubmatch(body)
+	buttonDataMatch := regexp.MustCompile(`data-confessional-export-tab="[^"]+"[^>]*data-tab="([^"]+)"|data-tab="([^"]+)"[^>]*data-confessional-export-tab="[^"]+"`).FindStringSubmatch(body)
+	panelDataMatch := regexp.MustCompile(`data-confessional-export-panel="[^"]+"[^>]*data-tab-panel="([^"]+)"|data-tab-panel="([^"]+)"[^>]*data-confessional-export-panel="[^"]+"`).FindStringSubmatch(body)
+	if len(buttonMatch) != 2 || len(panelMatch) != 2 {
+		t.Fatalf("calen data-confessional-export-tab i data-confessional-export-panel; body=%s", body)
+	}
+	if len(buttonDataMatch) == 0 || len(panelDataMatch) == 0 {
+		t.Fatalf("calen data-tab i data-tab-panel coherents per l'export confessional; body=%s", body)
+	}
+	buttonValue := buttonMatch[1]
+	panelValue := panelMatch[1]
+	if buttonValue != "confessional-export" || panelValue != "confessional-export" {
+		t.Fatalf("els identifiers export confessionals han de ser confessional-export; boto=%q panell=%q body=%s", buttonValue, panelValue, body)
+	}
+	buttonDataValue := firstNonEmpty(buttonDataMatch[1:]...)
+	panelDataValue := firstNonEmpty(panelDataMatch[1:]...)
+	if buttonDataValue != buttonValue || panelDataValue != panelValue {
+		t.Fatalf("data-tab/data-tab-panel han de coincidir amb els data-confessional-export-*; data-tab=%q data-tab-panel=%q export=%q body=%s", buttonDataValue, panelDataValue, buttonValue, body)
+	}
+	assertConfessionalExportFormContents(t, body)
+}
+
+func assertConfessionalExportFormContents(t *testing.T, body string) {
+	t.Helper()
+	for _, token := range []string{
+		`data-confessional-export-form`,
+		`name="include_hierarchy"`,
+		`name="include_territorial"`,
+		`name="include_archives"`,
+		`name="include_non_published"`,
+		`type="hidden" name="religio_confessio_codi"`,
+		`type="hidden" name="nivell_confessional_codi"`,
+		`conf-export-religion-search`,
+		`conf-export-level-search`,
+		`type="submit" class="boto-primari"`,
+		`fa-file-export`,
+	} {
+		if !strings.Contains(body, token) {
+			t.Fatalf("el formulari export confessional ha de contenir %q; body=%s", token, body)
+		}
+	}
+}
+
 func assertAdminImportExportInitialVisibility(t *testing.T, body string) {
 	t.Helper()
 
 	mainPanels := []string{"territori", "eclesiastic", "confessional", "arxius", "llibres"}
 	mainVisible := 0
 	for _, panel := range mainPanels {
-		if strings.Contains(body, `id="tab-`+panel+`" class="tab-pane actiu" data-tab-panel="`+panel+`" role="tabpanel"`) &&
-			!strings.Contains(body, `id="tab-`+panel+`" class="tab-pane actiu" data-tab-panel="`+panel+`" role="tabpanel" hidden`) {
+		activePattern := regexp.MustCompile(`id="tab-` + regexp.QuoteMeta(panel) + `" class="tab-pane actiu"[^>]*data-tab-panel="` + regexp.QuoteMeta(panel) + `"[^>]*role="tabpanel"`)
+		hiddenPattern := regexp.MustCompile(`id="tab-` + regexp.QuoteMeta(panel) + `" class="tab-pane[^"]*"[^>]*data-tab-panel="` + regexp.QuoteMeta(panel) + `"[^>]*role="tabpanel"[^>]*hidden`)
+		if activePattern.MatchString(body) && !regexp.MustCompile(`id="tab-`+regexp.QuoteMeta(panel)+`" class="tab-pane actiu"[^>]*hidden`).MatchString(body) {
 			mainVisible++
 			continue
 		}
 		if strings.Contains(body, `id="tab-`+panel+`"`) &&
-			!strings.Contains(body, `id="tab-`+panel+`" class="tab-pane actiu" data-tab-panel="`+panel+`" role="tabpanel"`) &&
-			!strings.Contains(body, `id="tab-`+panel+`" class="tab-pane " data-tab-panel="`+panel+`" role="tabpanel" hidden`) &&
-			!strings.Contains(body, `id="tab-`+panel+`" class="tab-pane" data-tab-panel="`+panel+`" role="tabpanel" hidden`) {
+			!activePattern.MatchString(body) &&
+			!hiddenPattern.MatchString(body) {
 			t.Fatalf("el panell principal %s ha de renderitzar hidden quan es inactiu; body=%s", panel, body)
 		}
 	}
@@ -760,17 +845,16 @@ func assertAdminImportExportInitialVisibility(t *testing.T, body string) {
 		present := 0
 		visible := 0
 		for _, panel := range panels {
-			activeToken := `id="tab-` + panel + `" class="tab-pane actiu" data-tab-panel="` + panel + `" role="tabpanel"`
-			hiddenTokenA := `id="tab-` + panel + `" class="tab-pane " data-tab-panel="` + panel + `" role="tabpanel" hidden`
-			hiddenTokenB := `id="tab-` + panel + `" class="tab-pane" data-tab-panel="` + panel + `" role="tabpanel" hidden`
-			if strings.Contains(body, activeToken) {
+			activePattern := regexp.MustCompile(`id="tab-` + regexp.QuoteMeta(panel) + `" class="tab-pane actiu"[^>]*data-tab-panel="` + regexp.QuoteMeta(panel) + `"[^>]*role="tabpanel"`)
+			hiddenPattern := regexp.MustCompile(`id="tab-` + regexp.QuoteMeta(panel) + `" class="tab-pane[^"]*"[^>]*data-tab-panel="` + regexp.QuoteMeta(panel) + `"[^>]*role="tabpanel"[^>]*hidden`)
+			if activePattern.MatchString(body) {
 				present++
-				if !strings.Contains(body, activeToken+` hidden`) {
+				if !regexp.MustCompile(`id="tab-` + regexp.QuoteMeta(panel) + `" class="tab-pane actiu"[^>]*hidden`).MatchString(body) {
 					visible++
 				}
 				continue
 			}
-			if strings.Contains(body, hiddenTokenA) || strings.Contains(body, hiddenTokenB) {
+			if hiddenPattern.MatchString(body) {
 				present++
 			}
 		}
@@ -784,6 +868,15 @@ func assertAdminImportExportInitialVisibility(t *testing.T, body string) {
 			t.Fatalf("admin-import-export no ha de contenir %q; body=%s", forbidden, body)
 		}
 	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func filterPublishedConfEntitats(all []db.EntitatReligiosa) []db.EntitatReligiosa {
