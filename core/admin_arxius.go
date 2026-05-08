@@ -932,13 +932,15 @@ func (a *App) AdminAddArxiuLlibre(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	existingLinks, listErr := a.currentLlibreArxiuLinks(llibreID)
+	hasExistingLinks := listErr == nil && len(existingLinks) > 0
 	if err := a.saveLlibreArxiuLink(&db.ArxiuLlibreLink{
 		ArxiuID:               id,
 		LlibreID:              llibreID,
 		Signatura:             signatura,
 		URLOverride:           urlOverride,
-		Principal:             true,
-		PreferitVisualitzacio: true,
+		Principal:             !hasExistingLinks,
+		PreferitVisualitzacio: !hasExistingLinks,
 		CreatedBy:             sqlNullIntFromInt(user.ID),
 		UpdatedBy:             sqlNullIntFromInt(user.ID),
 	}); err != nil {

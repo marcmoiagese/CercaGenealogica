@@ -178,6 +178,7 @@ func TestF354U7LlibresExportV2DerivesReligiousContextFromArchive(t *testing.T) {
 		ArchiveCodes    []string
 		ExternalCodes   []string
 		PrimaryCount    int
+		PreferredCount  int
 		ReligiousCodes  []string
 		HasCopyRelation bool
 	}{}
@@ -185,12 +186,16 @@ func TestF354U7LlibresExportV2DerivesReligiousContextFromArchive(t *testing.T) {
 		archiveCodes := make([]string, 0, len(row.Archives))
 		externalCodes := make([]string, 0, len(row.Archives))
 		primaryCount := 0
+		preferredCount := 0
 		hasCopyRelation := false
 		for _, archive := range row.Archives {
 			archiveCodes = append(archiveCodes, archive.ArchiveCode)
 			externalCodes = append(externalCodes, archive.ExternalCode)
 			if archive.Primary {
 				primaryCount++
+			}
+			if archive.PreferredForDisplay {
+				preferredCount++
 			}
 			if archive.RelationType == "copia_digital" && !archive.PreferredForDisplay {
 				hasCopyRelation = true
@@ -205,6 +210,7 @@ func TestF354U7LlibresExportV2DerivesReligiousContextFromArchive(t *testing.T) {
 			ArchiveCodes    []string
 			ExternalCodes   []string
 			PrimaryCount    int
+			PreferredCount  int
 			ReligiousCodes  []string
 			HasCopyRelation bool
 		}{
@@ -212,11 +218,12 @@ func TestF354U7LlibresExportV2DerivesReligiousContextFromArchive(t *testing.T) {
 			ArchiveCodes:    archiveCodes,
 			ExternalCodes:   externalCodes,
 			PrimaryCount:    primaryCount,
+			PreferredCount:  preferredCount,
 			ReligiousCodes:  religiousCodes,
 			HasCopyRelation: hasCopyRelation,
 		}
 	}
-	if got := records["f35_4u7_book_religios"]; got.OldID != llibreRelID || len(got.ArchiveCodes) != 2 || got.PrimaryCount != 1 || !slicesContain(got.ArchiveCodes, "f35_4u7_arxiu_religios") || !slicesContain(got.ArchiveCodes, "f35_4u7_arxiu_civil") || !slicesContain(got.ExternalCodes, "REL-001") || !got.HasCopyRelation || !slicesContain(got.ReligiousCodes, "f35_4u7_entitat_export") {
+	if got := records["f35_4u7_book_religios"]; got.OldID != llibreRelID || len(got.ArchiveCodes) != 2 || got.PrimaryCount != 1 || got.PreferredCount != 1 || !slicesContain(got.ArchiveCodes, "f35_4u7_arxiu_religios") || !slicesContain(got.ArchiveCodes, "f35_4u7_arxiu_civil") || !slicesContain(got.ExternalCodes, "REL-001") || !got.HasCopyRelation || !slicesContain(got.ReligiousCodes, "f35_4u7_entitat_export") {
 		t.Fatalf("export v2 del llibre religios inesperat: %+v", got)
 	}
 	if got := records["f35_4u7_book_civil"]; got.OldID != llibreCivilID || len(got.ArchiveCodes) != 1 || got.ArchiveCodes[0] != "f35_4u7_arxiu_civil" || len(got.ReligiousCodes) != 0 {
@@ -330,6 +337,73 @@ func TestF354U7R1BookFormArchiveSearchAvoidsMassiveSelect(t *testing.T) {
 	body = rr.Body.String()
 	if !strings.Contains(body, "Arxiu Cercable F35-4U7") || strings.Contains(body, "Arxiu Invisible F35-4U7") {
 		t.Fatalf("la cerca d'arxius ha de carregar només coincidencies, body=%s", body)
+	}
+}
+
+func TestF354U7R1PendingBookAddArchiveKeepsSinglePrimaryAndPreferred(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u7r1_pending_add.sqlite3")
+	_, municipiID := seedF354U7BookTerritory(t, database, "PendingAdd")
+	arxiuAID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u7_pa", "Arxiu A Pending", 0)
+	arxiuBID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u7_pb", "Arxiu B Pending", 0)
+	llibreID := createF354U7Book(t, database, admin.ID, municipiID, 0, "f35_4u7_book_pending", "Llibre F35-4U7 Pending")
+
+	saveLink := requireF354U7LinkSaver(t, database)
+	if err := saveLink(&db.ArxiuLlibreLink{
+		ArxiuID:               arxiuAID,
+		LlibreID:              llibreID,
+		Signatura:             "SIG-A",
+		URLOverride:           "https://example.test/a",
+		Principal:             true,
+		PreferitVisualitzacio: true,
+		Estat:                 "actiu",
+		ModeracioEstat:        "publicat",
+	}); err != nil {
+		t.Fatalf("save link A: %v", err)
+	}
+
+	form := url.Values{}
+	form.Set("arxiu_id", strconv.Itoa(arxiuBID))
+	form.Set("signatura", "SIG-B")
+	form.Set("url_override", "https://example.test/b")
+	req := httptest.NewRequest(http.MethodPost, "/documentals/llibres/"+strconv.Itoa(llibreID)+"/arxius/add", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminAddLlibreArxiu(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("AdminAddLlibreArxiu status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rels, err := database.ListLlibreArxius(llibreID)
+	if err != nil {
+		t.Fatalf("ListLlibreArxius: %v", err)
+	}
+	if len(rels) != 2 {
+		t.Fatalf("s'esperaven 2 relacions, got %d", len(rels))
+	}
+	primaryCount := 0
+	preferredCount := 0
+	seen := map[int]bool{}
+	for _, rel := range rels {
+		if seen[rel.ArxiuID] {
+			t.Fatalf("duplicat exacte d'arxiu detectat a les relacions: %+v", rels)
+		}
+		seen[rel.ArxiuID] = true
+		if rel.Principal {
+			primaryCount++
+		}
+		if rel.PreferitVisualitzacio {
+			preferredCount++
+		}
+		if rel.ArxiuID == arxiuAID && (!rel.Principal || !rel.PreferitVisualitzacio) {
+			t.Fatalf("l'arxiu A ha de continuar principal/preferit, got %+v", rel)
+		}
+		if rel.ArxiuID == arxiuBID && (rel.Principal || rel.PreferitVisualitzacio) {
+			t.Fatalf("l'arxiu B no ha d'entrar principal/preferit, got %+v", rel)
+		}
+	}
+	if primaryCount != 1 || preferredCount != 1 {
+		t.Fatalf("principal/preferit han de ser unics, got principal=%d preferit=%d rels=%+v", primaryCount, preferredCount, rels)
 	}
 }
 

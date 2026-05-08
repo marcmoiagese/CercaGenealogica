@@ -753,24 +753,28 @@ func normalizeLlibreArxiuLinks(links []db.ArxiuLlibreLink) []db.ArxiuLlibreLink 
 	}
 	sort.Ints(order)
 	out := make([]db.ArxiuLlibreLink, 0, len(order))
-	hasPreferred := false
-	hasPrimary := false
+	primaryIdx := -1
+	preferredIdx := -1
 	for _, arxiuID := range order {
 		link := byArchive[arxiuID]
-		if link.PreferitVisualitzacio {
-			hasPreferred = true
+		if link.Principal && primaryIdx < 0 {
+			primaryIdx = len(out)
 		}
-		if link.Principal {
-			hasPrimary = true
+		if link.PreferitVisualitzacio && preferredIdx < 0 {
+			preferredIdx = len(out)
 		}
+		link.Principal = false
+		link.PreferitVisualitzacio = false
 		out = append(out, link)
 	}
-	if !hasPreferred {
-		out[0].PreferitVisualitzacio = true
+	if preferredIdx < 0 {
+		preferredIdx = 0
 	}
-	if !hasPrimary {
-		out[0].Principal = true
+	if primaryIdx < 0 {
+		primaryIdx = 0
 	}
+	out[primaryIdx].Principal = true
+	out[preferredIdx].PreferitVisualitzacio = true
 	return out
 }
 
@@ -1618,13 +1622,15 @@ func (a *App) AdminAddLlibreArxiu(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	existingLinks, err := a.currentLlibreArxiuLinks(llibreID)
+	hasExistingLinks := err == nil && len(existingLinks) > 0
 	_ = a.saveLlibreArxiuLink(&db.ArxiuLlibreLink{
 		ArxiuID:               arxiuID,
 		LlibreID:              llibreID,
 		Signatura:             signatura,
 		URLOverride:           urlOverride,
-		Principal:             true,
-		PreferitVisualitzacio: true,
+		Principal:             !hasExistingLinks,
+		PreferitVisualitzacio: !hasExistingLinks,
 		CreatedBy:             sqlNullIntFromInt(user.ID),
 		UpdatedBy:             sqlNullIntFromInt(user.ID),
 	})
