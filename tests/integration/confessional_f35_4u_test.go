@@ -128,7 +128,8 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 	for _, token := range []string{
 		`data-confessional-export-form`,
 		`class="form-vertical confessional-export-form"`,
-		`<script src="/static/js/admin-import-export.js?v=2"></script>`,
+		`<link rel="stylesheet" href="/static/css/admin-import-export.css?v=1">`,
+		`<script src="/static/js/admin-import-export.js?v=3"></script>`,
 		`class="confessional-export-options"`,
 		`class="confessional-export-option" for="conf-export-include-hierarchy"`,
 		`id="conf-export-religion-search"`,
@@ -189,6 +190,7 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 
 	root := findProjectRoot(t)
 	cssBody := readProjectFileF354S(t, root, "static/css/estils.css")
+	pageCSSBody := readProjectFileF354S(t, root, "static/css/admin-import-export.css")
 	jsBody := readProjectFileF354S(t, root, "static/js/admin-import-export.js")
 	templateBody := readProjectFileF354S(t, root, "templates/admin-import-export.html")
 	for _, token := range []string{
@@ -200,9 +202,12 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 		`.confessional-selected-value.has-selection`,
 		`.confessional-suggest-clear:focus-visible`,
 	} {
-		if !strings.Contains(cssBody, token) {
+		if !strings.Contains(pageCSSBody, token) {
 			t.Fatalf("falta CSS F35-4U2 %q", token)
 		}
+	}
+	if strings.Contains(cssBody, `.io-tabs .tab-boto`) || strings.Contains(cssBody, `.confessional-import-form`) {
+		t.Fatalf("el CSS especific d'admin/import-export no ha de quedar duplicat a estils.css")
 	}
 	for _, token := range []string{
 		`[data-local-suggest='1']`,
@@ -210,6 +215,7 @@ func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *tes
 		`mousedown`,
 		`religionFilterHidden`,
 		`form.querySelectorAll("[data-local-suggest='1']")`,
+		`pane.hidden = !activePane;`,
 	} {
 		if !strings.Contains(jsBody, token) {
 			t.Fatalf("falta JS F35-4U2 %q", token)
@@ -238,11 +244,19 @@ func TestF354U3ConfessionalAutocompleteAssetsAndAliasSubtabWork(t *testing.T) {
 		t.Fatalf("AdminImportExport F35-4U3 status=%d body=%s", rr.Code, rr.Body.String())
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, `id="tab-confessional-export" class="tab-pane actiu"`) {
+	if !strings.Contains(body, `id="tab-confessional-export" class="tab-pane actiu" data-tab-panel="confessional-export" role="tabpanel"`) ||
+		strings.Contains(body, `id="tab-confessional-export" class="tab-pane actiu" data-tab-panel="confessional-export" role="tabpanel" hidden`) {
 		t.Fatalf("confessional_subtab ha d'activar el panell export; body=%s", body)
 	}
-	if !strings.Contains(body, `<script src="/static/js/admin-import-export.js?v=2"></script>`) {
+	if !strings.Contains(body, `id="tab-confessional-import" class="tab-pane " data-tab-panel="confessional-import" role="tabpanel" hidden`) &&
+		!strings.Contains(body, `id="tab-confessional-import" class="tab-pane" data-tab-panel="confessional-import" role="tabpanel" hidden`) {
+		t.Fatalf("el subpanell import confessional inactiu ha de renderitzar hidden; body=%s", body)
+	}
+	if !strings.Contains(body, `<script src="/static/js/admin-import-export.js?v=3"></script>`) {
 		t.Fatalf("la resposta ha de carregar el JS extern d'admin import/export; body=%s", body)
+	}
+	if !strings.Contains(body, `<link rel="stylesheet" href="/static/css/admin-import-export.css?v=1">`) {
+		t.Fatalf("la resposta ha de carregar el CSS extern versionat d'admin import/export; body=%s", body)
 	}
 
 	staticReq := httptest.NewRequest(http.MethodGet, "http://localhost:8080/static/js/admin-import-export.js", nil)
@@ -257,6 +271,24 @@ func TestF354U3ConfessionalAutocompleteAssetsAndAliasSubtabWork(t *testing.T) {
 			t.Fatalf("el fitxer JS servit ha de contenir %q", token)
 		}
 	}
+
+	staticReq = httptest.NewRequest(http.MethodGet, "http://localhost:8080/static/css/admin-import-export.css", nil)
+	staticRR = httptest.NewRecorder()
+	core.ServeStatic(staticRR, staticReq)
+	if staticRR.Code != http.StatusOK {
+		t.Fatalf("ServeStatic del CSS F35-4U3 ha de retornar 200, got %d", staticRR.Code)
+	}
+	cssServed := staticRR.Body.String()
+	for _, token := range []string{`.io-tabs .tab-pane[hidden]`, `.confessional-export-option`, `.confessional-suggestions`} {
+		if !strings.Contains(cssServed, token) {
+			t.Fatalf("el fitxer CSS servit ha de contenir %q", token)
+		}
+	}
+
+	root := findProjectRoot(t)
+	assertNoInvalidCSSUnits(t, readProjectFileF354S(t, root, "static/css/estils.css"), "static/css/estils.css")
+	assertNoInvalidCSSUnits(t, readProjectFileF354S(t, root, "static/css/admin-import-export.css"), "static/css/admin-import-export.css")
+	assertAdminImportExportInitialVisibility(t, body)
 }
 
 func TestF354UExportUsesPortableStableReferences(t *testing.T) {
@@ -685,6 +717,73 @@ func extractHiddenTextareaValue(t *testing.T, body, name string) string {
 		t.Fatalf("no s'ha trobat textarea %s al body", name)
 	}
 	return html.UnescapeString(strings.TrimSpace(match[1]))
+}
+
+func assertNoInvalidCSSUnits(t *testing.T, body, path string) {
+	t.Helper()
+	re := regexp.MustCompile(`[0-9]+ +(px|fr|s)\b`)
+	if match := re.FindString(body); match != "" {
+		t.Fatalf("%s conte CSS invalid amb unitats separades: %q", path, match)
+	}
+}
+
+func assertAdminImportExportInitialVisibility(t *testing.T, body string) {
+	t.Helper()
+
+	mainPanels := []string{"territori", "eclesiastic", "confessional", "arxius", "llibres"}
+	mainVisible := 0
+	for _, panel := range mainPanels {
+		if strings.Contains(body, `id="tab-`+panel+`" class="tab-pane actiu" data-tab-panel="`+panel+`" role="tabpanel"`) &&
+			!strings.Contains(body, `id="tab-`+panel+`" class="tab-pane actiu" data-tab-panel="`+panel+`" role="tabpanel" hidden`) {
+			mainVisible++
+			continue
+		}
+		if strings.Contains(body, `id="tab-`+panel+`"`) &&
+			!strings.Contains(body, `id="tab-`+panel+`" class="tab-pane actiu" data-tab-panel="`+panel+`" role="tabpanel"`) &&
+			!strings.Contains(body, `id="tab-`+panel+`" class="tab-pane " data-tab-panel="`+panel+`" role="tabpanel" hidden`) &&
+			!strings.Contains(body, `id="tab-`+panel+`" class="tab-pane" data-tab-panel="`+panel+`" role="tabpanel" hidden`) {
+			t.Fatalf("el panell principal %s ha de renderitzar hidden quan es inactiu; body=%s", panel, body)
+		}
+	}
+	if mainVisible != 1 {
+		t.Fatalf("hi ha d'haver exactament un panell principal visible al render inicial, trobat=%d body=%s", mainVisible, body)
+	}
+
+	subtabs := map[string][]string{
+		"territori":    {"territori-import", "territori-export"},
+		"eclesiastic":  {"eclesiastic-import", "eclesiastic-export"},
+		"confessional": {"confessional-import", "confessional-export"},
+		"arxius":       {"arxius-import", "arxius-export"},
+		"llibres":      {"llibres-import", "llibres-export"},
+	}
+	for group, panels := range subtabs {
+		present := 0
+		visible := 0
+		for _, panel := range panels {
+			activeToken := `id="tab-` + panel + `" class="tab-pane actiu" data-tab-panel="` + panel + `" role="tabpanel"`
+			hiddenTokenA := `id="tab-` + panel + `" class="tab-pane " data-tab-panel="` + panel + `" role="tabpanel" hidden`
+			hiddenTokenB := `id="tab-` + panel + `" class="tab-pane" data-tab-panel="` + panel + `" role="tabpanel" hidden`
+			if strings.Contains(body, activeToken) {
+				present++
+				if !strings.Contains(body, activeToken+` hidden`) {
+					visible++
+				}
+				continue
+			}
+			if strings.Contains(body, hiddenTokenA) || strings.Contains(body, hiddenTokenB) {
+				present++
+			}
+		}
+		if present > 0 && visible != 1 {
+			t.Fatalf("el grup de subpestanyes %s ha de tenir exactament un panell visible, trobat=%d body=%s", group, visible, body)
+		}
+	}
+
+	for _, forbidden := range []string{`style=`, `onclick=`, `onchange=`, `oninput=`, `onkeyup=`, `onfocus=`, `onblur=`, `onsubmit=`, `javascript:`} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("admin-import-export no ha de contenir %q; body=%s", forbidden, body)
+		}
+	}
 }
 
 func filterPublishedConfEntitats(all []db.EntitatReligiosa) []db.EntitatReligiosa {
