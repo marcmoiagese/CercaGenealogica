@@ -796,6 +796,7 @@
   "confessional.io.error.cycle": "Hierarchy cycle detected",
   "confessional.io.error.code_conflict": "Existing code with a different confessional key",
   "confessional.io.error.file_too_large": "File too large",
+  "confessional.io.error.apply_rolled_back": "Transactional import rolled back: no partial changes were applied",
   "ecles.title": "Ecclesiastical entities",
   "ecles.types.altres": "Other",
   "ecles.types.arquebisbat": "Archdiocese",

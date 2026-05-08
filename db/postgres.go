@@ -1245,6 +1245,9 @@ func (d *PostgreSQL) DeleteEntitatReligiosaRelacio(id int) error {
 func (d *PostgreSQL) UpdateEntitatReligiosaRelacioModeracio(id int, estat, motiu string, moderatorID int) error {
 	return postgresUpdateEntitatReligiosaRelacioModeracio(d, id, estat, motiu, moderatorID)
 }
+func (d *PostgreSQL) ApplyConfessionalImportPlanTx(plan *ConfessionalImportTxPlan) (*ConfessionalImportTxResult, error) {
+	return postgresApplyConfessionalImportPlanTx(d, plan)
+}
 func (d *PostgreSQL) ListArxiuEntitatsReligioses(arxiuID int, entitatReligiosaID int, status string) ([]ArxiuEntitatReligiosa, error) {
 	return postgresListArxiuEntitatsReligioses(d, arxiuID, entitatReligiosaID, status)
 }

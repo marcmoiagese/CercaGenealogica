@@ -422,119 +422,66 @@ func (a *App) AdminConfessionalImportApply(w http.ResponseWriter, r *http.Reques
 		a.renderConfessionalImportExportResult(w, r, user, plan.View, "")
 		return
 	}
-
-	entityIDs := make(map[string]int, len(plan.ExistingEntityIDs)+len(plan.EntityCreates))
-	for key, id := range plan.ExistingEntityIDs {
-		entityIDs[key] = id
-	}
-	entityCreated, entitySkipped := 0, 0
-	for _, item := range plan.EntityCreates {
-		entity := item.Entity
-		entity.CreatedBy = sqlNullIntFromInt(user.ID)
-		entity.UpdatedBy = sqlNullIntFromInt(user.ID)
-		if entity.ModeracioEstat == "publicat" {
-			entity.ModeratedBy = sqlNullIntFromInt(user.ID)
-			entity.ModeratedAt = sql.NullTime{Time: time.Now(), Valid: true}
-		}
-		newID, err := a.DB.SaveEntitatReligiosa(&entity)
-		if err != nil {
-			a.renderConfessionalImportExportResult(w, r, user, plan.View, fmt.Sprintf("Import confessional: %s", err))
-			return
-		}
-		entityIDs[item.RefKey] = newID
-		entityCreated++
-	}
-	entitySkipped = plan.View.EntityExistingCount
-
-	hierarchyCreated, hierarchySkipped := 0, plan.View.HierarchyExistingCount
-	for _, item := range plan.HierarchyCreates {
-		rel := &db.EntitatReligiosaRelacio{
-			EntitatOrigenID: entityIDs[item.ParentRefKey],
-			EntitatDestiID:  entityIDs[item.ChildRefKey],
-			TipusRelacio:    item.RelationType,
-			AnyInici:        item.StartsYear,
-			AnyFi:           item.EndsYear,
-			Observacions:    item.Observations,
-			ModeracioEstat:  item.Status,
-			CreatedBy:       sqlNullIntFromInt(user.ID),
-			UpdatedBy:       sqlNullIntFromInt(user.ID),
-		}
-		if item.Status == "publicat" {
-			rel.ModeratedBy = sqlNullIntFromInt(user.ID)
-			rel.ModeratedAt = sql.NullTime{Time: time.Now(), Valid: true}
-		}
-		if _, err := a.DB.SaveEntitatReligiosaRelacio(rel); err != nil {
-			a.renderConfessionalImportExportResult(w, r, user, plan.View, fmt.Sprintf("Import confessional: %s", err))
-			return
-		}
-		hierarchyCreated++
-	}
-
-	territoryCreated, territorySkipped := 0, plan.View.TerritoryExistingCount
-	for _, item := range plan.TerritoryCreates {
-		rel := &db.MunicipiEntitatReligiosa{
-			MunicipiID:         item.MunicipiID,
-			NucliID:            item.NucliID,
-			EntitatReligiosaID: entityIDs[item.EntityRefKey],
-			TipusRelacio:       item.RelationType,
-			AnyInici:           item.StartsYear,
-			AnyFi:              item.EndsYear,
-			Observacions:       item.Observations,
-			ModeracioEstat:     item.Status,
-			CreatedBy:          sqlNullIntFromInt(user.ID),
-			UpdatedBy:          sqlNullIntFromInt(user.ID),
-		}
-		if item.Status == "publicat" {
-			rel.ModeratedBy = sqlNullIntFromInt(user.ID)
-			rel.ModeratedAt = sql.NullTime{Time: time.Now(), Valid: true}
-		}
-		if _, err := a.DB.SaveMunicipiEntitatReligiosa(rel); err != nil {
-			a.renderConfessionalImportExportResult(w, r, user, plan.View, fmt.Sprintf("Import confessional: %s", err))
-			return
-		}
-		territoryCreated++
-	}
-
-	archiveCreated, archiveSkipped := 0, plan.View.ArchiveExistingCount
-	for _, item := range plan.ArchiveCreates {
-		rel := &db.ArxiuEntitatReligiosa{
-			ArxiuID:            item.ArxiuID,
-			EntitatReligiosaID: entityIDs[item.EntityRefKey],
-			TipusRelacio:       item.RelationType,
-			AnyInici:           item.StartsYear,
-			AnyFi:              item.EndsYear,
-			Observacions:       item.Observations,
-			Estat:              item.State,
-			ModeracioEstat:     item.Status,
-			CreatedBy:          sqlNullIntFromInt(user.ID),
-			UpdatedBy:          sqlNullIntFromInt(user.ID),
-		}
-		if item.Status == "publicat" {
-			rel.ModeratedBy = sqlNullIntFromInt(user.ID)
-			rel.ModeratedAt = sql.NullTime{Time: time.Now(), Valid: true}
-		}
-		if _, err := a.DB.SaveArxiuEntitatReligiosa(rel); err != nil {
-			a.renderConfessionalImportExportResult(w, r, user, plan.View, fmt.Sprintf("Import confessional: %s", err))
-			return
-		}
-		archiveCreated++
+	txResult, err := a.DB.ApplyConfessionalImportPlanTx(a.confessionalImportTxPlan(plan, user.ID))
+	if err != nil {
+		errMsg := T(ResolveLang(r), "confessional.io.error.apply_rolled_back")
+		a.renderConfessionalImportExportResult(w, r, user, plan.View, errMsg+": "+err.Error())
+		return
 	}
 
 	http.Redirect(w, r, withQueryParams("/admin/import-export?tab=confessional&subtab=confessional-import", map[string]string{
 		"import":                   "1",
 		"conf_entities_total":      strconv.Itoa(plan.View.EntityCreateCount + plan.View.EntityExistingCount),
-		"conf_entities_created":    strconv.Itoa(entityCreated),
-		"conf_entities_skipped":    strconv.Itoa(entitySkipped),
+		"conf_entities_created":    strconv.Itoa(txResult.EntitiesCreated),
+		"conf_entities_skipped":    strconv.Itoa(txResult.EntitiesSkipped),
 		"conf_hierarchy_total":     strconv.Itoa(plan.View.HierarchyCreateCount + plan.View.HierarchyExistingCount),
-		"conf_hierarchy_created":   strconv.Itoa(hierarchyCreated),
-		"conf_hierarchy_skipped":   strconv.Itoa(hierarchySkipped),
+		"conf_hierarchy_created":   strconv.Itoa(txResult.HierarchyCreated),
+		"conf_hierarchy_skipped":   strconv.Itoa(txResult.HierarchySkipped),
 		"conf_territorial_total":   strconv.Itoa(plan.View.TerritoryCreateCount + plan.View.TerritoryExistingCount),
-		"conf_territorial_created": strconv.Itoa(territoryCreated),
-		"conf_territorial_skipped": strconv.Itoa(territorySkipped),
+		"conf_territorial_created": strconv.Itoa(txResult.TerritoryCreated),
+		"conf_territorial_skipped": strconv.Itoa(txResult.TerritorySkipped),
 		"conf_archive_total":       strconv.Itoa(plan.View.ArchiveCreateCount + plan.View.ArchiveExistingCount),
-		"conf_archive_created":     strconv.Itoa(archiveCreated),
-		"conf_archive_skipped":     strconv.Itoa(archiveSkipped),
+		"conf_archive_created":     strconv.Itoa(txResult.ArchiveCreated),
+		"conf_archive_skipped":     strconv.Itoa(txResult.ArchiveSkipped),
 	}), http.StatusSeeOther)
+}
+
+func (a *App) confessionalImportTxPlan(plan *confessionalImportPlan, userID int) *db.ConfessionalImportTxPlan {
+	out := &db.ConfessionalImportTxPlan{
+		ActorUserID:       userID,
+		ExistingEntityIDs: make(map[string]int, len(plan.ExistingEntityIDs)),
+		EntityCreates:     make([]db.ConfessionalImportEntityCreate, 0, len(plan.EntityCreates)),
+		HierarchyCreates:  make([]db.ConfessionalImportHierarchyCreate, 0, len(plan.HierarchyCreates)),
+		TerritoryCreates:  make([]db.ConfessionalImportTerritoryCreate, 0, len(plan.TerritoryCreates)),
+		ArchiveCreates:    make([]db.ConfessionalImportArchiveCreate, 0, len(plan.ArchiveCreates)),
+	}
+	for key, id := range plan.ExistingEntityIDs {
+		out.ExistingEntityIDs[key] = id
+	}
+	for _, item := range plan.EntityCreates {
+		entity := item.Entity
+		entity.CreatedBy = sqlNullIntFromInt(userID)
+		entity.UpdatedBy = sqlNullIntFromInt(userID)
+		if entity.ModeracioEstat == "publicat" {
+			entity.ModeratedBy = sqlNullIntFromInt(userID)
+			entity.ModeratedAt = sql.NullTime{Time: time.Now(), Valid: true}
+		}
+		out.EntityCreates = append(out.EntityCreates, db.ConfessionalImportEntityCreate{
+			RefKey: item.RefKey,
+			Entity: entity,
+			Label:  item.Label,
+		})
+	}
+	for _, item := range plan.HierarchyCreates {
+		out.HierarchyCreates = append(out.HierarchyCreates, db.ConfessionalImportHierarchyCreate(item))
+	}
+	for _, item := range plan.TerritoryCreates {
+		out.TerritoryCreates = append(out.TerritoryCreates, db.ConfessionalImportTerritoryCreate(item))
+	}
+	for _, item := range plan.ArchiveCreates {
+		out.ArchiveCreates = append(out.ArchiveCreates, db.ConfessionalImportArchiveCreate(item))
+	}
+	return out
 }
 
 func (a *App) renderConfessionalImportExportResult(w http.ResponseWriter, r *http.Request, user *db.User, plan confessionalImportViewPlan, msg string) {

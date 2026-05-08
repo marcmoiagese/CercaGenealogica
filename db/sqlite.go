@@ -918,6 +918,9 @@ func (d *SQLite) DeleteEntitatReligiosaRelacio(id int) error {
 func (d *SQLite) UpdateEntitatReligiosaRelacioModeracio(id int, estat, motiu string, moderatorID int) error {
 	return sqliteUpdateEntitatReligiosaRelacioModeracio(d, id, estat, motiu, moderatorID)
 }
+func (d *SQLite) ApplyConfessionalImportPlanTx(plan *ConfessionalImportTxPlan) (*ConfessionalImportTxResult, error) {
+	return sqliteApplyConfessionalImportPlanTx(d, plan)
+}
 func (d *SQLite) ListArxiuEntitatsReligioses(arxiuID int, entitatReligiosaID int, status string) ([]ArxiuEntitatReligiosa, error) {
 	return sqliteListArxiuEntitatsReligioses(d, arxiuID, entitatReligiosaID, status)
 }

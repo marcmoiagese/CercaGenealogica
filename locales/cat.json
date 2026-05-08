@@ -796,6 +796,7 @@
   "confessional.io.error.cycle": "Cicle jeràrquic detectat",
   "confessional.io.error.code_conflict": "Codi existent amb una altra clau confessional",
   "confessional.io.error.file_too_large": "Fitxer massa gran",
+  "confessional.io.error.apply_rolled_back": "Import transaccional revertit: no s'ha aplicat cap canvi parcial",
   "ecles.title": "Entitats eclesiàstiques",
   "ecles.types.altres": "Altres",
   "ecles.types.arquebisbat": "Arquebisbat",

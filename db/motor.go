@@ -655,6 +655,7 @@ type DB interface {
 	SaveEntitatReligiosaRelacio(rel *EntitatReligiosaRelacio) (int, error)
 	DeleteEntitatReligiosaRelacio(id int) error
 	UpdateEntitatReligiosaRelacioModeracio(id int, estat, motiu string, moderatorID int) error
+	ApplyConfessionalImportPlanTx(plan *ConfessionalImportTxPlan) (*ConfessionalImportTxResult, error)
 	ListArxiuEntitatsReligioses(arxiuID int, entitatReligiosaID int, status string) ([]ArxiuEntitatReligiosa, error)
 	GetArxiuEntitatReligiosa(id int) (*ArxiuEntitatReligiosa, error)
 	SaveArxiuEntitatReligiosa(rel *ArxiuEntitatReligiosa) (int, error)
@@ -1839,6 +1840,67 @@ type ArxiuEntitatReligiosa struct {
 	ModeratedAt        sql.NullTime
 	CreatedAt          sql.NullTime
 	UpdatedAt          sql.NullTime
+}
+
+type ConfessionalImportTxPlan struct {
+	ActorUserID       int
+	ExistingEntityIDs map[string]int
+	EntityCreates     []ConfessionalImportEntityCreate
+	HierarchyCreates  []ConfessionalImportHierarchyCreate
+	TerritoryCreates  []ConfessionalImportTerritoryCreate
+	ArchiveCreates    []ConfessionalImportArchiveCreate
+}
+
+type ConfessionalImportEntityCreate struct {
+	RefKey string
+	Entity EntitatReligiosa
+	Label  string
+}
+
+type ConfessionalImportHierarchyCreate struct {
+	ParentRefKey string
+	ChildRefKey  string
+	RelationType string
+	StartsYear   sql.NullInt64
+	EndsYear     sql.NullInt64
+	Observations string
+	Status       string
+	Label        string
+}
+
+type ConfessionalImportTerritoryCreate struct {
+	EntityRefKey string
+	MunicipiID   int
+	NucliID      sql.NullInt64
+	RelationType string
+	StartsYear   sql.NullInt64
+	EndsYear     sql.NullInt64
+	Observations string
+	Status       string
+	Label        string
+}
+
+type ConfessionalImportArchiveCreate struct {
+	EntityRefKey string
+	ArxiuID      int
+	RelationType string
+	StartsYear   sql.NullInt64
+	EndsYear     sql.NullInt64
+	Observations string
+	State        string
+	Status       string
+	Label        string
+}
+
+type ConfessionalImportTxResult struct {
+	EntitiesCreated  int
+	EntitiesSkipped  int
+	HierarchyCreated int
+	HierarchySkipped int
+	TerritoryCreated int
+	TerritorySkipped int
+	ArchiveCreated   int
+	ArchiveSkipped   int
 }
 
 type Municipi struct {

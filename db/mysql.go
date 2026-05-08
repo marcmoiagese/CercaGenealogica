@@ -891,6 +891,9 @@ func (d *MySQL) DeleteEntitatReligiosaRelacio(id int) error {
 func (d *MySQL) UpdateEntitatReligiosaRelacioModeracio(id int, estat, motiu string, moderatorID int) error {
 	return mysqlUpdateEntitatReligiosaRelacioModeracio(d, id, estat, motiu, moderatorID)
 }
+func (d *MySQL) ApplyConfessionalImportPlanTx(plan *ConfessionalImportTxPlan) (*ConfessionalImportTxResult, error) {
+	return mysqlApplyConfessionalImportPlanTx(d, plan)
+}
 func (d *MySQL) ListArxiuEntitatsReligioses(arxiuID int, entitatReligiosaID int, status string) ([]ArxiuEntitatReligiosa, error) {
 	return mysqlListArxiuEntitatsReligioses(d, arxiuID, entitatReligiosaID, status)
 }
