@@ -2,11 +2,13 @@ package integration
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -181,9 +183,9 @@ func TestF354SDiagnosticDetectsAlertsCoverageAndSafeFilters(t *testing.T) {
 		duplicateName,
 		"Catolicisme",
 		"Islam",
-		"Relacio incompatible",
-		"Multiples pares",
-		"Arxiu sense context religios",
+		"Relació incompatible",
+		"Múltiples pares",
+		"Arxiu sense context religiós",
 	} {
 		if !strings.Contains(body, token) {
 			t.Fatalf("la diagnostica no mostra %q; body=%s", token, body)
@@ -217,6 +219,80 @@ func TestF354SDiagnosticDetectsAlertsCoverageAndSafeFilters(t *testing.T) {
 	if !strings.Contains(maliciousBody, "confessionalDiagnosticFilters") {
 		t.Fatalf("la pagina ha de continuar renderitzant-se amb filtres maliciosos: %s", maliciousBody)
 	}
+}
+
+func TestF354S1DiagnosticI18NKeysAreCompleteCleanAndConsistent(t *testing.T) {
+	root := findProjectRoot(t)
+	locales := map[string]map[string]string{}
+	for _, lang := range []string{"cat", "en", "oc"} {
+		var values map[string]string
+		body := readProjectFileF354S(t, root, "locales/"+lang+".json")
+		if err := json.Unmarshal([]byte(body), &values); err != nil {
+			t.Fatalf("locales/%s.json no es JSON valid: %v", lang, err)
+		}
+		locales[lang] = values
+	}
+
+	keys := f354S1DiagnosticLocaleKeys(locales["cat"])
+	if len(keys) != 62 {
+		t.Fatalf("s'esperaven 62 claus i18n F35-4S, got=%d", len(keys))
+	}
+
+	placeholderRE := regexp.MustCompile(`%[sd]`)
+	mojibake := []string{"Ãƒ", "Ã‚", "Ã¢", "ï¿½"}
+	for _, key := range keys {
+		catValue := locales["cat"][key]
+		catPlaceholders := placeholderRE.FindAllString(catValue, -1)
+		for _, lang := range []string{"cat", "en", "oc"} {
+			value, ok := locales[lang][key]
+			if !ok {
+				t.Fatalf("falta %s a locales/%s.json", key, lang)
+			}
+			if strings.TrimSpace(value) == "" {
+				t.Fatalf("%s a locales/%s.json es buit", key, lang)
+			}
+			for _, bad := range mojibake {
+				if strings.Contains(value, bad) {
+					t.Fatalf("%s a locales/%s.json conte mojibake %q: %q", key, lang, bad, value)
+				}
+			}
+			placeholders := placeholderRE.FindAllString(value, -1)
+			if strings.Join(placeholders, "|") != strings.Join(catPlaceholders, "|") {
+				t.Fatalf("%s a locales/%s.json te placeholders %v, esperats %v", key, lang, placeholders, catPlaceholders)
+			}
+		}
+	}
+
+	for key, badValue := range map[string]string{
+		"confessional.menu.diagnostic":                               "Diagnostic de qualitat",
+		"confessional.diagnostic.title":                              "Diagnostic de qualitat confessional",
+		"confessional.diagnostic.summary.critical_alerts":            "Alertes critiques",
+		"confessional.diagnostic.severity.critical":                  "Critica",
+		"confessional.diagnostic.severity.warning":                   "Avis",
+		"confessional.diagnostic.type.incompatible_relation":         "Relacio incompatible",
+		"confessional.diagnostic.type.multiple_parents":              "Multiples pares",
+		"confessional.diagnostic.type.pending_relation_inconsistent": "Relacio pendent incoherent",
+		"confessional.diagnostic.col.description":                    "Descripcio",
+		"confessional.diagnostic.coverage.title":                     "Cobertura per religio/confessio",
+		"confessional.diagnostic.message.issue.self_relation":        "La relacio apunta a la mateixa entitat.",
+		"confessional.diagnostic.message.pending_relation.duplicate": "La filla pendent te multiples relacions inicials pendents.",
+		"confessional.diagnostic.message.archive_without_context":    "L'arxiu sembla religios pero no te cap relacio religiosa publicada.",
+		"confessional.diagnostic.message.archive_context_ambiguous":  "L'arxiu te multiples relacions religioses massa generiques o sense tipus clar.",
+	} {
+		if locales["cat"][key] == badValue {
+			t.Fatalf("%s conserva el valor catala degradat %q", key, badValue)
+		}
+	}
+}
+
+func f354S1DiagnosticLocaleKeys(values map[string]string) []string {
+	keys := make([]string, 0, 62)
+	for key := range values {
+		if key == "confessional.menu.diagnostic" || strings.HasPrefix(key, "confessional.diagnostic.") {
+			keys = append(keys, key)
+		}
+	}
+	return keys
 }
 
 func f354SDiagnosticGET(handler http.HandlerFunc, path string, session *http.Cookie) *httptest.ResponseRecorder {
