@@ -2,10 +2,18 @@ package core
 
 import (
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
+
+type confessionalExportCatalogOption struct {
+	Code         string
+	Label        string
+	Context      string
+	ReligionCode string
+}
 
 func (a *App) AdminImportExport(w http.ResponseWriter, r *http.Request) {
 	permKeys := []string{
@@ -103,6 +111,8 @@ func (a *App) adminImportExportPageData(r *http.Request, user *db.User) map[stri
 		"ConfessionalArchiveCreated":     parseIntQuery(q.Get("conf_archive_created")),
 		"ConfessionalArchiveSkipped":     parseIntQuery(q.Get("conf_archive_skipped")),
 	}
+	data["ConfessionalExportReligions"] = confessionalExportReligionOptions(ResolveLang(r))
+	data["ConfessionalExportLevels"] = confessionalExportLevelOptions(ResolveLang(r))
 
 	data["TerritoriImportRun"] = q.Get("import") == "1" && activeTab == "territori" && territoriSubtab == "territori-import"
 	if activeTab == "territori" {
@@ -164,6 +174,55 @@ func (a *App) adminImportExportPageData(r *http.Request, user *db.User) map[stri
 	data["LlibresErrors"] = parseIntQuery(q.Get("llibres_errors"))
 
 	return data
+}
+
+func confessionalExportReligionOptions(lang string) []confessionalExportCatalogOption {
+	items := ListSelectableConfessionalReligionCatalog()
+	out := make([]confessionalExportCatalogOption, 0, len(items))
+	for _, item := range items {
+		out = append(out, confessionalExportCatalogOption{
+			Code:    item.Code,
+			Label:   ConfessionalReligionLabel(item, lang),
+			Context: ConfessionalCategoryLabel(item.CategoryCode, lang),
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Label == out[j].Label {
+			return out[i].Code < out[j].Code
+		}
+		return out[i].Label < out[j].Label
+	})
+	return out
+}
+
+func confessionalExportLevelOptions(lang string) []confessionalExportCatalogOption {
+	items := ListConfessionalLevelCatalog()
+	out := make([]confessionalExportCatalogOption, 0, len(items))
+	for _, item := range items {
+		if !item.Active {
+			continue
+		}
+		contextParts := []string{}
+		if religion, ok := GetConfessionalReligionCatalogByCode(item.ReligionCode); ok {
+			contextParts = append(contextParts, ConfessionalReligionLabel(religion, lang))
+		}
+		if item.CategoryCode != "" {
+			contextParts = append(contextParts, ConfessionalCategoryLabel(item.CategoryCode, lang))
+		}
+		out = append(out, confessionalExportCatalogOption{
+			Code:         item.Code,
+			Label:        ConfessionalLevelLabel(item, lang),
+			Context:      strings.Join(contextParts, " - "),
+			ReligionCode: item.ReligionCode,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Label == out[j].Label {
+			return out[i].Code < out[j].Code
+		}
+		return out[i].Label < out[j].Label
+	})
+	return out
 }
 
 func resolveImportExportTab(requested string, available map[string]bool) string {

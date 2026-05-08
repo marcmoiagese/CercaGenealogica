@@ -85,8 +85,13 @@ func TestF354UImportExportUITabPermissionsAndI18N(t *testing.T) {
 			"confessional.io.title",
 			"confessional.io.import.dry_run",
 			"confessional.io.import.apply",
+			"confessional.io.export.all_religions",
+			"confessional.io.export.all_levels",
+			"confessional.io.export.options_title",
+			"confessional.io.export.clear_selection",
 			"confessional.io.error.invalid_json",
 			"confessional.io.error.unresolved_reference",
+			"confessional.io.error.invalid_filter",
 		} {
 			if strings.TrimSpace(payload[key]) == "" {
 				t.Fatalf("%s ha de definir %s", localeFile, key)
@@ -99,6 +104,88 @@ func TestF354UImportExportUITabPermissionsAndI18N(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestF354U2ConfessionalExportUIUsesControlledSuggestsAndStyledOptions(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u2_ui.sqlite3")
+
+	user := createTestUser(t, database, "f35_4u2_ui_"+time.Now().Format("150405000000000"))
+	session := createSessionCookie(t, database, user.ID, "sess_f35_4u2_ui_"+time.Now().Format("150405000000000"))
+	policyID := createPolicyWithGrant(t, database, "f35_4u2_ui", "territori.confessional.import_export.export")
+	addGrantToPolicy(t, database, policyID, "territori.confessional.import_export.view")
+	assignPolicyToUser(t, database, user.ID, policyID)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/import-export?tab=confessional&subtab=confessional-export", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminImportExport(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminImportExport F35-4U2 status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	for _, token := range []string{
+		`data-confessional-export-form`,
+		`class="form-vertical confessional-export-form"`,
+		`class="confessional-export-options"`,
+		`class="confessional-export-option" for="conf-export-include-hierarchy"`,
+		`id="conf-export-religion-search"`,
+		`data-local-suggest="1"`,
+		`data-hidden="conf-export-religion"`,
+		`type="hidden" name="religio_confessio_codi"`,
+		`data-code="catolicisme_ritu_llati"`,
+		`id="conf-export-level-search"`,
+		`data-hidden="conf-export-level"`,
+		`type="hidden" name="nivell_confessional_codi"`,
+		`data-religion-filter-hidden="conf-export-religion"`,
+		`data-code="parroquia"`,
+		`data-religion-code="catolicisme_ritu_llati"`,
+		`Totes les religions/confessions`,
+		`Tots els nivells/divisions`,
+	} {
+		if !strings.Contains(body, token) {
+			t.Fatalf("la UI F35-4U2 ha de contenir %q; body=%s", token, body)
+		}
+	}
+	for _, forbidden := range []string{
+		`id="conf-export-religion" type="text" name="religio_confessio_codi"`,
+		`id="conf-export-level" type="text" name="nivell_confessional_codi"`,
+		`confessional-tabs`,
+		`onclick=`,
+		`onchange=`,
+		`oninput=`,
+		`onsubmit=`,
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("la UI F35-4U2 no ha de contenir %q; body=%s", forbidden, body)
+		}
+	}
+
+	root := findProjectRoot(t)
+	cssBody := readProjectFileF354S(t, root, "static/css/estils.css")
+	jsBody := readProjectFileF354S(t, root, "static/js/admin-import-export.js")
+	templateBody := readProjectFileF354S(t, root, "templates/admin-import-export.html")
+	for _, token := range []string{
+		`.confessional-export-options`,
+		`.confessional-export-option`,
+		`.confessional-selected-value.has-selection`,
+		`.confessional-suggest-clear:focus-visible`,
+	} {
+		if !strings.Contains(cssBody, token) {
+			t.Fatalf("falta CSS F35-4U2 %q", token)
+		}
+	}
+	for _, token := range []string{
+		`[data-local-suggest='1']`,
+		`religionFilterHidden`,
+		`form.querySelectorAll("[data-local-suggest='1']")`,
+	} {
+		if !strings.Contains(jsBody, token) {
+			t.Fatalf("falta JS F35-4U2 %q", token)
+		}
+	}
+	if strings.Contains(templateBody, "confessional-tabs") || strings.Contains(templateBody, "onclick=") {
+		t.Fatalf("la plantilla F35-4U2 no ha de reintroduir tabs legacy ni JS inline")
 	}
 }
 
@@ -158,6 +245,30 @@ func TestF354UExportUsesPortableStableReferences(t *testing.T) {
 	}
 	if !strings.Contains(body, `"municipality"`) || !strings.Contains(body, `"archive"`) {
 		t.Fatalf("l'export ha d'incloure referencies portables de municipi i arxiu; body=%s", body)
+	}
+}
+
+func TestF354U2ConfessionalExportRejectsInvalidCatalogFilters(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u2_invalid_filter.sqlite3")
+	user := createTestUser(t, database, "f35_4u2_invalid_"+time.Now().Format("150405000000000"))
+	session := createSessionCookie(t, database, user.ID, "sess_f35_4u2_invalid_"+time.Now().Format("150405000000000"))
+	policyID := createPolicyWithGrant(t, database, "f35_4u2_invalid", "territori.confessional.import_export.export")
+	assignPolicyToUser(t, database, user.ID, policyID)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/confessional/export?religio_confessio_codi=no_existeix", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminConfessionalExport(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("filtre religio invalid ha de retornar 400, got=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/admin/confessional/export?religio_confessio_codi=catolicisme_ritu_llati&nivell_confessional_codi=ortodoxia_parroquia", nil)
+	req.AddCookie(session)
+	rr = httptest.NewRecorder()
+	app.AdminConfessionalExport(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("nivell incompatible ha de retornar 400, got=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

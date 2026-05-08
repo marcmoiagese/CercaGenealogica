@@ -199,6 +199,19 @@ func (a *App) AdminConfessionalExport(w http.ResponseWriter, r *http.Request) {
 	includeArchives := r.URL.Query().Get("include_archives") != "0"
 	religionCode := normalizeCatalogCode(strings.TrimSpace(r.URL.Query().Get("religio_confessio_codi")))
 	levelCode := normalizeCatalogCode(strings.TrimSpace(r.URL.Query().Get("nivell_confessional_codi")))
+	if religionCode != "" {
+		if religion, ok := GetConfessionalReligionCatalogByCode(religionCode); !ok || !religion.Active {
+			http.Error(w, T(ResolveLang(r), "confessional.io.error.invalid_filter"), http.StatusBadRequest)
+			return
+		}
+	}
+	if levelCode != "" {
+		level, ok := GetConfessionalLevelCatalogByCode(levelCode)
+		if !ok || !level.Active || (religionCode != "" && level.ReligionCode != religionCode) {
+			http.Error(w, T(ResolveLang(r), "confessional.io.error.invalid_filter"), http.StatusBadRequest)
+			return
+		}
+	}
 
 	allEntitats, err := a.DB.ListEntitatsReligioses()
 	if err != nil {

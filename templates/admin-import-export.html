@@ -475,26 +475,87 @@
                                     {{ end }}
                                     {{ if .Data.CanConfessionalExport }}
                                     <section id="tab-confessional-export" class="tab-pane {{ if eq .Data.ConfessionalSubtab "confessional-export" }}actiu{{ end }}" data-tab-panel="confessional-export" role="tabpanel">
-                                        <form class="form-vertical" method="get" action="/admin/confessional/export">
-                                            <div class="grup-camp checkbox-linia">
-                                                <label><input type="checkbox" name="include_hierarchy" value="1" checked> {{ t .Lang "confessional.io.export.include_hierarchy" }}</label>
-                                            </div>
-                                            <div class="grup-camp checkbox-linia">
-                                                <label><input type="checkbox" name="include_territorial" value="1" checked> {{ t .Lang "confessional.io.export.include_territory" }}</label>
-                                            </div>
-                                            <div class="grup-camp checkbox-linia">
-                                                <label><input type="checkbox" name="include_archives" value="1" checked> {{ t .Lang "confessional.io.export.include_archives" }}</label>
-                                            </div>
-                                            <div class="grup-camp checkbox-linia">
-                                                <label><input type="checkbox" name="include_non_published" value="1"> {{ t .Lang "confessional.io.export.include_non_published" }}</label>
-                                            </div>
-                                            <div class="grup-camp">
-                                                <label for="conf-export-religion">{{ t .Lang "confessional.io.export.religion" }}</label>
-                                                <input id="conf-export-religion" type="text" name="religio_confessio_codi" placeholder="{{ t .Lang "confessional.io.export.religion_placeholder" }}">
-                                            </div>
-                                            <div class="grup-camp">
-                                                <label for="conf-export-level">{{ t .Lang "confessional.io.export.level" }}</label>
-                                                <input id="conf-export-level" type="text" name="nivell_confessional_codi" placeholder="{{ t .Lang "confessional.io.export.level_placeholder" }}">
+                                        <form class="form-vertical confessional-export-form" method="get" action="/admin/confessional/export" data-confessional-export-form>
+                                            <p class="muted">{{ t .Lang "confessional.io.export.description" }}</p>
+                                            <fieldset class="confessional-export-options">
+                                                <legend>{{ t .Lang "confessional.io.export.options_title" }}</legend>
+                                                <label class="confessional-export-option" for="conf-export-include-hierarchy">
+                                                    <input id="conf-export-include-hierarchy" type="checkbox" name="include_hierarchy" value="1" checked>
+                                                    <span class="confessional-export-option__body">
+                                                        <span class="confessional-export-option__title">{{ t .Lang "confessional.io.export.include_hierarchy" }}</span>
+                                                        <span class="confessional-export-option__desc">{{ t .Lang "confessional.io.export.include_hierarchy_desc" }}</span>
+                                                    </span>
+                                                </label>
+                                                <label class="confessional-export-option" for="conf-export-include-territorial">
+                                                    <input id="conf-export-include-territorial" type="checkbox" name="include_territorial" value="1" checked>
+                                                    <span class="confessional-export-option__body">
+                                                        <span class="confessional-export-option__title">{{ t .Lang "confessional.io.export.include_territory" }}</span>
+                                                        <span class="confessional-export-option__desc">{{ t .Lang "confessional.io.export.include_territory_desc" }}</span>
+                                                    </span>
+                                                </label>
+                                                <label class="confessional-export-option" for="conf-export-include-archives">
+                                                    <input id="conf-export-include-archives" type="checkbox" name="include_archives" value="1" checked>
+                                                    <span class="confessional-export-option__body">
+                                                        <span class="confessional-export-option__title">{{ t .Lang "confessional.io.export.include_archives" }}</span>
+                                                        <span class="confessional-export-option__desc">{{ t .Lang "confessional.io.export.include_archives_desc" }}</span>
+                                                    </span>
+                                                </label>
+                                                <label class="confessional-export-option" for="conf-export-include-non-published">
+                                                    <input id="conf-export-include-non-published" type="checkbox" name="include_non_published" value="1">
+                                                    <span class="confessional-export-option__body">
+                                                        <span class="confessional-export-option__title">{{ t .Lang "confessional.io.export.include_non_published" }}</span>
+                                                        <span class="confessional-export-option__desc">{{ t .Lang "confessional.io.export.include_non_published_desc" }}</span>
+                                                    </span>
+                                                </label>
+                                            </fieldset>
+                                            <div class="confessional-export-filters">
+                                                <div class="grup-camp confessional-local-suggest">
+                                                    <label for="conf-export-religion-search">{{ t .Lang "confessional.io.export.religion" }}</label>
+                                                    <input id="conf-export-religion-search"
+                                                           type="text"
+                                                           autocomplete="off"
+                                                           placeholder="{{ t .Lang "confessional.io.export.religion_placeholder" }}"
+                                                           data-local-suggest="1"
+                                                           data-hidden="conf-export-religion"
+                                                           data-options="conf-export-religion-options"
+                                                           data-suggestions="conf-export-religion-suggestions"
+                                                           data-selected="conf-export-religion-selected"
+                                                           data-clear="conf-export-religion-clear"
+                                                           data-empty-label="{{ t .Lang "confessional.io.export.no_results" }}">
+                                                    <input id="conf-export-religion" type="hidden" name="religio_confessio_codi" value="">
+                                                    <div id="conf-export-religion-selected" class="confessional-selected-value">{{ t .Lang "confessional.io.export.all_religions" }}</div>
+                                                    <button id="conf-export-religion-clear" class="confessional-suggest-clear" type="button">{{ t .Lang "confessional.io.export.clear_selection" }}</button>
+                                                    <ul id="conf-export-religion-suggestions" class="resultats-cerca confessional-suggestions"></ul>
+                                                    <div id="conf-export-religion-options" class="confessional-suggest-options" hidden>
+                                                        {{ range .Data.ConfessionalExportReligions }}
+                                                        <span data-suggest-option data-code="{{ .Code }}" data-label="{{ .Label }}" data-context="{{ .Context }}"></span>
+                                                        {{ end }}
+                                                    </div>
+                                                </div>
+                                                <div class="grup-camp confessional-local-suggest">
+                                                    <label for="conf-export-level-search">{{ t .Lang "confessional.io.export.level" }}</label>
+                                                    <input id="conf-export-level-search"
+                                                           type="text"
+                                                           autocomplete="off"
+                                                           placeholder="{{ t .Lang "confessional.io.export.level_placeholder" }}"
+                                                           data-local-suggest="1"
+                                                           data-hidden="conf-export-level"
+                                                           data-options="conf-export-level-options"
+                                                           data-suggestions="conf-export-level-suggestions"
+                                                           data-selected="conf-export-level-selected"
+                                                           data-clear="conf-export-level-clear"
+                                                           data-religion-filter-hidden="conf-export-religion"
+                                                           data-empty-label="{{ t .Lang "confessional.io.export.no_results" }}">
+                                                    <input id="conf-export-level" type="hidden" name="nivell_confessional_codi" value="">
+                                                    <div id="conf-export-level-selected" class="confessional-selected-value">{{ t .Lang "confessional.io.export.all_levels" }}</div>
+                                                    <button id="conf-export-level-clear" class="confessional-suggest-clear" type="button">{{ t .Lang "confessional.io.export.clear_selection" }}</button>
+                                                    <ul id="conf-export-level-suggestions" class="resultats-cerca confessional-suggestions"></ul>
+                                                    <div id="conf-export-level-options" class="confessional-suggest-options" hidden>
+                                                        {{ range .Data.ConfessionalExportLevels }}
+                                                        <span data-suggest-option data-code="{{ .Code }}" data-label="{{ .Label }}" data-context="{{ .Context }}" data-religion-code="{{ .ReligionCode }}"></span>
+                                                        {{ end }}
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div class="form-accio">
                                                 <button type="submit" class="boto-primari">

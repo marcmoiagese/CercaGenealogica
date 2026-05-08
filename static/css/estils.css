@@ -697,6 +697,119 @@ body {
     padding: 0;
 }
 
+.confessional-export-form {
+    gap: 18px;
+}
+
+.confessional-export-options {
+    border: 1px solid #dfe3ec;
+    border-radius: 8px;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    margin: 0;
+    padding: 14px;
+}
+
+.confessional-export-options legend {
+    color: #344054;
+    font-weight: 700;
+    padding: 0 6px;
+}
+
+.confessional-export-option {
+    align-items: flex-start;
+    background: #f8fafc;
+    border: 1px solid #dfe3ec;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    gap: 10px;
+    min-height: 76px;
+    padding: 12px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.confessional-export-option:hover,
+.confessional-export-option:focus-within {
+    background: #f3f7fb;
+    border-color: #9db5d6;
+    box-shadow: 0 0 0 3px rgba(45, 118, 189, 0.12);
+}
+
+.confessional-export-option input[type="checkbox"] {
+    accent-color: var(--secondary-color);
+    flex: 0 0 auto;
+    height: 18px;
+    margin-top: 2px;
+    width: 18px;
+}
+
+.confessional-export-option__body {
+    display: grid;
+    gap: 4px;
+}
+
+.confessional-export-option__title {
+    color: #1f2937;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.confessional-export-option__desc {
+    color: #667085;
+    font-size: 0.88rem;
+    line-height: 1.35;
+}
+
+.confessional-export-filters {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.confessional-local-suggest {
+    position: relative;
+}
+
+.confessional-local-suggest input[type="text"] {
+    width: 100%;
+}
+
+.confessional-selected-value {
+    color: #667085;
+    font-size: 0.88rem;
+    margin-top: 6px;
+}
+
+.confessional-selected-value.has-selection {
+    color: #175cd3;
+    font-weight: 700;
+}
+
+.confessional-suggest-clear {
+    background: none;
+    border: none;
+    color: var(--secondary-color);
+    cursor: pointer;
+    font-weight: 700;
+    margin-top: 6px;
+    padding: 0;
+}
+
+.confessional-suggest-clear:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid var(--secondary-color);
+    outline-offset: 2px;
+}
+
+.confessional-suggestions {
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 20;
+}
+
 .taula-wrapper {
     width: 100%;
     overflow: auto;
