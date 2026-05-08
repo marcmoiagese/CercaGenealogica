@@ -650,6 +650,9 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	if _, found := m["CanViewConfessionalMunicipisEntitats"]; !found {
 		m["CanViewConfessionalMunicipisEntitats"] = effectiveAdmin || hasModularConfessionalMunicipisEntitatsViewKey(hasKey)
 	}
+	if _, found := m["CanViewConfessionalDiagnostic"]; !found {
+		m["CanViewConfessionalDiagnostic"] = effectiveAdmin || hasModularConfessionalDiagnosticViewKey(hasKey)
+	}
 	if _, found := m["CanViewTerritory"]; !found {
 		m["CanViewTerritory"] = m["CanViewNivells"].(bool) || m["CanViewMunicipis"].(bool) || m["CanViewEcles"].(bool)
 	}
@@ -846,7 +849,8 @@ func hasModularConfessionalViewKey(hasKey func(string) bool) bool {
 		hasModularConfessionalNivellsViewKey(hasKey) ||
 		hasModularConfessionalEntitatsViewKey(hasKey) ||
 		hasModularConfessionalRelacionsEntitatsViewKey(hasKey) ||
-		hasModularConfessionalMunicipisEntitatsViewKey(hasKey)
+		hasModularConfessionalMunicipisEntitatsViewKey(hasKey) ||
+		hasModularConfessionalDiagnosticViewKey(hasKey)
 }
 
 func hasModularConfessionalReligionsViewKey(hasKey func(string) bool) bool {
@@ -889,4 +893,8 @@ func hasModularConfessionalMunicipisEntitatsViewKey(hasKey func(string) bool) bo
 		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsCreate) ||
 		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsEdit) ||
 		hasKey(permKeyTerritoriConfessionalMunicipisEntitatsDelete))
+}
+
+func hasModularConfessionalDiagnosticViewKey(hasKey func(string) bool) bool {
+	return hasKey != nil && hasKey(permKeyTerritoriConfessionalDiagnosticView)
 }

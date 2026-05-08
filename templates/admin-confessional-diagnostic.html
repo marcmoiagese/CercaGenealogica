@@ -1,0 +1,190 @@
+{{ define "admin-confessional-diagnostic.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "confessional.diagnostic.title" }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/registres-taula.css">
+    <link rel="stylesheet" href="/static/css/territori-municipis-browse.css">
+    <style>
+        .diagnostic-summary { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 16px 0 20px; }
+        .diagnostic-stat { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 16px; }
+        .diagnostic-stat-label { color: #475467; display: block; font-size: .9rem; line-height: 1.35; margin-bottom: 8px; }
+        .diagnostic-stat-value { color: #101828; font-size: 1.8rem; font-weight: 700; line-height: 1; }
+        .diagnostic-section-title { margin: 0; }
+        .diagnostic-controls { margin-bottom: 20px; }
+        .diagnostic-actions { align-items: end; display: flex; gap: 8px; }
+        .diagnostic-actions .boto-secundari, .diagnostic-actions .boto-primari { white-space: nowrap; }
+        .diagnostic-severity { border-radius: 999px; display: inline-flex; font-size: .8rem; font-weight: 700; padding: 4px 10px; text-transform: uppercase; }
+        .diagnostic-severity.critical { background: #fef3f2; color: #b42318; }
+        .diagnostic-severity.warning { background: #fffaeb; color: #b54708; }
+        .diagnostic-severity.info { background: #eff8ff; color: #175cd3; }
+        .diagnostic-link-list { color: #667085; line-height: 1.45; }
+        .diagnostic-link-list a { color: inherit; }
+        .diagnostic-table td { vertical-align: top; }
+    </style>
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal taula-ample">
+        <section class="card municipis-browse">
+            <header class="card-header">
+                <h1>{{ t .Lang "confessional.diagnostic.title" }}</h1>
+            </header>
+
+            <div class="diagnostic-summary">
+                <article class="diagnostic-stat">
+                    <span class="diagnostic-stat-label">{{ t .Lang "confessional.diagnostic.summary.published_entities" }}</span>
+                    <span class="diagnostic-stat-value">{{ .Data.Diagnostic.Summary.PublishedEntities }}</span>
+                </article>
+                <article class="diagnostic-stat">
+                    <span class="diagnostic-stat-label">{{ t .Lang "confessional.diagnostic.summary.pending_entities" }}</span>
+                    <span class="diagnostic-stat-value">{{ .Data.Diagnostic.Summary.PendingEntities }}</span>
+                </article>
+                <article class="diagnostic-stat">
+                    <span class="diagnostic-stat-label">{{ t .Lang "confessional.diagnostic.summary.published_hierarchy_relations" }}</span>
+                    <span class="diagnostic-stat-value">{{ .Data.Diagnostic.Summary.PublishedHierarchyRelations }}</span>
+                </article>
+                <article class="diagnostic-stat">
+                    <span class="diagnostic-stat-label">{{ t .Lang "confessional.diagnostic.summary.published_territorial_relations" }}</span>
+                    <span class="diagnostic-stat-value">{{ .Data.Diagnostic.Summary.PublishedTerritorialRelations }}</span>
+                </article>
+                <article class="diagnostic-stat">
+                    <span class="diagnostic-stat-label">{{ t .Lang "confessional.diagnostic.summary.published_archive_relations" }}</span>
+                    <span class="diagnostic-stat-value">{{ .Data.Diagnostic.Summary.PublishedArchiveRelations }}</span>
+                </article>
+                <article class="diagnostic-stat">
+                    <span class="diagnostic-stat-label">{{ t .Lang "confessional.diagnostic.summary.critical_alerts" }}</span>
+                    <span class="diagnostic-stat-value">{{ .Data.Diagnostic.Summary.CriticalAlerts }}</span>
+                </article>
+                <article class="diagnostic-stat">
+                    <span class="diagnostic-stat-label">{{ t .Lang "confessional.diagnostic.summary.warning_alerts" }}</span>
+                    <span class="diagnostic-stat-value">{{ .Data.Diagnostic.Summary.WarningAlerts }}</span>
+                </article>
+                <article class="diagnostic-stat">
+                    <span class="diagnostic-stat-label">{{ t .Lang "confessional.diagnostic.summary.info_alerts" }}</span>
+                    <span class="diagnostic-stat-value">{{ .Data.Diagnostic.Summary.InfoAlerts }}</span>
+                </article>
+            </div>
+
+            <form class="filtres-localitzacio diagnostic-controls" method="get" action="/confessional/diagnostic" id="confessionalDiagnosticFilters">
+                <div class="filtre-grup">
+                    <label for="diagnostic-religion">{{ t .Lang "confessional.filter.religion" }}</label>
+                    <select id="diagnostic-religion" name="religio_confessio_codi">
+                        <option value="">{{ t .Lang "confessional.filter.all_religions" }}</option>
+                        {{ range .Data.SelectableReligions }}
+                        <option value="{{ .Code }}" {{ if eq $.Data.Diagnostic.Filter.ReligionCode .Code }}selected{{ end }}>{{ index $.Data.ReligionCatalogLabels .Code }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="filtre-grup">
+                    <label for="diagnostic-level">{{ t .Lang "confessional.filter.level" }}</label>
+                    <select id="diagnostic-level" name="nivell_confessional_codi">
+                        <option value="">{{ t .Lang "confessional.filter.all_levels" }}</option>
+                        {{ range .Data.SelectableNivells }}
+                        <option value="{{ .Code }}" {{ if eq $.Data.Diagnostic.Filter.LevelCode .Code }}selected{{ end }}>{{ index $.Data.LevelCatalogLabels .Code }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="filtre-grup">
+                    <label for="diagnostic-severity">{{ t .Lang "confessional.diagnostic.filter.severity" }}</label>
+                    <select id="diagnostic-severity" name="severity">
+                        {{ range .Data.Diagnostic.SeverityOptions }}
+                        <option value="{{ .Value }}" {{ if eq $.Data.Diagnostic.Filter.Severity .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="filtre-grup">
+                    <label for="diagnostic-type">{{ t .Lang "confessional.diagnostic.filter.alert_type" }}</label>
+                    <select id="diagnostic-type" name="alert_type">
+                        {{ range .Data.Diagnostic.AlertTypeOptions }}
+                        <option value="{{ .Value }}" {{ if eq $.Data.Diagnostic.Filter.AlertType .Value }}selected{{ end }}>{{ .Label }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div class="filtre-grup">
+                    <label for="diagnostic-query">{{ t .Lang "confessional.filter.search" }}</label>
+                    <input id="diagnostic-query" type="text" name="q" maxlength="80" value="{{ .Data.Diagnostic.Filter.Query }}" placeholder="{{ t .Lang "confessional.diagnostic.filter.query_placeholder" }}" autocomplete="off">
+                </div>
+                <div class="diagnostic-actions">
+                    <button class="boto-primari" type="submit">{{ t .Lang "confessional.filter.apply" }}</button>
+                    <a class="boto-secundari" href="/confessional/diagnostic">{{ t .Lang "confessional.filter.clear" }}</a>
+                </div>
+            </form>
+        </section>
+
+        <section class="card">
+            <header class="card-header">
+                <h2 class="diagnostic-section-title">{{ t .Lang "confessional.diagnostic.alerts.title" }}</h2>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula diagnostic-table">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "confessional.diagnostic.col.severity" }}</th>
+                            <th>{{ t .Lang "confessional.diagnostic.col.type" }}</th>
+                            <th>{{ t .Lang "confessional.diagnostic.col.description" }}</th>
+                            <th>{{ t .Lang "confessional.diagnostic.col.subject" }}</th>
+                            <th>{{ t .Lang "confessional.diagnostic.col.context" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Diagnostic.Alerts }}
+                        <tr>
+                            <td><span class="diagnostic-severity {{ .SeverityClass }}">{{ .SeverityLabel }}</span></td>
+                            <td>{{ .TypeLabel }}</td>
+                            <td>{{ .Description }}</td>
+                            <td class="diagnostic-link-list">{{ if .SubjectURL }}<a href="{{ .SubjectURL }}">{{ .Subject }}</a>{{ else }}{{ .Subject }}{{ end }}</td>
+                            <td class="diagnostic-link-list">{{ if .ContextURL }}<a href="{{ .ContextURL }}">{{ .Context }}</a>{{ else if .Context }}{{ .Context }}{{ else }}-{{ end }}</td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="5" class="empty-cell">{{ t .Lang "confessional.diagnostic.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card">
+            <header class="card-header">
+                <h2 class="diagnostic-section-title">{{ t .Lang "confessional.diagnostic.coverage.title" }}</h2>
+            </header>
+            <div class="taula-wrapper">
+                <table class="taula diagnostic-table">
+                    <thead>
+                        <tr>
+                            <th>{{ t .Lang "confessional.col.religion" }}</th>
+                            <th>{{ t .Lang "confessional.diagnostic.summary.published_entities" }}</th>
+                            <th>{{ t .Lang "confessional.diagnostic.summary.published_hierarchy_relations" }}</th>
+                            <th>{{ t .Lang "confessional.diagnostic.summary.published_territorial_relations" }}</th>
+                            <th>{{ t .Lang "confessional.diagnostic.summary.published_archive_relations" }}</th>
+                            <th>{{ t .Lang "confessional.diagnostic.summary.critical_alerts" }}</th>
+                            <th>{{ t .Lang "confessional.diagnostic.summary.warning_alerts" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Data.Diagnostic.CoverageRows }}
+                        <tr>
+                            <td>{{ .ReligionLabel }}</td>
+                            <td>{{ .PublishedEntities }}</td>
+                            <td>{{ .HierarchyRelations }}</td>
+                            <td>{{ .TerritorialRelations }}</td>
+                            <td>{{ .ArchiveRelations }}</td>
+                            <td>{{ .CriticalAlerts }}</td>
+                            <td>{{ .WarningAlerts }}</td>
+                        </tr>
+                        {{ else }}
+                        <tr><td colspan="7" class="empty-cell">{{ t .Lang "confessional.diagnostic.coverage.empty" }}</td></tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

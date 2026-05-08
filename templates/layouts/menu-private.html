@@ -90,7 +90,7 @@
             </ul>
         </div>
         {{ end }}
-        {{ if and .Data (or (index .Data "CanViewConfessionalEntitats") (index .Data "CanViewConfessionalRelacionsEntitats") (index .Data "CanViewConfessionalMunicipisEntitats") (index .Data "IsAdmin") ) }}
+        {{ if and .Data (or (index .Data "CanViewConfessionalEntitats") (index .Data "CanViewConfessionalRelacionsEntitats") (index .Data "CanViewConfessionalMunicipisEntitats") (index .Data "CanViewConfessionalDiagnostic") (index .Data "IsAdmin") ) }}
         <div class="menu-seccio">
             <div class="menu-titol">
                 <i class="fas fa-place-of-worship"></i>
@@ -106,6 +106,9 @@
                 {{ end }}
                 {{ if or (index .Data "CanViewConfessionalMunicipisEntitats") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/confessional/municipis-entitats"><i class="fas fa-map-location-dot"></i> {{ t .Lang "confessional.menu.territorial_relations" }}</a></li>
+                {{ end }}
+                {{ if or (index .Data "CanViewConfessionalDiagnostic") (index .Data "IsAdmin") }}
+                <li class="menu-opcio"><a href="/confessional/diagnostic"><i class="fas fa-stethoscope"></i> {{ t .Lang "confessional.menu.diagnostic" }}</a></li>
                 {{ end }}
             </ul>
         </div>
