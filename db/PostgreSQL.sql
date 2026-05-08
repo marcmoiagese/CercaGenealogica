@@ -15,7 +15,7 @@ EXCEPTION WHEN insufficient_privilege THEN
     RAISE NOTICE 'Skipping extension pg_trgm (insufficient privileges)';
 END $$;
 
--- Taules de GESTIÓ D'USUARIS I PERMISOS
+-- Taules de GESTIÃ“ D'USUARIS I PERMISOS
 ------------------------------------------------------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS usuaris (
@@ -297,7 +297,7 @@ CREATE INDEX IF NOT EXISTS idx_persona_anecdotari_persona
 CREATE INDEX IF NOT EXISTS idx_persona_anecdotari_status
   ON persona_anecdotari(status, created_at DESC);
 
--- Taules de DADES GEOGRÀFIQUES I HISTÒRIQUES
+-- Taules de DADES GEOGRÃ€FIQUES I HISTÃ’RIQUES
 ------------------------------------------------------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS paisos (
@@ -579,7 +579,7 @@ CREATE INDEX IF NOT EXISTS idx_demografia_queue_pending ON demografia_queue(proc
 CREATE TABLE IF NOT EXISTS noms_historics (
     id SERIAL PRIMARY KEY,
 
-    -- Tipus d'entitat a la qual fa referència aquest nom històric:
+    -- Tipus d'entitat a la qual fa referÃ¨ncia aquest nom histÃ²ric:
     --   municipi       -> entitat_id apunta a municipis.id
     --   nivell_admin   -> entitat_id apunta a nivells_administratius.id
     --   eclesiastic    -> entitat_id apunta a arquebisbats.id
@@ -851,7 +851,7 @@ CREATE TABLE IF NOT EXISTS llibres_indexacio_stats (
 );
 
 -- =====================================================================
--- Arxius / Custòdia (físic o digital) + Estat d'indexació per pàgina
+-- Arxius / CustÃ²dia (fÃ­sic o digital) + Estat d'indexaciÃ³ per pÃ gina
 -- =====================================================================
 
 CREATE TABLE IF NOT EXISTS arxius (
@@ -918,8 +918,35 @@ CREATE TABLE IF NOT EXISTS arxius_llibres (
   llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,
   signatura TEXT,
   url_override TEXT,
+  tipus_relacio TEXT NOT NULL DEFAULT 'custodia_original',
+  principal BOOLEAN NOT NULL DEFAULT FALSE,
+  preferit_visualitzacio BOOLEAN NOT NULL DEFAULT FALSE,
+  source_system TEXT,
+  external_id TEXT,
+  external_code TEXT,
+  notes TEXT,
+  estat TEXT NOT NULL DEFAULT 'actiu',
+  moderation_status TEXT NOT NULL DEFAULT 'publicat',
+  created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+  moderated_at TIMESTAMP WITHOUT TIME ZONE,
   PRIMARY KEY (arxiu_id, llibre_id)
 );
+
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS tipus_relacio TEXT NOT NULL DEFAULT 'custodia_original';
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS principal BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS preferit_visualitzacio BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS source_system TEXT;
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS external_id TEXT;
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS external_code TEXT;
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS estat TEXT NOT NULL DEFAULT 'actiu';
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS moderation_status TEXT NOT NULL DEFAULT 'publicat';
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS created_by INTEGER;
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS updated_by INTEGER;
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS moderated_by INTEGER;
+ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMP WITHOUT TIME ZONE;
 
 CREATE TABLE IF NOT EXISTS llibre_pagines (
   id SERIAL PRIMARY KEY,
@@ -1229,7 +1256,7 @@ CREATE TABLE IF NOT EXISTS cognom_variants (
 CREATE INDEX IF NOT EXISTS idx_cognom_variants_status ON cognom_variants(cognom_id, moderation_status);
 CREATE INDEX IF NOT EXISTS idx_cognom_variants_key ON cognom_variants(key);
 
--- Redirects de cognoms (alias -> canònic)
+-- Redirects de cognoms (alias -> canÃ²nic)
 CREATE TABLE IF NOT EXISTS cognoms_redirects (
   from_cognom_id INTEGER PRIMARY KEY REFERENCES cognoms(id) ON DELETE CASCADE,
   to_cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
@@ -1239,7 +1266,7 @@ CREATE TABLE IF NOT EXISTS cognoms_redirects (
 );
 CREATE INDEX IF NOT EXISTS idx_cognoms_redirects_to ON cognoms_redirects(to_cognom_id);
 
--- Propostes d'unificació de cognoms (moderables)
+-- Propostes d'unificaciÃ³ de cognoms (moderables)
 CREATE TABLE IF NOT EXISTS cognoms_redirects_suggestions (
   id SERIAL PRIMARY KEY,
   from_cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
@@ -1256,7 +1283,7 @@ CREATE INDEX IF NOT EXISTS idx_cognoms_redirects_suggestions_status ON cognoms_r
 CREATE INDEX IF NOT EXISTS idx_cognoms_redirects_suggestions_from ON cognoms_redirects_suggestions(from_cognom_id);
 CREATE INDEX IF NOT EXISTS idx_cognoms_redirects_suggestions_to ON cognoms_redirects_suggestions(to_cognom_id);
 
--- Referències de cognoms (moderables)
+-- ReferÃ¨ncies de cognoms (moderables)
 CREATE TABLE IF NOT EXISTS cognoms_referencies (
   id SERIAL PRIMARY KEY,
   cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
@@ -1276,7 +1303,7 @@ CREATE TABLE IF NOT EXISTS cognoms_referencies (
 CREATE INDEX IF NOT EXISTS idx_cognoms_ref_cognom_status ON cognoms_referencies(cognom_id, moderation_status);
 CREATE INDEX IF NOT EXISTS idx_cognoms_ref_kind ON cognoms_referencies(kind);
 
--- Estadístiques pre-agregades per cognom/municipi/any
+-- EstadÃ­stiques pre-agregades per cognom/municipi/any
 CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_any (
   cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
   municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
@@ -1303,7 +1330,7 @@ CREATE TABLE IF NOT EXISTS cognoms_freq_municipi_total (
 CREATE INDEX IF NOT EXISTS idx_cognoms_freq_municipi_total_municipi
   ON cognoms_freq_municipi_total(municipi_id, total_freq DESC);
 
--- Estadístiques pre-agregades per cognom/nivell/any
+-- EstadÃ­stiques pre-agregades per cognom/nivell/any
 CREATE TABLE IF NOT EXISTS cognoms_freq_nivell_any (
   cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
   nivell_id INTEGER NOT NULL REFERENCES nivells_administratius(id) ON DELETE CASCADE,
@@ -1330,7 +1357,7 @@ CREATE TABLE IF NOT EXISTS cognoms_freq_nivell_total (
 CREATE INDEX IF NOT EXISTS idx_cognoms_freq_nivell_total
   ON cognoms_freq_nivell_total(nivell_id, total_freq DESC);
 
--- Estadístiques globals per cognom
+-- EstadÃ­stiques globals per cognom
 CREATE TABLE IF NOT EXISTS cognoms_stats_total (
   cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
   total_persones INTEGER NOT NULL DEFAULT 0,
@@ -1341,7 +1368,7 @@ CREATE TABLE IF NOT EXISTS cognoms_stats_total (
 CREATE INDEX IF NOT EXISTS idx_cognoms_stats_total_aparicions
   ON cognoms_stats_total(total_aparicions DESC);
 
--- Estadístiques per any per cognom
+-- EstadÃ­stiques per any per cognom
 CREATE TABLE IF NOT EXISTS cognoms_stats_any (
   cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
   "any" INTEGER NOT NULL,
@@ -1352,7 +1379,7 @@ CREATE TABLE IF NOT EXISTS cognoms_stats_any (
 CREATE INDEX IF NOT EXISTS idx_cognoms_stats_any_any
   ON cognoms_stats_any("any");
 
--- Estadístiques per ancestre (municipi/nivell) i any
+-- EstadÃ­stiques per ancestre (municipi/nivell) i any
 CREATE TABLE IF NOT EXISTS cognoms_stats_ancestor_any (
   cognom_id INTEGER NOT NULL REFERENCES cognoms(id) ON DELETE CASCADE,
   ancestor_type TEXT NOT NULL,
@@ -1367,7 +1394,7 @@ CREATE INDEX IF NOT EXISTS idx_cognoms_stats_ancestor_cognom_any
 CREATE INDEX IF NOT EXISTS idx_cognoms_stats_ancestor_id
   ON cognoms_stats_ancestor_any(ancestor_type, ancestor_id);
 
--- Estadístiques pre-agregades per nom/municipi/any
+-- EstadÃ­stiques pre-agregades per nom/municipi/any
 CREATE TABLE IF NOT EXISTS noms_freq_municipi_any (
   nom_id INTEGER NOT NULL REFERENCES noms(id) ON DELETE CASCADE,
   municipi_id INTEGER NOT NULL REFERENCES municipis(id) ON DELETE CASCADE,
@@ -1394,7 +1421,7 @@ CREATE TABLE IF NOT EXISTS noms_freq_municipi_total (
 CREATE INDEX IF NOT EXISTS idx_noms_freq_municipi_total_municipi
   ON noms_freq_municipi_total(municipi_id, total_freq DESC);
 
--- Estadístiques pre-agregades per nom/nivell/any
+-- EstadÃ­stiques pre-agregades per nom/nivell/any
 CREATE TABLE IF NOT EXISTS noms_freq_nivell_any (
   nom_id INTEGER NOT NULL REFERENCES noms(id) ON DELETE CASCADE,
   nivell_id INTEGER NOT NULL REFERENCES nivells_administratius(id) ON DELETE CASCADE,
@@ -1450,7 +1477,7 @@ CREATE INDEX IF NOT EXISTS idx_transcripcions_atributs_raw_transcripcio
 CREATE INDEX IF NOT EXISTS idx_transcripcions_atributs_raw_clau_transcripcio
   ON transcripcions_atributs_raw(clau, transcripcio_id);
 
--- Taules de GESTIÓ DE SESSIONS
+-- Taules de GESTIÃ“ DE SESSIONS
 ------------------------------------------------------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -1551,7 +1578,7 @@ CREATE TABLE IF NOT EXISTS usuaris_punts (
     ultima_actualitzacio TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Índexs
+-- Ãndexs
 ------------------------------------------------------------------------------------------------------------------------
 
 CREATE INDEX IF NOT EXISTS idx_codi_postal ON municipis(codi_postal);
@@ -1581,7 +1608,7 @@ CREATE INDEX IF NOT EXISTS idx_access_ip_ts      ON session_access_log(ip, ts DE
 CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token);
 CREATE INDEX IF NOT EXISTS idx_password_resets_expira ON password_resets(expira);
 
--- Índexs útils per consultes habituals
+-- Ãndexs Ãºtils per consultes habituals
 CREATE UNIQUE INDEX IF NOT EXISTS idx_nivell_scope_nom
     ON nivells_administratius(nivel, COALESCE(parent_id, -pais_id), nom_nivell);
 
@@ -1597,7 +1624,16 @@ CREATE INDEX IF NOT EXISTS idx_arxius_llibres_arxiu
 CREATE INDEX IF NOT EXISTS idx_arxius_llibres_llibre
     ON arxius_llibres(llibre_id);
 
--- Enllaços alternatius per llibres
+CREATE INDEX IF NOT EXISTS idx_arxius_llibres_llibre_principal
+    ON arxius_llibres(llibre_id, principal);
+
+CREATE INDEX IF NOT EXISTS idx_arxius_llibres_llibre_preferit
+    ON arxius_llibres(llibre_id, preferit_visualitzacio);
+
+CREATE INDEX IF NOT EXISTS idx_arxius_llibres_source_code
+    ON arxius_llibres(source_system, external_code);
+
+-- EnllaÃ§os alternatius per llibres
 CREATE TABLE IF NOT EXISTS llibres_urls (
   id SERIAL PRIMARY KEY,
   llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,
@@ -1619,7 +1655,7 @@ CREATE INDEX IF NOT EXISTS idx_llibres_urls_llibre_ref
 CREATE INDEX IF NOT EXISTS idx_llibre_pagines_estat
     ON llibre_pagines(llibre_id, estat);
 
--- Media (àlbums + ítems)
+-- Media (Ã lbums + Ã­tems)
 CREATE TABLE IF NOT EXISTS media_albums (
   id SERIAL PRIMARY KEY,
   public_id TEXT NOT NULL UNIQUE,

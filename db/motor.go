@@ -2205,24 +2205,50 @@ type ArxiuWithCount struct {
 }
 
 type ArxiuLlibreDetail struct {
-	ArxiuID     int
-	LlibreID    int
-	Titol       string
-	TipusLlibre string
-	NomEsglesia string
-	Cronologia  string
-	Municipi    sql.NullString
-	ArxiuNom    sql.NullString
-	Signatura   sql.NullString
-	URLOverride sql.NullString
-	Pagines     sql.NullInt64
+	ArxiuID               int
+	LlibreID              int
+	TipusRelacio          string
+	Principal             bool
+	PreferitVisualitzacio bool
+	SourceSystem          sql.NullString
+	ExternalID            sql.NullString
+	ExternalCode          sql.NullString
+	Notes                 sql.NullString
+	Estat                 sql.NullString
+	ModeracioEstat        sql.NullString
+	CreatedBy             sql.NullInt64
+	UpdatedBy             sql.NullInt64
+	ModeratedBy           sql.NullInt64
+	ModeratedAt           sql.NullTime
+	Titol                 string
+	TipusLlibre           string
+	NomEsglesia           string
+	Cronologia            string
+	Municipi              sql.NullString
+	ArxiuNom              sql.NullString
+	Signatura             sql.NullString
+	URLOverride           sql.NullString
+	Pagines               sql.NullInt64
 }
 
 type ArxiuLlibreLink struct {
-	ArxiuID     int
-	LlibreID    int
-	Signatura   string
-	URLOverride string
+	ArxiuID               int
+	LlibreID              int
+	TipusRelacio          string
+	Principal             bool
+	PreferitVisualitzacio bool
+	Signatura             string
+	URLOverride           string
+	SourceSystem          string
+	ExternalID            string
+	ExternalCode          string
+	Notes                 string
+	Estat                 string
+	ModeracioEstat        string
+	CreatedBy             sql.NullInt64
+	UpdatedBy             sql.NullInt64
+	ModeratedBy           sql.NullInt64
+	ModeratedAt           sql.NullTime
 }
 
 type LlibreURL struct {

@@ -1081,6 +1081,9 @@ func (d *SQLite) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride
 func (d *SQLite) DeleteArxiuLlibre(arxiuID, llibreID int) error {
 	return d.help.deleteArxiuLlibre(arxiuID, llibreID)
 }
+func (d *SQLite) SaveArxiuLlibreLink(link *ArxiuLlibreLink) error {
+	return d.help.saveArxiuLlibreLink(link)
+}
 func (d *SQLite) SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error) {
 	return d.help.searchLlibresSimple(q, limit)
 }

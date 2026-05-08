@@ -13,9 +13,10 @@ import (
 )
 
 type wikiChangeMeta struct {
-	Before         json.RawMessage `json:"before"`
-	After          json.RawMessage `json:"after"`
-	SourceChangeID int             `json:"source_change_id,omitempty"`
+	Before         json.RawMessage      `json:"before"`
+	After          json.RawMessage      `json:"after"`
+	ArchiveLinks   []db.ArxiuLlibreLink `json:"archive_links,omitempty"`
+	SourceChangeID int                  `json:"source_change_id,omitempty"`
 }
 
 type WikiDiffField struct {
@@ -65,6 +66,30 @@ func parseWikiChangeMeta(metadata string) (json.RawMessage, json.RawMessage) {
 		}
 	}
 	return nil, nil
+}
+
+func parseFullWikiChangeMeta(metadata string) (wikiChangeMeta, bool) {
+	payload := strings.TrimSpace(metadata)
+	if payload == "" {
+		return wikiChangeMeta{}, false
+	}
+	parse := func(raw []byte) (wikiChangeMeta, bool) {
+		var meta wikiChangeMeta
+		if err := json.Unmarshal(raw, &meta); err == nil {
+			if len(meta.Before) > 0 || len(meta.After) > 0 || len(meta.ArchiveLinks) > 0 {
+				return meta, true
+			}
+		}
+		return wikiChangeMeta{}, false
+	}
+	if meta, ok := parse([]byte(payload)); ok {
+		return meta, true
+	}
+	var nested string
+	if err := json.Unmarshal([]byte(payload), &nested); err == nil && strings.TrimSpace(nested) != "" {
+		return parse([]byte(nested))
+	}
+	return wikiChangeMeta{}, false
 }
 
 func buildWikiChangeMetadata(beforeJSON, afterJSON json.RawMessage, sourceChangeID int) (string, error) {
@@ -403,16 +428,41 @@ func (a *App) applyWikiLlibreChange(change *db.WikiChange, motiu string, moderat
 	if err := a.DB.UpdateLlibre(&llibre); err != nil {
 		return err
 	}
-	arxiuID := extractWikiArxiuID(change.Metadata)
-	if arxiuID > 0 {
-		if rels, err := a.DB.ListLlibreArxius(llibre.ID); err == nil {
-			for _, rel := range rels {
-				if rel.ArxiuID != arxiuID {
-					_ = a.DB.DeleteArxiuLlibre(rel.ArxiuID, llibre.ID)
+	meta, _ := parseFullWikiChangeMeta(change.Metadata)
+	if len(meta.ArchiveLinks) > 0 {
+		desired := normalizeLlibreArxiuLinks(meta.ArchiveLinks)
+		current, err := a.currentLlibreArxiuLinks(llibre.ID)
+		if err == nil {
+			keep := make(map[int]struct{}, len(desired))
+			for i := range desired {
+				desired[i].LlibreID = llibre.ID
+				keep[desired[i].ArxiuID] = struct{}{}
+				if change.ChangedBy.Valid {
+					desired[i].UpdatedBy = change.ChangedBy
+					if !desired[i].CreatedBy.Valid {
+						desired[i].CreatedBy = change.ChangedBy
+					}
 				}
+				_ = a.saveLlibreArxiuLink(&desired[i])
+			}
+			for _, rel := range current {
+				if _, ok := keep[rel.ArxiuID]; ok {
+					continue
+				}
+				_ = a.DB.DeleteArxiuLlibre(rel.ArxiuID, llibre.ID)
 			}
 		}
-		_ = a.DB.AddArxiuLlibre(arxiuID, llibre.ID, "", "")
+	} else {
+		arxiuID := extractWikiArxiuID(change.Metadata)
+		if arxiuID > 0 {
+			_ = a.saveLlibreArxiuLink(&db.ArxiuLlibreLink{
+				ArxiuID:               arxiuID,
+				LlibreID:              llibre.ID,
+				Principal:             true,
+				PreferitVisualitzacio: true,
+				UpdatedBy:             change.ChangedBy,
+			})
+		}
 	}
 	return nil
 }

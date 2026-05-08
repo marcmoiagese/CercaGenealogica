@@ -1536,6 +1536,9 @@ func (d *PostgreSQL) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOver
 func (d *PostgreSQL) DeleteArxiuLlibre(arxiuID, llibreID int) error {
 	return d.help.deleteArxiuLlibre(arxiuID, llibreID)
 }
+func (d *PostgreSQL) SaveArxiuLlibreLink(link *ArxiuLlibreLink) error {
+	return d.help.saveArxiuLlibreLink(link)
+}
 func (d *PostgreSQL) SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error) {
 	return d.help.searchLlibresSimple(q, limit)
 }

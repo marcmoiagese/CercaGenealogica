@@ -20,13 +20,17 @@
                 <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
                 <div class="grup-camp">
                     <label for="arxiu_id">{{ t .Lang "books.form.archive" }}</label>
+                    <div class="camp-inline">
+                        <input id="archive_q" name="archive_q" type="text" value="{{ .Data.ArchiveQuery }}" placeholder="{{ t .Lang "books.form.archive.search" }}">
+                        <button type="submit" name="search_archive" value="1" class="boto-secundari" formnovalidate>{{ t .Lang "common.search" }}</button>
+                    </div>
                     <select id="arxiu_id" name="arxiu_id" required>
                         <option value="">{{ t .Lang "books.form.archive.none" }}</option>
                         {{ range .Data.Arxius }}
                         <option value="{{ .ID }}" {{ if eq $.Data.SelectedArxiuID .ID }}selected{{ end }}>{{ .Nom }}</option>
                         {{ end }}
                     </select>
-                    <p class="camp-helper">{{ t .Lang "books.form.documentary_base.helper" }}</p>
+                    <p class="camp-helper">{{ t .Lang "books.form.archive.search.helper" }}</p>
                 </div>
                 <div class="grup-camp">
                     <label for="arquevisbat_id">{{ t .Lang "books.form.entity" }}</label>

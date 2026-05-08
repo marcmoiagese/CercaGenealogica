@@ -4896,6 +4896,84 @@ func (h sqlHelper) ensureLlibreURLColumns() {
 	}
 }
 
+func (h sqlHelper) ensureArxiuLlibreColumns() {
+	if !h.tableExists("arxius_llibres") {
+		return
+	}
+	stmts := []string{}
+	indexStmts := []string{}
+	add := func(column, stmt string) {
+		if !h.columnExists("arxius_llibres", column) {
+			stmts = append(stmts, stmt)
+		}
+	}
+	switch h.style {
+	case "mysql":
+		add("tipus_relacio", "ALTER TABLE arxius_llibres ADD COLUMN tipus_relacio VARCHAR(100) NOT NULL DEFAULT 'custodia_original'")
+		add("principal", "ALTER TABLE arxius_llibres ADD COLUMN principal TINYINT(1) NOT NULL DEFAULT 0")
+		add("preferit_visualitzacio", "ALTER TABLE arxius_llibres ADD COLUMN preferit_visualitzacio TINYINT(1) NOT NULL DEFAULT 0")
+		add("source_system", "ALTER TABLE arxius_llibres ADD COLUMN source_system VARCHAR(80) NULL")
+		add("external_id", "ALTER TABLE arxius_llibres ADD COLUMN external_id VARCHAR(120) NULL")
+		add("external_code", "ALTER TABLE arxius_llibres ADD COLUMN external_code VARCHAR(120) NULL")
+		add("notes", "ALTER TABLE arxius_llibres ADD COLUMN notes TEXT NULL")
+		add("estat", "ALTER TABLE arxius_llibres ADD COLUMN estat VARCHAR(40) NULL")
+		add("moderation_status", "ALTER TABLE arxius_llibres ADD COLUMN moderation_status VARCHAR(20) NULL")
+		add("created_by", "ALTER TABLE arxius_llibres ADD COLUMN created_by INT UNSIGNED NULL")
+		add("updated_by", "ALTER TABLE arxius_llibres ADD COLUMN updated_by INT UNSIGNED NULL")
+		add("moderated_by", "ALTER TABLE arxius_llibres ADD COLUMN moderated_by INT UNSIGNED NULL")
+		add("moderated_at", "ALTER TABLE arxius_llibres ADD COLUMN moderated_at DATETIME NULL")
+		indexStmts = append(indexStmts,
+			"CREATE INDEX idx_arxius_llibres_llibre_principal ON arxius_llibres(llibre_id, principal)",
+			"CREATE INDEX idx_arxius_llibres_llibre_preferit ON arxius_llibres(llibre_id, preferit_visualitzacio)",
+			"CREATE INDEX idx_arxius_llibres_source_code ON arxius_llibres(source_system, external_code)",
+		)
+	case "postgres":
+		add("tipus_relacio", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS tipus_relacio TEXT NOT NULL DEFAULT 'custodia_original'")
+		add("principal", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS principal BOOLEAN NOT NULL DEFAULT FALSE")
+		add("preferit_visualitzacio", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS preferit_visualitzacio BOOLEAN NOT NULL DEFAULT FALSE")
+		add("source_system", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS source_system TEXT")
+		add("external_id", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS external_id TEXT")
+		add("external_code", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS external_code TEXT")
+		add("notes", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS notes TEXT")
+		add("estat", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS estat TEXT")
+		add("moderation_status", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS moderation_status TEXT")
+		add("created_by", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL")
+		add("updated_by", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL")
+		add("moderated_by", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL")
+		add("moderated_at", "ALTER TABLE arxius_llibres ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMP WITHOUT TIME ZONE")
+		indexStmts = append(indexStmts,
+			"CREATE INDEX IF NOT EXISTS idx_arxius_llibres_llibre_principal ON arxius_llibres(llibre_id, principal)",
+			"CREATE INDEX IF NOT EXISTS idx_arxius_llibres_llibre_preferit ON arxius_llibres(llibre_id, preferit_visualitzacio)",
+			"CREATE INDEX IF NOT EXISTS idx_arxius_llibres_source_code ON arxius_llibres(source_system, external_code)",
+		)
+	default:
+		add("tipus_relacio", "ALTER TABLE arxius_llibres ADD COLUMN tipus_relacio TEXT NOT NULL DEFAULT 'custodia_original'")
+		add("principal", "ALTER TABLE arxius_llibres ADD COLUMN principal INTEGER NOT NULL DEFAULT 0")
+		add("preferit_visualitzacio", "ALTER TABLE arxius_llibres ADD COLUMN preferit_visualitzacio INTEGER NOT NULL DEFAULT 0")
+		add("source_system", "ALTER TABLE arxius_llibres ADD COLUMN source_system TEXT")
+		add("external_id", "ALTER TABLE arxius_llibres ADD COLUMN external_id TEXT")
+		add("external_code", "ALTER TABLE arxius_llibres ADD COLUMN external_code TEXT")
+		add("notes", "ALTER TABLE arxius_llibres ADD COLUMN notes TEXT")
+		add("estat", "ALTER TABLE arxius_llibres ADD COLUMN estat TEXT")
+		add("moderation_status", "ALTER TABLE arxius_llibres ADD COLUMN moderation_status TEXT")
+		add("created_by", "ALTER TABLE arxius_llibres ADD COLUMN created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL")
+		add("updated_by", "ALTER TABLE arxius_llibres ADD COLUMN updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL")
+		add("moderated_by", "ALTER TABLE arxius_llibres ADD COLUMN moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL")
+		add("moderated_at", "ALTER TABLE arxius_llibres ADD COLUMN moderated_at TIMESTAMP")
+		indexStmts = append(indexStmts,
+			"CREATE INDEX IF NOT EXISTS idx_arxius_llibres_llibre_principal ON arxius_llibres(llibre_id, principal)",
+			"CREATE INDEX IF NOT EXISTS idx_arxius_llibres_llibre_preferit ON arxius_llibres(llibre_id, preferit_visualitzacio)",
+			"CREATE INDEX IF NOT EXISTS idx_arxius_llibres_source_code ON arxius_llibres(source_system, external_code)",
+		)
+	}
+	for _, stmt := range stmts {
+		_, _ = h.db.Exec(stmt)
+	}
+	for _, stmt := range indexStmts {
+		_, _ = h.db.Exec(stmt)
+	}
+}
+
 func (h sqlHelper) ensurePrivacyExtraColumns() {
 	stmts := []string{}
 	switch h.style {
@@ -7196,8 +7274,11 @@ func (h sqlHelper) countArxiuDonacioClicks(arxiuID int) (int, error) {
 }
 
 func (h sqlHelper) listArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
+	h.ensureArxiuLlibreColumns()
 	query := `
-        SELECT al.arxiu_id, al.llibre_id, al.signatura, al.url_override,
+        SELECT al.arxiu_id, al.llibre_id, al.tipus_relacio, al.principal, al.preferit_visualitzacio,
+               al.source_system, al.external_id, al.external_code, al.notes, al.estat, al.moderation_status,
+               al.created_by, al.updated_by, al.moderated_by, al.moderated_at, al.signatura, al.url_override,
                l.titol, l.tipus_llibre, l.nom_esglesia, l.cronologia, m.nom as municipi, a.nom as arxiu_nom,
                l.pagines
         FROM arxius_llibres al
@@ -7214,7 +7295,10 @@ func (h sqlHelper) listArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
 	var res []ArxiuLlibreDetail
 	for rows.Next() {
 		var d ArxiuLlibreDetail
-		if err := rows.Scan(&d.ArxiuID, &d.LlibreID, &d.Signatura, &d.URLOverride, &d.Titol, &d.TipusLlibre, &d.NomEsglesia, &d.Cronologia, &d.Municipi, &d.ArxiuNom, &d.Pagines); err != nil {
+		if err := rows.Scan(&d.ArxiuID, &d.LlibreID, &d.TipusRelacio, &d.Principal, &d.PreferitVisualitzacio,
+			&d.SourceSystem, &d.ExternalID, &d.ExternalCode, &d.Notes, &d.Estat, &d.ModeracioEstat,
+			&d.CreatedBy, &d.UpdatedBy, &d.ModeratedBy, &d.ModeratedAt, &d.Signatura, &d.URLOverride,
+			&d.Titol, &d.TipusLlibre, &d.NomEsglesia, &d.Cronologia, &d.Municipi, &d.ArxiuNom, &d.Pagines); err != nil {
 			return nil, err
 		}
 		res = append(res, d)
@@ -7223,19 +7307,32 @@ func (h sqlHelper) listArxiuLlibres(arxiuID int) ([]ArxiuLlibreDetail, error) {
 }
 
 func (h sqlHelper) listLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
+	h.ensureArxiuLlibreColumns()
 	query := `
         SELECT al.arxiu_id,
                al.llibre_id,
-               MAX(al.signatura) as signatura,
-               MAX(al.url_override) as url_override,
+               al.tipus_relacio,
+               al.principal,
+               al.preferit_visualitzacio,
+               al.source_system,
+               al.external_id,
+               al.external_code,
+               al.notes,
+               al.estat,
+               al.moderation_status,
+               al.created_by,
+               al.updated_by,
+               al.moderated_by,
+               al.moderated_at,
+               al.signatura,
+               al.url_override,
                a.nom as arxiu_nom,
                m.nom as municipi
         FROM arxius_llibres al
         INNER JOIN arxius a ON a.id = al.arxiu_id
         LEFT JOIN municipis m ON m.id = a.municipi_id
         WHERE al.llibre_id = ?
-        GROUP BY al.arxiu_id, al.llibre_id, a.nom, m.nom
-        ORDER BY a.nom`
+        ORDER BY al.preferit_visualitzacio DESC, al.principal DESC, a.nom, al.arxiu_id`
 	query = formatPlaceholders(h.style, query)
 	rows, err := h.db.Query(query, llibreID)
 	if err != nil {
@@ -7245,7 +7342,9 @@ func (h sqlHelper) listLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
 	var res []ArxiuLlibreDetail
 	for rows.Next() {
 		var d ArxiuLlibreDetail
-		if err := rows.Scan(&d.ArxiuID, &d.LlibreID, &d.Signatura, &d.URLOverride, &d.ArxiuNom, &d.Municipi); err != nil {
+		if err := rows.Scan(&d.ArxiuID, &d.LlibreID, &d.TipusRelacio, &d.Principal, &d.PreferitVisualitzacio,
+			&d.SourceSystem, &d.ExternalID, &d.ExternalCode, &d.Notes, &d.Estat, &d.ModeracioEstat,
+			&d.CreatedBy, &d.UpdatedBy, &d.ModeratedBy, &d.ModeratedAt, &d.Signatura, &d.URLOverride, &d.ArxiuNom, &d.Municipi); err != nil {
 			return nil, err
 		}
 		res = append(res, d)
@@ -7254,6 +7353,7 @@ func (h sqlHelper) listLlibreArxius(llibreID int) ([]ArxiuLlibreDetail, error) {
 }
 
 func (h sqlHelper) listLlibreArxiusByLlibreIDs(llibreIDs []int) (map[int][]ArxiuLlibreDetail, error) {
+	h.ensureArxiuLlibreColumns()
 	llibreIDs = normalizePositiveUniqueIDs(llibreIDs)
 	res := make(map[int][]ArxiuLlibreDetail, len(llibreIDs))
 	if len(llibreIDs) == 0 {
@@ -7270,16 +7370,28 @@ func (h sqlHelper) listLlibreArxiusByLlibreIDs(llibreIDs []int) (map[int][]Arxiu
 		query := `
         SELECT al.arxiu_id,
                al.llibre_id,
-               MAX(al.signatura) as signatura,
-               MAX(al.url_override) as url_override,
+               al.tipus_relacio,
+               al.principal,
+               al.preferit_visualitzacio,
+               al.source_system,
+               al.external_id,
+               al.external_code,
+               al.notes,
+               al.estat,
+               al.moderation_status,
+               al.created_by,
+               al.updated_by,
+               al.moderated_by,
+               al.moderated_at,
+               al.signatura,
+               al.url_override,
                a.nom as arxiu_nom,
                m.nom as municipi
         FROM arxius_llibres al
         INNER JOIN arxius a ON a.id = al.arxiu_id
         LEFT JOIN municipis m ON m.id = a.municipi_id
         WHERE al.llibre_id IN (` + placeholders + `)
-        GROUP BY al.arxiu_id, al.llibre_id, a.nom, m.nom
-        ORDER BY al.llibre_id, a.nom`
+        ORDER BY al.llibre_id, al.preferit_visualitzacio DESC, al.principal DESC, a.nom, al.arxiu_id`
 		query = formatPlaceholders(h.style, query)
 		args := make([]interface{}, 0, len(chunk))
 		for _, id := range chunk {
@@ -7291,7 +7403,9 @@ func (h sqlHelper) listLlibreArxiusByLlibreIDs(llibreIDs []int) (map[int][]Arxiu
 		}
 		for rows.Next() {
 			var d ArxiuLlibreDetail
-			if err := rows.Scan(&d.ArxiuID, &d.LlibreID, &d.Signatura, &d.URLOverride, &d.ArxiuNom, &d.Municipi); err != nil {
+			if err := rows.Scan(&d.ArxiuID, &d.LlibreID, &d.TipusRelacio, &d.Principal, &d.PreferitVisualitzacio,
+				&d.SourceSystem, &d.ExternalID, &d.ExternalCode, &d.Notes, &d.Estat, &d.ModeracioEstat,
+				&d.CreatedBy, &d.UpdatedBy, &d.ModeratedBy, &d.ModeratedAt, &d.Signatura, &d.URLOverride, &d.ArxiuNom, &d.Municipi); err != nil {
 				rows.Close()
 				return nil, err
 			}
@@ -7307,18 +7421,92 @@ func (h sqlHelper) listLlibreArxiusByLlibreIDs(llibreIDs []int) (map[int][]Arxiu
 }
 
 func (h sqlHelper) addArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
-	stmt := formatPlaceholders(h.style, `
-        INSERT INTO arxius_llibres (arxiu_id, llibre_id, signatura, url_override)
-        VALUES (?, ?, ?, ?)`)
-	_, err := h.db.Exec(stmt, arxiuID, llibreID, signatura, urlOverride)
-	return err
+	return h.saveArxiuLlibreLink(&ArxiuLlibreLink{
+		ArxiuID:               arxiuID,
+		LlibreID:              llibreID,
+		TipusRelacio:          "custodia_original",
+		Principal:             true,
+		PreferitVisualitzacio: true,
+		Signatura:             signatura,
+		URLOverride:           urlOverride,
+		Estat:                 "actiu",
+		ModeracioEstat:        "publicat",
+	})
 }
 
 func (h sqlHelper) updateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride string) error {
+	return h.saveArxiuLlibreLink(&ArxiuLlibreLink{
+		ArxiuID:     arxiuID,
+		LlibreID:    llibreID,
+		Signatura:   signatura,
+		URLOverride: urlOverride,
+	})
+}
+
+func (h sqlHelper) saveArxiuLlibreLink(link *ArxiuLlibreLink) error {
+	h.ensureArxiuLlibreColumns()
+	if link == nil || link.ArxiuID <= 0 || link.LlibreID <= 0 {
+		return nil
+	}
+	if strings.TrimSpace(link.TipusRelacio) == "" {
+		link.TipusRelacio = "custodia_original"
+	}
+	if strings.TrimSpace(link.Estat) == "" {
+		link.Estat = "actiu"
+	}
+	if strings.TrimSpace(link.ModeracioEstat) == "" {
+		link.ModeracioEstat = "publicat"
+	}
+	if link.PreferitVisualitzacio {
+		stmt := formatPlaceholders(h.style, `UPDATE arxius_llibres SET preferit_visualitzacio = 0 WHERE llibre_id = ?`)
+		_, _ = h.db.Exec(stmt, link.LlibreID)
+	}
+	if link.Principal {
+		stmt := formatPlaceholders(h.style, `UPDATE arxius_llibres SET principal = 0 WHERE llibre_id = ?`)
+		_, _ = h.db.Exec(stmt, link.LlibreID)
+	}
+	existsStmt := formatPlaceholders(h.style, `SELECT COUNT(*) FROM arxius_llibres WHERE arxiu_id = ? AND llibre_id = ?`)
+	var count int
+	if err := h.db.QueryRow(existsStmt, link.ArxiuID, link.LlibreID).Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		stmt := formatPlaceholders(h.style, `
+        INSERT INTO arxius_llibres (
+            arxiu_id, llibre_id, tipus_relacio, principal, preferit_visualitzacio,
+            signatura, url_override, source_system, external_id, external_code, notes,
+            estat, moderation_status, created_by, updated_by, moderated_by, moderated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		_, err := h.db.Exec(stmt,
+			link.ArxiuID, link.LlibreID, strings.TrimSpace(link.TipusRelacio), link.Principal, link.PreferitVisualitzacio,
+			nullStringOrNil(link.Signatura), nullStringOrNil(link.URLOverride), nullStringOrNil(link.SourceSystem),
+			nullStringOrNil(link.ExternalID), nullStringOrNil(link.ExternalCode), nullStringOrNil(link.Notes),
+			nullStringOrNil(link.Estat), nullStringOrNil(link.ModeracioEstat), link.CreatedBy, link.UpdatedBy, link.ModeratedBy, link.ModeratedAt)
+		return err
+	}
 	stmt := formatPlaceholders(h.style, `
-        UPDATE arxius_llibres SET signatura = ?, url_override = ?
+        UPDATE arxius_llibres
+        SET tipus_relacio = COALESCE(?, tipus_relacio),
+            principal = ?,
+            preferit_visualitzacio = ?,
+            signatura = ?,
+            url_override = ?,
+            source_system = COALESCE(?, source_system),
+            external_id = COALESCE(?, external_id),
+            external_code = COALESCE(?, external_code),
+            notes = COALESCE(?, notes),
+            estat = COALESCE(?, estat),
+            moderation_status = COALESCE(?, moderation_status),
+            updated_by = COALESCE(?, updated_by),
+            moderated_by = COALESCE(?, moderated_by),
+            moderated_at = COALESCE(?, moderated_at)
         WHERE arxiu_id = ? AND llibre_id = ?`)
-	_, err := h.db.Exec(stmt, signatura, urlOverride, arxiuID, llibreID)
+	_, err := h.db.Exec(stmt,
+		nullStringOrNil(link.TipusRelacio), link.Principal, link.PreferitVisualitzacio,
+		nullStringOrNil(link.Signatura), nullStringOrNil(link.URLOverride),
+		nullStringOrNil(link.SourceSystem), nullStringOrNil(link.ExternalID), nullStringOrNil(link.ExternalCode),
+		nullStringOrNil(link.Notes), nullStringOrNil(link.Estat), nullStringOrNil(link.ModeracioEstat),
+		link.UpdatedBy, link.ModeratedBy, link.ModeratedAt, link.ArxiuID, link.LlibreID)
 	return err
 }
 
@@ -7366,6 +7554,7 @@ func (h sqlHelper) deleteLlibreURL(id int) error {
 }
 
 func (h sqlHelper) deleteArxiuLlibre(arxiuID, llibreID int) error {
+	h.ensureArxiuLlibreColumns()
 	stmt := formatPlaceholders(h.style, `DELETE FROM arxius_llibres WHERE arxiu_id = ? AND llibre_id = ?`)
 	_, err := h.db.Exec(stmt, arxiuID, llibreID)
 	return err

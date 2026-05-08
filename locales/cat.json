@@ -524,6 +524,8 @@
   "books.form.abat": "Abat / rector",
   "books.form.archive": "Arxiu",
   "books.form.archive.helper": "Opcional: vincula el llibre a un arxiu perquè compti al seu total",
+  "books.form.archive.search": "Cerca arxiu per nom o codi",
+  "books.form.archive.search.helper": "Busca un arxiu i carrega només coincidències per evitar un selector massiu.",
   "books.form.documentary_base.helper": "Base documental del llibre: arxiu + municipi. L'entitat eclesiàstica és opcional i es pot derivar de l'arxiu.",
   "books.form.archive.none": "Sense arxiu",
   "books.form.cancel": "Cancel·lar",

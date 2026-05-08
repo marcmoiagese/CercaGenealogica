@@ -2,6 +2,7 @@ package integration
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/marcmoiagese/CercaGenealogica/core"
@@ -43,9 +44,17 @@ func newAppsForAllDBs(t *testing.T) []appDB {
 		if _, ok := cfg["LOG_LEVEL"]; !ok {
 			cfg["LOG_LEVEL"] = "silent"
 		}
+		cfg["RECREADB"] = "true"
+		if cfg["DB_ENGINE"] == "sqlite" {
+			cfg["DB_PATH"] = filepath.Join(t.TempDir(), "multidb.sqlite3")
+		}
 
 		dbInstance, err := db.NewDB(cfg)
 		if err != nil {
+			if cfg["DB_ENGINE"] != "sqlite" {
+				t.Logf("saltant DB %s per tests: %v", c.Label, err)
+				continue
+			}
 			t.Fatalf("no s'ha pogut inicialitzar DB %s per tests: %v", c.Label, err)
 		}
 

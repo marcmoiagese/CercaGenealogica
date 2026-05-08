@@ -1218,9 +1218,25 @@ CREATE TABLE IF NOT EXISTS arxius_llibres (
   llibre_id INT UNSIGNED NOT NULL,
   signatura VARCHAR(255),
   url_override TEXT,
+  tipus_relacio VARCHAR(100) NOT NULL DEFAULT 'custodia_original',
+  principal TINYINT(1) NOT NULL DEFAULT 0,
+  preferit_visualitzacio TINYINT(1) NOT NULL DEFAULT 0,
+  source_system VARCHAR(100),
+  external_id VARCHAR(191),
+  external_code VARCHAR(191),
+  notes TEXT,
+  estat VARCHAR(50) NOT NULL DEFAULT 'actiu',
+  moderation_status VARCHAR(50) NOT NULL DEFAULT 'publicat',
+  created_by INT UNSIGNED NULL,
+  updated_by INT UNSIGNED NULL,
+  moderated_by INT UNSIGNED NULL,
+  moderated_at DATETIME NULL,
   PRIMARY KEY (arxiu_id, llibre_id),
   FOREIGN KEY (arxiu_id) REFERENCES arxius(id) ON DELETE CASCADE,
-  FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE CASCADE
+  FOREIGN KEY (llibre_id) REFERENCES llibres(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+  FOREIGN KEY (updated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+  FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS llibre_pagines (
@@ -1240,6 +1256,9 @@ CREATE TABLE IF NOT EXISTS llibre_pagines (
 -- Índexs per accelerar consultes habituals
 CREATE INDEX idx_arxius_llibres_arxiu  ON arxius_llibres(arxiu_id);
 CREATE INDEX idx_arxius_llibres_llibre ON arxius_llibres(llibre_id);
+CREATE INDEX idx_arxius_llibres_llibre_principal ON arxius_llibres(llibre_id, principal);
+CREATE INDEX idx_arxius_llibres_llibre_preferit ON arxius_llibres(llibre_id, preferit_visualitzacio);
+CREATE INDEX idx_arxius_llibres_source_code ON arxius_llibres(source_system, external_code);
 
 CREATE TABLE IF NOT EXISTS llibres_urls (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,

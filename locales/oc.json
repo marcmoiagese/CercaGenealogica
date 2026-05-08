@@ -524,6 +524,8 @@
   "books.form.abat": "Abat / rector",
   "books.form.archive": "Archiu",
   "books.form.archive.helper": "Opcional: ligatz lo libre a un archiu per que compte dins son total",
+  "books.form.archive.search": "Cercar l'archiu per nom o còdi",
+  "books.form.archive.search.helper": "Cercatz un archiu e cargatz sonque las correspondéncias per evitar un selector massís.",
   "books.form.documentary_base.helper": "Basa documentaria del libre: archiu + municipi. L'entitat eclesiastica es opcionala e pòt venir de l'archiu.",
   "books.form.archive.none": "Sens archiu",
   "books.form.cancel": "Anullar",

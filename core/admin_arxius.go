@@ -893,7 +893,8 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 func (a *App) AdminAddArxiuLlibre(w http.ResponseWriter, r *http.Request) {
 	id := extractID(r.URL.Path)
 	target := a.resolveArxiuTarget(id)
-	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusEdit, target); !ok {
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusEdit, target)
+	if !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -907,7 +908,40 @@ func (a *App) AdminAddArxiuLlibre(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id)+"?error=llibre", http.StatusSeeOther)
 		return
 	}
-	if err := a.DB.AddArxiuLlibre(id, llibreID, signatura, urlOverride); err != nil {
+	llibre, err := a.DB.GetLlibre(llibreID)
+	if err == nil && llibre != nil && llibre.ModeracioEstat == "publicat" {
+		lang := resolveUserLang(r, user)
+		if !a.ensureWikiChangeAllowed(w, r, lang) {
+			return
+		}
+		links, err := a.currentLlibreArxiuLinks(llibreID)
+		if err == nil {
+			links = append(links, db.ArxiuLlibreLink{
+				ArxiuID:               id,
+				LlibreID:              llibreID,
+				Signatura:             signatura,
+				URLOverride:           urlOverride,
+				Principal:             len(links) == 0,
+				PreferitVisualitzacio: len(links) == 0,
+				CreatedBy:             sqlNullIntFromInt(user.ID),
+				UpdatedBy:             sqlNullIntFromInt(user.ID),
+			})
+			if err := a.queueLlibreArchiveLinksChange(r, user, llibre, links); err == nil {
+				http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id), http.StatusSeeOther)
+				return
+			}
+		}
+	}
+	if err := a.saveLlibreArxiuLink(&db.ArxiuLlibreLink{
+		ArxiuID:               id,
+		LlibreID:              llibreID,
+		Signatura:             signatura,
+		URLOverride:           urlOverride,
+		Principal:             true,
+		PreferitVisualitzacio: true,
+		CreatedBy:             sqlNullIntFromInt(user.ID),
+		UpdatedBy:             sqlNullIntFromInt(user.ID),
+	}); err != nil {
 		http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(id)+"?error=dup", http.StatusSeeOther)
 		return
 	}
@@ -922,13 +956,43 @@ func (a *App) AdminUpdateArxiuLlibre(w http.ResponseWriter, r *http.Request) {
 	}
 	arxiuID, _ := strconv.Atoi(parts[2])
 	target := a.resolveArxiuTarget(arxiuID)
-	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusEdit, target); !ok {
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusEdit, target)
+	if !ok {
 		return
 	}
 	llibreID, _ := strconv.Atoi(parts[4])
 	signatura := strings.TrimSpace(r.FormValue("signatura"))
 	urlOverride := strings.TrimSpace(r.FormValue("url_override"))
-	_ = a.DB.UpdateArxiuLlibre(arxiuID, llibreID, signatura, urlOverride)
+	llibre, err := a.DB.GetLlibre(llibreID)
+	if err == nil && llibre != nil && llibre.ModeracioEstat == "publicat" {
+		lang := resolveUserLang(r, user)
+		if !a.ensureWikiChangeAllowed(w, r, lang) {
+			return
+		}
+		links, err := a.currentLlibreArxiuLinks(llibreID)
+		if err == nil {
+			for i := range links {
+				if links[i].ArxiuID != arxiuID {
+					continue
+				}
+				links[i].Signatura = signatura
+				links[i].URLOverride = urlOverride
+				links[i].UpdatedBy = sqlNullIntFromInt(user.ID)
+				if err := a.queueLlibreArchiveLinksChange(r, user, llibre, links); err == nil {
+					http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(arxiuID), http.StatusSeeOther)
+					return
+				}
+				break
+			}
+		}
+	}
+	_ = a.saveLlibreArxiuLink(&db.ArxiuLlibreLink{
+		ArxiuID:     arxiuID,
+		LlibreID:    llibreID,
+		Signatura:   signatura,
+		URLOverride: urlOverride,
+		UpdatedBy:   sqlNullIntFromInt(user.ID),
+	})
 	http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(arxiuID), http.StatusSeeOther)
 }
 
@@ -940,10 +1004,31 @@ func (a *App) AdminDeleteArxiuLlibre(w http.ResponseWriter, r *http.Request) {
 	}
 	arxiuID, _ := strconv.Atoi(parts[2])
 	target := a.resolveArxiuTarget(arxiuID)
-	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusEdit, target); !ok {
+	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusEdit, target)
+	if !ok {
 		return
 	}
 	llibreID, _ := strconv.Atoi(parts[4])
+	llibre, err := a.DB.GetLlibre(llibreID)
+	if err == nil && llibre != nil && llibre.ModeracioEstat == "publicat" {
+		lang := resolveUserLang(r, user)
+		if !a.ensureWikiChangeAllowed(w, r, lang) {
+			return
+		}
+		links, err := a.currentLlibreArxiuLinks(llibreID)
+		if err == nil {
+			filtered := make([]db.ArxiuLlibreLink, 0, len(links))
+			for _, link := range links {
+				if link.ArxiuID != arxiuID {
+					filtered = append(filtered, link)
+				}
+			}
+			if err := a.queueLlibreArchiveLinksChange(r, user, llibre, filtered); err == nil {
+				http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(arxiuID), http.StatusSeeOther)
+				return
+			}
+		}
+	}
 	_ = a.DB.DeleteArxiuLlibre(arxiuID, llibreID)
 	http.Redirect(w, r, "/documentals/arxius/"+strconv.Itoa(arxiuID), http.StatusSeeOther)
 }

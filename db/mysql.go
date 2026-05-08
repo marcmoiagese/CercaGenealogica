@@ -1053,6 +1053,9 @@ func (d *MySQL) UpdateArxiuLlibre(arxiuID, llibreID int, signatura, urlOverride 
 func (d *MySQL) DeleteArxiuLlibre(arxiuID, llibreID int) error {
 	return d.help.deleteArxiuLlibre(arxiuID, llibreID)
 }
+func (d *MySQL) SaveArxiuLlibreLink(link *ArxiuLlibreLink) error {
+	return d.help.saveArxiuLlibreLink(link)
+}
 func (d *MySQL) SearchLlibresSimple(q string, limit int) ([]LlibreSimple, error) {
 	return d.help.searchLlibresSimple(q, limit)
 }

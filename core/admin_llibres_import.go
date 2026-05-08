@@ -36,33 +36,33 @@ type llibresExportItemsV2 struct {
 }
 
 type llibreExportRecordV2 struct {
-	Code             string                      `json:"code,omitempty"`
-	Title            string                      `json:"title,omitempty"`
-	ChurchName       string                      `json:"church_name,omitempty"`
-	BookType         string                      `json:"book_type,omitempty"`
-	Chronology       string                      `json:"chronology,omitempty"`
-	Volume           string                      `json:"volume,omitempty"`
-	Abbot            string                      `json:"abbot,omitempty"`
-	Content          string                      `json:"content,omitempty"`
-	Language         string                      `json:"language,omitempty"`
-	Requirements     string                      `json:"requirements,omitempty"`
-	CatalogUnit      string                      `json:"catalog_unit,omitempty"`
-	InstallationUnit string                      `json:"installation_unit,omitempty"`
-	Pages            *int                        `json:"pages,omitempty"`
-	URLBase          string                      `json:"url_base,omitempty"`
-	URLImagePrefix   string                      `json:"url_image_prefix,omitempty"`
-	DefaultPage      string                      `json:"default_page,omitempty"`
-	IndexedComplete  bool                        `json:"indexed_complete,omitempty"`
-	DigitalCode      string                      `json:"digital_code,omitempty"`
-	PhysicalCode     string                      `json:"physical_code,omitempty"`
-	SourceSystem     string                      `json:"source_system,omitempty"`
-	ExternalID       string                      `json:"external_id,omitempty"`
-	ExternalCode     string                      `json:"external_code,omitempty"`
-	Municipality     *llibreExportMunicipalityV2 `json:"municipality,omitempty"`
-	ArchiveRefs      []llibreExportArchiveRefV2  `json:"archive_refs,omitempty"`
-	URLRefs          []llibreExportURLRefV2      `json:"url_refs,omitempty"`
-	ReligiousContext *llibreExportReligiousRefV2 `json:"religious_context,omitempty"`
-	Legacy           *llibreExportLegacyV2       `json:"legacy,omitempty"`
+	Code             string                       `json:"code,omitempty"`
+	Title            string                       `json:"title,omitempty"`
+	ChurchName       string                       `json:"church_name,omitempty"`
+	BookType         string                       `json:"book_type,omitempty"`
+	Chronology       string                       `json:"chronology,omitempty"`
+	Volume           string                       `json:"volume,omitempty"`
+	Abbot            string                       `json:"abbot,omitempty"`
+	Content          string                       `json:"content,omitempty"`
+	Language         string                       `json:"language,omitempty"`
+	Requirements     string                       `json:"requirements,omitempty"`
+	CatalogUnit      string                       `json:"catalog_unit,omitempty"`
+	InstallationUnit string                       `json:"installation_unit,omitempty"`
+	Pages            *int                         `json:"pages,omitempty"`
+	URLBase          string                       `json:"url_base,omitempty"`
+	URLImagePrefix   string                       `json:"url_image_prefix,omitempty"`
+	DefaultPage      string                       `json:"default_page,omitempty"`
+	IndexedComplete  bool                         `json:"indexed_complete,omitempty"`
+	DigitalCode      string                       `json:"digital_code,omitempty"`
+	PhysicalCode     string                       `json:"physical_code,omitempty"`
+	SourceSystem     string                       `json:"source_system,omitempty"`
+	ExternalID       string                       `json:"external_id,omitempty"`
+	ExternalCode     string                       `json:"external_code,omitempty"`
+	Municipality     *llibreExportMunicipalityV2  `json:"municipality,omitempty"`
+	Archives         []llibreExportArchiveRefV2   `json:"archives,omitempty"`
+	URLs             []llibreExportURLRefV2       `json:"urls,omitempty"`
+	ReligiousContext []llibreExportReligiousRefV2 `json:"religious_context,omitempty"`
+	Legacy           *llibreExportLegacyV2        `json:"legacy,omitempty"`
 }
 
 type llibreExportMunicipalityV2 struct {
@@ -71,10 +71,19 @@ type llibreExportMunicipalityV2 struct {
 }
 
 type llibreExportArchiveRefV2 struct {
-	ArchiveCode string `json:"archive_code,omitempty"`
-	ArchiveName string `json:"archive_name,omitempty"`
-	Signatura   string `json:"signatura,omitempty"`
-	URLOverride string `json:"url_override,omitempty"`
+	ArchiveCode         string `json:"archive_code,omitempty"`
+	ArchiveName         string `json:"archive_name,omitempty"`
+	Signatura           string `json:"signatura,omitempty"`
+	URLOverride         string `json:"url_override,omitempty"`
+	RelationType        string `json:"relation_type,omitempty"`
+	Primary             bool   `json:"primary,omitempty"`
+	PreferredForDisplay bool   `json:"preferred_for_display,omitempty"`
+	SourceSystem        string `json:"source_system,omitempty"`
+	ExternalID          string `json:"external_id,omitempty"`
+	ExternalCode        string `json:"external_code,omitempty"`
+	Notes               string `json:"notes,omitempty"`
+	State               string `json:"state,omitempty"`
+	ModerationStatus    string `json:"moderation_status,omitempty"`
 }
 
 type llibreExportURLRefV2 struct {
@@ -223,29 +232,52 @@ func (a *App) AdminLlibresExport(w http.ResponseWriter, r *http.Request) {
 		rec.Legacy.MunicipiNom = legacyMunicipiNom
 		rec.Legacy.MunicipiPaisISO2 = legacyMunicipiISO2
 		contexts, _ := a.DB.ListLlibreDocumentaryContexts(row.ID)
-		seenArchive := map[int]bool{}
+		contextByArchive := map[int]db.LlibreDocumentaryContext{}
+		seenReligious := map[string]struct{}{}
 		for _, ctx := range contexts {
-			if !seenArchive[ctx.ArxiuID] {
-				seenArchive[ctx.ArxiuID] = true
-				rec.ArchiveRefs = append(rec.ArchiveRefs, llibreExportArchiveRefV2{
-					ArchiveCode: strings.TrimSpace(ctx.ArxiuCode.String),
-					ArchiveName: strings.TrimSpace(ctx.ArxiuNom.String),
-					Signatura:   strings.TrimSpace(ctx.Signatura.String),
-					URLOverride: strings.TrimSpace(ctx.URLOverride.String),
-				})
+			if _, ok := contextByArchive[ctx.ArxiuID]; !ok {
+				contextByArchive[ctx.ArxiuID] = ctx
 			}
-			if rec.ReligiousContext == nil && ctx.ReligiousEntityID.Valid {
-				status := strings.TrimSpace(ctx.RelationModerationStatus.String)
-				if status != "" && status != "publicat" {
-					continue
-				}
-				rec.ReligiousContext = &llibreExportReligiousRefV2{
-					EntityCode: strings.TrimSpace(ctx.ReligiousEntityCode.String),
-					EntityName: strings.TrimSpace(ctx.ReligiousEntityName.String),
-					Religion:   strings.TrimSpace(ctx.ReligionCode.String),
-					Level:      strings.TrimSpace(ctx.LevelCode.String),
-				}
+			if !ctx.ReligiousEntityID.Valid {
+				continue
 			}
+			status := strings.TrimSpace(ctx.RelationModerationStatus.String)
+			if status != "" && status != "publicat" {
+				continue
+			}
+			key := strings.TrimSpace(ctx.ReligiousEntityCode.String)
+			if key == "" {
+				key = strconv.Itoa(int(ctx.ReligiousEntityID.Int64))
+			}
+			if _, ok := seenReligious[key]; ok {
+				continue
+			}
+			seenReligious[key] = struct{}{}
+			rec.ReligiousContext = append(rec.ReligiousContext, llibreExportReligiousRefV2{
+				EntityCode: strings.TrimSpace(ctx.ReligiousEntityCode.String),
+				EntityName: strings.TrimSpace(ctx.ReligiousEntityName.String),
+				Religion:   strings.TrimSpace(ctx.ReligionCode.String),
+				Level:      strings.TrimSpace(ctx.LevelCode.String),
+			})
+		}
+		archiveLinks, _ := a.DB.ListLlibreArxius(row.ID)
+		for _, link := range archiveLinks {
+			ctx := contextByArchive[link.ArxiuID]
+			rec.Archives = append(rec.Archives, llibreExportArchiveRefV2{
+				ArchiveCode:         strings.TrimSpace(ctx.ArxiuCode.String),
+				ArchiveName:         strings.TrimSpace(link.ArxiuNom.String),
+				Signatura:           strings.TrimSpace(link.Signatura.String),
+				URLOverride:         strings.TrimSpace(link.URLOverride.String),
+				RelationType:        strings.TrimSpace(link.TipusRelacio),
+				Primary:             link.Principal,
+				PreferredForDisplay: link.PreferitVisualitzacio,
+				SourceSystem:        strings.TrimSpace(link.SourceSystem.String),
+				ExternalID:          strings.TrimSpace(link.ExternalID.String),
+				ExternalCode:        strings.TrimSpace(link.ExternalCode.String),
+				Notes:               strings.TrimSpace(link.Notes.String),
+				State:               strings.TrimSpace(link.Estat.String),
+				ModerationStatus:    strings.TrimSpace(link.ModeracioEstat.String),
+			})
 		}
 		urls, _ := a.DB.ListLlibreURLs(row.ID)
 		for _, link := range urls {
@@ -273,7 +305,7 @@ func (a *App) AdminLlibresExport(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
-			rec.URLRefs = append(rec.URLRefs, llibreExportURLRefV2{
+			rec.URLs = append(rec.URLs, llibreExportURLRefV2{
 				URL:         strings.TrimSpace(link.URL),
 				Type:        typ,
 				Description: desc,
@@ -774,8 +806,9 @@ func (a *App) AdminLlibresImportRun(w http.ResponseWriter, r *http.Request) {
 				Errorf("Llibres import: bulk insert arxiu-llibre fallit (%s): %v", mode, err)
 			}
 			relationsMode = "generic"
-			for _, link := range arxiuLinks {
-				if err := a.DB.AddArxiuLlibre(link.ArxiuID, link.LlibreID, link.Signatura, link.URLOverride); err != nil {
+			for i := range arxiuLinks {
+				link := arxiuLinks[i]
+				if err := a.saveLlibreArxiuLink(&link); err != nil {
 					Errorf("Llibres import: error afegint arxiu-llibre: %v", err)
 				}
 			}

@@ -524,6 +524,8 @@
   "books.form.abat": "Abbot / priest",
   "books.form.archive": "Archive",
   "books.form.archive.helper": "Optional: link this book to an archive so it counts in its totals",
+  "books.form.archive.search": "Search archive by name or code",
+  "books.form.archive.search.helper": "Search an archive and load only matches to avoid a massive selector.",
   "books.form.documentary_base.helper": "Documentary base for the book: archive + municipality. The ecclesiastical entity is optional and can be derived from the archive.",
   "books.form.archive.none": "No archive",
   "books.form.cancel": "Cancel",

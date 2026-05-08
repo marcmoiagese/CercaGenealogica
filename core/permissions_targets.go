@@ -143,7 +143,10 @@ func (a *App) loadLlibreTargetFast(llibreID int) (PermissionTarget, bool) {
         LEFT JOIN nivells_administratius na1 ON na1.id = m.nivell_administratiu_id_1
         LEFT JOIN arxius_llibres al ON al.llibre_id = l.id
         LEFT JOIN arxius ax ON ax.id = al.arxiu_id
-        WHERE l.id = ?`
+        WHERE l.id = ?
+        ORDER BY COALESCE(al.preferit_visualitzacio, 0) DESC,
+                 COALESCE(al.principal, 0) DESC,
+                 al.arxiu_id ASC`
 	query = formatSQLForDB(a.DB, query)
 	rows, err := a.DB.Query(query, llibreID)
 	if err != nil || len(rows) == 0 {
@@ -178,12 +181,12 @@ func (a *App) loadLlibreTargetFast(llibreID int) (PermissionTarget, bool) {
 		}
 		if v := rowInt(row, "arxiu_id"); v > 0 {
 			target.ArxiuIDs = append(target.ArxiuIDs, v)
+			if target.ArxiuID == nil {
+				target.ArxiuID = intPtr(v)
+			}
 		}
 	}
 	target.ArxiuIDs = dedupeIntSlice(target.ArxiuIDs)
-	if len(target.ArxiuIDs) == 1 {
-		target.ArxiuID = intPtr(target.ArxiuIDs[0])
-	}
 	return target, true
 }
 
