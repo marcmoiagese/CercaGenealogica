@@ -5911,26 +5911,10 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 				}
 			}
 		}
-		if err := a.DB.UpdateEntitatReligiosaModeracio(id, estat, motiu, moderatorID); err != nil {
-			return err
-		}
-		if estat == "publicat" && before != nil && before.ModeracioEstat != "publicat" {
-			after, err := a.DB.GetEntitatReligiosa(id)
-			if err != nil {
-				return err
-			}
-			if after != nil {
-				if err := a.ensureInitialWikiVersion("entitat_religiosa", id, after, after.CreatedBy, moderatorID); err != nil {
-					return err
-				}
-			}
-		}
 		if dependentRel != nil && (estat == "publicat" || estat == "rebutjat") {
-			if err := a.DB.UpdateEntitatReligiosaRelacioModeracio(dependentRel.ID, estat, motiu, moderatorID); err != nil {
-				return err
-			}
+			return a.updateConfessionalEntityWithInitialParentRelation(id, estat, motiu, moderatorID, before, dependentRel)
 		}
-		return nil
+		return a.updateConfessionalEntityModerationOnly(id, estat, motiu, moderatorID, before)
 	case "entitat_religiosa_relacio":
 		return a.DB.UpdateEntitatReligiosaRelacioModeracio(id, estat, motiu, moderatorID)
 	case "municipi_entitat_religiosa":
@@ -5960,8 +5944,6 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.DB.UpdateCognomReferenciaModeracio(id, estat, motiu, moderatorID)
 	case "cognom_merge":
 		return a.moderateCognomMergeSuggestion(id, estat, motiu, moderatorID)
-	case "event_historic":
-		return a.DB.UpdateEventHistoricModeracio(id, estat, motiu, moderatorID)
 	case "municipi_canvi":
 		return a.moderateWikiChange(id, "municipi", estat, motiu, moderatorID)
 	case "arxiu_canvi":
@@ -5976,6 +5958,8 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 		return a.moderateWikiChange(id, "event_historic", estat, motiu, moderatorID)
 	case "entitat_religiosa_canvi":
 		return a.moderateWikiChange(id, "entitat_religiosa", estat, motiu, moderatorID)
+	case "municipi_mapa_version":
+		return a.moderateMapaVersion(id, estat, motiu, moderatorID)
 	case "municipi_historia_general":
 		return a.DB.SetMunicipiHistoriaGeneralStatus(id, estat, motiu, &moderatorID)
 	case "municipi_historia_fet":
@@ -6004,8 +5988,8 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 			return nil
 		}
 		return fmt.Errorf("estat desconegut")
-	case "municipi_mapa_version":
-		return a.moderateMapaVersion(id, estat, motiu, moderatorID)
+	case "event_historic":
+		return a.DB.UpdateEventHistoricModeracio(id, estat, motiu, moderatorID)
 	case "media_album":
 		return a.moderateMediaAlbum(id, estat, motiu, moderatorID)
 	case "media_item":
@@ -6016,9 +6000,80 @@ func (a *App) updateModeracioObject(objectType string, id int, estat, motiu stri
 			return fmt.Errorf("estat desconegut")
 		}
 		return a.DB.ExternalLinkModerate(id, status)
-	default:
-		return fmt.Errorf("tipus desconegut")
 	}
+	return fmt.Errorf("tipus desconegut")
+}
+
+func (a *App) updateConfessionalEntityModerationOnly(id int, estat, motiu string, moderatorID int, before *db.EntitatReligiosa) error {
+	if err := a.DB.UpdateEntitatReligiosaModeracio(id, estat, motiu, moderatorID); err != nil {
+		return err
+	}
+	if estat == "publicat" && before != nil && before.ModeracioEstat != "publicat" {
+		after, err := a.DB.GetEntitatReligiosa(id)
+		if err != nil {
+			return err
+		}
+		if after != nil {
+			if err := a.ensureInitialWikiVersion("entitat_religiosa", id, after, after.CreatedBy, moderatorID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (a *App) updateConfessionalEntityWithInitialParentRelation(id int, estat, motiu string, moderatorID int, before *db.EntitatReligiosa, dependentRel *db.EntitatReligiosaRelacio) error {
+	if before == nil || dependentRel == nil {
+		return a.updateConfessionalEntityModerationOnly(id, estat, motiu, moderatorID, before)
+	}
+	if err := a.DB.UpdateEntitatReligiosaRelacioModeracio(dependentRel.ID, estat, motiu, moderatorID); err != nil {
+		return err
+	}
+	if err := a.DB.UpdateEntitatReligiosaModeracio(id, estat, motiu, moderatorID); err != nil {
+		a.rollbackInitialConfessionalParentRelation(dependentRel, "update_entitat_religiosa_failed")
+		return err
+	}
+	if estat == "publicat" && before.ModeracioEstat != "publicat" {
+		after, err := a.DB.GetEntitatReligiosa(id)
+		if err != nil {
+			a.rollbackConfessionalEntityModeration(before, "get_entitat_after_publish_failed")
+			a.rollbackInitialConfessionalParentRelation(dependentRel, "get_entitat_after_publish_failed")
+			return err
+		}
+		if after != nil {
+			if err := a.ensureInitialWikiVersion("entitat_religiosa", id, after, after.CreatedBy, moderatorID); err != nil {
+				a.rollbackConfessionalEntityModeration(before, "ensure_initial_wiki_failed")
+				a.rollbackInitialConfessionalParentRelation(dependentRel, "ensure_initial_wiki_failed")
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (a *App) rollbackInitialConfessionalParentRelation(rel *db.EntitatReligiosaRelacio, reason string) {
+	if rel == nil {
+		return
+	}
+	if err := a.DB.UpdateEntitatReligiosaRelacioModeracio(rel.ID, rel.ModeracioEstat, rel.ModeracioMotiu, confessionalModeratedByInt(rel.ModeratedBy)); err != nil {
+		Errorf("Moderacio confessional rollback relacio inicial rel=%d reason=%s ha fallat: %v", rel.ID, reason, err)
+	}
+}
+
+func (a *App) rollbackConfessionalEntityModeration(before *db.EntitatReligiosa, reason string) {
+	if before == nil {
+		return
+	}
+	if err := a.DB.UpdateEntitatReligiosaModeracio(before.ID, before.ModeracioEstat, before.ModeracioMotiu, confessionalModeratedByInt(before.ModeratedBy)); err != nil {
+		Errorf("Moderacio confessional rollback entitat=%d reason=%s ha fallat: %v", before.ID, reason, err)
+	}
+}
+
+func confessionalModeratedByInt(value sql.NullInt64) int {
+	if !value.Valid {
+		return 0
+	}
+	return int(value.Int64)
 }
 
 func (a *App) moderateMapaVersion(id int, estat, notes string, moderatorID int) error {
