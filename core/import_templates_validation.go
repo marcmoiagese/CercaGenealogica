@@ -198,6 +198,11 @@ func validateTemplateImportModel(model *templateImportModel) error {
 	if strings.TrimSpace(model.BookMode) == "cronologia_lookup" && strings.TrimSpace(firstNonEmpty(model.BookChronologyColumn, model.BookColumn)) == "" {
 		return fmt.Errorf("book_resolution.column obligatori per cronologia_lookup")
 	}
+	switch strings.TrimSpace(strings.ToLower(model.MunicipalityContext)) {
+	case "", "import_context", "required", "none":
+	default:
+		return fmt.Errorf("book_resolution.municipality_context no suportat")
+	}
 	allowedTargets := allowedTemplateTargetsForRecordType(model.RecordType)
 	if len(model.Mapping) > templateMaxColumns {
 		return fmt.Errorf("massa columnes a la plantilla")
