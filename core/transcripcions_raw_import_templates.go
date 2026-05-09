@@ -144,6 +144,15 @@ type templatePendingCreate struct {
 	Bundle db.TranscripcioRawImportBundle
 }
 
+type templateMergeOutcome struct {
+	Accepted                bool
+	Changed                 bool
+	RecordID                int
+	ChangeID                int
+	CreatedProposal         bool
+	PendingActivityObjectID int
+}
+
 type templateDuplicateCheckBlockMetrics struct {
 	Key                         string
 	BookID                      int
@@ -671,6 +680,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 			CreatedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
 		}
 		applyBaseDefaults(&t, model.BaseDefaults)
+		enforceTemplateImportedPending(&t, userID)
 		persones := map[string]*db.TranscripcioPersonaRaw{}
 		atributs := map[string]*db.TranscripcioAtributRaw{}
 		mappedValues := map[string]string{}
@@ -895,15 +905,19 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 					duplicateBlock.CompareDur += time.Since(compareStart)
 				}
 				writeStart := time.Now()
-				updated, okUpdate := a.mergeTemplateRow(existingID, &t, persones, atributs, model.Policies)
+				outcome := a.mergeTemplateRow(existingID, &t, persones, atributs, model.Policies)
 				result.Debug.addWrite(time.Since(writeStart))
-				if okUpdate {
+				if outcome.Accepted {
 					result.Updated++
 					result.markBook(bookID)
+					result.addUpdatedRegistre(existingID)
+					if outcome.ChangeID > 0 {
+						result.addChangeProposal(outcome.ChangeID)
+					}
 					if matchContextKey != "" && matchKey != "" {
 						templateRememberSeenMatch(seenMatchByContext, matchContextKey, matchKey, rowNum)
 					}
-					if updated {
+					if outcome.Changed {
 						existingMap[matchKey] = existingID
 					}
 					continue
@@ -924,6 +938,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		if t.DataActeEstat == "" {
 			t.DataActeEstat = "clar"
 		}
+		enforceTemplateImportedPending(&t, userID)
 		if !validTipusActe(t.TipusActe) {
 			result.Debug.addWritePrepare(time.Since(writePrepareStart))
 			result.Failed++
@@ -989,6 +1004,7 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 		Result:  &result,
 		Runtime: importRuntime,
 	})
+	a.finalizeTemplateImportSideEffects(ctx, template, model, headers, userID, fixedBookID, start, &result)
 	duplicateCheckRun.logBlocksAndSummary(result.Debug.Rows)
 	result.WriteCompletedAt = time.Now()
 	result.Debug.finalize(len(result.BookIDs), time.Since(start))
@@ -1040,6 +1056,7 @@ func (a *App) flushTemplatePendingCreates(pending []templatePendingCreate, resul
 			for i := range pending {
 				result.Created++
 				result.markBook(pending[i].BookID)
+				result.addCreatedRegistre(bulkResult.IDs[i])
 			}
 			return pending[:0]
 		}
@@ -1071,6 +1088,242 @@ func (a *App) createTemplatePendingRow(row templatePendingCreate, result *csvImp
 	}
 	result.Created++
 	result.markBook(row.BookID)
+	result.addCreatedRegistre(createResult.IDs[0])
+}
+
+func enforceTemplateImportedPending(row *db.TranscripcioRaw, userID int) {
+	if row == nil {
+		return
+	}
+	row.ModeracioEstat = "pendent"
+	row.ModeratedBy = sql.NullInt64{}
+	row.ModeratedAt = sql.NullTime{}
+	row.ModeracioMotiu = ""
+	if userID > 0 && !row.CreatedBy.Valid {
+		row.CreatedBy = sql.NullInt64{Int64: int64(userID), Valid: true}
+	}
+}
+
+func (a *App) finalizeTemplateImportSideEffects(ctx importContext, template *db.CSVImportTemplate, model *templateImportModel, headers []string, userID int, fixedBookID int, startedAt time.Time, result *csvImportResult) {
+	if a == nil || a.DB == nil || result == nil || template == nil {
+		return
+	}
+	result.PendingActivityCount = a.recordTemplateImportPendingActivities(ctx, userID, result)
+	a.logTemplateImportRun(ctx, template, model, headers, userID, fixedBookID, startedAt, result)
+}
+
+func (a *App) recordTemplateImportPendingActivities(ctx importContext, userID int, result *csvImportResult) int {
+	if a == nil || a.DB == nil || result == nil || userID <= 0 {
+		return 0
+	}
+	objectIDs := append([]int{}, result.CreatedRegistreIDs...)
+	objectIDs = append(objectIDs, result.UpdatedRegistreIDs...)
+	objectIDs = uniquePositiveInts(objectIDs)
+	if len(objectIDs) == 0 {
+		return 0
+	}
+	existingActivities, err := a.DB.ListActivityByObjects("registre", objectIDs, "pendent")
+	existingSet := map[int]struct{}{}
+	if err == nil {
+		for _, act := range existingActivities {
+			if act.ObjectID.Valid && act.ObjectID.Int64 > 0 {
+				existingSet[int(act.ObjectID.Int64)] = struct{}{}
+			}
+		}
+	}
+	rows := make([]db.UserActivity, 0, len(objectIDs))
+	now := time.Now()
+	for _, objectID := range objectIDs {
+		if _, exists := existingSet[objectID]; exists {
+			continue
+		}
+		rows = append(rows, db.UserActivity{
+			UserID:     userID,
+			Action:     "import_template",
+			ObjectType: "registre",
+			ObjectID:   sql.NullInt64{Int64: int64(objectID), Valid: true},
+			Status:     "pendent",
+			Details:    "template_import",
+			CreatedAt:  now,
+		})
+	}
+	if len(rows) == 0 {
+		return 0
+	}
+	insertCtx := ctx.RequestContext()
+	mode, err := a.DB.BulkInsertUserActivities(insertCtx, rows)
+	if err != nil {
+		for i := range rows {
+			_, _ = a.DB.InsertUserActivity(&rows[i])
+		}
+	} else if mode == "" {
+		mode = "bulk"
+		_ = mode
+	}
+	a.EvaluateAchievementsForUser(insertCtx, userID, AchievementTrigger{CreatedAt: now})
+	a.logAntiAbuseSignals(userID, now)
+	return len(rows)
+}
+
+func (a *App) logTemplateImportRun(ctx importContext, template *db.CSVImportTemplate, model *templateImportModel, headers []string, userID int, fixedBookID int, startedAt time.Time, result *csvImportResult) {
+	if a == nil || a.DB == nil || result == nil || template == nil {
+		return
+	}
+	status := adminImportStatusOK
+	if result.Failed > 0 {
+		status = adminImportStatusError
+	}
+	errorsByReason := csvImportErrorsByReason(result.Errors)
+	payload := map[string]interface{}{
+		"import_type":   "transcripcions_templates",
+		"module":        "templates",
+		"template_id":   template.ID,
+		"template_name": strings.TrimSpace(template.Name),
+		"record_type":   templateImportRecordType(model),
+		"headers":       append([]string(nil), headers...),
+		"row_count":     result.Debug.Rows,
+		"book_ids":      sortedKeysFromIntSet(result.BookIDs),
+	}
+	if fixedBookID > 0 {
+		payload["scope"] = "book"
+		payload["fixed_book_id"] = fixedBookID
+	} else {
+		payload["scope"] = "global"
+	}
+	if ctx.MunicipiID > 0 {
+		payload["municipi_id"] = ctx.MunicipiID
+	}
+	if ctx.ArxiuID > 0 {
+		payload["arxiu_id"] = ctx.ArxiuID
+	}
+	resultMap := map[string]interface{}{
+		"status":                 status,
+		"created":                result.Created,
+		"updated":                result.Updated,
+		"failed":                 result.Failed,
+		"created_target_count":   len(uniquePositiveInts(result.CreatedRegistreIDs)),
+		"updated_target_count":   len(uniquePositiveInts(result.UpdatedRegistreIDs)),
+		"pending_activity_count": result.PendingActivityCount,
+		"errors_by_reason":       errorsByReason,
+	}
+	targets, createdTargets, updatedTargets := templateImportAdminTargets(template.ID, result)
+	detail := &adminImportJobDetail{
+		Payload:       payload,
+		Result:        resultMap,
+		Targets:       targets,
+		ProgressTotal: templateImportMaxInt(result.Debug.Rows, result.Created+result.Updated+result.Failed),
+		ProgressDone:  result.Created + result.Updated,
+		StartedAt:     startedAt,
+		FinishedAt:    time.Now(),
+	}
+	logResult := a.logAdminImportRunDetailedResult(ctx.Request, "transcripcions_templates", status, userID, detail)
+	result.ImportRunID = logResult.ImportRunID
+	result.AdminJobID = logResult.AdminJobID
+	result.AuditID = logResult.AuditID
+	result.CreatedTargetCount = createdTargets
+	result.UpdatedTargetCount = updatedTargets
+}
+
+func templateImportRecordType(model *templateImportModel) string {
+	if model == nil {
+		return "transcripcions_raw"
+	}
+	if strings.TrimSpace(model.RecordType) != "" {
+		return strings.TrimSpace(model.RecordType)
+	}
+	return "transcripcions_raw"
+}
+
+func csvImportErrorsByReason(entries []importErrorEntry) map[string]int {
+	out := map[string]int{}
+	for _, entry := range entries {
+		key := strings.TrimSpace(entry.Reason)
+		if key == "" {
+			key = "unknown"
+		}
+		out[key]++
+	}
+	return out
+}
+
+func templateImportAdminTargets(templateID int, result *csvImportResult) ([]db.AdminJobTarget, int, int) {
+	if result == nil {
+		return nil, 0, 0
+	}
+	targets := make([]db.AdminJobTarget, 0, 1+len(result.BookIDs)+len(result.CreatedRegistreIDs)+len(result.UpdatedRegistreIDs)+len(result.ChangeProposalIDs))
+	seen := map[string]struct{}{}
+	appendTarget := func(objectType string, objectID int) {
+		if strings.TrimSpace(objectType) == "" || objectID <= 0 {
+			return
+		}
+		key := objectType + ":" + strconv.Itoa(objectID)
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		targets = append(targets, db.AdminJobTarget{ObjectType: objectType, ObjectID: objectID})
+	}
+	if templateID > 0 {
+		appendTarget("csv_import_template", templateID)
+	}
+	for _, bookID := range sortedKeysFromIntSet(result.BookIDs) {
+		appendTarget("llibre", bookID)
+	}
+	createdTargets := 0
+	for _, id := range uniquePositiveInts(result.CreatedRegistreIDs) {
+		appendTarget("registre", id)
+		createdTargets++
+	}
+	updatedTargets := 0
+	for _, id := range uniquePositiveInts(result.UpdatedRegistreIDs) {
+		appendTarget("registre", id)
+		updatedTargets++
+	}
+	for _, id := range uniquePositiveInts(result.ChangeProposalIDs) {
+		appendTarget("registre_canvi", id)
+	}
+	return targets, createdTargets, updatedTargets
+}
+
+func sortedKeysFromIntSet(values map[int]struct{}) []int {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]int, 0, len(values))
+	for id := range values {
+		if id > 0 {
+			out = append(out, id)
+		}
+	}
+	sort.Ints(out)
+	return out
+}
+
+func uniquePositiveInts(values []int) []int {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := map[int]struct{}{}
+	out := make([]int, 0, len(values))
+	for _, id := range values {
+		if id <= 0 {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	sort.Ints(out)
+	return out
+}
+
+func templateImportMaxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func parseTemplateImportModel(modelJSON string) (*templateImportModel, error) {
@@ -3204,53 +3457,164 @@ func parseStrictPositiveInt(value string) (int, bool) {
 	return n, true
 }
 
-func (a *App) mergeTemplateRow(existingID int, t *db.TranscripcioRaw, persones map[string]*db.TranscripcioPersonaRaw, atributs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) (bool, bool) {
+func (a *App) mergeTemplateRow(existingID int, t *db.TranscripcioRaw, persones map[string]*db.TranscripcioPersonaRaw, atributs map[string]*db.TranscripcioAtributRaw, policies templatePolicies) templateMergeOutcome {
 	existing, err := a.DB.GetTranscripcioRaw(existingID)
 	if err != nil || existing == nil {
-		return false, false
+		return templateMergeOutcome{}
 	}
-	updated := updateExistingTranscripcio(existing, t, policies.UpdateMissingOnly)
-	if updated {
-		_ = a.DB.UpdateTranscripcioRaw(existing)
+	beforePersones, _ := a.DB.ListTranscripcioPersones(existingID)
+	beforeAtributs, _ := a.DB.ListTranscripcioAtributs(existingID)
+	userID := 0
+	if t != nil && t.CreatedBy.Valid {
+		userID = int(t.CreatedBy.Int64)
 	}
-	if policies.AddMissingPeople {
-		personesExistents, _ := a.DB.ListTranscripcioPersones(existingID)
-		personKeys := map[string]bool{}
-		for _, p := range personesExistents {
-			personKeys[personKey(&p)] = true
-		}
-		for _, p := range persones {
-			if isEmptyPerson(p) {
-				continue
-			}
-			key := personKey(p)
-			if personKeys[key] {
-				continue
-			}
-			p.TranscripcioID = existingID
-			_, _ = a.DB.CreateTranscripcioPersona(p)
-			personKeys[key] = true
-		}
+	afterRaw := *existing
+	changed := updateExistingTranscripcio(&afterRaw, t, policies.UpdateMissingOnly)
+	enforceTemplateImportedPending(&afterRaw, userID)
+	afterPersones, addedPeople := mergeTemplatePeoplePreview(beforePersones, persones, policies.AddMissingPeople)
+	afterAtributs, addedAttrs := mergeTemplateAttrsPreview(beforeAtributs, atributs, policies.AddMissingAttrs)
+	changed = changed || addedPeople || addedAttrs
+	if !changed {
+		return templateMergeOutcome{Accepted: true, RecordID: existingID, PendingActivityObjectID: existingID}
 	}
-	if policies.AddMissingAttrs {
-		attrsExistents, _ := a.DB.ListTranscripcioAtributs(existingID)
-		attrKeys := map[string]bool{}
-		for _, a := range attrsExistents {
-			attrKeys[a.Clau] = true
+	if strings.EqualFold(strings.TrimSpace(existing.ModeracioEstat), "publicat") {
+		changeID, err := a.createTemplateImportChangeProposal(existingID, existing, beforePersones, beforeAtributs, afterRaw, afterPersones, afterAtributs, userID)
+		if err != nil || changeID == 0 {
+			return templateMergeOutcome{}
 		}
-		for _, attr := range atributs {
-			if isEmptyAttr(attr) {
-				continue
-			}
-			if attrKeys[attr.Clau] {
-				continue
-			}
-			attr.TranscripcioID = existingID
-			_, _ = a.DB.CreateTranscripcioAtribut(attr)
-			attrKeys[attr.Clau] = true
+		return templateMergeOutcome{
+			Accepted:                true,
+			Changed:                 true,
+			RecordID:                existingID,
+			ChangeID:                changeID,
+			CreatedProposal:         true,
+			PendingActivityObjectID: existingID,
 		}
 	}
-	return updated, true
+	if err := a.persistTemplatePendingMerge(existing, &afterRaw, afterPersones, afterAtributs); err != nil {
+		return templateMergeOutcome{}
+	}
+	return templateMergeOutcome{
+		Accepted:                true,
+		Changed:                 true,
+		RecordID:                existingID,
+		PendingActivityObjectID: existingID,
+	}
+}
+
+func mergeTemplatePeoplePreview(existing []db.TranscripcioPersonaRaw, incoming map[string]*db.TranscripcioPersonaRaw, addMissing bool) ([]db.TranscripcioPersonaRaw, bool) {
+	out := append([]db.TranscripcioPersonaRaw(nil), existing...)
+	if !addMissing {
+		return out, false
+	}
+	personKeys := map[string]bool{}
+	for _, p := range existing {
+		personKeys[personKey(&p)] = true
+	}
+	added := false
+	for _, p := range incoming {
+		if isEmptyPerson(p) {
+			continue
+		}
+		key := personKey(p)
+		if personKeys[key] {
+			continue
+		}
+		copyP := *p
+		out = append(out, copyP)
+		personKeys[key] = true
+		added = true
+	}
+	return out, added
+}
+
+func mergeTemplateAttrsPreview(existing []db.TranscripcioAtributRaw, incoming map[string]*db.TranscripcioAtributRaw, addMissing bool) ([]db.TranscripcioAtributRaw, bool) {
+	out := append([]db.TranscripcioAtributRaw(nil), existing...)
+	if !addMissing {
+		return out, false
+	}
+	attrKeys := map[string]bool{}
+	for _, attr := range existing {
+		attrKeys[attr.Clau] = true
+	}
+	added := false
+	for _, attr := range incoming {
+		if isEmptyAttr(attr) {
+			continue
+		}
+		if attrKeys[attr.Clau] {
+			continue
+		}
+		copyAttr := *attr
+		out = append(out, copyAttr)
+		attrKeys[attr.Clau] = true
+		added = true
+	}
+	return out, added
+}
+
+func (a *App) persistTemplatePendingMerge(existing *db.TranscripcioRaw, afterRaw *db.TranscripcioRaw, afterPersones []db.TranscripcioPersonaRaw, afterAtributs []db.TranscripcioAtributRaw) error {
+	if a == nil || a.DB == nil || existing == nil || afterRaw == nil {
+		return fmt.Errorf("template merge persistence unavailable")
+	}
+	afterRaw.ID = existing.ID
+	afterRaw.CreatedBy = existing.CreatedBy
+	if err := a.DB.UpdateTranscripcioRaw(afterRaw); err != nil {
+		return err
+	}
+	if err := a.DB.DeleteTranscripcioPersones(existing.ID); err != nil {
+		return err
+	}
+	for i := range afterPersones {
+		persona := afterPersones[i]
+		persona.TranscripcioID = existing.ID
+		if _, err := a.DB.CreateTranscripcioPersona(&persona); err != nil {
+			return err
+		}
+	}
+	if err := a.DB.DeleteTranscripcioAtributs(existing.ID); err != nil {
+		return err
+	}
+	for i := range afterAtributs {
+		attr := afterAtributs[i]
+		attr.TranscripcioID = existing.ID
+		if _, err := a.DB.CreateTranscripcioAtribut(&attr); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *App) createTemplateImportChangeProposal(existingID int, beforeRaw *db.TranscripcioRaw, beforePersones []db.TranscripcioPersonaRaw, beforeAtributs []db.TranscripcioAtributRaw, afterRaw db.TranscripcioRaw, afterPersones []db.TranscripcioPersonaRaw, afterAtributs []db.TranscripcioAtributRaw, userID int) (int, error) {
+	if a == nil || a.DB == nil || beforeRaw == nil {
+		return 0, fmt.Errorf("template change proposal unavailable")
+	}
+	afterRaw.ID = existingID
+	afterRaw.CreatedBy = beforeRaw.CreatedBy
+	meta := map[string]interface{}{
+		"source": "template_import",
+		"before": map[string]interface{}{
+			"raw":      beforeRaw,
+			"persones": beforePersones,
+			"atributs": beforeAtributs,
+		},
+		"after": map[string]interface{}{
+			"raw":      afterRaw,
+			"persones": afterPersones,
+			"atributs": afterAtributs,
+		},
+	}
+	metaJSON, _ := json.Marshal(meta)
+	return a.DB.CreateTranscripcioRawChange(&db.TranscripcioRawChange{
+		TranscripcioID: existingID,
+		ChangeType:     "template_import",
+		FieldKey:       "bulk",
+		OldValue:       "",
+		NewValue:       "",
+		Metadata:       string(metaJSON),
+		ModeracioEstat: "pendent",
+		ChangedBy:      sqlNullIntFromInt(userID),
+	})
 }
 
 func updateExistingTranscripcio(existing *db.TranscripcioRaw, incoming *db.TranscripcioRaw, missingOnly bool) bool {

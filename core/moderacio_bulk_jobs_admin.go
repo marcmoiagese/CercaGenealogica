@@ -918,7 +918,7 @@ func (a *App) runModeracioBulkAdminJob(jobID int, action, motiu string, actorID 
 	result.ErrorPhases = errorCollector.phaseCountsSlice()
 	result.ErrorSamples = errorCollector.samplesSlice()
 	auditStart := time.Now()
-	if err := a.insertAdminAudit(nil, actorID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
+	if _, err := a.insertAdminAudit(nil, actorID, auditActionModeracioBulk, "moderacio", 0, map[string]interface{}{
 		"action":       action,
 		"scope":        "all",
 		"bulk_type":    result.BulkType,

@@ -67,6 +67,7 @@ func (a *App) AdminImportRegistresGlobal(w http.ResponseWriter, r *http.Request)
 	ctx := importContext{
 		MunicipiID: parseIntValue(r.FormValue("municipi_id")),
 		ArxiuID:    parseIntValue(r.FormValue("arxiu_id")),
+		Request:    r,
 	}
 	var result csvImportResult
 	switch model {

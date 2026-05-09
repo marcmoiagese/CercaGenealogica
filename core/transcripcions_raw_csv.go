@@ -474,7 +474,7 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 		if separator == 0 {
 			separator = ','
 		}
-		result = a.RunCSVTemplateImport(template, file, separator, user.ID, importContext{}, llibreID)
+		result = a.RunCSVTemplateImport(template, file, separator, user.ID, importContext{Request: r}, llibreID)
 	case "generic":
 		template, err := a.getSystemImportTemplateByName(systemImportTemplateGenericName)
 		if err != nil || template == nil {
@@ -485,7 +485,7 @@ func (a *App) AdminImportRegistresLlibre(w http.ResponseWriter, r *http.Request)
 		if separator == 0 {
 			separator = ','
 		}
-		result = a.RunCSVTemplateImport(template, file, separator, user.ID, importContext{}, llibreID)
+		result = a.RunCSVTemplateImport(template, file, separator, user.ID, importContext{Request: r}, llibreID)
 	default:
 		result.Failed = 1
 		result.Errors = append(result.Errors, importErrorEntry{Row: 0, Reason: "model d'importació no suportat"})

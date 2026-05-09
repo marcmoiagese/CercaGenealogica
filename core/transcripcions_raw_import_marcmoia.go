@@ -1,10 +1,12 @@
 package core
 
 import (
+	"context"
 	"database/sql"
 	"encoding/csv"
 	"fmt"
 	"io"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -18,10 +20,22 @@ type csvImportResult struct {
 	Failed                int
 	Errors                []importErrorEntry
 	BookIDs               map[int]struct{}
+	CreatedRegistreIDs    []int
+	UpdatedRegistreIDs    []int
+	ChangeProposalIDs     []int
+	ImportRunID           int
+	AdminJobID            int
+	AuditID               int
+	CreatedTargetCount    int
+	UpdatedTargetCount    int
+	PendingActivityCount  int
 	Debug                 csvImportDebugMetrics
 	WritePrepareBreakdown *templateWritePrepareBreakdown
 	ImportPhaseGaps       *templateImportPhaseGapMetrics
 	WriteCompletedAt      time.Time
+	createdRegistreSet    map[int]struct{}
+	updatedRegistreSet    map[int]struct{}
+	changeProposalSet     map[int]struct{}
 }
 
 type templateWritePrepareBreakdown struct {
@@ -55,9 +69,59 @@ func (r *csvImportResult) markBook(id int) {
 	r.BookIDs[id] = struct{}{}
 }
 
+func (r *csvImportResult) addCreatedRegistre(id int) {
+	if r == nil || id <= 0 {
+		return
+	}
+	if r.createdRegistreSet == nil {
+		r.createdRegistreSet = map[int]struct{}{}
+	}
+	if _, exists := r.createdRegistreSet[id]; exists {
+		return
+	}
+	r.createdRegistreSet[id] = struct{}{}
+	r.CreatedRegistreIDs = append(r.CreatedRegistreIDs, id)
+}
+
+func (r *csvImportResult) addUpdatedRegistre(id int) {
+	if r == nil || id <= 0 {
+		return
+	}
+	if r.updatedRegistreSet == nil {
+		r.updatedRegistreSet = map[int]struct{}{}
+	}
+	if _, exists := r.updatedRegistreSet[id]; exists {
+		return
+	}
+	r.updatedRegistreSet[id] = struct{}{}
+	r.UpdatedRegistreIDs = append(r.UpdatedRegistreIDs, id)
+}
+
+func (r *csvImportResult) addChangeProposal(id int) {
+	if r == nil || id <= 0 {
+		return
+	}
+	if r.changeProposalSet == nil {
+		r.changeProposalSet = map[int]struct{}{}
+	}
+	if _, exists := r.changeProposalSet[id]; exists {
+		return
+	}
+	r.changeProposalSet[id] = struct{}{}
+	r.ChangeProposalIDs = append(r.ChangeProposalIDs, id)
+}
+
 type importContext struct {
 	MunicipiID int
 	ArxiuID    int
+	Request    *http.Request
+}
+
+func (c importContext) RequestContext() context.Context {
+	if c.Request != nil {
+		return c.Request.Context()
+	}
+	return context.Background()
 }
 
 func normalizeCSVHeader(raw string) string {

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
@@ -1124,6 +1125,145 @@ func TestF354U9BookIDRequiresColumnAndValueWithoutFixedBookID(t *testing.T) {
 	}
 	if blankValue.Errors[0].Fields["column"] != "llibre_id" {
 		t.Fatalf("fields valor buit incomplets: %+v", blankValue.Errors[0].Fields)
+	}
+}
+
+func TestF354U10TemplateImportCreatesAuditJobTargetsAndPendingActivity(t *testing.T) {
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f354u10_run")
+	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U10 Run")
+	bookID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "BOOK-U10", Chronology: "1852-1871", Title: "Book U10", Published: true})
+
+	template := buildF354U9CustomTemplate(t, `{
+  "record_type": "baptisme",
+  "book_resolution": {
+    "mode": "llibre_id",
+    "column": "llibre_id"
+  },
+  "base_defaults": {
+    "moderation_status": "publicat"
+  },
+  "mapping": {
+    "columns": [
+      { "header": "tipus_acte", "key": "tipus_acte", "required": true, "map_to": [{ "target": "base.tipus_acte" }] },
+      { "header": "batejat", "key": "batejat", "map_to": [{ "target": "person.batejat", "transform": [{ "op": "parse_person_from_nom" }] }] }
+    ]
+  }
+}`)
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"llibre_id", "tipus_acte", "batejat"},
+		{strconv.Itoa(bookID), "baptisme", "Joan Auditoria"},
+	})), ',', user.ID, importContext{}, 0)
+	if result.Created != 1 || result.Failed != 0 {
+		t.Fatalf("import plantilla F354U10 inesperat: %+v", result)
+	}
+	if result.ImportRunID == 0 || result.AdminJobID == 0 || result.AuditID == 0 {
+		t.Fatalf("s'esperaven IDs de run/job/audit informats: %+v", result)
+	}
+	if result.PendingActivityCount != 1 {
+		t.Fatalf("s'esperava 1 activitat pendent, got=%d", result.PendingActivityCount)
+	}
+	if result.CreatedTargetCount != 1 || result.UpdatedTargetCount != 0 {
+		t.Fatalf("targets creats/actualitzats inesperats: created=%d updated=%d", result.CreatedTargetCount, result.UpdatedTargetCount)
+	}
+	registres, err := database.ListTranscripcionsRaw(bookID, db.TranscripcioFilter{Limit: -1})
+	if err != nil || len(registres) != 1 {
+		t.Fatalf("ListTranscripcionsRaw inesperat: len=%d err=%v", len(registres), err)
+	}
+	reg := registres[0]
+	if reg.ModeracioEstat != "pendent" || reg.ModeratedBy.Valid || reg.ModeratedAt.Valid || !reg.CreatedBy.Valid || int(reg.CreatedBy.Int64) != user.ID {
+		t.Fatalf("registre importat ha de quedar pendent i atribuït a l'usuari: %+v", reg)
+	}
+	targetRows, err := database.Query("SELECT object_type, object_id FROM admin_job_targets WHERE job_id = ? ORDER BY seq_num", result.AdminJobID)
+	if err != nil {
+		t.Fatalf("Query admin_job_targets ha fallat: %v", err)
+	}
+	if len(targetRows) < 2 {
+		t.Fatalf("s'esperaven almenys 2 targets (llibre, registre) en el test directe, got=%d rows=%+v", len(targetRows), targetRows)
+	}
+	activityRows, err := database.Query("SELECT accio, estat, objecte_id FROM usuaris_activitat WHERE objecte_tipus = ? AND objecte_id = ? ORDER BY id DESC", "registre", reg.ID)
+	if err != nil || len(activityRows) == 0 {
+		t.Fatalf("s'esperava activitat pendent del registre importat: err=%v rows=%d", err, len(activityRows))
+	}
+}
+
+func TestF354U10PublishedMergeCreatesPendingChangeInsteadOfDirectUpdate(t *testing.T) {
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f354u10_published_merge")
+	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U10 Published Merge")
+	bookID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "BOOK-U10-MERGE", Chronology: "1852-1871", Title: "Book U10 Merge", Published: true})
+	book, _ := database.GetLlibre(bookID)
+	book.IndexacioCompleta = true
+	_ = database.UpdateLlibre(book)
+
+	existingID, err := database.CreateTranscripcioRaw(&db.TranscripcioRaw{
+		LlibreID:       bookID,
+		TipusActe:      "baptisme",
+		NotesMarginals: "Nota antiga",
+		ModeracioEstat: "publicat",
+		CreatedBy:      sql.NullInt64{Int64: int64(user.ID), Valid: true},
+		ModeratedBy:    sql.NullInt64{Int64: int64(user.ID), Valid: true},
+		ModeratedAt:    sql.NullTime{Time: time.Now(), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscripcioRaw ha fallat: %v", err)
+	}
+	_, _ = database.CreateTranscripcioPersona(&db.TranscripcioPersonaRaw{
+		TranscripcioID: existingID,
+		Rol:            "batejat",
+		Nom:            "Joan",
+		Cognom1:        "Garcia",
+	})
+
+	template := buildF354U9CustomTemplate(t, `{
+  "record_type": "baptisme",
+  "book_resolution": {
+    "mode": "llibre_id",
+    "column": "llibre_id"
+  },
+  "mapping": {
+    "columns": [
+      { "header": "tipus_acte", "key": "tipus_acte", "required": true, "map_to": [{ "target": "base.tipus_acte" }] },
+      { "header": "notes", "key": "notes", "map_to": [{ "target": "base.notes_marginals" }] },
+      { "header": "batejat", "key": "batejat", "map_to": [{ "target": "person.batejat", "transform": [{ "op": "parse_person_from_nom" }] }] }
+    ]
+  },
+  "policies": {
+    "merge_existing": {
+      "mode": "by_principal_person_if_book_indexed",
+      "principal_roles": ["batejat"],
+      "update_missing_only": false,
+      "add_missing_people": true,
+      "add_missing_attrs": true
+      }
+    }
+}`)
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"llibre_id", "tipus_acte", "notes", "batejat"},
+		{strconv.Itoa(bookID), "baptisme", "Nota nova importada", "Joan Garcia"},
+	})), ',', user.ID, importContext{}, 0)
+	if result.Updated != 1 || result.Failed != 0 {
+		t.Fatalf("merge publicat inesperat: %+v", result)
+	}
+	if result.UpdatedTargetCount != 1 || len(result.ChangeProposalIDs) != 1 {
+		t.Fatalf("s'esperava proposta pendent i target d'update: %+v", result)
+	}
+	registre, err := database.GetTranscripcioRaw(existingID)
+	if err != nil || registre == nil {
+		t.Fatalf("GetTranscripcioRaw ha fallat: %v", err)
+	}
+	if registre.NotesMarginals != "Nota antiga" || registre.ModeracioEstat != "publicat" {
+		t.Fatalf("el registre publicat no s'ha de tocar directament: %+v", registre)
+	}
+	changes, err := database.ListTranscripcioRawChanges(existingID)
+	if err != nil || len(changes) != 1 {
+		t.Fatalf("s'esperava exactament una proposta pendent, len=%d err=%v", len(changes), err)
+	}
+	if changes[0].ModeracioEstat != "pendent" || changes[0].ChangeType != "template_import" {
+		t.Fatalf("canvi pendent inesperat: %+v", changes[0])
+	}
+	if !strings.Contains(changes[0].Metadata, "template_import") {
+		t.Fatalf("la metadata del canvi ha d'indicar origen template_import: %s", changes[0].Metadata)
 	}
 }
 

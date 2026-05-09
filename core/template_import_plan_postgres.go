@@ -107,6 +107,7 @@ func persistTemplateImportPlanPostgresBatch(rows []TemplateImportPlanRow, app *A
 			for i := range rows {
 				result.Created++
 				result.markBook(rows[i].BookID)
+				result.addCreatedRegistre(bulkResult.IDs[i])
 			}
 			return
 		}
@@ -136,6 +137,7 @@ func persistTemplateImportPlanPostgresRow(row TemplateImportPlanRow, result *csv
 	}
 	result.Created++
 	result.markBook(row.BookID)
+	result.addCreatedRegistre(createResult.IDs[0])
 }
 
 func templateImportPlanRowBundle(row TemplateImportPlanRow) db.TranscripcioRawImportBundle {
