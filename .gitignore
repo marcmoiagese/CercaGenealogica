@@ -1,35 +1,25 @@
-/database.db
-/database.db-shm
-/database.db-wal
-/database.*
-/db/Index_llibres_Digitals.xlsx
-/db/Index_llibres_Digitals_arbeca.csv
+# Runtime/local database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+database.*
+
+# Local import/export/test data
+*.csv
+*.xls
 *.xlsx
-.codex/
-.vscode/
-/tests/README.md
-.gocache/
-coverage.out
-.gitignore
-.cache/
-.continue/
-plantilla-temporal/
 *.zip
-data/*
-.github/
 
-# Playwright / Node
-node_modules/
-test-results/
-playwright-report/
-blob-report/
+# Local environment files
+.env
+.env.*
+!.env.example
 
-# Playwright auth/session state
-tests/e2e/.auth/
-
-# Local Playwright generated files
-.playwright/
-.cache/ms-playwright/
-
-# Local backups
-*.bak
+# Local cache/temp
+.cache/
+cache/
+tmp/
+temp/
+data/

@@ -667,11 +667,10 @@ func (a *App) RunCSVTemplateImport(template *db.CSVImportTemplate, reader io.Rea
 
 		t := db.TranscripcioRaw{
 			LlibreID:       bookID,
-			ModeracioEstat: pickTemplateModerationStatus(model),
+			ModeracioEstat: "pendent",
 			CreatedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
 		}
 		applyBaseDefaults(&t, model.BaseDefaults)
-		t.ModeracioEstat = "pendent"
 		persones := map[string]*db.TranscripcioPersonaRaw{}
 		atributs := map[string]*db.TranscripcioAtributRaw{}
 		mappedValues := map[string]string{}
@@ -1506,9 +1505,6 @@ func (a *App) prepareBookLookups(model *templateImportModel, ctx importContext, 
 		filter.ArxiuID = ctx.ArxiuID
 	}
 	shouldLoadScoped := filter.MunicipiID != 0 || filter.ArxiuID != 0 || model.ScopeFilters || len(model.ContextFilters) > 0 || model.BookMode == "cronologia_lookup"
-	if model.BookMode == "v2_lookup" && (filter.MunicipiID != 0 || filter.ArxiuID != 0) {
-		shouldLoadScoped = true
-	}
 	if shouldLoadScoped {
 		llibres, _ := a.DB.ListLlibres(filter)
 		for _, l := range llibres {
@@ -1550,11 +1546,21 @@ func resolveTemplateBookID(model *templateImportModel, rowCtx templateRowContext
 			return 0, bookInfo{}, &templateBookResolveError{Code: "book_not_found", FieldsM: map[string]string{"fixed_book_id": strconv.Itoa(state.fixedBookID)}}
 		}
 		if model.BookMode == "llibre_id" && model.BookColumn != "" {
-			val := rowCtx.HeaderValue(normalizeCSVHeader(model.BookColumn))
-			if val != "" {
-				if id, err := strconv.Atoi(val); err == nil && id != state.fixedBookID {
-					return 0, bookInfo{}, &templateBookResolveError{Code: "book_id_mismatch", FieldsM: map[string]string{"fixed_book_id": strconv.Itoa(state.fixedBookID), "row_book_id": val}}
-				}
+			column := normalizeCSVHeader(model.BookColumn)
+			val, ok := rowCtx.LookupHeaderValue(column)
+			if !ok {
+				return 0, bookInfo{}, &templateBookResolveError{Code: "book_resolution_missing_column", FieldsM: map[string]string{"column": model.BookColumn}}
+			}
+			val = strings.TrimSpace(val)
+			if val == "" {
+				return 0, bookInfo{}, &templateBookResolveError{Code: "book_resolution_missing_value", FieldsM: map[string]string{"column": model.BookColumn}}
+			}
+			id, err := strconv.Atoi(val)
+			if err != nil || id <= 0 {
+				return 0, bookInfo{}, &templateBookResolveError{Code: "book_id_invalid", FieldsM: map[string]string{"column": model.BookColumn, "value": val, "llibre_id": val, "fixed_book_id": strconv.Itoa(state.fixedBookID)}}
+			}
+			if id != state.fixedBookID {
+				return 0, bookInfo{}, &templateBookResolveError{Code: "book_id_mismatch", FieldsM: map[string]string{"column": model.BookColumn, "value": val, "fixed_book_id": strconv.Itoa(state.fixedBookID), "llibre_id": val}}
 			}
 		}
 		return state.fixedBookID, info, nil
@@ -1565,19 +1571,26 @@ func resolveTemplateBookID(model *templateImportModel, rowCtx templateRowContext
 	case "v2_lookup":
 		return state.resolveByV2(rowCtx)
 	default:
-		raw := rowCtx.HeaderValue(normalizeCSVHeader(model.BookColumn))
-		id, err := strconv.Atoi(raw)
-		if err != nil || id == 0 {
+		column := normalizeCSVHeader(model.BookColumn)
+		raw, ok := rowCtx.LookupHeaderValue(column)
+		if !ok {
 			return 0, bookInfo{}, &templateBookResolveError{Code: "book_resolution_missing_column", FieldsM: map[string]string{"column": model.BookColumn}}
+		}
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			return 0, bookInfo{}, &templateBookResolveError{Code: "book_resolution_missing_value", FieldsM: map[string]string{"column": model.BookColumn}}
+		}
+		id, err := strconv.Atoi(raw)
+		if err != nil || id <= 0 {
+			return 0, bookInfo{}, &templateBookResolveError{Code: "book_id_invalid", FieldsM: map[string]string{"column": model.BookColumn, "value": raw, "llibre_id": raw}}
 		}
 		info, ok := state.byID[id]
 		if !ok {
-			llibre, getErr := state.app.DB.GetLlibre(id)
-			if getErr != nil || llibre == nil {
+			var found bool
+			info, found = state.loadBookInfo(id)
+			if !found {
 				return 0, bookInfo{}, &templateBookResolveError{Code: "book_not_found", FieldsM: map[string]string{"book_id": strconv.Itoa(id)}}
 			}
-			info = bookInfo{ID: llibre.ID, Indexed: llibre.IndexacioCompleta}
-			state.byID[id] = info
 		}
 		return id, info, nil
 	}
@@ -1762,11 +1775,11 @@ func (s *templateBookLookupState) resolveByChronologyWithContext(rowCtx template
 	if archive == nil {
 		return 0, bookInfo{}, nil, false
 	}
-	if err := s.validateMunicipalityContext(); err != nil {
+	if err := s.validateMunicipalityContext(rowCtx); err != nil {
 		return 0, bookInfo{}, err, true
 	}
 	id, info, err := s.resolveScopedCandidates(rowCtx, raw, func(item templateScopedBook) bool {
-		if item.Row.MunicipiID != s.ctx.MunicipiID {
+		if !s.matchesMunicipality(item.Row) {
 			return false
 		}
 		if s.normalizeChronology(item.Row.Cronologia) != s.normalizeChronology(raw) {
@@ -1787,11 +1800,11 @@ func (s *templateBookLookupState) resolveByMetadata(rowCtx templateRowContext) (
 	if archiveErr != nil {
 		return 0, bookInfo{}, archiveErr, true
 	}
-	if err := s.validateMunicipalityContext(); err != nil {
+	if err := s.validateMunicipalityContext(rowCtx); err != nil {
 		return 0, bookInfo{}, err, true
 	}
 	id, info, err := s.resolveScopedCandidates(rowCtx, title, func(item templateScopedBook) bool {
-		if item.Row.MunicipiID != s.ctx.MunicipiID {
+		if !s.matchesMunicipality(item.Row) {
 			return false
 		}
 		if !strings.EqualFold(strings.TrimSpace(item.Row.TipusLlibre), bookType) {
@@ -1819,11 +1832,11 @@ func (s *templateBookLookupState) resolveByChurchChronology(rowCtx templateRowCo
 	if archiveErr != nil {
 		return 0, bookInfo{}, archiveErr, true
 	}
-	if err := s.validateMunicipalityContext(); err != nil {
+	if err := s.validateMunicipalityContext(rowCtx); err != nil {
 		return 0, bookInfo{}, err, true
 	}
 	id, info, err := s.resolveScopedCandidates(rowCtx, chronology, func(item templateScopedBook) bool {
-		if item.Row.MunicipiID != s.ctx.MunicipiID {
+		if !s.matchesMunicipality(item.Row) {
 			return false
 		}
 		if !strings.EqualFold(strings.TrimSpace(item.Row.TipusLlibre), bookType) {
@@ -1848,11 +1861,11 @@ func (s *templateBookLookupState) resolveByMunicipalityChronology(rowCtx templat
 	if chronology == "" {
 		return 0, bookInfo{}, nil, false
 	}
-	if err := s.validateMunicipalityContext(); err != nil {
+	if err := s.validateMunicipalityContext(rowCtx); err != nil {
 		return 0, bookInfo{}, err, true
 	}
 	id, info, err := s.resolveScopedCandidates(rowCtx, chronology, func(item templateScopedBook) bool {
-		return item.Row.MunicipiID == s.ctx.MunicipiID && s.normalizeChronology(item.Row.Cronologia) == s.normalizeChronology(chronology)
+		return s.matchesMunicipality(item.Row) && s.normalizeChronology(item.Row.Cronologia) == s.normalizeChronology(chronology)
 	})
 	return id, info, err, true
 }
@@ -1906,7 +1919,11 @@ func (s *templateBookLookupState) resolveArchiveCandidates(arxiuID int, rowCtx t
 				candidateIDs[link.LlibreID] = info
 				continue
 			}
-			candidateIDs[link.LlibreID] = bookInfo{ID: link.LlibreID}
+			info, ok := s.loadBookInfo(link.LlibreID)
+			if !ok {
+				continue
+			}
+			candidateIDs[link.LlibreID] = info
 		}
 	}
 	fields := s.rowDebugFields(rowCtx)
@@ -1969,11 +1986,6 @@ func (s *templateBookLookupState) linksForArchive(arxiuID int) []db.ArxiuLlibreD
 	}
 	links, _ := s.app.DB.ListArxiuLlibres(arxiuID)
 	s.archiveLinks[arxiuID] = links
-	for _, link := range links {
-		if _, ok := s.byID[link.LlibreID]; !ok {
-			s.byID[link.LlibreID] = bookInfo{ID: link.LlibreID}
-		}
-	}
 	return links
 }
 
@@ -2004,9 +2016,43 @@ func (s *templateBookLookupState) bookHasArchive(item templateScopedBook, arxiuI
 	return false
 }
 
-func (s *templateBookLookupState) validateMunicipalityContext() *templateBookResolveError {
+func (s *templateBookLookupState) loadBookInfo(bookID int) (bookInfo, bool) {
+	if info, ok := s.byID[bookID]; ok && info.ID != 0 {
+		return info, true
+	}
+	if row := s.bookRow(bookID); row != nil {
+		info := bookInfo{ID: row.ID, Indexed: row.IndexacioCompleta}
+		s.byID[bookID] = info
+		return info, true
+	}
+	llibre, err := s.app.DB.GetLlibre(bookID)
+	if err != nil || llibre == nil {
+		return bookInfo{}, false
+	}
+	info := bookInfo{ID: llibre.ID, Indexed: llibre.IndexacioCompleta}
+	s.byID[bookID] = info
+	return info, true
+}
+
+func (s *templateBookLookupState) municipalityContextMode() string {
+	switch strings.TrimSpace(strings.ToLower(s.model.MunicipalityContext)) {
+	case "", "import_context":
+		return "import_context"
+	case "required":
+		return "required"
+	case "none":
+		return "none"
+	default:
+		return "import_context"
+	}
+}
+
+func (s *templateBookLookupState) validateMunicipalityContext(rowCtx templateRowContext) *templateBookResolveError {
+	if s.municipalityContextMode() == "none" {
+		return nil
+	}
 	if s.ctx.MunicipiID == 0 {
-		return &templateBookResolveError{Code: "municipality_context_missing"}
+		return &templateBookResolveError{Code: "municipality_context_missing", FieldsM: s.rowDebugFields(rowCtx)}
 	}
 	if s.municipalityOK {
 		return nil
@@ -2025,6 +2071,13 @@ func (s *templateBookLookupState) validateMunicipalityContext() *templateBookRes
 
 func (s *templateBookLookupState) resolveSourceSystem(rowCtx templateRowContext) string {
 	return strings.ToLower(strings.TrimSpace(firstNonEmpty(s.rowValue(rowCtx, s.model.BookSourceColumn), s.model.BookSourceSystem)))
+}
+
+func (s *templateBookLookupState) matchesMunicipality(book db.LlibreRow) bool {
+	if s.municipalityContextMode() == "none" {
+		return true
+	}
+	return book.MunicipiID == s.ctx.MunicipiID
 }
 
 func (s *templateBookLookupState) rowValue(rowCtx templateRowContext, column string) string {
@@ -3295,19 +3348,12 @@ func principalPersonHasName(persones map[string]*db.TranscripcioPersonaRaw, role
 	return false
 }
 
-func pickTemplateModerationStatus(model *templateImportModel) string {
-	return "pendent"
-}
-
 func applyBaseDefaults(t *db.TranscripcioRaw, defaults map[string]string) {
 	if t == nil || defaults == nil {
 		return
 	}
 	if v := defaults["tipus_acte"]; v != "" {
 		t.TipusActe = v
-	}
-	if v := defaults["moderation_status"]; v != "" {
-		t.ModeracioEstat = v
 	}
 	if v := defaults["data_acte_estat"]; v != "" {
 		t.DataActeEstat = v
