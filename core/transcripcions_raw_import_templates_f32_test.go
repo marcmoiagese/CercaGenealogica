@@ -1051,6 +1051,82 @@ func TestF354U9BookIDMismatchAndInvalidErrors(t *testing.T) {
 	}
 }
 
+func TestF354U9FixedBookIDAllowsMissingOrBlankBookColumn(t *testing.T) {
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f354u9_fixed_book_column_optional")
+	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U9 Fixed Optional Column")
+	bookID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "BOOK-FIXED-OPTIONAL", Chronology: "1852-1871", Title: "Book Fixed Optional", Published: true})
+
+	template := buildF354U9Template(t, `{
+  "mode": "llibre_id",
+  "column": "llibre_id"
+}`)
+
+	missingColumn := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"tipus_acte", "batejat"},
+		{"baptisme", "Joan Missing Column"},
+	})), ',', user.ID, importContext{}, bookID)
+	if missingColumn.Created != 1 || missingColumn.Failed != 0 {
+		t.Fatalf("fixedBookID hauria d'acceptar columna absent: %+v", missingColumn)
+	}
+
+	blankValue := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"llibre_id", "tipus_acte", "batejat"},
+		{"   ", "baptisme", "Joan Blank Value"},
+	})), ',', user.ID, importContext{}, bookID)
+	if blankValue.Created != 1 || blankValue.Failed != 0 {
+		t.Fatalf("fixedBookID hauria d'acceptar valor buit: %+v", blankValue)
+	}
+
+	registres, err := database.ListTranscripcionsRaw(bookID, db.TranscripcioFilter{Limit: -1})
+	if err != nil {
+		t.Fatalf("ListTranscripcionsRaw inesperat: %v", err)
+	}
+	if len(registres) != 2 {
+		t.Fatalf("s'esperaven 2 registres importats amb fixedBookID, got=%d", len(registres))
+	}
+}
+
+func TestF354U9BookIDRequiresColumnAndValueWithoutFixedBookID(t *testing.T) {
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f354u9_book_id_requires_column")
+	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U9 Strict Book Column")
+	_ = createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "BOOK-STRICT", Chronology: "1852-1871", Title: "Book Strict", Published: true})
+
+	template := buildF354U9Template(t, `{
+  "mode": "llibre_id",
+  "column": "llibre_id"
+}`)
+
+	missingColumn := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"tipus_acte", "batejat"},
+		{"baptisme", "Joan Missing Column"},
+	})), ',', user.ID, importContext{}, 0)
+	if missingColumn.Created != 0 || missingColumn.Failed != 1 {
+		t.Fatalf("sense fixedBookID hauria de fallar si falta la columna: %+v", missingColumn)
+	}
+	if len(missingColumn.Errors) == 0 || missingColumn.Errors[0].Reason != "book_resolution_missing_column" {
+		t.Fatalf("reason columna absent inesperat: %+v", missingColumn.Errors)
+	}
+	if missingColumn.Errors[0].Fields["column"] != "llibre_id" {
+		t.Fatalf("fields columna absent incomplets: %+v", missingColumn.Errors[0].Fields)
+	}
+
+	blankValue := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"llibre_id", "tipus_acte", "batejat"},
+		{"   ", "baptisme", "Joan Blank Value"},
+	})), ',', user.ID, importContext{}, 0)
+	if blankValue.Created != 0 || blankValue.Failed != 1 {
+		t.Fatalf("sense fixedBookID hauria de fallar si el valor es buit: %+v", blankValue)
+	}
+	if len(blankValue.Errors) == 0 || blankValue.Errors[0].Reason != "book_resolution_missing_value" {
+		t.Fatalf("reason valor buit inesperat: %+v", blankValue.Errors)
+	}
+	if blankValue.Errors[0].Fields["column"] != "llibre_id" {
+		t.Fatalf("fields valor buit incomplets: %+v", blankValue.Errors[0].Fields)
+	}
+}
+
 func TestF354U9TemplateValidationRejectsUnknownMunicipalityContext(t *testing.T) {
 	app, _ := newModeracioBulkDiagnosticsApp(t)
 	user := createModeracioBulkDiagnosticsUser(t, app.DB, "f354u9_invalid_muni_context")

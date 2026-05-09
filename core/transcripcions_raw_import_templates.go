@@ -1548,19 +1548,17 @@ func resolveTemplateBookID(model *templateImportModel, rowCtx templateRowContext
 		if model.BookMode == "llibre_id" && model.BookColumn != "" {
 			column := normalizeCSVHeader(model.BookColumn)
 			val, ok := rowCtx.LookupHeaderValue(column)
-			if !ok {
-				return 0, bookInfo{}, &templateBookResolveError{Code: "book_resolution_missing_column", FieldsM: map[string]string{"column": model.BookColumn}}
+			if ok {
+				val = strings.TrimSpace(val)
 			}
-			val = strings.TrimSpace(val)
-			if val == "" {
-				return 0, bookInfo{}, &templateBookResolveError{Code: "book_resolution_missing_value", FieldsM: map[string]string{"column": model.BookColumn}}
-			}
-			id, err := strconv.Atoi(val)
-			if err != nil || id <= 0 {
-				return 0, bookInfo{}, &templateBookResolveError{Code: "book_id_invalid", FieldsM: map[string]string{"column": model.BookColumn, "value": val, "llibre_id": val, "fixed_book_id": strconv.Itoa(state.fixedBookID)}}
-			}
-			if id != state.fixedBookID {
-				return 0, bookInfo{}, &templateBookResolveError{Code: "book_id_mismatch", FieldsM: map[string]string{"column": model.BookColumn, "value": val, "fixed_book_id": strconv.Itoa(state.fixedBookID), "llibre_id": val}}
+			if ok && val != "" {
+				id, err := strconv.Atoi(val)
+				if err != nil || id <= 0 {
+					return 0, bookInfo{}, &templateBookResolveError{Code: "book_id_invalid", FieldsM: map[string]string{"column": model.BookColumn, "value": val, "llibre_id": val, "fixed_book_id": strconv.Itoa(state.fixedBookID)}}
+				}
+				if id != state.fixedBookID {
+					return 0, bookInfo{}, &templateBookResolveError{Code: "book_id_mismatch", FieldsM: map[string]string{"column": model.BookColumn, "value": val, "fixed_book_id": strconv.Itoa(state.fixedBookID), "llibre_id": val}}
+				}
 			}
 		}
 		return state.fixedBookID, info, nil
@@ -2043,7 +2041,7 @@ func (s *templateBookLookupState) municipalityContextMode() string {
 	case "none":
 		return "none"
 	default:
-		return "import_context"
+		return "invalid"
 	}
 }
 
