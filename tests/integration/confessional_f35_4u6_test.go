@@ -778,6 +778,15 @@ func TestF354U6ManualArchiveRelationCreateUsesEntitatReligiosaAndStaysPending(t 
 	if strings.Contains(newBody, "Arquebisbat Legacy No Selector F35-4U6") {
 		t.Fatalf("el selector nou no ha de reutilitzar arquebisbats legacy, body=%s", newBody)
 	}
+	for _, token := range []string{
+		`class="menu-lateral"`,
+		`/documentals/arxius`,
+		`/confessional/entitats`,
+	} {
+		if !strings.Contains(newBody, token) {
+			t.Fatalf("el formulari documental ha de renderitzar el shell privat complet i el menu no pot quedar buit: falta %q body=%s", token, newBody)
+		}
+	}
 
 	form := url.Values{}
 	form.Set("arxiu_id", strconv.Itoa(arxiuID))

@@ -293,22 +293,23 @@ func (a *App) renderArxiuEntitatReligiosaForm(w http.ResponseWriter, r *http.Req
 		arxiuLabels[arxiu.ID] = arxiu.Nom
 	}
 	entitatOptionLabels := arxiuEntitatReligiosaEntitatOptionLabels(entitats, religionLabels, levelLabels)
-	RenderPrivateTemplate(w, r, "admin-arxiu-entitat-religiosa-form.html", arxiuEntitatReligiosaFormData{
-		Relacio:                rel,
-		Arxius:                 arxius,
-		Entitats:               entitats,
-		RelacioTypes:           arxiuEntitatReligiosaTypes,
-		ReligionCatalogLabels:  religionLabels,
-		LevelCatalogLabels:     levelLabels,
-		ArxiuLabels:            arxiuLabels,
-		EntitatOptionLabels:    entitatOptionLabels,
-		TypeLabels:             arxiuEntitatReligiosaTypeLabels(lang),
-		Error:                  errMsg,
-		ReturnURL:              returnURL,
-		IsNew:                  isNew,
-		FromArxiuID:            fromArxiuID,
-		FromEntitatReligiosaID: fromEntitatID,
-		User:                   user,
+	RenderPrivateTemplate(w, r, "admin-arxiu-entitat-religiosa-form.html", map[string]interface{}{
+		"Relacio":                rel,
+		"Arxius":                 arxius,
+		"Entitats":               entitats,
+		"RelacioTypes":           arxiuEntitatReligiosaTypes,
+		"ReligionCatalogLabels":  religionLabels,
+		"LevelCatalogLabels":     levelLabels,
+		"ArxiuLabels":            arxiuLabels,
+		"EntitatOptionLabels":    entitatOptionLabels,
+		"TypeLabels":             arxiuEntitatReligiosaTypeLabels(lang),
+		"Error":                  errMsg,
+		"ReturnURL":              returnURL,
+		"IsNew":                  isNew,
+		"FromArxiuID":            fromArxiuID,
+		"FromEntitatReligiosaID": fromEntitatID,
+		"CanManageArxius":        a.canManageAnyDocumentalsModular(user),
+		"User":                   user,
 	})
 }
 

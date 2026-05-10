@@ -16,6 +16,8 @@
     let parentSuggestionsController = null;
     let parentSuggestionsRequestID = 0;
     let parentCompatibilityMessage = "";
+    let parentSearchHasResults = false;
+    let parentSearchConfirmedEmpty = false;
 
     function selectedLevelOption() {
       if (level.selectedOptions.length === 0 || level.selectedOptions[0].disabled) {
@@ -150,9 +152,14 @@
         return;
       }
       const selectedLevel = selectedLevelOption();
+      const parentLevelCodes = selectedLevel ? selectedLevel.dataset.parentLevelCodes || "" : "";
       if (!religion.value || !selectedLevel) {
         help.textContent = help.dataset.empty || "";
-      } else if (!selectedLevel.dataset.parentLevelCodes) {
+      } else if (parentLevelCodes === "") {
+        help.textContent = help.dataset.none || "";
+      } else if (parentSearchHasResults) {
+        help.textContent = "";
+      } else if (parentSearchConfirmedEmpty) {
         help.textContent = help.dataset.none || "";
       } else {
         help.textContent = "";
@@ -210,6 +217,10 @@
         return null;
       }
       const url = new URL(apiAttr, window.location.origin);
+      const parentLevelCodes = selectedLevel.dataset.parentLevelCodes || "";
+      if (parentLevelCodes === "") {
+        return null;
+      }
       url.searchParams.set("q", query);
       url.searchParams.set("limit", "10");
       url.searchParams.set("religio_confessio_codi", religion.value);
@@ -226,6 +237,8 @@
         return;
       }
       renderParentSuggestions(data.items || []);
+      parentSearchHasResults = Array.isArray(data.items) && data.items.length > 0;
+      parentSearchConfirmedEmpty = Array.isArray(data.items) && data.items.length === 0;
       syncParentHelp();
     }
 
@@ -236,6 +249,7 @@
       if (err && err.name === "AbortError") {
         return;
       }
+      parentSearchHasResults = false;
       clearParentSuggestions();
     }
 
@@ -246,6 +260,8 @@
       const url = buildParentSuggestURL(query);
       if (!url) {
         abortParentSuggestions();
+        parentSearchHasResults = false;
+        parentSearchConfirmedEmpty = false;
         clearParentSuggestions();
         syncParentHelp();
         return;
@@ -300,6 +316,8 @@
       if (resetParent && parent && parentLabel) {
         abortParentSuggestions();
         parentCompatibilityMessage = "";
+        parentSearchHasResults = false;
+        parentSearchConfirmedEmpty = false;
         clearSelectedParent();
         clearParentSuggestions();
       }
@@ -311,6 +329,8 @@
         parentCompatibilityMessage = "";
         parent.value = "";
         resetSelectedParentMetadata();
+        parentSearchHasResults = false;
+        parentSearchConfirmedEmpty = false;
         if (parentLabel.value.trim().length < 1) {
           abortParentSuggestions();
           clearParentSuggestions();
@@ -337,6 +357,7 @@
           applyParentSuggestion(lastParentItems[activeParentIndex >= 0 ? activeParentIndex : 0]);
         } else if (event.key === "Escape") {
           abortParentSuggestions();
+          parentSearchHasResults = false;
           clearParentSuggestions();
         }
       });
@@ -345,6 +366,7 @@
           return;
         }
         abortParentSuggestions();
+        parentSearchHasResults = false;
         clearParentSuggestions();
       });
     }
@@ -379,6 +401,8 @@
     });
     level.addEventListener("change", function () {
       abortParentSuggestions();
+      parentSearchHasResults = false;
+      parentSearchConfirmedEmpty = false;
       clearParentSuggestions();
       syncSelectedParentCompatibility();
     });

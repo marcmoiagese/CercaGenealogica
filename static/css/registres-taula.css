@@ -268,9 +268,16 @@
 .confessional-suggestions {
     border-color: #cfe0ea;
     box-shadow: 0 12px 28px rgba(15, 63, 87, 0.16);
+    list-style: none;
+    margin: 0.25rem 0 0;
+    padding: 0;
+    position: relative;
+    z-index: 20;
 }
 
 .confessional-suggestions li {
+    list-style: none;
+    margin: 0;
     padding: 0;
 }
 
@@ -281,6 +288,8 @@
 }
 
 .confessional-suggestions .suggestion-option {
+    appearance: none;
+    -webkit-appearance: none;
     width: 100%;
     border: none;
     background: transparent;

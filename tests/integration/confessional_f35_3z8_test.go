@@ -140,6 +140,26 @@ func TestF353Z8ParentSelectorFiltersCompatiblePublishedParents(t *testing.T) {
 	_ = pendingID
 }
 
+func TestF353Z8NewChildPrefillsSelectedParent(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_3z8_new_child_parent.sqlite3")
+	session := f353YAdminSession(t, database, "z8_new_child_parent")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	parentID := f353Z8SaveEntity(t, database, "z8_new_child_parent_"+suffix, "Arquebisbat pare F35-3Z8 "+suffix, "arquebisbat_arxidiocesi", "publicat")
+
+	body := f353YGet(t, app.AdminNewConfessional, "/confessional/entitats/new?parent_id="+strconv.Itoa(parentID), session)
+	for _, token := range []string{
+		`id="confessional_entity_parent_id" name="parent_id" type="hidden" value="` + strconv.Itoa(parentID) + `"`,
+		`id="parent_id_label" type="text" value="Arquebisbat pare F35-3Z8 ` + suffix,
+		`data-selected-parent-level-code="arquebisbat_arxidiocesi"`,
+		`data-selected-parent-religion-code="catolicisme_ritu_llati"`,
+	} {
+		if !strings.Contains(body, token) {
+			t.Fatalf("l'alta de filla ha de conservar i mostrar el pare seleccionat; falta %q body=%s", token, body)
+		}
+	}
+}
+
 func TestF353Z8EntityListFiltersPublishedHierarchySafely(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f35_3z8_list.sqlite3")
 	session := f353YAdminSession(t, database, "z8_list")
@@ -225,9 +245,25 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 		`syncSelectedParentCompatibility`,
 		`selectedParentCompatibilityState`,
 		`storeSelectedParentMetadata`,
+		`parentSearchHasResults`,
+		`parentSearchConfirmedEmpty`,
+		`parentLevelCodes === ""`,
 	} {
 		if !strings.Contains(staticBody, token) {
 			t.Fatalf("falta sincronitzacio JS F35-3Z8: %s", token)
+		}
+	}
+	if !strings.Contains(staticBody, `parentSearchHasResults`) || !strings.Contains(staticBody, `help.textContent = "";`) {
+		t.Fatalf("el JS no ha de mostrar ajuda contradictoria quan hi ha suggeriments oberts amb resultats")
+	}
+	for _, token := range []string{
+		`.confessional-suggestions {`,
+		`list-style: none;`,
+		`.confessional-suggestions .suggestion-option`,
+		`appearance: none;`,
+	} {
+		if !strings.Contains(readProjectFileF353U(t, root, "static/css/registres-taula.css"), token) {
+			t.Fatalf("falta contracte CSS autocomplete F35-4U11D-R2: %s", token)
 		}
 	}
 	if strings.Contains(formBody, "<script>\n") || strings.Contains(formBody, "onclick=") || strings.Contains(formBody, "onchange=") || strings.Contains(listBody, "<style>") || strings.Contains(navBody, "<style>") {
