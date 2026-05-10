@@ -1110,6 +1110,9 @@ func filterConfessionalEntitats(all []db.EntitatReligiosa, rels []db.EntitatReli
 	}
 	filter.Total = len(out)
 	filter.TotalPages = 1
+	if filter.PerPage <= 0 {
+		filter.PerPage = parseListPerPage("")
+	}
 	if filter.PerPage > 0 {
 		filter.TotalPages = (filter.Total + filter.PerPage - 1) / filter.PerPage
 		if filter.TotalPages == 0 {
@@ -1201,11 +1204,17 @@ func filterConfessionalHierarchyRows(all []db.EntitatReligiosa, rels []db.Entita
 	sortConfessionalHierarchyRows(rows, filter)
 	filter.Total = len(rows)
 	filter.TotalPages = 1
+	if filter.PerPage <= 0 {
+		filter.PerPage = parseListPerPage("")
+	}
 	if filter.PerPage > 0 {
 		filter.TotalPages = (filter.Total + filter.PerPage - 1) / filter.PerPage
 		if filter.TotalPages == 0 {
 			filter.TotalPages = 1
 		}
+	}
+	if filter.Page <= 0 {
+		filter.Page = 1
 	}
 	if filter.Page > filter.TotalPages {
 		filter.Page = filter.TotalPages

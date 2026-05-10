@@ -34,6 +34,10 @@
     }
 
     function abortParentSuggestions() {
+      if (parentTimer !== null) {
+        window.clearTimeout(parentTimer);
+        parentTimer = null;
+      }
       if (parentSuggestionsController) {
         parentSuggestionsController.abort();
         parentSuggestionsController = null;
