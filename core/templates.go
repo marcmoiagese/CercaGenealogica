@@ -322,6 +322,15 @@ func injectCSRFToken(data interface{}, token string) interface{} {
 	return data
 }
 
+func boolTemplateFlag(m map[string]interface{}, key string) bool {
+	v, ok := m[key]
+	if !ok {
+		return false
+	}
+	b, ok := v.(bool)
+	return ok && b
+}
+
 // injectUserIfMissing intenta inserir l'usuari obtingut del context (RequireLogin/requirePermission)
 // quan el handler no l'ha passat explícitament al mapa de dades. Només actua sobre map[string]interface{}.
 func injectUserIfMissing(r *http.Request, data interface{}) interface{} {
@@ -654,15 +663,15 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 		m["CanViewConfessionalDiagnostic"] = effectiveAdmin || hasModularConfessionalDiagnosticViewKey(hasKey)
 	}
 	if _, found := m["ShowLegacyEclesMenu"]; !found {
-		hasLegacyEcles := m["CanViewEcles"].(bool) || m["CanManageEclesia"].(bool)
-		hasConfessional := m["CanViewConfessionalEntitats"].(bool) ||
-			m["CanViewConfessionalRelacionsEntitats"].(bool) ||
-			m["CanViewConfessionalMunicipisEntitats"].(bool) ||
-			m["CanViewConfessionalDiagnostic"].(bool)
+		hasLegacyEcles := boolTemplateFlag(m, "CanViewEcles") || boolTemplateFlag(m, "CanManageEclesia")
+		hasConfessional := boolTemplateFlag(m, "CanViewConfessionalEntitats") ||
+			boolTemplateFlag(m, "CanViewConfessionalRelacionsEntitats") ||
+			boolTemplateFlag(m, "CanViewConfessionalMunicipisEntitats") ||
+			boolTemplateFlag(m, "CanViewConfessionalDiagnostic")
 		m["ShowLegacyEclesMenu"] = hasLegacyEcles && !hasConfessional
 	}
 	if _, found := m["CanViewTerritory"]; !found {
-		m["CanViewTerritory"] = m["CanViewNivells"].(bool) || m["CanViewMunicipis"].(bool) || m["CanViewEcles"].(bool)
+		m["CanViewTerritory"] = boolTemplateFlag(m, "CanViewNivells") || boolTemplateFlag(m, "CanViewMunicipis") || boolTemplateFlag(m, "CanViewEcles")
 	}
 	if _, found := m["UnreadMessagesCount"]; !found {
 		if count, ok := unreadMessagesCountFromContext(r); ok {

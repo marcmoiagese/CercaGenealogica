@@ -17,6 +17,16 @@ import (
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
+func mustReadProjectFileF354U7(t *testing.T, root string, parts ...string) string {
+	t.Helper()
+	path := filepath.Clean(filepath.Join(append([]string{root}, parts...)...))
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile %s: %v", path, err)
+	}
+	return string(body)
+}
+
 func TestF354U7CreateLlibreV2WithoutEntityUsesArchiveMunicipalityBase(t *testing.T) {
 	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u7_create.sqlite3")
 	_, municipiID := seedF354U7BookTerritory(t, database, "Create")
@@ -42,24 +52,28 @@ func TestF354U7CreateLlibreV2WithoutEntityUsesArchiveMunicipalityBase(t *testing
 		t.Fatalf("AdminSaveLlibre status=%d body=%s", rr.Code, rr.Body.String())
 	}
 
-	rows, err := database.Query("SELECT id, arquevisbat_id, moderation_status, codi, source_system, external_id, external_code FROM llibres WHERE codi = ?", "f35_4u7_book_create")
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("no s'ha pogut llegir el llibre creat: err=%v rows=%d", err, len(rows))
+	createdBook, err := database.ResolveLlibreByStableRef(db.LlibreStableRef{Codi: "f35_4u7_book_create"})
+	if err != nil || createdBook == nil {
+		t.Fatalf("ResolveLlibreByStableRef llibre creat: err=%v llibre=%v", err, createdBook)
 	}
-	llibreID := parseCountValue(t, rows[0]["id"])
-	if got := strings.TrimSpace(asString(rows[0]["arquevisbat_id"])); got != "" && got != "0" {
+	llibreID := createdBook.ID
+	llibre, err := database.GetLlibre(llibreID)
+	if err != nil || llibre == nil {
+		t.Fatalf("GetLlibre creat: err=%v llibre=%v", err, llibre)
+	}
+	if got := strings.TrimSpace(strconv.Itoa(llibre.ArquebisbatID)); got != "" && got != "0" {
 		t.Fatalf("el llibre v2 sense entitat no ha de forçar arquevisbat_id, got %q", got)
 	}
-	if got := strings.TrimSpace(asString(rows[0]["moderation_status"])); got != "pendent" {
+	if got := strings.TrimSpace(llibre.ModeracioEstat); got != "pendent" {
 		t.Fatalf("el llibre v2 nou ha d'entrar pendent, got %q", got)
 	}
-	if got := strings.TrimSpace(asString(rows[0]["source_system"])); got != "ahat" {
+	if got := strings.TrimSpace(llibre.SourceSystem); got != "ahat" {
 		t.Fatalf("source_system inesperat: %q", got)
 	}
-	if got := strings.TrimSpace(asString(rows[0]["external_id"])); got != "EXT-BOOK-001" {
+	if got := strings.TrimSpace(llibre.ExternalID); got != "EXT-BOOK-001" {
 		t.Fatalf("external_id inesperat: %q", got)
 	}
-	if got := strings.TrimSpace(asString(rows[0]["external_code"])); got != "BOOK-001" {
+	if got := strings.TrimSpace(llibre.ExternalCode); got != "BOOK-001" {
 		t.Fatalf("external_code inesperat: %q", got)
 	}
 	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxius_llibres WHERE llibre_id = ? AND arxiu_id = ?", llibreID, arxiuID); got != 1 {
@@ -376,22 +390,55 @@ func TestF354U11AR1BookUpdateIgnoresTamperedLegacyEntityID(t *testing.T) {
 		t.Fatalf("AdminSaveLlibre tamper status=%d body=%s", rr.Code, rr.Body.String())
 	}
 
-	rows, err := database.Query("SELECT arquevisbat_id FROM llibres WHERE id = ?", llibreID)
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("Query llibre tamper: err=%v rows=%d", err, len(rows))
+	llibre, err := database.GetLlibre(llibreID)
+	if err != nil || llibre == nil {
+		t.Fatalf("GetLlibre tamper: err=%v llibre=%v", err, llibre)
 	}
-	if got := parseCountValue(t, rows[0]["arquevisbat_id"]); got != originalLegacyID {
+	if got := llibre.ArquebisbatID; got != originalLegacyID {
 		t.Fatalf("el backend ha d'ignorar el tampering d'arquevisbat_id, got=%d want=%d", got, originalLegacyID)
+	}
+}
+
+func TestF354U11AR2BookUpdateClearsLegacyArquebisbatForCivilType(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u11ar2_book_civil_legacy.sqlite3")
+	paisID, municipiID := seedF354U7BookTerritory(t, database, "CivilLegacy")
+	legacyID := createF354U7LegacyEntity(t, database, paisID, "Bisbat Legacy Civil F35-4U11A-R2")
+	tamperedLegacyID := createF354U7LegacyEntity(t, database, paisID, "Bisbat Legacy Civil Tampered F35-4U11A-R2")
+	arxiuID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u11ar2_archive", "Arxiu Civil F35-4U11A-R2", 0)
+	llibreID := createF354U7Book(t, database, admin.ID, municipiID, legacyID, "f35_4u11ar2_book", "Llibre Civil F35-4U11A-R2")
+
+	form := url.Values{}
+	form.Set("id", strconv.Itoa(llibreID))
+	form.Set("arxiu_id", strconv.Itoa(arxiuID))
+	form.Set("municipi_id", strconv.Itoa(municipiID))
+	form.Set("arquevisbat_id", strconv.Itoa(tamperedLegacyID))
+	form.Set("titol", "Llibre Civil F35-4U11A-R2")
+	form.Set("tipus_llibre", "padrons")
+	form.Set("codi", "f35_4u11ar2_book")
+	req := httptest.NewRequest(http.MethodPost, "/documentals/llibres/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminSaveLlibre(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("AdminSaveLlibre civil status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	llibre, err := database.GetLlibre(llibreID)
+	if err != nil || llibre == nil {
+		t.Fatalf("GetLlibre civil: err=%v llibre=%v", err, llibre)
+	}
+	if got := llibre.ArquebisbatID; got != 0 {
+		t.Fatalf("un llibre civil ha de netejar arquevisbat_id legacy, got=%d", got)
+	}
+	if got := strings.TrimSpace(llibre.TipusLlibre); got != "padrons" {
+		t.Fatalf("tipus_llibre inesperat després del canvi civil: %q", got)
 	}
 }
 
 func TestF354U11AR1BooksListTemplateKeepsSequentialColumnsAndAccessibleFilters(t *testing.T) {
 	root := findProjectRoot(t)
-	body, err := os.ReadFile(filepath.Join(root, "templates", "admin-llibres-list.html"))
-	if err != nil {
-		t.Fatalf("ReadFile admin-llibres-list.html: %v", err)
-	}
-	src := string(body)
+	src := mustReadProjectFileF354U7(t, root, "templates", "admin-llibres-list.html")
 	for _, token := range []string{
 		`id="llibres-filter-titol"`,
 		`id="llibres-filter-municipi"`,

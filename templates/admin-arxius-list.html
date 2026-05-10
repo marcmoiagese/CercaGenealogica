@@ -139,6 +139,7 @@
                                     {{ if and $canEdit $canDelete }} | {{ end }}
                                     {{ if $canDelete }}
                                     <form method="post" action="{{ $manageBase }}/{{ .ID }}/delete" class="inline-form" data-confirm-message="{{ t $.Lang "archives.confirm.delete" }}">
+                                        <input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}">
                                         <button type="submit" class="enllaç">{{ t $.Lang "archives.action.delete" }}</button>
                                     </form>
                                     {{ end }}

@@ -20,6 +20,51 @@ import (
 	"github.com/marcmoiagese/CercaGenealogica/db"
 )
 
+func mustReadProjectFileF354U6(t *testing.T, root string, parts ...string) string {
+	t.Helper()
+	path := filepath.Clean(filepath.Join(append([]string{root}, parts...)...))
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile %s: %v", path, err)
+	}
+	return string(body)
+}
+
+func findSingleArxiuF354U6(t *testing.T, database db.DB, filter db.ArxiuFilter) db.ArxiuWithCount {
+	t.Helper()
+	rows, err := database.ListArxius(filter)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("ListArxius %+v: err=%v rows=%d", filter, err, len(rows))
+	}
+	return rows[0]
+}
+
+func resolveSingleArxiuByCodeF354U6(t *testing.T, database db.DB, code string) *db.Arxiu {
+	t.Helper()
+	rows, err := database.ResolveArxiusByCodes([]string{code})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("ResolveArxiusByCodes %q: err=%v rows=%d", code, err, len(rows))
+	}
+	arxiu, err := database.GetArxiu(rows[0].ID)
+	if err != nil || arxiu == nil {
+		t.Fatalf("GetArxiu %d by code %q: err=%v arxiu=%v", rows[0].ID, code, err, arxiu)
+	}
+	return arxiu
+}
+
+func latestAdminJobF354U6(t *testing.T, database db.DB, kind string) *db.AdminJob {
+	t.Helper()
+	rows, err := database.ListAdminJobs(db.AdminJobFilter{Kind: kind, Limit: 1})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("ListAdminJobs kind=%s: err=%v rows=%d", kind, err, len(rows))
+	}
+	job, err := database.GetAdminJob(rows[0].ID)
+	if err != nil || job == nil {
+		t.Fatalf("GetAdminJob %d: err=%v job=%v", rows[0].ID, err, job)
+	}
+	return job
+}
+
 func TestF354U6ArxiusV2ImportCreatesPendingArchiveWithoutReligiousRelation(t *testing.T) {
 	app, database, admin, session := setupF354U6ArxiusAdmin(t, "test_f35_4u6_import_no_relation.sqlite3")
 	_, municipiID, _ := seedF354U6ArxiuTerritory(t, database)
@@ -54,20 +99,21 @@ func TestF354U6ArxiusV2ImportCreatesPendingArchiveWithoutReligiousRelation(t *te
 		t.Fatalf("redirect import v2 sense relacio sense resum esperat: %s", location)
 	}
 
-	rows, err := database.Query("SELECT id, codi, municipi_id, moderation_status, moderated_by, moderated_at FROM arxius WHERE nom = ?", "Arxiu F35-4U6 Sense Relacio")
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("no s'ha pogut llegir l'arxiu v2 creat: err=%v rows=%d", err, len(rows))
+	arxiuRow := findSingleArxiuF354U6(t, database, db.ArxiuFilter{Text: "Arxiu F35-4U6 Sense Relacio", Limit: 1})
+	arxiu, err := database.GetArxiu(arxiuRow.ID)
+	if err != nil || arxiu == nil {
+		t.Fatalf("GetArxiu import v2 sense relacio: err=%v arxiu=%v", err, arxiu)
 	}
-	if got := strings.TrimSpace(asString(rows[0]["codi"])); got != "f35_4u6_arxiu_sense_relacio" {
+	if got := strings.TrimSpace(arxiu.Codi); got != "f35_4u6_arxiu_sense_relacio" {
 		t.Fatalf("codi estable inesperat: %q", got)
 	}
-	if got := parseCountValue(t, rows[0]["municipi_id"]); got != municipiID {
-		t.Fatalf("municipi_id inesperat: got=%d want=%d", got, municipiID)
+	if !arxiu.MunicipiID.Valid || int(arxiu.MunicipiID.Int64) != municipiID {
+		t.Fatalf("municipi_id inesperat: got=%d want=%d", arxiu.MunicipiID.Int64, municipiID)
 	}
-	if got := strings.TrimSpace(asString(rows[0]["moderation_status"])); got != "pendent" {
+	if got := strings.TrimSpace(arxiu.ModeracioEstat); got != "pendent" {
 		t.Fatalf("arxiu importat ha d'entrar pendent, got %q", got)
 	}
-	if strings.TrimSpace(asString(rows[0]["moderated_by"])) != "" || strings.TrimSpace(asString(rows[0]["moderated_at"])) != "" {
+	if arxiu.ModeratedBy.Valid || arxiu.ModeratedAt.Valid {
 		t.Fatalf("arxiu importat no ha de tenir moderated_by/moderated_at")
 	}
 	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxiu_entitat_religiosa"); got != 0 {
@@ -130,48 +176,46 @@ func TestF354U6ArxiusV2ImportCreatesPendingArchiveAndConfessionalRelation(t *tes
 		t.Fatalf("import v2 amb relacio status=%d body=%s", rr.Code, rr.Body.String())
 	}
 
-	arxiuRows, err := database.Query("SELECT id, codi, moderation_status, moderated_by, moderated_at FROM arxius WHERE codi = ?", "f35_4u6_arxiu_amb_relacio")
-	if err != nil || len(arxiuRows) != 1 {
-		t.Fatalf("no s'ha pogut llegir l'arxiu importat amb relacio: err=%v rows=%d", err, len(arxiuRows))
-	}
-	arxiuID := parseCountValue(t, arxiuRows[0]["id"])
-	if got := strings.TrimSpace(asString(arxiuRows[0]["moderation_status"])); got != "pendent" {
+	arxiu = resolveSingleArxiuByCodeF354U6(t, database, "f35_4u6_arxiu_amb_relacio")
+	arxiuID := arxiu.ID
+	if got := strings.TrimSpace(arxiu.ModeracioEstat); got != "pendent" {
 		t.Fatalf("arxiu v2 amb relacio ha d'entrar pendent, got %q", got)
 	}
-	if strings.TrimSpace(asString(arxiuRows[0]["moderated_by"])) != "" || strings.TrimSpace(asString(arxiuRows[0]["moderated_at"])) != "" {
+	if arxiu.ModeratedBy.Valid || arxiu.ModeratedAt.Valid {
 		t.Fatalf("arxiu v2 amb relacio no ha de quedar moderat")
 	}
 
-	relRows, err := database.Query("SELECT moderation_status, moderated_by, moderated_at, tipus_relacio FROM arxiu_entitat_religiosa WHERE arxiu_id = ?", arxiuID)
-	if err != nil || len(relRows) != 1 {
-		t.Fatalf("no s'ha pogut llegir la relacio arxiu-entitat creada: err=%v rows=%d", err, len(relRows))
+	rels, err := database.ListArxiuEntitatsReligioses(arxiuID, 0, "")
+	if err != nil || len(rels) != 1 {
+		t.Fatalf("ListArxiuEntitatsReligioses arxiu=%d: err=%v rows=%d", arxiuID, err, len(rels))
 	}
-	if got := strings.TrimSpace(asString(relRows[0]["moderation_status"])); got != "pendent" {
+	rel, err := database.GetArxiuEntitatReligiosa(rels[0].ID)
+	if err != nil || rel == nil {
+		t.Fatalf("GetArxiuEntitatReligiosa %d: err=%v rel=%v", rels[0].ID, err, rel)
+	}
+	if got := strings.TrimSpace(rel.ModeracioEstat); got != "pendent" {
 		t.Fatalf("la relacio arxiu-entitat importada ha d'entrar pendent, got %q", got)
 	}
-	if strings.TrimSpace(asString(relRows[0]["moderated_by"])) != "" || strings.TrimSpace(asString(relRows[0]["moderated_at"])) != "" {
+	if rel.ModeratedBy.Valid || rel.ModeratedAt.Valid {
 		t.Fatalf("la relacio arxiu-entitat importada no ha de quedar moderada")
 	}
-	if got := strings.TrimSpace(asString(relRows[0]["tipus_relacio"])); got != "custodia_documentacio" {
+	if got := strings.TrimSpace(rel.TipusRelacio); got != "custodia_documentacio" {
 		t.Fatalf("tipus_relacio inesperat: %q", got)
 	}
 
-	jobRows, err := database.Query("SELECT id, status, payload_json, result_json FROM admin_jobs WHERE kind = ? ORDER BY id DESC LIMIT 1", "admin_import")
-	if err != nil || len(jobRows) != 1 {
-		t.Fatalf("no s'ha pogut llegir l'admin job d'import d'arxius: err=%v rows=%d", err, len(jobRows))
-	}
-	jobID := parseCountValue(t, jobRows[0]["id"])
-	if got := strings.TrimSpace(asString(jobRows[0]["status"])); got != "done" {
+	job := latestAdminJobF354U6(t, database, "admin_import")
+	jobID := job.ID
+	if got := strings.TrimSpace(job.Status); got != "done" {
 		t.Fatalf("l'admin job d'import d'arxius ha d'acabar done, got %q", got)
 	}
 	for _, token := range []string{`"import_type":"arxius"`, `"import_format":"v2"`, `"archives_requested":1`, `"relations_requested":1`} {
-		if !strings.Contains(asString(jobRows[0]["payload_json"]), token) {
-			t.Fatalf("payload admin job sense token %q: %s", token, asString(jobRows[0]["payload_json"]))
+		if !strings.Contains(job.PayloadJSON, token) {
+			t.Fatalf("payload admin job sense token %q: %s", token, job.PayloadJSON)
 		}
 	}
 	for _, token := range []string{`"archives_created":1`, `"relations_created":1`, `"activity_count":2`, `"admin_target_count":2`} {
-		if !strings.Contains(asString(jobRows[0]["result_json"]), token) {
-			t.Fatalf("result admin job sense token %q: %s", token, asString(jobRows[0]["result_json"]))
+		if !strings.Contains(job.ResultJSON, token) {
+			t.Fatalf("result admin job sense token %q: %s", token, job.ResultJSON)
 		}
 	}
 	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM admin_job_targets WHERE job_id = ?", jobID); got != 2 {
@@ -412,7 +456,7 @@ func TestF354U6LegacyArxiusImportStillWorks(t *testing.T) {
 	seedF354U6LegacyFixtureTerritory(t, database)
 
 	projectRoot := findProjectRoot(t)
-	fixturePath := filepath.Join(projectRoot, "tests", "fixtures", "arxius_export_sample.json")
+	fixturePath := filepath.Clean(filepath.Join(projectRoot, "tests", "fixtures", "arxius_export_sample.json"))
 	payload, err := os.ReadFile(fixturePath)
 	if err != nil {
 		t.Fatalf("ReadFile fixture legacy: %v", err)
@@ -424,14 +468,15 @@ func TestF354U6LegacyArxiusImportStillWorks(t *testing.T) {
 	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxius"); got != 1 {
 		t.Fatalf("legacy import ha de continuar creant 1 arxiu, got %d", got)
 	}
-	rows, err := database.Query("SELECT codi, entitat_eclesiastica_id, moderation_status FROM arxius WHERE nom = ?", "Arxiu Test A")
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("no s'ha pogut llegir l'arxiu legacy importat: err=%v rows=%d", err, len(rows))
+	arxiuRow := findSingleArxiuF354U6(t, database, db.ArxiuFilter{Text: "Arxiu Test A", Limit: 1})
+	arxiu, err := database.GetArxiu(arxiuRow.ID)
+	if err != nil || arxiu == nil {
+		t.Fatalf("GetArxiu legacy importat: err=%v arxiu=%v", err, arxiu)
 	}
-	if strings.TrimSpace(asString(rows[0]["moderation_status"])) != "pendent" {
+	if strings.TrimSpace(arxiu.ModeracioEstat) != "pendent" {
 		t.Fatalf("legacy import ha de continuar entrant pendent")
 	}
-	if parseCountValue(t, rows[0]["entitat_eclesiastica_id"]) == 0 {
+	if !arxiu.EntitatEclesiasticaID.Valid || arxiu.EntitatEclesiasticaID.Int64 == 0 {
 		t.Fatalf("legacy import ha de continuar resolent l'entitat eclesiastica opcional")
 	}
 	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM usuaris_activitat WHERE usuari_id = ? AND estat = 'pendent' AND detalls = 'import' AND objecte_tipus = 'arxiu'", admin.ID); got != 1 {
@@ -488,11 +533,7 @@ func TestF354U6ArxiuEditFormShowsLegacyFieldAndOptionalConfessionalSection(t *te
 
 func TestF354U6ArchiveRelationTemplatesUseLocaleKeysAndNoInlineDeleteStyle(t *testing.T) {
 	root := findProjectRoot(t)
-	formBody, err := os.ReadFile(filepath.Join(root, "templates", "admin-arxius-form.html"))
-	if err != nil {
-		t.Fatalf("ReadFile admin-arxius-form.html: %v", err)
-	}
-	formSrc := string(formBody)
+	formSrc := mustReadProjectFileF354U6(t, root, "templates", "admin-arxius-form.html")
 	for _, required := range []string{
 		`archives.form.code`,
 		`archives.type.estatal`,
@@ -521,8 +562,8 @@ func TestF354U6ArchiveRelationTemplatesUseLocaleKeysAndNoInlineDeleteStyle(t *te
 	}
 
 	for _, rel := range []string{
-		filepath.Join(root, "templates", "admin-arxius-show.html"),
-		filepath.Join(root, "templates", "admin-confessional-entity-show.html"),
+		filepath.Clean(filepath.Join(root, "templates", "admin-arxius-show.html")),
+		filepath.Clean(filepath.Join(root, "templates", "admin-confessional-entity-show.html")),
 	} {
 		body, err := os.ReadFile(rel)
 		if err != nil {
@@ -543,9 +584,9 @@ func TestF354U6ArchiveRelationTemplatesUseLocaleKeysAndNoInlineDeleteStyle(t *te
 	}
 
 	for _, localeRel := range []string{
-		filepath.Join(root, "locales", "cat.json"),
-		filepath.Join(root, "locales", "en.json"),
-		filepath.Join(root, "locales", "oc.json"),
+		filepath.Clean(filepath.Join(root, "locales", "cat.json")),
+		filepath.Clean(filepath.Join(root, "locales", "en.json")),
+		filepath.Clean(filepath.Join(root, "locales", "oc.json")),
 	} {
 		body, err := os.ReadFile(localeRel)
 		if err != nil {
@@ -608,11 +649,11 @@ func TestF354U6ArxiuUpdateWithoutReligiousRelationStaysValid(t *testing.T) {
 	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxiu_entitat_religiosa WHERE arxiu_id = ?", arxiuID); got != 0 {
 		t.Fatalf("actualitzar un arxiu sense relacio no ha de crear relacions buides, got %d", got)
 	}
-	rows, err := database.Query("SELECT codi, moderation_status FROM arxius WHERE id = ?", arxiuID)
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("Query arxiu actualitzat: err=%v rows=%d", err, len(rows))
+	arxiu, err := database.GetArxiu(arxiuID)
+	if err != nil || arxiu == nil {
+		t.Fatalf("GetArxiu actualitzat: err=%v arxiu=%v", err, arxiu)
 	}
-	if got := strings.TrimSpace(asString(rows[0]["codi"])); got != "f35_4u6_ui_sense_relacio" {
+	if got := strings.TrimSpace(arxiu.Codi); got != "f35_4u6_ui_sense_relacio" {
 		t.Fatalf("codi estable no desat a l'edicio: %q", got)
 	}
 }
@@ -668,25 +709,21 @@ func TestF354U6ArchiveUpdateIgnoresTamperedLegacyEntityID(t *testing.T) {
 		t.Fatalf("AdminUpdateArxiu tamper status=%d body=%s", rr.Code, rr.Body.String())
 	}
 
-	rows, err := database.Query("SELECT codi, entitat_eclesiastica_id FROM arxius WHERE id = ?", arxiuID)
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("Query arxiu tamper: err=%v rows=%d", err, len(rows))
+	arxiu, err = database.GetArxiu(arxiuID)
+	if err != nil || arxiu == nil {
+		t.Fatalf("GetArxiu tamper: err=%v arxiu=%v", err, arxiu)
 	}
-	if got := strings.TrimSpace(asString(rows[0]["codi"])); got != "f35_4u11ar1_arxiu_updated" {
+	if got := strings.TrimSpace(arxiu.Codi); got != "f35_4u11ar1_arxiu_updated" {
 		t.Fatalf("codi estable no actualitzat: %q", got)
 	}
-	if got := parseCountValue(t, rows[0]["entitat_eclesiastica_id"]); got != originalID {
-		t.Fatalf("el backend ha d'ignorar el tampering del legacy entity id, got=%d want=%d", got, originalID)
+	if !arxiu.EntitatEclesiasticaID.Valid || int(arxiu.EntitatEclesiasticaID.Int64) != originalID {
+		t.Fatalf("el backend ha d'ignorar el tampering del legacy entity id, got=%d want=%d", arxiu.EntitatEclesiasticaID.Int64, originalID)
 	}
 }
 
 func TestF354U11AR1ArchiveListTemplateKeepsSequentialColumnsAndAccessibleFilters(t *testing.T) {
 	root := findProjectRoot(t)
-	body, err := os.ReadFile(filepath.Join(root, "templates", "admin-arxius-list.html"))
-	if err != nil {
-		t.Fatalf("ReadFile admin-arxius-list.html: %v", err)
-	}
-	src := string(body)
+	src := mustReadProjectFileF354U6(t, root, "templates", "admin-arxius-list.html")
 	for _, token := range []string{
 		`id="arxius-filter-nom"`,
 		`id="arxius-filter-tipus"`,
@@ -699,6 +736,7 @@ func TestF354U11AR1ArchiveListTemplateKeepsSequentialColumnsAndAccessibleFilters
 		`scope="col" data-col="0" data-key="nom"`,
 		`scope="col" data-col="6" data-key="status"`,
 		`action="{{ $manageBase }}/{{ .ID }}/delete" class="inline-form"`,
+		`name="csrf_token" value="{{ $.Data.CSRFToken }}"`,
 	} {
 		if !strings.Contains(src, token) {
 			t.Fatalf("falta contracte d'accessibilitat/reindexacio a arxius-list: %q", token)

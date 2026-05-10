@@ -67,6 +67,7 @@
                     {{ end }}
                     {{ if $.Data.CanDeleteArxiu }}
                     <form method="post" action="{{ $manageBase }}/{{ .Data.Arxiu.ID }}/delete" class="inline-form" data-confirm-message="{{ t .Lang "archives.confirm.delete" }}">
+                        <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                         <button type="submit" class="boto-perill"><i class="fas fa-trash"></i> {{ t .Lang "archives.action.delete" }}</button>
                     </form>
                     {{ end }}

@@ -758,6 +758,14 @@ func (a *App) AdminDeleteArxiu(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusDelete, target); !ok {
 		return
 	}
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/documentals/arxius", http.StatusSeeOther)
+		return
+	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		return
+	}
 	_ = a.DB.DeleteArxiu(id)
 	http.Redirect(w, r, "/documentals/arxius", http.StatusSeeOther)
 }

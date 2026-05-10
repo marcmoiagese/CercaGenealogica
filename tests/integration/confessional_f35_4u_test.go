@@ -371,13 +371,11 @@ func TestF354U11AR1MenuUsesServerSideLegacyFlag(t *testing.T) {
 	menuBody := readProjectFileF354S(t, root, "templates/layouts/menu-private.html")
 	templatesBody := readProjectFileF354S(t, root, "core/templates.go")
 
-	for _, token := range []string{
-		`ShowLegacyEclesMenu`,
-		`{{ if index .Data "ShowLegacyEclesMenu" }}`,
-	} {
-		if !strings.Contains(menuBody+templatesBody, token) {
-			t.Fatalf("falta el contracte server-side del menu legacy: %q", token)
-		}
+	if !strings.Contains(menuBody, `{{ if index .Data "ShowLegacyEclesMenu" }}`) {
+		t.Fatalf("falta el contracte de render del menu legacy a menu-private.html")
+	}
+	if !strings.Contains(templatesBody, `m["ShowLegacyEclesMenu"] =`) {
+		t.Fatalf("falta la injeccio server-side de ShowLegacyEclesMenu a core/templates.go")
 	}
 	if strings.Contains(menuBody, `CanViewConfessionalEntitats`) && strings.Contains(menuBody, `CanViewConfessionalDiagnostic`) && strings.Contains(menuBody, `not (or`) {
 		t.Fatalf("el menu no ha de mantenir una negacio template llarga i contradictoria per al flux legacy")
