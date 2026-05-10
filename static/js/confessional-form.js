@@ -152,6 +152,8 @@
       const selectedLevel = selectedLevelOption();
       if (!religion.value || !selectedLevel) {
         help.textContent = help.dataset.empty || "";
+      } else if (!selectedLevel.dataset.parentLevelCodes) {
+        help.textContent = help.dataset.none || "";
       } else {
         help.textContent = "";
       }
@@ -378,9 +380,7 @@
       syncSelectedParentCompatibility();
     });
     syncConfessionalLevels(false);
-    if (parent && parent.value && parentLabel && parentLabel.value) {
-      syncParentHelp();
-    }
+    syncSelectedParentCompatibility();
   }
 
   if (document.readyState === "loading") {

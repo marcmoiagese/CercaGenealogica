@@ -126,15 +126,12 @@
                                 <td data-col="7" data-key="actions" class="confessional-actions">
                                     <a class="icon-action" href="/confessional/entitats/{{ .Entitat.ID }}" title="{{ t $.Lang "common.view" }}" aria-label="{{ t $.Lang "common.view" }}">
                                         <i class="fas fa-eye" aria-hidden="true"></i>
-                                        <span class="sr-only">{{ t $.Lang "common.view" }}</span>
                                     </a>
                                     {{ if $.Data.CanEdit }}<a class="icon-action" href="/confessional/entitats/{{ .Entitat.ID }}/edit" title="{{ t $.Lang "common.edit" }}" aria-label="{{ t $.Lang "common.edit" }}">
                                         <i class="fas fa-edit" aria-hidden="true"></i>
-                                        <span class="sr-only">{{ t $.Lang "common.edit" }}</span>
                                     </a>{{ end }}
                                     {{ if $.Data.CanCreate }}<a class="icon-action" href="/confessional/entitats/new?parent_id={{ .Entitat.ID }}" title="{{ t $.Lang "confessional.management.new_child" }}" aria-label="{{ t $.Lang "confessional.management.new_child" }}">
                                         <i class="fas fa-plus" aria-hidden="true"></i>
-                                        <span class="sr-only">{{ t $.Lang "confessional.management.new_child" }}</span>
                                     </a>{{ end }}
                                     {{ if $.Data.CanDelete }}
                                     <form method="post" action="/confessional/delete">
@@ -142,7 +139,6 @@
                                         <input type="hidden" name="id" value="{{ .Entitat.ID }}">
                                         <button type="submit" class="icon-action danger" title="{{ t $.Lang "confessional.action.delete" }}" aria-label="{{ t $.Lang "confessional.action.delete" }}">
                                             <i class="fas fa-trash" aria-hidden="true"></i>
-                                            <span class="sr-only">{{ t $.Lang "confessional.action.delete" }}</span>
                                         </button>
                                     </form>
                                     {{ end }}

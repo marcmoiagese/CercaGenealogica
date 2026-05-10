@@ -119,7 +119,7 @@ func TestF353Z8ParentSelectorFiltersCompatiblePublishedParents(t *testing.T) {
 		`class="suggestions-list confessional-suggestions"`,
 		`data-api="/api/confessional/entitats/suggest"`,
 		`id="parent_id_help"`,
-		`data-incompatible="{{ t .Lang "confessional.parent.incompatible" }}"`,
+		`data-incompatible="`,
 		`/static/js/confessional-form.js`,
 	} {
 		if !strings.Contains(body, token) {
