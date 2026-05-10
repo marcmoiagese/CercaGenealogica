@@ -57,6 +57,8 @@
                                 data-empty-label="{{ t .Lang "municipis.search.empty" }}"
                                 data-hidden="entitat_religiosa_id"
                                 data-suggestions="entitat_religiosa_suggestions"
+                                data-helper-default="{{ t .Lang "books.form.religious_entity.helper" }}"
+                                data-helper-auto-selected="{{ t .Lang "books.form.religious_entity.auto_selected" }}"
                                 data-suggest="1">
                             <input type="hidden" id="entitat_religiosa_id" name="entitat_religiosa_id" value="{{ .Data.FormState.EntitatReligiosaID }}">
                             <ul id="entitat_religiosa_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "books.form.religious_entity.suggestions" }}"></ul>
@@ -77,6 +79,8 @@
                                 data-empty-label="{{ t .Lang "municipis.search.empty" }}"
                                 data-hidden="municipi_id"
                                 data-suggestions="municipi_suggestions"
+                                data-helper-default="{{ t .Lang "books.form.documentary_base.helper" }}"
+                                data-empty-scope-message="{{ t .Lang "books.form.validation.religious_scope_empty" }}"
                                 data-suggest="1"
                                 required>
                             <input type="hidden" id="municipi_id" name="municipi_id" value="{{ .Data.FormState.MunicipiID }}">

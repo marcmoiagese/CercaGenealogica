@@ -359,6 +359,7 @@ func (a *App) AdminNewLlibre(w http.ResponseWriter, r *http.Request) {
 	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	selectedArxiu := intFromForm(r.URL.Query().Get("arxiu_id"))
 	selectedEntitat := intFromForm(r.URL.Query().Get("entitat_religiosa_id"))
+	lang := ResolveLang(r)
 	var ok bool
 	if selectedArxiu > 0 {
 		target := a.resolveArxiuTarget(selectedArxiu)
@@ -370,7 +371,7 @@ func (a *App) AdminNewLlibre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newLlibre := &db.Llibre{ModeracioEstat: "pendent"}
-	a.renderLlibreForm(w, r, newLlibre, true, "", returnURL, a.llibreFormStateFromRequest(newLlibre, selectedArxiu, selectedEntitat))
+	a.renderLlibreForm(w, r, newLlibre, true, "", returnURL, a.llibreFormStateFromRequest(lang, newLlibre, selectedArxiu, selectedEntitat))
 }
 
 func (a *App) AdminEditLlibre(w http.ResponseWriter, r *http.Request) {
@@ -387,21 +388,17 @@ func (a *App) AdminEditLlibre(w http.ResponseWriter, r *http.Request) {
 	}
 	returnURL := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	selectedArxiu := 0
+	lang := ResolveLang(r)
 	if rels, err := a.DB.ListLlibreArxius(id); err == nil && len(rels) > 0 {
 		selectedArxiu = rels[0].ArxiuID
 	}
 	selectedEntitat := 0
-	if ctx := a.deriveLlibreReligiousContext(id); strings.TrimSpace(ctx.Name) != "" {
+	if ctx := a.deriveLlibreReligiousContext(id); ctx.ID > 0 || strings.TrimSpace(ctx.Code) != "" || strings.TrimSpace(ctx.Name) != "" {
 		if items, _, err := a.publishedReligiousEntities(); err == nil {
-			for _, item := range items {
-				if strings.TrimSpace(item.Nom) == strings.TrimSpace(ctx.Name) {
-					selectedEntitat = item.ID
-					break
-				}
-			}
+			selectedEntitat = matchReligiousEntityFromContext(items, ctx)
 		}
 	}
-	a.renderLlibreForm(w, r, llibre, false, "", returnURL, a.llibreFormStateFromRequest(llibre, selectedArxiu, selectedEntitat))
+	a.renderLlibreForm(w, r, llibre, false, "", returnURL, a.llibreFormStateFromRequest(lang, llibre, selectedArxiu, selectedEntitat))
 }
 
 func (a *App) AdminToggleIndexacioLlibre(w http.ResponseWriter, r *http.Request) {
@@ -412,7 +409,7 @@ func (a *App) AdminToggleIndexacioLlibre(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		http.Error(w, "CSRF invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â lid", http.StatusBadRequest)
 		return
 	}
 	llibre, err := a.DB.GetLlibre(llibreID)
@@ -457,7 +454,7 @@ func (a *App) AdminRecalcIndexacioLlibre(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		http.Error(w, "CSRF invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â lid", http.StatusBadRequest)
 		return
 	}
 	if llibreID == 0 {
@@ -526,24 +523,28 @@ func parseLlibreForm(r *http.Request) *db.Llibre {
 	}
 }
 
-func (a *App) validateLlibre(l *db.Llibre, arxiuID int, entitatReligiosaID int) string {
+func (a *App) validateLlibre(lang string, l *db.Llibre, arxiuID int, entitatReligiosaID int) string {
 	if l.MunicipiID == 0 {
-		return "Cal indicar el municipi."
+		return T(lang, "books.form.validation.municipi_required")
 	}
 	if mun, err := a.DB.GetMunicipi(l.MunicipiID); err != nil {
 		Errorf("Error validant municipi del llibre: %v", err)
-		return "No s'ha pogut validar el municipi."
+		return T(lang, "books.form.validation.municipi_validate_error")
 	} else if mun == nil {
-		return "El municipi seleccionat no existeix."
+		return T(lang, "books.form.validation.municipi_missing")
 	}
 	if l.ArquebisbatID > 0 {
 		if ent, err := a.DB.GetArquebisbat(l.ArquebisbatID); err != nil {
 			Errorf("Error validant entitat eclesiastica del llibre: %v", err)
-			return "No s'ha pogut validar l'entitat eclesiastica."
+			return T(lang, "books.form.validation.legacy_entity_validate_error")
 		} else if ent == nil {
-			return "L'entitat eclesiastica seleccionada no existeix."
+			return T(lang, "books.form.validation.legacy_entity_missing")
 		}
 	}
+	if msg := a.validateLlibreReligiousScope(lang, l, entitatReligiosaID); msg != "" {
+		return msg
+	}
+	entitatReligiosaID = 0
 	if entitatReligiosaID > 0 {
 		entitat, err := a.DB.GetEntitatReligiosa(entitatReligiosaID)
 		if err != nil {
@@ -551,7 +552,7 @@ func (a *App) validateLlibre(l *db.Llibre, arxiuID int, entitatReligiosaID int) 
 			return "No s'ha pogut validar l'entitat religiosa."
 		}
 		if entitat == nil || strings.TrimSpace(entitat.ModeracioEstat) != "publicat" {
-			return "L'entitat religiosa seleccionada no existeix o no està publicada."
+			return "L'entitat religiosa seleccionada no existeix o no estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â  publicada."
 		}
 		allowedMunicipis, err := a.municipalityScopeForReligiousEntity(entitatReligiosaID)
 		if err != nil {
@@ -559,33 +560,35 @@ func (a *App) validateLlibre(l *db.Llibre, arxiuID int, entitatReligiosaID int) 
 			return "No s'ha pogut validar el municipi dins l'abast confessional."
 		}
 		if len(allowedMunicipis) == 0 {
-			return "L'entitat religiosa seleccionada no té municipis vinculats publicats."
+			return "L'entitat religiosa seleccionada no tÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â© municipis vinculats publicats."
 		}
 		if !allowedMunicipis[l.MunicipiID] {
 			return "El municipi seleccionat no pertany a l'abast de l'entitat religiosa indicada."
 		}
 	}
 	if strings.TrimSpace(l.Titol) == "" && strings.TrimSpace(l.NomEsglesia) == "" {
-		return "Cal un títol o nom d'església."
+		return T(lang, "books.form.validation.title_or_church_required")
 	}
 	if arxiuID == 0 {
-		return "Cal indicar l'arxiu."
+		return T(lang, "books.form.validation.archive_required")
 	}
 	if arxiu, err := a.DB.GetArxiu(arxiuID); err != nil {
 		Errorf("Error validant arxiu del llibre: %v", err)
-		return "No s'ha pogut validar l'arxiu."
+		return T(lang, "books.form.validation.archive_validate_error")
 	} else if arxiu == nil {
-		return "L'arxiu seleccionat no existeix."
+		return T(lang, "books.form.validation.archive_missing")
+	} else if strings.TrimSpace(arxiu.ModeracioEstat) != "publicat" {
+		return T(lang, "books.form.validation.archive_not_published")
 	}
 	if (strings.TrimSpace(l.CodiDigital) != "" || strings.TrimSpace(l.CodiFisic) != "") &&
 		strings.TrimSpace(l.TipusLlibre) != "" && strings.TrimSpace(l.Cronologia) != "" {
 		dup, err := a.DB.HasLlibreDuplicate(l.MunicipiID, l.TipusLlibre, l.Cronologia, l.CodiDigital, l.CodiFisic, l.ID)
 		if err != nil {
 			Errorf("Error comprovant duplicats de llibre: %v", err)
-			return "No s'ha pogut validar el llibre."
+			return T(lang, "books.form.validation.book_validate_error")
 		}
 		if dup {
-			return "Ja existeix un llibre amb el mateix tipus, cronologia i codi dins del municipi."
+			return T(lang, "books.form.validation.duplicate")
 		}
 	}
 	return ""
@@ -601,8 +604,35 @@ func isCivilBookType(tipus string) bool {
 }
 
 type llibreReligiousContextView struct {
+	ID   int
 	Code string
 	Name string
+}
+
+func (a *App) validateLlibreReligiousScope(lang string, l *db.Llibre, entitatReligiosaID int) string {
+	if entitatReligiosaID <= 0 {
+		return ""
+	}
+	entitat, err := a.DB.GetEntitatReligiosa(entitatReligiosaID)
+	if err != nil {
+		Errorf("Error validant entitat religiosa del llibre: %v", err)
+		return T(lang, "books.form.validation.religious_entity_validate_error")
+	}
+	if entitat == nil || strings.TrimSpace(entitat.ModeracioEstat) != "publicat" {
+		return T(lang, "books.form.validation.religious_entity_missing_or_unpublished")
+	}
+	allowedMunicipis, err := a.municipalityScopeForReligiousEntity(entitatReligiosaID)
+	if err != nil {
+		Errorf("Error validant abast municipal de l'entitat religiosa %d: %v", entitatReligiosaID, err)
+		return T(lang, "books.form.validation.religious_scope_validate_error")
+	}
+	if len(allowedMunicipis) == 0 {
+		return T(lang, "books.form.validation.religious_scope_empty")
+	}
+	if !allowedMunicipis[l.MunicipiID] {
+		return T(lang, "books.form.validation.religious_scope_mismatch")
+	}
+	return ""
 }
 
 type llibreFormState struct {
@@ -623,15 +653,22 @@ func (a *App) deriveLlibreReligiousContext(llibreID int) llibreReligiousContextV
 		return llibreReligiousContextView{}
 	}
 	for _, ctx := range contexts {
-		if !ctx.ReligiousEntityID.Valid {
-			continue
-		}
 		if strings.TrimSpace(ctx.RelationModerationStatus.String) != "" && strings.TrimSpace(ctx.RelationModerationStatus.String) != "publicat" {
 			continue
 		}
+		id := 0
+		if ctx.ReligiousEntityID.Valid {
+			id = int(ctx.ReligiousEntityID.Int64)
+		}
+		code := strings.TrimSpace(ctx.ReligiousEntityCode.String)
+		name := strings.TrimSpace(ctx.ReligiousEntityName.String)
+		if id == 0 && code == "" && name == "" {
+			continue
+		}
 		return llibreReligiousContextView{
-			Code: strings.TrimSpace(ctx.ReligiousEntityCode.String),
-			Name: strings.TrimSpace(ctx.ReligiousEntityName.String),
+			ID:   id,
+			Code: code,
+			Name: name,
 		}
 	}
 	return llibreReligiousContextView{}
@@ -675,6 +712,31 @@ func (a *App) publishedReligiousEntities() ([]db.EntitatReligiosa, map[int]db.En
 		return strings.ToLower(strings.TrimSpace(out[i].Nom)) < strings.ToLower(strings.TrimSpace(out[j].Nom))
 	})
 	return out, byID, nil
+}
+
+func matchReligiousEntityFromContext(items []db.EntitatReligiosa, ctx llibreReligiousContextView) int {
+	if ctx.ID > 0 {
+		for _, item := range items {
+			if item.ID == ctx.ID {
+				return item.ID
+			}
+		}
+	}
+	if code := strings.TrimSpace(ctx.Code); code != "" {
+		for _, item := range items {
+			if strings.EqualFold(strings.TrimSpace(item.Codi), code) {
+				return item.ID
+			}
+		}
+	}
+	if name := strings.TrimSpace(ctx.Name); name != "" {
+		for _, item := range items {
+			if strings.EqualFold(strings.TrimSpace(item.Nom), name) {
+				return item.ID
+			}
+		}
+	}
+	return 0
 }
 
 func (a *App) confessionalChildrenByParent() (map[int][]int, error) {
@@ -733,13 +795,22 @@ func (a *App) municipalityScopeForReligiousEntity(entitatReligiosaID int) (map[i
 	if entitatReligiosaID <= 0 {
 		return nil, nil
 	}
+	_, publishedEntitiesByID, err := a.publishedReligiousEntities()
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := publishedEntitiesByID[entitatReligiosaID]; !ok {
+		return map[int]bool{}, nil
+	}
 	childrenByParent, err := a.confessionalChildrenByParent()
 	if err != nil {
 		return nil, err
 	}
 	allowedEntities := map[int]bool{entitatReligiosaID: true}
 	for childID := range confessionalDescendantSet(entitatReligiosaID, childrenByParent) {
-		allowedEntities[childID] = true
+		if _, ok := publishedEntitiesByID[childID]; ok {
+			allowedEntities[childID] = true
+		}
 	}
 	rels, err := a.DB.ListMunicipiEntitatsReligioses(0)
 	if err != nil {
@@ -753,12 +824,19 @@ func (a *App) municipalityScopeForReligiousEntity(entitatReligiosaID int) (map[i
 		if rel.MunicipiID <= 0 || !allowedEntities[rel.EntitatReligiosaID] {
 			continue
 		}
+		municipi, err := a.DB.GetMunicipi(rel.MunicipiID)
+		if err != nil {
+			return nil, err
+		}
+		if municipi == nil || strings.TrimSpace(municipi.ModeracioEstat) != "publicat" {
+			continue
+		}
 		allowedMunicipis[rel.MunicipiID] = true
 	}
 	return allowedMunicipis, nil
 }
 
-func (a *App) llibreFormStateFromRequest(llibre *db.Llibre, arxiuID, entitatReligiosaID int) llibreFormState {
+func (a *App) llibreFormStateFromRequest(lang string, llibre *db.Llibre, arxiuID, entitatReligiosaID int) llibreFormState {
 	state := llibreFormState{
 		ArxiuID:            arxiuID,
 		EntitatReligiosaID: entitatReligiosaID,
@@ -777,13 +855,13 @@ func (a *App) llibreFormStateFromRequest(llibre *db.Llibre, arxiuID, entitatReli
 		if rels, err := a.archivePublishedReligiousEntities(state.ArxiuID); err == nil && len(rels) == 1 {
 			state.EntitatReligiosaID = rels[0].ID
 			state.EntitatReligiosaLabel = strings.TrimSpace(rels[0].Nom)
-			state.RelatedEntitiesMessage = "Preseleccionada des de l'arxiu perquè només hi ha una entitat religiosa publicada relacionada."
+			state.RelatedEntitiesMessage = T(lang, "books.form.religious_entity.auto_selected")
 		}
 	}
 	if state.EntitatReligiosaID > 0 {
 		if allowed, err := a.municipalityScopeForReligiousEntity(state.EntitatReligiosaID); err == nil && len(allowed) == 0 {
 			state.MunicipiScopeEmpty = true
-			state.MunicipiScopeMessage = "L'entitat religiosa seleccionada no té municipis vinculats publicats."
+			state.MunicipiScopeMessage = T(lang, "books.form.validation.religious_scope_empty")
 		}
 	}
 	return state
@@ -808,12 +886,7 @@ func (a *App) SearchBookReligiousEntitiesSuggestJSON(w http.ResponseWriter, r *h
 	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	arxiuID := parseIntDefault(r.URL.Query().Get("arxiu_id"), 0)
-	limit := 10
-	if val := strings.TrimSpace(r.URL.Query().Get("limit")); val != "" {
-		if v, err := strconv.Atoi(val); err == nil && v > 0 && v <= 25 {
-			limit = v
-		}
-	}
+	limit := parseSuggestLimit(r.URL.Query().Get("limit"))
 	related, err := a.archivePublishedReligiousEntities(arxiuID)
 	if err != nil {
 		Errorf("Error carregant entitats religioses relacionades amb arxiu %d: %v", arxiuID, err)
@@ -861,16 +934,7 @@ func (a *App) SearchBookReligiousEntitiesSuggestJSON(w http.ResponseWriter, r *h
 	if len(matches) > limit {
 		matches = matches[:limit]
 	}
-	items := make([]map[string]interface{}, 0, len(matches))
-	for _, item := range matches {
-		context := joinNonEmpty(strings.TrimSpace(item.Codi), joinNonEmpty(strings.TrimSpace(item.ReligioConfessioCodi), strings.TrimSpace(item.NivellConfessionalCodi), " · "), " · ")
-		items = append(items, map[string]interface{}{
-			"id":      item.ID,
-			"nom":     strings.TrimSpace(item.Nom),
-			"context": strings.TrimSpace(context),
-			"related": relatedIDs[item.ID],
-		})
-	}
+	items := buildReligiousSuggestItems(matches, relatedIDs)
 	writeJSON(w, map[string]interface{}{
 		"items":                  items,
 		"archive_related_count":  len(related),
@@ -892,46 +956,69 @@ func (a *App) SearchBookMunicipisSuggestJSON(w http.ResponseWriter, r *http.Requ
 	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	entitatReligiosaID := parseIntDefault(r.URL.Query().Get("entitat_religiosa_id"), 0)
-	limit := 10
-	if val := strings.TrimSpace(r.URL.Query().Get("limit")); val != "" {
-		if v, err := strconv.Atoi(val); err == nil && v > 0 && v <= 25 {
-			limit = v
-		}
-	}
+	limit := parseSuggestLimit(r.URL.Query().Get("limit"))
+	lang := ResolveLang(r)
 	filter := db.MunicipiBrowseFilter{
 		Text:   query,
 		Status: "publicat",
 		Limit:  limit,
 	}
-	scopeEmpty := false
-	scopeMessage := ""
-	if entitatReligiosaID > 0 {
-		allowed, err := a.municipalityScopeForReligiousEntity(entitatReligiosaID)
-		if err != nil {
-			Errorf("Error carregant abast municipal d'entitat religiosa %d: %v", entitatReligiosaID, err)
-			writeJSON(w, map[string]interface{}{"items": []interface{}{}})
-			return
-		}
-		if len(allowed) == 0 {
-			scopeEmpty = true
-			scopeMessage = "L'entitat religiosa seleccionada no té municipis vinculats publicats."
-			writeJSON(w, map[string]interface{}{
-				"items":         []interface{}{},
-				"scope_empty":   true,
-				"scope_message": scopeMessage,
-			})
-			return
-		}
-		filter.AllowedMunicipiIDs = make([]int, 0, len(allowed))
-		for municipiID := range allowed {
-			filter.AllowedMunicipiIDs = append(filter.AllowedMunicipiIDs, municipiID)
-		}
-		sort.Ints(filter.AllowedMunicipiIDs)
+	scopeEmpty, scopeMessage, err := a.applyReligiousMunicipalityScope(lang, entitatReligiosaID, &filter)
+	if err != nil {
+		Errorf("Error carregant abast municipal d'entitat religiosa %d: %v", entitatReligiosaID, err)
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	if scopeEmpty {
+		writeJSON(w, map[string]interface{}{
+			"items":         []interface{}{},
+			"scope_empty":   true,
+			"scope_message": scopeMessage,
+		})
+		return
 	}
 	if query == "" {
 		filter.Text = ""
 	}
-	rows, _ := a.DB.SuggestMunicipis(filter)
+	rows, err := a.DB.SuggestMunicipis(filter)
+	if err != nil {
+		Errorf("Error suggerint municipis per llibres: %v", err)
+		writeJSON(w, map[string]interface{}{"items": []interface{}{}})
+		return
+	}
+	items := buildMunicipiSuggestItems(rows)
+	writeJSON(w, map[string]interface{}{
+		"items":         items,
+		"scope_empty":   scopeEmpty,
+		"scope_message": scopeMessage,
+	})
+}
+
+func parseSuggestLimit(raw string) int {
+	limit := 10
+	if val := strings.TrimSpace(raw); val != "" {
+		if v, err := strconv.Atoi(val); err == nil && v > 0 && v <= 25 {
+			limit = v
+		}
+	}
+	return limit
+}
+
+func buildReligiousSuggestItems(items []db.EntitatReligiosa, relatedIDs map[int]bool) []map[string]interface{} {
+	out := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		context := joinNonEmpty(strings.TrimSpace(item.Codi), joinNonEmpty(strings.TrimSpace(item.ReligioConfessioCodi), strings.TrimSpace(item.NivellConfessionalCodi), " · "), " · ")
+		out = append(out, map[string]interface{}{
+			"id":      item.ID,
+			"nom":     strings.TrimSpace(item.Nom),
+			"context": strings.TrimSpace(context),
+			"related": relatedIDs[item.ID],
+		})
+	}
+	return out
+}
+
+func buildMunicipiSuggestItems(rows []db.MunicipiSuggestRow) []map[string]interface{} {
 	items := make([]map[string]interface{}, 0, len(rows))
 	for _, row := range rows {
 		levelIDs := make([]interface{}, 7)
@@ -958,11 +1045,26 @@ func (a *App) SearchBookMunicipisSuggestJSON(w http.ResponseWriter, r *http.Requ
 			"nivells_tipus": levelTypes,
 		})
 	}
-	writeJSON(w, map[string]interface{}{
-		"items":         items,
-		"scope_empty":   scopeEmpty,
-		"scope_message": scopeMessage,
-	})
+	return items
+}
+
+func (a *App) applyReligiousMunicipalityScope(lang string, entitatReligiosaID int, filter *db.MunicipiBrowseFilter) (bool, string, error) {
+	if entitatReligiosaID <= 0 {
+		return false, "", nil
+	}
+	allowed, err := a.municipalityScopeForReligiousEntity(entitatReligiosaID)
+	if err != nil {
+		return false, "", err
+	}
+	if len(allowed) == 0 {
+		return true, T(lang, "books.form.validation.religious_scope_empty"), nil
+	}
+	filter.AllowedMunicipiIDs = make([]int, 0, len(allowed))
+	for municipiID := range allowed {
+		filter.AllowedMunicipiIDs = append(filter.AllowedMunicipiIDs, municipiID)
+	}
+	sort.Ints(filter.AllowedMunicipiIDs)
+	return false, "", nil
 }
 
 func intFromForm(val string) int {
@@ -1164,8 +1266,9 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 	}
 	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	isNew := llibre.ID == 0
-	formState := a.llibreFormStateFromRequest(llibre, arxiuID, entitatReligiosaID)
-	if msg := a.validateLlibre(llibre, arxiuID, entitatReligiosaID); msg != "" {
+	lang := ResolveLang(r)
+	formState := a.llibreFormStateFromRequest(lang, llibre, arxiuID, entitatReligiosaID)
+	if msg := a.validateLlibre(lang, llibre, arxiuID, entitatReligiosaID); msg != "" {
 		a.renderLlibreForm(w, r, llibre, isNew, msg, returnURL, formState)
 		return
 	}
@@ -1814,7 +1917,7 @@ func (a *App) AdminUpdateLlibrePageStat(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		http.Error(w, "CSRF invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â lid", http.StatusBadRequest)
 		return
 	}
 	statID := intFromForm(r.FormValue("stat_id"))
@@ -1870,7 +1973,7 @@ func (a *App) AdminPurgeLlibreRegistres(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		http.Error(w, "CSRF invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â lid", http.StatusBadRequest)
 		return
 	}
 	user, _ := a.VerificarSessio(r)
@@ -2045,7 +2148,7 @@ func (a *App) AdminAddLlibreURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		http.Error(w, "CSRF invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â lid", http.StatusBadRequest)
 		return
 	}
 	if llibreID == 0 {
@@ -2147,7 +2250,7 @@ func (a *App) AdminDeleteLlibreURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validateCSRF(r, r.FormValue("csrf_token")) {
-		http.Error(w, "CSRF invàlid", http.StatusBadRequest)
+		http.Error(w, "CSRF invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â lid", http.StatusBadRequest)
 		return
 	}
 	linkID, _ := strconv.Atoi(parts[4])
@@ -2190,7 +2293,7 @@ func (a *App) AdminEditLlibreArxiuLinks(w http.ResponseWriter, r *http.Request) 
 	}
 	arxius, err := a.DB.ListLlibreArxius(llibreID)
 	if err != nil {
-		Errorf("Error carregant enllaços d'arxiu: %v", err)
+		Errorf("Error carregant enllaÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§os d'arxiu: %v", err)
 		http.Redirect(w, r, "/documentals/llibres/"+strconv.Itoa(llibreID), http.StatusSeeOther)
 		return
 	}

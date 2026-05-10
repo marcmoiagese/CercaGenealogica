@@ -3,6 +3,7 @@ package integration
 import (
 	"database/sql"
 	"encoding/json"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -486,7 +487,7 @@ func TestF354U11BBookSaveRejectsMunicipalityOutsideReligiousScope(t *testing.T) 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("AdminSaveLlibre fora abast ha de rerenderitzar amb error, status=%d body=%s", rr.Code, rr.Body.String())
 	}
-	if !strings.Contains(rr.Body.String(), "abast de l&#39;entitat religiosa") {
+	if !strings.Contains(html.UnescapeString(rr.Body.String()), "abast de l'entitat religiosa") {
 		t.Fatalf("manca missatge d'abast religios, body=%s", rr.Body.String())
 	}
 	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM llibres WHERE codi = ?", "f35_4u11b_scope_book"); got != 0 {
@@ -584,6 +585,62 @@ func TestF354U11AR1BooksListTemplateKeepsSequentialColumnsAndAccessibleFilters(t
 	}
 	if strings.Contains(src, `data-key="entitat"`) {
 		t.Fatalf("llibres-list no ha de conservar la columna legacy entitat")
+	}
+}
+
+func TestF354U11BR1BookSaveRejectsUnpublishedArchive(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u11br1_archive_pending.sqlite3")
+	_, municipiID := seedF354U7BookTerritory(t, database, "ArchivePending")
+	publishF354U7Municipi(t, database, municipiID)
+	arxiuID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u11br1_pending_archive", "Arxiu Pendent F35-4U11B-R1", 0)
+	arxiu, err := database.GetArxiu(arxiuID)
+	if err != nil || arxiu == nil {
+		t.Fatalf("GetArxiu pending: err=%v arxiu=%v", err, arxiu)
+	}
+	arxiu.ModeracioEstat = "pendent"
+	if err := database.UpdateArxiu(arxiu); err != nil {
+		t.Fatalf("UpdateArxiu pending: %v", err)
+	}
+
+	form := url.Values{}
+	form.Set("arxiu_id", strconv.Itoa(arxiuID))
+	form.Set("municipi_id", strconv.Itoa(municipiID))
+	form.Set("titol", "Llibre arxiu pendent F35-4U11B-R1")
+	form.Set("tipus_llibre", "baptismes")
+	form.Set("codi", "f35_4u11br1_pending_archive_book")
+	req := httptest.NewRequest(http.MethodPost, "/documentals/llibres/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminSaveLlibre(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminSaveLlibre amb arxiu pendent ha de rerenderitzar, status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	body := strings.ToLower(html.UnescapeString(rr.Body.String()))
+	if !strings.Contains(body, "arxiu seleccionat") || !strings.Contains(body, "publicat") {
+		t.Fatalf("manca validacio d'arxiu publicat, body=%s", rr.Body.String())
+	}
+}
+
+func TestF354U11BR1BookFormJSUsesLocalizedHelpersAndNoHardcodedCatalan(t *testing.T) {
+	root := findProjectRoot(t)
+	src := mustReadProjectFileF354U7(t, root, "static", "js", "admin-llibres-form.js")
+	for _, token := range []string{
+		"dataset.helperDefault",
+		"dataset.helperAutoSelected",
+		"dataset.emptyScopeMessage",
+		"AbortController",
+		"url.includes(\"?\")",
+	} {
+		if !strings.Contains(src, token) {
+			t.Fatalf("falta contracte JS F35-4U11B-R1: %q", token)
+		}
+	}
+	if strings.Contains(src, "Preseleccionada des de l'arxiu") {
+		t.Fatalf("el JS no ha de contenir text dur en català, src=%s", src)
+	}
+	if strings.Contains(src, "var ") {
+		t.Fatalf("el JS no ha d'usar var després del refactor, src=%s", src)
 	}
 }
 
