@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"html"
@@ -401,6 +402,44 @@ func TestF354U11BBookReligiousEntitySuggestUsesArchiveRelations(t *testing.T) {
 	}
 }
 
+func TestF354U11BBookReligiousEntitySuggestAcceptsPost(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u11b_rel_suggest_post.sqlite3")
+	_, municipiID := seedF354U7BookTerritory(t, database, "RelSuggestPost")
+	arxiuID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u11b_archive_rel_post", "Arxiu F35-4U11B RelSuggest POST", 0)
+	entitatID := createF354U7ReligiousEntity(t, database, "f35_4u11b_entitat_rel_post", "Parroquia F35-4U11B RelSuggest POST")
+	if _, err := database.SaveArxiuEntitatReligiosa(&db.ArxiuEntitatReligiosa{
+		ArxiuID:            arxiuID,
+		EntitatReligiosaID: entitatID,
+		TipusRelacio:       "custodia_documentacio",
+		Estat:              "actiu",
+		ModeracioEstat:     "publicat",
+	}); err != nil {
+		t.Fatalf("SaveArxiuEntitatReligiosa POST: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/documentals/llibres/entitats-religioses/suggest", bytes.NewBufferString("arxiu_id="+strconv.Itoa(arxiuID)+"&limit=25"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.SearchBookReligiousEntitiesSuggestJSON(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("SearchBookReligiousEntitiesSuggestJSON POST status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		Items []struct {
+			ID      int  `json:"id"`
+			Related bool `json:"related"`
+		} `json:"items"`
+		ArchiveRelatedSingle bool `json:"archive_related_single"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json invalid suggest entitats POST: %v", err)
+	}
+	if !payload.ArchiveRelatedSingle || len(payload.Items) != 1 || payload.Items[0].ID != entitatID || !payload.Items[0].Related {
+		t.Fatalf("payload suggest entitats POST inesperat: %+v", payload)
+	}
+}
+
 func TestF354U11BBookMunicipiSuggestFiltersByReligiousEntityScope(t *testing.T) {
 	app, database, _, session := setupF354U7BooksAdmin(t, "test_f35_4u11b_mun_suggest.sqlite3")
 	paisID, municipiAID := seedF354U7BookTerritory(t, database, "MunScopeA")
@@ -452,6 +491,61 @@ func TestF354U11BBookMunicipiSuggestFiltersByReligiousEntityScope(t *testing.T) 
 	}
 	if len(payload.Items) != 1 || payload.Items[0].ID != municipiAID {
 		t.Fatalf("scope municipi inesperat: %+v", payload)
+	}
+}
+
+func TestF354U11BBookMunicipiSuggestAcceptsPost(t *testing.T) {
+	app, database, _, session := setupF354U7BooksAdmin(t, "test_f35_4u11b_mun_suggest_post.sqlite3")
+	paisID, municipiAID := seedF354U7BookTerritory(t, database, "MunScopePostA")
+	municipiBID := createF354U7MunicipiForPais(t, database, paisID, "MunScopePostB")
+	publishF354U7Municipi(t, database, municipiAID)
+	publishF354U7Municipi(t, database, municipiBID)
+	parentID := createF354U7ReligiousEntity(t, database, "f35_4u11b_parent_post", "Diocesi F35-4U11B Parent POST")
+	childID := createF354U7ReligiousEntity(t, database, "f35_4u11b_child_post", "Parroquia F35-4U11B Child POST")
+	if _, err := database.SaveEntitatReligiosaRelacio(&db.EntitatReligiosaRelacio{
+		EntitatOrigenID: parentID,
+		EntitatDestiID:  childID,
+		TipusRelacio:    "jerarquia",
+		ModeracioEstat:  "publicat",
+	}); err != nil {
+		t.Fatalf("SaveEntitatReligiosaRelacio POST: %v", err)
+	}
+	if _, err := database.SaveMunicipiEntitatReligiosa(&db.MunicipiEntitatReligiosa{
+		MunicipiID:         municipiAID,
+		EntitatReligiosaID: childID,
+		TipusRelacio:       "parroquia",
+		ModeracioEstat:     "publicat",
+	}); err != nil {
+		t.Fatalf("SaveMunicipiEntitatReligiosa POST A: %v", err)
+	}
+	otherID := createF354U7ReligiousEntity(t, database, "f35_4u11b_other_post", "Parroquia F35-4U11B Other POST")
+	if _, err := database.SaveMunicipiEntitatReligiosa(&db.MunicipiEntitatReligiosa{
+		MunicipiID:         municipiBID,
+		EntitatReligiosaID: otherID,
+		TipusRelacio:       "parroquia",
+		ModeracioEstat:     "publicat",
+	}); err != nil {
+		t.Fatalf("SaveMunicipiEntitatReligiosa POST B: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/documentals/llibres/municipis/suggest", bytes.NewBufferString("entitat_religiosa_id="+strconv.Itoa(parentID)+"&q=Municipi"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.SearchBookMunicipisSuggestJSON(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("SearchBookMunicipisSuggestJSON POST status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		Items []struct {
+			ID int `json:"id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json invalid suggest municipis POST: %v", err)
+	}
+	if len(payload.Items) != 1 || payload.Items[0].ID != municipiAID {
+		t.Fatalf("scope municipi POST inesperat: %+v", payload)
 	}
 }
 

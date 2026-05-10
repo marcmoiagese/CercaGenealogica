@@ -64,22 +64,37 @@ document.addEventListener("DOMContentLoaded", function () {
         entityInput.dataset.api = api;
     }
 
-    function buildReligiousEntitySuggestURL(archiveID, limit) {
-        const params = new URLSearchParams();
-        if (archiveID) {
-            params.set("arxiu_id", archiveID);
+    function buildSuggestBody(key, id, limit) {
+        const body = new URLSearchParams();
+        if (id) {
+            body.set(key, String(id));
         }
-        params.set("limit", String(limit));
-        return RELIGIOUS_ENTITY_SUGGEST_API + "?" + params.toString();
+        body.set("limit", String(limit));
+        return body.toString();
     }
 
-    function buildMunicipiSuggestURL(entityID, limit) {
-        const params = new URLSearchParams();
-        if (entityID) {
-            params.set("entitat_religiosa_id", entityID);
-        }
-        params.set("limit", String(limit));
-        return MUNICIPI_SUGGEST_API + "?" + params.toString();
+    function fetchBookReligiousEntitiesSuggest(archiveID, limit, signal) {
+        return fetch("/api/documentals/llibres/entitats-religioses/suggest", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: buildSuggestBody("arxiu_id", archiveID, limit),
+            signal: signal
+        });
+    }
+
+    function fetchBookMunicipisSuggest(entityID, limit, signal) {
+        return fetch("/api/documentals/llibres/municipis/suggest", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: buildSuggestBody("entitat_religiosa_id", entityID, limit),
+            signal: signal
+        });
     }
 
     function updateMunicipalityScopeState(payload) {
@@ -101,10 +116,7 @@ document.addEventListener("DOMContentLoaded", function () {
             municipalityScopeController.abort();
         }
         municipalityScopeController = new AbortController();
-        fetch(buildMunicipiSuggestURL(entityHidden.value.trim(), 10), {
-            credentials: "same-origin",
-            signal: municipalityScopeController.signal
-        })
+        fetchBookMunicipisSuggest(entityHidden.value.trim(), 10, municipalityScopeController.signal)
             .then(function (resp) { return resp.json(); })
             .then(function (data) {
                 if (requestID !== municipalityScopeRequest) {
@@ -142,17 +154,14 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
         relatedEntityController = new AbortController();
-        fetch(buildReligiousEntitySuggestURL(archiveID, 25), {
-            credentials: "same-origin",
-            signal: relatedEntityController.signal
-        })
+        fetchBookReligiousEntitiesSuggest(archiveID, 25, relatedEntityController.signal)
             .then(function (resp) { return resp.json(); })
             .then(function (data) {
                 if (requestID !== relatedEntityRequest) {
                     return;
                 }
                 let autoSelected = false;
-                if (!entityTouched && data && Array.isArray(data.items) && data.items.length === 1) {
+                if (!entityTouched && data && data.archive_related_single === true && Array.isArray(data.items) && data.items.length === 1) {
                     setEntityValue(data.items[0], "auto");
                     autoSelected = true;
                 }

@@ -882,13 +882,13 @@ func (a *App) renderLlibreForm(w http.ResponseWriter, r *http.Request, l *db.Lli
 }
 
 func (a *App) SearchBookReligiousEntitiesSuggestJSON(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
 	}
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	arxiuID := parseIntDefault(r.URL.Query().Get("arxiu_id"), 0)
-	limit := parseSuggestLimit(r.URL.Query().Get("limit"))
+	query := suggestRequestValue(r, "q")
+	arxiuID := parseIntDefault(suggestRequestValue(r, "arxiu_id"), 0)
+	limit := parseSuggestLimit(suggestRequestValue(r, "limit"))
 	related, err := a.archivePublishedReligiousEntities(arxiuID)
 	if err != nil {
 		Errorf("Error carregant entitats religioses relacionades amb arxiu %d: %v", arxiuID, err)
@@ -952,13 +952,13 @@ func (a *App) SearchBookReligiousEntitiesSuggestJSON(w http.ResponseWriter, r *h
 }
 
 func (a *App) SearchBookMunicipisSuggestJSON(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
 	}
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	entitatReligiosaID := parseIntDefault(r.URL.Query().Get("entitat_religiosa_id"), 0)
-	limit := parseSuggestLimit(r.URL.Query().Get("limit"))
+	query := suggestRequestValue(r, "q")
+	entitatReligiosaID := parseIntDefault(suggestRequestValue(r, "entitat_religiosa_id"), 0)
+	limit := parseSuggestLimit(suggestRequestValue(r, "limit"))
 	lang := ResolveLang(r)
 	filter := db.MunicipiBrowseFilter{
 		Text:   query,
@@ -1004,6 +1004,19 @@ func parseSuggestLimit(raw string) int {
 		}
 	}
 	return limit
+}
+
+func suggestRequestValue(r *http.Request, key string) string {
+	if r == nil {
+		return ""
+	}
+	if r.Method == http.MethodPost {
+		if err := r.ParseForm(); err != nil {
+			return ""
+		}
+		return strings.TrimSpace(r.FormValue(key))
+	}
+	return strings.TrimSpace(r.URL.Query().Get(key))
 }
 
 func buildReligiousSuggestItems(items []db.EntitatReligiosa, relatedIDs map[int]bool) []map[string]interface{} {
