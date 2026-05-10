@@ -440,6 +440,18 @@ func TestF354U11BBookReligiousEntitySuggestAcceptsPost(t *testing.T) {
 	}
 }
 
+func TestF354U11BBookReligiousEntitySuggestRejectsMalformedPost(t *testing.T) {
+	app, _, _, session := setupF354U7BooksAdmin(t, "test_f35_4u11b_rel_suggest_bad_post.sqlite3")
+	req := httptest.NewRequest(http.MethodPost, "/api/documentals/llibres/entitats-religioses/suggest", bytes.NewBufferString("arxiu_id=%ZZ"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.SearchBookReligiousEntitiesSuggestJSON(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("SearchBookReligiousEntitiesSuggestJSON malformed POST status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestF354U11BBookMunicipiSuggestFiltersByReligiousEntityScope(t *testing.T) {
 	app, database, _, session := setupF354U7BooksAdmin(t, "test_f35_4u11b_mun_suggest.sqlite3")
 	paisID, municipiAID := seedF354U7BookTerritory(t, database, "MunScopeA")
@@ -546,6 +558,18 @@ func TestF354U11BBookMunicipiSuggestAcceptsPost(t *testing.T) {
 	}
 	if len(payload.Items) != 1 || payload.Items[0].ID != municipiAID {
 		t.Fatalf("scope municipi POST inesperat: %+v", payload)
+	}
+}
+
+func TestF354U11BBookMunicipiSuggestRejectsMalformedPost(t *testing.T) {
+	app, _, _, session := setupF354U7BooksAdmin(t, "test_f35_4u11b_mun_suggest_bad_post.sqlite3")
+	req := httptest.NewRequest(http.MethodPost, "/api/documentals/llibres/municipis/suggest", bytes.NewBufferString("entitat_religiosa_id=%ZZ"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.SearchBookMunicipisSuggestJSON(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("SearchBookMunicipisSuggestJSON malformed POST status=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

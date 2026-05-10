@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -886,9 +887,14 @@ func (a *App) SearchBookReligiousEntitiesSuggestJSON(w http.ResponseWriter, r *h
 		http.NotFound(w, r)
 		return
 	}
-	query := suggestRequestValue(r, "q")
-	arxiuID := parseIntDefault(suggestRequestValue(r, "arxiu_id"), 0)
-	limit := parseSuggestLimit(suggestRequestValue(r, "limit"))
+	values, err := suggestRequestValues(r)
+	if err != nil {
+		http.Error(w, "invalid form payload", http.StatusBadRequest)
+		return
+	}
+	query := suggestValue(values, "q")
+	arxiuID := parseIntDefault(suggestValue(values, "arxiu_id"), 0)
+	limit := parseSuggestLimit(suggestValue(values, "limit"))
 	related, err := a.archivePublishedReligiousEntities(arxiuID)
 	if err != nil {
 		Errorf("Error carregant entitats religioses relacionades amb arxiu %d: %v", arxiuID, err)
@@ -956,9 +962,14 @@ func (a *App) SearchBookMunicipisSuggestJSON(w http.ResponseWriter, r *http.Requ
 		http.NotFound(w, r)
 		return
 	}
-	query := suggestRequestValue(r, "q")
-	entitatReligiosaID := parseIntDefault(suggestRequestValue(r, "entitat_religiosa_id"), 0)
-	limit := parseSuggestLimit(suggestRequestValue(r, "limit"))
+	values, err := suggestRequestValues(r)
+	if err != nil {
+		http.Error(w, "invalid form payload", http.StatusBadRequest)
+		return
+	}
+	query := suggestValue(values, "q")
+	entitatReligiosaID := parseIntDefault(suggestValue(values, "entitat_religiosa_id"), 0)
+	limit := parseSuggestLimit(suggestValue(values, "limit"))
 	lang := ResolveLang(r)
 	filter := db.MunicipiBrowseFilter{
 		Text:   query,
@@ -1006,17 +1017,21 @@ func parseSuggestLimit(raw string) int {
 	return limit
 }
 
-func suggestRequestValue(r *http.Request, key string) string {
+func suggestRequestValues(r *http.Request) (url.Values, error) {
 	if r == nil {
-		return ""
+		return url.Values{}, nil
 	}
 	if r.Method == http.MethodPost {
 		if err := r.ParseForm(); err != nil {
-			return ""
+			return nil, err
 		}
-		return strings.TrimSpace(r.FormValue(key))
+		return r.Form, nil
 	}
-	return strings.TrimSpace(r.URL.Query().Get(key))
+	return r.URL.Query(), nil
+}
+
+func suggestValue(values url.Values, key string) string {
+	return strings.TrimSpace(values.Get(key))
 }
 
 func buildReligiousSuggestItems(items []db.EntitatReligiosa, relatedIDs map[int]bool) []map[string]interface{} {
