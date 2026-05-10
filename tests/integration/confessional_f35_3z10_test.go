@@ -1,6 +1,9 @@
 package integration
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -38,6 +41,8 @@ func TestF353Z10SeparatesManagementAndReligiousNavigation(t *testing.T) {
 		`/confessional/navegacio`,
 		`/static/js/nivells-taula.js`,
 		"Arquebisbat de Tarragona F35-3Z10 " + suffix,
+		`/api/confessional/entitats/suggest?scope=roots`,
+		`/confessional/entitats/new?parent_id=` + strconv.Itoa(archID),
 	} {
 		if !strings.Contains(managementBody, token) {
 			t.Fatalf("la gestio d'entitats no segueix el contracte tipus nivells (%q); body=%s", token, managementBody)
@@ -55,12 +60,12 @@ func TestF353Z10SeparatesManagementAndReligiousNavigation(t *testing.T) {
 		}
 	}
 
-	childrenBody := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats?parent_id="+strconv.Itoa(archID), session)
+	childrenBody := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats?parent_id="+strconv.Itoa(archID)+"&parent_mode=direct", session)
 	if !strings.Contains(childrenBody, `href="/confessional/entitats/`+strconv.Itoa(arxID)+`">Arxiprestat de la Conca-Urgell-Garrigues F35-3Z10 `+suffix) || strings.Contains(childrenBody, `href="/confessional/entitats/`+strconv.Itoa(parishID)+`">Parroquia de Sant Pere F35-3Z10 `+suffix) {
 		t.Fatalf("/confessional/entitats ha de mostrar filles directes del pare seleccionat; body=%s", childrenBody)
 	}
 	newChildBody := f353YGet(t, app.AdminNewConfessional, "/confessional/entitats/new?parent_id="+strconv.Itoa(archID), session)
-	if !strings.Contains(newChildBody, `value="`+strconv.Itoa(archID)+`" data-religion-code="catolicisme_ritu_llati"`) || !strings.Contains(newChildBody, `selected>Arquebisbat de Tarragona F35-3Z10 `+suffix) {
+	if !strings.Contains(newChildBody, `id="parent_id" name="parent_id" type="hidden" value="`+strconv.Itoa(archID)+`"`) || !strings.Contains(newChildBody, `id="parent_id_label" type="text" value="Arquebisbat de Tarragona F35-3Z10 `+suffix) {
 		t.Fatalf("nova entitat sota pare ha de preseleccionar el pare; body=%s", newChildBody)
 	}
 
@@ -93,6 +98,26 @@ func TestF353Z10SeparatesManagementAndReligiousNavigation(t *testing.T) {
 	searchBody := f353YGet(t, app.AdminConfessionalNavigation, "/confessional/navegacio?q=Sant%20Pere", session)
 	if !strings.Contains(searchBody, "Parroquia de Sant Pere F35-3Z10 "+suffix) {
 		t.Fatalf("el cercador lliure de navegacio ha de trobar entitats sense context previ; body=%s", searchBody)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/confessional/entitats/suggest?q=Arquebisbat&scope=roots&nivell_confessional_codi=parroquia&religio_confessio_codi=catolicisme_ritu_llati", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminConfessionalEntitiesSuggestJSON(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("suggest status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		Items []struct {
+			ID  int    `json:"id"`
+			Nom string `json:"nom"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json invalid suggest confessional: %v", err)
+	}
+	if len(payload.Items) == 0 || payload.Items[0].ID != archID {
+		t.Fatalf("el suggest de pares ha de retornar l'entitat arrel compatible; payload=%+v", payload)
 	}
 }
 
@@ -132,7 +157,7 @@ func TestF353Z10NavigationSecurityI18NAndMenuContract(t *testing.T) {
 			t.Fatalf("falta contracte navegador religios Z10: %s", token)
 		}
 	}
-	if strings.Contains(listBody, "<script>\n") || strings.Contains(navBody, "<script>\n") || strings.Contains(listBody, "onclick=") || strings.Contains(navBody, "onclick=") || strings.Contains(listBody, "onchange=") || strings.Contains(navBody, "onchange=") {
+	if strings.Contains(listBody, "<script>\n") || strings.Contains(navBody, "<script>\n") || strings.Contains(listBody, "onclick=") || strings.Contains(navBody, "onclick=") || strings.Contains(listBody, "onchange=") || strings.Contains(navBody, "onchange=") || strings.Contains(listBody, "<style>") || strings.Contains(navBody, "<style>") {
 		t.Fatalf("Z10 no ha de reintroduir JS inline")
 	}
 	for _, lang := range []string{"cat", "en", "oc"} {

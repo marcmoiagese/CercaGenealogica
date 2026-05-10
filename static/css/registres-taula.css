@@ -119,6 +119,120 @@
     display: none;
 }
 
+.confessional-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.confessional-actions form {
+    display: inline;
+    margin: 0;
+}
+
+.confessional-actions .boto-secundari,
+.confessional-actions .boto-primari {
+    padding: 5px 8px;
+}
+
+.confessional-empty {
+    color: #667085;
+    text-align: center;
+}
+
+.confessional-results {
+    color: #667085;
+    margin: 0 0 10px;
+}
+
+.confessional-path {
+    color: #475467;
+    font-size: 0.92rem;
+    line-height: 1.4;
+    margin: 0 0 12px;
+}
+
+.confessional-path ol,
+.confessional-path-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+}
+
+.confessional-path li:not(:last-child)::after,
+.confessional-path-list li:not(:last-child)::after {
+    color: #98a2b3;
+    content: ">";
+    margin-left: 4px;
+}
+
+.confessional-path-cell {
+    min-width: 260px;
+}
+
+.confessional-path-level {
+    color: #667085;
+    font-size: 0.82rem;
+}
+
+.confessional-counts {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.suggestions-list {
+    background: #fff;
+    border: 1px solid var(--color-borda);
+    border-radius: 8px;
+    box-shadow: 0 8px 18px rgba(15, 63, 87, 0.12);
+    display: none;
+    list-style: none;
+    margin: 6px 0 0;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 0;
+}
+
+.suggestions-list.is-open {
+    display: block;
+}
+
+.suggestions-list li {
+    border-bottom: 1px solid #eef2f6;
+    cursor: pointer;
+    padding: 0.65rem 0.8rem;
+}
+
+.suggestions-list li:last-child {
+    border-bottom: 0;
+}
+
+.suggestions-list li.is-active,
+.suggestions-list li:hover {
+    background: #f5f9fc;
+}
+
+.suggestions-list .suggestion-empty {
+    color: #667085;
+    cursor: default;
+}
+
+.suggestions-list .suggestion-title {
+    display: block;
+    font-weight: 600;
+}
+
+.suggestions-list .suggestion-context {
+    color: #667085;
+    display: block;
+    font-size: 0.84rem;
+    margin-top: 0.15rem;
+}
+
 .editable-cell:hover .edit-icons,
 .editable-cell.is-editing .edit-icons {
     display: inline-flex;

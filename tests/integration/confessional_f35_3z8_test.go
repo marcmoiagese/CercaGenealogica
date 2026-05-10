@@ -1,6 +1,9 @@
 package integration
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -80,6 +83,16 @@ func TestF353Z8HierarchicalCreateValidatesCompatiblePublishedParent(t *testing.T
 	if body := f353YPostConfessional(t, app.AdminSaveConfessional, session, selfForm); !strings.Contains(body, "mateixa") {
 		t.Fatalf("una entitat no pot ser pare d'ella mateixa; body=%s", body)
 	}
+
+	rootID := f353Z8SaveEntity(t, database, "z8_cycle_root_"+suffix, "Santa Seu F35-3Z8 "+suffix, "santa_seu", "publicat")
+	childCycleID := f353Z8SaveEntity(t, database, "z8_cycle_child_"+suffix, "Arquebisbat cicle F35-3Z8 "+suffix, "arquebisbat_arxidiocesi", "publicat")
+	f353Z9SavePublishedRelation(t, database, rootID, childCycleID, "arquebisbat_arxidiocesi")
+	cycleForm := f353ZEntityForm("Santa Seu F35-3Z8 "+suffix, "z8_cycle_root_"+suffix, rootID)
+	cycleForm.Set("nivell_confessional_codi", "santa_seu")
+	cycleForm.Set("parent_id", strconv.Itoa(childCycleID))
+	if body := f353YPostConfessional(t, app.AdminSaveConfessional, session, cycleForm); !strings.Contains(body, "descendent") {
+		t.Fatalf("una entitat no pot passar a dependre d'una descendent; body=%s", body)
+	}
 }
 
 func TestF353Z8ParentSelectorFiltersCompatiblePublishedParents(t *testing.T) {
@@ -98,21 +111,11 @@ func TestF353Z8ParentSelectorFiltersCompatiblePublishedParents(t *testing.T) {
 	if !strings.Contains(levelOption, `data-parent-level-codes="arquebisbat_arxidiocesi,bisbat_diocesi"`) {
 		t.Fatalf("el nivell fill ha d'exposar els codis pare compatibles; option=%s", levelOption)
 	}
-	for _, id := range []int{archID, dioceseID} {
-		option := f353Z5OptionSnippet(body, strconv.Itoa(id))
-		if !strings.Contains(option, `data-level-code=`) || strings.Contains(option, "hidden") || strings.Contains(option, "disabled") {
-			t.Fatalf("pare compatible publicat ha de quedar seleccionable; id=%d option=%s", id, option)
-		}
-	}
-	parishOption := f353Z5OptionSnippet(body, strconv.Itoa(parishID))
-	if !strings.Contains(parishOption, "hidden") || !strings.Contains(parishOption, "disabled") {
-		t.Fatalf("pare de nivell incompatible ha de quedar ocult/deshabilitat; option=%s", parishOption)
-	}
-	if strings.Contains(body, `value="`+strconv.Itoa(pendingID)+`"`) {
-		t.Fatalf("pares pendents no han d'apareixer al selector; body=%s", body)
-	}
 	for _, token := range []string{
-		`data-can-have-children=`,
+		`id="parent_id_label"`,
+		`id="parent_id" name="parent_id" type="hidden"`,
+		`id="parent_id_suggestions"`,
+		`data-api="/api/confessional/entitats/suggest"`,
 		`id="parent_id_help"`,
 		`/static/js/confessional-form.js`,
 	} {
@@ -120,6 +123,16 @@ func TestF353Z8ParentSelectorFiltersCompatiblePublishedParents(t *testing.T) {
 			t.Fatalf("falta contracte selector pare F35-3Z8: %s", token)
 		}
 	}
+	if strings.Contains(body, `select id="parent_id"`) {
+		t.Fatalf("el formulari no ha de tornar al select massiu de pares; body=%s", body)
+	}
+	if strings.Contains(body, "Pendent selector F35-3Z8 "+suffix) {
+		t.Fatalf("pares pendents no han d'apareixer precarregats al formulari; body=%s", body)
+	}
+	_ = archID
+	_ = dioceseID
+	_ = parishID
+	_ = pendingID
 }
 
 func TestF353Z8EntityListFiltersPublishedHierarchySafely(t *testing.T) {
@@ -186,7 +199,9 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 	}
 	for _, token := range []string{
 		`data-parent-level-codes`,
-		`data-can-have-children`,
+		`id="parent_id_label"`,
+		`id="parent_id_suggestions"`,
+		`/api/confessional/entitats/suggest`,
 		`confessional.help.parents.choose_level`,
 		`confessional.help.parents.none`,
 	} {
@@ -195,15 +210,15 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 		}
 	}
 	for _, token := range []string{
-		`parentLevelAllowed`,
-		`data-parent-level-codes`,
-		`data-can-have-children`,
+		`fetchParentSuggestions`,
+		`child_id`,
+		`exclude_id`,
 	} {
 		if !strings.Contains(staticBody, token) {
 			t.Fatalf("falta sincronitzacio JS F35-3Z8: %s", token)
 		}
 	}
-	if strings.Contains(formBody, "<script>\n") || strings.Contains(formBody, "onclick=") || strings.Contains(formBody, "onchange=") {
+	if strings.Contains(formBody, "<script>\n") || strings.Contains(formBody, "onclick=") || strings.Contains(formBody, "onchange=") || strings.Contains(listBody, "<style>") || strings.Contains(navBody, "<style>") {
 		t.Fatalf("no s'ha de reintroduir JS inline al formulari confessional")
 	}
 	for _, token := range []string{
@@ -231,12 +246,52 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 			"confessional.filter.parent",
 			"confessional.filter.status_publicat",
 			"confessional.error.parent_level_incompatible",
+			"confessional.error.parent_cycle",
 			"confessional.help.parents.choose_level",
 			"confessional.help.parents.none",
+			"confessional.suggest.empty",
 		} {
 			if strings.TrimSpace(values[key]) == "" {
 				t.Fatalf("%s no defineix %s", lang, key)
 			}
+		}
+	}
+}
+
+func TestF353Z8ParentSuggestFiltersPublishedCompatibleRootsAndDescendants(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_3z8_parent_suggest.sqlite3")
+	session := f353YAdminSession(t, database, "z8_parent_suggest")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	rootID := f353Z8SaveEntity(t, database, "z8_sugg_root_"+suffix, "Arquebisbat suggest F35-3Z8 "+suffix, "arquebisbat_arxidiocesi", "publicat")
+	childID := f353Z8SaveEntity(t, database, "z8_sugg_child_"+suffix, "Arxiprestat suggest F35-3Z8 "+suffix, "arxiprestat_vicariat_forani", "publicat")
+	grandchildID := f353Z8SaveEntity(t, database, "z8_sugg_grand_"+suffix, "Parroquia suggest F35-3Z8 "+suffix, "parroquia", "publicat")
+	pendingID := f353Z8SaveEntity(t, database, "z8_sugg_pending_"+suffix, "Arquebisbat pendent suggest F35-3Z8 "+suffix, "arquebisbat_arxidiocesi", "pendent")
+	f353Z9SavePublishedRelation(t, database, rootID, childID, "arxiprestat_vicariat_forani")
+	f353Z9SavePublishedRelation(t, database, childID, grandchildID, "parroquia")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/confessional/entitats/suggest?q=suggest&scope=roots&nivell_confessional_codi=parroquia&religio_confessio_codi=catolicisme_ritu_llati&child_id="+strconv.Itoa(childID), nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminConfessionalEntitiesSuggestJSON(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("suggest status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		Items []struct {
+			ID  int    `json:"id"`
+			Nom string `json:"nom"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json invalid suggest confessional: %v", err)
+	}
+	if len(payload.Items) == 0 || payload.Items[0].ID != rootID {
+		t.Fatalf("el suggest ha d'incloure l'arrel compatible publicada; payload=%+v", payload)
+	}
+	for _, item := range payload.Items {
+		if item.ID == childID || item.ID == grandchildID || item.ID == pendingID {
+			t.Fatalf("el suggest no ha d'incloure descendents ni pendents; payload=%+v", payload)
 		}
 	}
 }

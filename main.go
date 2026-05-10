@@ -325,6 +325,7 @@ func main() {
 	http.HandleFunc("/api/territori/nivells/suggest", applyMiddleware(app.RequireLogin(app.AdminNivellsSuggest), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/territori/municipis/suggest", applyMiddleware(app.RequireLogin(app.AdminMunicipisSuggest), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/territori/eclesiastic/suggest", applyMiddleware(app.RequireLogin(app.AdminEclesSuggest), core.BlockIPs, core.RateLimit))
+	http.HandleFunc("/api/confessional/entitats/suggest", applyMiddleware(app.RequireLogin(app.AdminConfessionalEntitiesSuggestJSON), core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/territori/municipis/", applyMiddleware(app.MunicipiMapesAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/municipis/", applyMiddleware(app.MunicipiMapesAPI, core.BlockIPs, core.RateLimit))
 	http.HandleFunc("/api/admin/municipis/", applyMiddleware(app.MunicipiDemografiaAdminAPI, core.BlockIPs, core.RateLimit))

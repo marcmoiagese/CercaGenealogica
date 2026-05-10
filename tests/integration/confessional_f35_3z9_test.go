@@ -31,6 +31,7 @@ func TestF353Z9ConfessionalHierarchyNavigationAndSearch(t *testing.T) {
 		`id="nivellsTable"`,
 		`/static/js/nivells-taula.js`,
 		"Arquebisbat de Tarragona F35-3Z9 " + suffix,
+		"Parroquia de Sant Jaume Apostol d&#39;Arbeca F35-3Z9 " + suffix,
 	} {
 		if !strings.Contains(rootBody, token) {
 			t.Fatalf("vista arrel jerarquica no conte %q; body=%s", token, rootBody)
@@ -40,7 +41,7 @@ func TestF353Z9ConfessionalHierarchyNavigationAndSearch(t *testing.T) {
 		t.Fatalf("la gestio d'entitats no ha de ser una pantalla tipus municipis; body=%s", rootBody)
 	}
 
-	branchBody := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats?parent_id="+strconv.Itoa(archID), session)
+	branchBody := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats?parent_id="+strconv.Itoa(archID)+"&parent_mode=direct", session)
 	for _, token := range []string{
 		"Cami actual",
 		"Arquebisbat de Tarragona F35-3Z9 " + suffix,
@@ -127,8 +128,8 @@ func TestF353Z9ConfessionalHierarchyI18NAndCSPContract(t *testing.T) {
 			t.Fatalf("falta contracte template navegacio Z9/Z10: %s", token)
 		}
 	}
-	if strings.Contains(listBody, "<script>\n") || strings.Contains(navBody, "<script>\n") || strings.Contains(listBody, "onchange=") || strings.Contains(navBody, "onchange=") || strings.Contains(listBody, "onclick=") || strings.Contains(navBody, "onclick=") {
-		t.Fatalf("les vistes confessionals no han de tenir JS inline")
+	if strings.Contains(listBody, "<script>\n") || strings.Contains(navBody, "<script>\n") || strings.Contains(listBody, "onchange=") || strings.Contains(navBody, "onchange=") || strings.Contains(listBody, "onclick=") || strings.Contains(navBody, "onclick=") || strings.Contains(listBody, "<style>") || strings.Contains(navBody, "<style>") {
+		t.Fatalf("les vistes confessionals no han de tenir JS o CSS inline")
 	}
 	for _, token := range []string{
 		`data-submit-form`,

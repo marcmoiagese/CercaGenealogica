@@ -6,22 +6,6 @@
     <title>{{ .Data.Section.Title }}</title>
     {{ template "styles-private" . }}
     <link rel="stylesheet" href="/static/css/registres-taula.css">
-    <style>
-        .confessional-actions { align-items: center; display: flex; gap: 8px; }
-        .confessional-actions form { display: inline; margin: 0; }
-        .confessional-actions .boto-secundari, .confessional-actions .boto-primari { padding: 5px 8px; }
-        .confessional-empty { color: #667085; text-align: center; }
-        .confessional-hierarchy-controls { margin: 0 0 16px; }
-        .confessional-results { color: #667085; margin: 0 0 10px; }
-        .confessional-path { color: #475467; font-size: .92rem; line-height: 1.4; margin: 0 0 12px; }
-        .confessional-path ol { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 4px 0 0; padding: 0; }
-        .confessional-path li:not(:last-child)::after { content: ">"; margin-left: 4px; color: #98a2b3; }
-        .confessional-path-cell { min-width: 260px; }
-        .confessional-path-list { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
-        .confessional-path-list li:not(:last-child)::after { content: ">"; margin-left: 4px; color: #98a2b3; }
-        .confessional-path-level { color: #667085; font-size: .82rem; }
-        .confessional-counts { text-align: right; white-space: nowrap; }
-    </style>
 </head>
 <body>
     {{ template "header-private" . }}
@@ -45,21 +29,49 @@
             <form method="get" id="nivellsFilterForm">
                 <div class="filtres-arxius">
                     <div class="grup-camp">
-                        <label for="confessional-parent-filter">{{ t .Lang "confessional.management.parent_context" }}</label>
-                        <select id="confessional-parent-filter" name="parent_id" data-submit-form="true">
-                            <option value="0">{{ t .Lang "confessional.hierarchy.root" }}</option>
-                            {{ range .Data.ParentOptions }}
-                            <option value="{{ .ID }}" {{ if eq $.Data.Filter.ParentID .ID }}selected{{ end }}>{{ .Nom }}</option>
+                        <label for="confessional-q">{{ t .Lang "confessional.filter.search" }}</label>
+                        <input id="confessional-q" type="text" name="q" maxlength="80" value="{{ .Data.Filter.Text }}" placeholder="{{ t .Lang "confessional.navigation.search.placeholder" }}" autocomplete="off">
+                    </div>
+                    <div class="grup-camp">
+                        <label for="confessional-religion">{{ t .Lang "confessional.filter.religion" }}</label>
+                        <select id="confessional-religion" name="religio_confessio_codi">
+                            <option value="">{{ t .Lang "confessional.filter.all_religions" }}</option>
+                            {{ range .Data.SelectableReligions }}
+                            <option value="{{ .Code }}" {{ if eq $.Data.Filter.ReligionCode .Code }}selected{{ end }}>{{ index $.Data.ReligionCatalogLabels .Code }}</option>
                             {{ end }}
                         </select>
                     </div>
-                    {{ if .Data.CanCreate }}
-                    <a class="boto-primari" href="/confessional/entitats/new{{ if gt .Data.Filter.ParentID 0 }}?parent_id={{ .Data.Filter.ParentID }}{{ end }}">{{ t .Lang "confessional.management.new_child" }}</a>
-                    {{ end }}
+                    <div class="grup-camp">
+                        <label for="confessional-level">{{ t .Lang "confessional.filter.level" }}</label>
+                        <select id="confessional-level" name="nivell_confessional_codi">
+                            <option value="">{{ t .Lang "confessional.filter.all_levels" }}</option>
+                            {{ range .Data.SelectableNivells }}
+                            <option value="{{ .Code }}" data-religion-code="{{ .ReligionCode }}" {{ if and $.Data.Filter.ReligionCode (ne $.Data.Filter.ReligionCode .ReligionCode) }}hidden disabled{{ end }} {{ if eq $.Data.Filter.LevelCode .Code }}selected{{ end }}>{{ index $.Data.LevelCatalogLabels .Code }}</option>
+                            {{ end }}
+                        </select>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="confessional-parent-filter">{{ t .Lang "confessional.management.parent_context" }}</label>
+                        <input id="confessional-parent-filter-label" type="text" value="{{ if .Data.SelectedParent }}{{ .Data.SelectedParent.Nom }}{{ end }}" data-suggest="1" data-api="/api/confessional/entitats/suggest?scope=roots" data-hidden="confessional-parent-filter" data-suggestions="confessional-parent-filter-suggestions" data-empty-label="{{ t .Lang "confessional.suggest.empty" }}" autocomplete="off">
+                        <input id="confessional-parent-filter" name="parent_id" type="hidden" value="{{ .Data.Filter.ParentID }}">
+                        <ul id="confessional-parent-filter-suggestions" class="suggestions-list" aria-label="{{ t .Lang "common.suggestions" }}"></ul>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="confessional-parent-mode">{{ t .Lang "confessional.hierarchy.scope" }}</label>
+                        <select id="confessional-parent-mode" name="parent_mode">
+                            <option value="all" {{ if eq .Data.Filter.ParentMode "all" }}selected{{ end }}>{{ t .Lang "confessional.hierarchy.scope.all" }}</option>
+                            <option value="direct" {{ if eq .Data.Filter.ParentMode "direct" }}selected{{ end }}>{{ t .Lang "confessional.hierarchy.scope.direct" }}</option>
+                            <option value="descendants" {{ if eq .Data.Filter.ParentMode "descendants" }}selected{{ end }}>{{ t .Lang "confessional.hierarchy.scope.descendants" }}</option>
+                        </select>
+                    </div>
+                    <button class="boto-secundari" type="submit">{{ t .Lang "confessional.filter.apply" }}</button>
+                    <a class="boto-secundari" href="/confessional/entitats">{{ t .Lang "confessional.filter.clear" }}</a>
+                    {{ if .Data.CanCreate }}<a class="boto-primari" href="/confessional/entitats/new">{{ .Data.Section.NewLabel }}</a>{{ end }}
                 </div>
                 <input type="hidden" name="per_page" value="{{ .Data.Filter.PerPage }}">
                 <input type="hidden" name="page" value="1">
             </form>
+            <p class="confessional-results">{{ t .Lang "confessional.filter.results" }}: {{ .Data.Total }}</p>
             {{ if .Data.ParentPath }}
             <div class="confessional-path">
                 <strong>{{ t .Lang "confessional.hierarchy.current_path" }}</strong>
@@ -114,6 +126,7 @@
                                 <td data-col="7" data-key="actions" class="confessional-actions">
                                     <a class="boto-secundari" href="/confessional/entitats/{{ .Entitat.ID }}">{{ t $.Lang "confessional.action.view" }}</a>
                                     {{ if $.Data.CanEdit }}<a class="boto-secundari" href="/confessional/entitats/{{ .Entitat.ID }}/edit">Edita</a>{{ end }}
+                                    {{ if $.Data.CanCreate }}<a class="boto-primari" href="/confessional/entitats/new?parent_id={{ .Entitat.ID }}">{{ t $.Lang "confessional.management.new_child" }}</a>{{ end }}
                                     {{ if $.Data.CanDelete }}
                                     <form method="post" action="/confessional/delete">
                                         <input type="hidden" name="kind" value="entitat">
@@ -131,6 +144,15 @@
                     </table>
                 </div>
             </div>
+            {{ if gt .Data.TotalPages 1 }}
+            <div class="paginador" id="paginador">
+                {{ range .Data.PageLinks }}
+                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}data-nav-href="{{ .URL }}"{{ end }}>
+                    {{ .Label }}
+                </button>
+                {{ end }}
+            </div>
+            {{ end }}
             {{ end }}
 
             {{ if eq .Data.Section.Kind "model" }}
@@ -237,7 +259,9 @@
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
     {{ if eq .Data.Section.Kind "entitat" }}
+    <script src="/static/js/arxiu-form-suggest.js"></script>
     <script src="/static/js/nivells-taula.js"></script>
+    <script src="/static/js/confessional-management.js"></script>
     {{ end }}
 </body>
 </html>

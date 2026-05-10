@@ -186,16 +186,9 @@
                 </div>
                 <div class="grup-camp">
                     <label for="parent_id">{{ t .Lang "confessional.field.parent_entity_optional" }}</label>
-                    <select id="parent_id" name="parent_id">
-                        <option value="">{{ t .Lang "confessional.select.parent_entity.none" }}</option>
-                        {{ range .Data.SelectableEntitats }}
-                        {{ if ne .ID $.Data.Form.Entitat.ID }}
-                        {{ $parentAllowed := index $.Data.ParentOptionAllowed .ID }}
-                        {{ $isSelectedParent := and $.Data.Form.Entitat.ParentID.Valid (eq .ID (int $.Data.Form.Entitat.ParentID.Int64)) }}
-                        <option value="{{ .ID }}" data-religion-code="{{ .ReligioConfessioCodi }}" data-level-code="{{ .NivellConfessionalCodi }}" data-can-have-children="{{ index $.Data.LevelCanHaveChildren .NivellConfessionalCodi }}" {{ if and (not $parentAllowed) (not $isSelectedParent) }}hidden disabled{{ end }} {{ if $isSelectedParent }}selected{{ end }}>{{ .Nom }}</option>
-                        {{ end }}
-                        {{ end }}
-                    </select>
+                    <input id="parent_id_label" type="text" value="{{ if .Data.SelectedParent }}{{ .Data.SelectedParent.Nom }}{{ end }}" data-api="/api/confessional/entitats/suggest" data-empty-label="{{ t .Lang "confessional.suggest.empty" }}" data-placeholder-none="{{ t .Lang "confessional.select.parent_entity.none" }}" autocomplete="off">
+                    <input id="parent_id" name="parent_id" type="hidden" value="{{ if .Data.Form.Entitat.ParentID.Valid }}{{ .Data.Form.Entitat.ParentID.Int64 }}{{ end }}">
+                    <ul id="parent_id_suggestions" class="suggestions-list" aria-label="{{ t .Lang "common.suggestions" }}"></ul>
                     <p id="parent_id_help" class="muted" data-empty="{{ t .Lang "confessional.help.parents.choose_level" }}" data-none="{{ t .Lang "confessional.help.parents.none" }}">{{ t .Lang "confessional.help.parents.choose_level" }}</p>
                 </div>
                 <div class="grup-camp">
@@ -313,6 +306,7 @@
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
     {{ if eq .Data.Form.Kind "entitat" }}
+    <script src="/static/js/arxiu-form-suggest.js"></script>
     <script src="/static/js/confessional-form.js"></script>
     {{ end }}
 </body>
