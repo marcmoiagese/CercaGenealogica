@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -1654,7 +1655,7 @@ func (a *App) AdminConfessionalEntitiesSuggestJSON(w http.ResponseWriter, r *htt
 	writeJSON(w, map[string]interface{}{"items": items})
 }
 
-func parseConfessionalEntitySuggestFilter(values map[string]string) confessionalEntitySuggestFilter {
+func parseConfessionalEntitySuggestFilter(values url.Values) confessionalEntitySuggestFilter {
 	return confessionalEntitySuggestFilter{
 		Query:        normalizeConfessionalSearchText(suggestValue(values, "q")),
 		Limit:        parseSuggestLimit(suggestValue(values, "limit")),
