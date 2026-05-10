@@ -119,12 +119,14 @@ func TestF353Z8ParentSelectorFiltersCompatiblePublishedParents(t *testing.T) {
 		`class="suggestions-list confessional-suggestions"`,
 		`data-api="/api/confessional/entitats/suggest"`,
 		`id="parent_id_help"`,
-		`data-incompatible="`,
 		`/static/js/confessional-form.js`,
 	} {
 		if !strings.Contains(body, token) {
 			t.Fatalf("falta contracte selector pare F35-3Z8: %s", token)
 		}
+	}
+	if !strings.Contains(body, `data-incompatible="`) || strings.Contains(body, `data-incompatible=""`) {
+		t.Fatalf("data-incompatible ha d'estar renderitzat i no buit; body=%s", body)
 	}
 	if strings.Contains(body, `select id="parent_id"`) {
 		t.Fatalf("el formulari no ha de tornar al select massiu de pares; body=%s", body)

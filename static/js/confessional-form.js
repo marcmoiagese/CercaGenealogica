@@ -176,7 +176,10 @@
         return { compatible: false, reason: "incompatible" };
       }
       const parentLevelCodes = (selectedLevel.dataset.parentLevelCodes || "").split(",").filter(Boolean);
-      if (parentLevelCodes.indexOf(parentLevelCode) === -1) {
+      if (parentLevelCodes.includes("*")) {
+        return { compatible: true, reason: "" };
+      }
+      if (!parentLevelCodes.includes(parentLevelCode)) {
         return { compatible: false, reason: "incompatible" };
       }
       return { compatible: true, reason: "" };
