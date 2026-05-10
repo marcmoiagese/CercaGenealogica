@@ -1,10 +1,10 @@
 (function () {
   function initConfessionalManagement() {
-    var form = document.getElementById("nivellsFilterForm");
-    var religion = document.getElementById("confessional-religion");
-    var level = document.getElementById("confessional-level");
-    var parentHidden = document.getElementById("confessional-parent-filter");
-    var parentLabel = document.getElementById("confessional-parent-filter-label");
+    const form = document.getElementById("nivellsFilterForm");
+    const religion = document.getElementById("confessional-religion");
+    const level = document.getElementById("confessional-level");
+    const parentHidden = document.getElementById("confessional-parent-filter");
+    const parentLabel = document.getElementById("confessional-parent-filter-label");
     if (!form) {
       return;
     }
@@ -13,12 +13,12 @@
       if (!religion || !level) {
         return;
       }
-      var selectedReligion = religion.value;
+      const selectedReligion = religion.value;
       Array.prototype.forEach.call(level.options, function (option) {
         if (!option.value) {
           return;
         }
-        var visible = !selectedReligion || option.getAttribute("data-religion-code") === selectedReligion;
+        const visible = !selectedReligion || option.dataset.religionCode === selectedReligion;
         option.hidden = !visible;
         option.disabled = !visible;
       });

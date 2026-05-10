@@ -113,7 +113,8 @@ func TestF353Z8ParentSelectorFiltersCompatiblePublishedParents(t *testing.T) {
 	}
 	for _, token := range []string{
 		`id="parent_id_label"`,
-		`id="parent_id" name="parent_id" type="hidden"`,
+		`for="parent_id_label"`,
+		`id="confessional_entity_parent_id" name="parent_id" type="hidden"`,
 		`id="parent_id_suggestions"`,
 		`data-api="/api/confessional/entitats/suggest"`,
 		`id="parent_id_help"`,
@@ -200,6 +201,7 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 	for _, token := range []string{
 		`data-parent-level-codes`,
 		`id="parent_id_label"`,
+		`for="parent_id_label"`,
 		`id="parent_id_suggestions"`,
 		`/api/confessional/entitats/suggest`,
 		`confessional.help.parents.choose_level`,
@@ -286,7 +288,7 @@ func TestF353Z8ParentSuggestFiltersPublishedCompatibleRootsAndDescendants(t *tes
 	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json invalid suggest confessional: %v", err)
 	}
-	if len(payload.Items) == 0 || payload.Items[0].ID != rootID {
+	if !payloadContainsConfessionalID(payload.Items, rootID) {
 		t.Fatalf("el suggest ha d'incloure l'arrel compatible publicada; payload=%+v", payload)
 	}
 	for _, item := range payload.Items {
@@ -310,4 +312,16 @@ func f353Z8SaveEntity(t *testing.T, database db.DB, code, name, level, moderatio
 		t.Fatalf("SaveEntitatReligiosa(%s): %v", name, err)
 	}
 	return id
+}
+
+func payloadContainsConfessionalID(items []struct {
+	ID  int    `json:"id"`
+	Nom string `json:"nom"`
+}, id int) bool {
+	for _, item := range items {
+		if item.ID == id {
+			return true
+		}
+	}
+	return false
 }

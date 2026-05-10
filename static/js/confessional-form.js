@@ -1,18 +1,20 @@
 (function () {
   function initConfessionalForm() {
-    var religion = document.getElementById("religio_confessio_codi");
-    var level = document.getElementById("nivell_confessional_codi");
-    var parent = document.getElementById("parent_id");
-    var parentLabel = document.getElementById("parent_id_label");
-    var parentSuggestions = document.getElementById("parent_id_suggestions");
-    var formID = document.querySelector("input[name='id']");
+    const religion = document.getElementById("religio_confessio_codi");
+    const level = document.getElementById("nivell_confessional_codi");
+    const parent = document.querySelector("input[name='parent_id']");
+    const parentLabel = document.getElementById("parent_id_label");
+    const parentSuggestions = document.getElementById("parent_id_suggestions");
+    const formID = document.querySelector("input[name='id']");
     if (!religion || !level) {
       return;
     }
 
-    var lastParentItems = [];
-    var activeParentIndex = -1;
-    var parentTimer = null;
+    let lastParentItems = [];
+    let activeParentIndex = -1;
+    let parentTimer = null;
+    let parentSuggestionsController = null;
+    let parentSuggestionsRequestID = 0;
 
     function selectedLevelOption() {
       if (level.selectedOptions.length === 0 || level.selectedOptions[0].disabled) {
@@ -29,6 +31,13 @@
       parentSuggestions.classList.remove("is-open");
       lastParentItems = [];
       activeParentIndex = -1;
+    }
+
+    function abortParentSuggestions() {
+      if (parentSuggestionsController) {
+        parentSuggestionsController.abort();
+        parentSuggestionsController = null;
+      }
     }
 
     function setActiveParent(index) {
@@ -49,7 +58,7 @@
       lastParentItems = items || [];
       activeParentIndex = -1;
       if (!items || items.length === 0) {
-        var empty = document.createElement("li");
+        const empty = document.createElement("li");
         empty.className = "suggestion-empty";
         empty.textContent = parentLabel ? parentLabel.dataset.emptyLabel || "No results" : "No results";
         parentSuggestions.appendChild(empty);
@@ -57,14 +66,14 @@
         return;
       }
       items.forEach(function (item, idx) {
-        var li = document.createElement("li");
+        const li = document.createElement("li");
         li.dataset.index = String(idx);
-        var title = document.createElement("span");
+        const title = document.createElement("span");
         title.className = "suggestion-title";
         title.textContent = item.nom || "";
         li.appendChild(title);
         if (item.context) {
-          var context = document.createElement("span");
+          const context = document.createElement("span");
           context.className = "suggestion-context";
           context.textContent = item.context;
           li.appendChild(context);
@@ -89,34 +98,28 @@
     }
 
     function syncParentHelp() {
-      var help = document.getElementById("parent_id_help");
+      const help = document.getElementById("parent_id_help");
       if (!help) {
         return;
       }
-      var selectedLevel = selectedLevelOption();
+      const selectedLevel = selectedLevelOption();
       if (!religion.value || !selectedLevel) {
-        help.textContent = help.getAttribute("data-empty") || "";
+        help.textContent = help.dataset.empty || "";
       } else {
         help.textContent = "";
       }
     }
 
-    function fetchParentSuggestions(query) {
-      if (!parentLabel) {
-        return;
-      }
-      var apiAttr = parentLabel.dataset.api || "";
+    function buildParentSuggestURL(query) {
+      const apiAttr = parentLabel ? parentLabel.dataset.api || "" : "";
       if (!apiAttr) {
-        clearParentSuggestions();
-        return;
+        return null;
       }
-      var selectedLevel = selectedLevelOption();
+      const selectedLevel = selectedLevelOption();
       if (!religion.value || !selectedLevel) {
-        clearParentSuggestions();
-        syncParentHelp();
-        return;
+        return null;
       }
-      var url = new URL(apiAttr, window.location.origin);
+      const url = new URL(apiAttr, window.location.origin);
       url.searchParams.set("q", query);
       url.searchParams.set("limit", "10");
       url.searchParams.set("religio_confessio_codi", religion.value);
@@ -125,26 +128,61 @@
         url.searchParams.set("child_id", formID.value);
         url.searchParams.set("exclude_id", formID.value);
       }
-      fetch(url.toString(), { credentials: "same-origin" })
+      return url;
+    }
+
+    function handleParentSuggestResponse(data, requestID) {
+      if (requestID !== parentSuggestionsRequestID) {
+        return;
+      }
+      renderParentSuggestions(data.items || []);
+      syncParentHelp();
+    }
+
+    function handleParentSuggestError(err, requestID) {
+      if (requestID !== parentSuggestionsRequestID) {
+        return;
+      }
+      if (err && err.name === "AbortError") {
+        return;
+      }
+      clearParentSuggestions();
+    }
+
+    function fetchParentSuggestions(query) {
+      if (!parentLabel) {
+        return;
+      }
+      const url = buildParentSuggestURL(query);
+      if (!url) {
+        abortParentSuggestions();
+        clearParentSuggestions();
+        syncParentHelp();
+        return;
+      }
+      parentSuggestionsRequestID += 1;
+      const requestID = parentSuggestionsRequestID;
+      abortParentSuggestions();
+      parentSuggestionsController = new AbortController();
+      fetch(url.toString(), { credentials: "same-origin", signal: parentSuggestionsController.signal })
         .then(function (resp) { return resp.json(); })
         .then(function (data) {
-          renderParentSuggestions(data.items || []);
-          syncParentHelp();
+          handleParentSuggestResponse(data, requestID);
         })
-        .catch(function () {
-          clearParentSuggestions();
+        .catch(function (err) {
+          handleParentSuggestError(err, requestID);
         });
     }
 
     function syncConfessionalLevels(resetParent) {
-      var selectedReligion = religion.value;
-      var visibleLevels = 0;
+      const selectedReligion = religion.value;
+      let visibleLevels = 0;
 
       Array.prototype.forEach.call(level.options, function (option) {
         if (!option.value) {
           return;
         }
-        var matchesReligion = !!selectedReligion && option.getAttribute("data-religion-code") === selectedReligion;
+        const matchesReligion = !!selectedReligion && option.dataset.religionCode === selectedReligion;
         option.hidden = !matchesReligion;
         option.disabled = !matchesReligion;
         if (matchesReligion) {
@@ -158,18 +196,19 @@
 
       level.disabled = visibleLevels === 0;
 
-      var help = document.getElementById("nivell_confessional_help");
+      const help = document.getElementById("nivell_confessional_help");
       if (help) {
         if (!selectedReligion) {
-          help.textContent = help.getAttribute("data-empty") || "";
+          help.textContent = help.dataset.empty || "";
         } else if (visibleLevels === 0) {
-          help.textContent = help.getAttribute("data-none") || "";
+          help.textContent = help.dataset.none || "";
         } else {
           help.textContent = "";
         }
       }
 
       if (resetParent && parent && parentLabel) {
+        abortParentSuggestions();
         parent.value = "";
         parentLabel.value = "";
         clearParentSuggestions();
@@ -181,6 +220,7 @@
       parentLabel.addEventListener("input", function () {
         parent.value = "";
         if (parentLabel.value.trim().length < 1) {
+          abortParentSuggestions();
           clearParentSuggestions();
           syncParentHelp();
           return;
@@ -204,6 +244,7 @@
           event.preventDefault();
           applyParentSuggestion(lastParentItems[activeParentIndex >= 0 ? activeParentIndex : 0]);
         } else if (event.key === "Escape") {
+          abortParentSuggestions();
           clearParentSuggestions();
         }
       });
@@ -211,15 +252,16 @@
         if (event.target === parentLabel || (parentSuggestions && parentSuggestions.contains(event.target))) {
           return;
         }
+        abortParentSuggestions();
         clearParentSuggestions();
       });
     }
 
-    var form = religion.form;
+    const form = religion.form;
     if (form) {
       form.addEventListener("submit", function (event) {
-        var selected = selectedLevelOption();
-        if (!religion.value || !level.value || !selected || selected.getAttribute("data-religion-code") !== religion.value) {
+        const selected = selectedLevelOption();
+        if (!religion.value || !level.value || !selected || selected.dataset.religionCode !== religion.value) {
           event.preventDefault();
           syncConfessionalLevels(false);
           level.focus();
@@ -242,6 +284,7 @@
         parent.value = "";
         parentLabel.value = "";
       }
+      abortParentSuggestions();
       clearParentSuggestions();
       syncParentHelp();
     });

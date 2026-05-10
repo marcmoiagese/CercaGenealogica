@@ -42,6 +42,10 @@ func TestF353Z10SeparatesManagementAndReligiousNavigation(t *testing.T) {
 		`/static/js/nivells-taula.js`,
 		"Arquebisbat de Tarragona F35-3Z10 " + suffix,
 		`/api/confessional/entitats/suggest?scope=roots`,
+		`id="confessional-parent-filter-label"`,
+		`id="confessional-parent-filter"`,
+		`id="confessional-parent-filter-suggestions"`,
+		`label for="confessional-parent-filter-label"`,
 		`/confessional/entitats/new?parent_id=` + strconv.Itoa(archID),
 	} {
 		if !strings.Contains(managementBody, token) {
@@ -65,7 +69,7 @@ func TestF353Z10SeparatesManagementAndReligiousNavigation(t *testing.T) {
 		t.Fatalf("/confessional/entitats ha de mostrar filles directes del pare seleccionat; body=%s", childrenBody)
 	}
 	newChildBody := f353YGet(t, app.AdminNewConfessional, "/confessional/entitats/new?parent_id="+strconv.Itoa(archID), session)
-	if !strings.Contains(newChildBody, `id="parent_id" name="parent_id" type="hidden" value="`+strconv.Itoa(archID)+`"`) || !strings.Contains(newChildBody, `id="parent_id_label" type="text" value="Arquebisbat de Tarragona F35-3Z10 `+suffix) {
+	if !strings.Contains(newChildBody, `id="confessional_entity_parent_id" name="parent_id" type="hidden" value="`+strconv.Itoa(archID)+`"`) || !strings.Contains(newChildBody, `id="parent_id_label" type="text" value="Arquebisbat de Tarragona F35-3Z10 `+suffix) || !strings.Contains(newChildBody, `label for="parent_id_label"`) {
 		t.Fatalf("nova entitat sota pare ha de preseleccionar el pare; body=%s", newChildBody)
 	}
 
@@ -116,8 +120,24 @@ func TestF353Z10SeparatesManagementAndReligiousNavigation(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json invalid suggest confessional: %v", err)
 	}
-	if len(payload.Items) == 0 || payload.Items[0].ID != archID {
+	if !payloadContainsConfessionalID(payload.Items, archID) {
 		t.Fatalf("el suggest de pares ha de retornar l'entitat arrel compatible; payload=%+v", payload)
+	}
+
+	for i := 0; i < 28; i++ {
+		name := "Paginacio F35-3Z10 " + suffix + " " + strconv.Itoa(i)
+		code := "z10_page_" + suffix + "_" + strconv.Itoa(i)
+		f353Z8SaveEntity(t, database, code, name, "parroquia", "publicat")
+	}
+	pageTwoBody := f353YGet(t, app.AdminConfessionalSectionList, "/confessional/entitats?page=2&per_page=25&religio_confessio_codi=catolicisme_ritu_llati", session)
+	if !strings.Contains(pageTwoBody, `href="/confessional/entitats?page=1&per_page=25&religio_confessio_codi=catolicisme_ritu_llati#nivellsTable"`) {
+		t.Fatalf("el paginador ha de renderitzar enllacos reals conservant filtres; body=%s", pageTwoBody)
+	}
+	if strings.Contains(pageTwoBody, `data-nav-href=`) {
+		t.Fatalf("el paginador no ha d'usar data-nav-href; body=%s", pageTwoBody)
+	}
+	if strings.Contains(pageTwoBody, "Paginacio F35-3Z10 "+suffix+" 0") {
+		t.Fatalf("page=2 no ha de clampjar sempre a la primera pagina; body=%s", pageTwoBody)
 	}
 }
 
@@ -145,6 +165,15 @@ func TestF353Z10NavigationSecurityI18NAndMenuContract(t *testing.T) {
 	}
 	if strings.Contains(listBody, `id="confessional-q"`) || strings.Contains(listBody, `class="card municipis-browse"`) {
 		t.Fatalf("el template d'entitats no ha de contenir cercador lliure ni layout municipis")
+	}
+	for _, token := range []string{
+		`id="confessional-parent-filter-label"`,
+		`id="confessional-parent-filter-suggestions"`,
+		`href="{{ .URL }}"`,
+	} {
+		if !strings.Contains(listBody, token) {
+			t.Fatalf("falta contracte de gestio/paginacio Z10: %s", token)
+		}
 	}
 	for _, token := range []string{
 		`action="/confessional/navegacio"`,

@@ -72,6 +72,22 @@ type confessionalHierarchyRow struct {
 	Depth          int
 }
 
+type confessionalEntitySuggestFilter struct {
+	Query        string
+	Limit        int
+	Scope        string
+	ReligionCode string
+	LevelCode    string
+	ExcludeID    int
+	ChildID      int
+}
+
+type confessionalEntitySuggestion struct {
+	label string
+	score int
+	item  map[string]interface{}
+}
+
 var confessionalSections = map[string]confessionalSection{
 	"religio": {Kind: "religio", Slug: "religions", Title: "Religions/confessions", NewLabel: "Nova religio/confessio", ViewPerm: permKeyTerritoriConfessionalReligionsView, CreatePerm: permKeyTerritoriConfessionalReligionsCreate, EditPerm: permKeyTerritoriConfessionalReligionsEdit, DeletePerm: permKeyTerritoriConfessionalReligionsDelete},
 	"model":   {Kind: "model", Slug: "models", Title: "Models confessionals", NewLabel: "Nou model", ViewPerm: permKeyTerritoriConfessionalModelsView, CreatePerm: permKeyTerritoriConfessionalModelsCreate, EditPerm: permKeyTerritoriConfessionalModelsEdit, DeletePerm: permKeyTerritoriConfessionalModelsDelete},
@@ -176,9 +192,12 @@ func (a *App) AdminConfessionalSectionList(w http.ResponseWriter, r *http.Reques
 		}
 		parentOptions = confessionalManagementParentOptionsWithRelations(publishedEntitats, publishedRelEntitats)
 		selectedParent = confessionalEntityByID(publishedEntitats, listFilter.ParentID)
-		pagination = buildPagination(r, listFilter.Page, listFilter.PerPage, 0, "#nivellsTable")
-		listFilter.PerPage = pagination.PerPage
-		listFilter.Page = pagination.Page
+		if listFilter.PerPage <= 0 {
+			listFilter.PerPage = parseListPerPage("")
+		}
+		if listFilter.Page <= 0 {
+			listFilter.Page = 1
+		}
 		hierarchyRows, parentPath = filterConfessionalHierarchyRows(publishedEntitats, publishedRelEntitats, publishedMunicipiEntitatsReligioses(allRelacions), &listFilter, lang)
 		pagination = buildPagination(r, listFilter.Page, listFilter.PerPage, listFilter.Total, "#nivellsTable")
 		listFilter.Page = pagination.Page
@@ -1100,6 +1119,9 @@ func filterConfessionalEntitats(all []db.EntitatReligiosa, rels []db.EntitatReli
 	if filter.Page > filter.TotalPages {
 		filter.Page = filter.TotalPages
 	}
+	if filter.Page <= 0 {
+		filter.Page = 1
+	}
 	start := (filter.Page - 1) * filter.PerPage
 	if start >= len(out) {
 		return []db.EntitatReligiosa{}
@@ -1575,97 +1597,37 @@ func (a *App) AdminConfessionalEntitiesSuggestJSON(w http.ResponseWriter, r *htt
 		return
 	}
 	lang := ResolveLangForUser(r, user.PreferredLang)
-	query := normalizeConfessionalSearchText(suggestValue(values, "q"))
-	limit := parseSuggestLimit(suggestValue(values, "limit"))
-	scope := strings.TrimSpace(suggestValue(values, "scope"))
-	religionCode := normalizeCatalogCode(suggestValue(values, "religio_confessio_codi"))
-	levelCode := normalizeCatalogCode(suggestValue(values, "nivell_confessional_codi"))
-	excludeID := parsePositiveIntDefault(suggestValue(values, "exclude_id"), 0, 0, 1000000000)
-	childID := parsePositiveIntDefault(suggestValue(values, "child_id"), 0, 0, 1000000000)
-
-	allEntitats, _ := a.DB.ListEntitatsReligioses()
-	allRels, _ := a.DB.ListEntitatReligiosaRelacions()
+	filter := parseConfessionalEntitySuggestFilter(values)
+	allEntitats, err := a.DB.ListEntitatsReligioses()
+	if err != nil {
+		Errorf("AdminConfessionalEntitiesSuggestJSON ListEntitatsReligioses: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	allRels, err := a.DB.ListEntitatReligiosaRelacions()
+	if err != nil {
+		Errorf("AdminConfessionalEntitiesSuggestJSON ListEntitatReligiosaRelacions: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 	publishedEntitats := publishedEntitatsReligioses(allEntitats)
 	publishedRels := publishedEntitatReligiosaRelacions(allRels)
-	_, parentByChild, childrenByParent := confessionalHierarchyMaps(publishedEntitats, publishedRels)
+	entitiesByID, parentByChild, childrenByParent := confessionalHierarchyMaps(publishedEntitats, publishedRels)
 	blockedParentIDs := map[int]bool{}
-	if childID > 0 {
-		blockedParentIDs = confessionalDescendantSet(childID, childrenByParent)
-		blockedParentIDs[childID] = true
+	if filter.ChildID > 0 {
+		blockedParentIDs = confessionalDescendantSet(filter.ChildID, childrenByParent)
+		blockedParentIDs[filter.ChildID] = true
 	}
-
-	type suggestion struct {
-		label string
-		score int
-		item  map[string]interface{}
-	}
-	suggestions := make([]suggestion, 0, len(publishedEntitats))
-	queryLower := strings.ToLower(query)
-	matchScore := func(label string) int {
-		clean := strings.ToLower(strings.TrimSpace(label))
-		if clean == "" {
-			return 0
-		}
-		if queryLower == "" {
-			return 1
-		}
-		if clean == queryLower {
-			return 4
-		}
-		if strings.HasPrefix(clean, queryLower) {
-			return 3
-		}
-		if strings.Contains(clean, queryLower) {
-			return 2
-		}
-		return 0
-	}
-
+	suggestions := make([]confessionalEntitySuggestion, 0, len(publishedEntitats))
 	for _, item := range publishedEntitats {
-		if excludeID > 0 && item.ID == excludeID {
+		if !confessionalSuggestEntityEligible(item, filter, blockedParentIDs, parentByChild) {
 			continue
 		}
-		if blockedParentIDs[item.ID] {
+		suggestion, ok := buildConfessionalEntitySuggestion(item, filter, entitiesByID, parentByChild, lang)
+		if !ok {
 			continue
 		}
-		if religionCode != "" && item.ReligioConfessioCodi != religionCode {
-			continue
-		}
-		level, ok := GetConfessionalLevelCatalogByCode(item.NivellConfessionalCodi)
-		if !ok || !level.CanHaveChildren {
-			continue
-		}
-		if levelCode != "" && !ConfessionalParentLevelCompatible(item.NivellConfessionalCodi, levelCode) {
-			continue
-		}
-		if scope == "roots" && parentByChild[item.ID] != 0 {
-			continue
-		}
-		path := confessionalEntityPath(item.ID, confessionalEntitiesMap(publishedEntitats), parentByChild, lang)
-		label := strings.TrimSpace(item.Nom)
-		score := matchScore(label + " " + item.Codi + " " + confessionalPathSortKey(path))
-		if score == 0 {
-			continue
-		}
-		contextParts := []string{}
-		if item.Codi != "" {
-			contextParts = append(contextParts, item.Codi)
-		}
-		if len(path) > 1 {
-			contextParts = append(contextParts, confessionalPathSortKey(path[:len(path)-1]))
-		}
-		contextParts = append(contextParts, firstNonEmpty(confessionalLevelLabel(item.NivellConfessionalCodi, lang), item.NivellConfessionalCodi))
-		suggestions = append(suggestions, suggestion{
-			label: strings.ToLower(label),
-			score: score,
-			item: map[string]interface{}{
-				"id":                 item.ID,
-				"nom":                label,
-				"context":            strings.Join(contextParts, " / "),
-				"religio_confessio":  item.ReligioConfessioCodi,
-				"nivell_confessional": item.NivellConfessionalCodi,
-			},
-		})
+		suggestions = append(suggestions, suggestion)
 	}
 	sort.SliceStable(suggestions, func(i, j int) bool {
 		if suggestions[i].score != suggestions[j].score {
@@ -1673,14 +1635,108 @@ func (a *App) AdminConfessionalEntitiesSuggestJSON(w http.ResponseWriter, r *htt
 		}
 		return suggestions[i].label < suggestions[j].label
 	})
-	items := make([]map[string]interface{}, 0, limit)
+	items := make([]map[string]interface{}, 0, filter.Limit)
 	for _, suggestion := range suggestions {
 		items = append(items, suggestion.item)
-		if len(items) >= limit {
+		if len(items) >= filter.Limit {
 			break
 		}
 	}
 	writeJSON(w, map[string]interface{}{"items": items})
+}
+
+func parseConfessionalEntitySuggestFilter(values map[string]string) confessionalEntitySuggestFilter {
+	return confessionalEntitySuggestFilter{
+		Query:        normalizeConfessionalSearchText(suggestValue(values, "q")),
+		Limit:        parseSuggestLimit(suggestValue(values, "limit")),
+		Scope:        strings.TrimSpace(suggestValue(values, "scope")),
+		ReligionCode: normalizeCatalogCode(suggestValue(values, "religio_confessio_codi")),
+		LevelCode:    normalizeCatalogCode(suggestValue(values, "nivell_confessional_codi")),
+		ExcludeID:    parsePositiveIntDefault(suggestValue(values, "exclude_id"), 0, 0, 1000000000),
+		ChildID:      parsePositiveIntDefault(suggestValue(values, "child_id"), 0, 0, 1000000000),
+	}
+}
+
+func confessionalSuggestMatchScore(queryLower, label string) int {
+	clean := strings.ToLower(strings.TrimSpace(label))
+	if clean == "" {
+		return 0
+	}
+	if queryLower == "" {
+		return 1
+	}
+	if clean == queryLower {
+		return 4
+	}
+	if strings.HasPrefix(clean, queryLower) {
+		return 3
+	}
+	if strings.Contains(clean, queryLower) {
+		return 2
+	}
+	return 0
+}
+
+func confessionalSuggestEntityEligible(
+	item db.EntitatReligiosa,
+	filter confessionalEntitySuggestFilter,
+	blockedParentIDs map[int]bool,
+	parentByChild map[int]int,
+) bool {
+	if filter.ExcludeID > 0 && item.ID == filter.ExcludeID {
+		return false
+	}
+	if blockedParentIDs[item.ID] {
+		return false
+	}
+	if filter.ReligionCode != "" && item.ReligioConfessioCodi != filter.ReligionCode {
+		return false
+	}
+	level, ok := GetConfessionalLevelCatalogByCode(item.NivellConfessionalCodi)
+	if !ok || !level.CanHaveChildren {
+		return false
+	}
+	if filter.LevelCode != "" && !ConfessionalParentLevelCompatible(item.NivellConfessionalCodi, filter.LevelCode) {
+		return false
+	}
+	if filter.Scope == "roots" && parentByChild[item.ID] != 0 {
+		return false
+	}
+	return true
+}
+
+func buildConfessionalEntitySuggestion(
+	item db.EntitatReligiosa,
+	filter confessionalEntitySuggestFilter,
+	entitiesByID map[int]db.EntitatReligiosa,
+	parentByChild map[int]int,
+	lang string,
+) (confessionalEntitySuggestion, bool) {
+	path := confessionalEntityPath(item.ID, entitiesByID, parentByChild, lang)
+	label := strings.TrimSpace(item.Nom)
+	score := confessionalSuggestMatchScore(strings.ToLower(filter.Query), label+" "+item.Codi+" "+confessionalPathSortKey(path))
+	if score == 0 {
+		return confessionalEntitySuggestion{}, false
+	}
+	contextParts := []string{}
+	if item.Codi != "" {
+		contextParts = append(contextParts, item.Codi)
+	}
+	if len(path) > 1 {
+		contextParts = append(contextParts, confessionalPathSortKey(path[:len(path)-1]))
+	}
+	contextParts = append(contextParts, firstNonEmpty(confessionalLevelLabel(item.NivellConfessionalCodi, lang), item.NivellConfessionalCodi))
+	return confessionalEntitySuggestion{
+		label: strings.ToLower(label),
+		score: score,
+		item: map[string]interface{}{
+			"id":                  item.ID,
+			"nom":                 label,
+			"context":             strings.Join(contextParts, " / "),
+			"religio_confessio":   item.ReligioConfessioCodi,
+			"nivell_confessional": item.NivellConfessionalCodi,
+		},
+	}, true
 }
 
 func confessionalEntitiesMap(items []db.EntitatReligiosa) map[int]db.EntitatReligiosa {

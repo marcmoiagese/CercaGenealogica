@@ -51,7 +51,7 @@
                         </select>
                     </div>
                     <div class="grup-camp">
-                        <label for="confessional-parent-filter">{{ t .Lang "confessional.management.parent_context" }}</label>
+                        <label for="confessional-parent-filter-label">{{ t .Lang "confessional.management.parent_context" }}</label>
                         <input id="confessional-parent-filter-label" type="text" value="{{ if .Data.SelectedParent }}{{ .Data.SelectedParent.Nom }}{{ end }}" data-suggest="1" data-api="/api/confessional/entitats/suggest?scope=roots" data-hidden="confessional-parent-filter" data-suggestions="confessional-parent-filter-suggestions" data-empty-label="{{ t .Lang "confessional.suggest.empty" }}" autocomplete="off">
                         <input id="confessional-parent-filter" name="parent_id" type="hidden" value="{{ .Data.Filter.ParentID }}">
                         <ul id="confessional-parent-filter-suggestions" class="suggestions-list" aria-label="{{ t .Lang "common.suggestions" }}"></ul>
@@ -147,9 +147,11 @@
             {{ if gt .Data.TotalPages 1 }}
             <div class="paginador" id="paginador">
                 {{ range .Data.PageLinks }}
-                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} {{ if .Current }}actiu{{ end }}" {{ if not .Current }}data-nav-href="{{ .URL }}"{{ end }}>
-                    {{ .Label }}
-                </button>
+                {{ if .Current }}
+                <button type="button" class="{{ if .IsNav }}paginador-nav{{ end }} actiu" aria-current="page" disabled>{{ .Label }}</button>
+                {{ else }}
+                <a class="{{ if .IsNav }}paginador-nav{{ end }}" href="{{ .URL }}">{{ .Label }}</a>
+                {{ end }}
                 {{ end }}
             </div>
             {{ end }}
