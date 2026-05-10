@@ -176,7 +176,7 @@ func TestF354U6ArxiusV2ImportCreatesPendingArchiveAndConfessionalRelation(t *tes
 		t.Fatalf("import v2 amb relacio status=%d body=%s", rr.Code, rr.Body.String())
 	}
 
-	arxiu = resolveSingleArxiuByCodeF354U6(t, database, "f35_4u6_arxiu_amb_relacio")
+	arxiu := resolveSingleArxiuByCodeF354U6(t, database, "f35_4u6_arxiu_amb_relacio")
 	arxiuID := arxiu.ID
 	if got := strings.TrimSpace(arxiu.ModeracioEstat); got != "pendent" {
 		t.Fatalf("arxiu v2 amb relacio ha d'entrar pendent, got %q", got)
@@ -649,7 +649,7 @@ func TestF354U6ArxiuUpdateWithoutReligiousRelationStaysValid(t *testing.T) {
 	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM arxiu_entitat_religiosa WHERE arxiu_id = ?", arxiuID); got != 0 {
 		t.Fatalf("actualitzar un arxiu sense relacio no ha de crear relacions buides, got %d", got)
 	}
-	arxiu, err := database.GetArxiu(arxiuID)
+	arxiu, err = database.GetArxiu(arxiuID)
 	if err != nil || arxiu == nil {
 		t.Fatalf("GetArxiu actualitzat: err=%v arxiu=%v", err, arxiu)
 	}
@@ -709,7 +709,7 @@ func TestF354U6ArchiveUpdateIgnoresTamperedLegacyEntityID(t *testing.T) {
 		t.Fatalf("AdminUpdateArxiu tamper status=%d body=%s", rr.Code, rr.Body.String())
 	}
 
-	arxiu, err = database.GetArxiu(arxiuID)
+	arxiu, err := database.GetArxiu(arxiuID)
 	if err != nil || arxiu == nil {
 		t.Fatalf("GetArxiu tamper: err=%v arxiu=%v", err, arxiu)
 	}
