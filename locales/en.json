@@ -3899,5 +3899,6 @@
   "confessional.help.levels.choose_religion": "Select a specific religion/confession first to see the available levels/divisions.",
   "confessional.help.levels.none_for_religion": "This religion/confession has no levels/divisions defined in the catalog.",
   "confessional.help.parents.choose_level": "Select a religion/confession and level/division to see compatible parent entities.",
-  "confessional.help.parents.none": "There are no published parent entities compatible with this level/division."
+  "confessional.help.parents.none": "There are no published parent entities compatible with this level/division.",
+  "confessional.parent.incompatible": "The selected parent entity is not compatible with the current level/division and has been unassigned."
 }

@@ -69,7 +69,7 @@ func TestF353Z10SeparatesManagementAndReligiousNavigation(t *testing.T) {
 		t.Fatalf("/confessional/entitats ha de mostrar filles directes del pare seleccionat; body=%s", childrenBody)
 	}
 	newChildBody := f353YGet(t, app.AdminNewConfessional, "/confessional/entitats/new?parent_id="+strconv.Itoa(archID), session)
-	if !strings.Contains(newChildBody, `id="confessional_entity_parent_id" name="parent_id" type="hidden" value="`+strconv.Itoa(archID)+`"`) || !strings.Contains(newChildBody, `id="parent_id_label" type="text" value="Arquebisbat de Tarragona F35-3Z10 `+suffix) || !strings.Contains(newChildBody, `label for="parent_id_label"`) {
+	if !strings.Contains(newChildBody, `id="confessional_entity_parent_id" name="parent_id" type="hidden" value="`+strconv.Itoa(archID)+`"`) || !strings.Contains(newChildBody, `id="parent_id_label" type="text" value="Arquebisbat de Tarragona F35-3Z10 `+suffix) || !strings.Contains(newChildBody, `label for="parent_id_label"`) || !strings.Contains(newChildBody, `data-selected-parent-level-code="arquebisbat_arxidiocesi"`) || !strings.Contains(newChildBody, `data-selected-parent-religion-code="catolicisme_ritu_llati"`) {
 		t.Fatalf("nova entitat sota pare ha de preseleccionar el pare; body=%s", newChildBody)
 	}
 
@@ -170,6 +170,11 @@ func TestF353Z10NavigationSecurityI18NAndMenuContract(t *testing.T) {
 		`id="confessional-parent-filter-label"`,
 		`id="confessional-parent-filter-suggestions"`,
 		`href="{{ .URL }}"`,
+		`fa-eye`,
+		`fa-edit`,
+		`fa-plus`,
+		`fa-trash`,
+		`class="icon-action danger"`,
 	} {
 		if !strings.Contains(listBody, token) {
 			t.Fatalf("falta contracte de gestio/paginacio Z10: %s", token)

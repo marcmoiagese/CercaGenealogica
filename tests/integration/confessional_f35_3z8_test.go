@@ -116,8 +116,10 @@ func TestF353Z8ParentSelectorFiltersCompatiblePublishedParents(t *testing.T) {
 		`for="parent_id_label"`,
 		`id="confessional_entity_parent_id" name="parent_id" type="hidden"`,
 		`id="parent_id_suggestions"`,
+		`class="suggestions-list confessional-suggestions"`,
 		`data-api="/api/confessional/entitats/suggest"`,
 		`id="parent_id_help"`,
+		`data-incompatible="{{ t .Lang "confessional.parent.incompatible" }}"`,
 		`/static/js/confessional-form.js`,
 	} {
 		if !strings.Contains(body, token) {
@@ -206,6 +208,9 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 		`/api/confessional/entitats/suggest`,
 		`confessional.help.parents.choose_level`,
 		`confessional.help.parents.none`,
+		`data-selected-parent-level-code="{{ if .Data.SelectedParent }}`,
+		`data-selected-parent-religion-code="{{ if .Data.SelectedParent }}`,
+		`confessional.parent.incompatible`,
 	} {
 		if !strings.Contains(formBody, token) {
 			t.Fatalf("falta contracte template F35-3Z8: %s", token)
@@ -215,6 +220,9 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 		`fetchParentSuggestions`,
 		`child_id`,
 		`exclude_id`,
+		`syncSelectedParentCompatibility`,
+		`selectedParentCompatibilityState`,
+		`storeSelectedParentMetadata`,
 	} {
 		if !strings.Contains(staticBody, token) {
 			t.Fatalf("falta sincronitzacio JS F35-3Z8: %s", token)
@@ -251,6 +259,7 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 			"confessional.error.parent_cycle",
 			"confessional.help.parents.choose_level",
 			"confessional.help.parents.none",
+			"confessional.parent.incompatible",
 			"confessional.suggest.empty",
 		} {
 			if strings.TrimSpace(values[key]) == "" {

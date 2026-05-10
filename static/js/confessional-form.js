@@ -15,6 +15,7 @@
     let parentTimer = null;
     let parentSuggestionsController = null;
     let parentSuggestionsRequestID = 0;
+    let parentCompatibilityMessage = "";
 
     function selectedLevelOption() {
       if (level.selectedOptions.length === 0 || level.selectedOptions[0].disabled) {
@@ -31,6 +32,31 @@
       parentSuggestions.classList.remove("is-open");
       lastParentItems = [];
       activeParentIndex = -1;
+    }
+
+    function resetSelectedParentMetadata() {
+      if (!parentLabel) {
+        return;
+      }
+      parentLabel.dataset.selectedParentLevelCode = "";
+      parentLabel.dataset.selectedParentReligionCode = "";
+    }
+
+    function storeSelectedParentMetadata(item) {
+      if (!parentLabel) {
+        return;
+      }
+      parentLabel.dataset.selectedParentLevelCode = item && item.nivell_confessional ? String(item.nivell_confessional) : "";
+      parentLabel.dataset.selectedParentReligionCode = item && item.religio_confessio ? String(item.religio_confessio) : "";
+    }
+
+    function clearSelectedParent() {
+      if (!parent || !parentLabel) {
+        return;
+      }
+      parent.value = "";
+      parentLabel.value = "";
+      resetSelectedParentMetadata();
     }
 
     function abortParentSuggestions() {
@@ -71,20 +97,30 @@
       }
       items.forEach(function (item, idx) {
         const li = document.createElement("li");
+        li.className = "suggestion-option-item";
         li.dataset.index = String(idx);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "suggestion-option";
+        button.title = item.nom || "";
+        button.setAttribute("aria-label", item.nom || "");
+        button.addEventListener("mousedown", function (event) {
+          event.preventDefault();
+        });
         const title = document.createElement("span");
         title.className = "suggestion-title";
         title.textContent = item.nom || "";
-        li.appendChild(title);
+        button.appendChild(title);
         if (item.context) {
           const context = document.createElement("span");
           context.className = "suggestion-context";
           context.textContent = item.context;
-          li.appendChild(context);
+          button.appendChild(context);
         }
-        li.addEventListener("click", function () {
+        button.addEventListener("click", function () {
           applyParentSuggestion(item);
         });
+        li.appendChild(button);
         parentSuggestions.appendChild(li);
       });
       parentSuggestions.classList.add("is-open");
@@ -94,16 +130,23 @@
       if (!item || !parent || !parentLabel) {
         return;
       }
+      parentCompatibilityMessage = "";
       parent.value = item.id ? String(item.id) : "";
       parentLabel.value = item.nom || "";
+      storeSelectedParentMetadata(item);
       parent.dispatchEvent(new Event("change", { bubbles: true }));
       parentLabel.dispatchEvent(new CustomEvent("suggest:select", { detail: { item: item } }));
       clearParentSuggestions();
+      syncParentHelp();
     }
 
     function syncParentHelp() {
       const help = document.getElementById("parent_id_help");
       if (!help) {
+        return;
+      }
+      if (parentCompatibilityMessage) {
+        help.textContent = parentCompatibilityMessage;
         return;
       }
       const selectedLevel = selectedLevelOption();
@@ -112,6 +155,44 @@
       } else {
         help.textContent = "";
       }
+    }
+
+    function selectedParentCompatibilityState() {
+      if (!parent || !parent.value || !parentLabel) {
+        return { compatible: true, reason: "" };
+      }
+      const selectedLevel = selectedLevelOption();
+      if (!selectedLevel || !religion.value) {
+        return { compatible: true, reason: "" };
+      }
+      const parentReligionCode = parentLabel.dataset.selectedParentReligionCode || "";
+      const parentLevelCode = parentLabel.dataset.selectedParentLevelCode || "";
+      if (!parentReligionCode || !parentLevelCode) {
+        return { compatible: false, reason: "incompatible" };
+      }
+      if (parentReligionCode !== religion.value) {
+        return { compatible: false, reason: "incompatible" };
+      }
+      const parentLevelCodes = (selectedLevel.dataset.parentLevelCodes || "").split(",").filter(Boolean);
+      if (parentLevelCodes.indexOf(parentLevelCode) === -1) {
+        return { compatible: false, reason: "incompatible" };
+      }
+      return { compatible: true, reason: "" };
+    }
+
+    function syncSelectedParentCompatibility() {
+      const compatibility = selectedParentCompatibilityState();
+      if (compatibility.compatible) {
+        parentCompatibilityMessage = "";
+        syncParentHelp();
+        return true;
+      }
+      const help = document.getElementById("parent_id_help");
+      parentCompatibilityMessage = help ? help.dataset.incompatible || "" : "";
+      clearSelectedParent();
+      clearParentSuggestions();
+      syncParentHelp();
+      return false;
     }
 
     function buildParentSuggestURL(query) {
@@ -213,8 +294,8 @@
 
       if (resetParent && parent && parentLabel) {
         abortParentSuggestions();
-        parent.value = "";
-        parentLabel.value = "";
+        parentCompatibilityMessage = "";
+        clearSelectedParent();
         clearParentSuggestions();
       }
       syncParentHelp();
@@ -222,7 +303,9 @@
 
     if (parentLabel && parent) {
       parentLabel.addEventListener("input", function () {
+        parentCompatibilityMessage = "";
         parent.value = "";
+        resetSelectedParentMetadata();
         if (parentLabel.value.trim().length < 1) {
           abortParentSuggestions();
           clearParentSuggestions();
@@ -271,6 +354,11 @@
           level.focus();
           return;
         }
+        if (!syncSelectedParentCompatibility()) {
+          event.preventDefault();
+          parentLabel.focus();
+          return;
+        }
         if (parentLabel && parent && parentLabel.value.trim() !== "" && parent.value === "") {
           event.preventDefault();
           parentLabel.focus();
@@ -281,16 +369,13 @@
     }
 
     religion.addEventListener("change", function () {
+      parentCompatibilityMessage = "";
       syncConfessionalLevels(true);
     });
     level.addEventListener("change", function () {
-      if (parent && parentLabel) {
-        parent.value = "";
-        parentLabel.value = "";
-      }
       abortParentSuggestions();
       clearParentSuggestions();
-      syncParentHelp();
+      syncSelectedParentCompatibility();
     });
     syncConfessionalLevels(false);
     if (parent && parent.value && parentLabel && parentLabel.value) {

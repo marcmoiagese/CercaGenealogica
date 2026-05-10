@@ -3899,5 +3899,6 @@
   "confessional.help.levels.choose_religion": "Selecciona primer una religio/confessio concreta per veure els nivells/divisions disponibles.",
   "confessional.help.levels.none_for_religion": "Aquesta religio/confessio no te nivells/divisions definits al cataleg.",
   "confessional.help.parents.choose_level": "Selecciona una religio/confessio i un nivell/divisio per veure les entitats pare compatibles.",
-  "confessional.help.parents.none": "No hi ha cap entitat pare publicada i compatible amb aquest nivell/divisio."
+  "confessional.help.parents.none": "No hi ha cap entitat pare publicada i compatible amb aquest nivell/divisio.",
+  "confessional.parent.incompatible": "L'entitat pare seleccionada no es compatible amb el nivell/divisio actual i s'ha desassignat."
 }

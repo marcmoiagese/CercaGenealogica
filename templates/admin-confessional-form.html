@@ -186,10 +186,10 @@
                 </div>
                 <div class="grup-camp">
                     <label for="parent_id_label">{{ t .Lang "confessional.field.parent_entity_optional" }}</label>
-                    <input id="parent_id_label" type="text" value="{{ if .Data.SelectedParent }}{{ .Data.SelectedParent.Nom }}{{ end }}" data-api="/api/confessional/entitats/suggest" data-empty-label="{{ t .Lang "confessional.suggest.empty" }}" data-placeholder-none="{{ t .Lang "confessional.select.parent_entity.none" }}" autocomplete="off">
+                    <input id="parent_id_label" type="text" value="{{ if .Data.SelectedParent }}{{ .Data.SelectedParent.Nom }}{{ end }}" data-api="/api/confessional/entitats/suggest" data-empty-label="{{ t .Lang "confessional.suggest.empty" }}" data-placeholder-none="{{ t .Lang "confessional.select.parent_entity.none" }}" data-selected-parent-level-code="{{ if .Data.SelectedParent }}{{ .Data.SelectedParent.NivellConfessionalCodi }}{{ end }}" data-selected-parent-religion-code="{{ if .Data.SelectedParent }}{{ .Data.SelectedParent.ReligioConfessioCodi }}{{ end }}" autocomplete="off">
                     <input id="confessional_entity_parent_id" name="parent_id" type="hidden" value="{{ if .Data.Form.Entitat.ParentID.Valid }}{{ .Data.Form.Entitat.ParentID.Int64 }}{{ end }}">
-                    <ul id="parent_id_suggestions" class="suggestions-list" aria-label="{{ t .Lang "common.suggestions" }}"></ul>
-                    <p id="parent_id_help" class="muted" data-empty="{{ t .Lang "confessional.help.parents.choose_level" }}" data-none="{{ t .Lang "confessional.help.parents.none" }}">{{ t .Lang "confessional.help.parents.choose_level" }}</p>
+                    <ul id="parent_id_suggestions" class="suggestions-list confessional-suggestions" aria-label="{{ t .Lang "common.suggestions" }}"></ul>
+                    <p id="parent_id_help" class="muted" data-empty="{{ t .Lang "confessional.help.parents.choose_level" }}" data-none="{{ t .Lang "confessional.help.parents.none" }}" data-incompatible="{{ t .Lang "confessional.parent.incompatible" }}">{{ t .Lang "confessional.help.parents.choose_level" }}</p>
                 </div>
                 <div class="grup-camp">
                     <label for="pais_id">{{ t .Lang "confessional.field.country" }}</label>

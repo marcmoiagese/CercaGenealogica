@@ -3779,6 +3779,7 @@
   "confessional.help.levels.none_for_religion": "Aquesta religion/confession a pas de nivèls/divisions definits dins lo catalòg.",
   "confessional.help.parents.choose_level": "Selecciona una religion/confession e un nivèl/division per veire las entitats parentas compatiblas.",
   "confessional.help.parents.none": "I a pas cap d'entitat parenta publicada e compatibla amb aqueste nivèl/division.",
+  "confessional.parent.incompatible": "L'entitat parenta seleccionada es pas compatibla amb lo nivèl/division actual e foguèt desassignada.",
   "confessional.menu.diagnostic": "Diagnostic de qualitat",
   "confessional.diagnostic.title": "Diagnostic de qualitat confessionau",
   "confessional.diagnostic.summary.published_entities": "Entitats publicadas",
