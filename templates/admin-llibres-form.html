@@ -18,30 +18,77 @@
             <form method="post" action="/documentals/llibres/save">
                 <input type="hidden" name="id" value="{{ .Data.Llibre.ID }}">
                 <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
-                <div class="grup-camp">
-                    <label for="arxiu_id">{{ t .Lang "books.form.archive" }}</label>
-                    <div class="camp-inline">
-                        <input id="archive_q" name="archive_q" type="text" value="{{ .Data.ArchiveQuery }}" placeholder="{{ t .Lang "books.form.archive.search" }}">
-                        <button type="submit" name="search_archive" value="1" class="boto-secundari" formnovalidate>{{ t .Lang "common.search" }}</button>
+                <section class="grup-camps">
+                    <header class="card-header">
+                        <h2>{{ t .Lang "books.form.documentary_base.title" }}</h2>
+                    </header>
+                    <div class="grup-camp">
+                        <label for="arxiu_search">{{ t .Lang "books.form.archive" }}</label>
+                        <div class="suggest-field">
+                            <input
+                                type="text"
+                                id="arxiu_search"
+                                name="arxiu_search"
+                                value="{{ .Data.FormState.ArxiuLabel }}"
+                                placeholder="{{ t .Lang "books.form.archive.search" }}"
+                                autocomplete="off"
+                                data-api="/api/documentals/arxius/suggest"
+                                data-empty-label="{{ t .Lang "municipis.search.empty" }}"
+                                data-hidden="arxiu_id"
+                                data-suggestions="arxiu_suggestions"
+                                data-suggest="1"
+                                required>
+                            <input type="hidden" id="arxiu_id" name="arxiu_id" value="{{ .Data.FormState.ArxiuID }}">
+                            <ul id="arxiu_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "books.form.archive.suggestions" }}"></ul>
+                        </div>
+                        <p class="camp-helper">{{ t .Lang "books.form.archive.search.helper" }}</p>
                     </div>
-                    <select id="arxiu_id" name="arxiu_id" required>
-                        <option value="">{{ t .Lang "books.form.archive.none" }}</option>
-                        {{ range .Data.Arxius }}
-                        <option value="{{ .ID }}" {{ if eq $.Data.SelectedArxiuID .ID }}selected{{ end }}>{{ .Nom }}</option>
-                        {{ end }}
-                    </select>
-                    <p class="camp-helper">{{ t .Lang "books.form.archive.search.helper" }}</p>
-                </div>
-                <div class="grup-camp">
-                    <label for="municipi_id">{{ t .Lang "books.form.municipi" }}</label>
-                    <select id="municipi_id" name="municipi_id" required>
-                        <option value="">{{ t .Lang "books.form.municipi.none" }}</option>
-                        {{ range .Data.Municipis }}
-                        <option value="{{ .ID }}" {{ if eq $.Data.Llibre.MunicipiID .ID }}selected{{ end }}>{{ .Nom }}</option>
-                        {{ end }}
-                    </select>
-                    <p class="camp-helper">{{ t .Lang "books.form.documentary_base.helper" }}</p>
-                </div>
+                    <div class="grup-camp">
+                        <label for="entitat_religiosa_search">{{ t .Lang "books.form.religious_entity" }}</label>
+                        <div class="suggest-field">
+                            <input
+                                type="text"
+                                id="entitat_religiosa_search"
+                                name="entitat_religiosa_search"
+                                value="{{ .Data.FormState.EntitatReligiosaLabel }}"
+                                placeholder="{{ t .Lang "books.form.religious_entity.search" }}"
+                                autocomplete="off"
+                                data-api="/api/documentals/llibres/entitats-religioses/suggest"
+                                data-empty-label="{{ t .Lang "municipis.search.empty" }}"
+                                data-hidden="entitat_religiosa_id"
+                                data-suggestions="entitat_religiosa_suggestions"
+                                data-suggest="1">
+                            <input type="hidden" id="entitat_religiosa_id" name="entitat_religiosa_id" value="{{ .Data.FormState.EntitatReligiosaID }}">
+                            <ul id="entitat_religiosa_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "books.form.religious_entity.suggestions" }}"></ul>
+                        </div>
+                        <p id="llibre-entitat-helper" class="camp-helper">{{ if .Data.FormState.RelatedEntitiesMessage }}{{ .Data.FormState.RelatedEntitiesMessage }}{{ else }}{{ t .Lang "books.form.religious_entity.helper" }}{{ end }}</p>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="municipi_search">{{ t .Lang "books.form.municipi" }}</label>
+                        <div class="suggest-field">
+                            <input
+                                type="text"
+                                id="municipi_search"
+                                name="municipi_search"
+                                value="{{ .Data.FormState.MunicipiLabel }}"
+                                placeholder="{{ t .Lang "municipis.search.placeholder" }}"
+                                autocomplete="off"
+                                data-api="/api/documentals/llibres/municipis/suggest"
+                                data-empty-label="{{ t .Lang "municipis.search.empty" }}"
+                                data-hidden="municipi_id"
+                                data-suggestions="municipi_suggestions"
+                                data-suggest="1"
+                                required>
+                            <input type="hidden" id="municipi_id" name="municipi_id" value="{{ .Data.FormState.MunicipiID }}">
+                            <ul id="municipi_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
+                        </div>
+                        <p id="llibre-municipi-helper" class="camp-helper">{{ if .Data.FormState.MunicipiScopeEmpty }}{{ .Data.FormState.MunicipiScopeMessage }}{{ else }}{{ t .Lang "books.form.documentary_base.helper" }}{{ end }}</p>
+                    </div>
+                </section>
+                <section class="grup-camps">
+                    <header class="card-header">
+                        <h2>{{ t .Lang "books.form.book_data.title" }}</h2>
+                    </header>
                 <div class="grup-camp">
                     <label for="titol">{{ t .Lang "books.form.title" }}</label>
                     <input id="titol" name="titol" type="text" value="{{ .Data.Llibre.Titol }}">
@@ -144,6 +191,7 @@
                         <span>{{ t .Lang "books.form.recalc" }}</span>
                     </label>
                 </div>
+                </section>
                 <div class="form-accio">
                     <button type="submit" class="boto-primari">{{ t .Lang "books.form.save" }}</button>
                     <a class="boto-secundari" href="{{ if .Data.ReturnURL }}{{ .Data.ReturnURL }}{{ else }}/documentals/llibres{{ end }}">{{ t .Lang "books.form.cancel" }}</a>
@@ -153,6 +201,8 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
+    <script src="/static/js/arxiu-form-suggest.js"></script>
+    <script src="/static/js/admin-llibres-form.js"></script>
 </body>
 </html>
 {{ end }}

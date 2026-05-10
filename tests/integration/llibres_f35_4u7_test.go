@@ -342,26 +342,155 @@ func TestF354U7R1BookFormArchiveSearchAvoidsMassiveSelect(t *testing.T) {
 	if strings.Contains(body, "Arxiu Invisible F35-4U7") || strings.Contains(body, "Arxiu Cercable F35-4U7") {
 		t.Fatalf("el formulari nou no ha de carregar un selector massiu d'arxius sense cerca")
 	}
+	if strings.Contains(body, `name="archive_q"`) || strings.Contains(body, `name="search_archive"`) {
+		t.Fatalf("el formulari nou no ha de mantenir la cerca roundtrip antiga, body=%s", body)
+	}
 	if strings.Contains(body, `<label for="arquevisbat_id">`) {
 		t.Fatalf("el formulari nou no ha de mostrar el selector legacy d'entitat, body=%s", body)
 	}
 	if strings.Contains(body, `name="arquevisbat_id"`) {
 		t.Fatalf("el formulari nou no ha d'enviar arquevisbat_id des del client, body=%s", body)
 	}
-	if !strings.Contains(body, "Base documental del llibre") {
+	if !strings.Contains(body, "Base documental del llibre") ||
+		!strings.Contains(body, `/api/documentals/arxius/suggest`) ||
+		!strings.Contains(body, `/api/documentals/llibres/entitats-religioses/suggest`) ||
+		!strings.Contains(body, `/api/documentals/llibres/municipis/suggest`) {
 		t.Fatalf("el formulari nou ha de reforcar la base documental principal, body=%s", body)
 	}
-
-	req = httptest.NewRequest(http.MethodGet, "/documentals/llibres/new?archive_q=Cercable", nil)
-	req.AddCookie(session)
-	rr = httptest.NewRecorder()
-	app.AdminNewLlibre(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("AdminNewLlibre cerca status=%d body=%s", rr.Code, rr.Body.String())
+	if !strings.Contains(body, `/static/js/admin-llibres-form.js`) || !strings.Contains(body, `/static/js/arxiu-form-suggest.js`) {
+		t.Fatalf("el formulari nou ha d'usar JS extern per suggest i coordinacio, body=%s", body)
 	}
-	body = rr.Body.String()
-	if !strings.Contains(body, "Arxiu Cercable F35-4U7") || strings.Contains(body, "Arxiu Invisible F35-4U7") {
-		t.Fatalf("la cerca d'arxius ha de carregar només coincidencies, body=%s", body)
+}
+
+func TestF354U11BBookReligiousEntitySuggestUsesArchiveRelations(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u11b_rel_suggest.sqlite3")
+	_, municipiID := seedF354U7BookTerritory(t, database, "RelSuggest")
+	arxiuID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u11b_archive_rel", "Arxiu F35-4U11B RelSuggest", 0)
+	entitatID := createF354U7ReligiousEntity(t, database, "f35_4u11b_entitat_rel", "Parroquia F35-4U11B RelSuggest")
+	if _, err := database.SaveArxiuEntitatReligiosa(&db.ArxiuEntitatReligiosa{
+		ArxiuID:            arxiuID,
+		EntitatReligiosaID: entitatID,
+		TipusRelacio:       "custodia_documentacio",
+		Estat:              "actiu",
+		ModeracioEstat:     "publicat",
+	}); err != nil {
+		t.Fatalf("SaveArxiuEntitatReligiosa: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/documentals/llibres/entitats-religioses/suggest?arxiu_id="+strconv.Itoa(arxiuID), nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.SearchBookReligiousEntitiesSuggestJSON(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("SearchBookReligiousEntitiesSuggestJSON status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		Items []struct {
+			ID      int    `json:"id"`
+			Nom     string `json:"nom"`
+			Related bool   `json:"related"`
+		} `json:"items"`
+		ArchiveRelatedSingle bool `json:"archive_related_single"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json invalid suggest entitats: %v", err)
+	}
+	if !payload.ArchiveRelatedSingle || len(payload.Items) != 1 || payload.Items[0].ID != entitatID || !payload.Items[0].Related {
+		t.Fatalf("payload suggest entitats inesperat: %+v", payload)
+	}
+}
+
+func TestF354U11BBookMunicipiSuggestFiltersByReligiousEntityScope(t *testing.T) {
+	app, database, _, session := setupF354U7BooksAdmin(t, "test_f35_4u11b_mun_suggest.sqlite3")
+	paisID, municipiAID := seedF354U7BookTerritory(t, database, "MunScopeA")
+	municipiBID := createF354U7MunicipiForPais(t, database, paisID, "MunScopeB")
+	publishF354U7Municipi(t, database, municipiAID)
+	publishF354U7Municipi(t, database, municipiBID)
+	parentID := createF354U7ReligiousEntity(t, database, "f35_4u11b_parent", "Diocesi F35-4U11B Parent")
+	childID := createF354U7ReligiousEntity(t, database, "f35_4u11b_child", "Parroquia F35-4U11B Child")
+	if _, err := database.SaveEntitatReligiosaRelacio(&db.EntitatReligiosaRelacio{
+		EntitatOrigenID: parentID,
+		EntitatDestiID:  childID,
+		TipusRelacio:    "jerarquia",
+		ModeracioEstat:  "publicat",
+	}); err != nil {
+		t.Fatalf("SaveEntitatReligiosaRelacio: %v", err)
+	}
+	if _, err := database.SaveMunicipiEntitatReligiosa(&db.MunicipiEntitatReligiosa{
+		MunicipiID:         municipiAID,
+		EntitatReligiosaID: childID,
+		TipusRelacio:       "parroquia",
+		ModeracioEstat:     "publicat",
+	}); err != nil {
+		t.Fatalf("SaveMunicipiEntitatReligiosa A: %v", err)
+	}
+	otherID := createF354U7ReligiousEntity(t, database, "f35_4u11b_other", "Parroquia F35-4U11B Other")
+	if _, err := database.SaveMunicipiEntitatReligiosa(&db.MunicipiEntitatReligiosa{
+		MunicipiID:         municipiBID,
+		EntitatReligiosaID: otherID,
+		TipusRelacio:       "parroquia",
+		ModeracioEstat:     "publicat",
+	}); err != nil {
+		t.Fatalf("SaveMunicipiEntitatReligiosa B: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/documentals/llibres/municipis/suggest?entitat_religiosa_id="+strconv.Itoa(parentID)+"&q=Municipi", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.SearchBookMunicipisSuggestJSON(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("SearchBookMunicipisSuggestJSON status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		Items []struct {
+			ID int `json:"id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json invalid suggest municipis: %v", err)
+	}
+	if len(payload.Items) != 1 || payload.Items[0].ID != municipiAID {
+		t.Fatalf("scope municipi inesperat: %+v", payload)
+	}
+}
+
+func TestF354U11BBookSaveRejectsMunicipalityOutsideReligiousScope(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u11b_save_scope.sqlite3")
+	paisID, municipiAID := seedF354U7BookTerritory(t, database, "SaveScopeA")
+	municipiBID := createF354U7MunicipiForPais(t, database, paisID, "SaveScopeB")
+	publishF354U7Municipi(t, database, municipiAID)
+	publishF354U7Municipi(t, database, municipiBID)
+	arxiuID := createF354U7Archive(t, database, admin.ID, municipiAID, "f35_4u11b_scope_archive", "Arxiu Scope F35-4U11B", 0)
+	entitatID := createF354U7ReligiousEntity(t, database, "f35_4u11b_scope_ent", "Parroquia Scope F35-4U11B")
+	if _, err := database.SaveMunicipiEntitatReligiosa(&db.MunicipiEntitatReligiosa{
+		MunicipiID:         municipiAID,
+		EntitatReligiosaID: entitatID,
+		TipusRelacio:       "parroquia",
+		ModeracioEstat:     "publicat",
+	}); err != nil {
+		t.Fatalf("SaveMunicipiEntitatReligiosa: %v", err)
+	}
+
+	form := url.Values{}
+	form.Set("arxiu_id", strconv.Itoa(arxiuID))
+	form.Set("entitat_religiosa_id", strconv.Itoa(entitatID))
+	form.Set("municipi_id", strconv.Itoa(municipiBID))
+	form.Set("titol", "Llibre fora d'abast F35-4U11B")
+	form.Set("tipus_llibre", "baptismes")
+	form.Set("codi", "f35_4u11b_scope_book")
+	req := httptest.NewRequest(http.MethodPost, "/documentals/llibres/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminSaveLlibre(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminSaveLlibre fora abast ha de rerenderitzar amb error, status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "abast de l&#39;entitat religiosa") {
+		t.Fatalf("manca missatge d'abast religios, body=%s", rr.Body.String())
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM llibres WHERE codi = ?", "f35_4u11b_scope_book"); got != 0 {
+		t.Fatalf("no s'hauria d'haver creat cap llibre fora d'abast, got=%d", got)
 	}
 }
 
@@ -566,6 +695,45 @@ func seedF354U7BookTerritory(t *testing.T, database db.DB, suffix string) (int, 
 		t.Fatalf("CreateMunicipi: %v", err)
 	}
 	return paisID, municipiID
+}
+
+func createF354U7MunicipiForPais(t *testing.T, database db.DB, paisID int, suffix string) int {
+	t.Helper()
+	nivellID, err := database.CreateNivell(&db.NivellAdministratiu{
+		PaisID:         paisID,
+		Nivel:          1,
+		NomNivell:      "Pais F35-4U7 Extra " + suffix,
+		TipusNivell:    "pais",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	})
+	if err != nil {
+		t.Fatalf("CreateNivell extra: %v", err)
+	}
+	mun := &db.Municipi{
+		Nom:            "Municipi F35-4U7 " + suffix,
+		Tipus:          "municipi",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	}
+	mun.NivellAdministratiuID[0] = sql.NullInt64{Int64: int64(nivellID), Valid: true}
+	municipiID, err := database.CreateMunicipi(mun)
+	if err != nil {
+		t.Fatalf("CreateMunicipi extra: %v", err)
+	}
+	return municipiID
+}
+
+func publishF354U7Municipi(t *testing.T, database db.DB, municipiID int) {
+	t.Helper()
+	mun, err := database.GetMunicipi(municipiID)
+	if err != nil || mun == nil {
+		t.Fatalf("GetMunicipi publish: err=%v municipi=%v", err, mun)
+	}
+	mun.ModeracioEstat = "publicat"
+	if err := database.UpdateMunicipi(mun); err != nil {
+		t.Fatalf("UpdateMunicipi publish: %v", err)
+	}
 }
 
 func createF354U7Archive(t *testing.T, database db.DB, userID, municipiID int, codi, nom string, legacyEntitatID int) int {
