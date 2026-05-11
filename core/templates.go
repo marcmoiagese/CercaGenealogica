@@ -351,6 +351,15 @@ func templateIndex(m interface{}, k interface{}) interface{} {
 	if m == nil {
 		return nil
 	}
+	switch typed := m.(type) {
+	case arxiuEntitatReligiosaFormData:
+		return arxiuEntitatReligiosaTemplateIndex(typed, k)
+	case *arxiuEntitatReligiosaFormData:
+		if typed == nil {
+			return nil
+		}
+		return arxiuEntitatReligiosaTemplateIndex(*typed, k)
+	}
 	v := reflect.ValueOf(m)
 	if !v.IsValid() {
 		return nil
@@ -371,21 +380,30 @@ func templateIndex(m interface{}, k interface{}) interface{} {
 		if val.IsValid() {
 			return val.Interface()
 		}
-	case reflect.Struct:
-		fieldName, ok := k.(string)
-		if !ok || fieldName == "" {
-			return nil
-		}
-		field := v.FieldByName(fieldName)
-		if field.IsValid() {
-			return field.Interface()
-		}
 	case reflect.Slice, reflect.Array:
 		idx, ok := coerceIntIndex(k)
 		if !ok || idx < 0 || idx >= v.Len() {
 			return nil
 		}
 		return v.Index(idx).Interface()
+	}
+	return nil
+}
+
+func arxiuEntitatReligiosaTemplateIndex(data arxiuEntitatReligiosaFormData, key interface{}) interface{} {
+	fieldName, ok := key.(string)
+	if !ok || fieldName == "" {
+		return nil
+	}
+	switch fieldName {
+	case "CanViewConfessionalEntitats":
+		return data.CanViewConfessionalEntitats
+	case "CanViewDocumentals":
+		return data.CanViewDocumentals
+	case "CanViewArxius":
+		return data.CanViewArxius
+	case "CanManageArxius":
+		return data.CanManageArxius
 	}
 	return nil
 }

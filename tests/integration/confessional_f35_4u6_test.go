@@ -834,6 +834,9 @@ func TestF354U6ArchiveRelationFormKeepsTypedRenderContract(t *testing.T) {
 
 	for _, token := range []string{
 		`type arxiuEntitatReligiosaFormData struct {`,
+		`CanViewConfessionalEntitats`,
+		`CanViewDocumentals`,
+		`CanViewArxius`,
 		`CanManageArxius`,
 		`bool`,
 		`RenderPrivateTemplate(w, r, "admin-arxiu-entitat-religiosa-form.html", arxiuEntitatReligiosaFormData{`,
