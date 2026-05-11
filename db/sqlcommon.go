@@ -2615,9 +2615,16 @@ func (h sqlHelper) appendNivellTipusAliasesFilter(where string, args []interface
 	placeholders := buildInPlaceholders(h.style, len(aliases))
 	where += " AND REPLACE(REPLACE(lower(COALESCE(n.tipus_nivell,'')), '_', ''), ' ', '') IN (" + placeholders + ")"
 	for _, alias := range aliases {
-		args = append(args, strings.ToLower(strings.TrimSpace(alias)))
+		args = append(args, normalizeNivellTipusAliasForSQL(alias))
 	}
 	return where, args
+}
+
+func normalizeNivellTipusAliasForSQL(raw string) string {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	raw = strings.ReplaceAll(raw, "_", "")
+	raw = strings.ReplaceAll(raw, " ", "")
+	return raw
 }
 
 func (h sqlHelper) getNivell(id int) (*NivellAdministratiu, error) {

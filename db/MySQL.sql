@@ -1260,14 +1260,6 @@ CREATE TABLE IF NOT EXISTS arxiu_abast (
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-ALTER TABLE arxiu_abast
-    MODIFY COLUMN target_id_identity INT UNSIGNED AS (
-        CASE
-            WHEN target_kind IN ('religious_entity', 'municipi', 'comarca', 'provincia', 'comunitat_autonoma', 'estat', 'nivell_administratiu') THEN IFNULL(target_id, 0)
-            ELSE 0
-        END
-    ) STORED;
-
 CREATE TABLE IF NOT EXISTS arxius_llibres (
   arxiu_id INT UNSIGNED NOT NULL,
   llibre_id INT UNSIGNED NOT NULL,
