@@ -1690,18 +1690,19 @@ type NivellAdministratiu struct {
 }
 
 type NivellAdminFilter struct {
-	PaisID         int
-	Nivel          int
-	Text           string
-	TipusNivell    string
-	Estat          string
-	Status         string
-	Limit          int
-	Offset         int
-	AllowedPaisIDs []int
-	CreatedByIDs   []int
-	CreatedAfter   time.Time
-	CreatedBefore  time.Time
+	PaisID             int
+	Nivel              int
+	Text               string
+	TipusNivell        string
+	TipusNivellAliases []string
+	Estat              string
+	Status             string
+	Limit              int
+	Offset             int
+	AllowedPaisIDs     []int
+	CreatedByIDs       []int
+	CreatedAfter       time.Time
+	CreatedBefore      time.Time
 }
 
 type ReligioConfessio struct {

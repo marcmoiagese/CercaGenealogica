@@ -17,43 +17,6 @@ var nivellEstats = map[string]bool{
 	"abolit":   true,
 }
 
-func normalizeNivellSuggestType(raw string) string {
-	raw = strings.ToLower(strings.TrimSpace(raw))
-	raw = strings.ReplaceAll(raw, "_", "")
-	raw = strings.ReplaceAll(raw, " ", "")
-	return raw
-}
-
-func nivellSuggestTypeAliases(raw string) []string {
-	switch normalizeNivellSuggestType(raw) {
-	case "", "nivelladministratiu":
-		return nil
-	case "comarca":
-		return []string{"comarca"}
-	case "provincia":
-		return []string{"provincia"}
-	case "comunitatautonoma":
-		return []string{"comunitatautonoma", "autonomia", "regioautonoma"}
-	case "estat":
-		return []string{"estat", "pais"}
-	default:
-		return []string{normalizeNivellSuggestType(raw)}
-	}
-}
-
-func nivellSuggestMatchesType(raw string, aliases []string) bool {
-	if len(aliases) == 0 {
-		return true
-	}
-	current := normalizeNivellSuggestType(raw)
-	for _, alias := range aliases {
-		if current == alias {
-			return true
-		}
-	}
-	return false
-}
-
 func (a *App) AdminListNivells(w http.ResponseWriter, r *http.Request) {
 	paisID := extractID(r.URL.Path)
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
@@ -297,13 +260,11 @@ func (a *App) AdminNivellsSuggest(w http.ResponseWriter, r *http.Request) {
 		Status: "publicat",
 		Limit:  limit,
 	}
-	typeAliases := nivellSuggestTypeAliases(strings.TrimSpace(r.URL.Query().Get("target_kind")))
+	typeAliases := nivellKindAliasesForTargetKind(strings.TrimSpace(r.URL.Query().Get("target_kind")))
 	if len(typeAliases) == 0 {
-		typeAliases = nivellSuggestTypeAliases(strings.TrimSpace(r.URL.Query().Get("tipus_nivell")))
+		typeAliases = nivellKindAliasesForTargetKind(strings.TrimSpace(r.URL.Query().Get("tipus_nivell")))
 	}
-	if len(typeAliases) > 0 && filter.Limit < 50 {
-		filter.Limit = 50
-	}
+	filter.TipusNivellAliases = typeAliases
 	if nivelRaw := strings.TrimSpace(r.URL.Query().Get("nivel")); nivelRaw != "" {
 		if v, err := strconv.Atoi(nivelRaw); err == nil && v > 0 {
 			filter.Nivel = v
@@ -329,16 +290,14 @@ func (a *App) AdminNivellsSuggest(w http.ResponseWriter, r *http.Request) {
 	lang := ResolveLang(r)
 	items := make([]map[string]interface{}, 0, len(rows))
 	for _, row := range rows {
-		if !nivellSuggestMatchesType(row.TipusNivell, typeAliases) {
-			continue
-		}
+		translatedType := translateOrFallbackLabel(lang, "levels.types."+strings.TrimSpace(row.TipusNivell), row.TipusNivell)
 		label := strings.TrimSpace(row.NomNivell)
 		if label == "" {
-			label = strings.TrimSpace(row.TipusNivell)
+			label = translatedType
 		}
 		contextParts := []string{}
-		if row.TipusNivell != "" && row.TipusNivell != label {
-			contextParts = append(contextParts, translateOrFallbackLabel(lang, "levels.types."+strings.TrimSpace(row.TipusNivell), row.TipusNivell))
+		if strings.TrimSpace(translatedType) != "" && translatedType != label {
+			contextParts = append(contextParts, translatedType)
 		}
 		if row.ParentNom.Valid {
 			contextParts = append(contextParts, strings.TrimSpace(row.ParentNom.String))

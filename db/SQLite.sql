@@ -952,7 +952,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_arxiu_abast_identity_id ON arxiu_abast(
     target_kind,
     relation_kind,
     target_id
-) WHERE target_kind IN ('religious_entity', 'municipi', 'comarca', 'provincia', 'comunitat_autonoma', 'estat') AND target_id IS NOT NULL;
+) WHERE target_kind IN ('religious_entity', 'municipi', 'comarca', 'provincia', 'comunitat_autonoma', 'estat', 'nivell_administratiu') AND target_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_arxiu_abast_identity_text ON arxiu_abast(
     arxiu_id,
     target_kind,

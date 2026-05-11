@@ -1222,7 +1222,7 @@ CREATE TABLE IF NOT EXISTS arxiu_abast (
     target_label VARCHAR(255) NULL,
     target_id_identity INT UNSIGNED AS (
         CASE
-            WHEN target_kind IN ('religious_entity', 'municipi', 'comarca', 'provincia', 'comunitat_autonoma', 'estat') THEN IFNULL(target_id, 0)
+            WHEN target_kind IN ('religious_entity', 'municipi', 'comarca', 'provincia', 'comunitat_autonoma', 'estat', 'nivell_administratiu') THEN IFNULL(target_id, 0)
             ELSE 0
         END
     ) STORED,

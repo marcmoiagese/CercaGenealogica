@@ -2478,6 +2478,13 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 		where += " AND (lower(n.nom_nivell) LIKE ? OR lower(COALESCE(n.codi_oficial,'')) LIKE ? OR lower(COALESCE(n.tipus_nivell,'')) LIKE ?)"
 		args = append(args, like, like, like)
 	}
+	if len(f.TipusNivellAliases) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.TipusNivellAliases))
+		where += " AND REPLACE(REPLACE(lower(COALESCE(n.tipus_nivell,'')), '_', ''), ' ', '') IN (" + placeholders + ")"
+		for _, alias := range f.TipusNivellAliases {
+			args = append(args, strings.ToLower(strings.TrimSpace(alias)))
+		}
+	}
 	if strings.TrimSpace(f.TipusNivell) != "" {
 		where += " AND lower(COALESCE(n.tipus_nivell,'')) = ?"
 		args = append(args, strings.ToLower(strings.TrimSpace(f.TipusNivell)))
@@ -2566,6 +2573,13 @@ func (h sqlHelper) countNivells(f NivellAdminFilter) (int, error) {
 		like := "%" + strings.ToLower(strings.TrimSpace(f.Text)) + "%"
 		where += " AND (lower(n.nom_nivell) LIKE ? OR lower(COALESCE(n.codi_oficial,'')) LIKE ? OR lower(COALESCE(n.tipus_nivell,'')) LIKE ?)"
 		args = append(args, like, like, like)
+	}
+	if len(f.TipusNivellAliases) > 0 {
+		placeholders := buildInPlaceholders(h.style, len(f.TipusNivellAliases))
+		where += " AND REPLACE(REPLACE(lower(COALESCE(n.tipus_nivell,'')), '_', ''), ' ', '') IN (" + placeholders + ")"
+		for _, alias := range f.TipusNivellAliases {
+			args = append(args, strings.ToLower(strings.TrimSpace(alias)))
+		}
 	}
 	if strings.TrimSpace(f.TipusNivell) != "" {
 		where += " AND lower(COALESCE(n.tipus_nivell,'')) = ?"

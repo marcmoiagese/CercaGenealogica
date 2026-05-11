@@ -511,42 +511,7 @@ func arxiuAbastInputMode(targetKind string) string {
 }
 
 func arxiuAbastLevelKindMatches(targetKind, levelType string) bool {
-	if normalizeArxiuAbastKey(targetKind) == "nivelladministratiu" {
-		return strings.TrimSpace(levelType) != ""
-	}
-	left := normalizeArxiuAbastKey(targetKind)
-	right := normalizeArxiuAbastKey(levelType)
-	if left == right {
-		return true
-	}
-	for _, alias := range arxiuAbastLevelKindAliases(left) {
-		if right == alias {
-			return true
-		}
-	}
-	return false
-}
-
-func arxiuAbastLevelKindAliases(targetKind string) []string {
-	switch normalizeArxiuAbastKey(targetKind) {
-	case "comarca":
-		return []string{"comarca"}
-	case "provincia":
-		return []string{"provincia"}
-	case "comunitatautonoma":
-		return []string{"comunitatautonoma", "autonomia", "regioautonoma"}
-	case "estat":
-		return []string{"estat", "pais"}
-	default:
-		return nil
-	}
-}
-
-func normalizeArxiuAbastKey(raw string) string {
-	raw = strings.ToLower(strings.TrimSpace(raw))
-	raw = strings.ReplaceAll(raw, "_", "")
-	raw = strings.ReplaceAll(raw, " ", "")
-	return raw
+	return nivellKindMatchesTargetKind(targetKind, levelType)
 }
 
 func normalizeArxiuAbastEstat(raw string) string {
