@@ -246,6 +246,18 @@ func TestF354U12ArchiveScopeReturnToRejectsExternalTargets(t *testing.T) {
 	}
 }
 
+func TestF354U12GetArxiuAbastFormWithCSRFTreatsEditQueryAsEdit(t *testing.T) {
+	app, database, _, session := setupF354U12ArxiuAbastAdmin(t, "test_f35_4u12_form_helper.sqlite3")
+	arxiuID := f354CreateArxiu(t, database, "Arxiu F35-4U12 Form Helper "+strconv.FormatInt(time.Now().UnixNano(), 10))
+	relID := f354U12SaveScope(t, database, f354U12FreeTextScope(arxiuID, "Abast helper edit", "other", "pendent"))
+	path := "/documentals/arxius/abasts/" + strconv.Itoa(relID) + "/edit?return_to=%2Fdocumentals%2Farxius%2F" + strconv.Itoa(arxiuID) + "%2Fedit"
+
+	body, _ := getArxiuAbastFormWithCSRF(t, app, session, path)
+	if !strings.Contains(body, `name="id" value="`+strconv.Itoa(relID)+`"`) {
+		t.Fatalf("el helper ha de tractar %q com a formulari edit, body=%s", path, body)
+	}
+}
+
 func TestF354U12ArchiveScopeEditCannotMoveToAnotherArchive(t *testing.T) {
 	app, database, _, session := setupF354U12ArxiuAbastAdmin(t, "test_f35_4u12_move.sqlite3")
 	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
@@ -254,7 +266,15 @@ func TestF354U12ArchiveScopeEditCannotMoveToAnotherArchive(t *testing.T) {
 	rowID := f354U12SaveScope(t, database, f354U12FreeTextScope(arxiuA, "Abast inicial F35-4U12", "other", "pendent"))
 	f354U12UpdateScopeNotes(t, database, rowID, "before move")
 
-	rr := postF354U12ArxiuAbast(t, app, session, f354U12ArxiuAbastEditPath(rowID), f354U12EditScopeFormValues(rowID, arxiuB, "free_text", "", "Abast inicial F35-4U12", "other", "tampered move", "/documentals/arxius/"+strconv.Itoa(arxiuB)+"/edit"))
+	rr := postF354U12ArxiuAbast(t, app, session, f354U12ArxiuAbastEditPath(rowID), f354U12EditScopeFormValues(f354U12EditScopeFormInput{
+		ScopeID:      rowID,
+		ArxiuID:      arxiuB,
+		TargetKind:   "free_text",
+		TargetLabel:  "Abast inicial F35-4U12",
+		RelationKind: "other",
+		Notes:        "tampered move",
+		ReturnTo:     "/documentals/arxius/" + strconv.Itoa(arxiuB) + "/edit",
+	}))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("edit tampered move status=%d body=%s", rr.Code, rr.Body.String())
 	}
@@ -435,10 +455,15 @@ func extractCSRFContextFromArxiuAbastForm(t *testing.T, app *core.App, session *
 
 func getArxiuAbastFormWithCSRF(t *testing.T, app *core.App, session *http.Cookie, path string) (string, *http.Cookie) {
 	t.Helper()
-	if strings.HasSuffix(path, "/edit") {
-		return getArxiuAbastEditFormWithCSRF(t, app, session, extractTrailingID(path))
+	u, err := url.Parse(path)
+	if err != nil {
+		t.Fatalf("url.Parse(%q): %v", path, err)
 	}
-	return getArxiuAbastNewFormWithCSRF(t, app, session, extractIDBeforeSegmentLocal(path, "abasts"))
+	cleanPath := u.Path
+	if strings.HasSuffix(cleanPath, "/edit") {
+		return getArxiuAbastEditFormWithCSRF(t, app, session, extractTrailingID(cleanPath))
+	}
+	return getArxiuAbastNewFormWithCSRF(t, app, session, extractIDBeforeSegmentLocal(cleanPath, "abasts"))
 }
 
 func getArxiuAbastNewFormWithCSRF(t *testing.T, app *core.App, session *http.Cookie, arxiuID int) (string, *http.Cookie) {
@@ -495,6 +520,17 @@ func f354U12ArxiuAbastEditPath(relID int) string {
 	return "/documentals/arxius/abasts/" + strconv.Itoa(relID) + "/edit"
 }
 
+type f354U12EditScopeFormInput struct {
+	ScopeID      int
+	ArxiuID      int
+	TargetKind   string
+	TargetID     string
+	TargetLabel  string
+	RelationKind string
+	Notes        string
+	ReturnTo     string
+}
+
 func f354U12ScopeFormValues(arxiuID int, targetKind, targetID, targetLabel, relationKind, notes, returnTo string) url.Values {
 	values := url.Values{
 		"arxiu_id":      {strconv.Itoa(arxiuID)},
@@ -521,9 +557,9 @@ func f354U12MunicipiScopeValues(arxiuID int, arxiu *db.Arxiu, relationKind, note
 	return f354U12ScopeFormValues(arxiuID, "municipi", strconv.Itoa(int(arxiu.MunicipiID.Int64)), "", relationKind, notes, "")
 }
 
-func f354U12EditScopeFormValues(scopeID, arxiuID int, targetKind, targetID, targetLabel, relationKind, notes, returnTo string) url.Values {
-	values := f354U12ScopeFormValues(arxiuID, targetKind, targetID, targetLabel, relationKind, notes, returnTo)
-	values.Set("id", strconv.Itoa(scopeID))
+func f354U12EditScopeFormValues(input f354U12EditScopeFormInput) url.Values {
+	values := f354U12ScopeFormValues(input.ArxiuID, input.TargetKind, input.TargetID, input.TargetLabel, input.RelationKind, input.Notes, input.ReturnTo)
+	values.Set("id", strconv.Itoa(input.ScopeID))
 	return values
 }
 
@@ -622,4 +658,23 @@ func extractIDBeforeSegmentLocal(path, segment string) int {
 		}
 	}
 	return 0
+}
+
+func TestF354U12ExtractIDBeforeSegmentLocal(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		segment string
+		want    int
+	}{
+		{name: "archive id before abasts", path: "/documentals/arxius/10/abasts/new", segment: "abasts", want: 10},
+		{name: "non numeric before abasts", path: "/documentals/arxius/x/abasts/new", segment: "abasts", want: 0},
+		{name: "skips non numeric match and uses later valid segment", path: "/documentals/abasts/10/abasts/new", segment: "abasts", want: 10},
+		{name: "missing segment", path: "/documentals/arxius/10/edit", segment: "abasts", want: 0},
+	}
+	for _, tc := range tests {
+		if got := extractIDBeforeSegmentLocal(tc.path, tc.segment); got != tc.want {
+			t.Fatalf("%s: extractIDBeforeSegmentLocal(%q, %q)=%d want=%d", tc.name, tc.path, tc.segment, got, tc.want)
+		}
+	}
 }

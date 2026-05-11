@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
@@ -454,7 +455,7 @@ func (a *App) buildArxiuAbastLabelCache(lang string, rows []db.ArxiuAbast) arxiu
 		if !arxiuAbastNeedsLegacyLookup(&row) {
 			continue
 		}
-		key := arxiuAbastTargetCacheKey(row.TargetKind, int(row.TargetID.Int64))
+		key := arxiuAbastTargetCacheKey(row.TargetKind, row.TargetID.Int64)
 		if key == "" || cache[key] != "" {
 			continue
 		}
@@ -547,7 +548,7 @@ func (a *App) arxiuAbastListLabel(abast *db.ArxiuAbast, cache arxiuAbastLabelCac
 	if strings.TrimSpace(abast.TargetCode) != "" {
 		return strings.TrimSpace(abast.TargetCode)
 	}
-	if label := strings.TrimSpace(cache[arxiuAbastTargetCacheKey(abast.TargetKind, int(abast.TargetID.Int64))]); label != "" {
+	if label := strings.TrimSpace(cache[arxiuAbastTargetCacheKey(abast.TargetKind, abast.TargetID.Int64)]); label != "" {
 		return label
 	}
 	if abast.TargetID.Valid && abast.TargetID.Int64 > 0 {
@@ -666,11 +667,11 @@ func arxiuAbastNeedsLegacyLookup(abast *db.ArxiuAbast) bool {
 		arxiuAbastIDBackedKinds[abast.TargetKind]
 }
 
-func arxiuAbastTargetCacheKey(kind string, targetID int) string {
+func arxiuAbastTargetCacheKey(kind string, targetID int64) string {
 	if strings.TrimSpace(kind) == "" || targetID <= 0 {
 		return ""
 	}
-	return kind + ":" + fmt.Sprintf("%d", targetID)
+	return kind + ":" + strconv.FormatInt(targetID, 10)
 }
 
 func (a *App) resolveArxiuAbastLegacyLabel(lang string, abast *db.ArxiuAbast) string {
