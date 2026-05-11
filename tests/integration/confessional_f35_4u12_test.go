@@ -36,6 +36,7 @@ func TestF354U12ArxiuAbastSchemaSQLite(t *testing.T) {
 		"idx_arxiu_abast_target",
 		"idx_arxiu_abast_moderacio",
 		"idx_arxiu_abast_relacio",
+		"ux_arxiu_abast_identity",
 	} {
 		if !f351SQLiteIndexExists(t, database, idx) {
 			t.Fatalf("index esperat no creat: %s", idx)
@@ -67,6 +68,7 @@ func TestF354U12ArxiuAbastSQLFilesAligned(t *testing.T) {
 			"idx_arxiu_abast_target",
 			"idx_arxiu_abast_moderacio",
 			"idx_arxiu_abast_relacio",
+			"ux_arxiu_abast_identity",
 		} {
 			if !strings.Contains(src, token) {
 				t.Fatalf("%s no conte token F35-4U12 %q", rel, token)
@@ -121,7 +123,7 @@ func TestF354U12CreateTerritorialAndReligiousArchiveScopes(t *testing.T) {
 	}
 	entitatID := f353YCreateEntitat(t, database, "Parroquia F35-4U12 "+suffix, "publicat")
 
-	rr := postF354U12ArxiuAbast(t, app, session, url.Values{
+	rr := postF354U12ArxiuAbast(t, app, session, "/documentals/arxius/"+strconv.Itoa(arxiuID)+"/abasts/new", url.Values{
 		"arxiu_id":      {strconv.Itoa(arxiuID)},
 		"target_kind":   {"municipi"},
 		"target_id":     {strconv.Itoa(int(arxiu.MunicipiID.Int64))},
@@ -136,7 +138,7 @@ func TestF354U12CreateTerritorialAndReligiousArchiveScopes(t *testing.T) {
 		t.Fatalf("return_to municipi no respectat: %s", rr.Header().Get("Location"))
 	}
 
-	rr = postF354U12ArxiuAbast(t, app, session, url.Values{
+	rr = postF354U12ArxiuAbast(t, app, session, "/documentals/arxius/"+strconv.Itoa(arxiuID)+"/abasts/new", url.Values{
 		"arxiu_id":      {strconv.Itoa(arxiuID)},
 		"target_kind":   {"religious_entity"},
 		"target_id":     {strconv.Itoa(entitatID)},
@@ -191,9 +193,11 @@ func TestF354U12ArchiveScopeDeleteRespectsReturnTo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveArxiuAbast: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/documentals/arxius/abasts/"+strconv.Itoa(relID)+"/delete", strings.NewReader("return_to=%2Fdocumentals%2Farxius%2F"+strconv.Itoa(arxiuID)))
+	csrf, csrfCookie := extractCSRFContextFromArxiuAbastForm(t, app, session, "/documentals/arxius/"+strconv.Itoa(arxiuID)+"/abasts/new")
+	req := httptest.NewRequest(http.MethodPost, "/documentals/arxius/abasts/"+strconv.Itoa(relID)+"/delete", strings.NewReader("csrf_token="+url.QueryEscape(csrf)+"&return_to=%2Fdocumentals%2Farxius%2F"+strconv.Itoa(arxiuID)))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(session)
+	req.AddCookie(csrfCookie)
 	rr := httptest.NewRecorder()
 	app.AdminDeleteArxiuAbast(rr, req)
 	if rr.Code != http.StatusSeeOther {
@@ -218,6 +222,13 @@ func TestF354U12ArchiveScopeTemplatePreservesCSPAndSuggestUI(t *testing.T) {
 	if !strings.Contains(src, `data-suggest="1"`) {
 		t.Fatalf(`template ha de contenir data-suggest="1"`)
 	}
+	if !strings.Contains(src, `name="csrf_token"`) {
+		t.Fatalf(`template ha de contenir name="csrf_token"`)
+	}
+	sections := readProjectFileF354(t, root, "templates/admin-arxiu-abast-sections.html")
+	if !strings.Contains(sections, `name="csrf_token"`) {
+		t.Fatalf(`partial d'abast ha de contenir csrf_token`)
+	}
 	js := readProjectFileF354(t, root, "static/js/arxiu-abast-form.js")
 	for _, required := range []string{
 		"/api/confessional/entitats/suggest",
@@ -227,6 +238,106 @@ func TestF354U12ArchiveScopeTemplatePreservesCSPAndSuggestUI(t *testing.T) {
 		if !strings.Contains(js, required) {
 			t.Fatalf("JS arxiu-abast-form ha de contenir %q", required)
 		}
+	}
+}
+
+func TestF354U12ArchiveScopeReturnToRejectsExternalTargets(t *testing.T) {
+	app, database, _, session := setupF354U12ArxiuAbastAdmin(t, "test_f35_4u12_return_to.sqlite3")
+	for idx, raw := range []string{"https://evil.example", "//evil.example"} {
+		arxiuID := f354CreateArxiu(t, database, "Arxiu F35-4U12 Return "+strconv.FormatInt(time.Now().UnixNano(), 10)+strconv.Itoa(idx))
+		arxiu, _ := database.GetArxiu(arxiuID)
+		rr := postF354U12ArxiuAbast(t, app, session, "/documentals/arxius/"+strconv.Itoa(arxiuID)+"/abasts/new", url.Values{
+			"arxiu_id":      {strconv.Itoa(arxiuID)},
+			"target_kind":   {"municipi"},
+			"target_id":     {strconv.Itoa(int(arxiu.MunicipiID.Int64))},
+			"relation_kind": {"coverage"},
+			"notes":         {"redirect check"},
+			"return_to":     {raw},
+		})
+		if rr.Code != http.StatusSeeOther {
+			t.Fatalf("save amb return_to=%q status=%d body=%s", raw, rr.Code, rr.Body.String())
+		}
+		expected := "/documentals/arxius/" + strconv.Itoa(arxiuID) + "/edit?notice=scope-pending"
+		if rr.Header().Get("Location") != expected {
+			t.Fatalf("return_to insegur %q ha de caure al fallback %q, got %q", raw, expected, rr.Header().Get("Location"))
+		}
+	}
+}
+
+func TestF354U12ArchiveScopeEditCannotMoveToAnotherArchive(t *testing.T) {
+	app, database, _, session := setupF354U12ArxiuAbastAdmin(t, "test_f35_4u12_move.sqlite3")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+	arxiuA := f354CreateArxiu(t, database, "Arxiu A F35-4U12 "+suffix)
+	arxiuB := f354CreateArxiu(t, database, "Arxiu B F35-4U12 "+suffix)
+	rowID, err := database.SaveArxiuAbast(&db.ArxiuAbast{
+		ArxiuID:        arxiuA,
+		TargetKind:     "free_text",
+		TargetLabel:    "Abast inicial F35-4U12",
+		RelationKind:   "other",
+		Notes:          "before move",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	})
+	if err != nil {
+		t.Fatalf("SaveArxiuAbast initial: %v", err)
+	}
+
+	rr := postF354U12ArxiuAbast(t, app, session, "/documentals/arxius/abasts/"+strconv.Itoa(rowID)+"/edit", url.Values{
+		"id":            {strconv.Itoa(rowID)},
+		"arxiu_id":      {strconv.Itoa(arxiuB)},
+		"target_kind":   {"free_text"},
+		"target_label":  {"Abast inicial F35-4U12"},
+		"relation_kind": {"other"},
+		"notes":         {"tampered move"},
+		"return_to":     {"/documentals/arxius/" + strconv.Itoa(arxiuB) + "/edit"},
+	})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("edit tampered move status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(strings.ToLower(rr.Body.String()), "altre arxiu") && !strings.Contains(strings.ToLower(rr.Body.String()), "other archive") {
+		t.Fatalf("la resposta ha de bloquejar el move, body=%s", rr.Body.String())
+	}
+	updated, err := database.GetArxiuAbast(rowID)
+	if err != nil || updated == nil {
+		t.Fatalf("GetArxiuAbast after move attempt: err=%v row=%v", err, updated)
+	}
+	if updated.ArxiuID != arxiuA {
+		t.Fatalf("l'abast no s'ha de moure d'arxiu: got=%d want=%d", updated.ArxiuID, arxiuA)
+	}
+}
+
+func TestF354U12ArchiveScopeSQLiteUniqueConstraintBlocksDuplicates(t *testing.T) {
+	_, database := newTestAppForLogin(t, "test_f35_4u12_unique.sqlite3")
+	arxiuID := f354CreateArxiu(t, database, "Arxiu F35-4U12 Unique "+strconv.FormatInt(time.Now().UnixNano(), 10))
+	if _, err := database.SaveArxiuAbast(&db.ArxiuAbast{
+		ArxiuID:        arxiuID,
+		TargetKind:     "free_text",
+		TargetLabel:    "Mateix abast",
+		RelationKind:   "coverage",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	}); err != nil {
+		t.Fatalf("primer SaveArxiuAbast: %v", err)
+	}
+	if _, err := database.SaveArxiuAbast(&db.ArxiuAbast{
+		ArxiuID:        arxiuID,
+		TargetKind:     "free_text",
+		TargetLabel:    "Mateix abast",
+		RelationKind:   "coverage",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	}); err == nil {
+		t.Fatalf("el duplicat SQLite ha de fallar per unique constraint")
+	}
+	if _, err := database.SaveArxiuAbast(&db.ArxiuAbast{
+		ArxiuID:        arxiuID,
+		TargetKind:     "free_text",
+		TargetLabel:    "Abast diferent",
+		RelationKind:   "coverage",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	}); err != nil {
+		t.Fatalf("un segon abast diferent ha de funcionar: %v", err)
 	}
 }
 
@@ -252,12 +363,40 @@ func setupF354U12ArxiuAbastAdmin(t *testing.T, dbName string) (*core.App, db.DB,
 	return app, database, admin, session
 }
 
-func postF354U12ArxiuAbast(t *testing.T, app *core.App, session *http.Cookie, form url.Values) *httptest.ResponseRecorder {
+func postF354U12ArxiuAbast(t *testing.T, app *core.App, session *http.Cookie, formPath string, form url.Values) *httptest.ResponseRecorder {
 	t.Helper()
+	csrfToken, csrfCookie := extractCSRFContextFromArxiuAbastForm(t, app, session, formPath)
+	form.Set("csrf_token", csrfToken)
 	req := httptest.NewRequest(http.MethodPost, "/documentals/arxius/abasts/save", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(session)
+	req.AddCookie(csrfCookie)
 	rr := httptest.NewRecorder()
 	app.AdminSaveArxiuAbast(rr, req)
 	return rr
+}
+
+func extractCSRFContextFromArxiuAbastForm(t *testing.T, app *core.App, session *http.Cookie, path string) (string, *http.Cookie) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	if strings.HasSuffix(path, "/edit") {
+		app.AdminEditArxiuAbast(rr, req)
+	} else {
+		app.AdminNewArxiuAbastFromArxiu(rr, req)
+	}
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET %s per extreure CSRF ha fallat: %d body=%s", path, rr.Code, rr.Body.String())
+	}
+	resp := rr.Result()
+	defer resp.Body.Close()
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == "cg_csrf" {
+			cloned := *cookie
+			return extractCSRFTokenFromHTML(t, rr.Body.String()), &cloned
+		}
+	}
+	t.Fatalf("no s'ha trobat la cookie cg_csrf a %s", path)
+	return "", nil
 }

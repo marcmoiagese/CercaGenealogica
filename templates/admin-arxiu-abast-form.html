@@ -16,6 +16,7 @@
             </header>
             {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
             <form method="post" action="/documentals/arxius/abasts/save">
+                <input type="hidden" name="csrf_token" value="{{ .Data.CSRFToken }}">
                 <input type="hidden" name="id" value="{{ .Data.Abast.ID }}">
                 <input type="hidden" name="arxiu_id" value="{{ .Data.Arxiu.ID }}">
                 <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
@@ -50,7 +51,7 @@
                         <input type="hidden" id="target_id" name="target_id" value="{{ if .Data.Abast.TargetID.Valid }}{{ .Data.Abast.TargetID.Int64 }}{{ end }}">
                         <input type="hidden" id="target_code" name="target_code" value="{{ .Data.Abast.TargetCode }}">
                         <input type="hidden" id="target_label" name="target_label" value="{{ .Data.Abast.TargetLabel }}">
-                        <ul id="target_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
+                        <ul id="target_suggestions" class="resultats-cerca" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
                     </div>
                 </div>
 

@@ -24,6 +24,7 @@ type arxiuAbastRelationKind struct {
 type arxiuAbastFormData struct {
 	Abast              *db.ArxiuAbast
 	Arxiu              *db.Arxiu
+	CSRFToken          string
 	Error              string
 	ReturnURL          string
 	IsNew              bool
@@ -46,6 +47,12 @@ type arxiuAbastViewRow struct {
 	RelationKindLabel string
 	Notes             string
 	ModeracioEstat    string
+}
+
+type arxiuAbastViewSection struct {
+	Key   string
+	Title string
+	Rows  []arxiuAbastViewRow
 }
 
 var arxiuAbastTargetKinds = []arxiuAbastTargetKind{
@@ -125,7 +132,7 @@ func (a *App) AdminNewArxiuAbastFromArxiu(w http.ResponseWriter, r *http.Request
 		Estat:          "actiu",
 		ModeracioEstat: "pendent",
 	}
-	a.renderArxiuAbastForm(w, r, user, arxiu, abast, true, "", strings.TrimSpace(r.URL.Query().Get("return_to")))
+	a.renderArxiuAbastForm(w, r, user, arxiu, abast, true, "", safeReturnTo(r.URL.Query().Get("return_to"), fmt.Sprintf("/documentals/arxius/%d/edit", arxiuID)))
 }
 
 func (a *App) AdminEditArxiuAbast(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +156,7 @@ func (a *App) AdminEditArxiuAbast(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	a.renderArxiuAbastForm(w, r, user, arxiu, abast, false, "", strings.TrimSpace(r.URL.Query().Get("return_to")))
+	a.renderArxiuAbastForm(w, r, user, arxiu, abast, false, "", safeReturnTo(r.URL.Query().Get("return_to"), fmt.Sprintf("/documentals/arxius/%d/edit", abast.ArxiuID)))
 }
 
 func (a *App) AdminSaveArxiuAbast(w http.ResponseWriter, r *http.Request) {
@@ -157,8 +164,11 @@ func (a *App) AdminSaveArxiuAbast(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/documentals/arxius", http.StatusSeeOther)
 		return
 	}
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invalid", http.StatusBadRequest)
+		return
+	}
 	id := parsePositiveIntDefault(r.FormValue("id"), 0, 0, 1000000000)
-	returnURL := strings.TrimSpace(r.FormValue("return_to"))
 	abast := parseArxiuAbastForm(r)
 	var current *db.ArxiuAbast
 	if id > 0 {
@@ -168,22 +178,35 @@ func (a *App) AdminSaveArxiuAbast(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		abast.ID = id
+		if abast.ArxiuID != current.ArxiuID {
+			abast.ArxiuID = current.ArxiuID
+		}
 	}
-	target := a.resolveArxiuTarget(abast.ArxiuID)
+	targetArxiuID := abast.ArxiuID
+	if current != nil {
+		targetArxiuID = current.ArxiuID
+	}
+	target := a.resolveArxiuTarget(targetArxiuID)
 	user, ok := a.requirePermissionKey(w, r, permKeyDocumentalsArxiusEdit, target)
 	if !ok {
 		return
 	}
-	arxiu, err := a.DB.GetArxiu(abast.ArxiuID)
+	returnURL := safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/documentals/arxius/%d/edit?notice=scope-pending", targetArxiuID))
+	arxiu, err := a.DB.GetArxiu(targetArxiuID)
 	if err != nil || arxiu == nil {
 		http.NotFound(w, r)
 		return
 	}
-	if current != nil && current.ModeracioEstat == "publicat" && !a.canModerateModular(user) {
-		a.renderArxiuAbastForm(w, r, user, arxiu, abast, false, T(ResolveLangForUser(r, user.PreferredLang), "archives.scope.error.published_edit_restricted"), returnURL)
+	lang := ResolveLangForUser(r, user.PreferredLang)
+	if current != nil && parsePositiveIntDefault(r.FormValue("arxiu_id"), 0, 0, 1000000000) != current.ArxiuID {
+		a.renderArxiuAbastForm(w, r, user, arxiu, abast, false, T(lang, "archives.scope.error.move_restricted"), returnURL)
 		return
 	}
-	if errMsg := a.validateArxiuAbast(abast); errMsg != "" {
+	if current != nil && current.ModeracioEstat == "publicat" && !a.canModerateModular(user) {
+		a.renderArxiuAbastForm(w, r, user, arxiu, abast, false, T(lang, "archives.scope.error.published_edit_restricted"), returnURL)
+		return
+	}
+	if errMsg := a.validateArxiuAbast(lang, abast); errMsg != "" {
 		a.renderArxiuAbastForm(w, r, user, arxiu, abast, id == 0, errMsg, returnURL)
 		return
 	}
@@ -200,7 +223,11 @@ func (a *App) AdminSaveArxiuAbast(w http.ResponseWriter, r *http.Request) {
 	}
 	savedID, err := a.DB.SaveArxiuAbast(abast)
 	if err != nil {
-		a.renderArxiuAbastForm(w, r, user, arxiu, abast, id == 0, T(ResolveLangForUser(r, user.PreferredLang), "archives.scope.error.save"), returnURL)
+		msgKey := "archives.scope.error.save"
+		if arxiuAbastIsDuplicateErr(err) {
+			msgKey = "archives.scope.error.duplicate"
+		}
+		a.renderArxiuAbastForm(w, r, user, arxiu, abast, id == 0, T(lang, msgKey), returnURL)
 		return
 	}
 	objectID := savedID
@@ -210,13 +237,14 @@ func (a *App) AdminSaveArxiuAbast(w http.ResponseWriter, r *http.Request) {
 		action = "editar"
 	}
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuUpdate, action, "arxiu_abast", &objectID, "pendent", nil, "")
-	if returnURL == "" {
-		returnURL = fmt.Sprintf("/documentals/arxius/%d/edit?notice=scope-pending", abast.ArxiuID)
-	}
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
 }
 
 func (a *App) AdminDeleteArxiuAbast(w http.ResponseWriter, r *http.Request) {
+	if !validateCSRF(r, r.FormValue("csrf_token")) {
+		http.Error(w, "CSRF invalid", http.StatusBadRequest)
+		return
+	}
 	id := extractID(r.URL.Path)
 	abast, err := a.DB.GetArxiuAbast(id)
 	if err != nil || abast == nil {
@@ -228,10 +256,7 @@ func (a *App) AdminDeleteArxiuAbast(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	returnURL := strings.TrimSpace(r.FormValue("return_to"))
-	if returnURL == "" {
-		returnURL = fmt.Sprintf("/documentals/arxius/%d/edit", abast.ArxiuID)
-	}
+	returnURL := safeReturnTo(r.FormValue("return_to"), fmt.Sprintf("/documentals/arxius/%d/edit", abast.ArxiuID))
 	if abast.ModeracioEstat == "publicat" || arxiuAbastDeleteRequested(abast) {
 		if !arxiuAbastDeleteRequested(abast) {
 			abast.UpdatedBy = sqlNullIntFromInt(user.ID)
@@ -281,58 +306,72 @@ func parseArxiuAbastForm(r *http.Request) *db.ArxiuAbast {
 	}
 }
 
-func (a *App) validateArxiuAbast(abast *db.ArxiuAbast) string {
+func (a *App) validateArxiuAbast(lang string, abast *db.ArxiuAbast) string {
+	if msg := a.validateArxiuAbastCommon(lang, abast); msg != "" {
+		return msg
+	}
+	if msg := a.resolveAndValidateArxiuAbastTarget(lang, abast); msg != "" {
+		return msg
+	}
+	return a.validateArxiuAbastDuplicate(lang, abast)
+}
+
+func (a *App) validateArxiuAbastCommon(lang string, abast *db.ArxiuAbast) string {
 	if abast == nil || abast.ArxiuID <= 0 {
-		return "Cal indicar l'arxiu."
+		return T(lang, "archives.scope.error.archive_required")
 	}
 	if arxiu, err := a.DB.GetArxiu(abast.ArxiuID); err != nil || arxiu == nil {
-		return "L'arxiu indicat no existeix."
+		return T(lang, "archives.scope.error.archive_not_found")
 	}
 	if !arxiuAbastTargetKindValid(abast.TargetKind) {
-		return "El tipus d'abast no es valid."
+		return T(lang, "archives.scope.error.invalid_target_kind")
 	}
 	if !arxiuAbastRelationKindValid(abast.RelationKind) {
-		return "El tipus de relacio no es valid."
+		return T(lang, "archives.scope.error.invalid_relation_kind")
 	}
+	return ""
+}
+
+func (a *App) resolveAndValidateArxiuAbastTarget(lang string, abast *db.ArxiuAbast) string {
 	switch abast.TargetKind {
 	case "religious_entity":
 		if !abast.TargetID.Valid || abast.TargetID.Int64 <= 0 {
-			return "Cal seleccionar una entitat religiosa."
+			return T(lang, "archives.scope.error.religious_entity_required")
 		}
 		entitat, err := a.DB.GetEntitatReligiosa(int(abast.TargetID.Int64))
 		if err != nil || entitat == nil {
-			return "L'entitat religiosa indicada no existeix."
+			return T(lang, "archives.scope.error.religious_entity_not_found")
 		}
 		if entitat.ModeracioEstat != "publicat" || entitat.Estat != "actiu" {
-			return "L'entitat religiosa ha d'estar publicada."
+			return T(lang, "archives.scope.error.religious_entity_not_published")
 		}
 		abast.TargetLabel = strings.TrimSpace(entitat.Nom)
 		abast.TargetCode = strings.TrimSpace(entitat.Codi)
 	case "municipi":
 		if !abast.TargetID.Valid || abast.TargetID.Int64 <= 0 {
-			return "Cal seleccionar un municipi."
+			return T(lang, "archives.scope.error.municipi_required")
 		}
 		mun, err := a.DB.GetMunicipi(int(abast.TargetID.Int64))
 		if err != nil || mun == nil {
-			return "El municipi indicat no existeix."
+			return T(lang, "archives.scope.error.municipi_not_found")
 		}
 		if mun.ModeracioEstat != "publicat" {
-			return "El municipi ha d'estar publicat."
+			return T(lang, "archives.scope.error.municipi_not_published")
 		}
 		abast.TargetLabel = strings.TrimSpace(mun.Nom)
 	case "comarca", "provincia", "comunitat_autonoma", "estat":
 		if !abast.TargetID.Valid || abast.TargetID.Int64 <= 0 {
-			return "Cal seleccionar un nivell administratiu."
+			return T(lang, "archives.scope.error.level_required")
 		}
 		nivell, err := a.DB.GetNivell(int(abast.TargetID.Int64))
 		if err != nil || nivell == nil {
-			return "El nivell administratiu indicat no existeix."
+			return T(lang, "archives.scope.error.level_not_found")
 		}
 		if nivell.ModeracioEstat != "publicat" {
-			return "El nivell administratiu ha d'estar publicat."
+			return T(lang, "archives.scope.error.level_not_published")
 		}
 		if !arxiuAbastLevelKindMatches(abast.TargetKind, nivell.TipusNivell) {
-			return "El nivell seleccionat no correspon al tipus d'abast."
+			return T(lang, "archives.scope.error.level_kind_mismatch")
 		}
 		abast.TargetLabel = strings.TrimSpace(nivell.NomNivell)
 		if abast.TargetLabel == "" {
@@ -341,14 +380,18 @@ func (a *App) validateArxiuAbast(abast *db.ArxiuAbast) string {
 		abast.TargetCode = strings.TrimSpace(nivell.CodiOficial)
 	case "institucio", "free_text":
 		if strings.TrimSpace(abast.TargetLabel) == "" {
-			return "Cal indicar una etiqueta visible."
+			return T(lang, "archives.scope.error.label_required")
 		}
 	default:
-		return "El tipus d'abast no es valid."
+		return T(lang, "archives.scope.error.invalid_target_kind")
 	}
+	return ""
+}
+
+func (a *App) validateArxiuAbastDuplicate(lang string, abast *db.ArxiuAbast) string {
 	existing, err := a.DB.ListArxiuAbasts(abast.ArxiuID, "", "")
 	if err != nil {
-		return "No s'ha pogut validar l'abast."
+		return T(lang, "archives.scope.error.validate")
 	}
 	for _, row := range existing {
 		if row.ID == abast.ID || row.ModeracioEstat == "rebutjat" {
@@ -359,7 +402,7 @@ func (a *App) validateArxiuAbast(abast *db.ArxiuAbast) string {
 			strings.EqualFold(strings.TrimSpace(row.TargetCode), strings.TrimSpace(abast.TargetCode)) &&
 			strings.EqualFold(strings.TrimSpace(row.TargetLabel), strings.TrimSpace(abast.TargetLabel)) &&
 			row.RelationKind == abast.RelationKind {
-			return "Ja existeix un abast equivalent."
+			return T(lang, "archives.scope.error.duplicate")
 		}
 	}
 	return ""
@@ -386,15 +429,15 @@ func (a *App) renderArxiuAbastForm(w http.ResponseWriter, r *http.Request, user 
 	})
 }
 
-func (a *App) buildArxiuAbastSections(lang string, arxiuID int, status string) (map[string][]arxiuAbastViewRow, error) {
+func (a *App) buildArxiuAbastSections(lang string, arxiuID int, status string) ([]arxiuAbastViewSection, error) {
 	rows, err := a.DB.ListArxiuAbasts(arxiuID, "", status)
 	if err != nil {
-		return map[string][]arxiuAbastViewRow{}, err
+		return []arxiuAbastViewSection{}, err
 	}
-	out := map[string][]arxiuAbastViewRow{
-		"territorial": {},
-		"religious":   {},
-		"other":       {},
+	sections := []arxiuAbastViewSection{
+		{Key: "territorial", Title: T(lang, "archives.scope.territorial"), Rows: []arxiuAbastViewRow{}},
+		{Key: "religious", Title: T(lang, "archives.scope.religious"), Rows: []arxiuAbastViewRow{}},
+		{Key: "other", Title: T(lang, "archives.scope.other_institutions"), Rows: []arxiuAbastViewRow{}},
 	}
 	targetLabels := arxiuAbastTargetKindLabels(lang)
 	relationLabels := arxiuAbastRelationKindLabels(lang)
@@ -403,7 +446,7 @@ func (a *App) buildArxiuAbastSections(lang string, arxiuID int, status string) (
 			ID:                row.ID,
 			TargetKind:        row.TargetKind,
 			TargetKindLabel:   targetLabels[row.TargetKind],
-			TargetLabel:       a.resolveArxiuAbastDisplayLabel(lang, &row),
+			TargetLabel:       arxiuAbastListLabel(&row),
 			RelationKind:      row.RelationKind,
 			RelationKindLabel: relationLabels[row.RelationKind],
 			Notes:             strings.TrimSpace(row.Notes),
@@ -411,14 +454,14 @@ func (a *App) buildArxiuAbastSections(lang string, arxiuID int, status string) (
 		}
 		switch row.TargetKind {
 		case "religious_entity":
-			out["religious"] = append(out["religious"], item)
+			sections[1].Rows = append(sections[1].Rows, item)
 		case "institucio", "free_text":
-			out["other"] = append(out["other"], item)
+			sections[2].Rows = append(sections[2].Rows, item)
 		default:
-			out["territorial"] = append(out["territorial"], item)
+			sections[0].Rows = append(sections[0].Rows, item)
 		}
 	}
-	return out, nil
+	return sections, nil
 }
 
 func (a *App) resolveArxiuAbastDisplayLabel(lang string, abast *db.ArxiuAbast) string {
@@ -471,7 +514,7 @@ func arxiuAbastLevelKindMatches(targetKind, levelType string) bool {
 	if left == right {
 		return true
 	}
-	return (left == "estat" && right == "pais") || (left == "comunitatautonoma" && right == "comunitatautonoma")
+	return left == "estat" && right == "pais"
 }
 
 func normalizeArxiuAbastKey(raw string) string {
@@ -493,4 +536,25 @@ func arxiuAbastDeleteRequested(rel *db.ArxiuAbast) bool {
 		return false
 	}
 	return strings.TrimSpace(rel.ModeracioMotiu) == arxiuAbastDeleteRequestMarker
+}
+
+func arxiuAbastListLabel(abast *db.ArxiuAbast) string {
+	if abast == nil {
+		return ""
+	}
+	if strings.TrimSpace(abast.TargetLabel) != "" {
+		return strings.TrimSpace(abast.TargetLabel)
+	}
+	return strings.TrimSpace(abast.TargetCode)
+}
+
+func arxiuAbastIsDuplicateErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(msg, "ux_arxiu_abast_identity") ||
+		strings.Contains(msg, "unique constraint failed") ||
+		strings.Contains(msg, "duplicate entry") ||
+		strings.Contains(msg, "duplicate key value")
 }

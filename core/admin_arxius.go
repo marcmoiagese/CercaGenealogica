@@ -3,6 +3,7 @@ package core
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -593,11 +594,7 @@ func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.
 	}
 	relacionsReligioses := []db.ArxiuEntitatReligiosa{}
 	entitatsReligioses := []db.EntitatReligiosa{}
-	abastSections := map[string][]arxiuAbastViewRow{
-		"territorial": {},
-		"religious":   {},
-		"other":       {},
-	}
+	abastSections := []arxiuAbastViewSection{}
 	if arxiu != nil && arxiu.ID > 0 {
 		relacionsReligioses, _ = a.DB.ListArxiuEntitatsReligioses(arxiu.ID, 0, relationStatus)
 		entitatsReligioses, _ = a.DB.ListEntitatsReligioses()
@@ -621,8 +618,7 @@ func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.
 		"CanDeleteArxiuEntitatReligiosa":  canDeleteRel,
 		"CanManageArxiuEntitatReligiosa":  canManageRel,
 		"ArxiuAbastSections":              abastSections,
-		"ArxiuAbastTargetKindLabels":      arxiuAbastTargetKindLabels(lang),
-		"ArxiuAbastRelationKindLabels":    arxiuAbastRelationKindLabels(lang),
+		"ArxiuAbastReturnTo":              fmt.Sprintf("/documentals/arxius/%d/edit", arxiu.ID),
 		"CanCreateArxiuAbast":             canCreateAbast,
 		"CanEditArxiuAbast":               canEditAbast,
 		"CanDeleteArxiuAbast":             canDeleteAbast,
@@ -896,6 +892,7 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 		"CanEditArxiuEntitatReligiosa":    a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsEdit, target),
 		"CanDeleteArxiuEntitatReligiosa":  a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsDelete, target),
 		"ArxiuAbastSections":              abastSections,
+		"ArxiuAbastReturnTo":              fmt.Sprintf("/documentals/arxius/%d", id),
 		"CanCreateArxiuAbast":             canEditArxiu,
 		"CanEditArxiuAbast":               canEditArxiu,
 		"CanDeleteArxiuAbast":             canDeleteArxiu,

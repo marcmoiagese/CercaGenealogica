@@ -1,0 +1,42 @@
+{{ define "admin-arxiu-abast-sections" }}
+{{ range .Sections }}
+<section class="card">
+    <div class="card-header">
+        <h3>{{ .Title }}</h3>
+    </div>
+    <div class="taula-wrapper">
+        <table class="taula">
+            <thead>
+                <tr>
+                    <th>{{ t $.Lang "archives.scope.form.target_kind" }}</th>
+                    <th>{{ t $.Lang "archives.scope.form.target" }}</th>
+                    <th>{{ t $.Lang "archives.scope.form.relation_kind" }}</th>
+                    <th>{{ t $.Lang "archives.scope.form.notes" }}</th>
+                    <th>{{ t $.Lang "moderation.status" }}</th>
+                    {{ if or $.CanEdit $.CanDelete }}<th>{{ t $.Lang "archives.books.col.actions" }}</th>{{ end }}
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .Rows }}
+                <tr>
+                    <td>{{ .TargetKindLabel }}</td>
+                    <td>{{ .TargetLabel }}</td>
+                    <td>{{ .RelationKindLabel }}</td>
+                    <td>{{ if .Notes }}{{ .Notes }}{{ else }}-{{ end }}</td>
+                    <td>{{ if .ModeracioEstat }}{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}{{ else }}-{{ end }}</td>
+                    {{ if or $.CanEdit $.CanDelete }}
+                    <td>
+                        {{ if $.CanEdit }}<a class="boto-secundari" href="/documentals/arxius/abasts/{{ .ID }}/edit?return_to={{ $.ReturnTo | urlquery }}">{{ t $.Lang "archives.scope.edit" }}</a>{{ end }}
+                        {{ if $.CanDelete }}<form method="post" action="/documentals/arxius/abasts/{{ .ID }}/delete" class="inline-form"><input type="hidden" name="csrf_token" value="{{ $.Data.CSRFToken }}"><input type="hidden" name="return_to" value="{{ $.ReturnTo }}"><button class="boto-perill" type="submit">{{ t $.Lang "archives.scope.delete" }}</button></form>{{ end }}
+                    </td>
+                    {{ end }}
+                </tr>
+                {{ else }}
+                <tr><td colspan="{{ if or $.CanEdit $.CanDelete }}6{{ else }}5{{ end }}">-</td></tr>
+                {{ end }}
+            </tbody>
+        </table>
+    </div>
+</section>
+{{ end }}
+{{ end }}
