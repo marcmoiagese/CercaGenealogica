@@ -305,19 +305,39 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 	if !strings.Contains(staticBody, `if (!selectedLevel || !religion.value) {`) || !strings.Contains(staticBody, `return { compatible: true, reason: "" };`) {
 		t.Fatalf("el pare preseleccionat no s'ha de considerar incompatible mentre encara no hi ha nivell real")
 	}
-	if !strings.Contains(staticBody, `const parentReligionCode = selectedParentReligionCode();`) {
+	handlerStart := strings.Index(staticBody, `religion.addEventListener("change", function () {`)
+	if handlerStart == -1 {
+		t.Fatalf("falta handler JS de canvi de religio")
+	}
+	handlerTail := staticBody[handlerStart:]
+	handlerEnd := strings.Index(handlerTail, `level.addEventListener("change", function () {`)
+	if handlerEnd == -1 {
+		t.Fatalf("falta tancament recognizable del handler JS de canvi de religio")
+	}
+	religionChangeBody := handlerTail[:handlerEnd]
+	if !strings.Contains(religionChangeBody, `const parentReligionCode = selectedParentReligionCode();`) {
 		t.Fatalf("canviar la religio ha de capturar la metadata de religio del pare en una variable local")
 	}
-	if !strings.Contains(staticBody, `if (parent && parent.value && parentReligionCode !== religion.value) {`) {
+	if !strings.Contains(religionChangeBody, `if (parent && parent.value && parentReligionCode !== religion.value) {`) {
 		t.Fatalf("canviar la religio ha de netejar qualsevol pare amb religio diferent o metadata absent")
 	}
-	if !strings.Contains(staticBody, `clearSelectedParent();`) {
+	for _, token := range []string{
+		`abortParentSuggestions();`,
+		`parentSearchHasResults = false;`,
+		`parentSearchConfirmedEmpty = false;`,
+		`clearSelectedParent();`,
+		`clearParentSuggestions();`,
+		`syncConfessionalLevels(false);`,
+		`syncSelectedParentCompatibility(true);`,
+	} {
+		if !strings.Contains(religionChangeBody, token) {
+			t.Fatalf("falta contracte del handler de canvi de religio: %s", token)
+		}
+	}
+	if !strings.Contains(religionChangeBody, `clearSelectedParent();`) {
 		t.Fatalf("canviar la religio a una confessio incompatible ha de netejar el pare seleccionat")
 	}
-	if !strings.Contains(staticBody, `parentSearchHasResults = false;`) || !strings.Contains(staticBody, `parentSearchConfirmedEmpty = false;`) {
-		t.Fatalf("canviar la religio i desassignar el pare ha de reiniciar l'estat intern del suggest")
-	}
-	if strings.Contains(staticBody, `selectedParentReligionCode() && selectedParentReligionCode() !== religion.value`) {
+	if strings.Contains(religionChangeBody, `selectedParentReligionCode() && selectedParentReligionCode() !== religion.value`) {
 		t.Fatalf("el canvi de religio no ha de dependre d'una metadata de religio present per netejar el pare")
 	}
 	if strings.Contains(staticBody, `syncSelectedParentCompatibility();`) {
