@@ -1693,6 +1693,7 @@ type NivellAdminFilter struct {
 	PaisID         int
 	Nivel          int
 	Text           string
+	TipusNivell    string
 	Estat          string
 	Status         string
 	Limit          int

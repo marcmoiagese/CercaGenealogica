@@ -2474,8 +2474,13 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 		args = append(args, f.Nivel)
 	}
 	if strings.TrimSpace(f.Text) != "" {
-		where += " AND lower(n.nom_nivell) LIKE ?"
-		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
+		like := "%" + strings.ToLower(strings.TrimSpace(f.Text)) + "%"
+		where += " AND (lower(n.nom_nivell) LIKE ? OR lower(COALESCE(n.codi_oficial,'')) LIKE ? OR lower(COALESCE(n.tipus_nivell,'')) LIKE ?)"
+		args = append(args, like, like, like)
+	}
+	if strings.TrimSpace(f.TipusNivell) != "" {
+		where += " AND lower(COALESCE(n.tipus_nivell,'')) = ?"
+		args = append(args, strings.ToLower(strings.TrimSpace(f.TipusNivell)))
 	}
 	if strings.TrimSpace(f.Estat) != "" {
 		where += " AND n.estat = ?"
@@ -2558,8 +2563,13 @@ func (h sqlHelper) countNivells(f NivellAdminFilter) (int, error) {
 		args = append(args, f.Nivel)
 	}
 	if strings.TrimSpace(f.Text) != "" {
-		where += " AND lower(n.nom_nivell) LIKE ?"
-		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Text))+"%")
+		like := "%" + strings.ToLower(strings.TrimSpace(f.Text)) + "%"
+		where += " AND (lower(n.nom_nivell) LIKE ? OR lower(COALESCE(n.codi_oficial,'')) LIKE ? OR lower(COALESCE(n.tipus_nivell,'')) LIKE ?)"
+		args = append(args, like, like, like)
+	}
+	if strings.TrimSpace(f.TipusNivell) != "" {
+		where += " AND lower(COALESCE(n.tipus_nivell,'')) = ?"
+		args = append(args, strings.ToLower(strings.TrimSpace(f.TipusNivell)))
 	}
 	if strings.TrimSpace(f.Estat) != "" {
 		where += " AND n.estat = ?"

@@ -64,6 +64,7 @@ var arxiuAbastTargetKinds = []arxiuAbastTargetKind{
 	{Code: "provincia", Key: "archives.scope.target_kind.provincia"},
 	{Code: "comunitat_autonoma", Key: "archives.scope.target_kind.comunitat_autonoma"},
 	{Code: "estat", Key: "archives.scope.target_kind.estat"},
+	{Code: "nivell_administratiu", Key: "archives.scope.target_kind.nivell_administratiu"},
 	{Code: "religious_entity", Key: "archives.scope.target_kind.religious_entity"},
 	{Code: "institucio", Key: "archives.scope.target_kind.institucio"},
 	{Code: "free_text", Key: "archives.scope.target_kind.free_text"},
@@ -79,12 +80,13 @@ var arxiuAbastRelationKinds = []arxiuAbastRelationKind{
 }
 
 var arxiuAbastIDBackedKinds = map[string]bool{
-	"religious_entity":   true,
-	"municipi":           true,
-	"comarca":            true,
-	"provincia":          true,
-	"comunitat_autonoma": true,
-	"estat":              true,
+	"religious_entity":     true,
+	"municipi":             true,
+	"comarca":              true,
+	"provincia":            true,
+	"comunitat_autonoma":   true,
+	"estat":                true,
+	"nivell_administratiu": true,
 }
 
 func arxiuAbastTargetKindLabels(lang string) map[string]string {
@@ -366,7 +368,7 @@ func (a *App) resolveAndValidateArxiuAbastTarget(lang string, abast *db.ArxiuAba
 		return a.resolveReligiousEntityAbastTarget(lang, abast)
 	case "municipi":
 		return a.resolveMunicipiAbastTarget(lang, abast)
-	case "comarca", "provincia", "comunitat_autonoma", "estat":
+	case "comarca", "provincia", "comunitat_autonoma", "estat", "nivell_administratiu":
 		return a.resolveAdministrativeLevelAbastTarget(lang, abast)
 	case "institucio", "free_text":
 		return validateTextAbastTarget(lang, abast)
@@ -501,7 +503,7 @@ func arxiuAbastInputMode(targetKind string) string {
 	switch strings.TrimSpace(targetKind) {
 	case "institucio", "free_text":
 		return "text"
-	case "municipi", "comarca", "provincia", "comunitat_autonoma", "estat", "religious_entity":
+	case "municipi", "comarca", "provincia", "comunitat_autonoma", "estat", "nivell_administratiu", "religious_entity":
 		return "suggest"
 	default:
 		return "suggest"
@@ -509,12 +511,35 @@ func arxiuAbastInputMode(targetKind string) string {
 }
 
 func arxiuAbastLevelKindMatches(targetKind, levelType string) bool {
+	if normalizeArxiuAbastKey(targetKind) == "nivelladministratiu" {
+		return strings.TrimSpace(levelType) != ""
+	}
 	left := normalizeArxiuAbastKey(targetKind)
 	right := normalizeArxiuAbastKey(levelType)
 	if left == right {
 		return true
 	}
-	return left == "estat" && right == "pais"
+	for _, alias := range arxiuAbastLevelKindAliases(left) {
+		if right == alias {
+			return true
+		}
+	}
+	return false
+}
+
+func arxiuAbastLevelKindAliases(targetKind string) []string {
+	switch normalizeArxiuAbastKey(targetKind) {
+	case "comarca":
+		return []string{"comarca"}
+	case "provincia":
+		return []string{"provincia"}
+	case "comunitatautonoma":
+		return []string{"comunitatautonoma", "autonomia", "regioautonoma"}
+	case "estat":
+		return []string{"estat", "pais"}
+	default:
+		return nil
+	}
 }
 
 func normalizeArxiuAbastKey(raw string) string {

@@ -2,6 +2,7 @@ package integration
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -210,9 +211,17 @@ func TestF354U12ArchiveScopeTemplatePreservesCSPAndSuggestUI(t *testing.T) {
 		"/api/confessional/entitats/suggest",
 		"/api/territori/municipis/suggest",
 		"/api/territori/nivells/suggest",
+		"target_kind=comarca",
+		"target_kind=provincia",
+		"target_kind=nivell_administratiu",
 	} {
 		if !strings.Contains(js, required) {
 			t.Fatalf("JS arxiu-abast-form ha de contenir %q", required)
+		}
+	}
+	for _, forbidden := range []string{"nivel=1", "nivel=2", "nivel=3", "nivel=4"} {
+		if strings.Contains(js, forbidden) {
+			t.Fatalf("JS arxiu-abast-form no ha d'usar mapping numeric antic %q", forbidden)
 		}
 	}
 }
@@ -385,6 +394,102 @@ func TestF354U12ArchiveScopeLevelKindMismatchDoesNotInsert(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), `name="target_kind"`) {
 		t.Fatalf("el formulari s'ha de tornar a renderitzar en el mismatch de nivell")
+	}
+}
+
+func TestF354U12ArchiveScopeAdministrativeKindValidationAndGenericLevel(t *testing.T) {
+	app, database, _, session := setupF354U12ArxiuAbastAdmin(t, "test_f35_4u12_admin_kind_validation.sqlite3")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+	arxiuID := f354CreateArxiu(t, database, "Arxiu F35-4U12 Admin Kind "+suffix)
+	paisID := f354U12CreatePais(t, database, "QA", "QAT", "997")
+	paisLevelID := f354U12CreatePublishedLevel(t, database, paisID, 1, "Pais F35-4U12 "+suffix, "pais", "", 0)
+	provinciaID := f354U12CreatePublishedLevel(t, database, paisID, 2, "Provincia F35-4U12 "+suffix, "provincia", "QA-P", paisLevelID)
+	comarcaID := f354U12CreatePublishedLevel(t, database, paisID, 3, "Comarca F35-4U12 "+suffix, "comarca", "QA-C", provinciaID)
+	departamentID := f354U12CreatePublishedLevel(t, database, paisID, 4, "Departament F35-4U12 "+suffix, "departament", "QA-D", comarcaID)
+
+	rr := postF354U12ArxiuAbast(t, app, session, f354U12ArxiuAbastNewPath(arxiuID), f354U12ScopeFormValues(arxiuID, "provincia", strconv.Itoa(comarcaID), "", "coverage", "mismatch provincia", ""))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("provincia amb comarca ha de fallar, got=%d body=%s", rr.Code, rr.Body.String())
+	}
+	rr = postF354U12ArxiuAbast(t, app, session, f354U12ArxiuAbastNewPath(arxiuID), f354U12ScopeFormValues(arxiuID, "comarca", strconv.Itoa(provinciaID), "", "coverage", "mismatch comarca", ""))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("comarca amb provincia ha de fallar, got=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = postF354U12ArxiuAbast(t, app, session, f354U12ArxiuAbastNewPath(arxiuID), f354U12ScopeFormValues(arxiuID, "provincia", strconv.Itoa(provinciaID), "", "coverage", "ok provincia", ""))
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("provincia amb provincia ha de funcionar, got=%d body=%s", rr.Code, rr.Body.String())
+	}
+	rr = postF354U12ArxiuAbast(t, app, session, f354U12ArxiuAbastNewPath(arxiuID), f354U12ScopeFormValues(arxiuID, "comarca", strconv.Itoa(comarcaID), "", "coverage", "ok comarca", ""))
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("comarca amb comarca ha de funcionar, got=%d body=%s", rr.Code, rr.Body.String())
+	}
+	rr = postF354U12ArxiuAbast(t, app, session, f354U12ArxiuAbastNewPath(arxiuID), f354U12ScopeFormValues(arxiuID, "estat", strconv.Itoa(paisLevelID), "", "coverage", "ok estat", ""))
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("estat amb pais ha de funcionar, got=%d body=%s", rr.Code, rr.Body.String())
+	}
+	rr = postF354U12ArxiuAbast(t, app, session, f354U12ArxiuAbastNewPath(arxiuID), f354U12ScopeFormValues(arxiuID, "nivell_administratiu", strconv.Itoa(departamentID), "", "coverage", "ok generic", ""))
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("nivell_administratiu amb departament ha de funcionar, got=%d body=%s", rr.Code, rr.Body.String())
+	}
+	rr = postF354U12ArxiuAbast(t, app, session, f354U12ArxiuAbastNewPath(arxiuID), f354U12ScopeFormValues(arxiuID, "nivell_administratiu", strconv.Itoa(departamentID), "", "coverage", "duplicat generic", ""))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("duplicat generic ha de fallar en validacio, got=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rows, err := database.ListArxiuAbasts(arxiuID, "", "")
+	if err != nil {
+		t.Fatalf("ListArxiuAbasts admin kind validation: %v", err)
+	}
+	if len(rows) != 4 {
+		t.Fatalf("s'esperaven 4 abasts valids desats, got=%d rows=%+v", len(rows), rows)
+	}
+	foundGeneric := false
+	for _, row := range rows {
+		if row.TargetKind == "nivell_administratiu" {
+			foundGeneric = row.TargetID.Valid && int(row.TargetID.Int64) == departamentID && strings.TrimSpace(row.TargetLabel) == "Departament F35-4U12 "+suffix
+		}
+	}
+	if !foundGeneric {
+		t.Fatalf("cal desar l'abast generic amb target_id i label reals, rows=%+v", rows)
+	}
+
+	body := f354Get(t, app.AdminEditArxiu, "/documentals/arxius/"+strconv.Itoa(arxiuID)+"/edit", session)
+	if !strings.Contains(body, "Departament F35-4U12 "+suffix) {
+		t.Fatalf("la UI ha de mostrar el nivell generic desat, body=%s", body)
+	}
+}
+
+func TestF354U12AdminNivellsSuggestFiltersAdministrativeKinds(t *testing.T) {
+	app, database, _, session := setupF354U12ArxiuAbastAdmin(t, "test_f35_4u12_nivells_suggest.sqlite3")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+	paisID := f354U12CreatePais(t, database, "QB", "QBT", "996")
+	paisLevelID := f354U12CreatePublishedLevel(t, database, paisID, 1, "Pais Suggest F35R5 "+suffix, "pais", "", 0)
+	provinciaNom := "Provincia Suggest F35R5 " + suffix
+	comarcaNom := "Comarca Suggest F35R5 " + suffix
+	departamentNom := "Departament Suggest F35R5 " + suffix
+	provinciaID := f354U12CreatePublishedLevel(t, database, paisID, 2, provinciaNom, "provincia", "QB-P", paisLevelID)
+	comarcaID := f354U12CreatePublishedLevel(t, database, paisID, 3, comarcaNom, "comarca", "QB-C", provinciaID)
+	_ = f354U12CreatePublishedLevel(t, database, paisID, 4, departamentNom, "departament", "QB-D", comarcaID)
+
+	provItems := f354U12SuggestNivells(t, app, session, "/api/territori/nivells/suggest?q=Suggest+F35R5&target_kind=provincia")
+	if !f354U12SuggestContainsNom(provItems, provinciaNom) || f354U12SuggestContainsNom(provItems, comarcaNom) {
+		t.Fatalf("target_kind=provincia ha de retornar nomes provincies: %+v", provItems)
+	}
+
+	comarcaItems := f354U12SuggestNivells(t, app, session, "/api/territori/nivells/suggest?q=Suggest+F35R5&target_kind=comarca")
+	if !f354U12SuggestContainsNom(comarcaItems, comarcaNom) || f354U12SuggestContainsNom(comarcaItems, provinciaNom) {
+		t.Fatalf("target_kind=comarca ha de retornar nomes comarques: %+v", comarcaItems)
+	}
+
+	estatItems := f354U12SuggestNivells(t, app, session, "/api/territori/nivells/suggest?q=Pais+Suggest+F35R5&target_kind=estat")
+	if !f354U12SuggestContainsNom(estatItems, "Pais Suggest F35R5 "+suffix) {
+		t.Fatalf("target_kind=estat ha de permetre pais/estat: %+v", estatItems)
+	}
+
+	genericItems := f354U12SuggestNivells(t, app, session, "/api/territori/nivells/suggest?q=Suggest+F35R5&target_kind=nivell_administratiu")
+	if !f354U12SuggestContainsNom(genericItems, departamentNom) || !f354U12SuggestContainsNom(genericItems, provinciaNom) || !f354U12SuggestContainsNom(genericItems, comarcaNom) {
+		t.Fatalf("target_kind=nivell_administratiu ha de permetre qualsevol nivell publicat: %+v", genericItems)
 	}
 }
 
@@ -635,6 +740,72 @@ func f354U12CSRFResponse(t *testing.T, rr *httptest.ResponseRecorder, path strin
 	}
 	t.Fatalf("no s'ha trobat la cookie cg_csrf a %s", path)
 	return "", nil
+}
+
+func f354U12CreatePais(t *testing.T, database db.DB, iso2, iso3, num string) int {
+	t.Helper()
+	paisID, err := database.CreatePais(&db.Pais{
+		CodiISO2:    iso2,
+		CodiISO3:    iso3,
+		CodiPaisNum: num,
+	})
+	if err != nil {
+		t.Fatalf("CreatePais(%s): %v", iso2, err)
+	}
+	return paisID
+}
+
+func f354U12CreatePublishedLevel(t *testing.T, database db.DB, paisID, nivel int, nom, tipus, codi string, parentID int) int {
+	t.Helper()
+	level := &db.NivellAdministratiu{
+		PaisID:         paisID,
+		Nivel:          nivel,
+		NomNivell:      nom,
+		TipusNivell:    tipus,
+		CodiOficial:    codi,
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	}
+	if parentID > 0 {
+		level.ParentID = sql.NullInt64{Int64: int64(parentID), Valid: true}
+	}
+	levelID, err := database.CreateNivell(level)
+	if err != nil {
+		t.Fatalf("CreateNivell(%s,%s): %v", nom, tipus, err)
+	}
+	return levelID
+}
+
+type f354U12SuggestItem struct {
+	Nom     string `json:"nom"`
+	Context string `json:"context"`
+}
+
+func f354U12SuggestNivells(t *testing.T, app *core.App, session *http.Cookie, path string) []f354U12SuggestItem {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminNivellsSuggest(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminNivellsSuggest(%s) status=%d body=%s", path, rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		Items []f354U12SuggestItem `json:"items"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal suggest payload: %v body=%s", err, rr.Body.String())
+	}
+	return payload.Items
+}
+
+func f354U12SuggestContainsNom(items []f354U12SuggestItem, want string) bool {
+	for _, item := range items {
+		if strings.TrimSpace(item.Nom) == strings.TrimSpace(want) {
+			return true
+		}
+	}
+	return false
 }
 
 func extractTrailingID(path string) int {

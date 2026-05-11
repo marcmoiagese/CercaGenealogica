@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const textInput = document.getElementById("target_label_text");
     const suggestWrap = document.querySelector("[data-arxiu-abast-suggest-wrap]");
     const textWrap = document.querySelector("[data-arxiu-abast-text-wrap]");
+    const suggestions = document.getElementById("target_suggestions");
 
     function apiForKind(value) {
         switch (value) {
@@ -19,16 +20,50 @@ document.addEventListener("DOMContentLoaded", () => {
             case "municipi":
                 return "/api/territori/municipis/suggest";
             case "comarca":
-                return "/api/territori/nivells/suggest?nivel=2";
+                return "/api/territori/nivells/suggest?target_kind=comarca";
             case "provincia":
-                return "/api/territori/nivells/suggest?nivel=3";
+                return "/api/territori/nivells/suggest?target_kind=provincia";
             case "comunitat_autonoma":
-                return "/api/territori/nivells/suggest?nivel=4";
+                return "/api/territori/nivells/suggest?target_kind=comunitat_autonoma";
             case "estat":
-                return "/api/territori/nivells/suggest?nivel=1";
+                return "/api/territori/nivells/suggest?target_kind=estat";
+            case "nivell_administratiu":
+                return "/api/territori/nivells/suggest?target_kind=nivell_administratiu";
             default:
                 return "";
         }
+    }
+
+    function placeholderForKind(value) {
+        if (!search) {
+            return "";
+        }
+        switch (value) {
+            case "municipi":
+                return search.dataset.placeholderMunicipi || search.dataset.placeholderDefault || "";
+            case "comarca":
+                return search.dataset.placeholderComarca || search.dataset.placeholderDefault || "";
+            case "provincia":
+                return search.dataset.placeholderProvincia || search.dataset.placeholderDefault || "";
+            case "comunitat_autonoma":
+                return search.dataset.placeholderComunitatAutonoma || search.dataset.placeholderDefault || "";
+            case "estat":
+                return search.dataset.placeholderEstat || search.dataset.placeholderDefault || "";
+            case "nivell_administratiu":
+                return search.dataset.placeholderNivellAdministratiu || search.dataset.placeholderDefault || "";
+            case "religious_entity":
+                return search.dataset.placeholderReligiousEntity || search.dataset.placeholderDefault || "";
+            default:
+                return search.dataset.placeholderDefault || "";
+        }
+    }
+
+    function clearSuggestions() {
+        if (!suggestions) {
+            return;
+        }
+        suggestions.innerHTML = "";
+        suggestions.classList.remove("is-open");
     }
 
     function syncMode(clearSelection) {
@@ -42,6 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (search) {
             search.dataset.api = apiForKind(current);
+            search.placeholder = placeholderForKind(current);
         }
         if (clearSelection && targetID) {
             targetID.value = "";
@@ -49,11 +85,17 @@ document.addEventListener("DOMContentLoaded", () => {
         if (clearSelection && targetCode) {
             targetCode.value = "";
         }
-        if (clearSelection && targetLabel && !textMode) {
+        if (clearSelection && targetLabel) {
             targetLabel.value = "";
         }
         if (clearSelection && search && document.activeElement !== search) {
             search.value = "";
+        }
+        if (clearSelection && textInput) {
+            textInput.value = "";
+        }
+        if (clearSelection) {
+            clearSuggestions();
         }
     }
 
