@@ -666,6 +666,11 @@ type DB interface {
 	SaveArxiuEntitatReligiosa(rel *ArxiuEntitatReligiosa) (int, error)
 	DeleteArxiuEntitatReligiosa(id int) error
 	UpdateArxiuEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error
+	ListArxiuAbasts(arxiuID int, targetKind string, status string) ([]ArxiuAbast, error)
+	GetArxiuAbast(id int) (*ArxiuAbast, error)
+	SaveArxiuAbast(rel *ArxiuAbast) (int, error)
+	DeleteArxiuAbast(id int) error
+	UpdateArxiuAbastModeracio(id int, estat, motiu string, moderatorID int) error
 }
 
 // Tipus comú d'usuari al paquet `db`
@@ -1845,6 +1850,26 @@ type ArxiuEntitatReligiosa struct {
 	ModeratedAt        sql.NullTime
 	CreatedAt          sql.NullTime
 	UpdatedAt          sql.NullTime
+}
+
+type ArxiuAbast struct {
+	ID             int
+	ArxiuID        int
+	TargetKind     string
+	TargetID       sql.NullInt64
+	TargetCode     string
+	TargetLabel    string
+	RelationKind   string
+	Notes          string
+	Estat          string
+	ModeracioEstat string
+	ModeracioMotiu string
+	CreatedBy      sql.NullInt64
+	UpdatedBy      sql.NullInt64
+	ModeratedBy    sql.NullInt64
+	ModeratedAt    sql.NullTime
+	CreatedAt      sql.NullTime
+	UpdatedAt      sql.NullTime
 }
 
 type ConfessionalImportTxPlan struct {

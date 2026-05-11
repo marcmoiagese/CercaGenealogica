@@ -924,6 +924,30 @@ CREATE INDEX IF NOT EXISTS idx_arxiu_entitat_religiosa_entitat ON arxiu_entitat_
 CREATE INDEX IF NOT EXISTS idx_arxiu_entitat_religiosa_moderacio ON arxiu_entitat_religiosa(moderation_status);
 CREATE INDEX IF NOT EXISTS idx_arxiu_entitat_religiosa_tipus ON arxiu_entitat_religiosa(tipus_relacio);
 
+CREATE TABLE IF NOT EXISTS arxiu_abast (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    arxiu_id INTEGER NOT NULL REFERENCES arxius(id) ON DELETE CASCADE,
+    target_kind TEXT NOT NULL,
+    target_id INTEGER,
+    target_code TEXT,
+    target_label TEXT,
+    relation_kind TEXT NOT NULL,
+    notes TEXT,
+    estat TEXT NOT NULL DEFAULT 'actiu' CHECK(estat IN ('actiu','historic')),
+    moderation_status TEXT NOT NULL DEFAULT 'pendent' CHECK(moderation_status IN ('pendent','publicat','rebutjat')),
+    moderation_notes TEXT,
+    created_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    updated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_by INTEGER REFERENCES usuaris(id) ON DELETE SET NULL,
+    moderated_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_arxiu_abast_arxiu ON arxiu_abast(arxiu_id);
+CREATE INDEX IF NOT EXISTS idx_arxiu_abast_target ON arxiu_abast(target_kind, target_id);
+CREATE INDEX IF NOT EXISTS idx_arxiu_abast_moderacio ON arxiu_abast(moderation_status);
+CREATE INDEX IF NOT EXISTS idx_arxiu_abast_relacio ON arxiu_abast(relation_kind);
+
 CREATE TABLE IF NOT EXISTS arxius_llibres (
   arxiu_id INTEGER NOT NULL REFERENCES arxius(id) ON DELETE CASCADE,
   llibre_id INTEGER NOT NULL REFERENCES llibres(id) ON DELETE CASCADE,

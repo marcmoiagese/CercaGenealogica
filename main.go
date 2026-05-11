@@ -985,6 +985,14 @@ func main() {
 	http.HandleFunc("/documentals/arxius/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(path, "/abasts/save"):
+			applyMiddleware(app.AdminSaveArxiuAbast, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/abasts/new"):
+			applyMiddleware(app.AdminNewArxiuAbastFromArxiu, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.Contains(path, "/abasts/") && strings.HasSuffix(path, "/edit"):
+			applyMiddleware(app.AdminEditArxiuAbast, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodPost && strings.Contains(path, "/abasts/") && strings.HasSuffix(path, "/delete"):
+			applyMiddleware(app.AdminDeleteArxiuAbast, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodPost && strings.HasSuffix(path, "/entitats-religioses/save"):
 			applyMiddleware(app.AdminSaveArxiuEntitatReligiosa, core.BlockIPs, core.RateLimit)(w, r)
 		case r.Method == http.MethodGet && strings.HasSuffix(path, "/entitats-religioses/new"):

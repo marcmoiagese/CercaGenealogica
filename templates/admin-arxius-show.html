@@ -154,6 +154,119 @@
             <section class="tabs">
                 <section class="card">
                     <div class="card-header" style="margin-bottom:0.65rem;">
+                        <h2 style="font-size:1.2rem;"><i class="fas fa-layer-group"></i> {{ t .Lang "archives.scope.section" }}</h2>
+                        {{ if .Data.CanCreateArxiuAbast }}
+                        <a class="boto-primari" href="/documentals/arxius/{{ .Data.Arxiu.ID }}/abasts/new?return_to=/documentals/arxius/{{ .Data.Arxiu.ID }}"><i class="fas fa-plus"></i> {{ t .Lang "archives.scope.add" }}</a>
+                        {{ end }}
+                    </div>
+                    <h3>{{ t .Lang "archives.scope.territorial" }}</h3>
+                    <div class="taula-wrapper">
+                        <table class="taula">
+                            <thead>
+                                <tr>
+                                    <th>{{ t .Lang "archives.scope.form.target_kind" }}</th>
+                                    <th>{{ t .Lang "archives.scope.form.target" }}</th>
+                                    <th>{{ t .Lang "archives.scope.form.relation_kind" }}</th>
+                                    <th>{{ t .Lang "archives.scope.form.notes" }}</th>
+                                    <th>{{ t .Lang "moderation.status" }}</th>
+                                    {{ if or .Data.CanEditArxiuAbast .Data.CanDeleteArxiuAbast }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{ range index .Data.ArxiuAbastSections "territorial" }}
+                                <tr>
+                                    <td>{{ .TargetKindLabel }}</td>
+                                    <td>{{ .TargetLabel }}</td>
+                                    <td>{{ .RelationKindLabel }}</td>
+                                    <td>{{ if .Notes }}{{ .Notes }}{{ else }}-{{ end }}</td>
+                                    <td>{{ if .ModeracioEstat }}{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}{{ else }}-{{ end }}</td>
+                                    {{ if or $.Data.CanEditArxiuAbast $.Data.CanDeleteArxiuAbast }}
+                                    <td>
+                                        {{ if $.Data.CanEditArxiuAbast }}<a class="boto-secundari" href="/documentals/arxius/abasts/{{ .ID }}/edit?return_to=/documentals/arxius/{{ $.Data.Arxiu.ID }}">{{ t $.Lang "archives.scope.edit" }}</a>{{ end }}
+                                        {{ if $.Data.CanDeleteArxiuAbast }}<form method="post" action="/documentals/arxius/abasts/{{ .ID }}/delete" class="inline-form"><input type="hidden" name="return_to" value="/documentals/arxius/{{ $.Data.Arxiu.ID }}"><button class="boto-perill" type="submit">{{ t $.Lang "archives.scope.delete" }}</button></form>{{ end }}
+                                    </td>
+                                    {{ end }}
+                                </tr>
+                                {{ else }}
+                                <tr><td colspan="{{ if or .Data.CanEditArxiuAbast .Data.CanDeleteArxiuAbast }}6{{ else }}5{{ end }}">-</td></tr>
+                                {{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3>{{ t .Lang "archives.scope.religious" }}</h3>
+                    <div class="taula-wrapper">
+                        <table class="taula">
+                            <thead>
+                                <tr>
+                                    <th>{{ t .Lang "archives.scope.form.target_kind" }}</th>
+                                    <th>{{ t .Lang "archives.scope.form.target" }}</th>
+                                    <th>{{ t .Lang "archives.scope.form.relation_kind" }}</th>
+                                    <th>{{ t .Lang "archives.scope.form.notes" }}</th>
+                                    <th>{{ t .Lang "moderation.status" }}</th>
+                                    {{ if or .Data.CanEditArxiuAbast .Data.CanDeleteArxiuAbast }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{ range index .Data.ArxiuAbastSections "religious" }}
+                                <tr>
+                                    <td>{{ .TargetKindLabel }}</td>
+                                    <td>{{ .TargetLabel }}</td>
+                                    <td>{{ .RelationKindLabel }}</td>
+                                    <td>{{ if .Notes }}{{ .Notes }}{{ else }}-{{ end }}</td>
+                                    <td>{{ if .ModeracioEstat }}{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}{{ else }}-{{ end }}</td>
+                                    {{ if or $.Data.CanEditArxiuAbast $.Data.CanDeleteArxiuAbast }}
+                                    <td>
+                                        {{ if $.Data.CanEditArxiuAbast }}<a class="boto-secundari" href="/documentals/arxius/abasts/{{ .ID }}/edit?return_to=/documentals/arxius/{{ $.Data.Arxiu.ID }}">{{ t $.Lang "archives.scope.edit" }}</a>{{ end }}
+                                        {{ if $.Data.CanDeleteArxiuAbast }}<form method="post" action="/documentals/arxius/abasts/{{ .ID }}/delete" class="inline-form"><input type="hidden" name="return_to" value="/documentals/arxius/{{ $.Data.Arxiu.ID }}"><button class="boto-perill" type="submit">{{ t $.Lang "archives.scope.delete" }}</button></form>{{ end }}
+                                    </td>
+                                    {{ end }}
+                                </tr>
+                                {{ else }}
+                                <tr><td colspan="{{ if or .Data.CanEditArxiuAbast .Data.CanDeleteArxiuAbast }}6{{ else }}5{{ end }}">-</td></tr>
+                                {{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3>{{ t .Lang "archives.scope.other_institutions" }}</h3>
+                    <div class="taula-wrapper">
+                        <table class="taula">
+                            <thead>
+                                <tr>
+                                    <th>{{ t .Lang "archives.scope.form.target_kind" }}</th>
+                                    <th>{{ t .Lang "archives.scope.form.target" }}</th>
+                                    <th>{{ t .Lang "archives.scope.form.relation_kind" }}</th>
+                                    <th>{{ t .Lang "archives.scope.form.notes" }}</th>
+                                    <th>{{ t .Lang "moderation.status" }}</th>
+                                    {{ if or .Data.CanEditArxiuAbast .Data.CanDeleteArxiuAbast }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{ range index .Data.ArxiuAbastSections "other" }}
+                                <tr>
+                                    <td>{{ .TargetKindLabel }}</td>
+                                    <td>{{ .TargetLabel }}</td>
+                                    <td>{{ .RelationKindLabel }}</td>
+                                    <td>{{ if .Notes }}{{ .Notes }}{{ else }}-{{ end }}</td>
+                                    <td>{{ if .ModeracioEstat }}{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}{{ else }}-{{ end }}</td>
+                                    {{ if or $.Data.CanEditArxiuAbast $.Data.CanDeleteArxiuAbast }}
+                                    <td>
+                                        {{ if $.Data.CanEditArxiuAbast }}<a class="boto-secundari" href="/documentals/arxius/abasts/{{ .ID }}/edit?return_to=/documentals/arxius/{{ $.Data.Arxiu.ID }}">{{ t $.Lang "archives.scope.edit" }}</a>{{ end }}
+                                        {{ if $.Data.CanDeleteArxiuAbast }}<form method="post" action="/documentals/arxius/abasts/{{ .ID }}/delete" class="inline-form"><input type="hidden" name="return_to" value="/documentals/arxius/{{ $.Data.Arxiu.ID }}"><button class="boto-perill" type="submit">{{ t $.Lang "archives.scope.delete" }}</button></form>{{ end }}
+                                    </td>
+                                    {{ end }}
+                                </tr>
+                                {{ else }}
+                                <tr><td colspan="{{ if or .Data.CanEditArxiuAbast .Data.CanDeleteArxiuAbast }}6{{ else }}5{{ end }}">-</td></tr>
+                                {{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <div class="card-header" style="margin-bottom:0.65rem;">
                         <h2 style="font-size:1.2rem;"><i class="fas fa-place-of-worship"></i> {{ t .Lang "confessional.archive_relation.archive_section" }}</h2>
                         {{ if .Data.CanCreateArxiuEntitatReligiosa }}
                         <a class="boto-primari" href="/documentals/arxius/{{ .Data.Arxiu.ID }}/entitats-religioses/new?return_to=/documentals/arxius/{{ .Data.Arxiu.ID }}"><i class="fas fa-plus"></i> {{ t .Lang "confessional.archive_relation.add" }}</a>

@@ -579,15 +579,29 @@ func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.
 	canEditRel := a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsEdit, target)
 	canDeleteRel := a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsDelete, target)
 	canManageRel := canCreateRel || canEditRel || canDeleteRel || a.canModerateModular(user)
+	canCreateAbast := a.HasPermission(user.ID, permKeyDocumentalsArxiusEdit, target)
+	canEditAbast := canCreateAbast
+	canDeleteAbast := a.HasPermission(user.ID, permKeyDocumentalsArxiusDelete, target)
+	canManageAbast := canCreateAbast || canDeleteAbast || a.canModerateModular(user)
 	relationStatus := "publicat"
 	if canManageRel {
 		relationStatus = ""
 	}
+	abastStatus := "publicat"
+	if canManageAbast {
+		abastStatus = ""
+	}
 	relacionsReligioses := []db.ArxiuEntitatReligiosa{}
 	entitatsReligioses := []db.EntitatReligiosa{}
+	abastSections := map[string][]arxiuAbastViewRow{
+		"territorial": {},
+		"religious":   {},
+		"other":       {},
+	}
 	if arxiu != nil && arxiu.ID > 0 {
 		relacionsReligioses, _ = a.DB.ListArxiuEntitatsReligioses(arxiu.ID, 0, relationStatus)
 		entitatsReligioses, _ = a.DB.ListEntitatsReligioses()
+		abastSections, _ = a.buildArxiuAbastSections(lang, arxiu.ID, abastStatus)
 	}
 	RenderPrivateTemplate(w, r, "admin-arxius-form.html", map[string]interface{}{
 		"Arxiu":                           arxiu,
@@ -606,6 +620,12 @@ func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.
 		"CanEditArxiuEntitatReligiosa":    canEditRel,
 		"CanDeleteArxiuEntitatReligiosa":  canDeleteRel,
 		"CanManageArxiuEntitatReligiosa":  canManageRel,
+		"ArxiuAbastSections":              abastSections,
+		"ArxiuAbastTargetKindLabels":      arxiuAbastTargetKindLabels(lang),
+		"ArxiuAbastRelationKindLabels":    arxiuAbastRelationKindLabels(lang),
+		"CanCreateArxiuAbast":             canCreateAbast,
+		"CanEditArxiuAbast":               canEditAbast,
+		"CanDeleteArxiuAbast":             canDeleteAbast,
 		"User":                            user,
 	})
 }
@@ -811,6 +831,10 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 	canEditArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusEdit, target)
 	canDeleteArxiu := a.HasPermission(user.ID, permKeyDocumentalsArxiusDelete, target)
 	canCreateLlibre := a.HasPermission(user.ID, permKeyDocumentalsLlibresCreate, target)
+	abastStatus := "publicat"
+	if canEditArxiu || canDeleteArxiu || a.canModerateModular(user) {
+		abastStatus = ""
+	}
 	canEditAll := a.HasPermission(user.ID, permKeyDocumentalsLlibresEdit, target)
 	canViewAll := a.HasPermission(user.ID, permKeyDocumentalsLlibresView, target) || canEditAll
 	viewScope := a.buildListScopeFilter(user.ID, permKeyDocumentalsLlibresView, ScopeLlibre)
@@ -847,6 +871,7 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 	munNom := a.loadMunicipiNom(arxiu)
 	lang := ResolveLang(r)
 	arxiuPro := a.buildArxiuProData(lang, arxiu, entNom, munNom, llibres, canEditLlibre, canViewLlibre, showLlibreActions)
+	abastSections, _ := a.buildArxiuAbastSections(lang, id, abastStatus)
 	RenderPrivateTemplate(w, r, "admin-arxius-show.html", map[string]interface{}{
 		"Arxiu":                           arxiu,
 		"Llibres":                         llibres,
@@ -870,6 +895,10 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 		"CanCreateArxiuEntitatReligiosa":  a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsCreate, target),
 		"CanEditArxiuEntitatReligiosa":    a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsEdit, target),
 		"CanDeleteArxiuEntitatReligiosa":  a.HasPermission(user.ID, permKeyTerritoriConfessionalArxiusEntitatsDelete, target),
+		"ArxiuAbastSections":              abastSections,
+		"CanCreateArxiuAbast":             canEditArxiu,
+		"CanEditArxiuAbast":               canEditArxiu,
+		"CanDeleteArxiuAbast":             canDeleteArxiu,
 		"CanEditLlibre":                   canEditLlibre,
 		"CanViewLlibre":                   canViewLlibre,
 		"ShowLlibreActions":               showLlibreActions,

@@ -942,6 +942,21 @@ func (d *SQLite) DeleteArxiuEntitatReligiosa(id int) error {
 func (d *SQLite) UpdateArxiuEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return sqliteUpdateArxiuEntitatReligiosaModeracio(d, id, estat, motiu, moderatorID)
 }
+func (d *SQLite) ListArxiuAbasts(arxiuID int, targetKind string, status string) ([]ArxiuAbast, error) {
+	return sqliteListArxiuAbasts(d, arxiuID, targetKind, status)
+}
+func (d *SQLite) GetArxiuAbast(id int) (*ArxiuAbast, error) {
+	return sqliteGetArxiuAbast(d, id)
+}
+func (d *SQLite) SaveArxiuAbast(rel *ArxiuAbast) (int, error) {
+	return sqliteSaveArxiuAbast(d, rel)
+}
+func (d *SQLite) DeleteArxiuAbast(id int) error {
+	return sqliteDeleteArxiuAbast(d, id)
+}
+func (d *SQLite) UpdateArxiuAbastModeracio(id int, estat, motiu string, moderatorID int) error {
+	return sqliteUpdateArxiuAbastModeracio(d, id, estat, motiu, moderatorID)
+}
 func (d *SQLite) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
 }

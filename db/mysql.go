@@ -915,6 +915,21 @@ func (d *MySQL) DeleteArxiuEntitatReligiosa(id int) error {
 func (d *MySQL) UpdateArxiuEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return mysqlUpdateArxiuEntitatReligiosaModeracio(d, id, estat, motiu, moderatorID)
 }
+func (d *MySQL) ListArxiuAbasts(arxiuID int, targetKind string, status string) ([]ArxiuAbast, error) {
+	return mysqlListArxiuAbasts(d, arxiuID, targetKind, status)
+}
+func (d *MySQL) GetArxiuAbast(id int) (*ArxiuAbast, error) {
+	return mysqlGetArxiuAbast(d, id)
+}
+func (d *MySQL) SaveArxiuAbast(rel *ArxiuAbast) (int, error) {
+	return mysqlSaveArxiuAbast(d, rel)
+}
+func (d *MySQL) DeleteArxiuAbast(id int) error {
+	return mysqlDeleteArxiuAbast(d, id)
+}
+func (d *MySQL) UpdateArxiuAbastModeracio(id int, estat, motiu string, moderatorID int) error {
+	return mysqlUpdateArxiuAbastModeracio(d, id, estat, motiu, moderatorID)
+}
 func (d *MySQL) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
 }

@@ -1269,6 +1269,21 @@ func (d *PostgreSQL) DeleteArxiuEntitatReligiosa(id int) error {
 func (d *PostgreSQL) UpdateArxiuEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error {
 	return postgresUpdateArxiuEntitatReligiosaModeracio(d, id, estat, motiu, moderatorID)
 }
+func (d *PostgreSQL) ListArxiuAbasts(arxiuID int, targetKind string, status string) ([]ArxiuAbast, error) {
+	return postgresListArxiuAbasts(d, arxiuID, targetKind, status)
+}
+func (d *PostgreSQL) GetArxiuAbast(id int) (*ArxiuAbast, error) {
+	return postgresGetArxiuAbast(d, id)
+}
+func (d *PostgreSQL) SaveArxiuAbast(rel *ArxiuAbast) (int, error) {
+	return postgresSaveArxiuAbast(d, rel)
+}
+func (d *PostgreSQL) DeleteArxiuAbast(id int) error {
+	return postgresDeleteArxiuAbast(d, id)
+}
+func (d *PostgreSQL) UpdateArxiuAbastModeracio(id int, estat, motiu string, moderatorID int) error {
+	return postgresUpdateArxiuAbastModeracio(d, id, estat, motiu, moderatorID)
+}
 func (d *PostgreSQL) BulkUpdateModeracioSimple(objectType, estat, motiu string, moderatorID int, ids []int) (int, error) {
 	return d.help.bulkUpdateModeracioSimple(objectType, estat, motiu, moderatorID, ids)
 }

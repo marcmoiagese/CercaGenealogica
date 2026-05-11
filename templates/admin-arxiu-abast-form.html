@@ -1,0 +1,97 @@
+{{ define "admin-arxiu-abast-form.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ t .Lang "archives.scope.form.title" }}</title>
+    {{ template "styles-private" . }}
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal">
+        <section class="card">
+            <header class="card-header">
+                <h1>{{ t .Lang "archives.scope.form.title" }}</h1>
+            </header>
+            {{ if .Data.Error }}<div class="alert alert-error">{{ .Data.Error }}</div>{{ end }}
+            <form method="post" action="/documentals/arxius/abasts/save">
+                <input type="hidden" name="id" value="{{ .Data.Abast.ID }}">
+                <input type="hidden" name="arxiu_id" value="{{ .Data.Arxiu.ID }}">
+                <input type="hidden" name="return_to" value="{{ .Data.ReturnURL }}">
+
+                <div class="grup-camp">
+                    <label for="arxiu_nom">{{ t .Lang "confessional.archive_relation.field.archive" }}</label>
+                    <input id="arxiu_nom" class="input-text" value="{{ .Data.Arxiu.Nom }}" disabled>
+                </div>
+
+                <div class="grup-camp">
+                    <label for="target_kind">{{ t .Lang "archives.scope.form.target_kind" }}</label>
+                    <select id="target_kind" name="target_kind" required data-arxiu-abast-kind>
+                        {{ range .Data.TargetKinds }}
+                        <option value="{{ .Code }}" {{ if eq $.Data.Abast.TargetKind .Code }}selected{{ end }}>{{ index $.Data.TargetKindLabels .Code }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+
+                <div class="grup-camp" data-arxiu-abast-suggest-wrap {{ if eq .Data.TargetInputMode "text" }}hidden{{ end }}>
+                    <label for="target_search">{{ t .Lang "archives.scope.form.target" }}</label>
+                    <div class="suggest-field">
+                        <input
+                            type="text"
+                            id="target_search"
+                            value="{{ .Data.TargetDisplayLabel }}"
+                            placeholder="{{ t .Lang "archives.scope.form.search_placeholder" }}"
+                            autocomplete="off"
+                            data-hidden="target_id"
+                            data-suggestions="target_suggestions"
+                            data-suggest="1"
+                            data-empty-label="{{ t .Lang "municipis.search.empty" }}">
+                        <input type="hidden" id="target_id" name="target_id" value="{{ if .Data.Abast.TargetID.Valid }}{{ .Data.Abast.TargetID.Int64 }}{{ end }}">
+                        <input type="hidden" id="target_code" name="target_code" value="{{ .Data.Abast.TargetCode }}">
+                        <input type="hidden" id="target_label" name="target_label" value="{{ .Data.Abast.TargetLabel }}">
+                        <ul id="target_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
+                    </div>
+                </div>
+
+                <div class="grup-camp" data-arxiu-abast-text-wrap {{ if ne .Data.TargetInputMode "text" }}hidden{{ end }}>
+                    <label for="target_label_text">{{ t .Lang "archives.scope.form.target_label" }}</label>
+                    <input type="text" id="target_label_text" value="{{ .Data.Abast.TargetLabel }}" autocomplete="off">
+                </div>
+
+                <div class="grup-camp">
+                    <label for="relation_kind">{{ t .Lang "archives.scope.form.relation_kind" }}</label>
+                    <select id="relation_kind" name="relation_kind" required>
+                        {{ range .Data.RelationKinds }}
+                        <option value="{{ .Code }}" {{ if eq $.Data.Abast.RelationKind .Code }}selected{{ end }}>{{ index $.Data.RelationKindLabels .Code }}</option>
+                        {{ end }}
+                    </select>
+                </div>
+
+                <div class="grup-camp">
+                    <label for="estat">{{ t .Lang "confessional.archive_relation.field.state" }}</label>
+                    <select id="estat" name="estat">
+                        <option value="actiu" {{ if eq .Data.Abast.Estat "actiu" }}selected{{ end }}>{{ t .Lang "confessional.status.actiu" }}</option>
+                        <option value="historic" {{ if eq .Data.Abast.Estat "historic" }}selected{{ end }}>{{ t .Lang "confessional.status.historic" }}</option>
+                    </select>
+                </div>
+
+                <div class="grup-camp">
+                    <label for="notes">{{ t .Lang "archives.scope.form.notes" }}</label>
+                    <textarea id="notes" name="notes" rows="4">{{ .Data.Abast.Notes }}</textarea>
+                </div>
+
+                <div class="form-accio">
+                    <button class="boto-primari" type="submit">{{ t .Lang "common.save" }}</button>
+                    <a class="boto-secundari" href="{{ if .Data.ReturnURL }}{{ .Data.ReturnURL }}{{ else }}/documentals/arxius/{{ .Data.Arxiu.ID }}/edit{{ end }}">{{ t .Lang "archives.form.cancel" }}</a>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+    <script src="/static/js/arxiu-form-suggest.js"></script>
+    <script src="/static/js/arxiu-abast-form.js"></script>
+</body>
+</html>
+{{ end }}

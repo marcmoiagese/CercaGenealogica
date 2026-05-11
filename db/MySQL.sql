@@ -1213,6 +1213,34 @@ CREATE TABLE IF NOT EXISTS arxiu_entitat_religiosa (
     FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS arxiu_abast (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    arxiu_id INT UNSIGNED NOT NULL,
+    target_kind VARCHAR(64) NOT NULL,
+    target_id INT UNSIGNED NULL,
+    target_code VARCHAR(191) NULL,
+    target_label VARCHAR(255) NULL,
+    relation_kind VARCHAR(64) NOT NULL,
+    notes TEXT,
+    estat ENUM('actiu','historic') NOT NULL DEFAULT 'actiu',
+    moderation_status ENUM('pendent','publicat','rebutjat') NOT NULL DEFAULT 'pendent',
+    moderation_notes TEXT,
+    created_by INT UNSIGNED NULL,
+    updated_by INT UNSIGNED NULL,
+    moderated_by INT UNSIGNED NULL,
+    moderated_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_arxiu_abast_arxiu (arxiu_id),
+    INDEX idx_arxiu_abast_target (target_kind, target_id),
+    INDEX idx_arxiu_abast_moderacio (moderation_status),
+    INDEX idx_arxiu_abast_relacio (relation_kind),
+    FOREIGN KEY (arxiu_id) REFERENCES arxius(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (updated_by) REFERENCES usuaris(id) ON DELETE SET NULL,
+    FOREIGN KEY (moderated_by) REFERENCES usuaris(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS arxius_llibres (
   arxiu_id INT UNSIGNED NOT NULL,
   llibre_id INT UNSIGNED NOT NULL,
