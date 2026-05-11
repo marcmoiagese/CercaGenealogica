@@ -293,8 +293,35 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
       syncConfessionalLevels(false);`) {
 		t.Fatalf("seleccionar un pare via autocomplete ha de recalcular els nivells disponibles")
 	}
+	if strings.Contains(staticBody, `return parentLevelCodes.includes("*");`) {
+		t.Fatalf("el wildcard '*' no ha de permetre nivells sense pare")
+	}
+	if !strings.Contains(staticBody, `return optionParentLevelCodes(option).length === 0;`) {
+		t.Fatalf("levelAllowedWithoutParent ha d'alinear-se amb el backend i admetre nomes nivells root reals")
+	}
+	if !strings.Contains(staticBody, `return parentLevelCodes.includes("*") || parentLevelCodes.includes(parentLevelCode);`) {
+		t.Fatalf("levelAllowsParent ha de continuar tractant '*' com a comodí de nivell pare")
+	}
 	if !strings.Contains(staticBody, `if (!selectedLevel || !religion.value) {`) || !strings.Contains(staticBody, `return { compatible: true, reason: "" };`) {
 		t.Fatalf("el pare preseleccionat no s'ha de considerar incompatible mentre encara no hi ha nivell real")
+	}
+	if !strings.Contains(staticBody, `if (parent && parent.value && selectedParentReligionCode() && selectedParentReligionCode() !== religion.value) {`) {
+		t.Fatalf("canviar la religio ha de detectar quan el pare seleccionat pertany a una altra confessio")
+	}
+	if !strings.Contains(staticBody, `clearSelectedParent();`) {
+		t.Fatalf("canviar la religio a una confessio incompatible ha de netejar el pare seleccionat")
+	}
+	if strings.Contains(staticBody, `syncSelectedParentCompatibility();`) {
+		t.Fatalf("totes les crides a syncSelectedParentCompatibility han de passar boolea explicit")
+	}
+	for _, token := range []string{
+		`if (!syncSelectedParentCompatibility(false)) {`,
+		`syncSelectedParentCompatibility(true);`,
+		`syncSelectedParentCompatibility(false);`,
+	} {
+		if !strings.Contains(staticBody, token) {
+			t.Fatalf("falta contracte explicit de syncSelectedParentCompatibility: %s", token)
+		}
 	}
 	if !strings.Contains(staticBody, `parentSearchHasResults`) || !strings.Contains(staticBody, `help.textContent = "";`) {
 		t.Fatalf("el JS no ha de mostrar ajuda contradictoria quan hi ha suggeriments oberts amb resultats")

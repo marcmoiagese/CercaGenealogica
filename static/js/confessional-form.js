@@ -59,11 +59,7 @@
       if (!option) {
         return false;
       }
-      const parentLevelCodes = optionParentLevelCodes(option);
-      if (parentLevelCodes.length === 0) {
-        return true;
-      }
-      return parentLevelCodes.includes("*");
+      return optionParentLevelCodes(option).length === 0;
     }
 
     function clearParentSuggestions() {
@@ -438,7 +434,7 @@
           level.focus();
           return;
         }
-        if (!syncSelectedParentCompatibility()) {
+        if (!syncSelectedParentCompatibility(false)) {
           event.preventDefault();
           parentLabel.focus();
           return;
@@ -454,7 +450,13 @@
 
     religion.addEventListener("change", function () {
       parentCompatibilityMessage = "";
+      if (parent && parent.value && selectedParentReligionCode() && selectedParentReligionCode() !== religion.value) {
+        abortParentSuggestions();
+        clearSelectedParent();
+        clearParentSuggestions();
+      }
       syncConfessionalLevels(false);
+      syncSelectedParentCompatibility(true);
     });
     level.addEventListener("change", function () {
       abortParentSuggestions();
@@ -464,7 +466,7 @@
       syncSelectedParentCompatibility(true);
     });
     syncConfessionalLevels(false);
-    syncSelectedParentCompatibility();
+    syncSelectedParentCompatibility(false);
   }
 
   if (document.readyState === "loading") {
