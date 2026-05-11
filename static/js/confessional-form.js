@@ -26,6 +26,46 @@
       return level.selectedOptions[0];
     }
 
+    function selectedParentLevelCode() {
+      if (!parent || !parent.value || !parentLabel) {
+        return "";
+      }
+      return parentLabel.dataset.selectedParentLevelCode || "";
+    }
+
+    function selectedParentReligionCode() {
+      if (!parent || !parent.value || !parentLabel) {
+        return "";
+      }
+      return parentLabel.dataset.selectedParentReligionCode || "";
+    }
+
+    function optionParentLevelCodes(option) {
+      return (option && option.dataset.parentLevelCodes ? option.dataset.parentLevelCodes : "")
+        .split(",")
+        .map(function (item) { return item.trim(); })
+        .filter(Boolean);
+    }
+
+    function levelAllowsParent(option, parentLevelCode) {
+      if (!option || !parentLevelCode) {
+        return false;
+      }
+      const parentLevelCodes = optionParentLevelCodes(option);
+      return parentLevelCodes.includes("*") || parentLevelCodes.includes(parentLevelCode);
+    }
+
+    function levelAllowedWithoutParent(option) {
+      if (!option) {
+        return false;
+      }
+      const parentLevelCodes = optionParentLevelCodes(option);
+      if (parentLevelCodes.length === 0) {
+        return true;
+      }
+      return parentLevelCodes.includes("*");
+    }
+
     function clearParentSuggestions() {
       if (!parentSuggestions) {
         return;
@@ -136,10 +176,10 @@
       parent.value = item.id ? String(item.id) : "";
       parentLabel.value = item.nom || "";
       storeSelectedParentMetadata(item);
+      syncConfessionalLevels(false);
       parent.dispatchEvent(new Event("change", { bubbles: true }));
       parentLabel.dispatchEvent(new CustomEvent("suggest:select", { detail: { item: item } }));
       clearParentSuggestions();
-      syncParentHelp();
     }
 
     function syncParentHelp() {
@@ -183,20 +223,13 @@
       if (parentReligionCode !== religion.value) {
         return { compatible: false, reason: "incompatible" };
       }
-      const parentLevelCodes = (selectedLevel.dataset.parentLevelCodes || "")
-        .split(",")
-        .map(function (item) { return item.trim(); })
-        .filter(Boolean);
-      if (parentLevelCodes.includes("*")) {
+      if (levelAllowsParent(selectedLevel, parentLevelCode)) {
         return { compatible: true, reason: "" };
       }
-      if (!parentLevelCodes.includes(parentLevelCode)) {
-        return { compatible: false, reason: "incompatible" };
-      }
-      return { compatible: true, reason: "" };
+      return { compatible: false, reason: "incompatible" };
     }
 
-    function syncSelectedParentCompatibility() {
+    function syncSelectedParentCompatibility(clearLevelOnIncompatible) {
       const compatibility = selectedParentCompatibilityState();
       if (compatibility.compatible) {
         parentCompatibilityMessage = "";
@@ -205,7 +238,9 @@
       }
       const help = document.getElementById("parent_id_help");
       parentCompatibilityMessage = help ? help.dataset.incompatible || "" : "";
-      clearSelectedParent();
+      if (clearLevelOnIncompatible) {
+        level.value = "";
+      }
       clearParentSuggestions();
       syncParentHelp();
       return false;
@@ -288,6 +323,8 @@
 
     function syncConfessionalLevels(resetParent) {
       const selectedReligion = religion.value;
+      const parentLevelCode = selectedParentLevelCode();
+      const parentReligionCode = selectedParentReligionCode();
       let visibleLevels = 0;
 
       Array.prototype.forEach.call(level.options, function (option) {
@@ -295,9 +332,17 @@
           return;
         }
         const matchesReligion = !!selectedReligion && option.dataset.religionCode === selectedReligion;
-        option.hidden = !matchesReligion;
-        option.disabled = !matchesReligion;
-        if (matchesReligion) {
+        let allowedByParent = false;
+        if (!parentLevelCode) {
+          allowedByParent = levelAllowedWithoutParent(option);
+        } else if (parentReligionCode !== "" && option.dataset.religionCode !== parentReligionCode) {
+          allowedByParent = false;
+        } else {
+          allowedByParent = levelAllowsParent(option, parentLevelCode);
+        }
+        option.hidden = !matchesReligion || !allowedByParent;
+        option.disabled = !matchesReligion || !allowedByParent;
+        if (matchesReligion && allowedByParent) {
           visibleLevels += 1;
         }
       });
@@ -327,6 +372,7 @@
         clearSelectedParent();
         clearParentSuggestions();
       }
+      syncSelectedParentCompatibility(true);
       syncParentHelp();
     }
 
@@ -337,7 +383,7 @@
         resetSelectedParentMetadata();
         parentSearchHasResults = false;
         parentSearchConfirmedEmpty = false;
-        syncParentHelp();
+        syncConfessionalLevels(false);
         if (parentLabel.value.trim().length < 1) {
           abortParentSuggestions();
           clearParentSuggestions();
@@ -408,14 +454,14 @@
 
     religion.addEventListener("change", function () {
       parentCompatibilityMessage = "";
-      syncConfessionalLevels(true);
+      syncConfessionalLevels(false);
     });
     level.addEventListener("change", function () {
       abortParentSuggestions();
       parentSearchHasResults = false;
       parentSearchConfirmedEmpty = false;
       clearParentSuggestions();
-      syncSelectedParentCompatibility();
+      syncSelectedParentCompatibility(true);
     });
     syncConfessionalLevels(false);
     syncSelectedParentCompatibility();

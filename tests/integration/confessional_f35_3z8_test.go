@@ -145,13 +145,13 @@ func TestF353Z8NewChildPrefillsSelectedParent(t *testing.T) {
 	session := f353YAdminSession(t, database, "z8_new_child_parent")
 	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
 
-	parentID := f353Z8SaveEntity(t, database, "z8_new_child_parent_"+suffix, "Arquebisbat pare F35-3Z8 "+suffix, "arquebisbat_arxidiocesi", "publicat")
+	parentID := f353Z8SaveEntity(t, database, "z8_new_child_parent_"+suffix, "Arxiprestat pare F35-3Z8 "+suffix, "arxiprestat_vicariat_forani", "publicat")
 
 	body := f353YGet(t, app.AdminNewConfessional, "/confessional/entitats/new?parent_id="+strconv.Itoa(parentID), session)
 	for _, token := range []string{
 		`id="confessional_entity_parent_id" name="parent_id" type="hidden" value="` + strconv.Itoa(parentID) + `"`,
-		`id="parent_id_label" type="text" value="Arquebisbat pare F35-3Z8 ` + suffix,
-		`data-selected-parent-level-code="arquebisbat_arxidiocesi"`,
+		`id="parent_id_label" type="text" value="Arxiprestat pare F35-3Z8 ` + suffix,
+		`data-selected-parent-level-code="arxiprestat_vicariat_forani"`,
 		`data-selected-parent-religion-code="catolicisme_ritu_llati"`,
 		`id="parent_id_help"`,
 	} {
@@ -161,6 +161,32 @@ func TestF353Z8NewChildPrefillsSelectedParent(t *testing.T) {
 	}
 	if !strings.Contains(body, `>Selecciona una religio/confessio i un nivell/divisio per veure les entitats pare compatibles.<`) {
 		t.Fatalf("amb el placeholder de nivell el missatge inicial ha de continuar sent d'instruccio, no de 'cap pare'; body=%s", body)
+	}
+	compatibleOption := f353Z5OptionSnippet(body, "parroquia")
+	if strings.Contains(compatibleOption, "hidden") || strings.Contains(compatibleOption, "disabled") {
+		t.Fatalf("un nivell fill compatible ha de quedar disponible des del render inicial; option=%s", compatibleOption)
+	}
+	incompatibleOption := f353Z5OptionSnippet(body, "bisbat_diocesi")
+	if !strings.Contains(incompatibleOption, "hidden") || !strings.Contains(incompatibleOption, "disabled") {
+		t.Fatalf("un nivell superior incompatible no s'ha de poder triar quan el pare ja ve preseleccionat; option=%s", incompatibleOption)
+	}
+}
+
+func TestF353Z8RootEntityDoesNotExposeChildOnlyLevelsWithoutParent(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_3z8_root_only_levels.sqlite3")
+	session := f353YAdminSession(t, database, "z8_root_only_levels")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	rootID := f353Z8SaveEntity(t, database, "z8_root_only_"+suffix, "Santa Seu arrel F35-3Z8 "+suffix, "santa_seu", "publicat")
+
+	body := f353YGet(t, app.AdminEditConfessional, "/confessional/entitats/"+strconv.Itoa(rootID)+"/edit", session)
+	rootOption := f353Z5OptionSnippet(body, "santa_seu")
+	if strings.Contains(rootOption, "hidden") || strings.Contains(rootOption, "disabled") {
+		t.Fatalf("el nivell arrel de l'entitat editada ha de continuar disponible sense pare; option=%s", rootOption)
+	}
+	childOnlyOption := f353Z5OptionSnippet(body, "parroquia")
+	if !strings.Contains(childOnlyOption, "hidden") || !strings.Contains(childOnlyOption, "disabled") {
+		t.Fatalf("sense pare no s'han d'exposar nivells que exigeixen jerarquia; option=%s", childOnlyOption)
 	}
 }
 
@@ -246,6 +272,10 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 		`fetchParentSuggestions`,
 		`child_id`,
 		`exclude_id`,
+		`selectedParentLevelCode`,
+		`selectedParentReligionCode`,
+		`levelAllowsParent`,
+		`levelAllowedWithoutParent`,
 		`syncSelectedParentCompatibility`,
 		`selectedParentCompatibilityState`,
 		`storeSelectedParentMetadata`,
@@ -258,6 +288,10 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 		if !strings.Contains(staticBody, token) {
 			t.Fatalf("falta sincronitzacio JS F35-3Z8: %s", token)
 		}
+	}
+	if !strings.Contains(staticBody, `storeSelectedParentMetadata(item);
+      syncConfessionalLevels(false);`) {
+		t.Fatalf("seleccionar un pare via autocomplete ha de recalcular els nivells disponibles")
 	}
 	if !strings.Contains(staticBody, `if (!selectedLevel || !religion.value) {`) || !strings.Contains(staticBody, `return { compatible: true, reason: "" };`) {
 		t.Fatalf("el pare preseleccionat no s'ha de considerar incompatible mentre encara no hi ha nivell real")

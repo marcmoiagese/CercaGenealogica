@@ -179,7 +179,8 @@
                         <option value="">{{ t .Lang "confessional.select.level" }}</option>
                         {{ range .Data.SelectableNivells }}
                         {{ $matchesReligion := and $.Data.Form.Entitat.ReligioConfessioCodi (eq .ReligionCode $.Data.Form.Entitat.ReligioConfessioCodi) }}
-                        <option value="{{ .Code }}" data-religion-code="{{ .ReligionCode }}" data-parent-level-codes="{{ index $.Data.ParentLevelCodesCSV .Code }}" {{ if not $matchesReligion }}hidden disabled{{ end }} {{ if and $matchesReligion (eq $.Data.Form.Entitat.NivellConfessionalCodi .Code) }}selected{{ end }}>{{ index $.Data.LevelCatalogLabels .Code }}</option>
+                        {{ $allowedInitial := index $.Data.InitialLevelAllowed .Code }}
+                        <option value="{{ .Code }}" data-religion-code="{{ .ReligionCode }}" data-parent-level-codes="{{ index $.Data.ParentLevelCodesCSV .Code }}" {{ if or (not $matchesReligion) (not $allowedInitial) }}hidden disabled{{ end }} {{ if and $matchesReligion (eq $.Data.Form.Entitat.NivellConfessionalCodi .Code) }}selected{{ end }}>{{ index $.Data.LevelCatalogLabels .Code }}</option>
                         {{ end }}
                     </select>
                     <p id="nivell_confessional_help" class="muted" data-empty="{{ t .Lang "confessional.help.levels.choose_religion" }}" data-none="{{ t .Lang "confessional.help.levels.none_for_religion" }}">{{ t .Lang "confessional.help.levels.choose_religion" }}</p>

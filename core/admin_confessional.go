@@ -761,6 +761,7 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 		"SelectableEntitats":    selectableEntitats,
 		"SelectedParent":        selectedParent,
 		"ParentOptionAllowed":   confessionalParentOptionAllowedMap(selectableEntitats, data.Entitat),
+		"InitialLevelAllowed":   confessionalInitialLevelAllowedMap(selectedParent),
 		"ParentLevelCodesCSV":   confessionalParentLevelCodesCSVMap(),
 		"LevelCanHaveChildren":  confessionalLevelCanHaveChildrenMap(),
 		"Municipis":             municipis,
@@ -1437,6 +1438,28 @@ func confessionalParentLevelCodesCSVMap() map[string]string {
 		out[level.Code] = ConfessionalAllowedParentLevelCodesCSV(level)
 	}
 	return out
+}
+
+func confessionalInitialLevelAllowedMap(selectedParent *db.EntitatReligiosa) map[string]bool {
+	out := map[string]bool{}
+	for _, level := range ListConfessionalLevelCatalog() {
+		if selectedParent == nil || selectedParent.NivellConfessionalCodi == "" {
+			out[level.Code] = confessionalLevelAllowedWithoutParent(level)
+			continue
+		}
+		out[level.Code] = ConfessionalParentLevelCompatible(selectedParent.NivellConfessionalCodi, level.Code)
+	}
+	return out
+}
+
+func confessionalLevelAllowedWithoutParent(level ConfessionalLevelCatalogItem) bool {
+	if !level.Active {
+		return false
+	}
+	if level.AllowedParentLevelCodes == nil {
+		return true
+	}
+	return len(level.AllowedParentLevelCodes) == 0
 }
 
 func confessionalLevelCanHaveChildrenMap() map[string]bool {
