@@ -75,6 +75,15 @@ var arxiuAbastRelationKinds = []arxiuAbastRelationKind{
 	{Code: "other", Key: "archives.scope.relation_kind.other"},
 }
 
+var arxiuAbastIDBackedKinds = map[string]bool{
+	"religious_entity":   true,
+	"municipi":           true,
+	"comarca":            true,
+	"provincia":          true,
+	"comunitat_autonoma": true,
+	"estat":              true,
+}
+
 func arxiuAbastTargetKindLabels(lang string) map[string]string {
 	labels := map[string]string{}
 	for _, item := range arxiuAbastTargetKinds {
@@ -170,17 +179,10 @@ func (a *App) AdminSaveArxiuAbast(w http.ResponseWriter, r *http.Request) {
 	}
 	id := parsePositiveIntDefault(r.FormValue("id"), 0, 0, 1000000000)
 	abast := parseArxiuAbastForm(r)
-	var current *db.ArxiuAbast
-	if id > 0 {
-		current, _ = a.DB.GetArxiuAbast(id)
-		if current == nil {
-			http.NotFound(w, r)
-			return
-		}
-		abast.ID = id
-		if abast.ArxiuID != current.ArxiuID {
-			abast.ArxiuID = current.ArxiuID
-		}
+	current, currentErr := a.loadCurrentArxiuAbastForSave(id, abast)
+	if currentErr != nil {
+		currentErr(w, r)
+		return
 	}
 	targetArxiuID := abast.ArxiuID
 	if current != nil {
@@ -223,11 +225,7 @@ func (a *App) AdminSaveArxiuAbast(w http.ResponseWriter, r *http.Request) {
 	}
 	savedID, err := a.DB.SaveArxiuAbast(abast)
 	if err != nil {
-		msgKey := "archives.scope.error.save"
-		if arxiuAbastIsDuplicateErr(err) {
-			msgKey = "archives.scope.error.duplicate"
-		}
-		a.renderArxiuAbastForm(w, r, user, arxiu, abast, id == 0, T(lang, msgKey), returnURL)
+		a.renderArxiuAbastForm(w, r, user, arxiu, abast, id == 0, a.arxiuAbastSaveError(lang, err), returnURL)
 		return
 	}
 	objectID := savedID
@@ -238,6 +236,33 @@ func (a *App) AdminSaveArxiuAbast(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = a.RegisterUserActivity(r.Context(), user.ID, ruleArxiuUpdate, action, "arxiu_abast", &objectID, "pendent", nil, "")
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
+}
+
+func (a *App) loadCurrentArxiuAbastForSave(id int, abast *db.ArxiuAbast) (*db.ArxiuAbast, func(http.ResponseWriter, *http.Request)) {
+	if id <= 0 {
+		return nil, nil
+	}
+	current, err := a.DB.GetArxiuAbast(id)
+	if err != nil {
+		return nil, func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "error intern", http.StatusInternalServerError)
+		}
+	}
+	if current == nil {
+		return nil, func(w http.ResponseWriter, r *http.Request) {
+			http.NotFound(w, r)
+		}
+	}
+	abast.ID = id
+	abast.ArxiuID = current.ArxiuID
+	return current, nil
+}
+
+func (a *App) arxiuAbastSaveError(lang string, err error) string {
+	if arxiuAbastIsDuplicateErr(err) {
+		return T(lang, "archives.scope.error.duplicate")
+	}
+	return T(lang, "archives.scope.error.save")
 }
 
 func (a *App) AdminDeleteArxiuAbast(w http.ResponseWriter, r *http.Request) {
@@ -335,57 +360,16 @@ func (a *App) validateArxiuAbastCommon(lang string, abast *db.ArxiuAbast) string
 func (a *App) resolveAndValidateArxiuAbastTarget(lang string, abast *db.ArxiuAbast) string {
 	switch abast.TargetKind {
 	case "religious_entity":
-		if !abast.TargetID.Valid || abast.TargetID.Int64 <= 0 {
-			return T(lang, "archives.scope.error.religious_entity_required")
-		}
-		entitat, err := a.DB.GetEntitatReligiosa(int(abast.TargetID.Int64))
-		if err != nil || entitat == nil {
-			return T(lang, "archives.scope.error.religious_entity_not_found")
-		}
-		if entitat.ModeracioEstat != "publicat" || entitat.Estat != "actiu" {
-			return T(lang, "archives.scope.error.religious_entity_not_published")
-		}
-		abast.TargetLabel = strings.TrimSpace(entitat.Nom)
-		abast.TargetCode = strings.TrimSpace(entitat.Codi)
+		return a.resolveReligiousEntityAbastTarget(lang, abast)
 	case "municipi":
-		if !abast.TargetID.Valid || abast.TargetID.Int64 <= 0 {
-			return T(lang, "archives.scope.error.municipi_required")
-		}
-		mun, err := a.DB.GetMunicipi(int(abast.TargetID.Int64))
-		if err != nil || mun == nil {
-			return T(lang, "archives.scope.error.municipi_not_found")
-		}
-		if mun.ModeracioEstat != "publicat" {
-			return T(lang, "archives.scope.error.municipi_not_published")
-		}
-		abast.TargetLabel = strings.TrimSpace(mun.Nom)
+		return a.resolveMunicipiAbastTarget(lang, abast)
 	case "comarca", "provincia", "comunitat_autonoma", "estat":
-		if !abast.TargetID.Valid || abast.TargetID.Int64 <= 0 {
-			return T(lang, "archives.scope.error.level_required")
-		}
-		nivell, err := a.DB.GetNivell(int(abast.TargetID.Int64))
-		if err != nil || nivell == nil {
-			return T(lang, "archives.scope.error.level_not_found")
-		}
-		if nivell.ModeracioEstat != "publicat" {
-			return T(lang, "archives.scope.error.level_not_published")
-		}
-		if !arxiuAbastLevelKindMatches(abast.TargetKind, nivell.TipusNivell) {
-			return T(lang, "archives.scope.error.level_kind_mismatch")
-		}
-		abast.TargetLabel = strings.TrimSpace(nivell.NomNivell)
-		if abast.TargetLabel == "" {
-			abast.TargetLabel = strings.TrimSpace(nivell.TipusNivell)
-		}
-		abast.TargetCode = strings.TrimSpace(nivell.CodiOficial)
+		return a.resolveAdministrativeLevelAbastTarget(lang, abast)
 	case "institucio", "free_text":
-		if strings.TrimSpace(abast.TargetLabel) == "" {
-			return T(lang, "archives.scope.error.label_required")
-		}
+		return validateTextAbastTarget(lang, abast)
 	default:
 		return T(lang, "archives.scope.error.invalid_target_kind")
 	}
-	return ""
 }
 
 func (a *App) validateArxiuAbastDuplicate(lang string, abast *db.ArxiuAbast) string {
@@ -394,14 +378,10 @@ func (a *App) validateArxiuAbastDuplicate(lang string, abast *db.ArxiuAbast) str
 		return T(lang, "archives.scope.error.validate")
 	}
 	for _, row := range existing {
-		if row.ID == abast.ID || row.ModeracioEstat == "rebutjat" {
+		if row.ID == abast.ID {
 			continue
 		}
-		if row.TargetKind == abast.TargetKind &&
-			nullIntEqual(row.TargetID, abast.TargetID) &&
-			strings.EqualFold(strings.TrimSpace(row.TargetCode), strings.TrimSpace(abast.TargetCode)) &&
-			strings.EqualFold(strings.TrimSpace(row.TargetLabel), strings.TrimSpace(abast.TargetLabel)) &&
-			row.RelationKind == abast.RelationKind {
+		if arxiuAbastSameStableIdentity(&row, abast) {
 			return T(lang, "archives.scope.error.duplicate")
 		}
 	}
@@ -415,6 +395,7 @@ func (a *App) renderArxiuAbastForm(w http.ResponseWriter, r *http.Request, user 
 	RenderPrivateTemplate(w, r, "admin-arxiu-abast-form.html", arxiuAbastFormData{
 		Abast:              abast,
 		Arxiu:              arxiu,
+		CSRFToken:          csrfTokenFromRequest(r),
 		Error:              errMsg,
 		ReturnURL:          returnURL,
 		IsNew:              isNew,
@@ -446,7 +427,7 @@ func (a *App) buildArxiuAbastSections(lang string, arxiuID int, status string) (
 			ID:                row.ID,
 			TargetKind:        row.TargetKind,
 			TargetKindLabel:   targetLabels[row.TargetKind],
-			TargetLabel:       arxiuAbastListLabel(&row),
+			TargetLabel:       a.arxiuAbastListLabel(lang, &row),
 			RelationKind:      row.RelationKind,
 			RelationKindLabel: relationLabels[row.RelationKind],
 			Notes:             strings.TrimSpace(row.Notes),
@@ -538,14 +519,17 @@ func arxiuAbastDeleteRequested(rel *db.ArxiuAbast) bool {
 	return strings.TrimSpace(rel.ModeracioMotiu) == arxiuAbastDeleteRequestMarker
 }
 
-func arxiuAbastListLabel(abast *db.ArxiuAbast) string {
+func (a *App) arxiuAbastListLabel(lang string, abast *db.ArxiuAbast) string {
 	if abast == nil {
 		return ""
 	}
 	if strings.TrimSpace(abast.TargetLabel) != "" {
 		return strings.TrimSpace(abast.TargetLabel)
 	}
-	return strings.TrimSpace(abast.TargetCode)
+	if strings.TrimSpace(abast.TargetCode) != "" {
+		return strings.TrimSpace(abast.TargetCode)
+	}
+	return strings.TrimSpace(a.resolveArxiuAbastDisplayLabel(lang, abast))
 }
 
 func arxiuAbastIsDuplicateErr(err error) bool {
@@ -554,7 +538,97 @@ func arxiuAbastIsDuplicateErr(err error) bool {
 	}
 	msg := strings.ToLower(strings.TrimSpace(err.Error()))
 	return strings.Contains(msg, "ux_arxiu_abast_identity") ||
+		strings.Contains(msg, "ux_arxiu_abast_identity_id") ||
+		strings.Contains(msg, "ux_arxiu_abast_identity_text") ||
 		strings.Contains(msg, "unique constraint failed") ||
 		strings.Contains(msg, "duplicate entry") ||
 		strings.Contains(msg, "duplicate key value")
+}
+
+func csrfTokenFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	cookie, err := r.Cookie(csrfCookieName)
+	if err != nil || cookie == nil {
+		return ""
+	}
+	return strings.TrimSpace(cookie.Value)
+}
+
+func (a *App) resolveReligiousEntityAbastTarget(lang string, abast *db.ArxiuAbast) string {
+	if !abast.TargetID.Valid || abast.TargetID.Int64 <= 0 {
+		return T(lang, "archives.scope.error.religious_entity_required")
+	}
+	entitat, err := a.DB.GetEntitatReligiosa(int(abast.TargetID.Int64))
+	if err != nil || entitat == nil {
+		return T(lang, "archives.scope.error.religious_entity_not_found")
+	}
+	if entitat.ModeracioEstat != "publicat" || entitat.Estat != "actiu" {
+		return T(lang, "archives.scope.error.religious_entity_not_published")
+	}
+	abast.TargetLabel = strings.TrimSpace(entitat.Nom)
+	abast.TargetCode = strings.TrimSpace(entitat.Codi)
+	return ""
+}
+
+func (a *App) resolveMunicipiAbastTarget(lang string, abast *db.ArxiuAbast) string {
+	if !abast.TargetID.Valid || abast.TargetID.Int64 <= 0 {
+		return T(lang, "archives.scope.error.municipi_required")
+	}
+	mun, err := a.DB.GetMunicipi(int(abast.TargetID.Int64))
+	if err != nil || mun == nil {
+		return T(lang, "archives.scope.error.municipi_not_found")
+	}
+	if mun.ModeracioEstat != "publicat" {
+		return T(lang, "archives.scope.error.municipi_not_published")
+	}
+	abast.TargetLabel = strings.TrimSpace(mun.Nom)
+	abast.TargetCode = ""
+	return ""
+}
+
+func (a *App) resolveAdministrativeLevelAbastTarget(lang string, abast *db.ArxiuAbast) string {
+	if !abast.TargetID.Valid || abast.TargetID.Int64 <= 0 {
+		return T(lang, "archives.scope.error.level_required")
+	}
+	nivell, err := a.DB.GetNivell(int(abast.TargetID.Int64))
+	if err != nil || nivell == nil {
+		return T(lang, "archives.scope.error.level_not_found")
+	}
+	if nivell.ModeracioEstat != "publicat" {
+		return T(lang, "archives.scope.error.level_not_published")
+	}
+	if !arxiuAbastLevelKindMatches(abast.TargetKind, nivell.TipusNivell) {
+		return T(lang, "archives.scope.error.level_kind_mismatch")
+	}
+	abast.TargetLabel = strings.TrimSpace(nivell.NomNivell)
+	if abast.TargetLabel == "" {
+		abast.TargetLabel = strings.TrimSpace(nivell.TipusNivell)
+	}
+	abast.TargetCode = strings.TrimSpace(nivell.CodiOficial)
+	return ""
+}
+
+func validateTextAbastTarget(lang string, abast *db.ArxiuAbast) string {
+	if strings.TrimSpace(abast.TargetLabel) == "" {
+		return T(lang, "archives.scope.error.label_required")
+	}
+	return ""
+}
+
+func arxiuAbastSameStableIdentity(existing, candidate *db.ArxiuAbast) bool {
+	if existing == nil || candidate == nil {
+		return false
+	}
+	if existing.ArxiuID != candidate.ArxiuID ||
+		existing.TargetKind != candidate.TargetKind ||
+		existing.RelationKind != candidate.RelationKind {
+		return false
+	}
+	if arxiuAbastIDBackedKinds[candidate.TargetKind] {
+		return nullIntEqual(existing.TargetID, candidate.TargetID)
+	}
+	return strings.EqualFold(strings.TrimSpace(existing.TargetCode), strings.TrimSpace(candidate.TargetCode)) &&
+		strings.EqualFold(strings.TrimSpace(existing.TargetLabel), strings.TrimSpace(candidate.TargetLabel))
 }

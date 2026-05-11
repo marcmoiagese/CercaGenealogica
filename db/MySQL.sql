@@ -1220,9 +1220,24 @@ CREATE TABLE IF NOT EXISTS arxiu_abast (
     target_id INT UNSIGNED NULL,
     target_code VARCHAR(191) NULL,
     target_label VARCHAR(255) NULL,
-    target_id_norm INT UNSIGNED AS (IFNULL(target_id, 0)) STORED,
-    target_code_norm VARCHAR(191) AS (IFNULL(target_code, '')) STORED,
-    target_label_norm VARCHAR(255) AS (IFNULL(target_label, '')) STORED,
+    target_id_identity INT UNSIGNED AS (
+        CASE
+            WHEN target_kind IN ('religious_entity', 'municipi', 'comarca', 'provincia', 'comunitat_autonoma', 'estat') THEN IFNULL(target_id, 0)
+            ELSE 0
+        END
+    ) STORED,
+    target_code_identity VARCHAR(191) AS (
+        CASE
+            WHEN target_kind IN ('institucio', 'free_text') THEN IFNULL(target_code, '')
+            ELSE ''
+        END
+    ) STORED,
+    target_label_identity VARCHAR(255) AS (
+        CASE
+            WHEN target_kind IN ('institucio', 'free_text') THEN IFNULL(target_label, '')
+            ELSE ''
+        END
+    ) STORED,
     relation_kind VARCHAR(64) NOT NULL,
     notes TEXT,
     estat ENUM('actiu','historic') NOT NULL DEFAULT 'actiu',
@@ -1238,7 +1253,7 @@ CREATE TABLE IF NOT EXISTS arxiu_abast (
     INDEX idx_arxiu_abast_target (target_kind, target_id),
     INDEX idx_arxiu_abast_moderacio (moderation_status),
     INDEX idx_arxiu_abast_relacio (relation_kind),
-    UNIQUE KEY ux_arxiu_abast_identity (arxiu_id, target_kind, relation_kind, target_id_norm, target_code_norm, target_label_norm),
+    UNIQUE KEY ux_arxiu_abast_identity (arxiu_id, target_kind, relation_kind, target_id_identity, target_code_identity, target_label_identity),
     FOREIGN KEY (arxiu_id) REFERENCES arxius(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES usuaris(id) ON DELETE SET NULL,
     FOREIGN KEY (updated_by) REFERENCES usuaris(id) ON DELETE SET NULL,

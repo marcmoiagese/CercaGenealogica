@@ -595,13 +595,16 @@ func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.
 	relacionsReligioses := []db.ArxiuEntitatReligiosa{}
 	entitatsReligioses := []db.EntitatReligiosa{}
 	abastSections := []arxiuAbastViewSection{}
+	arxiuAbastReturnTo := ""
 	if arxiu != nil && arxiu.ID > 0 {
 		relacionsReligioses, _ = a.DB.ListArxiuEntitatsReligioses(arxiu.ID, 0, relationStatus)
 		entitatsReligioses, _ = a.DB.ListEntitatsReligioses()
 		abastSections, _ = a.buildArxiuAbastSections(lang, arxiu.ID, abastStatus)
+		arxiuAbastReturnTo = fmt.Sprintf("/documentals/arxius/%d/edit", arxiu.ID)
 	}
 	RenderPrivateTemplate(w, r, "admin-arxius-form.html", map[string]interface{}{
 		"Arxiu":                           arxiu,
+		"CSRFToken":                       csrfTokenFromRequest(r),
 		"IsNew":                           isNew,
 		"Error":                           errMsg,
 		"ReturnURL":                       returnURL,
@@ -618,7 +621,7 @@ func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.
 		"CanDeleteArxiuEntitatReligiosa":  canDeleteRel,
 		"CanManageArxiuEntitatReligiosa":  canManageRel,
 		"ArxiuAbastSections":              abastSections,
-		"ArxiuAbastReturnTo":              fmt.Sprintf("/documentals/arxius/%d/edit", arxiu.ID),
+		"ArxiuAbastReturnTo":              arxiuAbastReturnTo,
 		"CanCreateArxiuAbast":             canCreateAbast,
 		"CanEditArxiuAbast":               canEditAbast,
 		"CanDeleteArxiuAbast":             canDeleteAbast,
@@ -870,6 +873,7 @@ func (a *App) AdminShowArxiu(w http.ResponseWriter, r *http.Request) {
 	abastSections, _ := a.buildArxiuAbastSections(lang, id, abastStatus)
 	RenderPrivateTemplate(w, r, "admin-arxius-show.html", map[string]interface{}{
 		"Arxiu":                           arxiu,
+		"CSRFToken":                       csrfTokenFromRequest(r),
 		"Llibres":                         llibres,
 		"EntitatNom":                      entNom,
 		"MunicipiNom":                     munNom,

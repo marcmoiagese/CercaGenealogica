@@ -947,14 +947,19 @@ CREATE INDEX IF NOT EXISTS idx_arxiu_abast_arxiu ON arxiu_abast(arxiu_id);
 CREATE INDEX IF NOT EXISTS idx_arxiu_abast_target ON arxiu_abast(target_kind, target_id);
 CREATE INDEX IF NOT EXISTS idx_arxiu_abast_moderacio ON arxiu_abast(moderation_status);
 CREATE INDEX IF NOT EXISTS idx_arxiu_abast_relacio ON arxiu_abast(relation_kind);
-CREATE UNIQUE INDEX IF NOT EXISTS ux_arxiu_abast_identity ON arxiu_abast(
+CREATE UNIQUE INDEX IF NOT EXISTS ux_arxiu_abast_identity_id ON arxiu_abast(
     arxiu_id,
     target_kind,
     relation_kind,
-    COALESCE(target_id, 0),
+    target_id
+) WHERE target_kind IN ('religious_entity', 'municipi', 'comarca', 'provincia', 'comunitat_autonoma', 'estat') AND target_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_arxiu_abast_identity_text ON arxiu_abast(
+    arxiu_id,
+    target_kind,
+    relation_kind,
     COALESCE(target_code, ''),
     COALESCE(target_label, '')
-);
+) WHERE target_kind IN ('institucio', 'free_text');
 
 CREATE TABLE IF NOT EXISTS arxius_llibres (
   arxiu_id INTEGER NOT NULL REFERENCES arxius(id) ON DELETE CASCADE,
