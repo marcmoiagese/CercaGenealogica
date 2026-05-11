@@ -450,8 +450,11 @@
 
     religion.addEventListener("change", function () {
       parentCompatibilityMessage = "";
-      if (parent && parent.value && selectedParentReligionCode() && selectedParentReligionCode() !== religion.value) {
+      const parentReligionCode = selectedParentReligionCode();
+      if (parent && parent.value && parentReligionCode !== religion.value) {
         abortParentSuggestions();
+        parentSearchHasResults = false;
+        parentSearchConfirmedEmpty = false;
         clearSelectedParent();
         clearParentSuggestions();
       }
