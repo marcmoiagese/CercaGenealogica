@@ -55,6 +55,8 @@ type arxiuAbastViewSection struct {
 	Rows  []arxiuAbastViewRow
 }
 
+type arxiuAbastLabelCache map[string]string
+
 var arxiuAbastTargetKinds = []arxiuAbastTargetKind{
 	{Code: "municipi", Key: "archives.scope.target_kind.municipi"},
 	{Code: "comarca", Key: "archives.scope.target_kind.comarca"},
@@ -422,12 +424,13 @@ func (a *App) buildArxiuAbastSections(lang string, arxiuID int, status string) (
 	}
 	targetLabels := arxiuAbastTargetKindLabels(lang)
 	relationLabels := arxiuAbastRelationKindLabels(lang)
+	labelCache := a.buildArxiuAbastLabelCache(lang, rows)
 	for _, row := range rows {
 		item := arxiuAbastViewRow{
 			ID:                row.ID,
 			TargetKind:        row.TargetKind,
 			TargetKindLabel:   targetLabels[row.TargetKind],
-			TargetLabel:       a.arxiuAbastListLabel(lang, &row),
+			TargetLabel:       a.arxiuAbastListLabel(&row, labelCache),
 			RelationKind:      row.RelationKind,
 			RelationKindLabel: relationLabels[row.RelationKind],
 			Notes:             strings.TrimSpace(row.Notes),
@@ -443,6 +446,21 @@ func (a *App) buildArxiuAbastSections(lang string, arxiuID int, status string) (
 		}
 	}
 	return sections, nil
+}
+
+func (a *App) buildArxiuAbastLabelCache(lang string, rows []db.ArxiuAbast) arxiuAbastLabelCache {
+	cache := arxiuAbastLabelCache{}
+	for _, row := range rows {
+		if !arxiuAbastNeedsLegacyLookup(&row) {
+			continue
+		}
+		key := arxiuAbastTargetCacheKey(row.TargetKind, int(row.TargetID.Int64))
+		if key == "" || cache[key] != "" {
+			continue
+		}
+		cache[key] = a.resolveArxiuAbastLegacyLabel(lang, &row)
+	}
+	return cache
 }
 
 func (a *App) resolveArxiuAbastDisplayLabel(lang string, abast *db.ArxiuAbast) string {
@@ -519,7 +537,7 @@ func arxiuAbastDeleteRequested(rel *db.ArxiuAbast) bool {
 	return strings.TrimSpace(rel.ModeracioMotiu) == arxiuAbastDeleteRequestMarker
 }
 
-func (a *App) arxiuAbastListLabel(lang string, abast *db.ArxiuAbast) string {
+func (a *App) arxiuAbastListLabel(abast *db.ArxiuAbast, cache arxiuAbastLabelCache) string {
 	if abast == nil {
 		return ""
 	}
@@ -529,7 +547,13 @@ func (a *App) arxiuAbastListLabel(lang string, abast *db.ArxiuAbast) string {
 	if strings.TrimSpace(abast.TargetCode) != "" {
 		return strings.TrimSpace(abast.TargetCode)
 	}
-	return strings.TrimSpace(a.resolveArxiuAbastDisplayLabel(lang, abast))
+	if label := strings.TrimSpace(cache[arxiuAbastTargetCacheKey(abast.TargetKind, int(abast.TargetID.Int64))]); label != "" {
+		return label
+	}
+	if abast.TargetID.Valid && abast.TargetID.Int64 > 0 {
+		return fmt.Sprintf("#%d", abast.TargetID.Int64)
+	}
+	return strings.TrimSpace(abast.TargetKind)
 }
 
 func arxiuAbastIsDuplicateErr(err error) bool {
@@ -631,4 +655,31 @@ func arxiuAbastSameStableIdentity(existing, candidate *db.ArxiuAbast) bool {
 	}
 	return strings.EqualFold(strings.TrimSpace(existing.TargetCode), strings.TrimSpace(candidate.TargetCode)) &&
 		strings.EqualFold(strings.TrimSpace(existing.TargetLabel), strings.TrimSpace(candidate.TargetLabel))
+}
+
+func arxiuAbastNeedsLegacyLookup(abast *db.ArxiuAbast) bool {
+	return abast != nil &&
+		abast.TargetID.Valid &&
+		abast.TargetID.Int64 > 0 &&
+		strings.TrimSpace(abast.TargetLabel) == "" &&
+		strings.TrimSpace(abast.TargetCode) == "" &&
+		arxiuAbastIDBackedKinds[abast.TargetKind]
+}
+
+func arxiuAbastTargetCacheKey(kind string, targetID int) string {
+	if strings.TrimSpace(kind) == "" || targetID <= 0 {
+		return ""
+	}
+	return kind + ":" + fmt.Sprintf("%d", targetID)
+}
+
+func (a *App) resolveArxiuAbastLegacyLabel(lang string, abast *db.ArxiuAbast) string {
+	label := strings.TrimSpace(a.resolveArxiuAbastDisplayLabel(lang, abast))
+	if label != "" {
+		return label
+	}
+	if abast != nil && abast.TargetID.Valid && abast.TargetID.Int64 > 0 {
+		return fmt.Sprintf("#%d", abast.TargetID.Int64)
+	}
+	return ""
 }
