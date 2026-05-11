@@ -2478,13 +2478,7 @@ func (h sqlHelper) listNivells(f NivellAdminFilter) ([]NivellAdministratiu, erro
 		where += " AND (lower(n.nom_nivell) LIKE ? OR lower(COALESCE(n.codi_oficial,'')) LIKE ? OR lower(COALESCE(n.tipus_nivell,'')) LIKE ?)"
 		args = append(args, like, like, like)
 	}
-	if len(f.TipusNivellAliases) > 0 {
-		placeholders := buildInPlaceholders(h.style, len(f.TipusNivellAliases))
-		where += " AND REPLACE(REPLACE(lower(COALESCE(n.tipus_nivell,'')), '_', ''), ' ', '') IN (" + placeholders + ")"
-		for _, alias := range f.TipusNivellAliases {
-			args = append(args, strings.ToLower(strings.TrimSpace(alias)))
-		}
-	}
+	where, args = h.appendNivellTipusAliasesFilter(where, args, f.TipusNivellAliases)
 	if strings.TrimSpace(f.TipusNivell) != "" {
 		where += " AND lower(COALESCE(n.tipus_nivell,'')) = ?"
 		args = append(args, strings.ToLower(strings.TrimSpace(f.TipusNivell)))
@@ -2574,13 +2568,7 @@ func (h sqlHelper) countNivells(f NivellAdminFilter) (int, error) {
 		where += " AND (lower(n.nom_nivell) LIKE ? OR lower(COALESCE(n.codi_oficial,'')) LIKE ? OR lower(COALESCE(n.tipus_nivell,'')) LIKE ?)"
 		args = append(args, like, like, like)
 	}
-	if len(f.TipusNivellAliases) > 0 {
-		placeholders := buildInPlaceholders(h.style, len(f.TipusNivellAliases))
-		where += " AND REPLACE(REPLACE(lower(COALESCE(n.tipus_nivell,'')), '_', ''), ' ', '') IN (" + placeholders + ")"
-		for _, alias := range f.TipusNivellAliases {
-			args = append(args, strings.ToLower(strings.TrimSpace(alias)))
-		}
-	}
+	where, args = h.appendNivellTipusAliasesFilter(where, args, f.TipusNivellAliases)
 	if strings.TrimSpace(f.TipusNivell) != "" {
 		where += " AND lower(COALESCE(n.tipus_nivell,'')) = ?"
 		args = append(args, strings.ToLower(strings.TrimSpace(f.TipusNivell)))
@@ -2616,6 +2604,20 @@ func (h sqlHelper) countNivells(f NivellAdminFilter) (int, error) {
 		return 0, err
 	}
 	return total, nil
+}
+
+func (h sqlHelper) appendNivellTipusAliasesFilter(where string, args []interface{}, aliases []string) (string, []interface{}) {
+	if len(aliases) == 0 {
+		return where, args
+	}
+	// Keep this SQL normalization aligned with core.normalizeNivellKindKey:
+	// lower-case + remove "_" + remove spaces.
+	placeholders := buildInPlaceholders(h.style, len(aliases))
+	where += " AND REPLACE(REPLACE(lower(COALESCE(n.tipus_nivell,'')), '_', ''), ' ', '') IN (" + placeholders + ")"
+	for _, alias := range aliases {
+		args = append(args, strings.ToLower(strings.TrimSpace(alias)))
+	}
+	return where, args
 }
 
 func (h sqlHelper) getNivell(id int) (*NivellAdministratiu, error) {

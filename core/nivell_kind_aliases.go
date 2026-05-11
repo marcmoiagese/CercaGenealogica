@@ -10,7 +10,8 @@ func normalizeNivellKindKey(raw string) string {
 }
 
 func nivellKindAliasesForTargetKind(targetKind string) []string {
-	switch normalizeNivellKindKey(targetKind) {
+	normalized := normalizeNivellKindKey(targetKind)
+	switch normalized {
 	case "", "nivelladministratiu":
 		return nil
 	case "comarca":
@@ -22,10 +23,6 @@ func nivellKindAliasesForTargetKind(targetKind string) []string {
 	case "estat":
 		return []string{"estat", "pais"}
 	default:
-		normalized := normalizeNivellKindKey(targetKind)
-		if normalized == "" {
-			return nil
-		}
 		return []string{normalized}
 	}
 }
