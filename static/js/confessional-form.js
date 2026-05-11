@@ -20,7 +20,7 @@
     let parentSearchConfirmedEmpty = false;
 
     function selectedLevelOption() {
-      if (level.selectedOptions.length === 0 || level.selectedOptions[0].disabled) {
+      if (!level.value || level.selectedOptions.length === 0 || level.selectedOptions[0].disabled) {
         return null;
       }
       return level.selectedOptions[0];
@@ -155,6 +155,7 @@
       const parentLevelCodes = selectedLevel ? selectedLevel.dataset.parentLevelCodes || "" : "";
       if (!religion.value || !selectedLevel) {
         help.textContent = help.dataset.empty || "";
+        return;
       } else if (parentLevelCodes === "") {
         help.textContent = help.dataset.none || "";
       } else if (parentSearchHasResults) {
@@ -182,7 +183,10 @@
       if (parentReligionCode !== religion.value) {
         return { compatible: false, reason: "incompatible" };
       }
-      const parentLevelCodes = (selectedLevel.dataset.parentLevelCodes || "").split(",").filter(Boolean);
+      const parentLevelCodes = (selectedLevel.dataset.parentLevelCodes || "")
+        .split(",")
+        .map(function (item) { return item.trim(); })
+        .filter(Boolean);
       if (parentLevelCodes.includes("*")) {
         return { compatible: true, reason: "" };
       }
@@ -250,7 +254,9 @@
         return;
       }
       parentSearchHasResults = false;
+      parentSearchConfirmedEmpty = false;
       clearParentSuggestions();
+      syncParentHelp();
     }
 
     function fetchParentSuggestions(query) {
@@ -331,6 +337,7 @@
         resetSelectedParentMetadata();
         parentSearchHasResults = false;
         parentSearchConfirmedEmpty = false;
+        syncParentHelp();
         if (parentLabel.value.trim().length < 1) {
           abortParentSuggestions();
           clearParentSuggestions();
@@ -358,7 +365,9 @@
         } else if (event.key === "Escape") {
           abortParentSuggestions();
           parentSearchHasResults = false;
+          parentSearchConfirmedEmpty = false;
           clearParentSuggestions();
+          syncParentHelp();
         }
       });
       document.addEventListener("click", function (event) {
@@ -367,7 +376,9 @@
         }
         abortParentSuggestions();
         parentSearchHasResults = false;
+        parentSearchConfirmedEmpty = false;
         clearParentSuggestions();
+        syncParentHelp();
       });
     }
 

@@ -18,21 +18,25 @@ type arxiuEntitatReligiosaType struct {
 const arxiuEntitatReligiosaDeleteRequestMarker = "__delete_requested__"
 
 type arxiuEntitatReligiosaFormData struct {
-	Relacio                *db.ArxiuEntitatReligiosa
-	Arxius                 []db.ArxiuWithCount
-	Entitats               []db.EntitatReligiosa
-	RelacioTypes           []arxiuEntitatReligiosaType
-	ReligionCatalogLabels  map[string]string
-	LevelCatalogLabels     map[string]string
-	ArxiuLabels            map[int]string
-	EntitatOptionLabels    map[int]string
-	TypeLabels             map[string]string
-	Error                  string
-	ReturnURL              string
-	IsNew                  bool
-	FromArxiuID            int
-	FromEntitatReligiosaID int
-	User                   *db.User
+	Relacio                     *db.ArxiuEntitatReligiosa
+	Arxius                      []db.ArxiuWithCount
+	Entitats                    []db.EntitatReligiosa
+	RelacioTypes                []arxiuEntitatReligiosaType
+	ReligionCatalogLabels       map[string]string
+	LevelCatalogLabels          map[string]string
+	ArxiuLabels                 map[int]string
+	EntitatOptionLabels         map[int]string
+	TypeLabels                  map[string]string
+	Error                       string
+	ReturnURL                   string
+	IsNew                       bool
+	FromArxiuID                 int
+	FromEntitatReligiosaID      int
+	CanViewConfessionalEntitats bool
+	CanViewDocumentals          bool
+	CanViewArxius               bool
+	CanManageArxius             bool
+	User                        *db.User
 }
 
 var arxiuEntitatReligiosaTypes = []arxiuEntitatReligiosaType{
@@ -293,23 +297,26 @@ func (a *App) renderArxiuEntitatReligiosaForm(w http.ResponseWriter, r *http.Req
 		arxiuLabels[arxiu.ID] = arxiu.Nom
 	}
 	entitatOptionLabels := arxiuEntitatReligiosaEntitatOptionLabels(entitats, religionLabels, levelLabels)
-	RenderPrivateTemplate(w, r, "admin-arxiu-entitat-religiosa-form.html", map[string]interface{}{
-		"Relacio":                rel,
-		"Arxius":                 arxius,
-		"Entitats":               entitats,
-		"RelacioTypes":           arxiuEntitatReligiosaTypes,
-		"ReligionCatalogLabels":  religionLabels,
-		"LevelCatalogLabels":     levelLabels,
-		"ArxiuLabels":            arxiuLabels,
-		"EntitatOptionLabels":    entitatOptionLabels,
-		"TypeLabels":             arxiuEntitatReligiosaTypeLabels(lang),
-		"Error":                  errMsg,
-		"ReturnURL":              returnURL,
-		"IsNew":                  isNew,
-		"FromArxiuID":            fromArxiuID,
-		"FromEntitatReligiosaID": fromEntitatID,
-		"CanManageArxius":        a.canManageAnyDocumentalsModular(user),
-		"User":                   user,
+	RenderPrivateTemplate(w, r, "admin-arxiu-entitat-religiosa-form.html", arxiuEntitatReligiosaFormData{
+		Relacio:                     rel,
+		Arxius:                      arxius,
+		Entitats:                    entitats,
+		RelacioTypes:                arxiuEntitatReligiosaTypes,
+		ReligionCatalogLabels:       religionLabels,
+		LevelCatalogLabels:          levelLabels,
+		ArxiuLabels:                 arxiuLabels,
+		EntitatOptionLabels:         entitatOptionLabels,
+		TypeLabels:                  arxiuEntitatReligiosaTypeLabels(lang),
+		Error:                       errMsg,
+		ReturnURL:                   returnURL,
+		IsNew:                       isNew,
+		FromArxiuID:                 fromArxiuID,
+		FromEntitatReligiosaID:      fromEntitatID,
+		CanViewConfessionalEntitats: a.HasPermission(user.ID, permKeyTerritoriConfessionalEntitatsView, PermissionTarget{}),
+		CanViewDocumentals:          a.HasPermission(user.ID, permKeyDocumentalsArxiusView, PermissionTarget{}) || a.HasPermission(user.ID, permKeyDocumentalsLlibresView, PermissionTarget{}),
+		CanViewArxius:               a.HasPermission(user.ID, permKeyDocumentalsArxiusView, PermissionTarget{}),
+		CanManageArxius:             a.canManageAnyDocumentalsModular(user),
+		User:                        user,
 	})
 }
 

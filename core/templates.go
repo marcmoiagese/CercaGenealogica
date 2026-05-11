@@ -371,6 +371,15 @@ func templateIndex(m interface{}, k interface{}) interface{} {
 		if val.IsValid() {
 			return val.Interface()
 		}
+	case reflect.Struct:
+		fieldName, ok := k.(string)
+		if !ok || fieldName == "" {
+			return nil
+		}
+		field := v.FieldByName(fieldName)
+		if field.IsValid() {
+			return field.Interface()
+		}
 	case reflect.Slice, reflect.Array:
 		idx, ok := coerceIntIndex(k)
 		if !ok || idx < 0 || idx >= v.Len() {

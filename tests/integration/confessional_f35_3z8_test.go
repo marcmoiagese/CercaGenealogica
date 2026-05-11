@@ -153,10 +153,14 @@ func TestF353Z8NewChildPrefillsSelectedParent(t *testing.T) {
 		`id="parent_id_label" type="text" value="Arquebisbat pare F35-3Z8 ` + suffix,
 		`data-selected-parent-level-code="arquebisbat_arxidiocesi"`,
 		`data-selected-parent-religion-code="catolicisme_ritu_llati"`,
+		`id="parent_id_help"`,
 	} {
 		if !strings.Contains(body, token) {
 			t.Fatalf("l'alta de filla ha de conservar i mostrar el pare seleccionat; falta %q body=%s", token, body)
 		}
+	}
+	if !strings.Contains(body, `>Selecciona una religio/confessio i un nivell/divisio per veure les entitats pare compatibles.<`) {
+		t.Fatalf("amb el placeholder de nivell el missatge inicial ha de continuar sent d'instruccio, no de 'cap pare'; body=%s", body)
 	}
 }
 
@@ -248,10 +252,15 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 		`parentSearchHasResults`,
 		`parentSearchConfirmedEmpty`,
 		`parentLevelCodes === ""`,
+		`!level.value`,
+		`map(function (item) { return item.trim(); })`,
 	} {
 		if !strings.Contains(staticBody, token) {
 			t.Fatalf("falta sincronitzacio JS F35-3Z8: %s", token)
 		}
+	}
+	if !strings.Contains(staticBody, `if (!selectedLevel || !religion.value) {`) || !strings.Contains(staticBody, `return { compatible: true, reason: "" };`) {
+		t.Fatalf("el pare preseleccionat no s'ha de considerar incompatible mentre encara no hi ha nivell real")
 	}
 	if !strings.Contains(staticBody, `parentSearchHasResults`) || !strings.Contains(staticBody, `help.textContent = "";`) {
 		t.Fatalf("el JS no ha de mostrar ajuda contradictoria quan hi ha suggeriments oberts amb resultats")

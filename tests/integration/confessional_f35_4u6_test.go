@@ -828,6 +828,25 @@ func TestF354U6ManualArchiveRelationCreateUsesEntitatReligiosaAndStaysPending(t 
 	}
 }
 
+func TestF354U6ArchiveRelationFormKeepsTypedRenderContract(t *testing.T) {
+	root := findProjectRoot(t)
+	body := readProjectFileF354S(t, root, "core/arxiu_entitat_religiosa.go")
+
+	for _, token := range []string{
+		`type arxiuEntitatReligiosaFormData struct {`,
+		`CanManageArxius`,
+		`bool`,
+		`RenderPrivateTemplate(w, r, "admin-arxiu-entitat-religiosa-form.html", arxiuEntitatReligiosaFormData{`,
+	} {
+		if !strings.Contains(body, token) {
+			t.Fatalf("el formulari documental ha de conservar contracte tipat F35-4U11D-R3: falta %q", token)
+		}
+	}
+	if strings.Contains(body, `RenderPrivateTemplate(w, r, "admin-arxiu-entitat-religiosa-form.html", map[string]interface{}{`) {
+		t.Fatalf("el formulari documental no ha d'usar map generic per renderitzar el template")
+	}
+}
+
 func TestF354U6PublishedArchiveRelationDeleteNeedsModerationInsteadOfHardDelete(t *testing.T) {
 	app, database, admin, session := setupF354U6ArxiusUIAdmin(t, "test_f35_4u6_delete_published.sqlite3")
 	arxiuID := f354CreateArxiu(t, database, "Arxiu Delete Published F35-4U6")
