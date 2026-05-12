@@ -370,6 +370,7 @@
       const selectedReligion = religion.value;
       let visibleLevels = 0;
 
+      // Level visibility depends only on religion; parent compatibility is handled separately.
       Array.prototype.forEach.call(level.options, function (option) {
         if (!option.value) {
           return;

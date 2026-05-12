@@ -310,12 +310,16 @@ func TestF354U13JSLevelFilteringAndParentSuggestContract(t *testing.T) {
 	root := findProjectRoot(t)
 	formBody := readProjectFileF353U(t, root, "templates/admin-confessional-form.html")
 	staticBody := readProjectFileF353U(t, root, "static/js/confessional-form.js")
+	handlerBody := readProjectFileF353U(t, root, "core/admin_confessional.go")
 
 	if strings.Contains(formBody, `InitialLevelAllowed`) || strings.Contains(formBody, `$allowedInitial`) {
 		t.Fatalf("el template no ha de prefiltrar nivells segons el pare seleccionat")
 	}
 	if !strings.Contains(formBody, `data-parent-level-codes="{{ index $.Data.ParentLevelCodesCSV .Code }}"`) {
 		t.Fatalf("el template ha de continuar exposant els codis de nivell pare compatibles")
+	}
+	if !strings.Contains(handlerBody, `"SelectableNivells":     ListSelectableConfessionalLevelCatalog(),`) {
+		t.Fatalf("renderConfessionalForm ha d'usar la llista seleccionable de nivells actius")
 	}
 	for _, token := range []string{
 		`const selectedLevel = selectedLevelOption();`,
@@ -359,6 +363,9 @@ func TestF354U13JSLevelFilteringAndParentSuggestContract(t *testing.T) {
 		if strings.Contains(syncBody, banned) {
 			t.Fatalf("syncConfessionalLevels no ha de dependre del pare per mostrar nivells: %s", banned)
 		}
+	}
+	if !strings.Contains(staticBody, `// Level visibility depends only on religion; parent compatibility is handled separately.`) {
+		t.Fatalf("falta el comentari curt que documenta la regla de filtratge per religio")
 	}
 }
 

@@ -120,6 +120,34 @@ func TestF353Z7SelectableCatalogLabelsHaveI18N(t *testing.T) {
 	}
 }
 
+func TestF353Z7SelectableConfessionalLevelsAreAllActive(t *testing.T) {
+	full := core.ListConfessionalLevelCatalog()
+	selectable := core.ListSelectableConfessionalLevelCatalog()
+
+	activeCount := 0
+	fullByCode := make(map[string]core.ConfessionalLevelCatalogItem, len(full))
+	for _, item := range full {
+		fullByCode[item.Code] = item
+		if item.Active {
+			activeCount++
+		}
+	}
+	if len(core.ListConfessionalLevelCatalog()) != len(full) {
+		t.Fatalf("la llista selectable no ha de mutar el cataleg base")
+	}
+	if len(selectable) != activeCount {
+		t.Fatalf("nivells seleccionables esperats %d, got %d", activeCount, len(selectable))
+	}
+	for _, item := range selectable {
+		if !item.Active {
+			t.Fatalf("%s no pot sortir als nivells seleccionables si es inactiu", item.Code)
+		}
+		if _, ok := fullByCode[item.Code]; !ok {
+			t.Fatalf("%s ha de continuar existint al cataleg base", item.Code)
+		}
+	}
+}
+
 func TestF353Z7EntitySelectorUsesSelectableI18NLabelsAndStableCodes(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f35_3z7_selector.sqlite3")
 	session := f353YAdminSession(t, database, "z7_selector")

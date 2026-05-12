@@ -77,6 +77,17 @@ func ListConfessionalLevelCatalog() []ConfessionalLevelCatalogItem {
 	return items
 }
 
+func ListSelectableConfessionalLevelCatalog() []ConfessionalLevelCatalogItem {
+	out := []ConfessionalLevelCatalogItem{}
+	for _, item := range confessionalLevelCatalog {
+		if !item.Active {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
 func ListConfessionalLevelsByReligionCode(code string) []ConfessionalLevelCatalogItem {
 	code = normalizeCatalogCode(code)
 	out := []ConfessionalLevelCatalogItem{}

@@ -787,7 +787,7 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 		"SelectableReligions":   ListSelectableConfessionalReligionCatalog(),
 		"Models":                models,
 		"Nivells":               ListConfessionalLevelCatalog(),
-		"SelectableNivells":     ListConfessionalLevelCatalog(),
+		"SelectableNivells":     ListSelectableConfessionalLevelCatalog(),
 		"ReligionCatalogLabels": confessionalReligionCatalogLabels(lang),
 		"LevelCatalogLabels":    confessionalLevelCatalogLabels(lang),
 		"Entitats":              allEntitats,
