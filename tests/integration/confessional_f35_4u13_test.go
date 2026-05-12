@@ -124,6 +124,8 @@ func TestF354U13ValidatesInitialRelationsAndKeepsAutocompleteContract(t *testing
 		`id="municipi_principal_label"`,
 		`id="municipi_principal_id" name="municipi_principal_id" type="hidden"`,
 		`data-hidden="municipi_principal_id"`,
+		`role="combobox"`,
+		`aria-controls="municipi_principal_suggestions"`,
 		`/api/territori/municipis/suggest`,
 		`/static/js/arxiu-form-suggest.js`,
 		`/static/js/confessional-form.js`,
@@ -176,12 +178,15 @@ func TestF354U13ValidatesInitialRelationsAndKeepsAutocompleteContract(t *testing
 func TestF354U13TemplateAndLocalesContract(t *testing.T) {
 	root := findProjectRoot(t)
 	formBody := readProjectFileF353U(t, root, "templates/admin-confessional-form.html")
-	staticBody := readProjectFileF353U(t, root, "static/js/confessional-form.js")
+	confessionalJS := readProjectFileF353U(t, root, "static/js/confessional-form.js")
+	suggestJS := readProjectFileF353U(t, root, "static/js/arxiu-form-suggest.js")
 	for _, token := range []string{
 		`municipi_principal_label`,
 		`municipi_principal_id`,
 		`initial_relation_notes`,
 		`initial_parent_relation_kind`,
+		`class="suggestions-list confessional-suggestions"`,
+		`role="listbox"`,
 		`/api/territori/municipis/suggest`,
 	} {
 		if !strings.Contains(formBody, token) {
@@ -192,7 +197,16 @@ func TestF354U13TemplateAndLocalesContract(t *testing.T) {
 		`syncInitialRelationKind`,
 		`initial_parent_relation_kind`,
 	} {
-		if !strings.Contains(staticBody, token) {
+		if !strings.Contains(confessionalJS, token) {
+			t.Fatalf("falta contracte JS F35-4U13: %s", token)
+		}
+	}
+	for _, token := range []string{
+		`const useConfessionalOption = suggestions.classList.contains("confessional-suggestions")`,
+		`button.className = "suggestion-option"`,
+		`context.textContent = contextText`,
+	} {
+		if !strings.Contains(suggestJS, token) {
 			t.Fatalf("falta contracte JS F35-4U13: %s", token)
 		}
 	}

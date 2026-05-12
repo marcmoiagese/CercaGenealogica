@@ -644,6 +644,112 @@ body {
     display: block;
 }
 
+.suggestions-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--color-borda, #d9d9d9);
+    border-radius: 8px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+    display: none;
+    z-index: 20;
+}
+
+.suggestions-list.is-open {
+    display: block;
+}
+
+.suggestions-list li {
+    padding: 0.6rem 0.85rem;
+    border-bottom: 1px solid #eef1f4;
+    cursor: pointer;
+    margin: 0;
+}
+
+.suggestions-list li:last-child {
+    border-bottom: none;
+}
+
+.suggestions-list li:hover,
+.suggestions-list li.is-active,
+.suggestions-list li:focus-within {
+    background: #f5f7fa;
+}
+
+.suggestions-list .suggestion-empty {
+    color: #94a3b8;
+    cursor: default;
+}
+
+.suggestions-list .suggestion-title {
+    display: block;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.suggestions-list .suggestion-context {
+    display: block;
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-top: 0.2rem;
+}
+
+.confessional-suggestions {
+    border-color: #cfe0ea;
+    box-shadow: 0 12px 28px rgba(15, 63, 87, 0.16);
+}
+
+.confessional-suggestions li {
+    list-style: none;
+    padding: 0;
+}
+
+.confessional-suggestions li.is-active,
+.confessional-suggestions li:hover,
+.confessional-suggestions li:focus-within {
+    background: linear-gradient(90deg, rgba(22, 96, 136, 0.14), rgba(22, 96, 136, 0.04));
+}
+
+.confessional-suggestions .suggestion-option {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    padding: 0.75rem 0.9rem;
+    text-align: left;
+}
+
+.confessional-suggestions .suggestion-option:focus {
+    outline: none;
+}
+
+.confessional-suggestions .suggestion-title {
+    color: #0f3f57;
+}
+
+.confessional-suggestions .suggestion-context {
+    color: #667085;
+    font-size: 0.8rem;
+}
+
+.confessional-suggestions .suggestion-empty {
+    padding: 0.75rem 0.9rem;
+}
+
 .boto-primari,
 .boto-secundari,
 .boto-perill,

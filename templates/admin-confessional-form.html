@@ -205,13 +205,17 @@
                                 value="{{ .Data.Form.PrimaryMunicipiLabel }}"
                                 placeholder="{{ t .Lang "municipis.search.placeholder" }}"
                                 autocomplete="off"
+                                role="combobox"
+                                aria-autocomplete="list"
+                                aria-controls="municipi_principal_suggestions"
+                                aria-expanded="false"
                                 data-api="/api/territori/municipis/suggest"
                                 data-empty-label="{{ t .Lang "municipis.search.empty" }}"
                                 data-hidden="municipi_principal_id"
                                 data-suggestions="municipi_principal_suggestions"
                                 data-suggest="1">
                             <input id="municipi_principal_id" name="municipi_principal_id" type="hidden" value="{{ .Data.Form.PrimaryMunicipiID }}">
-                            <ul id="municipi_principal_suggestions" class="suggestions-list confessional-suggestions" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
+                            <ul id="municipi_principal_suggestions" class="suggestions-list confessional-suggestions" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
                         </div>
                         <p class="muted">{{ t .Lang "confessional.initial_relations.primary_municipality.help" }}</p>
                         {{ if .Data.Form.PrimaryMunicipiExisting }}

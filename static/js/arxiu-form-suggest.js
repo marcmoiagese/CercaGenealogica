@@ -25,9 +25,9 @@ document.addEventListener("DOMContentLoaded", () => {
             parts.push(country);
         }
         if (chain.length) {
-            parts.push(chain.join(" / "));
+            parts.push(chain.join(" | "));
         }
-        return parts.join(" - ");
+        return parts.join(" | ");
     }
 
     function setupSuggest(input) {
@@ -44,6 +44,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         const emptyLabel = input.dataset.emptyLabel || "No results";
+        const useConfessionalOption = suggestions.classList.contains("confessional-suggestions");
         let lastItems = [];
         let activeIndex = -1;
         let debounceTimer = null;
@@ -51,6 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
         function clearSuggestions() {
             suggestions.innerHTML = "";
             suggestions.classList.remove("is-open");
+            input.setAttribute("aria-expanded", "false");
             lastItems = [];
             activeIndex = -1;
         }
@@ -77,26 +79,52 @@ document.addEventListener("DOMContentLoaded", () => {
                 li.className = "suggestion-empty";
                 suggestions.appendChild(li);
                 suggestions.classList.add("is-open");
+                input.setAttribute("aria-expanded", "true");
                 return;
             }
             items.forEach((item, idx) => {
                 const li = document.createElement("li");
                 li.dataset.index = String(idx);
-                const title = document.createElement("span");
-                title.className = "suggestion-title";
-                title.textContent = item.nom || "";
                 const contextText = buildContext(item);
-                li.appendChild(title);
-                if (contextText) {
-                    const context = document.createElement("span");
-                    context.className = "suggestion-context";
-                    context.textContent = contextText;
-                    li.appendChild(context);
+                if (useConfessionalOption) {
+                    li.className = "suggestion-option-item";
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "suggestion-option";
+                    button.title = item.nom || "";
+                    button.setAttribute("aria-label", item.nom || "");
+                    button.addEventListener("mousedown", (event) => {
+                        event.preventDefault();
+                    });
+                    const title = document.createElement("span");
+                    title.className = "suggestion-title";
+                    title.textContent = item.nom || "";
+                    button.appendChild(title);
+                    if (contextText) {
+                        const context = document.createElement("span");
+                        context.className = "suggestion-context";
+                        context.textContent = contextText;
+                        button.appendChild(context);
+                    }
+                    button.addEventListener("click", () => applySuggestion(item));
+                    li.appendChild(button);
+                } else {
+                    const title = document.createElement("span");
+                    title.className = "suggestion-title";
+                    title.textContent = item.nom || "";
+                    li.appendChild(title);
+                    if (contextText) {
+                        const context = document.createElement("span");
+                        context.className = "suggestion-context";
+                        context.textContent = contextText;
+                        li.appendChild(context);
+                    }
+                    li.addEventListener("click", () => applySuggestion(item));
                 }
-                li.addEventListener("click", () => applySuggestion(item));
                 suggestions.appendChild(li);
             });
             suggestions.classList.add("is-open");
+            input.setAttribute("aria-expanded", "true");
         }
 
         function applySuggestion(item) {
