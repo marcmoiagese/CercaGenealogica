@@ -205,6 +205,11 @@ func TestF354U13TemplateAndLocalesContract(t *testing.T) {
 		`initial_parent_relation_kind`,
 		`document.createElement("div")`,
 		`setAttribute("tabindex", "-1")`,
+		`handleParentOptionMouseDown`,
+		`parentOptionClickHandler`,
+		`handleParentOptionClick`,
+		`parentSuggestionOptionID`,
+		`ensureParentSuggestionsID`,
 		`setAttribute("aria-label", parentSuggestionAccessibleLabel(item))`,
 		`aria-activedescendant`,
 		`aria-selected`,
@@ -381,11 +386,11 @@ func f354U13CSSBlock(body, selector string) string {
 		return ""
 	}
 	block := body[idx:]
-	next := strings.Index(block, "\n\n")
-	if next < 0 {
+	end := strings.Index(block, "}")
+	if end < 0 {
 		return block
 	}
-	return block[:next]
+	return block[:end+1]
 }
 
 func f354U13EntityExistsByName(t *testing.T, database db.DB, name string) bool {

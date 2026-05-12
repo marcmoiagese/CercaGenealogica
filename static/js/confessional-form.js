@@ -149,6 +149,36 @@
       return item.context ? String(item.nom || "") + " - " + String(item.context) : String(item.nom || "");
     }
 
+    function handleParentOptionMouseDown(event) {
+      if (event.button === 0) {
+        event.preventDefault();
+      }
+    }
+
+    function handleParentOptionClick(item) {
+      applyParentSuggestion(item);
+    }
+
+    function parentOptionClickHandler(item) {
+      return function () {
+        handleParentOptionClick(item);
+      };
+    }
+
+    function ensureParentSuggestionsID() {
+      if (!parentSuggestions) {
+        return "parent_suggestions_fallback";
+      }
+      if (!parentSuggestions.id) {
+        parentSuggestions.id = parentLabel && parentLabel.id ? parentLabel.id + "_suggestions" : "parent_suggestions_fallback";
+      }
+      return parentSuggestions.id;
+    }
+
+    function parentSuggestionOptionID(idx) {
+      return ensureParentSuggestionsID() + "_option_" + idx;
+    }
+
     function renderParentSuggestions(items) {
       if (!parentSuggestions) {
         return;
@@ -167,20 +197,14 @@
       items.forEach(function (item, idx) {
         const li = document.createElement("li");
         const option = document.createElement("div");
-        li.id = parentSuggestions.id + "_option_" + idx;
+        li.id = parentSuggestionOptionID(idx);
         li.className = "suggestion-option-item";
         li.dataset.index = String(idx);
         li.setAttribute("role", "option");
         li.setAttribute("aria-selected", "false");
         li.setAttribute("aria-label", parentSuggestionAccessibleLabel(item));
-        li.addEventListener("mousedown", function (event) {
-          if (event.button === 0) {
-            event.preventDefault();
-          }
-        });
-        li.addEventListener("click", function () {
-          applyParentSuggestion(item);
-        });
+        li.addEventListener("mousedown", handleParentOptionMouseDown);
+        li.addEventListener("click", parentOptionClickHandler(item));
         option.className = "suggestion-option";
         option.title = item.nom || "";
         option.setAttribute("tabindex", "-1");

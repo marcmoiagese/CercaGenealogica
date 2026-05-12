@@ -675,7 +675,6 @@ body {
     background: linear-gradient(90deg, rgba(22, 96, 136, 0.14), rgba(22, 96, 136, 0.04));
 }
 
-.confessional-suggestions li.is-active,
 .confessional-suggestions li:hover,
 .confessional-suggestions li:focus-within {
     background: linear-gradient(90deg, rgba(22, 96, 136, 0.14), rgba(22, 96, 136, 0.04));
