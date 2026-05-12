@@ -799,6 +799,8 @@ func main() {
 			applyMiddleware(app.AdminNewConfessional, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/edit"):
 			applyMiddleware(app.AdminEditConfessional, core.BlockIPs, core.RateLimit)(w, r)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/confessional/nivells/"):
+			applyMiddleware(app.AdminConfessionalLevelShow, core.BlockIPs, core.RateLimit)(w, r)
 		case strings.Contains(r.URL.Path, "/confessional/entitats/"):
 			applyMiddleware(app.AdminConfessionalEntityShow, core.BlockIPs, core.RateLimit)(w, r)
 		default:

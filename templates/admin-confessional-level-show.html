@@ -1,0 +1,87 @@
+{{ define "admin-confessional-level-show.html" }}
+<!DOCTYPE html>
+<html lang="{{ .Lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ .Data.LevelLabel }}</title>
+    {{ template "styles-private" . }}
+    <link rel="stylesheet" href="/static/css/confessional-profile.css">
+</head>
+<body>
+    {{ template "header-private" . }}
+    {{ template "menu" . }}
+    <main class="contingut-principal taula-ample confessional-profile-shell">
+        <section class="card confessional-profile-hero">
+            <header class="card-header">
+                <p class="confessional-profile-kicker">{{ t .Lang "confessional.col.level" }}</p>
+                <h1>{{ .Data.LevelLabel }}</h1>
+                <p class="confessional-profile-subtitle">{{ .Data.ReligionLabel }} | {{ .Data.Level.Code }}</p>
+                <p class="confessional-profile-backlink"><a href="/confessional/nivells">{{ t .Lang "wiki.history.back" }}</a></p>
+            </header>
+            <div class="confessional-profile-meta">
+                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.profile.level_code" }}</strong>{{ .Data.Level.Code }}</div>
+                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.col.religion" }}</strong>{{ .Data.ReligionLabel }}</div>
+                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.profile.level_category" }}</strong>{{ .Data.CategoryLabel }}</div>
+                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.profile.level_can_have_children" }}</strong>{{ if .Data.CanHaveChildren }}{{ t .Lang "common.yes" }}{{ else }}{{ t .Lang "common.no" }}{{ end }}</div>
+            </div>
+        </section>
+
+        <section class="card">
+            <header class="card-header"><h2>{{ t .Lang "confessional.profile.level_summary" }}</h2></header>
+            <div class="confessional-profile-stats">
+                <div class="confessional-profile-stat"><strong>{{ t .Lang "confessional.profile.parent_relations" }}</strong><span class="confessional-profile-stat-value">{{ len .Data.ParentLevels }}</span></div>
+                <div class="confessional-profile-stat"><strong>{{ t .Lang "confessional.profile.child_relations" }}</strong><span class="confessional-profile-stat-value">{{ len .Data.ChildLevels }}</span></div>
+                <div class="confessional-profile-stat"><strong>{{ t .Lang "confessional.profile.level_entities" }}</strong><span class="confessional-profile-stat-value">{{ len .Data.Entities }}</span></div>
+                <div class="confessional-profile-stat"><strong>{{ t .Lang "confessional.profile.territorial_relations" }}</strong><span class="confessional-profile-stat-value">{{ if .Data.CanHaveTerritory }}{{ t .Lang "common.yes" }}{{ else }}{{ t .Lang "common.no" }}{{ end }}</span></div>
+            </div>
+        </section>
+
+        <section class="confessional-profile-panels">
+            <section class="card confessional-profile-list">
+                <header class="card-header"><h2>{{ t .Lang "confessional.profile.parent_levels" }}</h2></header>
+                {{ if .Data.ParentLevels }}
+                <ul class="confessional-profile-links">
+                    {{ range .Data.ParentLevels }}
+                    <li><a class="confessional-profile-link-main" href="{{ .URL }}">{{ .Label }}</a><div class="confessional-profile-link-meta">{{ .Meta }}</div></li>
+                    {{ end }}
+                </ul>
+                {{ else }}
+                <div class="confessional-profile-empty">{{ t .Lang "confessional.profile.no_parent_levels" }}</div>
+                {{ end }}
+            </section>
+
+            <section class="card confessional-profile-list">
+                <header class="card-header"><h2>{{ t .Lang "confessional.profile.child_levels" }}</h2></header>
+                {{ if .Data.ChildLevels }}
+                <ul class="confessional-profile-links">
+                    {{ range .Data.ChildLevels }}
+                    <li><a class="confessional-profile-link-main" href="{{ .URL }}">{{ .Label }}</a><div class="confessional-profile-link-meta">{{ .Meta }}</div></li>
+                    {{ end }}
+                </ul>
+                {{ else }}
+                <div class="confessional-profile-empty">{{ t .Lang "confessional.profile.no_child_levels" }}</div>
+                {{ end }}
+            </section>
+        </section>
+
+        <section class="card confessional-profile-list">
+            <header class="card-header amb-accio">
+                <h2>{{ t .Lang "confessional.profile.level_entities" }}</h2>
+                {{ if .Data.CanCreateEntity }}<a class="boto-primari" href="/confessional/entitats/new?nivell_confessional_codi={{ .Data.Level.Code }}">{{ t .Lang "confessional.profile.create_entity_for_level" }}</a>{{ end }}
+            </header>
+            {{ if .Data.Entities }}
+            <ul class="confessional-profile-links">
+                {{ range .Data.Entities }}
+                <li><a class="confessional-profile-link-main" href="{{ .URL }}">{{ .Label }}</a><div class="confessional-profile-link-meta">{{ .Meta }}</div></li>
+                {{ end }}
+            </ul>
+            {{ else }}
+            <div class="confessional-profile-empty">{{ t .Lang "confessional.profile.no_level_entities" }}</div>
+            {{ end }}
+        </section>
+    </main>
+    {{ template "footer" . }}
+    {{ template "scripts-private" . }}
+</body>
+</html>
+{{ end }}

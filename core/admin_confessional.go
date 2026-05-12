@@ -93,6 +93,36 @@ type confessionalEntitySuggestion struct {
 	item  map[string]interface{}
 }
 
+type confessionalProfileLink struct {
+	Label string
+	URL   string
+	Meta  string
+}
+
+type confessionalEntityTerritoryRelationView struct {
+	MunicipiID    int
+	MunicipiLabel string
+	MunicipiURL   string
+	NucliID       int
+	NucliLabel    string
+	NucliURL      string
+	TypeLabel     string
+	Status        string
+	Years         string
+	Notes         string
+	IsPrimary     bool
+}
+
+type confessionalEntityArchiveRelationView struct {
+	ID         int
+	ArxiuID    int
+	ArxiuLabel string
+	ArxiuURL   string
+	TypeLabel  string
+	Years      string
+	Notes      string
+}
+
 var confessionalSections = map[string]confessionalSection{
 	"religio": {Kind: "religio", Slug: "religions", Title: "Religions/confessions", NewLabel: "Nova religio/confessio", ViewPerm: permKeyTerritoriConfessionalReligionsView, CreatePerm: permKeyTerritoriConfessionalReligionsCreate, EditPerm: permKeyTerritoriConfessionalReligionsEdit, DeletePerm: permKeyTerritoriConfessionalReligionsDelete},
 	"model":   {Kind: "model", Slug: "models", Title: "Models confessionals", NewLabel: "Nou model", ViewPerm: permKeyTerritoriConfessionalModelsView, CreatePerm: permKeyTerritoriConfessionalModelsCreate, EditPerm: permKeyTerritoriConfessionalModelsEdit, DeletePerm: permKeyTerritoriConfessionalModelsDelete},
@@ -574,6 +604,81 @@ func (a *App) AdminConfessionalEntityShow(w http.ResponseWriter, r *http.Request
 			relationTypeLabels[rel.TipusRelacio] = rel.TipusRelacio
 		}
 	}
+	arxiuTypeLabels := arxiuEntitatReligiosaTypeLabels(lang)
+	arxiuLabelsMap := arxiuLabels(arxius)
+	parentLinks := make([]confessionalProfileLink, 0, len(relsSuperiors))
+	for _, rel := range relsSuperiors {
+		parentLinks = append(parentLinks, confessionalProfileLink{
+			Label: indexEntityName(allEntitats, rel.EntitatOrigenID),
+			URL:   fmt.Sprintf("/confessional/entitats/%d", rel.EntitatOrigenID),
+			Meta:  relationTypeLabels[rel.TipusRelacio],
+		})
+	}
+	childLinks := make([]confessionalProfileLink, 0, len(relsInferiors))
+	for _, rel := range relsInferiors {
+		childLinks = append(childLinks, confessionalProfileLink{
+			Label: indexEntityName(allEntitats, rel.EntitatDestiID),
+			URL:   fmt.Sprintf("/confessional/entitats/%d", rel.EntitatDestiID),
+			Meta:  relationTypeLabels[rel.TipusRelacio],
+		})
+	}
+	sort.Slice(parentLinks, func(i, j int) bool {
+		return strings.ToLower(parentLinks[i].Label) < strings.ToLower(parentLinks[j].Label)
+	})
+	sort.Slice(childLinks, func(i, j int) bool {
+		return strings.ToLower(childLinks[i].Label) < strings.ToLower(childLinks[j].Label)
+	})
+	primaryTerritory := findConfessionalPrimaryMunicipiRelation(id, relsTerritori)
+	territoryRows := make([]confessionalEntityTerritoryRelationView, 0, len(relsTerritori))
+	otherTerritoryRows := make([]confessionalEntityTerritoryRelationView, 0, len(relsTerritori))
+	for _, rel := range relsTerritori {
+		row := confessionalEntityTerritoryRelationView{
+			MunicipiID:    rel.MunicipiID,
+			MunicipiLabel: indexMunicipiName(municipis, rel.MunicipiID),
+			MunicipiURL:   fmt.Sprintf("/territori/municipis/%d", rel.MunicipiID),
+			TypeLabel:     relationTypeLabels[rel.TipusRelacio],
+			Status:        rel.ModeracioEstat,
+			Years:         confessionalYearRange(rel.AnyInici, rel.AnyFi),
+			Notes:         strings.TrimSpace(rel.Observacions),
+		}
+		if rel.NucliID.Valid {
+			row.NucliID = int(rel.NucliID.Int64)
+			row.NucliLabel = indexMunicipiName(municipis, row.NucliID)
+			row.NucliURL = fmt.Sprintf("/territori/municipis/%d", row.NucliID)
+		}
+		if primaryTerritory != nil && rel.ID == primaryTerritory.ID {
+			row.IsPrimary = true
+		}
+		territoryRows = append(territoryRows, row)
+		if !row.IsPrimary {
+			otherTerritoryRows = append(otherTerritoryRows, row)
+		}
+	}
+	sort.Slice(territoryRows, func(i, j int) bool {
+		return strings.ToLower(territoryRows[i].MunicipiLabel) < strings.ToLower(territoryRows[j].MunicipiLabel)
+	})
+	sort.Slice(otherTerritoryRows, func(i, j int) bool {
+		return strings.ToLower(otherTerritoryRows[i].MunicipiLabel) < strings.ToLower(otherTerritoryRows[j].MunicipiLabel)
+	})
+	archiveRows := make([]confessionalEntityArchiveRelationView, 0, len(relacionsArxius))
+	for _, rel := range relacionsArxius {
+		archiveRows = append(archiveRows, confessionalEntityArchiveRelationView{
+			ID:         rel.ID,
+			ArxiuID:    rel.ArxiuID,
+			ArxiuLabel: arxiuLabelsMap[rel.ArxiuID],
+			ArxiuURL:   fmt.Sprintf("/documentals/arxius/%d", rel.ArxiuID),
+			TypeLabel:  arxiuTypeLabels[rel.TipusRelacio],
+			Years:      confessionalYearRange(rel.AnyInici, rel.AnyFi),
+			Notes:      strings.TrimSpace(rel.Observacions),
+		})
+	}
+	sort.Slice(archiveRows, func(i, j int) bool {
+		return strings.ToLower(archiveRows[i].ArxiuLabel) < strings.ToLower(archiveRows[j].ArxiuLabel)
+	})
+	needsParent := false
+	if level, ok := GetConfessionalLevelCatalogByCode(entitat.NivellConfessionalCodi); ok && level.Active && len(level.AllowedParentLevelCodes) > 0 {
+		needsParent = true
+	}
 	RenderPrivateTemplate(w, r, "admin-confessional-entity-show.html", map[string]interface{}{
 		"Entitat":                         entitat,
 		"EntitatLabels":                   entitatReligiosaLabels(allEntitats),
@@ -586,8 +691,16 @@ func (a *App) AdminConfessionalEntityShow(w http.ResponseWriter, r *http.Request
 		"RelacionsInferiors":              relsInferiors,
 		"RelacionsTerritori":              relsTerritori,
 		"RelacionsArxius":                 relacionsArxius,
-		"ArxiuLabels":                     arxiuLabels(arxius),
-		"ArxiuEntitatReligiosaTypeLabels": arxiuEntitatReligiosaTypeLabels(lang),
+		"ParentLinks":                     parentLinks,
+		"ChildLinks":                      childLinks,
+		"PrimaryTerritory":                primaryTerritory,
+		"TerritoryRows":                   territoryRows,
+		"OtherTerritoryRows":              otherTerritoryRows,
+		"ArchiveRows":                     archiveRows,
+		"LevelProfileURL":                 "/confessional/nivells/" + strings.TrimSpace(entitat.NivellConfessionalCodi),
+		"NeedsParent":                     needsParent,
+		"ArxiuLabels":                     arxiuLabelsMap,
+		"ArxiuEntitatReligiosaTypeLabels": arxiuTypeLabels,
 		"HasPendingChanges":               hasPending,
 		"CanEdit":                         canEdit,
 		"CanDelete":                       canDelete,
@@ -619,6 +732,85 @@ func (a *App) confessionalUserLabel(id sql.NullInt64) string {
 		label = fmt.Sprintf("#%d", u.ID)
 	}
 	return label
+}
+
+func (a *App) AdminConfessionalLevelShow(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.requirePermissionKey(w, r, permKeyTerritoriConfessionalNivellsView, PermissionTarget{})
+	if !ok {
+		return
+	}
+	code := confessionalLevelCodeFromPath(r.URL.Path)
+	level, ok := GetConfessionalLevelCatalogByCode(code)
+	if !ok || !level.Active {
+		http.NotFound(w, r)
+		return
+	}
+	lang := ResolveLangForUser(r, user.PreferredLang)
+	religion, _ := GetConfessionalReligionCatalogByCode(level.ReligionCode)
+	parentLevels := []confessionalProfileLink{}
+	for _, parentCode := range level.AllowedParentLevelCodes {
+		parent, parentOK := GetConfessionalLevelCatalogByCode(parentCode)
+		if !parentOK || !parent.Active {
+			continue
+		}
+		parentLevels = append(parentLevels, confessionalProfileLink{
+			Label: ConfessionalLevelLabel(parent, lang),
+			URL:   "/confessional/nivells/" + parent.Code,
+			Meta:  parent.Code,
+		})
+	}
+	childLevels := []confessionalProfileLink{}
+	for _, item := range ListSelectableConfessionalLevelCatalog() {
+		if item.Code == level.Code || !item.Active {
+			continue
+		}
+		if !ConfessionalParentLevelCompatible(level.Code, item.Code) {
+			continue
+		}
+		childLevels = append(childLevels, confessionalProfileLink{
+			Label: ConfessionalLevelLabel(item, lang),
+			URL:   "/confessional/nivells/" + item.Code,
+			Meta:  item.Code,
+		})
+	}
+	sort.Slice(childLevels, func(i, j int) bool {
+		return strings.ToLower(childLevels[i].Label) < strings.ToLower(childLevels[j].Label)
+	})
+	entities := []confessionalProfileLink{}
+	allEntities, _ := a.DB.ListEntitatsReligioses()
+	for _, entity := range allEntities {
+		if entity.ModeracioEstat != "publicat" || strings.TrimSpace(entity.NivellConfessionalCodi) != level.Code {
+			continue
+		}
+		meta := strings.TrimSpace(entity.Codi)
+		if meta == "" {
+			meta = ConfessionalReligionLabel(religion, lang)
+		}
+		entities = append(entities, confessionalProfileLink{
+			Label: entity.Nom,
+			URL:   fmt.Sprintf("/confessional/entitats/%d", entity.ID),
+			Meta:  meta,
+		})
+	}
+	sort.Slice(entities, func(i, j int) bool {
+		return strings.ToLower(entities[i].Label) < strings.ToLower(entities[j].Label)
+	})
+	RenderPrivateTemplate(w, r, "admin-confessional-level-show.html", map[string]interface{}{
+		"Level":             level,
+		"LevelLabel":        ConfessionalLevelLabel(level, lang),
+		"Religion":          religion,
+		"ReligionLabel":     ConfessionalReligionLabel(religion, lang),
+		"CategoryLabel":     ConfessionalCategoryLabel(level.CategoryCode, lang),
+		"ParentLevels":      parentLevels,
+		"ChildLevels":       childLevels,
+		"Entities":          entities,
+		"CanCreateEntity":   a.HasPermission(user.ID, permKeyTerritoriConfessionalEntitatsCreate, PermissionTarget{}),
+		"CanHaveChildren":   level.CanHaveChildren,
+		"CanHaveTerritory":  level.CanHaveTerritory,
+		"CanLinkMunicipi":   level.CanLinkMunicipi,
+		"CanSuggestImports": level.CanSuggestForImports,
+		"User":              user,
+	})
 }
 
 func (a *App) EntitatReligiosaWikiHistory(w http.ResponseWriter, r *http.Request) {
@@ -2128,6 +2320,16 @@ func confessionalSectionURL(section confessionalSection, query string) string {
 	return url
 }
 
+func confessionalLevelCodeFromPath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i := 0; i+2 < len(parts); i++ {
+		if parts[i] == "confessional" && parts[i+1] == "nivells" {
+			return normalizeCatalogCode(parts[i+2])
+		}
+	}
+	return ""
+}
+
 func extractConfessionalPath(path string) (string, int) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	for i := 0; i+2 < len(parts); i++ {
@@ -2143,6 +2345,37 @@ func extractConfessionalPath(path string) (string, int) {
 		return kind, id
 	}
 	return "", 0
+}
+
+func confessionalYearRange(start, end sql.NullInt64) string {
+	switch {
+	case start.Valid && end.Valid:
+		return fmt.Sprintf("%d - %d", start.Int64, end.Int64)
+	case start.Valid:
+		return strconv.FormatInt(start.Int64, 10)
+	case end.Valid:
+		return strconv.FormatInt(end.Int64, 10)
+	default:
+		return ""
+	}
+}
+
+func indexEntityName(items []db.EntitatReligiosa, id int) string {
+	for _, item := range items {
+		if item.ID == id {
+			return item.Nom
+		}
+	}
+	return fmt.Sprintf("#%d", id)
+}
+
+func indexMunicipiName(items []db.MunicipiRow, id int) string {
+	for _, item := range items {
+		if item.ID == id {
+			return item.Nom
+		}
+	}
+	return fmt.Sprintf("#%d", id)
 }
 
 func normalizeReligioEstat(raw string) string {
