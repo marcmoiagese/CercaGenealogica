@@ -4,6 +4,12 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
+    function handleSuggestionMouseDown(event) {
+        if (event.button === 0) {
+            event.preventDefault();
+        }
+    }
+
     function buildContext(item) {
         if (item && item.context) {
             return String(item.context);
@@ -30,6 +36,14 @@ document.addEventListener("DOMContentLoaded", () => {
         return parts.join(" | ");
     }
 
+    function suggestionAccessibleLabel(item, contextText) {
+        const title = item && item.nom ? String(item.nom) : "";
+        if (!contextText) {
+            return title;
+        }
+        return title ? `${title} - ${contextText}` : contextText;
+    }
+
     function setupSuggest(input) {
         const hiddenId = input.dataset.hidden || "";
         const hiddenTypeId = input.dataset.hiddenType || "";
@@ -53,6 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
             suggestions.innerHTML = "";
             suggestions.classList.remove("is-open");
             input.setAttribute("aria-expanded", "false");
+            input.removeAttribute("aria-activedescendant");
             lastItems = [];
             activeIndex = -1;
         }
@@ -62,11 +77,71 @@ document.addEventListener("DOMContentLoaded", () => {
             items.forEach((el, idx) => {
                 if (idx === index) {
                     el.classList.add("is-active");
+                    el.setAttribute("aria-selected", "true");
+                    if (el.id) {
+                        input.setAttribute("aria-activedescendant", el.id);
+                    }
                 } else {
                     el.classList.remove("is-active");
+                    el.setAttribute("aria-selected", "false");
                 }
             });
             activeIndex = index;
+        }
+
+        function createSuggestionTitle(item) {
+            const title = document.createElement("span");
+            title.className = "suggestion-title";
+            title.textContent = item.nom || "";
+            return title;
+        }
+
+        function createSuggestionContext(contextText) {
+            if (!contextText) {
+                return null;
+            }
+            const context = document.createElement("span");
+            context.className = "suggestion-context";
+            context.textContent = contextText;
+            return context;
+        }
+
+        function appendSuggestionText(target, item, contextText) {
+            target.appendChild(createSuggestionTitle(item));
+            const context = createSuggestionContext(contextText);
+            if (context) {
+                target.appendChild(context);
+            }
+        }
+
+        function createPlainSuggestionItem(item, idx, contextText) {
+            const li = document.createElement("li");
+            li.id = `${suggestions.id}_option_${idx}`;
+            li.dataset.index = String(idx);
+            li.setAttribute("role", "option");
+            li.setAttribute("aria-selected", "false");
+            appendSuggestionText(li, item, contextText);
+            li.addEventListener("click", () => applySuggestion(item));
+            return li;
+        }
+
+        function createConfessionalSuggestionItem(item, idx, contextText) {
+            const li = document.createElement("li");
+            const button = document.createElement("button");
+            li.id = `${suggestions.id}_option_${idx}`;
+            li.className = "suggestion-option-item";
+            li.dataset.index = String(idx);
+            li.setAttribute("role", "option");
+            li.setAttribute("aria-selected", "false");
+            button.type = "button";
+            button.className = "suggestion-option";
+            button.title = item.nom || "";
+            button.setAttribute("aria-label", suggestionAccessibleLabel(item, contextText));
+            button.addEventListener("mousedown", handleSuggestionMouseDown);
+            appendSuggestionText(button, item, contextText);
+            button.addEventListener("click", () => applySuggestion(item));
+            li.appendChild(button);
+            return li;
         }
 
         function renderSuggestions(items) {
@@ -83,44 +158,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
             items.forEach((item, idx) => {
-                const li = document.createElement("li");
-                li.dataset.index = String(idx);
                 const contextText = buildContext(item);
-                if (useConfessionalOption) {
-                    li.className = "suggestion-option-item";
-                    const button = document.createElement("button");
-                    button.type = "button";
-                    button.className = "suggestion-option";
-                    button.title = item.nom || "";
-                    button.setAttribute("aria-label", item.nom || "");
-                    button.addEventListener("mousedown", (event) => {
-                        event.preventDefault();
-                    });
-                    const title = document.createElement("span");
-                    title.className = "suggestion-title";
-                    title.textContent = item.nom || "";
-                    button.appendChild(title);
-                    if (contextText) {
-                        const context = document.createElement("span");
-                        context.className = "suggestion-context";
-                        context.textContent = contextText;
-                        button.appendChild(context);
-                    }
-                    button.addEventListener("click", () => applySuggestion(item));
-                    li.appendChild(button);
-                } else {
-                    const title = document.createElement("span");
-                    title.className = "suggestion-title";
-                    title.textContent = item.nom || "";
-                    li.appendChild(title);
-                    if (contextText) {
-                        const context = document.createElement("span");
-                        context.className = "suggestion-context";
-                        context.textContent = contextText;
-                        li.appendChild(context);
-                    }
-                    li.addEventListener("click", () => applySuggestion(item));
-                }
+                const li = useConfessionalOption
+                    ? createConfessionalSuggestionItem(item, idx, contextText)
+                    : createPlainSuggestionItem(item, idx, contextText);
                 suggestions.appendChild(li);
             });
             suggestions.classList.add("is-open");

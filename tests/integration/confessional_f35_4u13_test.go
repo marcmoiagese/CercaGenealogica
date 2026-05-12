@@ -125,7 +125,12 @@ func TestF354U13ValidatesInitialRelationsAndKeepsAutocompleteContract(t *testing
 		`id="municipi_principal_id" name="municipi_principal_id" type="hidden"`,
 		`data-hidden="municipi_principal_id"`,
 		`role="combobox"`,
+		`aria-autocomplete="list"`,
 		`aria-controls="municipi_principal_suggestions"`,
+		`aria-expanded="false"`,
+		`id="parent_id_label"`,
+		`aria-controls="parent_id_suggestions"`,
+		`id="parent_id_suggestions" class="suggestions-list confessional-suggestions" role="listbox"`,
 		`/api/territori/municipis/suggest`,
 		`/static/js/arxiu-form-suggest.js`,
 		`/static/js/confessional-form.js`,
@@ -185,6 +190,8 @@ func TestF354U13TemplateAndLocalesContract(t *testing.T) {
 		`municipi_principal_id`,
 		`initial_relation_notes`,
 		`initial_parent_relation_kind`,
+		`parent_id_label`,
+		`aria-expanded="false"`,
 		`class="suggestions-list confessional-suggestions"`,
 		`role="listbox"`,
 		`/api/territori/municipis/suggest`,
@@ -196,19 +203,42 @@ func TestF354U13TemplateAndLocalesContract(t *testing.T) {
 	for _, token := range []string{
 		`syncInitialRelationKind`,
 		`initial_parent_relation_kind`,
+		`aria-activedescendant`,
+		`aria-selected`,
+		`role", "option"`,
 	} {
 		if !strings.Contains(confessionalJS, token) {
 			t.Fatalf("falta contracte JS F35-4U13: %s", token)
 		}
 	}
 	for _, token := range []string{
-		`const useConfessionalOption = suggestions.classList.contains("confessional-suggestions")`,
+		`suggestionAccessibleLabel`,
 		`button.className = "suggestion-option"`,
+		`suggestion-option-item`,
 		`context.textContent = contextText`,
+		`aria-activedescendant`,
+		`aria-selected`,
+		`role", "option"`,
+		`event.button === 0`,
+		`textContent`,
 	} {
 		if !strings.Contains(suggestJS, token) {
 			t.Fatalf("falta contracte JS F35-4U13: %s", token)
 		}
+	}
+	cssBody := readProjectFileF353U(t, root, "static/css/estils.css")
+	for _, token := range []string{
+		`.suggestion-option:focus`,
+		`outline: 2px solid`,
+		`.suggestion-option-item`,
+	} {
+		if !strings.Contains(cssBody, token) {
+			t.Fatalf("falta contracte CSS F35-4U13: %s", token)
+		}
+	}
+	if strings.Contains(cssBody, `.confessional-suggestions .suggestion-option:focus {
+    outline: none;`) {
+		t.Fatalf("el CSS no ha de treure el focus visible a suggestion-option")
 	}
 	for _, lang := range []string{"cat", "en", "oc"} {
 		values := readLocaleF353Z7(t, root, lang)

@@ -83,6 +83,10 @@
       }
       parentSuggestions.innerHTML = "";
       parentSuggestions.classList.remove("is-open");
+      if (parentLabel) {
+        parentLabel.setAttribute("aria-expanded", "false");
+        parentLabel.removeAttribute("aria-activedescendant");
+      }
       lastParentItems = [];
       activeParentIndex = -1;
     }
@@ -128,9 +132,21 @@
         return;
       }
       Array.prototype.forEach.call(parentSuggestions.querySelectorAll("li"), function (item, idx) {
-        item.classList.toggle("is-active", idx === index);
+        const active = idx === index;
+        item.classList.toggle("is-active", active);
+        item.setAttribute("aria-selected", active ? "true" : "false");
+        if (active && parentLabel && item.id) {
+          parentLabel.setAttribute("aria-activedescendant", item.id);
+        }
       });
       activeParentIndex = index;
+    }
+
+    function parentSuggestionAccessibleLabel(item) {
+      if (!item) {
+        return "";
+      }
+      return item.context ? String(item.nom || "") + " - " + String(item.context) : String(item.nom || "");
     }
 
     function renderParentSuggestions(items) {
@@ -150,15 +166,20 @@
       }
       items.forEach(function (item, idx) {
         const li = document.createElement("li");
+        li.id = parentSuggestions.id + "_option_" + idx;
         li.className = "suggestion-option-item";
         li.dataset.index = String(idx);
+        li.setAttribute("role", "option");
+        li.setAttribute("aria-selected", "false");
         const button = document.createElement("button");
         button.type = "button";
         button.className = "suggestion-option";
         button.title = item.nom || "";
-        button.setAttribute("aria-label", item.nom || "");
+        button.setAttribute("aria-label", parentSuggestionAccessibleLabel(item));
         button.addEventListener("mousedown", function (event) {
-          event.preventDefault();
+          if (event.button === 0) {
+            event.preventDefault();
+          }
         });
         const title = document.createElement("span");
         title.className = "suggestion-title";
@@ -177,6 +198,9 @@
         parentSuggestions.appendChild(li);
       });
       parentSuggestions.classList.add("is-open");
+      if (parentLabel) {
+        parentLabel.setAttribute("aria-expanded", "true");
+      }
     }
 
     function applyParentSuggestion(item) {

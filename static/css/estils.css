@@ -590,60 +590,7 @@ body {
     gap: 0.35rem;
 }
 
-.resultats-cerca {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    background: #fff;
-    border: 1px solid var(--color-borda, #d9d9d9);
-    border-radius: 8px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    max-height: 240px;
-    overflow-y: auto;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-    display: none;
-    z-index: 20;
-}
-
-.resultats-cerca.is-open {
-    display: block;
-}
-
-.resultats-cerca li {
-    padding: 0.6rem 0.85rem;
-    border-bottom: 1px solid #eef1f4;
-    cursor: pointer;
-}
-
-.resultats-cerca li:last-child {
-    border-bottom: none;
-}
-
-.resultats-cerca li:hover,
-.resultats-cerca li.is-active {
-    background: #f5f7fa;
-}
-
-.resultats-cerca .suggestion-empty {
-    color: #94a3b8;
-    cursor: default;
-}
-
-.resultats-cerca .suggestion-title {
-    font-weight: 600;
-    color: var(--color-text);
-}
-
-.resultats-cerca .suggestion-context {
-    font-size: 0.85rem;
-    color: #64748b;
-    margin-top: 0.2rem;
-    display: block;
-}
-
+.resultats-cerca,
 .suggestions-list {
     position: absolute;
     top: calc(100% + 4px);
@@ -662,10 +609,12 @@ body {
     z-index: 20;
 }
 
+.resultats-cerca.is-open,
 .suggestions-list.is-open {
     display: block;
 }
 
+.resultats-cerca li,
 .suggestions-list li {
     padding: 0.6rem 0.85rem;
     border-bottom: 1px solid #eef1f4;
@@ -673,27 +622,33 @@ body {
     margin: 0;
 }
 
+.resultats-cerca li:last-child,
 .suggestions-list li:last-child {
     border-bottom: none;
 }
 
+.resultats-cerca li:hover,
+.resultats-cerca li.is-active,
 .suggestions-list li:hover,
 .suggestions-list li.is-active,
 .suggestions-list li:focus-within {
     background: #f5f7fa;
 }
 
+.resultats-cerca .suggestion-empty,
 .suggestions-list .suggestion-empty {
     color: #94a3b8;
     cursor: default;
 }
 
+.resultats-cerca .suggestion-title,
 .suggestions-list .suggestion-title {
     display: block;
     font-weight: 600;
     color: var(--color-text);
 }
 
+.resultats-cerca .suggestion-context,
 .suggestions-list .suggestion-context {
     display: block;
     font-size: 0.85rem;
@@ -707,6 +662,11 @@ body {
 }
 
 .confessional-suggestions li {
+    list-style: none;
+    padding: 0;
+}
+
+.confessional-suggestions .suggestion-option-item {
     list-style: none;
     padding: 0;
 }
@@ -734,7 +694,8 @@ body {
 }
 
 .confessional-suggestions .suggestion-option:focus {
-    outline: none;
+    outline: 2px solid #1660a0;
+    outline-offset: -2px;
 }
 
 .confessional-suggestions .suggestion-title {
