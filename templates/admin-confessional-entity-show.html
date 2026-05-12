@@ -3,188 +3,221 @@
 <html lang="{{ .Lang }}">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ .Data.Entitat.Nom }}</title>
     {{ template "styles-private" . }}
     <link rel="stylesheet" href="/static/css/registres-taula.css">
     <link rel="stylesheet" href="/static/css/persona.css">
-    <link rel="stylesheet" href="/static/css/confessional-profile.css">
+    <link rel="stylesheet" href="/static/css/estils-v8.css">
+    <link rel="stylesheet" href="/static/css/municipi.css">
+    <link rel="stylesheet" href="/static/css/mapes.css">
+    <link rel="stylesheet" href="/static/css/municipi-anecdotes.css">
+    <link rel="stylesheet" href="/static/css/municipi-perfil-pro.css">
+    <link rel="stylesheet" href="/static/css/municipi-demografia.css">
+    <link rel="stylesheet" href="/static/css/municipi-stats-noms-cognoms.css">
 </head>
 <body>
     {{ template "header-private" . }}
     {{ template "menu" . }}
-    <main class="contingut-principal taula-ample confessional-profile-shell">
-        <section class="card confessional-profile-hero">
-            <header class="card-header amb-accio confessional-profile-header">
-                <div>
-                    <p class="confessional-profile-kicker">{{ index .Data.LevelCatalogLabels .Data.Entitat.NivellConfessionalCodi }}</p>
-                    <h1>{{ .Data.Entitat.Nom }}</h1>
-                    <p class="confessional-profile-subtitle">{{ index .Data.ReligionCatalogLabels .Data.Entitat.ReligioConfessioCodi }} | {{ .Data.Entitat.Codi }}</p>
-                    <p class="confessional-profile-backlink"><a href="/confessional/entitats">{{ t .Lang "wiki.history.back" }}</a></p>
+    <main class="contingut-principal muni-page">
+        <section class="card muni-hero">
+            <div class="muni-hero-left">
+                <div class="muni-title-row">
+                    <h1 class="muni-title">{{ .Data.Entitat.Nom }}</h1>
+                    <div class="muni-badges">
+                        <span class="muni-pill"><i class="fas fa-location-dot"></i> {{ index .Data.LevelCatalogLabels .Data.Entitat.NivellConfessionalCodi }}</span>
+                        <span class="muni-badge {{ if eq .Data.Entitat.ModeracioEstat "publicat" }}badge-success{{ else if eq .Data.Entitat.ModeracioEstat "pendent" }}badge-warning{{ else }}badge-muted{{ end }}">{{ t .Lang (printf "activity.status.%s" .Data.Entitat.ModeracioEstat) }}</span>
+                        <span class="muni-badge badge-muted">{{ index .Data.ReligionCatalogLabels .Data.Entitat.ReligioConfessioCodi }}</span>
+                        <div class="opcions-dropdown muni-opcions">
+                            <button class="boto-opcions" id="botoOpcions">
+                                <i class="fas fa-cog"></i> {{ t .Lang "confessional.action.options" }} <i class="fas fa-chevron-down"></i>
+                            </button>
+                            <ul class="dropdown-opcions" id="dropdownOpcions">
+                                <li><a href="/confessional/entitats/{{ .Data.Entitat.ID }}/history"><i class="fas fa-clock-rotate-left"></i> {{ t .Lang "confessional.profile.history" }}</a></li>
+                                {{ if .Data.CanEdit }}<li><a href="/confessional/entitats/{{ .Data.Entitat.ID }}/edit?return_to=/confessional/entitats/{{ .Data.Entitat.ID }}"><i class="fas fa-pen"></i> {{ t .Lang "confessional.action.edit" }}</a></li>{{ end }}
+                                {{ if .Data.CanDelete }}<li><form method="post" action="/confessional/delete"><input type="hidden" name="kind" value="entitat"><input type="hidden" name="id" value="{{ .Data.Entitat.ID }}"><button type="submit"><i class="fas fa-trash"></i> {{ t .Lang "confessional.action.delete" }}</button></form></li>{{ end }}
+                            </ul>
+                        </div>
+                    </div>
                 </div>
-                <div class="opcions-dropdown muni-opcions">
-                    <button class="boto-opcions" id="botoOpcions">
-                        <i class="fas fa-cog"></i> {{ t .Lang "confessional.action.options" }} <i class="fas fa-chevron-down"></i>
-                    </button>
-                    <ul class="dropdown-opcions" id="dropdownOpcions">
-                        <li><a href="/confessional/entitats/{{ .Data.Entitat.ID }}/history"><i class="fas fa-clock-rotate-left"></i> {{ t .Lang "confessional.profile.history" }}</a></li>
-                        {{ if .Data.CanEdit }}<li><a href="/confessional/entitats/{{ .Data.Entitat.ID }}/edit?return_to=/confessional/entitats/{{ .Data.Entitat.ID }}"><i class="fas fa-pen"></i> {{ t .Lang "confessional.action.edit" }}</a></li>{{ end }}
-                        {{ if .Data.CanDelete }}
-                        <li>
-                            <form method="post" action="/confessional/delete">
-                                <input type="hidden" name="kind" value="entitat">
-                                <input type="hidden" name="id" value="{{ .Data.Entitat.ID }}">
-                                <button type="submit"><i class="fas fa-trash"></i> {{ t .Lang "confessional.action.delete" }}</button>
-                            </form>
-                        </li>
-                        {{ end }}
-                    </ul>
+                <p class="muted muni-subtitle">{{ .Data.Entitat.Codi }}</p>
+                <div class="muni-actions">
+                    <a class="boto-secundari" href="/confessional/entitats"><i class="fas fa-arrow-left"></i> {{ t .Lang "wiki.history.back" }}</a>
+                    {{ if .Data.LevelProfileURL }}<a class="boto-secundari" href="{{ .Data.LevelProfileURL }}"><i class="fas fa-sitemap"></i> {{ t .Lang "confessional.col.level" }}</a>{{ end }}
+                    {{ if .Data.CanCreateArxiuEntitatReligiosa }}<a class="boto-primari" href="/confessional/entitats/{{ .Data.Entitat.ID }}/arxius/new?return_to=/confessional/entitats/{{ .Data.Entitat.ID }}"><i class="fas fa-plus"></i> {{ t .Lang "confessional.archive_relation.add" }}</a>{{ end }}
                 </div>
-            </header>
-            {{ if eq .Data.Notice "pending" }}<div class="alert alert-success">{{ t .Lang "confessional.profile.pending_created" }}</div>{{ end }}
-            {{ if .Data.HasPendingChanges }}<div class="pending-note">{{ t .Lang "confessional.profile.pending_changes" }}</div>{{ end }}
-            <div class="confessional-profile-meta">
-                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.col.religion" }}</strong>{{ index .Data.ReligionCatalogLabels .Data.Entitat.ReligioConfessioCodi }}</div>
-                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.col.level" }}</strong><a href="{{ .Data.LevelProfileURL }}">{{ index .Data.LevelCatalogLabels .Data.Entitat.NivellConfessionalCodi }}</a></div>
-                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.profile.country" }}</strong>{{ if .Data.Entitat.PaisID.Valid }}{{ index .Data.PaisLabels (int .Data.Entitat.PaisID.Int64) }}{{ else }}-{{ end }}</div>
-                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.col.years" }}</strong>{{ if .Data.Entitat.AnyInici.Valid }}{{ .Data.Entitat.AnyInici.Int64 }}{{ end }}{{ if and .Data.Entitat.AnyInici.Valid .Data.Entitat.AnyFi.Valid }} - {{ end }}{{ if .Data.Entitat.AnyFi.Valid }}{{ .Data.Entitat.AnyFi.Int64 }}{{ end }}</div>
-                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.col.status" }}</strong><span class="confessional-profile-status"><span class="confessional-profile-badge">{{ t .Lang (printf "confessional.status.%s" .Data.Entitat.Estat) }}</span><span class="confessional-profile-badge">{{ .Data.Entitat.ModeracioEstat }}</span></span></div>
-                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.profile.primary_municipality" }}</strong>{{ with .Data.PrimaryTerritory }}<a href="/territori/municipis/{{ .MunicipiID }}">{{ index $.Data.MunicipiLabels .MunicipiID }}</a>{{ else }}-{{ end }}</div>
+            </div>
+            <div class="muni-hero-right">
+                <dl class="muni-kv">
+                    <div><dt>{{ t .Lang "confessional.profile.primary_municipality" }}</dt><dd>{{ with .Data.PrimaryTerritory }}<a class="enllaç" href="/territori/municipis/{{ .MunicipiID }}">{{ index $.Data.MunicipiLabels .MunicipiID }}</a>{{ else }}-{{ end }}</dd></div>
+                    <div><dt>{{ t .Lang "confessional.profile.country" }}</dt><dd>{{ if .Data.Entitat.PaisID.Valid }}{{ index .Data.PaisLabels (int .Data.Entitat.PaisID.Int64) }}{{ else }}-{{ end }}</dd></div>
+                    <div><dt>{{ t .Lang "confessional.col.years" }}</dt><dd>{{ if .Data.Entitat.AnyInici.Valid }}{{ .Data.Entitat.AnyInici.Int64 }}{{ end }}{{ if and .Data.Entitat.AnyInici.Valid .Data.Entitat.AnyFi.Valid }} - {{ end }}{{ if .Data.Entitat.AnyFi.Valid }}{{ .Data.Entitat.AnyFi.Int64 }}{{ end }}</dd></div>
+                    <div><dt>{{ t .Lang "confessional.field.wikipedia" }}</dt><dd>{{ if .Data.Entitat.WebWikipedia }}<a class="enllaç" href="{{ .Data.Entitat.WebWikipedia }}" target="_blank" rel="noreferrer">{{ t .Lang "common.view" }}</a>{{ else }}-{{ end }}</dd></div>
+                    <div><dt>{{ t .Lang "confessional.field.web" }}</dt><dd>{{ if .Data.Entitat.Web }}<a class="enllaç" href="{{ .Data.Entitat.Web }}" target="_blank" rel="noreferrer">{{ t .Lang "common.view" }}</a>{{ else }}-{{ end }}</dd></div>
+                </dl>
             </div>
         </section>
 
-        <section class="card">
-            <header class="card-header"><h2>{{ t .Lang "confessional.profile.level_summary" }}</h2></header>
-            <div class="confessional-profile-stats">
-                <div class="confessional-profile-stat"><strong>{{ t .Lang "confessional.profile.parent_relations" }}</strong><span class="confessional-profile-stat-value">{{ len .Data.ParentLinks }}</span></div>
-                <div class="confessional-profile-stat"><strong>{{ t .Lang "confessional.profile.child_relations" }}</strong><span class="confessional-profile-stat-value">{{ len .Data.ChildLinks }}</span></div>
-                <div class="confessional-profile-stat"><strong>{{ t .Lang "confessional.profile.territorial_relations" }}</strong><span class="confessional-profile-stat-value">{{ len .Data.TerritoryRows }}</span></div>
-                <div class="confessional-profile-stat"><strong>{{ t .Lang "confessional.archive_relation.entity_section" }}</strong><span class="confessional-profile-stat-value">{{ len .Data.ArchiveRows }}</span></div>
-            </div>
-        </section>
+        {{ if eq .Data.Notice "pending" }}<div class="alert alert-success">{{ t .Lang "confessional.profile.pending_created" }}</div>{{ end }}
+        {{ if .Data.HasPendingChanges }}<div class="alert alert-warning">{{ t .Lang "confessional.profile.pending_changes" }}</div>{{ end }}
 
-        <section class="card confessional-profile-details">
-            <header class="card-header"><h2>{{ t .Lang "confessional.profile.details" }}</h2></header>
-            <p><strong>{{ t .Lang "confessional.field.web" }}:</strong> {{ if .Data.Entitat.Web }}<a href="{{ .Data.Entitat.Web }}">{{ .Data.Entitat.Web }}</a>{{ else }}-{{ end }}</p>
-            <p><strong>{{ t .Lang "confessional.field.wikipedia" }}:</strong> {{ if .Data.Entitat.WebWikipedia }}<a href="{{ .Data.Entitat.WebWikipedia }}">{{ .Data.Entitat.WebWikipedia }}</a>{{ else }}-{{ end }}</p>
-            <p><strong>{{ t .Lang "confessional.profile.description" }}:</strong> {{ if .Data.Entitat.Descripcio }}{{ .Data.Entitat.Descripcio }}{{ else }}-{{ end }}</p>
-            <p><strong>{{ t .Lang "confessional.profile.notes" }}:</strong> {{ if .Data.Entitat.Observacions }}{{ .Data.Entitat.Observacions }}{{ else }}-{{ end }}</p>
-            {{ if .Data.Entitat.ModeracioMotiu }}<p><strong>{{ t .Lang "confessional.profile.moderation_reason" }}:</strong> {{ .Data.Entitat.ModeracioMotiu }}</p>{{ end }}
-            <div class="confessional-profile-meta">
-                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.profile.creator" }}</strong>{{ .Data.Creator }}</div>
-                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.profile.updater" }}</strong>{{ .Data.Updater }}</div>
-                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.profile.moderator" }}</strong>{{ .Data.Moderator }}</div>
-                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.profile.created_at" }}</strong>{{ if .Data.Entitat.CreatedAt.Valid }}{{ .Data.Entitat.CreatedAt.Time.Format "02/01/2006 15:04" }}{{ else }}-{{ end }}</div>
-                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.profile.updated_at" }}</strong>{{ if .Data.Entitat.UpdatedAt.Valid }}{{ .Data.Entitat.UpdatedAt.Time.Format "02/01/2006 15:04" }}{{ else }}-{{ end }}</div>
-                <div class="confessional-profile-meta-item"><strong>{{ t .Lang "confessional.profile.moderated_at" }}</strong>{{ if .Data.Entitat.ModeratedAt.Valid }}{{ .Data.Entitat.ModeratedAt.Time.Format "02/01/2006 15:04" }}{{ else }}-{{ end }}</div>
-            </div>
-        </section>
-
-        <section class="confessional-profile-panels">
-            <section class="card confessional-profile-list">
-                <header class="card-header"><h2>{{ t .Lang "confessional.profile.parent_relations" }}</h2></header>
-                {{ if .Data.ParentLinks }}
-                <ul class="confessional-profile-links">
-                    {{ range .Data.ParentLinks }}
-                    <li><a class="confessional-profile-link-main" href="{{ .URL }}">{{ .Label }}</a><div class="confessional-profile-link-meta">{{ .Meta }}</div></li>
-                    {{ end }}
-                </ul>
-                {{ else }}
-                <div class="confessional-profile-empty">{{ if .Data.NeedsParent }}{{ t .Lang "confessional.profile.no_parent_entity_expected" }}{{ else }}{{ t .Lang "confessional.profile.no_parent_entity" }}{{ end }}</div>
-                {{ end }}
-            </section>
-
-            <section class="card confessional-profile-list">
-                <header class="card-header"><h2>{{ t .Lang "confessional.profile.child_relations" }}</h2></header>
-                {{ if .Data.ChildLinks }}
-                <ul class="confessional-profile-links">
-                    {{ range .Data.ChildLinks }}
-                    <li><a class="confessional-profile-link-main" href="{{ .URL }}">{{ .Label }}</a><div class="confessional-profile-link-meta">{{ .Meta }}</div></li>
-                    {{ end }}
-                </ul>
-                {{ else }}
-                <div class="confessional-profile-empty">{{ t .Lang "confessional.profile.no_child_entities" }}</div>
-                {{ end }}
-            </section>
-        </section>
-
-        <section class="card confessional-profile-table">
-            <header class="card-header"><h2>{{ t .Lang "confessional.profile.entity_relations" }}</h2></header>
-            <div class="taula-wrapper">
-                <table class="taula"><thead><tr><th>{{ t .Lang "confessional.col.parent_entity" }}</th><th>{{ t .Lang "confessional.col.child_entity" }}</th><th>{{ t .Lang "confessional.col.type" }}</th><th>{{ t .Lang "confessional.col.status" }}</th></tr></thead><tbody>
-                {{ range .Data.RelacionsSuperiors }}
-                <tr><td>{{ index $.Data.EntitatLabels .EntitatOrigenID }}</td><td>{{ index $.Data.EntitatLabels .EntitatDestiID }}</td><td>{{ index $.Data.RelationTypeLabels .TipusRelacio }}</td><td>{{ .ModeracioEstat }}</td></tr>
-                {{ else }}<tr><td colspan="4">-</td></tr>{{ end }}
-                {{ range .Data.RelacionsInferiors }}
-                <tr><td>{{ index $.Data.EntitatLabels .EntitatOrigenID }}</td><td>{{ index $.Data.EntitatLabels .EntitatDestiID }}</td><td>{{ index $.Data.RelationTypeLabels .TipusRelacio }}</td><td>{{ .ModeracioEstat }}</td></tr>
-                {{ end }}
-                </tbody></table>
-            </div>
-        </section>
-
-        <section class="card">
-            <header class="card-header"><h2>{{ t .Lang "confessional.profile.territorial_relations" }}</h2></header>
-            {{ if .Data.PrimaryTerritory }}
-            <section class="confessional-profile-panel">
-                <h3>{{ t .Lang "confessional.profile.primary_municipality" }}</h3>
-                <p><a class="confessional-profile-link-main" href="/territori/municipis/{{ .Data.PrimaryTerritory.MunicipiID }}">{{ index .Data.MunicipiLabels .Data.PrimaryTerritory.MunicipiID }}</a></p>
-                <p class="confessional-profile-link-meta">{{ index .Data.RelationTypeLabels .Data.PrimaryTerritory.TipusRelacio }}</p>
-            </section>
-            {{ end }}
-            {{ if .Data.OtherTerritoryRows }}
-            <section class="confessional-profile-list">
-                <h3>{{ t .Lang "confessional.profile.other_territorial_relations" }}</h3>
-                <ul class="confessional-profile-territory-list">
-                    {{ range .Data.OtherTerritoryRows }}
-                    <li>
-                        <a class="confessional-profile-link-main" href="{{ .MunicipiURL }}">{{ .MunicipiLabel }}</a>
-                        {{ if .NucliID }}<div class="confessional-profile-link-meta">{{ t $.Lang "confessional.field.nucli" }}: <a href="{{ .NucliURL }}">{{ .NucliLabel }}</a></div>{{ end }}
-                        <div class="confessional-profile-link-meta">{{ .TypeLabel }}{{ if .Years }} · {{ .Years }}{{ end }}</div>
-                    </li>
-                    {{ end }}
-                </ul>
-            </section>
-            {{ else if not .Data.PrimaryTerritory }}
-            <div class="confessional-profile-empty">-</div>
-            {{ end }}
-        </section>
-
-        <section class="card confessional-profile-table">
-            <header class="card-header amb-accio">
-                <h2>{{ t .Lang "confessional.archive_relation.entity_section" }}</h2>
-                {{ if .Data.CanCreateArxiuEntitatReligiosa }}
-                <a class="boto-primari" href="/confessional/entitats/{{ .Data.Entitat.ID }}/arxius/new?return_to=/confessional/entitats/{{ .Data.Entitat.ID }}"><i class="fas fa-plus"></i> {{ t .Lang "confessional.archive_relation.add" }}</a>
-                {{ end }}
-            </header>
-            <div class="taula-wrapper">
-                <table class="taula">
-                    <thead>
-                        <tr>
-                            <th>{{ t .Lang "confessional.archive_relation.field.archive" }}</th>
-                            <th>{{ t .Lang "confessional.archive_relation.field.type" }}</th>
-                            <th>{{ t .Lang "confessional.col.years" }}</th>
-                            <th>{{ t .Lang "confessional.archive_relation.field.notes" }}</th>
-                            {{ if or .Data.CanEditArxiuEntitatReligiosa .Data.CanDeleteArxiuEntitatReligiosa }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {{ range .Data.ArchiveRows }}
-                        <tr>
-                            <td><a href="{{ .ArxiuURL }}">{{ .ArxiuLabel }}</a></td>
-                            <td>{{ .TypeLabel }}</td>
-                            <td>{{ if .Years }}{{ .Years }}{{ else }}-{{ end }}</td>
-                            <td>{{ if .Notes }}{{ .Notes }}{{ else }}-{{ end }}</td>
-                            {{ if or $.Data.CanEditArxiuEntitatReligiosa $.Data.CanDeleteArxiuEntitatReligiosa }}
-                            <td>
-                                {{ if $.Data.CanEditArxiuEntitatReligiosa }}<a class="boto-secundari" href="/documentals/arxius/entitats-religioses/{{ .ID }}/edit?return_to=/confessional/entitats/{{ $.Data.Entitat.ID }}">{{ t $.Lang "confessional.action.edit" }}</a>{{ end }}
-                                {{ if $.Data.CanDeleteArxiuEntitatReligiosa }}<form method="post" action="/documentals/arxius/entitats-religioses/{{ .ID }}/delete" class="inline-form"><button class="boto-perill" type="submit">{{ t $.Lang "confessional.action.delete" }}</button></form>{{ end }}
-                            </td>
+        <div class="muni-grid">
+            <aside class="muni-left">
+                <section class="card muni-card">
+                    <header class="card-header"><h2>{{ t .Lang "confessional.profile.parent_relations" }}</h2></header>
+                    <ol class="muni-hierarchy">
+                        {{ if .Data.ParentLinks }}
+                            {{ range .Data.ParentLinks }}
+                            <li class="muni-h-item"><span class="muni-h-label">{{ .Meta }}</span><span class="muni-h-value"><a href="{{ .URL }}">{{ .Label }}</a></span></li>
                             {{ end }}
-                        </tr>
-                        {{ else }}<tr><td colspan="{{ if or .Data.CanEditArxiuEntitatReligiosa .Data.CanDeleteArxiuEntitatReligiosa }}5{{ else }}4{{ end }}">-</td></tr>{{ end }}
-                    </tbody>
-                </table>
-            </div>
-        </section>
+                        {{ else }}
+                            <li class="muni-h-item">{{ if .Data.NeedsParent }}{{ t .Lang "confessional.profile.no_parent_entity_expected" }}{{ else }}{{ t .Lang "confessional.profile.no_parent_entity" }}{{ end }}</li>
+                        {{ end }}
+                    </ol>
+                </section>
+                <section class="card muni-card">
+                    <header class="card-header"><h2>{{ t .Lang "confessional.profile.child_relations" }}</h2></header>
+                    <ol class="muni-hierarchy">
+                        {{ if .Data.ChildLinks }}
+                            {{ range .Data.ChildLinks }}
+                            <li class="muni-h-item"><span class="muni-h-label">{{ .Meta }}</span><span class="muni-h-value"><a href="{{ .URL }}">{{ .Label }}</a></span></li>
+                            {{ end }}
+                        {{ else }}
+                            <li class="muni-h-item">{{ t .Lang "confessional.profile.no_child_entities" }}</li>
+                        {{ end }}
+                    </ol>
+                </section>
+                <section class="card muni-card muni-callout">
+                    <div class="muni-callout-icon"><i class="fas fa-layer-group"></i></div>
+                    <div>
+                        <h3 class="muni-callout-title">{{ t .Lang "confessional.profile.details" }}</h3>
+                        <p class="muted muni-callout-text">{{ if .Data.Entitat.Descripcio }}{{ .Data.Entitat.Descripcio }}{{ else }}{{ t .Lang "confessional.profile.notes" }}{{ end }}</p>
+                    </div>
+                </section>
+            </aside>
+
+            <section class="muni-right">
+                <section class="card muni-card">
+                    <header class="card-header muni-card-header-row">
+                        <div>
+                            <h2>{{ t .Lang "confessional.profile.details" }}</h2>
+                            <p class="muted">{{ t .Lang "confessional.col.religion" }}</p>
+                        </div>
+                    </header>
+                    <div class="taula-wrapper">
+                        <table class="taula">
+                            <tbody>
+                                <tr><th>{{ t .Lang "confessional.col.religion" }}</th><td>{{ index .Data.ReligionCatalogLabels .Data.Entitat.ReligioConfessioCodi }}</td></tr>
+                                <tr><th>{{ t .Lang "confessional.col.level" }}</th><td>{{ if .Data.LevelProfileURL }}<a href="{{ .Data.LevelProfileURL }}">{{ index .Data.LevelCatalogLabels .Data.Entitat.NivellConfessionalCodi }}</a>{{ else }}{{ index .Data.LevelCatalogLabels .Data.Entitat.NivellConfessionalCodi }}{{ end }}</td></tr>
+                                <tr><th>{{ t .Lang "confessional.col.status" }}</th><td>{{ t .Lang (printf "confessional.status.%s" .Data.Entitat.Estat) }}</td></tr>
+                                <tr><th>{{ t .Lang "moderation.status" }}</th><td>{{ t .Lang (printf "activity.status.%s" .Data.Entitat.ModeracioEstat) }}</td></tr>
+                                <tr><th>{{ t .Lang "confessional.profile.description" }}</th><td>{{ if .Data.Entitat.Descripcio }}{{ .Data.Entitat.Descripcio }}{{ else }}-{{ end }}</td></tr>
+                                <tr><th>{{ t .Lang "confessional.profile.notes" }}</th><td>{{ if .Data.Entitat.Observacions }}{{ .Data.Entitat.Observacions }}{{ else }}-{{ end }}</td></tr>
+                                {{ if .Data.Entitat.ModeracioMotiu }}<tr><th>{{ t .Lang "confessional.profile.moderation_reason" }}</th><td>{{ .Data.Entitat.ModeracioMotiu }}</td></tr>{{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="card muni-card muni-history">
+                    <header class="card-header"><h2>{{ t .Lang "confessional.profile.entity_relations" }}</h2></header>
+                    <div class="taula-wrapper">
+                        <table class="taula">
+                            <thead><tr><th>{{ t .Lang "confessional.col.parent_entity" }}</th><th>{{ t .Lang "confessional.col.child_entity" }}</th><th>{{ t .Lang "confessional.col.type" }}</th><th>{{ t .Lang "confessional.col.status" }}</th></tr></thead>
+                            <tbody>
+                                {{ range .Data.RelacionsSuperiors }}
+                                <tr><td>{{ index $.Data.EntitatLabels .EntitatOrigenID }}</td><td>{{ index $.Data.EntitatLabels .EntitatDestiID }}</td><td>{{ index $.Data.RelationTypeLabels .TipusRelacio }}</td><td>{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</td></tr>
+                                {{ end }}
+                                {{ range .Data.RelacionsInferiors }}
+                                <tr><td>{{ index $.Data.EntitatLabels .EntitatOrigenID }}</td><td>{{ index $.Data.EntitatLabels .EntitatDestiID }}</td><td>{{ index $.Data.RelationTypeLabels .TipusRelacio }}</td><td>{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</td></tr>
+                                {{ end }}
+                                {{ if and (eq (len .Data.RelacionsSuperiors) 0) (eq (len .Data.RelacionsInferiors) 0) }}<tr><td colspan="4">-</td></tr>{{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="card muni-card muni-events">
+                    <header class="card-header muni-card-header-row">
+                        <div>
+                            <h2>{{ t .Lang "confessional.profile.territorial_relations" }}</h2>
+                            <p class="muted">{{ t .Lang "confessional.profile.primary_municipality" }}</p>
+                        </div>
+                    </header>
+                    <div class="taula-wrapper">
+                        <table class="taula">
+                            <thead><tr><th>{{ t .Lang "confessional.field.municipi" }}</th><th>{{ t .Lang "confessional.field.nucli" }}</th><th>{{ t .Lang "confessional.col.type" }}</th><th>{{ t .Lang "confessional.col.years" }}</th></tr></thead>
+                            <tbody>
+                                {{ if .Data.PrimaryTerritory }}
+                                <tr><td><a href="/territori/municipis/{{ .Data.PrimaryTerritory.MunicipiID }}">{{ index .Data.MunicipiLabels .Data.PrimaryTerritory.MunicipiID }}</a></td><td>-</td><td>{{ index .Data.RelationTypeLabels .Data.PrimaryTerritory.TipusRelacio }}</td><td>{{ if .Data.PrimaryTerritory.AnyInici.Valid }}{{ .Data.PrimaryTerritory.AnyInici.Int64 }}{{ end }}{{ if and .Data.PrimaryTerritory.AnyInici.Valid .Data.PrimaryTerritory.AnyFi.Valid }} - {{ end }}{{ if .Data.PrimaryTerritory.AnyFi.Valid }}{{ .Data.PrimaryTerritory.AnyFi.Int64 }}{{ end }}</td></tr>
+                                {{ end }}
+                                {{ if gt (len .Data.OtherTerritoryRows) 0 }}
+                                    {{ range .Data.OtherTerritoryRows }}
+                                    <tr><td><a href="{{ .MunicipiURL }}">{{ .MunicipiLabel }}</a></td><td>{{ if .NucliID }}<a href="{{ .NucliURL }}">{{ .NucliLabel }}</a>{{ else }}-{{ end }}</td><td>{{ .TypeLabel }}</td><td>{{ if .Years }}{{ .Years }}{{ else }}-{{ end }}</td></tr>
+                                    {{ end }}
+                                {{ else if not .Data.PrimaryTerritory }}
+                                    <tr><td colspan="4">-</td></tr>
+                                {{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="card muni-card muni-anecdotes">
+                    <header class="card-header muni-card-header-row">
+                        <div>
+                            <h2>{{ t .Lang "confessional.archive_relation.entity_section" }}</h2>
+                            <p class="muted">{{ t .Lang "confessional.archive_relation.field.archive" }}</p>
+                        </div>
+                    </header>
+                    <div class="taula-wrapper">
+                        <table class="taula">
+                            <thead>
+                                <tr>
+                                    <th>{{ t .Lang "confessional.archive_relation.field.archive" }}</th>
+                                    <th>{{ t .Lang "confessional.archive_relation.field.type" }}</th>
+                                    <th>{{ t .Lang "confessional.col.years" }}</th>
+                                    <th>{{ t .Lang "confessional.archive_relation.field.notes" }}</th>
+                                    {{ if or .Data.CanEditArxiuEntitatReligiosa .Data.CanDeleteArxiuEntitatReligiosa }}<th>{{ t .Lang "archives.books.col.actions" }}</th>{{ end }}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{ range .Data.ArchiveRows }}
+                                <tr>
+                                    <td><a href="{{ .ArxiuURL }}">{{ .ArxiuLabel }}</a></td>
+                                    <td>{{ .TypeLabel }}</td>
+                                    <td>{{ if .Years }}{{ .Years }}{{ else }}-{{ end }}</td>
+                                    <td>{{ if .Notes }}{{ .Notes }}{{ else }}-{{ end }}</td>
+                                    {{ if or $.Data.CanEditArxiuEntitatReligiosa $.Data.CanDeleteArxiuEntitatReligiosa }}
+                                    <td>
+                                        {{ if $.Data.CanEditArxiuEntitatReligiosa }}<a class="boto-secundari" href="/documentals/arxius/entitats-religioses/{{ .ID }}/edit?return_to=/confessional/entitats/{{ $.Data.Entitat.ID }}">{{ t $.Lang "confessional.action.edit" }}</a>{{ end }}
+                                        {{ if $.Data.CanDeleteArxiuEntitatReligiosa }}<form method="post" action="/documentals/arxius/entitats-religioses/{{ .ID }}/delete" class="inline-form"><button class="boto-perill" type="submit">{{ t $.Lang "confessional.action.delete" }}</button></form>{{ end }}
+                                    </td>
+                                    {{ end }}
+                                </tr>
+                                {{ else }}<tr><td colspan="{{ if or .Data.CanEditArxiuEntitatReligiosa .Data.CanDeleteArxiuEntitatReligiosa }}5{{ else }}4{{ end }}">-</td></tr>{{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="card muni-card">
+                    <header class="card-header"><h2>{{ t .Lang "confessional.profile.history" }}</h2></header>
+                    <div class="taula-wrapper">
+                        <table class="taula">
+                            <tbody>
+                                <tr><th>{{ t .Lang "confessional.profile.creator" }}</th><td>{{ .Data.Creator }}</td></tr>
+                                <tr><th>{{ t .Lang "confessional.profile.updater" }}</th><td>{{ .Data.Updater }}</td></tr>
+                                <tr><th>{{ t .Lang "confessional.profile.moderator" }}</th><td>{{ .Data.Moderator }}</td></tr>
+                                <tr><th>{{ t .Lang "confessional.profile.created_at" }}</th><td>{{ if .Data.Entitat.CreatedAt.Valid }}{{ .Data.Entitat.CreatedAt.Time.Format "02/01/2006 15:04" }}{{ else }}-{{ end }}</td></tr>
+                                <tr><th>{{ t .Lang "confessional.profile.updated_at" }}</th><td>{{ if .Data.Entitat.UpdatedAt.Valid }}{{ .Data.Entitat.UpdatedAt.Time.Format "02/01/2006 15:04" }}{{ else }}-{{ end }}</td></tr>
+                                <tr><th>{{ t .Lang "confessional.profile.moderated_at" }}</th><td>{{ if .Data.Entitat.ModeratedAt.Valid }}{{ .Data.Entitat.ModeratedAt.Time.Format "02/01/2006 15:04" }}{{ else }}-{{ end }}</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+        </div>
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
