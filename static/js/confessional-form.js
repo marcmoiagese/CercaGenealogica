@@ -41,13 +41,6 @@
       parentRelationKind.textContent = prefix ? prefix + " " + selected.value : selected.value;
     }
 
-    function selectedParentLevelCode() {
-      if (!parent || !parent.value || !parentLabel) {
-        return "";
-      }
-      return parentLabel.dataset.selectedParentLevelCode || "";
-    }
-
     function selectedParentReligionCode() {
       if (!parent || !parent.value || !parentLabel) {
         return "";
@@ -68,13 +61,6 @@
       }
       const parentLevelCodes = optionParentLevelCodes(option);
       return parentLevelCodes.includes("*") || parentLevelCodes.includes(parentLevelCode);
-    }
-
-    function levelAllowedWithoutParent(option) {
-      if (!option) {
-        return false;
-      }
-      return optionParentLevelCodes(option).length === 0;
     }
 
     function clearParentSuggestions() {
@@ -382,8 +368,6 @@
 
     function syncConfessionalLevels(resetParent) {
       const selectedReligion = religion.value;
-      const parentLevelCode = selectedParentLevelCode();
-      const parentReligionCode = selectedParentReligionCode();
       let visibleLevels = 0;
 
       Array.prototype.forEach.call(level.options, function (option) {
@@ -391,17 +375,9 @@
           return;
         }
         const matchesReligion = !!selectedReligion && option.dataset.religionCode === selectedReligion;
-        let allowedByParent = false;
-        if (!parentLevelCode) {
-          allowedByParent = levelAllowedWithoutParent(option);
-        } else if (parentReligionCode !== "" && option.dataset.religionCode !== parentReligionCode) {
-          allowedByParent = false;
-        } else {
-          allowedByParent = levelAllowsParent(option, parentLevelCode);
-        }
-        option.hidden = !matchesReligion || !allowedByParent;
-        option.disabled = !matchesReligion || !allowedByParent;
-        if (matchesReligion && allowedByParent) {
+        option.hidden = !matchesReligion;
+        option.disabled = !matchesReligion;
+        if (matchesReligion) {
           visibleLevels += 1;
         }
       });

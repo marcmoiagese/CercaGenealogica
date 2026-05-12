@@ -167,8 +167,8 @@ func TestF353Z8NewChildPrefillsSelectedParent(t *testing.T) {
 		t.Fatalf("un nivell fill compatible ha de quedar disponible des del render inicial; option=%s", compatibleOption)
 	}
 	incompatibleOption := f353Z5OptionSnippet(body, "bisbat_diocesi")
-	if !strings.Contains(incompatibleOption, "hidden") || !strings.Contains(incompatibleOption, "disabled") {
-		t.Fatalf("un nivell superior incompatible no s'ha de poder triar quan el pare ja ve preseleccionat; option=%s", incompatibleOption)
+	if strings.Contains(incompatibleOption, "hidden") || strings.Contains(incompatibleOption, "disabled") {
+		t.Fatalf("el pare preseleccionat no ha d'ocultar nivells superiors de la mateixa religio; option=%s", incompatibleOption)
 	}
 }
 
@@ -185,8 +185,8 @@ func TestF353Z8RootEntityDoesNotExposeChildOnlyLevelsWithoutParent(t *testing.T)
 		t.Fatalf("el nivell arrel de l'entitat editada ha de continuar disponible sense pare; option=%s", rootOption)
 	}
 	childOnlyOption := f353Z5OptionSnippet(body, "parroquia")
-	if !strings.Contains(childOnlyOption, "hidden") || !strings.Contains(childOnlyOption, "disabled") {
-		t.Fatalf("sense pare no s'han d'exposar nivells que exigeixen jerarquia; option=%s", childOnlyOption)
+	if strings.Contains(childOnlyOption, "hidden") || strings.Contains(childOnlyOption, "disabled") {
+		t.Fatalf("sense pare, la religio ha de continuar mostrant nivells no arrel com parroquia; option=%s", childOnlyOption)
 	}
 }
 
@@ -272,10 +272,8 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 		`fetchParentSuggestions`,
 		`child_id`,
 		`exclude_id`,
-		`selectedParentLevelCode`,
 		`selectedParentReligionCode`,
 		`levelAllowsParent`,
-		`levelAllowedWithoutParent`,
 		`syncSelectedParentCompatibility`,
 		`selectedParentCompatibilityState`,
 		`storeSelectedParentMetadata`,
@@ -296,11 +294,14 @@ func TestF353Z8HierarchyI18NAndCSPRegression(t *testing.T) {
 	if strings.Contains(staticBody, `return parentLevelCodes.includes("*");`) {
 		t.Fatalf("el wildcard '*' no ha de permetre nivells sense pare")
 	}
-	if !strings.Contains(staticBody, `return optionParentLevelCodes(option).length === 0;`) {
-		t.Fatalf("levelAllowedWithoutParent ha d'alinear-se amb el backend i admetre nomes nivells root reals")
+	if strings.Contains(staticBody, `levelAllowedWithoutParent`) {
+		t.Fatalf("el nivell visible ja no ha de dependre del helper levelAllowedWithoutParent")
 	}
 	if !strings.Contains(staticBody, `return parentLevelCodes.includes("*") || parentLevelCodes.includes(parentLevelCode);`) {
 		t.Fatalf("levelAllowsParent ha de continuar tractant '*' com a comodí de nivell pare")
+	}
+	if strings.Contains(staticBody, `function selectedParentLevelCode()`) {
+		t.Fatalf("syncConfessionalLevels ja no ha de dependre del helper selectedParentLevelCode")
 	}
 	if !strings.Contains(staticBody, `if (!selectedLevel || !religion.value) {`) || !strings.Contains(staticBody, `return { compatible: true, reason: "" };`) {
 		t.Fatalf("el pare preseleccionat no s'ha de considerar incompatible mentre encara no hi ha nivell real")

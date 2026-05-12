@@ -279,6 +279,89 @@ func TestF354U13TemplateAndLocalesContract(t *testing.T) {
 	}
 }
 
+func TestF354U13LevelSelectDependsOnReligionNotParent(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u13_level_select.sqlite3")
+	session := f353YAdminSession(t, database, "f354u13_level_select")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	rootID := f353Z8SaveEntity(t, database, "f354u13_level_root_"+suffix, "Santa Seu F35-4U13 "+suffix, "santa_seu", "publicat")
+	parentID := f353Z8SaveEntity(t, database, "f354u13_level_parent_"+suffix, "Arquebisbat F35-4U13 "+suffix, "arquebisbat_arxidiocesi", "publicat")
+	childID := f353Z8SaveEntity(t, database, "f354u13_level_child_"+suffix, "Parroquia F35-4U13 "+suffix, "parroquia", "publicat")
+	f353Z9SavePublishedRelation(t, database, parentID, childID, "parroquia")
+
+	rootBody := f353YGet(t, app.AdminEditConfessional, "/confessional/entitats/"+strconv.Itoa(rootID)+"/edit", session)
+	arxOption := f353Z5OptionSnippet(rootBody, "arxiprestat_vicariat_forani")
+	if strings.Contains(arxOption, "hidden") || strings.Contains(arxOption, "disabled") {
+		t.Fatalf("sense pare seleccionat l'arxiprestat ha de continuar visible per la religio correcta; option=%s", arxOption)
+	}
+	santaOption := f353Z5OptionSnippet(rootBody, "santa_seu")
+	if !strings.Contains(santaOption, `data-parent-level-codes=""`) {
+		t.Fatalf("santa_seu ha de continuar renderitzant-se com a nivell arrel; option=%s", santaOption)
+	}
+
+	editBody := f353YGet(t, app.AdminEditConfessional, "/confessional/entitats/"+strconv.Itoa(childID)+"/edit", session)
+	editArxOption := f353Z5OptionSnippet(editBody, "arxiprestat_vicariat_forani")
+	if strings.Contains(editArxOption, "hidden") || strings.Contains(editArxOption, "disabled") {
+		t.Fatalf("un pare existent incompatible no ha d'ocultar nivells alternatius compatibles amb la religio; option=%s", editArxOption)
+	}
+}
+
+func TestF354U13JSLevelFilteringAndParentSuggestContract(t *testing.T) {
+	root := findProjectRoot(t)
+	formBody := readProjectFileF353U(t, root, "templates/admin-confessional-form.html")
+	staticBody := readProjectFileF353U(t, root, "static/js/confessional-form.js")
+
+	if strings.Contains(formBody, `InitialLevelAllowed`) || strings.Contains(formBody, `$allowedInitial`) {
+		t.Fatalf("el template no ha de prefiltrar nivells segons el pare seleccionat")
+	}
+	if !strings.Contains(formBody, `data-parent-level-codes="{{ index $.Data.ParentLevelCodesCSV .Code }}"`) {
+		t.Fatalf("el template ha de continuar exposant els codis de nivell pare compatibles")
+	}
+	for _, token := range []string{
+		`const selectedLevel = selectedLevelOption();`,
+		`url.searchParams.set("religio_confessio_codi", religion.value);`,
+		`url.searchParams.set("nivell_confessional_codi", level.value);`,
+		`if (!religion.value || !selectedLevel) {`,
+		`if (parentLevelCodes === "") {`,
+		`const matchesReligion = !!selectedReligion && option.dataset.religionCode === selectedReligion;`,
+		`option.hidden = !matchesReligion;`,
+		`option.disabled = !matchesReligion;`,
+		`if (matchesReligion) {`,
+	} {
+		if !strings.Contains(staticBody, token) {
+			t.Fatalf("falta contracte JS R7: %s", token)
+		}
+	}
+	for _, banned := range []string{
+		`function selectedParentLevelCode()`,
+		`function levelAllowedWithoutParent(`,
+	} {
+		if strings.Contains(staticBody, banned) {
+			t.Fatalf("syncConfessionalLevels no ha de dependre del pare per mostrar nivells: %s", banned)
+		}
+	}
+	syncStart := strings.Index(staticBody, `function syncConfessionalLevels(resetParent) {`)
+	if syncStart == -1 {
+		t.Fatalf("falta syncConfessionalLevels al JS")
+	}
+	syncTail := staticBody[syncStart:]
+	syncEnd := strings.Index(syncTail, `if (parentLabel && parent) {`)
+	if syncEnd == -1 {
+		t.Fatalf("no s'ha pogut delimitar el cos de syncConfessionalLevels")
+	}
+	syncBody := syncTail[:syncEnd]
+	for _, banned := range []string{
+		`selectedParentLevelCode`,
+		`selectedParentReligionCode`,
+		`allowedByParent`,
+		`levelAllowsParent(`,
+	} {
+		if strings.Contains(syncBody, banned) {
+			t.Fatalf("syncConfessionalLevels no ha de dependre del pare per mostrar nivells: %s", banned)
+		}
+	}
+}
+
 func TestF354U13PrimaryMunicipiIgnoresNucliRelations(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f35_4u13_ignore_nucli.sqlite3")
 	session := f353YAdminSession(t, database, "f354u13_ignore_nucli")
