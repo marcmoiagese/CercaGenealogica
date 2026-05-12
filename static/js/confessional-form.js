@@ -21,10 +21,11 @@
     const parentRelationKind = document.getElementById("initial_parent_relation_kind");
 
     function selectedLevelOption() {
-      if (!level.value || level.selectedOptions.length === 0 || level.selectedOptions[0]?.disabled) {
+      const selected = level.selectedOptions.length > 0 ? level.selectedOptions[0] : null;
+      if (!level.value || !selected || selected.disabled) {
         return null;
       }
-      return level.selectedOptions[0];
+      return selected;
     }
 
     function syncInitialRelationKind() {
@@ -357,7 +358,8 @@
         }
       });
 
-      if (level.selectedOptions.length > 0 && level.selectedOptions[0]?.disabled) {
+      const selected = level.selectedOptions.length > 0 ? level.selectedOptions[0] : null;
+      if (selected && selected.disabled) {
         level.value = "";
       }
 

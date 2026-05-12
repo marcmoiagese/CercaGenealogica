@@ -28,8 +28,12 @@ func TestF354U13CreateEntityWithPrimaryMunicipalityCreatesPendingTerritorialRela
 	if rr.Code != http.StatusSeeOther {
 		t.Fatalf("save status=%d body=%s", rr.Code, rr.Body.String())
 	}
+	f354U13AssertSafeRedirectLocation(t, rr.Header().Get("Location"))
 
 	entity := f353ZFindEntitatByName(t, database, entityName)
+	if rr.Header().Get("Location") != "/confessional/entitats/"+strconv.Itoa(entity.ID)+"?notice=pending" {
+		t.Fatalf("nova entitat amb relacions inicials ha d'anar a la fitxa pendent; got=%s", rr.Header().Get("Location"))
+	}
 	rel := f354U13FindPrimaryMunicipiRelation(t, database, entity.ID, municipiID)
 	if rel == nil {
 		t.Fatalf("no s'ha creat la relacio territorial principal")
@@ -160,9 +164,13 @@ func TestF354U13ValidatesInitialRelationsAndKeepsAutocompleteContract(t *testing
 	unsafeReturnTo.Set("return_to", "https://evil.example/out")
 	unsafeReturnTo.Set("municipi_principal_id", strconv.Itoa(f353YCreateMunicipi(t, database, "Municipi return_to F35-4U13 "+suffix)))
 	rr := f353ZPostConfessionalRedirect(t, app.AdminSaveConfessional, session, unsafeReturnTo)
-	if loc := rr.Header().Get("Location"); strings.HasPrefix(loc, "http://") || strings.HasPrefix(loc, "https://") {
-		t.Fatalf("return_to insegur no s'ha de respectar: %s", loc)
-	}
+	f354U13AssertSafeRedirectLocation(t, rr.Header().Get("Location"))
+
+	unsafeSchemeRelative := f353ZEntityForm("Parroquia return_to protocol-relative F35-4U13 "+suffix, "f354u13_bad_return2_"+suffix, 0)
+	unsafeSchemeRelative.Set("return_to", "//evil.example/out")
+	unsafeSchemeRelative.Set("municipi_principal_id", strconv.Itoa(f353YCreateMunicipi(t, database, "Municipi return_to protocol-relative F35-4U13 "+suffix)))
+	rr = f353ZPostConfessionalRedirect(t, app.AdminSaveConfessional, session, unsafeSchemeRelative)
+	f354U13AssertSafeRedirectLocation(t, rr.Header().Get("Location"))
 }
 
 func TestF354U13TemplateAndLocalesContract(t *testing.T) {
@@ -249,6 +257,34 @@ func TestF354U13PrimaryMunicipiIgnoresNucliRelations(t *testing.T) {
 	}
 }
 
+func TestF354U13EditEntityWithSameParentDoesNotDuplicateRelation(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u13_no_duplicate_parent.sqlite3")
+	session := f353YAdminSession(t, database, "f354u13_no_duplicate_parent")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	parentID := f353Z8SaveEntity(t, database, "f354u13_parent_dup_"+suffix, "Arxiprestat duplicat F35-4U13 "+suffix, "arxiprestat_vicariat_forani", "publicat")
+	childID := f353Z8SaveEntity(t, database, "f354u13_child_dup_"+suffix, "Parroquia duplicat pare F35-4U13 "+suffix, "parroquia", "publicat")
+	if _, err := database.SaveEntitatReligiosaRelacio(&db.EntitatReligiosaRelacio{
+		EntitatOrigenID: parentID,
+		EntitatDestiID:  childID,
+		TipusRelacio:    "parroquia",
+		ModeracioEstat:  "publicat",
+	}); err != nil {
+		t.Fatalf("SaveEntitatReligiosaRelacio: %v", err)
+	}
+
+	child, err := database.GetEntitatReligiosa(childID)
+	if err != nil || child == nil {
+		t.Fatalf("GetEntitatReligiosa: %v", err)
+	}
+	form := f353Z12EntityEditForm(childID, child.Codi, child.Nom, child.NivellConfessionalCodi, parentID)
+	_ = f353ZPostConfessionalRedirect(t, app.AdminSaveConfessional, session, form)
+
+	if got := f354U13CountParentRelations(t, database, parentID, childID); got != 1 {
+		t.Fatalf("editar amb el mateix pare no ha de duplicar relacions; got=%d", got)
+	}
+}
+
 func f354U13FindPrimaryMunicipiRelation(t *testing.T, database db.DB, entityID, municipiID int) *db.MunicipiEntitatReligiosa {
 	t.Helper()
 	rels, err := database.ListMunicipiEntitatsReligiosesByEntitat(entityID)
@@ -290,4 +326,28 @@ func f354U13EntityExistsByName(t *testing.T, database db.DB, name string) bool {
 		}
 	}
 	return false
+}
+
+func f354U13CountParentRelations(t *testing.T, database db.DB, parentID, childID int) int {
+	t.Helper()
+	rels, err := database.ListEntitatReligiosaRelacions()
+	if err != nil {
+		t.Fatalf("ListEntitatReligiosaRelacions: %v", err)
+	}
+	total := 0
+	for _, rel := range rels {
+		if rel.EntitatOrigenID == parentID && rel.EntitatDestiID == childID && rel.ModeracioEstat != "rebutjat" {
+			total++
+		}
+	}
+	return total
+}
+
+func f354U13AssertSafeRedirectLocation(t *testing.T, loc string) {
+	t.Helper()
+	for _, badPrefix := range []string{"http://", "https://", "//"} {
+		if strings.HasPrefix(loc, badPrefix) {
+			t.Fatalf("return_to insegur no s'ha de respectar: %s", loc)
+		}
+	}
 }

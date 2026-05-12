@@ -416,7 +416,7 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 	}
 	lang := ResolveLangForUser(r, user.PreferredLang)
 	data, errMsg := a.parseConfessionalForm(kind, id, r, lang)
-	returnURL := confessionalReturnURL(section, data.ReturnURL, id)
+	returnURL := confessionalReturnURL(section, data.ReturnURL, id, false)
 	if errMsg != "" {
 		data.Error = errMsg
 		a.renderConfessionalForm(w, r, user, data)
@@ -476,6 +476,7 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 				a.renderConfessionalForm(w, r, user, data)
 				return
 			}
+			returnURL = confessionalReturnURL(section, data.ReturnURL, id, true)
 			http.Redirect(w, r, returnURL, http.StatusSeeOther)
 			return
 		}
@@ -490,6 +491,7 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 		if data.Entitat.ID == 0 {
 			data.Entitat.ID = savedID
 		}
+		returnURL = confessionalReturnURL(section, data.ReturnURL, savedID, true)
 		http.Redirect(w, r, returnURL, http.StatusSeeOther)
 		return
 	}
@@ -804,7 +806,7 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 }
 
 func (a *App) parseConfessionalForm(kind string, id int, r *http.Request, lang string) (confessionalFormData, string) {
-	data := confessionalFormData{Kind: kind, IsNew: id == 0, ReturnURL: safeReturnTo(r.FormValue("return_to"), confessionalSectionURL(confessionalSectionMust(kind), ""))}
+	data := confessionalFormData{Kind: kind, IsNew: id == 0, ReturnURL: strings.TrimSpace(r.FormValue("return_to"))}
 	estat := normalizeConfessionalEstat(r.FormValue("estat"))
 	status := a.confessionalModerationStatusForSave(kind, id)
 	switch kind {
@@ -1596,7 +1598,7 @@ func (a *App) createConfessionalEntityInitialRelations(data confessionalFormData
 		}
 	}
 	if needsPrimaryMunicipiRelation {
-		if err := a.createConfessionalPrimaryMunicipiRelation(data.Entitat, entityID, userID, data.PrimaryMunicipiID, data.InitialRelationNotes, true); err != nil {
+		if err := a.createConfessionalPrimaryMunicipiRelationIfNeeded(data.Entitat, entityID, userID, data.PrimaryMunicipiID, data.InitialRelationNotes); err != nil {
 			return err
 		}
 	}
@@ -1628,14 +1630,18 @@ func (a *App) createConfessionalParentRelation(entitat *db.EntitatReligiosa, chi
 	return err
 }
 
-func (a *App) createConfessionalPrimaryMunicipiRelation(entitat *db.EntitatReligiosa, entityID, userID, municipiID int, notes string, needsRelation bool) error {
+func (a *App) createConfessionalPrimaryMunicipiRelationIfNeeded(entitat *db.EntitatReligiosa, entityID, userID, municipiID int, notes string) error {
 	if entitat == nil || entityID == 0 || municipiID == 0 {
 		return nil
+	}
+	needsRelation, err := a.needsConfessionalPrimaryMunicipiRelation(entityID, municipiID)
+	if err != nil {
+		return err
 	}
 	if !needsRelation {
 		return nil
 	}
-	_, err := a.DB.SaveMunicipiEntitatReligiosa(a.buildConfessionalPrimaryMunicipiRelation(entitat, entityID, userID, municipiID, notes))
+	_, err = a.DB.SaveMunicipiEntitatReligiosa(a.buildConfessionalPrimaryMunicipiRelation(entitat, entityID, userID, municipiID, notes))
 	return err
 }
 
@@ -1696,26 +1702,29 @@ func findConfessionalPrimaryMunicipiRelation(entityID int, rels []db.MunicipiEnt
 	return pendingNoNucli
 }
 
-func confessionalReturnURL(section confessionalSection, raw string, entityID int) string {
+func confessionalReturnURL(section confessionalSection, raw string, entityID int, pending bool) string {
 	fallback := confessionalSectionURL(section, "notice=saved")
-	if section.Kind == "entitat" && entityID > 0 {
+	if pending && section.Kind == "entitat" && entityID > 0 {
 		fallback = fmt.Sprintf("/confessional/entitats/%d?notice=pending", entityID)
 	}
 	return safeReturnTo(raw, fallback)
 }
 
 func confessionalInitialRelationsError(needsParentRelation, needsPrimaryMunicipiRelation, duringSave bool) string {
+	const prefix = "No s'ha pogut "
 	action := "crear"
+	object := "les relacions inicials de l'entitat"
 	if duringSave {
 		action = "desar"
+		object = "l'entitat amb"
 	}
 	switch {
 	case needsParentRelation && needsPrimaryMunicipiRelation:
-		return "No s'ha pogut " + action + " l'entitat amb la relacio jerarquica i la relacio territorial principal."
+		return prefix + action + " " + object + " la relacio jerarquica i la relacio territorial principal."
 	case needsPrimaryMunicipiRelation:
-		return "No s'ha pogut " + action + " l'entitat amb la relacio territorial principal."
+		return prefix + action + " " + object + " la relacio territorial principal."
 	default:
-		return "No s'ha pogut " + action + " l'entitat amb la relacio jerarquica."
+		return prefix + action + " " + object + " la relacio jerarquica."
 	}
 }
 
