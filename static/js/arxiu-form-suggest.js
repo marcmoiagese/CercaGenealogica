@@ -63,6 +63,17 @@ document.addEventListener("DOMContentLoaded", () => {
         let activeIndex = -1;
         let debounceTimer = null;
 
+        function ensureSuggestionsID() {
+            if (!suggestions.id) {
+                suggestions.id = input.id ? `${input.id}_suggestions` : "suggestions_fallback";
+            }
+            return suggestions.id;
+        }
+
+        function suggestionOptionID(idx) {
+            return `${ensureSuggestionsID()}_option_${idx}`;
+        }
+
         function clearSuggestions() {
             suggestions.innerHTML = "";
             suggestions.classList.remove("is-open");
@@ -116,7 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         function createPlainSuggestionItem(item, idx, contextText) {
             const li = document.createElement("li");
-            li.id = `${suggestions.id}_option_${idx}`;
+            li.id = suggestionOptionID(idx);
             li.dataset.index = String(idx);
             li.setAttribute("role", "option");
             li.setAttribute("aria-selected", "false");
@@ -127,20 +138,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
         function createConfessionalSuggestionItem(item, idx, contextText) {
             const li = document.createElement("li");
-            const button = document.createElement("button");
-            li.id = `${suggestions.id}_option_${idx}`;
+            const option = document.createElement("div");
+            li.id = suggestionOptionID(idx);
             li.className = "suggestion-option-item";
             li.dataset.index = String(idx);
             li.setAttribute("role", "option");
             li.setAttribute("aria-selected", "false");
-            button.type = "button";
-            button.className = "suggestion-option";
-            button.title = item.nom || "";
-            button.setAttribute("aria-label", suggestionAccessibleLabel(item, contextText));
-            button.addEventListener("mousedown", handleSuggestionMouseDown);
-            appendSuggestionText(button, item, contextText);
-            button.addEventListener("click", () => applySuggestion(item));
-            li.appendChild(button);
+            li.setAttribute("aria-label", suggestionAccessibleLabel(item, contextText));
+            li.addEventListener("mousedown", handleSuggestionMouseDown);
+            li.addEventListener("click", () => applySuggestion(item));
+            option.className = "suggestion-option";
+            option.title = item.nom || "";
+            option.setAttribute("tabindex", "-1");
+            appendSuggestionText(option, item, contextText);
+            li.appendChild(option);
             return li;
         }
 

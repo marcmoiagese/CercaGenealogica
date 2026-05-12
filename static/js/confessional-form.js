@@ -166,35 +166,35 @@
       }
       items.forEach(function (item, idx) {
         const li = document.createElement("li");
+        const option = document.createElement("div");
         li.id = parentSuggestions.id + "_option_" + idx;
         li.className = "suggestion-option-item";
         li.dataset.index = String(idx);
         li.setAttribute("role", "option");
         li.setAttribute("aria-selected", "false");
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "suggestion-option";
-        button.title = item.nom || "";
-        button.setAttribute("aria-label", parentSuggestionAccessibleLabel(item));
-        button.addEventListener("mousedown", function (event) {
+        li.setAttribute("aria-label", parentSuggestionAccessibleLabel(item));
+        li.addEventListener("mousedown", function (event) {
           if (event.button === 0) {
             event.preventDefault();
           }
         });
+        li.addEventListener("click", function () {
+          applyParentSuggestion(item);
+        });
+        option.className = "suggestion-option";
+        option.title = item.nom || "";
+        option.setAttribute("tabindex", "-1");
         const title = document.createElement("span");
         title.className = "suggestion-title";
         title.textContent = item.nom || "";
-        button.appendChild(title);
+        option.appendChild(title);
         if (item.context) {
           const context = document.createElement("span");
           context.className = "suggestion-context";
           context.textContent = item.context;
-          button.appendChild(context);
+          option.appendChild(context);
         }
-        button.addEventListener("click", function () {
-          applyParentSuggestion(item);
-        });
-        li.appendChild(button);
+        li.appendChild(option);
         parentSuggestions.appendChild(li);
       });
       parentSuggestions.classList.add("is-open");

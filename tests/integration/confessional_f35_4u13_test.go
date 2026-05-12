@@ -203,6 +203,9 @@ func TestF354U13TemplateAndLocalesContract(t *testing.T) {
 	for _, token := range []string{
 		`syncInitialRelationKind`,
 		`initial_parent_relation_kind`,
+		`document.createElement("div")`,
+		`setAttribute("tabindex", "-1")`,
+		`setAttribute("aria-label", parentSuggestionAccessibleLabel(item))`,
 		`aria-activedescendant`,
 		`aria-selected`,
 		`role", "option"`,
@@ -213,19 +216,33 @@ func TestF354U13TemplateAndLocalesContract(t *testing.T) {
 	}
 	for _, token := range []string{
 		`suggestionAccessibleLabel`,
-		`button.className = "suggestion-option"`,
+		`function suggestionOptionID(idx)`,
+		`document.createElement("div")`,
+		`option.className = "suggestion-option"`,
+		`setAttribute("tabindex", "-1")`,
 		`suggestion-option-item`,
 		`context.textContent = contextText`,
 		`aria-activedescendant`,
 		`aria-selected`,
 		`role", "option"`,
 		`event.button === 0`,
+		`suggestions.id`,
 		`textContent`,
 	} {
 		if !strings.Contains(suggestJS, token) {
 			t.Fatalf("falta contracte JS F35-4U13: %s", token)
 		}
 	}
+	for _, banned := range []string{
+		`const button = document.createElement("button")`,
+		`button.className = "suggestion-option"`,
+		`button.type = "button"`,
+	} {
+		if strings.Contains(suggestJS, banned) {
+			t.Fatalf("el JS de suggest no ha de mantenir el patró antic amb button: %s", banned)
+		}
+	}
+
 	cssBody := readProjectFileF353U(t, root, "static/css/estils.css")
 	for _, token := range []string{
 		`.suggestion-option:focus`,
@@ -236,8 +253,8 @@ func TestF354U13TemplateAndLocalesContract(t *testing.T) {
 			t.Fatalf("falta contracte CSS F35-4U13: %s", token)
 		}
 	}
-	if strings.Contains(cssBody, `.confessional-suggestions .suggestion-option:focus {
-    outline: none;`) {
+	focusBlock := f354U13CSSBlock(cssBody, ".confessional-suggestions .suggestion-option:focus")
+	if strings.Contains(strings.ReplaceAll(focusBlock, " ", ""), "outline:none") {
 		t.Fatalf("el CSS no ha de treure el focus visible a suggestion-option")
 	}
 	for _, lang := range []string{"cat", "en", "oc"} {
@@ -356,6 +373,19 @@ func f354U13CountPrimaryMunicipiRelations(t *testing.T, database db.DB, entityID
 		}
 	}
 	return total
+}
+
+func f354U13CSSBlock(body, selector string) string {
+	idx := strings.Index(body, selector)
+	if idx < 0 {
+		return ""
+	}
+	block := body[idx:]
+	next := strings.Index(block, "\n\n")
+	if next < 0 {
+		return block
+	}
+	return block[:next]
 }
 
 func f354U13EntityExistsByName(t *testing.T, database db.DB, name string) bool {
