@@ -882,6 +882,9 @@ func (d *SQLite) GetEntitatReligiosa(id int) (*EntitatReligiosa, error) {
 func (d *SQLite) SaveEntitatReligiosa(e *EntitatReligiosa) (int, error) {
 	return sqliteSaveEntitatReligiosa(d, e)
 }
+func (d *SQLite) SaveEntitatReligiosaWithInitialRelationsTx(plan *EntitatReligiosaInitialRelationsTxPlan) (*EntitatReligiosaInitialRelationsTxResult, error) {
+	return sqliteSaveEntitatReligiosaWithInitialRelationsTx(d, plan)
+}
 func (d *SQLite) DeleteEntitatReligiosa(id int) error {
 	return sqliteDeleteEntitatReligiosa(d, id)
 }

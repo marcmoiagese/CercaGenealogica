@@ -18,12 +18,26 @@
     let parentCompatibilityMessage = "";
     let parentSearchHasResults = false;
     let parentSearchConfirmedEmpty = false;
+    const parentRelationKind = document.getElementById("initial_parent_relation_kind");
 
     function selectedLevelOption() {
       if (!level.value || level.selectedOptions.length === 0 || level.selectedOptions[0].disabled) {
         return null;
       }
       return level.selectedOptions[0];
+    }
+
+    function syncInitialRelationKind() {
+      if (!parentRelationKind) {
+        return;
+      }
+      const selected = selectedLevelOption();
+      if (!selected || !selected.value) {
+        parentRelationKind.textContent = parentRelationKind.dataset.empty || "";
+        return;
+      }
+      const prefix = parentRelationKind.dataset.prefix || "";
+      parentRelationKind.textContent = prefix ? prefix + " " + selected.value : selected.value;
     }
 
     function selectedParentLevelCode() {
@@ -368,6 +382,7 @@
         clearSelectedParent();
         clearParentSuggestions();
       }
+      syncInitialRelationKind();
       syncSelectedParentCompatibility(true);
       syncParentHelp();
     }
@@ -466,10 +481,12 @@
       parentSearchHasResults = false;
       parentSearchConfirmedEmpty = false;
       clearParentSuggestions();
+      syncInitialRelationKind();
       syncSelectedParentCompatibility(true);
     });
     syncConfessionalLevels(false);
     syncSelectedParentCompatibility(false);
+    syncInitialRelationKind();
   }
 
   if (document.readyState === "loading") {

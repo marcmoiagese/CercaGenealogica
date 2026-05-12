@@ -646,6 +646,7 @@ type DB interface {
 	ListEntitatsReligioses() ([]EntitatReligiosa, error)
 	GetEntitatReligiosa(id int) (*EntitatReligiosa, error)
 	SaveEntitatReligiosa(e *EntitatReligiosa) (int, error)
+	SaveEntitatReligiosaWithInitialRelationsTx(plan *EntitatReligiosaInitialRelationsTxPlan) (*EntitatReligiosaInitialRelationsTxResult, error)
 	DeleteEntitatReligiosa(id int) error
 	UpdateEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error
 	ApproveEntitatReligiosaWithInitialParentTx(entityID, relationID int, motiu string, moderatorID int) error
@@ -1833,6 +1834,18 @@ type MunicipiEntitatReligiosa struct {
 	ModeratedAt        sql.NullTime
 	CreatedAt          sql.NullTime
 	UpdatedAt          sql.NullTime
+}
+
+type EntitatReligiosaInitialRelationsTxPlan struct {
+	Entitat           *EntitatReligiosa
+	ParentRelation    *EntitatReligiosaRelacio
+	TerritoryRelation *MunicipiEntitatReligiosa
+}
+
+type EntitatReligiosaInitialRelationsTxResult struct {
+	EntitatID           int
+	ParentRelationID    int
+	TerritoryRelationID int
 }
 
 type ArxiuEntitatReligiosa struct {

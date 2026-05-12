@@ -1209,6 +1209,9 @@ func (d *PostgreSQL) GetEntitatReligiosa(id int) (*EntitatReligiosa, error) {
 func (d *PostgreSQL) SaveEntitatReligiosa(e *EntitatReligiosa) (int, error) {
 	return postgresSaveEntitatReligiosa(d, e)
 }
+func (d *PostgreSQL) SaveEntitatReligiosaWithInitialRelationsTx(plan *EntitatReligiosaInitialRelationsTxPlan) (*EntitatReligiosaInitialRelationsTxResult, error) {
+	return postgresSaveEntitatReligiosaWithInitialRelationsTx(d, plan)
+}
 func (d *PostgreSQL) DeleteEntitatReligiosa(id int) error {
 	return postgresDeleteEntitatReligiosa(d, id)
 }

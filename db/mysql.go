@@ -855,6 +855,9 @@ func (d *MySQL) GetEntitatReligiosa(id int) (*EntitatReligiosa, error) {
 func (d *MySQL) SaveEntitatReligiosa(e *EntitatReligiosa) (int, error) {
 	return mysqlSaveEntitatReligiosa(d, e)
 }
+func (d *MySQL) SaveEntitatReligiosaWithInitialRelationsTx(plan *EntitatReligiosaInitialRelationsTxPlan) (*EntitatReligiosaInitialRelationsTxResult, error) {
+	return mysqlSaveEntitatReligiosaWithInitialRelationsTx(d, plan)
+}
 func (d *MySQL) DeleteEntitatReligiosa(id int) error {
 	return mysqlDeleteEntitatReligiosa(d, id)
 }

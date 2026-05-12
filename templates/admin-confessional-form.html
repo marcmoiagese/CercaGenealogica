@@ -192,6 +192,39 @@
                     <ul id="parent_id_suggestions" class="suggestions-list confessional-suggestions" aria-label="{{ t .Lang "common.suggestions" }}"></ul>
                     <p id="parent_id_help" class="muted" data-empty="{{ t .Lang "confessional.help.parents.choose_level" }}" data-none="{{ t .Lang "confessional.help.parents.none" }}" data-incompatible="{{ t .Lang "confessional.parent.incompatible" }}">{{ t .Lang "confessional.help.parents.choose_level" }}</p>
                 </div>
+                <section class="card card-seccio-interna">
+                    <header class="card-header">
+                        <h2>{{ t .Lang "confessional.initial_relations.title" }}</h2>
+                    </header>
+                    <div class="grup-camp">
+                        <label for="municipi_principal_label">{{ t .Lang "confessional.initial_relations.primary_municipality.label" }}</label>
+                        <div class="suggest-field">
+                            <input
+                                id="municipi_principal_label"
+                                type="text"
+                                value="{{ .Data.Form.PrimaryMunicipiLabel }}"
+                                placeholder="{{ t .Lang "municipis.search.placeholder" }}"
+                                autocomplete="off"
+                                data-api="/api/territori/municipis/suggest"
+                                data-empty-label="{{ t .Lang "municipis.search.empty" }}"
+                                data-hidden="municipi_principal_id"
+                                data-suggestions="municipi_principal_suggestions"
+                                data-suggest="1">
+                            <input id="municipi_principal_id" name="municipi_principal_id" type="hidden" value="{{ .Data.Form.PrimaryMunicipiID }}">
+                            <ul id="municipi_principal_suggestions" class="suggestions-list confessional-suggestions" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
+                        </div>
+                        <p class="muted">{{ t .Lang "confessional.initial_relations.primary_municipality.help" }}</p>
+                        {{ if .Data.Form.PrimaryMunicipiExisting }}<p class="muted">{{ t .Lang "confessional.initial_relations.primary_municipality.existing" }}</p>{{ end }}
+                    </div>
+                    <div class="grup-camp">
+                        <label for="initial_parent_relation_kind">{{ t .Lang "confessional.initial_relations.parent_relation_kind.label" }}</label>
+                        <p id="initial_parent_relation_kind" class="muted" data-empty="{{ t .Lang "confessional.initial_relations.parent_relation_kind.empty" }}" data-prefix="{{ t .Lang "confessional.initial_relations.parent_relation_kind.prefix" }}">{{ t .Lang "confessional.initial_relations.parent_relation_kind.empty" }}</p>
+                    </div>
+                    <div class="grup-camp">
+                        <label for="initial_relation_notes">{{ t .Lang "confessional.initial_relations.notes.label" }}</label>
+                        <textarea id="initial_relation_notes" name="initial_relation_notes">{{ .Data.Form.InitialRelationNotes }}</textarea>
+                    </div>
+                </section>
                 <div class="grup-camp">
                     <label for="pais_id">{{ t .Lang "confessional.field.country" }}</label>
                     <select id="pais_id" name="pais_id">
