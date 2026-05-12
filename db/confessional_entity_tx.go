@@ -57,32 +57,41 @@ func runEntitatReligiosaWithInitialRelationsTx(ops entitatReligiosaInitialRelati
 	}
 	result := &EntitatReligiosaInitialRelationsTxResult{EntitatID: entityID}
 
-	if plan.ParentRelation != nil {
-		rel := *plan.ParentRelation
-		if rel.EntitatDestiID == 0 {
-			rel.EntitatDestiID = entityID
-		}
-		result.ParentRelationID, err = insertEntitatReligiosaRelacioTx(tx, ops.q, &rel)
-		if err != nil {
-			return nil, err
-		}
+	result.ParentRelationID, err = saveInitialParentRelationTx(tx, ops.q, entityID, plan.ParentRelation)
+	if err != nil {
+		return nil, err
 	}
-
-	if plan.TerritoryRelation != nil {
-		rel := *plan.TerritoryRelation
-		if rel.EntitatReligiosaID == 0 {
-			rel.EntitatReligiosaID = entityID
-		}
-		result.TerritoryRelationID, err = insertMunicipiEntitatReligiosaTx(tx, ops.q, &rel)
-		if err != nil {
-			return nil, err
-		}
+	result.TerritoryRelationID, err = saveInitialTerritoryRelationTx(tx, ops.q, entityID, plan.TerritoryRelation)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, confessionalInitialRelationsTxWrap(ops.engine, "commit_tx", "entitat_religiosa", entityID, err)
 	}
 	return result, nil
+}
+
+func saveInitialParentRelationTx(tx *sql.Tx, q confessionalQueries, entityID int, rel *EntitatReligiosaRelacio) (int, error) {
+	if rel == nil {
+		return 0, nil
+	}
+	copy := *rel
+	if copy.EntitatDestiID == 0 {
+		copy.EntitatDestiID = entityID
+	}
+	return insertEntitatReligiosaRelacioTx(tx, q, &copy)
+}
+
+func saveInitialTerritoryRelationTx(tx *sql.Tx, q confessionalQueries, entityID int, rel *MunicipiEntitatReligiosa) (int, error) {
+	if rel == nil {
+		return 0, nil
+	}
+	copy := *rel
+	if copy.EntitatReligiosaID == 0 {
+		copy.EntitatReligiosaID = entityID
+	}
+	return insertMunicipiEntitatReligiosaTx(tx, q, &copy)
 }
 
 func saveEntitatReligiosaTx(tx *sql.Tx, q confessionalQueries, e *EntitatReligiosa) (int, error) {

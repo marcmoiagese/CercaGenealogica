@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"database/sql"
 	"net/http"
 	"strconv"
 	"strings"
@@ -133,6 +134,9 @@ func TestF354U13ValidatesInitialRelationsAndKeepsAutocompleteContract(t *testing
 			t.Fatalf("el formulari no ha de contenir %q; body=%s", banned, formBody)
 		}
 	}
+	if strings.Count(formBody, `id="municipi_principal_id"`) != 1 {
+		t.Fatalf("el formulari ha de tenir un sol hidden de municipi principal; body=%s", formBody)
+	}
 
 	badMunicipiName := "Parroquia invalid municipi F35-4U13 " + suffix
 	badMunicipi := f353ZEntityForm(badMunicipiName, "f354u13_bad_mun_"+suffix, 0)
@@ -150,6 +154,14 @@ func TestF354U13ValidatesInitialRelationsAndKeepsAutocompleteContract(t *testing
 	body = f353YPostConfessional(t, app.AdminSaveConfessional, session, badParent)
 	if !strings.Contains(body, "entitat pare indicada no existeix") {
 		t.Fatalf("cal error de pare invalid; body=%s", body)
+	}
+
+	unsafeReturnTo := f353ZEntityForm("Parroquia return_to F35-4U13 "+suffix, "f354u13_bad_return_"+suffix, 0)
+	unsafeReturnTo.Set("return_to", "https://evil.example/out")
+	unsafeReturnTo.Set("municipi_principal_id", strconv.Itoa(f353YCreateMunicipi(t, database, "Municipi return_to F35-4U13 "+suffix)))
+	rr := f353ZPostConfessionalRedirect(t, app.AdminSaveConfessional, session, unsafeReturnTo)
+	if loc := rr.Header().Get("Location"); strings.HasPrefix(loc, "http://") || strings.HasPrefix(loc, "https://") {
+		t.Fatalf("return_to insegur no s'ha de respectar: %s", loc)
 	}
 }
 
@@ -193,11 +205,55 @@ func TestF354U13TemplateAndLocalesContract(t *testing.T) {
 	}
 }
 
+func TestF354U13PrimaryMunicipiIgnoresNucliRelations(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u13_ignore_nucli.sqlite3")
+	session := f353YAdminSession(t, database, "f354u13_ignore_nucli")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	municipiName := "Municipi nucli F35-4U13 " + suffix
+	municipiID := f353YCreateMunicipi(t, database, municipiName)
+	nucliID, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            "Nucli F35-4U13 " + suffix,
+		Tipus:          "nucli_urba",
+		MunicipiID:     sql.NullInt64{Int64: int64(municipiID), Valid: true},
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	})
+	if err != nil {
+		t.Fatalf("CreateMunicipi nucli: %v", err)
+	}
+	entityID := f353Z8SaveEntity(t, database, "f354u13_nucli_"+suffix, "Parroquia nucli F35-4U13 "+suffix, "parroquia", "publicat")
+	_, err = database.SaveMunicipiEntitatReligiosa(&db.MunicipiEntitatReligiosa{
+		MunicipiID:         municipiID,
+		NucliID:            sql.NullInt64{Int64: int64(nucliID), Valid: true},
+		EntitatReligiosaID: entityID,
+		TipusRelacio:       "parroquia",
+		ModeracioEstat:     "publicat",
+	})
+	if err != nil {
+		t.Fatalf("SaveMunicipiEntitatReligiosa nucli: %v", err)
+	}
+
+	entity, err := database.GetEntitatReligiosa(entityID)
+	if err != nil || entity == nil {
+		t.Fatalf("GetEntitatReligiosa: %v", err)
+	}
+	form := f353Z12EntityEditForm(entityID, entity.Codi, entity.Nom, entity.NivellConfessionalCodi, 0)
+	form.Set("parent_id", "")
+	form.Set("municipi_principal_id", strconv.Itoa(municipiID))
+	form.Set("municipi_principal_label", municipiName)
+	_ = f353ZPostConfessionalRedirect(t, app.AdminSaveConfessional, session, form)
+
+	if got := f354U13CountPrimaryMunicipiRelations(t, database, entityID, municipiID); got != 1 {
+		t.Fatalf("la relacio amb nucli no ha de bloquejar la creacio del municipi principal; got=%d", got)
+	}
+}
+
 func f354U13FindPrimaryMunicipiRelation(t *testing.T, database db.DB, entityID, municipiID int) *db.MunicipiEntitatReligiosa {
 	t.Helper()
-	rels, err := database.ListMunicipiEntitatsReligioses(0)
+	rels, err := database.ListMunicipiEntitatsReligiosesByEntitat(entityID)
 	if err != nil {
-		t.Fatalf("ListMunicipiEntitatsReligioses: %v", err)
+		t.Fatalf("ListMunicipiEntitatsReligiosesByEntitat: %v", err)
 	}
 	for i := range rels {
 		if rels[i].EntitatReligiosaID == entityID && rels[i].MunicipiID == municipiID && !rels[i].NucliID.Valid {
@@ -209,9 +265,9 @@ func f354U13FindPrimaryMunicipiRelation(t *testing.T, database db.DB, entityID, 
 
 func f354U13CountPrimaryMunicipiRelations(t *testing.T, database db.DB, entityID, municipiID int) int {
 	t.Helper()
-	rels, err := database.ListMunicipiEntitatsReligioses(0)
+	rels, err := database.ListMunicipiEntitatsReligiosesByEntitat(entityID)
 	if err != nil {
-		t.Fatalf("ListMunicipiEntitatsReligioses: %v", err)
+		t.Fatalf("ListMunicipiEntitatsReligiosesByEntitat: %v", err)
 	}
 	total := 0
 	for _, rel := range rels {

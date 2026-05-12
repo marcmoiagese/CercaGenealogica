@@ -652,11 +652,13 @@ type DB interface {
 	ApproveEntitatReligiosaWithInitialParentTx(entityID, relationID int, motiu string, moderatorID int) error
 	RejectEntitatReligiosaWithInitialParentTx(entityID, relationID int, motiu string, moderatorID int) error
 	ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error)
+	ListMunicipiEntitatsReligiosesByEntitat(entitatReligiosaID int) ([]MunicipiEntitatReligiosa, error)
 	GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error)
 	SaveMunicipiEntitatReligiosa(rel *MunicipiEntitatReligiosa) (int, error)
 	DeleteMunicipiEntitatReligiosa(id int) error
 	UpdateMunicipiEntitatReligiosaModeracio(id int, estat, motiu string, moderatorID int) error
 	ListEntitatReligiosaRelacions() ([]EntitatReligiosaRelacio, error)
+	HasEntitatReligiosaRelacio(parentID, childID int) (bool, error)
 	GetEntitatReligiosaRelacio(id int) (*EntitatReligiosaRelacio, error)
 	SaveEntitatReligiosaRelacio(rel *EntitatReligiosaRelacio) (int, error)
 	DeleteEntitatReligiosaRelacio(id int) error

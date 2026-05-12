@@ -35,6 +35,7 @@ type confessionalQueries struct {
 
 	listRelacionsAll        string
 	listRelacionsByMunicipi string
+	listRelacionsByEntitat  string
 	getRelacio              string
 	insertRelacio           string
 	updateRelacio           string
@@ -42,6 +43,7 @@ type confessionalQueries struct {
 	updateRelacioModeracio  string
 
 	listEntitatRelacions          string
+	existsEntitatRelacio          string
 	getEntitatRelacio             string
 	insertEntitatRelacio          string
 	updateEntitatRelacio          string
@@ -77,12 +79,14 @@ func sqliteConfessionalQueries() confessionalQueries {
 		updateEntitatModeracio:        `UPDATE entitat_religiosa SET moderation_status=?, moderation_notes=?, moderated_by=?, moderated_at=datetime('now'), updated_at=datetime('now') WHERE id=?`,
 		listRelacionsAll:              `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, COALESCE(moderation_notes, ''), created_by, updated_by, moderated_by, moderated_at, created_at, updated_at FROM municipi_entitat_religiosa ORDER BY municipi_id, nucli_id, any_inici, id`,
 		listRelacionsByMunicipi:       `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, COALESCE(moderation_notes, ''), created_by, updated_by, moderated_by, moderated_at, created_at, updated_at FROM municipi_entitat_religiosa WHERE municipi_id = ? ORDER BY municipi_id, nucli_id, any_inici, id`,
+		listRelacionsByEntitat:        `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, COALESCE(moderation_notes, ''), created_by, updated_by, moderated_by, moderated_at, created_at, updated_at FROM municipi_entitat_religiosa WHERE entitat_religiosa_id = ? ORDER BY municipi_id, nucli_id, any_inici, id`,
 		getRelacio:                    `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, COALESCE(moderation_notes, ''), created_by, updated_by, moderated_by, moderated_at, created_at, updated_at FROM municipi_entitat_religiosa WHERE id = ?`,
 		insertRelacio:                 `INSERT INTO municipi_entitat_religiosa (municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, observacions, moderation_status, moderation_notes, created_by, updated_by, moderated_by, moderated_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
 		updateRelacio:                 `UPDATE municipi_entitat_religiosa SET municipi_id=?, nucli_id=?, entitat_religiosa_id=?, tipus_relacio=?, any_inici=?, any_fi=?, observacions=?, moderation_status=?, moderation_notes=?, created_by=?, updated_by=?, moderated_by=?, moderated_at=?, updated_at=datetime('now') WHERE id=?`,
 		deleteRelacio:                 `DELETE FROM municipi_entitat_religiosa WHERE id = ?`,
 		updateRelacioModeracio:        `UPDATE municipi_entitat_religiosa SET moderation_status=?, moderation_notes=?, moderated_by=?, moderated_at=datetime('now'), updated_at=datetime('now') WHERE id=?`,
 		listEntitatRelacions:          `SELECT id, entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, COALESCE(observacions, ''), moderation_status, COALESCE(moderation_notes, ''), created_by, updated_by, moderated_by, moderated_at, created_at, updated_at FROM entitat_religiosa_relacio ORDER BY entitat_origen_id, entitat_desti_id, any_inici, id`,
+		existsEntitatRelacio:          `SELECT 1 FROM entitat_religiosa_relacio WHERE entitat_origen_id = ? AND entitat_desti_id = ? AND moderation_status <> 'rebutjat' LIMIT 1`,
 		getEntitatRelacio:             `SELECT id, entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, COALESCE(observacions, ''), moderation_status, COALESCE(moderation_notes, ''), created_by, updated_by, moderated_by, moderated_at, created_at, updated_at FROM entitat_religiosa_relacio WHERE id = ?`,
 		insertEntitatRelacio:          `INSERT INTO entitat_religiosa_relacio (entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, observacions, moderation_status, moderation_notes, created_by, updated_by, moderated_by, moderated_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
 		updateEntitatRelacio:          `UPDATE entitat_religiosa_relacio SET entitat_origen_id=?, entitat_desti_id=?, tipus_relacio=?, any_inici=?, any_fi=?, font_id=?, observacions=?, moderation_status=?, moderation_notes=?, created_by=?, updated_by=?, moderated_by=?, moderated_at=?, updated_at=datetime('now') WHERE id=?`,
@@ -139,12 +143,14 @@ func postgresConfessionalQueries() confessionalQueries {
 		updateEntitatModeracio:        `UPDATE entitat_religiosa SET moderation_status=$1, moderation_notes=$2, moderated_by=$3, moderated_at=NOW(), updated_at=NOW() WHERE id=$4`,
 		listRelacionsAll:              `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, COALESCE(moderation_notes, ''), created_by, updated_by, moderated_by, moderated_at, created_at, updated_at FROM municipi_entitat_religiosa ORDER BY municipi_id, nucli_id, any_inici, id`,
 		listRelacionsByMunicipi:       `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, COALESCE(moderation_notes, ''), created_by, updated_by, moderated_by, moderated_at, created_at, updated_at FROM municipi_entitat_religiosa WHERE municipi_id = $1 ORDER BY municipi_id, nucli_id, any_inici, id`,
+		listRelacionsByEntitat:        `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, COALESCE(moderation_notes, ''), created_by, updated_by, moderated_by, moderated_at, created_at, updated_at FROM municipi_entitat_religiosa WHERE entitat_religiosa_id = $1 ORDER BY municipi_id, nucli_id, any_inici, id`,
 		getRelacio:                    `SELECT id, municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, COALESCE(observacions, ''), moderation_status, COALESCE(moderation_notes, ''), created_by, updated_by, moderated_by, moderated_at, created_at, updated_at FROM municipi_entitat_religiosa WHERE id = $1`,
 		insertRelacio:                 `INSERT INTO municipi_entitat_religiosa (municipi_id, nucli_id, entitat_religiosa_id, tipus_relacio, any_inici, any_fi, observacions, moderation_status, moderation_notes, created_by, updated_by, moderated_by, moderated_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW()) RETURNING id`,
 		updateRelacio:                 `UPDATE municipi_entitat_religiosa SET municipi_id=$1, nucli_id=$2, entitat_religiosa_id=$3, tipus_relacio=$4, any_inici=$5, any_fi=$6, observacions=$7, moderation_status=$8, moderation_notes=$9, created_by=$10, updated_by=$11, moderated_by=$12, moderated_at=$13, updated_at=NOW() WHERE id=$14`,
 		deleteRelacio:                 `DELETE FROM municipi_entitat_religiosa WHERE id = $1`,
 		updateRelacioModeracio:        `UPDATE municipi_entitat_religiosa SET moderation_status=$1, moderation_notes=$2, moderated_by=$3, moderated_at=NOW(), updated_at=NOW() WHERE id=$4`,
 		listEntitatRelacions:          `SELECT id, entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, COALESCE(observacions, ''), moderation_status, COALESCE(moderation_notes, ''), created_by, updated_by, moderated_by, moderated_at, created_at, updated_at FROM entitat_religiosa_relacio ORDER BY entitat_origen_id, entitat_desti_id, any_inici, id`,
+		existsEntitatRelacio:          `SELECT 1 FROM entitat_religiosa_relacio WHERE entitat_origen_id = $1 AND entitat_desti_id = $2 AND moderation_status <> 'rebutjat' LIMIT 1`,
 		getEntitatRelacio:             `SELECT id, entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, COALESCE(observacions, ''), moderation_status, COALESCE(moderation_notes, ''), created_by, updated_by, moderated_by, moderated_at, created_at, updated_at FROM entitat_religiosa_relacio WHERE id = $1`,
 		insertEntitatRelacio:          `INSERT INTO entitat_religiosa_relacio (entitat_origen_id, entitat_desti_id, tipus_relacio, any_inici, any_fi, font_id, observacions, moderation_status, moderation_notes, created_by, updated_by, moderated_by, moderated_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW()) RETURNING id`,
 		updateEntitatRelacio:          `UPDATE entitat_religiosa_relacio SET entitat_origen_id=$1, entitat_desti_id=$2, tipus_relacio=$3, any_inici=$4, any_fi=$5, font_id=$6, observacions=$7, moderation_status=$8, moderation_notes=$9, created_by=$10, updated_by=$11, moderated_by=$12, moderated_at=$13, updated_at=NOW() WHERE id=$14`,
@@ -322,11 +328,20 @@ func mysqlDeleteEntitatReligiosa(d *MySQL, id int) error {
 func sqliteListMunicipiEntitatsReligioses(d *SQLite, municipiID int) ([]MunicipiEntitatReligiosa, error) {
 	return listMunicipiEntitatsReligioses(d.Conn, sqliteConfessionalQueries(), municipiID)
 }
+func sqliteListMunicipiEntitatsReligiosesByEntitat(d *SQLite, entitatReligiosaID int) ([]MunicipiEntitatReligiosa, error) {
+	return listMunicipiEntitatsReligiosesByEntitat(d.Conn, sqliteConfessionalQueries(), entitatReligiosaID)
+}
 func postgresListMunicipiEntitatsReligioses(d *PostgreSQL, municipiID int) ([]MunicipiEntitatReligiosa, error) {
 	return listMunicipiEntitatsReligioses(d.Conn, postgresConfessionalQueries(), municipiID)
 }
+func postgresListMunicipiEntitatsReligiosesByEntitat(d *PostgreSQL, entitatReligiosaID int) ([]MunicipiEntitatReligiosa, error) {
+	return listMunicipiEntitatsReligiosesByEntitat(d.Conn, postgresConfessionalQueries(), entitatReligiosaID)
+}
 func mysqlListMunicipiEntitatsReligioses(d *MySQL, municipiID int) ([]MunicipiEntitatReligiosa, error) {
 	return listMunicipiEntitatsReligioses(d.Conn, mysqlConfessionalQueries(), municipiID)
+}
+func mysqlListMunicipiEntitatsReligiosesByEntitat(d *MySQL, entitatReligiosaID int) ([]MunicipiEntitatReligiosa, error) {
+	return listMunicipiEntitatsReligiosesByEntitat(d.Conn, mysqlConfessionalQueries(), entitatReligiosaID)
 }
 func sqliteGetMunicipiEntitatReligiosa(d *SQLite, id int) (*MunicipiEntitatReligiosa, error) {
 	return getMunicipiEntitatReligiosa(d.Conn, sqliteConfessionalQueries(), id)
@@ -371,11 +386,20 @@ func mysqlDeleteMunicipiEntitatReligiosa(d *MySQL, id int) error {
 func sqliteListEntitatReligiosaRelacions(d *SQLite) ([]EntitatReligiosaRelacio, error) {
 	return listEntitatReligiosaRelacions(d.Conn, sqliteConfessionalQueries())
 }
+func sqliteHasEntitatReligiosaRelacio(d *SQLite, parentID, childID int) (bool, error) {
+	return hasEntitatReligiosaRelacio(d.Conn, sqliteConfessionalQueries(), parentID, childID)
+}
 func postgresListEntitatReligiosaRelacions(d *PostgreSQL) ([]EntitatReligiosaRelacio, error) {
 	return listEntitatReligiosaRelacions(d.Conn, postgresConfessionalQueries())
 }
+func postgresHasEntitatReligiosaRelacio(d *PostgreSQL, parentID, childID int) (bool, error) {
+	return hasEntitatReligiosaRelacio(d.Conn, postgresConfessionalQueries(), parentID, childID)
+}
 func mysqlListEntitatReligiosaRelacions(d *MySQL) ([]EntitatReligiosaRelacio, error) {
 	return listEntitatReligiosaRelacions(d.Conn, mysqlConfessionalQueries())
+}
+func mysqlHasEntitatReligiosaRelacio(d *MySQL, parentID, childID int) (bool, error) {
+	return hasEntitatReligiosaRelacio(d.Conn, mysqlConfessionalQueries(), parentID, childID)
 }
 func sqliteGetEntitatReligiosaRelacio(d *SQLite, id int) (*EntitatReligiosaRelacio, error) {
 	return getEntitatReligiosaRelacio(d.Conn, sqliteConfessionalQueries(), id)
@@ -695,6 +719,26 @@ func listMunicipiEntitatsReligioses(conn *sql.DB, q confessionalQueries, municip
 	return out, nil
 }
 
+func listMunicipiEntitatsReligiosesByEntitat(conn *sql.DB, q confessionalQueries, entitatReligiosaID int) ([]MunicipiEntitatReligiosa, error) {
+	rows, err := conn.Query(q.listRelacionsByEntitat, entitatReligiosaID)
+	if err != nil {
+		return nil, confessionalWrap(q, "list_municipi_entitat_religiosa_by_entitat", "municipi_entitat_religiosa", entitatReligiosaID, err)
+	}
+	defer rows.Close()
+	var out []MunicipiEntitatReligiosa
+	for rows.Next() {
+		item, err := scanRelacio(rows)
+		if err != nil {
+			return nil, confessionalWrap(q, "scan_municipi_entitat_religiosa_by_entitat", "municipi_entitat_religiosa", entitatReligiosaID, err)
+		}
+		out = append(out, *item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, confessionalWrap(q, "rows_municipi_entitat_religiosa_by_entitat", "municipi_entitat_religiosa", entitatReligiosaID, err)
+	}
+	return out, nil
+}
+
 func getMunicipiEntitatReligiosa(conn *sql.DB, q confessionalQueries, id int) (*MunicipiEntitatReligiosa, error) {
 	item, err := scanRelacio(conn.QueryRow(q.getRelacio, id))
 	if err != nil {
@@ -744,6 +788,18 @@ func listEntitatReligiosaRelacions(conn *sql.DB, q confessionalQueries) ([]Entit
 		return nil, confessionalWrap(q, "rows_entitat_religiosa_relacio", "entitat_religiosa_relacio", 0, err)
 	}
 	return out, nil
+}
+
+func hasEntitatReligiosaRelacio(conn *sql.DB, q confessionalQueries, parentID, childID int) (bool, error) {
+	var found int
+	err := conn.QueryRow(q.existsEntitatRelacio, parentID, childID).Scan(&found)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, confessionalWrap(q, "exists_entitat_religiosa_relacio", "entitat_religiosa_relacio", childID, err)
+	}
+	return true, nil
 }
 
 func getEntitatReligiosaRelacio(conn *sql.DB, q confessionalQueries, id int) (*EntitatReligiosaRelacio, error) {

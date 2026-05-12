@@ -1227,6 +1227,9 @@ func (d *PostgreSQL) RejectEntitatReligiosaWithInitialParentTx(entityID, relatio
 func (d *PostgreSQL) ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
 	return postgresListMunicipiEntitatsReligioses(d, municipiID)
 }
+func (d *PostgreSQL) ListMunicipiEntitatsReligiosesByEntitat(entitatReligiosaID int) ([]MunicipiEntitatReligiosa, error) {
+	return postgresListMunicipiEntitatsReligiosesByEntitat(d, entitatReligiosaID)
+}
 func (d *PostgreSQL) GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error) {
 	return postgresGetMunicipiEntitatReligiosa(d, id)
 }
@@ -1241,6 +1244,9 @@ func (d *PostgreSQL) UpdateMunicipiEntitatReligiosaModeracio(id int, estat, moti
 }
 func (d *PostgreSQL) ListEntitatReligiosaRelacions() ([]EntitatReligiosaRelacio, error) {
 	return postgresListEntitatReligiosaRelacions(d)
+}
+func (d *PostgreSQL) HasEntitatReligiosaRelacio(parentID, childID int) (bool, error) {
+	return postgresHasEntitatReligiosaRelacio(d, parentID, childID)
 }
 func (d *PostgreSQL) GetEntitatReligiosaRelacio(id int) (*EntitatReligiosaRelacio, error) {
 	return postgresGetEntitatReligiosaRelacio(d, id)

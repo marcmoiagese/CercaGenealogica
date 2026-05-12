@@ -873,6 +873,9 @@ func (d *MySQL) RejectEntitatReligiosaWithInitialParentTx(entityID, relationID i
 func (d *MySQL) ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
 	return mysqlListMunicipiEntitatsReligioses(d, municipiID)
 }
+func (d *MySQL) ListMunicipiEntitatsReligiosesByEntitat(entitatReligiosaID int) ([]MunicipiEntitatReligiosa, error) {
+	return mysqlListMunicipiEntitatsReligiosesByEntitat(d, entitatReligiosaID)
+}
 func (d *MySQL) GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error) {
 	return mysqlGetMunicipiEntitatReligiosa(d, id)
 }
@@ -887,6 +890,9 @@ func (d *MySQL) UpdateMunicipiEntitatReligiosaModeracio(id int, estat, motiu str
 }
 func (d *MySQL) ListEntitatReligiosaRelacions() ([]EntitatReligiosaRelacio, error) {
 	return mysqlListEntitatReligiosaRelacions(d)
+}
+func (d *MySQL) HasEntitatReligiosaRelacio(parentID, childID int) (bool, error) {
+	return mysqlHasEntitatReligiosaRelacio(d, parentID, childID)
 }
 func (d *MySQL) GetEntitatReligiosaRelacio(id int) (*EntitatReligiosaRelacio, error) {
 	return mysqlGetEntitatReligiosaRelacio(d, id)

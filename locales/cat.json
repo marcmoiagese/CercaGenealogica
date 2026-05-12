@@ -3965,7 +3965,7 @@
   "confessional.error.parent_level_incompatible": "El nivell de l'entitat pare no es compatible amb el nivell/divisio de la filla.",
   "confessional.initial_relations.primary_municipality.invalid": "El municipi principal indicat no existeix o no es un municipi valid.",
   "confessional.initial_relations.primary_municipality.unsupported": "Aquest nivell/divisio no admet municipi principal en el formulari.",
-  "confessional.initial_relations.primary_municipality.change_requires_advanced": "Per canviar el municipi principal existent, fes servir les relacions territorials avancades.",
+  "confessional.initial_relations.primary_municipality.change_requires_advanced": "Per canviar el municipi principal existent, fes servir les relacions territorials avançades.",
   "confessional.help.levels.choose_religion": "Selecciona primer una religio/confessio concreta per veure els nivells/divisions disponibles.",
   "confessional.help.levels.none_for_religion": "Aquesta religio/confessio no te nivells/divisions definits al cataleg.",
   "confessional.help.parents.choose_level": "Selecciona una religio/confessio i un nivell/divisio per veure les entitats pare compatibles.",

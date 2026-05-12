@@ -367,7 +367,7 @@ func (a *App) AdminEditConfessional(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data := confessionalFormData{Kind: kind, ReturnURL: strings.TrimSpace(r.URL.Query().Get("return_to"))}
+	data := confessionalFormData{Kind: kind, ReturnURL: safeReturnTo(r.URL.Query().Get("return_to"), confessionalSectionURL(section, ""))}
 	var err error
 	switch kind {
 	case "model":
@@ -416,6 +416,7 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 	}
 	lang := ResolveLangForUser(r, user.PreferredLang)
 	data, errMsg := a.parseConfessionalForm(kind, id, r, lang)
+	returnURL := confessionalReturnURL(section, data.ReturnURL, id)
 	if errMsg != "" {
 		data.Error = errMsg
 		a.renderConfessionalForm(w, r, user, data)
@@ -471,17 +472,9 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 			return
 		} else if proposed {
 			if err := a.createConfessionalEntityInitialRelations(data, id, user.ID, needsParentRelation, needsPrimaryMunicipiRelation); err != nil {
-				if needsPrimaryMunicipiRelation {
-					data.Error = "No s'ha pogut crear la relacio territorial principal."
-				} else {
-					data.Error = "No s'ha pogut crear la relacio jerarquica."
-				}
+				data.Error = confessionalInitialRelationsError(needsParentRelation, needsPrimaryMunicipiRelation, false)
 				a.renderConfessionalForm(w, r, user, data)
 				return
-			}
-			returnURL := data.ReturnURL
-			if returnURL == "" {
-				returnURL = fmt.Sprintf("/confessional/entitats/%d?notice=pending", id)
 			}
 			http.Redirect(w, r, returnURL, http.StatusSeeOther)
 			return
@@ -490,17 +483,9 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 	if kind == "entitat" && data.Entitat != nil && (needsParentRelation || needsPrimaryMunicipiRelation) {
 		savedID, err := a.saveConfessionalEntityWithInitialRelations(data, user.ID, needsParentRelation, needsPrimaryMunicipiRelation)
 		if err != nil {
-			if needsPrimaryMunicipiRelation {
-				data.Error = "No s'ha pogut desar l'entitat amb la relacio territorial principal."
-			} else {
-				data.Error = "No s'ha pogut desar l'entitat amb la relacio jerarquica."
-			}
+			data.Error = confessionalInitialRelationsError(needsParentRelation, needsPrimaryMunicipiRelation, true)
 			a.renderConfessionalForm(w, r, user, data)
 			return
-		}
-		returnURL := data.ReturnURL
-		if returnURL == "" {
-			returnURL = confessionalSectionURL(section, "notice=saved")
 		}
 		if data.Entitat.ID == 0 {
 			data.Entitat.ID = savedID
@@ -512,10 +497,6 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 		data.Error = "No s'ha pogut desar el registre confessional."
 		a.renderConfessionalForm(w, r, user, data)
 		return
-	}
-	returnURL := data.ReturnURL
-	if returnURL == "" {
-		returnURL = confessionalSectionURL(section, "notice=saved")
 	}
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
 }
@@ -782,11 +763,9 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 			}
 		}
 		if data.PrimaryMunicipiID == 0 && data.Entitat != nil && data.Entitat.ID > 0 {
-			if rels, err := a.DB.ListMunicipiEntitatsReligioses(0); err == nil {
-				if primary := findConfessionalPrimaryMunicipiRelation(data.Entitat.ID, rels); primary != nil {
-					data.PrimaryMunicipiID = primary.MunicipiID
-					data.PrimaryMunicipiExisting = true
-				}
+			if primary := a.confessionalPrimaryMunicipiForEntity(data.Entitat.ID); primary != nil {
+				data.PrimaryMunicipiID = primary.MunicipiID
+				data.PrimaryMunicipiExisting = true
 			}
 		}
 		if data.PrimaryMunicipiID > 0 && data.PrimaryMunicipiLabel == "" {
@@ -825,7 +804,7 @@ func (a *App) renderConfessionalForm(w http.ResponseWriter, r *http.Request, use
 }
 
 func (a *App) parseConfessionalForm(kind string, id int, r *http.Request, lang string) (confessionalFormData, string) {
-	data := confessionalFormData{Kind: kind, IsNew: id == 0, ReturnURL: strings.TrimSpace(r.FormValue("return_to"))}
+	data := confessionalFormData{Kind: kind, IsNew: id == 0, ReturnURL: safeReturnTo(r.FormValue("return_to"), confessionalSectionURL(confessionalSectionMust(kind), ""))}
 	estat := normalizeConfessionalEstat(r.FormValue("estat"))
 	status := a.confessionalModerationStatusForSave(kind, id)
 	switch kind {
@@ -1617,7 +1596,7 @@ func (a *App) createConfessionalEntityInitialRelations(data confessionalFormData
 		}
 	}
 	if needsPrimaryMunicipiRelation {
-		if err := a.createConfessionalPrimaryMunicipiRelation(data.Entitat, entityID, userID, data.PrimaryMunicipiID, data.InitialRelationNotes); err != nil {
+		if err := a.createConfessionalPrimaryMunicipiRelation(data.Entitat, entityID, userID, data.PrimaryMunicipiID, data.InitialRelationNotes, true); err != nil {
 			return err
 		}
 	}
@@ -1649,15 +1628,14 @@ func (a *App) createConfessionalParentRelation(entitat *db.EntitatReligiosa, chi
 	return err
 }
 
-func (a *App) createConfessionalPrimaryMunicipiRelation(entitat *db.EntitatReligiosa, entityID, userID, municipiID int, notes string) error {
+func (a *App) createConfessionalPrimaryMunicipiRelation(entitat *db.EntitatReligiosa, entityID, userID, municipiID int, notes string, needsRelation bool) error {
 	if entitat == nil || entityID == 0 || municipiID == 0 {
 		return nil
 	}
-	needsRelation, err := a.needsConfessionalPrimaryMunicipiRelation(entityID, municipiID)
-	if err != nil || !needsRelation {
-		return err
+	if !needsRelation {
+		return nil
 	}
-	_, err = a.DB.SaveMunicipiEntitatReligiosa(a.buildConfessionalPrimaryMunicipiRelation(entitat, entityID, userID, municipiID, notes))
+	_, err := a.DB.SaveMunicipiEntitatReligiosa(a.buildConfessionalPrimaryMunicipiRelation(entitat, entityID, userID, municipiID, notes))
 	return err
 }
 
@@ -1665,23 +1643,18 @@ func (a *App) needsConfessionalParentRelation(parentID, childID int) (bool, erro
 	if parentID <= 0 || childID <= 0 {
 		return false, nil
 	}
-	rels, err := a.DB.ListEntitatReligiosaRelacions()
+	hasRelation, err := a.DB.HasEntitatReligiosaRelacio(parentID, childID)
 	if err != nil {
 		return false, err
 	}
-	for _, rel := range rels {
-		if rel.EntitatOrigenID == parentID && rel.EntitatDestiID == childID && rel.ModeracioEstat != "rebutjat" {
-			return false, nil
-		}
-	}
-	return true, nil
+	return !hasRelation, nil
 }
 
 func (a *App) needsConfessionalPrimaryMunicipiRelation(entityID, municipiID int) (bool, error) {
 	if entityID <= 0 || municipiID <= 0 {
 		return false, nil
 	}
-	rels, err := a.DB.ListMunicipiEntitatsReligioses(0)
+	rels, err := a.DB.ListMunicipiEntitatsReligiosesByEntitat(entityID)
 	if err != nil {
 		return false, err
 	}
@@ -1697,7 +1670,7 @@ func (a *App) needsConfessionalPrimaryMunicipiRelation(entityID, municipiID int)
 }
 
 func (a *App) confessionalPrimaryMunicipiForEntity(entityID int) *db.MunicipiEntitatReligiosa {
-	rels, err := a.DB.ListMunicipiEntitatsReligioses(0)
+	rels, err := a.DB.ListMunicipiEntitatsReligiosesByEntitat(entityID)
 	if err != nil {
 		return nil
 	}
@@ -1706,39 +1679,44 @@ func (a *App) confessionalPrimaryMunicipiForEntity(entityID int) *db.MunicipiEnt
 
 func findConfessionalPrimaryMunicipiRelation(entityID int, rels []db.MunicipiEntitatReligiosa) *db.MunicipiEntitatReligiosa {
 	var pendingNoNucli *db.MunicipiEntitatReligiosa
-	var publishedAny *db.MunicipiEntitatReligiosa
-	var pendingAny *db.MunicipiEntitatReligiosa
 	for i := range rels {
 		rel := rels[i]
-		if rel.EntitatReligiosaID != entityID || rel.ModeracioEstat == "rebutjat" {
+		if rel.EntitatReligiosaID != entityID || rel.ModeracioEstat == "rebutjat" || rel.NucliID.Valid {
 			continue
 		}
-		if !rel.NucliID.Valid {
-			if rel.ModeracioEstat == "publicat" {
-				copy := rel
-				return &copy
-			}
-			if pendingNoNucli == nil {
-				copy := rel
-				pendingNoNucli = &copy
-			}
-		}
-		if rel.ModeracioEstat == "publicat" && publishedAny == nil {
+		if rel.ModeracioEstat == "publicat" {
 			copy := rel
-			publishedAny = &copy
+			return &copy
 		}
-		if pendingAny == nil {
+		if pendingNoNucli == nil {
 			copy := rel
-			pendingAny = &copy
+			pendingNoNucli = &copy
 		}
 	}
-	if pendingNoNucli != nil {
-		return pendingNoNucli
+	return pendingNoNucli
+}
+
+func confessionalReturnURL(section confessionalSection, raw string, entityID int) string {
+	fallback := confessionalSectionURL(section, "notice=saved")
+	if section.Kind == "entitat" && entityID > 0 {
+		fallback = fmt.Sprintf("/confessional/entitats/%d?notice=pending", entityID)
 	}
-	if publishedAny != nil {
-		return publishedAny
+	return safeReturnTo(raw, fallback)
+}
+
+func confessionalInitialRelationsError(needsParentRelation, needsPrimaryMunicipiRelation, duringSave bool) string {
+	action := "crear"
+	if duringSave {
+		action = "desar"
 	}
-	return pendingAny
+	switch {
+	case needsParentRelation && needsPrimaryMunicipiRelation:
+		return "No s'ha pogut " + action + " l'entitat amb la relacio jerarquica i la relacio territorial principal."
+	case needsPrimaryMunicipiRelation:
+		return "No s'ha pogut " + action + " l'entitat amb la relacio territorial principal."
+	default:
+		return "No s'ha pogut " + action + " l'entitat amb la relacio jerarquica."
+	}
 }
 
 func (a *App) buildConfessionalParentRelation(entitat *db.EntitatReligiosa, childID, userID int, notes string) *db.EntitatReligiosaRelacio {

@@ -900,6 +900,9 @@ func (d *SQLite) RejectEntitatReligiosaWithInitialParentTx(entityID, relationID 
 func (d *SQLite) ListMunicipiEntitatsReligioses(municipiID int) ([]MunicipiEntitatReligiosa, error) {
 	return sqliteListMunicipiEntitatsReligioses(d, municipiID)
 }
+func (d *SQLite) ListMunicipiEntitatsReligiosesByEntitat(entitatReligiosaID int) ([]MunicipiEntitatReligiosa, error) {
+	return sqliteListMunicipiEntitatsReligiosesByEntitat(d, entitatReligiosaID)
+}
 func (d *SQLite) GetMunicipiEntitatReligiosa(id int) (*MunicipiEntitatReligiosa, error) {
 	return sqliteGetMunicipiEntitatReligiosa(d, id)
 }
@@ -914,6 +917,9 @@ func (d *SQLite) UpdateMunicipiEntitatReligiosaModeracio(id int, estat, motiu st
 }
 func (d *SQLite) ListEntitatReligiosaRelacions() ([]EntitatReligiosaRelacio, error) {
 	return sqliteListEntitatReligiosaRelacions(d)
+}
+func (d *SQLite) HasEntitatReligiosaRelacio(parentID, childID int) (bool, error) {
+	return sqliteHasEntitatReligiosaRelacio(d, parentID, childID)
 }
 func (d *SQLite) GetEntitatReligiosaRelacio(id int) (*EntitatReligiosaRelacio, error) {
 	return sqliteGetEntitatReligiosaRelacio(d, id)

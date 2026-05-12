@@ -21,7 +21,7 @@
     const parentRelationKind = document.getElementById("initial_parent_relation_kind");
 
     function selectedLevelOption() {
-      if (!level.value || level.selectedOptions.length === 0 || level.selectedOptions[0].disabled) {
+      if (!level.value || level.selectedOptions.length === 0 || level.selectedOptions[0]?.disabled) {
         return null;
       }
       return level.selectedOptions[0];
@@ -357,7 +357,7 @@
         }
       });
 
-      if (level.selectedOptions.length > 0 && level.selectedOptions[0].disabled) {
+      if (level.selectedOptions.length > 0 && level.selectedOptions[0]?.disabled) {
         level.value = "";
       }
 

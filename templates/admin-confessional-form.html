@@ -214,7 +214,9 @@
                             <ul id="municipi_principal_suggestions" class="suggestions-list confessional-suggestions" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
                         </div>
                         <p class="muted">{{ t .Lang "confessional.initial_relations.primary_municipality.help" }}</p>
-                        {{ if .Data.Form.PrimaryMunicipiExisting }}<p class="muted">{{ t .Lang "confessional.initial_relations.primary_municipality.existing" }}</p>{{ end }}
+                        {{ if .Data.Form.PrimaryMunicipiExisting }}
+                        <p class="muted">{{ t .Lang "confessional.initial_relations.primary_municipality.existing" }}</p>
+                        {{ end }}
                     </div>
                     <div class="grup-camp">
                         <label for="initial_parent_relation_kind">{{ t .Lang "confessional.initial_relations.parent_relation_kind.label" }}</label>
