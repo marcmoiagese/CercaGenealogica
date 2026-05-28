@@ -493,7 +493,7 @@ func (a *App) logPostgresStagingProfile(result csvImportResult) {
 		profile.UnaccountedDur,
 		profile.TotalDur,
 	)
-	if len(profile.Batches) == 1 && profile.Rows > templateImportCreateBatchSize {
+	if len(profile.Batches) == 1 && IsPostgresStagingWholeImportEnabled() {
 		logPostgresStagingTopPhases(profile.Batches[0])
 		return
 	}
