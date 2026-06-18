@@ -2981,6 +2981,16 @@ func (h sqlHelper) municipiBrowseWhere(f MunicipiBrowseFilter) (string, []interf
 		where += " AND m.id = ?"
 		args = append(args, f.MunicipiID)
 	}
+	switch strings.TrimSpace(f.Scope) {
+	case "municipi":
+		where += " AND m.municipi_id IS NULL"
+	case "nucli":
+		where += " AND m.municipi_id IS NOT NULL"
+	}
+	if f.ParentMunicipiID > 0 {
+		where += " AND m.municipi_id = ?"
+		args = append(args, f.ParentMunicipiID)
+	}
 	if f.NivellID > 0 {
 		parts := municipiBrowseLevelColumns()
 		where += " AND ("
@@ -3419,7 +3429,7 @@ func (h sqlHelper) suggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRo
 		args = append(args, "%"+queryText+"%")
 	}
 	query := `
-		SELECT m.id, m.nom, m.tipus,
+		SELECT m.id, m.nom, m.tipus, m.municipi_id,
 		       ` + municipiBrowsePaisExpr() + ` AS pais_id,
 		       m.nivell_administratiu_id_1, m.nivell_administratiu_id_2, m.nivell_administratiu_id_3,
 		       m.nivell_administratiu_id_4, m.nivell_administratiu_id_5, m.nivell_administratiu_id_6, m.nivell_administratiu_id_7,
@@ -3452,7 +3462,7 @@ func (h sqlHelper) suggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRo
 	for rows.Next() {
 		var r MunicipiSuggestRow
 		if err := rows.Scan(
-			&r.ID, &r.Nom, &r.Tipus, &r.PaisID,
+			&r.ID, &r.Nom, &r.Tipus, &r.MunicipiID, &r.PaisID,
 			&r.LevelIDs[0], &r.LevelIDs[1], &r.LevelIDs[2], &r.LevelIDs[3], &r.LevelIDs[4], &r.LevelIDs[5], &r.LevelIDs[6],
 			&r.LevelNames[0], &r.LevelNames[1], &r.LevelNames[2], &r.LevelNames[3], &r.LevelNames[4], &r.LevelNames[5], &r.LevelNames[6],
 			&r.LevelTypes[0], &r.LevelTypes[1], &r.LevelTypes[2], &r.LevelTypes[3], &r.LevelTypes[4], &r.LevelTypes[5], &r.LevelTypes[6],

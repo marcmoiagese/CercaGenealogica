@@ -510,18 +510,26 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	applyPrimaryMunicipiChange := func() bool {
+		if kind != "entitat" || id == 0 || !needsPrimaryMunicipiUpdate {
+			return true
+		}
+		// Les relacions territorials tenen permis i flux propis; no formen part de la proposta wiki dels camps de l'entitat.
+		if err := a.upsertConfessionalPrimaryMunicipiRelationForEntity(data.Entitat, id, user.ID, data.PrimaryMunicipiID); err != nil {
+			data.Error = "No s'ha pogut actualitzar la relacio territorial principal."
+			a.renderConfessionalForm(w, r, user, data)
+			return false
+		}
+		return true
+	}
 	if kind == "entitat" && id > 0 {
 		if proposed, err := a.createEntitatReligiosaWikiProposal(data.Entitat, user.ID); err != nil {
 			data.Error = "No s'ha pogut crear la proposta de canvi."
 			a.renderConfessionalForm(w, r, user, data)
 			return
 		} else if proposed {
-			if needsPrimaryMunicipiUpdate {
-				if err := a.upsertConfessionalPrimaryMunicipiRelationForEntity(data.Entitat, id, user.ID, data.PrimaryMunicipiID); err != nil {
-					data.Error = "No s'ha pogut actualitzar la relacio territorial principal."
-					a.renderConfessionalForm(w, r, user, data)
-					return
-				}
+			if !applyPrimaryMunicipiChange() {
+				return
 			}
 			if err := a.createConfessionalEntityInitialRelations(data, id, user.ID, needsParentRelation, needsPrimaryMunicipiRelation); err != nil {
 				data.Error = confessionalInitialRelationsError(needsParentRelation, needsPrimaryMunicipiRelation, false)
@@ -552,12 +560,8 @@ func (a *App) AdminSaveConfessional(w http.ResponseWriter, r *http.Request) {
 		a.renderConfessionalForm(w, r, user, data)
 		return
 	}
-	if kind == "entitat" && id > 0 && needsPrimaryMunicipiUpdate {
-		if err := a.upsertConfessionalPrimaryMunicipiRelationForEntity(data.Entitat, id, user.ID, data.PrimaryMunicipiID); err != nil {
-			data.Error = "No s'ha pogut actualitzar la relacio territorial principal."
-			a.renderConfessionalForm(w, r, user, data)
-			return
-		}
+	if !applyPrimaryMunicipiChange() {
+		return
 	}
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
 }
@@ -1195,47 +1199,47 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request, lang s
 		}
 		data.Relacio = item
 		if data.RelationMunicipiLabel != "" && item.MunicipiID == 0 {
-			return data, "Cal seleccionar un municipi valid."
+			return data, T(lang, "confessional.error.relation_municipality_invalid")
 		}
 		if item.MunicipiID == 0 {
-			return data, "Cal indicar el municipi."
+			return data, T(lang, "confessional.error.relation_municipality_required")
 		}
 		municipi, err := a.DB.GetMunicipi(item.MunicipiID)
 		if err != nil || municipi == nil {
-			return data, "El municipi indicat no existeix."
+			return data, T(lang, "confessional.error.relation_municipality_not_found")
 		}
 		if municipi.MunicipiID.Valid {
 			return data, T(lang, "confessional.error.primary_municipality_must_be_municipi")
 		}
 		data.RelationMunicipiLabel = strings.TrimSpace(municipi.Nom)
 		if data.RelationNucliLabel != "" && !item.NucliID.Valid {
-			return data, "Cal seleccionar un nucli valid."
+			return data, T(lang, "confessional.error.relation_nucli_invalid")
 		}
 		if item.NucliID.Valid {
 			if item.NucliID.Int64 == int64(item.MunicipiID) {
-				return data, "El nucli no pot ser el mateix registre que el municipi."
+				return data, T(lang, "confessional.error.relation_nucli_same_as_municipality")
 			}
 			nucli, err := a.DB.GetMunicipi(int(item.NucliID.Int64))
 			if err != nil || nucli == nil {
-				return data, "El nucli indicat no existeix."
+				return data, T(lang, "confessional.error.relation_nucli_not_found")
 			}
 			if !nucli.MunicipiID.Valid || nucli.MunicipiID.Int64 != int64(item.MunicipiID) {
-				return data, "El nucli indicat no pertany al municipi seleccionat."
+				return data, T(lang, "confessional.error.relation_nucli_not_in_municipality")
 			}
 			data.RelationNucliLabel = strings.TrimSpace(nucli.Nom)
 		}
 		if data.RelationEntityLabel != "" && item.EntitatReligiosaID == 0 {
-			return data, "Cal seleccionar l'entitat religiosa."
+			return data, T(lang, "confessional.error.relation_entity_invalid")
 		}
 		if item.EntitatReligiosaID == 0 {
-			return data, "Cal indicar l'entitat religiosa."
+			return data, T(lang, "confessional.error.relation_entity_required")
 		}
 		entitat, err := a.DB.GetEntitatReligiosa(item.EntitatReligiosaID)
 		if err != nil || entitat == nil {
-			return data, "L'entitat religiosa indicada no existeix."
+			return data, T(lang, "confessional.error.relation_entity_not_found")
 		}
 		if entitat.ModeracioEstat != "publicat" {
-			return data, "L'entitat religiosa indicada no esta publicada."
+			return data, T(lang, "confessional.error.relation_entity_not_published")
 		}
 		data.RelationEntityLabel = strings.TrimSpace(entitat.Nom)
 		item.TipusRelacio = suggestConfessionalRelationType(entitat.NivellConfessionalCodi)

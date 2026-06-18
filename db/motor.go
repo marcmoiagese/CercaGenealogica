@@ -2056,8 +2056,10 @@ type MunicipiBrowseFilter struct {
 	Status              string
 	PaisID              int
 	MunicipiID          int
+	ParentMunicipiID    int
 	FocusID             int
 	NivellID            int
+	Scope               string
 	Tipus               string
 	LevelIDs            [7]int
 	Sort                string
@@ -2103,6 +2105,7 @@ type MunicipiSuggestRow struct {
 	ID         int
 	Nom        string
 	Tipus      string
+	MunicipiID sql.NullInt64
 	PaisID     int
 	LevelIDs   [7]sql.NullInt64
 	LevelNames [7]sql.NullString

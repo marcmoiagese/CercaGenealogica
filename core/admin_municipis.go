@@ -585,9 +585,11 @@ func (a *App) AdminMunicipisSuggest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	filter := db.MunicipiBrowseFilter{
-		Text:   query,
-		Status: "publicat",
-		Limit:  limit,
+		Text:             query,
+		Status:           "publicat",
+		Limit:            limit,
+		Scope:            strings.TrimSpace(r.URL.Query().Get("scope")),
+		ParentMunicipiID: parsePositiveIntDefault(r.URL.Query().Get("parent_municipi_id"), 0, 0, 1000000000),
 	}
 	if pid := strings.TrimSpace(r.URL.Query().Get("pais_id")); pid != "" {
 		if v, err := strconv.Atoi(pid); err == nil {
@@ -610,25 +612,8 @@ func (a *App) AdminMunicipisSuggest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	rows, _ := a.DB.SuggestMunicipis(filter)
-	scope := strings.TrimSpace(r.URL.Query().Get("scope"))
-	parentMunicipiID := parsePositiveIntDefault(r.URL.Query().Get("parent_municipi_id"), 0, 0, 1000000000)
 	items := make([]map[string]interface{}, 0, len(rows))
 	for _, row := range rows {
-		full, err := a.DB.GetMunicipi(row.ID)
-		if err != nil || full == nil {
-			continue
-		}
-		if scope == "municipi" && full.MunicipiID.Valid {
-			continue
-		}
-		if scope == "nucli" {
-			if !full.MunicipiID.Valid {
-				continue
-			}
-			if parentMunicipiID > 0 && int(full.MunicipiID.Int64) != parentMunicipiID {
-				continue
-			}
-		}
 		levelIDs := make([]interface{}, 7)
 		levelNames := make([]interface{}, 7)
 		levelTypes := make([]interface{}, 7)
@@ -653,9 +638,9 @@ func (a *App) AdminMunicipisSuggest(w http.ResponseWriter, r *http.Request) {
 			"nivells_tipus": levelTypes,
 			"scope_type":    "municipi",
 		}
-		if full.MunicipiID.Valid {
+		if row.MunicipiID.Valid {
 			item["scope_type"] = "nucli"
-			item["parent_municipi_id"] = int(full.MunicipiID.Int64)
+			item["parent_municipi_id"] = int(row.MunicipiID.Int64)
 		}
 		if row.Latitud.Valid {
 			item["lat"] = row.Latitud.Float64

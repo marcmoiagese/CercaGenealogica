@@ -231,34 +231,55 @@ func TestF354U15MunicipiSuggestScopesFilterMunicipisAndNuclis(t *testing.T) {
 	session := f353YAdminSession(t, database, "f354u15_suggest")
 	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
 
-	municipiName := "Suggest municipi F35-4U15 " + suffix
+	municipiName := "Suggest municipi objectiu F35-4U15 " + suffix
 	municipiID := f353YCreateMunicipi(t, database, municipiName)
-	nucliName := "Suggest nucli F35-4U15 " + suffix
-	_, err := database.CreateMunicipi(&db.Municipi{
-		Nom:            nucliName,
-		Tipus:          "nucli_urba",
-		MunicipiID:     sql.NullInt64{Int64: int64(municipiID), Valid: true},
-		Estat:          "actiu",
-		ModeracioEstat: "publicat",
-	})
-	if err != nil {
-		t.Fatalf("CreateMunicipi nucli: %v", err)
+	for i := 0; i < 12; i++ {
+		_, err := database.CreateMunicipi(&db.Municipi{
+			Nom:            "Suggest AAA nucli truncament F35-4U15 " + suffix + " " + strconv.Itoa(i),
+			Tipus:          "nucli_urba",
+			MunicipiID:     sql.NullInt64{Int64: int64(municipiID), Valid: true},
+			Estat:          "actiu",
+			ModeracioEstat: "publicat",
+		})
+		if err != nil {
+			t.Fatalf("CreateMunicipi nucli truncament municipi: %v", err)
+		}
 	}
 
 	municipiItems := f354U15MunicipiSuggest(t, app, session, "/api/territori/municipis/suggest?scope=municipi&q=Suggest")
 	if !f354U15SuggestContainsNom(municipiItems, municipiName) {
-		t.Fatalf("scope municipi ha d'incloure el municipi pare: %+v", municipiItems)
+		t.Fatalf("scope municipi ha d'incloure el municipi objectiu malgrat els nuclis anteriors al limit: %+v", municipiItems)
 	}
-	if f354U15SuggestContainsNom(municipiItems, nucliName) {
-		t.Fatalf("scope municipi no ha d'incloure nuclis: %+v", municipiItems)
+	for _, item := range municipiItems {
+		if strings.Contains(item.Nom, "nucli truncament") {
+			t.Fatalf("scope municipi no ha d'incloure nuclis: %+v", municipiItems)
+		}
 	}
 
-	nucliItems := f354U15MunicipiSuggest(t, app, session, "/api/territori/municipis/suggest?scope=nucli&parent_municipi_id="+strconv.Itoa(municipiID)+"&q=Suggest")
-	if !f354U15SuggestContainsNom(nucliItems, nucliName) {
-		t.Fatalf("scope nucli ha d'incloure el nucli del municipi seleccionat: %+v", nucliItems)
+	parentMunicipiName := "Suggest pare nucli F35-4U15 " + suffix
+	parentMunicipiID := f353YCreateMunicipi(t, database, parentMunicipiName)
+	nucliName := "Suggest nucli objectiu F35-4U15 " + suffix
+	_, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            nucliName,
+		Tipus:          "nucli_urba",
+		MunicipiID:     sql.NullInt64{Int64: int64(parentMunicipiID), Valid: true},
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	})
+	if err != nil {
+		t.Fatalf("CreateMunicipi nucli objectiu: %v", err)
 	}
-	if f354U15SuggestContainsNom(nucliItems, municipiName) {
-		t.Fatalf("scope nucli no ha d'incloure el municipi pare: %+v", nucliItems)
+	for i := 0; i < 12; i++ {
+		f353YCreateMunicipi(t, database, "Suggest AAA municipi truncament F35-4U15 "+suffix+" "+strconv.Itoa(i))
+	}
+	nucliItems := f354U15MunicipiSuggest(t, app, session, "/api/territori/municipis/suggest?scope=nucli&parent_municipi_id="+strconv.Itoa(parentMunicipiID)+"&q=Suggest")
+	if !f354U15SuggestContainsNom(nucliItems, nucliName) {
+		t.Fatalf("scope nucli ha d'incloure el nucli objectiu malgrat els municipis anteriors al limit: %+v", nucliItems)
+	}
+	for _, item := range nucliItems {
+		if strings.Contains(item.Nom, "municipi truncament") || item.Nom == parentMunicipiName {
+			t.Fatalf("scope nucli no ha d'incloure municipis: %+v", nucliItems)
+		}
 	}
 }
 
