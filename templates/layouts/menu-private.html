@@ -84,14 +84,7 @@
                 {{ if or (index .Data "CanViewMunicipis") (index .Data "CanManageTerritory") (index .Data "IsAdmin") }}
                 <li class="menu-opcio"><a href="/territori/municipis"><i class="fas fa-map-marker-alt"></i> {{ t .Lang "municipis.title" }}</a></li>
                 {{ end }}
-                {{ if and
-                    (or (index .Data "CanViewEcles") (index .Data "CanManageEclesia") (index .Data "IsAdmin"))
-                    (not (or
-                        (index .Data "CanViewConfessionalEntitats")
-                        (index .Data "CanViewConfessionalRelacionsEntitats")
-                        (index .Data "CanViewConfessionalMunicipisEntitats")
-                        (index .Data "CanViewConfessionalDiagnostic")
-                        (index .Data "IsAdmin"))) }}
+                {{ if index .Data "ShowLegacyEclesMenu" }}
                 <li class="menu-opcio"><a href="/territori/eclesiastic"><i class="fas fa-church"></i> {{ t .Lang "admin.menu.ecles" }}</a></li>
                 {{ end }}
             </ul>

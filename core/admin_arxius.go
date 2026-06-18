@@ -127,7 +127,7 @@ func (a *App) ListArxius(w http.ResponseWriter, r *http.Request) {
 	lang := ResolveLang(r)
 	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
 	page := parseListPage(r.URL.Query().Get("page"))
-	filterKeys := []string{"nom", "tipus", "acces", "entitat", "municipi", "web", "llibres", "status"}
+	filterKeys := []string{"nom", "tipus", "acces", "municipi", "web", "llibres", "status"}
 	filterValues := map[string]string{}
 	filterMatch := map[string]string{}
 	for _, key := range filterKeys {
@@ -383,11 +383,6 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if v := strings.TrimSpace(r.URL.Query().Get("entitat_id")); v != "" {
-		if id, err := strconv.Atoi(v); err == nil {
-			filter.EntitatID = id
-		}
-	}
 	if !scopeFilter.hasGlobal {
 		if scopeFilter.isEmpty() {
 			pagination := buildPagination(r, page, perPage, 0, "#arxiusTable")
@@ -397,7 +392,6 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 				"FilterValues":       filterValues,
 				"FilterOrder":        strings.Join(filterOrder, ","),
 				"ArxiusBasePath":     "/documentals/arxius",
-				"Arquebisbats":       []db.ArquebisbatRow{},
 				"CanManageArxius":    canManage,
 				"CanCreateArxiu":     canCreateArxiu,
 				"CanImportArxiu":     canImportArxiu,
@@ -490,14 +484,12 @@ func (a *App) AdminListArxius(w http.ResponseWriter, r *http.Request) {
 			showArxiuActions = true
 		}
 	}
-	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	RenderPrivateTemplate(w, r, "admin-arxius-list.html", map[string]interface{}{
 		"Arxius":             arxius,
 		"Filter":             filter,
 		"FilterValues":       filterValues,
 		"FilterOrder":        strings.Join(filterOrder, ","),
 		"ArxiusBasePath":     "/documentals/arxius",
-		"Arquebisbats":       arquebisbats,
 		"CanManageArxius":    canManage,
 		"CanCreateArxiu":     canCreateArxiu,
 		"CanImportArxiu":     canImportArxiu,
@@ -535,10 +527,6 @@ func arxiuFilterValue(a db.ArxiuWithCount, key, lang string) string {
 			return ""
 		}
 		return strings.TrimSpace(T(lang, "archives.access."+a.Acces) + " " + a.Acces)
-	case "entitat":
-		if a.EntitatNom.Valid {
-			return a.EntitatNom.String
-		}
 	case "municipi":
 		if a.MunicipiNom.Valid {
 			return a.MunicipiNom.String
@@ -558,7 +546,6 @@ func arxiuFilterValue(a db.ArxiuWithCount, key, lang string) string {
 func parseArxiuForm(r *http.Request) *db.Arxiu {
 	_ = r.ParseForm()
 	municipiID := sqlNullInt(r.FormValue("municipi_id"))
-	entitatID := sqlNullInt(r.FormValue("entitat_eclesiastica_id"))
 	acceptaDonacions := strings.TrimSpace(r.FormValue("accepta_donacions")) != ""
 	donacionsURL := strings.TrimSpace(r.FormValue("donacions_url"))
 	if !acceptaDonacions || donacionsURL == "" {
@@ -566,25 +553,23 @@ func parseArxiuForm(r *http.Request) *db.Arxiu {
 		acceptaDonacions = false
 	}
 	return &db.Arxiu{
-		Codi:                  strings.TrimSpace(r.FormValue("codi")),
-		Nom:                   strings.TrimSpace(r.FormValue("nom")),
-		Tipus:                 strings.TrimSpace(r.FormValue("tipus")),
-		Acces:                 strings.TrimSpace(r.FormValue("acces")),
-		MunicipiID:            municipiID,
-		EntitatEclesiasticaID: entitatID,
-		Adreca:                strings.TrimSpace(r.FormValue("adreca")),
-		Ubicacio:              strings.TrimSpace(r.FormValue("ubicacio")),
-		What3Words:            strings.TrimSpace(r.FormValue("what3words")),
-		Web:                   strings.TrimSpace(r.FormValue("web")),
-		Notes:                 strings.TrimSpace(r.FormValue("notes")),
-		AcceptaDonacions:      acceptaDonacions,
-		DonacionsURL:          donacionsURL,
+		Codi:             strings.TrimSpace(r.FormValue("codi")),
+		Nom:              strings.TrimSpace(r.FormValue("nom")),
+		Tipus:            strings.TrimSpace(r.FormValue("tipus")),
+		Acces:            strings.TrimSpace(r.FormValue("acces")),
+		MunicipiID:       municipiID,
+		Adreca:           strings.TrimSpace(r.FormValue("adreca")),
+		Ubicacio:         strings.TrimSpace(r.FormValue("ubicacio")),
+		What3Words:       strings.TrimSpace(r.FormValue("what3words")),
+		Web:              strings.TrimSpace(r.FormValue("web")),
+		Notes:            strings.TrimSpace(r.FormValue("notes")),
+		AcceptaDonacions: acceptaDonacions,
+		DonacionsURL:     donacionsURL,
 	}
 }
 
 func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.Arxiu, isNew bool, errMsg string, user *db.User, returnURL string) {
 	municipiLabel := a.loadMunicipiNom(arxiu)
-	entitatLabel := a.loadEntitatNom(arxiu)
 	lang := ResolveLangForUser(r, user.PreferredLang)
 	target := PermissionTarget{}
 	if arxiu != nil && arxiu.ID > 0 {
@@ -611,7 +596,6 @@ func (a *App) renderArxiuForm(w http.ResponseWriter, r *http.Request, arxiu *db.
 		"ReturnURL":                       returnURL,
 		"CanManageArxius":                 true,
 		"MunicipiLabel":                   municipiLabel,
-		"EntitatLabel":                    entitatLabel,
 		"RelacionsReligioses":             relacionsReligioses,
 		"EntitatReligiosaLabels":          entitatReligiosaLabels(entitatsReligioses),
 		"ReligionCatalogLabels":           confessionalReligionCatalogLabels(lang),
@@ -643,12 +627,7 @@ func (a *App) AdminCreateArxiu(w http.ResponseWriter, r *http.Request) {
 	}
 	arxiu := parseArxiuForm(r)
 	target := PermissionTarget{}
-	if arxiu.EntitatEclesiasticaID.Valid {
-		entitatID := int(arxiu.EntitatEclesiasticaID.Int64)
-		if entitatID > 0 {
-			target.EclesID = intPtr(entitatID)
-		}
-	} else if arxiu.MunicipiID.Valid {
+	if arxiu.MunicipiID.Valid {
 		municipiID := int(arxiu.MunicipiID.Int64)
 		if municipiID > 0 {
 			target = a.resolveMunicipiTarget(municipiID)
@@ -719,6 +698,7 @@ func (a *App) AdminUpdateArxiu(w http.ResponseWriter, r *http.Request) {
 		a.renderArxiuForm(w, r, arxiu, false, "No s'ha pogut carregar l'arxiu existent.", user, returnURL)
 		return
 	}
+	arxiu.EntitatEclesiasticaID = existing.EntitatEclesiasticaID
 	if existing.ModeracioEstat == "publicat" {
 		lang := resolveUserLang(r, user)
 		if !a.ensureWikiChangeAllowed(w, r, lang) {

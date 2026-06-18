@@ -466,11 +466,11 @@ func TestF354U6ArxiuEditFormShowsLegacyFieldAndOptionalConfessionalSection(t *te
 	}
 
 	body := f354Get(t, app.AdminEditArxiu, "/documentals/arxius/"+strconv.Itoa(arxiuID)+"/edit", session)
-	if !strings.Contains(body, `name="entitat_eclesiastica_id"`) {
-		t.Fatalf("la pantalla d'edicio ha de mantenir el camp legacy entitat_eclesiastica_id, body=%s", body)
-	}
 	if strings.Contains(body, `id="entitat_search"`) {
 		t.Fatalf("el camp visible legacy no ha de continuar al flux principal, body=%s", body)
+	}
+	if strings.Contains(body, `name="entitat_eclesiastica_id"`) {
+		t.Fatalf("la pantalla d'edicio no ha d'enviar el camp legacy entitat_eclesiastica_id, body=%s", body)
 	}
 	if !strings.Contains(body, `name="codi"`) {
 		t.Fatalf("la pantalla d'edicio ha d'exposar el codi estable, body=%s", body)
@@ -592,7 +592,6 @@ func TestF354U6ArxiuUpdateWithoutReligiousRelationStaysValid(t *testing.T) {
 	form.Set("tipus", "privat")
 	form.Set("acces", "online")
 	form.Set("municipi_id", strconv.FormatInt(arxiu.MunicipiID.Int64, 10))
-	form.Set("entitat_eclesiastica_id", "")
 	form.Set("adreca", "")
 	form.Set("ubicacio", "")
 	form.Set("what3words", "")
@@ -615,6 +614,98 @@ func TestF354U6ArxiuUpdateWithoutReligiousRelationStaysValid(t *testing.T) {
 	}
 	if got := strings.TrimSpace(asString(rows[0]["codi"])); got != "f35_4u6_ui_sense_relacio" {
 		t.Fatalf("codi estable no desat a l'edicio: %q", got)
+	}
+}
+
+func TestF354U6ArchiveUpdateIgnoresTamperedLegacyEntityID(t *testing.T) {
+	app, database, _, session := setupF354U6ArxiusUIAdmin(t, "test_f35_4u6_tamper_legacy.sqlite3")
+	paisID, _, _ := seedF354U6ArxiuTerritory(t, database)
+	originalID, err := database.CreateArquebisbat(&db.Arquebisbat{
+		Nom:            "Arquebisbat Legacy Original F35-4U11A-R1",
+		TipusEntitat:   "bisbat",
+		PaisID:         sql.NullInt64{Int64: int64(paisID), Valid: true},
+		ModeracioEstat: "publicat",
+	})
+	if err != nil {
+		t.Fatalf("CreateArquebisbat original: %v", err)
+	}
+	tamperedID, err := database.CreateArquebisbat(&db.Arquebisbat{
+		Nom:            "Arquebisbat Legacy Tampered F35-4U11A-R1",
+		TipusEntitat:   "bisbat",
+		PaisID:         sql.NullInt64{Int64: int64(paisID), Valid: true},
+		ModeracioEstat: "publicat",
+	})
+	if err != nil {
+		t.Fatalf("CreateArquebisbat tampered: %v", err)
+	}
+	municipiID := f353YCreateMunicipi(t, database, "Municipi Tamper Arxiu F35-4U11A-R1")
+	arxiuID, err := database.CreateArxiu(&db.Arxiu{
+		Codi:                  "f35_4u11ar1_arxiu",
+		Nom:                   "Arxiu Tamper Legacy F35-4U11A-R1",
+		Tipus:                 "privat",
+		Acces:                 "online",
+		MunicipiID:            sql.NullInt64{Int64: int64(municipiID), Valid: true},
+		EntitatEclesiasticaID: sql.NullInt64{Int64: int64(originalID), Valid: true},
+		ModeracioEstat:        "pendent",
+	})
+	if err != nil {
+		t.Fatalf("CreateArxiu: %v", err)
+	}
+
+	form := url.Values{}
+	form.Set("codi", "f35_4u11ar1_arxiu_updated")
+	form.Set("nom", "Arxiu Tamper Legacy F35-4U11A-R1")
+	form.Set("tipus", "privat")
+	form.Set("acces", "online")
+	form.Set("municipi_id", strconv.Itoa(municipiID))
+	form.Set("entitat_eclesiastica_id", strconv.Itoa(tamperedID))
+	req := httptest.NewRequest(http.MethodPost, "/documentals/arxius/"+strconv.Itoa(arxiuID), strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminUpdateArxiu(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("AdminUpdateArxiu tamper status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rows, err := database.Query("SELECT codi, entitat_eclesiastica_id FROM arxius WHERE id = ?", arxiuID)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("Query arxiu tamper: err=%v rows=%d", err, len(rows))
+	}
+	if got := strings.TrimSpace(asString(rows[0]["codi"])); got != "f35_4u11ar1_arxiu_updated" {
+		t.Fatalf("codi estable no actualitzat: %q", got)
+	}
+	if got := parseCountValue(t, rows[0]["entitat_eclesiastica_id"]); got != originalID {
+		t.Fatalf("el backend ha d'ignorar el tampering del legacy entity id, got=%d want=%d", got, originalID)
+	}
+}
+
+func TestF354U11AR1ArchiveListTemplateKeepsSequentialColumnsAndAccessibleFilters(t *testing.T) {
+	root := findProjectRoot(t)
+	body, err := os.ReadFile(filepath.Join(root, "templates", "admin-arxius-list.html"))
+	if err != nil {
+		t.Fatalf("ReadFile admin-arxius-list.html: %v", err)
+	}
+	src := string(body)
+	for _, token := range []string{
+		`id="arxius-filter-nom"`,
+		`id="arxius-filter-tipus"`,
+		`id="arxius-filter-acces"`,
+		`id="arxius-filter-municipi"`,
+		`id="arxius-filter-web"`,
+		`id="arxius-filter-llibres"`,
+		`id="arxius-filter-status"`,
+		`class="sr-only" for="arxius-filter-nom"`,
+		`scope="col" data-col="0" data-key="nom"`,
+		`scope="col" data-col="6" data-key="status"`,
+		`action="{{ $manageBase }}/{{ .ID }}/delete" class="inline-form"`,
+	} {
+		if !strings.Contains(src, token) {
+			t.Fatalf("falta contracte d'accessibilitat/reindexacio a arxius-list: %q", token)
+		}
+	}
+	if strings.Contains(src, `data-key="entitat"`) {
+		t.Fatalf("arxius-list no ha de conservar la columna legacy entitat")
 	}
 }
 

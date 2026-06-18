@@ -653,6 +653,14 @@ func injectPermsIfMissing(r *http.Request, data interface{}) interface{} {
 	if _, found := m["CanViewConfessionalDiagnostic"]; !found {
 		m["CanViewConfessionalDiagnostic"] = effectiveAdmin || hasModularConfessionalDiagnosticViewKey(hasKey)
 	}
+	if _, found := m["ShowLegacyEclesMenu"]; !found {
+		hasLegacyEcles := m["CanViewEcles"].(bool) || m["CanManageEclesia"].(bool)
+		hasConfessional := m["CanViewConfessionalEntitats"].(bool) ||
+			m["CanViewConfessionalRelacionsEntitats"].(bool) ||
+			m["CanViewConfessionalMunicipisEntitats"].(bool) ||
+			m["CanViewConfessionalDiagnostic"].(bool)
+		m["ShowLegacyEclesMenu"] = hasLegacyEcles && !hasConfessional
+	}
 	if _, found := m["CanViewTerritory"]; !found {
 		m["CanViewTerritory"] = m["CanViewNivells"].(bool) || m["CanViewMunicipis"].(bool) || m["CanViewEcles"].(bool)
 	}

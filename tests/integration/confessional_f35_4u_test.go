@@ -366,6 +366,24 @@ func TestF354U4ConfessionalExportSelectorsUseOnlySingleEntityData(t *testing.T) 
 	}
 }
 
+func TestF354U11AR1MenuUsesServerSideLegacyFlag(t *testing.T) {
+	root := findProjectRoot(t)
+	menuBody := readProjectFileF354S(t, root, "templates/layouts/menu-private.html")
+	templatesBody := readProjectFileF354S(t, root, "core/templates.go")
+
+	for _, token := range []string{
+		`ShowLegacyEclesMenu`,
+		`{{ if index .Data "ShowLegacyEclesMenu" }}`,
+	} {
+		if !strings.Contains(menuBody+templatesBody, token) {
+			t.Fatalf("falta el contracte server-side del menu legacy: %q", token)
+		}
+	}
+	if strings.Contains(menuBody, `CanViewConfessionalEntitats`) && strings.Contains(menuBody, `CanViewConfessionalDiagnostic`) && strings.Contains(menuBody, `not (or`) {
+		t.Fatalf("el menu no ha de mantenir una negacio template llarga i contradictoria per al flux legacy")
+	}
+}
+
 func TestF354U4ConfessionalExportSelectorsUseOnlyRealReligions(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f35_4u4_religions.sqlite3")
 

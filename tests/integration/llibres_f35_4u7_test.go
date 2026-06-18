@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -326,11 +328,11 @@ func TestF354U7R1BookFormArchiveSearchAvoidsMassiveSelect(t *testing.T) {
 	if strings.Contains(body, "Arxiu Invisible F35-4U7") || strings.Contains(body, "Arxiu Cercable F35-4U7") {
 		t.Fatalf("el formulari nou no ha de carregar un selector massiu d'arxius sense cerca")
 	}
-	if !strings.Contains(body, `type="hidden" id="arquevisbat_id" name="arquevisbat_id"`) {
-		t.Fatalf("el context eclesiastic legacy ha de quedar com a camp ocult de compatibilitat, body=%s", body)
-	}
 	if strings.Contains(body, `<label for="arquevisbat_id">`) {
 		t.Fatalf("el formulari nou no ha de mostrar el selector legacy d'entitat, body=%s", body)
+	}
+	if strings.Contains(body, `name="arquevisbat_id"`) {
+		t.Fatalf("el formulari nou no ha d'enviar arquevisbat_id des del client, body=%s", body)
 	}
 	if !strings.Contains(body, "Base documental del llibre") {
 		t.Fatalf("el formulari nou ha de reforcar la base documental principal, body=%s", body)
@@ -346,6 +348,66 @@ func TestF354U7R1BookFormArchiveSearchAvoidsMassiveSelect(t *testing.T) {
 	body = rr.Body.String()
 	if !strings.Contains(body, "Arxiu Cercable F35-4U7") || strings.Contains(body, "Arxiu Invisible F35-4U7") {
 		t.Fatalf("la cerca d'arxius ha de carregar només coincidencies, body=%s", body)
+	}
+}
+
+func TestF354U11AR1BookUpdateIgnoresTamperedLegacyEntityID(t *testing.T) {
+	app, database, admin, session := setupF354U7BooksAdmin(t, "test_f35_4u11ar1_book_tamper.sqlite3")
+	paisID, municipiID := seedF354U7BookTerritory(t, database, "Tamper")
+	originalLegacyID := createF354U7LegacyEntity(t, database, paisID, "Bisbat Legacy Original F35-4U11A-R1")
+	tamperedLegacyID := createF354U7LegacyEntity(t, database, paisID, "Bisbat Legacy Tampered F35-4U11A-R1")
+	arxiuID := createF354U7Archive(t, database, admin.ID, municipiID, "f35_4u11ar1_archive", "Arxiu Tamper F35-4U11A-R1", 0)
+	llibreID := createF354U7Book(t, database, admin.ID, municipiID, originalLegacyID, "f35_4u11ar1_book", "Llibre Tamper F35-4U11A-R1")
+
+	form := url.Values{}
+	form.Set("id", strconv.Itoa(llibreID))
+	form.Set("arxiu_id", strconv.Itoa(arxiuID))
+	form.Set("municipi_id", strconv.Itoa(municipiID))
+	form.Set("arquevisbat_id", strconv.Itoa(tamperedLegacyID))
+	form.Set("titol", "Llibre Tamper F35-4U11A-R1")
+	form.Set("tipus_llibre", "baptismes")
+	form.Set("codi", "f35_4u11ar1_book")
+	req := httptest.NewRequest(http.MethodPost, "/documentals/llibres/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminSaveLlibre(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("AdminSaveLlibre tamper status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rows, err := database.Query("SELECT arquevisbat_id FROM llibres WHERE id = ?", llibreID)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("Query llibre tamper: err=%v rows=%d", err, len(rows))
+	}
+	if got := parseCountValue(t, rows[0]["arquevisbat_id"]); got != originalLegacyID {
+		t.Fatalf("el backend ha d'ignorar el tampering d'arquevisbat_id, got=%d want=%d", got, originalLegacyID)
+	}
+}
+
+func TestF354U11AR1BooksListTemplateKeepsSequentialColumnsAndAccessibleFilters(t *testing.T) {
+	root := findProjectRoot(t)
+	body, err := os.ReadFile(filepath.Join(root, "templates", "admin-llibres-list.html"))
+	if err != nil {
+		t.Fatalf("ReadFile admin-llibres-list.html: %v", err)
+	}
+	src := string(body)
+	for _, token := range []string{
+		`id="llibres-filter-titol"`,
+		`id="llibres-filter-municipi"`,
+		`id="llibres-filter-crono"`,
+		`id="llibres-filter-pagines"`,
+		`id="llibres-filter-status"`,
+		`class="sr-only" for="llibres-filter-titol"`,
+		`scope="col" data-col="0" data-key="titol"`,
+		`scope="col" data-col="5" data-key="status"`,
+	} {
+		if !strings.Contains(src, token) {
+			t.Fatalf("falta contracte d'accessibilitat/reindexacio a llibres-list: %q", token)
+		}
+	}
+	if strings.Contains(src, `data-key="entitat"`) {
+		t.Fatalf("llibres-list no ha de conservar la columna legacy entitat")
 	}
 }
 

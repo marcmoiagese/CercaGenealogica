@@ -67,7 +67,6 @@
                         <ul id="municipi_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
                     </div>
                 </div>
-                <input type="hidden" id="entitat_eclesiastica_id" name="entitat_eclesiastica_id" value="{{ if .Data.Arxiu.EntitatEclesiasticaID.Valid }}{{ .Data.Arxiu.EntitatEclesiasticaID.Int64 }}{{ end }}">
                 <div class="grup-camp">
                     <label for="adreca">{{ t .Lang "archives.form.address" }}</label>
                     <textarea id="adreca" name="adreca">{{ .Data.Arxiu.Adreca }}</textarea>

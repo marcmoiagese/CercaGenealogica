@@ -28,11 +28,6 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	}
 	perPage := parseListPerPage(r.URL.Query().Get("per_page"))
 	page := parseListPage(r.URL.Query().Get("page"))
-	if v := strings.TrimSpace(r.URL.Query().Get("arquevisbat_id")); v != "" {
-		if id, err := strconv.Atoi(v); err == nil {
-			filter.ArquebisbatID = id
-		}
-	}
 	if v := strings.TrimSpace(r.URL.Query().Get("municipi_id")); v != "" {
 		if id, err := strconv.Atoi(v); err == nil {
 			filter.MunicipiID = id
@@ -57,7 +52,7 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 	}
 	filter.Status = status
 	lang := ResolveLang(r)
-	filterKeys := []string{"titol", "entitat", "municipi", "crono", "pagines", "status"}
+	filterKeys := []string{"titol", "municipi", "crono", "pagines", "status"}
 	filterValues := map[string]string{}
 	filterMatch := map[string]string{}
 	for _, key := range filterKeys {
@@ -105,7 +100,6 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 				"Filter":                   filter,
 				"FilterValues":             filterValues,
 				"FilterOrder":              strings.Join(filterOrder, ","),
-				"Arquebisbats":             []db.ArquebisbatRow{},
 				"MunicipiLabel":            "",
 				"Arxius":                   []db.ArxiuWithCount{},
 				"TipusOptions":             llibreTipusOptions,
@@ -265,7 +259,6 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 			showPurgeModal = true
 		}
 	}
-	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	municipiLabel := ""
 	if filter.MunicipiID > 0 {
 		if mun, err := a.DB.GetMunicipi(filter.MunicipiID); err == nil && mun != nil {
@@ -279,7 +272,6 @@ func (a *App) AdminListLlibres(w http.ResponseWriter, r *http.Request) {
 		"Filter":                   filter,
 		"FilterValues":             filterValues,
 		"FilterOrder":              strings.Join(filterOrder, ","),
-		"Arquebisbats":             arquebisbats,
 		"MunicipiLabel":            municipiLabel,
 		"Arxius":                   arxius,
 		"TipusOptions":             llibreTipusOptions,
@@ -323,10 +315,6 @@ func llibreFilterValue(llibre db.LlibreRow, stats map[string]LlibreIndexacioView
 			return title
 		}
 		return title + " " + nom
-	case "entitat":
-		if llibre.ArquebisbatNom.Valid {
-			return llibre.ArquebisbatNom.String
-		}
 	case "municipi":
 		if llibre.MunicipiNom.Valid {
 			return llibre.MunicipiNom.String
@@ -381,13 +369,6 @@ func (a *App) AdminNewLlibre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newLlibre := &db.Llibre{ModeracioEstat: "pendent"}
-	if selectedArxiu > 0 {
-		if arxiu, err := a.DB.GetArxiu(selectedArxiu); err == nil && arxiu != nil {
-			if arxiu.EntitatEclesiasticaID.Valid {
-				newLlibre.ArquebisbatID = int(arxiu.EntitatEclesiasticaID.Int64)
-			}
-		}
-	}
 	a.renderLlibreForm(w, r, newLlibre, true, "", returnURL, selectedArxiu, strings.TrimSpace(r.URL.Query().Get("archive_q")))
 }
 
@@ -497,7 +478,6 @@ func parseNullInt64(val string) sql.NullInt64 {
 
 func parseLlibreForm(r *http.Request) *db.Llibre {
 	_ = r.ParseForm()
-	arquevisbatID, _ := strconv.Atoi(r.FormValue("arquevisbat_id"))
 	municipiID, _ := strconv.Atoi(r.FormValue("municipi_id"))
 	paginesVal := strings.TrimSpace(r.FormValue("pagines"))
 	pagines := sql.NullInt64{}
@@ -508,7 +488,6 @@ func parseLlibreForm(r *http.Request) *db.Llibre {
 	}
 	return &db.Llibre{
 		ID:                intFromForm(r.FormValue("id")),
-		ArquebisbatID:     arquevisbatID,
 		MunicipiID:        municipiID,
 		NomEsglesia:       strings.TrimSpace(r.FormValue("nom_esglesia")),
 		Codi:              strings.TrimSpace(r.FormValue("codi")),
@@ -614,7 +593,6 @@ func (a *App) deriveLlibreReligiousContext(llibreID int) llibreReligiousContextV
 }
 
 func (a *App) renderLlibreForm(w http.ResponseWriter, r *http.Request, l *db.Llibre, isNew bool, errMsg string, returnURL string, selectedArxiu int, archiveQuery string) {
-	arquebisbats, _ := a.DB.ListArquebisbats(db.ArquebisbatFilter{})
 	municipis, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	archiveQuery = strings.TrimSpace(archiveQuery)
 	arxius := []db.ArxiuWithCount{}
@@ -643,7 +621,6 @@ func (a *App) renderLlibreForm(w http.ResponseWriter, r *http.Request, l *db.Lli
 	RenderPrivateTemplate(w, r, "admin-llibres-form.html", map[string]interface{}{
 		"Llibre":          l,
 		"TipusOptions":    llibreTipusOptions,
-		"Arquebisbats":    arquebisbats,
 		"Municipis":       municipis,
 		"Arxius":          arxius,
 		"ArchiveQuery":    archiveQuery,
@@ -894,6 +871,11 @@ func (a *App) AdminSaveLlibre(w http.ResponseWriter, r *http.Request) {
 		if err != nil || existing == nil {
 			a.renderLlibreForm(w, r, llibre, isNew, "No s'ha pogut carregar el llibre existent.", returnURL, arxiuID, archiveQuery)
 			return
+		}
+		if isCivilBookType(llibre.TipusLlibre) {
+			llibre.ArquebisbatID = 0
+		} else {
+			llibre.ArquebisbatID = existing.ArquebisbatID
 		}
 		archiveLinks, err := a.currentLlibreArxiuLinks(llibre.ID)
 		if err != nil {
