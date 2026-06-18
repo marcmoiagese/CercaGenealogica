@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -281,6 +282,81 @@ func TestF354U15MunicipiSuggestScopesFilterMunicipisAndNuclis(t *testing.T) {
 			t.Fatalf("scope nucli no ha d'incloure municipis: %+v", nucliItems)
 		}
 	}
+
+	municipiItemsWithParent := f354U15MunicipiSuggest(t, app, session, "/api/territori/municipis/suggest?scope=municipi&parent_municipi_id="+strconv.Itoa(parentMunicipiID)+"&q=objectiu")
+	if !f354U15SuggestContainsNom(municipiItemsWithParent, municipiName) {
+		t.Fatalf("scope municipi ha d'ignorar parent_municipi_id i mantenir municipis: %+v", municipiItemsWithParent)
+	}
+	for _, item := range municipiItemsWithParent {
+		if strings.Contains(item.Nom, "nucli") || item.Nom == parentMunicipiName {
+			t.Fatalf("scope municipi amb parent no ha d'incloure nuclis: %+v", municipiItemsWithParent)
+		}
+	}
+}
+
+func TestF354U15TerritorialRelationRejectsUnpublishedMunicipality(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u15_relacio_unpublished_municipi.sqlite3")
+	session := f353YAdminSession(t, database, "f354u15_relacio_unpublished_municipi")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	municipiID, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            "Municipi draft F35-4U15 " + suffix,
+		Tipus:          "municipi",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	})
+	if err != nil {
+		t.Fatalf("CreateMunicipi esborrany: %v", err)
+	}
+	entityID := f353Z8SaveEntity(t, database, "f354u15_rel_draft_municipi_"+suffix, "Parroquia draft municipi F35-4U15 "+suffix, "parroquia", "publicat")
+	body := f353YPostConfessional(t, app.AdminSaveConfessional, session, f354U15RelationForm(municipiID, 0, entityID))
+	if !strings.Contains(body, "municipi indicat ha d") {
+		t.Fatalf("cal error de municipi no publicat; body=%s", body)
+	}
+	rels, err := database.ListMunicipiEntitatsReligiosesByEntitat(entityID)
+	if err != nil {
+		t.Fatalf("ListMunicipiEntitatsReligiosesByEntitat: %v", err)
+	}
+	if len(rels) != 0 {
+		t.Fatalf("no s'ha de guardar cap relacio amb municipi no publicat: %+v", rels)
+	}
+}
+
+func TestF354U15TerritorialRelationRejectsUnpublishedNucli(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u15_relacio_unpublished_nucli.sqlite3")
+	session := f353YAdminSession(t, database, "f354u15_relacio_unpublished_nucli")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	municipiID := f353YCreateMunicipi(t, database, "Municipi publicat F35-4U15 "+suffix)
+	draftNucliID, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            "Nucli draft F35-4U15 " + suffix,
+		Tipus:          "nucli_urba",
+		MunicipiID:     sql.NullInt64{Int64: int64(municipiID), Valid: true},
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	})
+	if err != nil {
+		t.Fatalf("CreateMunicipi nucli esborrany: %v", err)
+	}
+	entityID := f353Z8SaveEntity(t, database, "f354u15_rel_draft_nucli_"+suffix, "Parroquia draft nucli F35-4U15 "+suffix, "parroquia", "publicat")
+	f354SSaveMunicipiEntitatRelacio(t, database, municipiID, entityID, "parroquia", "publicat")
+
+	body := f353YPostConfessional(t, app.AdminSaveConfessional, session, f354U15RelationForm(municipiID, draftNucliID, entityID))
+	if !strings.Contains(body, "nucli indicat ha d") {
+		t.Fatalf("cal error de nucli no publicat; body=%s", body)
+	}
+	if rel := f354U13FindPrimaryMunicipiRelation(t, database, entityID, municipiID); rel == nil {
+		t.Fatalf("la relacio existent s'ha de preservar quan el nucli no es publicat")
+	}
+	rels, err := database.ListMunicipiEntitatsReligiosesByEntitat(entityID)
+	if err != nil {
+		t.Fatalf("ListMunicipiEntitatsReligiosesByEntitat: %v", err)
+	}
+	for _, rel := range rels {
+		if rel.NucliID.Valid && int(rel.NucliID.Int64) == draftNucliID {
+			t.Fatalf("no s'ha de guardar cap relacio amb nucli no publicat: %+v", rels)
+		}
+	}
 }
 
 type f354U15SuggestItem struct {
@@ -314,4 +390,17 @@ func f354U15SuggestContainsNom(items []f354U15SuggestItem, want string) bool {
 		}
 	}
 	return false
+}
+
+func f354U15RelationForm(municipiID, nucliID, entityID int) url.Values {
+	form := url.Values{}
+	form.Set("kind", "relacio")
+	form.Set("municipi_id", strconv.Itoa(municipiID))
+	form.Set("entitat_religiosa_id", strconv.Itoa(entityID))
+	form.Set("tipus_relacio", "parroquia")
+	form.Set("status", "publicat")
+	if nucliID > 0 {
+		form.Set("nucli_id", strconv.Itoa(nucliID))
+	}
+	return form
 }

@@ -1211,6 +1211,9 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request, lang s
 		if municipi.MunicipiID.Valid {
 			return data, T(lang, "confessional.error.primary_municipality_must_be_municipi")
 		}
+		if municipi.ModeracioEstat != "publicat" {
+			return data, T(lang, "confessional.error.relation_municipality_not_published")
+		}
 		data.RelationMunicipiLabel = strings.TrimSpace(municipi.Nom)
 		if data.RelationNucliLabel != "" && !item.NucliID.Valid {
 			return data, T(lang, "confessional.error.relation_nucli_invalid")
@@ -1225,6 +1228,9 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request, lang s
 			}
 			if !nucli.MunicipiID.Valid || nucli.MunicipiID.Int64 != int64(item.MunicipiID) {
 				return data, T(lang, "confessional.error.relation_nucli_not_in_municipality")
+			}
+			if nucli.ModeracioEstat != "publicat" {
+				return data, T(lang, "confessional.error.relation_nucli_not_published")
 			}
 			data.RelationNucliLabel = strings.TrimSpace(nucli.Nom)
 		}

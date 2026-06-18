@@ -2981,16 +2981,6 @@ func (h sqlHelper) municipiBrowseWhere(f MunicipiBrowseFilter) (string, []interf
 		where += " AND m.id = ?"
 		args = append(args, f.MunicipiID)
 	}
-	switch strings.TrimSpace(f.Scope) {
-	case "municipi":
-		where += " AND m.municipi_id IS NULL"
-	case "nucli":
-		where += " AND m.municipi_id IS NOT NULL"
-	}
-	if f.ParentMunicipiID > 0 {
-		where += " AND m.municipi_id = ?"
-		args = append(args, f.ParentMunicipiID)
-	}
 	if f.NivellID > 0 {
 		parts := municipiBrowseLevelColumns()
 		where += " AND ("
@@ -3418,6 +3408,21 @@ func (h sqlHelper) countMunicipisBrowse(f MunicipiBrowseFilter) (int, error) {
 
 func (h sqlHelper) suggestMunicipis(f MunicipiBrowseFilter) ([]MunicipiSuggestRow, error) {
 	where, args := h.municipiBrowseWhere(f)
+	scope := strings.TrimSpace(f.Scope)
+	parentMunicipiID := f.ParentMunicipiID
+	if scope != "nucli" {
+		parentMunicipiID = 0
+	}
+	switch scope {
+	case "municipi":
+		where += " AND m.municipi_id IS NULL"
+	case "nucli":
+		where += " AND m.municipi_id IS NOT NULL"
+		if parentMunicipiID > 0 {
+			where += " AND m.municipi_id = ?"
+			args = append(args, parentMunicipiID)
+		}
+	}
 	orderPrefix := ""
 	if strings.TrimSpace(f.Text) != "" {
 		queryText := strings.ToLower(strings.TrimSpace(f.Text))
