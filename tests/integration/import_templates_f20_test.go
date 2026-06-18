@@ -529,6 +529,76 @@ func TestTemplateImportMergeExisting(t *testing.T) {
 	}
 }
 
+func TestF354U10TemplateImportCreatesRunJobAuditAndActivityViaHandler(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u10_template_audit.sqlite3")
+	user, sessionID := createF7UserWithSession(t, database)
+	ensureAdminPolicyForUser(t, database, user.ID)
+	llibreID, _ := createF7LlibreWithPagina(t, database, user.ID)
+
+	modelJSON := `{
+  "version": 1,
+  "kind": "transcripcions_raw",
+  "book_resolution": { "mode": "llibre_id", "column": "llibre_id" },
+  "base_defaults": { "moderation_status": "publicat" },
+  "mapping": {
+    "columns": [
+      { "header": "llibre_id", "key": "llibre_id", "required": true, "map_to": [{ "target": "base.llibre_id" }] },
+      { "header": "tipus_acte", "key": "tipus_acte", "required": true, "map_to": [{ "target": "base.tipus_acte" }] },
+      { "header": "batejat", "key": "batejat", "map_to": [{ "target": "person.batejat", "transform": [{ "op": "parse_person_from_nom" }] }] }
+    ]
+  }
+}`
+	templateID, err := database.CreateCSVImportTemplate(&db.CSVImportTemplate{
+		Name:             "Template F354U10",
+		OwnerUserID:      sqlNullFromInt(user.ID),
+		Visibility:       "private",
+		DefaultSeparator: ",",
+		ModelJSON:        modelJSON,
+	})
+	if err != nil || templateID == 0 {
+		t.Fatalf("CreateCSVImportTemplate ha fallat: %v", err)
+	}
+
+	req := buildImportGlobalRequest(t, sessionID, "csrf-f354u10-template-import", map[string]string{
+		"model":       "template",
+		"template_id": strconv.Itoa(templateID),
+		"separator":   ",",
+	}, strings.Join([]string{
+		"llibre_id,tipus_acte,batejat",
+		fmt.Sprintf("%d,baptisme,Joan Handler", llibreID),
+	}, "\n"))
+	rr := httptest.NewRecorder()
+	app.AdminImportRegistresGlobal(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("import via handler esperava 303, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	registres, err := database.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{Limit: -1})
+	if err != nil || len(registres) != 1 {
+		t.Fatalf("ListTranscripcionsRaw inesperat: len=%d err=%v", len(registres), err)
+	}
+	if registres[0].ModeracioEstat != "pendent" || registres[0].ModeratedBy.Valid || registres[0].ModeratedAt.Valid {
+		t.Fatalf("el registre importat ha de quedar pendent: %+v", registres[0])
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM admin_import_runs WHERE import_type = ? AND status = 'ok'", "transcripcions_templates"); got != 1 {
+		t.Fatalf("s'esperava 1 admin_import_run de plantilles, got %d", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM admin_audit WHERE action = ? AND object_type = ? AND actor_id = ?", "admin_import", "import", user.ID); got < 1 {
+		t.Fatalf("s'esperava almenys 1 admin_audit d'import plantilla, got %d", got)
+	}
+	jobRows, err := database.Query("SELECT id FROM admin_jobs WHERE kind = ? ORDER BY id DESC LIMIT 1", "admin_import")
+	if err != nil || len(jobRows) != 1 {
+		t.Fatalf("Query admin_jobs ha fallat: err=%v rows=%d", err, len(jobRows))
+	}
+	jobID := parseCountValue(t, jobRows[0]["id"])
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM admin_job_targets WHERE job_id = ?", jobID); got < 3 {
+		t.Fatalf("s'esperaven almenys 3 admin_job_targets, got %d", got)
+	}
+	if got := countRows(t, database, "SELECT COUNT(*) AS n FROM usuaris_activitat WHERE objecte_tipus = ? AND objecte_id = ? AND estat = ? AND accio = ?", "registre", registres[0].ID, "pendent", "import_template"); got != 1 {
+		t.Fatalf("s'esperava 1 activitat pendent d'import plantilla, got %d", got)
+	}
+}
+
 func TestImportersRegression(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f20_regression.sqlite3")
 	user, sessionID := createF7UserWithSession(t, database)
