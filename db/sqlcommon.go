@@ -9134,7 +9134,10 @@ func (h sqlHelper) persistTemplatePendingMerge(t *TranscripcioRaw, persones []Tr
 		return err
 	}
 	if rows == 0 {
-		checkStmt := formatPlaceholders(h.style, `SELECT 1 FROM transcripcions_raw WHERE id = ?`)
+		checkStmt := `SELECT 1 FROM transcripcions_raw WHERE id = ?`
+		if h.style == "postgres" {
+			checkStmt = `SELECT 1 FROM transcripcions_raw WHERE id = $1`
+		}
 		var exists int
 		if err := tx.QueryRow(checkStmt, t.ID).Scan(&exists); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
