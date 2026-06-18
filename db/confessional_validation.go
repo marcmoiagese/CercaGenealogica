@@ -56,7 +56,7 @@ func validateConfessionalEntityPair(parent, child *EntitatReligiosa) error {
 		return nil
 	}
 	if err := ValidateConfessionalEntityRelationHook(parent, child); err != nil {
-		return fmt.Errorf("%w: %s", ErrInvalidReference, err.Error())
+		return fmt.Errorf("%w: %w", ErrInvalidReference, err)
 	}
 	return nil
 }
