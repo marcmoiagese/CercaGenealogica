@@ -80,6 +80,9 @@ func saveInitialParentRelationTx(tx *sql.Tx, q confessionalQueries, entityID int
 	if copy.EntitatDestiID == 0 {
 		copy.EntitatDestiID = entityID
 	}
+	if err := validateConfessionalEntityRelationIDs(tx, q, copy.EntitatOrigenID, copy.EntitatDestiID); err != nil {
+		return 0, err
+	}
 	return insertEntitatReligiosaRelacioTx(tx, q, &copy)
 }
 
@@ -95,6 +98,9 @@ func saveInitialTerritoryRelationTx(tx *sql.Tx, q confessionalQueries, entityID 
 }
 
 func saveEntitatReligiosaTx(tx *sql.Tx, q confessionalQueries, e *EntitatReligiosa) (int, error) {
+	if err := validateConfessionalEntityParent(tx, q, e); err != nil {
+		return 0, err
+	}
 	args := []interface{}{nullableStringArg(e.Codi), e.Nom, nullableStringArg(e.ReligioConfessioCodi), nullableStringArg(e.NivellConfessionalCodi), e.ReligioConfessioID, e.ModelConfessionalID, e.NivellConfessionalID, e.PaisID, e.ParentID, e.TipusEntitat, e.TipusEspecific, e.AnyInici, e.AnyFi, e.Estat, e.Web, e.WebWikipedia, e.Territori, e.Descripcio, e.Observacions, e.ModeracioEstat, e.ModeracioMotiu, e.CreatedBy, e.UpdatedBy, e.ModeratedBy, e.ModeratedAt}
 	if e.ID == 0 {
 		return execInsertTx(tx, q, "create_entitat_religiosa_tx", "entitat_religiosa", q.insertEntitat, args, &e.ID)
@@ -107,6 +113,9 @@ func saveEntitatReligiosaTx(tx *sql.Tx, q confessionalQueries, e *EntitatReligio
 }
 
 func insertEntitatReligiosaRelacioTx(tx *sql.Tx, q confessionalQueries, rel *EntitatReligiosaRelacio) (int, error) {
+	if err := validateConfessionalEntityRelationIDs(tx, q, rel.EntitatOrigenID, rel.EntitatDestiID); err != nil {
+		return 0, err
+	}
 	args := []interface{}{rel.EntitatOrigenID, rel.EntitatDestiID, rel.TipusRelacio, rel.AnyInici, rel.AnyFi, rel.FontID, rel.Observacions, rel.ModeracioEstat, rel.ModeracioMotiu, rel.CreatedBy, rel.UpdatedBy, rel.ModeratedBy, rel.ModeratedAt}
 	return execInsertTx(tx, q, "create_entitat_religiosa_relacio_tx", "entitat_religiosa_relacio", q.insertEntitatRelacio, args, &rel.ID)
 }

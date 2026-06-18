@@ -667,6 +667,9 @@ func getEntitatReligiosa(conn *sql.DB, q confessionalQueries, id int) (*EntitatR
 }
 
 func saveEntitatReligiosa(conn *sql.DB, q confessionalQueries, e *EntitatReligiosa) (int, error) {
+	if err := validateConfessionalEntityParent(conn, q, e); err != nil {
+		return 0, err
+	}
 	args := []interface{}{nullableStringArg(e.Codi), e.Nom, nullableStringArg(e.ReligioConfessioCodi), nullableStringArg(e.NivellConfessionalCodi), e.ReligioConfessioID, e.ModelConfessionalID, e.NivellConfessionalID, e.PaisID, e.ParentID, e.TipusEntitat, e.TipusEspecific, e.AnyInici, e.AnyFi, e.Estat, e.Web, e.WebWikipedia, e.Territori, e.Descripcio, e.Observacions, e.ModeracioEstat, e.ModeracioMotiu, e.CreatedBy, e.UpdatedBy, e.ModeratedBy, e.ModeratedAt}
 	if e.ID == 0 {
 		return execInsert(conn, q, "create_entitat_religiosa", "entitat_religiosa", q.insertEntitat, args, &e.ID)
@@ -816,6 +819,9 @@ func getEntitatReligiosaRelacio(conn *sql.DB, q confessionalQueries, id int) (*E
 func saveEntitatReligiosaRelacio(conn *sql.DB, q confessionalQueries, rel *EntitatReligiosaRelacio) (int, error) {
 	if rel.EntitatOrigenID == rel.EntitatDestiID {
 		return 0, fmt.Errorf("%w: entitat religiosa parent equals child", ErrInvalidReference)
+	}
+	if err := validateConfessionalEntityRelationIDs(conn, q, rel.EntitatOrigenID, rel.EntitatDestiID); err != nil {
+		return 0, err
 	}
 	if hasCycle, err := entitatRelacioWouldCycle(conn, q, rel); err != nil {
 		return 0, err

@@ -885,7 +885,7 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 			continue
 		}
 		if err := validateConfessionalEntityRelation(&parent, &child); err != nil {
-			plan.View.Errors = append(plan.View.Errors, fmt.Sprintf("%s: %s -> %s", T(defaultLang, "confessional.io.error.invalid_relation"), confessionalEntityRefLabel(parentRef), confessionalEntityRefLabel(childRef)))
+			plan.View.Errors = append(plan.View.Errors, fmt.Sprintf("%s: %s -> %s. %s", T(defaultLang, "confessional.io.error.invalid_relation"), confessionalEntityRefLabel(parentRef), confessionalEntityRefLabel(childRef), confessionalRelationErrorMessage(defaultLang, err)))
 			continue
 		}
 		if parentKey == childKey || confessionalGraphReachable(hierarchyGraph, childKey, parentKey) {

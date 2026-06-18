@@ -140,6 +140,29 @@ var confessionalSections = map[string]confessionalSection{
 var errConfessionalParentLevelIncompatible = errors.New("confessional parent level incompatible")
 var errConfessionalParentCycle = errors.New("confessional parent cycle")
 
+type confessionalParentLevelCompatibilityError struct {
+	ParentLevel         ConfessionalLevelCatalogItem
+	ChildLevel          ConfessionalLevelCatalogItem
+	AllowedParentLabels []string
+}
+
+func (e confessionalParentLevelCompatibilityError) Error() string {
+	childLabel := strings.TrimSpace(e.ChildLevel.CanonicalName)
+	parentLabel := strings.TrimSpace(e.ParentLevel.CanonicalName)
+	if len(e.AllowedParentLabels) == 0 {
+		return fmt.Sprintf("Relacio jerarquica no valida. Una entitat de nivell %s no pot penjar directament d'una %s.", childLabel, parentLabel)
+	}
+	return fmt.Sprintf("Relacio jerarquica no valida. Una entitat de nivell %s no pot penjar directament d'una %s. Selecciona %s o una entitat pare compatible.", childLabel, parentLabel, strings.Join(e.AllowedParentLabels, " o "))
+}
+
+func (e confessionalParentLevelCompatibilityError) Is(target error) bool {
+	return target == errConfessionalParentLevelIncompatible
+}
+
+func init() {
+	db.ValidateConfessionalEntityRelationHook = validateConfessionalEntityRelation
+}
+
 func (a *App) AdminConfessionalList(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/confessional/entitats", http.StatusSeeOther)
 }
@@ -2086,7 +2109,11 @@ func validateConfessionalEntityRelation(parent, child *db.EntitatReligiosa) erro
 			return errors.New("Els nivells de la relacio han de pertanyer a la mateixa religio/confessio.")
 		}
 		if !ConfessionalParentLevelCompatible(parentLevel.Code, childLevel.Code) {
-			return errConfessionalParentLevelIncompatible
+			return confessionalParentLevelCompatibilityError{
+				ParentLevel:         parentLevel,
+				ChildLevel:          childLevel,
+				AllowedParentLabels: confessionalAllowedParentLabels(childLevel),
+			}
 		}
 	}
 	return nil
@@ -2094,12 +2121,27 @@ func validateConfessionalEntityRelation(parent, child *db.EntitatReligiosa) erro
 
 func confessionalRelationErrorMessage(lang string, err error) string {
 	if errors.Is(err, errConfessionalParentLevelIncompatible) {
+		if msg := strings.TrimSpace(err.Error()); msg != "" && msg != errConfessionalParentLevelIncompatible.Error() {
+			return msg
+		}
 		return T(lang, "confessional.error.parent_level_incompatible")
 	}
 	if errors.Is(err, errConfessionalParentCycle) {
 		return T(lang, "confessional.error.parent_cycle")
 	}
 	return err.Error()
+}
+
+func confessionalAllowedParentLabels(childLevel ConfessionalLevelCatalogItem) []string {
+	labels := make([]string, 0, len(childLevel.AllowedParentLevelCodes))
+	for _, code := range childLevel.AllowedParentLevelCodes {
+		item, ok := GetConfessionalLevelCatalogByCode(code)
+		if !ok || !item.Active {
+			continue
+		}
+		labels = append(labels, strings.TrimSpace(item.CanonicalName))
+	}
+	return labels
 }
 
 func selectedConfessionalParentID(item *db.EntitatReligiosa) int {
