@@ -331,7 +331,7 @@ func (d *SQLite) SaveTransparencyContributor(c *TransparencyContributor) (int, e
 func (d *SQLite) DeleteTransparencyContributor(id int) error {
 	return d.help.deleteTransparencyContributor(id)
 }
-func (d *SQLite) InsertAdminImportRun(importType, status string, createdBy int) error {
+func (d *SQLite) InsertAdminImportRun(importType, status string, createdBy int) (int, error) {
 	return d.help.insertAdminImportRun(importType, status, createdBy)
 }
 func (d *SQLite) CountAdminImportRunsSince(since time.Time) (AdminImportRunSummary, error) {
@@ -1375,6 +1375,9 @@ func (d *SQLite) CreateTranscripcioRaw(t *TranscripcioRaw) (int, error) {
 }
 func (d *SQLite) UpdateTranscripcioRaw(t *TranscripcioRaw) error {
 	return d.help.updateTranscripcioRaw(t)
+}
+func (d *SQLite) PersistTemplatePendingMerge(t *TranscripcioRaw, persones []TranscripcioPersonaRaw, atributs []TranscripcioAtributRaw) error {
+	return d.help.persistTemplatePendingMerge(t, persones, atributs)
 }
 func (d *SQLite) UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateTranscripcioModeracio(id, estat, motiu, moderatorID)

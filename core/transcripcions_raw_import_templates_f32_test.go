@@ -1181,9 +1181,12 @@ func TestF354U10TemplateImportCreatesAuditJobTargetsAndPendingActivity(t *testin
 	if len(targetRows) < 2 {
 		t.Fatalf("s'esperaven almenys 2 targets (llibre, registre) en el test directe, got=%d rows=%+v", len(targetRows), targetRows)
 	}
-	activityRows, err := database.Query("SELECT accio, estat, objecte_id FROM usuaris_activitat WHERE objecte_tipus = ? AND objecte_id = ? ORDER BY id DESC", "registre", reg.ID)
+	activityRows, err := database.Query("SELECT accio, estat, objecte_tipus, objecte_id, detalls FROM usuaris_activitat WHERE objecte_tipus = ? AND objecte_id = ? ORDER BY id DESC", "registre", reg.ID)
 	if err != nil || len(activityRows) == 0 {
 		t.Fatalf("s'esperava activitat pendent del registre importat: err=%v rows=%d", err, len(activityRows))
+	}
+	if activityRows[0]["accio"] != "import_template" || activityRows[0]["estat"] != "pendent" || activityRows[0]["objecte_tipus"] != "registre" || activityRows[0]["detalls"] != "template_import" {
+		t.Fatalf("activitat pendent inesperada: %+v", activityRows[0])
 	}
 }
 
@@ -1192,9 +1195,14 @@ func TestF354U10PublishedMergeCreatesPendingChangeInsteadOfDirectUpdate(t *testi
 	user := createModeracioBulkDiagnosticsUser(t, database, "f354u10_published_merge")
 	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U10 Published Merge")
 	bookID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "BOOK-U10-MERGE", Chronology: "1852-1871", Title: "Book U10 Merge", Published: true})
-	book, _ := database.GetLlibre(bookID)
+	book, err := database.GetLlibre(bookID)
+	if err != nil || book == nil {
+		t.Fatalf("GetLlibre ha fallat: llibre=%+v err=%v", book, err)
+	}
 	book.IndexacioCompleta = true
-	_ = database.UpdateLlibre(book)
+	if err := database.UpdateLlibre(book); err != nil {
+		t.Fatalf("UpdateLlibre ha fallat: %v", err)
+	}
 
 	existingID, err := database.CreateTranscripcioRaw(&db.TranscripcioRaw{
 		LlibreID:       bookID,
@@ -1314,7 +1322,10 @@ func TestF354U9TemplateImportDoesNotModifyPublishedBookArtifacts(t *testing.T) {
 	if _, err := database.SaveLlibrePagina(&db.LlibrePagina{LlibreID: llibreID, NumPagina: 12, Estat: "indexada"}); err != nil {
 		t.Fatalf("SaveLlibrePagina ha fallat: %v", err)
 	}
-	beforeBook, _ := database.GetLlibre(llibreID)
+	beforeBook, err := database.GetLlibre(llibreID)
+	if err != nil || beforeBook == nil {
+		t.Fatalf("GetLlibre before ha fallat: llibre=%+v err=%v", beforeBook, err)
+	}
 	beforeLinks, _ := database.ListLlibreArxius(llibreID)
 	beforeURLs, _ := database.ListLlibreURLs(llibreID)
 	beforePages, _ := database.ListLlibrePagines(llibreID)
@@ -1330,7 +1341,10 @@ func TestF354U9TemplateImportDoesNotModifyPublishedBookArtifacts(t *testing.T) {
 	if result.Created != 1 || result.Failed != 0 {
 		t.Fatalf("import sobre llibre publicat inesperat: %+v", result)
 	}
-	afterBook, _ := database.GetLlibre(llibreID)
+	afterBook, err := database.GetLlibre(llibreID)
+	if err != nil || afterBook == nil {
+		t.Fatalf("GetLlibre after ha fallat: llibre=%+v err=%v", afterBook, err)
+	}
 	afterLinks, _ := database.ListLlibreArxius(llibreID)
 	afterURLs, _ := database.ListLlibreURLs(llibreID)
 	afterPages, _ := database.ListLlibrePagines(llibreID)

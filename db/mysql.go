@@ -312,7 +312,7 @@ func (d *MySQL) SaveTransparencyContributor(c *TransparencyContributor) (int, er
 func (d *MySQL) DeleteTransparencyContributor(id int) error {
 	return d.help.deleteTransparencyContributor(id)
 }
-func (d *MySQL) InsertAdminImportRun(importType, status string, createdBy int) error {
+func (d *MySQL) InsertAdminImportRun(importType, status string, createdBy int) (int, error) {
 	return d.help.insertAdminImportRun(importType, status, createdBy)
 }
 func (d *MySQL) CountAdminImportRunsSince(since time.Time) (AdminImportRunSummary, error) {
@@ -1346,6 +1346,9 @@ func (d *MySQL) CreateTranscripcioRaw(t *TranscripcioRaw) (int, error) {
 }
 func (d *MySQL) UpdateTranscripcioRaw(t *TranscripcioRaw) error {
 	return d.help.updateTranscripcioRaw(t)
+}
+func (d *MySQL) PersistTemplatePendingMerge(t *TranscripcioRaw, persones []TranscripcioPersonaRaw, atributs []TranscripcioAtributRaw) error {
+	return d.help.persistTemplatePendingMerge(t, persones, atributs)
 }
 func (d *MySQL) UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateTranscripcioModeracio(id, estat, motiu, moderatorID)

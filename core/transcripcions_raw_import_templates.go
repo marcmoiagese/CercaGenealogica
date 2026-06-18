@@ -145,12 +145,11 @@ type templatePendingCreate struct {
 }
 
 type templateMergeOutcome struct {
-	Accepted                bool
-	Changed                 bool
-	RecordID                int
-	ChangeID                int
-	CreatedProposal         bool
-	PendingActivityObjectID int
+	Accepted        bool
+	Changed         bool
+	RecordID        int
+	ChangeID        int
+	CreatedProposal bool
 }
 
 type templateDuplicateCheckBlockMetrics struct {
@@ -1124,11 +1123,13 @@ func (a *App) recordTemplateImportPendingActivities(ctx importContext, userID in
 	}
 	existingActivities, err := a.DB.ListActivityByObjects("registre", objectIDs, "pendent")
 	existingSet := map[int]struct{}{}
-	if err == nil {
-		for _, act := range existingActivities {
-			if act.ObjectID.Valid && act.ObjectID.Int64 > 0 {
-				existingSet[int(act.ObjectID.Int64)] = struct{}{}
-			}
+	if err != nil {
+		Errorf("template import pending activity lookup failed: %v", err)
+		return 0
+	}
+	for _, act := range existingActivities {
+		if act.ObjectID.Valid && act.ObjectID.Int64 > 0 {
+			existingSet[int(act.ObjectID.Int64)] = struct{}{}
 		}
 	}
 	rows := make([]db.UserActivity, 0, len(objectIDs))
@@ -1151,18 +1152,27 @@ func (a *App) recordTemplateImportPendingActivities(ctx importContext, userID in
 		return 0
 	}
 	insertCtx := ctx.RequestContext()
+	inserted := 0
 	mode, err := a.DB.BulkInsertUserActivities(insertCtx, rows)
 	if err != nil {
 		for i := range rows {
-			_, _ = a.DB.InsertUserActivity(&rows[i])
+			if _, insertErr := a.DB.InsertUserActivity(&rows[i]); insertErr == nil {
+				inserted++
+			}
 		}
-	} else if mode == "" {
-		mode = "bulk"
-		_ = mode
+	} else {
+		inserted = len(rows)
+		if mode == "" {
+			mode = "bulk"
+			_ = mode
+		}
+	}
+	if inserted <= 0 {
+		return 0
 	}
 	a.EvaluateAchievementsForUser(insertCtx, userID, AchievementTrigger{CreatedAt: now})
 	a.logAntiAbuseSignals(userID, now)
-	return len(rows)
+	return inserted
 }
 
 func (a *App) logTemplateImportRun(ctx importContext, template *db.CSVImportTemplate, model *templateImportModel, headers []string, userID int, fixedBookID int, startedAt time.Time, result *csvImportResult) {
@@ -3475,7 +3485,7 @@ func (a *App) mergeTemplateRow(existingID int, t *db.TranscripcioRaw, persones m
 	afterAtributs, addedAttrs := mergeTemplateAttrsPreview(beforeAtributs, atributs, policies.AddMissingAttrs)
 	changed = changed || addedPeople || addedAttrs
 	if !changed {
-		return templateMergeOutcome{Accepted: true, RecordID: existingID, PendingActivityObjectID: existingID}
+		return templateMergeOutcome{Accepted: true, RecordID: existingID}
 	}
 	if strings.EqualFold(strings.TrimSpace(existing.ModeracioEstat), "publicat") {
 		changeID, err := a.createTemplateImportChangeProposal(existingID, existing, beforePersones, beforeAtributs, afterRaw, afterPersones, afterAtributs, userID)
@@ -3483,22 +3493,20 @@ func (a *App) mergeTemplateRow(existingID int, t *db.TranscripcioRaw, persones m
 			return templateMergeOutcome{}
 		}
 		return templateMergeOutcome{
-			Accepted:                true,
-			Changed:                 true,
-			RecordID:                existingID,
-			ChangeID:                changeID,
-			CreatedProposal:         true,
-			PendingActivityObjectID: existingID,
+			Accepted:        true,
+			Changed:         true,
+			RecordID:        existingID,
+			ChangeID:        changeID,
+			CreatedProposal: true,
 		}
 	}
 	if err := a.persistTemplatePendingMerge(existing, &afterRaw, afterPersones, afterAtributs); err != nil {
 		return templateMergeOutcome{}
 	}
 	return templateMergeOutcome{
-		Accepted:                true,
-		Changed:                 true,
-		RecordID:                existingID,
-		PendingActivityObjectID: existingID,
+		Accepted: true,
+		Changed:  true,
+		RecordID: existingID,
 	}
 }
 
@@ -3559,30 +3567,13 @@ func (a *App) persistTemplatePendingMerge(existing *db.TranscripcioRaw, afterRaw
 	}
 	afterRaw.ID = existing.ID
 	afterRaw.CreatedBy = existing.CreatedBy
-	if err := a.DB.UpdateTranscripcioRaw(afterRaw); err != nil {
-		return err
-	}
-	if err := a.DB.DeleteTranscripcioPersones(existing.ID); err != nil {
-		return err
+	for i := range afterAtributs {
+		afterAtributs[i].TranscripcioID = existing.ID
 	}
 	for i := range afterPersones {
-		persona := afterPersones[i]
-		persona.TranscripcioID = existing.ID
-		if _, err := a.DB.CreateTranscripcioPersona(&persona); err != nil {
-			return err
-		}
+		afterPersones[i].TranscripcioID = existing.ID
 	}
-	if err := a.DB.DeleteTranscripcioAtributs(existing.ID); err != nil {
-		return err
-	}
-	for i := range afterAtributs {
-		attr := afterAtributs[i]
-		attr.TranscripcioID = existing.ID
-		if _, err := a.DB.CreateTranscripcioAtribut(&attr); err != nil {
-			return err
-		}
-	}
-	return nil
+	return a.DB.PersistTemplatePendingMerge(afterRaw, afterPersones, afterAtributs)
 }
 
 func (a *App) createTemplateImportChangeProposal(existingID int, beforeRaw *db.TranscripcioRaw, beforePersones []db.TranscripcioPersonaRaw, beforeAtributs []db.TranscripcioAtributRaw, afterRaw db.TranscripcioRaw, afterPersones []db.TranscripcioPersonaRaw, afterAtributs []db.TranscripcioAtributRaw, userID int) (int, error) {

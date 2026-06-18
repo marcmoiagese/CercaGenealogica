@@ -5749,14 +5749,30 @@ func (h sqlHelper) countUsersSince(since time.Time) (int, error) {
 	return total, nil
 }
 
-func (h sqlHelper) insertAdminImportRun(importType, status string, createdBy int) error {
+func (h sqlHelper) insertAdminImportRun(importType, status string, createdBy int) (int, error) {
 	createdByVal := sql.NullInt64{Int64: int64(createdBy), Valid: createdBy > 0}
 	stmt := `
         INSERT INTO admin_import_runs (import_type, status, created_by, created_at)
         VALUES (?, ?, ?, ` + h.nowFun + `)`
+	if h.style == "postgres" {
+		stmt += " RETURNING id"
+	}
 	stmt = formatPlaceholders(h.style, stmt)
-	_, err := h.db.Exec(stmt, importType, status, createdByVal)
-	return err
+	if h.style == "postgres" {
+		var id int
+		if err := h.db.QueryRow(stmt, importType, status, createdByVal).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	res, err := h.db.Exec(stmt, importType, status, createdByVal)
+	if err != nil {
+		return 0, err
+	}
+	if id, err := res.LastInsertId(); err == nil {
+		return int(id), nil
+	}
+	return 0, nil
 }
 
 func (h sqlHelper) countAdminImportRunsSince(since time.Time) (AdminImportRunSummary, error) {
@@ -9083,6 +9099,57 @@ func (h sqlHelper) updateTranscripcioRaw(t *TranscripcioRaw) error {
 		t.TranscripcioLiteral, t.NotesMarginals, t.ObservacionsPaleografiques,
 		status, t.ModeratedBy, t.ModeratedAt, t.ModeracioMotiu, t.ID)
 	return err
+}
+
+func (h sqlHelper) persistTemplatePendingMerge(t *TranscripcioRaw, persones []TranscripcioPersonaRaw, atributs []TranscripcioAtributRaw) error {
+	if t == nil || t.ID <= 0 {
+		return fmt.Errorf("template merge target invalid")
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	status := strings.TrimSpace(t.ModeracioEstat)
+	if status == "" {
+		status = "pendent"
+	}
+	updateStmt := `
+        UPDATE transcripcions_raw
+        SET llibre_id = ?, pagina_id = ?, num_pagina_text = ?, posicio_pagina = ?, tipus_acte = ?, any_doc = ?, data_acte_text = ?, data_acte_iso = ?, data_acte_estat = ?,
+            transcripcio_literal = ?, notes_marginals = ?, observacions_paleografiques = ?,
+            moderation_status = ?, moderated_by = ?, moderated_at = ?, moderation_notes = ?, updated_at = ` + h.nowFun + `
+        WHERE id = ?`
+	updateStmt = formatPlaceholders(h.style, updateStmt)
+	if _, err := tx.Exec(updateStmt,
+		t.LlibreID, t.PaginaID, t.NumPaginaText, t.PosicioPagina, t.TipusActe, t.AnyDoc, t.DataActeText, t.DataActeISO, t.DataActeEstat,
+		t.TranscripcioLiteral, t.NotesMarginals, t.ObservacionsPaleografiques,
+		status, t.ModeratedBy, t.ModeratedAt, t.ModeracioMotiu, t.ID); err != nil {
+		return err
+	}
+	deletePersonesStmt := formatPlaceholders(h.style, `DELETE FROM transcripcions_persones_raw WHERE transcripcio_id = ?`)
+	if _, err := tx.Exec(deletePersonesStmt, t.ID); err != nil {
+		return err
+	}
+	for i := range persones {
+		persona := persones[i]
+		persona.TranscripcioID = t.ID
+		if _, err := h.createTranscripcioPersonaTx(tx, &persona); err != nil {
+			return err
+		}
+	}
+	deleteAtributsStmt := formatPlaceholders(h.style, `DELETE FROM transcripcions_atributs_raw WHERE transcripcio_id = ?`)
+	if _, err := tx.Exec(deleteAtributsStmt, t.ID); err != nil {
+		return err
+	}
+	for i := range atributs {
+		attr := atributs[i]
+		attr.TranscripcioID = t.ID
+		if _, err := h.createTranscripcioAtributTx(tx, &attr); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (h sqlHelper) deleteTranscripcioRaw(id int) error {

@@ -306,7 +306,7 @@ func (d *PostgreSQL) SaveTransparencyContributor(c *TransparencyContributor) (in
 func (d *PostgreSQL) DeleteTransparencyContributor(id int) error {
 	return d.help.deleteTransparencyContributor(id)
 }
-func (d *PostgreSQL) InsertAdminImportRun(importType, status string, createdBy int) error {
+func (d *PostgreSQL) InsertAdminImportRun(importType, status string, createdBy int) (int, error) {
 	return d.help.insertAdminImportRun(importType, status, createdBy)
 }
 func (d *PostgreSQL) CountAdminImportRunsSince(since time.Time) (AdminImportRunSummary, error) {
@@ -2184,6 +2184,9 @@ func (d *PostgreSQL) CreateTranscripcioRaw(t *TranscripcioRaw) (int, error) {
 }
 func (d *PostgreSQL) UpdateTranscripcioRaw(t *TranscripcioRaw) error {
 	return d.help.updateTranscripcioRaw(t)
+}
+func (d *PostgreSQL) PersistTemplatePendingMerge(t *TranscripcioRaw, persones []TranscripcioPersonaRaw, atributs []TranscripcioAtributRaw) error {
+	return d.help.persistTemplatePendingMerge(t, persones, atributs)
 }
 func (d *PostgreSQL) UpdateTranscripcioModeracio(id int, estat, motiu string, moderatorID int) error {
 	return d.help.updateTranscripcioModeracio(id, estat, motiu, moderatorID)

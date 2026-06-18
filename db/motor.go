@@ -58,7 +58,7 @@ type DB interface {
 	GetTransparencyContributor(id int) (*TransparencyContributor, error)
 	SaveTransparencyContributor(c *TransparencyContributor) (int, error)
 	DeleteTransparencyContributor(id int) error
-	InsertAdminImportRun(importType, status string, createdBy int) error
+	InsertAdminImportRun(importType, status string, createdBy int) (int, error)
 	CountAdminImportRunsSince(since time.Time) (AdminImportRunSummary, error)
 	CreateAdminJob(job *AdminJob) (int, error)
 	UpdateAdminJobProgress(id int, progressDone, progressTotal int) error
@@ -436,6 +436,7 @@ type DB interface {
 	GetTranscripcioRaw(id int) (*TranscripcioRaw, error)
 	CreateTranscripcioRaw(t *TranscripcioRaw) (int, error)
 	UpdateTranscripcioRaw(t *TranscripcioRaw) error
+	PersistTemplatePendingMerge(t *TranscripcioRaw, persones []TranscripcioPersonaRaw, atributs []TranscripcioAtributRaw) error
 	DeleteTranscripcioRaw(id int) error
 	ListTranscripcionsRawPageStats(llibreID int) ([]TranscripcioRawPageStat, error)
 	UpdateTranscripcionsRawPageStat(stat *TranscripcioRawPageStat) error

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -53,12 +52,11 @@ func (a *App) logAdminImportRunDetailedResult(r *http.Request, importType, statu
 	if cleanStatus != adminImportStatusOK {
 		cleanStatus = adminImportStatusError
 	}
-	if err := a.DB.InsertAdminImportRun(cleanType, cleanStatus, userID); err != nil {
+	importRunID, err := a.DB.InsertAdminImportRun(cleanType, cleanStatus, userID)
+	if err != nil {
 		Errorf("Admin import run log failed: %v", err)
 	} else {
-		if rows, err := a.DB.Query("SELECT id FROM admin_import_runs WHERE import_type = ? AND status = ? AND created_by = ? ORDER BY id DESC LIMIT 1", cleanType, cleanStatus, userID); err == nil && len(rows) > 0 {
-			logResult.ImportRunID = rowIntValue(rows[0]["id"])
-		}
+		logResult.ImportRunID = importRunID
 	}
 	auditMeta := map[string]interface{}{
 		"type":   cleanType,
@@ -160,25 +158,4 @@ func (a *App) logAdminImportRunDetailedResult(r *http.Request, importType, statu
 		Errorf("Admin job import targets log failed: %v", err)
 	}
 	return logResult
-}
-
-func rowIntValue(raw interface{}) int {
-	switch v := raw.(type) {
-	case int:
-		return v
-	case int32:
-		return int(v)
-	case int64:
-		return int(v)
-	case float64:
-		return int(v)
-	case []byte:
-		i, _ := strconv.Atoi(string(v))
-		return i
-	case string:
-		i, _ := strconv.Atoi(strings.TrimSpace(v))
-		return i
-	default:
-		return 0
-	}
 }
