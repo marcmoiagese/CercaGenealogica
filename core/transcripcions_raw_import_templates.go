@@ -1153,7 +1153,7 @@ func (a *App) recordTemplateImportPendingActivities(ctx importContext, userID in
 	}
 	insertCtx := ctx.RequestContext()
 	inserted := 0
-	mode, err := a.DB.BulkInsertUserActivities(insertCtx, rows)
+	_, err = a.DB.BulkInsertUserActivities(insertCtx, rows)
 	if err != nil {
 		for i := range rows {
 			if _, insertErr := a.DB.InsertUserActivity(&rows[i]); insertErr == nil {
@@ -1162,10 +1162,6 @@ func (a *App) recordTemplateImportPendingActivities(ctx importContext, userID in
 		}
 	} else {
 		inserted = len(rows)
-		if mode == "" {
-			mode = "bulk"
-			_ = mode
-		}
 	}
 	if inserted <= 0 {
 		return 0

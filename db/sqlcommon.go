@@ -5769,10 +5769,11 @@ func (h sqlHelper) insertAdminImportRun(importType, status string, createdBy int
 	if err != nil {
 		return 0, err
 	}
-	if id, err := res.LastInsertId(); err == nil {
-		return int(id), nil
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
 	}
-	return 0, nil
+	return int(id), nil
 }
 
 func (h sqlHelper) countAdminImportRunsSince(since time.Time) (AdminImportRunSummary, error) {
@@ -9121,11 +9122,19 @@ func (h sqlHelper) persistTemplatePendingMerge(t *TranscripcioRaw, persones []Tr
             moderation_status = ?, moderated_by = ?, moderated_at = ?, moderation_notes = ?, updated_at = ` + h.nowFun + `
         WHERE id = ?`
 	updateStmt = formatPlaceholders(h.style, updateStmt)
-	if _, err := tx.Exec(updateStmt,
+	res, err := tx.Exec(updateStmt,
 		t.LlibreID, t.PaginaID, t.NumPaginaText, t.PosicioPagina, t.TipusActe, t.AnyDoc, t.DataActeText, t.DataActeISO, t.DataActeEstat,
 		t.TranscripcioLiteral, t.NotesMarginals, t.ObservacionsPaleografiques,
-		status, t.ModeratedBy, t.ModeratedAt, t.ModeracioMotiu, t.ID); err != nil {
+		status, t.ModeratedBy, t.ModeratedAt, t.ModeracioMotiu, t.ID)
+	if err != nil {
 		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows != 1 {
+		return fmt.Errorf("template merge target not found: %d", t.ID)
 	}
 	deletePersonesStmt := formatPlaceholders(h.style, `DELETE FROM transcripcions_persones_raw WHERE transcripcio_id = ?`)
 	if _, err := tx.Exec(deletePersonesStmt, t.ID); err != nil {
