@@ -1146,6 +1146,9 @@ func (a *App) parseConfessionalForm(kind string, id int, r *http.Request, lang s
 			if municipi.MunicipiID.Valid {
 				return data, T(lang, "confessional.error.primary_municipality_must_be_municipi")
 			}
+			if municipi.ModeracioEstat != "publicat" {
+				return data, T(lang, "confessional.error.relation_municipality_not_published")
+			}
 			data.PrimaryMunicipiLabel = strings.TrimSpace(municipi.Nom)
 			if id > 0 {
 				if existing := a.confessionalPrimaryMunicipiForEntity(id); existing != nil {

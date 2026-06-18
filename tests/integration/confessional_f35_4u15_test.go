@@ -146,6 +146,36 @@ func TestF354U15PrimaryMunicipalityRejectsNucli(t *testing.T) {
 	}
 }
 
+func TestF354U15CreateEntityRejectsUnpublishedPrimaryMunicipality(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u15_create_unpublished_primary.sqlite3")
+	session := f353YAdminSession(t, database, "f354u15_create_unpublished_primary")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	municipiName := "Municipi pendent alta F35-4U15 " + suffix
+	municipiID, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            municipiName,
+		Tipus:          "municipi",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	})
+	if err != nil {
+		t.Fatalf("CreateMunicipi pendent: %v", err)
+	}
+	entityName := "Parroquia pendent alta F35-4U15 " + suffix
+	entityCode := "f354u15_create_pending_" + suffix
+	form := f353ZEntityForm(entityName, entityCode, 0)
+	form.Set("municipi_principal_id", strconv.Itoa(municipiID))
+	form.Set("municipi_principal_label", municipiName)
+
+	body := f353YPostConfessional(t, app.AdminSaveConfessional, session, form)
+	if !strings.Contains(body, "municipi indicat ha d") {
+		t.Fatalf("cal error de municipi principal no publicat en alta; body=%s", body)
+	}
+	if f354U13EntityExistsByName(t, database, entityName) {
+		t.Fatalf("no s'ha de crear l'entitat si el municipi principal no esta publicat")
+	}
+}
+
 func TestF354U15TerritorialRelationFormUsesAutocompleteAndPrefillsLabels(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f35_4u15_relacio_form.sqlite3")
 	session := f353YAdminSession(t, database, "f354u15_relacio_form")
@@ -224,6 +254,50 @@ func TestF354U15TerritorialRelationFormUsesAutocompleteAndPrefillsLabels(t *test
 		if !strings.Contains(editBody, token) {
 			t.Fatalf("prefill relacio sense %q; body=%s", token, editBody)
 		}
+	}
+}
+
+func TestF354U15EditEntityRejectsUnpublishedPrimaryMunicipality(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u15_edit_unpublished_primary.sqlite3")
+	session := f353YAdminSession(t, database, "f354u15_edit_unpublished_primary")
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	municipiAName := "Municipi A pendent edit F35-4U15 " + suffix
+	municipiBName := "Municipi B pendent edit F35-4U15 " + suffix
+	municipiAID := f353YCreateMunicipi(t, database, municipiAName)
+	municipiBID, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            municipiBName,
+		Tipus:          "municipi",
+		Estat:          "actiu",
+		ModeracioEstat: "pendent",
+	})
+	if err != nil {
+		t.Fatalf("CreateMunicipi pendent B: %v", err)
+	}
+	entityID := f353Z8SaveEntity(t, database, "f354u15_edit_pending_"+suffix, "Parroquia edit pendent F35-4U15 "+suffix, "parroquia", "publicat")
+	f354SSaveMunicipiEntitatRelacio(t, database, municipiAID, entityID, "parroquia", "publicat")
+
+	entity, err := database.GetEntitatReligiosa(entityID)
+	if err != nil || entity == nil {
+		t.Fatalf("GetEntitatReligiosa: %v", err)
+	}
+	form := f353Z12EntityEditForm(entityID, entity.Codi, entity.Nom, entity.NivellConfessionalCodi, 0)
+	form.Set("parent_id", "")
+	form.Set("municipi_principal_id", strconv.Itoa(municipiBID))
+	form.Set("municipi_principal_label", municipiBName)
+
+	body := f353YPostConfessional(t, app.AdminSaveConfessional, session, form)
+	if !strings.Contains(body, "municipi indicat ha d") {
+		t.Fatalf("cal error de municipi principal no publicat en edicio; body=%s", body)
+	}
+	if rel := f354U13FindPrimaryMunicipiRelation(t, database, entityID, municipiAID); rel == nil {
+		t.Fatalf("la relacio principal existent ha de continuar apuntant a A")
+	}
+	if rel := f354U13FindPrimaryMunicipiRelation(t, database, entityID, municipiBID); rel != nil {
+		t.Fatalf("no s'ha de crear cap relacio principal nova cap a B: %+v", rel)
+	}
+	if got := f354U13CountPrimaryMunicipiRelations(t, database, entityID, municipiAID); got != 1 {
+		t.Fatalf("nomes hi ha d'haver una relacio principal cap a A, got=%d", got)
 	}
 }
 
