@@ -61,6 +61,76 @@ type confessionalArchiveRef struct {
 	Municipality *confessionalMunicipalityRef `json:"municipality,omitempty"`
 }
 
+const (
+	confessionalRefKindUnresolved = "unresolved"
+	confessionalRefKindAmbiguous  = "ambiguous"
+)
+
+type confessionalReferenceDiagnostic struct {
+	Kind           string
+	Section        string
+	RefType        string
+	Field          string
+	Value          string
+	Origin         string
+	ExpectedParent string
+	SearchScope    string
+	Suggestion     string
+	Candidates     []string
+}
+
+func (d confessionalReferenceDiagnostic) Error() string {
+	label := T(defaultLang, "confessional.io.error.unresolved_reference")
+	if d.Kind == confessionalRefKindAmbiguous {
+		label = "Referencia ambigua"
+	}
+	parts := []string{label}
+	if d.Section != "" {
+		parts = append(parts, "seccio="+d.Section)
+	}
+	if d.RefType != "" {
+		parts = append(parts, "tipus="+d.RefType)
+	}
+	if d.Field != "" {
+		parts = append(parts, "camp="+d.Field)
+	}
+	if d.Value != "" {
+		parts = append(parts, "valor="+d.Value)
+	}
+	if d.Origin != "" {
+		parts = append(parts, "origen="+d.Origin)
+	}
+	if d.ExpectedParent != "" {
+		parts = append(parts, "pare_esperat="+d.ExpectedParent)
+	}
+	if d.SearchScope != "" {
+		parts = append(parts, "abast="+d.SearchScope)
+	}
+	if len(d.Candidates) > 0 {
+		parts = append(parts, "candidats="+strings.Join(d.Candidates, ", "))
+	}
+	if d.Suggestion != "" {
+		parts = append(parts, "accio="+d.Suggestion)
+	}
+	return strings.Join(parts, "; ")
+}
+
+type confessionalMunicipalityLookup struct {
+	All               map[int]*db.Municipi
+	Exact             map[string][]int
+	ByNameTypeCountry map[string][]int
+	ByNameType        map[string][]int
+	ByName            map[string][]int
+}
+
+type confessionalArchiveLookup struct {
+	Rows       map[int]db.ArxiuWithCount
+	Exact      map[string][]int
+	ByNameType map[string][]int
+	ByName     map[string][]int
+	Municipis  map[int]*db.Municipi
+}
+
 type confessionalExportEntityRecord struct {
 	Ref              confessionalEntityRef `json:"ref"`
 	Name             string                `json:"name"`
@@ -766,7 +836,16 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 		}
 		ref := confessionalNormalizeEntityRef(item.Ref)
 		if ref.Code == "" || ref.ReligionCode == "" || ref.LevelCode == "" || strings.TrimSpace(item.Name) == "" {
-			plan.View.Errors = append(plan.View.Errors, fmt.Sprintf("%s: %s", T(defaultLang, "confessional.io.error.unresolved_reference"), confessionalEntityRefLabel(ref)))
+			plan.View.Errors = append(plan.View.Errors, confessionalReferenceDiagnostic{
+				Kind:        confessionalRefKindUnresolved,
+				Section:     "entitats_religioses",
+				RefType:     "entitat",
+				Field:       "ref",
+				Value:       confessionalEntityRefLabel(ref),
+				Origin:      strings.TrimSpace(item.Name),
+				SearchScope: "payload importat",
+				Suggestion:  "Completa code, religion_code, level_code i name abans de repetir el dry-run.",
+			}.Error())
 			continue
 		}
 		_, _, religionOK, levelOK, compatible := ConfessionalLevelCompatibleWithReligion(ref.ReligionCode, ref.LevelCode)
@@ -813,7 +892,16 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 		item := payloadEntities[refKey]
 		ref := confessionalNormalizeEntityRef(item.Ref)
 		if entityExactDup[refKey] {
-			plan.View.Errors = append(plan.View.Errors, fmt.Sprintf("%s: %s", T(defaultLang, "confessional.io.error.unresolved_reference"), confessionalEntityRefLabel(ref)))
+			plan.View.Errors = append(plan.View.Errors, confessionalReferenceDiagnostic{
+				Kind:        confessionalRefKindAmbiguous,
+				Section:     "entitats_religioses",
+				RefType:     "entitat",
+				Field:       "ref",
+				Value:       confessionalEntityRefLabel(ref),
+				Origin:      strings.TrimSpace(item.Name),
+				SearchScope: "entitats religioses existents",
+				Suggestion:  "Resol el duplicat existent o exporta amb una referencia unica.",
+			}.Error())
 			continue
 		}
 		if existing, ok := entityExact[refKey]; ok {
@@ -850,6 +938,12 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 			knownRefs[refKey] = entity
 		}
 	}
+	knownRefLabel := func(ref confessionalEntityRef, refKey string) string {
+		if entity, ok := knownRefs[refKey]; ok {
+			return confessionalEntityRefLabel(confessionalEntityRefFromEntity(entity))
+		}
+		return confessionalEntityRefLabel(ref)
+	}
 
 	existingHierarchyKeys := map[string]struct{}{}
 	hierarchyGraph := map[string]map[string]bool{}
@@ -881,7 +975,16 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 		parent, okParent := knownRefs[parentKey]
 		child, okChild := knownRefs[childKey]
 		if !okParent || !okChild {
-			plan.View.Errors = append(plan.View.Errors, fmt.Sprintf("%s: %s -> %s", T(defaultLang, "confessional.io.error.unresolved_reference"), confessionalEntityRefLabel(parentRef), confessionalEntityRefLabel(childRef)))
+			plan.View.Errors = append(plan.View.Errors, confessionalReferenceDiagnostic{
+				Kind:        confessionalRefKindUnresolved,
+				Section:     "relacions_entitats",
+				RefType:     "entitat",
+				Field:       "parent/child",
+				Value:       fmt.Sprintf("%s -> %s", confessionalEntityRefLabel(parentRef), confessionalEntityRefLabel(childRef)),
+				Origin:      fmt.Sprintf("%s -> %s", confessionalEntityRefLabel(parentRef), confessionalEntityRefLabel(childRef)),
+				SearchScope: "payload importat i entitats religioses existents",
+				Suggestion:  "Assegura que parent i child existeixen al payload o a la base de dades amb la mateixa referencia estable.",
+			}.Error())
 			continue
 		}
 		if err := validateConfessionalEntityRelation(&parent, &child); err != nil {
@@ -943,24 +1046,45 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 		entityRef := confessionalNormalizeEntityRef(rel.Entity)
 		entityKey := confessionalEntityRefKey(entityRef)
 		if _, ok := knownRefs[entityKey]; !ok {
-			plan.View.Errors = append(plan.View.Errors, fmt.Sprintf("%s: %s", T(defaultLang, "confessional.io.error.unresolved_reference"), confessionalEntityRefLabel(entityRef)))
+			plan.View.Errors = append(plan.View.Errors, confessionalReferenceDiagnostic{
+				Kind:        confessionalRefKindUnresolved,
+				Section:     "relacions_territorials",
+				RefType:     "entitat",
+				Field:       "entity",
+				Value:       confessionalEntityRefLabel(entityRef),
+				Origin:      confessionalEntityRefLabel(entityRef),
+				SearchScope: "payload importat i entitats religioses existents",
+				Suggestion:  "Exporta o defineix primer l'entitat religiosa amb el mateix code/religion_code/level_code.",
+			}.Error())
 			continue
 		}
-		municipiID, err := confessionalResolveMunicipalityRef(rel.Municipality, municipiIndex)
+		originLabel := knownRefLabel(entityRef, entityKey)
+		municipiID, err := confessionalResolveMunicipalityRef(rel.Municipality, municipiIndex, "relacions_territorials", "municipality", originLabel, "", false)
 		if err != nil {
 			plan.View.Errors = append(plan.View.Errors, err.Error())
 			continue
 		}
 		nucliID := sql.NullInt64{}
 		if rel.Nucleus != nil {
-			resolvedNucliID, err := confessionalResolveMunicipalityRef(*rel.Nucleus, municipiIndex)
+			expectedParent := strings.TrimSpace(rel.Municipality.Name)
+			resolvedNucliID, err := confessionalResolveMunicipalityRef(*rel.Nucleus, municipiIndex, "relacions_territorials", "nucleus", originLabel, expectedParent, true)
 			if err != nil {
 				plan.View.Errors = append(plan.View.Errors, err.Error())
 				continue
 			}
 			nucli, ok := municipisByID[resolvedNucliID]
 			if !ok || !nucli.MunicipiID.Valid || int(nucli.MunicipiID.Int64) != municipiID {
-				plan.View.Errors = append(plan.View.Errors, fmt.Sprintf("%s: %s", T(defaultLang, "confessional.io.error.unresolved_reference"), rel.Nucleus.Name))
+				plan.View.Errors = append(plan.View.Errors, confessionalReferenceDiagnostic{
+					Kind:           confessionalRefKindUnresolved,
+					Section:        "relacions_territorials",
+					RefType:        "nucli",
+					Field:          "nucleus",
+					Value:          strings.TrimSpace(rel.Nucleus.Name),
+					Origin:         originLabel,
+					ExpectedParent: expectedParent,
+					SearchScope:    "nuclis existents del municipi indicat",
+					Suggestion:     "Exporta el nucli amb parent_names correcte o selecciona el municipi pare real.",
+				}.Error())
 				continue
 			}
 			nucliID = sql.NullInt64{Int64: int64(resolvedNucliID), Valid: true}
@@ -1013,10 +1137,19 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 		entityRef := confessionalNormalizeEntityRef(rel.Entity)
 		entityKey := confessionalEntityRefKey(entityRef)
 		if _, ok := knownRefs[entityKey]; !ok {
-			plan.View.Errors = append(plan.View.Errors, fmt.Sprintf("%s: %s", T(defaultLang, "confessional.io.error.unresolved_reference"), confessionalEntityRefLabel(entityRef)))
+			plan.View.Errors = append(plan.View.Errors, confessionalReferenceDiagnostic{
+				Kind:        confessionalRefKindUnresolved,
+				Section:     "relacions_arxius",
+				RefType:     "entitat",
+				Field:       "entity",
+				Value:       confessionalEntityRefLabel(entityRef),
+				Origin:      confessionalEntityRefLabel(entityRef),
+				SearchScope: "payload importat i entitats religioses existents",
+				Suggestion:  "Exporta o defineix primer l'entitat religiosa amb la mateixa referencia estable.",
+			}.Error())
 			continue
 		}
-		arxiuID, err := confessionalResolveArchiveRef(rel.Archive, arxiuIndex)
+		arxiuID, err := confessionalResolveArchiveRef(rel.Archive, arxiuIndex, "relacions_arxius", "archive", knownRefLabel(entityRef, entityKey))
 		if err != nil {
 			plan.View.Errors = append(plan.View.Errors, err.Error())
 			continue
@@ -1132,45 +1265,101 @@ func (a *App) confessionalArchiveRef(row db.ArxiuWithCount, municipis map[int]*d
 	return ref
 }
 
-func (a *App) confessionalMunicipalityIndex(all map[int]*db.Municipi) map[string][]int {
-	index := map[string][]int{}
+func (a *App) confessionalMunicipalityIndex(all map[int]*db.Municipi) confessionalMunicipalityLookup {
+	index := confessionalMunicipalityLookup{
+		All:               all,
+		Exact:             map[string][]int{},
+		ByNameTypeCountry: map[string][]int{},
+		ByNameType:        map[string][]int{},
+		ByName:            map[string][]int{},
+	}
 	for id, municipi := range all {
 		ref := a.confessionalMunicipalityRef(municipi, all)
 		key := confessionalMunicipalityRefKey(ref)
-		index[key] = append(index[key], id)
+		index.Exact[key] = append(index.Exact[key], id)
+		index.ByNameTypeCountry[confessionalMunicipalityNameTypeCountryKey(ref)] = append(index.ByNameTypeCountry[confessionalMunicipalityNameTypeCountryKey(ref)], id)
+		index.ByNameType[confessionalMunicipalityNameTypeKey(ref)] = append(index.ByNameType[confessionalMunicipalityNameTypeKey(ref)], id)
+		index.ByName[confessionalMunicipalityNameKey(ref)] = append(index.ByName[confessionalMunicipalityNameKey(ref)], id)
 	}
 	return index
 }
 
-func (a *App) confessionalArchiveIndex(rows []db.ArxiuWithCount, municipis map[int]*db.Municipi) map[string][]int {
-	index := map[string][]int{}
+func (a *App) confessionalArchiveIndex(rows []db.ArxiuWithCount, municipis map[int]*db.Municipi) confessionalArchiveLookup {
+	index := confessionalArchiveLookup{
+		Rows:       map[int]db.ArxiuWithCount{},
+		Exact:      map[string][]int{},
+		ByNameType: map[string][]int{},
+		ByName:     map[string][]int{},
+		Municipis:  municipis,
+	}
 	for _, row := range rows {
 		ref := a.confessionalArchiveRef(row, municipis)
 		key := confessionalArchiveRefKey(ref)
-		index[key] = append(index[key], row.ID)
+		index.Rows[row.ID] = row
+		index.Exact[key] = append(index.Exact[key], row.ID)
+		index.ByNameType[confessionalArchiveNameTypeKey(ref)] = append(index.ByNameType[confessionalArchiveNameTypeKey(ref)], row.ID)
+		index.ByName[normalizeKey(ref.Name)] = append(index.ByName[normalizeKey(ref.Name)], row.ID)
 	}
 	return index
 }
 
-func confessionalResolveMunicipalityRef(ref confessionalMunicipalityRef, index map[string][]int) (int, error) {
-	key := confessionalMunicipalityRefKey(confessionalNormalizeMunicipalityRef(ref))
-	ids := index[key]
+func confessionalResolveMunicipalityRef(ref confessionalMunicipalityRef, lookup confessionalMunicipalityLookup, section, field, origin, expectedParent string, wantNucleus bool) (int, error) {
+	ref = confessionalNormalizeMunicipalityRef(ref)
+	key := confessionalMunicipalityRefKey(ref)
+	ids := lookup.Exact[key]
+	if len(ids) == 1 {
+		if err := confessionalValidateMunicipalityCandidate(ref, lookup, ids[0], section, field, origin, expectedParent, wantNucleus); err != nil {
+			return 0, err
+		}
+		return ids[0], nil
+	}
+	if len(ids) > 1 {
+		return 0, confessionalMunicipalityDiagnostic(ref, lookup, ids, confessionalRefKindAmbiguous, section, field, origin, expectedParent, wantNucleus)
+	}
+	candidates := lookup.ByNameTypeCountry[confessionalMunicipalityNameTypeCountryKey(ref)]
+	if len(candidates) == 0 {
+		candidates = lookup.ByNameType[confessionalMunicipalityNameTypeKey(ref)]
+	}
+	if len(candidates) == 0 {
+		candidates = lookup.ByName[confessionalMunicipalityNameKey(ref)]
+	}
+	if len(candidates) > 0 {
+		filtered := confessionalFilterMunicipalityCandidates(candidates, lookup, wantNucleus, expectedParent)
+		if len(filtered) == 1 {
+			return filtered[0], nil
+		}
+		kind := confessionalRefKindAmbiguous
+		if len(filtered) == 0 {
+			filtered = candidates
+			kind = confessionalRefKindUnresolved
+		}
+		return 0, confessionalMunicipalityDiagnostic(ref, lookup, filtered, kind, section, field, origin, expectedParent, wantNucleus)
+	}
+	return 0, confessionalMunicipalityDiagnostic(ref, lookup, nil, confessionalRefKindUnresolved, section, field, origin, expectedParent, wantNucleus)
+}
+
+func confessionalResolveArchiveRef(ref confessionalArchiveRef, lookup confessionalArchiveLookup, section, field, origin string) (int, error) {
+	ref = confessionalNormalizeArchiveRef(ref)
+	key := confessionalArchiveRefKey(ref)
+	ids := lookup.Exact[key]
 	if len(ids) == 1 {
 		return ids[0], nil
 	}
 	if len(ids) > 1 {
-		return 0, fmt.Errorf("%s: %s", T(defaultLang, "confessional.io.error.unresolved_reference"), ref.Name)
+		return 0, confessionalArchiveDiagnostic(ref, lookup, ids, confessionalRefKindAmbiguous, section, field, origin)
 	}
-	return 0, fmt.Errorf("%s: %s", T(defaultLang, "confessional.io.error.unresolved_reference"), ref.Name)
-}
-
-func confessionalResolveArchiveRef(ref confessionalArchiveRef, index map[string][]int) (int, error) {
-	key := confessionalArchiveRefKey(confessionalNormalizeArchiveRef(ref))
-	ids := index[key]
-	if len(ids) == 1 {
-		return ids[0], nil
+	candidates := lookup.ByNameType[confessionalArchiveNameTypeKey(ref)]
+	if len(candidates) == 0 {
+		candidates = lookup.ByName[normalizeKey(ref.Name)]
 	}
-	return 0, fmt.Errorf("%s: %s", T(defaultLang, "confessional.io.error.unresolved_reference"), ref.Name)
+	if len(candidates) > 0 {
+		kind := confessionalRefKindAmbiguous
+		if len(candidates) == 1 {
+			return candidates[0], nil
+		}
+		return 0, confessionalArchiveDiagnostic(ref, lookup, candidates, kind, section, field, origin)
+	}
+	return 0, confessionalArchiveDiagnostic(ref, lookup, nil, confessionalRefKindUnresolved, section, field, origin)
 }
 
 func confessionalNormalizeEntityRef(ref confessionalEntityRef) confessionalEntityRef {
@@ -1221,10 +1410,10 @@ func confessionalEntityRefKey(ref confessionalEntityRef) string {
 func confessionalMunicipalityRefKey(ref confessionalMunicipalityRef) string {
 	ref = confessionalNormalizeMunicipalityRef(ref)
 	return strings.Join([]string{
-		strings.ToLower(ref.Name),
-		strings.ToLower(ref.Type),
-		strings.ToLower(ref.CountryISO2),
-		strings.ToLower(strings.Join(ref.ParentNames, ">")),
+		normalizeKey(ref.Name),
+		normalizeKey(ref.Type),
+		normalizeKey(ref.CountryISO2),
+		normalizeKey(strings.Join(ref.ParentNames, ">")),
 	}, "|")
 }
 
@@ -1235,10 +1424,30 @@ func confessionalArchiveRefKey(ref confessionalArchiveRef) string {
 		municipiKey = confessionalMunicipalityRefKey(*ref.Municipality)
 	}
 	return strings.Join([]string{
-		strings.ToLower(ref.Name),
-		strings.ToLower(ref.Type),
+		normalizeKey(ref.Name),
+		normalizeKey(ref.Type),
 		municipiKey,
 	}, "|")
+}
+
+func confessionalMunicipalityNameKey(ref confessionalMunicipalityRef) string {
+	ref = confessionalNormalizeMunicipalityRef(ref)
+	return normalizeKey(ref.Name)
+}
+
+func confessionalMunicipalityNameTypeKey(ref confessionalMunicipalityRef) string {
+	ref = confessionalNormalizeMunicipalityRef(ref)
+	return strings.Join([]string{normalizeKey(ref.Name), normalizeKey(ref.Type)}, "|")
+}
+
+func confessionalMunicipalityNameTypeCountryKey(ref confessionalMunicipalityRef) string {
+	ref = confessionalNormalizeMunicipalityRef(ref)
+	return strings.Join([]string{normalizeKey(ref.Name), normalizeKey(ref.Type), normalizeKey(ref.CountryISO2)}, "|")
+}
+
+func confessionalArchiveNameTypeKey(ref confessionalArchiveRef) string {
+	ref = confessionalNormalizeArchiveRef(ref)
+	return strings.Join([]string{normalizeKey(ref.Name), normalizeKey(ref.Type)}, "|")
 }
 
 func confessionalHierarchyKey(parentKey, childKey, relationType string, startsYear, endsYear sql.NullInt64) string {
@@ -1300,6 +1509,146 @@ func confessionalEntityRefLabel(ref confessionalEntityRef) string {
 		return ref.Name + " (" + ref.Code + ")"
 	}
 	return ref.Code
+}
+
+func confessionalValidateMunicipalityCandidate(ref confessionalMunicipalityRef, lookup confessionalMunicipalityLookup, id int, section, field, origin, expectedParent string, wantNucleus bool) error {
+	municipi := lookup.All[id]
+	if municipi == nil {
+		return confessionalMunicipalityDiagnostic(ref, lookup, nil, confessionalRefKindUnresolved, section, field, origin, expectedParent, wantNucleus)
+	}
+	if wantNucleus && !municipi.MunicipiID.Valid {
+		return confessionalMunicipalityDiagnostic(ref, lookup, []int{id}, confessionalRefKindUnresolved, section, field, origin, expectedParent, wantNucleus)
+	}
+	if !wantNucleus && municipi.MunicipiID.Valid {
+		return confessionalMunicipalityDiagnostic(ref, lookup, []int{id}, confessionalRefKindUnresolved, section, field, origin, expectedParent, wantNucleus)
+	}
+	if expectedParent != "" && municipi.MunicipiID.Valid {
+		parent := lookup.All[int(municipi.MunicipiID.Int64)]
+		if parent == nil || normalizeKey(parent.Nom) != normalizeKey(expectedParent) {
+			return confessionalMunicipalityDiagnostic(ref, lookup, []int{id}, confessionalRefKindUnresolved, section, field, origin, expectedParent, wantNucleus)
+		}
+	}
+	return nil
+}
+
+func confessionalFilterMunicipalityCandidates(ids []int, lookup confessionalMunicipalityLookup, wantNucleus bool, expectedParent string) []int {
+	filtered := make([]int, 0, len(ids))
+	for _, id := range ids {
+		municipi := lookup.All[id]
+		if municipi == nil {
+			continue
+		}
+		if wantNucleus && !municipi.MunicipiID.Valid {
+			continue
+		}
+		if !wantNucleus && municipi.MunicipiID.Valid {
+			continue
+		}
+		if expectedParent != "" && municipi.MunicipiID.Valid {
+			parent := lookup.All[int(municipi.MunicipiID.Int64)]
+			if parent == nil || normalizeKey(parent.Nom) != normalizeKey(expectedParent) {
+				continue
+			}
+		}
+		filtered = append(filtered, id)
+	}
+	return filtered
+}
+
+func confessionalMunicipalityDiagnostic(ref confessionalMunicipalityRef, lookup confessionalMunicipalityLookup, ids []int, kind, section, field, origin, expectedParent string, wantNucleus bool) error {
+	refType := "municipi"
+	searchScope := "municipis reals existents"
+	suggestion := "Verifica name, type, country_iso2 i parent_names abans de repetir el dry-run."
+	if wantNucleus {
+		refType = "nucli"
+		searchScope = "nuclis reals existents"
+		suggestion = "Inclou el municipi pare correcte a parent_names i evita reutilitzar noms de nucli sense context."
+	}
+	if expectedParent != "" {
+		searchScope += " sota " + expectedParent
+	}
+	return confessionalReferenceDiagnostic{
+		Kind:           kind,
+		Section:        section,
+		RefType:        refType,
+		Field:          field,
+		Value:          strings.TrimSpace(ref.Name),
+		Origin:         origin,
+		ExpectedParent: expectedParent,
+		SearchScope:    searchScope,
+		Suggestion:     suggestion,
+		Candidates:     confessionalMunicipalityCandidateLabels(ids, lookup),
+	}
+}
+
+func confessionalMunicipalityCandidateLabels(ids []int, lookup confessionalMunicipalityLookup) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	labels := make([]string, 0, len(ids))
+	for _, id := range ids {
+		municipi := lookup.All[id]
+		if municipi == nil {
+			continue
+		}
+		label := strings.TrimSpace(municipi.Nom)
+		if municipi.MunicipiID.Valid {
+			if parent := lookup.All[int(municipi.MunicipiID.Int64)]; parent != nil {
+				label = label + " [" + strings.TrimSpace(parent.Nom) + "]"
+			}
+		}
+		if strings.TrimSpace(municipi.Tipus) != "" {
+			label = label + " {" + strings.TrimSpace(municipi.Tipus) + "}"
+		}
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+	if len(labels) > 5 {
+		labels = labels[:5]
+	}
+	return labels
+}
+
+func confessionalArchiveDiagnostic(ref confessionalArchiveRef, lookup confessionalArchiveLookup, ids []int, kind, section, field, origin string) error {
+	return confessionalReferenceDiagnostic{
+		Kind:        kind,
+		Section:     section,
+		RefType:     "arxiu",
+		Field:       field,
+		Value:       strings.TrimSpace(ref.Name),
+		Origin:      origin,
+		SearchScope: "arxius existents",
+		Suggestion:  "Verifica name, type i municipality del bloc archive abans de repetir el dry-run.",
+		Candidates:  confessionalArchiveCandidateLabels(ids, lookup),
+	}
+}
+
+func confessionalArchiveCandidateLabels(ids []int, lookup confessionalArchiveLookup) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	labels := make([]string, 0, len(ids))
+	for _, id := range ids {
+		row, ok := lookup.Rows[id]
+		if !ok {
+			continue
+		}
+		label := strings.TrimSpace(row.Nom)
+		if strings.TrimSpace(row.Tipus) != "" {
+			label += " {" + strings.TrimSpace(row.Tipus) + "}"
+		}
+		if row.MunicipiID.Valid {
+			if municipi := lookup.Municipis[int(row.MunicipiID.Int64)]; municipi != nil {
+				label += " [" + strings.TrimSpace(municipi.Nom) + "]"
+			}
+		}
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+	if len(labels) > 5 {
+		labels = labels[:5]
+	}
+	return labels
 }
 
 func confessionalEntityDiff(existing, imported db.EntitatReligiosa) string {
