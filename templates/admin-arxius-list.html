@@ -54,15 +54,6 @@
                         </select>
                     </div>
                     <div class="grup-camp">
-                        <label for="filtre-entitat">{{ t .Lang "archives.filter.entity" }}</label>
-                        <select id="filtre-entitat" name="entitat_id">
-                            <option value="">{{ t .Lang "archives.filter.entity.any" }}</option>
-                            {{ range .Data.Arquebisbats }}
-                            <option value="{{ .ID }}" {{ if eq $.Data.Filter.EntitatID .ID }}selected{{ end }}>{{ .Nom }}</option>
-                            {{ end }}
-                        </select>
-                    </div>
-                    <div class="grup-camp">
                         <label for="filtre-status">{{ t .Lang "moderation.status" }}</label>
                         <select id="filtre-status" name="status">
                             {{ $st := .Data.Filter.Status }}
@@ -96,33 +87,29 @@
                                 <th data-col="2" data-key="acces">
                                     <input type="text" placeholder="{{ t .Lang "archives.col.access" }}" data-col="2" data-key="acces" value="{{ index $.Data.FilterValues "acces" }}">
                                 </th>
-                                <th data-col="3" data-key="entitat">
-                                    <input type="text" placeholder="{{ t .Lang "archives.col.entity" }}" data-col="3" data-key="entitat" value="{{ index $.Data.FilterValues "entitat" }}">
+                                <th data-col="3" data-key="municipi">
+                                    <input type="text" placeholder="{{ t .Lang "archives.col.municipi" }}" data-col="3" data-key="municipi" value="{{ index $.Data.FilterValues "municipi" }}">
                                 </th>
-                                <th data-col="4" data-key="municipi">
-                                    <input type="text" placeholder="{{ t .Lang "archives.col.municipi" }}" data-col="4" data-key="municipi" value="{{ index $.Data.FilterValues "municipi" }}">
+                                <th data-col="4" data-key="web">
+                                    <input type="text" placeholder="{{ t .Lang "archives.col.web" }}" data-col="4" data-key="web" value="{{ index $.Data.FilterValues "web" }}">
                                 </th>
-                                <th data-col="5" data-key="web">
-                                    <input type="text" placeholder="{{ t .Lang "archives.col.web" }}" data-col="5" data-key="web" value="{{ index $.Data.FilterValues "web" }}">
+                                <th data-col="5" data-key="llibres">
+                                    <input type="text" placeholder="{{ t .Lang "archives.col.books" }}" data-col="5" data-key="llibres" value="{{ index $.Data.FilterValues "llibres" }}">
                                 </th>
-                                <th data-col="6" data-key="llibres">
-                                    <input type="text" placeholder="{{ t .Lang "archives.col.books" }}" data-col="6" data-key="llibres" value="{{ index $.Data.FilterValues "llibres" }}">
+                                <th data-col="6" data-key="status">
+                                    <input type="text" placeholder="{{ t .Lang "moderation.status" }}" data-col="6" data-key="status" value="{{ index $.Data.FilterValues "status" }}">
                                 </th>
-                                <th data-col="7" data-key="status">
-                                    <input type="text" placeholder="{{ t .Lang "moderation.status" }}" data-col="7" data-key="status" value="{{ index $.Data.FilterValues "status" }}">
-                                </th>
-                                {{ if $.Data.ShowArxiuActions }}<th data-col="8" data-key="actions"></th>{{ end }}
+                                {{ if $.Data.ShowArxiuActions }}<th data-col="7" data-key="actions"></th>{{ end }}
                             </tr>
                             <tr>
                                 <th data-col="0" data-key="nom">{{ t .Lang "archives.col.name" }}</th>
                                 <th data-col="1" data-key="tipus">{{ t .Lang "archives.col.type" }}</th>
                                 <th data-col="2" data-key="acces">{{ t .Lang "archives.col.access" }}</th>
-                                <th data-col="3" data-key="entitat">{{ t .Lang "archives.col.entity" }}</th>
-                                <th data-col="4" data-key="municipi">{{ t .Lang "archives.col.municipi" }}</th>
-                                <th data-col="5" data-key="web">{{ t .Lang "archives.col.web" }}</th>
-                                <th data-col="6" data-key="llibres">{{ t .Lang "archives.col.books" }}</th>
-                                <th data-col="7" data-key="status">{{ t .Lang "moderation.status" }}</th>
-                                {{ if $.Data.ShowArxiuActions }}<th data-col="8" data-key="actions">{{ t .Lang "archives.col.actions" }}</th>{{ end }}
+                                <th data-col="3" data-key="municipi">{{ t .Lang "archives.col.municipi" }}</th>
+                                <th data-col="4" data-key="web">{{ t .Lang "archives.col.web" }}</th>
+                                <th data-col="5" data-key="llibres">{{ t .Lang "archives.col.books" }}</th>
+                                <th data-col="6" data-key="status">{{ t .Lang "moderation.status" }}</th>
+                                {{ if $.Data.ShowArxiuActions }}<th data-col="7" data-key="actions">{{ t .Lang "archives.col.actions" }}</th>{{ end }}
                             </tr>
                         </thead>
                         <tbody id="taulaDades">
@@ -131,15 +118,14 @@
                                 <td data-col="0" data-key="nom"><a href="{{ $viewBase }}/{{ .ID }}">{{ .Nom }}</a></td>
                                 <td data-col="1" data-key="tipus">{{ t $.Lang (printf "archives.type.%s" .Tipus) }}</td>
                                 <td data-col="2" data-key="acces">{{ t $.Lang (printf "archives.access.%s" .Acces) }}</td>
-                                <td data-col="3" data-key="entitat">{{ .EntitatNom.String }}</td>
-                                <td data-col="4" data-key="municipi">{{ .MunicipiNom.String }}</td>
-                                <td data-col="5" data-key="web">{{ if .Web }}<a href="{{ .Web }}" target="_blank">{{ t $.Lang "archives.link" }}</a>{{ end }}</td>
-                                <td data-col="6" data-key="llibres">{{ .Llibres }}</td>
-                                <td data-col="7" data-key="status"><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
+                                <td data-col="3" data-key="municipi">{{ .MunicipiNom.String }}</td>
+                                <td data-col="4" data-key="web">{{ if .Web }}<a href="{{ .Web }}" target="_blank">{{ t $.Lang "archives.link" }}</a>{{ end }}</td>
+                                <td data-col="5" data-key="llibres">{{ .Llibres }}</td>
+                                <td data-col="6" data-key="status"><span class="badge">{{ t $.Lang (printf "activity.status.%s" .ModeracioEstat) }}</span></td>
                                 {{ if $.Data.ShowArxiuActions }}
                                 {{ $canEdit := index $.Data.CanEditArxiu .ID }}
                                 {{ $canDelete := index $.Data.CanDeleteArxiu .ID }}
-                                <td class="accions cell-actions" data-col="8" data-key="actions">
+                                <td class="accions cell-actions" data-col="7" data-key="actions">
                                     {{ if $canEdit }}
                                     <a href="{{ $manageBase }}/{{ .ID }}/edit">{{ t $.Lang "archives.action.edit" }}</a>
                                     {{ end }}

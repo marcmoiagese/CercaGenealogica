@@ -28,7 +28,7 @@
                         {{ t .Lang "admin.io.tab.territori" }}
                     </button>
                     {{ end }}
-                    {{ if or .Data.CanEclesImport .Data.CanEclesExport }}
+                    {{ if .Data.ShowLegacyEclesTab }}
                     <button type="button" class="tab-boto {{ if eq .Data.ActiveTab "eclesiastic" }}actiu{{ end }}" data-tab="eclesiastic" role="tab" aria-selected="{{ if eq .Data.ActiveTab "eclesiastic" }}true{{ else }}false{{ end }}" aria-controls="tab-eclesiastic">
                         {{ t .Lang "admin.io.tab.eclesiastic" }}
                     </button>
@@ -188,7 +188,7 @@
                     </section>
                     {{ end }}
 
-                    {{ if or .Data.CanEclesImport .Data.CanEclesExport }}
+                    {{ if .Data.ShowLegacyEclesTab }}
                     <section id="tab-eclesiastic" class="tab-pane {{ if eq .Data.ActiveTab "eclesiastic" }}actiu{{ end }}" data-tab-panel="eclesiastic" role="tabpanel" {{ if ne .Data.ActiveTab "eclesiastic" }}hidden{{ end }}>
                         <section class="card">
                             <header class="card-header">

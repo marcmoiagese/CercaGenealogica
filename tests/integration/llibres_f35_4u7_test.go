@@ -326,6 +326,15 @@ func TestF354U7R1BookFormArchiveSearchAvoidsMassiveSelect(t *testing.T) {
 	if strings.Contains(body, "Arxiu Invisible F35-4U7") || strings.Contains(body, "Arxiu Cercable F35-4U7") {
 		t.Fatalf("el formulari nou no ha de carregar un selector massiu d'arxius sense cerca")
 	}
+	if !strings.Contains(body, `type="hidden" id="arquevisbat_id" name="arquevisbat_id"`) {
+		t.Fatalf("el context eclesiastic legacy ha de quedar com a camp ocult de compatibilitat, body=%s", body)
+	}
+	if strings.Contains(body, `<label for="arquevisbat_id">`) {
+		t.Fatalf("el formulari nou no ha de mostrar el selector legacy d'entitat, body=%s", body)
+	}
+	if !strings.Contains(body, "Base documental del llibre") {
+		t.Fatalf("el formulari nou ha de reforcar la base documental principal, body=%s", body)
+	}
 
 	req = httptest.NewRequest(http.MethodGet, "/documentals/llibres/new?archive_q=Cercable", nil)
 	req.AddCookie(session)

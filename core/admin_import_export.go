@@ -56,11 +56,12 @@ func (a *App) adminImportExportPageData(r *http.Request, user *db.User) map[stri
 	canConfessionalView := a.HasPermission(user.ID, permKeyTerritoriConfessionalImportExportView, PermissionTarget{})
 	canConfessionalImport := a.HasPermission(user.ID, permKeyTerritoriConfessionalImportExportImport, PermissionTarget{})
 	canConfessionalExport := a.HasPermission(user.ID, permKeyTerritoriConfessionalImportExportExport, PermissionTarget{})
+	showLegacyEclesTab := (canEclesImport || canEclesExport) && !(canConfessionalView || canConfessionalImport || canConfessionalExport)
 
 	activeTab := strings.TrimSpace(r.URL.Query().Get("tab"))
 	activeTab = resolveImportExportTab(activeTab, map[string]bool{
 		"territori":    canTerritoriImport || canTerritoriExport,
-		"eclesiastic":  canEclesImport || canEclesExport,
+		"eclesiastic":  showLegacyEclesTab,
 		"confessional": canConfessionalView || canConfessionalImport || canConfessionalExport,
 		"arxius":       canArxiusImport || canArxiusExport,
 		"llibres":      canLlibresImport || canLlibresExport,
@@ -92,6 +93,7 @@ func (a *App) adminImportExportPageData(r *http.Request, user *db.User) map[stri
 		"CanTerritoriExport":             canTerritoriExport,
 		"CanEclesImport":                 canEclesImport,
 		"CanEclesExport":                 canEclesExport,
+		"ShowLegacyEclesTab":             showLegacyEclesTab,
 		"CanConfessionalView":            canConfessionalView,
 		"CanConfessionalImport":          canConfessionalImport,
 		"CanConfessionalExport":          canConfessionalExport,

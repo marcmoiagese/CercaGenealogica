@@ -67,25 +67,7 @@
                         <ul id="municipi_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
                     </div>
                 </div>
-                <div class="grup-camp">
-                    <label for="entitat_search">{{ t .Lang "archives.form.entity" }}</label>
-                    <div class="suggest-field">
-                        <input
-                            type="text"
-                            id="entitat_search"
-                            name="entitat_search"
-                            value="{{ .Data.EntitatLabel }}"
-                            placeholder="{{ t .Lang "ecles.search.placeholder" }}"
-                            autocomplete="off"
-                            data-api="/api/territori/eclesiastic/suggest"
-                            data-empty-label="{{ t .Lang "ecles.search.empty" }}"
-                            data-hidden="entitat_eclesiastica_id"
-                            data-suggestions="entitat_suggestions"
-                            data-suggest="1">
-                        <input type="hidden" id="entitat_eclesiastica_id" name="entitat_eclesiastica_id" value="{{ if .Data.Arxiu.EntitatEclesiasticaID.Valid }}{{ .Data.Arxiu.EntitatEclesiasticaID.Int64 }}{{ end }}">
-                        <ul id="entitat_suggestions" class="resultats-cerca" role="listbox" aria-label="{{ t .Lang "ecles.search.suggestions" }}"></ul>
-                    </div>
-                </div>
+                <input type="hidden" id="entitat_eclesiastica_id" name="entitat_eclesiastica_id" value="{{ if .Data.Arxiu.EntitatEclesiasticaID.Valid }}{{ .Data.Arxiu.EntitatEclesiasticaID.Int64 }}{{ end }}">
                 <div class="grup-camp">
                     <label for="adreca">{{ t .Lang "archives.form.address" }}</label>
                     <textarea id="adreca" name="adreca">{{ .Data.Arxiu.Adreca }}</textarea>

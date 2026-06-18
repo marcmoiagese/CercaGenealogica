@@ -32,16 +32,7 @@
                     </select>
                     <p class="camp-helper">{{ t .Lang "books.form.archive.search.helper" }}</p>
                 </div>
-                <div class="grup-camp">
-                    <label for="arquevisbat_id">{{ t .Lang "books.form.entity" }}</label>
-                    <select id="arquevisbat_id" name="arquevisbat_id">
-                        <option value="">{{ t .Lang "books.form.entity.none" }}</option>
-                        {{ range .Data.Arquebisbats }}
-                        <option value="{{ .ID }}" {{ if eq $.Data.Llibre.ArquebisbatID .ID }}selected{{ end }}>{{ .Nom }}</option>
-                        {{ end }}
-                    </select>
-                    <p class="camp-helper">{{ t .Lang "books.form.entity.helper" }}</p>
-                </div>
+                <input type="hidden" id="arquevisbat_id" name="arquevisbat_id" value="{{ .Data.Llibre.ArquebisbatID }}">
                 <div class="grup-camp">
                     <label for="municipi_id">{{ t .Lang "books.form.municipi" }}</label>
                     <select id="municipi_id" name="municipi_id" required>
@@ -50,6 +41,7 @@
                         <option value="{{ .ID }}" {{ if eq $.Data.Llibre.MunicipiID .ID }}selected{{ end }}>{{ .Nom }}</option>
                         {{ end }}
                     </select>
+                    <p class="camp-helper">{{ t .Lang "books.form.documentary_base.helper" }}</p>
                 </div>
                 <div class="grup-camp">
                     <label for="titol">{{ t .Lang "books.form.title" }}</label>

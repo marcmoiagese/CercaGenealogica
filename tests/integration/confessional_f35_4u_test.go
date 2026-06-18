@@ -946,7 +946,7 @@ func assertConfessionalExportFormContents(t *testing.T, body string) {
 func assertAdminImportExportInitialVisibility(t *testing.T, body string) {
 	t.Helper()
 
-	mainPanels := []string{"territori", "eclesiastic", "confessional", "arxius", "llibres"}
+	mainPanels := []string{"territori", "confessional", "arxius", "llibres"}
 	mainVisible := 0
 	for _, panel := range mainPanels {
 		activePattern := regexp.MustCompile(`id="tab-` + regexp.QuoteMeta(panel) + `" class="tab-pane actiu"[^>]*data-tab-panel="` + regexp.QuoteMeta(panel) + `"[^>]*role="tabpanel"`)
@@ -964,10 +964,12 @@ func assertAdminImportExportInitialVisibility(t *testing.T, body string) {
 	if mainVisible != 1 {
 		t.Fatalf("hi ha d'haver exactament un panell principal visible al render inicial, trobat=%d body=%s", mainVisible, body)
 	}
+	if strings.Contains(body, `data-tab="eclesiastic"`) || strings.Contains(body, `id="tab-eclesiastic"`) {
+		t.Fatalf("la UI confessional v2 no ha d'exposar la pestanya principal legacy eclesiastica, body=%s", body)
+	}
 
 	subtabs := map[string][]string{
 		"territori":    {"territori-import", "territori-export"},
-		"eclesiastic":  {"eclesiastic-import", "eclesiastic-export"},
 		"confessional": {"confessional-import", "confessional-export"},
 		"arxius":       {"arxius-import", "arxius-export"},
 		"llibres":      {"llibres-import", "llibres-export"},

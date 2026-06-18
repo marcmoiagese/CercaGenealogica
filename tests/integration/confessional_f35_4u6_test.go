@@ -469,6 +469,9 @@ func TestF354U6ArxiuEditFormShowsLegacyFieldAndOptionalConfessionalSection(t *te
 	if !strings.Contains(body, `name="entitat_eclesiastica_id"`) {
 		t.Fatalf("la pantalla d'edicio ha de mantenir el camp legacy entitat_eclesiastica_id, body=%s", body)
 	}
+	if strings.Contains(body, `id="entitat_search"`) {
+		t.Fatalf("el camp visible legacy no ha de continuar al flux principal, body=%s", body)
+	}
 	if !strings.Contains(body, `name="codi"`) {
 		t.Fatalf("la pantalla d'edicio ha d'exposar el codi estable, body=%s", body)
 	}
