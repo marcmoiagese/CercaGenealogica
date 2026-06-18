@@ -469,8 +469,12 @@ func TestF354TPrefillQueryParamsPopulateFormsSafely(t *testing.T) {
 	relacioBody := relacioRR.Body.String()
 	for _, token := range []string{
 		`name="return_to" value="/confessional/diagnostic"`,
-		`option value="` + strconv.Itoa(municipiID) + `" selected`,
-		`option value="` + strconv.Itoa(childID) + `" data-religion-code="catolicisme_ritu_llati" data-level-code="parroquia" selected`,
+		`id="municipi_id_label"`,
+		`value="Municipi prefill F35-4T ` + suffix + `"`,
+		`id="municipi_id" name="municipi_id" type="hidden" value="` + strconv.Itoa(municipiID) + `"`,
+		`id="entitat_religiosa_id_label"`,
+		`value="Parroquia prefill F35-4T ` + suffix + `"`,
+		`id="entitat_religiosa_id" name="entitat_religiosa_id" type="hidden" value="` + strconv.Itoa(childID) + `"`,
 	} {
 		if !strings.Contains(relacioBody, token) {
 			t.Fatalf("prefill relacio no conte %q; body=%s", token, relacioBody)

@@ -6,6 +6,54 @@
     const parentLabel = document.getElementById("parent_id_label");
     const parentSuggestions = document.getElementById("parent_id_suggestions");
     const formID = document.querySelector("input[name='id']");
+    const relationMunicipi = document.getElementById("municipi_id");
+    const relationMunicipiLabel = document.getElementById("municipi_id_label");
+    const relationNucli = document.getElementById("nucli_id");
+    const relationNucliLabel = document.getElementById("nucli_id_label");
+
+    function clearRelationNucli() {
+      if (relationNucli) {
+        relationNucli.value = "";
+        relationNucli.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      if (relationNucliLabel) {
+        relationNucliLabel.value = "";
+      }
+    }
+
+    function syncRelationNucliSuggest() {
+      if (!relationNucliLabel) {
+        return;
+      }
+      if (!relationMunicipi || !relationMunicipi.value) {
+        relationNucliLabel.dataset.api = "/api/territori/municipis/suggest?scope=nucli";
+        relationNucliLabel.disabled = true;
+        relationNucliLabel.placeholder = relationNucliLabel.dataset.placeholderEmpty || relationNucliLabel.placeholder;
+        clearRelationNucli();
+        return;
+      }
+      relationNucliLabel.dataset.api = "/api/territori/municipis/suggest?scope=nucli&parent_municipi_id=" + encodeURIComponent(relationMunicipi.value);
+      relationNucliLabel.disabled = false;
+    }
+
+    if (relationNucliLabel) {
+      relationNucliLabel.dataset.placeholderEmpty = relationNucliLabel.getAttribute("placeholder") || "";
+    }
+    if (relationMunicipiLabel && relationNucliLabel) {
+      relationMunicipiLabel.addEventListener("input", function () {
+        clearRelationNucli();
+        syncRelationNucliSuggest();
+      });
+      relationMunicipiLabel.addEventListener("suggest:select", function () {
+        clearRelationNucli();
+        syncRelationNucliSuggest();
+      });
+    }
+    if (relationMunicipi) {
+      relationMunicipi.addEventListener("change", syncRelationNucliSuggest);
+    }
+    syncRelationNucliSuggest();
+
     if (!religion || !level) {
       return;
     }

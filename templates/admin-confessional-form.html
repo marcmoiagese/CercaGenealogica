@@ -217,9 +217,7 @@
                             <ul id="municipi_principal_suggestions" class="suggestions-list confessional-suggestions" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
                         </div>
                         <p class="muted">{{ t .Lang "confessional.initial_relations.primary_municipality.help" }}</p>
-                        {{ if .Data.Form.PrimaryMunicipiExisting }}
-                        <p class="muted">{{ t .Lang "confessional.initial_relations.primary_municipality.existing" }}</p>
-                        {{ end }}
+                        <p class="muted">{{ t .Lang "confessional.help.advanced_territorial_relations" }}</p>
                     </div>
                     <div class="grup-camp">
                         <label for="initial_parent_relation_kind">{{ t .Lang "confessional.initial_relations.parent_relation_kind.label" }}</label>
@@ -262,37 +260,76 @@
                 {{ if eq .Data.Form.Kind "relacio" }}
                 <input type="hidden" name="id" value="{{ .Data.Form.Relacio.ID }}">
                 <div class="grup-camp">
-                    <label for="municipi_id">{{ t .Lang "confessional.field.municipi" }}</label>
-                    <select id="municipi_id" name="municipi_id" required>
-                        <option value="">{{ t .Lang "confessional.select.municipi" }}</option>
-                        {{ range .Data.Municipis }}
-                        <option value="{{ .ID }}" {{ if eq .ID $.Data.Form.Relacio.MunicipiID }}selected{{ end }}>{{ .Nom }}{{ if .Tipus }} ({{ .Tipus }}){{ end }}</option>
-                        {{ end }}
-                    </select>
+                    <label for="municipi_id_label">{{ t .Lang "confessional.field.municipality_label" }}</label>
+                    <div class="suggest-field">
+                        <input
+                            id="municipi_id_label"
+                            name="municipi_id_label"
+                            type="text"
+                            value="{{ .Data.Form.RelationMunicipiLabel }}"
+                            placeholder="{{ t .Lang "municipis.search.placeholder" }}"
+                            autocomplete="off"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-controls="municipi_id_suggestions"
+                            aria-expanded="false"
+                            data-api="/api/territori/municipis/suggest?scope=municipi"
+                            data-empty-label="{{ t .Lang "municipis.search.empty" }}"
+                            data-hidden="municipi_id"
+                            data-suggestions="municipi_id_suggestions"
+                            data-suggest="1"
+                            required>
+                        <input id="municipi_id" name="municipi_id" type="hidden" value="{{ .Data.Form.Relacio.MunicipiID }}">
+                        <ul id="municipi_id_suggestions" class="suggestions-list confessional-suggestions" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
+                    </div>
                 </div>
                 <div class="grup-camp">
-                    <label for="nucli_id">{{ t .Lang "confessional.field.nucli" }}</label>
-                    <select id="nucli_id" name="nucli_id">
-                        <option value="">{{ t .Lang "confessional.select.nucli.none" }}</option>
-                        {{ range .Data.Nuclis }}
-                        <option value="{{ .ID }}" {{ if and $.Data.Form.Relacio.NucliID.Valid (eq .ID (int $.Data.Form.Relacio.NucliID.Int64)) }}selected{{ end }}>{{ .Nom }}{{ if .Tipus }} ({{ .Tipus }}){{ end }}</option>
-                        {{ else }}
-                        {{ if .Data.Form.Relacio.MunicipiID }}
-                        <option value="" disabled>{{ t .Lang "confessional.select.nucli.none" }}</option>
-                        {{ else }}
-                        <option value="" disabled>{{ t .Lang "confessional.select.nucli.choose_municipi" }}</option>
-                        {{ end }}
-                        {{ end }}
-                    </select>
+                    <label for="nucli_id_label">{{ t .Lang "confessional.field.nucli_label" }}</label>
+                    <div class="suggest-field">
+                        <input
+                            id="nucli_id_label"
+                            name="nucli_id_label"
+                            type="text"
+                            value="{{ .Data.Form.RelationNucliLabel }}"
+                            placeholder="{{ t .Lang "confessional.select.nucli.choose_municipi" }}"
+                            autocomplete="off"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-controls="nucli_id_suggestions"
+                            aria-expanded="false"
+                            data-api="/api/territori/municipis/suggest?scope=nucli"
+                            data-empty-label="{{ t .Lang "municipis.search.empty" }}"
+                            data-hidden="nucli_id"
+                            data-suggestions="nucli_id_suggestions"
+                            data-parent-hidden="municipi_id"
+                            data-suggest="1">
+                        <input id="nucli_id" name="nucli_id" type="hidden" value="{{ if .Data.Form.Relacio.NucliID.Valid }}{{ .Data.Form.Relacio.NucliID.Int64 }}{{ end }}">
+                        <ul id="nucli_id_suggestions" class="suggestions-list confessional-suggestions" role="listbox" aria-label="{{ t .Lang "municipis.search.suggestions" }}"></ul>
+                    </div>
                 </div>
                 <div class="grup-camp">
-                    <label for="entitat_religiosa_id">{{ t .Lang "confessional.field.religious_entity" }}</label>
-                    <select id="entitat_religiosa_id" name="entitat_religiosa_id" required>
-                        <option value="">{{ t .Lang "confessional.select.entity" }}</option>
-                        {{ range .Data.SelectableEntitats }}
-                        <option value="{{ .ID }}" data-religion-code="{{ .ReligioConfessioCodi }}" data-level-code="{{ .NivellConfessionalCodi }}" {{ if eq .ID $.Data.Form.Relacio.EntitatReligiosaID }}selected{{ end }}>{{ .Nom }}</option>
-                        {{ end }}
-                    </select>
+                    <label for="entitat_religiosa_id_label">{{ t .Lang "confessional.field.entity_label" }}</label>
+                    <div class="suggest-field">
+                        <input
+                            id="entitat_religiosa_id_label"
+                            name="entitat_religiosa_id_label"
+                            type="text"
+                            value="{{ .Data.Form.RelationEntityLabel }}"
+                            placeholder="{{ t .Lang "confessional.select.entity" }}"
+                            autocomplete="off"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-controls="entitat_religiosa_id_suggestions"
+                            aria-expanded="false"
+                            data-api="/api/confessional/entitats/suggest"
+                            data-empty-label="{{ t .Lang "confessional.suggest.empty" }}"
+                            data-hidden="entitat_religiosa_id"
+                            data-suggestions="entitat_religiosa_id_suggestions"
+                            data-suggest="1"
+                            required>
+                        <input id="entitat_religiosa_id" name="entitat_religiosa_id" type="hidden" value="{{ .Data.Form.Relacio.EntitatReligiosaID }}">
+                        <ul id="entitat_religiosa_id_suggestions" class="suggestions-list confessional-suggestions" role="listbox" aria-label="{{ t .Lang "common.suggestions" }}"></ul>
+                    </div>
                 </div>
                 <div class="grup-camp">
                     <label>{{ t .Lang "confessional.field.relation_type" }}</label>
@@ -344,7 +381,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "scripts-private" . }}
-    {{ if eq .Data.Form.Kind "entitat" }}
+    {{ if or (eq .Data.Form.Kind "entitat") (eq .Data.Form.Kind "relacio") }}
     <script src="/static/js/arxiu-form-suggest.js"></script>
     <script src="/static/js/confessional-form.js"></script>
     {{ end }}
