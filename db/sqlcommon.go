@@ -9133,8 +9133,17 @@ func (h sqlHelper) persistTemplatePendingMerge(t *TranscripcioRaw, persones []Tr
 	if err != nil {
 		return err
 	}
-	if rows != 1 {
-		return fmt.Errorf("template merge target not found: %d", t.ID)
+	if rows == 0 {
+		checkStmt := formatPlaceholders(h.style, `SELECT 1 FROM transcripcions_raw WHERE id = ?`)
+		var exists int
+		if err := tx.QueryRow(checkStmt, t.ID).Scan(&exists); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("template merge target not found: %d", t.ID)
+			}
+			return err
+		}
+	} else if rows != 1 {
+		return fmt.Errorf("unexpected rows affected for template merge target %d: %d", t.ID, rows)
 	}
 	deletePersonesStmt := formatPlaceholders(h.style, `DELETE FROM transcripcions_persones_raw WHERE transcripcio_id = ?`)
 	if _, err := tx.Exec(deletePersonesStmt, t.ID); err != nil {
