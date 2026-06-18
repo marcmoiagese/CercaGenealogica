@@ -271,6 +271,40 @@ type f327PageLookupCountingDB struct {
 	getByNumCalls int
 }
 
+type f354U9BookLookupCountingDB struct {
+	db.DB
+	listLlibresCalls           int
+	listLlibreArxiusByIDsCalls int
+	listArxiuLlibresCalls      int
+	listLlibreURLsCalls        int
+	resolveStableRefCalls      int
+}
+
+func (f *f354U9BookLookupCountingDB) ListLlibres(filter db.LlibreFilter) ([]db.LlibreRow, error) {
+	f.listLlibresCalls++
+	return f.DB.ListLlibres(filter)
+}
+
+func (f *f354U9BookLookupCountingDB) ListLlibreArxiusByLlibreIDs(ids []int) (map[int][]db.ArxiuLlibreDetail, error) {
+	f.listLlibreArxiusByIDsCalls++
+	return f.DB.ListLlibreArxiusByLlibreIDs(ids)
+}
+
+func (f *f354U9BookLookupCountingDB) ListArxiuLlibres(arxiuID int) ([]db.ArxiuLlibreDetail, error) {
+	f.listArxiuLlibresCalls++
+	return f.DB.ListArxiuLlibres(arxiuID)
+}
+
+func (f *f354U9BookLookupCountingDB) ListLlibreURLs(llibreID int) ([]db.LlibreURL, error) {
+	f.listLlibreURLsCalls++
+	return f.DB.ListLlibreURLs(llibreID)
+}
+
+func (f *f354U9BookLookupCountingDB) ResolveLlibreByStableRef(ref db.LlibreStableRef) (*db.Llibre, error) {
+	f.resolveStableRefCalls++
+	return f.DB.ResolveLlibreByStableRef(ref)
+}
+
 func (f *f327PageLookupCountingDB) ListLlibrePagines(llibreID int) ([]db.LlibrePagina, error) {
 	f.listCalls++
 	return f.DB.ListLlibrePagines(llibreID)
@@ -574,6 +608,325 @@ func TestF328StrongMatchKeyMatrimoniIgnoresPaginaDigitalAndStaysDeterministic(t 
 	}
 	if keyA != keyB {
 		t.Fatalf("pagina_digital no ha d'afectar ni l'ordre dels mapes; A=%q B=%q", keyA, keyB)
+	}
+}
+
+func TestF354U9MarcmoiaResolvesV2BookByMunicipiArxiuCronologia(t *testing.T) {
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f354u9_marcmoia")
+	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U9 Marcmoia")
+	ahatID := createF354U9Archive(t, database, user.ID, municipiID, "ahat", "AHAT")
+	llibreID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{
+		Code:         "MIR-1852",
+		Chronology:   "1852-1871",
+		Title:        "Baptismes Miralcamp",
+		BookType:     "baptismes",
+		ChurchName:   "Santa Maria",
+		Published:    true,
+		SourceSystem: "ahat",
+		ExternalCode: "0012345",
+		URLBase:      "https://ahat.example.test/mir-1852",
+	})
+	saveF354U9ArchiveLink(t, database, &db.ArxiuLlibreLink{
+		ArxiuID:               ahatID,
+		LlibreID:              llibreID,
+		TipusRelacio:          "custodia_original",
+		Principal:             true,
+		PreferitVisualitzacio: true,
+		SourceSystem:          "ahat",
+		ExternalCode:          "0012345",
+	})
+	if err := app.EnsureSystemImportTemplates(); err != nil {
+		t.Fatalf("EnsureSystemImportTemplates ha fallat: %v", err)
+	}
+	template, err := app.getSystemImportTemplateByName(systemImportTemplateBaptismesMarcmoiaName)
+	if err != nil || template == nil {
+		t.Fatalf("plantilla Marcmoia system no trobada: %v", err)
+	}
+
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"llibre", "paginallibre", "paginareal", "any", "cognoms", "pare", "mare", "nascut", "bateig"},
+		{"1852-1871", "12", "12", "1853", "Garcia Soler Joan", "Pere Garcia", "Maria Soler", "01/02/1853", "05/02/1853"},
+	})), ',', user.ID, importContext{MunicipiID: municipiID, ArxiuID: ahatID}, 0)
+	if result.Created != 1 || result.Failed != 0 {
+		t.Fatalf("import Marcmoia v2 inesperat: %+v", result)
+	}
+	registres, err := database.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{Limit: -1})
+	if err != nil || len(registres) != 1 {
+		t.Fatalf("ListTranscripcionsRaw inesperat: len=%d err=%v", len(registres), err)
+	}
+	if registres[0].LlibreID != llibreID || registres[0].ModeracioEstat != "pendent" || !registres[0].CreatedBy.Valid || int(registres[0].CreatedBy.Int64) != user.ID {
+		t.Fatalf("registre importat inconsistent: %+v", registres[0])
+	}
+}
+
+func TestF354U9FixedBookIDOverridesLookupAndKeepsPending(t *testing.T) {
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f354u9_fixed")
+	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U9 Fixed")
+	ahatID := createF354U9Archive(t, database, user.ID, municipiID, "ahat", "AHAT")
+	bookAID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "BOOK-A", Chronology: "1852-1871", Title: "Book A", Published: true})
+	bookBID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "BOOK-B", Chronology: "1900-1901", Title: "Book B", Published: true})
+	saveF354U9ArchiveLink(t, database, &db.ArxiuLlibreLink{ArxiuID: ahatID, LlibreID: bookAID, TipusRelacio: "custodia_original", Principal: true, PreferitVisualitzacio: true})
+	saveF354U9ArchiveLink(t, database, &db.ArxiuLlibreLink{ArxiuID: ahatID, LlibreID: bookBID, TipusRelacio: "copia_digital"})
+
+	template := buildF354U9Template(t, `{
+  "mode": "cronologia_lookup",
+  "column": "llibre",
+  "normalize_cronologia": true,
+  "context_filters": ["municipi_id", "arxiu_id"]
+}`)
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"llibre", "tipus_acte", "batejat"},
+		{"1852-1871", "baptisme", "Joan Fixed"},
+	})), ',', user.ID, importContext{MunicipiID: municipiID, ArxiuID: ahatID}, bookBID)
+	if result.Created != 1 || result.Failed != 0 {
+		t.Fatalf("fixedBookID inesperat: %+v", result)
+	}
+	registres, _ := database.ListTranscripcionsRaw(bookBID, db.TranscripcioFilter{Limit: -1})
+	if len(registres) != 1 || registres[0].ModeracioEstat != "pendent" {
+		t.Fatalf("fixedBookID no ha assignat ni moderat correctament: %+v", registres)
+	}
+	if other, _ := database.ListTranscripcionsRaw(bookAID, db.TranscripcioFilter{Limit: -1}); len(other) != 0 {
+		t.Fatalf("no s'haurien de crear registres al llibre A: %+v", other)
+	}
+}
+
+func TestF354U9V2LookupResolvesByBookCodeAndSourceSystemExternalCode(t *testing.T) {
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f354u9_refs")
+	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U9 Refs")
+	ahatID := createF354U9Archive(t, database, user.ID, municipiID, "ahat", "AHAT")
+	bookCodeID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "BOOK-CODE", Chronology: "1850", Title: "Book Code", Published: true})
+	bookExtID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "BOOK-EXT", Chronology: "1851", Title: "Book Ext", Published: true, SourceSystem: "ahat", ExternalCode: "EXT-42"})
+	saveF354U9ArchiveLink(t, database, &db.ArxiuLlibreLink{ArxiuID: ahatID, LlibreID: bookCodeID, TipusRelacio: "custodia_original", Principal: true, PreferitVisualitzacio: true})
+	saveF354U9ArchiveLink(t, database, &db.ArxiuLlibreLink{ArxiuID: ahatID, LlibreID: bookExtID, TipusRelacio: "copia_digital"})
+
+	templateByCode := buildF354U9Template(t, `{
+  "mode": "v2_lookup",
+  "book_code_column": "llibre_codi"
+}`)
+	resultByCode := app.RunCSVTemplateImport(templateByCode, strings.NewReader(buildF32CSV(t, [][]string{
+		{"llibre_codi", "tipus_acte", "batejat"},
+		{"BOOK-CODE", "baptisme", "Joan Code"},
+	})), ',', user.ID, importContext{}, 0)
+	if resultByCode.Created != 1 || resultByCode.Failed != 0 {
+		t.Fatalf("resolució per book_code inesperada: %+v", resultByCode)
+	}
+
+	templateByExt := buildF354U9Template(t, `{
+  "mode": "v2_lookup",
+  "source_system": "ahat",
+  "external_code_column": "external_code"
+}`)
+	resultByExt := app.RunCSVTemplateImport(templateByExt, strings.NewReader(buildF32CSV(t, [][]string{
+		{"external_code", "tipus_acte", "batejat"},
+		{"EXT-42", "baptisme", "Joan Ext"},
+	})), ',', user.ID, importContext{}, 0)
+	if resultByExt.Created != 1 || resultByExt.Failed != 0 {
+		t.Fatalf("resolució per source_system+external_code inesperada: %+v", resultByExt)
+	}
+	if regs, _ := database.ListTranscripcionsRaw(bookCodeID, db.TranscripcioFilter{Limit: -1}); len(regs) != 1 {
+		t.Fatalf("book_code hauria de tenir 1 transcripció, got=%d", len(regs))
+	}
+	if regs, _ := database.ListTranscripcionsRaw(bookExtID, db.TranscripcioFilter{Limit: -1}); len(regs) != 1 {
+		t.Fatalf("external_code hauria de tenir 1 transcripció, got=%d", len(regs))
+	}
+}
+
+func TestF354U9V2LookupRequiresSourceSystemForExternalCode(t *testing.T) {
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f354u9_missing_source")
+	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U9 Missing Source")
+	createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "AHAT-1", SourceSystem: "ahat", ExternalCode: "DUP-1", Published: true})
+	createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "FS-1", SourceSystem: "familysearch", ExternalCode: "DUP-1", Published: true})
+
+	template := buildF354U9Template(t, `{
+  "mode": "v2_lookup",
+  "external_code_column": "external_code"
+}`)
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"external_code", "tipus_acte", "batejat"},
+		{"DUP-1", "baptisme", "Joan Dup"},
+	})), ',', user.ID, importContext{}, 0)
+	if result.Created != 0 || result.Failed != 1 {
+		t.Fatalf("hauria de fallar sense source_system: %+v", result)
+	}
+	if len(result.Errors) == 0 || result.Errors[0].Reason != "external_ref_missing_source_system" {
+		t.Fatalf("error inesperat sense source_system: %+v", result.Errors)
+	}
+}
+
+func TestF354U9V2LookupResolvesSameLogicalBookAcrossArchives(t *testing.T) {
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f354u9_multi_arxiu")
+	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U9 Multi Arxiu")
+	ahatID := createF354U9Archive(t, database, user.ID, municipiID, "ahat", "AHAT")
+	fsID := createF354U9Archive(t, database, user.ID, municipiID, "familysearch", "FamilySearch")
+	llibreID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "MIR-MULTI", Chronology: "1852-1871", Title: "Mir Multi", Published: true})
+	saveF354U9ArchiveLink(t, database, &db.ArxiuLlibreLink{ArxiuID: ahatID, LlibreID: llibreID, TipusRelacio: "custodia_original", Principal: true, PreferitVisualitzacio: true})
+	saveF354U9ArchiveLink(t, database, &db.ArxiuLlibreLink{ArxiuID: fsID, LlibreID: llibreID, TipusRelacio: "copia_digital"})
+	template := buildF354U9Template(t, `{
+  "mode": "v2_lookup",
+  "chronology_column": "llibre"
+}`)
+
+	resultA := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"llibre", "tipus_acte", "batejat"},
+		{"1852-1871", "baptisme", "Joan AHAT"},
+	})), ',', user.ID, importContext{MunicipiID: municipiID, ArxiuID: ahatID}, 0)
+	resultB := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"llibre", "tipus_acte", "batejat"},
+		{"1852-1871", "baptisme", "Joan FS"},
+	})), ',', user.ID, importContext{MunicipiID: municipiID, ArxiuID: fsID}, 0)
+	if resultA.Created != 1 || resultA.Failed != 0 || resultB.Created != 1 || resultB.Failed != 0 {
+		t.Fatalf("resolució multi-arxiu inesperada: A=%+v B=%+v", resultA, resultB)
+	}
+	if regs, _ := database.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{Limit: -1}); len(regs) != 2 {
+		t.Fatalf("les dues imports haurien d'anar al mateix llibre lògic, got=%d", len(regs))
+	}
+}
+
+func TestF354U9V2LookupReportsAmbiguityAndContextErrors(t *testing.T) {
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f354u9_errors")
+	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U9 Errors")
+	ahatID := createF354U9Archive(t, database, user.ID, municipiID, "ahat", "AHAT")
+	fsID := createF354U9Archive(t, database, user.ID, municipiID, "familysearch", "FamilySearch")
+	bookAID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "AMB-A", Chronology: "1852-1871", Title: "A", Published: true})
+	bookBID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{Code: "AMB-B", Chronology: "1852-1871", Title: "B", Published: true})
+	saveF354U9ArchiveLink(t, database, &db.ArxiuLlibreLink{ArxiuID: ahatID, LlibreID: bookAID, TipusRelacio: "custodia_original", Principal: true, PreferitVisualitzacio: true})
+	saveF354U9ArchiveLink(t, database, &db.ArxiuLlibreLink{ArxiuID: fsID, LlibreID: bookBID, TipusRelacio: "custodia_original", Principal: true, PreferitVisualitzacio: true})
+
+	template := buildF354U9Template(t, `{
+  "mode": "v2_lookup",
+  "chronology_column": "llibre",
+  "archive_code_column": "arxiu_codi"
+}`)
+	ambiguous := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"llibre", "tipus_acte", "batejat"},
+		{"1852-1871", "baptisme", "Joan Amb"},
+	})), ',', user.ID, importContext{MunicipiID: municipiID}, 0)
+	if ambiguous.Created != 0 || ambiguous.Failed != 1 || ambiguous.Errors[0].Reason != "book_ambiguous" {
+		t.Fatalf("ambigüitat inesperada: %+v", ambiguous)
+	}
+
+	archiveMissing := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"arxiu_codi", "llibre", "tipus_acte", "batejat"},
+		{"inexistent", "1852-1871", "baptisme", "Joan Missing"},
+	})), ',', user.ID, importContext{MunicipiID: municipiID}, 0)
+	if archiveMissing.Created != 0 || archiveMissing.Failed != 1 || archiveMissing.Errors[0].Reason != "archive_not_found" {
+		t.Fatalf("archive_not_found inesperat: %+v", archiveMissing)
+	}
+
+	municipalityMissing := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"arxiu_codi", "llibre", "tipus_acte", "batejat"},
+		{"ahat", "1852-1871", "baptisme", "Joan No Mun"},
+	})), ',', user.ID, importContext{}, 0)
+	if municipalityMissing.Created != 0 || municipalityMissing.Failed != 1 || municipalityMissing.Errors[0].Reason != "municipality_context_missing" {
+		t.Fatalf("municipality_context_missing inesperat: %+v", municipalityMissing)
+	}
+
+	municipalityNotFound := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"arxiu_codi", "llibre", "tipus_acte", "batejat"},
+		{"ahat", "1852-1871", "baptisme", "Joan Bad Mun"},
+	})), ',', user.ID, importContext{MunicipiID: 999999, ArxiuID: ahatID}, 0)
+	if municipalityNotFound.Created != 0 || municipalityNotFound.Failed != 1 || municipalityNotFound.Errors[0].Reason != "municipality_not_found" {
+		t.Fatalf("municipality_not_found inesperat: %+v", municipalityNotFound)
+	}
+}
+
+func TestF354U9TemplateImportDoesNotModifyPublishedBookArtifacts(t *testing.T) {
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f354u9_published")
+	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U9 Published")
+	ahatID := createF354U9Archive(t, database, user.ID, municipiID, "ahat", "AHAT")
+	llibreID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{
+		Code:       "PUB-1",
+		Chronology: "1852-1871",
+		Title:      "Published Book",
+		BookType:   "baptismes",
+		Published:  true,
+		URLBase:    "https://example.test/pub-1",
+	})
+	saveF354U9ArchiveLink(t, database, &db.ArxiuLlibreLink{
+		ArxiuID:               ahatID,
+		LlibreID:              llibreID,
+		TipusRelacio:          "custodia_original",
+		Principal:             true,
+		PreferitVisualitzacio: true,
+		URLOverride:           "https://example.test/pub-1/override",
+	})
+	if err := database.AddLlibreURL(&db.LlibreURL{LlibreID: llibreID, URL: "https://example.test/pub-1/view"}); err != nil {
+		t.Fatalf("AddLlibreURL ha fallat: %v", err)
+	}
+	if _, err := database.SaveLlibrePagina(&db.LlibrePagina{LlibreID: llibreID, NumPagina: 12, Estat: "indexada"}); err != nil {
+		t.Fatalf("SaveLlibrePagina ha fallat: %v", err)
+	}
+	beforeBook, _ := database.GetLlibre(llibreID)
+	beforeLinks, _ := database.ListLlibreArxius(llibreID)
+	beforeURLs, _ := database.ListLlibreURLs(llibreID)
+	beforePages, _ := database.ListLlibrePagines(llibreID)
+
+	template := buildF354U9Template(t, `{
+  "mode": "v2_lookup",
+  "book_code_column": "llibre_codi"
+}`)
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"llibre_codi", "tipus_acte", "batejat"},
+		{"PUB-1", "baptisme", "Joan Published"},
+	})), ',', user.ID, importContext{}, 0)
+	if result.Created != 1 || result.Failed != 0 {
+		t.Fatalf("import sobre llibre publicat inesperat: %+v", result)
+	}
+	afterBook, _ := database.GetLlibre(llibreID)
+	afterLinks, _ := database.ListLlibreArxius(llibreID)
+	afterURLs, _ := database.ListLlibreURLs(llibreID)
+	afterPages, _ := database.ListLlibrePagines(llibreID)
+	if beforeBook.Codi != afterBook.Codi || beforeBook.URLBase != afterBook.URLBase || beforeBook.ModeracioEstat != afterBook.ModeracioEstat {
+		t.Fatalf("el llibre publicat no s'hauria de modificar: before=%+v after=%+v", beforeBook, afterBook)
+	}
+	if !reflect.DeepEqual(beforeLinks, afterLinks) || !reflect.DeepEqual(beforeURLs, afterURLs) || !reflect.DeepEqual(beforePages, afterPages) {
+		t.Fatalf("els artefactes del llibre publicat no s'haurien de tocar")
+	}
+}
+
+func TestF354U9BookLookupCachesRepeatedStableRefs(t *testing.T) {
+	app, database := newModeracioBulkDiagnosticsApp(t)
+	user := createModeracioBulkDiagnosticsUser(t, database, "f354u9_cache")
+	municipiID, arquebisbatID := createF354U9Territory(t, database, user.ID, "F354U9 Cache")
+	llibreID := createF354U9Book(t, database, user.ID, arquebisbatID, municipiID, f354U9BookSeed{
+		Code:         "CACHE-1",
+		Chronology:   "1852-1871",
+		Title:        "Cache Book",
+		Published:    true,
+		SourceSystem: "ahat",
+		ExternalCode: "CACHE-EXT",
+	})
+	countingDB := &f354U9BookLookupCountingDB{DB: database}
+	app.DB = countingDB
+	template := buildF354U9Template(t, `{
+  "mode": "v2_lookup",
+  "source_system": "ahat",
+  "external_code_column": "external_code"
+}`)
+	result := app.RunCSVTemplateImport(template, strings.NewReader(buildF32CSV(t, [][]string{
+		{"external_code", "tipus_acte", "batejat"},
+		{"CACHE-EXT", "baptisme", "Joan One"},
+		{"CACHE-EXT", "baptisme", "Joan Two"},
+		{"CACHE-EXT", "baptisme", "Joan Three"},
+	})), ',', user.ID, importContext{}, 0)
+	if result.Created != 3 || result.Failed != 0 {
+		t.Fatalf("import cache inesperat: %+v", result)
+	}
+	if countingDB.resolveStableRefCalls != 1 {
+		t.Fatalf("ResolveLlibreByStableRef s'hauria de reutilitzar per import, got=%d", countingDB.resolveStableRefCalls)
+	}
+	if countingDB.listLlibresCalls != 0 {
+		t.Fatalf("v2_lookup sense context no hauria de carregar tots els llibres, got list=%d", countingDB.listLlibresCalls)
+	}
+	if regs, _ := database.ListTranscripcionsRaw(llibreID, db.TranscripcioFilter{Limit: -1}); len(regs) != 3 {
+		t.Fatalf("esperava 3 transcripcions al llibre cache, got=%d", len(regs))
 	}
 }
 
@@ -903,4 +1256,114 @@ func buildF32CSV(t *testing.T, rows [][]string) string {
 
 func intToStringF32(v int) string {
 	return strconv.Itoa(v)
+}
+
+type f354U9BookSeed struct {
+	Code         string
+	Chronology   string
+	Title        string
+	BookType     string
+	ChurchName   string
+	SourceSystem string
+	ExternalID   string
+	ExternalCode string
+	URLBase      string
+	Published    bool
+}
+
+func createF354U9Territory(t *testing.T, database db.DB, userID int, label string) (int, int) {
+	t.Helper()
+	municipiID, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            label + " Municipi",
+		Tipus:          "municipi",
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+		CreatedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("CreateMunicipi ha fallat: %v", err)
+	}
+	arquebisbatID, err := database.CreateArquebisbat(&db.Arquebisbat{
+		Nom:            label + " Bisbat",
+		TipusEntitat:   "bisbat",
+		ModeracioEstat: "publicat",
+		CreatedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("CreateArquebisbat ha fallat: %v", err)
+	}
+	return municipiID, arquebisbatID
+}
+
+func createF354U9Archive(t *testing.T, database db.DB, userID, municipiID int, codi, nom string) int {
+	t.Helper()
+	id, err := database.CreateArxiu(&db.Arxiu{
+		Codi:           codi,
+		Nom:            nom,
+		Tipus:          "arxiu_general",
+		MunicipiID:     sql.NullInt64{Int64: int64(municipiID), Valid: municipiID > 0},
+		ModeracioEstat: "publicat",
+		CreatedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("CreateArxiu %s ha fallat: %v", codi, err)
+	}
+	return id
+}
+
+func createF354U9Book(t *testing.T, database db.DB, userID, arquebisbatID, municipiID int, seed f354U9BookSeed) int {
+	t.Helper()
+	status := "pendent"
+	if seed.Published {
+		status = "publicat"
+	}
+	id, err := database.CreateLlibre(&db.Llibre{
+		ArquebisbatID:  arquebisbatID,
+		MunicipiID:     municipiID,
+		Codi:           seed.Code,
+		SourceSystem:   seed.SourceSystem,
+		ExternalID:     seed.ExternalID,
+		ExternalCode:   seed.ExternalCode,
+		Titol:          firstNonEmpty(seed.Title, seed.Code),
+		TipusLlibre:    firstNonEmpty(seed.BookType, "baptismes"),
+		NomEsglesia:    seed.ChurchName,
+		Cronologia:     seed.Chronology,
+		URLBase:        seed.URLBase,
+		ModeracioEstat: status,
+		CreatedBy:      sql.NullInt64{Int64: int64(userID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("CreateLlibre %s ha fallat: %v", seed.Code, err)
+	}
+	return id
+}
+
+func saveF354U9ArchiveLink(t *testing.T, database db.DB, link *db.ArxiuLlibreLink) {
+	t.Helper()
+	type saver interface {
+		SaveArxiuLlibreLink(link *db.ArxiuLlibreLink) error
+	}
+	impl, ok := database.(saver)
+	if !ok {
+		t.Fatalf("DB no implementa SaveArxiuLlibreLink")
+	}
+	if err := impl.SaveArxiuLlibreLink(link); err != nil {
+		t.Fatalf("SaveArxiuLlibreLink ha fallat: %v", err)
+	}
+}
+
+func buildF354U9Template(t *testing.T, bookResolutionJSON string) *db.CSVImportTemplate {
+	t.Helper()
+	modelJSON := `{
+  "record_type": "baptisme",
+  "book_resolution": ` + bookResolutionJSON + `,
+  "base_defaults": { "moderation_status": "publicat" },
+  "mapping": {
+    "columns": [
+      { "header": "tipus_acte", "key": "tipus_acte", "required": true, "map_to": [{ "target": "base.tipus_acte" }] },
+      { "header": "batejat", "key": "batejat", "map_to": [{ "target": "person.batejat", "transform": [{ "op": "parse_person_from_nom" }] }] }
+    ]
+  }
+}`
+	return &db.CSVImportTemplate{Name: "F354U9 template", ModelJSON: modelJSON}
 }

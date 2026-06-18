@@ -187,6 +187,17 @@ func validateTemplateImportModel(model *templateImportModel) error {
 	if model == nil {
 		return fmt.Errorf("plantilla buida")
 	}
+	switch strings.TrimSpace(model.BookMode) {
+	case "", "llibre_id", "cronologia_lookup", "v2_lookup":
+	default:
+		return fmt.Errorf("book_resolution.mode no suportat")
+	}
+	if strings.TrimSpace(model.BookMode) == "llibre_id" && strings.TrimSpace(model.BookColumn) == "" {
+		return fmt.Errorf("book_resolution.column obligatori per llibre_id")
+	}
+	if strings.TrimSpace(model.BookMode) == "cronologia_lookup" && strings.TrimSpace(firstNonEmpty(model.BookChronologyColumn, model.BookColumn)) == "" {
+		return fmt.Errorf("book_resolution.column obligatori per cronologia_lookup")
+	}
 	allowedTargets := allowedTemplateTargetsForRecordType(model.RecordType)
 	if len(model.Mapping) > templateMaxColumns {
 		return fmt.Errorf("massa columnes a la plantilla")
