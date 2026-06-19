@@ -393,14 +393,26 @@ func (a *App) AdminConfessionalExport(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				continue
 			}
+			exportMunicipi := municipi
+			exportNucli := (*db.Municipi)(nil)
+			if confessionalMunicipalityIsNucleus(municipi) {
+				exportNucli = municipi
+				if parent := confessionalMunicipalityParent(municipi, municipisByID); parent != nil {
+					exportMunicipi = parent
+				}
+			}
 			record := confessionalExportTerritorialRelation{
 				Entity:           entityRef,
-				Municipality:     a.confessionalMunicipalityRef(municipi, municipisByID),
+				Municipality:     a.confessionalMunicipalityRef(exportMunicipi, municipisByID),
 				RelationType:     strings.TrimSpace(rel.TipusRelacio),
 				StartsYear:       confIntPtr(rel.AnyInici),
 				EndsYear:         confIntPtr(rel.AnyFi),
 				Observations:     strings.TrimSpace(rel.Observacions),
 				ModerationStatus: strings.TrimSpace(rel.ModeracioEstat),
+			}
+			if exportNucli != nil {
+				ref := a.confessionalMunicipalityRef(exportNucli, municipisByID)
+				record.Nucleus = &ref
 			}
 			if rel.NucliID.Valid {
 				if nucli, ok := municipisByID[int(rel.NucliID.Int64)]; ok {
@@ -1074,11 +1086,16 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 			Field:   "municipality",
 			Origin:  originLabel,
 		})
-		if err != nil {
-			plan.View.Errors = append(plan.View.Errors, err.Error())
-			continue
-		}
 		nucliID := sql.NullInt64{}
+		if err != nil {
+			legacyMunicipiID, legacyNucliID, legacyOK := confessionalNormalizeLegacyTerritoryRef(rel, municipiIndex, municipisByID, originLabel)
+			if !legacyOK {
+				plan.View.Errors = append(plan.View.Errors, err.Error())
+				continue
+			}
+			municipiID = legacyMunicipiID
+			nucliID = legacyNucliID
+		}
 		if rel.Nucleus != nil {
 			expectedParent := strings.TrimSpace(rel.Municipality.Name)
 			resolvedNucliID, err := confessionalResolveMunicipalityRef(*rel.Nucleus, municipiIndex, confessionalRefContext{
@@ -1330,7 +1347,7 @@ func (a *App) confessionalArchiveIndex(rows []db.ArxiuWithCount, municipis map[i
 func confessionalResolveMunicipalityRef(ref confessionalMunicipalityRef, lookup confessionalMunicipalityLookup, ctx confessionalRefContext) (int, error) {
 	ref = confessionalNormalizeMunicipalityRef(ref)
 	key := confessionalMunicipalityRefKey(ref)
-	ids := lookup.Exact[key]
+	ids := confessionalUniqueCandidateIDs(lookup.Exact[key])
 	if len(ids) == 1 {
 		if err := confessionalValidateMunicipalityCandidate(ref, lookup, ids[0], ctx); err != nil {
 			return 0, err
@@ -1340,12 +1357,12 @@ func confessionalResolveMunicipalityRef(ref confessionalMunicipalityRef, lookup 
 	if len(ids) > 1 {
 		return 0, confessionalMunicipalityDiagnostic(ref, lookup, ids, confessionalRefKindAmbiguous, ctx)
 	}
-	candidates := lookup.ByNameTypeCountry[confessionalMunicipalityNameTypeCountryKey(ref)]
+	candidates := confessionalUniqueCandidateIDs(lookup.ByNameTypeCountry[confessionalMunicipalityNameTypeCountryKey(ref)])
 	if len(candidates) == 0 {
-		candidates = lookup.ByNameType[confessionalMunicipalityNameTypeKey(ref)]
+		candidates = confessionalUniqueCandidateIDs(lookup.ByNameType[confessionalMunicipalityNameTypeKey(ref)])
 	}
 	if len(candidates) == 0 {
-		candidates = lookup.ByName[confessionalMunicipalityNameKey(ref)]
+		candidates = confessionalUniqueCandidateIDs(lookup.ByName[confessionalMunicipalityNameKey(ref)])
 	}
 	if len(candidates) > 0 {
 		filtered := confessionalFilterMunicipalityCandidates(candidates, lookup, ctx)
@@ -1365,16 +1382,16 @@ func confessionalResolveMunicipalityRef(ref confessionalMunicipalityRef, lookup 
 func confessionalResolveArchiveRef(ref confessionalArchiveRef, lookup confessionalArchiveLookup, section, field, origin string) (int, error) {
 	ref = confessionalNormalizeArchiveRef(ref)
 	key := confessionalArchiveRefKey(ref)
-	ids := lookup.Exact[key]
+	ids := confessionalUniqueCandidateIDs(lookup.Exact[key])
 	if len(ids) == 1 {
 		return ids[0], nil
 	}
 	if len(ids) > 1 {
 		return 0, confessionalArchiveDiagnostic(ref, lookup, ids, confessionalRefKindAmbiguous, section, field, origin)
 	}
-	candidates := lookup.ByNameType[confessionalArchiveNameTypeKey(ref)]
+	candidates := confessionalUniqueCandidateIDs(lookup.ByNameType[confessionalArchiveNameTypeKey(ref)])
 	if len(candidates) == 0 {
-		candidates = lookup.ByName[normalizeKey(ref.Name)]
+		candidates = confessionalUniqueCandidateIDs(lookup.ByName[normalizeKey(ref.Name)])
 	}
 	if len(candidates) > 0 {
 		filtered := confessionalFilterArchiveCandidates(candidates, lookup, ref)
@@ -1389,6 +1406,27 @@ func confessionalResolveArchiveRef(ref confessionalArchiveRef, lookup confession
 		return 0, confessionalArchiveDiagnostic(ref, lookup, filtered, kind, section, field, origin)
 	}
 	return 0, confessionalArchiveDiagnostic(ref, lookup, nil, confessionalRefKindUnresolved, section, field, origin)
+}
+
+func confessionalNormalizeLegacyTerritoryRef(rel confessionalExportTerritorialRelation, lookup confessionalMunicipalityLookup, municipisByID map[int]*db.Municipi, origin string) (int, sql.NullInt64, bool) {
+	if rel.Nucleus != nil {
+		return 0, sql.NullInt64{}, false
+	}
+	nucliID, err := confessionalResolveMunicipalityRef(rel.Municipality, lookup, confessionalRefContext{
+		Section:     "relacions_territorials",
+		Field:       "municipality",
+		Origin:      origin,
+		WantNucleus: true,
+	})
+	if err != nil {
+		return 0, sql.NullInt64{}, false
+	}
+	nucli := municipisByID[nucliID]
+	parent := confessionalMunicipalityParent(nucli, municipisByID)
+	if parent == nil {
+		return 0, sql.NullInt64{}, false
+	}
+	return parent.ID, sql.NullInt64{Int64: int64(nucliID), Valid: true}, true
 }
 
 func confessionalNormalizeEntityRef(ref confessionalEntityRef) confessionalEntityRef {
@@ -1552,6 +1590,22 @@ func confessionalValidateMunicipalityCandidate(ref confessionalMunicipalityRef, 
 	return nil
 }
 
+func confessionalUniqueCandidateIDs(ids []int) []int {
+	if len(ids) == 0 {
+		return nil
+	}
+	seen := make(map[int]struct{}, len(ids))
+	unique := make([]int, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	return unique
+}
+
 func confessionalFilterMunicipalityCandidates(ids []int, lookup confessionalMunicipalityLookup, ctx confessionalRefContext) []int {
 	filtered := make([]int, 0, len(ids))
 	for _, id := range ids {
@@ -1589,19 +1643,17 @@ func confessionalMunicipalityDiagnostic(ref confessionalMunicipalityRef, lookup 
 	}
 }
 
-// Prefer the explicit territorial type to identify nuclei; parent linkage only
-// validates which municipality a nucleus belongs to.
+// El camp Tipus es descriptiu. Per a import/export confessional,
+// una localitat es nucli nomes si penja estructuralment d'un municipi pare.
 func confessionalMunicipalityIsNucleus(m *db.Municipi) bool {
-	if m == nil {
-		return false
+	return m != nil && m.MunicipiID.Valid
+}
+
+func confessionalMunicipalityParent(m *db.Municipi, all map[int]*db.Municipi) *db.Municipi {
+	if m == nil || !m.MunicipiID.Valid {
+		return nil
 	}
-	switch normalizeKey(m.Tipus) {
-	case "nucli", "nucli_urba", "nucli_rural", "entitat_poblacio", "barri", "llogaret":
-		return true
-	case "municipi":
-		return false
-	}
-	return m.MunicipiID.Valid
+	return all[int(m.MunicipiID.Int64)]
 }
 
 func confessionalMunicipalityCandidateMatches(municipi *db.Municipi, lookup confessionalMunicipalityLookup, ctx confessionalRefContext) bool {
@@ -1614,10 +1666,10 @@ func confessionalMunicipalityCandidateMatches(municipi *db.Municipi, lookup conf
 	if ctx.ExpectedParent == "" {
 		return true
 	}
-	if !municipi.MunicipiID.Valid {
+	parent := confessionalMunicipalityParent(municipi, lookup.All)
+	if parent == nil {
 		return false
 	}
-	parent := lookup.All[int(municipi.MunicipiID.Int64)]
 	return parent != nil && normalizeKey(parent.Nom) == normalizeKey(ctx.ExpectedParent)
 }
 
@@ -1626,27 +1678,54 @@ func confessionalMunicipalityCandidateLabels(ids []int, lookup confessionalMunic
 		return nil
 	}
 	labels := make([]string, 0, len(ids))
-	for _, id := range ids {
+	for _, id := range confessionalUniqueCandidateIDs(ids) {
 		municipi := lookup.All[id]
 		if municipi == nil {
 			continue
 		}
-		label := strings.TrimSpace(municipi.Nom)
-		if municipi.MunicipiID.Valid {
-			if parent := lookup.All[int(municipi.MunicipiID.Int64)]; parent != nil {
-				label = label + " [" + strings.TrimSpace(parent.Nom) + "]"
-			}
-		}
-		if strings.TrimSpace(municipi.Tipus) != "" {
-			label = label + " {" + strings.TrimSpace(municipi.Tipus) + "}"
-		}
-		labels = append(labels, label)
+		labels = append(labels, confessionalMunicipalityCandidateLabel(municipi, lookup))
 	}
-	sort.Strings(labels)
 	if len(labels) > 5 {
 		labels = labels[:5]
 	}
 	return labels
+}
+
+func confessionalMunicipalityCandidateLabel(municipi *db.Municipi, lookup confessionalMunicipalityLookup) string {
+	if municipi == nil {
+		return ""
+	}
+	parts := []string{"id=" + strconv.Itoa(municipi.ID)}
+	if tipus := strings.TrimSpace(municipi.Tipus); tipus != "" {
+		parts = append(parts, "tipus="+tipus)
+	}
+	if parent := confessionalMunicipalityParent(municipi, lookup.All); parent != nil {
+		parts = append(parts, "parent="+strings.TrimSpace(parent.Nom))
+	}
+	if path := confessionalMunicipalityPathLabel(municipi, lookup.All); path != "" {
+		parts = append(parts, "path="+path)
+	}
+	return strings.TrimSpace(municipi.Nom) + " [" + strings.Join(parts, ", ") + "]"
+}
+
+func confessionalMunicipalityPathLabel(municipi *db.Municipi, all map[int]*db.Municipi) string {
+	if municipi == nil {
+		return ""
+	}
+	path := []string{strings.TrimSpace(municipi.Nom)}
+	current := municipi
+	for current != nil && current.MunicipiID.Valid {
+		parent := all[int(current.MunicipiID.Int64)]
+		if parent == nil {
+			break
+		}
+		path = append([]string{strings.TrimSpace(parent.Nom)}, path...)
+		current = parent
+	}
+	if len(path) <= 1 {
+		return ""
+	}
+	return strings.Join(path, " > ")
 }
 
 func confessionalArchiveDiagnostic(ref confessionalArchiveRef, lookup confessionalArchiveLookup, ids []int, kind, section, field, origin string) error {
@@ -1668,23 +1747,22 @@ func confessionalArchiveCandidateLabels(ids []int, lookup confessionalArchiveLoo
 		return nil
 	}
 	labels := make([]string, 0, len(ids))
-	for _, id := range ids {
+	for _, id := range confessionalUniqueCandidateIDs(ids) {
 		row, ok := lookup.Rows[id]
 		if !ok {
 			continue
 		}
-		label := strings.TrimSpace(row.Nom)
-		if strings.TrimSpace(row.Tipus) != "" {
-			label += " {" + strings.TrimSpace(row.Tipus) + "}"
+		parts := []string{"id=" + strconv.Itoa(row.ID)}
+		if tipus := strings.TrimSpace(row.Tipus); tipus != "" {
+			parts = append(parts, "tipus="+tipus)
 		}
 		if row.MunicipiID.Valid {
 			if municipi := lookup.Municipis[int(row.MunicipiID.Int64)]; municipi != nil {
-				label += " [" + strings.TrimSpace(municipi.Nom) + "]"
+				parts = append(parts, "municipi="+strings.TrimSpace(municipi.Nom))
 			}
 		}
-		labels = append(labels, label)
+		labels = append(labels, strings.TrimSpace(row.Nom)+" ["+strings.Join(parts, ", ")+"]")
 	}
-	sort.Strings(labels)
 	if len(labels) > 5 {
 		labels = labels[:5]
 	}

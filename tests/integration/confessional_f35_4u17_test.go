@@ -183,6 +183,62 @@ func TestF354U17DryRunResolvesMunicipalityAndNucleusWithParentContext(t *testing
 	}
 }
 
+func TestF354U17DryRunResolvesStructuralMunicipalityDespiteNucliUrbaType(t *testing.T) {
+	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_structural_municipality_nucli_urba.sqlite3", "f354u17_structural_mun_nucli")
+	suffix := time.Now().Format("150405000000000")
+	name := "Alio F35-4U17 " + suffix
+	if _, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            name,
+		Tipus:          "nucli_urba",
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	}); err != nil {
+		t.Fatalf("CreateMunicipi structural nucli_urba municipality: %v", err)
+	}
+
+	payload := f354U17Payload(t, map[string]interface{}{
+		"entitats_religioses":    f354U17BaseEntityPayload("f354u17_structural_mun_nucli", "Parroquia F35-4U17 Structural Nucli"),
+		"relacions_entitats":     []map[string]interface{}{},
+		"relacions_territorials": f354U17TerritoryRelationPayload("f354u17_structural_mun_nucli", map[string]interface{}{"name": name, "type": "nucli_urba"}, nil),
+		"relacions_arxius":       []map[string]interface{}{},
+	})
+	body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
+	if strings.Contains(body, "ReferÃ¨ncia no resolta") || strings.Contains(body, "ReferÃ¨ncia ambigua") {
+		t.Fatalf("un municipi structural amb tipus nucli_urba s'ha de resoldre com a municipi; body=%s", body)
+	}
+	if !strings.Contains(body, `name="payload_b64"`) {
+		t.Fatalf("el dry-run valid ha d'oferir apply; body=%s", body)
+	}
+}
+
+func TestF354U17DryRunResolvesStructuralMunicipalityDespitePobleType(t *testing.T) {
+	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_structural_municipality_poble.sqlite3", "f354u17_structural_mun_poble")
+	suffix := time.Now().Format("150405000000000")
+	name := "Poble F35-4U17 " + suffix
+	if _, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            name,
+		Tipus:          "poble",
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	}); err != nil {
+		t.Fatalf("CreateMunicipi structural poble municipality: %v", err)
+	}
+
+	payload := f354U17Payload(t, map[string]interface{}{
+		"entitats_religioses":    f354U17BaseEntityPayload("f354u17_structural_mun_poble", "Parroquia F35-4U17 Structural Poble"),
+		"relacions_entitats":     []map[string]interface{}{},
+		"relacions_territorials": f354U17TerritoryRelationPayload("f354u17_structural_mun_poble", map[string]interface{}{"name": name, "type": "poble"}, nil),
+		"relacions_arxius":       []map[string]interface{}{},
+	})
+	body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
+	if strings.Contains(body, "ReferÃ¨ncia no resolta") || strings.Contains(body, "ReferÃ¨ncia ambigua") {
+		t.Fatalf("un municipi structural amb tipus poble s'ha de resoldre com a municipi; body=%s", body)
+	}
+	if !strings.Contains(body, `name="payload_b64"`) {
+		t.Fatalf("el dry-run valid ha d'oferir apply; body=%s", body)
+	}
+}
+
 func TestF354U17DryRunFlagsAmbiguousNucleus(t *testing.T) {
 	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_ambiguous_nucleus.sqlite3", "f354u17_ambiguous")
 	suffix := time.Now().Format("150405000000000")
@@ -211,6 +267,8 @@ func TestF354U17DryRunFlagsAmbiguousNucleus(t *testing.T) {
 		"tipus=nucli",
 		"camp=nucleus",
 		"candidats=Nucli ambigu F35-4U17",
+		"id=",
+		"parent=Municipi ambigu F35-4U17",
 	} {
 		if !strings.Contains(body, token) {
 			t.Fatalf("el nucli ambigu ha d'explicar l'ambiguitat (%q); body=%s", token, body)
@@ -286,6 +344,143 @@ func TestF354U17ExportIncludesTerritoryContext(t *testing.T) {
 	}
 	if territory.Nucleus == nil || len(territory.Nucleus.ParentNames) != 1 || territory.Nucleus.ParentNames[0] != "Municipi export F35-4U17 "+suffix {
 		t.Fatalf("el nucli exportat ha d'incloure parent_names; got %+v", territory.Nucleus)
+	}
+}
+
+func TestF354U17ExportNormalizesMunicipalityFieldWhenRelationPointsToNucleus(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u17_export_normalizes_nucleus.sqlite3")
+	user := createTestUser(t, database, "f354u17_export_normalized_"+time.Now().Format("150405000000000"))
+	session := createSessionCookie(t, database, user.ID, "sess_f354u17_export_normalized_"+time.Now().Format("150405000000000"))
+	policyID := createPolicyWithGrant(t, database, "f354u17_export_normalized", "territori.confessional.import_export.export")
+	assignPolicyToUser(t, database, user.ID, policyID)
+
+	suffix := time.Now().Format("150405000000000")
+	parentID := f353YCreateMunicipi(t, database, "Municipi pare export F35-4U17 "+suffix)
+	nucleusID, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            "Nucli legacy export F35-4U17 " + suffix,
+		Tipus:          "municipi",
+		MunicipiID:     sql.NullInt64{Int64: int64(parentID), Valid: true},
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	})
+	if err != nil {
+		t.Fatalf("CreateMunicipi export legacy nucleus: %v", err)
+	}
+	entityID := f354SSaveEntitat(t, database, "f354u17_export_legacy_"+suffix, "Parroquia export legacy F35-4U17 "+suffix, "catolicisme_ritu_llati", "parroquia", "publicat")
+	if _, err := database.SaveMunicipiEntitatReligiosa(&db.MunicipiEntitatReligiosa{
+		MunicipiID:         nucleusID,
+		EntitatReligiosaID: entityID,
+		TipusRelacio:       "parroquia_local",
+		ModeracioEstat:     "publicat",
+	}); err != nil {
+		t.Fatalf("SaveMunicipiEntitatReligiosa export legacy: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/confessional/export", nil)
+	req.AddCookie(session)
+	rr := httptest.NewRecorder()
+	app.AdminConfessionalExport(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("export normalized status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var payload struct {
+		Items struct {
+			RelacionsTerritorials []struct {
+				Municipality struct {
+					Name string `json:"name"`
+				} `json:"municipality"`
+				Nucleus *struct {
+					Name string `json:"name"`
+				} `json:"nucleus"`
+			} `json:"relacions_territorials"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal export normalized: %v", err)
+	}
+	if len(payload.Items.RelacionsTerritorials) != 1 {
+		t.Fatalf("s'esperava 1 relacio territorial exportada, got %d", len(payload.Items.RelacionsTerritorials))
+	}
+	territory := payload.Items.RelacionsTerritorials[0]
+	if territory.Municipality.Name != "Municipi pare export F35-4U17 "+suffix {
+		t.Fatalf("el municipi exportat s'ha de normalitzar al pare, got %+v", territory.Municipality)
+	}
+	if territory.Nucleus == nil || territory.Nucleus.Name != "Nucli legacy export F35-4U17 "+suffix {
+		t.Fatalf("el nucli exportat s'ha de preservar, got %+v", territory.Nucleus)
+	}
+}
+
+func TestF354U17DryRunNormalizesLegacyMunicipalityThatActuallyPointsToNucleus(t *testing.T) {
+	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_legacy_municipality_points_to_nucleus.sqlite3", "f354u17_legacy_nucleus")
+	suffix := time.Now().Format("150405000000000")
+	parentID := f353YCreateMunicipi(t, database, "Municipi pare import F35-4U17 "+suffix)
+	nucleusName := "Nucli legacy import F35-4U17 " + suffix
+	if _, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            nucleusName,
+		Tipus:          "municipi",
+		MunicipiID:     sql.NullInt64{Int64: int64(parentID), Valid: true},
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	}); err != nil {
+		t.Fatalf("CreateMunicipi legacy import nucleus: %v", err)
+	}
+
+	payload := f354U17Payload(t, map[string]interface{}{
+		"entitats_religioses":    f354U17BaseEntityPayload("f354u17_legacy_nucleus", "Parroquia F35-4U17 Legacy"),
+		"relacions_entitats":     []map[string]interface{}{},
+		"relacions_territorials": f354U17TerritoryRelationPayload("f354u17_legacy_nucleus", map[string]interface{}{"name": nucleusName, "type": "municipi"}, nil),
+		"relacions_arxius":       []map[string]interface{}{},
+	})
+	dryRunBody := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
+	if strings.Contains(dryRunBody, "Referència no resolta") || strings.Contains(dryRunBody, "Referència ambigua") {
+		t.Fatalf("el payload legacy amb municipality apuntant a un nucli resoluble s'ha de normalitzar; body=%s", dryRunBody)
+	}
+
+	applyRR := f354U1Apply(t, app, session, csrfCookie, extractCSRFTokenFromHTML(t, dryRunBody), extractHiddenTextareaValue(t, dryRunBody, "payload_b64"))
+	if applyRR.Code != http.StatusSeeOther {
+		t.Fatalf("apply legacy normalization status=%d body=%s", applyRR.Code, applyRR.Body.String())
+	}
+	territoryRows := f354U1ListTerritory(t, database)
+	if len(territoryRows) != 1 {
+		t.Fatalf("s'esperava 1 relacio territorial importada, got %d", len(territoryRows))
+	}
+	if territoryRows[0].MunicipiID != parentID {
+		t.Fatalf("el municipi importat s'ha de normalitzar al pare %d, got %+v", parentID, territoryRows[0])
+	}
+	if !territoryRows[0].NucliID.Valid {
+		t.Fatalf("la relacio importada ha de conservar el nucli: %+v", territoryRows[0])
+	}
+}
+
+func TestF354U17DryRunResolvesMisleadingMunicipiTypeAsNucleusWhenParentMatches(t *testing.T) {
+	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_misleading_nucleus_type.sqlite3", "f354u17_misleading_nucleus")
+	suffix := time.Now().Format("150405000000000")
+	parentName := "Municipi pare nucleus F35-4U17 " + suffix
+	parentID := f353YCreateMunicipi(t, database, parentName)
+	nucleusName := "Nucli tipus municipi F35-4U17 " + suffix
+	if _, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            nucleusName,
+		Tipus:          "municipi",
+		MunicipiID:     sql.NullInt64{Int64: int64(parentID), Valid: true},
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	}); err != nil {
+		t.Fatalf("CreateMunicipi misleading nucleus type: %v", err)
+	}
+
+	payload := f354U17Payload(t, map[string]interface{}{
+		"entitats_religioses":    f354U17BaseEntityPayload("f354u17_misleading_nucleus", "Parroquia F35-4U17 Misleading Nucleus"),
+		"relacions_entitats":     []map[string]interface{}{},
+		"relacions_territorials": f354U17TerritoryRelationPayload("f354u17_misleading_nucleus", map[string]interface{}{"name": parentName, "type": "municipi"}, map[string]interface{}{"name": nucleusName, "type": "municipi", "parent_names": []string{parentName}}),
+		"relacions_arxius":       []map[string]interface{}{},
+	})
+	body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
+	if strings.Contains(body, "Referència no resolta") || strings.Contains(body, "Referència ambigua") {
+		t.Fatalf("un nucli structural amb tipus enganyos s'ha de resoldre com a nucli; body=%s", body)
+	}
+	if !strings.Contains(body, `name="payload_b64"`) {
+		t.Fatalf("el dry-run valid ha d'oferir apply; body=%s", body)
 	}
 }
 
