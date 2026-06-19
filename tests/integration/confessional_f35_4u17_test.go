@@ -261,6 +261,7 @@ func TestF354U17DryRunResolvesStructuralMunicipalityDespiteDescriptiveType(t *te
 	}
 
 	for _, tc := range cases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, tc.dbFile, tc.slug)
 			suffix := time.Now().Format("150405000000000")

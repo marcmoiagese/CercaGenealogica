@@ -1601,32 +1601,24 @@ func confessionalUniqueCandidateIDs(ids []int) []int {
 		return ids
 	}
 
-	hasDuplicate := false
-	for i, id := range ids {
-		for _, previous := range ids[:i] {
-			if previous == id {
-				hasDuplicate = true
-				break
-			}
-		}
-		if hasDuplicate {
-			break
-		}
-	}
-	if !hasDuplicate {
-		return ids
-	}
-
 	seen := make(map[int]struct{}, len(ids))
-	unique := make([]int, 0, len(ids))
-	for _, id := range ids {
+	for i, id := range ids {
 		if _, ok := seen[id]; ok {
-			continue
+			unique := make([]int, i, len(ids))
+			copy(unique, ids[:i])
+			for _, candidateID := range ids[i:] {
+				if _, ok := seen[candidateID]; ok {
+					continue
+				}
+				seen[candidateID] = struct{}{}
+				unique = append(unique, candidateID)
+			}
+			return unique
 		}
 		seen[id] = struct{}{}
-		unique = append(unique, id)
 	}
-	return unique
+
+	return ids
 }
 
 func confessionalFilterMunicipalityCandidates(ids []int, lookup confessionalMunicipalityLookup, ctx confessionalRefContext) []int {
