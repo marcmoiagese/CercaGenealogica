@@ -50,3 +50,37 @@ func TestConfessionalUniqueCandidateIDsPreservesOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestConfessionalUniqueCandidateIDsReturnsOriginalSliceWithoutDuplicates(t *testing.T) {
+	ids := []int{4, 2, 9}
+	got := confessionalUniqueCandidateIDs(ids)
+	if len(got) != len(ids) {
+		t.Fatalf("len(confessionalUniqueCandidateIDs()) = %d, esperava %d", len(got), len(ids))
+	}
+	if &got[0] != &ids[0] {
+		t.Fatalf("confessionalUniqueCandidateIDs() ha de reutilitzar el slice original quan no hi ha duplicats")
+	}
+}
+
+func TestConfessionalMunicipalityPathLabelStopsOnCycle(t *testing.T) {
+	all := map[int]*db.Municipi{
+		1: {
+			ID:         1,
+			Nom:        "Municipi A",
+			MunicipiID: sql.NullInt64{Int64: 2, Valid: true},
+		},
+		2: {
+			ID:         2,
+			Nom:        "Municipi B",
+			MunicipiID: sql.NullInt64{Int64: 1, Valid: true},
+		},
+	}
+
+	got := confessionalMunicipalityPathLabel(all[1], all)
+	if got == "" {
+		t.Fatalf("confessionalMunicipalityPathLabel() no hauria de quedar buit amb un cicle curt")
+	}
+	if got != "Municipi B > Municipi A" {
+		t.Fatalf("confessionalMunicipalityPathLabel() = %q, esperava un path truncat segur", got)
+	}
+}

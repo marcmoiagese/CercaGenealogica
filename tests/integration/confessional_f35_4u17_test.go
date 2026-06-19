@@ -90,6 +90,55 @@ func f354U17CreateCountryLevel(t *testing.T, database db.DB, iso2, iso3, num str
 	return levelID
 }
 
+func f354U17CreateStructuralMunicipality(t *testing.T, database db.DB, name, tipus string) int {
+	t.Helper()
+	id, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            name,
+		Tipus:          tipus,
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	})
+	if err != nil {
+		t.Fatalf("CreateMunicipi structural municipality (%s, %s): %v", name, tipus, err)
+	}
+	return id
+}
+
+func f354U17CreateStructuralNucleus(t *testing.T, database db.DB, parentID int, name, tipus string) int {
+	t.Helper()
+	id, err := database.CreateMunicipi(&db.Municipi{
+		Nom:            name,
+		Tipus:          tipus,
+		MunicipiID:     sql.NullInt64{Int64: int64(parentID), Valid: true},
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	})
+	if err != nil {
+		t.Fatalf("CreateMunicipi structural nucleus (%s, %s, parent=%d): %v", name, tipus, parentID, err)
+	}
+	return id
+}
+
+func f354U17AssertNoReferenceErrors(t *testing.T, body, message string) {
+	t.Helper()
+	if strings.Contains(body, "Referència no resolta") || strings.Contains(body, "Referència ambigua") {
+		t.Fatalf("%s; body=%s", message, body)
+	}
+}
+
+func f354U17AssertDryRunOffersApply(t *testing.T, body, message string) {
+	t.Helper()
+	if !strings.Contains(body, `name="payload_b64"`) {
+		t.Fatalf("%s; body=%s", message, body)
+	}
+}
+
+func f354U17AssertDryRunNoReferenceErrorsAndApply(t *testing.T, body, errorMessage, applyMessage string) {
+	t.Helper()
+	f354U17AssertNoReferenceErrors(t, body, errorMessage)
+	f354U17AssertDryRunOffersApply(t, body, applyMessage)
+}
+
 func TestF354U17DryRunShowsContextualUnresolvedMunicipality(t *testing.T) {
 	app, _, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_unresolved_municipality.sqlite3", "f354u17_unresolved")
 	payload := f354U17Payload(t, map[string]interface{}{
@@ -175,26 +224,14 @@ func TestF354U17DryRunResolvesMunicipalityAndNucleusWithParentContext(t *testing
 		"relacions_arxius":       []map[string]interface{}{},
 	})
 	body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
-	if strings.Contains(body, "Referència no resolta") || strings.Contains(body, "Referència ambigua") {
-		t.Fatalf("municipi i nucli existents amb context de pare s'han de resoldre; body=%s", body)
-	}
-	if !strings.Contains(body, `name="payload_b64"`) {
-		t.Fatalf("el dry-run valid amb municipi i nucli ha d'oferir apply; body=%s", body)
-	}
+	f354U17AssertDryRunNoReferenceErrorsAndApply(t, body, "municipi i nucli existents amb context de pare s'han de resoldre", "el dry-run valid amb municipi i nucli ha d'oferir apply")
 }
 
 func TestF354U17DryRunResolvesStructuralMunicipalityDespiteNucliUrbaType(t *testing.T) {
 	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_structural_municipality_nucli_urba.sqlite3", "f354u17_structural_mun_nucli")
 	suffix := time.Now().Format("150405000000000")
 	name := "Alio F35-4U17 " + suffix
-	if _, err := database.CreateMunicipi(&db.Municipi{
-		Nom:            name,
-		Tipus:          "nucli_urba",
-		Estat:          "actiu",
-		ModeracioEstat: "publicat",
-	}); err != nil {
-		t.Fatalf("CreateMunicipi structural nucli_urba municipality: %v", err)
-	}
+	f354U17CreateStructuralMunicipality(t, database, name, "nucli_urba")
 
 	payload := f354U17Payload(t, map[string]interface{}{
 		"entitats_religioses":    f354U17BaseEntityPayload("f354u17_structural_mun_nucli", "Parroquia F35-4U17 Structural Nucli"),
@@ -203,27 +240,14 @@ func TestF354U17DryRunResolvesStructuralMunicipalityDespiteNucliUrbaType(t *test
 		"relacions_arxius":       []map[string]interface{}{},
 	})
 	body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
-	if strings.Contains(body, "ReferÃ¨ncia no resolta") || strings.Contains(body, "ReferÃ¨ncia ambigua") {
-		t.Fatalf("un municipi structural amb tipus nucli_urba s'ha de resoldre com a municipi; body=%s", body)
-	}
-	if !strings.Contains(body, `name="payload_b64"`) {
-		t.Fatalf("el dry-run valid ha d'oferir apply; body=%s", body)
-	}
+	f354U17AssertDryRunNoReferenceErrorsAndApply(t, body, "un municipi structural amb tipus nucli_urba s'ha de resoldre com a municipi", "el dry-run valid ha d'oferir apply")
 }
 
 func TestF354U17DryRunResolvesStructuralMunicipalityDespitePobleType(t *testing.T) {
 	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_structural_municipality_poble.sqlite3", "f354u17_structural_mun_poble")
 	suffix := time.Now().Format("150405000000000")
 	name := "Poble F35-4U17 " + suffix
-	if _, err := database.CreateMunicipi(&db.Municipi{
-		Nom:            name,
-		Tipus:          "poble",
-		Estat:          "actiu",
-		ModeracioEstat: "publicat",
-	}); err != nil {
-		t.Fatalf("CreateMunicipi structural poble municipality: %v", err)
-	}
-
+	f354U17CreateStructuralMunicipality(t, database, name, "poble")
 	payload := f354U17Payload(t, map[string]interface{}{
 		"entitats_religioses":    f354U17BaseEntityPayload("f354u17_structural_mun_poble", "Parroquia F35-4U17 Structural Poble"),
 		"relacions_entitats":     []map[string]interface{}{},
@@ -231,12 +255,7 @@ func TestF354U17DryRunResolvesStructuralMunicipalityDespitePobleType(t *testing.
 		"relacions_arxius":       []map[string]interface{}{},
 	})
 	body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
-	if strings.Contains(body, "ReferÃ¨ncia no resolta") || strings.Contains(body, "ReferÃ¨ncia ambigua") {
-		t.Fatalf("un municipi structural amb tipus poble s'ha de resoldre com a municipi; body=%s", body)
-	}
-	if !strings.Contains(body, `name="payload_b64"`) {
-		t.Fatalf("el dry-run valid ha d'oferir apply; body=%s", body)
-	}
+	f354U17AssertDryRunNoReferenceErrorsAndApply(t, body, "un municipi structural amb tipus poble s'ha de resoldre com a municipi", "el dry-run valid ha d'oferir apply")
 }
 
 func TestF354U17DryRunFlagsAmbiguousNucleus(t *testing.T) {
@@ -244,15 +263,7 @@ func TestF354U17DryRunFlagsAmbiguousNucleus(t *testing.T) {
 	suffix := time.Now().Format("150405000000000")
 	municipiID := f353YCreateMunicipi(t, database, "Municipi ambigu F35-4U17 "+suffix)
 	for i := 0; i < 2; i++ {
-		if _, err := database.CreateMunicipi(&db.Municipi{
-			Nom:            "Nucli ambigu F35-4U17 " + suffix,
-			Tipus:          "nucli_urba",
-			MunicipiID:     sql.NullInt64{Int64: int64(municipiID), Valid: true},
-			Estat:          "actiu",
-			ModeracioEstat: "publicat",
-		}); err != nil {
-			t.Fatalf("CreateMunicipi nucli ambigu: %v", err)
-		}
+		f354U17CreateStructuralNucleus(t, database, municipiID, "Nucli ambigu F35-4U17 "+suffix, "nucli_urba")
 	}
 
 	payload := f354U17Payload(t, map[string]interface{}{

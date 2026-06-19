@@ -1421,7 +1421,10 @@ func confessionalNormalizeLegacyTerritoryRef(rel confessionalExportTerritorialRe
 	if err != nil {
 		return 0, sql.NullInt64{}, false
 	}
-	nucli := municipisByID[nucliID]
+	nucli, ok := municipisByID[nucliID]
+	if !ok || nucli == nil {
+		return 0, sql.NullInt64{}, false
+	}
 	parent := confessionalMunicipalityParent(nucli, municipisByID)
 	if parent == nil {
 		return 0, sql.NullInt64{}, false
@@ -1591,19 +1594,26 @@ func confessionalValidateMunicipalityCandidate(ref confessionalMunicipalityRef, 
 }
 
 func confessionalUniqueCandidateIDs(ids []int) []int {
-	if len(ids) == 0 {
-		return nil
+	if len(ids) <= 1 {
+		return ids
 	}
 	seen := make(map[int]struct{}, len(ids))
-	unique := make([]int, 0, len(ids))
 	for _, id := range ids {
 		if _, ok := seen[id]; ok {
-			continue
+			seen = make(map[int]struct{}, len(ids))
+			unique := make([]int, 0, len(ids))
+			for _, candidateID := range ids {
+				if _, ok := seen[candidateID]; ok {
+					continue
+				}
+				seen[candidateID] = struct{}{}
+				unique = append(unique, candidateID)
+			}
+			return unique
 		}
 		seen[id] = struct{}{}
-		unique = append(unique, id)
 	}
-	return unique
+	return ids
 }
 
 func confessionalFilterMunicipalityCandidates(ids []int, lookup confessionalMunicipalityLookup, ctx confessionalRefContext) []int {
@@ -1714,8 +1724,14 @@ func confessionalMunicipalityPathLabel(municipi *db.Municipi, all map[int]*db.Mu
 	}
 	path := []string{strings.TrimSpace(municipi.Nom)}
 	current := municipi
+	seen := map[int]bool{municipi.ID: true}
 	for current != nil && current.MunicipiID.Valid {
-		parent := all[int(current.MunicipiID.Int64)]
+		pid := int(current.MunicipiID.Int64)
+		if seen[pid] {
+			break
+		}
+		seen[pid] = true
+		parent := all[pid]
 		if parent == nil {
 			break
 		}
