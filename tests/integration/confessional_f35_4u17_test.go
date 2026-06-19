@@ -90,23 +90,44 @@ func f354U17CreateCountryLevel(t *testing.T, database db.DB, iso2, iso3, num str
 	return levelID
 }
 
-func f354U17CreateAdminLevel(t *testing.T, database db.DB, paisID, nivel int, nom, tipus, codi string, parentID int) int {
+type f354U17AdminLevelSpec struct {
+	PaisID   int
+	Nivel    int
+	Nom      string
+	Tipus    string
+	Codi     string
+	ParentID int
+}
+
+type f354U17HomonymousMunicipalityContext struct {
+	PaisLevelID      int
+	ProvinciaLevelID int
+	ComarcaLevelID   int
+	LevelIDs         [7]int
+	Name             string
+	Comarca          string
+	Provincia        string
+	IdescatCodi      string
+	MunicipiIdescat  string
+}
+
+func f354U17CreateAdminLevel(t *testing.T, database db.DB, spec f354U17AdminLevelSpec) int {
 	t.Helper()
 	level := &db.NivellAdministratiu{
-		PaisID:         paisID,
-		Nivel:          nivel,
-		NomNivell:      nom,
-		TipusNivell:    tipus,
-		CodiOficial:    codi,
+		PaisID:         spec.PaisID,
+		Nivel:          spec.Nivel,
+		NomNivell:      spec.Nom,
+		TipusNivell:    spec.Tipus,
+		CodiOficial:    spec.Codi,
 		Estat:          "actiu",
 		ModeracioEstat: "publicat",
 	}
-	if parentID > 0 {
-		level.ParentID = sql.NullInt64{Int64: int64(parentID), Valid: true}
+	if spec.ParentID > 0 {
+		level.ParentID = sql.NullInt64{Int64: int64(spec.ParentID), Valid: true}
 	}
 	id, err := database.CreateNivell(level)
 	if err != nil {
-		t.Fatalf("CreateNivell(%s): %v", nom, err)
+		t.Fatalf("CreateNivell(%s): %v", spec.Nom, err)
 	}
 	return id
 }
@@ -131,6 +152,65 @@ func f354U17CreateMunicipalityWithAdminContext(t *testing.T, database db.DB, nam
 		t.Fatalf("CreateMunicipi contextual municipality (%s): %v", name, err)
 	}
 	return id
+}
+
+func f354U17CreateHomonymousMunicipalityContext(t *testing.T, database db.DB, paisID, paisLevelID int, suffix, label, provinciaCode, comarcaCode, idescatCodi, municipiIdescat string) f354U17HomonymousMunicipalityContext {
+	t.Helper()
+	provinciaName := label + " provincia F35-4U17 " + suffix
+	provinciaLevelID := f354U17CreateAdminLevel(t, database, f354U17AdminLevelSpec{
+		PaisID: paisID, Nivel: 3, Nom: provinciaName, Tipus: "provincia", Codi: provinciaCode, ParentID: paisLevelID,
+	})
+	comarcaName := label + " comarca F35-4U17 " + suffix
+	comarcaLevelID := f354U17CreateAdminLevel(t, database, f354U17AdminLevelSpec{
+		PaisID: paisID, Nivel: 4, Nom: comarcaName, Tipus: "comarca", Codi: comarcaCode, ParentID: provinciaLevelID,
+	})
+	levelIDs := [7]int{}
+	levelIDs[0] = paisLevelID
+	levelIDs[2] = provinciaLevelID
+	levelIDs[3] = comarcaLevelID
+	return f354U17HomonymousMunicipalityContext{
+		PaisLevelID:      paisLevelID,
+		ProvinciaLevelID: provinciaLevelID,
+		ComarcaLevelID:   comarcaLevelID,
+		LevelIDs:         levelIDs,
+		Name:             "Cambrils F35-4U17 " + suffix,
+		Comarca:          comarcaName,
+		Provincia:        provinciaName,
+		IdescatCodi:      idescatCodi,
+		MunicipiIdescat:  municipiIdescat,
+	}
+}
+
+func f354U17CreateContextualCambrils(t *testing.T, database db.DB, ctx f354U17HomonymousMunicipalityContext) int {
+	t.Helper()
+	altres := "idescat_codi=" + ctx.IdescatCodi + "; municipi_idescat=" + ctx.MunicipiIdescat + "; comarca=" + ctx.Comarca + "; provincia=" + ctx.Provincia
+	return f354U17CreateMunicipalityWithAdminContext(t, database, ctx.Name, "poble", ctx.LevelIDs, altres)
+}
+
+func f354U17MunicipalityRefWithIdescatContext(ctx f354U17HomonymousMunicipalityContext) map[string]interface{} {
+	return map[string]interface{}{
+		"name":                    ctx.Name,
+		"type":                    "poble",
+		"country_iso2":            "ES",
+		"municipi_idescat":        ctx.MunicipiIdescat,
+		"idescat_codi":            ctx.IdescatCodi,
+		"comarca":                 ctx.Comarca,
+		"provincia":               ctx.Provincia,
+		"municipality_admin_name": ctx.Name,
+		"municipality_admin_code": ctx.MunicipiIdescat,
+		"nivells": []int{
+			ctx.PaisLevelID, 0, ctx.ProvinciaLevelID, ctx.ComarcaLevelID, 0, 0, 0,
+		},
+	}
+}
+
+func f354U17AssertTokens(t *testing.T, body string, tokens []string, message string) {
+	t.Helper()
+	for _, token := range tokens {
+		if !strings.Contains(body, token) {
+			t.Fatalf("%s (%q); body=%s", message, token, body)
+		}
+	}
 }
 
 func f354U17CreateStructuralMunicipality(t *testing.T, database db.DB, name, tipus string) int {
@@ -356,28 +436,18 @@ func TestF354U17DryRunResolvesHomonymousMunicipalityWithIdescatContext(t *testin
 	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_homonymous_idescat.sqlite3", "f354u17_homonymous_idescat")
 	suffix := time.Now().Format("150405000000000")
 	paisID := createBrowseTestCountry(t, database, "ES")
-	paisLevelID := f354U17CreateAdminLevel(t, database, paisID, 1, "Espanya homonima F35-4U17 "+suffix, "pais", "ES", 0)
-	tarragonaLevelID := f354U17CreateAdminLevel(t, database, paisID, 3, "Tarragona homonima F35-4U17 "+suffix, "provincia", "43", paisLevelID)
-	baixCampLevelID := f354U17CreateAdminLevel(t, database, paisID, 4, "Baix Camp homonima F35-4U17 "+suffix, "comarca", "03", tarragonaLevelID)
-	lleidaLevelID := f354U17CreateAdminLevel(t, database, paisID, 3, "Lleida homonima F35-4U17 "+suffix, "provincia", "25", paisLevelID)
-	solsonesLevelID := f354U17CreateAdminLevel(t, database, paisID, 4, "Solsones homonima F35-4U17 "+suffix, "comarca", "01", lleidaLevelID)
-
-	tarragonaLevels := [7]int{}
-	tarragonaLevels[0] = paisLevelID
-	tarragonaLevels[2] = tarragonaLevelID
-	tarragonaLevels[3] = baixCampLevelID
-	lleidaLevels := [7]int{}
-	lleidaLevels[0] = paisLevelID
-	lleidaLevels[2] = lleidaLevelID
-	lleidaLevels[3] = solsonesLevelID
-
-	targetID := f354U17CreateMunicipalityWithAdminContext(t, database, "Cambrils F35-4U17 "+suffix, "poble", tarragonaLevels, "idescat_codi=430385 03; municipi_idescat=430385; comarca=Baix Camp homonima F35-4U17 "+suffix+"; provincia=Tarragona homonima F35-4U17 "+suffix)
-	f354U17CreateMunicipalityWithAdminContext(t, database, "Cambrils F35-4U17 "+suffix, "poble", lleidaLevels, "idescat_codi=251484 01; municipi_idescat=251484; comarca=Solsones homonima F35-4U17 "+suffix+"; provincia=Lleida homonima F35-4U17 "+suffix)
+	paisLevelID := f354U17CreateAdminLevel(t, database, f354U17AdminLevelSpec{
+		PaisID: paisID, Nivel: 1, Nom: "Espanya homonima F35-4U17 " + suffix, Tipus: "pais", Codi: "ES",
+	})
+	tarragonaCtx := f354U17CreateHomonymousMunicipalityContext(t, database, paisID, paisLevelID, suffix, "Tarragona homonima", "43", "03", "430385 03", "430385")
+	lleidaCtx := f354U17CreateHomonymousMunicipalityContext(t, database, paisID, paisLevelID, suffix, "Lleida homonima", "25", "01", "251484 01", "251484")
+	targetID := f354U17CreateContextualCambrils(t, database, tarragonaCtx)
+	f354U17CreateContextualCambrils(t, database, lleidaCtx)
 
 	payload := f354U17Payload(t, map[string]interface{}{
 		"entitats_religioses":    f354U17BaseEntityPayload("f354u17_cambrils_idescat", "Parroquia F35-4U17 Cambrils"),
 		"relacions_entitats":     []map[string]interface{}{},
-		"relacions_territorials": f354U17TerritoryRelationPayload("f354u17_cambrils_idescat", map[string]interface{}{"name": "Cambrils F35-4U17 " + suffix, "type": "poble", "country_iso2": "ES", "municipi_idescat": "430385", "idescat_codi": "430385 03", "comarca": "Baix Camp homonima F35-4U17 " + suffix, "provincia": "Tarragona homonima F35-4U17 " + suffix, "municipality_admin_name": "Cambrils F35-4U17 " + suffix, "municipality_admin_code": "430385", "nivells": []int{paisLevelID, 0, tarragonaLevelID, baixCampLevelID, 0, 0, 0}}, nil),
+		"relacions_territorials": f354U17TerritoryRelationPayload("f354u17_cambrils_idescat", f354U17MunicipalityRefWithIdescatContext(tarragonaCtx), nil),
 		"relacions_arxius":       []map[string]interface{}{},
 	})
 	body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
@@ -397,23 +467,13 @@ func TestF354U17DryRunKeepsHomonymousMunicipalityAmbiguousWithoutContext(t *test
 	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_homonymous_ambiguous.sqlite3", "f354u17_homonymous_ambiguous")
 	suffix := time.Now().Format("150405000000000")
 	paisID := createBrowseTestCountry(t, database, "ES")
-	paisLevelID := f354U17CreateAdminLevel(t, database, paisID, 1, "Espanya ambigua F35-4U17 "+suffix, "pais", "ES", 0)
-	tarragonaLevelID := f354U17CreateAdminLevel(t, database, paisID, 3, "Tarragona ambigua F35-4U17 "+suffix, "provincia", "43", paisLevelID)
-	baixCampLevelID := f354U17CreateAdminLevel(t, database, paisID, 4, "Baix Camp ambigua F35-4U17 "+suffix, "comarca", "03", tarragonaLevelID)
-	lleidaLevelID := f354U17CreateAdminLevel(t, database, paisID, 3, "Lleida ambigua F35-4U17 "+suffix, "provincia", "25", paisLevelID)
-	solsonesLevelID := f354U17CreateAdminLevel(t, database, paisID, 4, "Solsones ambigua F35-4U17 "+suffix, "comarca", "01", lleidaLevelID)
-
-	tarragonaLevels := [7]int{}
-	tarragonaLevels[0] = paisLevelID
-	tarragonaLevels[2] = tarragonaLevelID
-	tarragonaLevels[3] = baixCampLevelID
-	lleidaLevels := [7]int{}
-	lleidaLevels[0] = paisLevelID
-	lleidaLevels[2] = lleidaLevelID
-	lleidaLevels[3] = solsonesLevelID
-
-	f354U17CreateMunicipalityWithAdminContext(t, database, "Cambrils F35-4U17 "+suffix, "poble", tarragonaLevels, "idescat_codi=430385 03; municipi_idescat=430385; comarca=Baix Camp ambigua F35-4U17 "+suffix+"; provincia=Tarragona ambigua F35-4U17 "+suffix)
-	f354U17CreateMunicipalityWithAdminContext(t, database, "Cambrils F35-4U17 "+suffix, "poble", lleidaLevels, "idescat_codi=251484 01; municipi_idescat=251484; comarca=Solsones ambigua F35-4U17 "+suffix+"; provincia=Lleida ambigua F35-4U17 "+suffix)
+	paisLevelID := f354U17CreateAdminLevel(t, database, f354U17AdminLevelSpec{
+		PaisID: paisID, Nivel: 1, Nom: "Espanya ambigua F35-4U17 " + suffix, Tipus: "pais", Codi: "ES",
+	})
+	tarragonaCtx := f354U17CreateHomonymousMunicipalityContext(t, database, paisID, paisLevelID, suffix, "Tarragona ambigua", "43", "03", "430385 03", "430385")
+	lleidaCtx := f354U17CreateHomonymousMunicipalityContext(t, database, paisID, paisLevelID, suffix, "Lleida ambigua", "25", "01", "251484 01", "251484")
+	f354U17CreateContextualCambrils(t, database, tarragonaCtx)
+	f354U17CreateContextualCambrils(t, database, lleidaCtx)
 
 	payload := f354U17Payload(t, map[string]interface{}{
 		"entitats_religioses":    f354U17BaseEntityPayload("f354u17_cambrils_ambiguous", "Parroquia F35-4U17 Cambrils Ambigua"),
@@ -422,20 +482,16 @@ func TestF354U17DryRunKeepsHomonymousMunicipalityAmbiguousWithoutContext(t *test
 		"relacions_arxius":       []map[string]interface{}{},
 	})
 	body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
-	for _, token := range []string{
+	f354U17AssertTokens(t, body, []string{
 		"Referència ambigua",
 		"valor=Cambrils F35-4U17 " + suffix,
 		"municipi_idescat=430385",
 		"municipi_idescat=251484",
-		"comarca=Baix Camp ambigua F35-4U17 " + suffix,
-		"comarca=Solsones ambigua F35-4U17 " + suffix,
-		"provincia=Tarragona ambigua F35-4U17 " + suffix,
-		"provincia=Lleida ambigua F35-4U17 " + suffix,
-	} {
-		if !strings.Contains(body, token) {
-			t.Fatalf("el dry-run sense context ha de continuar mostrant ambiguitat contextual (%q); body=%s", token, body)
-		}
-	}
+		"comarca=" + tarragonaCtx.Comarca,
+		"comarca=" + lleidaCtx.Comarca,
+		"provincia=" + tarragonaCtx.Provincia,
+		"provincia=" + lleidaCtx.Provincia,
+	}, "el dry-run sense context ha de continuar mostrant ambiguitat contextual")
 	if strings.Contains(body, `name="payload_b64"`) {
 		t.Fatalf("un municipi homonim sense context no ha d'oferir apply; body=%s", body)
 	}
@@ -450,9 +506,15 @@ func TestF354U17ExportIncludesTerritoryContext(t *testing.T) {
 
 	suffix := time.Now().Format("150405000000000")
 	paisID := createBrowseTestCountry(t, database, "ES")
-	paisLevelID := f354U17CreateAdminLevel(t, database, paisID, 1, "Espanya export F35-4U17 "+suffix, "pais", "ES", 0)
-	provinciaLevelID := f354U17CreateAdminLevel(t, database, paisID, 3, "Tarragona export F35-4U17 "+suffix, "provincia", "43", paisLevelID)
-	comarcaLevelID := f354U17CreateAdminLevel(t, database, paisID, 4, "Baix Camp export F35-4U17 "+suffix, "comarca", "03", provinciaLevelID)
+	paisLevelID := f354U17CreateAdminLevel(t, database, f354U17AdminLevelSpec{
+		PaisID: paisID, Nivel: 1, Nom: "Espanya export F35-4U17 " + suffix, Tipus: "pais", Codi: "ES",
+	})
+	provinciaLevelID := f354U17CreateAdminLevel(t, database, f354U17AdminLevelSpec{
+		PaisID: paisID, Nivel: 3, Nom: "Tarragona export F35-4U17 " + suffix, Tipus: "provincia", Codi: "43", ParentID: paisLevelID,
+	})
+	comarcaLevelID := f354U17CreateAdminLevel(t, database, f354U17AdminLevelSpec{
+		PaisID: paisID, Nivel: 4, Nom: "Baix Camp export F35-4U17 " + suffix, Tipus: "comarca", Codi: "03", ParentID: provinciaLevelID,
+	})
 	levelIDs := [7]int{}
 	levelIDs[0] = paisLevelID
 	levelIDs[2] = provinciaLevelID

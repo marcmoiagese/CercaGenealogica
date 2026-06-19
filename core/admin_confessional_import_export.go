@@ -324,6 +324,11 @@ func (a *App) AdminConfessionalExport(w http.ResponseWriter, r *http.Request) {
 	allArchiveRelations, _ := a.DB.ListArxiuEntitatsReligioses(0, 0, "")
 	allMunicipiRows, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	allArxius, _ := a.DB.ListArxius(db.ArxiuFilter{Limit: -1})
+	levelISO, levelsByID, err := a.confessionalMunicipalityLevelMaps()
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
 
 	municipisByID := a.confessionalMunicipisByID(allMunicipiRows)
 	arxiusByID := map[int]db.ArxiuWithCount{}
@@ -423,7 +428,7 @@ func (a *App) AdminConfessionalExport(w http.ResponseWriter, r *http.Request) {
 			}
 			record := confessionalExportTerritorialRelation{
 				Entity:           entityRef,
-				Municipality:     a.confessionalMunicipalityRef(exportMunicipi, municipisByID),
+				Municipality:     confessionalMunicipalityRefFromMunicipi(exportMunicipi, municipisByID, levelISO, levelsByID),
 				RelationType:     strings.TrimSpace(rel.TipusRelacio),
 				StartsYear:       confIntPtr(rel.AnyInici),
 				EndsYear:         confIntPtr(rel.AnyFi),
@@ -431,12 +436,12 @@ func (a *App) AdminConfessionalExport(w http.ResponseWriter, r *http.Request) {
 				ModerationStatus: strings.TrimSpace(rel.ModeracioEstat),
 			}
 			if exportNucli != nil {
-				ref := a.confessionalMunicipalityRef(exportNucli, municipisByID)
+				ref := confessionalMunicipalityRefFromMunicipi(exportNucli, municipisByID, levelISO, levelsByID)
 				record.Nucleus = &ref
 			}
 			if rel.NucliID.Valid {
 				if nucli, ok := municipisByID[int(rel.NucliID.Int64)]; ok {
-					ref := a.confessionalMunicipalityRef(nucli, municipisByID)
+					ref := confessionalMunicipalityRefFromMunicipi(nucli, municipisByID, levelISO, levelsByID)
 					record.Nucleus = &ref
 				}
 			}
@@ -459,7 +464,7 @@ func (a *App) AdminConfessionalExport(w http.ResponseWriter, r *http.Request) {
 			}
 			payload.Items.RelacionsArxius = append(payload.Items.RelacionsArxius, confessionalExportArchiveRelation{
 				Entity:           entityRef,
-				Archive:          a.confessionalArchiveRef(arxiu, municipisByID),
+				Archive:          confessionalArchiveRefFromRow(arxiu, municipisByID, levelISO, levelsByID),
 				RelationType:     strings.TrimSpace(rel.TipusRelacio),
 				StartsYear:       confIntPtr(rel.AnyInici),
 				EndsYear:         confIntPtr(rel.AnyFi),
@@ -863,10 +868,15 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 	allArchiveRelations, _ := a.DB.ListArxiuEntitatsReligioses(0, 0, "")
 	allMunicipiRows, _ := a.DB.ListMunicipis(db.MunicipiFilter{})
 	allArxius, _ := a.DB.ListArxius(db.ArxiuFilter{Limit: -1})
+	levelISO, levelsByID, err := a.confessionalMunicipalityLevelMaps()
+	if err != nil {
+		plan.View.Errors = append(plan.View.Errors, T(defaultLang, "common.error"))
+		return plan
+	}
 
 	municipisByID := a.confessionalMunicipisByID(allMunicipiRows)
-	municipiIndex := a.confessionalMunicipalityIndex(municipisByID)
-	arxiuIndex := a.confessionalArchiveIndex(allArxius, municipisByID)
+	municipiIndex := a.confessionalMunicipalityIndex(municipisByID, levelISO, levelsByID)
+	arxiuIndex := a.confessionalArchiveIndex(allArxius, municipisByID, levelISO, levelsByID)
 	entityExact, entityCode, entityExactDup := confessionalEntityIndexes(allEntitats)
 
 	payloadEntities := map[string]confessionalExportEntityRecord{}
@@ -1279,13 +1289,19 @@ func (a *App) confessionalMunicipisByID(rows []db.MunicipiRow) map[int]*db.Munic
 	return res
 }
 
-func (a *App) confessionalMunicipalityRef(m *db.Municipi, all map[int]*db.Municipi) confessionalMunicipalityRef {
-	levelISO, levelsByID := a.confessionalMunicipalityLevelMaps()
-	return confessionalMunicipalityRefFromMunicipi(m, all, levelISO, levelsByID)
+func (a *App) confessionalMunicipalityRef(m *db.Municipi, all map[int]*db.Municipi) (confessionalMunicipalityRef, error) {
+	levelISO, levelsByID, err := a.confessionalMunicipalityLevelMaps()
+	if err != nil {
+		return confessionalMunicipalityRef{}, err
+	}
+	return confessionalMunicipalityRefFromMunicipi(m, all, levelISO, levelsByID), nil
 }
 
-func (a *App) confessionalMunicipalityLevelMaps() (map[int]string, map[int]db.NivellAdministratiu) {
-	nivells, _ := a.DB.ListNivells(db.NivellAdminFilter{})
+func (a *App) confessionalMunicipalityLevelMaps() (map[int]string, map[int]db.NivellAdministratiu, error) {
+	nivells, err := a.DB.ListNivells(db.NivellAdminFilter{})
+	if err != nil {
+		return nil, nil, err
+	}
 	levelISO := map[int]string{}
 	levelsByID := map[int]db.NivellAdministratiu{}
 	for _, n := range nivells {
@@ -1294,7 +1310,7 @@ func (a *App) confessionalMunicipalityLevelMaps() (map[int]string, map[int]db.Ni
 			levelISO[n.ID] = strings.ToUpper(strings.TrimSpace(n.PaisISO2.String))
 		}
 	}
-	return levelISO, levelsByID
+	return levelISO, levelsByID, nil
 }
 
 func confessionalMunicipalityRefFromMunicipi(m *db.Municipi, all map[int]*db.Municipi, levelISO map[int]string, levelsByID map[int]db.NivellAdministratiu) confessionalMunicipalityRef {
@@ -1347,22 +1363,21 @@ func confessionalMunicipalityRefFromMunicipi(m *db.Municipi, all map[int]*db.Mun
 	return ref
 }
 
-func (a *App) confessionalArchiveRef(row db.ArxiuWithCount, municipis map[int]*db.Municipi) confessionalArchiveRef {
+func confessionalArchiveRefFromRow(row db.ArxiuWithCount, municipis map[int]*db.Municipi, levelISO map[int]string, levelsByID map[int]db.NivellAdministratiu) confessionalArchiveRef {
 	ref := confessionalArchiveRef{
 		Name: strings.TrimSpace(row.Nom),
 		Type: strings.TrimSpace(row.Tipus),
 	}
 	if row.MunicipiID.Valid {
 		if municipi, ok := municipis[int(row.MunicipiID.Int64)]; ok {
-			munRef := a.confessionalMunicipalityRef(municipi, municipis)
+			munRef := confessionalMunicipalityRefFromMunicipi(municipi, municipis, levelISO, levelsByID)
 			ref.Municipality = &munRef
 		}
 	}
 	return ref
 }
 
-func (a *App) confessionalMunicipalityIndex(all map[int]*db.Municipi) confessionalMunicipalityLookup {
-	levelISO, levelsByID := a.confessionalMunicipalityLevelMaps()
+func (a *App) confessionalMunicipalityIndex(all map[int]*db.Municipi, levelISO map[int]string, levelsByID map[int]db.NivellAdministratiu) confessionalMunicipalityLookup {
 	index := confessionalMunicipalityLookup{
 		All:               all,
 		Exact:             map[string][]int{},
@@ -1383,8 +1398,7 @@ func (a *App) confessionalMunicipalityIndex(all map[int]*db.Municipi) confession
 	return index
 }
 
-func (a *App) confessionalArchiveIndex(rows []db.ArxiuWithCount, municipis map[int]*db.Municipi) confessionalArchiveLookup {
-	levelISO, levelsByID := a.confessionalMunicipalityLevelMaps()
+func (a *App) confessionalArchiveIndex(rows []db.ArxiuWithCount, municipis map[int]*db.Municipi, levelISO map[int]string, levelsByID map[int]db.NivellAdministratiu) confessionalArchiveLookup {
 	index := confessionalArchiveLookup{
 		Rows:       map[int]db.ArxiuWithCount{},
 		Exact:      map[string][]int{},
@@ -1395,7 +1409,7 @@ func (a *App) confessionalArchiveIndex(rows []db.ArxiuWithCount, municipis map[i
 		Levels:     levelsByID,
 	}
 	for _, row := range rows {
-		ref := a.confessionalArchiveRef(row, municipis)
+		ref := confessionalArchiveRefFromRow(row, municipis, levelISO, levelsByID)
 		key := confessionalArchiveRefKey(ref)
 		index.Rows[row.ID] = row
 		index.Exact[key] = append(index.Exact[key], row.ID)
