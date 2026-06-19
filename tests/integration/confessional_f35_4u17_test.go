@@ -91,7 +91,7 @@ func TestF354U17DryRunKeepsSamePayloadHierarchyResolvable(t *testing.T) {
 
 	csrfToken, csrfCookie := extractCSRFContextFromImportExport(t, app, session)
 	body := f354U1DryRun(t, app, database, session, csrfCookie, csrfToken, payload)
-	if strings.Contains(body, "seccio=relacions_entitats") || strings.Contains(body, "Referencia no resolta") {
+	if strings.Contains(body, "seccio=relacions_entitats") || strings.Contains(body, "Referència no resolta") {
 		t.Fatalf("les relacions entre entitats del mateix payload han de resoldre's sense error; body=%s", body)
 	}
 	if !strings.Contains(body, `name="payload_b64"`) {
@@ -137,7 +137,7 @@ func TestF354U17DryRunResolvesMunicipalityAndNucleusWithParentContext(t *testing
 
 	csrfToken, csrfCookie := extractCSRFContextFromImportExport(t, app, session)
 	body := f354U1DryRun(t, app, database, session, csrfCookie, csrfToken, payload)
-	if strings.Contains(body, "Referencia no resolta") || strings.Contains(body, "Referencia ambigua") {
+	if strings.Contains(body, "Referència no resolta") || strings.Contains(body, "Referència ambigua") {
 		t.Fatalf("municipi i nucli existents amb context de pare s'han de resoldre; body=%s", body)
 	}
 	if !strings.Contains(body, `name="payload_b64"`) {
@@ -186,7 +186,7 @@ func TestF354U17DryRunFlagsAmbiguousNucleus(t *testing.T) {
 	csrfToken, csrfCookie := extractCSRFContextFromImportExport(t, app, session)
 	body := f354U1DryRun(t, app, database, session, csrfCookie, csrfToken, payload)
 	for _, token := range []string{
-		"Referencia ambigua",
+		"Referència ambigua",
 		"tipus=nucli",
 		"camp=nucleus",
 		"candidats=Nucli ambigu F35-4U17",
@@ -268,12 +268,89 @@ func TestF354U17ExportIncludesTerritoryContext(t *testing.T) {
 	}
 }
 
+func TestF354U17DryRunArchiveFallbackRespectsMunicipalityContext(t *testing.T) {
+	app, database := newTestAppForLogin(t, "test_f35_4u17_archive_context.sqlite3")
+	user := createTestUser(t, database, "f354u17_archive_"+time.Now().Format("150405000000000"))
+	session := createSessionCookie(t, database, user.ID, "sess_f354u17_archive_"+time.Now().Format("150405000000000"))
+	policyID := createPolicyWithGrant(t, database, "f354u17_archive", "territori.confessional.import_export.import")
+	addGrantToPolicy(t, database, policyID, "territori.confessional.import_export.view")
+	assignPolicyToUser(t, database, user.ID, policyID)
+
+	suffix := time.Now().Format("150405000000000")
+	municipiA := f353YCreateMunicipi(t, database, "Municipi arxiu A F35-4U17 "+suffix)
+	f353YCreateMunicipi(t, database, "Municipi arxiu B F35-4U17 "+suffix)
+	f354SCreateArxiu(t, database, "Arxiu context F35-4U17 "+suffix, municipiA)
+
+	baseEntity := []map[string]interface{}{
+		confEntityExportRecord("f354u17_archive_entity", "Parroquia arxiu F35-4U17", "catolicisme_ritu_llati", "parroquia"),
+	}
+	withMunicipality := confessionalExportPayloadForTest(t, map[string]interface{}{
+		"entitats_religioses":    baseEntity,
+		"relacions_entitats":     []map[string]interface{}{},
+		"relacions_territorials": []map[string]interface{}{},
+		"relacions_arxius": []map[string]interface{}{
+			{
+				"entity": confEntityRef("f354u17_archive_entity", "catolicisme_ritu_llati", "parroquia"),
+				"archive": map[string]interface{}{
+					"name": "Arxiu context F35-4U17 " + suffix,
+					"type": "arxiu",
+					"municipality": map[string]interface{}{
+						"name": "Municipi arxiu A F35-4U17 " + suffix,
+						"type": "municipi",
+					},
+				},
+				"relation_type": "custodia",
+			},
+		},
+	})
+	withoutMunicipality := confessionalExportPayloadForTest(t, map[string]interface{}{
+		"entitats_religioses":    baseEntity,
+		"relacions_entitats":     []map[string]interface{}{},
+		"relacions_territorials": []map[string]interface{}{},
+		"relacions_arxius": []map[string]interface{}{
+			{
+				"entity": confEntityRef("f354u17_archive_entity", "catolicisme_ritu_llati", "parroquia"),
+				"archive": map[string]interface{}{
+					"name": "Arxiu context F35-4U17 " + suffix,
+					"type": "arxiu",
+					"municipality": map[string]interface{}{
+						"name": "Municipi arxiu B F35-4U17 " + suffix,
+						"type": "municipi",
+					},
+				},
+				"relation_type": "custodia",
+			},
+		},
+	})
+
+	csrfToken, csrfCookie := extractCSRFContextFromImportExport(t, app, session)
+	withMunicipalityBody := f354U1DryRun(t, app, database, session, csrfCookie, csrfToken, withMunicipality)
+	if strings.Contains(withMunicipalityBody, "Referència ambigua") || strings.Contains(withMunicipalityBody, "Referència no resolta") {
+		t.Fatalf("el context de municipi ha de resoldre l'arxiu correcte; body=%s", withMunicipalityBody)
+	}
+	if !strings.Contains(withMunicipalityBody, `name="payload_b64"`) {
+		t.Fatalf("el dry-run amb municipi concret ha d'oferir apply; body=%s", withMunicipalityBody)
+	}
+
+	wrongMunicipalityBody := f354U1DryRun(t, app, database, session, csrfCookie, csrfToken, withoutMunicipality)
+	for _, token := range []string{
+		"Referència no resolta",
+		"tipus=arxiu",
+		"camp=archive",
+		"valor=Arxiu context F35-4U17",
+	} {
+		if !strings.Contains(wrongMunicipalityBody, token) {
+			t.Fatalf("un municipi incompatible no ha de resoldre l'arxiu (%q); body=%s", token, wrongMunicipalityBody)
+		}
+	}
+}
+
 func TestF354U17RoundTripWithTerritoryContext(t *testing.T) {
 	targetApp, targetDB, targetSession, exportedJSON, _, _ := f354U1PrepareTargetAndExport(t, "test_f35_4u17_roundtrip.sqlite3", true)
 	csrfToken, csrfCookie := extractCSRFContextFromImportExport(t, targetApp, targetSession)
 
 	dryRunBody := f354U1DryRun(t, targetApp, targetDB, targetSession, csrfCookie, csrfToken, exportedJSON)
-	if strings.Contains(dryRunBody, "Referencia no resolta") || strings.Contains(dryRunBody, "Referencia ambigua") {
+	if strings.Contains(dryRunBody, "Referència no resolta") || strings.Contains(dryRunBody, "Referència ambigua") {
 		t.Fatalf("el round-trip territorial valid no ha de perdre context ni fallar; body=%s", dryRunBody)
 	}
 

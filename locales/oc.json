@@ -846,6 +846,7 @@
   "confessional.io.error.invalid_json": "JSON pas valid",
   "confessional.io.error.unsupported_version": "Version pas suportada",
   "confessional.io.error.unresolved_reference": "Referéncia pas resolguda",
+  "confessional.io.error.ambiguous_reference": "Referéncia ambigua",
   "confessional.io.error.invalid_catalog": "Religion o nivèl confessionau pas valid",
   "confessional.io.error.invalid_relation": "Relacion pas valida",
   "confessional.io.error.duplicate_json": "Duplicat intern al JSON",

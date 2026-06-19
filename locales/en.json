@@ -846,6 +846,7 @@
   "confessional.io.error.invalid_json": "Invalid JSON",
   "confessional.io.error.unsupported_version": "Unsupported version",
   "confessional.io.error.unresolved_reference": "Unresolved reference",
+  "confessional.io.error.ambiguous_reference": "Ambiguous reference",
   "confessional.io.error.invalid_catalog": "Invalid religion or confessional level",
   "confessional.io.error.invalid_relation": "Invalid relation",
   "confessional.io.error.duplicate_json": "Duplicate item inside JSON",
