@@ -1594,26 +1594,39 @@ func confessionalValidateMunicipalityCandidate(ref confessionalMunicipalityRef, 
 }
 
 func confessionalUniqueCandidateIDs(ids []int) []int {
-	if len(ids) <= 1 {
+	if len(ids) == 0 {
+		return nil
+	}
+	if len(ids) == 1 {
 		return ids
 	}
+
+	hasDuplicate := false
+	for i, id := range ids {
+		for _, previous := range ids[:i] {
+			if previous == id {
+				hasDuplicate = true
+				break
+			}
+		}
+		if hasDuplicate {
+			break
+		}
+	}
+	if !hasDuplicate {
+		return ids
+	}
+
 	seen := make(map[int]struct{}, len(ids))
+	unique := make([]int, 0, len(ids))
 	for _, id := range ids {
 		if _, ok := seen[id]; ok {
-			seen = make(map[int]struct{}, len(ids))
-			unique := make([]int, 0, len(ids))
-			for _, candidateID := range ids {
-				if _, ok := seen[candidateID]; ok {
-					continue
-				}
-				seen[candidateID] = struct{}{}
-				unique = append(unique, candidateID)
-			}
-			return unique
+			continue
 		}
 		seen[id] = struct{}{}
+		unique = append(unique, id)
 	}
-	return ids
+	return unique
 }
 
 func confessionalFilterMunicipalityCandidates(ids []int, lookup confessionalMunicipalityLookup, ctx confessionalRefContext) []int {
@@ -1731,8 +1744,8 @@ func confessionalMunicipalityPathLabel(municipi *db.Municipi, all map[int]*db.Mu
 			break
 		}
 		seen[pid] = true
-		parent := all[pid]
-		if parent == nil {
+		parent, ok := all[pid]
+		if !ok || parent == nil {
 			break
 		}
 		path = append([]string{strings.TrimSpace(parent.Nom)}, path...)

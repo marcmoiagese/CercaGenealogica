@@ -51,6 +51,15 @@ func TestConfessionalUniqueCandidateIDsPreservesOrder(t *testing.T) {
 	}
 }
 
+func TestConfessionalUniqueCandidateIDsReturnsNilForEmptyInput(t *testing.T) {
+	if got := confessionalUniqueCandidateIDs(nil); got != nil {
+		t.Fatalf("confessionalUniqueCandidateIDs(nil) = %v, esperava nil", got)
+	}
+	if got := confessionalUniqueCandidateIDs([]int{}); got != nil {
+		t.Fatalf("confessionalUniqueCandidateIDs([]) = %v, esperava nil", got)
+	}
+}
+
 func TestConfessionalUniqueCandidateIDsReturnsOriginalSliceWithoutDuplicates(t *testing.T) {
 	ids := []int{4, 2, 9}
 	got := confessionalUniqueCandidateIDs(ids)

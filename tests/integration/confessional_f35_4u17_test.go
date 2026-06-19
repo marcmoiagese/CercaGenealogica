@@ -227,35 +227,56 @@ func TestF354U17DryRunResolvesMunicipalityAndNucleusWithParentContext(t *testing
 	f354U17AssertDryRunNoReferenceErrorsAndApply(t, body, "municipi i nucli existents amb context de pare s'han de resoldre", "el dry-run valid amb municipi i nucli ha d'oferir apply")
 }
 
-func TestF354U17DryRunResolvesStructuralMunicipalityDespiteNucliUrbaType(t *testing.T) {
-	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_structural_municipality_nucli_urba.sqlite3", "f354u17_structural_mun_nucli")
-	suffix := time.Now().Format("150405000000000")
-	name := "Alio F35-4U17 " + suffix
-	f354U17CreateStructuralMunicipality(t, database, name, "nucli_urba")
+func TestF354U17DryRunResolvesStructuralMunicipalityDespiteDescriptiveType(t *testing.T) {
+	cases := []struct {
+		name         string
+		dbFile       string
+		slug         string
+		municipality string
+		tipus        string
+		entityCode   string
+		entityName   string
+		errorMessage string
+	}{
+		{
+			name:         "nucli_urba",
+			dbFile:       "test_f35_4u17_structural_municipality_nucli_urba.sqlite3",
+			slug:         "f354u17_structural_mun_nucli",
+			municipality: "Alio F35-4U17 ",
+			tipus:        "nucli_urba",
+			entityCode:   "f354u17_structural_mun_nucli",
+			entityName:   "Parroquia F35-4U17 Structural Nucli",
+			errorMessage: "un municipi structural amb tipus nucli_urba s'ha de resoldre com a municipi",
+		},
+		{
+			name:         "poble",
+			dbFile:       "test_f35_4u17_structural_municipality_poble.sqlite3",
+			slug:         "f354u17_structural_mun_poble",
+			municipality: "Poble F35-4U17 ",
+			tipus:        "poble",
+			entityCode:   "f354u17_structural_mun_poble",
+			entityName:   "Parroquia F35-4U17 Structural Poble",
+			errorMessage: "un municipi structural amb tipus poble s'ha de resoldre com a municipi",
+		},
+	}
 
-	payload := f354U17Payload(t, map[string]interface{}{
-		"entitats_religioses":    f354U17BaseEntityPayload("f354u17_structural_mun_nucli", "Parroquia F35-4U17 Structural Nucli"),
-		"relacions_entitats":     []map[string]interface{}{},
-		"relacions_territorials": f354U17TerritoryRelationPayload("f354u17_structural_mun_nucli", map[string]interface{}{"name": name, "type": "nucli_urba"}, nil),
-		"relacions_arxius":       []map[string]interface{}{},
-	})
-	body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
-	f354U17AssertDryRunNoReferenceErrorsAndApply(t, body, "un municipi structural amb tipus nucli_urba s'ha de resoldre com a municipi", "el dry-run valid ha d'oferir apply")
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, tc.dbFile, tc.slug)
+			suffix := time.Now().Format("150405000000000")
+			name := tc.municipality + suffix
+			f354U17CreateStructuralMunicipality(t, database, name, tc.tipus)
 
-func TestF354U17DryRunResolvesStructuralMunicipalityDespitePobleType(t *testing.T) {
-	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_structural_municipality_poble.sqlite3", "f354u17_structural_mun_poble")
-	suffix := time.Now().Format("150405000000000")
-	name := "Poble F35-4U17 " + suffix
-	f354U17CreateStructuralMunicipality(t, database, name, "poble")
-	payload := f354U17Payload(t, map[string]interface{}{
-		"entitats_religioses":    f354U17BaseEntityPayload("f354u17_structural_mun_poble", "Parroquia F35-4U17 Structural Poble"),
-		"relacions_entitats":     []map[string]interface{}{},
-		"relacions_territorials": f354U17TerritoryRelationPayload("f354u17_structural_mun_poble", map[string]interface{}{"name": name, "type": "poble"}, nil),
-		"relacions_arxius":       []map[string]interface{}{},
-	})
-	body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
-	f354U17AssertDryRunNoReferenceErrorsAndApply(t, body, "un municipi structural amb tipus poble s'ha de resoldre com a municipi", "el dry-run valid ha d'oferir apply")
+			payload := f354U17Payload(t, map[string]interface{}{
+				"entitats_religioses":    f354U17BaseEntityPayload(tc.entityCode, tc.entityName),
+				"relacions_entitats":     []map[string]interface{}{},
+				"relacions_territorials": f354U17TerritoryRelationPayload(tc.entityCode, map[string]interface{}{"name": name, "type": tc.tipus}, nil),
+				"relacions_arxius":       []map[string]interface{}{},
+			})
+			body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
+			f354U17AssertDryRunNoReferenceErrorsAndApply(t, body, tc.errorMessage, "el dry-run valid ha d'oferir apply")
+		})
+	}
 }
 
 func TestF354U17DryRunFlagsAmbiguousNucleus(t *testing.T) {
