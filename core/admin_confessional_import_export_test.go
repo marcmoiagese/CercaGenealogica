@@ -2,6 +2,7 @@ package core
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 
 	"github.com/marcmoiagese/CercaGenealogica/db"
@@ -68,6 +69,38 @@ func TestConfessionalUniqueCandidateIDsReturnsOriginalSliceWithoutDuplicates(t *
 	}
 	if &got[0] != &ids[0] {
 		t.Fatalf("confessionalUniqueCandidateIDs() ha de reutilitzar el slice original quan no hi ha duplicats")
+	}
+}
+
+func TestConfessionalParseMunicipalityAltresExtractsContext(t *testing.T) {
+	meta := confessionalParseMunicipalityAltres("idescat_codi=430385 03; municipi_idescat=430385; categoria=capital; comarca=Baix Camp; provincia=Tarragona")
+	if meta.IdescatCodi != "430385 03" || meta.MunicipiIdescat != "430385" {
+		t.Fatalf("confessionalParseMunicipalityAltres() ha de conservar codis Idescat, got %+v", meta)
+	}
+	if meta.Categoria != "capital" || meta.Comarca != "Baix Camp" || meta.Provincia != "Tarragona" {
+		t.Fatalf("confessionalParseMunicipalityAltres() ha d'extreure categoria/comarca/provincia, got %+v", meta)
+	}
+}
+
+func TestConfessionalMunicipalityCandidateLabelIncludesTerritorialContext(t *testing.T) {
+	lookup := confessionalMunicipalityLookup{
+		All: map[int]*db.Municipi{
+			7: {
+				ID:             7,
+				Nom:            "Cambrils",
+				Tipus:          "poble",
+				Altres:         "idescat_codi=430385 03; municipi_idescat=430385; comarca=Baix Camp; provincia=Tarragona",
+				ModeracioEstat: "publicat",
+			},
+		},
+		LevelISO: map[int]string{},
+		Levels:   map[int]db.NivellAdministratiu{},
+	}
+	got := confessionalMunicipalityCandidateLabel(lookup.All[7], lookup)
+	for _, token := range []string{"municipi_idescat=430385", "comarca=Baix Camp", "provincia=Tarragona"} {
+		if !strings.Contains(got, token) {
+			t.Fatalf("confessionalMunicipalityCandidateLabel() ha d'incloure %q, got %q", token, got)
+		}
 	}
 }
 

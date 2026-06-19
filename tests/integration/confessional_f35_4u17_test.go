@@ -90,6 +90,49 @@ func f354U17CreateCountryLevel(t *testing.T, database db.DB, iso2, iso3, num str
 	return levelID
 }
 
+func f354U17CreateAdminLevel(t *testing.T, database db.DB, paisID, nivel int, nom, tipus, codi string, parentID int) int {
+	t.Helper()
+	level := &db.NivellAdministratiu{
+		PaisID:         paisID,
+		Nivel:          nivel,
+		NomNivell:      nom,
+		TipusNivell:    tipus,
+		CodiOficial:    codi,
+		Estat:          "actiu",
+		ModeracioEstat: "publicat",
+	}
+	if parentID > 0 {
+		level.ParentID = sql.NullInt64{Int64: int64(parentID), Valid: true}
+	}
+	id, err := database.CreateNivell(level)
+	if err != nil {
+		t.Fatalf("CreateNivell(%s): %v", nom, err)
+	}
+	return id
+}
+
+func f354U17CreateMunicipalityWithAdminContext(t *testing.T, database db.DB, name, tipus string, levelIDs [7]int, altres string) int {
+	t.Helper()
+	var nivellRefs [7]sql.NullInt64
+	for i, id := range levelIDs {
+		if id > 0 {
+			nivellRefs[i] = sql.NullInt64{Int64: int64(id), Valid: true}
+		}
+	}
+	id, err := database.CreateMunicipi(&db.Municipi{
+		Nom:                   name,
+		Tipus:                 tipus,
+		NivellAdministratiuID: nivellRefs,
+		Altres:                altres,
+		Estat:                 "actiu",
+		ModeracioEstat:        "publicat",
+	})
+	if err != nil {
+		t.Fatalf("CreateMunicipi contextual municipality (%s): %v", name, err)
+	}
+	return id
+}
+
 func f354U17CreateStructuralMunicipality(t *testing.T, database db.DB, name, tipus string) int {
 	t.Helper()
 	id, err := database.CreateMunicipi(&db.Municipi{
@@ -309,6 +352,95 @@ func TestF354U17DryRunFlagsAmbiguousNucleus(t *testing.T) {
 	}
 }
 
+func TestF354U17DryRunResolvesHomonymousMunicipalityWithIdescatContext(t *testing.T) {
+	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_homonymous_idescat.sqlite3", "f354u17_homonymous_idescat")
+	suffix := time.Now().Format("150405000000000")
+	paisID := createBrowseTestCountry(t, database, "ES")
+	paisLevelID := f354U17CreateAdminLevel(t, database, paisID, 1, "Espanya homonima F35-4U17 "+suffix, "pais", "ES", 0)
+	tarragonaLevelID := f354U17CreateAdminLevel(t, database, paisID, 3, "Tarragona homonima F35-4U17 "+suffix, "provincia", "43", paisLevelID)
+	baixCampLevelID := f354U17CreateAdminLevel(t, database, paisID, 4, "Baix Camp homonima F35-4U17 "+suffix, "comarca", "03", tarragonaLevelID)
+	lleidaLevelID := f354U17CreateAdminLevel(t, database, paisID, 3, "Lleida homonima F35-4U17 "+suffix, "provincia", "25", paisLevelID)
+	solsonesLevelID := f354U17CreateAdminLevel(t, database, paisID, 4, "Solsones homonima F35-4U17 "+suffix, "comarca", "01", lleidaLevelID)
+
+	tarragonaLevels := [7]int{}
+	tarragonaLevels[0] = paisLevelID
+	tarragonaLevels[2] = tarragonaLevelID
+	tarragonaLevels[3] = baixCampLevelID
+	lleidaLevels := [7]int{}
+	lleidaLevels[0] = paisLevelID
+	lleidaLevels[2] = lleidaLevelID
+	lleidaLevels[3] = solsonesLevelID
+
+	targetID := f354U17CreateMunicipalityWithAdminContext(t, database, "Cambrils F35-4U17 "+suffix, "poble", tarragonaLevels, "idescat_codi=430385 03; municipi_idescat=430385; comarca=Baix Camp homonima F35-4U17 "+suffix+"; provincia=Tarragona homonima F35-4U17 "+suffix)
+	f354U17CreateMunicipalityWithAdminContext(t, database, "Cambrils F35-4U17 "+suffix, "poble", lleidaLevels, "idescat_codi=251484 01; municipi_idescat=251484; comarca=Solsones homonima F35-4U17 "+suffix+"; provincia=Lleida homonima F35-4U17 "+suffix)
+
+	payload := f354U17Payload(t, map[string]interface{}{
+		"entitats_religioses":    f354U17BaseEntityPayload("f354u17_cambrils_idescat", "Parroquia F35-4U17 Cambrils"),
+		"relacions_entitats":     []map[string]interface{}{},
+		"relacions_territorials": f354U17TerritoryRelationPayload("f354u17_cambrils_idescat", map[string]interface{}{"name": "Cambrils F35-4U17 " + suffix, "type": "poble", "country_iso2": "ES", "municipi_idescat": "430385", "idescat_codi": "430385 03", "comarca": "Baix Camp homonima F35-4U17 " + suffix, "provincia": "Tarragona homonima F35-4U17 " + suffix, "municipality_admin_name": "Cambrils F35-4U17 " + suffix, "municipality_admin_code": "430385", "nivells": []int{paisLevelID, 0, tarragonaLevelID, baixCampLevelID, 0, 0, 0}}, nil),
+		"relacions_arxius":       []map[string]interface{}{},
+	})
+	body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
+	f354U17AssertDryRunNoReferenceErrorsAndApply(t, body, "el context Idescat ha de resoldre el municipi homonim correcte", "el dry-run valid amb context Idescat ha d'oferir apply")
+
+	applyRR := f354U1Apply(t, app, session, csrfCookie, extractCSRFTokenFromHTML(t, body), extractHiddenTextareaValue(t, body, "payload_b64"))
+	if applyRR.Code != http.StatusSeeOther {
+		t.Fatalf("apply homonymous municipality status=%d body=%s", applyRR.Code, applyRR.Body.String())
+	}
+	territoryRows := f354U1ListTerritory(t, database)
+	if len(territoryRows) != 1 || territoryRows[0].MunicipiID != targetID {
+		t.Fatalf("la relacio territorial ha de resoldre el Cambrils correcte %d, got %+v", targetID, territoryRows)
+	}
+}
+
+func TestF354U17DryRunKeepsHomonymousMunicipalityAmbiguousWithoutContext(t *testing.T) {
+	app, database, session, csrfCookie, csrfToken := f354U17ImportSession(t, "test_f35_4u17_homonymous_ambiguous.sqlite3", "f354u17_homonymous_ambiguous")
+	suffix := time.Now().Format("150405000000000")
+	paisID := createBrowseTestCountry(t, database, "ES")
+	paisLevelID := f354U17CreateAdminLevel(t, database, paisID, 1, "Espanya ambigua F35-4U17 "+suffix, "pais", "ES", 0)
+	tarragonaLevelID := f354U17CreateAdminLevel(t, database, paisID, 3, "Tarragona ambigua F35-4U17 "+suffix, "provincia", "43", paisLevelID)
+	baixCampLevelID := f354U17CreateAdminLevel(t, database, paisID, 4, "Baix Camp ambigua F35-4U17 "+suffix, "comarca", "03", tarragonaLevelID)
+	lleidaLevelID := f354U17CreateAdminLevel(t, database, paisID, 3, "Lleida ambigua F35-4U17 "+suffix, "provincia", "25", paisLevelID)
+	solsonesLevelID := f354U17CreateAdminLevel(t, database, paisID, 4, "Solsones ambigua F35-4U17 "+suffix, "comarca", "01", lleidaLevelID)
+
+	tarragonaLevels := [7]int{}
+	tarragonaLevels[0] = paisLevelID
+	tarragonaLevels[2] = tarragonaLevelID
+	tarragonaLevels[3] = baixCampLevelID
+	lleidaLevels := [7]int{}
+	lleidaLevels[0] = paisLevelID
+	lleidaLevels[2] = lleidaLevelID
+	lleidaLevels[3] = solsonesLevelID
+
+	f354U17CreateMunicipalityWithAdminContext(t, database, "Cambrils F35-4U17 "+suffix, "poble", tarragonaLevels, "idescat_codi=430385 03; municipi_idescat=430385; comarca=Baix Camp ambigua F35-4U17 "+suffix+"; provincia=Tarragona ambigua F35-4U17 "+suffix)
+	f354U17CreateMunicipalityWithAdminContext(t, database, "Cambrils F35-4U17 "+suffix, "poble", lleidaLevels, "idescat_codi=251484 01; municipi_idescat=251484; comarca=Solsones ambigua F35-4U17 "+suffix+"; provincia=Lleida ambigua F35-4U17 "+suffix)
+
+	payload := f354U17Payload(t, map[string]interface{}{
+		"entitats_religioses":    f354U17BaseEntityPayload("f354u17_cambrils_ambiguous", "Parroquia F35-4U17 Cambrils Ambigua"),
+		"relacions_entitats":     []map[string]interface{}{},
+		"relacions_territorials": f354U17TerritoryRelationPayload("f354u17_cambrils_ambiguous", map[string]interface{}{"name": "Cambrils F35-4U17 " + suffix, "type": "poble", "country_iso2": "ES"}, nil),
+		"relacions_arxius":       []map[string]interface{}{},
+	})
+	body := f354U17DryRunBody(t, app, database, session, csrfCookie, csrfToken, payload)
+	for _, token := range []string{
+		"Referència ambigua",
+		"valor=Cambrils F35-4U17 " + suffix,
+		"municipi_idescat=430385",
+		"municipi_idescat=251484",
+		"comarca=Baix Camp ambigua F35-4U17 " + suffix,
+		"comarca=Solsones ambigua F35-4U17 " + suffix,
+		"provincia=Tarragona ambigua F35-4U17 " + suffix,
+		"provincia=Lleida ambigua F35-4U17 " + suffix,
+	} {
+		if !strings.Contains(body, token) {
+			t.Fatalf("el dry-run sense context ha de continuar mostrant ambiguitat contextual (%q); body=%s", token, body)
+		}
+	}
+	if strings.Contains(body, `name="payload_b64"`) {
+		t.Fatalf("un municipi homonim sense context no ha d'oferir apply; body=%s", body)
+	}
+}
+
 func TestF354U17ExportIncludesTerritoryContext(t *testing.T) {
 	app, database := newTestAppForLogin(t, "test_f35_4u17_export_context.sqlite3")
 	user := createTestUser(t, database, "f354u17_export_"+time.Now().Format("150405000000000"))
@@ -317,13 +449,34 @@ func TestF354U17ExportIncludesTerritoryContext(t *testing.T) {
 	assignPolicyToUser(t, database, user.ID, policyID)
 
 	suffix := time.Now().Format("150405000000000")
-	municipiID := f353YCreateMunicipi(t, database, "Municipi export F35-4U17 "+suffix)
+	paisID := createBrowseTestCountry(t, database, "ES")
+	paisLevelID := f354U17CreateAdminLevel(t, database, paisID, 1, "Espanya export F35-4U17 "+suffix, "pais", "ES", 0)
+	provinciaLevelID := f354U17CreateAdminLevel(t, database, paisID, 3, "Tarragona export F35-4U17 "+suffix, "provincia", "43", paisLevelID)
+	comarcaLevelID := f354U17CreateAdminLevel(t, database, paisID, 4, "Baix Camp export F35-4U17 "+suffix, "comarca", "03", provinciaLevelID)
+	levelIDs := [7]int{}
+	levelIDs[0] = paisLevelID
+	levelIDs[2] = provinciaLevelID
+	levelIDs[3] = comarcaLevelID
+	municipiID := f354U17CreateMunicipalityWithAdminContext(
+		t,
+		database,
+		"Municipi export F35-4U17 "+suffix,
+		"poble",
+		levelIDs,
+		"idescat_codi=430385 03; municipi_idescat=430385; comarca=Baix Camp export F35-4U17 "+suffix+"; provincia=Tarragona export F35-4U17 "+suffix,
+	)
+	nucliLevels := [7]sql.NullInt64{}
+	nucliLevels[0] = sql.NullInt64{Int64: int64(paisLevelID), Valid: true}
+	nucliLevels[2] = sql.NullInt64{Int64: int64(provinciaLevelID), Valid: true}
+	nucliLevels[3] = sql.NullInt64{Int64: int64(comarcaLevelID), Valid: true}
 	nucliID, err := database.CreateMunicipi(&db.Municipi{
-		Nom:            "Nucli export F35-4U17 " + suffix,
-		Tipus:          "nucli_urba",
-		MunicipiID:     sql.NullInt64{Int64: int64(municipiID), Valid: true},
-		Estat:          "actiu",
-		ModeracioEstat: "publicat",
+		Nom:                   "Nucli export F35-4U17 " + suffix,
+		Tipus:                 "nucli_urba",
+		MunicipiID:            sql.NullInt64{Int64: int64(municipiID), Valid: true},
+		NivellAdministratiuID: nucliLevels,
+		Altres:                "idescat_codi=430385 03; municipi_idescat=430385; comarca=Baix Camp export F35-4U17 " + suffix + "; provincia=Tarragona export F35-4U17 " + suffix,
+		Estat:                 "actiu",
+		ModeracioEstat:        "publicat",
 	})
 	if err != nil {
 		t.Fatalf("CreateMunicipi export nucli: %v", err)
@@ -351,16 +504,32 @@ func TestF354U17ExportIncludesTerritoryContext(t *testing.T) {
 		Items struct {
 			RelacionsTerritorials []struct {
 				Municipality struct {
-					Name        string   `json:"name"`
-					Type        string   `json:"type"`
-					CountryISO2 string   `json:"country_iso2"`
-					ParentNames []string `json:"parent_names"`
+					Name                  string   `json:"name"`
+					Type                  string   `json:"type"`
+					CountryISO2           string   `json:"country_iso2"`
+					ParentNames           []string `json:"parent_names"`
+					Nivells               []int    `json:"nivells"`
+					AdminPath             []string `json:"admin_path"`
+					IdescatCodi           string   `json:"idescat_codi"`
+					MunicipiIdescat       string   `json:"municipi_idescat"`
+					Comarca               string   `json:"comarca"`
+					Provincia             string   `json:"provincia"`
+					MunicipalityAdminName string   `json:"municipality_admin_name"`
+					MunicipalityAdminCode string   `json:"municipality_admin_code"`
 				} `json:"municipality"`
 				Nucleus *struct {
-					Name        string   `json:"name"`
-					Type        string   `json:"type"`
-					CountryISO2 string   `json:"country_iso2"`
-					ParentNames []string `json:"parent_names"`
+					Name                  string   `json:"name"`
+					Type                  string   `json:"type"`
+					CountryISO2           string   `json:"country_iso2"`
+					ParentNames           []string `json:"parent_names"`
+					Nivells               []int    `json:"nivells"`
+					AdminPath             []string `json:"admin_path"`
+					IdescatCodi           string   `json:"idescat_codi"`
+					MunicipiIdescat       string   `json:"municipi_idescat"`
+					Comarca               string   `json:"comarca"`
+					Provincia             string   `json:"provincia"`
+					MunicipalityAdminName string   `json:"municipality_admin_name"`
+					MunicipalityAdminCode string   `json:"municipality_admin_code"`
 				} `json:"nucleus"`
 			} `json:"relacions_territorials"`
 		} `json:"items"`
@@ -372,11 +541,36 @@ func TestF354U17ExportIncludesTerritoryContext(t *testing.T) {
 		t.Fatalf("s'esperava 1 relacio territorial exportada, got %d", len(payload.Items.RelacionsTerritorials))
 	}
 	territory := payload.Items.RelacionsTerritorials[0]
-	if territory.Municipality.Name != "Municipi export F35-4U17 "+suffix || territory.Municipality.Type != "municipi" {
+	if territory.Municipality.Name != "Municipi export F35-4U17 "+suffix || territory.Municipality.Type != "poble" {
 		t.Fatalf("el municipi exportat ha de conservar name/type; got %+v", territory.Municipality)
+	}
+	for _, token := range []string{
+		"430385",
+		"430385 03",
+		"Baix Camp export F35-4U17 " + suffix,
+		"Tarragona export F35-4U17 " + suffix,
+	} {
+		if !strings.Contains(rr.Body.String(), token) {
+			t.Fatalf("l'export territorial confessional ha d'incloure %q; body=%s", token, rr.Body.String())
+		}
+	}
+	if len(territory.Municipality.Nivells) != 7 || territory.Municipality.Nivells[0] != paisLevelID || territory.Municipality.Nivells[2] != provinciaLevelID || territory.Municipality.Nivells[3] != comarcaLevelID {
+		t.Fatalf("el municipi exportat ha d'incloure nivells administratius; got %+v", territory.Municipality.Nivells)
+	}
+	if territory.Municipality.IdescatCodi != "430385 03" || territory.Municipality.MunicipiIdescat != "430385" {
+		t.Fatalf("el municipi exportat ha d'incloure codis Idescat; got %+v", territory.Municipality)
+	}
+	if territory.Municipality.Comarca != "Baix Camp export F35-4U17 "+suffix || territory.Municipality.Provincia != "Tarragona export F35-4U17 "+suffix {
+		t.Fatalf("el municipi exportat ha d'incloure comarca/provincia; got %+v", territory.Municipality)
+	}
+	if territory.Municipality.MunicipalityAdminName != "Municipi export F35-4U17 "+suffix || territory.Municipality.MunicipalityAdminCode != "430385" {
+		t.Fatalf("el municipi exportat ha d'incloure municipality_admin_*; got %+v", territory.Municipality)
 	}
 	if territory.Nucleus == nil || len(territory.Nucleus.ParentNames) != 1 || territory.Nucleus.ParentNames[0] != "Municipi export F35-4U17 "+suffix {
 		t.Fatalf("el nucli exportat ha d'incloure parent_names; got %+v", territory.Nucleus)
+	}
+	if territory.Nucleus.IdescatCodi != "430385 03" || territory.Nucleus.MunicipalityAdminName != "Municipi export F35-4U17 "+suffix || territory.Nucleus.MunicipalityAdminCode != "430385" {
+		t.Fatalf("el nucli exportat ha de conservar el context administratiu; got %+v", territory.Nucleus)
 	}
 }
 

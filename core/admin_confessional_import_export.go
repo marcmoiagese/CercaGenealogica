@@ -49,10 +49,19 @@ type confessionalEntityRef struct {
 }
 
 type confessionalMunicipalityRef struct {
-	Name        string   `json:"name"`
-	Type        string   `json:"type"`
-	CountryISO2 string   `json:"country_iso2,omitempty"`
-	ParentNames []string `json:"parent_names,omitempty"`
+	Name                  string   `json:"name"`
+	Type                  string   `json:"type"`
+	CountryISO2           string   `json:"country_iso2,omitempty"`
+	ParentNames           []string `json:"parent_names,omitempty"`
+	Nivells               []int    `json:"nivells,omitempty"`
+	AdminPath             []string `json:"admin_path,omitempty"`
+	IdescatCodi           string   `json:"idescat_codi,omitempty"`
+	MunicipiIdescat       string   `json:"municipi_idescat,omitempty"`
+	Categoria             string   `json:"categoria,omitempty"`
+	Comarca               string   `json:"comarca,omitempty"`
+	Provincia             string   `json:"provincia,omitempty"`
+	MunicipalityAdminName string   `json:"municipality_admin_name,omitempty"`
+	MunicipalityAdminCode string   `json:"municipality_admin_code,omitempty"`
 }
 
 type confessionalArchiveRef struct {
@@ -130,6 +139,8 @@ type confessionalMunicipalityLookup struct {
 	ByNameTypeCountry map[string][]int
 	ByNameType        map[string][]int
 	ByName            map[string][]int
+	LevelISO          map[int]string
+	Levels            map[int]db.NivellAdministratiu
 }
 
 type confessionalArchiveLookup struct {
@@ -139,6 +150,15 @@ type confessionalArchiveLookup struct {
 	ByName     map[string][]int
 	Municipis  map[int]*db.Municipi
 	LevelISO   map[int]string
+	Levels     map[int]db.NivellAdministratiu
+}
+
+type confessionalMunicipalityAltresMeta struct {
+	IdescatCodi     string
+	MunicipiIdescat string
+	Categoria       string
+	Comarca         string
+	Provincia       string
 }
 
 type confessionalExportEntityRecord struct {
@@ -1260,10 +1280,27 @@ func (a *App) confessionalMunicipisByID(rows []db.MunicipiRow) map[int]*db.Munic
 }
 
 func (a *App) confessionalMunicipalityRef(m *db.Municipi, all map[int]*db.Municipi) confessionalMunicipalityRef {
-	return confessionalMunicipalityRefFromMunicipi(m, all, a.levelISOMap())
+	levelISO, levelsByID := a.confessionalMunicipalityLevelMaps()
+	return confessionalMunicipalityRefFromMunicipi(m, all, levelISO, levelsByID)
 }
 
-func confessionalMunicipalityRefFromMunicipi(m *db.Municipi, all map[int]*db.Municipi, levelISO map[int]string) confessionalMunicipalityRef {
+func (a *App) confessionalMunicipalityLevelMaps() (map[int]string, map[int]db.NivellAdministratiu) {
+	nivells, _ := a.DB.ListNivells(db.NivellAdminFilter{})
+	levelISO := map[int]string{}
+	levelsByID := map[int]db.NivellAdministratiu{}
+	for _, n := range nivells {
+		levelsByID[n.ID] = n
+		if n.PaisISO2.Valid {
+			levelISO[n.ID] = strings.ToUpper(strings.TrimSpace(n.PaisISO2.String))
+		}
+	}
+	return levelISO, levelsByID
+}
+
+func confessionalMunicipalityRefFromMunicipi(m *db.Municipi, all map[int]*db.Municipi, levelISO map[int]string, levelsByID map[int]db.NivellAdministratiu) confessionalMunicipalityRef {
+	if m == nil {
+		return confessionalMunicipalityRef{}
+	}
 	ref := confessionalMunicipalityRef{
 		Name:        strings.TrimSpace(m.Nom),
 		Type:        strings.TrimSpace(m.Tipus),
@@ -1288,6 +1325,25 @@ func confessionalMunicipalityRefFromMunicipi(m *db.Municipi, all map[int]*db.Mun
 	if len(parentNames) > 0 {
 		ref.ParentNames = parentNames
 	}
+	if nivells := confessionalMunicipalityLevelIDs(m); len(nivells) > 0 {
+		ref.Nivells = nivells
+	}
+	if adminPath := confessionalMunicipalityAdminPath(m, levelsByID); len(adminPath) > 0 {
+		ref.AdminPath = adminPath
+	}
+	meta := confessionalParseMunicipalityAltres(m.Altres)
+	ref.IdescatCodi = meta.IdescatCodi
+	ref.MunicipiIdescat = meta.MunicipiIdescat
+	ref.Categoria = meta.Categoria
+	ref.Comarca = firstNonEmpty(meta.Comarca, confessionalMunicipalityLevelNameByType(m, levelsByID, "comarca"))
+	ref.Provincia = firstNonEmpty(meta.Provincia, confessionalMunicipalityLevelNameByType(m, levelsByID, "provincia"))
+	adminMunicipi := m
+	if parent := confessionalMunicipalityParent(m, all); parent != nil {
+		adminMunicipi = parent
+	}
+	adminMeta := confessionalParseMunicipalityAltres(adminMunicipi.Altres)
+	ref.MunicipalityAdminName = strings.TrimSpace(adminMunicipi.Nom)
+	ref.MunicipalityAdminCode = confessionalMunicipalityAdminCode(adminMeta)
 	return ref
 }
 
@@ -1306,15 +1362,18 @@ func (a *App) confessionalArchiveRef(row db.ArxiuWithCount, municipis map[int]*d
 }
 
 func (a *App) confessionalMunicipalityIndex(all map[int]*db.Municipi) confessionalMunicipalityLookup {
+	levelISO, levelsByID := a.confessionalMunicipalityLevelMaps()
 	index := confessionalMunicipalityLookup{
 		All:               all,
 		Exact:             map[string][]int{},
 		ByNameTypeCountry: map[string][]int{},
 		ByNameType:        map[string][]int{},
 		ByName:            map[string][]int{},
+		LevelISO:          levelISO,
+		Levels:            levelsByID,
 	}
 	for id, municipi := range all {
-		ref := a.confessionalMunicipalityRef(municipi, all)
+		ref := confessionalMunicipalityRefFromMunicipi(municipi, all, levelISO, levelsByID)
 		key := confessionalMunicipalityRefKey(ref)
 		index.Exact[key] = append(index.Exact[key], id)
 		index.ByNameTypeCountry[confessionalMunicipalityNameTypeCountryKey(ref)] = append(index.ByNameTypeCountry[confessionalMunicipalityNameTypeCountryKey(ref)], id)
@@ -1325,13 +1384,15 @@ func (a *App) confessionalMunicipalityIndex(all map[int]*db.Municipi) confession
 }
 
 func (a *App) confessionalArchiveIndex(rows []db.ArxiuWithCount, municipis map[int]*db.Municipi) confessionalArchiveLookup {
+	levelISO, levelsByID := a.confessionalMunicipalityLevelMaps()
 	index := confessionalArchiveLookup{
 		Rows:       map[int]db.ArxiuWithCount{},
 		Exact:      map[string][]int{},
 		ByNameType: map[string][]int{},
 		ByName:     map[string][]int{},
 		Municipis:  municipis,
-		LevelISO:   a.levelISOMap(),
+		LevelISO:   levelISO,
+		Levels:     levelsByID,
 	}
 	for _, row := range rows {
 		ref := a.confessionalArchiveRef(row, municipis)
@@ -1355,6 +1416,13 @@ func confessionalResolveMunicipalityRef(ref confessionalMunicipalityRef, lookup 
 		return ids[0], nil
 	}
 	if len(ids) > 1 {
+		filtered := confessionalFilterMunicipalityCandidates(ids, lookup, ref, ctx)
+		if len(filtered) == 1 {
+			return filtered[0], nil
+		}
+		if len(filtered) > 1 {
+			return 0, confessionalMunicipalityDiagnostic(ref, lookup, filtered, confessionalRefKindAmbiguous, ctx)
+		}
 		return 0, confessionalMunicipalityDiagnostic(ref, lookup, ids, confessionalRefKindAmbiguous, ctx)
 	}
 	candidates := confessionalUniqueCandidateIDs(lookup.ByNameTypeCountry[confessionalMunicipalityNameTypeCountryKey(ref)])
@@ -1365,7 +1433,7 @@ func confessionalResolveMunicipalityRef(ref confessionalMunicipalityRef, lookup 
 		candidates = confessionalUniqueCandidateIDs(lookup.ByName[confessionalMunicipalityNameKey(ref)])
 	}
 	if len(candidates) > 0 {
-		filtered := confessionalFilterMunicipalityCandidates(candidates, lookup, ctx)
+		filtered := confessionalFilterMunicipalityCandidates(candidates, lookup, ref, ctx)
 		if len(filtered) == 1 {
 			return filtered[0], nil
 		}
@@ -1447,7 +1515,122 @@ func confessionalNormalizeMunicipalityRef(ref confessionalMunicipalityRef) confe
 	for i := range ref.ParentNames {
 		ref.ParentNames[i] = strings.TrimSpace(ref.ParentNames[i])
 	}
+	for i := range ref.AdminPath {
+		ref.AdminPath[i] = strings.TrimSpace(ref.AdminPath[i])
+	}
+	ref.IdescatCodi = strings.TrimSpace(ref.IdescatCodi)
+	ref.MunicipiIdescat = strings.TrimSpace(ref.MunicipiIdescat)
+	ref.Categoria = strings.TrimSpace(ref.Categoria)
+	ref.Comarca = strings.TrimSpace(ref.Comarca)
+	ref.Provincia = strings.TrimSpace(ref.Provincia)
+	ref.MunicipalityAdminName = strings.TrimSpace(ref.MunicipalityAdminName)
+	ref.MunicipalityAdminCode = strings.TrimSpace(ref.MunicipalityAdminCode)
 	return ref
+}
+
+func confessionalParseMunicipalityAltres(altres string) confessionalMunicipalityAltresMeta {
+	meta := confessionalMunicipalityAltresMeta{}
+	for _, token := range strings.Split(altres, ";") {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+		parts := strings.SplitN(token, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := normalizeKey(strings.TrimSpace(parts[0]))
+		value := strings.TrimSpace(parts[1])
+		if value == "" {
+			continue
+		}
+		switch key {
+		case "idescat_codi":
+			meta.IdescatCodi = value
+		case "municipi_idescat":
+			meta.MunicipiIdescat = value
+		case "categoria":
+			meta.Categoria = value
+		case "comarca":
+			meta.Comarca = value
+		case "provincia":
+			meta.Provincia = value
+		}
+	}
+	if meta.MunicipiIdescat == "" && meta.IdescatCodi != "" {
+		fields := strings.Fields(meta.IdescatCodi)
+		if len(fields) > 0 {
+			meta.MunicipiIdescat = fields[0]
+		}
+	}
+	return meta
+}
+
+func confessionalMunicipalityLevelIDs(m *db.Municipi) []int {
+	if m == nil {
+		return nil
+	}
+	nivells := make([]int, 0, len(m.NivellAdministratiuID))
+	hasLevel := false
+	for _, level := range m.NivellAdministratiuID {
+		if level.Valid {
+			nivells = append(nivells, int(level.Int64))
+			hasLevel = true
+			continue
+		}
+		nivells = append(nivells, 0)
+	}
+	if !hasLevel {
+		return nil
+	}
+	return nivells
+}
+
+func confessionalMunicipalityAdminPath(m *db.Municipi, levelsByID map[int]db.NivellAdministratiu) []string {
+	if m == nil {
+		return nil
+	}
+	path := make([]string, 0, len(m.NivellAdministratiuID))
+	for _, level := range m.NivellAdministratiuID {
+		if !level.Valid {
+			continue
+		}
+		info, ok := levelsByID[int(level.Int64)]
+		if !ok {
+			continue
+		}
+		if name := strings.TrimSpace(info.NomNivell); name != "" {
+			path = append(path, name)
+		}
+	}
+	if len(path) == 0 {
+		return nil
+	}
+	return path
+}
+
+func confessionalMunicipalityLevelNameByType(m *db.Municipi, levelsByID map[int]db.NivellAdministratiu, tipus string) string {
+	if m == nil {
+		return ""
+	}
+	target := normalizeKey(tipus)
+	for _, level := range m.NivellAdministratiuID {
+		if !level.Valid {
+			continue
+		}
+		info, ok := levelsByID[int(level.Int64)]
+		if !ok {
+			continue
+		}
+		if normalizeKey(info.TipusNivell) == target {
+			return strings.TrimSpace(info.NomNivell)
+		}
+	}
+	return ""
+}
+
+func confessionalMunicipalityAdminCode(meta confessionalMunicipalityAltresMeta) string {
+	return firstNonEmpty(strings.TrimSpace(meta.MunicipiIdescat), strings.TrimSpace(meta.IdescatCodi))
 }
 
 func confessionalNormalizeArchiveRef(ref confessionalArchiveRef) confessionalArchiveRef {
@@ -1590,6 +1773,13 @@ func confessionalValidateMunicipalityCandidate(ref confessionalMunicipalityRef, 
 		}
 		return confessionalMunicipalityDiagnostic(ref, lookup, ids, confessionalRefKindUnresolved, ctx)
 	}
+	if municipi == nil {
+		return confessionalMunicipalityDiagnostic(ref, lookup, nil, confessionalRefKindUnresolved, ctx)
+	}
+	candidate := confessionalNormalizeMunicipalityRef(confessionalMunicipalityRefFromMunicipi(municipi, lookup.All, lookup.LevelISO, lookup.Levels))
+	if !confessionalMunicipalityRefMatchesExpected(candidate, ref) {
+		return confessionalMunicipalityDiagnostic(ref, lookup, []int{id}, confessionalRefKindUnresolved, ctx)
+	}
 	return nil
 }
 
@@ -1621,13 +1811,18 @@ func confessionalUniqueCandidateIDs(ids []int) []int {
 	return ids
 }
 
-func confessionalFilterMunicipalityCandidates(ids []int, lookup confessionalMunicipalityLookup, ctx confessionalRefContext) []int {
+func confessionalFilterMunicipalityCandidates(ids []int, lookup confessionalMunicipalityLookup, ref confessionalMunicipalityRef, ctx confessionalRefContext) []int {
 	filtered := make([]int, 0, len(ids))
 	for _, id := range ids {
 		municipi := lookup.All[id]
-		if confessionalMunicipalityCandidateMatches(municipi, lookup, ctx) {
-			filtered = append(filtered, id)
+		if !confessionalMunicipalityCandidateMatches(municipi, lookup, ctx) {
+			continue
 		}
+		candidate := confessionalNormalizeMunicipalityRef(confessionalMunicipalityRefFromMunicipi(municipi, lookup.All, lookup.LevelISO, lookup.Levels))
+		if !confessionalMunicipalityRefMatchesExpected(candidate, ref) {
+			continue
+		}
+		filtered = append(filtered, id)
 	}
 	return filtered
 }
@@ -1710,9 +1905,19 @@ func confessionalMunicipalityCandidateLabel(municipi *db.Municipi, lookup confes
 	if municipi == nil {
 		return ""
 	}
+	ref := confessionalNormalizeMunicipalityRef(confessionalMunicipalityRefFromMunicipi(municipi, lookup.All, lookup.LevelISO, lookup.Levels))
 	parts := []string{"id=" + strconv.Itoa(municipi.ID)}
 	if tipus := strings.TrimSpace(municipi.Tipus); tipus != "" {
 		parts = append(parts, "tipus="+tipus)
+	}
+	if ref.MunicipiIdescat != "" {
+		parts = append(parts, "municipi_idescat="+ref.MunicipiIdescat)
+	}
+	if ref.Comarca != "" {
+		parts = append(parts, "comarca="+ref.Comarca)
+	}
+	if ref.Provincia != "" {
+		parts = append(parts, "provincia="+ref.Provincia)
 	}
 	if parent := confessionalMunicipalityParent(municipi, lookup.All); parent != nil {
 		parts = append(parts, "parent="+strings.TrimSpace(parent.Nom))
@@ -1805,7 +2010,7 @@ func confessionalFilterArchiveCandidates(ids []int, lookup confessionalArchiveLo
 		if municipi == nil {
 			continue
 		}
-		candidate := confessionalNormalizeMunicipalityRef(confessionalMunicipalityRefFromMunicipi(municipi, lookup.Municipis, lookup.LevelISO))
+		candidate := confessionalNormalizeMunicipalityRef(confessionalMunicipalityRefFromMunicipi(municipi, lookup.Municipis, lookup.LevelISO, lookup.Levels))
 		if confessionalMunicipalityRefMatchesExpected(candidate, expected) {
 			filtered = append(filtered, id)
 		}
@@ -1828,6 +2033,30 @@ func confessionalMunicipalityRefMatchesExpected(candidate, expected confessional
 	if len(expected.ParentNames) > 0 && !confessionalParentNamesMatch(candidate.ParentNames, expected.ParentNames) {
 		return false
 	}
+	if len(expected.Nivells) > 0 && !confessionalMunicipalityLevelsMatch(candidate.Nivells, expected.Nivells) {
+		return false
+	}
+	if expected.MunicipiIdescat != "" && normalizeKey(candidate.MunicipiIdescat) != normalizeKey(expected.MunicipiIdescat) {
+		return false
+	}
+	if expected.IdescatCodi != "" && normalizeKey(candidate.IdescatCodi) != normalizeKey(expected.IdescatCodi) {
+		return false
+	}
+	if expected.MunicipalityAdminCode != "" && normalizeKey(candidate.MunicipalityAdminCode) != normalizeKey(expected.MunicipalityAdminCode) {
+		return false
+	}
+	if expected.MunicipalityAdminName != "" && normalizeKey(candidate.MunicipalityAdminName) != normalizeKey(expected.MunicipalityAdminName) {
+		return false
+	}
+	if expected.Comarca != "" && normalizeKey(candidate.Comarca) != normalizeKey(expected.Comarca) {
+		return false
+	}
+	if expected.Provincia != "" && normalizeKey(candidate.Provincia) != normalizeKey(expected.Provincia) {
+		return false
+	}
+	if len(expected.AdminPath) > 0 && !confessionalParentNamesMatch(candidate.AdminPath, expected.AdminPath) {
+		return false
+	}
 	return true
 }
 
@@ -1837,6 +2066,18 @@ func confessionalParentNamesMatch(candidate, expected []string) bool {
 	}
 	for i := range expected {
 		if normalizeKey(candidate[i]) != normalizeKey(expected[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func confessionalMunicipalityLevelsMatch(candidate, expected []int) bool {
+	if len(candidate) != len(expected) {
+		return false
+	}
+	for i := range expected {
+		if candidate[i] != expected[i] {
 			return false
 		}
 	}
