@@ -326,7 +326,8 @@ func (a *App) AdminConfessionalExport(w http.ResponseWriter, r *http.Request) {
 	allArxius, _ := a.DB.ListArxius(db.ArxiuFilter{Limit: -1})
 	levelISO, levelsByID, err := a.confessionalMunicipalityLevelMaps()
 	if err != nil {
-		http.NotFound(w, r)
+		Errorf("AdminConfessionalExport: error carregant nivells administratius per export confessional: %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -870,6 +871,7 @@ func (a *App) buildConfessionalImportPlan(payloadBytes []byte, includeNonPublish
 	allArxius, _ := a.DB.ListArxius(db.ArxiuFilter{Limit: -1})
 	levelISO, levelsByID, err := a.confessionalMunicipalityLevelMaps()
 	if err != nil {
+		Errorf("buildConfessionalImportPlan: error carregant nivells administratius per import confessional: %v", err)
 		plan.View.Errors = append(plan.View.Errors, T(defaultLang, "common.error"))
 		return plan
 	}
