@@ -1715,17 +1715,31 @@ func confessionalFilterArchiveCandidates(ids []int, lookup confessionalArchiveLo
 }
 
 func confessionalMunicipalityRefMatchesExpected(candidate, expected confessionalMunicipalityRef) bool {
-	if confessionalMunicipalityNameKey(candidate) != confessionalMunicipalityNameKey(expected) {
+	candidate = confessionalNormalizeMunicipalityRef(candidate)
+	expected = confessionalNormalizeMunicipalityRef(expected)
+	if normalizeKey(candidate.Name) != normalizeKey(expected.Name) {
 		return false
 	}
-	if expected.Type != "" && confessionalMunicipalityNameTypeKey(candidate) != confessionalMunicipalityNameTypeKey(expected) {
+	if expected.Type != "" && normalizeKey(candidate.Type) != normalizeKey(expected.Type) {
 		return false
 	}
-	if expected.CountryISO2 != "" && confessionalMunicipalityNameTypeCountryKey(candidate) != confessionalMunicipalityNameTypeCountryKey(expected) {
+	if expected.CountryISO2 != "" && normalizeKey(candidate.CountryISO2) != normalizeKey(expected.CountryISO2) {
 		return false
 	}
-	if len(expected.ParentNames) > 0 && confessionalMunicipalityRefKey(candidate) != confessionalMunicipalityRefKey(expected) {
+	if len(expected.ParentNames) > 0 && !confessionalParentNamesMatch(candidate.ParentNames, expected.ParentNames) {
 		return false
+	}
+	return true
+}
+
+func confessionalParentNamesMatch(candidate, expected []string) bool {
+	if len(candidate) != len(expected) {
+		return false
+	}
+	for i := range expected {
+		if normalizeKey(candidate[i]) != normalizeKey(expected[i]) {
+			return false
+		}
 	}
 	return true
 }
